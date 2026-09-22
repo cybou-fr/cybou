@@ -134,6 +134,8 @@ target_compile_definitions(bitcoinqt
   PUBLIC
     QT_NO_KEYWORDS
     QT_USE_QSTRINGBUILDER
+  PRIVATE
+    CYBOU_NETWORK_QUARANTINED=1
 )
 target_include_directories(bitcoinqt
   PUBLIC
@@ -259,7 +261,6 @@ add_executable(cybou
   main.cpp
   ../init/bitcoin-qt.cpp
 )
-target_compile_definitions(cybou PRIVATE CYBOU_NETWORK_QUARANTINED=1)
 
 add_windows_resources(cybou res/cybou-res.rc)
 add_windows_application_manifest(cybou)
