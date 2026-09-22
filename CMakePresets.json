@@ -2,6 +2,15 @@
   "version": 3,
   "configurePresets": [
     {
+      "name": "cybou-consumer",
+      "displayName": "CYBOU consumer desktop application",
+      "binaryDir": "${sourceDir}/build_cybou_consumer",
+      "cacheVariables": {
+        "CYBOU_CONSUMER_BUILD": "ON",
+        "BUILD_TESTS": "ON"
+      }
+    },
+    {
       "name": "vs2026",
       "displayName": "Build using 'Visual Studio 18 2026' generator and 'x64-windows' triplet",
       "condition": {

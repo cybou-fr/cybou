@@ -26,7 +26,7 @@ get_directory_property(precious_variables CACHE_VARIABLES)
 #=============================
 # Project / Package metadata
 #=============================
-set(CLIENT_NAME "Bitcoin Core")
+set(CLIENT_NAME "CYBOU")
 set(CLIENT_VERSION_MAJOR 31)
 set(CLIENT_VERSION_MINOR 1)
 set(CLIENT_VERSION_BUILD 0)
@@ -50,10 +50,10 @@ set(CMAKE_TRY_COMPILE_PLATFORM_VARIABLES
   CMAKE_CXX_LINK_EXECUTABLE
 )
 
-project(BitcoinCore
+project(CYBOU
   VERSION ${CLIENT_VERSION_MAJOR}.${CLIENT_VERSION_MINOR}.${CLIENT_VERSION_BUILD}
-  DESCRIPTION "Bitcoin client software"
-  HOMEPAGE_URL "https://bitcoincore.org/"
+  DESCRIPTION "CYBOU peer-to-peer network software"
+  HOMEPAGE_URL "https://cybou.fr/"
   LANGUAGES NONE
 )
 
@@ -64,7 +64,8 @@ endif()
 
 set(COPYRIGHT_HOLDERS "The %s developers")
 set(COPYRIGHT_HOLDERS_FINAL "The ${CLIENT_NAME} developers")
-set(CLIENT_BUGREPORT "https://github.com/bitcoin/bitcoin/issues")
+# No public CYBOU issue tracker has been designated yet.
+set(CLIENT_BUGREPORT "")
 
 #=============================
 # Language setup
@@ -99,9 +100,10 @@ endif()
 #=============================
 include(CMakeDependentOption)
 # When adding a new option, end the <help_text> with a full stop for consistency.
+option(CYBOU_CONSUMER_BUILD "Build only the CYBOU desktop consumer application." OFF)
 option(BUILD_BITCOIN_BIN "Build bitcoin executable." ON)
 option(BUILD_DAEMON "Build bitcoind executable." ON)
-option(BUILD_GUI "Build bitcoin-qt executable." OFF)
+option(BUILD_GUI "Build CYBOU desktop executable." OFF)
 option(BUILD_CLI "Build bitcoin-cli executable." ON)
 
 option(BUILD_TESTS "Build test_bitcoin and other unit test executables." ON)
@@ -155,6 +157,19 @@ cmake_dependent_option(WITH_DBUS "Enable DBus support." ON "NOT CMAKE_SYSTEM_NAM
 
 cmake_dependent_option(ENABLE_IPC "Build multiprocess bitcoin-node and bitcoin-gui executables in addition to monolithic bitcoind and bitcoin-qt executables." ON "NOT WIN32" OFF)
 cmake_dependent_option(WITH_EXTERNAL_LIBMULTIPROCESS "Build with external libmultiprocess library instead of with local git subtree when ENABLE_IPC is enabled. This is not normally recommended, but can be useful for developing libmultiprocess itself." OFF "ENABLE_IPC" OFF)
+if(CYBOU_CONSUMER_BUILD)
+  # The consumer package is a single-process desktop application. Inherited
+  # command-line and multiprocess products remain developer-profile only.
+  set(BUILD_BITCOIN_BIN OFF CACHE BOOL "Build bitcoin executable." FORCE)
+  set(BUILD_DAEMON OFF CACHE BOOL "Build bitcoind executable." FORCE)
+  set(BUILD_GUI ON CACHE BOOL "Build CYBOU desktop executable." FORCE)
+  set(BUILD_CLI OFF CACHE BOOL "Build bitcoin-cli executable." FORCE)
+  set(BUILD_TX OFF CACHE BOOL "Build bitcoin-tx executable." FORCE)
+  set(BUILD_UTIL OFF CACHE BOOL "Build bitcoin-util executable." FORCE)
+  set(BUILD_UTIL_CHAINSTATE OFF CACHE BOOL "Build experimental bitcoin-chainstate executable." FORCE)
+  set(BUILD_WALLET_TOOL OFF CACHE BOOL "Build bitcoin-wallet tool." FORCE)
+  set(ENABLE_IPC OFF CACHE BOOL "Build inherited multiprocess executables." FORCE)
+endif()
 if(ENABLE_IPC AND WITH_EXTERNAL_LIBMULTIPROCESS)
   find_package(Libmultiprocess REQUIRED COMPONENTS Lib)
   find_package(LibmultiprocessNative REQUIRED COMPONENTS Bin
@@ -638,7 +653,7 @@ else()
   set(bitcoin_daemon_status OFF)
 endif()
 message("  bitcoin-node (multiprocess) ......... ${bitcoin_daemon_status}")
-message("  bitcoin-qt (GUI) .................... ${BUILD_GUI}")
+message("  cybou (GUI) ......................... ${BUILD_GUI}")
 if(BUILD_GUI AND ENABLE_IPC)
   set(bitcoin_gui_status ON)
 else()
