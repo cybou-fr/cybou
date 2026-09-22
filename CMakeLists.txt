@@ -27,9 +27,9 @@ get_directory_property(precious_variables CACHE_VARIABLES)
 # Project / Package metadata
 #=============================
 set(CLIENT_NAME "CYBOU")
-set(CLIENT_VERSION_MAJOR 31)
-set(CLIENT_VERSION_MINOR 1)
-set(CLIENT_VERSION_BUILD 0)
+set(CLIENT_VERSION_MAJOR 0)
+set(CLIENT_VERSION_MINOR 0)
+set(CLIENT_VERSION_BUILD 2)
 set(CLIENT_VERSION_RC 0)
 set(CLIENT_VERSION_IS_RELEASE "true")
 set(COPYRIGHT_YEAR "2026")

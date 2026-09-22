@@ -107,6 +107,8 @@ public:
     bool MineBlocksOnDemand() const { return consensus.fPowNoRetargeting; }
     /** Return the chain type string */
     std::string GetChainTypeString() const { return ChainTypeToString(m_chain_type); }
+    /** Return the product-facing network name without changing internal chain selectors. */
+    std::string GetNetworkDisplayName() const { return m_chain_type == ChainType::MAIN ? "CYBOU-DEV" : ChainTypeToString(m_chain_type); }
     /** Return the chain type */
     ChainType GetChainType() const { return m_chain_type; }
     /** Return the list of hostnames to look up for DNS seeds */
