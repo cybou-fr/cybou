@@ -10,9 +10,10 @@ The imported source tree identifies itself as **Bitcoin Core 31.1.0**:
 
 ## Provenance limitation
 
-This workspace is an exported source tree without `.git` metadata. Consequently,
-the exact upstream commit, tag signature, remote URL, and archive checksum cannot
-be recovered from the available files alone.
+The local Git history begins with CYBOU import commit `6de2974`; it does not
+contain authenticated Bitcoin Core ancestry. Consequently, the exact upstream
+commit, tag signature, source URL, and archive checksum cannot be recovered from
+the repository history alone.
 
 Gate A (exact upstream baseline) therefore remains **open**. Before a release or
 trusted baseline tag, the operator must reconcile this tree with an authenticated
