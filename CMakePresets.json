@@ -11,6 +11,36 @@
       }
     },
     {
+      "name": "cybou-consumer-qt-mingw",
+      "displayName": "CYBOU consumer (Qt 6.11 MinGW)",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build_cybou_qt_mingw",
+      "toolchainFile": "$env{USERPROFILE}\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
+      "environment": {
+        "PATH": "C:\\Qt\\Tools\\mingw1310_64\\bin;C:\\Qt\\Tools\\Ninja;$penv{PATH}",
+        "CC": "C:\\Qt\\Tools\\mingw1310_64\\bin\\gcc.exe",
+        "CXX": "C:\\Qt\\Tools\\mingw1310_64\\bin\\g++.exe"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_COMPILER": "C:\\Qt\\Tools\\mingw1310_64\\bin\\gcc.exe",
+        "CMAKE_CXX_COMPILER": "C:\\Qt\\Tools\\mingw1310_64\\bin\\g++.exe",
+        "CMAKE_MAKE_PROGRAM": "C:\\Qt\\Tools\\Ninja\\ninja.exe",
+        "CMAKE_PREFIX_PATH": "C:\\Qt\\6.11.2\\mingw_64",
+        "CYBOU_CONSUMER_BUILD": "ON",
+        "BUILD_TESTS": "ON",
+        "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
+        "VCPKG_HOST_TRIPLET": "x64-windows",
+        "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "ON",
+        "VCPKG_MANIFEST_FEATURES": "tests"
+      }
+    },
+    {
       "name": "vs2026",
       "displayName": "Build using 'Visual Studio 18 2026' generator and 'x64-windows' triplet",
       "condition": {

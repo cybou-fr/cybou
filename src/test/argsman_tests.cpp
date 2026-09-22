@@ -54,7 +54,8 @@ BOOST_AUTO_TEST_CASE(cybou_default_paths_are_isolated)
 {
     BOOST_CHECK_EQUAL(std::string{BITCOIN_CONF_FILENAME}, "cybou.conf");
 
-    const std::string datadir_name{fs::PathToString(GetDefaultDataDir().filename())};
+    ArgsManager args;
+    const std::string datadir_name{fs::PathToString(args.GetDataDirBase().filename())};
 #if defined(WIN32) || defined(__APPLE__)
     BOOST_CHECK_EQUAL(datadir_name, "CYBOU");
 #else
