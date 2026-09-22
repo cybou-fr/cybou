@@ -569,18 +569,6 @@ int GuiMain(int argc, char* argv[])
         return EXIT_SUCCESS;
     }
 
-#ifdef CYBOU_NETWORK_QUARANTINED
-    // Fail closed until dedicated CYBOU-DEV chain parameters (genesis, network
-    // magic, ports, and discovery policy) replace every inherited Bitcoin
-    // network. Help and version output remain available for build validation.
-    const QString quarantine_error = QObject::tr(
-        "CYBOU network quarantine is active. Node startup is disabled until "
-        "dedicated CYBOU-DEV chain parameters are installed.");
-    InitError(Untranslated(quarantine_error.toStdString()));
-    QMessageBox::critical(nullptr, CLIENT_NAME, quarantine_error);
-    return EXIT_FAILURE;
-#endif
-
     // Install global event filter that makes sure that long tooltips can be word-wrapped
     app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
 
@@ -608,6 +596,18 @@ int GuiMain(int argc, char* argv[])
             // message in the case of a read error if the user decided to abort.
             QMessageBox::critical(nullptr, CLIENT_NAME, QObject::tr("Error: %1").arg(QString::fromStdString(error->message.translated)));
         }
+        return EXIT_FAILURE;
+    }
+
+    // The consumer application exposes only the isolated CYBOU-DEV network.
+    // Inherited Bitcoin test networks remain compiled for migration tests but
+    // must never be selectable by the public desktop executable.
+    if (Params().GetChainType() != ChainType::MAIN) {
+        const QString network_error = QObject::tr(
+            "This CYBOU build supports CYBOU-DEV only. Bitcoin testnet, "
+            "testnet4, signet, and regtest are disabled.");
+        InitError(Untranslated(network_error.toStdString()));
+        QMessageBox::critical(nullptr, CLIENT_NAME, network_error);
         return EXIT_FAILURE;
     }
 #ifdef ENABLE_WALLET

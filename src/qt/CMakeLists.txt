@@ -134,8 +134,6 @@ target_compile_definitions(bitcoinqt
   PUBLIC
     QT_NO_KEYWORDS
     QT_USE_QSTRINGBUILDER
-  PRIVATE
-    CYBOU_NETWORK_QUARANTINED=1
 )
 target_include_directories(bitcoinqt
   PUBLIC
