@@ -1,0 +1,128 @@
+version: '0.7'
+reference_upstream: Bitcoin Core v31.1
+reconcile_with_local_checkout: true
+principles:
+  public_identity_first: true
+  internal_cosmetic_renames_deferred: true
+  preserve_upstream_notices: true
+  initial_windows_package:
+  - cybou.exe
+entries:
+- source: CMakeLists.txt:CLIENT_NAME
+  target: CYBOU
+  action: replace
+  stage: v0.0.1
+- source: CMakeLists.txt:project(BitcoinCore)
+  target: project(CYBOU)
+  action: replace
+  stage: v0.0.1
+- source: CMakeLists.txt:HOMEPAGE_URL
+  target: https://cybou.fr/
+  action: replace
+  stage: v0.0.1
+- source: CMakeLists.txt:CLIENT_BUGREPORT
+  target: real CYBOU tracker
+  action: replace_when_exists
+  stage: public_repo
+- source: bitcoin-qt target
+  target: cybou
+  action: rename_public_binary
+  stage: v0.0.1
+- source: bitcoind
+  target: null
+  action: disable_from_consumer_package
+  stage: v0.0.1
+- source: bitcoin-cli
+  target: null
+  action: disable_from_consumer_package
+  stage: v0.0.1
+- source: bitcoin-tx
+  target: null
+  action: disable_from_consumer_package
+  stage: v0.0.1
+- source: bitcoin-util
+  target: null
+  action: disable_from_consumer_package
+  stage: v0.0.1
+- source: bitcoin-wallet
+  target: null
+  action: disable_from_consumer_package
+  stage: v0.0.1
+- source: bitcoin-node/bitcoin-gui multiprocess
+  target: null
+  action: disable
+  stage: v0.0.1
+- source: QAPP_ORG_NAME
+  target: CYBOU
+  action: replace
+  stage: v0.0.1
+- source: QAPP_ORG_DOMAIN
+  target: cybou.fr
+  action: replace
+  stage: v0.0.1
+- source: QAPP_APP_NAME_DEFAULT
+  target: CYBOU
+  action: replace
+  stage: v0.0.1
+- source: Bitcoin network app names
+  target: CYBOU / CYBOU Dev
+  action: remove_replace
+  stage: v0.0.1
+- source: bitcoin.conf
+  target: cybou.conf if retained
+  action: replace
+  stage: v0.0.1
+- source: Bitcoin/.bitcoin datadir
+  target: CYBOU-specific datadir
+  action: replace
+  stage: v0.0.1
+- source: 'bitcoin: URI'
+  target: null
+  action: disable_until_specified
+  stage: v0.0.1
+- source: Bitcoin icons/logos
+  target: CYBOU assets
+  action: replace
+  stage: v0.0.1
+- source: Bitcoin testnet/signet installer shortcuts
+  target: null
+  action: remove
+  stage: v0.0.1
+- source: org.bitcoincore.* app identity
+  target: CYBOU app identity
+  action: replace
+  stage: v0.0.1
+- source: BitcoinGUI
+  target: CybouGUI
+  action: rename_when_touched
+  stage: early_deferred
+- source: BitcoinApplication
+  target: CybouApplication
+  action: rename_when_touched
+  stage: early_deferred
+- source: bitcoinqt/bitcoin_common/bitcoin_node/bitcoin_util
+  target: null
+  action: defer_internal_cosmetic_rename
+  stage: later
+- source: bitcoin_*.ts catalogs
+  target: reviewed EN/FR CYBOU catalogs
+  action: do_not_ship_stale
+  stage: pilot
+- source: doc/man/bitcoin-*
+  target: null
+  action: do_not_ship_without_real_CYBOU_cli
+  stage: v0.0.1
+- source: contrib/seeds Bitcoin data
+  target: CYBOU seed data/tooling if needed
+  action: replace
+  stage: v0.0.1
+- source: contrib/signet
+  target: null
+  action: archive_remove
+  stage: v0.0.x
+copyright:
+  upstream_notices: preserve
+  new_cybou_files: CYBOU header under chosen license
+  substantive_inherited_modification: preserve upstream + add CYBOU contribution line
+  trivial_branding_edit: do not claim sole CYBOU authorship
+  third_party: never blanket replace

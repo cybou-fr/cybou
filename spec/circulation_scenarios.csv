@@ -1,0 +1,74 @@
+scenario_type,parameter,value_1,value_2,value_3,note
+grant_capacity,welcome_grant_5000,5000,5000000,0,full grants from 25B Onboarding Pool before recycling
+grant_capacity,welcome_grant_6000,6000,4166666,4000,full grants from 25B Onboarding Pool before recycling
+grant_capacity,welcome_grant_12000,12000,2083333,4000,full grants from 25B Onboarding Pool before recycling
+required_recycle_share,10_recipient_deliveries_per_day_5pct_growth,3650,0.05,0.0821917808219178,steady-state onboarding cost / annual active-user fee volume
+required_recycle_share,10_recipient_deliveries_per_day_10pct_growth,3650,0.1,0.1643835616438356,steady-state onboarding cost / annual active-user fee volume
+required_recycle_share,10_recipient_deliveries_per_day_20pct_growth,3650,0.2,0.3287671232876712,steady-state onboarding cost / annual active-user fee volume
+required_recycle_share,10_recipient_deliveries_per_day_30pct_growth,3650,0.3,0.4931506849315068,steady-state onboarding cost / annual active-user fee volume
+required_recycle_share,10_recipient_deliveries_per_day_50pct_growth,3650,0.5,0.821917808219178,steady-state onboarding cost / annual active-user fee volume
+required_recycle_share,15_recipient_deliveries_per_day_5pct_growth,5475,0.05,0.0547945205479452,steady-state onboarding cost / annual active-user fee volume
+required_recycle_share,15_recipient_deliveries_per_day_10pct_growth,5475,0.1,0.1095890410958904,steady-state onboarding cost / annual active-user fee volume
+required_recycle_share,15_recipient_deliveries_per_day_20pct_growth,5475,0.2,0.2191780821917808,steady-state onboarding cost / annual active-user fee volume
+required_recycle_share,15_recipient_deliveries_per_day_30pct_growth,5475,0.3,0.3287671232876712,steady-state onboarding cost / annual active-user fee volume
+required_recycle_share,15_recipient_deliveries_per_day_50pct_growth,5475,0.5,0.547945205479452,steady-state onboarding cost / annual active-user fee volume
+10y_pool_path,100000_new_per_year_10_daily_25pct_recycle_y1,100000.0,45625000.0,24445625000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_10_daily_25pct_recycle_y2,200000.0,136875000.0,23982500000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_10_daily_25pct_recycle_y3,300000.0,228125000.0,23610625000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_10_daily_25pct_recycle_y4,400000.0,319375000.0,23330000000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_10_daily_25pct_recycle_y5,500000.0,410625000.0,23140625000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_10_daily_25pct_recycle_y6,600000.0,501875000.0,23042500000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_10_daily_25pct_recycle_y7,700000.0,593125000.0,23035625000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_10_daily_25pct_recycle_y8,800000.0,684375000.0,23120000000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_10_daily_25pct_recycle_y9,900000.0,775625000.0,23295625000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_10_daily_25pct_recycle_y10,1000000.0,866875000.0,23562500000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_15_daily_25pct_recycle_y1,100000.0,68437500.0,24468437500.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_15_daily_25pct_recycle_y2,200000.0,205312500.0,24073750000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_15_daily_25pct_recycle_y3,300000.0,342187500.0,23815937500.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_15_daily_25pct_recycle_y4,400000.0,479062500.0,23695000000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_15_daily_25pct_recycle_y5,500000.0,615937500.0,23710937500.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_15_daily_25pct_recycle_y6,600000.0,752812500.0,23863750000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_15_daily_25pct_recycle_y7,700000.0,889687500.0,24153437500.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_15_daily_25pct_recycle_y8,800000.0,1026562500.0,24580000000.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_15_daily_25pct_recycle_y9,900000.0,1163437500.0,25143437500.0,uniform-arrival approximation
+10y_pool_path,100000_new_per_year_15_daily_25pct_recycle_y10,1000000.0,1300312500.0,25843750000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_10_daily_25pct_recycle_y1,500000.0,228125000.0,22228125000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_10_daily_25pct_recycle_y2,1000000.0,684375000.0,19912500000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_10_daily_25pct_recycle_y3,1500000.0,1140625000.0,18053125000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_10_daily_25pct_recycle_y4,2000000.0,1596875000.0,16650000000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_10_daily_25pct_recycle_y5,2500000.0,2053125000.0,15703125000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_10_daily_25pct_recycle_y6,3000000.0,2509375000.0,15212500000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_10_daily_25pct_recycle_y7,3500000.0,2965625000.0,15178125000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_10_daily_25pct_recycle_y8,4000000.0,3421875000.0,15600000000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_10_daily_25pct_recycle_y9,4500000.0,3878125000.0,16478125000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_10_daily_25pct_recycle_y10,5000000.0,4334375000.0,17812500000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_15_daily_25pct_recycle_y1,500000.0,342187500.0,22342187500.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_15_daily_25pct_recycle_y2,1000000.0,1026562500.0,20368750000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_15_daily_25pct_recycle_y3,1500000.0,1710937500.0,19079687500.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_15_daily_25pct_recycle_y4,2000000.0,2395312500.0,18475000000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_15_daily_25pct_recycle_y5,2500000.0,3079687500.0,18554687500.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_15_daily_25pct_recycle_y6,3000000.0,3764062500.0,19318750000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_15_daily_25pct_recycle_y7,3500000.0,4448437500.0,20767187500.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_15_daily_25pct_recycle_y8,4000000.0,5132812500.0,22900000000.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_15_daily_25pct_recycle_y9,4500000.0,5817187500.0,25717187500.0,uniform-arrival approximation
+10y_pool_path,500000_new_per_year_15_daily_25pct_recycle_y10,5000000.0,6501562500.0,29218750000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_10_daily_25pct_recycle_y1,1000000.0,456250000.0,19456250000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_10_daily_25pct_recycle_y2,2000000.0,1368750000.0,14825000000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_10_daily_25pct_recycle_y3,3000000.0,2281250000.0,11106250000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_10_daily_25pct_recycle_y4,4000000.0,3193750000.0,8300000000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_10_daily_25pct_recycle_y5,5000000.0,4106250000.0,6406250000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_10_daily_25pct_recycle_y6,6000000.0,5018750000.0,5425000000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_10_daily_25pct_recycle_y7,7000000.0,5931250000.0,5356250000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_10_daily_25pct_recycle_y8,8000000.0,6843750000.0,6200000000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_10_daily_25pct_recycle_y9,9000000.0,7756250000.0,7956250000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_10_daily_25pct_recycle_y10,10000000.0,8668750000.0,10625000000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_15_daily_25pct_recycle_y1,1000000.0,684375000.0,19684375000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_15_daily_25pct_recycle_y2,2000000.0,2053125000.0,15737500000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_15_daily_25pct_recycle_y3,3000000.0,3421875000.0,13159375000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_15_daily_25pct_recycle_y4,4000000.0,4790625000.0,11950000000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_15_daily_25pct_recycle_y5,5000000.0,6159375000.0,12109375000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_15_daily_25pct_recycle_y6,6000000.0,7528125000.0,13637500000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_15_daily_25pct_recycle_y7,7000000.0,8896875000.0,16534375000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_15_daily_25pct_recycle_y8,8000000.0,10265625000.0,20800000000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_15_daily_25pct_recycle_y9,9000000.0,11634375000.0,26434375000.0,uniform-arrival approximation
+10y_pool_path,1000000_new_per_year_15_daily_25pct_recycle_y10,10000000.0,13003125000.0,33437500000.0,uniform-arrival approximation

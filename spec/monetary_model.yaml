@@ -1,0 +1,51 @@
+version: '0.14'
+asset:
+  symbol: CYBOU
+  max_supply: 100000000000
+  decimals: 0
+  minimum_unit: 1
+  perpetual_emission: false
+genesis_allocation:
+  owner_developer_operator:
+    amount: 25000000000
+    percent: 25
+  onboarding_pool:
+    amount: 25000000000
+    percent: 25
+  network_operations_validators:
+    amount: 20000000000
+    percent: 20
+  product_ecosystem_reserve:
+    amount: 15000000000
+    percent: 15
+  strategic_reserve:
+    amount: 15000000000
+    percent: 15
+welcome_grant:
+  amount: 6000
+  destination: SystemBalance
+  immediate: true
+  vesting: false
+  full_grants_without_recycling: 4166666
+  voucher_required: true
+email_model:
+  new_account_recipient_limit_per_day: 25
+  normal_budget_recipient_deliveries_per_day: 15
+  annual_normal_budget: 5475
+  annual_margin: 525
+  standard_small_mail_tx_base_fee_target: 1
+  priority_fee_v1: false
+  size_aware_fee: true
+  max_mail_tx_size: OPEN
+fees:
+  pending_pool: PendingFeePool
+  batch_size: 4
+  split_percent:
+    security: 75
+    onboarding: 25
+  split_per_batch:
+    security: 3
+    onboarding: 1
+  network_service_bucket_v1: false
+  default_burn_fraction: 0
+  recurring_owner_tax_fraction: 0

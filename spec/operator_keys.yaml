@@ -1,0 +1,22 @@
+version: '0.14'
+domains:
+  operator_authority:
+    purposes:
+    - validator_admission
+    - validator_removal
+    - invite_voucher_authorization
+    - enumerated_operator_actions
+    target_custody: 2_of_3
+  operator_validator:
+    purposes:
+    - BFT_votes
+  release_signing:
+    purposes:
+    - official_release_authenticity
+  treasury:
+    purposes:
+    - company_owned_cybou
+forbidden_cross_domain_powers:
+- decrypt_user_mail
+- arbitrary_user_balance_debit
+- forge_user_signature

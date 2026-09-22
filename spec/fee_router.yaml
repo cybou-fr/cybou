@@ -1,0 +1,18 @@
+version: '0.14'
+asset: CYBOU
+decimals: 0
+state:
+- PendingFeePool
+- SecurityRewardPool
+- OnboardingPool
+routing:
+  batch_size: 4
+  security: 3
+  onboarding: 1
+percentages:
+  security: 75
+  onboarding: 25
+network_service_bucket_v1: false
+burn: 0
+recurring_owner_tax: 0
+priority_fee_v1: false

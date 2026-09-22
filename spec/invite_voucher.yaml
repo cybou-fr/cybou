@@ -1,0 +1,17 @@
+version: '0.14'
+welcome_grant: 6000
+asset: CYBOU
+source: OnboardingPool
+destination: SystemBalance
+automatic_on_identity_creation: false
+voucher:
+  required: true
+  one_time: true
+  operator_authority_signature: true
+  fields:
+  - voucher_id
+  - grant_amount
+  - expiry_epoch
+  - optional_organization_id
+  - operator_authority_signature
+  replay_protection: consensus_consumed_voucher_id

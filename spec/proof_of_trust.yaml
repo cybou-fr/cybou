@@ -1,0 +1,28 @@
+version: '0.14'
+scope: AccountID
+consensus_time:
+  source: finalized_block_height_epoch
+  wall_clock_for_consensus: false
+  epoch_blocks: null
+arithmetic: integer_only
+inputs:
+  system_balance:
+    capped: true
+  account_age:
+    source: creation_height_or_epoch
+    saturating: true
+  clean_history:
+    saturating: true
+  valid_activity:
+    saturating: true
+  violations:
+    negative: true
+mail_policy:
+  new_invited_account_limit_per_epoch: 25
+  hard_ceiling_required: true
+payments:
+  outgoing_tx_rate_limit: true
+  outgoing_value_rate_limit: true
+  new_recipient_rate_limit: true
+  confiscates_balance: false
+validator_authority: false

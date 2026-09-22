@@ -1,0 +1,9 @@
+total_pending_before_routing,pending_after,security_add,onboarding_add
+0,0,0,0
+1,1,0,0
+3,3,0,0
+4,0,3,1
+5,1,3,1
+8,0,6,2
+11,3,6,2
+100,0,75,25

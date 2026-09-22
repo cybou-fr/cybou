@@ -1,0 +1,13 @@
+version: '0.13'
+validator_rewards:
+  participation_threshold_percent: 90
+  require_no_confirmed_equivocation: true
+  require_active_operator_approved_validator_set_membership: true
+  distribution: equal_split
+  stake_weighting: false
+  integer_remainder: carry_forward_in_security_pool
+reward_epoch:
+  duration: null
+  candidate: 1_protocol_day
+service_node_rewards_v1: false
+future_storage_provider_rewards: separate_future_protocol_version

@@ -1,0 +1,5 @@
+validators,eligible,pool,per_eligible,remainder
+1,1,7000,7000,0
+5,5,7000,1400,0
+5,4,7000,1750,0
+3,3,1000,333,1

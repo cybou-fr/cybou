@@ -1,0 +1,27 @@
+version: '0.14'
+operation_type: MailTx
+first_class_protocol_operation: true
+encoded_as_op_return: false
+v1:
+  one_recipient: true
+  text_only: true
+  attachments: false
+  priority_fee: false
+  size_aware_fee: true
+  max_serialized_size: OPEN_BENCHMARK_REQUIRED
+history:
+  full_ciphertext_in_block_data_before_store: true
+  per_mail_permanent_consensus_state: false
+  desktop_pruning_allowed: true
+  active_validator_prestore_archival_required: true
+discovery:
+  recipient_tag: OPEN_PRIVACY_DESIGN
+  block_or_range_filter: PREFERRED
+evidence:
+  export_bundle: true
+  historical_sender_key_state_proof: true
+  salted_content_commitment: true
+  bare_plaintext_hash: false
+future_store:
+  content_in_store: true
+  mail_tx_contains_content_root: true

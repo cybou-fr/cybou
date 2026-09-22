@@ -1,0 +1,253 @@
+spec_version: '0.14'
+project:
+  name: CYBOU
+  website: cybou.fr
+  windows_binary: cybou.exe
+  native_asset: CYBOU
+  identity_namespace: .cybou
+  identity_example: stan.cybou
+implementation:
+  language: C++20/23
+  desktop_framework: Qt 6 Widgets
+  build_system: CMake
+  ancestry: Bitcoin Core copy already present in local repository
+  exact_upstream_commit_required_before_edits: true
+  desktop_process_model: single-process full node + UI
+  application_api:
+    rest: false
+    json_rpc: false
+    grpc: false
+    localhost_http: false
+documentation:
+  cybou_docs_authoritative_over_conflicting_bitcoin_docs: true
+  migrate_incrementally_with_code: true
+  preserve_upstream_license_notices: true
+  bitcoin_reference_inventory: v31.1
+  local_tree_must_be_reconciled: true
+network:
+  sovereign: true
+  bitcoin_network_access_in_cybou_build: forbidden
+  bitcoin_ibd_in_manual_cybou_test: forbidden
+  first_manual_launch_requires_quarantine: true
+  full_node_by_default: true
+  validator_by_default: false
+ledger:
+  model: UTXO-derived plus deterministic protocol state
+  evm_required: false
+  history:
+    desktop_mode: bounded
+    archive_optional: true
+    state_snapshots: true
+    trusted_checkpoint_required: true
+consensus:
+  core: BFT_explicit_finality
+  development_validator: single_operator_validator
+  pilot: static_multi_validator_BFT
+  production_goal: resilient_independent_validator_BFT
+  validator_admission: pluggable
+  stake_weighted_pos_required: false
+crypto:
+  agile: true
+  post_quantum_target: true
+  hybrid_transport_target: true
+  custom_primitives: false
+  downgrade_protection_required: true
+storage:
+  model: cooperative distributed encrypted object network
+  marketplace_contracts: false
+  target_contribution_ratio: 3.0
+  ratio_unit: verified effective capacity / logical entitlement
+  configured_capacity_is_credit: false
+  accounting_basis: rolling verified byte-time
+  opaque_objects: true
+  erasure_profile_parameterized: true
+  per_shard_onchain_records: false
+  repair_required: true
+applications:
+  order:
+  - Wallet/Identity
+  - Mail Protocol
+  - CYBOU Email
+  - Object Storage
+  - Backup
+  - Drive
+  email:
+    first_user_facing_application: true
+    model: consensus_registered_mail
+    native_cybou_protocol: true
+    text_only_v1: true
+    attachments_v1: false
+    smtp_required_v1: false
+    imap_required_v1: false
+    pop3_required_v1: false
+    recipient_online_required: false
+    e2e_encryption_required: true
+    plaintext_fallback: false
+    mail_tx_first_class_operation: true
+    mail_tx_in_block_history_v1: true
+    permanent_per_mail_consensus_state: false
+    active_validator_prestore_archival_required: true
+    future_body_storage: CYBOU_Object_Storage
+fees:
+  priority_fee_v1: false
+  fee_bidding_v1: false
+  mail_size_aware: true
+  mail_max_size: OPEN
+testing:
+  manual_windows_gate_each_milestone: true
+  next_milestone_requires_manual_pass: true
+  documentation_migration_checked_each_milestone: true
+production_blockers:
+- all-keys-lost recovery
+- formal BFT specification
+- bounded-history bootstrap/checkpoint policy
+- recipient-discovery metadata privacy
+- pre-Store MailTx retention/pruning policy
+- release/update security
+- operator authority continuity
+next_migration_pass:
+  project_rename_audit: true
+  copyright_attribution_audit: true
+  preserve_upstream_notices: true
+  mass_cosmetic_source_rename: false
+strategy:
+  origin: France
+  market_sequence:
+  - France
+  - European Union
+  - Global
+  public_positioning: European sovereign peer-to-peer network, designed in France
+  protocol_global_open: true
+  france_only: false
+  global_commercial_launch_initially: false
+  first_adoption_unit: organization_or_team
+public_asset_policy:
+  ico_before_useful_network: false
+  token_sale_before_useful_network: false
+  exchange_listing_early_objective: false
+  speculative_marketing: false
+  mica_review_before_public_economic_launch: true
+regulatory_readiness:
+  cra_track: true
+  french_cryptography_controls_track: true
+  messenger_eu_regulatory_review: false
+  gdpr_privacy_track: true
+  storage_legal_review_before_storage_public_launch: true
+  email_communications_service_review: true
+identity_privacy:
+  account_id_is_cryptographic_identity: true
+  cybou_handle_optional_alias: true
+  global_directory_required_for_pilot: false
+rename_policy:
+  public_surfaces_early: true
+  mass_internal_symbol_rename: false
+  initial_windows_public_binary: cybou.exe
+  preserve_upstream_copyright: true
+security:
+  mail_crypto_profile: standardized_or_heavily_reviewed
+email_crypto:
+  content_encryption: random CEK + AEAD
+  key_wrap: HPKE per recipient device
+  hpke_basis: RFC 9180
+  pq_kem_basis: ML-KEM / FIPS 203
+  preferred_hybrid_target: X25519 + ML-KEM-768
+  custom_kem_combiner: false
+  downgrade_protection: true
+  sender_authentication: separate crypto-agile signature layer
+  subject_encrypted: true
+  body_encrypted: true
+account_balances:
+  asset: CYBOU
+  balance:
+    user_controlled: true
+    network_arbitrary_debit: false
+    transferable: true
+  system_balance:
+    holds_real_cybou: true
+    irreversible_from_balance: true
+    transferable: false
+    withdrawable: false
+    pays_protocol_fees: true
+    contributes_to_trust: true
+    validator_voting_power: false
+invite_bonus:
+  asset: CYBOU
+  destination: System Balance
+  credited_immediately: true
+  vesting: false
+  separate_trust_credit: false
+monetary_policy:
+  asset: CYBOU
+  max_supply: 100000000000
+  decimals: 0
+  minimum_unit: 1
+  emission: fixed
+  default_fee_burn: 0
+  welcome_grant: 6000
+  genesis_allocation:
+    owner_developer_operator: 25000000000
+    onboarding_pool: 25000000000
+    network_operations_validators: 20000000000
+    product_ecosystem_reserve: 15000000000
+    strategic_reserve: 15000000000
+ownership_model:
+  commercial_owner_operator: true
+  dao: false
+  foundation_owned: false
+  decentralization_goal: operational_resilience_without_mandatory_central_cloud
+proof_of_trust:
+  canonical_section: true
+  epoch_source: finalized_block_height
+  epoch_blocks: OPEN
+  integer_arithmetic: true
+  system_balance_contribution_capped: true
+  new_mail_tx_limit_per_epoch: 25
+  consensus_voting_power: false
+fee_router:
+  batch_size: 4
+  security_per_batch: 3
+  onboarding_per_batch: 1
+  percentages:
+    security: 75
+    onboarding: 25
+  network_service_bucket_v1: false
+  burn: 0
+reward_policy:
+  validator_only_before_storage: true
+  validator_participation_threshold_percent: 90
+  distribution: equal_split_among_eligible_validators
+  stake_weighted: false
+  generic_service_node_rewards_v1: false
+email_v1_restrictions:
+  realtime_chat: false
+  public_open_channels: false
+  public_feed: false
+  attachments: false
+  html_active_content: false
+  smtp: false
+  imap: false
+  pop3: false
+mail:
+  operation: MailTx
+  first_class_protocol_operation: true
+  encoded_as_op_return: false
+  pre_store_ciphertext_location: block_history
+  permanent_per_mail_consensus_state: false
+  recipient_discovery_filter: PREFERRED_OPEN_DESIGN
+  attachments_v1: false
+  future_content_location: CYBOU_Object_Storage
+validator_policy:
+  admission: operator_approved
+  bft: true
+  equal_weight: 1
+  min_for_f1_target: 4
+invite:
+  welcome_grant: 6000
+  voucher_required: true
+  operator_signed: true
+  one_time: true
+operator_key_domains:
+- operator_authority
+- operator_validator
+- release_signing
+- treasury

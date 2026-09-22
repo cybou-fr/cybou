@@ -1,0 +1,11 @@
+version: '0.14'
+consensus: BFT_explicit_finality
+validator_admission: operator_controlled_PoA
+validator_weight: 1
+stake_weighted: false
+topology:
+  development: 1
+  integration_test: 2-3
+  minimum_for_f1_target: 4
+safety_model: n >= 3f + 1
+operator_authorized_set_transition: true

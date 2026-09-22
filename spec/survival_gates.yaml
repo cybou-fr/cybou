@@ -1,0 +1,51 @@
+version: '0.13'
+gates:
+- id: S0
+  name: Bitcoin quarantine
+  condition: CYBOU normal build cannot reach Bitcoin networks
+  blocks_next: true
+- id: S1
+  name: MailTx E2EE
+  condition: text MailTx encrypts/signs/verifies with no plaintext chain exposure
+  blocks_pilot: true
+- id: S2
+  name: MailTx finality
+  condition: offline recipient can later sync, verify and decrypt finalized MailTx
+  blocks_pilot: true
+- id: S3
+  name: Mail state boundedness
+  condition: current state contains no permanent per-mail object and remains bounded
+  blocks_pilot: true
+- id: S4
+  name: Static BFT safety
+  condition: 3-validator deterministic/fault tests pass
+  blocks_pilot: true
+- id: S5
+  name: Recipient metadata privacy
+  condition: recipient discovery design avoids avoidable plaintext social-graph leakage
+  blocks_public: true
+- id: S6
+  name: Pre-Store retention policy
+  condition: block pruning/archive behavior for encrypted MailTx is explicit and tested
+  blocks_public: true
+- id: S7
+  name: Release authenticity
+  condition: signed release/update verification exists
+  blocks_pilot: true
+- id: S8
+  name: Resource budget
+  condition: RAM/CPU/network/state/block growth measured and acceptable
+  blocks_pilot: true
+- id: S9
+  name: Operator privacy
+  condition: operator/admin/validators cannot decrypt mail or arbitrarily debit Balance
+  blocks_pilot: true
+- id: S10
+  name: Authority continuity
+  condition: operator-approved validator governance has an explicit operator-unavailable
+    recovery path
+  blocks_resilient_network: true
+- id: S11
+  name: Backup recovery
+  condition: recovery model defined honestly
+  blocks_backup_commercialization: true

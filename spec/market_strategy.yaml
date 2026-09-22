@@ -1,0 +1,42 @@
+version: '0.14'
+positioning:
+  en: CYBOU — a European sovereign peer-to-peer network, designed in France.
+  fr: CYBOU — réseau pair-à-pair souverain européen, conçu en France.
+ownership:
+  commercial_owner_operator: true
+  dao: false
+  foundation: false
+  operational_decentralization: true
+rollout:
+- phase: France
+  purpose: R&D, native Email pilot, operational proof
+- phase: European Union
+  purpose: multi-country approved-validator operation and cross-border pilots
+- phase: Global
+  purpose: later commercial expansion after EU maturity
+go_to_market:
+  first_product: CYBOU Email
+  first_adoption_unit: organization/team
+  initial_public_channels: false
+  lead_message:
+  - sovereign E2E encrypted email
+  - consensus registration/finality
+  - network-native identity
+  - operational resilience
+  - European independence
+  - post-quantum migration readiness
+  do_not_lead_with:
+  - blockchain
+  - coin
+  - staking
+  - UTXO
+asset:
+  ico: false
+  public_sale: false
+  exchange_listing_objective: false
+compliance_gates:
+- CRA readiness
+- French cryptography/export review
+- Email communications-service regulatory review
+- GDPR/privacy review
+- MiCA review before public economic launch

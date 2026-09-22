@@ -1,0 +1,40 @@
+version: '0.14'
+status: target_profile_not_yet_frozen_for_public_wire_compatibility
+native_email:
+  e2e_required: true
+  plaintext_fallback: false
+  smtp_required: false
+content:
+  cek: random_per_message
+  encrypt_once: true
+  aead_candidates:
+  - ChaCha20-Poly1305
+  - AES-256-GCM
+recipient_key_wrap:
+  mechanism: HPKE
+  basis: RFC 9180
+  per_recipient_device: true
+  preferred_pq_t_hybrid_target: MLKEM768-X25519
+  pq_basis: NIST FIPS 203 ML-KEM
+  pq_hpke_status: IETF Internet-Draft as of 2026-09
+  custom_hybrid_combiner: false
+authentication:
+  sender_signature_separate_from_hpke: true
+  pq_capable: true
+  exact_signature_profile: open
+privacy:
+  subject_inside_ciphertext: true
+  body_inside_ciphertext: true
+  thread_metadata_inside_ciphertext_where_possible: true
+  opaque_recipient_discovery_locator_target: true
+agility:
+  suite_id: true
+  kem_id: true
+  kdf_id: true
+  aead_id: true
+  signature_algorithm_id: true
+  downgrade_protection: true
+content_commitment:
+  salted: true
+  domain_separator: CYBOU-MAIL-CONTENT-V1
+  bare_plaintext_hash: false
