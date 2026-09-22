@@ -53,6 +53,24 @@ Freeze capped System Balance, age, clean-history, activity and penalty contribut
 ### O-015 Invite organization delegation
 Define whether an approved organization receives individually signed vouchers or a bounded sub-authority/allocation.
 
+### O-021 Operator Authority signature suite
+Benchmark and review a domain-specific hybrid signature profile for rare
+Operator Authority operations. `Ed25519 + ML-DSA-65`, requiring both component
+signatures to verify, is a candidate rather than a frozen decision. Freeze the
+suite identifier, exact signed bytes, component-key binding, downgrade rules,
+and implementation backend together. Do not copy a changing Internet-Draft wire
+format into consensus.
+
+### O-022 AccountID and network identifiers
+Freeze the canonical 32-byte (or alternative reviewed) encodings used to bind
+Invite Vouchers to one beneficiary and one CYBOU network before voucher signing
+is enabled.
+
+### O-023 Validator archival mode enforcement
+Define how a node declares and proves the active-validator role so the software
+can reject pruning configurations while pre-Store historical MailTx retention
+is mandatory.
+
 ## Evidence / legal
 
 ### O-016 Consensus timestamp semantics

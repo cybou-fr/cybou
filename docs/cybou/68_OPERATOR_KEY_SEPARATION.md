@@ -55,3 +55,31 @@ Operator Authority cannot:
 - bypass BFT validation.
 
 Its powers are explicitly enumerated by protocol rules.
+
+## Object-level signing domains
+
+Key separation does not replace per-object domain separation. Operator
+Authority operations must use distinct frozen signing domains, including at
+least:
+
+```text
+Invite Voucher
+Validator Admission
+Validator Removal
+Protocol Parameter Action
+```
+
+The exact domain bytes are part of each canonical object specification. A
+signature valid for one authority operation must not be reusable as another.
+
+## Signature-suite status
+
+The v0.0.3 code contains structural validation only. Its caller-supplied
+signature result is a test seam, not an authorization boundary. Production
+consensus must receive a typed verified result from the Operator Authority
+verifier after canonical serialization and domain-separated verification.
+
+For rare Operator Authority operations, a hybrid classical + post-quantum
+profile is preferred for evaluation. `Ed25519 + ML-DSA-65` with both signatures
+required is a candidate, not yet frozen. MailTx, BFT votes and release signing
+remain separate performance/security profiles.

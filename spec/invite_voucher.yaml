@@ -8,10 +8,18 @@ voucher:
   required: true
   one_time: true
   operator_authority_signature: true
+  bearer_voucher: false
+  canonical_signed_payload: REQUIRED_BEFORE_CONSENSUS
   fields:
+  - payload_version
+  - network_id
   - voucher_id
+  - beneficiary_account_id
   - grant_amount
   - expiry_epoch
   - optional_organization_id
   - operator_authority_signature
+  object_signing_domain: REQUIRED_BEFORE_CONSENSUS
+  signature_suite: OPEN
+  candidate_signature_suite: HYBRID_ED25519_ML_DSA_65_BOTH_REQUIRED
   replay_protection: consensus_consumed_voucher_id

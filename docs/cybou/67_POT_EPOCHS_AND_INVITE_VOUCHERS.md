@@ -70,7 +70,10 @@ Conceptually:
 
 ```text
 InviteVoucher {
+    version
+    network_id
     voucher_id
+    beneficiary_account_id
     grant_amount = 6000 CYBOU
     expiry_epoch
     optional organization_id
@@ -78,11 +81,22 @@ InviteVoucher {
 }
 ```
 
+The signed payload MUST bind the voucher to exactly one CYBOU network and one
+beneficiary AccountID. A bearer-style voucher is rejected because interception
+before redemption would otherwise allow another account to claim the grant.
+
+The signature is calculated over a canonical versioned payload that excludes
+the signature bundle itself. The exact encoding, network identifier, AccountID
+encoding, signature-suite identifier and object-specific signing domain must be
+frozen together before consensus redemption is enabled.
+
 ## Redemption
 
 ```text
 valid voucher
 + new AccountID
++ voucher beneficiary matches new AccountID
++ voucher network matches active network
 + unused voucher_id
 -> 6,000 CYBOU transferred
    OnboardingPool -> Account.SystemBalance

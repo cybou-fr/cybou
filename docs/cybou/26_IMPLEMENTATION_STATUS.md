@@ -78,3 +78,39 @@ Operator Authority custody target: 2-of-3.
 MailTx uses deterministic size-aware integer fees.
 
 Priority fees are disabled in v1.
+
+## Current code boundary
+
+The current `CYBOU-DEV v0.0.2` chain is a disposable network/bootstrap chain.
+It has CYBOU-specific genesis, network magic, ports, address prefixes and seed
+isolation, but still uses inherited Bitcoin PoW, subsidy and amount semantics.
+
+It is therefore:
+
+```text
+NOT monetary-policy-valid
+NOT BFT-finality-valid
+NOT production-compatible
+```
+
+Do not build Balance/System Balance or issuance assumptions on the inherited
+coinbase/subsidy path. The development genesis may be reset when the CYBOU BFT
+and deterministic state-transition layers replace the bootstrap consensus.
+
+## v0.0.3 implementation
+
+Implemented skeleton:
+
+- distinct Operator Authority / Validator / Release Signing / Treasury domains;
+- bounded Invite Voucher envelope;
+- exact 6,000 CYBOU structural grant check;
+- deterministic epoch expiry check;
+- consumed-voucher replay check;
+- explicit test seam for a future authority signature verifier.
+
+Not yet implemented:
+
+- AccountID;
+- beneficiary/network-bound canonical voucher payload;
+- production Operator Authority signature verification;
+- voucher redemption state transition.

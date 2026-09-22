@@ -2,11 +2,16 @@
 
 ## Identified release
 
-The imported source tree identifies itself as **Bitcoin Core 31.1.0**:
+The imported source at CYBOU import commit `6de2974` identifies itself as
+**Bitcoin Core 31.1.0**:
 
-- `CLIENT_VERSION_MAJOR=31`, `CLIENT_VERSION_MINOR=1` in the root build file;
+- the imported root build metadata used version 31.1.0 before CYBOU product
+  versioning replaced it;
 - the CYBOU rename inventory independently names Bitcoin Core v31.1;
 - inherited copyright and MIT license notices are retained.
+
+The current root `CMakeLists.txt` describes the CYBOU product version and is no
+longer evidence for the imported upstream version.
 
 ## Provenance limitation
 
