@@ -16,6 +16,7 @@
 #include <optional>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include <boost/test/unit_test.hpp>
@@ -47,6 +48,20 @@ BOOST_AUTO_TEST_CASE(util_datadir)
     args.ForceSetArg("-datadir", fs::PathToString(dd_norm) + "/.//");
     args.ClearPathCache();
     BOOST_CHECK_EQUAL(dd_norm, args.GetDataDirBase());
+}
+
+BOOST_AUTO_TEST_CASE(cybou_default_paths_are_isolated)
+{
+    BOOST_CHECK_EQUAL(std::string{BITCOIN_CONF_FILENAME}, "cybou.conf");
+
+    const std::string datadir_name{fs::PathToString(GetDefaultDataDir().filename())};
+#if defined(WIN32) || defined(__APPLE__)
+    BOOST_CHECK_EQUAL(datadir_name, "CYBOU");
+#else
+    BOOST_CHECK_EQUAL(datadir_name, ".cybou");
+#endif
+    BOOST_CHECK(datadir_name != "Bitcoin");
+    BOOST_CHECK(datadir_name != ".bitcoin");
 }
 
 struct TestArgsManager : public ArgsManager
