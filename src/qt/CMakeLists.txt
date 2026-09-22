@@ -273,6 +273,21 @@ import_plugins(cybou)
 install_binary_component(cybou)
 if(WIN32)
   set_target_properties(cybou PROPERTIES WIN32_EXECUTABLE TRUE)
+
+  find_program(CYBOU_WINDEPLOYQT_EXECUTABLE
+    NAMES windeployqt
+    HINTS "${Qt6_DIR}/../../../bin"
+    REQUIRED
+  )
+  add_custom_command(TARGET cybou POST_BUILD
+    COMMAND "${CYBOU_WINDEPLOYQT_EXECUTABLE}"
+      --release
+      --compiler-runtime
+      --no-translations
+      "$<TARGET_FILE:cybou>"
+    COMMENT "Deploying the Qt runtime for CYBOU"
+    VERBATIM
+  )
 endif()
 
 if(ENABLE_IPC)
