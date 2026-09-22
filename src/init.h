@@ -74,7 +74,7 @@ bool AppInitMain(node::NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip
 /**
  * Register all arguments with the ArgsManager
  */
-void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc=false);
+void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc=false, bool allow_inherited_chains=true);
 
 /** Validates requirements to run the indexes and spawns each index initial sync thread */
 bool StartIndexBackgroundSync(node::NodeContext& node);

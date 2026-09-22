@@ -509,17 +509,12 @@ bool LabelOutOfFocusEventFilter::eventFilter(QObject* watched, QEvent* event)
 #ifdef WIN32
 fs::path static StartupShortcutPath()
 {
-    ChainType chain = gArgs.GetChainType();
-    if (chain == ChainType::MAIN)
-        return GetSpecialFolderPath(CSIDL_STARTUP) / "Bitcoin.lnk";
-    if (chain == ChainType::TESTNET) // Remove this special case when testnet CBaseChainParams::DataDir() is incremented to "testnet4"
-        return GetSpecialFolderPath(CSIDL_STARTUP) / "Bitcoin (testnet).lnk";
-    return GetSpecialFolderPath(CSIDL_STARTUP) / fs::u8path(strprintf("Bitcoin (%s).lnk", ChainTypeToString(chain)));
+    return GetSpecialFolderPath(CSIDL_STARTUP) / "CYBOU.lnk";
 }
 
 bool GetStartOnSystemStartup()
 {
-    // check for Bitcoin*.lnk
+    // Check the isolated CYBOU startup shortcut.
     return fs::exists(StartupShortcutPath());
 }
 
@@ -546,9 +541,6 @@ bool SetStartOnSystemStartup(bool fAutoStart)
 
             // Start client minimized
             QString strArgs = "-min";
-            // Set -testnet /-regtest options
-            strArgs += QString::fromStdString(strprintf(" -chain=%s", gArgs.GetChainTypeString()));
-
             // Set the path to the shortcut target
             psl->SetPath(pszExePath);
             PathRemoveFileSpecW(pszExePath);

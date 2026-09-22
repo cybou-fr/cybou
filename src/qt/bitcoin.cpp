@@ -506,7 +506,9 @@ int GuiMain(int argc, char* argv[])
 
     /// 2. Parse command-line options. We do this after qt in order to show an error if there are problems parsing these
     // Command-line options take precedence:
-    SetupServerArgs(gArgs, init->canListenIpc());
+    // The consumer desktop exposes CYBOU-DEV only. Inherited chain arguments
+    // remain available to internal developer and test binaries.
+    SetupServerArgs(gArgs, init->canListenIpc(), /*allow_inherited_chains=*/false);
     SetupUIArgs(gArgs);
     std::string error;
     if (!gArgs.ParseParameters(argc, argv, error)) {
