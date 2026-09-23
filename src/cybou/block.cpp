@@ -47,7 +47,7 @@ inline uint32_t ReadUint32LE(const std::span<const unsigned char>& bytes, size_t
 
 } // namespace
 
-uint256 ComputeOperationsRoot(const std::vector<ProtocolOperationV1>& operations)
+uint256 ComputeOperationsRootFromHashes(std::span<const uint256> hashes)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/OPS_ROOT/V1"};
     CSHA256 hasher;
@@ -55,14 +55,11 @@ uint256 ComputeOperationsRoot(const std::vector<ProtocolOperationV1>& operations
 
     unsigned char count_bytes[4];
     for (int i = 0; i < 4; ++i) {
-        count_bytes[i] = static_cast<unsigned char>(operations.size() >> (8 * i));
+        count_bytes[i] = static_cast<unsigned char>(hashes.size() >> (8 * i));
     }
     hasher.Write(count_bytes, sizeof(count_bytes));
 
-    for (const auto& op : operations) {
-        const auto serialized = SerializeProtocolOperation(op);
-        uint256 op_hash;
-        CSHA256().Write(serialized.data(), serialized.size()).Finalize(op_hash.begin());
+    for (const auto& op_hash : hashes) {
         hasher.Write(op_hash.begin(), op_hash.size());
     }
 
@@ -71,27 +68,54 @@ uint256 ComputeOperationsRoot(const std::vector<ProtocolOperationV1>& operations
     return root;
 }
 
-uint256 ComputeBlockId(const CybouBlockV1& block)
+uint256 ComputeOperationsRoot(const std::vector<ProtocolOperationV1>& operations)
+{
+    std::vector<uint256> hashes;
+    hashes.reserve(operations.size());
+    for (const auto& op : operations) {
+        const auto serialized = SerializeProtocolOperation(op);
+        uint256 op_hash;
+        CSHA256().Write(serialized.data(), serialized.size()).Finalize(op_hash.begin());
+        hashes.push_back(op_hash);
+    }
+    return ComputeOperationsRootFromHashes(hashes);
+}
+
+uint256 ComputeBlockHeaderId(const CybouBlockHeaderV1& header)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/BLOCK/V1"};
     CSHA256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
-    hasher.Write(&block.version, 1);
-    hasher.Write(block.parent_block_id.begin(), block.parent_block_id.size());
+    hasher.Write(&header.version, 1);
+    hasher.Write(header.parent_block_id.begin(), header.parent_block_id.size());
 
     unsigned char height_bytes[8];
     for (int i = 0; i < 8; ++i) {
-        height_bytes[i] = static_cast<unsigned char>(block.height >> (8 * i));
+        height_bytes[i] = static_cast<unsigned char>(header.height >> (8 * i));
     }
     hasher.Write(height_bytes, sizeof(height_bytes));
-
-    const uint256 ops_root = ComputeOperationsRoot(block.operations);
-    hasher.Write(ops_root.begin(), ops_root.size());
-    hasher.Write(block.resulting_state_root.begin(), block.resulting_state_root.size());
+    hasher.Write(header.operations_root.begin(), header.operations_root.size());
+    hasher.Write(header.resulting_state_root.begin(), header.resulting_state_root.size());
 
     uint256 block_id;
     hasher.Finalize(block_id.begin());
     return block_id;
+}
+
+CybouBlockHeaderV1 ExtractBlockHeader(const CybouBlockV1& block)
+{
+    return CybouBlockHeaderV1{
+        .version = block.version,
+        .parent_block_id = block.parent_block_id,
+        .height = block.height,
+        .operations_root = ComputeOperationsRoot(block.operations),
+        .resulting_state_root = block.resulting_state_root,
+    };
+}
+
+uint256 ComputeBlockId(const CybouBlockV1& block)
+{
+    return ComputeBlockHeaderId(ExtractBlockHeader(block));
 }
 
 std::vector<unsigned char> SerializeBlock(const CybouBlockV1& block)

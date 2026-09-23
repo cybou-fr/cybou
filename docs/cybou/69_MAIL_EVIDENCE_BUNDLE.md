@@ -2,20 +2,44 @@
 
 CYBOU Email should support exportable cryptographic evidence for a finalized MailTx.
 
-## EvidenceBundle
+## EvidenceBundle V1 specification
 
-Conceptually:
+Implemented in `src/cybou/evidence.{h,cpp}`:
 
 ```text
-MailEvidenceBundle {
-    mail_tx
-    block_header
-    transaction_inclusion_proof
-    finality_certificate
-    sender_key_state_proof
-    protocol_version
+MailEvidenceBundleV1 {
+    version: uint8_t = 1
+    network_id: uint256
+    mail_operation: AuthorizedOperationV1 (payload = MailOpV1)
+    block_header: CybouBlockHeaderV1 {
+        version: uint8_t
+        parent_block_id: uint256
+        height: uint64_t
+        operations_root: uint256
+        resulting_state_root: uint256
+    }
+    inclusion_proof: OperationInclusionProofV1 {
+        operation_index: uint32_t
+        operation_hashes: vector<uint256>
+    }
+    finality_certificate: BftFinalityCertificateV1
+    sender_authorization: AccountAuthorizationV1
 }
 ```
+
+### Verification flow
+
+1. **Network & Operation integrity**:
+   - `network_id` matches verifier network;
+   - `mail_operation.payload` is a valid `MailOpV1`.
+2. **Historical sender authorization**:
+   - `mail_operation.signature` verifies with `sender_authorization.authorization_descriptor` over `ComputeUserOperationDigest(network_id, sender_id, nonce, payload)`.
+3. **Block transaction inclusion**:
+   - `inclusion_proof` verifies that `SerializeProtocolOperation(mail_operation)` is at `operation_index` in `operation_hashes`, and `ComputeOperationsRootFromHashes(operation_hashes) == block_header.operations_root`.
+4. **BFT finality certificate**:
+   - `ComputeBlockHeaderId(block_header) == finality_certificate.block_id`;
+   - `block_header.height == finality_certificate.height`;
+   - `VerifyFinalityCertificate(finality_certificate, validator_set, network_id)` succeeds.
 
 ## Sender key at historical height
 

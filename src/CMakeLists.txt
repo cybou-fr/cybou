@@ -112,6 +112,7 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   cybou/bft.cpp
   cybou/bft_engine.cpp
   cybou/block.cpp
+  cybou/evidence.cpp
   deploymentinfo.cpp
   external_signer.cpp
   init/common.cpp

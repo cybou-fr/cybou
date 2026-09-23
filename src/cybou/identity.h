@@ -36,6 +36,7 @@ struct AccountAuthorizationV1 {
 };
 
 std::vector<unsigned char> SerializeAccountAuthorization(const AccountAuthorizationV1& auth);
+std::optional<AccountAuthorizationV1> DeserializeAccountAuthorization(std::span<const unsigned char> bytes);
 uint256 ComputeAuthCommitment(const AccountAuthorizationV1& auth);
 
 } // namespace cybou

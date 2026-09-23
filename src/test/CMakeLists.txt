@@ -148,6 +148,7 @@ add_executable(cybou-core-test
   cybou_state_tests.cpp
   cybou_state_store_tests.cpp
   cybou_bft_tests.cpp
+  cybou_evidence_tests.cpp
 )
 
 include(TargetDataSources)

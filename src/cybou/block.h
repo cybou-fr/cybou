@@ -32,11 +32,33 @@ struct CybouBlockV1 {
     friend bool operator==(const CybouBlockV1&, const CybouBlockV1&) = default;
 };
 
+/**
+ * Canonical block header extracting commitment roots without holding operations payload.
+ */
+struct CybouBlockHeaderV1 {
+    uint8_t version{CYBOU_BLOCK_VERSION};
+    uint256 parent_block_id;
+    uint64_t height{0};
+    uint256 operations_root;
+    uint256 resulting_state_root;
+
+    friend bool operator==(const CybouBlockHeaderV1&, const CybouBlockHeaderV1&) = default;
+};
+
+/** Compute domain-separated operations commitment root from a sequence of operation hashes: SHA256("CYBOU/OPS_ROOT/V1" || count || hashes) */
+uint256 ComputeOperationsRootFromHashes(std::span<const uint256> hashes);
+
 /** Compute domain-separated operations commitment root: SHA256("CYBOU/OPS_ROOT/V1" || count || hashes) */
 uint256 ComputeOperationsRoot(const std::vector<ProtocolOperationV1>& operations);
 
+/** Compute domain-separated BlockID from header: SHA256("CYBOU/BLOCK/V1" || version || parent || height || ops_root || state_root) */
+uint256 ComputeBlockHeaderId(const CybouBlockHeaderV1& header);
+
 /** Compute domain-separated BlockID: SHA256("CYBOU/BLOCK/V1" || version || parent || height || ops_root || state_root) */
 uint256 ComputeBlockId(const CybouBlockV1& block);
+
+/** Extract header from a full block */
+CybouBlockHeaderV1 ExtractBlockHeader(const CybouBlockV1& block);
 
 std::vector<unsigned char> SerializeBlock(const CybouBlockV1& block);
 std::optional<CybouBlockV1> DeserializeBlock(std::span<const unsigned char> bytes);
