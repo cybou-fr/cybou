@@ -19,7 +19,7 @@ function(setup_split_debug_script)
 endfunction()
 
 function(add_windows_deploy_target)
-  if(MINGW AND TARGET bitcoin AND TARGET bitcoin-qt AND TARGET bitcoind AND TARGET bitcoin-cli AND TARGET bitcoin-tx AND TARGET bitcoin-wallet AND TARGET bitcoin-util AND TARGET test_bitcoin)
+  if(MINGW AND TARGET bitcoin AND TARGET bitcoin-qt AND TARGET bitcoind AND TARGET bitcoin-cli AND TARGET bitcoin-tx AND TARGET bitcoin-wallet AND TARGET bitcoin-util AND TARGET cybou-test)
     find_program(MAKENSIS_EXECUTABLE makensis)
     if(NOT MAKENSIS_EXECUTABLE)
       add_custom_target(deploy
@@ -42,7 +42,7 @@ function(add_windows_deploy_target)
       COMMAND ${CMAKE_STRIP} $<TARGET_FILE:bitcoin-tx> -o ${PROJECT_BINARY_DIR}/release/$<TARGET_FILE_NAME:bitcoin-tx>
       COMMAND ${CMAKE_STRIP} $<TARGET_FILE:bitcoin-wallet> -o ${PROJECT_BINARY_DIR}/release/$<TARGET_FILE_NAME:bitcoin-wallet>
       COMMAND ${CMAKE_STRIP} $<TARGET_FILE:bitcoin-util> -o ${PROJECT_BINARY_DIR}/release/$<TARGET_FILE_NAME:bitcoin-util>
-      COMMAND ${CMAKE_STRIP} $<TARGET_FILE:test_bitcoin> -o ${PROJECT_BINARY_DIR}/release/$<TARGET_FILE_NAME:test_bitcoin>
+      COMMAND ${CMAKE_STRIP} $<TARGET_FILE:cybou-test> -o ${PROJECT_BINARY_DIR}/release/$<TARGET_FILE_NAME:cybou-test>
       COMMAND ${MAKENSIS_EXECUTABLE} -V2 ${PROJECT_BINARY_DIR}/bitcoin-win64-setup.nsi
       VERBATIM
     )

@@ -75,10 +75,10 @@ jobs:
             -DWITH_ZMQ=OFF
 
       - name: Build unit test binary
-        run: cmake --build build-ci --target test_bitcoin --parallel 2
+        run: cmake --build build-ci --target cybou-test --parallel 2
 
       - name: Run CYBOU protocol tests
         run: |
-          build-ci/bin/test_bitcoin \
+          build-ci/bin/test \
             --run_test=cybou_chainparams_tests,cybou_signing_tests,cybou_identity_tests,cybou_account_creation_tests,cybou_state_tests,cybou_state_store_tests,headers_sync_chainwork_tests \
             --log_level=error

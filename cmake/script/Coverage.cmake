@@ -19,7 +19,7 @@ execute_process(
   COMMAND_ERROR_IS_FATAL ANY
 )
 execute_process(
-  COMMAND ${LCOV_COMMAND} --capture --directory src --test-name test_bitcoin --output-file test_bitcoin.info
+  COMMAND ${LCOV_COMMAND} --capture --directory src --test-name test --output-file test.info
   WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
   COMMAND_ERROR_IS_FATAL ANY
 )
@@ -29,7 +29,7 @@ execute_process(
   COMMAND_ERROR_IS_FATAL ANY
 )
 execute_process(
-  COMMAND ${LCOV_FILTER_COMMAND} test_bitcoin.info test_bitcoin_filtered.info
+  COMMAND ${LCOV_FILTER_COMMAND} test.info test_bitcoin_filtered.info
   WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
   COMMAND_ERROR_IS_FATAL ANY
 )
@@ -44,7 +44,7 @@ execute_process(
   COMMAND_ERROR_IS_FATAL ANY
 )
 execute_process(
-  COMMAND ${GENHTML_COMMAND} test_bitcoin_coverage.info --output-directory test_bitcoin.coverage
+  COMMAND ${GENHTML_COMMAND} test_bitcoin_coverage.info --output-directory test.coverage
   WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
   COMMAND_ERROR_IS_FATAL ANY
 )
