@@ -61,6 +61,10 @@ public:
      */
     void Initialize(const EllSwiftPubKey& their_pubkey, bool initiator, bool self_decrypt = false) noexcept;
 
+    /** Initialize with explicit network magic for protocol-vector testing. */
+    void Initialize(const EllSwiftPubKey& their_pubkey, bool initiator, bool self_decrypt,
+                    std::span<const unsigned char> network_magic) noexcept;
+
     /** Determine whether this cipher is fully initialized. */
     explicit operator bool() const noexcept { return m_send_l_cipher.has_value(); }
 

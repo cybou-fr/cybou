@@ -664,7 +664,8 @@ BOOST_AUTO_TEST_CASE(util_GetChainTypeString)
     const auto testnet = std::make_pair("-testnet", ArgsManager::ALLOW_ANY);
     const auto testnet4 = std::make_pair("-testnet4", ArgsManager::ALLOW_ANY);
     const auto regtest = std::make_pair("-regtest", ArgsManager::ALLOW_ANY);
-    test_args.SetupArgs({testnet, testnet4, regtest});
+    const auto chain = std::make_pair("-chain=<chain>", ArgsManager::ALLOW_ANY);
+    test_args.SetupArgs({testnet, testnet4, regtest, chain});
 
     const char* argv_none[] = {"cmd"};
     const char* argv_legacy[] = {"cmd", "-testnet4", "-regtest"};
@@ -888,7 +889,8 @@ BOOST_FIXTURE_TEST_CASE(util_ArgsMerge, ArgsMergeTestingSetup)
     // Results file is formatted like:
     //
     //   <input> || <IsArgSet/IsArgNegated/GetArg output> | <GetArgs output> | <GetUnsuitable output>
-    BOOST_CHECK_EQUAL(out_sha_hex, "f1ee5ab094cc43d16a6086fa7f2c10389e0f99902616b31bbf29189972ad1473");
+    // Frozen for CYBOU's main-only network/section topology.
+    BOOST_CHECK_EQUAL(out_sha_hex, "7a3f10f5e00251005465a622dbc0636dd937a4399f2340df24fbb35e138632f1");
 }
 
 // Similar test as above, but for ArgsManager::GetChainTypeString function.
@@ -991,7 +993,8 @@ BOOST_FIXTURE_TEST_CASE(util_ChainMerge, ChainMergeTestingSetup)
     // Results file is formatted like:
     //
     //   <input> || <output>
-    BOOST_CHECK_EQUAL(out_sha_hex, "c0e33aab0c74e040ddcee9edad59e8148d8e1cacb3cccd9ea1a1f485cb6bad21");
+    // Legacy Bitcoin selectors are inert in CYBOU, so all combinations resolve to main.
+    BOOST_CHECK_EQUAL(out_sha_hex, "b113bfc5d99320bf60295abaa44169abd0db701cfedd56b72fefc036aa6eb5ff");
 }
 
 BOOST_AUTO_TEST_CASE(util_ReadWriteSettings)

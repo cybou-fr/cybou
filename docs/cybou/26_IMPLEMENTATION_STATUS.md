@@ -117,6 +117,8 @@ Implemented skeleton:
 - atomic LevelDB snapshot persistence with paired state/hash verification.
 - GitHub Actions headless build gate for CYBOU protocol unit tests.
 - fixed-difficulty transition enforcement and deterministic 100-block fixture hash.
+- full 684-case C++ unit suite passes with upstream Bitcoin protocol vectors
+  isolated from CYBOU network magic and Base58 prefixes.
 
 Not yet implemented:
 
