@@ -37,7 +37,7 @@ std::vector<unsigned char> SerializeInviteVoucherPayload(const InviteVoucherPayl
     out.push_back(payload.payload_version);
     append_hash(payload.network_id);
     append_hash(payload.voucher_id);
-    append_hash(payload.beneficiary_account_id);
+    append_hash(payload.beneficiary_account_id.Value());
     append_u64le(payload.grant_amount);
     append_u64le(payload.expiry_epoch);
     out.push_back(payload.organization_id ? 0x01 : 0x00);

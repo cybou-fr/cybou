@@ -61,10 +61,10 @@ suite identifier, exact signed bytes, component-key binding, downgrade rules,
 and implementation backend together. Do not copy a changing Internet-Draft wire
 format into consensus.
 
-### O-022 AccountID and network identifiers
-Freeze the canonical 32-byte (or alternative reviewed) encodings used to bind
-Invite Vouchers to one beneficiary and one CYBOU network before voucher signing
-is enabled.
+### O-022 AccountID and network identifiers — resolved
+AccountID V1 is an opaque nonzero 32-byte identifier. Invite Voucher network_id
+is the 32-byte genesis block hash. Both use the internal byte order frozen by
+the V1 canonical serializer; see DEC-156 and DEC-157.
 
 ### O-023 Validator archival mode enforcement
 Define how a node declares and proves the active-validator role so the software

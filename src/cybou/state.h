@@ -26,7 +26,7 @@ struct AccountBalanceState {
 /** Minimal validation-relevant state for atomic Invite Voucher redemption. */
 struct InviteRedemptionState {
     uint64_t onboarding_pool{0};
-    std::map<uint256, AccountBalanceState> accounts;
+    std::map<AccountId, AccountBalanceState> accounts;
     std::set<uint256> consumed_voucher_ids;
 
     friend bool operator==(const InviteRedemptionState&, const InviteRedemptionState&) = default;

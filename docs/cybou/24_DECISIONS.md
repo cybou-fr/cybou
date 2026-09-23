@@ -157,3 +157,5 @@
 | DEC-153 | Operator Authority target custody is 2-of-3 | Frozen operational direction |
 | DEC-154 | MailEvidenceBundle must prove historical sender-key authorization at MailTx height | Frozen v0.14 |
 | DEC-155 | Mail content commitment uses random salt/domain separation; no bare predictable plaintext hash | Frozen v0.14 |
+| DEC-156 | AccountID V1 is an opaque stable 32-byte identifier; all-zero is invalid and key rotation does not change it | Frozen v0.14 |
+| DEC-157 | Invite Voucher network_id V1 is the 32-byte genesis block hash | Frozen v0.14 |

@@ -15,7 +15,7 @@ BOOST_AUTO_TEST_SUITE(cybou_state_tests)
 namespace {
 
 const uint256 NETWORK_ID{uint256::ONE};
-const uint256 BENEFICIARY{uint256::FromUserHex("0a").value()};
+const cybou::AccountId BENEFICIARY{uint256::FromUserHex("0a").value()};
 const uint256 VOUCHER_ID{uint256::FromUserHex("02").value()};
 
 class FixedVerifier final : public cybou::OperatorAuthoritySignatureVerifier
@@ -162,7 +162,7 @@ BOOST_AUTO_TEST_CASE(redemption_state_serialization_is_canonical_and_strict)
         "0170170000000000000000000000000000");
 
     auto state{State()};
-    state.accounts.emplace(uint256::FromUserHex("01").value(), cybou::AccountBalanceState{1, 2});
+    state.accounts.emplace(cybou::AccountId{uint256::FromUserHex("01").value()}, cybou::AccountBalanceState{1, 2});
     state.consumed_voucher_ids.insert(VOUCHER_ID);
     state.consumed_voucher_ids.insert(uint256::FromUserHex("03").value());
 

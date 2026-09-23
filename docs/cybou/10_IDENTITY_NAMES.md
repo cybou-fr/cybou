@@ -6,6 +6,11 @@
 AccountID = cryptographic identity
 ```
 
+V1 encodes AccountID as an opaque, stable 32-byte value in internal byte order.
+The all-zero value is invalid. AccountID names an authorization record rather
+than one public key, so authorized device/payment/mail keys may rotate without
+changing the AccountID.
+
 An AccountID may authorize:
 
 - device keys;

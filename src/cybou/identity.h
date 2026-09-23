@@ -5,6 +5,7 @@
 #ifndef CYBOU_IDENTITY_H
 #define CYBOU_IDENTITY_H
 
+#include <cybou/account_id.h>
 #include <cybou/signing.h>
 #include <uint256.h>
 
@@ -44,7 +45,7 @@ struct InviteVoucherPayloadV1 {
     uint8_t payload_version{INVITE_VOUCHER_PAYLOAD_VERSION};
     uint256 network_id;
     uint256 voucher_id;
-    uint256 beneficiary_account_id;
+    AccountId beneficiary_account_id;
     uint64_t grant_amount{WELCOME_GRANT};
     uint64_t expiry_epoch{0};
     std::optional<uint256> organization_id;
@@ -68,7 +69,7 @@ struct InviteVoucher {
 
 struct InviteVoucherValidationContext {
     uint256 expected_network_id;
-    uint256 redeemer_account_id;
+    AccountId redeemer_account_id;
     uint64_t current_epoch{0};
     const OperatorAuthorityKeySet* authority_keyset{nullptr};
     bool voucher_already_consumed{false};

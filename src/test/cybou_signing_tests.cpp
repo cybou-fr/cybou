@@ -99,7 +99,7 @@ cybou::InviteVoucherPayloadV1 ReferencePayload(bool with_organization)
     cybou::InviteVoucherPayloadV1 payload{
         .network_id = uint256::ONE,
         .voucher_id = uint256::FromUserHex("02").value(),
-        .beneficiary_account_id = uint256::FromUserHex("03").value(),
+        .beneficiary_account_id = cybou::AccountId{uint256::FromUserHex("03").value()},
         .grant_amount = cybou::WELCOME_GRANT,
         .expiry_epoch = 10,
         .organization_id = std::nullopt,
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(invite_voucher_payload_serialization_is_canonical)
     expected.push_back(cybou::INVITE_VOUCHER_PAYLOAD_VERSION);
     append_hash(payload.network_id);
     append_hash(payload.voucher_id);
-    append_hash(payload.beneficiary_account_id);
+    append_hash(payload.beneficiary_account_id.Value());
     append_u64le(payload.grant_amount);
     append_u64le(payload.expiry_epoch);
     expected.push_back(0x00);
@@ -181,7 +181,7 @@ BOOST_AUTO_TEST_CASE(invite_voucher_payload_serialization_is_deterministic_and_s
     BOOST_CHECK(cybou::SerializeInviteVoucherPayload(mutated) != base_bytes);
 
     mutated = base;
-    mutated.beneficiary_account_id = uint256::FromUserHex("05").value();
+    mutated.beneficiary_account_id = cybou::AccountId{uint256::FromUserHex("05").value()};
     BOOST_CHECK(cybou::SerializeInviteVoucherPayload(mutated) != base_bytes);
 
     mutated = base;

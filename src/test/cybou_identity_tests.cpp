@@ -17,8 +17,8 @@ BOOST_AUTO_TEST_SUITE(cybou_identity_tests)
 namespace {
 
 const uint256 NETWORK_ID{uint256::ONE};
-const uint256 BENEFICIARY{uint256::FromUserHex("0a").value()};
-const uint256 OTHER_ACCOUNT{uint256::FromUserHex("0b").value()};
+const cybou::AccountId BENEFICIARY{uint256::FromUserHex("0a").value()};
+const cybou::AccountId OTHER_ACCOUNT{uint256::FromUserHex("0b").value()};
 
 const cybou::OperatorAuthorityKeySet& AuthorityKeySet()
 {
@@ -104,6 +104,21 @@ BOOST_AUTO_TEST_CASE(operator_key_domains_are_distinct)
     BOOST_CHECK_EQUAL(tags.size(), domains.size());
 }
 
+BOOST_AUTO_TEST_CASE(account_id_has_one_canonical_fixed_width_encoding)
+{
+    std::array<unsigned char, cybou::AccountId::SIZE> bytes{};
+    bytes.front() = 0x2a;
+
+    const auto id{cybou::AccountId::FromBytes(bytes)};
+    BOOST_REQUIRE(id);
+    BOOST_CHECK_EQUAL(*id->Value().begin(), 0x2a);
+
+    BOOST_CHECK(!cybou::AccountId::FromBytes(std::span{bytes}.first(bytes.size() - 1)));
+    bytes.fill(0);
+    BOOST_CHECK(!cybou::AccountId::FromBytes(bytes));
+    BOOST_CHECK(cybou::AccountId{}.IsNull());
+}
+
 BOOST_AUTO_TEST_CASE(invite_voucher_requires_authority_and_is_single_use)
 {
     const auto voucher{ValidVoucher()};
@@ -160,7 +175,7 @@ BOOST_AUTO_TEST_CASE(invite_voucher_is_bound_to_beneficiary)
     BOOST_CHECK(Validate(voucher, context) == cybou::InviteVoucherError::BENEFICIARY_MISMATCH);
 
     auto null_beneficiary{ValidVoucher()};
-    null_beneficiary.payload.beneficiary_account_id.SetNull();
+    null_beneficiary.payload.beneficiary_account_id = cybou::AccountId{};
     BOOST_CHECK(Validate(null_beneficiary, ValidContext()) == cybou::InviteVoucherError::NULL_BENEFICIARY);
 }
 

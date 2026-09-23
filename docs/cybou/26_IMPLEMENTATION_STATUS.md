@@ -119,9 +119,10 @@ Implemented skeleton:
 - fixed-difficulty transition enforcement and deterministic 100-block fixture hash.
 - full 684-case C++ unit suite passes with upstream Bitcoin protocol vectors
   isolated from CYBOU network magic and Base58 prefixes.
+- strongly typed, fixed-width AccountID with null/length validation, integrated
+  into Invite Voucher validation and redemption state.
 
 Not yet implemented:
 
-- AccountID;
 - production Operator Authority signature verification;
 - integration of the voucher state store into finalized block application and rollback.

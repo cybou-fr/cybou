@@ -29,7 +29,7 @@ std::vector<unsigned char> SerializeInviteRedemptionState(const InviteRedemption
     append_u64le(state.onboarding_pool);
     append_u32le(static_cast<uint32_t>(state.accounts.size()));
     for (const auto& [account_id, balance] : state.accounts) {
-        append_hash(account_id);
+        append_hash(account_id.Value());
         append_u64le(balance.balance);
         append_u64le(balance.system_balance);
     }
@@ -77,11 +77,13 @@ std::optional<InviteRedemptionState> DeserializeInviteRedemptionState(const std:
         .consumed_voucher_ids{},
     };
     for (uint32_t i = 0; i < *account_count; ++i) {
-        const auto account_id{read_hash()};
+        const auto account_id_bytes{read_hash()};
         const auto balance{read_u64le()};
         const auto system_balance{read_u64le()};
-        if (!account_id || account_id->IsNull() || !balance || !system_balance ||
-            !state.accounts.emplace(*account_id, AccountBalanceState{*balance, *system_balance}).second) return std::nullopt;
+        if (!account_id_bytes || !balance || !system_balance) return std::nullopt;
+        const AccountId account_id{*account_id_bytes};
+        if (account_id.IsNull() ||
+            !state.accounts.emplace(account_id, AccountBalanceState{*balance, *system_balance}).second) return std::nullopt;
     }
 
     const auto voucher_count{read_u32le()};

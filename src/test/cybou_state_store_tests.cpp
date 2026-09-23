@@ -16,7 +16,7 @@ BOOST_FIXTURE_TEST_SUITE(cybou_state_store_tests, BasicTestingSetup)
 
 namespace {
 
-const uint256 ACCOUNT_ID{uint256::FromUserHex("0a").value()};
+const cybou::AccountId ACCOUNT_ID{uint256::FromUserHex("0a").value()};
 const uint256 VOUCHER_ID{uint256::FromUserHex("02").value()};
 const std::string STATE_KEY{"cybou/invite-redemption/state/v1"};
 const std::string HASH_KEY{"cybou/invite-redemption/hash/v1"};
