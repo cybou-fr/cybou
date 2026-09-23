@@ -6,7 +6,6 @@
 
 #include <dbwrapper.h>
 
-#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -16,52 +15,6 @@ namespace {
 const std::string STATE_KEY{"cybou/state/v1"};
 const std::string HASH_KEY{"cybou/hash/v1"};
 const std::string TIP_KEY{"cybou/tip/v1"};
-const std::string UNDO_PREFIX{"cybou/undo/v1/"};
-
-std::string UndoKey(const uint256& block_id) { return UNDO_PREFIX + block_id.GetHex(); }
-
-std::vector<unsigned char> SerializeUndo(
-    const std::optional<uint256>& previous_tip,
-    const uint256& before_hash,
-    const uint256& after_hash,
-    const CybouState& before)
-{
-    std::vector<unsigned char> out{1, static_cast<unsigned char>(previous_tip.has_value())};
-    if (previous_tip) out.insert(out.end(), previous_tip->begin(), previous_tip->end());
-    out.insert(out.end(), before_hash.begin(), before_hash.end());
-    out.insert(out.end(), after_hash.begin(), after_hash.end());
-    const auto state_bytes{SerializeCybouState(before)};
-    out.insert(out.end(), state_bytes.begin(), state_bytes.end());
-    return out;
-}
-
-struct ParsedUndo {
-    std::optional<uint256> previous_tip;
-    uint256 before_hash;
-    uint256 after_hash;
-    CybouState before;
-};
-
-std::optional<ParsedUndo> ParseUndo(const std::vector<unsigned char>& bytes)
-{
-    if (bytes.size() < 2 + 2 * uint256::size() || bytes[0] != 1 || bytes[1] > 1) return std::nullopt;
-    size_t offset{2};
-    const auto read_hash = [&]() -> std::optional<uint256> {
-        if (bytes.size() - offset < uint256::size()) return std::nullopt;
-        uint256 value;
-        std::copy_n(bytes.begin() + offset, uint256::size(), value.begin());
-        offset += uint256::size();
-        return value;
-    };
-    std::optional<uint256> previous_tip;
-    if (bytes[1] == 1) previous_tip = read_hash();
-    const auto before_hash{read_hash()};
-    const auto after_hash{read_hash()};
-    if ((bytes[1] == 1 && !previous_tip) || !before_hash || !after_hash) return std::nullopt;
-    const auto before{DeserializeCybouState(std::span{bytes}.subspan(offset))};
-    if (!before || CybouStateHash(*before) != *before_hash) return std::nullopt;
-    return ParsedUndo{previous_tip, *before_hash, *after_hash, *before};
-}
 
 } // namespace
 
@@ -73,7 +26,16 @@ void CybouStateStore::Write(const CybouState& state, const bool sync)
     m_db.WriteBatch(batch, sync);
 }
 
-StateLoadResult CybouStateStore::Load() const
+GenesisInitResult CybouStateStore::InitializeGenesis(const CybouState& genesis_state, const bool sync)
+{
+    if (m_db.Exists(STATE_KEY) || m_db.Exists(HASH_KEY)) {
+        return {GenesisInitError::ALREADY_INITIALIZED};
+    }
+    Write(genesis_state, sync);
+    return {};
+}
+
+StateLoadResult CybouStateStore::LoadState() const
 {
     std::vector<unsigned char> bytes;
     uint256 stored_hash;
@@ -92,99 +54,54 @@ StateLoadResult CybouStateStore::Load() const
     return {StateLoadError::NONE, std::move(state)};
 }
 
-AccountCreateResult CybouStateStore::CreateAccountAndWrite(
-    const AccountCreateOpV1& op,
-    const uint256& network_id,
-    const uint64_t block_height,
-    const uint64_t current_epoch,
-    const CybouProtocolParameters& params,
-    CybouState& state,
-    const bool sync)
+std::optional<uint256> CybouStateStore::GetStateRoot() const
 {
-    auto candidate{state};
-    CybouStateDelta delta;
-    auto result{ApplyAccountCreate(op, network_id, block_height, current_epoch, params, candidate, delta)};
-    if (!result) return result;
-    Write(candidate, sync);
-    state = std::move(candidate);
-    return result;
+    uint256 hash;
+    if (!m_db.Read(HASH_KEY, hash)) return std::nullopt;
+    return hash;
 }
 
-BlockTransitionResult CybouStateStore::ApplyBlock(
+std::optional<uint256> CybouStateStore::GetFinalizedTip() const
+{
+    uint256 tip;
+    if (!m_db.Read(TIP_KEY, tip)) return std::nullopt;
+    return tip;
+}
+
+BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     const uint256& block_id,
     const uint256& previous_block_id,
     const std::vector<AccountCreateOpV1>& ops,
     const uint256& network_id,
     const uint64_t block_height,
-    const uint64_t current_epoch,
     const CybouProtocolParameters& params,
-    CybouState& state,
     const bool sync)
 {
     if (block_id.IsNull()) return {BlockTransitionError::INVALID_BLOCK_ID};
     if (ops.size() > params.max_account_creates_per_block) {
         return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
     }
-    const auto loaded{Load()};
+    const auto loaded{LoadState()};
     if (!loaded) return {BlockTransitionError::STATE_NOT_INITIALIZED};
-    if (*loaded.state != state) return {BlockTransitionError::STATE_MISMATCH};
-    const std::string undo_key{UndoKey(block_id)};
-    if (m_db.Exists(undo_key)) return {BlockTransitionError::BLOCK_ALREADY_APPLIED};
 
-    const bool tip_exists{m_db.Exists(TIP_KEY)};
-    uint256 tip;
-    if ((tip_exists && (!m_db.Read(TIP_KEY, tip) || tip != previous_block_id)) ||
-        (!tip_exists && !previous_block_id.IsNull())) {
+    const auto tip{GetFinalizedTip()};
+    if (tip == block_id) return {BlockTransitionError::BLOCK_ALREADY_APPLIED};
+    if ((tip.has_value() && *tip != previous_block_id) ||
+        (!tip.has_value() && !previous_block_id.IsNull())) {
         return {BlockTransitionError::PARENT_MISMATCH};
     }
 
-    auto candidate{state};
-    CybouStateDelta delta;
+    auto candidate{*loaded.state};
     for (const auto& op : ops) {
-        const auto res{ApplyAccountCreate(op, network_id, block_height, current_epoch, params, candidate, delta)};
+        const auto res{ApplyAccountCreate(op, network_id, block_height, params, candidate)};
         if (!res) return {BlockTransitionError::INVALID_OPERATION, res};
     }
 
-    std::optional<uint256> previous_tip;
-    if (tip_exists) previous_tip = tip;
-    const uint256 before_hash{CybouStateHash(state)};
-    const uint256 after_hash{CybouStateHash(candidate)};
     CDBBatch batch{m_db};
     batch.Write(STATE_KEY, SerializeCybouState(candidate));
-    batch.Write(HASH_KEY, after_hash);
-    batch.Write(undo_key, SerializeUndo(previous_tip, before_hash, after_hash, state));
+    batch.Write(HASH_KEY, CybouStateHash(candidate));
     batch.Write(TIP_KEY, block_id);
     m_db.WriteBatch(batch, sync);
-    state = std::move(candidate);
-    return {};
-}
-
-BlockTransitionResult CybouStateStore::RollbackBlock(
-    const uint256& block_id,
-    CybouState& state,
-    const bool sync)
-{
-    if (block_id.IsNull()) return {BlockTransitionError::INVALID_BLOCK_ID};
-    uint256 tip;
-    if (!m_db.Read(TIP_KEY, tip) || tip != block_id) return {BlockTransitionError::NOT_CURRENT_TIP};
-    std::vector<unsigned char> undo_bytes;
-    const std::string undo_key{UndoKey(block_id)};
-    if (!m_db.Read(undo_key, undo_bytes)) return {BlockTransitionError::MISSING_OR_CORRUPT_UNDO};
-    const auto undo{ParseUndo(undo_bytes)};
-    if (!undo) return {BlockTransitionError::MISSING_OR_CORRUPT_UNDO};
-    const auto loaded{Load()};
-    if (!loaded || *loaded.state != state || CybouStateHash(state) != undo->after_hash) {
-        return {BlockTransitionError::STATE_MISMATCH};
-    }
-
-    CDBBatch batch{m_db};
-    batch.Write(STATE_KEY, SerializeCybouState(undo->before));
-    batch.Write(HASH_KEY, undo->before_hash);
-    batch.Erase(undo_key);
-    if (undo->previous_tip) batch.Write(TIP_KEY, *undo->previous_tip);
-    else batch.Erase(TIP_KEY);
-    m_db.WriteBatch(batch, sync);
-    state = undo->before;
     return {};
 }
 

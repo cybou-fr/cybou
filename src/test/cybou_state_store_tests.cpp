@@ -35,6 +35,7 @@ const cybou::CybouProtocolParameters PARAMS{
     .account_creation_epoch_lag = 1,
     .max_account_creates_per_block = 128,
     .onboarding_bonus = cybou::DEV_ONBOARDING_BONUS,
+    .epoch_blocks = 10,
 };
 
 cybou::AccountCreateOpV1 ValidOp(const cybou::AccountId& acc = ACCOUNT_ID)
@@ -54,7 +55,7 @@ cybou::AccountCreateOpV1 ValidOp(const cybou::AccountId& acc = ACCOUNT_ID)
     };
 }
 
-cybou::CybouState InitialState()
+cybou::CybouState GenesisState()
 {
     return cybou::CybouState{
         .onboarding_pool = 20000,
@@ -77,122 +78,124 @@ CDBWrapper MemoryDb()
 
 } // namespace
 
-BOOST_AUTO_TEST_CASE(state_store_round_trips_and_overwrites_snapshot)
+BOOST_AUTO_TEST_CASE(genesis_initializes_once_and_loads)
 {
     auto db{MemoryDb()};
     cybou::CybouStateStore store{db};
-    BOOST_CHECK(store.Load().error == cybou::StateLoadError::NOT_FOUND);
+    BOOST_CHECK(store.LoadState().error == cybou::StateLoadError::NOT_FOUND);
+    BOOST_CHECK(!store.GetStateRoot().has_value());
+    BOOST_CHECK(!store.GetFinalizedTip().has_value());
 
-    auto state{InitialState()};
-    store.Write(state);
-    auto loaded{store.Load()};
-    BOOST_REQUIRE(loaded);
-    BOOST_CHECK(*loaded.state == state);
+    const auto genesis{GenesisState()};
+    BOOST_REQUIRE(store.InitializeGenesis(genesis));
+    BOOST_CHECK(store.InitializeGenesis(genesis).error == cybou::GenesisInitError::ALREADY_INITIALIZED);
 
-    state.onboarding_pool = 14000;
-    store.Write(state);
-    loaded = store.Load();
+    auto loaded{store.LoadState()};
     BOOST_REQUIRE(loaded);
-    BOOST_CHECK(*loaded.state == state);
+    BOOST_CHECK(*loaded.state == genesis);
+    BOOST_REQUIRE(store.GetStateRoot().has_value());
+    BOOST_CHECK(*store.GetStateRoot() == cybou::CybouStateHash(genesis));
 }
 
 BOOST_AUTO_TEST_CASE(state_store_rejects_partial_or_hash_mismatched_snapshots)
 {
-    auto db{MemoryDb()};
-    cybou::CybouStateStore store{db};
-    const auto state{InitialState()};
+    {
+        auto db{MemoryDb()};
+        cybou::CybouStateStore store{db};
+        const auto genesis{GenesisState()};
 
-    db.Write(STATE_KEY, cybou::SerializeCybouState(state));
-    BOOST_CHECK(store.Load().error == cybou::StateLoadError::CORRUPT);
+        // State bytes without the matching hash: corrupt.
+        db.Write(STATE_KEY, cybou::SerializeCybouState(genesis));
+        BOOST_CHECK(store.LoadState().error == cybou::StateLoadError::CORRUPT);
+    }
+    {
+        auto db{MemoryDb()};
+        cybou::CybouStateStore store{db};
 
-    db.Write(HASH_KEY, uint256::ONE);
-    BOOST_CHECK(store.Load().error == cybou::StateLoadError::CORRUPT);
+        // Hash without state bytes: corrupt.
+        db.Write(HASH_KEY, uint256::ONE);
+        BOOST_CHECK(store.LoadState().error == cybou::StateLoadError::CORRUPT);
+    }
+    {
+        auto db{MemoryDb()};
+        cybou::CybouStateStore store{db};
+        const auto genesis{GenesisState()};
 
-    store.Write(state);
-    BOOST_REQUIRE(store.Load());
-    auto corrupt_bytes{cybou::SerializeCybouState(state)};
-    corrupt_bytes.back() ^= 1;
-    db.Write(STATE_KEY, corrupt_bytes);
-    BOOST_CHECK(store.Load().error == cybou::StateLoadError::CORRUPT);
+        // Bit-flip in the stored state breaks the hash check.
+        BOOST_REQUIRE(store.InitializeGenesis(genesis));
+        BOOST_REQUIRE(store.LoadState());
+        auto corrupt_bytes{cybou::SerializeCybouState(genesis)};
+        corrupt_bytes.back() ^= 1;
+        db.Write(STATE_KEY, corrupt_bytes);
+        BOOST_CHECK(store.LoadState().error == cybou::StateLoadError::CORRUPT);
+    }
 }
 
-BOOST_AUTO_TEST_CASE(create_account_and_write_keeps_memory_and_database_in_sync)
+BOOST_AUTO_TEST_CASE(commit_finalized_block_is_tip_ordered_and_atomic)
 {
     auto db{MemoryDb()};
     cybou::CybouStateStore store{db};
-    auto state{InitialState()};
-
-    const auto result{store.CreateAccountAndWrite(ValidOp(), NETWORK_ID, 1, 1, PARAMS, state)};
-    BOOST_REQUIRE(result);
-    const auto loaded{store.Load()};
-    BOOST_REQUIRE(loaded);
-    BOOST_CHECK(*loaded.state == state);
-
-    const auto snapshot{state};
-    const auto replay{store.CreateAccountAndWrite(ValidOp(), NETWORK_ID, 2, 1, PARAMS, state)};
-    BOOST_CHECK(replay.error == cybou::AccountCreateError::ACCOUNT_ALREADY_EXISTS);
-    BOOST_CHECK(state == snapshot);
-    BOOST_REQUIRE(store.Load());
-    BOOST_CHECK(*store.Load().state == snapshot);
-}
-
-BOOST_AUTO_TEST_CASE(apply_block_and_rollback_are_tip_ordered_and_atomic)
-{
-    auto db{MemoryDb()};
-    cybou::CybouStateStore store{db};
-    auto state{InitialState()};
-    store.Write(state);
-    const auto initial{state};
+    BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
     const uint256 block1{uint256::FromUserHex("11").value()};
     const uint256 block2{uint256::FromUserHex("12").value()};
 
-    BOOST_REQUIRE(store.ApplyBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 1, 1, PARAMS, state));
-    const auto after_block1{state};
-    BOOST_CHECK(store.ApplyBlock(
-        block2, uint256::ONE, {ValidOp(ACCOUNT_ID_2)}, NETWORK_ID, 2, 1, PARAMS, state).error ==
+    BOOST_REQUIRE(store.CommitFinalizedBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 10, PARAMS));
+    BOOST_REQUIRE(store.GetFinalizedTip().has_value());
+    BOOST_CHECK(*store.GetFinalizedTip() == block1);
+
+    BOOST_CHECK(store.CommitFinalizedBlock(
+        block2, uint256::ONE, {ValidOp(ACCOUNT_ID_2)}, NETWORK_ID, 11, PARAMS).error ==
         cybou::BlockTransitionError::PARENT_MISMATCH);
-    BOOST_REQUIRE(store.ApplyBlock(
-        block2, block1, {ValidOp(ACCOUNT_ID_2)}, NETWORK_ID, 2, 1, PARAMS, state));
-    BOOST_CHECK_EQUAL(state.onboarding_pool, 8000);
-    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).system_balance, 6000);
-    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID_2).system_balance, 6000);
+    BOOST_REQUIRE(store.CommitFinalizedBlock(
+        block2, block1, {ValidOp(ACCOUNT_ID_2)}, NETWORK_ID, 11, PARAMS));
 
-    BOOST_CHECK(store.RollbackBlock(block1, state).error == cybou::BlockTransitionError::NOT_CURRENT_TIP);
-    BOOST_REQUIRE(store.RollbackBlock(block2, state));
-    BOOST_CHECK(state == after_block1);
-    BOOST_REQUIRE(store.RollbackBlock(block1, state));
-    BOOST_CHECK(state == initial);
-    BOOST_REQUIRE(store.Load());
-    BOOST_CHECK(*store.Load().state == initial);
+    const auto loaded{store.LoadState()};
+    BOOST_REQUIRE(loaded);
+    BOOST_CHECK_EQUAL(loaded.state->onboarding_pool, 8000);
+    BOOST_CHECK_EQUAL(loaded.state->accounts.at(ACCOUNT_ID).system_balance, 6000);
+    BOOST_CHECK_EQUAL(loaded.state->accounts.at(ACCOUNT_ID_2).system_balance, 6000);
+    BOOST_CHECK_EQUAL(loaded.state->accounts.at(ACCOUNT_ID_2).creation_epoch, 1);
 }
 
-BOOST_AUTO_TEST_CASE(apply_block_rejects_duplicate_account)
+BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_replay_of_applied_block)
 {
     auto db{MemoryDb()};
     cybou::CybouStateStore store{db};
-    auto state{InitialState()};
-    store.Write(state);
+    BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
+    const uint256 block1{uint256::FromUserHex("11").value()};
+
+    BOOST_REQUIRE(store.CommitFinalizedBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 10, PARAMS));
+    BOOST_CHECK(store.CommitFinalizedBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 10, PARAMS).error ==
+        cybou::BlockTransitionError::BLOCK_ALREADY_APPLIED);
+}
+
+BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_invalid_operation_without_mutation)
+{
+    auto db{MemoryDb()};
+    cybou::CybouStateStore store{db};
+    BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
     const uint256 block1{uint256::FromUserHex("11").value()};
     const uint256 block2{uint256::FromUserHex("12").value()};
 
-    BOOST_REQUIRE(store.ApplyBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 1, 1, PARAMS, state));
-    const auto snapshot{state};
+    BOOST_REQUIRE(store.CommitFinalizedBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 10, PARAMS));
+    const auto snapshot{store.LoadState()};
+    BOOST_REQUIRE(snapshot);
 
-    const auto result{store.ApplyBlock(
-        block2, block1, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 2, 1, PARAMS, state)};
+    const auto result{store.CommitFinalizedBlock(
+        block2, block1, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 11, PARAMS)};
     BOOST_CHECK(result.error == cybou::BlockTransitionError::INVALID_OPERATION);
     BOOST_CHECK(result.op_result.error == cybou::AccountCreateError::ACCOUNT_ALREADY_EXISTS);
-    BOOST_CHECK(state == snapshot);
-    BOOST_REQUIRE(store.Load());
-    BOOST_CHECK(*store.Load().state == snapshot);
+    BOOST_REQUIRE(store.LoadState());
+    BOOST_CHECK(*store.LoadState().state == *snapshot.state);
+    BOOST_REQUIRE(store.GetFinalizedTip().has_value());
+    BOOST_CHECK(*store.GetFinalizedTip() == block1);
 }
 
-BOOST_AUTO_TEST_CASE(apply_block_rejects_too_many_account_creates)
+BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_too_many_account_creates)
 {
     auto db{MemoryDb()};
     cybou::CybouStateStore store{db};
-    auto state{InitialState()};
-    store.Write(state);
+    BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
     const uint256 block{uint256::FromUserHex("31").value()};
 
     cybou::CybouProtocolParameters strict_params{PARAMS};
@@ -203,30 +206,18 @@ BOOST_AUTO_TEST_CASE(apply_block_rejects_too_many_account_creates)
         ValidOp(ACCOUNT_ID_2),
     };
 
-    const auto result{store.ApplyBlock(block, uint256{}, ops, NETWORK_ID, 1, 1, strict_params, state)};
+    const auto result{store.CommitFinalizedBlock(block, uint256{}, ops, NETWORK_ID, 10, strict_params)};
     BOOST_CHECK(result.error == cybou::BlockTransitionError::TOO_MANY_ACCOUNT_CREATES);
+    BOOST_CHECK(store.LoadState().error != cybou::StateLoadError::CORRUPT);
 }
 
-BOOST_AUTO_TEST_CASE(apply_block_rejects_state_mismatch_and_corrupt_undo)
+BOOST_AUTO_TEST_CASE(commit_finalized_block_requires_initialized_state)
 {
     auto db{MemoryDb()};
     cybou::CybouStateStore store{db};
-    auto state{InitialState()};
-    store.Write(state);
-    const uint256 block{uint256::FromUserHex("21").value()};
-
-    auto stale{state};
-    --stale.onboarding_pool;
-    BOOST_CHECK(store.ApplyBlock(block, uint256{}, {ValidOp()}, NETWORK_ID, 1, 1, PARAMS, stale).error ==
-        cybou::BlockTransitionError::STATE_MISMATCH);
-    BOOST_REQUIRE(store.ApplyBlock(block, uint256{}, {ValidOp()}, NETWORK_ID, 1, 1, PARAMS, state));
-
-    const std::string undo_key{"cybou/undo/v1/" + block.GetHex()};
-    db.Write(undo_key, std::vector<unsigned char>{1, 0});
-    const auto snapshot{state};
-    BOOST_CHECK(store.RollbackBlock(block, state).error ==
-        cybou::BlockTransitionError::MISSING_OR_CORRUPT_UNDO);
-    BOOST_CHECK(state == snapshot);
+    const uint256 block{uint256::FromUserHex("11").value()};
+    BOOST_CHECK(store.CommitFinalizedBlock(block, uint256{}, {ValidOp()}, NETWORK_ID, 10, PARAMS).error ==
+        cybou::BlockTransitionError::STATE_NOT_INITIALIZED);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -125,12 +125,10 @@ AccountCreateResult ApplyAccountCreate(
     const AccountCreateOpV1& op,
     const uint256& network_id,
     const uint64_t block_height,
-    const uint64_t current_epoch,
     const CybouProtocolParameters& params,
-    CybouState& state,
-    CybouStateDelta& delta)
+    CybouState& state)
 {
-    const auto validation_error{ValidateAccountCreateOp(op, network_id, current_epoch, params)};
+    const auto validation_error{ValidateAccountCreateOp(op, network_id, block_height, params)};
     if (validation_error != AccountCreateValidationError::NONE) {
         return {AccountCreateError::INVALID_OP, validation_error};
     }
@@ -148,22 +146,11 @@ AccountCreateResult ApplyAccountCreate(
         .balance = 0,
         .system_balance = params.onboarding_bonus,
         .creation_height = block_height,
-        .creation_epoch = current_epoch,
+        .creation_epoch = EpochForHeight(block_height, params),
         .initial_auth_commitment = op.initial_authorization.authorization_descriptor,
     };
     state.accounts.emplace(op.account_id, std::move(acc));
-    delta.created_accounts.push_back(op.account_id);
-    delta.onboarding_pool_debited += params.onboarding_bonus;
-    delta.system_balance_credited += params.onboarding_bonus;
     return {};
-}
-
-void UndoAccountCreateDelta(const CybouStateDelta& delta, CybouState& state)
-{
-    for (const auto& account_id : delta.created_accounts) {
-        state.accounts.erase(account_id);
-    }
-    state.onboarding_pool += delta.onboarding_pool_debited;
 }
 
 } // namespace cybou

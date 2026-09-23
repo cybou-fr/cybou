@@ -128,32 +128,36 @@ BOOST_AUTO_TEST_CASE(validate_account_create_op_enforces_all_bindings)
         .account_creation_epoch_lag = 1,
         .max_account_creates_per_block = 128,
         .onboarding_bonus = 6000,
+        .epoch_blocks = 10,
     };
 
     const auto op{ValidOp(1, 1)};
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(op, NETWORK_ID, 1, params) == cybou::AccountCreateValidationError::NONE);
+    // Heights map to epochs via height / epoch_blocks (10): 10 -> epoch 1,
+    // 20 -> epoch 2 (within lag 1), 30 -> epoch 3 (expired), 0 -> epoch 0
+    // (work from the future).
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(op, NETWORK_ID, 10, params) == cybou::AccountCreateValidationError::NONE);
     // Within allowed epoch lag window
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(op, NETWORK_ID, 2, params) == cybou::AccountCreateValidationError::NONE);
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(op, NETWORK_ID, 20, params) == cybou::AccountCreateValidationError::NONE);
     // Expired: lag is 2 > 1
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(op, NETWORK_ID, 3, params) == cybou::AccountCreateValidationError::EXPIRED_WORK_EPOCH);
-    // Future epoch: work_epoch 1 > current_epoch 0
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(op, NETWORK_ID, 30, params) == cybou::AccountCreateValidationError::EXPIRED_WORK_EPOCH);
+    // Future epoch: work_epoch 1 > epoch(0) = 0
     BOOST_CHECK(cybou::ValidateAccountCreateOp(op, NETWORK_ID, 0, params) == cybou::AccountCreateValidationError::FUTURE_WORK_EPOCH);
 
     auto wrong_network{op};
     wrong_network.creation_work.network_id = uint256::FromUserHex("ff").value();
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(wrong_network, NETWORK_ID, 1, params) == cybou::AccountCreateValidationError::NETWORK_MISMATCH);
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(wrong_network, NETWORK_ID, 10, params) == cybou::AccountCreateValidationError::NETWORK_MISMATCH);
 
     auto wrong_account{op};
     wrong_account.account_id = cybou::AccountId{uint256::FromUserHex("0b").value()};
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(wrong_account, NETWORK_ID, 1, params) == cybou::AccountCreateValidationError::ACCOUNT_ID_MISMATCH);
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(wrong_account, NETWORK_ID, 10, params) == cybou::AccountCreateValidationError::ACCOUNT_ID_MISMATCH);
 
     auto wrong_auth{op};
     wrong_auth.initial_authorization.authorization_descriptor = uint256::FromUserHex("99").value();
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(wrong_auth, NETWORK_ID, 1, params) == cybou::AccountCreateValidationError::AUTH_COMMITMENT_MISMATCH);
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(wrong_auth, NETWORK_ID, 10, params) == cybou::AccountCreateValidationError::AUTH_COMMITMENT_MISMATCH);
 
     auto high_diff_params{params};
     high_diff_params.account_creation_work_bits = 255;
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(op, NETWORK_ID, 1, high_diff_params) == cybou::AccountCreateValidationError::INSUFFICIENT_WORK);
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(op, NETWORK_ID, 10, high_diff_params) == cybou::AccountCreateValidationError::INSUFFICIENT_WORK);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

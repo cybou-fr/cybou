@@ -38,14 +38,6 @@ struct CybouState {
     friend bool operator==(const CybouState&, const CybouState&) = default;
 };
 
-struct CybouStateDelta {
-    std::vector<AccountId> created_accounts;
-    uint64_t onboarding_pool_debited{0};
-    uint64_t system_balance_credited{0};
-
-    friend bool operator==(const CybouStateDelta&, const CybouStateDelta&) = default;
-};
-
 inline constexpr uint8_t CYBOU_STATE_VERSION{1};
 inline constexpr uint32_t MAX_SERIALIZED_ACCOUNTS{1'000'000};
 
@@ -68,16 +60,24 @@ struct AccountCreateResult {
     explicit operator bool() const { return error == AccountCreateError::NONE; }
 };
 
+/**
+ * Apply an AccountCreate operation to a candidate state.
+ *
+ * The caller owns candidate lifetime: on failure the state is left fully
+ * unmodified, so callers executing multi-op blocks operate on a throwaway
+ * candidate and commit only on success. The PoT epoch is derived from
+ * block_height internally.
+ *
+ * There is deliberately no undo/rollback counterpart: finalized BFT blocks
+ * are never reorged, so production state transition is strictly
+ * candidate-validate-commit, not mutate-then-undo.
+ */
 AccountCreateResult ApplyAccountCreate(
     const AccountCreateOpV1& op,
     const uint256& network_id,
     uint64_t block_height,
-    uint64_t current_epoch,
     const CybouProtocolParameters& params,
-    CybouState& state,
-    CybouStateDelta& delta);
-
-void UndoAccountCreateDelta(const CybouStateDelta& delta, CybouState& state);
+    CybouState& state);
 
 } // namespace cybou
 

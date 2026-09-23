@@ -137,9 +137,10 @@ std::optional<AccountCreateOpV1> DeserializeAccountCreateOp(const std::span<cons
 AccountCreateValidationError ValidateAccountCreateOp(
     const AccountCreateOpV1& op,
     const uint256& expected_network_id,
-    const uint64_t current_epoch,
+    const uint64_t block_height,
     const CybouProtocolParameters& params)
 {
+    const uint64_t current_epoch{EpochForHeight(block_height, params)};
     if (op.version != ACCOUNT_CREATE_OP_VERSION) return AccountCreateValidationError::UNSUPPORTED_VERSION;
     if (op.account_id.IsNull()) return AccountCreateValidationError::NULL_ACCOUNT_ID;
     if (op.creation_work.network_id.IsNull()) return AccountCreateValidationError::NULL_NETWORK_ID;

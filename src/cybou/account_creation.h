@@ -74,10 +74,15 @@ enum class AccountCreateValidationError : uint8_t {
     INSUFFICIENT_WORK,
 };
 
+/**
+ * Validate an AccountCreate operation at a given finalized block height.
+ * The PoT epoch is derived internally from the height via EpochForHeight();
+ * callers must never supply an epoch directly.
+ */
 AccountCreateValidationError ValidateAccountCreateOp(
     const AccountCreateOpV1& op,
     const uint256& expected_network_id,
-    uint64_t current_epoch,
+    uint64_t block_height,
     const CybouProtocolParameters& params);
 
 } // namespace cybou
