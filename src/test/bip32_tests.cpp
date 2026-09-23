@@ -4,6 +4,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <base58.h>
 #include <clientversion.h>
 #include <key.h>
 #include <key_io.h>
@@ -11,10 +12,36 @@
 #include <test/util/setup_common.h>
 #include <util/strencodings.h>
 
+#include <algorithm>
+#include <array>
 #include <string>
 #include <vector>
 
 namespace {
+
+constexpr std::array<unsigned char, 4> BIP32_XPUB{0x04, 0x88, 0xB2, 0x1E};
+constexpr std::array<unsigned char, 4> BIP32_XPRV{0x04, 0x88, 0xAD, 0xE4};
+
+template <typename ExtKey>
+std::string EncodeBIP32VectorKey(const ExtKey& key, const std::array<unsigned char, 4>& prefix)
+{
+    std::vector<unsigned char> data(prefix.begin(), prefix.end());
+    data.resize(prefix.size() + BIP32_EXTKEY_SIZE);
+    key.Encode(data.data() + prefix.size());
+    return EncodeBase58Check(data);
+}
+
+template <typename ExtKey>
+ExtKey DecodeBIP32VectorKey(const std::string& encoded, const std::array<unsigned char, 4>& prefix)
+{
+    ExtKey key;
+    std::vector<unsigned char> data;
+    if (DecodeBase58Check(encoded, data, 78) && data.size() == prefix.size() + BIP32_EXTKEY_SIZE &&
+        std::equal(prefix.begin(), prefix.end(), data.begin())) {
+        key.Decode(data.data() + prefix.size());
+    }
+    return key;
+}
 
 struct TestDerivation {
     std::string pub;
@@ -133,12 +160,12 @@ void RunTest(const TestVector& test)
         pubkey.Encode(data);
 
         // Test private key
-        BOOST_CHECK(EncodeExtKey(key) == derive.prv);
-        BOOST_CHECK(DecodeExtKey(derive.prv) == key); //ensure a base58 decoded key also matches
+        BOOST_CHECK(EncodeBIP32VectorKey(key, BIP32_XPRV) == derive.prv);
+        BOOST_CHECK(DecodeBIP32VectorKey<CExtKey>(derive.prv, BIP32_XPRV) == key);
 
         // Test public key
-        BOOST_CHECK(EncodeExtPubKey(pubkey) == derive.pub);
-        BOOST_CHECK(DecodeExtPubKey(derive.pub) == pubkey); //ensure a base58 decoded pubkey also matches
+        BOOST_CHECK(EncodeBIP32VectorKey(pubkey, BIP32_XPUB) == derive.pub);
+        BOOST_CHECK(DecodeBIP32VectorKey<CExtPubKey>(derive.pub, BIP32_XPUB) == pubkey);
 
         // Derive new keys
         CExtKey keyNew;
@@ -177,16 +204,16 @@ BOOST_AUTO_TEST_CASE(bip32_test4) {
 
 BOOST_AUTO_TEST_CASE(bip32_test5) {
     for (const auto& str : TEST5) {
-        auto dec_extkey = DecodeExtKey(str);
-        auto dec_extpubkey = DecodeExtPubKey(str);
+        auto dec_extkey = DecodeBIP32VectorKey<CExtKey>(str, BIP32_XPRV);
+        auto dec_extpubkey = DecodeBIP32VectorKey<CExtPubKey>(str, BIP32_XPUB);
         BOOST_CHECK_MESSAGE(!dec_extkey.key.IsValid(), "Decoding '" + str + "' as xprv should fail");
         BOOST_CHECK_MESSAGE(!dec_extpubkey.pubkey.IsValid(), "Decoding '" + str + "' as xpub should fail");
     }
 }
 
 BOOST_AUTO_TEST_CASE(bip32_max_depth) {
-    CExtKey key_parent{DecodeExtKey(test1.vDerive[0].prv)}, key_child;
-    CExtPubKey pubkey_parent{DecodeExtPubKey(test1.vDerive[0].pub)}, pubkey_child;
+    CExtKey key_parent{DecodeBIP32VectorKey<CExtKey>(test1.vDerive[0].prv, BIP32_XPRV)}, key_child;
+    CExtPubKey pubkey_parent{DecodeBIP32VectorKey<CExtPubKey>(test1.vDerive[0].pub, BIP32_XPUB)}, pubkey_child;
 
     // We can derive up to the 255th depth..
     for (auto i = 0; i++ < 255;) {
