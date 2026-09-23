@@ -107,15 +107,27 @@ Implemented skeleton:
 - domain-separated anti-Sybil work hashing (`CYBOU/ACCOUNT-CREATE-WORK/V1`);
 - proof-of-work difficulty verification (leading zero bits);
 - network, account ID, and initial authorization commitment bindings;
+- canonical immutable `CybouNetworkDefinitionV1` and domain-separated NetworkID;
+- network definition binding of genesis block, genesis state root, protocol parameters and initial validator-set commitment;
+- structural network-definition validation before state initialization, loading or transition;
 - atomic onboarding bonus transition from OnboardingPool to System Balance;
 - duplicate AccountID prevention;
 - canonical versioned state encoding and domain-separated state hash (`CYBOU/STATE/V1`);
-- atomic LevelDB snapshot persistence with paired state/hash verification (`CybouStateStore`);
-- atomic finalized block apply/rollback store boundary with per-block undo, CYBOU tip ordering and before/after state-hash verification;
+- `CybouStateStore` as the sole owner of canonical CYBOU consensus state;
+- immutable network definition owned by `CybouStateStore`, eliminating per-block caller-supplied NetworkID and protocol parameters;
+- persisted NetworkID verification that rejects reopening canonical state with an incompatible network definition;
+- atomic LevelDB persistence with paired state/hash verification;
+- candidate-validate-commit processing for BFT-finalized blocks;
+- atomic persistence of candidate state, state root, finalized tip and finalized height;
+- finalized-parent and contiguous-height ordering, duplicate-finalized-block rejection and no production rollback/undo path;
+- primitive OpenSSL hybrid Ed25519 + ML-DSA-65 Operator Authority signature verification;
 - strongly typed, fixed-width AccountID with null/length validation;
-- full C++ unit test suite covering account creation, signing domains, state transitions, and store rollbacks.
+- C++ unit tests covering account creation, signing domains, state transitions,
+  persistence integrity, invalid/mismatched network-definition rejection,
+  atomic failure behavior, finalized-tip/height ordering and duplicate-block rejection.
 
 Not yet implemented:
 
-- production Operator Authority signature verification for validator admissions;
+- frozen ordinary-account authorization key/signature profile and AccountCreate proof of possession;
+- consensus-operation wiring of Operator Authority signature verification for validator admissions;
 - connection of the state-store boundary to the block validation/finality lifecycle.

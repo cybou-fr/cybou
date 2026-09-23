@@ -32,7 +32,9 @@ network:
   full_node_by_default: true
   validator_by_default: false
 ledger:
-  model: UTXO-derived plus deterministic protocol state
+  model: account-based deterministic protocol state
+  canonical_account_source: AccountState
+  inherited_utxo_status: transitional_until_native_payment_and_bft
   evm_required: false
   history:
     desktop_mode: bounded

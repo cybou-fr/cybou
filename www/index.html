@@ -36,7 +36,7 @@
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/cybou.png">
-  <link rel="stylesheet" href="style.css?v=20260923-2">
+  <link rel="stylesheet" href="style.css?v=20260923-3">
 
   <!-- Schema.org JSON-LD Structured Data for Search Engines & AI Models -->
   <script type="application/ld+json">
@@ -127,12 +127,17 @@
        ========================================================================== -->
   <header class="nav-header">
     <div class="nav-container">
-      <a href="#" class="nav-brand" aria-label="Accueil CYBOU">
-        <div class="logo-tile">
-          <img src="assets/cybou.png" alt="CYBOU Logo" width="26" height="26">
-        </div>
-        <span>CYBOU</span>
-      </a>
+      <div class="nav-brand-group">
+        <a href="#" class="nav-brand" aria-label="Accueil CYBOU">
+          <div class="logo-tile">
+            <img src="assets/cybou.png" alt="CYBOU Logo" width="26" height="26">
+          </div>
+          <span>CYBOU</span>
+        </a>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="mobile-menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
 
       <nav class="desktop-nav" aria-label="Navigation principale">
         <ul class="nav-links">
@@ -152,7 +157,6 @@
         <a href="https://github.com/cybou-fr/cybou" target="_blank" rel="noopener noreferrer" class="github-link" aria-label="Dépôt GitHub CYBOU" title="GitHub">
           <img src="https://github.com/favicon.ico" alt="" width="22" height="22">
         </a>
-        <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-menu" data-i18n="menuLabel">Menu</button>
       </div>
     </div>
     <nav class="mobile-menu" id="mobile-menu" aria-label="Navigation mobile" hidden>
@@ -474,10 +478,15 @@
 
     <div class="faq-grid">
       <!-- FAQ 1: PQ by Design -->
-      <article class="faq-card pq-focus">
-        <span class="faq-badge-pq" data-i18n="faqPqBadge">Sécurité Post-Quantique • PQ by Design</span>
-        <h3 class="faq-question" data-i18n="faqQ1">Que signifie « Post-Quantique dès la conception » (PQ by design) pour CYBOU ?</h3>
-        <div class="faq-answer">
+      <article class="faq-card pq-focus is-open">
+        <button class="faq-trigger" type="button" aria-expanded="true" aria-controls="faq-answer-1">
+          <span class="faq-heading">
+            <span class="faq-badge-pq" data-i18n="faqPqBadge">Sécurité Post-Quantique • PQ by Design</span>
+            <span class="faq-question" data-i18n="faqQ1">Que signifie « Post-Quantique dès la conception » (PQ by design) pour CYBOU ?</span>
+          </span>
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer" id="faq-answer-1" aria-hidden="false">
           <p data-i18n="faqA1P1">
             La plupart des systèmes de communication historiques s'appuient sur RSA ou la cryptographie sur les courbes elliptiques classiques. Face à l'émergence des calculateurs quantiques, ils tentent de patcher a posteriori leurs protocoles, exposant toutes les communications passées aux attaques <strong>« Harvest Now, Decrypt Later » (HNDL)</strong> — où des acteurs étatiques enregistrent dès aujourd'hui les flux chiffrés pour les casser demain.
           </p>
@@ -489,8 +498,11 @@
 
       <!-- FAQ 2: Project Reality -->
       <article class="faq-card">
-        <h3 class="faq-question" data-i18n="faqQ2">Pourquoi CYBOU n'est-il pas encore téléchargeable pour le grand public ?</h3>
-        <div class="faq-answer">
+        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-2">
+          <span class="faq-question" data-i18n="faqQ2">Pourquoi CYBOU n'est-il pas encore téléchargeable pour le grand public ?</span>
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer" id="faq-answer-2" aria-hidden="true">
           <p data-i18n="faqA2">
             CYBOU est en phase d'ingénierie et de recherche ouverte. Avant toute ouverture au grand public, le projet doit remplacer le consensus hérité de la chaîne de développement par un moteur BFT multi-validateur testé, intégrer les communications de bout en bout et achever la séparation opérationnelle des clés. Le code source et les tests disponibles sont publiquement consultables.
           </p>
@@ -499,8 +511,11 @@
 
       <!-- FAQ 3: Cloud vs CYBOU -->
       <article class="faq-card">
-        <h3 class="faq-question" data-i18n="faqQ3">En quoi CYBOU diffère-t-il d'une messagerie électronique classique (SMTP/IMAP) ?</h3>
-        <div class="faq-answer">
+        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-3">
+          <span class="faq-question" data-i18n="faqQ3">En quoi CYBOU diffère-t-il d'une messagerie électronique classique (SMTP/IMAP) ?</span>
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer" id="faq-answer-3" aria-hidden="true">
           <p data-i18n="faqA3">
             L'architecture cible CYBOU remplace le modèle SMTP/IMAP centralisé par une opération native <code>MailTx</code>, un engagement de contenu salé et un index local au destinataire. Ce flux complet dépend encore de l'intégration du moteur BFT, du chiffrement MailTx et du client ; il n'est pas présenté comme un service déployé aujourd'hui.
           </p>
@@ -509,8 +524,11 @@
 
       <!-- FAQ 4: BFT Consensus -->
       <article class="faq-card">
-        <h3 class="faq-question" data-i18n="faqQ4">Comment fonctionne le consensus BFT et la tolérance aux pannes ?</h3>
-        <div class="faq-answer">
+        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-4">
+          <span class="faq-question" data-i18n="faqQ4">Comment fonctionne le consensus BFT et la tolérance aux pannes ?</span>
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer" id="faq-answer-4" aria-hidden="true">
           <p data-i18n="faqA4">
             Le modèle cible utilise une finalité BFT explicite, des validateurs de poids égal à 1 et une admission approuvée par l'opérateur. Une configuration d'au moins 4 validateurs est requise pour revendiquer une tolérance <code>f=1</code>. Le moteur multi-validateur et ses essais de panne restent en cours ; la chaîne DEV utilise encore son consensus de bootstrap hérité.
           </p>
@@ -519,8 +537,11 @@
 
       <!-- FAQ 5: Tokenomics -->
       <article class="faq-card">
-        <h3 class="faq-question" data-i18n="faqQ5">Quelle est la finalité économique du jeton CYBOU ?</h3>
-        <div class="faq-answer">
+        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-5">
+          <span class="faq-question" data-i18n="faqQ5">Quelle est la finalité économique du jeton CYBOU ?</span>
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer" id="faq-answer-5" aria-hidden="true">
           <p data-i18n="faqA5">
             Le jeton CYBOU a une offre maximale stricte et non-gonflable de <strong>100 000 000 000 unités (0 décimale)</strong>. Il n'a aucune vocation spéculative : il sert à réguler l'accès au réseau et prévenir le pourriel (spam). Chaque nouveau compte satisfaisant la preuve de travail anti-Sybil reçoit un bonus d'accueil automatique directement sur son Solde Système (doc 70), sans invitation ni approbation centrale. Les frais d'émission sont déterministes selon la taille (pas d'enchères de priorité) et répartis à 75% pour la sécurité du réseau et 25% pour la réserve d'accueil.
           </p>
@@ -600,6 +621,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=20260923-2"></script>
+  <script src="app.js?v=20260923-3"></script>
 </body>
 </html>

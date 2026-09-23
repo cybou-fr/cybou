@@ -54,9 +54,9 @@ interfaces:
   stage: now
   reason: application_api.rest=false and localhost_http=false in baseline; doc/man/rest doc removal follows bitcoin_doc_migration.yaml.
 - path: src/policy/fees/ (block_policy_estimator.*, block_policy_estimator_args.*)
-  action: remove
-  stage: now
-  reason: priority_fee_v1=false, fee_bidding_v1=false; deterministic size-aware CYBOU fee needs only min_relay_feerate, not an estimator.
+  action: replace/transitional
+  stage: with_cybou_identity_wallet
+  reason: priority_fee_v1=false and fee_bidding_v1=false, but the inherited wallet/Qt path still links the estimator; remove it with the CYBOU-native account wallet rather than breaking the transitional client.
 - path: src/rpc/fees.cpp
   action: remove
   stage: now

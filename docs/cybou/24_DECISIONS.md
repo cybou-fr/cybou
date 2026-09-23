@@ -13,7 +13,7 @@
 | DEC-009 | Bitcoin Core is starting C++ codebase, not network dependency | Frozen |
 | DEC-010 | First manual desktop run only after Bitcoin network quarantine | Frozen |
 | DEC-011 | Ordinary desktop nodes use bounded history/state sync | Frozen |
-| DEC-012 | Ledger remains UTXO-derived; EVM not required | Frozen |
+| DEC-012 | Ledger remains UTXO-derived; EVM not required | Superseded by DEC-160 |
 | DEC-013 | Target consensus is BFT with explicit finality; validator admission is separate | Frozen |
 | DEC-014 | Full node and validator roles are distinct | Frozen |
 | DEC-015 | Storage is cooperative, not a host-price marketplace | Frozen |
@@ -158,4 +158,9 @@
 | DEC-154 | MailEvidenceBundle must prove historical sender-key authorization at MailTx height | Frozen v0.0.1 |
 | DEC-155 | Mail content commitment uses random salt/domain separation; no bare predictable plaintext hash | Frozen v0.0.1 |
 | DEC-156 | AccountID V1 is an opaque stable 32-byte identifier; all-zero is invalid and key rotation does not change it | Frozen v0.0.1 |
-| DEC-157 | AccountCreationWork network_id V1 is the 32-byte genesis block hash | Frozen v0.0.1 |
+| DEC-157 | AccountCreationWork network_id V1 is the 32-byte genesis block hash | Superseded by DEC-161 |
+| DEC-158 | CybouStateStore solely owns canonical CYBOU state; BFT-finalized blocks use candidate-validate-atomic-commit and have no production rollback/reorg/undo path | Frozen v0.0.1 |
+| DEC-159 | Canonical finalized head stores block ID and height; every committed child height equals previous finalized height + 1 | Frozen v0.0.1 |
+| DEC-160 | CYBOU target ledger is account-based with AccountState as the sole balance/authorization/nonce source; inherited UTXO/Script remains transitional only until native Payment and BFT replacement land | Frozen direction |
+| DEC-161 | NetworkID is the domain-separated hash of an immutable network definition binding genesis block, genesis state root, protocol parameters and initial validator-set commitment | Frozen v0.0.1 |
+| DEC-162 | Canonical state rejects unsupported or structurally invalid network definitions before initialization, loading or block transition | Frozen v0.0.1 |

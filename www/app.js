@@ -6,6 +6,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   initLanguageSwitch();
   initMobileMenu();
+  initFaqAccordion();
   checkUrlLanguage();
 });
 
@@ -239,7 +240,8 @@ const translations = {
     faqA3: "The target CYBOU architecture replaces centralized SMTP/IMAP infrastructure with a native <code>MailTx</code>, a salted content commitment, and recipient-owned local indexes. This complete flow still depends on BFT, MailTx encryption, and client integration and is not presented as a deployed service today.",
     faqQ4: "How do BFT consensus and fault tolerance work?",
     faqA4: "The target model uses explicit BFT finality, operator-approved validator admission, and equal validator weight of 1. At least 4 validators are required before claiming <code>f=1</code> tolerance. The multi-validator engine and fault tests remain in progress; the DEV chain still uses its inherited bootstrap consensus.",
-    faqQ5: "The CYBOU token has a fixed, non-inflatable supply ceiling of <strong>100,000,000,000 units (0 decimals)</strong>. It is not speculative: it serves strictly for network anti-spam and deterministic bandwidth allocation. Newly created accounts satisfying anti-Sybil proof-of-work receive an automatic onboarding bonus (doc 70) credited directly to System Balance without any operator invites or central approval. Transaction fees are non-bidding and split 75% for network security and 25% recycled to the onboarding reserve.",
+    faqQ5: "What is the economic purpose of the CYBOU token?",
+    faqA5: "The CYBOU token has a fixed, non-inflatable supply ceiling of <strong>100,000,000,000 units (0 decimals)</strong>. It is not speculative: it serves strictly for network anti-spam and deterministic bandwidth allocation. Newly created accounts satisfying anti-Sybil proof-of-work receive an automatic onboarding bonus (doc 70) credited directly to System Balance without any operator invites or central approval. Transaction fees are non-bidding and split 75% for network security and 25% recycled to the onboarding reserve.",
 
     footNav: "Navigation",
     footDocs: "Specifications",
@@ -290,6 +292,31 @@ function initMobileMenu() {
   });
 }
 
+function initFaqAccordion() {
+  const cards = Array.from(document.querySelectorAll('.faq-card'));
+  cards.forEach(card => {
+    const trigger = card.querySelector('.faq-trigger');
+    if (!trigger) return;
+
+    trigger.addEventListener('click', () => {
+      const willOpen = !card.classList.contains('is-open');
+      cards.forEach(otherCard => {
+        otherCard.classList.remove('is-open');
+        const otherTrigger = otherCard.querySelector('.faq-trigger');
+        const otherAnswer = otherCard.querySelector('.faq-answer');
+        if (otherTrigger) otherTrigger.setAttribute('aria-expanded', 'false');
+        if (otherAnswer) otherAnswer.setAttribute('aria-hidden', 'true');
+      });
+      if (willOpen) {
+        card.classList.add('is-open');
+        trigger.setAttribute('aria-expanded', 'true');
+        const answer = card.querySelector('.faq-answer');
+        if (answer) answer.setAttribute('aria-hidden', 'false');
+      }
+    });
+  });
+}
+
 function setLanguage(lang, updateUrl = false) {
   currentLang = lang;
   const btnFr = document.getElementById('lang-fr');
@@ -297,6 +324,10 @@ function setLanguage(lang, updateUrl = false) {
   if (btnFr) btnFr.classList.toggle('active', lang === 'fr');
   if (btnEn) btnEn.classList.toggle('active', lang === 'en');
   document.documentElement.lang = lang;
+  const menuToggle = document.getElementById('menu-toggle');
+  if (menuToggle) {
+    menuToggle.setAttribute('aria-label', lang === 'fr' ? 'Ouvrir le menu' : 'Open menu');
+  }
 
   if (updateUrl && window.history && window.history.replaceState) {
     const url = new URL(window.location);

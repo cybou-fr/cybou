@@ -63,13 +63,21 @@ format into consensus.
 
 ### O-022 AccountID and network identifiers — resolved
 AccountID V1 is an opaque nonzero 32-byte identifier. AccountCreationWork network_id
-is the 32-byte genesis block hash. Both use the internal byte order frozen by
-the V1 canonical serializer; see DEC-156 and DEC-157.
+is the domain-separated hash of the canonical immutable network definition.
+Both use the internal byte order frozen by the V1 canonical serializer; see
+DEC-156 and DEC-161.
 
 ### O-023 Validator archival mode enforcement
 Define how a node declares and proves the active-validator role so the software
 can reject pruning configurations while pre-Store historical MailTx retention
 is mandatory.
+
+### O-024 Account authorization and proof of possession
+Freeze the V1 account key type, canonical authorization descriptor, proof-of-
+possession message and signature encoding before Payment, MailTx fee
+authorization or key rotation is implemented. The large Operator Authority
+hybrid signature bundle is a separate key domain and must not be reused for
+ordinary accounts by accident.
 
 ## Evidence / legal
 

@@ -1,14 +1,15 @@
-# CYBOU — Sovereign European Peer-to-Peer Messaging & BFT Architecture
+# CYBOU — Sovereign Decentralized Communication Infrastructure
 
-> CYBOU (cybou.fr) is a sovereign European peer-to-peer messaging protocol and BFT ledger engineered in C++20. Designed in France, it provides independent communications with zero foreign cloud dependencies, native hybrid post-quantum encryption (HPKE with ML-KEM-768 + X25519), deterministic Proof of Trust (PoT) epochs, and strict operator key isolation.
+> CYBOU (cybou.fr) is an open C++20 R&D project for sovereign, decentralized and secure communication infrastructure. Messaging is one service within the broader architecture. Multi-validator BFT finality, hybrid post-quantum encryption, storage and full operator-key isolation remain development targets rather than deployed production guarantees.
 
 ## System Overview & Current Development Status
-- **Current Version:** v0.0.1 (Architecture Hardening & Open Research Baseline).
-- **Not a Deployed Consumer Product Today:** The network currently executes on an internal bootstrap environment (`CYBOU-DEV v0.0.2`). Public consumer desktop releases will follow completion of the multi-validator BFT consensus transition.
+- **Project Stage:** Architecture hardening and open research.
+- **Not Deployed Infrastructure Today:** The network currently uses an internal development environment. Public releases will follow completion of the multi-validator BFT transition and end-to-end communication stack.
+- **Creator:** Stanislav Saveliev.
 - **Repository:** https://github.com/cybou-fr/cybou
 - **License:** MIT
 
-## Canonical Architecture Specifications (v0.0.1)
+## Canonical Architecture Specifications
 - **Consensus Model:** Explicit Byzantine Fault Tolerance (BFT) with operator-approved validator admission.
 - **Validator Weight:** Equal weight for all active validators (`weight = 1`).
 - **Byzantine Quorum:** Minimum 4 validators strictly required for $f=1$ malicious/offline fault tolerance ($N \ge 3f + 1$).

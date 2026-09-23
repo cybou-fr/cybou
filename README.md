@@ -1,11 +1,11 @@
 # CYBOU
 
-> **CYBOU** — European sovereign email on a peer-to-peer network, designed in France.  
-> *Messagerie électronique souveraine européenne sur réseau pair-à-pair, conçue en France.*
+> **CYBOU** — sovereign decentralized communication infrastructure, designed in France.
+> *Infrastructure souveraine de communication décentralisée, conçue en France.*
 
-CYBOU is a sovereign peer-to-peer network and commercially operated service engineered to restore digital sovereignty, privacy, and verifiable authenticity to everyday digital communication.
+CYBOU is an open engineering project for sovereign peer-to-peer communication infrastructure. Email is its first application layer, not the boundary of the platform.
 
-Instead of relying on centralized foreign hyperscalers, vulnerable cleartext mail transfers, or opaque cloud databases, CYBOU combines a hardened C++ peer-to-peer engine with end-to-end post-quantum encryption and explicit Byzantine Fault Tolerant (BFT) finality. The network's flagship product is **CYBOU Email**.
+CYBOU is being built around a hardened C++ peer-to-peer engine, deterministic state transitions, a target multi-validator BFT consensus, and a target hybrid post-quantum cryptographic profile. BFT finality and complete MailTx encryption are not yet deployed production guarantees. The first application layer is **CYBOU Email**, with Object Storage, Backup and Drive planned on the same infrastructure.
 
 ---
 
@@ -29,7 +29,7 @@ CYBOU Email is not a chat application dressed in an email skin, nor is it a repa
 ### Key Characteristics
 
 - **First-Class Protocol Operation**: Messages are processed as native `MailTx` transactions directly within the CYBOU peer-to-peer protocol, never hidden inside secondary metadata channels or arbitrary script payloads.
-- **Post-Quantum Hybrid Encryption**: Mail bodies are encrypted using high-assurance hybrid Post-Quantum authenticated key encapsulation (HPKE with ML-KEM-768 and X25519). Only the intended recipient can decrypt the message.
+- **Target Post-Quantum Hybrid Profile**: The MailTx design targets hybrid ML-KEM-768 + X25519 encryption. Full MailTx integration, wire-profile freeze and external security review remain required before any production post-quantum claim.
 - **Asynchronous Delivery by Design**: Recipients do not need to be online when an email is dispatched. Senders receive finalized cryptographic proof of inclusion, and recipients retrieve and decrypt their mail upon reconnecting.
 - **Local Mailbox Indexing**: User inboxes, sent items, read states, and thread hierarchies are indexed and managed locally by the client application. The consensus network stores only validation counters and cryptographic commitments, preventing state bloat.
 - **V1 Scope**: The initial release focuses on ultra-secure, text-only, single-recipient correspondence. Attachments and large-scale bulk storage will be introduced alongside the decentralized CYBOU Object Storage layer.
@@ -41,7 +41,7 @@ CYBOU Email is not a chat application dressed in an email skin, nor is it a repa
 CYBOU derives from a hardened C++ full-node codebase, heavily refactored to eliminate legacy Proof-of-Work mining, address balkanization, and unnecessary multi-process overhead.
 
 ### Permissioned BFT Consensus
-Transactions and blocks achieve immediate, irreversible finality through an operator-approved Byzantine Fault Tolerant consensus engine. 
+The target consensus model gives finalized blocks explicit, irreversible finality through an operator-approved Byzantine Fault Tolerant engine. The multi-validator engine is not implemented yet.
 - All active validators have equal voting weight.
 - Operates with a single validator in local development, requiring a minimum of four independent validators to ensure fault tolerance in production ($f=1$).
 - Eliminates energy-intensive mining, block reorganizations, and probabilistic settlement delays.

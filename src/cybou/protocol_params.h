@@ -11,7 +11,7 @@ namespace cybou {
 
 inline constexpr uint64_t DEV_ONBOARDING_BONUS{6000};
 inline constexpr uint32_t DEFAULT_MAX_ACCOUNT_CREATES_PER_BLOCK{100};
-inline constexpr unsigned int DEFAULT_ACCOUNT_CREATION_WORK_BITS{16};
+inline constexpr uint32_t DEFAULT_ACCOUNT_CREATION_WORK_BITS{16};
 inline constexpr uint64_t DEFAULT_ACCOUNT_CREATION_EPOCH_LAG{1};
 inline constexpr uint64_t DEFAULT_EPOCH_BLOCKS{1024};
 
@@ -23,7 +23,7 @@ inline constexpr uint64_t DEFAULT_EPOCH_BLOCKS{1024};
  * upgrade or a new genesis.
  */
 struct CybouProtocolParameters {
-    unsigned int account_creation_work_bits{DEFAULT_ACCOUNT_CREATION_WORK_BITS};
+    uint32_t account_creation_work_bits{DEFAULT_ACCOUNT_CREATION_WORK_BITS};
     uint64_t account_creation_epoch_lag{DEFAULT_ACCOUNT_CREATION_EPOCH_LAG};
     uint32_t max_account_creates_per_block{DEFAULT_MAX_ACCOUNT_CREATES_PER_BLOCK};
     uint64_t onboarding_bonus{DEV_ONBOARDING_BONUS};

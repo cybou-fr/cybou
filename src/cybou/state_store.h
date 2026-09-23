@@ -5,10 +5,12 @@
 #ifndef CYBOU_STATE_STORE_H
 #define CYBOU_STATE_STORE_H
 
+#include <cybou/network_definition.h>
 #include <cybou/state.h>
 
 #include <cstdint>
 #include <optional>
+#include <utility>
 #include <vector>
 
 class CDBWrapper;
@@ -19,6 +21,8 @@ enum class StateLoadError : uint8_t {
     NONE,
     NOT_FOUND,
     CORRUPT,
+    INVALID_NETWORK_DEFINITION,
+    NETWORK_MISMATCH,
 };
 
 struct StateLoadResult {
@@ -31,6 +35,8 @@ struct StateLoadResult {
 enum class GenesisInitError : uint8_t {
     NONE,
     ALREADY_INITIALIZED,
+    INVALID_NETWORK_DEFINITION,
+    GENESIS_STATE_MISMATCH,
 };
 
 struct GenesisInitResult {
@@ -43,8 +49,13 @@ enum class BlockTransitionError : uint8_t {
     NONE,
     INVALID_BLOCK_ID,
     STATE_NOT_INITIALIZED,
+    INVALID_NETWORK_DEFINITION,
+    NETWORK_MISMATCH,
+    CORRUPT_STATE,
     PARENT_MISMATCH,
     BLOCK_ALREADY_APPLIED,
+    INVALID_HEIGHT,
+    CORRUPT_HEAD,
     INVALID_OPERATION,
     TOO_MANY_ACCOUNT_CREATES,
 };
@@ -68,10 +79,16 @@ struct BlockTransitionResult {
 class CybouStateStore
 {
 public:
-    explicit CybouStateStore(CDBWrapper& db) : m_db{db} {}
+    CybouStateStore(CDBWrapper& db, CybouNetworkDefinitionV1 network_definition)
+        : m_db{db},
+          m_network_definition{std::move(network_definition)},
+          m_network_definition_error{ValidateNetworkDefinition(m_network_definition)},
+          m_network_id{NetworkId(m_network_definition)}
+    {
+    }
 
-    /** Persist the genesis state. Fails if a state already exists. */
-    GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true);
+    /** Persist genesis state and its canonical height. Fails if already initialized. */
+    GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true, uint64_t genesis_height = 0);
 
     /** Load the canonical state with hash integrity verification. */
     StateLoadResult LoadState() const;
@@ -81,6 +98,15 @@ public:
 
     /** Last finalized block id, if any block has been committed. */
     std::optional<uint256> GetFinalizedTip() const;
+
+    /** Canonical finalized height (genesis height before the first committed child). */
+    std::optional<uint64_t> GetFinalizedHeight() const;
+
+    /** Network identity derived from the immutable canonical definition. */
+    const uint256& GetNetworkId() const { return m_network_id; }
+
+    /** Network identity persisted with genesis, if initialized. */
+    std::optional<uint256> GetStoredNetworkId() const;
 
     /**
      * Atomically commit a BFT-finalized block: all operations are executed
@@ -92,15 +118,14 @@ public:
         const uint256& block_id,
         const uint256& previous_block_id,
         const std::vector<AccountCreateOpV1>& ops,
-        const uint256& network_id,
         uint64_t block_height,
-        const CybouProtocolParameters& params,
         bool sync = true);
 
 private:
-    void Write(const CybouState& state, bool sync);
-
     CDBWrapper& m_db;
+    const CybouNetworkDefinitionV1 m_network_definition;
+    const NetworkDefinitionError m_network_definition_error;
+    const uint256 m_network_id;
 };
 
 } // namespace cybou

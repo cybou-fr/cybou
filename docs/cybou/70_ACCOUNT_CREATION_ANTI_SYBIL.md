@@ -58,15 +58,18 @@ AccountCreateOpV1 {
 When processing `AccountCreateOpV1`:
 
 1. **Op Integrity**: Validate version, non-null fields, and work difficulty.
-2. **Network Binding**: `creation_work.network_id` must match the active network ID (genesis block hash).
+2. **Network Binding**: `creation_work.network_id` must match the active NetworkID derived from the immutable `CybouNetworkDefinitionV1`.
 3. **Account Binding**: `creation_work.account_id` must match `op.account_id`.
 4. **Auth Binding**: `creation_work.initial_authorization_commitment` must match `ComputeAuthCommitment(op.initial_authorization)`.
-5. **Anti-Duplication**: `op.account_id` must not already exist in consensus state.
-6. **Pool Solvency**: `OnboardingPool` must hold sufficient funds for the network bonus.
-7. **Atomic State Mutation**:
+5. **Epoch Binding**: The valid work epoch is derived deterministically from finalized block height and immutable network parameters; caller-supplied wall-clock time is irrelevant.
+6. **Anti-Duplication**: `op.account_id` must not already exist in consensus state.
+7. **Pool Solvency**: `OnboardingPool` must hold sufficient funds for the network bonus.
+8. **Block Limit**: The block must not exceed `max_account_creates_per_block`.
+9. **Candidate State Transition**:
    - `OnboardingPool` debited by onboarding bonus.
    - New `AccountState` created with `balance = 0`, `system_balance = onboarding_bonus`, `creation_height = height`, `creation_epoch = epoch`, `initial_auth_commitment`.
-   - Undo delta recorded for chain rollback.
+   - Any invalid operation rejects the candidate without changing canonical state.
+10. **Finalized Commit**: After BFT finality, candidate state, state root, finalized tip and finalized height are persisted atomically. The height must advance by exactly one. Finalized CYBOU state has no production rollback or per-block undo path.
 
 ## Network Economics and Rate Limits
 

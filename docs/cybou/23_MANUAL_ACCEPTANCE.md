@@ -20,9 +20,26 @@
 ```text
 [ ] permissionless AccountCreateOpV1 accepted
 [ ] invalid or insufficient AccountCreationWork rejected
+[ ] work_epoch is derived from block height and stale/future work is rejected
+[ ] max_account_creates_per_block is enforced
 [ ] duplicate AccountID creation rejected
 [ ] valid creation credits onboarding bonus OnboardingPool -> SystemBalance
 [ ] identity creation alone does not mint tokens
+```
+
+## Canonical state commit
+```text
+[ ] genesis initialization cannot overwrite existing canonical state
+[ ] genesis persists the NetworkID derived from the immutable network definition
+[ ] reopening state under a different NetworkID is rejected before mutation
+[ ] unsupported or structurally invalid network definitions cannot initialize or advance state
+[ ] caller cannot arbitrarily replace canonical state
+[ ] invalid block operation leaves canonical state/root/tip unchanged
+[ ] finalized child commits state, state root, tip and height atomically
+[ ] non-contiguous finalized height is rejected without state mutation
+[ ] duplicate finalized block is rejected
+[ ] block whose parent is not the finalized tip is rejected
+[ ] no CYBOU production rollback or per-block undo path exists
 ```
 
 ## Mail crypto
@@ -70,6 +87,7 @@
 [ ] equal vote weight
 [ ] operator-authorized activation/removal is chain-visible
 [ ] conflicting finalization safety tests pass
+[ ] finalized CYBOU blocks cannot be reorged through the state-store API
 ```
 
 ## Evidence

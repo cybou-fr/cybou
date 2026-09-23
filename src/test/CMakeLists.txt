@@ -160,10 +160,6 @@ target_raw_data_sources(cybou-test NAMESPACE test::data
 
 add_windows_application_manifest(cybou-test)
 
-# CMake reserves the target name "test" when CTest is enabled; the produced
-# binary is nevertheless named test.exe (see OUTPUT_NAME below).
-set_target_properties(cybou-test PROPERTIES OUTPUT_NAME test)
-
 target_link_libraries(cybou-test
   core_interface
   test_util
