@@ -1,125 +1,243 @@
 /* ==========================================================================
-   CYBOU.FR — Apple-Inspired Interactive Engine
-   Bilingual dynamic toggle, mail viewer interaction, voucher simulator
+   CYBOU.FR — Technical Engine & Dynamic Bilingual Localization
+   Engineered for transparent systems presentation & responsive state verification
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
   initLanguageSwitch();
-  initMailMockup();
   initVoucherSimulator();
 });
 
 // --- 1. Language Toggle (French / English) ---
 const translations = {
   fr: {
-    navVision: "Vision",
-    navEmail: "CYBOU Email",
-    navArchitecture: "Architecture",
-    navVoucher: "Bon d'invitation",
-    navSpecs: "Spécifications",
-    navDownload: "Télécharger",
-    heroTag: "Réseau Pair-à-Pair Européen • Conçu en France",
-    heroTitle1: "La messagerie souveraine.",
-    heroTitle2: "Sans compromis.",
-    heroSubtitle: "Émancipée des géants du cloud. Protégée par cryptographie post-quantique. Registre pair-à-pair à finalité BFT immédiate.",
-    heroBtnDiscover: "Découvrir CYBOU Email",
-    heroBtnSpecs: "Lire les spécifications",
-    bentoLabel: "Piliers fondamentaux",
-    bentoTitle: "Une rupture technologique majeure.",
-    bentoDesc: "Pourquoi CYBOU redéfinit l'intégrité et la souveraineté des communications.",
-    card1Title: "Zéro dépendance aux géants du cloud",
-    card1Desc: "Aucun serveur central, aucun hébergeur étranger, aucun point unique de défaillance. Le réseau s'exécute directement entre pairs indépendants.",
-    card2Title: "Chiffrement Post-Quantique HPKE",
-    card2Desc: "Vos correspondances sont scellées avec l'algorithme hybride ML-KEM-768 et X25519. Protégé dès aujourd'hui contre les ordinateurs quantiques de demain.",
-    card3Title: "Autorité exclusive de l'appareil",
-    card3Desc: "Vos clés privées ne quittent jamais votre machine. L'opérateur ne dispose d'aucun passe-partout ni pouvoir de censure sur vos soldes.",
-    card4Title: "Consensus BFT & Époques PoT",
-    card4Desc: "Finalité explicite sans minage énergivore. Époques de consensus Proof of Trust calculées strictement à partir de la hauteur de bloc en arithmétique entière.",
-    flowLabel: "Protocole MailTx",
-    flowTitle: "De la composition à la finalité.",
-    flowDesc: "Comment chaque message devient un enregistrement cryptographique immuable.",
-    step1Title: "Rédaction & Engagement salé",
-    step1Desc: "Le message texte est lié à un sel cryptographique imprédictible et converti en empreinte de contenu infalsifiable.",
-    step2Title: "Chiffrement Hybride E2EE",
-    step2Desc: "Encapsulation HPKE ciblée exclusivement pour la clé publique du destinataire. Aucun tiers ne peut déchiffrer.",
+    badgeStatus: "v0.0.1 Baseline",
+    navStatus: "État du projet",
+    navArch: "Piliers",
+    navMailTx: "Protocole MailTx",
+    navSpecs: "Fiche technique",
+    navSim: "Simulateur",
+    navRepo: "Dépôt GitHub",
+
+    heroTag: "R&D Ouverte • Architecture P2P C++20 • Souveraineté Européenne",
+    heroAccent: "Messagerie P2P souveraine & registre BFT.",
+    heroSubtitle: "Une architecture logicielle conçue en France, émancipée des géants du cloud. Chiffrement hybride post-quantique, finalité BFT explicite et isolation stricte de l'autorité de l'appareil.",
+
+    statusCalloutTitle: "Statut de développement : v0.0.1 (Baseline d'ingénierie & durcissement)",
+    statusCalloutBody: "CYBOU n'est pas un service commercial ou une application de bureau déployée pour le grand public. Le réseau s'exécute actuellement sur une chaîne de démarrage interne (CYBOU-DEV v0.0.2). Cette plateforme présente les fondations architecturales, les transitions d'état formelles en C++ et l'état réel d'avancement du projet.",
+
+    heroBtnStatus: "Consulter l'état réel d'avancement",
+    heroBtnCode: "Code source (GitHub)",
+
+    matrixLabel: "Transparence technique",
+    matrixTitle: "Matrice d'implémentation v0.0.1.",
+    matrixDesc: "Distinction stricte et vérifiable entre le code validé en tests unitaires, les modules en cours de refonte et les composants de la feuille de route.",
+
+    col1Title: "Validé & Testé (v0.0.1)",
+    badgeDone: "FONCTIONNEL",
+    col1Item1: "<strong>Enveloppe de bon d'invitation (doc 70) :</strong> validation cryptographique bornée, séparation de domaine anti-rejeu.",
+    col1Item2: "<strong>Identifiant typé AccountId (32 octets) :</strong> gestion déterministe du solde système (<code>SystemBalance</code>).",
+    col1Item3: "<strong>Subvention d'accueil atomique :</strong> transfert de 6 000 CYBOU de <code>OnboardingPool</code> vers <code>SystemBalance</code>.",
+    col1Item4: "<strong>Persistance d'état LevelDB :</strong> instantanés atomiques avec nommage et isolats stricts CYBOU.",
+    col1Item5: "<strong>Définition native MailTx (doc 16) :</strong> opération de premier rang, 1 destinataire, taille bornée, frais prévisibles (sans surenchère).",
+    col1Item6: "<strong>Couverture de tests :</strong> 684 tests unitaires validés, élimination intégrale des dépendances et terminologies Bitcoin résiduelles.",
+
+    col2Title: "En cours de consolidation",
+    badgeWip: "EN COURS",
+    col2Item1: "<strong>Moteur de consensus BFT (doc 07) :</strong> finalité explicite multi-validateurs avec admission contrôlée par l'opérateur (seuil f=1 dès 4 validateurs à poids égal).",
+    col2Item2: "<strong>Époques Proof of Trust (PoT) :</strong> calcul arithmétique entier strict dérivé de la hauteur de bloc (zéro dépendance à l'horloge locale).",
+    col2Item3: "<strong>Séparation stricte des clés (doc 68) :</strong> 4 domaines isolés (Autorité, Validateur, Signature de release, Trésorerie).",
+    col2Item4: "<strong>Remplacement PoW :</strong> élimination définitive des reliquats de preuve de travail de la chaîne de bootstrap <code>CYBOU-DEV v0.0.2</code>.",
+
+    col3Title: "Feuille de route planifiée",
+    badgePlanned: "PLANIFIÉ",
+    col3Item1: "<strong>Encapsulation Post-Quantique HPKE :</strong> intégration production du profil hybride ML-KEM-768 + X25519 (doc 49).",
+    col3Item2: "<strong>Stockage d'objets décentralisé :</strong> couche de pré-stockage pour validateurs et stockage d'objets pour pièces jointes à grande échelle.",
+    col3Item3: "<strong>Client graphique de bureau :</strong> interface utilisateur native (Inbox, Sent, état de lecture) avec conservation des index localement sur le poste.",
+    col3Item4: "<strong>Preuves d'inclusion de correspondance :</strong> certificats de finalité vérifiables hors-chaîne par des tiers certificateurs.",
+
+    archLabel: "Fondations de conception",
+    archTitle: "Rupture avec les architectures centralisées.",
+    archDesc: "Les quatre piliers de conception garantissant la souveraineté et l'intégrité pérenne des échanges numériques.",
+
+    bento1Title: "Émancipation totale des hébergeurs de cloud tiers",
+    bento1Desc: "Aucun serveur central, aucun compte sous juridiction extra-européenne, aucun point unique de censure ou de coupure. Les nœuds pairs échangent directement via un protocole P2P durci en C++20 sans passerelle obligatoire.",
+    bento1Metric: "Résilience autonome native au niveau protocolaire",
+
+    bento2Title: "Chiffrement Post-Quantique HPKE",
+    bento2Desc: "Anticipation des attaques par interception et déchiffrement ultérieur grâce au standard hybride ML-KEM-768 et X25519 (RFC 9180).",
+    bento2Metric: "Standard NIST post-quantique",
+
+    bento3Title: "Autorité exclusive de l'appareil",
+    bento3Desc: "Les clés privées ne transitent jamais sur le réseau. L'opérateur ne détient aucun passe-partout et ne peut modifier les soldes ou intercepter les courriers.",
+    bento3Metric: "Accès dérobé ou clé maîtresse centrale",
+
+    bento4Title: "Finalité BFT explicite & Économie déterministe",
+    bento4Desc: "Validation par consensus byzantin à poids égal (poids = 1). Arithmétique entière stricte, réserve plafonnée à 100 milliards de CYBOU, 0 décimale, et répartition déterministe des frais : 3/4 pour la Sécurité et 1/4 pour l'Accueil.",
+    bento4Metric: "Plafond absolu d'unités CYBOU (0 décimale)",
+
+    flowLabel: "Ingénierie du message",
+    flowTitle: "Le cycle de vie d'une transaction MailTx.",
+    flowDesc: "Comment un message textuel est engagé, scellé et enregistré de manière vérifiable sur le réseau.",
+
+    step1Title: "Engagement salé de contenu",
+    step1Desc: "Le corps textuel est lié à un sel cryptographique imprédictible (doc 69). L'empreinte résultante garantit l'intégrité sans exposer le contenu en clair aux validateurs.",
+
+    step2Title: "Chiffrement Hybride HPKE",
+    step2Desc: "Chiffrement de bout en bout ciblé pour la clé publique du destinataire avec protection post-quantique. Aucun tiers ne peut accéder au message en clair.",
+
     step3Title: "Opération MailTx native",
-    step3Desc: "Le message est diffusé comme transaction native de premier rang sur le réseau P2P avec frais déterminés sans surenchère.",
-    step4Title: "Finalité BFT & Réception",
-    step4Desc: "Le bloc est scellé par les validateurs BFT. Le destinataire hors-ligne synchronise et déchiffre son courrier localement.",
-    simLabel: "Simulateur d'onboarding",
-    simTitle: "Vérifiez un bon d'invitation (Invite Voucher).",
-    simDesc: "L'accès au réseau et l'attribution de la subvention d'accueil (6 000 CYBOU) reposent sur un bon d'opérateur vérifié.",
-    simBeneficiary: "Identifiant du compte (AccountId)",
-    simVoucherId: "Numéro du bon d'invitation",
-    simSubmit: "Exécuter l'admission sur l'état",
-    simStatusReady: "En attente de vérification",
-    simStatusSuccess: "Admis • Subvention 6 000 CYBOU créditée",
-    simPoolSource: "OnboardingPool (Réserve d'accueil)",
-    simBalanceTarget: "SystemBalance (Solde Système)",
-    simQuota: "Quota d'émission par époque PoT",
+    step3Desc: "Émission d'une transaction de premier rang (pas de payload arbitraire Bitcoin Script). Frais déterministes fonction de la taille, sans enchère de priorité.",
+
+    step4Title: "Consensus BFT & Index Local",
+    step4Desc: "Le bloc est scellé par les validateurs BFT. Aucun état par courrier n'est conservé dans le consensus : le client local indexe ses courriers reçus et envoyés.",
+
+    specLabel: "Spécifications machine & humaine",
+    specTitle: "Fiche technique du protocole CYBOU.",
+    specDesc: "Données d'ingénierie structurées et indexables pour moteurs de recherche et assistants d'analyse IA.",
+    factsheetHeading: "Paramètres canoniques de l'architecture CYBOU v0.0.1",
+
+    dtConsensus: "Modèle de consensus",
+    dtPoT: "Époques de confiance (PoT)",
+    dtSupply: "Offre maximale (MAX_SUPPLY)",
+    dtGrant: "Subvention d'accueil (Welcome Grant)",
+    dtFees: "Régime des frais de transaction",
+    dtMailTx: "Format MailTx (v1)",
+    dtKeys: "Séparation des clés d'opérateur",
+    dtStack: "Socle technologique",
+
+    simLabel: "Validation d'état C++",
+    simTitle: "Simulateur de transition d'état (Invite Voucher).",
+    simDesc: "Démonstration de la transition d'accueil telle qu'implémentée dans les modules src/cybou/voucher.cpp et src/cybou/state.cpp.",
+    simBeneficiary: "Identifiant de compte (AccountId — 32 octets)",
+    simVoucherId: "Code du bon d'invitation (VoucherId)",
+    simSubmit: "Exécuter la transition d'état",
     simStatusLabel: "Statut de la transition",
-    dlTitle: "Prenez le contrôle de vos communications.",
-    dlDesc: "Téléchargez le nœud complet CYBOU Desktop et commencez à échanger souverainement.",
-    dlWindows: "Windows (MSVC)",
-    dlWindowsDesc: "Client complet cybou.exe pour Windows 10/11.",
-    dlLinux: "Linux / Validateur",
-    dlLinuxDesc: "Binaire d'infrastructure et nœud de validation pour Ubuntu/Debian.",
-    dlBtn: "Télécharger les binaires"
+    simStatusReady: "En attente d'exécution",
+    simStatusSuccess: "Admis • Subvention 6 000 CYBOU créditée",
+    simPoolSource: "OnboardingPool (Réserve globale)",
+    simBalanceTarget: "SystemBalance (Solde Système)",
+    simReplay: "Séparation anti-rejeu",
+    simQuota: "Quota d'envoi par époque",
+
+    footNav: "Navigation",
+    footDocs: "Spécifications",
+    footGov: "Gouvernance"
   },
+
   en: {
-    navVision: "Vision",
-    navEmail: "CYBOU Email",
-    navArchitecture: "Architecture",
-    navVoucher: "Invite Voucher",
-    navSpecs: "Specifications",
-    navDownload: "Download",
-    heroTag: "European Sovereign Peer-to-Peer Network • Designed in France",
-    heroTitle1: "Sovereign messaging.",
-    heroTitle2: "Zero compromise.",
-    heroSubtitle: "Free from cloud hyper-scalers. Shielded by post-quantum encryption. Native peer-to-peer state with immediate BFT finality.",
-    heroBtnDiscover: "Explore CYBOU Email",
-    heroBtnSpecs: "Read Specifications",
-    bentoLabel: "Core Pillars",
-    bentoTitle: "A fundamental technological breakthrough.",
-    bentoDesc: "Why CYBOU redefines communication integrity and digital sovereignty.",
-    card1Title: "Zero Foreign Cloud Dependency",
-    card1Desc: "No centralized servers, no foreign hosts, no single point of failure. The network executes directly between independent peers.",
-    card2Title: "Post-Quantum HPKE Encryption",
-    card2Desc: "Correspondence is sealed using hybrid ML-KEM-768 and X25519. Immune today against tomorrow's quantum computing attacks.",
-    card3Title: "Exclusive Device Authority",
-    card3Desc: "Private keys never leave your device. The operator possesses no master key, back door, or power to freeze user balances.",
-    card4Title: "BFT Consensus & PoT Epochs",
-    card4Desc: "Explicit finality without energy-intensive mining. Proof of Trust epochs computed deterministically from block height using integer math.",
-    flowLabel: "MailTx Protocol",
-    flowTitle: "From composition to finality.",
-    flowDesc: "How every message becomes an immutable cryptographic record.",
-    step1Title: "Composition & Salted Commitment",
-    step1Desc: "Text content is bound to an unpredictable cryptographic salt, producing a tamper-proof commitment digest.",
-    step2Title: "Hybrid E2EE Encryption",
-    step2Desc: "HPKE encapsulation targeted exclusively to the recipient's public key. No intermediary can intercept or decrypt.",
+    badgeStatus: "v0.0.1 Baseline",
+    navStatus: "Project Status",
+    navArch: "Pillars",
+    navMailTx: "MailTx Protocol",
+    navSpecs: "Tech Specs",
+    navSim: "Simulator",
+    navRepo: "GitHub Repo",
+
+    heroTag: "Open R&D • C++20 P2P Architecture • European Sovereignty",
+    heroAccent: "Sovereign P2P messaging & BFT ledger.",
+    heroSubtitle: "Software architecture designed in France, freed from foreign cloud hyper-scalers. Post-quantum hybrid encryption, explicit BFT finality, and exclusive device authority.",
+
+    statusCalloutTitle: "Development Status: v0.0.1 (Engineering Baseline & Hardening)",
+    statusCalloutBody: "CYBOU is not a consumer product or desktop app deployed for the general public today. The network currently operates on an internal bootstrap chain (CYBOU-DEV v0.0.2). This site documents the architectural foundation, formal C++ state transitions, and real engineering progress.",
+
+    heroBtnStatus: "View Implementation Status",
+    heroBtnCode: "Source Code (GitHub)",
+
+    matrixLabel: "Technical Transparency",
+    matrixTitle: "v0.0.1 Implementation Matrix.",
+    matrixDesc: "Strict, verifiable breakdown between tested unit code, active engineering work, and the long-term roadmap.",
+
+    col1Title: "Validated & Tested (v0.0.1)",
+    badgeDone: "PASSING",
+    col1Item1: "<strong>Invite Voucher Envelope (doc 70):</strong> bounded cryptographic verification, domain separation against replay.",
+    col1Item2: "<strong>Typed AccountId (32 bytes):</strong> deterministic balance validation and <code>SystemBalance</code> tracking.",
+    col1Item3: "<strong>Atomic Welcome Grant:</strong> 6,000 CYBOU transfer from <code>OnboardingPool</code> to <code>SystemBalance</code>.",
+    col1Item4: "<strong>LevelDB Snapshot Persistence:</strong> atomic state snapshots with clean CYBOU namespacing.",
+    col1Item5: "<strong>Native MailTx Definition (doc 16):</strong> first-class operation, 1 recipient, bounded payload size, deterministic non-bidding fees.",
+    col1Item6: "<strong>Test Coverage:</strong> 684 unit tests passing, complete elimination of legacy Bitcoin terminology and prefixes.",
+
+    col2Title: "In Progress & Hardening",
+    badgeWip: "IN PROGRESS",
+    col2Item1: "<strong>Multi-Validator BFT Engine (doc 07):</strong> explicit finality with operator-approved admission (f=1 threshold at 4+ validators, equal weight = 1).",
+    col2Item2: "<strong>Proof of Trust (PoT) Epochs:</strong> deterministic integer math derived strictly from block height (zero local wall-clock dependency).",
+    col2Item3: "<strong>Strict Key Separation (doc 68):</strong> 4 isolated roles (Operator Authority, Validator, Release Signing, Treasury).",
+    col2Item4: "<strong>PoW Retirement:</strong> final deprecation of residual proof-of-work mechanics inherited from the <code>CYBOU-DEV v0.0.2</code> bootstrap chain.",
+
+    col3Title: "Planned Roadmap",
+    badgePlanned: "PLANNED",
+    col3Item1: "<strong>Post-Quantum HPKE Encapsulation:</strong> production integration of hybrid ML-KEM-768 + X25519 (doc 49).",
+    col3Item2: "<strong>Distributed Object Storage:</strong> validator pre-store staging layer and long-term object storage for attachments at scale.",
+    col3Item3: "<strong>Desktop GUI Client:</strong> native desktop user interface (Inbox, Sent, read-state) with index stores owned strictly on the local machine.",
+    col3Item4: "<strong>Mail Evidence Bundles:</strong> cryptographically verifiable inclusion certificates and BFT finality proofs for third-party auditing.",
+
+    archLabel: "Design Foundations",
+    archTitle: "Breaking with Centralized Cloud Architectures.",
+    archDesc: "The four architectural pillars guaranteeing long-term digital sovereignty and communication integrity.",
+
+    bento1Title: "Zero Foreign Cloud Dependency",
+    bento1Desc: "No centralized servers, no accounts under non-European jurisdiction, no single point of censorship or shutdown. Nodes communicate directly via a hardened C++20 P2P protocol without mandatory proxies.",
+    bento1Metric: "Native protocol-level autonomous resilience",
+
+    bento2Title: "Post-Quantum HPKE Encryption",
+    bento2Desc: "Future-proof immunity against 'harvest-now-decrypt-later' threats using the hybrid ML-KEM-768 and X25519 standard (RFC 9180).",
+    bento2Metric: "NIST post-quantum standard",
+
+    bento3Title: "Exclusive Device Authority",
+    bento3Desc: "Private keys never leave the host machine. The operator possesses no master key, back door, or administrative power to seize balances or intercept messages.",
+    bento3Metric: "Zero back doors or master administrative keys",
+
+    bento4Title: "Explicit BFT Finality & Deterministic Economics",
+    bento4Desc: "Consensus through equal-weight Byzantine fault tolerance (weight = 1). Integer arithmetic, fixed 100,000,000,000 CYBOU supply ceiling, 0 decimals, and deterministic fee split: 3/4 Security, 1/4 Onboarding.",
+    bento4Metric: "Strict maximum CYBOU token supply (0 decimals)",
+
+    flowLabel: "Message Lifecycle",
+    flowTitle: "The Lifecycle of a MailTx Transaction.",
+    flowDesc: "How a plain-text message is committed, sealed, and verifiably ledgered on the peer-to-peer network.",
+
+    step1Title: "Salted Content Commitment",
+    step1Desc: "The message body is bound to an unpredictable cryptographic salt (doc 69). The resulting hash commits content without exposing cleartext to validators.",
+
+    step2Title: "Hybrid HPKE Encryption",
+    step2Desc: "End-to-end encryption targeted exclusively to the recipient's public key with post-quantum security. Intermediaries cannot inspect payload contents.",
+
     step3Title: "First-Class MailTx Operation",
-    step3Desc: "Dispatched as a native first-class transaction on the P2P network with deterministic, non-bidding size fees.",
-    step4Title: "BFT Finality & Delivery",
-    step4Desc: "The block is sealed by BFT validators. Offline recipients synchronize and decrypt mail locally in their client.",
-    simLabel: "Onboarding Simulator",
-    simTitle: "Verify an Invite Voucher.",
-    simDesc: "Network onboarding and the Welcome Grant (6,000 CYBOU) are granted through verified operator vouchers.",
-    simBeneficiary: "Beneficiary AccountId",
-    simVoucherId: "Invite Voucher Code",
+    step3Desc: "Broadcasted as a native first-class transaction (never encoded as arbitrary Bitcoin script). Size-aware deterministic fee without bidding wars.",
+
+    step4Title: "BFT Consensus & Local Indexing",
+    step4Desc: "The block is sealed with explicit BFT finality. No per-mail consensus object is stored: the local client retains private Inbox and Sent index trees.",
+
+    specLabel: "Machine & Human Specifications",
+    specTitle: "CYBOU Protocol Technical Factsheet.",
+    specDesc: "Structured engineering parameters formatted for search engine indexing and AI knowledge models.",
+    factsheetHeading: "Canonical Architecture Parameters (CYBOU v0.0.1)",
+
+    dtConsensus: "Consensus Model",
+    dtPoT: "Proof of Trust Epochs (PoT)",
+    dtSupply: "Maximum Supply (MAX_SUPPLY)",
+    dtGrant: "Welcome Grant",
+    dtFees: "Transaction Fee Structure",
+    dtMailTx: "MailTx Specification (v1)",
+    dtKeys: "Operator Key Isolation",
+    dtStack: "Core Technology Stack",
+
+    simLabel: "C++ State Transition",
+    simTitle: "State Transition Simulator (Invite Voucher).",
+    simDesc: "Demonstration of the onboarding state transition implemented in src/cybou/voucher.cpp and src/cybou/state.cpp.",
+    simBeneficiary: "Account Identifier (AccountId — 32 bytes)",
+    simVoucherId: "Invite Voucher Code (VoucherId)",
     simSubmit: "Execute State Transition",
-    simStatusReady: "Awaiting Verification",
-    simStatusSuccess: "Verified • 6,000 CYBOU Grant Credited",
-    simPoolSource: "OnboardingPool (Source)",
-    simBalanceTarget: "SystemBalance (Credited)",
-    simQuota: "Outgoing Quota per PoT Epoch",
     simStatusLabel: "Transition Status",
-    dlTitle: "Take control of your communications.",
-    dlDesc: "Download the full CYBOU Desktop node and start exchanging sovereignly.",
-    dlWindows: "Windows (MSVC)",
-    dlWindowsDesc: "Full-node cybou.exe client for Windows 10/11.",
-    dlLinux: "Linux / Validator",
-    dlLinuxDesc: "Infrastructure binary & validator node for Ubuntu/Debian.",
-    dlBtn: "Download Binaries"
+    simStatusReady: "Awaiting execution",
+    simStatusSuccess: "Admitted • 6,000 CYBOU Welcome Grant Credited",
+    simPoolSource: "OnboardingPool (Global Reserve)",
+    simBalanceTarget: "SystemBalance (Credited)",
+    simReplay: "Anti-Replay Domain Separation",
+    simQuota: "Outgoing Quota per Epoch",
+
+    footNav: "Navigation",
+    footDocs: "Specifications",
+    footGov: "Governance"
   }
 };
 
@@ -139,82 +257,22 @@ function setLanguage(lang) {
   currentLang = lang;
   document.getElementById('lang-fr').classList.toggle('active', lang === 'fr');
   document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+  document.documentElement.lang = lang;
 
   const dict = translations[lang];
   for (const [key, val] of Object.entries(dict)) {
     const el = document.querySelector(`[data-i18n="${key}"]`);
     if (el) {
-      el.textContent = val;
+      if (val.includes('<')) {
+        el.innerHTML = val;
+      } else {
+        el.textContent = val;
+      }
     }
   }
 }
 
-// --- 2. Interactive macOS Mail Mockup ---
-const sampleEmails = [
-  {
-    sender: "sophie.delorme@cybou",
-    subject: "Audit de sécurité et homologation européenne",
-    time: "14:18",
-    badge: "ML-KEM-768",
-    proof: "BFT #28419",
-    body: `
-      <p>Bonjour Marc,</p>
-      <p>Nous avons finalisé le passage en revue des spécifications du protocole MailTx pour notre déploiement en France. L'isolation stricte des clés d'autorité opérateur (68_OPERATOR_KEY_SEPARATION) garantit qu'aucune clé maîtresse ne peut compromettre la confidentialité de nos correspondances.</p>
-      <p>L'engagement salé de contenu (69_MAIL_EVIDENCE_BUNDLE) et la finalité BFT explicite répondent parfaitement aux critères d'audit de souveraineté numérique.</p>
-      <p>Bien cordialement,<br><strong>Sophie Delorme</strong><br><span style="color: #86868b; font-size: 0.8rem;">Déléguée à la Sécurité Numérique</span></p>
-    `
-  },
-  {
-    sender: "alexandre.blanc@cybou",
-    subject: "Activation du 4ème nœud validateur BFT",
-    time: "11:05",
-    badge: "BFT f=1",
-    proof: "BFT #28412",
-    body: `
-      <p>Bonjour à tous,</p>
-      <p>Le 4ème validateur BFT a été admis avec succès par consensus. Le réseau atteint désormais la tolérance aux pannes byzantines f=1 avec des poids de vote strictement égaux à 1.</p>
-      <p>Les époques Proof of Trust continuent d'avancer selon la hauteur de bloc finalisée sans aucune dérive d'horloge locale.</p>
-    `
-  },
-  {
-    sender: "contact@anonyme.cybou",
-    subject: "Bienvenue sur le réseau CYBOU",
-    time: "Hier",
-    badge: "Welcome",
-    proof: "Genesis DEV",
-    body: `
-      <p>Félicitations pour la création de votre identité CYBOU.</p>
-      <p>Votre bon d'invitation vous a attribué 6 000 CYBOU de solde système (SystemBalance). Vous disposez dès maintenant d'un quota de 25 envois par époque PoT.</p>
-    `
-  }
-];
-
-function initMailMockup() {
-  const mailItems = document.querySelectorAll('.mail-item');
-  const viewTitle = document.getElementById('mockup-title');
-  const viewSender = document.getElementById('mockup-sender');
-  const viewProof = document.getElementById('mockup-proof-num');
-  const viewBody = document.getElementById('mockup-body');
-
-  if (!mailItems.length || !viewTitle || !viewSender || !viewBody) return;
-
-  mailItems.forEach((item, index) => {
-    item.addEventListener('click', () => {
-      mailItems.forEach(i => i.classList.remove('selected'));
-      item.classList.add('selected');
-
-      const data = sampleEmails[index];
-      if (data) {
-        viewTitle.textContent = data.subject;
-        viewSender.textContent = data.sender;
-        if (viewProof) viewProof.textContent = data.proof;
-        viewBody.innerHTML = data.body;
-      }
-    });
-  });
-}
-
-// --- 3. Interactive Invite Voucher Simulator ---
+// --- 2. Interactive Invite Voucher Simulator ---
 function initVoucherSimulator() {
   const btn = document.getElementById('sim-run-btn');
   const accountInput = document.getElementById('sim-account');
@@ -226,17 +284,21 @@ function initVoucherSimulator() {
   if (!btn || !accountInput || !voucherInput) return;
 
   btn.addEventListener('click', () => {
-    btn.textContent = currentLang === 'fr' ? 'Validation cryptographique en cours...' : 'Verifying cryptographic signature...';
+    btn.textContent = currentLang === 'fr' 
+      ? 'Vérification cryptographique en cours...' 
+      : 'Verifying cryptographic signature...';
     btn.style.opacity = '0.7';
 
     setTimeout(() => {
-      btn.textContent = currentLang === 'fr' ? 'Exécuter l\'admission sur l\'état' : 'Execute State Transition';
+      btn.textContent = currentLang === 'fr' 
+        ? 'Exécuter la transition d\'état' 
+        : 'Execute State Transition';
       btn.style.opacity = '1';
 
       if (statusVal) {
         statusVal.textContent = currentLang === 'fr' 
           ? 'Admis • Subvention 6 000 CYBOU créditée' 
-          : 'Verified • 6,000 CYBOU Grant Credited';
+          : 'Admitted • 6,000 CYBOU Welcome Grant Credited';
         statusVal.className = 'output-val highlight';
       }
       if (sysBalVal) {
@@ -246,6 +308,6 @@ function initVoucherSimulator() {
       if (poolVal) {
         poolVal.textContent = '99 999 994 000 CYBOU';
       }
-    }, 450);
+    }, 400);
   });
 }
