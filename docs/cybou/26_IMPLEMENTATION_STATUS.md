@@ -138,9 +138,10 @@ Implemented skeleton:
 - removed wire `fee` field from `PaymentOpV1` and `MailOpV1` to completely prevent fee bidding and under/overpayment attacks;
 - cryptographic Proof of Possession (`CYBOU/ACCOUNT_POP/V1`) enforced on `AccountCreateOpV1`;
 - `AccountState` cleaned of non-operational fields (`initial_auth_commitment` removed);
-- `MailOpV1` explicitly marked DEV EXPERIMENTAL / NOT WIRE-FROZEN.
+- `MailOpV1` explicitly marked DEV EXPERIMENTAL / NOT WIRE-FROZEN;
+- consensus-operation wiring of Operator Authority signature verification (`ValidatorAdmissionOpV1` and `ValidatorRemovalOpV1`) with domain-separated hybrid `Ed25519 + ML-DSA-65` signatures binding `NetworkID`;
+- tracking active validator set in canonical consensus state (`CybouState`) and enforcing equal weight = 1, unique keys/IDs, and non-empty active set invariants in `CybouStateStore`.
 
 Not yet implemented:
 
-- consensus-operation wiring of Operator Authority signature verification for validator admissions;
 - connection of the state-store boundary to the P2P wire message lifecycle.

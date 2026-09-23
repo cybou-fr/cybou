@@ -82,6 +82,7 @@ cybou::CybouState GenesisState()
         .security_reward_pool = 1000,
         .pending_fee_pool = 500,
         .accounts{},
+        .validator_set = TEST_VALIDATOR_SET,
     };
 }
 
@@ -137,7 +138,8 @@ cybou::FinalizedBlockV1 MakeFinalizedBlock(
     const std::vector<MockVal>& vals = TEST_VAL_NODES,
     std::optional<uint256> override_parent = std::nullopt,
     std::optional<uint64_t> override_height = std::nullopt,
-    std::optional<uint256> override_network_id = std::nullopt)
+    std::optional<uint256> override_network_id = std::nullopt,
+    const cybou::OperatorAuthoritySignatureVerifier* op_verifier = nullptr)
 {
     const auto loaded = store.LoadState();
     const uint64_t height = override_height.value_or(store.GetFinalizedHeight().value_or(0) + 1);
@@ -149,6 +151,8 @@ cybou::FinalizedBlockV1 MakeFinalizedBlock(
         .network_id = net_id,
         .block_height = height,
         .params = PARAMS,
+        .operator_authority = store.GetOperatorAuthority() ? &*store.GetOperatorAuthority() : nullptr,
+        .operator_verifier = op_verifier,
     };
     for (const auto& op : ops) {
         cybou::ApplyProtocolOperation(op, ctx, candidate);
@@ -555,6 +559,190 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_executes_authorized_payment)
     BOOST_REQUIRE(loaded_fb2.has_value());
     BOOST_CHECK(loaded_fb2->block == fb2.block);
     BOOST_CHECK(loaded_fb2->certificate == fb2.certificate);
+}
+
+namespace {
+
+class MockStoreAuthorityVerifier final : public cybou::OperatorAuthoritySignatureVerifier
+{
+public:
+    bool Verify(
+        const cybou::OperatorAuthorityKeySet& keyset,
+        const cybou::SignatureBundleV1& bundle,
+        std::span<const unsigned char> message) const override
+    {
+        return cybou::IsPresent(bundle) && bundle.authority_keyset_id == keyset.keyset_id;
+    }
+};
+
+cybou::SignatureBundleV1 CreateStoreMockSignatureBundle(const uint256& keyset_id)
+{
+    cybou::SignatureBundleV1 bundle;
+    bundle.suite_id = cybou::SignatureSuiteId::HYBRID_ED25519_MLDSA65_V1;
+    bundle.authority_keyset_id = keyset_id;
+    bundle.classical_signature.fill(0x11);
+    bundle.pq_signature.fill(0x22);
+    return bundle;
+}
+
+} // namespace
+
+BOOST_AUTO_TEST_CASE(store_genesis_validator_set_validation_and_access)
+{
+    auto db = MemoryDb();
+    const auto definition = TestNetworkDefinition();
+    cybou::CybouStateStore store{db, definition};
+
+    // 1. Rejects genesis with mismatched validator set commitment
+    auto bad_genesis = GenesisState();
+    bad_genesis.validator_set.validators.pop_back(); // 3 instead of 4
+    // State hash mismatch occurs first if genesis_state_root was derived from original
+    const auto bad_res = store.InitializeGenesis(bad_genesis);
+    BOOST_CHECK(!bad_res);
+
+    // 2. Initialize with valid genesis state matching network definition
+    BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
+
+    // 3. GetValidatorSet returns canonical validator set
+    const auto val_set = store.GetValidatorSet();
+    BOOST_REQUIRE(val_set.has_value());
+    BOOST_CHECK_EQUAL(val_set->Size(), 4);
+    BOOST_CHECK_EQUAL(val_set->TotalWeight(), 4);
+    BOOST_CHECK(*val_set == TEST_VALIDATOR_SET);
+
+    // 4. Reject block commit with mismatched validator_set parameter
+    auto bad_val_set = TEST_VALIDATOR_SET;
+    bad_val_set.validators.pop_back();
+    auto fb = MakeFinalizedBlock(store, {ValidOp()});
+    const auto mismatch_res = store.CommitFinalizedBlock(fb, bad_val_set);
+    BOOST_CHECK(mismatch_res.error == cybou::BlockTransitionError::VALIDATOR_SET_MISMATCH);
+}
+
+BOOST_AUTO_TEST_CASE(store_commits_block_with_validator_admission_and_removal)
+{
+    auto db = MemoryDb();
+    const auto definition = TestNetworkDefinition();
+
+    const uint256 keyset_id{uint256::FromUserHex("aa").value()};
+    const cybou::OperatorAuthorityKeySet authority{
+        .keyset_id = keyset_id,
+        .active_from_epoch = 0,
+        .retired_from_epoch = 100,
+    };
+    auto verifier = std::make_shared<MockStoreAuthorityVerifier>();
+
+    cybou::CybouStateStore store{db, definition, authority, verifier};
+    BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
+
+    // Create 5th validator node
+    MockVal node5;
+    node5.priv.fill(0);
+    node5.priv[0] = 5;
+    node5.pub = *cybou::DeriveEd25519PublicKey(node5.priv);
+
+    const cybou::ValidatorAdmissionOpV1 admission_op{
+        .version = cybou::VALIDATOR_ADMISSION_OP_VERSION,
+        .validator_id = node5.pub,
+        .consensus_public_key = node5.pub,
+        .activation_epoch = 0,
+        .operator_signature = CreateStoreMockSignatureBundle(keyset_id),
+    };
+
+    // Block 1: admit 5th validator, signed by current 4 validators
+    auto fb1 = MakeFinalizedBlock(store, {cybou::ProtocolOperationV1{admission_op}}, TEST_VALIDATOR_SET, TEST_VAL_NODES, std::nullopt, std::nullopt, std::nullopt, verifier.get());
+    BOOST_REQUIRE(store.CommitFinalizedBlock(fb1));
+
+    // Active validator set is now 5
+    const auto val_set_h1 = store.GetValidatorSet();
+    BOOST_REQUIRE(val_set_h1.has_value());
+    BOOST_CHECK_EQUAL(val_set_h1->Size(), 5);
+    BOOST_CHECK_EQUAL(val_set_h1->QuorumThreshold(), 4); // floor(2*5/3) + 1 = 4
+    BOOST_CHECK(val_set_h1->FindValidator(node5.pub) != nullptr);
+
+    // Prepare node list of 5 nodes
+    auto all_5_nodes = TEST_VAL_NODES;
+    all_5_nodes.push_back(node5);
+
+    // Block 2: regular operation, signed by 4 of the 5 validators (quorum satisfied)
+    std::vector<MockVal> four_signers = {all_5_nodes[0], all_5_nodes[1], all_5_nodes[2], all_5_nodes[4]};
+    auto fb2 = MakeFinalizedBlock(store, {ValidOp()}, *val_set_h1, four_signers, std::nullopt, std::nullopt, std::nullopt, verifier.get());
+    BOOST_REQUIRE(store.CommitFinalizedBlock(fb2));
+    BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 2);
+
+    // Block 3: remove the 5th validator
+    const cybou::ValidatorRemovalOpV1 removal_op{
+        .version = cybou::VALIDATOR_REMOVAL_OP_VERSION,
+        .validator_id = node5.pub,
+        .effective_epoch = 0,
+        .operator_signature = CreateStoreMockSignatureBundle(keyset_id),
+    };
+    auto fb3 = MakeFinalizedBlock(store, {cybou::ProtocolOperationV1{removal_op}}, *val_set_h1, four_signers, std::nullopt, std::nullopt, std::nullopt, verifier.get());
+    BOOST_REQUIRE(store.CommitFinalizedBlock(fb3));
+
+    // Active validator set is back to 4
+    const auto val_set_h3 = store.GetValidatorSet();
+    BOOST_REQUIRE(val_set_h3.has_value());
+    BOOST_CHECK_EQUAL(val_set_h3->Size(), 4);
+    BOOST_CHECK(val_set_h3->FindValidator(node5.pub) == nullptr);
+    BOOST_CHECK(*val_set_h3 == TEST_VALIDATOR_SET);
+}
+
+BOOST_AUTO_TEST_CASE(store_rejects_removal_of_last_validator_in_authority_mode)
+{
+    auto db = MemoryDb();
+
+    // Setup 1-validator Authority Mode network
+    const cybou::ValidatorSetV1 authority_val_set{
+        .version = cybou::VALIDATOR_SET_VERSION,
+        .validators = {
+            cybou::ValidatorV1{.validator_id = TEST_VAL_NODES[0].pub, .consensus_public_key = TEST_VAL_NODES[0].pub, .weight = 1},
+        },
+    };
+
+    cybou::CybouState auth_genesis_state{
+        .onboarding_pool = 20000,
+        .security_reward_pool = 1000,
+        .pending_fee_pool = 500,
+        .accounts{},
+        .validator_set = authority_val_set,
+    };
+
+    const cybou::CybouNetworkDefinitionV1 auth_definition{
+        .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
+        .genesis_block_id = uint256::ONE,
+        .genesis_state_root = cybou::CybouStateHash(auth_genesis_state),
+        .protocol_parameters = PARAMS,
+        .initial_validator_set_commitment = cybou::ComputeValidatorSetCommitment(authority_val_set),
+    };
+
+    const uint256 keyset_id{uint256::FromUserHex("aa").value()};
+    const cybou::OperatorAuthorityKeySet authority{
+        .keyset_id = keyset_id,
+        .active_from_epoch = 0,
+        .retired_from_epoch = 100,
+    };
+    auto verifier = std::make_shared<MockStoreAuthorityVerifier>();
+
+    cybou::CybouStateStore store{db, auth_definition, authority, verifier};
+    BOOST_REQUIRE(store.InitializeGenesis(auth_genesis_state));
+    BOOST_CHECK_EQUAL(store.GetValidatorSet()->Size(), 1);
+
+    // Attempt to remove the sole validator
+    const cybou::ValidatorRemovalOpV1 remove_last_op{
+        .version = cybou::VALIDATOR_REMOVAL_OP_VERSION,
+        .validator_id = TEST_VAL_NODES[0].pub,
+        .effective_epoch = 0,
+        .operator_signature = CreateStoreMockSignatureBundle(keyset_id),
+    };
+
+    auto fb = MakeFinalizedBlock(store, {cybou::ProtocolOperationV1{remove_last_op}}, authority_val_set, {TEST_VAL_NODES[0]}, std::nullopt, std::nullopt, std::nullopt, verifier.get());
+    const auto result = store.CommitFinalizedBlock(fb);
+    BOOST_CHECK(!result);
+    BOOST_CHECK(result.error == cybou::BlockTransitionError::INVALID_OPERATION);
+    BOOST_CHECK(result.op_result.validator_removal_result.error == cybou::ValidatorRemovalError::CANNOT_REMOVE_LAST_VALIDATOR);
+
+    // State is untouched: validator set still has 1 validator
+    BOOST_CHECK_EQUAL(store.GetValidatorSet()->Size(), 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

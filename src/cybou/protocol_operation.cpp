@@ -251,12 +251,193 @@ uint256 ComputeUserOperationDigest(
     return digest;
 }
 
+std::vector<unsigned char> SerializeValidatorAdmissionOp(const ValidatorAdmissionOpV1& op)
+{
+    std::vector<unsigned char> out;
+    out.reserve(1 + 32 + 32 + 8 + SIGNATURE_BUNDLE_V1_SIZE);
+    out.push_back(op.version);
+    out.insert(out.end(), op.validator_id.begin(), op.validator_id.end());
+    out.insert(out.end(), op.consensus_public_key.begin(), op.consensus_public_key.end());
+    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.activation_epoch >> (8 * i)));
+    const auto sig_bytes{SerializeSignatureBundle(op.operator_signature)};
+    out.insert(out.end(), sig_bytes.begin(), sig_bytes.end());
+    return out;
+}
+
+std::optional<ValidatorAdmissionOpV1> DeserializeValidatorAdmissionOp(const std::span<const unsigned char> bytes)
+{
+    static constexpr size_t EXPECTED_SIZE{1 + 32 + 32 + 8 + SIGNATURE_BUNDLE_V1_SIZE};
+    if (bytes.size() != EXPECTED_SIZE) return std::nullopt;
+    if (bytes[0] != VALIDATOR_ADMISSION_OP_VERSION) return std::nullopt;
+    uint256 val_id;
+    std::copy_n(bytes.begin() + 1, 32, val_id.begin());
+    uint256 consensus_key;
+    std::copy_n(bytes.begin() + 33, 32, consensus_key.begin());
+    uint64_t activation_epoch{0};
+    for (int i = 0; i < 8; ++i) activation_epoch |= uint64_t{bytes[65 + i]} << (8 * i);
+    const auto sig_bundle{DeserializeSignatureBundle(bytes.subspan(73, SIGNATURE_BUNDLE_V1_SIZE))};
+    if (!sig_bundle) return std::nullopt;
+    return ValidatorAdmissionOpV1{
+        .version = bytes[0],
+        .validator_id = val_id,
+        .consensus_public_key = consensus_key,
+        .activation_epoch = activation_epoch,
+        .operator_signature = *sig_bundle,
+    };
+}
+
+std::vector<unsigned char> ComputeValidatorAdmissionSigningData(
+    const uint256& network_id,
+    const ValidatorAdmissionOpV1& op)
+{
+    const auto tag{ObjectSigningDomainTag(ObjectSigningDomain::VALIDATOR_ADMISSION)};
+    std::vector<unsigned char> out;
+    out.reserve(tag.size() + 32 + 1 + 32 + 32 + 8);
+    out.insert(out.end(), tag.begin(), tag.end());
+    out.insert(out.end(), network_id.begin(), network_id.end());
+    out.push_back(op.version);
+    out.insert(out.end(), op.validator_id.begin(), op.validator_id.end());
+    out.insert(out.end(), op.consensus_public_key.begin(), op.consensus_public_key.end());
+    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.activation_epoch >> (8 * i)));
+    return out;
+}
+
+std::vector<unsigned char> SerializeValidatorRemovalOp(const ValidatorRemovalOpV1& op)
+{
+    std::vector<unsigned char> out;
+    out.reserve(1 + 32 + 8 + SIGNATURE_BUNDLE_V1_SIZE);
+    out.push_back(op.version);
+    out.insert(out.end(), op.validator_id.begin(), op.validator_id.end());
+    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.effective_epoch >> (8 * i)));
+    const auto sig_bytes{SerializeSignatureBundle(op.operator_signature)};
+    out.insert(out.end(), sig_bytes.begin(), sig_bytes.end());
+    return out;
+}
+
+std::optional<ValidatorRemovalOpV1> DeserializeValidatorRemovalOp(const std::span<const unsigned char> bytes)
+{
+    static constexpr size_t EXPECTED_SIZE{1 + 32 + 8 + SIGNATURE_BUNDLE_V1_SIZE};
+    if (bytes.size() != EXPECTED_SIZE) return std::nullopt;
+    if (bytes[0] != VALIDATOR_REMOVAL_OP_VERSION) return std::nullopt;
+    uint256 val_id;
+    std::copy_n(bytes.begin() + 1, 32, val_id.begin());
+    uint64_t effective_epoch{0};
+    for (int i = 0; i < 8; ++i) effective_epoch |= uint64_t{bytes[33 + i]} << (8 * i);
+    const auto sig_bundle{DeserializeSignatureBundle(bytes.subspan(41, SIGNATURE_BUNDLE_V1_SIZE))};
+    if (!sig_bundle) return std::nullopt;
+    return ValidatorRemovalOpV1{
+        .version = bytes[0],
+        .validator_id = val_id,
+        .effective_epoch = effective_epoch,
+        .operator_signature = *sig_bundle,
+    };
+}
+
+std::vector<unsigned char> ComputeValidatorRemovalSigningData(
+    const uint256& network_id,
+    const ValidatorRemovalOpV1& op)
+{
+    const auto tag{ObjectSigningDomainTag(ObjectSigningDomain::VALIDATOR_REMOVAL)};
+    std::vector<unsigned char> out;
+    out.reserve(tag.size() + 32 + 1 + 32 + 8);
+    out.insert(out.end(), tag.begin(), tag.end());
+    out.insert(out.end(), network_id.begin(), network_id.end());
+    out.push_back(op.version);
+    out.insert(out.end(), op.validator_id.begin(), op.validator_id.end());
+    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.effective_epoch >> (8 * i)));
+    return out;
+}
+
+ValidatorAdmissionResult ApplyValidatorAdmission(
+    const ValidatorAdmissionOpV1& op,
+    const ProtocolExecutionContextV1& context,
+    CybouState& state)
+{
+    if (op.version != VALIDATOR_ADMISSION_OP_VERSION || op.validator_id.IsNull()) {
+        return {ValidatorAdmissionError::NULL_VALIDATOR_ID};
+    }
+    if (op.consensus_public_key.IsNull()) {
+        return {ValidatorAdmissionError::NULL_CONSENSUS_KEY};
+    }
+    if (state.validator_set.FindValidator(op.validator_id) != nullptr) {
+        return {ValidatorAdmissionError::ALREADY_EXISTS};
+    }
+    if (state.validator_set.FindValidatorByPublicKey(op.consensus_public_key) != nullptr) {
+        return {ValidatorAdmissionError::DUPLICATE_CONSENSUS_KEY};
+    }
+    const uint64_t current_epoch{EpochForHeight(context.block_height, context.params)};
+    if (current_epoch < op.activation_epoch) {
+        return {ValidatorAdmissionError::FUTURE_EPOCH};
+    }
+    if (!context.operator_authority || !context.operator_verifier) {
+        return {ValidatorAdmissionError::OPERATOR_AUTHORITY_MISSING};
+    }
+    if (op.operator_signature.authority_keyset_id != context.operator_authority->keyset_id) {
+        return {ValidatorAdmissionError::OPERATOR_KEYSET_MISMATCH};
+    }
+    if (!IsActiveAtEpoch(*context.operator_authority, current_epoch)) {
+        return {ValidatorAdmissionError::OPERATOR_KEYSET_INACTIVE};
+    }
+    const auto signing_msg{ComputeValidatorAdmissionSigningData(context.network_id, op)};
+    if (!context.operator_verifier->Verify(*context.operator_authority, op.operator_signature, signing_msg)) {
+        return {ValidatorAdmissionError::INVALID_OPERATOR_SIGNATURE};
+    }
+
+    state.validator_set.validators.push_back(ValidatorV1{
+        .validator_id = op.validator_id,
+        .consensus_public_key = op.consensus_public_key,
+        .weight = 1,
+    });
+    return {ValidatorAdmissionError::NONE};
+}
+
+ValidatorRemovalResult ApplyValidatorRemoval(
+    const ValidatorRemovalOpV1& op,
+    const ProtocolExecutionContextV1& context,
+    CybouState& state)
+{
+    if (op.version != VALIDATOR_REMOVAL_OP_VERSION || op.validator_id.IsNull()) {
+        return {ValidatorRemovalError::NOT_FOUND};
+    }
+    const auto* val{state.validator_set.FindValidator(op.validator_id)};
+    if (!val) {
+        return {ValidatorRemovalError::NOT_FOUND};
+    }
+    if (state.validator_set.validators.size() <= MIN_VALIDATORS) {
+        return {ValidatorRemovalError::CANNOT_REMOVE_LAST_VALIDATOR};
+    }
+    const uint64_t current_epoch{EpochForHeight(context.block_height, context.params)};
+    if (current_epoch < op.effective_epoch) {
+        return {ValidatorRemovalError::FUTURE_EPOCH};
+    }
+    if (!context.operator_authority || !context.operator_verifier) {
+        return {ValidatorRemovalError::OPERATOR_AUTHORITY_MISSING};
+    }
+    if (op.operator_signature.authority_keyset_id != context.operator_authority->keyset_id) {
+        return {ValidatorRemovalError::OPERATOR_KEYSET_MISMATCH};
+    }
+    if (!IsActiveAtEpoch(*context.operator_authority, current_epoch)) {
+        return {ValidatorRemovalError::OPERATOR_KEYSET_INACTIVE};
+    }
+    const auto signing_msg{ComputeValidatorRemovalSigningData(context.network_id, op)};
+    if (!context.operator_verifier->Verify(*context.operator_authority, op.operator_signature, signing_msg)) {
+        return {ValidatorRemovalError::INVALID_OPERATOR_SIGNATURE};
+    }
+
+    std::erase_if(state.validator_set.validators, [&](const auto& v) {
+        return v.validator_id == op.validator_id;
+    });
+    return {ValidatorRemovalError::NONE};
+}
+
 ProtocolOperationType OperationType(const ProtocolOperationV1& operation)
 {
     return std::visit([](const auto& op) -> ProtocolOperationType {
         using T = std::decay_t<decltype(op)>;
         if constexpr (std::is_same_v<T, AccountCreateOpV1>) return ProtocolOperationType::ACCOUNT_CREATE;
         if constexpr (std::is_same_v<T, AuthorizedOperationV1>) return ProtocolOperationType::AUTHORIZED_OPERATION;
+        if constexpr (std::is_same_v<T, ValidatorAdmissionOpV1>) return ProtocolOperationType::VALIDATOR_ADMISSION;
+        if constexpr (std::is_same_v<T, ValidatorRemovalOpV1>) return ProtocolOperationType::VALIDATOR_REMOVAL;
     }, operation.payload);
 }
 
@@ -267,6 +448,8 @@ std::vector<unsigned char> SerializeProtocolOperation(const ProtocolOperationV1&
         using T = std::decay_t<decltype(value)>;
         if constexpr (std::is_same_v<T, AccountCreateOpV1>) return SerializeAccountCreateOp(value);
         if constexpr (std::is_same_v<T, AuthorizedOperationV1>) return SerializeAuthorizedOperation(value);
+        if constexpr (std::is_same_v<T, ValidatorAdmissionOpV1>) return SerializeValidatorAdmissionOp(value);
+        if constexpr (std::is_same_v<T, ValidatorRemovalOpV1>) return SerializeValidatorRemovalOp(value);
     }, operation.payload)};
     out.insert(out.end(), payload.begin(), payload.end());
     return out;
@@ -288,6 +471,16 @@ std::optional<ProtocolOperationV1> DeserializeProtocolOperation(const std::span<
         if (!auth_op) return std::nullopt;
         return ProtocolOperationV1{*auth_op};
     }
+    case ProtocolOperationType::VALIDATOR_ADMISSION: {
+        const auto admission_op{DeserializeValidatorAdmissionOp(payload_bytes)};
+        if (!admission_op) return std::nullopt;
+        return ProtocolOperationV1{*admission_op};
+    }
+    case ProtocolOperationType::VALIDATOR_REMOVAL: {
+        const auto removal_op{DeserializeValidatorRemovalOp(payload_bytes)};
+        if (!removal_op) return std::nullopt;
+        return ProtocolOperationV1{*removal_op};
+    }
     }
     return std::nullopt;
 }
@@ -302,24 +495,38 @@ OperationExecutionResult ApplyProtocolOperation(
         if constexpr (std::is_same_v<T, AccountCreateOpV1>) {
             const auto res{ApplyAccountCreate(op, context.network_id, context.block_height, context.params, state)};
             if (!res) {
-                return {OperationExecutionError::ACCOUNT_CREATE_FAILED, res, {}, {}};
+                return {OperationExecutionError::ACCOUNT_CREATE_FAILED, res, {}, {}, {}, {}, {}, {}};
             }
-            return {OperationExecutionError::NONE, res, {}, {}};
+            return {OperationExecutionError::NONE, res, {}, {}, {}, {}, {}, {}};
+        }
+        if constexpr (std::is_same_v<T, ValidatorAdmissionOpV1>) {
+            const auto res{ApplyValidatorAdmission(op, context, state)};
+            if (!res) {
+                return {.error = OperationExecutionError::VALIDATOR_ADMISSION_FAILED, .validator_admission_result = res};
+            }
+            return {.error = OperationExecutionError::NONE, .validator_admission_result = res};
+        }
+        if constexpr (std::is_same_v<T, ValidatorRemovalOpV1>) {
+            const auto res{ApplyValidatorRemoval(op, context, state)};
+            if (!res) {
+                return {.error = OperationExecutionError::VALIDATOR_REMOVAL_FAILED, .validator_removal_result = res};
+            }
+            return {.error = OperationExecutionError::NONE, .validator_removal_result = res};
         }
         if constexpr (std::is_same_v<T, AuthorizedOperationV1>) {
             auto account_it{state.accounts.find(op.account_id)};
             if (account_it == state.accounts.end()) {
-                return {OperationExecutionError::ACCOUNT_NOT_FOUND, {}, {}, {}};
+                return {OperationExecutionError::ACCOUNT_NOT_FOUND, {}, {}, {}, {}, {}, {}, {}};
             }
             if (op.nonce != account_it->second.next_nonce) {
-                return {OperationExecutionError::BAD_NONCE, {}, {}, {}};
+                return {OperationExecutionError::BAD_NONCE, {}, {}, {}, {}, {}, {}, {}};
             }
             const uint256 digest{ComputeUserOperationDigest(context.network_id, op.account_id, op.nonce, op.payload)};
             if (!VerifyUserSignature(
                     account_it->second.active_authorization_key,
                     op.signature,
                     std::span<const unsigned char>{digest.begin(), digest.size()})) {
-                return {OperationExecutionError::INVALID_SIGNATURE, {}, {}, {}};
+                return {OperationExecutionError::INVALID_SIGNATURE, {}, {}, {}, {}, {}, {}, {}};
             }
 
             return std::visit([&](const auto& payload) -> OperationExecutionResult {
@@ -327,37 +534,37 @@ OperationExecutionResult ApplyProtocolOperation(
                 if constexpr (std::is_same_v<P, PaymentOpV1>) {
                     const auto payment_res{ApplyPayment(op.account_id, payload.recipient, payload.amount, context.params.payment_fee, state)};
                     if (!payment_res) {
-                        return {OperationExecutionError::PAYMENT_FAILED, {}, payment_res, {}, {}, {}};
+                        return {OperationExecutionError::PAYMENT_FAILED, {}, payment_res, {}, {}, {}, {}, {}};
                     }
-                    return {OperationExecutionError::NONE, {}, payment_res, {}, {}, {}};
+                    return {OperationExecutionError::NONE, {}, payment_res, {}, {}, {}, {}, {}};
                 }
                 if constexpr (std::is_same_v<P, KeyUpdateOpV1>) {
                     const auto key_res{ApplyKeyUpdate(op.account_id, payload.new_authorization.authorization_descriptor, state)};
                     if (!key_res) {
-                        return {OperationExecutionError::KEY_UPDATE_FAILED, {}, {}, key_res, {}, {}};
+                        return {OperationExecutionError::KEY_UPDATE_FAILED, {}, {}, key_res, {}, {}, {}, {}};
                     }
-                    return {OperationExecutionError::NONE, {}, {}, key_res, {}, {}};
+                    return {OperationExecutionError::NONE, {}, {}, key_res, {}, {}, {}, {}};
                 }
                 if constexpr (std::is_same_v<P, SystemLockOpV1>) {
                     const auto lock_res{ApplySystemLock(op.account_id, payload.amount, state)};
                     if (!lock_res) {
-                        return {OperationExecutionError::SYSTEM_LOCK_FAILED, {}, {}, {}, lock_res, {}};
+                        return {OperationExecutionError::SYSTEM_LOCK_FAILED, {}, {}, {}, lock_res, {}, {}, {}};
                     }
-                    return {OperationExecutionError::NONE, {}, {}, {}, lock_res, {}};
+                    return {OperationExecutionError::NONE, {}, {}, {}, lock_res, {}, {}, {}};
                 }
                 if constexpr (std::is_same_v<P, MailOpV1>) {
                     if (payload.ciphertext.size() > context.params.max_mail_ciphertext_size) {
-                        return {OperationExecutionError::MAIL_OVERSIZED, {}, {}, {}, {}, {}};
+                        return {OperationExecutionError::MAIL_OVERSIZED, {}, {}, {}, {}, {}, {}, {}};
                     }
                     const uint64_t fee{MailFeeForSize(payload.ciphertext.size(), context.params)};
                     const auto mail_res{ApplyMail(op.account_id, payload.recipient, fee, context.block_height, context.params, state)};
                     if (!mail_res) {
                         if (mail_res.error == MailError::RATE_LIMIT_EXCEEDED) {
-                            return {OperationExecutionError::MAIL_RATE_LIMIT_EXCEEDED, {}, {}, {}, {}, mail_res};
+                            return {OperationExecutionError::MAIL_RATE_LIMIT_EXCEEDED, {}, {}, {}, {}, mail_res, {}, {}};
                         }
-                        return {OperationExecutionError::MAIL_FAILED, {}, {}, {}, {}, mail_res};
+                        return {OperationExecutionError::MAIL_FAILED, {}, {}, {}, {}, mail_res, {}, {}};
                     }
-                    return {OperationExecutionError::NONE, {}, {}, {}, {}, mail_res};
+                    return {OperationExecutionError::NONE, {}, {}, {}, {}, mail_res, {}, {}};
                 }
             }, op.payload);
         }

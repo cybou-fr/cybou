@@ -26,6 +26,8 @@ inline constexpr uint8_t PAYMENT_OP_VERSION{1};
 inline constexpr uint8_t KEY_UPDATE_OP_VERSION{1};
 inline constexpr uint8_t SYSTEM_LOCK_OP_VERSION{1};
 inline constexpr uint8_t MAIL_OP_VERSION{1};
+inline constexpr uint8_t VALIDATOR_ADMISSION_OP_VERSION{1};
+inline constexpr uint8_t VALIDATOR_REMOVAL_OP_VERSION{1};
 
 uint256 ComputeMailContentCommitment(const uint256& salt, std::span<const unsigned char> ciphertext);
 
@@ -99,12 +101,49 @@ uint256 ComputeUserOperationDigest(
     uint64_t nonce,
     const AuthorizedOperationPayloadV1& payload);
 
+struct ValidatorAdmissionOpV1 {
+    uint8_t version{VALIDATOR_ADMISSION_OP_VERSION};
+    uint256 validator_id;
+    uint256 consensus_public_key;
+    uint64_t activation_epoch{0};
+    SignatureBundleV1 operator_signature;
+
+    friend bool operator==(const ValidatorAdmissionOpV1&, const ValidatorAdmissionOpV1&) = default;
+};
+
+std::vector<unsigned char> SerializeValidatorAdmissionOp(const ValidatorAdmissionOpV1& op);
+std::optional<ValidatorAdmissionOpV1> DeserializeValidatorAdmissionOp(std::span<const unsigned char> bytes);
+std::vector<unsigned char> ComputeValidatorAdmissionSigningData(
+    const uint256& network_id,
+    const ValidatorAdmissionOpV1& op);
+
+struct ValidatorRemovalOpV1 {
+    uint8_t version{VALIDATOR_REMOVAL_OP_VERSION};
+    uint256 validator_id;
+    uint64_t effective_epoch{0};
+    SignatureBundleV1 operator_signature;
+
+    friend bool operator==(const ValidatorRemovalOpV1&, const ValidatorRemovalOpV1&) = default;
+};
+
+std::vector<unsigned char> SerializeValidatorRemovalOp(const ValidatorRemovalOpV1& op);
+std::optional<ValidatorRemovalOpV1> DeserializeValidatorRemovalOp(std::span<const unsigned char> bytes);
+std::vector<unsigned char> ComputeValidatorRemovalSigningData(
+    const uint256& network_id,
+    const ValidatorRemovalOpV1& op);
+
 enum class ProtocolOperationType : uint8_t {
     ACCOUNT_CREATE = 1,
     AUTHORIZED_OPERATION = 2,
+    VALIDATOR_ADMISSION = 3,
+    VALIDATOR_REMOVAL = 4,
 };
 
-using ProtocolOperationPayloadV1 = std::variant<AccountCreateOpV1, AuthorizedOperationV1>;
+using ProtocolOperationPayloadV1 = std::variant<
+    AccountCreateOpV1,
+    AuthorizedOperationV1,
+    ValidatorAdmissionOpV1,
+    ValidatorRemovalOpV1>;
 
 struct ProtocolOperationV1 {
     uint8_t version{PROTOCOL_OPERATION_VERSION};
@@ -113,6 +152,8 @@ struct ProtocolOperationV1 {
     ProtocolOperationV1() = default;
     ProtocolOperationV1(AccountCreateOpV1 operation) : payload{std::move(operation)} {}
     ProtocolOperationV1(AuthorizedOperationV1 operation) : payload{std::move(operation)} {}
+    ProtocolOperationV1(ValidatorAdmissionOpV1 operation) : payload{std::move(operation)} {}
+    ProtocolOperationV1(ValidatorRemovalOpV1 operation) : payload{std::move(operation)} {}
 
     friend bool operator==(const ProtocolOperationV1&, const ProtocolOperationV1&) = default;
 };
@@ -125,7 +166,55 @@ struct ProtocolExecutionContextV1 {
     uint256 network_id;
     uint64_t block_height{0};
     const CybouProtocolParameters& params;
+    const OperatorAuthorityKeySet* operator_authority{nullptr};
+    const OperatorAuthoritySignatureVerifier* operator_verifier{nullptr};
 };
+
+enum class ValidatorAdmissionError : uint8_t {
+    NONE,
+    NULL_VALIDATOR_ID,
+    NULL_CONSENSUS_KEY,
+    ALREADY_EXISTS,
+    DUPLICATE_CONSENSUS_KEY,
+    FUTURE_EPOCH,
+    OPERATOR_AUTHORITY_MISSING,
+    OPERATOR_KEYSET_MISMATCH,
+    OPERATOR_KEYSET_INACTIVE,
+    INVALID_OPERATOR_SIGNATURE,
+};
+
+struct ValidatorAdmissionResult {
+    ValidatorAdmissionError error{ValidatorAdmissionError::NONE};
+
+    explicit operator bool() const { return error == ValidatorAdmissionError::NONE; }
+};
+
+ValidatorAdmissionResult ApplyValidatorAdmission(
+    const ValidatorAdmissionOpV1& op,
+    const ProtocolExecutionContextV1& context,
+    CybouState& state);
+
+enum class ValidatorRemovalError : uint8_t {
+    NONE,
+    NOT_FOUND,
+    CANNOT_REMOVE_LAST_VALIDATOR,
+    FUTURE_EPOCH,
+    OPERATOR_AUTHORITY_MISSING,
+    OPERATOR_KEYSET_MISMATCH,
+    OPERATOR_KEYSET_INACTIVE,
+    INVALID_OPERATOR_SIGNATURE,
+};
+
+struct ValidatorRemovalResult {
+    ValidatorRemovalError error{ValidatorRemovalError::NONE};
+
+    explicit operator bool() const { return error == ValidatorRemovalError::NONE; }
+};
+
+ValidatorRemovalResult ApplyValidatorRemoval(
+    const ValidatorRemovalOpV1& op,
+    const ProtocolExecutionContextV1& context,
+    CybouState& state);
 
 enum class OperationExecutionError : uint8_t {
     NONE,
@@ -139,6 +228,8 @@ enum class OperationExecutionError : uint8_t {
     MAIL_FAILED,
     MAIL_OVERSIZED,
     MAIL_RATE_LIMIT_EXCEEDED,
+    VALIDATOR_ADMISSION_FAILED,
+    VALIDATOR_REMOVAL_FAILED,
 };
 
 struct OperationExecutionResult {
@@ -148,6 +239,8 @@ struct OperationExecutionResult {
     KeyUpdateResult key_update_result{};
     SystemLockResult system_lock_result{};
     MailResult mail_result{};
+    ValidatorAdmissionResult validator_admission_result{};
+    ValidatorRemovalResult validator_removal_result{};
 
     explicit operator bool() const { return error == OperationExecutionError::NONE; }
 };

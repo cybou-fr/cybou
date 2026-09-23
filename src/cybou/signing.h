@@ -13,6 +13,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <vector>
 
 namespace cybou {
 
@@ -91,7 +92,16 @@ struct SignatureBundleV1 {
     uint256 authority_keyset_id;
     std::array<unsigned char, ED25519_SIGNATURE_SIZE> classical_signature{};
     std::array<unsigned char, MLDSA65_SIGNATURE_SIZE> pq_signature{};
+
+    friend bool operator==(const SignatureBundleV1&, const SignatureBundleV1&) = default;
 };
+
+inline constexpr size_t SIGNATURE_BUNDLE_V1_SIZE{
+    2 + 32 + ED25519_SIGNATURE_SIZE + MLDSA65_SIGNATURE_SIZE
+};
+
+std::vector<unsigned char> SerializeSignatureBundle(const SignatureBundleV1& bundle);
+std::optional<SignatureBundleV1> DeserializeSignatureBundle(std::span<const unsigned char> bytes);
 
 /** Structural gate: known suite, non-null keyset, and BOTH signature parts. */
 bool IsPresent(const SignatureBundleV1& bundle);

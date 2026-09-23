@@ -14,6 +14,7 @@
 #include <serialize.h>
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -54,6 +55,8 @@ enum class GenesisInitError : uint8_t {
     ALREADY_INITIALIZED,
     INVALID_NETWORK_DEFINITION,
     GENESIS_STATE_MISMATCH,
+    VALIDATOR_SET_COMMITMENT_MISMATCH,
+    INVALID_GENESIS_VALIDATOR_SET,
 };
 
 struct GenesisInitResult {
@@ -78,6 +81,7 @@ enum class BlockTransitionError : uint8_t {
     INVALID_CERTIFICATE,
     STATE_ROOT_MISMATCH,
     FEE_ROUTING_FAILED,
+    VALIDATOR_SET_MISMATCH,
 };
 
 struct BlockTransitionResult {
@@ -100,13 +104,21 @@ struct BlockTransitionResult {
 class CybouStateStore
 {
 public:
-    CybouStateStore(CDBWrapper& db, CybouNetworkDefinitionV1 network_definition)
-        : m_db{db},
-          m_network_definition{std::move(network_definition)},
-          m_network_definition_error{ValidateNetworkDefinition(m_network_definition)},
-          m_network_id{NetworkId(m_network_definition)}
-    {
-    }
+    CybouStateStore(
+        CDBWrapper& db,
+        CybouNetworkDefinitionV1 network_definition,
+        std::optional<OperatorAuthorityKeySet> operator_authority = std::nullopt,
+        std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier = nullptr);
+
+    /** Set or update the active Operator Authority key set and optional verifier. */
+    void SetOperatorAuthority(
+        OperatorAuthorityKeySet keyset,
+        std::shared_ptr<OperatorAuthoritySignatureVerifier> verifier = nullptr);
+
+    const std::optional<OperatorAuthorityKeySet>& GetOperatorAuthority() const { return m_operator_authority; }
+
+    /** Retrieve canonical active validator set from persisted state. */
+    std::optional<ValidatorSetV1> GetValidatorSet() const;
 
     /** Persist genesis state at height 0. Fails if already initialized. */
     GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true);
@@ -143,7 +155,7 @@ public:
      */
     BlockTransitionResult CommitFinalizedBlock(
         const FinalizedBlockV1& finalized_block,
-        const ValidatorSetV1& validator_set,
+        const std::optional<ValidatorSetV1>& validator_set = std::nullopt,
         bool sync = true);
 
     /** Retrieve a persisted finalized block by its block ID. */
@@ -154,6 +166,8 @@ private:
     const CybouNetworkDefinitionV1 m_network_definition;
     const NetworkDefinitionError m_network_definition_error;
     const uint256 m_network_id;
+    std::optional<OperatorAuthorityKeySet> m_operator_authority;
+    std::shared_ptr<OperatorAuthoritySignatureVerifier> m_operator_verifier;
 };
 
 } // namespace cybou

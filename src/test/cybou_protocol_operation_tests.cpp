@@ -151,6 +151,7 @@ BOOST_AUTO_TEST_CASE(apply_protocol_operation_verifies_signature_and_advances_st
         .security_reward_pool = 1000,
         .pending_fee_pool = 100,
         .accounts{},
+        .validator_set{},
     };
     const cybou::CybouProtocolParameters params{
         .account_creation_work_bits = 0,
@@ -306,6 +307,7 @@ BOOST_AUTO_TEST_CASE(system_lock_roundtrip_and_execution)
         .security_reward_pool = 0,
         .pending_fee_pool = 0,
         .accounts{},
+        .validator_set{},
     };
     cybou::AccountCreateOpV1 create_op{
         .version = cybou::ACCOUNT_CREATE_OP_VERSION,
@@ -422,6 +424,7 @@ BOOST_AUTO_TEST_CASE(mail_operation_fee_commitment_and_execution)
         .security_reward_pool = 0,
         .pending_fee_pool = 0,
         .accounts{},
+        .validator_set{},
     };
     cybou::AccountCreateOpV1 create1{
         .version = cybou::ACCOUNT_CREATE_OP_VERSION,
@@ -510,6 +513,327 @@ BOOST_AUTO_TEST_CASE(mail_operation_fee_commitment_and_execution)
 
     // Hard Rule: Consensus state remains bounded, NO permanent per-mail object
     BOOST_CHECK_EQUAL(state.accounts.size(), state_accounts_before);
+}
+
+namespace {
+
+class MockAuthorityVerifier final : public cybou::OperatorAuthoritySignatureVerifier
+{
+public:
+    bool should_succeed{true};
+    mutable std::vector<unsigned char> last_message;
+
+    bool Verify(
+        const cybou::OperatorAuthorityKeySet& keyset,
+        const cybou::SignatureBundleV1& bundle,
+        std::span<const unsigned char> message) const override
+    {
+        last_message.assign(message.begin(), message.end());
+        if (!should_succeed) return false;
+        return cybou::IsPresent(bundle) && bundle.authority_keyset_id == keyset.keyset_id;
+    }
+};
+
+cybou::SignatureBundleV1 CreateValidMockSignatureBundle(const uint256& keyset_id)
+{
+    cybou::SignatureBundleV1 bundle;
+    bundle.suite_id = cybou::SignatureSuiteId::HYBRID_ED25519_MLDSA65_V1;
+    bundle.authority_keyset_id = keyset_id;
+    bundle.classical_signature.fill(0x11);
+    bundle.pq_signature.fill(0x22);
+    return bundle;
+}
+
+} // namespace
+
+BOOST_AUTO_TEST_CASE(validator_admission_and_removal_serialization_roundtrip)
+{
+    const uint256 keyset_id{uint256::FromUserHex("aa").value()};
+    const auto bundle = CreateValidMockSignatureBundle(keyset_id);
+    const auto bundle_bytes = cybou::SerializeSignatureBundle(bundle);
+    BOOST_CHECK_EQUAL(bundle_bytes.size(), cybou::SIGNATURE_BUNDLE_V1_SIZE);
+    const auto decoded_bundle = cybou::DeserializeSignatureBundle(bundle_bytes);
+    BOOST_REQUIRE(decoded_bundle.has_value());
+    BOOST_CHECK(*decoded_bundle == bundle);
+
+    // Corrupted bundle size
+    auto malformed_bundle = bundle_bytes;
+    malformed_bundle.pop_back();
+    BOOST_CHECK(!cybou::DeserializeSignatureBundle(malformed_bundle));
+
+    // ValidatorAdmissionOpV1
+    const uint256 val_id{uint256::FromUserHex("01").value()};
+    const uint256 consensus_key{uint256::FromUserHex("02").value()};
+    const cybou::ValidatorAdmissionOpV1 admission_op{
+        .version = cybou::VALIDATOR_ADMISSION_OP_VERSION,
+        .validator_id = val_id,
+        .consensus_public_key = consensus_key,
+        .activation_epoch = 5,
+        .operator_signature = bundle,
+    };
+    const auto admission_bytes = cybou::SerializeValidatorAdmissionOp(admission_op);
+    const auto decoded_admission = cybou::DeserializeValidatorAdmissionOp(admission_bytes);
+    BOOST_REQUIRE(decoded_admission.has_value());
+    BOOST_CHECK(*decoded_admission == admission_op);
+
+    // ProtocolOperationV1 wrapping ValidatorAdmissionOpV1
+    const cybou::ProtocolOperationV1 proto_admission{admission_op};
+    BOOST_CHECK(cybou::OperationType(proto_admission) == cybou::ProtocolOperationType::VALIDATOR_ADMISSION);
+    const auto proto_admission_bytes = cybou::SerializeProtocolOperation(proto_admission);
+    const auto decoded_proto_admission = cybou::DeserializeProtocolOperation(proto_admission_bytes);
+    BOOST_REQUIRE(decoded_proto_admission.has_value());
+    BOOST_CHECK(*decoded_proto_admission == proto_admission);
+
+    // Domain separation tag in signing data
+    const uint256 network_id{uint256::FromUserHex("99").value()};
+    const auto admission_signing_data = cybou::ComputeValidatorAdmissionSigningData(network_id, admission_op);
+    const std::string admission_signing_str{reinterpret_cast<const char*>(admission_signing_data.data()), admission_signing_data.size()};
+    BOOST_CHECK(admission_signing_str.starts_with("CYBOU/SIG/VALIDATOR-ADMISSION/V1"));
+
+    // ValidatorRemovalOpV1
+    const cybou::ValidatorRemovalOpV1 removal_op{
+        .version = cybou::VALIDATOR_REMOVAL_OP_VERSION,
+        .validator_id = val_id,
+        .effective_epoch = 7,
+        .operator_signature = bundle,
+    };
+    const auto removal_bytes = cybou::SerializeValidatorRemovalOp(removal_op);
+    const auto decoded_removal = cybou::DeserializeValidatorRemovalOp(removal_bytes);
+    BOOST_REQUIRE(decoded_removal.has_value());
+    BOOST_CHECK(*decoded_removal == removal_op);
+
+    // ProtocolOperationV1 wrapping ValidatorRemovalOpV1
+    const cybou::ProtocolOperationV1 proto_removal{removal_op};
+    BOOST_CHECK(cybou::OperationType(proto_removal) == cybou::ProtocolOperationType::VALIDATOR_REMOVAL);
+    const auto proto_removal_bytes = cybou::SerializeProtocolOperation(proto_removal);
+    const auto decoded_proto_removal = cybou::DeserializeProtocolOperation(proto_removal_bytes);
+    BOOST_REQUIRE(decoded_proto_removal.has_value());
+    BOOST_CHECK(*decoded_proto_removal == proto_removal);
+
+    const auto removal_signing_data = cybou::ComputeValidatorRemovalSigningData(network_id, removal_op);
+    const std::string removal_signing_str{reinterpret_cast<const char*>(removal_signing_data.data()), removal_signing_data.size()};
+    BOOST_CHECK(removal_signing_str.starts_with("CYBOU/SIG/VALIDATOR-REMOVAL/V1"));
+}
+
+BOOST_AUTO_TEST_CASE(validator_admission_validation_and_state_transition)
+{
+    const uint256 network_id{uint256::FromUserHex("11").value()};
+    const uint256 keyset_id{uint256::FromUserHex("aa").value()};
+    const cybou::OperatorAuthorityKeySet authority{
+        .keyset_id = keyset_id,
+        .active_from_epoch = 1,
+        .retired_from_epoch = 10,
+    };
+    MockAuthorityVerifier verifier;
+
+    const cybou::CybouProtocolParameters params{
+        .epoch_blocks = 10,
+    };
+
+    cybou::ProtocolExecutionContextV1 ctx{
+        .network_id = network_id,
+        .block_height = 10, // epoch 1
+        .params = params,
+        .operator_authority = &authority,
+        .operator_verifier = &verifier,
+    };
+
+    const uint256 val1_id{uint256::FromUserHex("01").value()};
+    const uint256 val1_key{uint256::FromUserHex("02").value()};
+    cybou::CybouState state{
+        .onboarding_pool = 10000,
+        .security_reward_pool = 0,
+        .pending_fee_pool = 0,
+        .accounts{},
+        .validator_set = cybou::ValidatorSetV1{
+            .version = cybou::VALIDATOR_SET_VERSION,
+            .validators = {
+                cybou::ValidatorV1{.validator_id = val1_id, .consensus_public_key = val1_key, .weight = 1},
+            },
+        },
+    };
+
+    const uint256 new_val_id{uint256::FromUserHex("03").value()};
+    const uint256 new_val_key{uint256::FromUserHex("04").value()};
+    cybou::ValidatorAdmissionOpV1 op{
+        .version = cybou::VALIDATOR_ADMISSION_OP_VERSION,
+        .validator_id = new_val_id,
+        .consensus_public_key = new_val_key,
+        .activation_epoch = 1,
+        .operator_signature = CreateValidMockSignatureBundle(keyset_id),
+    };
+
+    // 1. Reject null validator_id
+    auto bad_op = op;
+    bad_op.validator_id = uint256{};
+    auto res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{bad_op}, ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_admission_result.error == cybou::ValidatorAdmissionError::NULL_VALIDATOR_ID);
+
+    // 2. Reject null consensus_public_key
+    bad_op = op;
+    bad_op.consensus_public_key = uint256{};
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{bad_op}, ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_admission_result.error == cybou::ValidatorAdmissionError::NULL_CONSENSUS_KEY);
+
+    // 3. Reject duplicate validator_id
+    bad_op = op;
+    bad_op.validator_id = val1_id;
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{bad_op}, ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_admission_result.error == cybou::ValidatorAdmissionError::ALREADY_EXISTS);
+
+    // 4. Reject duplicate consensus_public_key
+    bad_op = op;
+    bad_op.consensus_public_key = val1_key;
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{bad_op}, ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_admission_result.error == cybou::ValidatorAdmissionError::DUPLICATE_CONSENSUS_KEY);
+
+    // 5. Reject future activation epoch (activation_epoch 2 > current_epoch 1)
+    bad_op = op;
+    bad_op.activation_epoch = 2;
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{bad_op}, ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_admission_result.error == cybou::ValidatorAdmissionError::FUTURE_EPOCH);
+
+    // 6. Reject missing operator authority
+    auto missing_auth_ctx = ctx;
+    missing_auth_ctx.operator_authority = nullptr;
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{op}, missing_auth_ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_admission_result.error == cybou::ValidatorAdmissionError::OPERATOR_AUTHORITY_MISSING);
+
+    // 7. Reject operator keyset mismatch
+    bad_op = op;
+    bad_op.operator_signature.authority_keyset_id = uint256::FromUserHex("bb").value();
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{bad_op}, ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_admission_result.error == cybou::ValidatorAdmissionError::OPERATOR_KEYSET_MISMATCH);
+
+    // 8. Reject inactive operator authority (epoch 0 < active_from_epoch 1, with activation_epoch 0)
+    auto inactive_op = op;
+    inactive_op.activation_epoch = 0;
+    auto inactive_ctx = ctx;
+    inactive_ctx.block_height = 5; // epoch 0
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{inactive_op}, inactive_ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_admission_result.error == cybou::ValidatorAdmissionError::OPERATOR_KEYSET_INACTIVE);
+
+    // Also test retired operator authority (epoch 10 >= retired_from_epoch 10)
+    inactive_ctx.block_height = 100; // epoch 10
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{op}, inactive_ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_admission_result.error == cybou::ValidatorAdmissionError::OPERATOR_KEYSET_INACTIVE);
+
+    // 9. Reject invalid operator signature
+    verifier.should_succeed = false;
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{op}, ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_admission_result.error == cybou::ValidatorAdmissionError::INVALID_OPERATOR_SIGNATURE);
+    verifier.should_succeed = true;
+
+    // 10. Valid admission succeeds
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{op}, ctx, state);
+    BOOST_REQUIRE(res);
+    BOOST_CHECK_EQUAL(state.validator_set.validators.size(), 2);
+    const auto* admitted = state.validator_set.FindValidator(new_val_id);
+    BOOST_REQUIRE(admitted != nullptr);
+    BOOST_CHECK(admitted->consensus_public_key == new_val_key);
+    // Hard Rule (DEC-146): Equal validator weight = 1
+    BOOST_CHECK_EQUAL(admitted->weight, 1);
+}
+
+BOOST_AUTO_TEST_CASE(validator_removal_validation_and_state_transition)
+{
+    const uint256 network_id{uint256::FromUserHex("11").value()};
+    const uint256 keyset_id{uint256::FromUserHex("aa").value()};
+    const cybou::OperatorAuthorityKeySet authority{
+        .keyset_id = keyset_id,
+        .active_from_epoch = 1,
+        .retired_from_epoch = 10,
+    };
+    MockAuthorityVerifier verifier;
+
+    const cybou::CybouProtocolParameters params{
+        .epoch_blocks = 10,
+    };
+
+    cybou::ProtocolExecutionContextV1 ctx{
+        .network_id = network_id,
+        .block_height = 20, // epoch 2
+        .params = params,
+        .operator_authority = &authority,
+        .operator_verifier = &verifier,
+    };
+
+    const uint256 val1_id{uint256::FromUserHex("01").value()};
+    const uint256 val1_key{uint256::FromUserHex("02").value()};
+    const uint256 val2_id{uint256::FromUserHex("03").value()};
+    const uint256 val2_key{uint256::FromUserHex("04").value()};
+
+    cybou::CybouState state{
+        .onboarding_pool = 10000,
+        .security_reward_pool = 0,
+        .pending_fee_pool = 0,
+        .accounts{},
+        .validator_set = cybou::ValidatorSetV1{
+            .version = cybou::VALIDATOR_SET_VERSION,
+            .validators = {
+                cybou::ValidatorV1{.validator_id = val1_id, .consensus_public_key = val1_key, .weight = 1},
+                cybou::ValidatorV1{.validator_id = val2_id, .consensus_public_key = val2_key, .weight = 1},
+            },
+        },
+    };
+
+    cybou::ValidatorRemovalOpV1 op{
+        .version = cybou::VALIDATOR_REMOVAL_OP_VERSION,
+        .validator_id = val2_id,
+        .effective_epoch = 2,
+        .operator_signature = CreateValidMockSignatureBundle(keyset_id),
+    };
+
+    // 1. Reject validator not found
+    auto bad_op = op;
+    bad_op.validator_id = uint256::FromUserHex("ff").value();
+    auto res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{bad_op}, ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_removal_result.error == cybou::ValidatorRemovalError::NOT_FOUND);
+
+    // 2. Reject future effective epoch (effective_epoch 3 > current_epoch 2)
+    bad_op = op;
+    bad_op.effective_epoch = 3;
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{bad_op}, ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_removal_result.error == cybou::ValidatorRemovalError::FUTURE_EPOCH);
+
+    // 3. Reject invalid signature
+    verifier.should_succeed = false;
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{op}, ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_removal_result.error == cybou::ValidatorRemovalError::INVALID_OPERATOR_SIGNATURE);
+    verifier.should_succeed = true;
+
+    // 4. Valid removal of validator 2 succeeds
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{op}, ctx, state);
+    BOOST_REQUIRE(res);
+    BOOST_CHECK_EQUAL(state.validator_set.validators.size(), 1);
+    BOOST_CHECK(state.validator_set.FindValidator(val2_id) == nullptr);
+    BOOST_CHECK(state.validator_set.FindValidator(val1_id) != nullptr);
+
+    // 5. Invariant: Cannot remove the last validator
+    cybou::ValidatorRemovalOpV1 remove_last_op{
+        .version = cybou::VALIDATOR_REMOVAL_OP_VERSION,
+        .validator_id = val1_id,
+        .effective_epoch = 2,
+        .operator_signature = CreateValidMockSignatureBundle(keyset_id),
+    };
+    res = cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{remove_last_op}, ctx, state);
+    BOOST_CHECK(!res);
+    BOOST_CHECK(res.validator_removal_result.error == cybou::ValidatorRemovalError::CANNOT_REMOVE_LAST_VALIDATOR);
+    // Validator set still has 1 validator
+    BOOST_CHECK_EQUAL(state.validator_set.validators.size(), 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+#include <cybou/signing.h>
 #include <cybou/state_store.h>
 
 #include <dbwrapper.h>
@@ -26,6 +27,42 @@ inline std::string BlockKey(const uint256& block_id)
 
 } // namespace
 
+CybouStateStore::CybouStateStore(
+    CDBWrapper& db,
+    CybouNetworkDefinitionV1 network_definition,
+    std::optional<OperatorAuthorityKeySet> operator_authority,
+    std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier)
+    : m_db{db},
+      m_network_definition{std::move(network_definition)},
+      m_network_definition_error{ValidateNetworkDefinition(m_network_definition)},
+      m_network_id{NetworkId(m_network_definition)},
+      m_operator_authority{std::move(operator_authority)},
+      m_operator_verifier{std::move(operator_verifier)}
+{
+    if (!m_operator_verifier) {
+        m_operator_verifier = std::make_shared<OpenSslOperatorAuthoritySignatureVerifier>();
+    }
+}
+
+void CybouStateStore::SetOperatorAuthority(
+    OperatorAuthorityKeySet keyset,
+    std::shared_ptr<OperatorAuthoritySignatureVerifier> verifier)
+{
+    m_operator_authority = std::move(keyset);
+    if (verifier) {
+        m_operator_verifier = std::move(verifier);
+    } else if (!m_operator_verifier) {
+        m_operator_verifier = std::make_shared<OpenSslOperatorAuthoritySignatureVerifier>();
+    }
+}
+
+std::optional<ValidatorSetV1> CybouStateStore::GetValidatorSet() const
+{
+    const auto loaded{LoadState()};
+    if (!loaded) return std::nullopt;
+    return loaded.state->validator_set;
+}
+
 GenesisInitResult CybouStateStore::InitializeGenesis(
     const CybouState& genesis_state,
     const bool sync)
@@ -39,6 +76,13 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     }
     if (CybouStateHash(genesis_state) != m_network_definition.genesis_state_root) {
         return {GenesisInitError::GENESIS_STATE_MISMATCH};
+    }
+    if (ComputeValidatorSetCommitment(genesis_state.validator_set) !=
+        m_network_definition.initial_validator_set_commitment) {
+        return {GenesisInitError::VALIDATOR_SET_COMMITMENT_MISMATCH};
+    }
+    if (ValidateValidatorSet(genesis_state.validator_set) != ValidatorSetValidationError::NONE) {
+        return {GenesisInitError::INVALID_GENESIS_VALIDATOR_SET};
     }
     const FinalizedHeadV1 initial_head{
         .block_id = m_network_definition.genesis_block_id,
@@ -125,7 +169,7 @@ std::optional<uint256> CybouStateStore::GetStoredNetworkId() const
 
 BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     const FinalizedBlockV1& finalized_block,
-    const ValidatorSetV1& validator_set,
+    const std::optional<ValidatorSetV1>& validator_set,
     const bool sync)
 {
     const auto loaded{LoadState()};
@@ -140,6 +184,10 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
             return {BlockTransitionError::CORRUPT_STATE};
         }
         return {BlockTransitionError::STATE_NOT_INITIALIZED};
+    }
+
+    if (validator_set.has_value() && *validator_set != loaded.state->validator_set) {
+        return {BlockTransitionError::VALIDATOR_SET_MISMATCH};
     }
 
     const auto& block = finalized_block.block;
@@ -163,7 +211,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         return {.error = BlockTransitionError::INVALID_CERTIFICATE};
     }
 
-    const auto cert_res = VerifyFinalityCertificate(cert, validator_set, m_network_id);
+    const auto cert_res = VerifyFinalityCertificate(cert, loaded.state->validator_set, m_network_id);
     if (cert_res != FinalityVerificationError::NONE) {
         return {.error = BlockTransitionError::INVALID_CERTIFICATE, .cert_error = cert_res};
     }
@@ -182,6 +230,8 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         .network_id = m_network_id,
         .block_height = block.height,
         .params = params,
+        .operator_authority = m_operator_authority ? &*m_operator_authority : nullptr,
+        .operator_verifier = m_operator_verifier.get(),
     };
     for (const auto& operation : block.operations) {
         const auto res{ApplyProtocolOperation(operation, ctx, candidate)};

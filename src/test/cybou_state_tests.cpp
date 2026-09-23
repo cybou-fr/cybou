@@ -69,6 +69,7 @@ cybou::CybouState InitialState()
         .security_reward_pool = 1000,
         .pending_fee_pool = 500,
         .accounts{},
+        .validator_set{},
     };
 }
 
@@ -203,6 +204,14 @@ BOOST_AUTO_TEST_CASE(cybou_state_hash_is_sensitive_to_every_field)
 
     changed = state;
     ++changed.accounts.at(ACCOUNT_ID).next_nonce;
+    BOOST_CHECK(cybou::CybouStateHash(changed) != root);
+
+    changed = state;
+    changed.validator_set.validators.push_back(cybou::ValidatorV1{
+        .validator_id = uint256::ONE,
+        .consensus_public_key = uint256::ONE,
+        .weight = 1,
+    });
     BOOST_CHECK(cybou::CybouStateHash(changed) != root);
 }
 

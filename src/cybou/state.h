@@ -8,6 +8,7 @@
 #include <cybou/account_creation.h>
 #include <cybou/account_id.h>
 #include <cybou/protocol_params.h>
+#include <cybou/validator.h>
 #include <uint256.h>
 
 #include <cstdint>
@@ -51,6 +52,7 @@ struct CybouState {
     uint64_t security_reward_pool{0};
     uint64_t pending_fee_pool{0};
     std::map<AccountId, AccountState> accounts;
+    ValidatorSetV1 validator_set;
 
     friend bool operator==(const CybouState&, const CybouState&) = default;
 };

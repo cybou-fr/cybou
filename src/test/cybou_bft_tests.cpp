@@ -235,6 +235,7 @@ BOOST_AUTO_TEST_CASE(bft_consensus_round_to_state_store_execution)
         .security_reward_pool = 5000,
         .pending_fee_pool = 0,
         .accounts{},
+        .validator_set = val_set,
     };
 
     const cybou::CybouProtocolParameters params{
@@ -465,6 +466,7 @@ BOOST_AUTO_TEST_CASE(authority_mode_n1_consensus_and_state_store)
         .security_reward_pool = 5000,
         .pending_fee_pool = 0,
         .accounts{},
+        .validator_set = val_set,
     };
 
     const cybou::CybouProtocolParameters params{

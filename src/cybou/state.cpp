@@ -41,6 +41,8 @@ std::vector<unsigned char> SerializeCybouState(const CybouState& state)
         append_u64le(acc.last_mail_epoch);
         append_u32le(acc.mail_count_in_epoch);
     }
+    const auto val_bytes{SerializeValidatorSet(state.validator_set)};
+    out.insert(out.end(), val_bytes.begin(), val_bytes.end());
     return out;
 }
 
@@ -86,6 +88,7 @@ std::optional<CybouState> DeserializeCybouState(const std::span<const unsigned c
         .security_reward_pool = *security_pool,
         .pending_fee_pool = *pending_pool,
         .accounts{},
+        .validator_set{},
     };
     for (uint32_t i = 0; i < *account_count; ++i) {
         const auto account_id_bytes{read_hash()};
@@ -115,7 +118,9 @@ std::optional<CybouState> DeserializeCybouState(const std::span<const unsigned c
         };
         if (!state.accounts.emplace(account_id, std::move(acc)).second) return std::nullopt;
     }
-    if (offset != bytes.size()) return std::nullopt;
+    const auto val_set{DeserializeValidatorSet(bytes.subspan(offset))};
+    if (!val_set) return std::nullopt;
+    state.validator_set = *val_set;
     return state;
 }
 
