@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <base58.h>
 #include <common/bloom.h>
 
 #include <clientversion.h>
@@ -83,8 +84,17 @@ BOOST_AUTO_TEST_CASE(bloom_create_insert_serialize_with_tweak)
 
 BOOST_AUTO_TEST_CASE(bloom_create_insert_key)
 {
-    std::string strSecret = std::string("5Kg1gnAjaLfKiwhhPpGS3QfRg2m6awQvaj98JCZBZQ5SuS2F15C");
-    CKey key = DecodeSecret(strSecret);
+    // Keep this frozen upstream key fixture independent of the active
+    // network's WIF prefix. It intentionally uses Bitcoin's 0x80 prefix.
+    const std::string strSecret{"5Kg1gnAjaLfKiwhhPpGS3QfRg2m6awQvaj98JCZBZQ5SuS2F15C"};
+    std::vector<unsigned char> encoded_secret;
+    BOOST_REQUIRE(DecodeBase58Check(strSecret, encoded_secret, 34));
+    BOOST_REQUIRE_EQUAL(encoded_secret.size(), 33);
+    BOOST_REQUIRE_EQUAL(encoded_secret.front(), 0x80);
+
+    CKey key;
+    key.Set(encoded_secret.begin() + 1, encoded_secret.end(), false);
+    BOOST_REQUIRE(key.IsValid());
     CPubKey pubkey = key.GetPubKey();
     std::vector<unsigned char> vchPubKey(pubkey.begin(), pubkey.end());
 
