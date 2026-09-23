@@ -107,6 +107,7 @@ public:
         uint256 network_id,
         ValidatorSetV1 validator_set,
         ExecuteOperations execute_operations);
+    ~BftValidatorNode();
 
     size_t GetNodeIndex() const { return m_node_index; }
     const uint256& GetValidatorId() const { return m_validator_id; }

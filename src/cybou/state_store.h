@@ -161,6 +161,9 @@ public:
     /** Retrieve a persisted finalized block by its block ID. */
     std::optional<FinalizedBlockV1> GetBlock(const uint256& block_id) const;
 
+    /** Retrieve a finalized non-genesis block by canonical height. */
+    std::optional<FinalizedBlockV1> GetBlockAtHeight(uint64_t height) const;
+
     /** Retrieve a persisted compact mail discovery filter by block ID. */
     std::optional<CybouMailDiscoveryFilterV1> GetBlockMailFilter(const uint256& block_id) const;
 
