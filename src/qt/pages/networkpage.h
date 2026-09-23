@@ -20,9 +20,9 @@ public:
 private:
     CybouDesktopModel* const m_model;
     QLabel* m_network;
-    QLabel* m_status;
-    QLabel* m_connections;
-    QLabel* m_height;
+    QLabel* m_status_metric;
+    QLabel* m_connections_metric;
+    QLabel* m_height_metric;
     QLabel* m_network_id;
     QLabel* m_data_directory;
     const std::function<void()> m_diagnostics_requested;

@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QFile>
 #include <QPainter>
+#include <QPen>
 #include <QPixmap>
 #include <QSvgRenderer>
 
@@ -14,15 +15,17 @@ namespace {
 
 QString iconResource(CybouTheme::NavIcon icon)
 {
+    // NOTE: the .qrc registers these under prefix /icons/cybou with extensionless
+    // aliases ("home", not "home.svg"), so the resource paths must not carry ".svg".
     switch (icon) {
-    case CybouTheme::NavIcon::Home: return QStringLiteral(":/icons/cybou/home.svg");
-    case CybouTheme::NavIcon::Identity: return QStringLiteral(":/icons/cybou/identity.svg");
-    case CybouTheme::NavIcon::Email: return QStringLiteral(":/icons/cybou/email.svg");
-    case CybouTheme::NavIcon::Storage: return QStringLiteral(":/icons/cybou/storage.svg");
-    case CybouTheme::NavIcon::Backup: return QStringLiteral(":/icons/cybou/backup.svg");
-    case CybouTheme::NavIcon::Network: return QStringLiteral(":/icons/cybou/network.svg");
-    case CybouTheme::NavIcon::Settings: return QStringLiteral(":/icons/cybou/settings.svg");
-    case CybouTheme::NavIcon::Diagnostics: return QStringLiteral(":/icons/cybou/diagnostics.svg");
+    case CybouTheme::NavIcon::Home: return QStringLiteral(":/icons/cybou/home");
+    case CybouTheme::NavIcon::Identity: return QStringLiteral(":/icons/cybou/identity");
+    case CybouTheme::NavIcon::Email: return QStringLiteral(":/icons/cybou/email");
+    case CybouTheme::NavIcon::Storage: return QStringLiteral(":/icons/cybou/storage");
+    case CybouTheme::NavIcon::Backup: return QStringLiteral(":/icons/cybou/backup");
+    case CybouTheme::NavIcon::Network: return QStringLiteral(":/icons/cybou/network");
+    case CybouTheme::NavIcon::Settings: return QStringLiteral(":/icons/cybou/settings");
+    case CybouTheme::NavIcon::Diagnostics: return QStringLiteral(":/icons/cybou/diagnostics");
     }
     return {};
 }
@@ -36,86 +39,84 @@ QString CybouTheme::applicationStyleSheet()
 {
     // The palette constants above are the single source of truth; the sheet
     // is assembled from them so pages can never drift from the site palette.
-    const QString subtle = color(SUBTLE).name();
-    const QString canvas = color(CANVAS).name();
-    const QString surface = color(SURFACE).name();
-    const QString border = color(BORDER).name();
-    const QString border_medium = color(BORDER_MEDIUM).name();
-    const QString text_primary = color(TEXT_PRIMARY).name();
-    const QString text_secondary = color(TEXT_SECONDARY).name();
-    const QString text_muted = color(TEXT_MUTED).name();
-    const QString dim = color(DIM).name();
-    const QString mint = color(MINT).name();
-    const QString teal = color(BRAND_TEAL).name();
-    const QString teal_dark = color(BRAND_TEAL_DARK).name();
-    const QString mint_soft = color(MINT_SOFT).name();
-    const QString mint_ghost = color(MINT_GHOST).name();
+    //
+    // Named tokens (@name@) are substituted with literal replace() calls.
+    // Do NOT switch this back to QString::arg(%N): every .arg() replaces the
+    // lowest-numbered remaining marker, so a single unused marker in the
+    // template silently shifts every later value by one position.
+    QString sheet{QStringLiteral(R"(
+        QMainWindow#cybouMainWindow, QWidget#shell, QStackedWidget { background: @subtle@; color: @text_primary@; }
+        QMenuBar { background: @canvas@; border-bottom: 1px solid @border@; padding: 4px 8px; color: @text_primary@; }
+        QMenuBar::item:selected, QMenu::item:selected { background: @mint_soft@; color: @teal_dark@; }
+        QMenu { background: @canvas@; border: 1px solid @border@; color: @text_primary@; }
 
-    return QStringLiteral(R"(
-        QMainWindow#cybouMainWindow, QWidget#shell, QStackedWidget { background: %1; color: %7; }
-        QMenuBar { background: %2; border-bottom: 1px solid %4; padding: 4px 8px; color: %7; }
-        QMenuBar::item:selected, QMenu::item:selected { background: %12; color: %11; }
-        QMenu { background: %2; border: 1px solid %4; color: %7; }
+        QFrame#sidebar { background: @canvas@; border-right: 1px solid @border@; }
+        QLabel#brand { font-size: 23px; font-weight: 800; letter-spacing: 1px; color: @text_primary@; }
+        QLabel#brandCaption { font-size: 11px; font-weight: 700; color: @teal_dark@; }
+        QLabel#sidebarFootnote { color: @text_muted@; font-size: 12px; line-height: 1.4; }
 
-        QFrame#sidebar { background: %2; border-right: 1px solid %4; }
-        QLabel#brand { font-size: 23px; font-weight: 800; letter-spacing: 1px; color: %7; }
-        QLabel#brandCaption { font-size: 11px; font-weight: 700; color: %11; }
-        QLabel#sidebarFootnote { color: %9; font-size: 12px; line-height: 1.4; }
+        QToolButton { border: 0; border-radius: 10px; padding: 9px 12px; text-align: left; color: @text_secondary@; font-size: 14px; }
+        QToolButton:hover { background: @surface@; color: @teal_dark@; }
+        QToolButton:checked { background: @mint_soft@; color: @teal_dark@; font-weight: 700; }
+        QFrame#separator { color: @border@; }
 
-        QToolButton { border: 0; border-radius: 10px; padding: 9px 12px; text-align: left; color: %8; font-size: 14px; }
-        QToolButton:hover { background: %3; color: %11; }
-        QToolButton:checked { background: %12; color: %11; font-weight: 700; }
-        QFrame#separator { color: %4; }
-
-        QFrame#card { background: %2; border: 1px solid %4; border-radius: 14px; }
-        QFrame#iconChip { background: %13; border-radius: 20px; }
-        QLabel#heroAccent { background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, stop:0 %12, stop:1 %1); }
-        QLabel#eyebrow { color: %9; font-size: 11px; font-weight: 800; letter-spacing: 3px; }
-        QLabel#heroTitle { color: %7; font-size: 30px; font-weight: 800; }
-        QLabel#heroSubtitle { color: %8; font-size: 14px; }
-        QLabel#pageTitle { color: %7; font-size: 28px; font-weight: 800; }
-        QLabel#pageSubtitle { color: %9; font-size: 14px; }
-        QLabel#sectionTitle { color: %7; font-size: 19px; font-weight: 750; }
-        QLabel#cardLabel { color: %9; font-size: 12px; font-weight: 700; }
-        QLabel#cardTitle { color: %7; font-size: 21px; font-weight: 800; }
-        QLabel#serviceTitle { color: %7; font-size: 16px; font-weight: 750; }
-        QLabel#bodyText { color: %8; font-size: 14px; }
-        QLabel#mutedText { color: %9; font-size: 13px; }
-        QLabel#metric { color: %7; font-size: 26px; font-weight: 800; }
-        QLabel#metricCaption { color: %9; font-size: 12px; }
-        QLabel#statusBadge { background: %12; color: %11; border-radius: 13px; padding: 6px 12px; font-weight: 700; }
-        QLabel#neutralBadge { background: %3; color: %9; border-radius: 11px; padding: 4px 9px; }
+        QFrame#card { background: @canvas@; border: 1px solid @border@; border-radius: 14px; }
+        QFrame#iconChip { background: @mint_ghost@; border-radius: 20px; }
+        QLabel#eyebrow { color: @text_muted@; font-size: 11px; font-weight: 800; letter-spacing: 3px; }
+        QLabel#heroTitle { color: @text_primary@; font-size: 30px; font-weight: 800; }
+        QLabel#heroSubtitle { color: @text_secondary@; font-size: 14px; }
+        QLabel#pageTitle { color: @text_primary@; font-size: 28px; font-weight: 800; }
+        QLabel#pageSubtitle { color: @text_muted@; font-size: 14px; }
+        QLabel#sectionTitle { color: @text_primary@; font-size: 19px; font-weight: 750; }
+        QLabel#cardLabel { color: @text_muted@; font-size: 12px; font-weight: 700; }
+        QLabel#cardTitle { color: @text_primary@; font-size: 21px; font-weight: 800; }
+        QLabel#serviceTitle { color: @text_primary@; font-size: 16px; font-weight: 750; }
+        QLabel#bodyText { color: @text_secondary@; font-size: 14px; }
+        QLabel#mutedText { color: @text_muted@; font-size: 13px; }
+        QLabel#metric { color: @text_primary@; font-size: 26px; font-weight: 800; }
+        QLabel#metricCaption { color: @text_muted@; font-size: 12px; }
+        QLabel#statusBadge { background: @mint_soft@; color: @teal_dark@; border-radius: 13px; padding: 6px 12px; font-weight: 700; }
+        QLabel#neutralBadge { background: @surface@; color: @text_muted@; border-radius: 11px; padding: 4px 9px; }
         QLabel#warningBadge { background: #fef3c7; color: #92400e; border-radius: 11px; padding: 6px 12px; font-weight: 700; }
-        QLabel#phaseLabel { color: %10; font-size: 12px; font-weight: 600; }
-        QLabel#phaseLabelActive { color: %11; font-size: 12px; font-weight: 800; }
-        QLabel#phaseLabelDone { color: %8; font-size: 12px; font-weight: 600; }
+        QLabel#phaseLabel { color: @dim@; font-size: 12px; font-weight: 600; }
+        QLabel#phaseLabelActive { color: @teal_dark@; font-size: 12px; font-weight: 800; }
+        QLabel#phaseLabelDone { color: @text_secondary@; font-size: 12px; font-weight: 600; }
 
         QPushButton { min-height: 34px; border-radius: 8px; padding: 4px 16px; font-weight: 700; }
-        QPushButton#primaryButton { background: %14; color: white; border: 1px solid %14; }
-        QPushButton#primaryButton:hover { background: %11; border-color: %11; }
-        QPushButton#secondaryButton { background: %2; color: %11; border: 1px solid %5; }
-        QPushButton#secondaryButton:hover { background: %13; border-color: %15; }
-        QPushButton:disabled { background: %3; color: %10; border-color: %4; }
+        QPushButton#primaryButton { background: @teal@; color: white; border: 1px solid @teal@; }
+        QPushButton#primaryButton:hover { background: @teal_dark@; border-color: @teal_dark@; }
+        QPushButton#secondaryButton { background: @canvas@; color: @teal_dark@; border: 1px solid @border_medium@; }
+        QPushButton#secondaryButton:hover { background: @mint_ghost@; border-color: @mint@; }
+        QPushButton:disabled { background: @surface@; color: @dim@; border-color: @border@; }
 
-        QCheckBox { color: %7; font-size: 14px; spacing: 8px; }
-        QCheckBox::indicator { width: 18px; height: 18px; border-radius: 5px; border: 1px solid %5; background: %2; }
-        QCheckBox::indicator:checked { background: %14; border-color: %14; }
-    )")
-        .arg(subtle)        //  1 app background
-        .arg(canvas)        //  2 card / canvas
-        .arg(surface)       //  3 surface
-        .arg(border)        //  4 border subtle
-        .arg(border_medium) //  5 border medium
-        .arg(text_primary)  //  6 (reserved)
-        .arg(text_primary)  //  7 primary text
-        .arg(text_secondary)//  8 secondary text
-        .arg(text_muted)    //  9 muted text
-        .arg(dim)           // 10 dim
-        .arg(teal_dark)     // 11 teal dark (active ink)
-        .arg(mint_soft)     // 12 mint soft (selected bg)
-        .arg(mint_ghost)    // 13 mint ghost (hover / chips)
-        .arg(teal)          // 14 brand teal (primary action)
-        .arg(mint);         // 15 mint accent
+        QCheckBox { color: @text_primary@; font-size: 14px; spacing: 8px; }
+        QCheckBox::indicator { width: 18px; height: 18px; border-radius: 5px; border: 1px solid @border_medium@; background: @canvas@; }
+        QCheckBox::indicator:checked { background: @teal@; border-color: @teal@; }
+    )")};
+
+    const auto set = [&sheet](const QString& token, const QString& value) {
+        sheet.replace(QStringLiteral("@") + token + QStringLiteral("@"), value);
+    };
+    set(QStringLiteral("subtle"), color(SUBTLE).name());
+    set(QStringLiteral("canvas"), color(CANVAS).name());
+    set(QStringLiteral("surface"), color(SURFACE).name());
+    set(QStringLiteral("border"), color(BORDER).name());
+    set(QStringLiteral("border_medium"), color(BORDER_MEDIUM).name());
+    set(QStringLiteral("text_primary"), color(TEXT_PRIMARY).name());
+    set(QStringLiteral("text_secondary"), color(TEXT_SECONDARY).name());
+    set(QStringLiteral("text_muted"), color(TEXT_MUTED).name());
+    set(QStringLiteral("dim"), color(DIM).name());
+    set(QStringLiteral("mint"), color(MINT).name());
+    set(QStringLiteral("teal"), color(BRAND_TEAL).name());
+    set(QStringLiteral("teal_dark"), color(BRAND_TEAL_DARK).name());
+    set(QStringLiteral("mint_soft"), color(MINT_SOFT).name());
+    set(QStringLiteral("mint_ghost"), color(MINT_GHOST).name());
+    // Dark squircle tile behind the white CYBOU logomark, mirroring the
+    // website's .logo-tile (white-on-transparent art needs a dark base even
+    // on the light desktop shell).
+    set(QStringLiteral("logo_tile_bg"), color(LOGO_TILE_BG).name());
+    set(QStringLiteral("logo_tile_border"), color(LOGO_TILE_BORDER).name());
+    return sheet;
 }
 
 QPixmap CybouTheme::iconPixmap(NavIcon icon, const QSize& size, const QColor& stroke)
@@ -147,6 +148,33 @@ QIcon CybouTheme::navIcon(NavIcon icon)
     result.addPixmap(iconPixmap(icon, size, color(BRAND_TEAL_DARK)), QIcon::Normal, QIcon::On);
     result.addPixmap(iconPixmap(icon, size, color(BRAND_TEAL_DARK)), QIcon::Active, QIcon::On);
     return result;
+}
+
+QPixmap CybouTheme::logoTile(const QSize& tile_size, int radius, const QSize& logo_size)
+{
+    // Render at 2x for crisp HiDPI output.
+    QPixmap pixmap{tile_size * 2};
+    pixmap.setDevicePixelRatio(2);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter{&pixmap};
+    painter.setRenderHint(QPainter::Antialiasing);
+    const QRectF tile_rect{QPointF{0, 0}, QSizeF{tile_size}};
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(color(LOGO_TILE_BG));
+    painter.drawRoundedRect(tile_rect, radius, radius);
+    painter.setPen(QPen{color(LOGO_TILE_BORDER), 1});
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRoundedRect(tile_rect.adjusted(0.5, 0.5, -0.5, -0.5), radius - 0.5, radius - 0.5);
+
+    QPixmap logo = QPixmap{QStringLiteral(":/icons/logo")}
+                       .scaled(logo_size * 2, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    logo.setDevicePixelRatio(2); // logical size becomes logo_size
+    const QPointF top_left{
+        (tile_size.width() - logo_size.width()) / 2.0,
+        (tile_size.height() - logo_size.height()) / 2.0};
+    painter.drawPixmap(top_left, logo);
+    return pixmap;
 }
 
 void CybouTheme::applyTo(QApplication& app)

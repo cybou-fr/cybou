@@ -74,7 +74,8 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     root->setContentsMargins(24, 22, 24, 22);
     root->setSpacing(16);
 
-    // Hero: typography plus a soft mint accent — no decorative artwork.
+    // Hero: typography plus the dark logomark tile (mirrors the site's
+    // .hero-logo-box) — the white art must never sit on a light background.
     auto* hero = new QFrame{this};
     hero->setObjectName("card");
     hero->setMinimumHeight(190);
@@ -94,13 +95,11 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     hero_text->addWidget(title);
     hero_text->addWidget(subtitle);
     hero_text->addStretch();
-    auto* accent = new QLabel{hero};
-    accent->setObjectName("heroAccent");
-    accent->setFixedSize(150, 150);
-    accent->setPixmap(QPixmap{QStringLiteral(":/icons/cybou")}.scaled(84, 84, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    accent->setAlignment(Qt::AlignCenter);
+    auto* hero_tile = new QLabel{hero};
+    hero_tile->setPixmap(CybouTheme::logoTile({112, 112}, 22, {84, 84}));
+    hero_tile->setFixedSize(112, 112);
     hero_layout->addLayout(hero_text, 1);
-    hero_layout->addWidget(accent, 0, Qt::AlignVCenter);
+    hero_layout->addWidget(hero_tile, 0, Qt::AlignVCenter);
     root->addWidget(hero);
 
     auto* primary_row = new QHBoxLayout;

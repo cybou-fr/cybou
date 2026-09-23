@@ -6,6 +6,7 @@
 
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboumainwindow.h>
+#include <qt/cyboutheme.h>
 #include <qt/networkstyle.h>
 #include <qt/platformstyle.h>
 #include <qt/rpcconsole.h>
@@ -164,6 +165,54 @@ void CybouShellTests::networkPageReflectsModel()
         if (label->text() == network_name) found_network_name = true;
     }
     QVERIFY(found_network_name);
+}
+
+void CybouShellTests::themeResolvesAllTokens()
+{
+    // Regression guard for the numbered-%N .arg() shift: every @token@ in the
+    // stylesheet must be substituted, and key palette colors must appear as-is.
+    const QString sheet = CybouTheme::applicationStyleSheet();
+    if (sheet.contains(QStringLiteral("@"))) {
+        const qsizetype at = sheet.indexOf(QStringLiteral("@"));
+        QWARN(qPrintable(QStringLiteral("unresolved token near: %1")
+                             .arg(sheet.mid(std::max<qsizetype>(0, at - 40), 80))));
+        QFAIL("stylesheet contains an unresolved @token@");
+    }
+    QVERIFY(sheet.contains(CybouTheme::color(CybouTheme::MINT_SOFT).name()));
+    QVERIFY(sheet.contains(CybouTheme::color(CybouTheme::MINT_GHOST).name()));
+    QVERIFY(sheet.contains(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
+    // The dark logomark tile is pre-rendered (not stylesheet-painted); it must
+    // produce a non-empty pixmap with the dark tile background actually drawn.
+    const QPixmap tile = CybouTheme::logoTile({44, 44}, 11, {30, 30});
+    QVERIFY(!tile.isNull());
+    QCOMPARE(tile.toImage().pixelColor(22, 22), CybouTheme::color(CybouTheme::LOGO_TILE_BG));
+}
+
+void CybouShellTests::navIconsRender()
+{
+    // Regression guard for the .svg-suffixed resource paths and the rcc alias
+    // collision (:/icons/cybou file vs /icons/cybou prefix silently drops the
+    // whole prefix): every nav icon must load from the .qrc and render.
+    const QColor stroke = CybouTheme::color(CybouTheme::BRAND_TEAL_DARK);
+    const QSize size{22, 22};
+    const CybouTheme::NavIcon icons[] = {
+        CybouTheme::NavIcon::Home,
+        CybouTheme::NavIcon::Identity,
+        CybouTheme::NavIcon::Email,
+        CybouTheme::NavIcon::Storage,
+        CybouTheme::NavIcon::Backup,
+        CybouTheme::NavIcon::Network,
+        CybouTheme::NavIcon::Settings,
+        CybouTheme::NavIcon::Diagnostics,
+    };
+    for (const auto icon : icons) {
+        const QPixmap pixmap = CybouTheme::iconPixmap(icon, size, stroke);
+        QVERIFY2(!pixmap.isNull(), "icon resource failed to load/render");
+    }
+    // The full nav icon set must carry both inactive and active pixmaps.
+    const QIcon nav = CybouTheme::navIcon(CybouTheme::NavIcon::Home);
+    QVERIFY(!nav.pixmap(size, QIcon::Normal, QIcon::Off).isNull());
+    QVERIFY(!nav.pixmap(size, QIcon::Normal, QIcon::On).isNull());
 }
 
 void CybouShellTests::closingWithoutNodeRequestsQuit()

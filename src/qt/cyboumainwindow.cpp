@@ -135,8 +135,13 @@ void CybouMainWindow::buildShell()
     sidebar_layout->setSpacing(7);
 
     auto* brand_row = new QHBoxLayout;
-    auto* logo = new QLabel{sidebar};
-    logo->setPixmap(QPixmap{QStringLiteral(":/icons/cybou")}.scaled(54, 54, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    // The white logomark is transparent-background art: it needs the dark
+    // squircle tile (mirrors the site's .logo-tile) to read on the light shell.
+    // The tile is pre-rendered into a pixmap (see CybouTheme::logoTile):
+    // stylesheet-painted frame tiles do not paint reliably inside styled cards.
+    auto* logo_tile = new QLabel{sidebar};
+    logo_tile->setPixmap(CybouTheme::logoTile({44, 44}, 11, {30, 30}));
+    logo_tile->setFixedSize(44, 44);
     auto* brand_text = new QVBoxLayout;
     auto* brand = new QLabel{tr("CYBOU"), sidebar};
     brand->setObjectName("brand");
@@ -145,7 +150,7 @@ void CybouMainWindow::buildShell()
     network->setObjectName("brandCaption");
     brand_text->addWidget(brand);
     brand_text->addWidget(network);
-    brand_row->addWidget(logo);
+    brand_row->addWidget(logo_tile);
     brand_row->addLayout(brand_text);
     brand_row->addStretch();
     sidebar_layout->addLayout(brand_row);
@@ -191,9 +196,27 @@ void CybouMainWindow::buildShell()
         [this] { showPage(1); },
         m_pages};
     auto* identity = new IdentityPage{m_desktop_model, m_pages};
-    auto* email = new ServicePlaceholderPage{tr("Email"), tr("Encrypted asynchronous communication."), CybouTheme::NavIcon::Email, m_pages};
-    auto* storage = new ServicePlaceholderPage{tr("Storage"), tr("Encrypted distributed object storage."), CybouTheme::NavIcon::Storage, m_pages};
-    auto* backup = new ServicePlaceholderPage{tr("Backup"), tr("Resilient encrypted backup built on CYBOU Storage."), CybouTheme::NavIcon::Backup, m_pages};
+    auto* email = new ServicePlaceholderPage{tr("Email"), tr("Encrypted asynchronous communication."), CybouTheme::NavIcon::Email,
+        QStringList{
+            tr("End-to-end encrypted asynchronous delivery between identities"),
+            tr("A first-class protocol operation (MailTx), not a bolt-on message layer"),
+            tr("Inbox, Sent and read-state indexes stay local to your client"),
+        },
+        tr("Identity \u00b7 BFT finality"), m_pages};
+    auto* storage = new ServicePlaceholderPage{tr("Storage"), tr("Encrypted distributed object storage."), CybouTheme::NavIcon::Storage,
+        QStringList{
+            tr("Encrypted, content-addressed objects spread across the network"),
+            tr("Durability through protocol-level replication, not a single provider"),
+            tr("The foundation for Email attachments and Backup"),
+        },
+        tr("Identity \u00b7 BFT finality"), m_pages};
+    auto* backup = new ServicePlaceholderPage{tr("Backup"), tr("Resilient encrypted backup built on CYBOU Storage."), CybouTheme::NavIcon::Backup,
+        QStringList{
+            tr("Encrypted backup of your local CYBOU data"),
+            tr("Resilience inherited from Storage replication"),
+            tr("Restore is bound to the same local identity keys"),
+        },
+        tr("Identity \u00b7 Storage"), m_pages};
     auto* network_page = new NetworkPage{m_desktop_model, [this] { showDebugWindow(); }, m_pages};
     auto* settings = new SettingsPage{m_desktop_model, [this] { optionsClicked(); }, [this] { showDebugWindow(); }, m_pages};
     m_pages->addWidget(home);

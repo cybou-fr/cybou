@@ -41,12 +41,16 @@ inline constexpr QRgb BRAND_INDIGO   = 0x4f46e5; // brand indigo
 inline constexpr QRgb MINT_SOFT  = 0xd1fae5; // selected background
 inline constexpr QRgb MINT_GHOST = 0xecfdf5; // hover / chip background
 
+/** Dark squircle tile behind the white logomark (mirrors www .logo-tile). */
+inline constexpr QRgb LOGO_TILE_BG     = 0x0a0b0e; // near-black tile background
+inline constexpr QRgb LOGO_TILE_BORDER = 0x26272b; // ~rgba(255,255,255,0.12) on the tile
+
 inline QColor color(QRgb rgb) { return QColor{rgb}; }
 
 /** Application stylesheet built from the canonical palette. */
 QString applicationStyleSheet();
 
-/** Coherent monochrome CYBOU line-icon set (: /icons/cybou/*.svg). */
+/** Coherent monochrome CYBOU line-icon set (qrc prefix /icons/cybou). */
 enum class NavIcon {
     Home,
     Identity,
@@ -64,6 +68,14 @@ enum class NavIcon {
  * the same asset serves inactive (dim) and active (teal) states.
  */
 QPixmap iconPixmap(NavIcon icon, const QSize& size, const QColor& stroke);
+
+/**
+ * Dark squircle tile with the white CYBOU logomark composited inside
+ * (mirrors the website's .logo-tile / .hero-logo-box). Rendered to a
+ * pixmap on purpose: a stylesheet-painted QFrame tile does not reliably
+ * paint inside a styled (border-radius) card across Qt styles.
+ */
+QPixmap logoTile(const QSize& tile_size, int radius, const QSize& logo_size);
 
 /** Checkable icon: dim when inactive, brand teal when active/checked. */
 QIcon navIcon(NavIcon icon);

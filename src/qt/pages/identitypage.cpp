@@ -103,11 +103,58 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     connect(m_create_button, &QPushButton::clicked, this, [this] { m_model->requestCreateIdentity(); });
     card_layout->addSpacing(8);
     card_layout->addWidget(m_create_button, 0, Qt::AlignLeft);
-    layout->addWidget(card);
-    layout->addStretch();
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
+
+    // Two-column body: main state card on the left, protocol facts on the right.
+    auto* content = new QHBoxLayout;
+    content->setSpacing(16);
+    content->addWidget(card, 3);
+
+    auto* side = new QVBoxLayout;
+    side->setSpacing(16);
+    auto* how_card = new QFrame{this};
+    how_card->setObjectName("card");
+    auto* how_layout = new QVBoxLayout{how_card};
+    how_layout->setContentsMargins(22, 20, 22, 20);
+    how_layout->setSpacing(10);
+    auto* how_title = new QLabel{tr("How identity works"), how_card};
+    how_title->setObjectName("sectionTitle");
+    how_layout->addWidget(how_title);
+    const QStringList facts{
+        tr("Your identity is controlled by keys that are generated and stored locally on this device."),
+        tr("Registration is a permissionless protocol operation (AccountCreateOp) — no operator approval, no central activation."),
+        tr("Protocol anti-Sybil work (AccountCreationWork) keeps mass registrations out."),
+        tr("A successful creation automatically funds your SystemBalance from the OnboardingPool."),
+    };
+    QStringList bullets;
+    for (const QString& fact : facts) bullets.append(QStringLiteral("\u2022 %1").arg(fact));
+    auto* how_body = new QLabel{bullets.join(QStringLiteral("\n")), how_card};
+    how_body->setObjectName("bodyText");
+    how_body->setWordWrap(true);
+    how_layout->addWidget(how_body);
+
+    auto* dev_card = new QFrame{this};
+    dev_card->setObjectName("card");
+    auto* dev_layout = new QVBoxLayout{dev_card};
+    dev_layout->setContentsMargins(22, 20, 22, 20);
+    dev_layout->setSpacing(10);
+    auto* dev_badge = new QLabel{tr("Development network"), dev_card};
+    dev_badge->setObjectName("warningBadge");
+    auto* dev_body = new QLabel{tr("CYBOU-DEV is a development network: balances have no real-world value and the chain may be reset as the protocol evolves."), dev_card};
+    dev_body->setObjectName("mutedText");
+    dev_body->setWordWrap(true);
+    dev_layout->addWidget(dev_badge, 0, Qt::AlignLeft);
+    dev_layout->addWidget(dev_body);
+
+    side->addWidget(how_card);
+    side->addWidget(dev_card);
+    side->addStretch();
+    content->addLayout(side, 2);
+    layout->addLayout(content, 1);
+    layout->addStretch();
+
     refresh();
 }
 

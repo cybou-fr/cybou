@@ -10,7 +10,7 @@
 #include <QVBoxLayout>
 
 ServicePlaceholderPage::ServicePlaceholderPage(const QString& title, const QString& description,
-    CybouTheme::NavIcon icon, QWidget* parent)
+    CybouTheme::NavIcon icon, const QStringList& what_to_expect, const QString& dependencies, QWidget* parent)
     : QWidget{parent}
 {
     auto* layout = new QVBoxLayout{this};
@@ -46,6 +46,25 @@ ServicePlaceholderPage::ServicePlaceholderPage(const QString& title, const QStri
     note->setWordWrap(true);
     card_layout->addLayout(header);
     card_layout->addWidget(note);
+
+    if (!what_to_expect.isEmpty()) {
+        auto* expect_title = new QLabel{tr("What to expect"), card};
+        expect_title->setObjectName("sectionTitle");
+        card_layout->addSpacing(6);
+        card_layout->addWidget(expect_title);
+        QStringList bullets;
+        for (const QString& item : what_to_expect) bullets.append(QStringLiteral("\u2022 %1").arg(item));
+        auto* expect_body = new QLabel{bullets.join(QStringLiteral("\n")), card};
+        expect_body->setObjectName("bodyText");
+        expect_body->setWordWrap(true);
+        card_layout->addWidget(expect_body);
+    }
+
+    if (!dependencies.isEmpty()) {
+        auto* requires_label = new QLabel{tr("Requires: %1").arg(dependencies), card};
+        requires_label->setObjectName("mutedText");
+        card_layout->addWidget(requires_label);
+    }
     layout->addWidget(card);
     layout->addStretch();
 }

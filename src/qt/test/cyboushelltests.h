@@ -39,6 +39,8 @@ private Q_SLOTS:
     void identityCreateFollowsCapabilities();
     void placeholdersExposeNoOperations();
     void networkPageReflectsModel();
+    void themeResolvesAllTokens();
+    void navIconsRender();
     void closingWithoutNodeRequestsQuit();
 
 private:

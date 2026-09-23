@@ -1,6 +1,9 @@
 <!DOCTYPE RCC><RCC version="1.0">
     <qresource prefix="/icons">
-        <file alias="cybou">res/icons/cybou.png</file>
+        <!-- NOTE: the app logo lives at :/icons/logo on purpose. Naming this
+             alias "cybou" would collide with the /icons/cybou prefix below and
+             rcc would silently drop the whole SVG icon block. -->
+        <file alias="logo">res/icons/cybou.png</file>
         <file alias="address-book">res/icons/address-book.png</file>
         <file alias="send">res/icons/send.png</file>
         <file alias="connect_0">res/icons/connect0.png</file>
