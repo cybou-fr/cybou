@@ -115,6 +115,7 @@ Implemented skeleton:
 - consensus replay set keyed only by consumed voucher ID.
 - canonical versioned redemption-state encoding and domain-separated state hash.
 - atomic LevelDB snapshot persistence with paired state/hash verification.
+- GitHub Actions headless build gate for CYBOU protocol unit tests.
 
 Not yet implemented:
 

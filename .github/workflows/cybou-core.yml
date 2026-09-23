@@ -1,0 +1,63 @@
+name: CYBOU core
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cybou-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cybou-unit:
+    name: CYBOU unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            cmake \
+            libboost-dev \
+            libevent-dev \
+            ninja-build \
+            pkgconf \
+            python3
+
+      - name: Configure headless unit build
+        run: |
+          cmake -S . -B build-ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O2 -g0" \
+            -DBUILD_BITCOIN_BIN=OFF \
+            -DBUILD_DAEMON=OFF \
+            -DBUILD_GUI=OFF \
+            -DBUILD_CLI=OFF \
+            -DBUILD_TESTS=ON \
+            -DBUILD_TX=OFF \
+            -DBUILD_UTIL=OFF \
+            -DENABLE_WALLET=OFF \
+            -DENABLE_EXTERNAL_SIGNER=OFF \
+            -DENABLE_IPC=OFF \
+            -DWITH_CCACHE=OFF \
+            -DWITH_ZMQ=OFF
+
+      - name: Build unit test binary
+        run: cmake --build build-ci --target test_bitcoin --parallel 2
+
+      - name: Run CYBOU protocol tests
+        run: |
+          build-ci/bin/test_bitcoin \
+            --run_test=cybou_chainparams_tests,cybou_signing_tests,cybou_identity_tests,cybou_state_tests,cybou_state_store_tests \
+            --log_level=error
