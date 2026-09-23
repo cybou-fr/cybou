@@ -109,6 +109,18 @@ std::optional<FinalizedBlockV1> CybouNodeRuntime::ProduceBlock(const bool sync)
     return res.finalized_block;
 }
 
+BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlockV1& block, const bool sync)
+{
+    std::lock_guard lock(m_mutex);
+    return m_store.CommitFinalizedBlock(block, std::nullopt, sync);
+}
+
+std::optional<FinalizedBlockV1> CybouNodeRuntime::GetBlockAtHeight(const uint64_t height) const
+{
+    std::lock_guard lock(m_mutex);
+    return m_store.GetBlockAtHeight(height);
+}
+
 uint64_t CybouNodeRuntime::SyncFromPeer(const std::string& host, const uint16_t port, const uint64_t max_blocks)
 {
     std::lock_guard lock(m_mutex);

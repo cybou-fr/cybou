@@ -18,6 +18,16 @@
 #include <qt/pages/walletpage.h>
 #include <qt/rpcconsole.h>
 
+#include <common/args.h>
+#include <cybou/identity_service.h>
+#include <cybou/network_definition.h>
+#include <cybou/node_runtime.h>
+#include <support/cleanse.h>
+#include <util/strencodings.h>
+
+#include <filesystem>
+#include <fstream>
+
 #include <QAction>
 #include <QApplication>
 #include <QButtonGroup>
@@ -119,11 +129,90 @@ CybouMainWindow::CybouMainWindow(
     }
 }
 
+CybouMainWindow::~CybouMainWindow() = default;
+
+void CybouMainWindow::initCybouRuntime()
+{
+    if (!m_client_model) return;
+
+    const auto val_pub = *uint256::FromUserHex("5c6f0fb4018874f31b12941dbf0967ca725dba3c2ddb52fd95f10974dde3888a");
+    const auto genesis = cybou::CreateDevGenesisState(val_pub);
+    const auto definition = cybou::CreateDevNetworkDefinition(genesis);
+    const auto net_id = cybou::NetworkId(definition);
+
+    m_desktop_model->setNetworkInfo(
+        QStringLiteral("CYBOU-DEV"),
+        QString::fromStdString(net_id.GetHex()));
+
+    try {
+        const std::filesystem::path data_dir = (gArgs.GetDataDirNet() / "cybou_state").std_path();
+        std::optional<std::array<unsigned char, 32>> val_key;
+        const auto key_path = (gArgs.GetDataDirNet() / "validator.key").std_path();
+        if (std::filesystem::exists(key_path) && std::filesystem::file_size(key_path) == 32) {
+            val_key.emplace();
+            std::ifstream kf(key_path, std::ios::binary);
+            kf.read(reinterpret_cast<char*>(val_key->data()), 32);
+        } else {
+            // Local DEV fallback validator key to allow block production out of the box
+            val_key.emplace();
+            val_key->fill(1);
+        }
+
+        cybou::NodeRuntimeConfig config{
+            .network_definition = definition,
+            .data_dir = data_dir,
+            .validator_private_key = val_key,
+            .db_cache_bytes = 8 << 20,
+        };
+        if (val_key.has_value()) {
+            memory_cleanse(val_key->data(), val_key->size());
+        }
+
+        m_node_runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
+        if (!m_node_runtime->GetStatus().is_initialized) {
+            m_node_runtime->InitializeGenesis(genesis);
+        }
+        m_identity_service = std::make_unique<cybou::CybouIdentityService>(*m_node_runtime);
+
+        const auto id_key_path = (gArgs.GetDataDirNet() / "identity.key").std_path();
+        if (std::filesystem::exists(id_key_path) && std::filesystem::file_size(id_key_path) == 32) {
+            std::array<unsigned char, 32> id_key{};
+            std::ifstream idf(id_key_path, std::ios::binary);
+            idf.read(reinterpret_cast<char*>(id_key.data()), 32);
+            m_identity_service->LoadExistingIdentity(id_key);
+            memory_cleanse(id_key.data(), id_key.size());
+        }
+
+        m_desktop_model->setIdentityService(m_identity_service.get());
+
+        // Update initial finality status:
+        const auto status = m_node_runtime->GetStatus();
+        m_desktop_model->setFinalityStatus(static_cast<int>(status.finalized_height), static_cast<int>(status.validator_count));
+
+        // Connect identity persistence on creation
+        connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, [this] {
+            if (m_desktop_model->status().identity_state == CybouIdentityState::Active && m_identity_service) {
+                const auto key = m_identity_service->GetPrivateKeySeed();
+                if (key.has_value()) {
+                    const auto id_path = (gArgs.GetDataDirNet() / "identity.key").std_path();
+                    if (!std::filesystem::exists(id_path)) {
+                        std::ofstream idf(id_path, std::ios::binary | std::ios::out);
+                        idf.write(reinterpret_cast<const char*>(key->data()), key->size());
+                    }
+                }
+            }
+        });
+    } catch (const std::exception& e) {
+        qWarning() << "CybouNodeRuntime initialization error:" << e.what();
+    }
+}
+
 void CybouMainWindow::setClientModel(ClientModel* client_model, interfaces::BlockAndHeaderTipInfo* tip_info)
 {
     m_client_model = client_model;
     BitcoinGUI::setClientModel(client_model, tip_info);
     m_desktop_model->setClientModel(client_model);
+    initCybouRuntime();
 }
 
 void CybouMainWindow::showPage(int index)

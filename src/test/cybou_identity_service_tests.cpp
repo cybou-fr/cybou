@@ -1,0 +1,182 @@
+// Copyright (c) 2026 The CYBOU developers
+// Distributed under the MIT software license, see the accompanying file COPYING.
+
+#include <cybou/account_creation.h>
+#include <cybou/identity_service.h>
+#include <cybou/node_runtime.h>
+#include <cybou/signing.h>
+#include <test/util/setup_common.h>
+
+#include <boost/test/unit_test.hpp>
+
+#include <array>
+#include <chrono>
+#include <future>
+
+BOOST_FIXTURE_TEST_SUITE(cybou_identity_service_tests, BasicTestingSetup)
+
+namespace {
+
+cybou::CybouState CreateTestGenesis(const uint256& val_pub)
+{
+    return cybou::CybouState{
+        .onboarding_pool = 1'000'000,
+        .security_reward_pool = 0,
+        .pending_fee_pool = 0,
+        .accounts = {},
+        .validator_set = {
+            .version = cybou::VALIDATOR_SET_VERSION,
+            .validators = {{
+                .validator_id = val_pub,
+                .consensus_public_key = val_pub,
+                .weight = 1,
+            }},
+        },
+    };
+}
+
+cybou::CybouNetworkDefinitionV1 CreateTestNetworkDefinition(const cybou::CybouState& genesis)
+{
+    auto params = cybou::DevProtocolParameters();
+    params.account_creation_work_bits = 0; // fast PoW for tests
+    return cybou::CybouNetworkDefinitionV1{
+        .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
+        .genesis_block_id = cybou::CybouStateHash(genesis),
+        .genesis_state_root = cybou::CybouStateHash(genesis),
+        .protocol_parameters = params,
+        .initial_validator_set_commitment = cybou::ComputeValidatorSetCommitment(genesis.validator_set),
+        .operator_authority = std::nullopt,
+    };
+}
+
+} // namespace
+
+BOOST_AUTO_TEST_CASE(identity_service_creates_and_activates_identity)
+{
+    std::array<unsigned char, 32> val_key{};
+    val_key.fill(1);
+    const auto val_pub = *cybou::DeriveEd25519PublicKey(val_key);
+
+    const auto genesis = CreateTestGenesis(val_pub);
+    const auto definition = CreateTestNetworkDefinition(genesis);
+
+    cybou::NodeRuntimeConfig config{
+        .network_definition = definition,
+        .data_dir = "cybou-identity-test-1",
+        .validator_private_key = val_key,
+        .memory_only = true,
+        .wipe_data = true,
+    };
+
+    cybou::CybouNodeRuntime runtime{std::move(config)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(genesis));
+
+    cybou::CybouIdentityService identity_service{runtime};
+    BOOST_CHECK_EQUAL(static_cast<int>(identity_service.GetPhase()), static_cast<int>(cybou::IdentityCreationPhase::IDLE));
+    BOOST_CHECK(!identity_service.GetAccountId().has_value());
+
+    std::vector<cybou::IdentityCreationPhase> visited_phases;
+    auto on_phase = [&](cybou::IdentityCreationPhase phase, const std::string&) {
+        visited_phases.push_back(phase);
+    };
+
+    const auto result = identity_service.CreateIdentitySync(on_phase);
+    BOOST_REQUIRE(result.success);
+    BOOST_CHECK_EQUAL(static_cast<int>(result.final_phase), static_cast<int>(cybou::IdentityCreationPhase::ACTIVE));
+    BOOST_CHECK_EQUAL(result.creation_height, 1);
+    BOOST_CHECK_EQUAL(result.system_balance, definition.protocol_parameters.onboarding_bonus);
+    BOOST_CHECK(!result.account_id.IsNull());
+
+    // Verify phases were executed in canonical sequence
+    BOOST_REQUIRE(visited_phases.size() >= 4);
+    BOOST_CHECK_EQUAL(static_cast<int>(visited_phases[0]), static_cast<int>(cybou::IdentityCreationPhase::CREATING_KEYS));
+    BOOST_CHECK_EQUAL(static_cast<int>(visited_phases[1]), static_cast<int>(cybou::IdentityCreationPhase::PERFORMING_WORK));
+    BOOST_CHECK_EQUAL(static_cast<int>(visited_phases[2]), static_cast<int>(cybou::IdentityCreationPhase::BROADCASTING));
+    BOOST_CHECK_EQUAL(static_cast<int>(visited_phases[3]), static_cast<int>(cybou::IdentityCreationPhase::WAITING_FOR_FINALITY));
+
+    // Verify account state in consensus runtime
+    const auto acc = runtime.GetAccountState(result.account_id);
+    BOOST_REQUIRE(acc.has_value());
+    BOOST_CHECK_EQUAL(acc->creation_height, 1);
+    BOOST_CHECK_EQUAL(acc->system_balance, definition.protocol_parameters.onboarding_bonus);
+    BOOST_CHECK_EQUAL(acc->balance, 0);
+
+    // Repeated call for the same identity is idempotent and immediately active
+    const auto repeat_result = identity_service.CreateIdentitySync();
+    BOOST_CHECK(repeat_result.success);
+    BOOST_CHECK(repeat_result.account_id == result.account_id);
+}
+
+BOOST_AUTO_TEST_CASE(identity_service_loads_existing_identity)
+{
+    std::array<unsigned char, 32> val_key{};
+    val_key.fill(1);
+    const auto val_pub = *cybou::DeriveEd25519PublicKey(val_key);
+
+    const auto genesis = CreateTestGenesis(val_pub);
+    const auto definition = CreateTestNetworkDefinition(genesis);
+
+    cybou::NodeRuntimeConfig config{
+        .network_definition = definition,
+        .data_dir = "cybou-identity-test-2",
+        .validator_private_key = val_key,
+        .memory_only = true,
+        .wipe_data = true,
+    };
+
+    cybou::CybouNodeRuntime runtime{std::move(config)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(genesis));
+
+    cybou::CybouIdentityService identity_service{runtime};
+
+    std::array<unsigned char, 32> user_key{};
+    user_key.fill(9);
+    BOOST_REQUIRE(identity_service.LoadExistingIdentity(user_key));
+
+    const auto expected_pub = *cybou::DeriveEd25519PublicKey(user_key);
+    BOOST_REQUIRE(identity_service.GetAccountId().has_value());
+    BOOST_CHECK(identity_service.GetAccountId()->Value() == expected_pub);
+    // Not active yet because not registered in genesis
+    BOOST_CHECK_EQUAL(static_cast<int>(identity_service.GetPhase()), static_cast<int>(cybou::IdentityCreationPhase::IDLE));
+}
+
+BOOST_AUTO_TEST_CASE(identity_service_creates_identity_asynchronously)
+{
+    std::array<unsigned char, 32> val_key{};
+    val_key.fill(1);
+    const auto val_pub = *cybou::DeriveEd25519PublicKey(val_key);
+
+    const auto genesis = CreateTestGenesis(val_pub);
+    const auto definition = CreateTestNetworkDefinition(genesis);
+
+    cybou::NodeRuntimeConfig config{
+        .network_definition = definition,
+        .data_dir = "cybou-identity-test-3",
+        .validator_private_key = val_key,
+        .memory_only = true,
+        .wipe_data = true,
+    };
+
+    cybou::CybouNodeRuntime runtime{std::move(config)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(genesis));
+
+    cybou::CybouIdentityService identity_service{runtime};
+
+    std::promise<cybou::IdentityCreationResult> completion_promise;
+    auto completion_future = completion_promise.get_future();
+
+    identity_service.CreateIdentityAsync(
+        /*on_phase=*/nullptr,
+        /*on_complete=*/[&](const cybou::IdentityCreationResult& res) {
+            completion_promise.set_value(res);
+        });
+
+    BOOST_REQUIRE(completion_future.wait_for(std::chrono::seconds(5)) == std::future_status::ready);
+    const auto result = completion_future.get();
+    BOOST_REQUIRE(result.success);
+    BOOST_CHECK_EQUAL(static_cast<int>(result.final_phase), static_cast<int>(cybou::IdentityCreationPhase::ACTIVE));
+    BOOST_CHECK_EQUAL(result.creation_height, 1);
+    BOOST_CHECK_EQUAL(result.system_balance, definition.protocol_parameters.onboarding_bonus);
+}
+
+BOOST_AUTO_TEST_SUITE_END()

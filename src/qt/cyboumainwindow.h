@@ -13,12 +13,18 @@ class QButtonGroup;
 class QCloseEvent;
 class QStackedWidget;
 
+namespace cybou {
+class CybouNodeRuntime;
+class CybouIdentityService;
+}
+
 class CybouMainWindow final : public BitcoinGUI
 {
     Q_OBJECT
 
 public:
     CybouMainWindow(interfaces::Node& node, const PlatformStyle* platform_style, const NetworkStyle* network_style, QWidget* parent = nullptr);
+    ~CybouMainWindow() override;
 
     void setClientModel(ClientModel* client_model = nullptr, interfaces::BlockAndHeaderTipInfo* tip_info = nullptr) override;
 
@@ -34,6 +40,8 @@ protected:
 private:
     CybouDesktopModel* m_desktop_model;
     ClientModel* m_client_model{nullptr};
+    std::unique_ptr<cybou::CybouNodeRuntime> m_node_runtime;
+    std::unique_ptr<cybou::CybouIdentityService> m_identity_service;
     QStackedWidget* m_pages;
     QButtonGroup* m_navigation;
 
@@ -42,6 +50,7 @@ private:
     void buildTrayMenu();
     void applyStyle();
     void showPage(int index);
+    void initCybouRuntime();
 };
 
 #endif // BITCOIN_QT_CYBOUMAINWINDOW_H

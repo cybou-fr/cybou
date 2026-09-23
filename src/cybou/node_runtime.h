@@ -79,6 +79,12 @@ public:
     /** Produce a block if running in authority mode */
     std::optional<FinalizedBlockV1> ProduceBlock(bool sync = true);
 
+    /** Commit a finalized block */
+    BlockTransitionResult CommitBlock(const FinalizedBlockV1& block, bool sync = true);
+
+    /** Block lookup by height */
+    std::optional<FinalizedBlockV1> GetBlockAtHeight(uint64_t height) const;
+
     /** Sync up to max_blocks from a remote peer block feed */
     uint64_t SyncFromPeer(const std::string& host, uint16_t port, uint64_t max_blocks = 100);
 

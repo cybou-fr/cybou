@@ -197,6 +197,7 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   cybou/protocol_operation.cpp
   cybou/mail_filter.cpp
   cybou/node_runtime.cpp
+  cybou/identity_service.cpp
   dbwrapper.cpp
   deploymentstatus.cpp
   flatfile.cpp

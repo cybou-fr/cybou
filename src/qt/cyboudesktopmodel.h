@@ -12,6 +12,10 @@
 class ClientModel;
 class OptionsModel;
 
+namespace cybou {
+class CybouIdentityService;
+}
+
 struct CybouCapabilities {
     bool account_creation{false};
     bool payments{false};
@@ -89,6 +93,9 @@ public:
         backend capability becomes available. */
     void setCapabilities(const CybouCapabilities& capabilities);
 
+    /** Core-facing adapter entry: canonical network name and NetworkID once exposed. */
+    void setNetworkInfo(const QString& network_name, const QString& network_id);
+
     /** Core-facing adapter entry (doc 73): the BFT finality feed reports the
         last certificate-committed height and the current validator set.
         -1 / 0 mean "not exposed" and render as such. No-op when unchanged. */
@@ -103,6 +110,10 @@ public:
         every finalized transition that moves them. */
     void setBalances(quint64 balance, quint64 system_balance);
 
+    /** Sets identity service provider and enables account_creation capability. */
+    void setIdentityService(cybou::CybouIdentityService* identity_service);
+    cybou::CybouIdentityService* identityService() const { return m_identity_service; }
+
     /** Requests identity creation from the backend.
         The UI only emits the request; protocol behavior belongs to core. */
     void requestCreateIdentity();
@@ -114,6 +125,7 @@ Q_SIGNALS:
 
 private:
     ClientModel* m_client_model{nullptr};
+    cybou::CybouIdentityService* m_identity_service{nullptr};
     CybouDesktopStatus m_status;
     CybouCapabilities m_capabilities;
     bool m_identity_request_pending{false};

@@ -72,6 +72,33 @@ void CybouDesktopModel::setCapabilities(const CybouCapabilities& capabilities)
     Q_EMIT capabilitiesChanged();
 }
 
+void CybouDesktopModel::setNetworkInfo(const QString& network_name, const QString& network_id)
+{
+    if (m_status.network_name == network_name && m_status.network_id == network_id) {
+        return;
+    }
+    m_status.network_name = network_name;
+    m_status.network_id = network_id;
+    Q_EMIT statusChanged();
+}
+
+#include <cybou/identity_service.h>
+
+void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity_service)
+{
+    m_identity_service = identity_service;
+    if (m_identity_service) {
+        m_capabilities.account_creation = true;
+        Q_EMIT capabilitiesChanged();
+
+        if (m_identity_service->GetPhase() == cybou::IdentityCreationPhase::ACTIVE &&
+            m_identity_service->GetAccountId().has_value()) {
+            const QString acc_hex = QString::fromStdString(m_identity_service->GetAccountId()->Value().GetHex());
+            setIdentityState(CybouIdentityState::Active, acc_hex);
+        }
+    }
+}
+
 void CybouDesktopModel::requestCreateIdentity()
 {
     // The UI boundary ends here: protocol anti-Sybil work, operation
@@ -81,6 +108,46 @@ void CybouDesktopModel::requestCreateIdentity()
     m_identity_request_pending = true;
     Q_EMIT createIdentityRequested();
     Q_EMIT statusChanged();
+
+    if (!m_identity_service) {
+        return;
+    }
+
+    m_identity_service->CreateIdentityAsync(
+        [this](cybou::IdentityCreationPhase phase, const std::string& /*detail*/) {
+            QMetaObject::invokeMethod(this, [this, phase] {
+                switch (phase) {
+                case cybou::IdentityCreationPhase::CREATING_KEYS:
+                    setIdentityState(CybouIdentityState::CreatingKeys);
+                    break;
+                case cybou::IdentityCreationPhase::PERFORMING_WORK:
+                    setIdentityState(CybouIdentityState::PerformingWork);
+                    break;
+                case cybou::IdentityCreationPhase::BROADCASTING:
+                    setIdentityState(CybouIdentityState::Broadcasting);
+                    break;
+                case cybou::IdentityCreationPhase::WAITING_FOR_FINALITY:
+                    setIdentityState(CybouIdentityState::WaitingForFinality);
+                    break;
+                case cybou::IdentityCreationPhase::FAILED:
+                    setIdentityState(CybouIdentityState::None);
+                    break;
+                default:
+                    break;
+                }
+            }, Qt::QueuedConnection);
+        },
+        [this](const cybou::IdentityCreationResult& result) {
+            QMetaObject::invokeMethod(this, [this, result] {
+                if (result.success) {
+                    const QString acc_hex = QString::fromStdString(result.account_id.Value().GetHex());
+                    setIdentityState(CybouIdentityState::Active, acc_hex, static_cast<int>(result.creation_height));
+                    setBalances(0, result.system_balance);
+                } else {
+                    setIdentityState(CybouIdentityState::None);
+                }
+            }, Qt::QueuedConnection);
+        });
 }
 
 void CybouDesktopModel::setFinalityStatus(int last_finalized_height, int validator_count)
@@ -104,7 +171,9 @@ void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString
     m_status.identity_state = state;
     m_status.account_id = account_id;
     m_status.creation_height = creation_height;
-    if (state == CybouIdentityState::Active) m_identity_request_pending = false;
+    if (state == CybouIdentityState::Active || state == CybouIdentityState::None) {
+        m_identity_request_pending = false;
+    }
     Q_EMIT statusChanged();
 }
 

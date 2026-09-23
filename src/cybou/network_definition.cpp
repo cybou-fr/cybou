@@ -3,6 +3,8 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/network_definition.h>
+#include <cybou/state.h>
+#include <cybou/validator.h>
 
 #include <crypto/sha256.h>
 
@@ -189,6 +191,37 @@ uint256 NetworkId(const CybouNetworkDefinitionV1& definition)
     hasher.Write(bytes.data(), bytes.size());
     hasher.Finalize(result.begin());
     return result;
+}
+
+CybouState CreateDevGenesisState(const uint256& validator_public_key)
+{
+    return CybouState{
+        .onboarding_pool = 10'000'000,
+        .security_reward_pool = 0,
+        .pending_fee_pool = 0,
+        .accounts = {},
+        .validator_set = {
+            .version = VALIDATOR_SET_VERSION,
+            .validators = {{
+                .validator_id = validator_public_key,
+                .consensus_public_key = validator_public_key,
+                .weight = 1,
+            }},
+        },
+    };
+}
+
+CybouNetworkDefinitionV1 CreateDevNetworkDefinition(const CybouState& genesis)
+{
+    const uint256 state_root = CybouStateHash(genesis);
+    return CybouNetworkDefinitionV1{
+        .protocol_version = CYBOU_NETWORK_DEFINITION_VERSION,
+        .genesis_block_id = state_root,
+        .genesis_state_root = state_root,
+        .protocol_parameters = DevProtocolParameters(),
+        .initial_validator_set_commitment = ComputeValidatorSetCommitment(genesis.validator_set),
+        .operator_authority = std::nullopt,
+    };
 }
 
 } // namespace cybou

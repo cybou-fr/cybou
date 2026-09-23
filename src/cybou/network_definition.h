@@ -7,6 +7,7 @@
 
 #include <cybou/protocol_params.h>
 #include <cybou/signing.h>
+#include <cybou/state.h>
 #include <uint256.h>
 
 #include <cstdint>
@@ -48,6 +49,9 @@ NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinitionV1&
 std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefinitionV1& definition);
 std::optional<CybouNetworkDefinitionV1> DeserializeNetworkDefinition(std::span<const unsigned char> bytes);
 uint256 NetworkId(const CybouNetworkDefinitionV1& definition);
+
+CybouState CreateDevGenesisState(const uint256& validator_public_key);
+CybouNetworkDefinitionV1 CreateDevNetworkDefinition(const CybouState& genesis);
 
 } // namespace cybou
 
