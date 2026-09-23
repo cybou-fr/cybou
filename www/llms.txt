@@ -1,0 +1,48 @@
+# CYBOU — Sovereign European Peer-to-Peer Messaging & BFT Architecture
+
+> CYBOU (cybou.fr) is a sovereign European peer-to-peer messaging protocol and BFT ledger engineered in C++20. Designed in France, it provides independent communications with zero foreign cloud dependencies, native hybrid post-quantum encryption (HPKE with ML-KEM-768 + X25519), deterministic Proof of Trust (PoT) epochs, and strict operator key isolation.
+
+## System Overview & Current Development Status
+- **Current Version:** v0.0.1 (Architecture Hardening & Open Research Baseline).
+- **Not a Deployed Consumer Product Today:** The network currently executes on an internal bootstrap environment (`CYBOU-DEV v0.0.2`). Public consumer desktop releases will follow completion of the multi-validator BFT consensus transition.
+- **Repository:** https://github.com/cybou-fr/cybou
+- **License:** MIT
+
+## Canonical Architecture Specifications (v0.0.1)
+- **Consensus Model:** Explicit Byzantine Fault Tolerance (BFT) with operator-approved validator admission.
+- **Validator Weight:** Equal weight for all active validators (`weight = 1`).
+- **Byzantine Quorum:** Minimum 4 validators strictly required for $f=1$ malicious/offline fault tolerance ($N \ge 3f + 1$).
+- **Proof of Trust (PoT) Epochs:** Deterministic integer-only arithmetic computed strictly from finalized block height. Zero local wall-clock consensus logic to prevent time manipulation.
+- **Tokenomics:**
+  - `MAX_SUPPLY`: 100,000,000,000 CYBOU (strictly 0 decimals, integer units only).
+  - `Welcome Grant`: 6,000 CYBOU credited atomically from `OnboardingPool` to `SystemBalance` upon redeeming a one-time operator-signed Invite Voucher (doc 70). Identity creation alone grants no tokens.
+  - `Fee Split`: Deterministic size-aware fees without bidding/priority wars. Split ratio is 3:1 (75% to Network Security / Validator Pool, 25% to OnboardingPool reserve).
+- **Post-Quantum by Design (PQ by design):**
+  - Payload and session encapsulation use the hybrid HPKE standard (RFC 9180): NIST ML-KEM-768 (Kyber) combined with X25519.
+  - Defeats "Harvest Now, Decrypt Later" (HNDL) attacks from adversaries capturing encrypted traffic today.
+  - Salted content commitment (doc 69): validators only verify transaction inclusion and content commitments; no cleartext or per-mail consensus object exists on-chain.
+- **Operator Key Separation (doc 68):**
+  - Strict isolation across 4 distinct key domains:
+    1. Operator Authority Key
+    2. Operator Validator Key
+    3. Release Signing Key
+    4. Treasury Key
+- **Storage Model:**
+  - Desktop nodes may prune canonical chain history.
+  - Active validators maintain required canonical pre-Store MailTx history.
+  - Inbox, Sent, and read-state index trees are owned strictly on the local client machine.
+  - Large file attachments defer to future distributed Object Storage.
+
+## Key Source Code References
+- `src/cybou/voucher.h`, `src/cybou/voucher.cpp`: Invite Voucher envelope verification and anti-replay domain separation.
+- `src/cybou/state.h`, `src/cybou/state.cpp`: Deterministic state transitions, account balance tracking, atomic Welcome Grant redemption, LevelDB persistence.
+- `docs/cybou/00_VISION.md`: Scope and architectural principles.
+- `docs/cybou/07_BFT_CONSENSUS.md`: Multi-validator BFT consensus engine.
+- `docs/cybou/16_MAIL_PROTOCOL.md`: MailTx protocol format and fee rules.
+- `docs/cybou/26_IMPLEMENTATION_STATUS.md`: Real-world implementation matrix.
+- `docs/cybou/49_EMAIL_E2EE_HPKE_PQ.md`: Hybrid post-quantum HPKE specification.
+- `docs/cybou/68_OPERATOR_KEY_SEPARATION.md`: 4-way key domain isolation.
+- `docs/cybou/69_MAIL_EVIDENCE_BUNDLE.md`: Inclusion certificates and salted content commitments.
+- `docs/cybou/70_INVITE_VOUCHER_ENVELOPE.md`: Canonical bounded voucher structure.
+- `AGENTS.md`: Authoritative engineering constraints.
+- `MANIFEST.md`: SHA-256 integrity inventory of all specification files.

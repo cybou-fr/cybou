@@ -6,6 +6,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   initLanguageSwitch();
   initVoucherSimulator();
+  checkUrlLanguage();
 });
 
 // --- 1. Language Toggle (French / English) ---
@@ -275,7 +276,13 @@ const translations = {
   }
 };
 
-let currentLang = 'fr';
+function checkUrlLanguage() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const lang = urlParams.get('lang');
+  if (lang === 'en' || lang === 'fr') {
+    setLanguage(lang, false);
+  }
+}
 
 function initLanguageSwitch() {
   const btnFr = document.getElementById('lang-fr');
@@ -283,15 +290,27 @@ function initLanguageSwitch() {
 
   if (!btnFr || !btnEn) return;
 
-  btnFr.addEventListener('click', () => setLanguage('fr'));
-  btnEn.addEventListener('click', () => setLanguage('en'));
+  btnFr.addEventListener('click', () => setLanguage('fr', true));
+  btnEn.addEventListener('click', () => setLanguage('en', true));
 }
 
-function setLanguage(lang) {
+function setLanguage(lang, updateUrl = false) {
   currentLang = lang;
-  document.getElementById('lang-fr').classList.toggle('active', lang === 'fr');
-  document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+  const btnFr = document.getElementById('lang-fr');
+  const btnEn = document.getElementById('lang-en');
+  if (btnFr) btnFr.classList.toggle('active', lang === 'fr');
+  if (btnEn) btnEn.classList.toggle('active', lang === 'en');
   document.documentElement.lang = lang;
+
+  if (updateUrl && window.history && window.history.replaceState) {
+    const url = new URL(window.location);
+    if (lang === 'en') {
+      url.searchParams.set('lang', 'en');
+    } else {
+      url.searchParams.delete('lang');
+    }
+    window.history.replaceState({}, '', url);
+  }
 
   const dict = translations[lang];
   for (const [key, val] of Object.entries(dict)) {
