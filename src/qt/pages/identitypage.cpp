@@ -82,6 +82,28 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     card_layout->addWidget(m_state_label);
     card_layout->addWidget(m_detail_label);
 
+    // What will happen, step by step. Visible only before a creation starts;
+    // the numbered list mirrors the protocol phases, nothing more.
+    m_steps = new QWidget{card};
+    auto* steps_layout = new QVBoxLayout{m_steps};
+    steps_layout->setContentsMargins(0, 0, 0, 0);
+    steps_layout->setSpacing(8);
+    const QStringList steps{
+        tr("Keys are generated on this device and stay local."),
+        tr("The node performs AccountCreationWork — protocol anti-Sybil computation."),
+        tr("The signed AccountCreateOp is broadcast to the validator set."),
+        tr("A BFT finality certificate commits the account."),
+        tr("SystemBalance is funded atomically from the OnboardingPool."),
+    };
+    for (int i = 0; i < steps.size(); ++i) {
+        auto* step = new QLabel{QStringLiteral("%1. %2").arg(i + 1).arg(steps.at(i)), m_steps};
+        step->setObjectName("bodyText");
+        step->setWordWrap(true);
+        steps_layout->addWidget(step);
+    }
+    m_steps->setVisible(false);
+    card_layout->addWidget(m_steps);
+
     // Active identity facts (populated only from real backend state).
     m_active_details = new QLabel{card};
     m_active_details->setObjectName("bodyText");
@@ -128,12 +150,33 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
         tr("Protocol anti-Sybil work (AccountCreationWork) keeps mass registrations out."),
         tr("A successful creation automatically funds your SystemBalance from the OnboardingPool."),
     };
-    QStringList bullets;
-    for (const QString& fact : facts) bullets.append(QStringLiteral("\u2022 %1").arg(fact));
-    auto* how_body = new QLabel{bullets.join(QStringLiteral("\n")), how_card};
-    how_body->setObjectName("bodyText");
-    how_body->setWordWrap(true);
-    how_layout->addWidget(how_body);
+    for (const QString& fact : facts) {
+        auto* bullet = new QLabel{QStringLiteral("\u2022 %1").arg(fact), how_card};
+        bullet->setObjectName("bodyText");
+        bullet->setWordWrap(true);
+        how_layout->addWidget(bullet);
+    }
+
+    auto* econ_card = new QFrame{this};
+    econ_card->setObjectName("card");
+    auto* econ_layout = new QVBoxLayout{econ_card};
+    econ_layout->setContentsMargins(22, 20, 22, 20);
+    econ_layout->setSpacing(10);
+    auto* econ_title = new QLabel{tr("Onboarding economics"), econ_card};
+    econ_title->setObjectName("sectionTitle");
+    econ_layout->addWidget(econ_title);
+    const QStringList econ_facts{
+        tr("DEV, Beta and Mainnet run separate economic parameters and a separate genesis."),
+        tr("Beta balances do not carry over to Mainnet."),
+        tr("The Mainnet onboarding bonus is frozen until aggregate Beta operational data exists."),
+        tr("Services consume SystemBalance — there are no service-specific free credits."),
+    };
+    for (const QString& fact : econ_facts) {
+        auto* bullet = new QLabel{QStringLiteral("\u2022 %1").arg(fact), econ_card};
+        bullet->setObjectName("bodyText");
+        bullet->setWordWrap(true);
+        econ_layout->addWidget(bullet);
+    }
 
     auto* dev_card = new QFrame{this};
     dev_card->setObjectName("card");
@@ -149,6 +192,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     dev_layout->addWidget(dev_body);
 
     side->addWidget(how_card);
+    side->addWidget(econ_card);
     side->addWidget(dev_card);
     side->addStretch();
     content->addLayout(side, 2);
@@ -163,6 +207,7 @@ void IdentityPage::rebuildForState(CybouIdentityState state)
     const bool creating = state != CybouIdentityState::None && state != CybouIdentityState::Active;
     const bool active = state == CybouIdentityState::Active;
     m_phase_row->setVisible(creating);
+    m_steps->setVisible(state == CybouIdentityState::None);
     m_active_details->setVisible(active);
     m_dev_warning->setVisible(active);
     m_create_button->setVisible(!active);
@@ -198,7 +243,7 @@ void IdentityPage::refresh()
         m_state_label->setText(tr("Identity active"));
         m_detail_label->setText(tr("Your CYBOU identity is registered on the network."));
         m_active_details->setText(
-            tr("AccountID: %1\nCreation height: %2\nNetwork: %3")
+            tr("AccountID: %1\nCreation height: %2\nNetwork: %3\nSystemBalance was funded atomically from the OnboardingPool at creation.")
                 .arg(status.account_id)
                 .arg(status.creation_height)
                 .arg(status.network_name));
@@ -207,7 +252,23 @@ void IdentityPage::refresh()
 
     if (status.identity_state != CybouIdentityState::None) {
         m_state_label->setText(tr("Creating identity"));
-        m_detail_label->setText(tr("Your identity is being registered through a permissionless protocol operation."));
+        switch (status.identity_state) {
+        case CybouIdentityState::CreatingKeys:
+            m_detail_label->setText(tr("Keys are being generated on this device. They never leave it — losing them means losing the identity."));
+            break;
+        case CybouIdentityState::PerformingWork:
+            m_detail_label->setText(tr("The node is performing AccountCreationWork — protocol anti-Sybil computation. One identity costs real work, so mass registrations stay out."));
+            break;
+        case CybouIdentityState::Broadcasting:
+            m_detail_label->setText(tr("The signed AccountCreateOp is being broadcast to the validator set."));
+            break;
+        case CybouIdentityState::WaitingForFinality:
+            m_detail_label->setText(tr("Waiting for a BFT finality certificate. The account becomes real only once validators commit the block — this page flips to Active at that point."));
+            break;
+        case CybouIdentityState::Active:
+        case CybouIdentityState::None:
+            break;
+        }
         return;
     }
 

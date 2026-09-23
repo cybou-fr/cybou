@@ -29,6 +29,7 @@ private:
     QLabel* m_dev_warning;
     QPushButton* m_create_button;
     QWidget* m_phase_row;
+    QWidget* m_steps;
     QVector<QLabel*> m_phases;
 
     void refresh();

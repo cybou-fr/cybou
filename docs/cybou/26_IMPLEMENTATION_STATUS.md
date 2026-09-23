@@ -164,6 +164,7 @@ Implemented skeleton:
 Desktop GUI:
 
 - native wallet page and Home balance card surfacing `Balance` / `System Balance` per doc 52 (whole-CYBOU rendering, one-way lock labeling, local activity ledger, capability-gated actions);
+- Identity page walking the full AccountCreateOp flow (local keys, AccountCreationWork, broadcast, BFT finality, atomic OnboardingPool funding) with per-phase explanations and onboarding economics (DEV/Beta/Mainnet separation, no carry-over, no free credits);
 - full Email client UI enforcing MailTx rules (one recipient, text-only, strict size meter, deterministic size-aware fee line, local read-state);
 - Storage and Backup client UIs (opaque content-addressed object list with pin/prune retention; encrypted backup sets with identity-key restore binding);
 - Network page with explicit-BFT finality section (finalized height, validator count, f = 1 ≥ 4 validators rule) fed by the doc 73 status contract;
