@@ -70,4 +70,10 @@ voucher:
     persistent_record: consumed_voucher_id_only
     state_encoding: CYBOU/STATE/INVITE-REDEMPTION/V1
     state_hash: domain_separated_sha256
+    bootstrap_persistence:
+      backend: LevelDB
+      write: synchronous_atomic_batch
+      records: [canonical_state, state_hash]
+      load_requires_hash_match: true
+      final_block_integration: pending
   crypto_verification_status: TYPED_VERIFIER_BOUNDARY_PROVIDER_PENDING

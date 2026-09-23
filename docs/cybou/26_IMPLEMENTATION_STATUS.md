@@ -114,9 +114,10 @@ Implemented skeleton:
 - atomic one-time Welcome Grant transition from OnboardingPool to System Balance;
 - consensus replay set keyed only by consumed voucher ID.
 - canonical versioned redemption-state encoding and domain-separated state hash.
+- atomic LevelDB snapshot persistence with paired state/hash verification.
 
 Not yet implemented:
 
 - AccountID;
 - production Operator Authority signature verification;
-- production persistence/integration of the voucher redemption state.
+- integration of the voucher state store into finalized block application and rollback.

@@ -185,6 +185,7 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   blockencodings.cpp
   blockfilter.cpp
   consensus/tx_verify.cpp
+  cybou/state_store.cpp
   dbwrapper.cpp
   deploymentstatus.cpp
   flatfile.cpp
