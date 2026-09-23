@@ -19,16 +19,20 @@
 #include <QApplication>
 #include <QButtonGroup>
 #include <QCloseEvent>
+#include <QDir>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QPixmap>
+#include <QProcessEnvironment>
+#include <QRegularExpression>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
 #include <QSystemTrayIcon>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -69,6 +73,26 @@ CybouMainWindow::CybouMainWindow(
     buildMenus();
     applyStyle();
     buildTrayMenu();
+
+    // Dev-only screenshot harness: capture every page and quit.
+    const auto shot_dir = QProcessEnvironment::systemEnvironment().value(QStringLiteral("CYBOU_SCREENSHOT_DIR"));
+    if (!shot_dir.isEmpty()) {
+        QTimer::singleShot(2500, this, [this, shot_dir] {
+            QDir{}.mkpath(shot_dir);
+            for (int i = 0; i < m_pages->count(); ++i) {
+                m_pages->setCurrentIndex(i);
+                if (auto* button = m_navigation->button(i)) button->setChecked(true);
+                qApp->processEvents();
+                QString slug = m_navigation->button(i) ? m_navigation->button(i)->text() : QStringLiteral("page-%1").arg(i);
+                slug = slug.toLower();
+                slug.replace(QRegularExpression(QStringLiteral("[^a-z0-9]+")), QStringLiteral("-"));
+                slug = slug.mid(0, 24).replace(QRegularExpression(QStringLiteral("(^-|-$)")), QStringLiteral(""));
+                if (slug.isEmpty()) slug = QStringLiteral("page-%1").arg(i);
+                this->grab().save(QDir{shot_dir}.filePath(QStringLiteral("%1-%2.png").arg(i).arg(slug)));
+            }
+            qApp->quit();
+        });
+    }
 }
 
 void CybouMainWindow::setClientModel(ClientModel* client_model, interfaces::BlockAndHeaderTipInfo* tip_info)

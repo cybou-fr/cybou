@@ -11,6 +11,9 @@
 
 class CybouDesktopModel;
 class QCheckBox;
+class QLabel;
+class QLineEdit;
+class QSpinBox;
 
 class SettingsPage : public QWidget
 {
@@ -21,6 +24,11 @@ public:
 private:
     CybouDesktopModel* const m_model;
     QCheckBox* m_run_in_background;
+    QCheckBox* m_proxy_enabled;
+    QLineEdit* m_proxy_host;
+    QSpinBox* m_proxy_port;
+    QCheckBox* m_listen;
+    QLabel* m_data_directory;
     const std::function<void()> m_preferences_requested;
     const std::function<void()> m_diagnostics_requested;
 

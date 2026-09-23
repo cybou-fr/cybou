@@ -55,9 +55,10 @@ QString CybouTheme::applicationStyleSheet()
         QLabel#brandCaption { font-size: 11px; font-weight: 700; color: @teal_dark@; }
         QLabel#sidebarFootnote { color: @text_muted@; font-size: 12px; line-height: 1.4; }
 
-        QToolButton { border: 0; border-radius: 10px; padding: 9px 12px; text-align: left; color: @text_secondary@; font-size: 14px; }
+        QToolButton { border: 1px solid transparent; border-radius: 10px; padding: 9px 12px; text-align: left; color: @text_secondary@; font-size: 14px; }
         QToolButton:hover { background: @surface@; color: @teal_dark@; }
         QToolButton:checked { background: @mint_soft@; color: @teal_dark@; font-weight: 700; }
+        QToolButton:focus { border-color: @teal@; color: @teal_dark@; }
         QFrame#separator { color: @border@; }
 
         QFrame#card { background: @canvas@; border: 1px solid @border@; border-radius: 14px; }
@@ -85,13 +86,31 @@ QString CybouTheme::applicationStyleSheet()
         QPushButton { min-height: 34px; border-radius: 8px; padding: 4px 16px; font-weight: 700; }
         QPushButton#primaryButton { background: @teal@; color: white; border: 1px solid @teal@; }
         QPushButton#primaryButton:hover { background: @teal_dark@; border-color: @teal_dark@; }
+        QPushButton#primaryButton:pressed { background: @mint@; border-color: @mint@; }
+        QPushButton#primaryButton:focus { border-color: @teal_dark@; }
         QPushButton#secondaryButton { background: @canvas@; color: @teal_dark@; border: 1px solid @border_medium@; }
         QPushButton#secondaryButton:hover { background: @mint_ghost@; border-color: @mint@; }
+        QPushButton#secondaryButton:pressed { background: @mint_soft@; }
+        QPushButton#secondaryButton:focus { border-color: @teal@; }
         QPushButton:disabled { background: @surface@; color: @dim@; border-color: @border@; }
+
+        QLineEdit, QSpinBox { background: @canvas@; border: 1px solid @border_medium@; border-radius: 8px; padding: 6px 10px; color: @text_primary@; font-size: 14px; min-height: 22px; }
+        QLineEdit:focus, QSpinBox:focus { border-color: @teal@; }
+        QLineEdit:disabled, QSpinBox:disabled { background: @surface@; color: @dim@; }
+        QSpinBox::up-button, QSpinBox::down-button { width: 18px; border-left: 1px solid @border@; background: @surface@; position: absolute; right: 0; }
+        QSpinBox::up-button { top: 0; bottom: 50%; border-top-right-radius: 7px; }
+        QSpinBox::down-button { top: 50%; bottom: 0; border-bottom-right-radius: 7px; }
+        QSpinBox::up-button:hover, QSpinBox::down-button:hover { background: @mint_ghost@; }
+        QSpinBox::up-arrow { image: none; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 5px solid @text_muted@; }
+        QSpinBox::down-arrow { image: none; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid @text_muted@; }
 
         QCheckBox { color: @text_primary@; font-size: 14px; spacing: 8px; }
         QCheckBox::indicator { width: 18px; height: 18px; border-radius: 5px; border: 1px solid @border_medium@; background: @canvas@; }
+        QCheckBox::indicator:hover { border-color: @teal@; }
         QCheckBox::indicator:checked { background: @teal@; border-color: @teal@; }
+        QCheckBox::indicator:checked:hover { background: @teal_dark@; border-color: @teal_dark@; }
+        QCheckBox:focus { color: @teal_dark@; }
+        QCheckBox:focus::indicator { border-color: @teal@; }
     )")};
 
     const auto set = [&sheet](const QString& token, const QString& value) {
