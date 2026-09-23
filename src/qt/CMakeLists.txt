@@ -85,6 +85,8 @@ add_library(bitcoinqt STATIC EXCLUDE_FROM_ALL
   cyboudesktopmodel.h
   cyboumainwindow.cpp
   cyboumainwindow.h
+  cyboutheme.cpp
+  cyboutheme.h
   csvmodelwriter.cpp
   csvmodelwriter.h
   freespacechecker.cpp
@@ -160,6 +162,7 @@ set_property(SOURCE macnotificationhandler.mm
 target_link_libraries(bitcoinqt
   PUBLIC
     Qt6::Widgets
+    Qt6::Svg
   PRIVATE
     core_interface
     bitcoin_cli
