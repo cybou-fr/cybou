@@ -1554,7 +1554,10 @@ BOOST_AUTO_TEST_CASE(v2transport_test)
     // Send wrong network's V1 header
     {
         V2TransportTester tester(m_rng, false);
-        tester.SendV1Version(CChainParams::Main()->MessageStart());
+        // CYBOU: only one network remains, so use the historic Bitcoin mainnet
+        // message start as a guaranteed-foreign magic.
+        constexpr MessageStartChars BITCOIN_MAINNET_MSG_START{0xf9, 0xbe, 0xb4, 0xd9};
+        tester.SendV1Version(BITCOIN_MAINNET_MSG_START);
         auto ret = tester.Interact();
         BOOST_CHECK(!ret);
     }

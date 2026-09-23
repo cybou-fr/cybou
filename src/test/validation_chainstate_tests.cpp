@@ -96,6 +96,13 @@ BOOST_FIXTURE_TEST_CASE(connect_tip_does_not_cache_inputs_on_failed_connect, Tes
 //! of what it does for the active chainstate.
 BOOST_FIXTURE_TEST_CASE(chainstate_update_tip, TestChain100Setup)
 {
+    // SKIPPED on CYBOU-DEV: snapshot activation requires assumeutxo data in
+    // chainparams, and CYBOU-DEV deliberately ships none (see
+    // cybou_chainparams_tests). assumeutxo is transitional and is replaced
+    // by the CYBOU bootstrap/checkpoint policy at v0.0.4
+    // (spec/bitcoin_code_removal.yaml). Revisit this test then.
+    BOOST_TEST_MESSAGE("skipping: no assumeutxo data on CYBOU-DEV");
+    if (Params().GetAvailableSnapshotHeights().empty()) return;
     ChainstateManager& chainman = *Assert(m_node.chainman);
     const auto get_notify_tip{[&]() {
         LOCK(m_node.notifications->m_tip_block_mutex);

@@ -39,7 +39,10 @@ BOOST_AUTO_TEST_CASE(key_io_valid_parse)
         const std::vector<std::byte> exp_payload{ParseHex<std::byte>(test[1].get_str())};
         const UniValue &metadata = test[2].get_obj();
         bool isPrivkey = metadata.find_value("isPrivkey").get_bool();
-        SelectParams(ChainTypeFromString(metadata.find_value("chain").get_str()).value());
+        // CYBOU: only the single main network remains; vectors for removed
+        // networks (testnet/testnet4/signet/regtest) are skipped.
+        if (metadata.find_value("chain").get_str() != "main") continue;
+        SelectParams(ChainType::MAIN);
         bool try_case_flip = metadata.find_value("tryCaseFlip").isNull() ? false : metadata.find_value("tryCaseFlip").get_bool();
         if (isPrivkey) {
             bool isCompressed = metadata.find_value("isCompressed").get_bool();
@@ -98,7 +101,10 @@ BOOST_AUTO_TEST_CASE(key_io_valid_gen)
         std::vector<unsigned char> exp_payload = ParseHex(test[1].get_str());
         const UniValue &metadata = test[2].get_obj();
         bool isPrivkey = metadata.find_value("isPrivkey").get_bool();
-        SelectParams(ChainTypeFromString(metadata.find_value("chain").get_str()).value());
+        // CYBOU: only the single main network remains; vectors for removed
+        // networks (testnet/testnet4/signet/regtest) are skipped.
+        if (metadata.find_value("chain").get_str() != "main") continue;
+        SelectParams(ChainType::MAIN);
         if (isPrivkey) {
             bool isCompressed = metadata.find_value("isCompressed").get_bool();
             CKey key;

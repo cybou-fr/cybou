@@ -562,6 +562,7 @@ void MinerTestingSetup::TestBasicMining(const CScript& scriptPubKey, const std::
     tx.vout[0].scriptPubKey = CScript() << OP_1;
     tx.nLockTime = 0;
     hash = tx.GetHash();
+    const CTransaction tx_relative_height_locked{tx};
     TryAddToMempool(tx_mempool, entry.Fee(HIGHFEE).Time(Now<NodeSeconds>()).SpendsCoinbase(true).FromTx(tx));
     BOOST_CHECK(CheckFinalTxAtTip(*Assert(m_node.chainman->ActiveChain().Tip()), CTransaction{tx})); // Locktime passes
     BOOST_CHECK(!TestSequenceLocks(CTransaction{tx}, tx_mempool)); // Sequence locks fail
@@ -576,6 +577,7 @@ void MinerTestingSetup::TestBasicMining(const CScript& scriptPubKey, const std::
     tx.vin[0].nSequence = CTxIn::SEQUENCE_LOCKTIME_TYPE_FLAG | (((m_node.chainman->ActiveChain().Tip()->GetMedianTimePast()+1-m_node.chainman->ActiveChain()[1]->GetMedianTimePast()) >> CTxIn::SEQUENCE_LOCKTIME_GRANULARITY) + 1); // txFirst[1] is the 3rd block
     prevheights[0] = baseheight + 2;
     hash = tx.GetHash();
+    const CTransaction tx_relative_time_locked{tx};
     TryAddToMempool(tx_mempool, entry.Time(Now<NodeSeconds>()).FromTx(tx));
     BOOST_CHECK(CheckFinalTxAtTip(*Assert(m_node.chainman->ActiveChain().Tip()), CTransaction{tx})); // Locktime passes
     BOOST_CHECK(!TestSequenceLocks(CTransaction{tx}, tx_mempool)); // Sequence locks fail
@@ -633,15 +635,24 @@ void MinerTestingSetup::TestBasicMining(const CScript& scriptPubKey, const std::
     tx.vin[0].nSequence = CTxIn::SEQUENCE_LOCKTIME_TYPE_FLAG | 1;
     BOOST_CHECK(!TestSequenceLocks(CTransaction{tx}, tx_mempool)); // Sequence locks fail
 
+    // CYBOU: BIP68 is active from height 1 on CYBOU-DEV, so the two
+    // relative-locked transactions added above (which bypassed mempool
+    // consensus checks via TryAddToMempool) can never be mined at tip+1 and
+    // would make the template fail TestBlockValidity with "bad-txns-nonfinal".
+    // A real node's mempool would never contain them (AcceptToMemoryPool
+    // rejects non-BIP68-final transactions), so drop them here; upstream's
+    // "valid template until BIP68 soft fork" assumption does not apply.
+    tx_mempool.removeRecursive(tx_relative_height_locked, MemPoolRemovalReason::REPLACED);
+    tx_mempool.removeRecursive(tx_relative_time_locked, MemPoolRemovalReason::REPLACED);
+
     auto block_template = mining->createNewBlock(options, /*cooldown=*/false);
     BOOST_REQUIRE(block_template);
 
-    // None of the of the absolute height/time locked tx should have made
-    // it into the template because we still check IsFinalTx in CreateNewBlock,
-    // but relative locked txs will if inconsistently added to mempool.
-    // For now these will still generate a valid template until BIP68 soft fork
+    // None of the absolute height/time locked txs should have made it into
+    // the template because we still check IsFinalTx in CreateNewBlock, and on
+    // CYBOU-DEV the relative-locked ones were removed above.
     CBlock block{block_template->getBlock()};
-    BOOST_CHECK_EQUAL(block.vtx.size(), 3U);
+    BOOST_CHECK_EQUAL(block.vtx.size(), 1U);
     // However if we advance height by 1 and time by SEQUENCE_LOCK_TIME, all of them should be mined
     for (int i = 0; i < CBlockIndex::nMedianTimeSpan; ++i) {
         CBlockIndex* ancestor{Assert(m_node.chainman->ActiveChain().Tip()->GetAncestor(m_node.chainman->ActiveChain().Tip()->nHeight - i))};
@@ -653,7 +664,9 @@ void MinerTestingSetup::TestBasicMining(const CScript& scriptPubKey, const std::
     block_template = mining->createNewBlock(options, /*cooldown=*/false);
     BOOST_REQUIRE(block_template);
     block = block_template->getBlock();
-    BOOST_CHECK_EQUAL(block.vtx.size(), 5U);
+    // CYBOU: only the two absolute-locked txs become minable here (the
+    // relative-locked ones were removed above), so coinbase + 2 txs.
+    BOOST_CHECK_EQUAL(block.vtx.size(), 3U);
 }
 
 void MinerTestingSetup::TestPrioritisedMining(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst)
@@ -818,16 +831,35 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
             block.nVersion = VERSIONBITS_TOP_BITS;
             block.nTime = Assert(m_node.chainman)->ActiveChain().Tip()->GetMedianTimePast()+1;
             txCoinbase.version = 1;
-            txCoinbase.vin[0].scriptSig = CScript{} << (current_height + 1) << bi.extranonce;
+            // CYBOU: BIP34 is active from height 1 on CYBOU-DEV (unlike
+            // regtest, where the coinbase height is not enforced early), so
+            // the coinbase must carry the actual block height. The template
+            // (either freshly created on even iterations or obtained via
+            // waitNext() on odd ones) is always built on the current tip, so
+            // the new block's height is current_height + 1 in both cases.
+            const int block_height{current_height + 1};
+            txCoinbase.vin[0].scriptSig = CScript{} << block_height << bi.extranonce;
             txCoinbase.vout.resize(1); // Ignore the (optional) segwit commitment added by CreateNewBlock (as the hardcoded nonces don't account for this)
             txCoinbase.vout[0].scriptPubKey = CScript();
+            // CYBOU: with segwit active from height 0 (SegwitHeight=0), a block
+            // whose coinbase carries the witness reserved value but no witness
+            // commitment output is rejected as "unexpected-witness". Drop the
+            // reserved value together with the commitment output above.
+            txCoinbase.vin[0].scriptWitness.SetNull();
             block.vtx[0] = MakeTransactionRef(txCoinbase);
             if (txFirst.size() == 0)
                 baseheight = current_height;
             if (txFirst.size() < 4)
                 txFirst.push_back(block.vtx[0]);
             block.hashMerkleRoot = BlockMerkleRoot(block);
-            block.nNonce = bi.nonce;
+            // CYBOU: the hardcoded nonces belong to the removed Bitcoin regtest
+            // chain. The extranonces above keep the test deterministic; find a
+            // valid nonce for the CYBOU-DEV chain instead (its pow limit is
+            // regtest-like, so this terminates almost immediately).
+            block.nNonce = 0;
+            while (!CheckProofOfWork(block.GetHash(), block.nBits, Assert(m_node.chainman)->GetConsensus())) {
+                ++block.nNonce;
+            }
         }
         std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(block);
         // Alternate calls between Chainman's ProcessNewBlock and submitSolution

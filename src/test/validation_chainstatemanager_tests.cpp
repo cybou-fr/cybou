@@ -183,8 +183,17 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_ibd_exit_after_loading_blocks, ChainTe
         chainman.m_cached_is_ibd.store(cached_is_ibd, std::memory_order_relaxed);
         chainman.m_blockman.m_importing = loading_blocks;
         if (tip_exists) {
-            tip.nChainWork = chainman.MinimumChainWork() - (enough_work ? 0 : 1);
-            tip.nTime = (recent_time - (tip_recent ? 0h : 100h)).time_since_epoch().count();
+            // CYBOU: on CYBOU-DEV MinimumChainWork() is zero, so no chain can
+            // have less work than the minimum; guard the "insufficient work"
+            // case (and avoid the arith_uint256 underflow it would cause).
+            const bool can_have_insufficient_work{chainman.MinimumChainWork() != arith_uint256{}};
+            arith_uint256 tip_work{chainman.MinimumChainWork()};
+            if (!enough_work && can_have_insufficient_work) tip_work -= 1;
+            tip.nChainWork = tip_work;
+            // Use a +/-1h margin around the max_tip_age boundary: the test and
+            // IsTipRecent() take their "now" reading at slightly different
+            // moments, so pinning the tip exactly to the boundary races.
+            tip.nTime = (recent_time + (tip_recent ? 1h : -100h)).time_since_epoch().count();
             chainman.ActiveChain().SetTip(tip);
         } else {
             assert(!chainman.ActiveChain().Tip());
@@ -198,7 +207,10 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_ibd_exit_after_loading_blocks, ChainTe
                 for (const bool enough_work : {false, true}) {
                     for (const bool tip_recent : {false, true}) {
                         apply(cached_is_ibd, loading_blocks, tip_exists, enough_work, tip_recent);
-                        const bool expected_ibd = cached_is_ibd && (loading_blocks || !tip_exists || !enough_work || !tip_recent);
+                        // CYBOU: with a zero MinimumChainWork, "insufficient work"
+                        // is not expressible and must not be expected to hold.
+                        const bool can_have_insufficient_work{chainman.MinimumChainWork() != arith_uint256{}};
+                        const bool expected_ibd = cached_is_ibd && (loading_blocks || !tip_exists || (can_have_insufficient_work && !enough_work) || !tip_recent);
                         BOOST_CHECK_EQUAL(chainman.IsInitialBlockDownload(), expected_ibd);
                     }
                 }
