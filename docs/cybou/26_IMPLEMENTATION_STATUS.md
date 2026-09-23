@@ -116,6 +116,7 @@ Implemented skeleton:
 - canonical versioned redemption-state encoding and domain-separated state hash.
 - atomic LevelDB snapshot persistence with paired state/hash verification.
 - GitHub Actions headless build gate for CYBOU protocol unit tests.
+- fixed-difficulty transition enforcement and deterministic 100-block fixture hash.
 
 Not yet implemented:
 

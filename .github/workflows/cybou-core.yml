@@ -59,5 +59,5 @@ jobs:
       - name: Run CYBOU protocol tests
         run: |
           build-ci/bin/test_bitcoin \
-            --run_test=cybou_chainparams_tests,cybou_signing_tests,cybou_identity_tests,cybou_state_tests,cybou_state_store_tests \
+            --run_test=cybou_chainparams_tests,cybou_signing_tests,cybou_identity_tests,cybou_state_tests,cybou_state_store_tests,headers_sync_chainwork_tests \
             --log_level=error

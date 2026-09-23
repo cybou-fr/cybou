@@ -4,8 +4,12 @@
 
 #include <chainparamsbase.h>
 #include <clientversion.h>
+#include <consensus/consensus.h>
 #include <kernel/chainparams.h>
+#include <pow.h>
+#include <test/util/setup_common.h>
 #include <uint256.h>
+#include <validation.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -39,6 +43,27 @@ BOOST_AUTO_TEST_CASE(product_identity_is_cybou)
     BOOST_CHECK_EQUAL(FormatFullVersion(), "v0.0.2");
     BOOST_CHECK_EQUAL(UA_NAME, "CYBOU");
     BOOST_CHECK_EQUAL(FormatSubVersion(UA_NAME, CLIENT_VERSION, {}), "/CYBOU:0.0.2/");
+}
+
+BOOST_AUTO_TEST_CASE(fixed_difficulty_rejects_every_nbits_change)
+{
+    const auto params{CChainParams::Main()};
+    const auto& consensus{params->GetConsensus()};
+    const uint32_t bits{params->GenesisBlock().nBits};
+
+    BOOST_REQUIRE(consensus.fPowNoRetargeting);
+    BOOST_CHECK(PermittedDifficultyTransition(consensus, consensus.DifficultyAdjustmentInterval(), bits, bits));
+    BOOST_CHECK(!PermittedDifficultyTransition(consensus, consensus.DifficultyAdjustmentInterval(), bits, bits - 1));
+    BOOST_CHECK(!PermittedDifficultyTransition(consensus, consensus.DifficultyAdjustmentInterval() + 1, bits, bits + 1));
+}
+
+BOOST_FIXTURE_TEST_CASE(deterministic_100_block_fixture, TestChain100Setup)
+{
+    LOCK(::cs_main);
+    BOOST_REQUIRE_EQUAL(m_node.chainman->ActiveChain().Height(), COINBASE_MATURITY);
+    BOOST_CHECK_EQUAL(
+        m_node.chainman->ActiveChain().Tip()->GetBlockHash().GetHex(),
+        "3bc6d2c27c8d18621daf8adf75568adf0cdcca846f712b0da42c82970e875fa5");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

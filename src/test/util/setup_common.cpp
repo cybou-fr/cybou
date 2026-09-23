@@ -393,12 +393,11 @@ TestChain100Setup::TestChain100Setup(
 
     {
         LOCK(::cs_main);
-        // The inherited test pinned the Bitcoin regtest tip hash here. That is
-        // impossible on CYBOU-DEV: mineBlocks advances mocktime by the real
-        // wall clock, so timestamps (and therefore the tip hash) vary between
-        // runs. Assert the invariant that actually matters for fixture users.
-        assert(m_node.chainman->ActiveChain().Height() == COINBASE_MATURITY);
-        assert(m_node.chainman->ActiveChain().Tip()->GetBlockHash() != Params().GenesisBlock().GetHash());
+        Assert(m_node.chainman->ActiveChain().Height() == COINBASE_MATURITY);
+        // Mock time advances deterministically, so pin the CYBOU-DEV fixture
+        // tip as a consensus-regression detector.
+        Assert(m_node.chainman->ActiveChain().Tip()->GetBlockHash() ==
+               uint256{"3bc6d2c27c8d18621daf8adf75568adf0cdcca846f712b0da42c82970e875fa5"});
     }
 }
 
