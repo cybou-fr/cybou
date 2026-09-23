@@ -103,6 +103,10 @@ Implemented skeleton:
 
 - distinct Operator Authority / Validator / Release Signing / Treasury domains;
 - bounded Invite Voucher envelope;
+- frozen versioned beneficiary/network-bound canonical voucher payload;
+- suite and authority-keyset binding in the signing preimage;
+- epoch-windowed Operator Authority keyset model;
+- strict structural requirement for both hybrid signature components;
 - exact 6,000 CYBOU structural grant check;
 - deterministic epoch expiry check;
 - consumed-voucher replay check;
@@ -111,6 +115,5 @@ Implemented skeleton:
 Not yet implemented:
 
 - AccountID;
-- beneficiary/network-bound canonical voucher payload;
 - production Operator Authority signature verification;
 - voucher redemption state transition.

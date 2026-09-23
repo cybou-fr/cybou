@@ -79,7 +79,7 @@ signature result is a test seam, not an authorization boundary. Production
 consensus must receive a typed verified result from the Operator Authority
 verifier after canonical serialization and domain-separated verification.
 
-For rare Operator Authority operations, a hybrid classical + post-quantum
-profile is preferred for evaluation. `Ed25519 + ML-DSA-65` with both signatures
-required is a candidate, not yet frozen. MailTx, BFT votes and release signing
-remain separate performance/security profiles.
+For rare Operator Authority operations, V1 freezes `Ed25519 + ML-DSA-65` with
+both signatures required. The signature bundle names an epoch-windowed keyset
+containing both public keys. MailTx, BFT votes and release signing remain
+separate performance/security profiles.

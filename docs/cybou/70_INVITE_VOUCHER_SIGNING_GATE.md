@@ -3,7 +3,8 @@
 ## Status
 
 This document records the implementation gate discovered during the v0.0.3
-audit. It does not freeze a signature algorithm or final consensus bytes.
+audit. The Operator Authority V1 envelope is frozen; cryptographic verification
+and the redemption state transition are not yet production-ready.
 
 ## Threats closed by the gate
 
@@ -35,7 +36,18 @@ organization presence flag
 organization_id when present
 ```
 
-The signature bundle is outside the payload it authenticates.
+The signature bundle is outside the canonical payload, but its suite and
+authority keyset identity are themselves covered by the signed preimage:
+
+```text
+object_signing_domain
+|| signature_suite_id_le16
+|| authority_keyset_id
+|| canonical_payload
+```
+
+For V1, `network_id` is the genesis block hash. A replacement genesis therefore
+creates a new replay domain.
 
 ## Required processing order
 
@@ -75,12 +87,12 @@ notes that a classical and post-quantum signature can be combined by requiring
 both to verify. NIST FIPS 204 standardizes ML-DSA. OpenSSL 3.5 exposes ML-DSA
 support and is an implementation candidate, not a protocol dependency.
 
-`Ed25519 + ML-DSA-65` is retained as a candidate for Operator Authority
-benchmarking and security review. It is not frozen until CYBOU evaluates exact
-sizes, component-key binding, failure semantics, library behavior, test vectors
-and the then-current standards status. Current IETF composite ML-DSA work must
-be treated according to its publication status at freeze time; a changing draft
-must not be copied into immutable consensus bytes.
+Operator Authority V1 freezes `Ed25519 + ML-DSA-65`, with both component
+signatures required. Each bundle identifies an epoch-windowed authority keyset
+containing both public keys, so historical vouchers remain verifiable after
+rotation. This profile is not automatically inherited by MailTx, BFT votes,
+release signing, or future authority-suite versions. Current IETF composite
+ML-DSA work is not copied into these immutable V1 bytes.
 
 ## Current code rule
 

@@ -16,15 +16,25 @@ voucher:
   signature_sizes:
     ed25519: 64
     mldsa65: 3309
+  authority_keyset:
+    keyset_id: hash32
+    ed25519_public_key_bytes: 32
+    mldsa65_public_key_bytes: 1952
+    epoch_window: active_from_inclusive_retired_from_exclusive
   payload_encoding:
     description: >-
-      Signed message is object_signing_domain || canonical_payload.
-      canonical_payload is a fixed-layout byte string: three 32-byte hashes
+      Signed message is object_signing_domain || signature_suite_id_le16 ||
+      authority_keyset_id || canonical_payload. canonical_payload is a
+      fixed-layout byte string: one version byte, three 32-byte hashes
       in internal byte order, uint64 little-endian, one presence flag byte,
       optional 32-byte organization_id. No dynamic-length fields.
     layout:
+    - field: payload_version
+      type: uint8
+      must_equal: 1
     - field: network_id
       type: hash32
+      semantics: genesis_block_hash
     - field: voucher_id
       type: hash32
     - field: beneficiary_account_id
@@ -40,7 +50,7 @@ voucher:
     - field: organization_id
       type: hash32
       present_if: organization_present == 1
-    size_bytes: [113, 145]
+    size_bytes: [114, 146]
   fields:
   - payload_version
   - network_id

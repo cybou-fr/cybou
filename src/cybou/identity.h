@@ -27,6 +27,7 @@ enum class OperatorKeyDomain : uint8_t {
 std::string_view KeyDomainTag(OperatorKeyDomain domain);
 
 inline constexpr uint64_t WELCOME_GRANT{6000};
+inline constexpr uint8_t INVITE_VOUCHER_PAYLOAD_VERSION{1};
 
 /**
  * Canonical Invite Voucher payload, version 1.
@@ -40,6 +41,7 @@ inline constexpr uint64_t WELCOME_GRANT{6000};
  * beneficiary_account_id binds it to one account (anti bearer interception).
  */
 struct InviteVoucherPayloadV1 {
+    uint8_t payload_version{INVITE_VOUCHER_PAYLOAD_VERSION};
     uint256 network_id;
     uint256 voucher_id;
     uint256 beneficiary_account_id;
@@ -48,13 +50,16 @@ struct InviteVoucherPayloadV1 {
     std::optional<uint256> organization_id;
 };
 
-/** Canonical size without organization_id: 3*32 + 8 + 8 + 1. */
-inline constexpr size_t INVITE_VOUCHER_PAYLOAD_BASE_SIZE{113};
+/** Canonical size without organization_id: 1 + 3*32 + 8 + 8 + 1. */
+inline constexpr size_t INVITE_VOUCHER_PAYLOAD_BASE_SIZE{114};
 
 std::vector<unsigned char> SerializeInviteVoucherPayload(const InviteVoucherPayloadV1& payload);
 
-/** Domain-separated signing message: tag || canonical payload. */
-std::vector<unsigned char> InviteVoucherSigMessage(const InviteVoucherPayloadV1& payload);
+/** Signing message: domain || suite_id_le16 || keyset_id || canonical payload. */
+std::vector<unsigned char> InviteVoucherSigMessage(
+    const InviteVoucherPayloadV1& payload,
+    SignatureSuiteId suite_id,
+    const uint256& authority_keyset_id);
 
 struct InviteVoucher {
     InviteVoucherPayloadV1 payload;
@@ -73,6 +78,7 @@ struct InviteVoucherValidationContext {
 
 enum class InviteVoucherError : uint8_t {
     NONE,
+    UNSUPPORTED_PAYLOAD_VERSION,
     NULL_VOUCHER_ID,
     NULL_BENEFICIARY,
     NETWORK_MISMATCH,

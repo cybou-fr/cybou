@@ -5,9 +5,12 @@
 #ifndef CYBOU_SIGNING_H
 #define CYBOU_SIGNING_H
 
+#include <uint256.h>
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 namespace cybou {
@@ -37,6 +40,18 @@ enum class SignatureSuiteId : uint16_t {
 
 inline constexpr size_t ED25519_SIGNATURE_SIZE{64};
 inline constexpr size_t MLDSA65_SIGNATURE_SIZE{3309};
+inline constexpr size_t ED25519_PUBLIC_KEY_SIZE{32};
+inline constexpr size_t MLDSA65_PUBLIC_KEY_SIZE{1952};
+
+struct OperatorAuthorityKeySet {
+    uint256 keyset_id;
+    std::array<unsigned char, ED25519_PUBLIC_KEY_SIZE> ed25519_public_key{};
+    std::array<unsigned char, MLDSA65_PUBLIC_KEY_SIZE> mldsa65_public_key{};
+    uint64_t active_from_epoch{0};
+    std::optional<uint64_t> retired_from_epoch;
+};
+
+bool IsActiveAtEpoch(const OperatorAuthorityKeySet& keyset, uint64_t epoch);
 
 /**
  * Hybrid signature bundle for HYBRID_ED25519_MLDSA65_V1.
@@ -47,11 +62,12 @@ inline constexpr size_t MLDSA65_SIGNATURE_SIZE{3309};
  */
 struct SignatureBundleV1 {
     SignatureSuiteId suite_id{SignatureSuiteId::HYBRID_ED25519_MLDSA65_V1};
+    uint256 authority_keyset_id;
     std::array<unsigned char, ED25519_SIGNATURE_SIZE> classical_signature{};
     std::array<unsigned char, MLDSA65_SIGNATURE_SIZE> pq_signature{};
 };
 
-/** Structural presence check: false when both signature parts are all zero. */
+/** Structural gate: known suite, non-null keyset, and BOTH signature parts. */
 bool IsPresent(const SignatureBundleV1& bundle);
 
 } // namespace cybou

@@ -34,6 +34,7 @@ std::vector<unsigned char> SerializeInviteVoucherPayload(const InviteVoucherPayl
     const auto append_u64le = [&out](const uint64_t value) {
         for (unsigned i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
     };
+    out.push_back(payload.payload_version);
     append_hash(payload.network_id);
     append_hash(payload.voucher_id);
     append_hash(payload.beneficiary_account_id);
@@ -44,10 +45,17 @@ std::vector<unsigned char> SerializeInviteVoucherPayload(const InviteVoucherPayl
     return out;
 }
 
-std::vector<unsigned char> InviteVoucherSigMessage(const InviteVoucherPayloadV1& payload)
+std::vector<unsigned char> InviteVoucherSigMessage(
+    const InviteVoucherPayloadV1& payload,
+    const SignatureSuiteId suite_id,
+    const uint256& authority_keyset_id)
 {
     const std::string_view tag{ObjectSigningDomainTag(ObjectSigningDomain::INVITE_VOUCHER)};
     std::vector<unsigned char> message{tag.begin(), tag.end()};
+    const auto suite{static_cast<uint16_t>(suite_id)};
+    message.push_back(static_cast<unsigned char>(suite));
+    message.push_back(static_cast<unsigned char>(suite >> 8));
+    message.insert(message.end(), authority_keyset_id.data(), authority_keyset_id.data() + uint256::size());
     const auto payload_bytes{SerializeInviteVoucherPayload(payload)};
     message.insert(message.end(), payload_bytes.begin(), payload_bytes.end());
     return message;
@@ -58,6 +66,7 @@ InviteVoucherError ValidateInviteVoucher(
     const InviteVoucherValidationContext& context)
 {
     const auto& payload{voucher.payload};
+    if (payload.payload_version != INVITE_VOUCHER_PAYLOAD_VERSION) return InviteVoucherError::UNSUPPORTED_PAYLOAD_VERSION;
     if (payload.voucher_id.IsNull()) return InviteVoucherError::NULL_VOUCHER_ID;
     if (payload.beneficiary_account_id.IsNull()) return InviteVoucherError::NULL_BENEFICIARY;
     if (payload.network_id != context.expected_network_id) return InviteVoucherError::NETWORK_MISMATCH;

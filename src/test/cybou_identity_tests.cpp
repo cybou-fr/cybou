@@ -32,6 +32,7 @@ cybou::InviteVoucher ValidVoucher()
         },
         .signature{},
     };
+    voucher.signature.authority_keyset_id = uint256::FromUserHex("04").value();
     voucher.signature.classical_signature[0] = 0x01;
     voucher.signature.pq_signature[0] = 0x01;
     return voucher;
@@ -130,7 +131,15 @@ BOOST_AUTO_TEST_CASE(invite_voucher_rejects_incomplete_envelopes)
     BOOST_CHECK(cybou::ValidateInviteVoucher(voucher, context) == cybou::InviteVoucherError::NULL_VOUCHER_ID);
 
     voucher = ValidVoucher();
+    voucher.payload.payload_version = 2;
+    BOOST_CHECK(cybou::ValidateInviteVoucher(voucher, context) == cybou::InviteVoucherError::UNSUPPORTED_PAYLOAD_VERSION);
+
+    voucher = ValidVoucher();
     voucher.signature = cybou::SignatureBundleV1{};
+    BOOST_CHECK(cybou::ValidateInviteVoucher(voucher, context) == cybou::InviteVoucherError::MISSING_AUTHORITY_SIGNATURE);
+
+    voucher = ValidVoucher();
+    voucher.signature.pq_signature.fill(0);
     BOOST_CHECK(cybou::ValidateInviteVoucher(voucher, context) == cybou::InviteVoucherError::MISSING_AUTHORITY_SIGNATURE);
 
     voucher = ValidVoucher();
