@@ -3,6 +3,8 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/bft.h>
+#include <cybou/bft_engine.h>
+#include <cybou/block.h>
 #include <cybou/network_definition.h>
 #include <cybou/signing.h>
 #include <cybou/state_store.h>
@@ -43,7 +45,7 @@ struct MockValidatorNode {
         const uint256 digest = cybou::ComputeBftCommitDigest(network_id, block_id, height, val_set_commitment);
         cybou::BftCommitVoteV1 vote;
         vote.validator_id = validator_id;
-        vote.signature = cybou::SignUserMessage(seed, digest).value();
+        vote.signature = *cybou::SignValidatorVote(seed, digest);
         return vote;
     }
 };
@@ -99,7 +101,7 @@ BOOST_AUTO_TEST_CASE(validator_set_invariants_and_serialization)
     // 1. Less than 4 validators
     cybou::ValidatorSetV1 too_small = val_set;
     too_small.validators.pop_back();
-    BOOST_CHECK(cybou::ValidateValidatorSet(too_small) == cybou::ValidatorSetValidationError::INSUFFICIENT_VALIDATORS);
+    BOOST_CHECK(cybou::ValidateValidatorSet(too_small) == cybou::ValidatorSetValidationError::INVALID_VALIDATOR_COUNT);
 
     // 2. Weight != 1 (Hard rule: equal validator weight = 1)
     cybou::ValidatorSetV1 unequal_weight = val_set;
@@ -265,8 +267,15 @@ BOOST_AUTO_TEST_CASE(bft_consensus_round_to_state_store_execution)
     BOOST_CHECK(head->block_id == genesis_block_id);
 
     // Round 1: Height 1 block proposal & BFT consensus with 3/4 votes
-    const uint256 block_1_id{uint256::FromUserHex("1001").value()};
     std::vector<cybou::ProtocolOperationV1> block_1_ops;
+    cybou::CybouBlockV1 block_1{
+        .version = cybou::CYBOU_BLOCK_VERSION,
+        .parent_block_id = genesis_block_id,
+        .height = 1,
+        .operations = block_1_ops,
+        .resulting_state_root = cybou::CybouStateHash(genesis_state),
+    };
+    const uint256 block_1_id = cybou::ComputeBlockId(block_1);
 
     cybou::BftFinalityCertificateV1 cert_1;
     cert_1.network_id = network_id;
@@ -284,16 +293,34 @@ BOOST_AUTO_TEST_CASE(bft_consensus_round_to_state_store_execution)
     BOOST_REQUIRE(cybou::VerifyFinalityCertificate(cert_1, val_set, network_id) ==
                   cybou::FinalityVerificationError::NONE);
 
-    // StateStore commit at finalized height 1 with previous_block_id = genesis
-    BOOST_REQUIRE(store.CommitFinalizedBlock(block_1_id, genesis_block_id, block_1_ops));
+    cybou::FinalizedBlockV1 finalized_1{
+        .block = block_1,
+        .certificate = cert_1,
+    };
+
+    // StateStore commit at finalized height 1
+    BOOST_REQUIRE(store.CommitFinalizedBlock(finalized_1, val_set));
     head = store.GetFinalizedHead();
     BOOST_REQUIRE(head.has_value());
     BOOST_CHECK_EQUAL(head->height, 1);
     BOOST_CHECK(head->block_id == block_1_id);
 
+    // Verify block was persisted and can be retrieved
+    const auto loaded_b1 = store.GetBlock(block_1_id);
+    BOOST_REQUIRE(loaded_b1.has_value());
+    BOOST_CHECK(loaded_b1->block == block_1);
+    BOOST_CHECK(loaded_b1->certificate == cert_1);
+
     // Round 2: Height 2 block proposal & BFT consensus with 4/4 unanimous votes
-    const uint256 block_2_id{uint256::FromUserHex("1002").value()};
     std::vector<cybou::ProtocolOperationV1> block_2_ops;
+    cybou::CybouBlockV1 block_2{
+        .version = cybou::CYBOU_BLOCK_VERSION,
+        .parent_block_id = block_1_id,
+        .height = 2,
+        .operations = block_2_ops,
+        .resulting_state_root = cybou::CybouStateHash(genesis_state),
+    };
+    const uint256 block_2_id = cybou::ComputeBlockId(block_2);
 
     cybou::BftFinalityCertificateV1 cert_2;
     cert_2.network_id = network_id;
@@ -309,11 +336,67 @@ BOOST_AUTO_TEST_CASE(bft_consensus_round_to_state_store_execution)
     BOOST_REQUIRE(cybou::VerifyFinalityCertificate(cert_2, val_set, network_id) ==
                   cybou::FinalityVerificationError::NONE);
 
-    BOOST_REQUIRE(store.CommitFinalizedBlock(block_2_id, block_1_id, block_2_ops));
+    cybou::FinalizedBlockV1 finalized_2{
+        .block = block_2,
+        .certificate = cert_2,
+    };
+
+    BOOST_REQUIRE(store.CommitFinalizedBlock(finalized_2, val_set));
     head = store.GetFinalizedHead();
     BOOST_REQUIRE(head.has_value());
     BOOST_CHECK_EQUAL(head->height, 2);
     BOOST_CHECK(head->block_id == block_2_id);
+}
+
+BOOST_AUTO_TEST_CASE(bft_state_machine_simulator_consensus_and_fault_tolerance)
+{
+    const uint256 network_id{uint256::FromUserHex("99").value()};
+    cybou::BftSimulator sim{network_id};
+    const uint256 state_root{uint256::FromUserHex("1111").value()};
+
+    // Scenario 1: Unanimous consensus (all 4 nodes online)
+    BOOST_CHECK(sim.StepRound(1, 0, {}, state_root));
+    for (size_t i = 0; i < 4; ++i) {
+        BOOST_CHECK(sim.Node(i).GetStep() == cybou::BftStep::FINALIZED);
+        BOOST_REQUIRE(sim.Node(i).GetLatestFinalizedBlock().has_value());
+    }
+
+    // Advance to height 2
+    for (size_t i = 0; i < 4; ++i) {
+        sim.Node(i).SetHeight(2, cybou::ComputeBlockId(sim.Node(i).GetLatestFinalizedBlock()->block));
+    }
+
+    // Scenario 2: 1 node crash (f=1 fault tolerance with N=4, quorum=3)
+    sim.SetNodeOnline(3, false); // node 3 crashed
+    BOOST_CHECK(sim.StepRound(2, 0, {}, state_root));
+    for (size_t i = 0; i < 3; ++i) {
+        BOOST_CHECK(sim.Node(i).GetStep() == cybou::BftStep::FINALIZED);
+    }
+    // Node 3 was offline, didn't finalize
+    BOOST_CHECK(sim.Node(3).GetStep() != cybou::BftStep::FINALIZED);
+
+    // Restore node 3
+    sim.SetNodeOnline(3, true);
+
+    // Advance to height 3
+    for (size_t i = 0; i < 4; ++i) {
+        sim.Node(i).SetHeight(3, cybou::ComputeBlockId(sim.Node(0).GetLatestFinalizedBlock()->block));
+    }
+
+    // Scenario 3: 2 vs 2 network partition ({0, 1} vs {2, 3})
+    // Neither partition can reach quorum (3 votes needed), block cannot finalize!
+    sim.SetPartition({0, 1}, {2, 3});
+    BOOST_CHECK(!sim.StepRound(3, 0, {}, state_root));
+    for (size_t i = 0; i < 4; ++i) {
+        BOOST_CHECK(sim.Node(i).GetStep() != cybou::BftStep::FINALIZED);
+    }
+
+    // Scenario 4: Heal network partition
+    sim.ClearPartition();
+    BOOST_CHECK(sim.StepRound(3, 0, {}, state_root));
+    for (size_t i = 0; i < 4; ++i) {
+        BOOST_CHECK(sim.Node(i).GetStep() == cybou::BftStep::FINALIZED);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

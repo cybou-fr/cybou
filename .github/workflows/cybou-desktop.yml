@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/qt/**'
+      - 'src/cybou/**'
       - 'CMakeLists.txt'
       - 'CMakePresets.json'
       - 'vcpkg.json'
@@ -42,7 +43,7 @@ jobs:
           cache: true
 
       - name: Set up vcpkg
-        uses: microsoft/run-vcpkg@v11
+        uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: ${{ env.VCPKG_ROOT }}
           runVcpkgInstall: true

@@ -53,6 +53,11 @@ std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefiniti
     append_u32le(definition.protocol_parameters.max_account_creates_per_block);
     append_u64le(definition.protocol_parameters.onboarding_bonus);
     append_u64le(definition.protocol_parameters.epoch_blocks);
+    append_u64le(definition.protocol_parameters.payment_fee);
+    append_u64le(definition.protocol_parameters.mail_base_fee);
+    append_u64le(definition.protocol_parameters.mail_tier_bytes);
+    append_u64le(definition.protocol_parameters.mail_tier_fee);
+    append_u32le(definition.protocol_parameters.max_mail_ciphertext_size);
     append_hash(definition.initial_validator_set_commitment);
     return out;
 }

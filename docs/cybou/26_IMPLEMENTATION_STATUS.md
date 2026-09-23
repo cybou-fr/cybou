@@ -127,10 +127,20 @@ Implemented skeleton:
   persistence integrity, invalid/mismatched network-definition rejection,
   atomic failure behavior, finalized-tip/height ordering and duplicate-block rejection.
 - dedicated `cybou-core-test` executable and CI path containing only native
-  CYBOU suites, separate from the inherited Bitcoin test universe.
+  CYBOU suites, separate from the inherited Bitcoin test universe;
+- strictly hardened BFT validator topology: $N=4, Q=3, f=1$ with equal validator weight = 1;
+- BFT consensus state machine and simulator harness (`BftValidatorNode`, `BftSimulator`) verifying normal rounds, $f=1$ crash tolerance, leader timeout advance, partition safety, and healing;
+- canonical `CybouBlockV1` with `ComputeBlockId` cryptographically committing to `parent_block_id`, `height`, operations commitment, and `resulting_state_root`;
+- `FinalizedBlockV1` binding `CybouBlockV1` and `BftFinalityCertificateV1`;
+- state store atomic `CommitFinalizedBlock` requiring `FinalizedBlockV1`, verifying BFT certificate against validator set, and ensuring exact `resulting_state_root` match;
+- block retrieval via `CybouStateStore::GetBlock`;
+- universal `SystemBalance` economics: payment fees and mail fees debited strictly from `SystemBalance` (user `balance` is strictly for user transfers);
+- removed wire `fee` field from `PaymentOpV1` and `MailOpV1` to completely prevent fee bidding and under/overpayment attacks;
+- cryptographic Proof of Possession (`CYBOU/ACCOUNT_POP/V1`) enforced on `AccountCreateOpV1`;
+- `AccountState` cleaned of non-operational fields (`initial_auth_commitment` removed);
+- `MailOpV1` explicitly marked DEV EXPERIMENTAL / NOT WIRE-FROZEN.
 
 Not yet implemented:
 
-- frozen ordinary-account authorization key/signature profile and AccountCreate proof of possession;
 - consensus-operation wiring of Operator Authority signature verification for validator admissions;
-- connection of the state-store boundary to the block validation/finality lifecycle.
+- connection of the state-store boundary to the P2P wire message lifecycle.

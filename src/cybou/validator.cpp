@@ -21,17 +21,6 @@ size_t ValidatorSetV1::TotalWeight() const
     return sum;
 }
 
-size_t ValidatorSetV1::FaultTolerance() const
-{
-    if (validators.size() < BFT_MIN_VALIDATORS) return 0;
-    return (validators.size() - 1) / 3;
-}
-
-size_t ValidatorSetV1::QuorumThreshold() const
-{
-    return 2 * FaultTolerance() + 1;
-}
-
 const ValidatorV1* ValidatorSetV1::FindValidator(const uint256& id) const
 {
     for (const auto& val : validators) {
@@ -53,8 +42,8 @@ ValidatorSetValidationError ValidateValidatorSet(const ValidatorSetV1& val_set)
     if (val_set.version != VALIDATOR_SET_VERSION) {
         return ValidatorSetValidationError::UNSUPPORTED_VERSION;
     }
-    if (val_set.validators.size() < BFT_MIN_VALIDATORS) {
-        return ValidatorSetValidationError::INSUFFICIENT_VALIDATORS;
+    if (val_set.validators.size() != BFT_STAGE1_VALIDATOR_COUNT) {
+        return ValidatorSetValidationError::INVALID_VALIDATOR_COUNT;
     }
     std::set<uint256> seen_ids;
     std::set<uint256> seen_keys;

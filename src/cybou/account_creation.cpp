@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/account_creation.h>
+#include <cybou/signing.h>
 
 #include <crypto/sha256.h>
 
@@ -94,10 +95,26 @@ bool CheckAccountCreationWork(const AccountCreationWorkV1& work, const unsigned 
     return CountLeadingZeroBits(hash) >= required_leading_zero_bits;
 }
 
+uint256 ComputeAccountPopDigest(
+    const uint256& network_id,
+    const AccountId& account_id,
+    const uint256& authorization_key)
+{
+    static constexpr std::string_view DOMAIN{"CYBOU/ACCOUNT_POP/V1"};
+    CSHA256 hasher;
+    hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
+    hasher.Write(network_id.begin(), network_id.size());
+    hasher.Write(account_id.Value().begin(), account_id.Value().size());
+    hasher.Write(authorization_key.begin(), authorization_key.size());
+    uint256 result;
+    hasher.Finalize(result.begin());
+    return result;
+}
+
 std::vector<unsigned char> SerializeAccountCreateOp(const AccountCreateOpV1& op)
 {
     std::vector<unsigned char> out;
-    out.reserve(1 + uint256::size() + uint256::size() + ACCOUNT_CREATION_WORK_SERIALIZED_SIZE);
+    out.reserve(1 + uint256::size() + uint256::size() + ACCOUNT_CREATION_WORK_SERIALIZED_SIZE + ACCOUNT_POP_SIGNATURE_SIZE);
     const auto append_hash = [&out](const uint256& hash) {
         out.insert(out.end(), hash.data(), hash.data() + uint256::size());
     };
@@ -107,12 +124,14 @@ std::vector<unsigned char> SerializeAccountCreateOp(const AccountCreateOpV1& op)
     append_hash(op.initial_authorization.authorization_descriptor);
     const auto work_bytes{SerializeAccountCreationWork(op.creation_work)};
     out.insert(out.end(), work_bytes.begin(), work_bytes.end());
+    out.insert(out.end(), op.proof_of_possession.begin(), op.proof_of_possession.end());
     return out;
 }
 
 std::optional<AccountCreateOpV1> DeserializeAccountCreateOp(const std::span<const unsigned char> bytes)
 {
-    static constexpr size_t EXPECTED_SIZE{1 + uint256::size() + uint256::size() + ACCOUNT_CREATION_WORK_SERIALIZED_SIZE};
+    static constexpr size_t EXPECTED_SIZE{
+        1 + uint256::size() + uint256::size() + ACCOUNT_CREATION_WORK_SERIALIZED_SIZE + ACCOUNT_POP_SIGNATURE_SIZE};
     if (bytes.size() != EXPECTED_SIZE) return std::nullopt;
     size_t offset{0};
     const auto read_u8 = [&]() -> uint8_t { return bytes[offset++]; };
@@ -128,9 +147,12 @@ std::optional<AccountCreateOpV1> DeserializeAccountCreateOp(const std::span<cons
     if (op.version != ACCOUNT_CREATE_OP_VERSION) return std::nullopt;
     op.account_id = AccountId{read_hash()};
     op.initial_authorization.authorization_descriptor = read_hash();
-    const auto work{DeserializeAccountCreationWork(bytes.subspan(offset))};
+    const auto work{DeserializeAccountCreationWork(bytes.subspan(offset, ACCOUNT_CREATION_WORK_SERIALIZED_SIZE))};
     if (!work) return std::nullopt;
     op.creation_work = *work;
+    offset += ACCOUNT_CREATION_WORK_SERIALIZED_SIZE;
+
+    std::copy_n(bytes.begin() + offset, ACCOUNT_POP_SIGNATURE_SIZE, op.proof_of_possession.begin());
     return op;
 }
 
@@ -158,6 +180,18 @@ AccountCreateValidationError ValidateAccountCreateOp(
     if (!CheckAccountCreationWork(op.creation_work, params.account_creation_work_bits)) {
         return AccountCreateValidationError::INSUFFICIENT_WORK;
     }
+
+    const uint256 pop_digest{ComputeAccountPopDigest(
+        expected_network_id,
+        op.account_id,
+        op.initial_authorization.authorization_descriptor)};
+    if (!VerifyUserSignature(
+            op.initial_authorization.authorization_descriptor,
+            op.proof_of_possession,
+            std::span<const unsigned char>{pop_digest.begin(), pop_digest.size()})) {
+        return AccountCreateValidationError::INVALID_PROOF_OF_POSSESSION;
+    }
+
     return AccountCreateValidationError::NONE;
 }
 

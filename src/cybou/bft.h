@@ -19,9 +19,11 @@ namespace cybou {
 
 inline constexpr uint8_t BFT_FINALITY_CERTIFICATE_VERSION{1};
 
+using ValidatorSignature = std::array<unsigned char, USER_SIGNATURE_SIZE>;
+
 struct BftCommitVoteV1 {
     uint256 validator_id;
-    std::array<unsigned char, USER_SIGNATURE_SIZE> signature{};
+    ValidatorSignature signature{};
 
     friend bool operator==(const BftCommitVoteV1&, const BftCommitVoteV1&) = default;
 };
@@ -46,6 +48,17 @@ uint256 ComputeBftCommitDigest(
     const uint256& block_id,
     uint64_t height,
     const uint256& validator_set_commitment);
+
+/** Sign a validator BFT vote digest with validator consensus private key seed. */
+std::optional<ValidatorSignature> SignValidatorVote(
+    std::span<const unsigned char, 32> private_key,
+    const uint256& digest);
+
+/** Verify a validator BFT vote signature against the validator consensus public key. */
+bool VerifyValidatorSignature(
+    const uint256& public_key,
+    const ValidatorSignature& signature,
+    const uint256& digest);
 
 enum class FinalityVerificationError : uint8_t {
     NONE,

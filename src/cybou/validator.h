@@ -16,7 +16,12 @@
 namespace cybou {
 
 inline constexpr uint8_t VALIDATOR_SET_VERSION{1};
-inline constexpr size_t BFT_MIN_VALIDATORS{4};
+inline constexpr size_t BFT_STAGE1_VALIDATOR_COUNT{4};
+inline constexpr size_t BFT_STAGE1_QUORUM{3};
+inline constexpr size_t BFT_STAGE1_FAULT_TOLERANCE{1};
+
+// Backwards-compatibility alias
+inline constexpr size_t BFT_MIN_VALIDATORS{BFT_STAGE1_VALIDATOR_COUNT};
 
 struct ValidatorV1 {
     uint256 validator_id;
@@ -34,8 +39,8 @@ struct ValidatorSetV1 {
 
     size_t Size() const { return validators.size(); }
     size_t TotalWeight() const;
-    size_t FaultTolerance() const; // f = (N - 1) / 3
-    size_t QuorumThreshold() const; // 2f + 1
+    size_t FaultTolerance() const { return BFT_STAGE1_FAULT_TOLERANCE; }
+    size_t QuorumThreshold() const { return BFT_STAGE1_QUORUM; }
 
     const ValidatorV1* FindValidator(const uint256& id) const;
     const ValidatorV1* FindValidatorByPublicKey(const uint256& pubkey) const;
@@ -44,7 +49,7 @@ struct ValidatorSetV1 {
 enum class ValidatorSetValidationError : uint8_t {
     NONE,
     UNSUPPORTED_VERSION,
-    INSUFFICIENT_VALIDATORS,
+    INVALID_VALIDATOR_COUNT,
     INVALID_WEIGHT,
     NULL_VALIDATOR_ID,
     NULL_CONSENSUS_KEY,

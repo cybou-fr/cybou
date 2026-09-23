@@ -36,7 +36,6 @@ std::vector<unsigned char> SerializeCybouState(const CybouState& state)
         append_u64le(acc.system_balance);
         append_u64le(acc.creation_height);
         append_u64le(acc.creation_epoch);
-        append_hash(acc.initial_auth_commitment);
         append_hash(acc.active_authorization_key);
         append_u64le(acc.next_nonce);
     }
@@ -92,11 +91,10 @@ std::optional<CybouState> DeserializeCybouState(const std::span<const unsigned c
         const auto system_balance{read_u64le()};
         const auto creation_height{read_u64le()};
         const auto creation_epoch{read_u64le()};
-        const auto auth_commitment{read_hash()};
         const auto auth_key{read_hash()};
         const auto next_nonce{read_u64le()};
         if (!account_id_bytes || !balance || !system_balance || !creation_height || !creation_epoch ||
-            !auth_commitment || !auth_key || !next_nonce) {
+            !auth_key || !next_nonce) {
             return std::nullopt;
         }
         const AccountId account_id{*account_id_bytes};
@@ -106,7 +104,6 @@ std::optional<CybouState> DeserializeCybouState(const std::span<const unsigned c
             .system_balance = *system_balance,
             .creation_height = *creation_height,
             .creation_epoch = *creation_epoch,
-            .initial_auth_commitment = *auth_commitment,
             .active_authorization_key = *auth_key,
             .next_nonce = *next_nonce,
         };
@@ -154,7 +151,6 @@ AccountCreateResult ApplyAccountCreate(
         .system_balance = params.onboarding_bonus,
         .creation_height = block_height,
         .creation_epoch = EpochForHeight(block_height, params),
-        .initial_auth_commitment = op.initial_authorization.authorization_descriptor,
         .active_authorization_key = op.initial_authorization.authorization_descriptor,
         .next_nonce = 0,
     };
@@ -184,12 +180,11 @@ PaymentResult ApplyPayment(
         return {PaymentError::RECIPIENT_NOT_FOUND};
     }
 
-    if (amount > std::numeric_limits<uint64_t>::max() - fee) {
-        return {PaymentError::FEE_CALCULATION_OVERFLOW};
-    }
-    const uint64_t total_deduction{amount + fee};
-    if (sender_it->second.balance < total_deduction) {
+    if (sender_it->second.balance < amount) {
         return {PaymentError::INSUFFICIENT_BALANCE};
+    }
+    if (sender_it->second.system_balance < fee) {
+        return {PaymentError::INSUFFICIENT_SYSTEM_BALANCE};
     }
 
     if (recipient_it->second.balance > std::numeric_limits<uint64_t>::max() - amount) {
@@ -200,7 +195,8 @@ PaymentResult ApplyPayment(
         return {PaymentError::FEE_POOL_OVERFLOW};
     }
 
-    sender_it->second.balance -= total_deduction;
+    sender_it->second.balance -= amount;
+    sender_it->second.system_balance -= fee;
     recipient_it->second.balance += amount;
     state.pending_fee_pool += fee;
     sender_it->second.next_nonce++;
@@ -270,30 +266,17 @@ MailResult ApplyMail(
     }
 
     auto& sender = sender_it->second;
-    if (sender.balance > std::numeric_limits<uint64_t>::max() - sender.system_balance) {
-        return {MailError::INSUFFICIENT_FEE_BALANCE};
-    }
-    const uint64_t total_available = sender.system_balance + sender.balance;
-    if (total_available < fee) {
-        return {MailError::INSUFFICIENT_FEE_BALANCE};
+    if (sender.system_balance < fee) {
+        return {MailError::INSUFFICIENT_SYSTEM_BALANCE};
     }
 
-    uint64_t remaining_fee = fee;
-    if (sender.system_balance >= remaining_fee) {
-        sender.system_balance -= remaining_fee;
-        remaining_fee = 0;
-    } else {
-        remaining_fee -= sender.system_balance;
-        sender.system_balance = 0;
-        sender.balance -= remaining_fee;
-    }
-
+    sender.system_balance -= fee;
     state.pending_fee_pool += fee;
     sender.next_nonce++;
     return {};
 }
 
-void RoutePendingFees(CybouState& state)
+FeeRoutingResult RoutePendingFees(CybouState& state)
 {
     const uint64_t chunks = state.pending_fee_pool / 4;
     const uint64_t remainder = state.pending_fee_pool % 4;
@@ -301,14 +284,17 @@ void RoutePendingFees(CybouState& state)
     const uint64_t security_addition = chunks * 3;
     const uint64_t onboarding_addition = chunks * 1;
 
-    if (state.security_reward_pool <= std::numeric_limits<uint64_t>::max() - security_addition) {
-        state.security_reward_pool += security_addition;
+    if (state.security_reward_pool > std::numeric_limits<uint64_t>::max() - security_addition) {
+        return {FeeRoutingError::SECURITY_POOL_OVERFLOW};
     }
-    if (state.onboarding_pool <= std::numeric_limits<uint64_t>::max() - onboarding_addition) {
-        state.onboarding_pool += onboarding_addition;
+    if (state.onboarding_pool > std::numeric_limits<uint64_t>::max() - onboarding_addition) {
+        return {FeeRoutingError::ONBOARDING_POOL_OVERFLOW};
     }
 
+    state.security_reward_pool += security_addition;
+    state.onboarding_pool += onboarding_addition;
     state.pending_fee_pool = remainder;
+    return {};
 }
 
 } // namespace cybou

@@ -73,6 +73,21 @@ uint256 ComputeBftCommitDigest(
     return digest;
 }
 
+std::optional<ValidatorSignature> SignValidatorVote(
+    const std::span<const unsigned char, 32> private_key,
+    const uint256& digest)
+{
+    return SignUserMessage(private_key, digest);
+}
+
+bool VerifyValidatorSignature(
+    const uint256& public_key,
+    const ValidatorSignature& signature,
+    const uint256& digest)
+{
+    return VerifyUserSignature(public_key, signature, digest);
+}
+
 FinalityVerificationError VerifyFinalityCertificate(
     const BftFinalityCertificateV1& cert,
     const ValidatorSetV1& validator_set,
@@ -114,7 +129,7 @@ FinalityVerificationError VerifyFinalityCertificate(
             return FinalityVerificationError::UNKNOWN_VALIDATOR;
         }
 
-        if (!VerifyUserSignature(validator->consensus_public_key, vote.signature, digest)) {
+        if (!VerifyValidatorSignature(validator->consensus_public_key, vote.signature, digest)) {
             return FinalityVerificationError::INVALID_SIGNATURE;
         }
 

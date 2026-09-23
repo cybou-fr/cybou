@@ -23,7 +23,6 @@ struct AccountState {
     uint64_t system_balance{0};
     uint64_t creation_height{0};
     uint64_t creation_epoch{0};
-    uint256 initial_auth_commitment;
     uint256 active_authorization_key;
     uint64_t next_nonce{0};
 
@@ -88,7 +87,7 @@ enum class PaymentError : uint8_t {
     SELF_PAYMENT,
     ZERO_AMOUNT,
     INSUFFICIENT_BALANCE,
-    FEE_CALCULATION_OVERFLOW,
+    INSUFFICIENT_SYSTEM_BALANCE,
     RECIPIENT_OVERFLOW,
     FEE_POOL_OVERFLOW,
 };
@@ -147,7 +146,7 @@ enum class MailError : uint8_t {
     SENDER_NOT_FOUND,
     RECIPIENT_NOT_FOUND,
     SELF_MAIL,
-    INSUFFICIENT_FEE_BALANCE,
+    INSUFFICIENT_SYSTEM_BALANCE,
     FEE_POOL_OVERFLOW,
 };
 
@@ -163,12 +162,25 @@ MailResult ApplyMail(
     uint64_t fee,
     CybouState& state);
 
+enum class FeeRoutingError : uint8_t {
+    NONE,
+    SECURITY_POOL_OVERFLOW,
+    ONBOARDING_POOL_OVERFLOW,
+};
+
+struct FeeRoutingResult {
+    FeeRoutingError error{FeeRoutingError::NONE};
+
+    explicit operator bool() const { return error == FeeRoutingError::NONE; }
+};
+
 /**
  * Route indivisible pending fees in 4-CYBOU batches:
  * 75% (3 CYBOU) to SecurityRewardPool, 25% (1 CYBOU) to OnboardingPool.
  * Any remainder (0 <= r < 4) stays in PendingFeePool without rounding loss.
+ * Atomic: on overflow returns an error and state is left untouched.
  */
-void RoutePendingFees(CybouState& state);
+FeeRoutingResult RoutePendingFees(CybouState& state);
 
 } // namespace cybou
 

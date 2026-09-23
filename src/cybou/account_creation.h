@@ -37,6 +37,8 @@ struct AccountCreationWorkV1 {
     friend bool operator==(const AccountCreationWorkV1&, const AccountCreationWorkV1&) = default;
 };
 
+inline constexpr size_t ACCOUNT_POP_SIGNATURE_SIZE{64};
+
 /**
  * Protocol-native account creation operation.
  */
@@ -45,6 +47,7 @@ struct AccountCreateOpV1 {
     AccountId account_id;
     AccountAuthorizationV1 initial_authorization;
     AccountCreationWorkV1 creation_work;
+    std::array<unsigned char, ACCOUNT_POP_SIGNATURE_SIZE> proof_of_possession{};
 
     friend bool operator==(const AccountCreateOpV1&, const AccountCreateOpV1&) = default;
 };
@@ -57,6 +60,12 @@ unsigned int CountLeadingZeroBits(const uint256& hash);
 
 /** Check whether work meets difficulty requirement (minimum leading zero bits). */
 bool CheckAccountCreationWork(const AccountCreationWorkV1& work, unsigned int required_leading_zero_bits);
+
+/** Compute domain-separated digest for AccountCreate proof of possession: SHA256("CYBOU/ACCOUNT_POP/V1" || network_id || account_id || pubkey) */
+uint256 ComputeAccountPopDigest(
+    const uint256& network_id,
+    const AccountId& account_id,
+    const uint256& authorization_key);
 
 std::vector<unsigned char> SerializeAccountCreateOp(const AccountCreateOpV1& op);
 std::optional<AccountCreateOpV1> DeserializeAccountCreateOp(std::span<const unsigned char> bytes);
@@ -72,6 +81,7 @@ enum class AccountCreateValidationError : uint8_t {
     FUTURE_WORK_EPOCH,
     EXPIRED_WORK_EPOCH,
     INSUFFICIENT_WORK,
+    INVALID_PROOF_OF_POSSESSION,
 };
 
 /**

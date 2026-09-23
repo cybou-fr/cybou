@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/account_creation.h>
+#include <cybou/signing.h>
 
 #include <uint256.h>
 #include <util/strencodings.h>
@@ -15,7 +16,12 @@ namespace {
 
 const uint256 NETWORK_ID{uint256::ONE};
 const cybou::AccountId ACCOUNT_ID{uint256::FromUserHex("0a").value()};
-const uint256 AUTH_KEY{uint256::FromUserHex("42").value()};
+const std::array<unsigned char, 32> AUTH_PRIVKEY = []{
+    std::array<unsigned char, 32> k{};
+    k[0] = 0x42;
+    return k;
+}();
+const uint256 AUTH_KEY = *cybou::DeriveEd25519PublicKey(AUTH_PRIVKEY);
 
 cybou::AccountAuthorizationV1 ValidAuth()
 {
@@ -44,12 +50,16 @@ cybou::AccountCreationWorkV1 ValidWork(const uint64_t epoch = 1, const unsigned 
 
 cybou::AccountCreateOpV1 ValidOp(const uint64_t epoch = 1, const unsigned int required_bits = 0)
 {
-    return cybou::AccountCreateOpV1{
+    cybou::AccountCreateOpV1 op{
         .version = cybou::ACCOUNT_CREATE_OP_VERSION,
         .account_id = ACCOUNT_ID,
         .initial_authorization = ValidAuth(),
         .creation_work = ValidWork(epoch, required_bits),
     };
+    const uint256 pop_digest = cybou::ComputeAccountPopDigest(
+        NETWORK_ID, op.account_id, op.initial_authorization.authorization_descriptor);
+    op.proof_of_possession = *cybou::SignUserMessage(AUTH_PRIVKEY, pop_digest);
+    return op;
 }
 
 } // namespace
@@ -158,6 +168,10 @@ BOOST_AUTO_TEST_CASE(validate_account_create_op_enforces_all_bindings)
     auto high_diff_params{params};
     high_diff_params.account_creation_work_bits = 255;
     BOOST_CHECK(cybou::ValidateAccountCreateOp(op, NETWORK_ID, 10, high_diff_params) == cybou::AccountCreateValidationError::INSUFFICIENT_WORK);
+
+    auto bad_pop{op};
+    bad_pop.proof_of_possession[0] ^= 0x55;
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(bad_pop, NETWORK_ID, 10, params) == cybou::AccountCreateValidationError::INVALID_PROOF_OF_POSSESSION);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

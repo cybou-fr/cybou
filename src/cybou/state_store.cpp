@@ -19,6 +19,11 @@ const std::string HASH_KEY{"cybou/hash/v1"};
 const std::string HEAD_KEY{"cybou/head/v1"};
 const std::string NETWORK_ID_KEY{"cybou/network-id/v1"};
 
+inline std::string BlockKey(const uint256& block_id)
+{
+    return "cybou/block/v1/" + block_id.GetHex();
+}
+
 } // namespace
 
 GenesisInitResult CybouStateStore::InitializeGenesis(
@@ -119,9 +124,8 @@ std::optional<uint256> CybouStateStore::GetStoredNetworkId() const
 }
 
 BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
-    const uint256& block_id,
-    const uint256& previous_block_id,
-    const std::vector<ProtocolOperationV1>& ops,
+    const FinalizedBlockV1& finalized_block,
+    const ValidatorSetV1& validator_set,
     const bool sync)
 {
     const auto loaded{LoadState()};
@@ -137,49 +141,86 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         }
         return {BlockTransitionError::STATE_NOT_INITIALIZED};
     }
+
+    const auto& block = finalized_block.block;
+    const auto& cert = finalized_block.certificate;
+    const uint256 block_id = ComputeBlockId(block);
+    if (block_id.IsNull()) {
+        return {BlockTransitionError::INVALID_BLOCK_ID};
+    }
+
+    const auto head{GetFinalizedHead()};
+    if (!head) return {BlockTransitionError::CORRUPT_HEAD};
+    if (head->block_id == block_id) return {BlockTransitionError::BLOCK_ALREADY_APPLIED};
+    if (head->block_id != block.parent_block_id) {
+        return {BlockTransitionError::PARENT_MISMATCH};
+    }
+    if (head->height == std::numeric_limits<uint64_t>::max() || block.height != head->height + 1) {
+        return {BlockTransitionError::INVALID_HEIGHT};
+    }
+
+    if (cert.block_id != block_id || cert.height != block.height) {
+        return {.error = BlockTransitionError::INVALID_CERTIFICATE};
+    }
+
+    const auto cert_res = VerifyFinalityCertificate(cert, validator_set, m_network_id);
+    if (cert_res != FinalityVerificationError::NONE) {
+        return {.error = BlockTransitionError::INVALID_CERTIFICATE, .cert_error = cert_res};
+    }
+
     const auto& params{m_network_definition.protocol_parameters};
-    if (block_id.IsNull()) return {BlockTransitionError::INVALID_BLOCK_ID};
     const size_t account_create_count{static_cast<size_t>(std::count_if(
-        ops.begin(), ops.end(), [](const auto& operation) {
+        block.operations.begin(), block.operations.end(), [](const auto& operation) {
             return OperationType(operation) == ProtocolOperationType::ACCOUNT_CREATE;
         }))};
     if (account_create_count > params.max_account_creates_per_block) {
         return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
     }
 
-    const auto head{GetFinalizedHead()};
-    if (!head) return {BlockTransitionError::CORRUPT_HEAD};
-    if (head->block_id == block_id) return {BlockTransitionError::BLOCK_ALREADY_APPLIED};
-    if (head->block_id != previous_block_id) {
-        return {BlockTransitionError::PARENT_MISMATCH};
-    }
-    if (head->height == std::numeric_limits<uint64_t>::max()) {
-        return {BlockTransitionError::INVALID_HEIGHT};
-    }
-    const uint64_t next_height{head->height + 1};
-
     auto candidate{*loaded.state};
     const ProtocolExecutionContextV1 ctx{
         .network_id = m_network_id,
-        .block_height = next_height,
+        .block_height = block.height,
         .params = params,
     };
-    for (const auto& operation : ops) {
+    for (const auto& operation : block.operations) {
         const auto res{ApplyProtocolOperation(operation, ctx, candidate)};
         if (!res) return {BlockTransitionError::INVALID_OPERATION, res};
     }
 
+    if (candidate.pending_fee_pool > 0) {
+        const auto fee_res = RoutePendingFees(candidate);
+        if (!fee_res) {
+            return {BlockTransitionError::FEE_ROUTING_FAILED};
+        }
+    }
+
+    const uint256 candidate_root = CybouStateHash(candidate);
+    if (candidate_root != block.resulting_state_root) {
+        return {BlockTransitionError::STATE_ROOT_MISMATCH};
+    }
+
     const FinalizedHeadV1 next_head{
         .block_id = block_id,
-        .height = next_height,
+        .height = block.height,
     };
 
     CDBBatch batch{m_db};
     batch.Write(STATE_KEY, SerializeCybouState(candidate));
-    batch.Write(HASH_KEY, CybouStateHash(candidate));
+    batch.Write(HASH_KEY, candidate_root);
     batch.Write(HEAD_KEY, next_head);
+    batch.Write(BlockKey(block_id), SerializeFinalizedBlock(finalized_block));
     m_db.WriteBatch(batch, sync);
     return {};
+}
+
+std::optional<FinalizedBlockV1> CybouStateStore::GetBlock(const uint256& block_id) const
+{
+    std::vector<unsigned char> bytes;
+    if (!m_db.Read(BlockKey(block_id), bytes)) {
+        return std::nullopt;
+    }
+    return DeserializeFinalizedBlock(bytes);
 }
 
 } // namespace cybou

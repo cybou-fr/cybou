@@ -19,13 +19,12 @@ std::vector<unsigned char> SerializePaymentOp(const PaymentOpV1& op)
     out.push_back(op.version);
     out.insert(out.end(), op.recipient.Value().begin(), op.recipient.Value().end());
     for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.amount >> (8 * i)));
-    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.fee >> (8 * i)));
     return out;
 }
 
 std::optional<PaymentOpV1> DeserializePaymentOp(const std::span<const unsigned char> bytes)
 {
-    if (bytes.size() != 1 + 32 + 8 + 8) return std::nullopt;
+    if (bytes.size() != 1 + 32 + 8) return std::nullopt;
     if (bytes[0] != PAYMENT_OP_VERSION) return std::nullopt;
     uint256 rec_bytes;
     std::copy_n(bytes.begin() + 1, 32, rec_bytes.begin());
@@ -33,13 +32,10 @@ std::optional<PaymentOpV1> DeserializePaymentOp(const std::span<const unsigned c
     if (recipient.IsNull()) return std::nullopt;
     uint64_t amount{0};
     for (int i = 0; i < 8; ++i) amount |= uint64_t{bytes[33 + i]} << (8 * i);
-    uint64_t fee{0};
-    for (int i = 0; i < 8; ++i) fee |= uint64_t{bytes[41 + i]} << (8 * i);
     return PaymentOpV1{
         .version = bytes[0],
         .recipient = recipient,
         .amount = amount,
-        .fee = fee,
     };
 }
 
@@ -85,12 +81,11 @@ std::optional<SystemLockOpV1> DeserializeSystemLockOp(const std::span<const unsi
 std::vector<unsigned char> SerializeMailOp(const MailOpV1& op)
 {
     std::vector<unsigned char> out;
-    out.reserve(109 + op.ciphertext.size());
+    out.reserve(101 + op.ciphertext.size());
     out.push_back(op.version);
     out.insert(out.end(), op.recipient.Value().begin(), op.recipient.Value().end());
     out.insert(out.end(), op.content_commitment.begin(), op.content_commitment.end());
     out.insert(out.end(), op.discovery_tag.begin(), op.discovery_tag.end());
-    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.fee >> (8 * i)));
     const uint32_t size = static_cast<uint32_t>(op.ciphertext.size());
     for (int i = 0; i < 4; ++i) out.push_back(static_cast<unsigned char>(size >> (8 * i)));
     out.insert(out.end(), op.ciphertext.begin(), op.ciphertext.end());
@@ -99,7 +94,7 @@ std::vector<unsigned char> SerializeMailOp(const MailOpV1& op)
 
 std::optional<MailOpV1> DeserializeMailOp(const std::span<const unsigned char> bytes)
 {
-    static constexpr size_t HEADER_SIZE{1 + 32 + 32 + 32 + 8 + 4};
+    static constexpr size_t HEADER_SIZE{1 + 32 + 32 + 32 + 4};
     if (bytes.size() < HEADER_SIZE) return std::nullopt;
     if (bytes[0] != MAIL_OP_VERSION) return std::nullopt;
 
@@ -114,13 +109,9 @@ std::optional<MailOpV1> DeserializeMailOp(const std::span<const unsigned char> b
     uint256 discovery_tag;
     std::copy_n(bytes.begin() + 65, 32, discovery_tag.begin());
 
-    uint64_t fee{0};
-    for (int i = 0; i < 8; ++i) fee |= uint64_t{bytes[97 + i]} << (8 * i);
-
     uint32_t size{0};
-    for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[105 + i]} << (8 * i);
+    for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[97 + i]} << (8 * i);
 
-    if (size > MAX_MAIL_CIPHERTEXT_SIZE) return std::nullopt;
     if (bytes.size() != HEADER_SIZE + size) return std::nullopt;
 
     std::vector<unsigned char> ciphertext(bytes.begin() + HEADER_SIZE, bytes.end());
@@ -129,18 +120,11 @@ std::optional<MailOpV1> DeserializeMailOp(const std::span<const unsigned char> b
         .recipient = recipient,
         .content_commitment = content_commitment,
         .discovery_tag = discovery_tag,
-        .fee = fee,
         .ciphertext = std::move(ciphertext),
     };
 }
 
 } // namespace
-
-uint64_t ComputeDeterministicMailFee(size_t ciphertext_size)
-{
-    const uint64_t tiers = (static_cast<uint64_t>(ciphertext_size) + MAIL_TIER_BYTES - 1) / MAIL_TIER_BYTES;
-    return MAIL_BASE_FEE + tiers * MAIL_TIER_FEE;
-}
 
 uint256 ComputeMailContentCommitment(const uint256& salt, const std::span<const unsigned char> ciphertext)
 {
@@ -341,11 +325,11 @@ OperationExecutionResult ApplyProtocolOperation(
             return std::visit([&](const auto& payload) -> OperationExecutionResult {
                 using P = std::decay_t<decltype(payload)>;
                 if constexpr (std::is_same_v<P, PaymentOpV1>) {
-                    const auto payment_res{ApplyPayment(op.account_id, payload.recipient, payload.amount, payload.fee, state)};
+                    const auto payment_res{ApplyPayment(op.account_id, payload.recipient, payload.amount, context.params.payment_fee, state)};
                     if (!payment_res) {
-                        return {OperationExecutionError::PAYMENT_FAILED, {}, payment_res, {}};
+                        return {OperationExecutionError::PAYMENT_FAILED, {}, payment_res, {}, {}, {}};
                     }
-                    return {OperationExecutionError::NONE, {}, payment_res, {}};
+                    return {OperationExecutionError::NONE, {}, payment_res, {}, {}, {}};
                 }
                 if constexpr (std::is_same_v<P, KeyUpdateOpV1>) {
                     const auto key_res{ApplyKeyUpdate(op.account_id, payload.new_authorization.authorization_descriptor, state)};
@@ -362,14 +346,11 @@ OperationExecutionResult ApplyProtocolOperation(
                     return {OperationExecutionError::NONE, {}, {}, {}, lock_res, {}};
                 }
                 if constexpr (std::is_same_v<P, MailOpV1>) {
-                    if (payload.ciphertext.size() > MAX_MAIL_CIPHERTEXT_SIZE) {
+                    if (payload.ciphertext.size() > context.params.max_mail_ciphertext_size) {
                         return {OperationExecutionError::MAIL_OVERSIZED, {}, {}, {}, {}, {}};
                     }
-                    const uint64_t expected_fee{ComputeDeterministicMailFee(payload.ciphertext.size())};
-                    if (payload.fee != expected_fee) {
-                        return {OperationExecutionError::MAIL_INVALID_FEE, {}, {}, {}, {}, {}};
-                    }
-                    const auto mail_res{ApplyMail(op.account_id, payload.recipient, payload.fee, state)};
+                    const uint64_t fee{MailFeeForSize(payload.ciphertext.size(), context.params)};
+                    const auto mail_res{ApplyMail(op.account_id, payload.recipient, fee, state)};
                     if (!mail_res) {
                         return {OperationExecutionError::MAIL_FAILED, {}, {}, {}, {}, mail_res};
                     }

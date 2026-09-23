@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+#include <cybou/signing.h>
 #include <cybou/state.h>
 
 #include <boost/test/unit_test.hpp>
@@ -17,7 +18,13 @@ namespace {
 const uint256 NETWORK_ID{uint256::ONE};
 const cybou::AccountId ACCOUNT_ID{uint256::FromUserHex("0a").value()};
 const cybou::AccountId ACCOUNT_ID_2{uint256::FromUserHex("0b").value()};
-const uint256 AUTH_KEY{uint256::FromUserHex("42").value()};
+
+const std::array<unsigned char, 32> AUTH_PRIVKEY = []{
+    std::array<unsigned char, 32> k{};
+    k[0] = 0x42;
+    return k;
+}();
+const uint256 AUTH_KEY = *cybou::DeriveEd25519PublicKey(AUTH_PRIVKEY);
 
 cybou::AccountAuthorizationV1 ValidAuth()
 {
@@ -49,6 +56,9 @@ cybou::AccountCreateOpV1 ValidOp(const cybou::AccountId& acc = ACCOUNT_ID)
             .nonce = 0,
         },
     };
+    const uint256 pop_digest = cybou::ComputeAccountPopDigest(
+        NETWORK_ID, op.account_id, op.initial_authorization.authorization_descriptor);
+    op.proof_of_possession = *cybou::SignUserMessage(AUTH_PRIVKEY, pop_digest);
     return op;
 }
 
@@ -90,7 +100,6 @@ BOOST_AUTO_TEST_CASE(account_create_moves_bonus_and_records_account)
     BOOST_CHECK_EQUAL(acc.system_balance, 6000);
     BOOST_CHECK_EQUAL(acc.creation_height, 10);
     BOOST_CHECK_EQUAL(acc.creation_epoch, 1);
-    BOOST_CHECK(acc.initial_auth_commitment == AUTH_KEY);
     BOOST_CHECK(acc.active_authorization_key == AUTH_KEY);
     BOOST_CHECK_EQUAL(acc.next_nonce, 0);
 }
@@ -206,11 +215,13 @@ BOOST_AUTO_TEST_CASE(payment_transfers_balance_and_accrues_fee)
     // Fund sender balance
     state.accounts.at(ACCOUNT_ID).balance = 1000;
     const uint64_t initial_fee_pool{state.pending_fee_pool};
+    const uint64_t initial_system_balance{state.accounts.at(ACCOUNT_ID).system_balance};
 
     const auto res{cybou::ApplyPayment(ACCOUNT_ID, ACCOUNT_ID_2, 400, 50, state)};
     BOOST_REQUIRE(res);
 
-    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).balance, 550);
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).balance, 600); // 1000 - 400
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).system_balance, initial_system_balance - 50); // fee debited from system_balance
     BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).next_nonce, 1);
     BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID_2).balance, 400);
     BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID_2).next_nonce, 0); // recipient nonce unmodified
@@ -244,10 +255,15 @@ BOOST_AUTO_TEST_CASE(payment_validates_invariants)
         cybou::PaymentError::SENDER_NOT_FOUND);
     BOOST_CHECK(state == snapshot);
 
-    // Insufficient balance (balance is 100, deduction is 100 + 1)
+    // Insufficient balance (balance is 100, amount is 101)
     BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(ACCOUNT_ID_2), NETWORK_ID, 10, TEST_PARAMS, state));
-    BOOST_CHECK(cybou::ApplyPayment(ACCOUNT_ID, ACCOUNT_ID_2, 100, 1, state).error ==
+    BOOST_CHECK(cybou::ApplyPayment(ACCOUNT_ID, ACCOUNT_ID_2, 101, 1, state).error ==
         cybou::PaymentError::INSUFFICIENT_BALANCE);
+
+    // Insufficient system balance for fee
+    state.accounts.at(ACCOUNT_ID).system_balance = 0;
+    BOOST_CHECK(cybou::ApplyPayment(ACCOUNT_ID, ACCOUNT_ID_2, 50, 10, state).error ==
+        cybou::PaymentError::INSUFFICIENT_SYSTEM_BALANCE);
 }
 
 BOOST_AUTO_TEST_CASE(key_update_rotates_authorization_key)
@@ -319,15 +335,15 @@ BOOST_AUTO_TEST_CASE(mail_operation_deducts_fee_and_keeps_state_bounded)
     // Bounded state invariant: no per-mail consensus object created
     BOOST_CHECK_EQUAL(state.accounts.size(), initial_account_count);
 
-    // Case 2: Fee exceeds system_balance, remainder debited from balance
+    // Case 2: Fee exceeds system_balance, rejected with INSUFFICIENT_SYSTEM_BALANCE
     state.accounts.at(ACCOUNT_ID).system_balance = 4;
     state.accounts.at(ACCOUNT_ID).balance = 20;
 
     const auto res2{cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID_2, 10, state)};
-    BOOST_REQUIRE(res2);
-    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).system_balance, 0);
-    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).balance, 14); // 20 - (10 - 4) = 14
-    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).next_nonce, 2);
+    BOOST_CHECK(res2.error == cybou::MailError::INSUFFICIENT_SYSTEM_BALANCE);
+    // User balance untouched, system_balance untouched
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).system_balance, 4);
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).balance, 20);
 
     // Case 3: Invariant violations
     BOOST_CHECK(cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID, 10, state).error ==
@@ -336,10 +352,6 @@ BOOST_AUTO_TEST_CASE(mail_operation_deducts_fee_and_keeps_state_bounded)
         cybou::MailError::RECIPIENT_NOT_FOUND);
     BOOST_CHECK(cybou::ApplyMail(cybou::AccountId{uint256::FromUserHex("ff").value()}, ACCOUNT_ID_2, 10, state).error ==
         cybou::MailError::SENDER_NOT_FOUND);
-
-    // Insufficient funds (total available = 0 + 14 = 14, fee = 15)
-    BOOST_CHECK(cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID_2, 15, state).error ==
-        cybou::MailError::INSUFFICIENT_FEE_BALANCE);
 }
 
 BOOST_AUTO_TEST_CASE(fee_routing_settles_four_cybou_chunks_without_loss)

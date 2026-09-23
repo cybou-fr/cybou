@@ -5,9 +5,12 @@
 #ifndef CYBOU_STATE_STORE_H
 #define CYBOU_STATE_STORE_H
 
+#include <cybou/bft.h>
+#include <cybou/block.h>
 #include <cybou/network_definition.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/state.h>
+#include <cybou/validator.h>
 #include <serialize.h>
 
 #include <cstdint>
@@ -72,11 +75,15 @@ enum class BlockTransitionError : uint8_t {
     CORRUPT_HEAD,
     INVALID_OPERATION,
     TOO_MANY_ACCOUNT_CREATES,
+    INVALID_CERTIFICATE,
+    STATE_ROOT_MISMATCH,
+    FEE_ROUTING_FAILED,
 };
 
 struct BlockTransitionResult {
     BlockTransitionError error{BlockTransitionError::NONE};
     OperationExecutionResult op_result{};
+    FinalityVerificationError cert_error{FinalityVerificationError::NONE};
 
     explicit operator bool() const { return error == BlockTransitionError::NONE; }
 };
@@ -126,16 +133,21 @@ public:
     std::optional<uint256> GetStoredNetworkId() const;
 
     /**
-     * Atomically commit a BFT-finalized block: all operations are executed
-     * against a throwaway candidate derived from the canonical state and the
-     * new state, its hash, and the updated head are written in one batch. On any
-     * failure the store is left untouched. Height is strictly derived as head.height + 1.
+     * Atomically commit a BFT-finalized block:
+     * - verifies parent equals current head
+     * - verifies height equals head.height + 1
+     * - verifies block ID and BFT finality certificate over the validator set
+     * - verifies operations and fee routing against a throwaway candidate
+     * - verifies candidate state root matches block.resulting_state_root
+     * - atomically writes new state, hash, head, and finalized block in one batch.
      */
     BlockTransitionResult CommitFinalizedBlock(
-        const uint256& block_id,
-        const uint256& previous_block_id,
-        const std::vector<ProtocolOperationV1>& ops,
+        const FinalizedBlockV1& finalized_block,
+        const ValidatorSetV1& validator_set,
         bool sync = true);
+
+    /** Retrieve a persisted finalized block by its block ID. */
+    std::optional<FinalizedBlockV1> GetBlock(const uint256& block_id) const;
 
 private:
     CDBWrapper& m_db;

@@ -30,8 +30,8 @@ Decide whether pre-Store MailTx bodies are later migrated into Store or remain v
 
 ## BFT / operator authority
 
-### O-009 Exact BFT protocol
-Freeze the round/locking/finality state machine.
+### O-009 Exact BFT protocol — resolved
+Frozen as Tendermint/IBFT style 4-validator state machine with deterministic round leader `(height + round) % 4`, prevote/precommit locking, 3/4 commit votes forming `BftFinalityCertificateV1`, and atomic `CommitFinalizedBlock` validation in `CybouStateStore`. Verified in `cybou::BftSimulator`.
 
 ### O-010 Validator admission transaction format
 Freeze operator-authorized activation/removal serialization.
@@ -72,12 +72,8 @@ Define how a node declares and proves the active-validator role so the software
 can reject pruning configurations while pre-Store historical MailTx retention
 is mandatory.
 
-### O-024 Account authorization and proof of possession
-Freeze the V1 account key type, canonical authorization descriptor, proof-of-
-possession message and signature encoding before Payment, MailTx fee
-authorization or key rotation is implemented. The large Operator Authority
-hybrid signature bundle is a separate key domain and must not be reused for
-ordinary accounts by accident.
+### O-024 Account authorization and proof of possession — resolved
+Frozen: Account authorization uses Ed25519; `AccountCreateOpV1` enforces cryptographic Proof of Possession (`CYBOU/ACCOUNT_POP/V1`) over `network_id || account_id || authorization_key`. Verified in `ValidateAccountCreateOp`.
 
 ## Evidence / legal
 
