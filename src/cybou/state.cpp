@@ -224,4 +224,91 @@ KeyUpdateResult ApplyKeyUpdate(
     return {};
 }
 
+SystemLockResult ApplySystemLock(
+    const AccountId& account_id,
+    const uint64_t amount,
+    CybouState& state)
+{
+    if (amount == 0) {
+        return {SystemLockError::ZERO_AMOUNT};
+    }
+    auto it{state.accounts.find(account_id)};
+    if (it == state.accounts.end()) {
+        return {SystemLockError::ACCOUNT_NOT_FOUND};
+    }
+    if (it->second.balance < amount) {
+        return {SystemLockError::INSUFFICIENT_BALANCE};
+    }
+    if (it->second.system_balance > std::numeric_limits<uint64_t>::max() - amount) {
+        return {SystemLockError::SYSTEM_BALANCE_OVERFLOW};
+    }
+    it->second.balance -= amount;
+    it->second.system_balance += amount;
+    it->second.next_nonce++;
+    return {};
+}
+
+MailResult ApplyMail(
+    const AccountId& sender_id,
+    const AccountId& recipient_id,
+    const uint64_t fee,
+    CybouState& state)
+{
+    if (recipient_id.IsNull() || sender_id == recipient_id) {
+        return {MailError::SELF_MAIL};
+    }
+    auto sender_it{state.accounts.find(sender_id)};
+    if (sender_it == state.accounts.end()) {
+        return {MailError::SENDER_NOT_FOUND};
+    }
+    auto recipient_it{state.accounts.find(recipient_id)};
+    if (recipient_it == state.accounts.end()) {
+        return {MailError::RECIPIENT_NOT_FOUND};
+    }
+    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - fee) {
+        return {MailError::FEE_POOL_OVERFLOW};
+    }
+
+    auto& sender = sender_it->second;
+    if (sender.balance > std::numeric_limits<uint64_t>::max() - sender.system_balance) {
+        return {MailError::INSUFFICIENT_FEE_BALANCE};
+    }
+    const uint64_t total_available = sender.system_balance + sender.balance;
+    if (total_available < fee) {
+        return {MailError::INSUFFICIENT_FEE_BALANCE};
+    }
+
+    uint64_t remaining_fee = fee;
+    if (sender.system_balance >= remaining_fee) {
+        sender.system_balance -= remaining_fee;
+        remaining_fee = 0;
+    } else {
+        remaining_fee -= sender.system_balance;
+        sender.system_balance = 0;
+        sender.balance -= remaining_fee;
+    }
+
+    state.pending_fee_pool += fee;
+    sender.next_nonce++;
+    return {};
+}
+
+void RoutePendingFees(CybouState& state)
+{
+    const uint64_t chunks = state.pending_fee_pool / 4;
+    const uint64_t remainder = state.pending_fee_pool % 4;
+
+    const uint64_t security_addition = chunks * 3;
+    const uint64_t onboarding_addition = chunks * 1;
+
+    if (state.security_reward_pool <= std::numeric_limits<uint64_t>::max() - security_addition) {
+        state.security_reward_pool += security_addition;
+    }
+    if (state.onboarding_pool <= std::numeric_limits<uint64_t>::max() - onboarding_addition) {
+        state.onboarding_pool += onboarding_addition;
+    }
+
+    state.pending_fee_pool = remainder;
+}
+
 } // namespace cybou

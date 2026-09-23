@@ -24,10 +24,22 @@ inline constexpr uint8_t PROTOCOL_OPERATION_VERSION{1};
 inline constexpr uint8_t AUTHORIZED_OPERATION_VERSION{1};
 inline constexpr uint8_t PAYMENT_OP_VERSION{1};
 inline constexpr uint8_t KEY_UPDATE_OP_VERSION{1};
+inline constexpr uint8_t SYSTEM_LOCK_OP_VERSION{1};
+inline constexpr uint8_t MAIL_OP_VERSION{1};
+
+inline constexpr size_t MAX_MAIL_CIPHERTEXT_SIZE{64 * 1024}; // 64 KB strict maximum
+inline constexpr uint64_t MAIL_BASE_FEE{4};
+inline constexpr uint64_t MAIL_TIER_BYTES{1024};
+inline constexpr uint64_t MAIL_TIER_FEE{1};
+
+uint64_t ComputeDeterministicMailFee(size_t ciphertext_size);
+uint256 ComputeMailContentCommitment(const uint256& salt, std::span<const unsigned char> ciphertext);
 
 enum class AuthorizedPayloadType : uint8_t {
     PAYMENT = 1,
     KEY_UPDATE = 2,
+    SYSTEM_LOCK = 3,
+    MAIL = 4,
 };
 
 struct PaymentOpV1 {
@@ -46,7 +58,25 @@ struct KeyUpdateOpV1 {
     friend bool operator==(const KeyUpdateOpV1&, const KeyUpdateOpV1&) = default;
 };
 
-using AuthorizedOperationPayloadV1 = std::variant<PaymentOpV1, KeyUpdateOpV1>;
+struct SystemLockOpV1 {
+    uint8_t version{SYSTEM_LOCK_OP_VERSION};
+    uint64_t amount{0};
+
+    friend bool operator==(const SystemLockOpV1&, const SystemLockOpV1&) = default;
+};
+
+struct MailOpV1 {
+    uint8_t version{MAIL_OP_VERSION};
+    AccountId recipient;
+    uint256 content_commitment;
+    uint256 discovery_tag;
+    uint64_t fee{0};
+    std::vector<unsigned char> ciphertext;
+
+    friend bool operator==(const MailOpV1&, const MailOpV1&) = default;
+};
+
+using AuthorizedOperationPayloadV1 = std::variant<PaymentOpV1, KeyUpdateOpV1, SystemLockOpV1, MailOpV1>;
 
 AuthorizedPayloadType PayloadType(const AuthorizedOperationPayloadV1& payload);
 std::vector<unsigned char> SerializeAuthorizedPayload(const AuthorizedOperationPayloadV1& payload);
@@ -108,6 +138,10 @@ enum class OperationExecutionError : uint8_t {
     INVALID_SIGNATURE,
     PAYMENT_FAILED,
     KEY_UPDATE_FAILED,
+    SYSTEM_LOCK_FAILED,
+    MAIL_FAILED,
+    MAIL_OVERSIZED,
+    MAIL_INVALID_FEE,
 };
 
 struct OperationExecutionResult {
@@ -115,6 +149,8 @@ struct OperationExecutionResult {
     AccountCreateResult account_create_result{};
     PaymentResult payment_result{};
     KeyUpdateResult key_update_result{};
+    SystemLockResult system_lock_result{};
+    MailResult mail_result{};
 
     explicit operator bool() const { return error == OperationExecutionError::NONE; }
 };

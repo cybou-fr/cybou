@@ -65,7 +65,94 @@ std::optional<KeyUpdateOpV1> DeserializeKeyUpdateOp(const std::span<const unsign
     };
 }
 
+std::vector<unsigned char> SerializeSystemLockOp(const SystemLockOpV1& op)
+{
+    std::vector<unsigned char> out;
+    out.push_back(op.version);
+    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.amount >> (8 * i)));
+    return out;
+}
+
+std::optional<SystemLockOpV1> DeserializeSystemLockOp(const std::span<const unsigned char> bytes)
+{
+    if (bytes.size() != 1 + 8) return std::nullopt;
+    if (bytes[0] != SYSTEM_LOCK_OP_VERSION) return std::nullopt;
+    uint64_t amount{0};
+    for (int i = 0; i < 8; ++i) amount |= uint64_t{bytes[1 + i]} << (8 * i);
+    return SystemLockOpV1{.version = bytes[0], .amount = amount};
+}
+
+std::vector<unsigned char> SerializeMailOp(const MailOpV1& op)
+{
+    std::vector<unsigned char> out;
+    out.reserve(109 + op.ciphertext.size());
+    out.push_back(op.version);
+    out.insert(out.end(), op.recipient.Value().begin(), op.recipient.Value().end());
+    out.insert(out.end(), op.content_commitment.begin(), op.content_commitment.end());
+    out.insert(out.end(), op.discovery_tag.begin(), op.discovery_tag.end());
+    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.fee >> (8 * i)));
+    const uint32_t size = static_cast<uint32_t>(op.ciphertext.size());
+    for (int i = 0; i < 4; ++i) out.push_back(static_cast<unsigned char>(size >> (8 * i)));
+    out.insert(out.end(), op.ciphertext.begin(), op.ciphertext.end());
+    return out;
+}
+
+std::optional<MailOpV1> DeserializeMailOp(const std::span<const unsigned char> bytes)
+{
+    static constexpr size_t HEADER_SIZE{1 + 32 + 32 + 32 + 8 + 4};
+    if (bytes.size() < HEADER_SIZE) return std::nullopt;
+    if (bytes[0] != MAIL_OP_VERSION) return std::nullopt;
+
+    uint256 rec_bytes;
+    std::copy_n(bytes.begin() + 1, 32, rec_bytes.begin());
+    const AccountId recipient{rec_bytes};
+    if (recipient.IsNull()) return std::nullopt;
+
+    uint256 content_commitment;
+    std::copy_n(bytes.begin() + 33, 32, content_commitment.begin());
+
+    uint256 discovery_tag;
+    std::copy_n(bytes.begin() + 65, 32, discovery_tag.begin());
+
+    uint64_t fee{0};
+    for (int i = 0; i < 8; ++i) fee |= uint64_t{bytes[97 + i]} << (8 * i);
+
+    uint32_t size{0};
+    for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[105 + i]} << (8 * i);
+
+    if (size > MAX_MAIL_CIPHERTEXT_SIZE) return std::nullopt;
+    if (bytes.size() != HEADER_SIZE + size) return std::nullopt;
+
+    std::vector<unsigned char> ciphertext(bytes.begin() + HEADER_SIZE, bytes.end());
+    return MailOpV1{
+        .version = bytes[0],
+        .recipient = recipient,
+        .content_commitment = content_commitment,
+        .discovery_tag = discovery_tag,
+        .fee = fee,
+        .ciphertext = std::move(ciphertext),
+    };
+}
+
 } // namespace
+
+uint64_t ComputeDeterministicMailFee(size_t ciphertext_size)
+{
+    const uint64_t tiers = (static_cast<uint64_t>(ciphertext_size) + MAIL_TIER_BYTES - 1) / MAIL_TIER_BYTES;
+    return MAIL_BASE_FEE + tiers * MAIL_TIER_FEE;
+}
+
+uint256 ComputeMailContentCommitment(const uint256& salt, const std::span<const unsigned char> ciphertext)
+{
+    static constexpr std::string_view DOMAIN{"CYBOU/MAIL_CONTENT/V1"};
+    CSHA256 hasher;
+    hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
+    hasher.Write(salt.begin(), salt.size());
+    hasher.Write(ciphertext.data(), ciphertext.size());
+    uint256 commitment;
+    hasher.Finalize(commitment.begin());
+    return commitment;
+}
 
 AuthorizedPayloadType PayloadType(const AuthorizedOperationPayloadV1& payload)
 {
@@ -73,6 +160,8 @@ AuthorizedPayloadType PayloadType(const AuthorizedOperationPayloadV1& payload)
         using T = std::decay_t<decltype(op)>;
         if constexpr (std::is_same_v<T, PaymentOpV1>) return AuthorizedPayloadType::PAYMENT;
         if constexpr (std::is_same_v<T, KeyUpdateOpV1>) return AuthorizedPayloadType::KEY_UPDATE;
+        if constexpr (std::is_same_v<T, SystemLockOpV1>) return AuthorizedPayloadType::SYSTEM_LOCK;
+        if constexpr (std::is_same_v<T, MailOpV1>) return AuthorizedPayloadType::MAIL;
     }, payload);
 }
 
@@ -84,6 +173,8 @@ std::vector<unsigned char> SerializeAuthorizedPayload(const AuthorizedOperationP
         using T = std::decay_t<decltype(op)>;
         if constexpr (std::is_same_v<T, PaymentOpV1>) return SerializePaymentOp(op);
         if constexpr (std::is_same_v<T, KeyUpdateOpV1>) return SerializeKeyUpdateOp(op);
+        if constexpr (std::is_same_v<T, SystemLockOpV1>) return SerializeSystemLockOp(op);
+        if constexpr (std::is_same_v<T, MailOpV1>) return SerializeMailOp(op);
     }, payload)};
     out.insert(out.end(), body.begin(), body.end());
     return out;
@@ -102,6 +193,16 @@ std::optional<AuthorizedOperationPayloadV1> DeserializeAuthorizedPayload(const s
     }
     case AuthorizedPayloadType::KEY_UPDATE: {
         const auto op{DeserializeKeyUpdateOp(sub)};
+        if (!op) return std::nullopt;
+        return *op;
+    }
+    case AuthorizedPayloadType::SYSTEM_LOCK: {
+        const auto op{DeserializeSystemLockOp(sub)};
+        if (!op) return std::nullopt;
+        return *op;
+    }
+    case AuthorizedPayloadType::MAIL: {
+        const auto op{DeserializeMailOp(sub)};
         if (!op) return std::nullopt;
         return *op;
     }
@@ -249,9 +350,30 @@ OperationExecutionResult ApplyProtocolOperation(
                 if constexpr (std::is_same_v<P, KeyUpdateOpV1>) {
                     const auto key_res{ApplyKeyUpdate(op.account_id, payload.new_authorization.authorization_descriptor, state)};
                     if (!key_res) {
-                        return {OperationExecutionError::KEY_UPDATE_FAILED, {}, {}, key_res};
+                        return {OperationExecutionError::KEY_UPDATE_FAILED, {}, {}, key_res, {}, {}};
                     }
-                    return {OperationExecutionError::NONE, {}, {}, key_res};
+                    return {OperationExecutionError::NONE, {}, {}, key_res, {}, {}};
+                }
+                if constexpr (std::is_same_v<P, SystemLockOpV1>) {
+                    const auto lock_res{ApplySystemLock(op.account_id, payload.amount, state)};
+                    if (!lock_res) {
+                        return {OperationExecutionError::SYSTEM_LOCK_FAILED, {}, {}, {}, lock_res, {}};
+                    }
+                    return {OperationExecutionError::NONE, {}, {}, {}, lock_res, {}};
+                }
+                if constexpr (std::is_same_v<P, MailOpV1>) {
+                    if (payload.ciphertext.size() > MAX_MAIL_CIPHERTEXT_SIZE) {
+                        return {OperationExecutionError::MAIL_OVERSIZED, {}, {}, {}, {}, {}};
+                    }
+                    const uint64_t expected_fee{ComputeDeterministicMailFee(payload.ciphertext.size())};
+                    if (payload.fee != expected_fee) {
+                        return {OperationExecutionError::MAIL_INVALID_FEE, {}, {}, {}, {}, {}};
+                    }
+                    const auto mail_res{ApplyMail(op.account_id, payload.recipient, payload.fee, state)};
+                    if (!mail_res) {
+                        return {OperationExecutionError::MAIL_FAILED, {}, {}, {}, {}, mail_res};
+                    }
+                    return {OperationExecutionError::NONE, {}, {}, {}, {}, mail_res};
                 }
             }, op.payload);
         }

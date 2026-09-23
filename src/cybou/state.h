@@ -123,6 +123,53 @@ KeyUpdateResult ApplyKeyUpdate(
     const uint256& new_authorization_key,
     CybouState& state);
 
+enum class SystemLockError : uint8_t {
+    NONE,
+    ACCOUNT_NOT_FOUND,
+    ZERO_AMOUNT,
+    INSUFFICIENT_BALANCE,
+    SYSTEM_BALANCE_OVERFLOW,
+};
+
+struct SystemLockResult {
+    SystemLockError error{SystemLockError::NONE};
+
+    explicit operator bool() const { return error == SystemLockError::NONE; }
+};
+
+SystemLockResult ApplySystemLock(
+    const AccountId& account_id,
+    uint64_t amount,
+    CybouState& state);
+
+enum class MailError : uint8_t {
+    NONE,
+    SENDER_NOT_FOUND,
+    RECIPIENT_NOT_FOUND,
+    SELF_MAIL,
+    INSUFFICIENT_FEE_BALANCE,
+    FEE_POOL_OVERFLOW,
+};
+
+struct MailResult {
+    MailError error{MailError::NONE};
+
+    explicit operator bool() const { return error == MailError::NONE; }
+};
+
+MailResult ApplyMail(
+    const AccountId& sender_id,
+    const AccountId& recipient_id,
+    uint64_t fee,
+    CybouState& state);
+
+/**
+ * Route indivisible pending fees in 4-CYBOU batches:
+ * 75% (3 CYBOU) to SecurityRewardPool, 25% (1 CYBOU) to OnboardingPool.
+ * Any remainder (0 <= r < 4) stays in PendingFeePool without rounding loss.
+ */
+void RoutePendingFees(CybouState& state);
+
 } // namespace cybou
 
 #endif // CYBOU_STATE_H

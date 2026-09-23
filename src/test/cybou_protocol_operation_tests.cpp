@@ -254,4 +254,271 @@ BOOST_AUTO_TEST_CASE(apply_protocol_operation_verifies_signature_and_advances_st
     BOOST_CHECK(bad_sig_res.error == cybou::OperationExecutionError::INVALID_SIGNATURE);
 }
 
+BOOST_AUTO_TEST_CASE(system_lock_roundtrip_and_execution)
+{
+    const cybou::AccountId sender{uint256::FromUserHex("a1").value()};
+    const cybou::SystemLockOpV1 lock_op{
+        .version = cybou::SYSTEM_LOCK_OP_VERSION,
+        .amount = 750,
+    };
+    std::array<unsigned char, cybou::USER_SIGNATURE_SIZE> sig{};
+    sig.fill(0x55);
+
+    const cybou::AuthorizedOperationV1 auth_op{
+        .version = cybou::AUTHORIZED_OPERATION_VERSION,
+        .account_id = sender,
+        .nonce = 10,
+        .payload = lock_op,
+        .signature = sig,
+    };
+    const cybou::ProtocolOperationV1 operation{auth_op};
+
+    // Serialization & roundtrip
+    const auto encoded{cybou::SerializeProtocolOperation(operation)};
+    const auto decoded{cybou::DeserializeProtocolOperation(encoded)};
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK(*decoded == operation);
+
+    // Execution with cryptographic verification
+    std::array<unsigned char, 32> priv{};
+    priv.fill(0x42);
+    const auto pub{cybou::DeriveEd25519PublicKey(priv)};
+    BOOST_REQUIRE(pub.has_value());
+
+    const cybou::AccountId acc{uint256::FromUserHex("11").value()};
+    const uint256 network_id{uint256::FromUserHex("77").value()};
+    const cybou::CybouProtocolParameters params{
+        .account_creation_work_bits = 0,
+        .account_creation_epoch_lag = 1,
+        .max_account_creates_per_block = 128,
+        .onboarding_bonus = 100,
+        .epoch_blocks = 10,
+    };
+    const cybou::ProtocolExecutionContextV1 ctx{
+        .network_id = network_id,
+        .block_height = 1,
+        .params = params,
+    };
+
+    cybou::CybouState state{
+        .onboarding_pool = 10000,
+        .security_reward_pool = 0,
+        .pending_fee_pool = 0,
+        .accounts{},
+    };
+    const cybou::AccountCreateOpV1 create_op{
+        .version = cybou::ACCOUNT_CREATE_OP_VERSION,
+        .account_id = acc,
+        .initial_authorization{.authorization_descriptor = *pub},
+        .creation_work{
+            .version = cybou::ACCOUNT_CREATION_WORK_VERSION,
+            .network_id = network_id,
+            .account_id = acc,
+            .initial_authorization_commitment = cybou::ComputeAuthCommitment({*pub}),
+            .work_epoch = 0,
+            .nonce = 0,
+        },
+    };
+    BOOST_REQUIRE(cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{create_op}, ctx, state));
+    state.accounts.at(acc).balance = 500;
+
+    const cybou::SystemLockOpV1 exec_lock{.version = cybou::SYSTEM_LOCK_OP_VERSION, .amount = 200};
+    const uint256 digest{cybou::ComputeUserOperationDigest(network_id, acc, 0, exec_lock)};
+    const auto valid_sig{cybou::SignUserMessage(priv, std::span<const unsigned char>{digest.begin(), digest.size()})};
+    BOOST_REQUIRE(valid_sig.has_value());
+
+    const cybou::AuthorizedOperationV1 exec_op{
+        .version = cybou::AUTHORIZED_OPERATION_VERSION,
+        .account_id = acc,
+        .nonce = 0,
+        .payload = exec_lock,
+        .signature = *valid_sig,
+    };
+
+    const auto exec_res{cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{exec_op}, ctx, state)};
+    BOOST_REQUIRE(exec_res);
+    BOOST_CHECK_EQUAL(state.accounts.at(acc).balance, 300);
+    BOOST_CHECK_EQUAL(state.accounts.at(acc).system_balance, 300); // 100 bonus + 200 locked
+    BOOST_CHECK_EQUAL(state.accounts.at(acc).next_nonce, 1);
+}
+
+BOOST_AUTO_TEST_CASE(mail_operation_fee_commitment_and_execution)
+{
+    // Deterministic size-aware fee tiers
+    BOOST_CHECK_EQUAL(cybou::ComputeDeterministicMailFee(0), 4);
+    BOOST_CHECK_EQUAL(cybou::ComputeDeterministicMailFee(500), 5); // 4 + 1
+    BOOST_CHECK_EQUAL(cybou::ComputeDeterministicMailFee(1024), 5); // 4 + 1
+    BOOST_CHECK_EQUAL(cybou::ComputeDeterministicMailFee(1025), 6); // 4 + 2
+    BOOST_CHECK_EQUAL(cybou::ComputeDeterministicMailFee(65536), 68); // 4 + 64
+
+    // Content commitment
+    const uint256 salt{uint256::FromUserHex("5a17").value()};
+    const std::vector<unsigned char> ciphertext{0x01, 0x02, 0x03, 0x04};
+    const uint256 commitment = cybou::ComputeMailContentCommitment(salt, ciphertext);
+    BOOST_CHECK(!commitment.IsNull());
+
+    const cybou::AccountId sender{uint256::FromUserHex("a1").value()};
+    const cybou::AccountId recipient{uint256::FromUserHex("b2").value()};
+
+    const cybou::MailOpV1 mail_op{
+        .version = cybou::MAIL_OP_VERSION,
+        .recipient = recipient,
+        .content_commitment = commitment,
+        .discovery_tag = uint256::FromUserHex("d15c").value(),
+        .fee = cybou::ComputeDeterministicMailFee(ciphertext.size()),
+        .ciphertext = ciphertext,
+    };
+    std::array<unsigned char, cybou::USER_SIGNATURE_SIZE> sig{};
+    sig.fill(0x33);
+
+    const cybou::AuthorizedOperationV1 auth_op{
+        .version = cybou::AUTHORIZED_OPERATION_VERSION,
+        .account_id = sender,
+        .nonce = 0,
+        .payload = mail_op,
+        .signature = sig,
+    };
+    const cybou::ProtocolOperationV1 operation{auth_op};
+
+    // Serialization & roundtrip
+    const auto encoded{cybou::SerializeProtocolOperation(operation)};
+    const auto decoded{cybou::DeserializeProtocolOperation(encoded)};
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK(*decoded == operation);
+
+    // Execution with cryptographic verification
+    std::array<unsigned char, 32> priv1{};
+    priv1.fill(0x11);
+    const auto pub1{cybou::DeriveEd25519PublicKey(priv1)};
+    BOOST_REQUIRE(pub1.has_value());
+
+    std::array<unsigned char, 32> priv2{};
+    priv2.fill(0x22);
+    const auto pub2{cybou::DeriveEd25519PublicKey(priv2)};
+    BOOST_REQUIRE(pub2.has_value());
+
+    const cybou::AccountId acc1{uint256::FromUserHex("01").value()};
+    const cybou::AccountId acc2{uint256::FromUserHex("02").value()};
+    const uint256 network_id{uint256::FromUserHex("42").value()};
+
+    const cybou::CybouProtocolParameters params{
+        .account_creation_work_bits = 0,
+        .account_creation_epoch_lag = 1,
+        .max_account_creates_per_block = 128,
+        .onboarding_bonus = 6000,
+        .epoch_blocks = 10,
+    };
+    const cybou::ProtocolExecutionContextV1 ctx{
+        .network_id = network_id,
+        .block_height = 1,
+        .params = params,
+    };
+
+    cybou::CybouState state{
+        .onboarding_pool = 100000,
+        .security_reward_pool = 0,
+        .pending_fee_pool = 0,
+        .accounts{},
+    };
+    const cybou::AccountCreateOpV1 create1{
+        .version = cybou::ACCOUNT_CREATE_OP_VERSION,
+        .account_id = acc1,
+        .initial_authorization{.authorization_descriptor = *pub1},
+        .creation_work{
+            .version = cybou::ACCOUNT_CREATION_WORK_VERSION,
+            .network_id = network_id,
+            .account_id = acc1,
+            .initial_authorization_commitment = cybou::ComputeAuthCommitment({*pub1}),
+            .work_epoch = 0,
+            .nonce = 0,
+        },
+    };
+    BOOST_REQUIRE(cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{create1}, ctx, state));
+
+    const cybou::AccountCreateOpV1 create2{
+        .version = cybou::ACCOUNT_CREATE_OP_VERSION,
+        .account_id = acc2,
+        .initial_authorization{.authorization_descriptor = *pub2},
+        .creation_work{
+            .version = cybou::ACCOUNT_CREATION_WORK_VERSION,
+            .network_id = network_id,
+            .account_id = acc2,
+            .initial_authorization_commitment = cybou::ComputeAuthCommitment({*pub2}),
+            .work_epoch = 0,
+            .nonce = 0,
+        },
+    };
+    BOOST_REQUIRE(cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{create2}, ctx, state));
+
+    const size_t state_accounts_before = state.accounts.size();
+
+    // 1. Invalid fee rejected (priority fee bidding disabled)
+    cybou::MailOpV1 bad_fee_mail{
+        .version = cybou::MAIL_OP_VERSION,
+        .recipient = acc2,
+        .content_commitment = commitment,
+        .discovery_tag = uint256::FromUserHex("d1").value(),
+        .fee = 100, // Should be 5, priority bidding rejected!
+        .ciphertext = ciphertext,
+    };
+    const uint256 bad_fee_digest{cybou::ComputeUserOperationDigest(network_id, acc1, 0, bad_fee_mail)};
+    const auto bad_fee_sig{cybou::SignUserMessage(priv1, std::span<const unsigned char>{bad_fee_digest.begin(), bad_fee_digest.size()})};
+    const cybou::AuthorizedOperationV1 bad_fee_op{
+        .version = cybou::AUTHORIZED_OPERATION_VERSION,
+        .account_id = acc1,
+        .nonce = 0,
+        .payload = bad_fee_mail,
+        .signature = *bad_fee_sig,
+    };
+    BOOST_CHECK(cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{bad_fee_op}, ctx, state).error ==
+                cybou::OperationExecutionError::MAIL_INVALID_FEE);
+
+    // 2. Oversized mail rejected
+    cybou::MailOpV1 oversized_mail = mail_op;
+    oversized_mail.recipient = acc2;
+    oversized_mail.ciphertext.resize(cybou::MAX_MAIL_CIPHERTEXT_SIZE + 1);
+    oversized_mail.fee = cybou::ComputeDeterministicMailFee(oversized_mail.ciphertext.size());
+    const uint256 over_digest{cybou::ComputeUserOperationDigest(network_id, acc1, 0, oversized_mail)};
+    const auto over_sig{cybou::SignUserMessage(priv1, std::span<const unsigned char>{over_digest.begin(), over_digest.size()})};
+    const cybou::AuthorizedOperationV1 over_op{
+        .version = cybou::AUTHORIZED_OPERATION_VERSION,
+        .account_id = acc1,
+        .nonce = 0,
+        .payload = oversized_mail,
+        .signature = *over_sig,
+    };
+    BOOST_CHECK(cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{over_op}, ctx, state).error ==
+                cybou::OperationExecutionError::MAIL_OVERSIZED);
+
+    // 3. Valid mail operation execution
+    cybou::MailOpV1 valid_mail{
+        .version = cybou::MAIL_OP_VERSION,
+        .recipient = acc2,
+        .content_commitment = commitment,
+        .discovery_tag = uint256::FromUserHex("d1").value(),
+        .fee = cybou::ComputeDeterministicMailFee(ciphertext.size()), // 5 CYBOU
+        .ciphertext = ciphertext,
+    };
+    const uint256 valid_digest{cybou::ComputeUserOperationDigest(network_id, acc1, 0, valid_mail)};
+    const auto valid_mail_sig{cybou::SignUserMessage(priv1, std::span<const unsigned char>{valid_digest.begin(), valid_digest.size()})};
+    const cybou::AuthorizedOperationV1 valid_op{
+        .version = cybou::AUTHORIZED_OPERATION_VERSION,
+        .account_id = acc1,
+        .nonce = 0,
+        .payload = valid_mail,
+        .signature = *valid_mail_sig,
+    };
+
+    const auto mail_exec_res{cybou::ApplyProtocolOperation(cybou::ProtocolOperationV1{valid_op}, ctx, state)};
+    BOOST_REQUIRE(mail_exec_res);
+
+    // System balance consumed
+    BOOST_CHECK_EQUAL(state.accounts.at(acc1).system_balance, 5995); // 6000 - 5
+    BOOST_CHECK_EQUAL(state.accounts.at(acc1).next_nonce, 1);
+    BOOST_CHECK_EQUAL(state.pending_fee_pool, 5);
+
+    // Hard Rule: Consensus state remains bounded, NO permanent per-mail object
+    BOOST_CHECK_EQUAL(state.accounts.size(), state_accounts_before);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
