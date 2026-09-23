@@ -21,7 +21,7 @@ v0.14 is the architecture-hardening release and consistency-cleaned baseline.
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
 | `AGENTS.md` | 61 | `9dccd126d108ec14` |
-| `README.md` | 92 | `7fcafae47701a491` |
+| `README.md` | 101 | `186b9e8ffa1d7c31` |
 | `docs/cybou/00_VISION.md` | 81 | `c4925e5bda478519` |
 | `docs/cybou/01_BASELINE_AND_SCOPE.md` | 59 | `22edcc694bf13c53` |
 | `docs/cybou/02_ARCHITECTURE.md` | 76 | `d27de93b60cf46b4` |
@@ -91,6 +91,8 @@ v0.14 is the architecture-hardening release and consistency-cleaned baseline.
 | `docs/cybou/67_POT_EPOCHS_AND_INVITE_VOUCHERS.md` | 121 | `555fed2a9f766cd3` |
 | `docs/cybou/68_OPERATOR_KEY_SEPARATION.md` | 57 | `e299a7003950ab51` |
 | `docs/cybou/69_MAIL_EVIDENCE_BUNDLE.md` | 85 | `05f2f7b893c215f5` |
+| `docs/cybou/70_INVITE_VOUCHER_SIGNING_GATE.md` | 115 | `fe2bd08574896190` |
+| `docs/cybou/UPSTREAM_BASELINE.md` | 35 | `55877f4ce32d689b` |
 | `spec/bft_validator_policy.yaml` | 11 | `2b0e131a71004387` |
 | `spec/bitcoin_doc_migration.yaml` | 209 | `3d8535234f55471b` |
 | `spec/circulation_scenarios.csv` | 74 | `db240cf0d3280644` |
@@ -109,4 +111,4 @@ v0.14 is the architecture-hardening release and consistency-cleaned baseline.
 | `spec/survival_gates.yaml` | 51 | `c0ddefcb3ea4f58a` |
 | `spec/validator_reward_test_vectors.csv` | 5 | `2f439357448d8aa1` |
 
-Files excluding manifest: 88
+Files excluding manifest: 90
