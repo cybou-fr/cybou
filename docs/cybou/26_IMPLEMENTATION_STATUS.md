@@ -166,6 +166,7 @@ Desktop GUI:
 - native wallet page and Home balance card surfacing `Balance` / `System Balance` per doc 52 (whole-CYBOU rendering, one-way lock labeling, local activity ledger, capability-gated actions);
 - full Email client UI enforcing MailTx rules (one recipient, text-only, strict size meter, deterministic size-aware fee line, local read-state);
 - Storage and Backup client UIs (opaque content-addressed object list with pin/prune retention; encrypted backup sets with identity-key restore binding);
+- Network page with explicit-BFT finality section (finalized height, validator count, f = 1 ≥ 4 validators rule) fed by the doc 73 status contract;
 - core → desktop integration contract (doc 73): status fields, capability flags, service data flows, absolute rules both sides obey;
 - node diagnostics restyled to the CYBOU theme; inherited Bitcoin locale files dropped until real CYBOU translations exist.
 

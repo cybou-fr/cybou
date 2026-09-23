@@ -50,6 +50,12 @@ struct CybouDesktopStatus {
     QString data_directory;
     quint64 balance{0};
     quint64 system_balance{0};
+    /** Last height committed by a BFT finality certificate; -1 until core
+        exposes the finality feed. The GUI never derives finality locally. */
+    int last_finalized_height{-1};
+    /** Validators in the current epoch, equal weight 1 each; 0 until core
+        exposes the validator set. */
+    int validator_count{0};
 };
 
 /**

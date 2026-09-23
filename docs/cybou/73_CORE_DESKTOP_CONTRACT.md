@@ -29,6 +29,10 @@ account_id, creation_height        from the finalized AccountCreateOp
 balance, system_balance            from AccountState after every
                                    finalized transition that moves them
 network_id                         canonical NetworkID once exposed
+last_finalized_height              from the BFT finality feed (-1 until
+                                   exposed; the GUI never derives it)
+validator_count                    current epoch validator set (equal
+                                   weight 1; 0 until exposed)
 ```
 
 `WaitingForFinality` is entered when the op is broadcast and left only when
