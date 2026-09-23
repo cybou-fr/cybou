@@ -74,11 +74,11 @@ jobs:
             -DWITH_CCACHE=OFF \
             -DWITH_ZMQ=OFF
 
-      - name: Build unit test binary
-        run: cmake --build build-ci --target cybou-test --parallel 2
+      - name: Build CYBOU core test binary
+        run: cmake --build build-ci --target cybou-core-test --parallel 2
 
       - name: Run CYBOU protocol tests
         run: |
-          build-ci/bin/test \
-            --run_test=cybou_chainparams_tests,cybou_signing_tests,cybou_identity_tests,cybou_account_creation_tests,cybou_state_tests,cybou_state_store_tests,headers_sync_chainwork_tests \
+          build-ci/bin/cybou-core-test \
+            --run_test=cybou_chainparams_tests,cybou_signing_tests,cybou_identity_tests,cybou_account_creation_tests,cybou_state_tests,cybou_state_store_tests \
             --log_level=error

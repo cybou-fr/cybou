@@ -34,12 +34,6 @@ add_executable(cybou-test
   coinscachepair_tests.cpp
   coinstatsindex_tests.cpp
   coinsviewoverlay_tests.cpp
-  cybou_account_creation_tests.cpp
-  cybou_chainparams_tests.cpp
-  cybou_identity_tests.cpp
-  cybou_signing_tests.cpp
-  cybou_state_tests.cpp
-  cybou_state_store_tests.cpp
   common_url_tests.cpp
   compress_tests.cpp
   crypto_tests.cpp
@@ -142,6 +136,18 @@ add_executable(cybou-test
   versionbits_tests.cpp
 )
 
+# Keep the native CYBOU suites independent from the inherited Bitcoin test
+# universe. This target is the fast architectural/consensus test boundary.
+add_executable(cybou-core-test
+  cybou_main.cpp
+  cybou_account_creation_tests.cpp
+  cybou_chainparams_tests.cpp
+  cybou_identity_tests.cpp
+  cybou_signing_tests.cpp
+  cybou_state_tests.cpp
+  cybou_state_store_tests.cpp
+)
+
 include(TargetDataSources)
 target_json_data_sources(cybou-test
   data/base58_encode_decode.json
@@ -159,8 +165,22 @@ target_raw_data_sources(cybou-test NAMESPACE test::data
 )
 
 add_windows_application_manifest(cybou-test)
+add_windows_application_manifest(cybou-core-test)
 
 target_link_libraries(cybou-test
+  core_interface
+  test_util
+  bitcoin_cli
+  bitcoin_node
+  bitcoin_consensus
+  minisketch
+  secp256k1
+  Boost::headers
+  libevent::extra
+  $<TARGET_NAME_IF_EXISTS:USDT::headers>
+)
+
+target_link_libraries(cybou-core-test
   core_interface
   test_util
   bitcoin_cli
@@ -181,7 +201,7 @@ if(ENABLE_IPC)
   add_subdirectory(${PROJECT_SOURCE_DIR}/src/ipc/test ipc)
 endif()
 
-function(add_boost_test source_file)
+function(add_boost_test test_target source_file)
   if(NOT EXISTS ${source_file})
     return()
   endif()
@@ -198,7 +218,7 @@ function(add_boost_test source_file)
   list(REMOVE_ITEM test_suite_macro "mock_process")
   foreach(test_suite_name IN LISTS test_suite_macro)
     add_test(NAME ${test_suite_name}
-      COMMAND cybou-test --run_test=${test_suite_name} --catch_system_error=no --log_level=test_suite -- DEBUG_LOG_OUT
+      COMMAND ${test_target} --run_test=${test_suite_name} --catch_system_error=no --log_level=test_suite -- DEBUG_LOG_OUT
     )
     set_property(TEST ${test_suite_name} PROPERTY
       SKIP_REGULAR_EXPRESSION
@@ -209,18 +229,20 @@ function(add_boost_test source_file)
   endforeach()
 endfunction()
 
-function(add_all_test_targets)
-  get_target_property(test_source_dir cybou-test SOURCE_DIR)
-  get_target_property(test_sources cybou-test SOURCES)
+function(add_all_test_targets test_target)
+  get_target_property(test_source_dir ${test_target} SOURCE_DIR)
+  get_target_property(test_sources ${test_target} SOURCES)
   foreach(test_source ${test_sources})
     cmake_path(IS_RELATIVE test_source result)
     if(result)
       cmake_path(APPEND test_source_dir ${test_source} OUTPUT_VARIABLE test_source)
     endif()
-    add_boost_test(${test_source})
+    add_boost_test(${test_target} ${test_source})
   endforeach()
 endfunction()
 
-add_all_test_targets()
+add_all_test_targets(cybou-test)
+add_all_test_targets(cybou-core-test)
 
 install_binary_component(cybou-test INTERNAL)
+install_binary_component(cybou-core-test INTERNAL)

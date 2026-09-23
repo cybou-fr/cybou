@@ -125,6 +125,8 @@ Implemented skeleton:
 - C++ unit tests covering account creation, signing domains, state transitions,
   persistence integrity, invalid/mismatched network-definition rejection,
   atomic failure behavior, finalized-tip/height ordering and duplicate-block rejection.
+- dedicated `cybou-core-test` executable and CI path containing only native
+  CYBOU suites, separate from the inherited Bitcoin test universe.
 
 Not yet implemented:
 
