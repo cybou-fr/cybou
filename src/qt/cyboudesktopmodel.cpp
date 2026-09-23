@@ -75,6 +75,10 @@ void CybouDesktopModel::setCapabilities(const CybouCapabilities& capabilities)
 void CybouDesktopModel::requestCreateIdentity()
 {
     // The UI boundary ends here: protocol anti-Sybil work, operation
-    // construction and finality handling belong to core.
+    // construction and finality handling belong to core. The flag below is
+    // request bookkeeping only — the UI shows that the request was handed
+    // over and never advances protocol phases on its own.
+    m_identity_request_pending = true;
     Q_EMIT createIdentityRequested();
+    Q_EMIT statusChanged();
 }

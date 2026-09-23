@@ -212,6 +212,13 @@ void IdentityPage::refresh()
     }
 
     m_state_label->setText(tr("No CYBOU identity"));
-    m_detail_label->setText(tr("Your identity will be controlled by local keys and registered through a permissionless protocol operation with protocol anti-Sybil work."));
-    m_create_button->setEnabled(m_model->capabilities().account_creation);
+    const bool pending = m_model->identityCreationRequestPending();
+    m_detail_label->setText(pending
+        ? tr("Creation requested. The node will drive the protocol phases — keys, anti-Sybil work, broadcast and BFT finality — and this page will follow them.")
+        : tr("Your identity will be controlled by local keys and registered through a permissionless protocol operation with protocol anti-Sybil work."));
+    m_create_button->setEnabled(!pending && m_model->capabilities().account_creation);
+    m_create_button->setText(pending ? tr("Creation requested…") : tr("Create identity"));
+    m_create_button->setToolTip(pending
+        ? tr("Waiting for the node to pick up the request.")
+        : tr("Identity creation is not connected to the desktop yet."));
 }

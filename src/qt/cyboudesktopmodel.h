@@ -72,6 +72,10 @@ public:
 
     const CybouDesktopStatus& status() const { return m_status; }
     const CybouCapabilities& capabilities() const { return m_capabilities; }
+    /** True once the user requested identity creation and the node has not
+        picked the request up yet (identity state still None). This is a
+        UI-side request tracker only — protocol phases are driven by core. */
+    bool identityCreationRequestPending() const { return m_identity_request_pending; }
     void setClientModel(ClientModel* client_model);
     OptionsModel* optionsModel() const;
 
@@ -92,6 +96,7 @@ private:
     ClientModel* m_client_model{nullptr};
     CybouDesktopStatus m_status;
     CybouCapabilities m_capabilities;
+    bool m_identity_request_pending{false};
 
     void refreshFromClient();
 };

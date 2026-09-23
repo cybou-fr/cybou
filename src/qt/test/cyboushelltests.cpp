@@ -137,6 +137,12 @@ void CybouShellTests::identityCreateFollowsCapabilities()
     QSignalSpy spy{window->desktopModel(), &CybouDesktopModel::createIdentityRequested};
     QTest::mouseClick(create, Qt::LeftButton);
     QCOMPARE(spy.count(), 1);
+
+    // The request is tracked UI-side: the button stands down and the page
+    // says it is waiting for the node, without inventing protocol phases.
+    QVERIFY(window->desktopModel()->identityCreationRequestPending());
+    QVERIFY(!create->isEnabled());
+    QVERIFY(create->text().contains(QStringLiteral("requested")));
 }
 
 void CybouShellTests::emailPageGatesSending()
