@@ -25,7 +25,9 @@ private:
     QLabel* m_node_state;
     QLabel* m_peer_count;
     QLabel* m_height;
+    QLabel* m_finalized_height;
     QLabel* m_identity_state;
+    QLabel* m_identity_detail;
     QLabel* m_balance;
     QLabel* m_system_balance;
     QLabel* m_footer_state;

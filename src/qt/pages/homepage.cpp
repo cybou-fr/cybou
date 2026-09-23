@@ -141,9 +141,18 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     m_height->setObjectName("metric");
     height_box->addWidget(height_label);
     height_box->addWidget(m_height);
+    auto* finalized_box = new QVBoxLayout;
+    auto* finalized_label = new QLabel{tr("Finalized height"), network_card};
+    finalized_label->setObjectName("metricCaption");
+    m_finalized_height = new QLabel{network_card};
+    m_finalized_height->setObjectName("metric");
+    finalized_box->addWidget(finalized_label);
+    finalized_box->addWidget(m_finalized_height);
     metrics->addLayout(peers_box);
-    metrics->addSpacing(48);
+    metrics->addSpacing(40);
     metrics->addLayout(height_box);
+    metrics->addSpacing(40);
+    metrics->addLayout(finalized_box);
     metrics->addStretch();
     network_layout->addLayout(network_title_row);
     network_layout->addSpacing(8);
@@ -191,14 +200,14 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     identity_layout->addLayout(identity_header);
     m_identity_state = new QLabel{identity_card};
     m_identity_state->setObjectName("cardTitle");
-    auto* identity_body = new QLabel{tr("A CYBOU identity will provide protocol-native access to communication services."), identity_card};
-    identity_body->setObjectName("mutedText");
-    identity_body->setWordWrap(true);
+    m_identity_detail = new QLabel{identity_card};
+    m_identity_detail->setObjectName("mutedText");
+    m_identity_detail->setWordWrap(true);
     auto* identity_button = new QPushButton{tr("View identity"), identity_card};
     identity_button->setObjectName("secondaryButton");
     connect(identity_button, &QPushButton::clicked, this, [this] { m_identity_requested(); });
     identity_layout->addWidget(m_identity_state);
-    identity_layout->addWidget(identity_body);
+    identity_layout->addWidget(m_identity_detail);
     identity_layout->addStretch();
     identity_layout->addWidget(identity_button, 0, Qt::AlignLeft);
 
@@ -247,9 +256,41 @@ void HomePage::refresh()
     m_node_state->setText(status.node_running ? tr("Running") : tr("Starting"));
     m_peer_count->setText(QString::number(status.peer_count));
     m_height->setText(QString::number(status.height));
-    m_identity_state->setText(status.identity_state == CybouIdentityState::Active
-        ? tr("Identity active")
-        : tr("No identity created"));
+    m_finalized_height->setText(status.last_finalized_height >= 0
+        ? QString::number(status.last_finalized_height)
+        : QStringLiteral("—"));
+
+    switch (status.identity_state) {
+    case CybouIdentityState::Active:
+        m_identity_state->setText(tr("Identity active"));
+        m_identity_detail->setText(tr("Your identity is registered and ready."));
+        break;
+    case CybouIdentityState::CreatingKeys:
+        m_identity_state->setText(tr("Creating identity"));
+        m_identity_detail->setText(tr("Generating keys on this device."));
+        break;
+    case CybouIdentityState::PerformingWork:
+        m_identity_state->setText(tr("Creating identity"));
+        m_identity_detail->setText(tr("Performing AccountCreationWork — protocol anti-Sybil computation."));
+        break;
+    case CybouIdentityState::Broadcasting:
+        m_identity_state->setText(tr("Creating identity"));
+        m_identity_detail->setText(tr("Broadcasting AccountCreateOp to the validator set."));
+        break;
+    case CybouIdentityState::WaitingForFinality:
+        m_identity_state->setText(tr("Creating identity"));
+        m_identity_detail->setText(tr("Waiting for a BFT finality certificate."));
+        break;
+    case CybouIdentityState::None:
+        m_identity_state->setText(m_model->identityCreationRequestPending()
+            ? tr("Creation requested")
+            : tr("No identity created"));
+        m_identity_detail->setText(m_model->identityCreationRequestPending()
+            ? tr("The node will drive the protocol phases next.")
+            : tr("A CYBOU identity provides protocol-native access to communication services."));
+        break;
+    }
+
     m_balance->setText(cybouAmountText(status.balance));
     m_system_balance->setText(tr("System Balance: %1 — frozen CYBOU that pays protocol fees.")
         .arg(cybouAmountText(status.system_balance)));
