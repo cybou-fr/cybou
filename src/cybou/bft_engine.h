@@ -85,15 +85,15 @@ uint256 ComputePrecommitNilDigest(
     const uint256& validator_id);
 
 /**
- * Deterministic leader index for (height, round) with N=4 validators: (height + round) % 4
+ * Deterministic leader index for (height, round) with N validators: (height + round) % N
  */
-inline size_t BftLeaderIndex(uint64_t height, uint32_t round)
+inline size_t BftLeaderIndex(uint64_t height, uint32_t round, size_t validator_count = 4)
 {
-    return static_cast<size_t>((height + static_cast<uint64_t>(round)) % BFT_STAGE1_VALIDATOR_COUNT);
+    return validator_count == 0 ? 0 : static_cast<size_t>((height + static_cast<uint64_t>(round)) % validator_count);
 }
 
 /**
- * Individual BFT validator state machine for N=4, f=1 consensus.
+ * Individual BFT validator state machine for N >= 1 consensus.
  */
 class BftValidatorNode
 {
@@ -124,10 +124,10 @@ public:
     /** Handle an incoming proposal message. Returns prevote message if produced. */
     std::optional<BftPrevoteMsg> ReceiveProposal(const BftProposalMsg& proposal);
 
-    /** Handle an incoming prevote message. Returns precommit message if 2/3+ prevote quorum reached. */
+    /** Handle an incoming prevote message. Returns precommit message if quorum reached. */
     std::optional<BftPrecommitMsg> ReceivePrevote(const BftPrevoteMsg& prevote);
 
-    /** Handle an incoming precommit message. Finalizes block if 2/3+ precommit quorum reached. */
+    /** Handle an incoming precommit message. Finalizes block if quorum reached. */
     bool ReceivePrecommit(const BftPrecommitMsg& precommit);
 
     /** Trigger a round timeout: advances step/round when stalled. */
@@ -162,17 +162,24 @@ private:
 };
 
 /**
- * Simulator harness for testing 4-node BFT network under normal, crash, and partitioned conditions.
+ * Simulator harness for testing N-node BFT network under normal, crash, and partitioned conditions.
+ * Supports N=1 (Authority mode), N=2..3 (Integration mode), and N>=4 (BFT mode).
  */
 class BftSimulator
 {
 public:
-    explicit BftSimulator(const uint256& network_id);
+    explicit BftSimulator(const uint256& network_id, size_t validator_count = 4);
 
     /** Get validator set */
     const ValidatorSetV1& GetValidatorSet() const { return m_validator_set; }
 
-    /** Access node i (0 <= i < 4) */
+    /** Number of validators */
+    size_t NodeCount() const { return m_nodes.size(); }
+
+    /** Quorum threshold */
+    size_t Quorum() const { return m_validator_set.QuorumThreshold(); }
+
+    /** Access node i */
     BftValidatorNode& Node(size_t index) { return *m_nodes.at(index); }
 
     /** Set online/offline status for node (simulates crash / recovery) */
@@ -193,8 +200,8 @@ private:
     uint256 m_network_id;
     ValidatorSetV1 m_validator_set;
     std::vector<std::unique_ptr<BftValidatorNode>> m_nodes;
-    std::array<bool, BFT_STAGE1_VALIDATOR_COUNT> m_online{true, true, true, true};
-    std::array<std::array<bool, 4>, 4> m_can_communicate;
+    std::vector<bool> m_online;
+    std::vector<std::vector<bool>> m_can_communicate;
 };
 
 } // namespace cybou

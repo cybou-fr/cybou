@@ -24,16 +24,69 @@ for every active validator.
 
 No stake-weighted consensus power.
 
-## Topology stages
+## Topology modes & quorum
+
+CYBOU uses a unified BFT consensus engine across all deployment sizes ($N \ge 1$), eliminating the need for temporary PoA branches or format conversions:
 
 ```text
-Beta Stage 1 (Frozen):
-    Strictly N=4 validators, equal weight = 1
-    Quorum threshold = 3 (2f + 1)
-    Fault tolerance f = 1
+Operator Authority
+      │
+      └── defines admissible ValidatorSetV1
+                  │
+                  ▼
+             BFT engine
+                  │
+        ┌─────────┼─────────┐
+        │         │         │
+      N = 1    N = 2..3   N >= 4
+        │         │         │
+    Authority Integration  Byzantine BFT
+    mode      mode        mode
+    1/1       2/2, 3/3    3/4, 4/5, 5/6, 5/7 ...
+    f = 0     f = 0       f >= 1
 ```
 
-A deployment must not claim tolerance of one Byzantine validator with fewer than 4 validators. Sets with $N \ne 4$ are strictly rejected by `ValidateValidatorSet` in Stage 1.
+### Consensus modes
+
+1. **Authority Mode ($N = 1$)**:
+   - Single authorized validator (`ConsensusMode::AUTHORITY`);
+   - Quorum threshold = 1 (1/1 commit vote);
+   - Fault tolerance $f = 0$;
+   - Leader index is always node 0;
+   - Produces canonical `BftFinalityCertificateV1` with 1 commit vote;
+   - Desktop and observer nodes verify finality certificates identically.
+
+2. **Integration Mode ($N \in \{2, 3\}$)**:
+   - Development & staging clusters (`ConsensusMode::INTEGRATION`);
+   - Quorum threshold = 2 ($N=2$) or 3 ($N=3$);
+   - Fault tolerance $f = 0$ (all nodes must agree; crash of any node pauses progress).
+
+3. **Byzantine BFT Mode ($N \ge 4$)**:
+   - Production decentralized operation (`ConsensusMode::BFT`);
+   - Quorum threshold: $\lfloor 2N / 3 \rfloor + 1$;
+   - Fault tolerance: $f = \lfloor (N - 1) / 3 \rfloor \ge 1$;
+   - $N=4 \implies Q=3, f=1$;
+   - $N=5 \implies Q=4, f=1$;
+   - $N=6 \implies Q=5, f=1$;
+   - $N=7 \implies Q=5, f=2$.
+
+A deployment must not claim tolerance of one Byzantine validator with fewer than 4 validators. Sets with $N < 1$ are strictly rejected by `ValidateValidatorSet`.
+
+### Quorum formula
+
+Quorum is calculated directly with integer arithmetic:
+
+```text
+quorum = (2 * N) / 3 + 1
+```
+
+Fault tolerance is an informational property:
+
+```text
+f = N == 0 ? 0 : (N - 1) / 3
+```
+
+Wire formats (`CybouBlockV1`, `BftFinalityCertificateV1`), state transitions, and validator set serialization remain strictly identical across all modes. Transitioning from $N=1$ to $N \ge 4$ requires only an operator-authorized `ValidatorSetV1` update without changing the consensus engine or block structures.
 
 ## BFT state machine
 

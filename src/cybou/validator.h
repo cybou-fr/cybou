@@ -16,12 +16,16 @@
 namespace cybou {
 
 inline constexpr uint8_t VALIDATOR_SET_VERSION{1};
-inline constexpr size_t BFT_STAGE1_VALIDATOR_COUNT{4};
-inline constexpr size_t BFT_STAGE1_QUORUM{3};
-inline constexpr size_t BFT_STAGE1_FAULT_TOLERANCE{1};
+inline constexpr size_t MIN_VALIDATORS{1};
 
 // Backwards-compatibility alias
-inline constexpr size_t BFT_MIN_VALIDATORS{BFT_STAGE1_VALIDATOR_COUNT};
+inline constexpr size_t BFT_MIN_VALIDATORS{MIN_VALIDATORS};
+
+enum class ConsensusMode : uint8_t {
+    AUTHORITY = 1,    // N = 1 (1/1 quorum, f = 0)
+    INTEGRATION = 2,  // N = 2, 3 (2/2 or 3/3 quorum, f = 0)
+    BFT = 3,          // N >= 4 (floor(2N/3) + 1, f >= 1)
+};
 
 struct ValidatorV1 {
     uint256 validator_id;
@@ -39,8 +43,15 @@ struct ValidatorSetV1 {
 
     size_t Size() const { return validators.size(); }
     size_t TotalWeight() const;
-    size_t FaultTolerance() const { return BFT_STAGE1_FAULT_TOLERANCE; }
-    size_t QuorumThreshold() const { return BFT_STAGE1_QUORUM; }
+    size_t FaultTolerance() const { return validators.empty() ? 0 : (validators.size() - 1) / 3; }
+    size_t QuorumThreshold() const { return (2 * validators.size()) / 3 + 1; }
+
+    ConsensusMode Mode() const
+    {
+        if (validators.size() == 1) return ConsensusMode::AUTHORITY;
+        if (validators.size() <= 3) return ConsensusMode::INTEGRATION;
+        return ConsensusMode::BFT;
+    }
 
     const ValidatorV1* FindValidator(const uint256& id) const;
     const ValidatorV1* FindValidatorByPublicKey(const uint256& pubkey) const;

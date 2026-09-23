@@ -42,7 +42,7 @@ ValidatorSetValidationError ValidateValidatorSet(const ValidatorSetV1& val_set)
     if (val_set.version != VALIDATOR_SET_VERSION) {
         return ValidatorSetValidationError::UNSUPPORTED_VERSION;
     }
-    if (val_set.validators.size() != BFT_STAGE1_VALIDATOR_COUNT) {
+    if (val_set.validators.size() < MIN_VALIDATORS) {
         return ValidatorSetValidationError::INVALID_VALIDATOR_COUNT;
     }
     std::set<uint256> seen_ids;

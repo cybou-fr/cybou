@@ -98,9 +98,9 @@ BOOST_AUTO_TEST_CASE(validator_set_invariants_and_serialization)
     BOOST_CHECK(!commitment.IsNull());
 
     // Invariant violations:
-    // 1. Less than 4 validators
+    // 1. Less than MIN_VALIDATORS (0 validators)
     cybou::ValidatorSetV1 too_small = val_set;
-    too_small.validators.pop_back();
+    too_small.validators.clear();
     BOOST_CHECK(cybou::ValidateValidatorSet(too_small) == cybou::ValidatorSetValidationError::INVALID_VALIDATOR_COUNT);
 
     // 2. Weight != 1 (Hard rule: equal validator weight = 1)
@@ -399,4 +399,165 @@ BOOST_AUTO_TEST_CASE(bft_state_machine_simulator_consensus_and_fault_tolerance)
     }
 }
 
+BOOST_AUTO_TEST_CASE(consensus_mode_quorum_and_fault_tolerance_scaling)
+{
+    // Test N = 1 to 7 according to the consensus specification:
+    // quorum = floor(2*N/3) + 1
+    // f = (N - 1) / 3
+    struct TestCase {
+        size_t n;
+        size_t expected_quorum;
+        size_t expected_f;
+        cybou::ConsensusMode expected_mode;
+    };
+
+    const std::vector<TestCase> cases = {
+        {1, 1, 0, cybou::ConsensusMode::AUTHORITY},    // 1/1 quorum, f = 0
+        {2, 2, 0, cybou::ConsensusMode::INTEGRATION},  // 2/2 quorum, f = 0
+        {3, 3, 0, cybou::ConsensusMode::INTEGRATION},  // 3/3 quorum, f = 0
+        {4, 3, 1, cybou::ConsensusMode::BFT},          // 3/4 quorum, f = 1
+        {5, 4, 1, cybou::ConsensusMode::BFT},          // 4/5 quorum, f = 1
+        {6, 5, 1, cybou::ConsensusMode::BFT},          // 5/6 quorum, f = 1
+        {7, 5, 2, cybou::ConsensusMode::BFT},          // 5/7 quorum, f = 2
+    };
+
+    for (const auto& tc : cases) {
+        cybou::ValidatorSetV1 set;
+        set.version = cybou::VALIDATOR_SET_VERSION;
+        for (size_t i = 1; i <= tc.n; ++i) {
+            auto node = MockValidatorNode::Create(static_cast<uint8_t>(i));
+            set.validators.push_back(cybou::ValidatorV1{
+                .validator_id = node.validator_id,
+                .consensus_public_key = node.consensus_pubkey,
+                .weight = 1,
+            });
+        }
+
+        BOOST_CHECK_EQUAL(set.Size(), tc.n);
+        BOOST_CHECK_EQUAL(set.QuorumThreshold(), tc.expected_quorum);
+        BOOST_CHECK_EQUAL(set.FaultTolerance(), tc.expected_f);
+        BOOST_CHECK(set.Mode() == tc.expected_mode);
+        BOOST_CHECK(cybou::ValidateValidatorSet(set) == cybou::ValidatorSetValidationError::NONE);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(authority_mode_n1_consensus_and_state_store)
+{
+    // N = 1 Authority Mode: Single validator produces blocks and finality certificates
+    const auto node = MockValidatorNode::Create(1);
+    cybou::ValidatorSetV1 val_set;
+    val_set.validators.push_back(cybou::ValidatorV1{
+        .validator_id = node.validator_id,
+        .consensus_public_key = node.consensus_pubkey,
+        .weight = 1,
+    });
+
+    BOOST_CHECK_EQUAL(val_set.Size(), 1);
+    BOOST_CHECK_EQUAL(val_set.QuorumThreshold(), 1);
+    BOOST_CHECK_EQUAL(val_set.FaultTolerance(), 0);
+    BOOST_CHECK(val_set.Mode() == cybou::ConsensusMode::AUTHORITY);
+    BOOST_CHECK(cybou::ValidateValidatorSet(val_set) == cybou::ValidatorSetValidationError::NONE);
+
+    const uint256 val_set_commitment = cybou::ComputeValidatorSetCommitment(val_set);
+
+    const cybou::CybouState genesis_state{
+        .onboarding_pool = 100000,
+        .security_reward_pool = 5000,
+        .pending_fee_pool = 0,
+        .accounts{},
+    };
+
+    const cybou::CybouProtocolParameters params{
+        .account_creation_work_bits = 0,
+        .account_creation_epoch_lag = 1,
+        .max_account_creates_per_block = 128,
+        .onboarding_bonus = cybou::DEV_ONBOARDING_BONUS,
+        .epoch_blocks = 10,
+    };
+
+    const uint256 genesis_block_id{uint256::FromUserHex("1001").value()};
+
+    const cybou::CybouNetworkDefinitionV1 definition{
+        .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
+        .genesis_block_id = genesis_block_id,
+        .genesis_state_root = cybou::CybouStateHash(genesis_state),
+        .protocol_parameters = params,
+        .initial_validator_set_commitment = val_set_commitment,
+    };
+    const uint256 network_id = cybou::NetworkId(definition);
+
+    auto db{MemoryDb()};
+    cybou::CybouStateStore store{db, definition};
+    BOOST_REQUIRE(store.InitializeGenesis(genesis_state));
+
+    // Height 1 block proposal
+    cybou::CybouBlockV1 block_1{
+        .version = cybou::CYBOU_BLOCK_VERSION,
+        .parent_block_id = genesis_block_id,
+        .height = 1,
+        .operations = {},
+        .resulting_state_root = cybou::CybouStateHash(genesis_state),
+    };
+    const uint256 block_1_id = cybou::ComputeBlockId(block_1);
+
+    // 1/1 Finality Certificate
+    cybou::BftFinalityCertificateV1 cert_1{
+        .version = cybou::BFT_FINALITY_CERTIFICATE_VERSION,
+        .network_id = network_id,
+        .block_id = block_1_id,
+        .height = 1,
+        .validator_set_commitment = val_set_commitment,
+        .commit_votes = {
+            node.SignCommit(network_id, block_1_id, 1, val_set_commitment),
+        },
+    };
+
+    // Verify 1/1 certificate
+    BOOST_CHECK(cybou::VerifyFinalityCertificate(cert_1, val_set, network_id) ==
+                cybou::FinalityVerificationError::NONE);
+
+    // Empty votes fails
+    cybou::BftFinalityCertificateV1 empty_cert = cert_1;
+    empty_cert.commit_votes.clear();
+    BOOST_CHECK(cybou::VerifyFinalityCertificate(empty_cert, val_set, network_id) ==
+                cybou::FinalityVerificationError::INSUFFICIENT_VOTES);
+
+    // Commit to StateStore
+    cybou::FinalizedBlockV1 finalized_1{
+        .block = block_1,
+        .certificate = cert_1,
+    };
+    BOOST_REQUIRE(store.CommitFinalizedBlock(finalized_1, val_set));
+
+    auto head = store.GetFinalizedHead();
+    BOOST_REQUIRE(head.has_value());
+    BOOST_CHECK_EQUAL(head->height, 1);
+    BOOST_CHECK(head->block_id == block_1_id);
+}
+
+BOOST_AUTO_TEST_CASE(bft_simulator_authority_mode_n1)
+{
+    const uint256 network_id{uint256::FromUserHex("88").value()};
+    cybou::BftSimulator sim{network_id, 1}; // N = 1
+    BOOST_CHECK_EQUAL(sim.NodeCount(), 1);
+    BOOST_CHECK_EQUAL(sim.Quorum(), 1);
+    BOOST_CHECK(sim.GetValidatorSet().Mode() == cybou::ConsensusMode::AUTHORITY);
+
+    const uint256 state_root{uint256::FromUserHex("2222").value()};
+
+    // Step height 1
+    BOOST_CHECK(sim.StepRound(1, 0, {}, state_root));
+    BOOST_CHECK(sim.Node(0).GetStep() == cybou::BftStep::FINALIZED);
+    BOOST_REQUIRE(sim.Node(0).GetLatestFinalizedBlock().has_value());
+    BOOST_CHECK_EQUAL(sim.Node(0).GetLatestFinalizedBlock()->certificate.commit_votes.size(), 1);
+
+    // Step height 2
+    sim.Node(0).SetHeight(2, cybou::ComputeBlockId(sim.Node(0).GetLatestFinalizedBlock()->block));
+    BOOST_CHECK(sim.StepRound(2, 0, {}, state_root));
+    BOOST_CHECK(sim.Node(0).GetStep() == cybou::BftStep::FINALIZED);
+    BOOST_REQUIRE(sim.Node(0).GetLatestFinalizedBlock().has_value());
+    BOOST_CHECK_EQUAL(sim.Node(0).GetLatestFinalizedBlock()->block.height, 2);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
+

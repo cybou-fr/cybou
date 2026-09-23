@@ -161,7 +161,7 @@ std::optional<BftProposalMsg> BftValidatorNode::StartRound(
     m_precommitted = false;
     m_finalized_block.reset();
 
-    if (BftLeaderIndex(m_height, m_round) != m_node_index) {
+    if (BftLeaderIndex(m_height, m_round, m_validator_set.validators.size()) != m_node_index) {
         return std::nullopt;
     }
 
@@ -203,7 +203,7 @@ std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposal
         return std::nullopt;
     }
 
-    const size_t leader_idx = BftLeaderIndex(m_height, m_round);
+    const size_t leader_idx = BftLeaderIndex(m_height, m_round, m_validator_set.validators.size());
     if (leader_idx >= m_validator_set.validators.size()) return std::nullopt;
     if (proposal.proposer_id != m_validator_set.validators[leader_idx].validator_id) {
         return std::nullopt;
@@ -426,14 +426,17 @@ void BftValidatorNode::OnRoundTimeout()
 // BftSimulator
 // ------------------------------------------------------------------------------------------------
 
-BftSimulator::BftSimulator(const uint256& network_id)
+BftSimulator::BftSimulator(const uint256& network_id, size_t validator_count)
     : m_network_id{network_id}
 {
-    m_validator_set.version = 1;
-    m_validator_set.validators.resize(BFT_STAGE1_VALIDATOR_COUNT);
+    validator_count = std::max<size_t>(1, validator_count);
+    m_validator_set.version = VALIDATOR_SET_VERSION;
+    m_validator_set.validators.resize(validator_count);
+    m_online.assign(validator_count, true);
+    m_can_communicate.assign(validator_count, std::vector<bool>(validator_count, true));
 
     std::vector<std::array<unsigned char, 32>> seeds;
-    for (size_t i = 0; i < BFT_STAGE1_VALIDATOR_COUNT; ++i) {
+    for (size_t i = 0; i < validator_count; ++i) {
         std::string seed_str = "CYBOU_SIM_VALIDATOR_SEED_" + std::to_string(i);
         uint256 seed_hash;
         CSHA256().Write(reinterpret_cast<const unsigned char*>(seed_str.data()), seed_str.size()).Finalize(seed_hash.begin());
@@ -450,7 +453,7 @@ BftSimulator::BftSimulator(const uint256& network_id)
         };
     }
 
-    for (size_t i = 0; i < BFT_STAGE1_VALIDATOR_COUNT; ++i) {
+    for (size_t i = 0; i < validator_count; ++i) {
         m_nodes.push_back(std::make_unique<BftValidatorNode>(
             i, seeds[i], m_network_id, m_validator_set));
     }
@@ -460,34 +463,36 @@ BftSimulator::BftSimulator(const uint256& network_id)
 
 void BftSimulator::SetNodeOnline(size_t index, bool online)
 {
-    if (index < BFT_STAGE1_VALIDATOR_COUNT) {
+    if (index < m_online.size()) {
         m_online[index] = online;
     }
 }
 
 void BftSimulator::SetPartition(const std::vector<size_t>& partition_a, const std::vector<size_t>& partition_b)
 {
-    for (size_t i = 0; i < 4; ++i) {
-        for (size_t j = 0; j < 4; ++j) {
+    const size_t n = m_nodes.size();
+    for (size_t i = 0; i < n; ++i) {
+        for (size_t j = 0; j < n; ++j) {
             m_can_communicate[i][j] = false;
         }
     }
     for (size_t i : partition_a) {
         for (size_t j : partition_a) {
-            if (i < 4 && j < 4) m_can_communicate[i][j] = true;
+            if (i < n && j < n) m_can_communicate[i][j] = true;
         }
     }
     for (size_t i : partition_b) {
         for (size_t j : partition_b) {
-            if (i < 4 && j < 4) m_can_communicate[i][j] = true;
+            if (i < n && j < n) m_can_communicate[i][j] = true;
         }
     }
 }
 
 void BftSimulator::ClearPartition()
 {
-    for (size_t i = 0; i < 4; ++i) {
-        for (size_t j = 0; j < 4; ++j) {
+    const size_t n = m_nodes.size();
+    for (size_t i = 0; i < n; ++i) {
+        for (size_t j = 0; j < n; ++j) {
             m_can_communicate[i][j] = true;
         }
     }
@@ -499,7 +504,8 @@ bool BftSimulator::StepRound(
     const std::vector<ProtocolOperationV1>& ops,
     const uint256& resulting_state_root)
 {
-    const size_t leader_idx = BftLeaderIndex(height, round);
+    const size_t n = m_nodes.size();
+    const size_t leader_idx = BftLeaderIndex(height, round, n);
     std::optional<BftProposalMsg> proposal;
 
     if (m_online[leader_idx]) {
@@ -507,7 +513,7 @@ bool BftSimulator::StepRound(
     }
 
     std::vector<BftPrevoteMsg> prevotes;
-    for (size_t i = 0; i < 4; ++i) {
+    for (size_t i = 0; i < n; ++i) {
         if (!m_online[i]) continue;
         if (i != leader_idx) {
             m_nodes[i]->StartRound(round, ops, resulting_state_root);
@@ -519,11 +525,11 @@ bool BftSimulator::StepRound(
     }
 
     std::vector<BftPrecommitMsg> precommits;
-    for (size_t i = 0; i < 4; ++i) {
+    for (size_t i = 0; i < n; ++i) {
         if (!m_online[i]) continue;
         for (const auto& pv : prevotes) {
             size_t sender = 0;
-            for (size_t k = 0; k < 4; ++k) {
+            for (size_t k = 0; k < n; ++k) {
                 if (m_nodes[k]->GetValidatorId() == pv.validator_id) sender = k;
             }
             if (m_can_communicate[sender][i]) {
@@ -534,11 +540,11 @@ bool BftSimulator::StepRound(
     }
 
     size_t finalized_count = 0;
-    for (size_t i = 0; i < 4; ++i) {
+    for (size_t i = 0; i < n; ++i) {
         if (!m_online[i]) continue;
         for (const auto& pc : precommits) {
             size_t sender = 0;
-            for (size_t k = 0; k < 4; ++k) {
+            for (size_t k = 0; k < n; ++k) {
                 if (m_nodes[k]->GetValidatorId() == pc.validator_id) sender = k;
             }
             if (m_can_communicate[sender][i]) {
