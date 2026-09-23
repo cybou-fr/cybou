@@ -89,6 +89,20 @@ public:
         backend capability becomes available. */
     void setCapabilities(const CybouCapabilities& capabilities);
 
+    /** Core-facing adapter entry (doc 73): the BFT finality feed reports the
+        last certificate-committed height and the current validator set.
+        -1 / 0 mean "not exposed" and render as such. No-op when unchanged. */
+    void setFinalityStatus(int last_finalized_height, int validator_count);
+
+    /** Core-facing adapter entry (doc 73): core drives identity lifecycle
+        transitions only. The GUI never sets these states on its own. */
+    void setIdentityState(CybouIdentityState state, const QString& account_id = {},
+        int creation_height = 0);
+
+    /** Core-facing adapter entry (doc 73): balances from AccountState after
+        every finalized transition that moves them. */
+    void setBalances(quint64 balance, quint64 system_balance);
+
     /** Requests identity creation from the backend.
         The UI only emits the request; protocol behavior belongs to core. */
     void requestCreateIdentity();

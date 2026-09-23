@@ -41,6 +41,7 @@ private Q_SLOTS:
     void walletPageShowsBalances();
     void storageAndBackupGateActions();
     void networkPageReflectsModel();
+    void adapterSettersDrivePages();
     void themeResolvesAllTokens();
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();

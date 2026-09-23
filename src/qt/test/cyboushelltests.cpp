@@ -228,6 +228,47 @@ void CybouShellTests::networkPageReflectsModel()
     QVERIFY(found_network_name);
 }
 
+void CybouShellTests::adapterSettersDrivePages()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(model);
+
+    // Doc 73 adapter surface: setters mutate status and pages follow.
+    QSignalSpy status_spy{model, &CybouDesktopModel::statusChanged};
+    model->setFinalityStatus(42, 4);
+    QCOMPARE(model->status().last_finalized_height, 42);
+    QCOMPARE(model->status().validator_count, 4);
+    QVERIFY(status_spy.count() >= 1);
+
+    auto* network = window->pageAt(6);
+    QVERIFY(network);
+    const auto labels = network->findChildren<QLabel*>();
+    bool found_height = false;
+    bool found_fault = false;
+    for (const auto* label : labels) {
+        if (label->text() == QLatin1String{"42"}) found_height = true;
+        if (label->text() == QLatin1String{"f = 1"}) found_fault = true;
+    }
+    QVERIFY(found_height);
+    QVERIFY(found_fault);
+
+    // Identity lifecycle and balances flow through the same boundary.
+    model->setIdentityState(CybouIdentityState::Active, QStringLiteral("acct-1"), 42);
+    QCOMPARE(model->status().identity_state, CybouIdentityState::Active);
+    QVERIFY(!model->identityCreationRequestPending());
+
+    model->setBalances(1000, 250);
+    QCOMPARE(model->status().balance, quint64{1000});
+    QCOMPARE(model->status().system_balance, quint64{250});
+
+    // Unchanged values are a no-op (no extra signal).
+    const int before = status_spy.count();
+    model->setFinalityStatus(42, 4);
+    model->setBalances(1000, 250);
+    QCOMPARE(status_spy.count(), before);
+}
+
 void CybouShellTests::themeResolvesAllTokens()
 {
     // Regression guard for the numbered-%N .arg() shift: every @token@ in the

@@ -82,3 +82,38 @@ void CybouDesktopModel::requestCreateIdentity()
     Q_EMIT createIdentityRequested();
     Q_EMIT statusChanged();
 }
+
+void CybouDesktopModel::setFinalityStatus(int last_finalized_height, int validator_count)
+{
+    if (m_status.last_finalized_height == last_finalized_height &&
+        m_status.validator_count == validator_count) {
+        return;
+    }
+    m_status.last_finalized_height = last_finalized_height;
+    m_status.validator_count = validator_count;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString& account_id,
+    int creation_height)
+{
+    if (m_status.identity_state == state && m_status.account_id == account_id &&
+        m_status.creation_height == creation_height) {
+        return;
+    }
+    m_status.identity_state = state;
+    m_status.account_id = account_id;
+    m_status.creation_height = creation_height;
+    if (state == CybouIdentityState::Active) m_identity_request_pending = false;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setBalances(quint64 balance, quint64 system_balance)
+{
+    if (m_status.balance == balance && m_status.system_balance == system_balance) {
+        return;
+    }
+    m_status.balance = balance;
+    m_status.system_balance = system_balance;
+    Q_EMIT statusChanged();
+}

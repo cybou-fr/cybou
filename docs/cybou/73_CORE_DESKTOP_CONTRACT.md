@@ -38,6 +38,28 @@ validator_count                    current epoch validator set (equal
 `WaitingForFinality` is entered when the op is broadcast and left only when
 a BFT finality certificate commits the block.
 
+## Adapter surface (what core calls)
+
+The GUI consumes exclusively through these `CybouDesktopModel` setters;
+each is a no-op when the value is unchanged and emits `statusChanged()`
+(resp. `capabilitiesChanged()`) only on real changes:
+
+```text
+setFinalityStatus(last_finalized_height, validator_count)
+    BFT finality feed; -1 / 0 mean "not exposed".
+setIdentityState(state, account_id, creation_height)
+    Core drives identity transitions only (see the phase table above);
+    reaching Active also clears the UI-side request-pending flag.
+setBalances(balance, system_balance)
+    From AccountState after every finalized transition that moves them.
+setCapabilities(CybouCapabilities)
+    One flag per protocol path, true only when live on the node.
+```
+
+UI-to-core direction is request-only: `requestCreateIdentity()`
+(the `createIdentityRequested` signal) and page actions that core gates.
+Nothing else crosses the boundary.
+
 ## Capabilities (`CybouCapabilities`)
 
 Each flag flips to true only when the corresponding protocol path is live
