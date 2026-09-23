@@ -113,6 +113,7 @@ Implemented skeleton:
 - typed Operator Authority verifier boundary with keyset and epoch checks.
 - atomic one-time Welcome Grant transition from OnboardingPool to System Balance;
 - consensus replay set keyed only by consumed voucher ID.
+- canonical versioned redemption-state encoding and domain-separated state hash.
 
 Not yet implemented:
 

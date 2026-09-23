@@ -68,4 +68,6 @@ voucher:
     amount: 6000
     failure_mutates_state: false
     persistent_record: consumed_voucher_id_only
+    state_encoding: CYBOU/STATE/INVITE-REDEMPTION/V1
+    state_hash: domain_separated_sha256
   crypto_verification_status: TYPED_VERIFIER_BOUNDARY_PROVIDER_PENDING

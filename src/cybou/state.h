@@ -9,7 +9,10 @@
 
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <set>
+#include <span>
+#include <vector>
 
 namespace cybou {
 
@@ -25,7 +28,17 @@ struct InviteRedemptionState {
     uint64_t onboarding_pool{0};
     std::map<uint256, AccountBalanceState> accounts;
     std::set<uint256> consumed_voucher_ids;
+
+    friend bool operator==(const InviteRedemptionState&, const InviteRedemptionState&) = default;
 };
+
+inline constexpr uint8_t INVITE_REDEMPTION_STATE_VERSION{1};
+inline constexpr uint32_t MAX_SERIALIZED_ACCOUNTS{1'000'000};
+inline constexpr uint32_t MAX_SERIALIZED_CONSUMED_VOUCHERS{1'000'000};
+
+std::vector<unsigned char> SerializeInviteRedemptionState(const InviteRedemptionState& state);
+std::optional<InviteRedemptionState> DeserializeInviteRedemptionState(std::span<const unsigned char> bytes);
+uint256 InviteRedemptionStateHash(const InviteRedemptionState& state);
 
 enum class InviteRedemptionError : uint8_t {
     NONE,

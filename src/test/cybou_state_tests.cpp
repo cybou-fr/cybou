@@ -5,6 +5,7 @@
 #include <cybou/state.h>
 
 #include <boost/test/unit_test.hpp>
+#include <util/strencodings.h>
 
 #include <limits>
 #include <span>
@@ -147,6 +148,64 @@ BOOST_AUTO_TEST_CASE(redemption_failures_never_partially_mutate_state)
     result = cybou::RedeemInviteVoucher(Voucher(), Context(), ACCEPT, state);
     BOOST_CHECK(result.error == cybou::InviteRedemptionError::SYSTEM_BALANCE_OVERFLOW);
     assert_unchanged(state, before);
+}
+
+BOOST_AUTO_TEST_CASE(redemption_state_serialization_is_canonical_and_strict)
+{
+    const cybou::InviteRedemptionState empty{
+        .onboarding_pool = cybou::WELCOME_GRANT,
+        .accounts{},
+        .consumed_voucher_ids{},
+    };
+    BOOST_CHECK_EQUAL(
+        HexStr(cybou::SerializeInviteRedemptionState(empty)),
+        "0170170000000000000000000000000000");
+
+    auto state{State()};
+    state.accounts.emplace(uint256::FromUserHex("01").value(), cybou::AccountBalanceState{1, 2});
+    state.consumed_voucher_ids.insert(VOUCHER_ID);
+    state.consumed_voucher_ids.insert(uint256::FromUserHex("03").value());
+
+    const auto bytes{cybou::SerializeInviteRedemptionState(state)};
+    const auto decoded{cybou::DeserializeInviteRedemptionState(bytes)};
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK(*decoded == state);
+    BOOST_CHECK(cybou::SerializeInviteRedemptionState(*decoded) == bytes);
+    BOOST_CHECK(cybou::InviteRedemptionStateHash(*decoded) == cybou::InviteRedemptionStateHash(state));
+
+    auto malformed{bytes};
+    malformed[0] = 2;
+    BOOST_CHECK(!cybou::DeserializeInviteRedemptionState(malformed));
+
+    malformed = bytes;
+    malformed.pop_back();
+    BOOST_CHECK(!cybou::DeserializeInviteRedemptionState(malformed));
+
+    malformed = bytes;
+    malformed.push_back(0);
+    BOOST_CHECK(!cybou::DeserializeInviteRedemptionState(malformed));
+}
+
+BOOST_AUTO_TEST_CASE(redemption_state_hash_is_sensitive_to_every_state_class)
+{
+    const auto state{State()};
+    const auto root{cybou::InviteRedemptionStateHash(state)};
+
+    auto changed{state};
+    ++changed.onboarding_pool;
+    BOOST_CHECK(cybou::InviteRedemptionStateHash(changed) != root);
+
+    changed = state;
+    ++changed.accounts.at(BENEFICIARY).balance;
+    BOOST_CHECK(cybou::InviteRedemptionStateHash(changed) != root);
+
+    changed = state;
+    ++changed.accounts.at(BENEFICIARY).system_balance;
+    BOOST_CHECK(cybou::InviteRedemptionStateHash(changed) != root);
+
+    changed = state;
+    changed.consumed_voucher_ids.insert(VOUCHER_ID);
+    BOOST_CHECK(cybou::InviteRedemptionStateHash(changed) != root);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
