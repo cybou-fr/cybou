@@ -62,7 +62,14 @@ BOOST_AUTO_TEST_CASE(subsidy_limit_test)
         nSum += nSubsidy * 1000;
         BOOST_CHECK(MoneyRange(nSum));
     }
-    BOOST_CHECK_EQUAL(nSum, CAmount{2099999997690000});
+    // TRANSITIONAL: this pins the inherited Bitcoin halving schedule evaluated
+    // with CYBOU-DEV's 150-block interval. It is NOT the CYBOU monetary model:
+    // GetBlockSubsidy is replaced by the CYBOU reward router together with the
+    // fee router (3 security + 1 onboarding) and the 100,000,000,000 CYBOU
+    // fixed supply (spec/fee_router.yaml, spec/monetary_model.yaml,
+    // spec/bitcoin_code_removal.yaml, with_cybou_reward_router stage). Update
+    // this test in that milestone; do not treat the value below as policy.
+    BOOST_CHECK_EQUAL(nSum, CAmount{5078740193000});
 }
 
 //! CYBOU-DEV deliberately ships no assumeutxo snapshot data. The inherited

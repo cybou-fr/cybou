@@ -24,14 +24,14 @@
 using namespace util::hex_literals;
 using util::ToString;
 
-static const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
-static const std::string strSecret2 = "5KC4ejrDjv152FGwP386VD1i2NYc5KkfSMyv1nGy1VGDxGHqVY3";
-static const std::string strSecret1C = "Kwr371tjA9u2rFSMZjTNun2PXXP3WPZu2afRHTcta6KxEUdm1vEw";
-static const std::string strSecret2C = "L3Hq7a8FEQwJkW1M2GNKDW28546Vp5miewcCzSqUD9kCAXrJdS3g";
-static const std::string addr1 = "1QFqqMUD55ZV3PJEJZtaKCsQmjLT6JkjvJ";
-static const std::string addr2 = "1F5y5E5FMc5YzdJtB9hLaUe43GDxEKXENJ";
-static const std::string addr1C = "1NoJrossxPBKfCHuJXT4HadJrXRE9Fxiqs";
-static const std::string addr2C = "1CRj2HyM1CXWzHAXLQtiGLyggNT9WQqsDs";
+static const std::string strSecret1 = "6EPMsREoTcUAKX6BS7gje5TWnvUFviiyKZsmPvYPW7SaLFJfWe1"; // CYBOU WIF
+static const std::string strSecret2 = "6FcubER7bpwQoDYgmGW5CBoPfZniH3MBUFxvqyY4qqT5mgQVVzD"; // CYBOU WIF
+static const std::string strSecret1C = "Q65h7Xyv4TYt8jos3rWPCeg2Vh1Jt7AFax74xBKYKVRt7kD6wDWa"; // CYBOU WIF
+static const std::string strSecret2C = "QBXV86DS8ibA2zNrWPRKWNfm3DimBoN5DK3rfAY7xYr83oUS4kan"; // CYBOU WIF
+static const std::string addr1 = "CfijQPpGx8Y1wXCezKDVtiVSPrYs1TqKcS"; // CYBOU base58
+static const std::string addr2 = "CWYreGRKEf45tmDJru2G9zG5fPSN7JN6T1"; // CYBOU base58
+static const std::string addr1C = "CeGCRrDwqS9rZLCKzGmys6FLUede24ZV4o"; // CYBOU base58
+static const std::string addr2C = "CTtcbLKQtFW3tR4x2ADdqrbiJVfZQD9cFm"; // CYBOU base58
 
 static const std::string strAddressBad = "1HV9Lc3sNHZxwj4Zk6fB38tEmBryq2cBiF";
 

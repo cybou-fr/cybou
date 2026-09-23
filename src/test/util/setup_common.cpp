@@ -379,7 +379,11 @@ TestChain100Setup::TestChain100Setup(
     TestOpts opts)
     : TestingSetup{chain_type, opts}
 {
-    SetMockTime(1598887952);
+    // CYBOU-DEV genesis is timestamped in 2026. The initial mocktime must not
+    // precede genesis: block times are clamped to (median time past + spacing)
+    // relative to the genesis block, and a clamped time far beyond mocked
+    // "now" trips the time-too-new rule.
+    SetMockTime(std::max<int64_t>(1598887952, Params().GenesisBlock().nTime + 2 * 60 * 60));
     constexpr std::array<unsigned char, 32> vchKey = {
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}};
     coinbaseKey.Set(vchKey.begin(), vchKey.end(), true);
@@ -389,9 +393,12 @@ TestChain100Setup::TestChain100Setup(
 
     {
         LOCK(::cs_main);
-        assert(
-            m_node.chainman->ActiveChain().Tip()->GetBlockHash().ToString() ==
-            "0c8c5f79505775a0f6aed6aca2350718ceb9c6f2c878667864d5c7a6d8ffa2a6");
+        // The inherited test pinned the Bitcoin regtest tip hash here. That is
+        // impossible on CYBOU-DEV: mineBlocks advances mocktime by the real
+        // wall clock, so timestamps (and therefore the tip hash) vary between
+        // runs. Assert the invariant that actually matters for fixture users.
+        assert(m_node.chainman->ActiveChain().Height() == COINBASE_MATURITY);
+        assert(m_node.chainman->ActiveChain().Tip()->GetBlockHash() != Params().GenesisBlock().GetHash());
     }
 }
 
