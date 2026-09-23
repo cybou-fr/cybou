@@ -1,4 +1,4 @@
-version: '0.14'
+version: '0.0.1'
 consensus: BFT_explicit_finality
 validator_admission: operator_controlled_PoA
 validator_weight: 1

@@ -10,7 +10,7 @@ Security updates are actively provided for:
 
 | Version | Status |
 |---|---|
-| CYBOU v0.14.x (Development Baseline) | Active development |
+| CYBOU v0.0.1 (Development Baseline) | Active development |
 
 ---
 

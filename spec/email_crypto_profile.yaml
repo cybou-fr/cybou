@@ -1,4 +1,4 @@
-version: '0.14'
+version: '0.0.1'
 status: target_profile_not_yet_frozen_for_public_wire_compatibility
 native_email:
   e2e_required: true

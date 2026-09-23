@@ -1,4 +1,4 @@
-# 22 — Roadmap v0.14 — Architecture hardening
+# 22 — Roadmap v0.0.1 — Architecture hardening
 
 ## v0.0.0 — Exact upstream baseline
 Pin exact local Bitcoin Core tag/commit. Build/tests only. No normal Bitcoin-network launch.

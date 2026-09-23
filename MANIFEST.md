@@ -1,6 +1,6 @@
-# CYBOU Documentation v0.14 — Manifest
+# CYBOU Documentation v0.0.1 — Manifest
 
-v0.14 is the architecture-hardening release and consistency-cleaned baseline.
+v0.0.1 is the architecture-hardening release and consistency-cleaned baseline.
 
 ## Frozen hardening decisions
 
@@ -20,7 +20,7 @@ v0.14 is the architecture-hardening release and consistency-cleaned baseline.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| `AGENTS.md` | 61 | `9dccd126d108ec14` |
+| `AGENTS.md` | 61 | `bf327abd35b7252c` |
 | `README.md` | 101 | `186b9e8ffa1d7c31` |
 | `docs/cybou/00_VISION.md` | 81 | `c4925e5bda478519` |
 | `docs/cybou/01_BASELINE_AND_SCOPE.md` | 59 | `22edcc694bf13c53` |
@@ -44,19 +44,19 @@ v0.14 is the architecture-hardening release and consistency-cleaned baseline.
 | `docs/cybou/19_SECURITY_THREAT_MODEL.md` | 53 | `25daa9a974d1294a` |
 | `docs/cybou/20_PROTOCOL_SERIALIZATION.md` | 68 | `9e58f0076fb66b90` |
 | `docs/cybou/21_RELEASE_SECURITY.md` | 40 | `57772fe861d4f333` |
-| `docs/cybou/22_ROADMAP.md` | 123 | `ec724d89acf6a558` |
-| `docs/cybou/23_MANUAL_ACCEPTANCE.md` | 82 | `8475cee7d5c4023b` |
-| `docs/cybou/24_DECISIONS.md` | 159 | `8aa1c38b8b5a7630` |
-| `docs/cybou/25_OPEN_QUESTIONS.md` | 73 | `b801fe7c1d09b815` |
-| `docs/cybou/26_IMPLEMENTATION_STATUS.md` | 80 | `616c60e6a10b2f08` |
-| `docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md` | 175 | `1dfbeabc5a0f6588` |
+| `docs/cybou/22_ROADMAP.md` | 123 | `d5181c3e2853b31c` |
+| `docs/cybou/23_MANUAL_ACCEPTANCE.md` | 82 | `ce0baf4cdaa9baef` |
+| `docs/cybou/24_DECISIONS.md` | 161 | `fcdf21d5fd526e2e` |
+| `docs/cybou/25_OPEN_QUESTIONS.md` | 91 | `68fd099a60cd33db` |
+| `docs/cybou/26_IMPLEMENTATION_STATUS.md` | 132 | `cc450090367727fc` |
+| `docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md` | 175 | `7b3cdc6050c7cf85` |
 | `docs/cybou/28_BITCOIN_DOCUMENTATION_MIGRATION.md` | 221 | `63ba6ee5d01c00dc` |
 | `docs/cybou/29_DOCUMENTATION_AUTHORITY.md` | 79 | `fad3b5767d5ffa7d` |
 | `docs/cybou/30_REPOSITORY_DOCUMENTATION_CLEANUP.md` | 215 | `05597f40cb045934` |
 | `docs/cybou/31_IMPLEMENTATION_DETAIL_GATES.md` | 101 | `020f7185a750cfd8` |
 | `docs/cybou/32_UPSTREAM_REFERENCE_SOURCES.md` | 20 | `de2fc2cb65c2bda2` |
 | `docs/cybou/33_EMAIL_FIRST_PRODUCT_STRATEGY.md` | 65 | `ee3430d19de85aeb` |
-| `docs/cybou/34_MAIL_STATE_AND_RETENTION.md` | 111 | `5a637a214249c9d2` |
+| `docs/cybou/34_MAIL_STATE_AND_RETENTION.md` | 111 | `072aa5ca428f57f6` |
 | `docs/cybou/35_ROADMAP_CHANGE_EMAIL_FIRST.md` | 44 | `f7ddf5096a47e798` |
 | `docs/cybou/36_PROJECT_RENAME_AND_COPYRIGHT_PLAN.md` | 15 | `981e9aee26fbdb69` |
 | `docs/cybou/37_FRANCE_EU_GLOBAL_STRATEGY.md` | 96 | `99058ca64593188d` |
@@ -66,7 +66,7 @@ v0.14 is the architecture-hardening release and consistency-cleaned baseline.
 | `docs/cybou/41_PUBLIC_SUPPORT_AND_FUNDING.md` | 107 | `08e4ac9e49c8c9dd` |
 | `docs/cybou/42_COMPETITIVE_POSITIONING.md` | 57 | `44a9177464721ddc` |
 | `docs/cybou/43_STRATEGIC_SOURCE_REGISTER.md` | 116 | `b2c9dc42f9ddbae2` |
-| `docs/cybou/44_CRITICAL_SURVIVAL_AUDIT_V0_7.md` | 101 | `4633302324e7aad8` |
+| `docs/cybou/44_CRITICAL_SURVIVAL_AUDIT_V0_7.md` | 101 | `1cb9e024dafd88b3` |
 | `docs/cybou/45_PROJECT_RENAME_MAP.md` | 290 | `d29235a0809f0af7` |
 | `docs/cybou/46_COPYRIGHT_ATTRIBUTION_POLICY.md` | 109 | `dcfbbc4dff8e93e3` |
 | `docs/cybou/47_EMAIL_CHAIN_DELIVERY_MODEL.md` | 49 | `f2c58498aaa22d88` |
@@ -80,33 +80,33 @@ v0.14 is the architecture-hardening release and consistency-cleaned baseline.
 | `docs/cybou/55_FEE_FLOW_AND_RECYCLING.md` | 89 | `db86ae32f94eab29` |
 | `docs/cybou/56_OWNER_OPERATOR_AND_RESILIENCE.md` | 70 | `fe62720eba15712d` |
 | `docs/cybou/57_GLOBAL_PROOF_OF_TRUST_POLICY.md` | 60 | `d42d5677d5929377` |
-| `docs/cybou/58_CIRCULATION_SIMULATION.md` | 161 | `517c017b1a884783` |
+| `docs/cybou/58_CIRCULATION_SIMULATION.md` | 161 | `748386018bbb7875` |
 | `docs/cybou/59_DETERMINISTIC_FEE_ROUTER.md` | 95 | `38c144970b0d7e6e` |
 | `docs/cybou/60_VALIDATOR_REWARDS_AND_OPERATOR_REVENUE.md` | 74 | `f9568c67a10a8494` |
 | `docs/cybou/62_MAIL_REGISTRATION_AND_PROOF_MODEL.md` | 70 | `e23b80c01787fb98` |
-| `docs/cybou/63_MAIL_STATE_GROWTH_AND_DISCOVERY.md` | 77 | `8e4a2cc39d14118a` |
+| `docs/cybou/63_MAIL_STATE_GROWTH_AND_DISCOVERY.md` | 77 | `7865ff3352cbf80a` |
 | `docs/cybou/64_PRESTORE_MAIL_RETENTION.md` | 78 | `65dc8c973f4f2470` |
 | `docs/cybou/65_MAILTX_PROTOCOL_OPERATION.md` | 106 | `78402ab70ee3864a` |
-| `docs/cybou/66_BFT_VALIDATOR_SET_HARDENING.md` | 87 | `7317b76767292bc0` |
+| `docs/cybou/66_BFT_VALIDATOR_SET_HARDENING.md` | 87 | `f7575b006c5cf2dd` |
 | `docs/cybou/67_POT_EPOCHS_AND_INVITE_VOUCHERS.md` | 121 | `555fed2a9f766cd3` |
 | `docs/cybou/68_OPERATOR_KEY_SEPARATION.md` | 57 | `e299a7003950ab51` |
 | `docs/cybou/69_MAIL_EVIDENCE_BUNDLE.md` | 85 | `05f2f7b893c215f5` |
 | `docs/cybou/70_INVITE_VOUCHER_SIGNING_GATE.md` | 115 | `fe2bd08574896190` |
 | `docs/cybou/UPSTREAM_BASELINE.md` | 35 | `55877f4ce32d689b` |
-| `spec/bft_validator_policy.yaml` | 11 | `2b0e131a71004387` |
+| `spec/bft_validator_policy.yaml` | 11 | `1f1934f0f3ea0776` |
 | `spec/bitcoin_doc_migration.yaml` | 209 | `3d8535234f55471b` |
 | `spec/circulation_scenarios.csv` | 74 | `db240cf0d3280644` |
-| `spec/cybou_baseline.yaml` | 253 | `88773a18c92a83bb` |
-| `spec/email_crypto_profile.yaml` | 40 | `3c15f3e6d4ca02b2` |
-| `spec/fee_router.yaml` | 18 | `4c5b247f40c03b49` |
+| `spec/cybou_baseline.yaml` | 253 | `8554ddcf27f12713` |
+| `spec/email_crypto_profile.yaml` | 40 | `75512b33cf03cfe0` |
+| `spec/fee_router.yaml` | 18 | `ccebf298d9eb9ec0` |
 | `spec/fee_router_test_vectors.csv` | 9 | `db9274d10b0a3dfa` |
-| `spec/invite_voucher.yaml` | 17 | `1633b6d0d021313c` |
-| `spec/mail_protocol.yaml` | 27 | `c03a36b9ef96da99` |
-| `spec/market_strategy.yaml` | 42 | `cfa81471775352eb` |
-| `spec/monetary_model.yaml` | 51 | `45aa73ad5689b3e1` |
-| `spec/operator_keys.yaml` | 22 | `8fc6da6f562b011e` |
+| `spec/invite_voucher.yaml` | 80 | `d00ddd5c58eab061` |
+| `spec/mail_protocol.yaml` | 27 | `104e9cb288c55e92` |
+| `spec/market_strategy.yaml` | 42 | `9421f65346373f9e` |
+| `spec/monetary_model.yaml` | 51 | `9941ee000ed25ee2` |
+| `spec/operator_keys.yaml` | 42 | `cea0f5219da749cc` |
 | `spec/project_rename_map.yaml` | 128 | `37d46672c907e3fb` |
-| `spec/proof_of_trust.yaml` | 28 | `1fc1bf278725885e` |
+| `spec/proof_of_trust.yaml` | 28 | `88dceb9fd2b2d023` |
 | `spec/reward_policy.yaml` | 13 | `676e276df9a12277` |
 | `spec/survival_gates.yaml` | 51 | `c0ddefcb3ea4f58a` |
 | `spec/validator_reward_test_vectors.csv` | 5 | `2f439357448d8aa1` |

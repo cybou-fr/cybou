@@ -1,4 +1,4 @@
-# AGENTS.md — CYBOU v0.14 implementation authority
+# AGENTS.md — CYBOU v0.0.1 implementation authority
 
 Read active docs before coding.
 

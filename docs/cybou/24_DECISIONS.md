@@ -26,7 +26,7 @@
 | DEC-022 | Backup as first user-facing application | Superseded |
 | DEC-023 | Drive follows Backup | Frozen |
 | DEC-024 | Separate email-like product | Superseded |
-| DEC-025 | Messaging Core is shared messaging substrate | Superseded by v0.14 |
+| DEC-025 | Messaging Core is shared messaging substrate | Superseded by v0.0.1 |
 | DEC-026 | Crypto is agile and PQ/hybrid capable | Frozen |
 | DEC-027 | No custom cryptographic primitives | Frozen |
 | DEC-028 | Normal chain transactions have non-zero anti-spam fees | Frozen direction |
@@ -38,12 +38,12 @@
 | DEC-034 | Active CYBOU docs do not advertise unsupported inherited features | Frozen |
 | DEC-035 | Documentation migration is part of milestone Definition of Done | Frozen |
 | DEC-036 | CYBOU Email is first user-facing product | Frozen roadmap |
-| DEC-037 | Email v1 uses bounded Message Store, not general Object Storage | Superseded by v0.14 |
-| DEC-038 | Message Store has TTL/quota/replication but no erasure coding or 3:1 | Superseded by v0.14 |
+| DEC-037 | Email v1 uses bounded Message Store, not general Object Storage | Superseded by v0.0.1 |
+| DEC-038 | Message Store has TTL/quota/replication but no erasure coding or 3:1 | Superseded by v0.0.1 |
 | DEC-039 | General Object Storage follows Email v1 | Frozen roadmap |
 | DEC-040 | Backup follows general Storage durability/accounting | Frozen roadmap |
-| DEC-041 | Large Messenger attachments are deferred until Object Storage exists | Superseded by v0.14 |
-| DEC-042 | Advanced Messenger/group features come after core Messenger and Backup | Superseded by v0.14 |
+| DEC-041 | Large Messenger attachments are deferred until Object Storage exists | Superseded by v0.0.1 |
+| DEC-042 | Advanced Messenger/group features come after core Messenger and Backup | Superseded by v0.0.1 |
 | DEC-043 | Project rename/copyright migration is an explicit audited pass | Planned |
 | DEC-044 | Existing Bitcoin/third-party copyright notices are preserved | Frozen |
 | DEC-045 | CYBOU notices are additive on new/substantially modified files | Frozen direction |
@@ -69,8 +69,8 @@
 | DEC-065 | Public Bitcoin names/resources/config paths are removed early; internal cosmetic renames are deferred | Superseded by v0.13 |
 | DEC-066 | Initial Windows consumer package ships `cybou.exe` only unless another binary is explicitly approved | Superseded by v0.13 |
 | DEC-067 | First pilot uses controlled contact/invite onboarding to reduce spam surface | Superseded by v0.13 |
-| DEC-068 | Desktop resource budgets are measured from early Messenger builds | Superseded by v0.14 |
-| DEC-069 | First user-facing product is CYBOU Email, not Messenger | Superseded by v0.14 |
+| DEC-068 | Desktop resource budgets are measured from early Messenger builds | Superseded by v0.0.1 |
+| DEC-069 | First user-facing product is CYBOU Email, not Messenger | Superseded by v0.0.1 |
 | DEC-070 | CYBOU Email v1 is CYBOU-native and does not require SMTP/IMAP/POP | Superseded by v0.13 |
 | DEC-071 | All CYBOU-native email is E2E encrypted; no plaintext fallback | Frozen |
 | DEC-072 | Email content is encrypted once with a random CEK; CEK is HPKE-wrapped per recipient device | Frozen direction |
@@ -86,7 +86,7 @@
 | DEC-082 | Invite Bonus is credited fully and immediately to System Balance; no vesting | Frozen |
 | DEC-083 | Invite Bonus CYBOU directly contributes to Trust through System Balance; no separate invite-trust token/credit | Frozen |
 | DEC-084 | New invited account Email limit target is approximately 20–30 recipient deliveries/day | Frozen direction |
-| DEC-085 | Recipient-delivery count, not UI-message count, is used for Email sending limits | Superseded by v0.14 |
+| DEC-085 | Recipient-delivery count, not UI-message count, is used for Email sending limits | Superseded by v0.0.1 |
 | DEC-086 | Trust can raise limits but personal-account limits always retain a hard ceiling | Frozen |
 | DEC-087 | System Balance never creates validator voting power | Frozen |
 | DEC-088 | Monetary model is fixed maximum supply with bootstrap pools and fee recycling | Frozen |
@@ -102,7 +102,7 @@
 | DEC-098 | Current owner/operator is the development validator and remains an operator validator in production | Frozen direction |
 | DEC-099 | Production operator validator may receive normal deterministic validator rewards for verified work | Frozen direction |
 | DEC-100 | `WELCOME_GRANT = 6,000 CYBOU` paid fully to System Balance on valid invite | Frozen v0.10 baseline |
-| DEC-101 | Standard Email modeling unit targets approximately 1 CYBOU per recipient delivery | Superseded by v0.14 |
+| DEC-101 | Standard Email modeling unit targets approximately 1 CYBOU per recipient delivery | Superseded by v0.0.1 |
 | DEC-102 | New invited account Email ceiling starts at 25 recipient deliveries/day | Frozen v0.10 baseline |
 | DEC-103 | Proof of Trust is global across Email, payments and all CYBOU services | Frozen |
 | DEC-104 | Each service maps global PoT to its own bounded limits | Frozen |
@@ -120,17 +120,17 @@
 | DEC-116 | Validator rewards use equal split among eligible validators | Superseded by v0.13 |
 | DEC-117 | Validator reward eligibility requires >= 90% consensus participation and no confirmed equivocation | Superseded by v0.13 |
 | DEC-118 | v1 validator rewards are not stake-weighted | Superseded by v0.13 |
-| DEC-119 | Relay Node weight = 1 service point | Superseded by v0.14 |
-| DEC-120 | Mailbox Node weight = 2 service points | Superseded by v0.14 |
-| DEC-121 | Service reward eligibility requires >= 95% uptime plus challenge pass and valid registration | Superseded by v0.14 |
-| DEC-122 | Relay/Mailbox rewards are not based on raw message count, claimed bytes or self-reported traffic | Superseded by v0.14 |
-| DEC-123 | Only registered service nodes participate in Network Service rewards | Superseded by v0.14 |
-| DEC-124 | Service-node bond is not required in v1 | Superseded by v0.14 |
-| DEC-125 | Reward payout uses epochs; exact epoch duration remains implementation-tunable | Superseded by v0.14 |
-| DEC-126 | Integer payout remainder stays in the corresponding reward pool for the next epoch | Superseded by v0.14 |
+| DEC-119 | Relay Node weight = 1 service point | Superseded by v0.0.1 |
+| DEC-120 | Mailbox Node weight = 2 service points | Superseded by v0.0.1 |
+| DEC-121 | Service reward eligibility requires >= 95% uptime plus challenge pass and valid registration | Superseded by v0.0.1 |
+| DEC-122 | Relay/Mailbox rewards are not based on raw message count, claimed bytes or self-reported traffic | Superseded by v0.0.1 |
+| DEC-123 | Only registered service nodes participate in Network Service rewards | Superseded by v0.0.1 |
+| DEC-124 | Service-node bond is not required in v1 | Superseded by v0.0.1 |
+| DEC-125 | Reward payout uses epochs; exact epoch duration remains implementation-tunable | Superseded by v0.0.1 |
+| DEC-126 | Integer payout remainder stays in the corresponding reward pool for the next epoch | Superseded by v0.0.1 |
 | DEC-127 | CYBOU Email is a consensus-registered mail protocol, not a realtime messenger | Frozen v0.13 |
 | DEC-128 | v1 MailTx stores E2E encrypted text in block data | Frozen v0.13 |
-| DEC-129 | current state stores compact MailMarker data, not full email ciphertext | Superseded by v0.14 |
+| DEC-129 | current state stores compact MailMarker data, not full email ciphertext | Superseded by v0.0.1 |
 | DEC-130 | v1 has no Email Relay, Mailbox Store or ServiceNodeRegistry | Frozen v0.13 |
 | DEC-131 | recipient availability is not required; receiving occurs through normal state/block synchronization | Frozen v0.13 |
 | DEC-132 | v1 Email is text-only; attachments are forbidden until Object Storage exists | Frozen v0.13 |
@@ -140,22 +140,22 @@
 | DEC-136 | no rewarded generic service-node role exists before Object Storage | Frozen v0.13 |
 | DEC-137 | new invited account baseline is 25 outgoing MailTx/day | Frozen v0.13 |
 | DEC-138 | finalized MailTx provides cryptographic registration/origin/integrity evidence but is not automatically a legal notarial act | Frozen v0.13 |
-| DEC-139 | Permanent per-MailTx consensus-state MailMarker is rejected | Frozen v0.14 |
-| DEC-140 | MailTx existence/authenticity is proven by typed operation + block inclusion + BFT finality, not permanent bounded mail-validation state | Frozen v0.14 |
-| DEC-141 | Before Store, active validators retain canonical historical MailTx bodies required for retrieval | Frozen v0.14 |
-| DEC-142 | Broad mass-scale Email is gated on Object Storage or equivalent durable content layer | Frozen v0.14 |
-| DEC-143 | MailTx is a first-class CYBOU protocol operation, not OP_RETURN/Bitcoin Script application data | Frozen v0.14 |
-| DEC-144 | MailTx fees are deterministic and size-aware; strict max serialized MailTx size required | Frozen v0.14 |
-| DEC-145 | Priority fee / fee bidding is disabled in v1 | Frozen v0.14 |
-| DEC-146 | All active v1 validators have equal consensus weight = 1 | Frozen v0.14 |
-| DEC-147 | Four active validators is the minimum deployment target when claiming f=1 BFT tolerance | Frozen v0.14 |
-| DEC-148 | PoT time/rate logic uses deterministic block-height-derived protocol epochs, never local wall clock | Frozen v0.14 |
-| DEC-149 | PoT consensus arithmetic is integer/deterministic | Frozen v0.14 |
-| DEC-150 | Welcome Grant requires one-time Operator-signed Invite Voucher | Frozen v0.14 |
-| DEC-151 | Identity creation alone does not receive Welcome Grant | Frozen v0.14 |
-| DEC-152 | Operator Authority, Validator, Release Signing and Treasury keys are separate domains | Frozen v0.14 |
+| DEC-139 | Permanent per-MailTx consensus-state MailMarker is rejected | Frozen v0.0.1 |
+| DEC-140 | MailTx existence/authenticity is proven by typed operation + block inclusion + BFT finality, not permanent bounded mail-validation state | Frozen v0.0.1 |
+| DEC-141 | Before Store, active validators retain canonical historical MailTx bodies required for retrieval | Frozen v0.0.1 |
+| DEC-142 | Broad mass-scale Email is gated on Object Storage or equivalent durable content layer | Frozen v0.0.1 |
+| DEC-143 | MailTx is a first-class CYBOU protocol operation, not OP_RETURN/Bitcoin Script application data | Frozen v0.0.1 |
+| DEC-144 | MailTx fees are deterministic and size-aware; strict max serialized MailTx size required | Frozen v0.0.1 |
+| DEC-145 | Priority fee / fee bidding is disabled in v1 | Frozen v0.0.1 |
+| DEC-146 | All active v1 validators have equal consensus weight = 1 | Frozen v0.0.1 |
+| DEC-147 | Four active validators is the minimum deployment target when claiming f=1 BFT tolerance | Frozen v0.0.1 |
+| DEC-148 | PoT time/rate logic uses deterministic block-height-derived protocol epochs, never local wall clock | Frozen v0.0.1 |
+| DEC-149 | PoT consensus arithmetic is integer/deterministic | Frozen v0.0.1 |
+| DEC-150 | Welcome Grant requires one-time Operator-signed Invite Voucher | Frozen v0.0.1 |
+| DEC-151 | Identity creation alone does not receive Welcome Grant | Frozen v0.0.1 |
+| DEC-152 | Operator Authority, Validator, Release Signing and Treasury keys are separate domains | Frozen v0.0.1 |
 | DEC-153 | Operator Authority target custody is 2-of-3 | Frozen operational direction |
-| DEC-154 | MailEvidenceBundle must prove historical sender-key authorization at MailTx height | Frozen v0.14 |
-| DEC-155 | Mail content commitment uses random salt/domain separation; no bare predictable plaintext hash | Frozen v0.14 |
-| DEC-156 | AccountID V1 is an opaque stable 32-byte identifier; all-zero is invalid and key rotation does not change it | Frozen v0.14 |
-| DEC-157 | Invite Voucher network_id V1 is the 32-byte genesis block hash | Frozen v0.14 |
+| DEC-154 | MailEvidenceBundle must prove historical sender-key authorization at MailTx height | Frozen v0.0.1 |
+| DEC-155 | Mail content commitment uses random salt/domain separation; no bare predictable plaintext hash | Frozen v0.0.1 |
+| DEC-156 | AccountID V1 is an opaque stable 32-byte identifier; all-zero is invalid and key rotation does not change it | Frozen v0.0.1 |
+| DEC-157 | Invite Voucher network_id V1 is the 32-byte genesis block hash | Frozen v0.0.1 |

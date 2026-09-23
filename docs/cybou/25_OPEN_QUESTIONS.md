@@ -1,4 +1,4 @@
-# 25 — Open questions / blockers v0.14
+# 25 — Open questions / blockers v0.0.1
 
 ## Mail / privacy
 

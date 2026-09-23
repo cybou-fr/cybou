@@ -145,7 +145,7 @@ It does not yet model:
 Those are required before final production economics.
 
 
-## v0.14 fee-router note
+## v0.0.1 fee-router note
 
 The 25% onboarding recycle share is unchanged.
 

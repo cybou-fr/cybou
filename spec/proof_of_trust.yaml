@@ -1,4 +1,4 @@
-version: '0.14'
+version: '0.0.1'
 scope: AccountID
 consensus_time:
   source: finalized_block_height_epoch

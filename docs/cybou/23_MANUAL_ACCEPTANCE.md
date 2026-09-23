@@ -1,4 +1,4 @@
-# 23 — Manual acceptance v0.14
+# 23 — Manual acceptance v0.0.1
 
 ## Network quarantine
 ```text

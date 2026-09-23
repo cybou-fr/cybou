@@ -1,6 +1,6 @@
 # CYBOU Documentation Hub
 
-Welcome to the internal technical documentation for **CYBOU** (v0.14).
+Welcome to the internal technical documentation for **CYBOU** (v0.0.1).
 
 CYBOU is a commercially operated European sovereign peer-to-peer network designed in France.
 Its first core product is **CYBOU Email**, built on first-class on-chain MailTx operations, permissioned BFT explicit finality, deterministic Proof of Trust (PoT) epochs, and zero-priority-fee economic routing.
@@ -49,7 +49,7 @@ The primary architecture, protocol requirements, and design choices are document
 
 ## Building CYBOU
 
-Supported compilation targets for CYBOU v0.14:
+Supported compilation targets for CYBOU v0.0.1:
 
 - **Windows (MSVC)**: [Windows MSVC Build Notes](build-windows-msvc.md) — Primary desktop build.
 - **Linux / Unix**: [Unix Build Notes](build-unix.md) — Infrastructure and validator node build.

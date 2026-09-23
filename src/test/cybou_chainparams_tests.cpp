@@ -39,10 +39,10 @@ BOOST_AUTO_TEST_CASE(dev_network_is_isolated)
 
 BOOST_AUTO_TEST_CASE(product_identity_is_cybou)
 {
-    BOOST_CHECK_EQUAL(CLIENT_VERSION, 2);
-    BOOST_CHECK_EQUAL(FormatFullVersion(), "v0.0.2");
+    BOOST_CHECK_EQUAL(CLIENT_VERSION, 1);
+    BOOST_CHECK_EQUAL(FormatFullVersion(), "v0.0.1");
     BOOST_CHECK_EQUAL(UA_NAME, "CYBOU");
-    BOOST_CHECK_EQUAL(FormatSubVersion(UA_NAME, CLIENT_VERSION, {}), "/CYBOU:0.0.2/");
+    BOOST_CHECK_EQUAL(FormatSubVersion(UA_NAME, CLIENT_VERSION, {}), "/CYBOU:0.0.1/");
 }
 
 BOOST_AUTO_TEST_CASE(fixed_difficulty_rejects_every_nbits_change)

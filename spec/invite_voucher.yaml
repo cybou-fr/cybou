@@ -1,4 +1,4 @@
-version: '0.14'
+version: '0.0.1'
 welcome_grant: 6000
 asset: CYBOU
 source: OnboardingPool
@@ -63,6 +63,7 @@ voucher:
   replay_protection: consensus_consumed_voucher_id
   redemption:
     atomic: true
+    one_grant_per_account: true
     debit: OnboardingPool
     credit: beneficiary.SystemBalance
     amount: 6000

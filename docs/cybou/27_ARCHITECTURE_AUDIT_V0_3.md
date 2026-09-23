@@ -1,6 +1,6 @@
 # STATUS: HISTORICAL / SUPERSEDED
 
-This audit is retained for project history only. It is not an active v0.14 implementation authority.
+This audit is retained for project history only. It is not an active v0.0.1 implementation authority.
 
 # 27 — Architecture audit v0.3
 

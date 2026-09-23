@@ -70,7 +70,7 @@ There is no hidden server-side allowlist that changes consensus behavior without
 
 ## Reward relation
 
-Eligible active validators split Security rewards equally under the v0.14 reward model.
+Eligible active validators split Security rewards equally under the v0.0.1 reward model.
 
 Validator admission and reward eligibility remain separate checks.
 

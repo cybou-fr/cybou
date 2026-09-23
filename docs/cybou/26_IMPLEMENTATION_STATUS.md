@@ -1,4 +1,4 @@
-# 26 — Implementation status v0.14
+# 26 — Implementation status v0.0.1
 
 ## Hardened architecture
 
@@ -112,6 +112,8 @@ Implemented skeleton:
 - consumed-voucher replay check;
 - typed Operator Authority verifier boundary with keyset and epoch checks.
 - atomic one-time Welcome Grant transition from OnboardingPool to System Balance;
+- one Welcome Grant per AccountID: a second valid voucher for an already-onboarded
+  account is rejected as ALREADY_ONBOARDED without state mutation;
 - consensus replay set keyed only by consumed voucher ID.
 - canonical versioned redemption-state encoding and domain-separated state hash.
 - atomic LevelDB snapshot persistence with paired state/hash verification.

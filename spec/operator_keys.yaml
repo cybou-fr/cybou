@@ -1,4 +1,4 @@
-version: '0.14'
+version: '0.0.1'
 domains:
   operator_authority:
     purposes:

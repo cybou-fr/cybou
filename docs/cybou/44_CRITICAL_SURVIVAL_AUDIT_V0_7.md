@@ -1,4 +1,4 @@
-# 44 — Critical survival audit — v0.14 architecture
+# 44 — Critical survival audit — v0.0.1 architecture
 
 The largest existential risks are cryptographic mistakes, unbounded history/state growth, unsafe BFT, metadata leakage and fork debt.
 

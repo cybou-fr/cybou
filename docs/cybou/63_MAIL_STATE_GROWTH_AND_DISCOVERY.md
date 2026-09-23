@@ -6,7 +6,7 @@ If every finalized email creates a permanent consensus-state entry, current stat
 
 This is unacceptable for a desktop full-node network.
 
-## Frozen v0.14 decision
+## Frozen v0.0.1 decision
 
 ```text
 MailTx != permanent current-state MailMarker

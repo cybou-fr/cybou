@@ -1,6 +1,6 @@
 # 34 — Mail state and retention
 
-CYBOU v0.14 removes the design where every email creates a permanent per-mail object in current consensus state.
+CYBOU v0.0.1 removes the design where every email creates a permanent per-mail object in current consensus state.
 
 ## Core rule
 
@@ -38,7 +38,7 @@ A permanent object for every email would make current state grow forever in dire
 
 That defeats bounded-state goals even if old block bodies are pruned.
 
-Therefore v0.14 freezes:
+Therefore v0.0.1 freezes:
 
 ```text
 NO permanent MailMarker[MailID] for every email.
