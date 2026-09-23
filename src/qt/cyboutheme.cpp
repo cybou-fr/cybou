@@ -118,7 +118,8 @@ QString CybouTheme::applicationStyleSheet()
         /* Secondary windows (node diagnostics) and any future dialogs must
            not fall back to the platform dark palette. */
         QDialog { background: @subtle@; color: @text_primary@; }
-        QWidget#RPCConsole { background: @subtle@; }
+        QWidget#RPCConsole { background: @subtle@; color: @text_primary@; }
+        QWidget#RPCConsole QLabel { color: @text_secondary@; }
         QDialog QLabel { color: @text_secondary@; }
         QToolTip { background: @canvas@; color: @text_primary@; border: 1px solid @border@; padding: 4px 8px; }
         QTabWidget::pane { border: 1px solid @border@; border-radius: 10px; background: @canvas@; top: -1px; }
