@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CYBOU — Messagerie électronique souveraine européenne, conçue en France</title>
+  <meta name="description" content="CYBOU est un réseau pair-à-pair européen et un service souverain conçu en France. Chiffrement post-quantique HPKE, finalité BFT explicite, zéro dépendance au cloud.">
+  <link rel="icon" type="image/png" href="assets/cybou.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ==========================================================================
+       Navigation Bar (Glassmorphic Apple Style)
+       ========================================================================== -->
+  <header class="nav-header">
+    <div class="nav-container">
+      <a href="#" class="nav-brand">
+        <img src="assets/cybou.png" alt="CYBOU Logo" class="nav-logo">
+        <span>CYBOU</span>
+        <span class="nav-badge">v0.14</span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#vision" data-i18n="navVision">Vision</a></li>
+        <li><a href="#email" data-i18n="navEmail">CYBOU Email</a></li>
+        <li><a href="#architecture" data-i18n="navArchitecture">Architecture</a></li>
+        <li><a href="#voucher" data-i18n="navVoucher">Bon d'invitation</a></li>
+        <li><a href="../doc/README.md" target="_blank" data-i18n="navSpecs">Spécifications</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <div class="lang-switch">
+          <button id="lang-fr" class="lang-btn active">FR</button>
+          <button id="lang-en" class="lang-btn">EN</button>
+        </div>
+        <a href="#telecharger" class="nav-cta" data-i18n="navDownload">Télécharger</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================================================
+       Hero Section
+       ========================================================================== -->
+  <section class="hero-section" id="vision">
+    <div class="hero-ambient-glow"></div>
+
+    <div class="hero-tag">
+      <span class="flag-icon">🇫🇷</span>
+      <span data-i18n="heroTag">Réseau Pair-à-Pair Européen • Conçu en France</span>
+    </div>
+
+    <h1 class="hero-title">
+      <span class="gradient-text" data-i18n="heroTitle1">La messagerie souveraine.</span><br>
+      <span class="accent-text" data-i18n="heroTitle2">Sans compromis.</span>
+    </h1>
+
+    <p class="hero-subtitle" data-i18n="heroSubtitle">
+      Émancipée des géants du cloud. Protégée par cryptographie post-quantique. Registre pair-à-pair à finalité BFT immédiate.
+    </p>
+
+    <div class="hero-buttons">
+      <a href="#email" class="btn-primary" data-i18n="heroBtnDiscover">
+        Découvrir CYBOU Email
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <a href="../docs/cybou/00_VISION.md" target="_blank" class="btn-secondary" data-i18n="heroBtnSpecs">
+        Lire les spécifications
+      </a>
+    </div>
+
+    <!-- Apple-Style macOS Desktop App Mockup -->
+    <div class="mockup-container" id="email">
+      <div class="app-window">
+        <!-- Titlebar -->
+        <div class="window-header">
+          <div class="window-dots">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="window-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+            CYBOU Desktop — cybou.exe (v0.14)
+          </div>
+          <div class="window-status">
+            <span class="status-pill">
+              <span class="status-indicator"></span>
+              4/4 Validateurs BFT
+            </span>
+          </div>
+        </div>
+
+        <!-- Window Body -->
+        <div class="window-body">
+          <!-- Sidebar -->
+          <div class="app-sidebar">
+            <div>
+              <div class="sidebar-group-title">Messagerie</div>
+              <ul class="sidebar-menu">
+                <li class="sidebar-item active">
+                  <span>📥 Boîte de réception</span>
+                  <span class="sidebar-badge">3</span>
+                </li>
+                <li class="sidebar-item">
+                  <span>📤 Messages envoyés</span>
+                </li>
+                <li class="sidebar-item">
+                  <span>📝 Brouillons</span>
+                </li>
+                <li class="sidebar-item">
+                  <span>📦 Archives</span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="sidebar-node-info">
+              <div class="node-info-row">
+                <span>Époque PoT</span>
+                <span>#142 (Bloc 28419)</span>
+              </div>
+              <div class="node-info-row">
+                <span>Solde Système</span>
+                <span style="color: #30d158;">6 000 CYBOU</span>
+              </div>
+              <div class="node-info-row">
+                <span>Quota époque</span>
+                <span>24 / 25 restants</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mail List -->
+          <div class="app-mail-list">
+            <div class="mail-item selected">
+              <div class="mail-item-header">
+                <span class="mail-sender">Sophie Delorme</span>
+                <span class="mail-time">14:18</span>
+              </div>
+              <div class="mail-subject">Audit de sécurité et homologation européenne</div>
+              <div class="mail-snippet">Nous avons finalisé le passage en revue des spécifications du protocole MailTx...</div>
+              <div class="mail-badges">
+                <span class="mini-badge verified">ML-KEM-768</span>
+                <span class="mini-badge">BFT #28419</span>
+              </div>
+            </div>
+
+            <div class="mail-item">
+              <div class="mail-item-header">
+                <span class="mail-sender">Alexandre Blanc</span>
+                <span class="mail-time">11:05</span>
+              </div>
+              <div class="mail-subject">Activation du 4ème nœud validateur BFT</div>
+              <div class="mail-snippet">Le 4ème validateur BFT a été admis avec succès par consensus. Tolérance f=1 atteinte...</div>
+              <div class="mail-badges">
+                <span class="mini-badge verified">BFT f=1</span>
+                <span class="mini-badge">BFT #28412</span>
+              </div>
+            </div>
+
+            <div class="mail-item">
+              <div class="mail-item-header">
+                <span class="mail-sender">CYBOU Onboarding</span>
+                <span class="mail-time">Hier</span>
+              </div>
+              <div class="mail-subject">Bienvenue sur le réseau CYBOU</div>
+              <div class="mail-snippet">Votre bon d'invitation vous a attribué 6 000 CYBOU de solde système...</div>
+              <div class="mail-badges">
+                <span class="mini-badge verified">Welcome</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mail View Pane -->
+          <div class="app-mail-view">
+            <div class="mail-view-header">
+              <h2 class="mail-view-title" id="mockup-title">Audit de sécurité et homologation européenne</h2>
+              <div class="mail-view-meta">
+                <div class="meta-sender-info">
+                  <span class="meta-sender-name">Sophie Delorme</span>
+                  <span class="meta-sender-addr" id="mockup-sender">sophie.delorme@cybou</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cryptographic Evidence Banner -->
+            <div class="crypto-proof-banner">
+              <div class="proof-icon">🛡️</div>
+              <div class="proof-details">
+                <strong>Chiffrement Post-Quantique HPKE vérifié</strong> (ML-KEM-768 + X25519)<br>
+                Preuve d'inclusion BFT scellée : <span id="mockup-proof-num">BFT #28419</span> • Engagement salé authentifié
+              </div>
+            </div>
+
+            <div class="mail-view-body" id="mockup-body">
+              <p>Bonjour Marc,</p>
+              <p>Nous avons finalisé le passage en revue des spécifications du protocole MailTx pour notre déploiement en France. L'isolation stricte des clés d'autorité opérateur (68_OPERATOR_KEY_SEPARATION) garantit qu'aucune clé maîtresse ne peut compromettre la confidentialité de nos correspondances.</p>
+              <p>L'engagement salé de contenu (69_MAIL_EVIDENCE_BUNDLE) et la finalité BFT explicite répondent parfaitement aux critères d'audit de souveraineté numérique.</p>
+              <p>Bien cordialement,<br><strong>Sophie Delorme</strong><br><span style="color: #86868b; font-size: 0.8rem;">Déléguée à la Sécurité Numérique</span></p>
+            </div>
+
+            <div class="mail-signature-box">
+              Empreinte de transaction (MailTxId) : 8f4e2c91b5a3804d...a719<br>
+              Signature de l'expéditeur : Secp256k1/ECDSA vérifiée conforme
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Bento Grid — Core Pillars
+       ========================================================================== -->
+  <section class="section" id="architecture">
+    <div class="section-header">
+      <div class="section-label" data-i18n="bentoLabel">Piliers fondamentaux</div>
+      <h2 class="section-title" data-i18n="bentoTitle">Une rupture technologique majeure.</h2>
+      <p class="section-description" data-i18n="bentoDesc">
+        Pourquoi CYBOU redéfinit l'intégrité et la souveraineté des communications.
+      </p>
+    </div>
+
+    <div class="bento-grid">
+      <!-- Card 1: Zero Cloud -->
+      <div class="bento-card bento-span-8">
+        <div class="card-ambient-light light-blue"></div>
+        <div>
+          <div class="card-icon">🌐</div>
+          <div class="card-content">
+            <h3 data-i18n="card1Title">Zéro dépendance aux géants du cloud</h3>
+            <p data-i18n="card1Desc">
+              Aucun serveur central, aucun hébergeur étranger, aucun point unique de défaillance. Le réseau s'exécute directement entre pairs indépendants sur une base logicielle durcie en C++.
+            </p>
+          </div>
+        </div>
+        <div>
+          <div class="card-metric">100% P2P</div>
+          <div class="card-metric-label">Continuité autonome même sans serveur opérateur</div>
+        </div>
+      </div>
+
+      <!-- Card 2: PQ Crypto -->
+      <div class="bento-card bento-span-4">
+        <div class="card-ambient-light light-indigo"></div>
+        <div>
+          <div class="card-icon">🛡️</div>
+          <div class="card-content">
+            <h3 data-i18n="card2Title">Chiffrement Post-Quantique HPKE</h3>
+            <p data-i18n="card2Desc">
+              Vos correspondances sont scellées avec l'algorithme hybride ML-KEM-768 et X25519. Protégé dès aujourd'hui contre les attaques des ordinateurs quantiques futurs.
+            </p>
+          </div>
+        </div>
+        <div>
+          <div class="card-metric">ML-KEM</div>
+          <div class="card-metric-label">Standard NIST post-quantique</div>
+        </div>
+      </div>
+
+      <!-- Card 3: Exclusive Device Authority -->
+      <div class="bento-card bento-span-4">
+        <div class="card-ambient-light light-emerald"></div>
+        <div>
+          <div class="card-icon">🔑</div>
+          <div class="card-content">
+            <h3 data-i18n="card3Title">Autorité exclusive de l'appareil</h3>
+            <p data-i18n="card3Desc">
+              Vos clés privées ne quittent jamais votre machine. L'opérateur ne dispose d'aucun passe-partout ni pouvoir de censure sur vos soldes ou vos messages.
+            </p>
+          </div>
+        </div>
+        <div>
+          <div class="card-metric">0</div>
+          <div class="card-metric-label">Clé maîtresse ou accès dérobé</div>
+        </div>
+      </div>
+
+      <!-- Card 4: BFT & PoT -->
+      <div class="bento-card bento-span-8">
+        <div class="card-ambient-light light-blue"></div>
+        <div>
+          <div class="card-icon">⚡</div>
+          <div class="card-content">
+            <h3 data-i18n="card4Title">Consensus BFT & Époques PoT</h3>
+            <p data-i18n="card4Desc">
+              Finalité explicite sans minage énergivore. Époques de consensus Proof of Trust calculées strictement à partir de la hauteur de bloc en arithmétique entière, immunisées contre toute manipulation d'horloge.
+            </p>
+          </div>
+        </div>
+        <div>
+          <div class="card-metric">f = 1</div>
+          <div class="card-metric-label">Tolérance byzantine avec 4 validateurs à poids égal</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       MailTx Protocol Stepper
+       ========================================================================== -->
+  <section class="section">
+    <div class="section-header">
+      <div class="section-label" data-i18n="flowLabel">Protocole MailTx</div>
+      <h2 class="section-title" data-i18n="flowTitle">De la composition à la finalité.</h2>
+      <p class="section-description" data-i18n="flowDesc">
+        Comment chaque message devient un enregistrement cryptographique immuable.
+      </p>
+    </div>
+
+    <div class="flow-container">
+      <div class="flow-step">
+        <div class="step-num">01 / ENGAGEMENT</div>
+        <h4 class="step-title" data-i18n="step1Title">Rédaction & Engagement salé</h4>
+        <p class="step-desc" data-i18n="step1Desc">
+          Le message texte est lié à un sel cryptographique imprédictible et converti en empreinte de contenu infalsifiable.
+        </p>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-num">02 / SCELLAGE</div>
+        <h4 class="step-title" data-i18n="step2Title">Chiffrement Hybride E2EE</h4>
+        <p class="step-desc" data-i18n="step2Desc">
+          Encapsulation HPKE ciblée exclusivement pour la clé publique du destinataire. Aucun tiers ne peut déchiffrer.
+        </p>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-num">03 / DIFFUSION</div>
+        <h4 class="step-title" data-i18n="step3Title">Opération MailTx native</h4>
+        <p class="step-desc" data-i18n="step3Desc">
+          Le message est diffusé comme transaction native de premier rang sur le réseau P2P avec frais déterminés sans surenchère.
+        </p>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-num">04 / FINALITÉ</div>
+        <h4 class="step-title" data-i18n="step4Title">Finalité BFT & Réception</h4>
+        <p class="step-desc" data-i18n="step4Desc">
+          Le bloc est scellé par les validateurs BFT. Le destinataire hors-ligne synchronise et déchiffre son courrier localement.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Interactive Voucher Simulator
+       ========================================================================== -->
+  <section class="section" id="voucher">
+    <div class="section-header">
+      <div class="section-label" data-i18n="simLabel">Simulateur d'onboarding</div>
+      <h2 class="section-title" data-i18n="simTitle">Vérifiez un bon d'invitation (Invite Voucher).</h2>
+      <p class="section-description" data-i18n="simDesc">
+        L'accès au réseau et l'attribution de la subvention d'accueil (6 000 CYBOU) reposent sur un bon d'opérateur vérifié.
+      </p>
+    </div>
+
+    <div class="simulator-box">
+      <div class="sim-grid">
+        <div class="sim-controls">
+          <div class="sim-input-group">
+            <label class="sim-label" data-i18n="simBeneficiary">Identifiant du compte (AccountId)</label>
+            <input type="text" class="sim-input" id="sim-account" value="cybou1q9x0c83a7f4e91bd5c48b7a692ef3d9a102" readonly>
+          </div>
+
+          <div class="sim-input-group">
+            <label class="sim-label" data-i18n="simVoucherId">Numéro du bon d'invitation</label>
+            <input type="text" class="sim-input" id="sim-voucher" value="VOUCHER-FR-2026-PARIS-0042">
+          </div>
+
+          <button class="sim-button" id="sim-run-btn" data-i18n="simSubmit">Exécuter l'admission sur l'état</button>
+        </div>
+
+        <div class="sim-output-card">
+          <div class="output-row">
+            <span class="output-label" data-i18n="simStatusLabel">Statut de la transition</span>
+            <span class="output-val" id="sim-status-val" data-i18n="simStatusReady">En attente de vérification</span>
+          </div>
+          <div class="output-row">
+            <span class="output-label" data-i18n="simPoolSource">OnboardingPool (Réserve)</span>
+            <span class="output-val" id="sim-pool-val">100 000 000 000 CYBOU</span>
+          </div>
+          <div class="output-row">
+            <span class="output-label" data-i18n="simBalanceTarget">SystemBalance (Solde Système)</span>
+            <span class="output-val" id="sim-sysbal-val">0 CYBOU</span>
+          </div>
+          <div class="output-row">
+            <span class="output-label" data-i18n="simQuota">Quota d'émission par époque PoT</span>
+            <span class="output-val">25 MailTx / époque</span>
+          </div>
+          <div class="output-row">
+            <span class="output-label">Protection rejeu</span>
+            <span class="output-val" style="color: #30d158;">Actif (Portail Doc 70)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Download / Getting Started
+       ========================================================================== -->
+  <section class="download-section" id="telecharger">
+    <div class="section-label">Accès anticipé</div>
+    <h2 class="section-title" data-i18n="dlTitle">Prenez le contrôle de vos communications.</h2>
+    <p class="section-description" style="max-width: 600px; margin: 0 auto;" data-i18n="dlDesc">
+      Téléchargez le nœud complet CYBOU Desktop et commencez à échanger souverainement.
+    </p>
+
+    <div class="platform-cards">
+      <div class="platform-card">
+        <div class="platform-icon">🪟</div>
+        <h3 class="platform-title" data-i18n="dlWindows">Windows (MSVC)</h3>
+        <p class="platform-desc" data-i18n="dlWindowsDesc">Client complet cybou.exe pour Windows 10/11.</p>
+        <a href="../INSTALL.md" class="platform-btn" data-i18n="dlBtn">Guide de compilation</a>
+      </div>
+
+      <div class="platform-card">
+        <div class="platform-icon">🐧</div>
+        <h3 class="platform-title" data-i18n="dlLinux">Linux / Validateur</h3>
+        <p class="platform-desc" data-i18n="dlLinuxDesc">Binaire d'infrastructure et nœud de validation pour Ubuntu/Debian.</p>
+        <a href="../INSTALL.md" class="platform-btn" data-i18n="dlBtn">Guide de compilation</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Footer (Apple Style)
+       ========================================================================== -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-grid">
+        <div class="footer-col-brand">
+          <h4>CYBOU</h4>
+          <p>
+            Messagerie électronique souveraine européenne sur réseau pair-à-pair, conçue en France.<br>
+            Opérée commercialement. Indépendante des clouds étrangers.
+          </p>
+        </div>
+
+        <div class="footer-col">
+          <h5>Produit</h5>
+          <ul class="footer-links">
+            <li><a href="#email">CYBOU Email</a></li>
+            <li><a href="#architecture">Architecture</a></li>
+            <li><a href="#voucher">Bons d'invitation</a></li>
+            <li><a href="#telecharger">Téléchargements</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>Spécifications</h5>
+          <ul class="footer-links">
+            <li><a href="../docs/cybou/00_VISION.md">Vision & Portée</a></li>
+            <li><a href="../docs/cybou/16_MAIL_PROTOCOL.md">Protocole MailTx</a></li>
+            <li><a href="../docs/cybou/07_BFT_CONSENSUS.md">Consensus BFT</a></li>
+            <li><a href="../docs/cybou/49_EMAIL_E2EE_HPKE_PQ.md">Cryptographie HPKE PQ</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>Gouvernance</h5>
+          <ul class="footer-links">
+            <li><a href="../AGENTS.md">Règles AGENTS.md</a></li>
+            <li><a href="../MANIFEST.md">Manifeste SHA-256</a></li>
+            <li><a href="../SECURITY.md">Politique de sécurité</a></li>
+            <li><a href="../COPYING">Licence & Droits</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>
+          © 2026 CYBOU. Conçu en France. Tous droits réservés.
+        </div>
+        <div class="sovereignty-badge">
+          <span>🇪🇺</span>
+          <span>Souveraineté Numérique Européenne</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
