@@ -113,6 +113,8 @@ add_library(bitcoinqt STATIC EXCLUDE_FROM_ALL
   optionsdialog.h
   optionsmodel.cpp
   optionsmodel.h
+  pages/backuppage.cpp
+  pages/backuppage.h
   pages/emailpage.cpp
   pages/emailpage.h
   pages/homepage.cpp
@@ -121,10 +123,10 @@ add_library(bitcoinqt STATIC EXCLUDE_FROM_ALL
   pages/identitypage.h
   pages/networkpage.cpp
   pages/networkpage.h
-  pages/serviceplaceholderpage.cpp
-  pages/serviceplaceholderpage.h
   pages/settingspage.cpp
   pages/settingspage.h
+  pages/storagepage.cpp
+  pages/storagepage.h
   pages/walletpage.cpp
   pages/walletpage.h
   peertablemodel.cpp

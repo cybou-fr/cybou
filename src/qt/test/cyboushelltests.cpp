@@ -195,16 +195,19 @@ void CybouShellTests::walletPageShowsBalances()
     }
 }
 
-void CybouShellTests::storageAndBackupExposeNoOperations()
+void CybouShellTests::storageAndBackupGateActions()
 {
     auto window = makeWindow();
-    // Email (page 2) is now a full client UI; Storage and Backup remain
-    // inert placeholders until their services are specified.
+    // Both pages are full client UIs now; without an identity every action
+    // must stay disabled and the page must say why.
     for (int index = 3; index <= 4; ++index) {
-        auto* placeholder = window->pageAt(index);
-        QVERIFY2(placeholder, qPrintable(QStringLiteral("placeholder page %1 exists").arg(index)));
-        QVERIFY(placeholder->findChildren<QPushButton*>().isEmpty());
-        QVERIFY(placeholder->findChildren<QLineEdit*>().isEmpty());
+        auto* page = window->pageAt(index);
+        QVERIFY2(page, qPrintable(QStringLiteral("service page %1 exists").arg(index)));
+        const auto buttons = page->findChildren<QPushButton*>();
+        QVERIFY(!buttons.isEmpty());
+        for (const auto* button : buttons) {
+            QVERIFY(!button->isEnabled());
+        }
     }
 }
 

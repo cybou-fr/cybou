@@ -8,12 +8,13 @@
 #include <qt/cyboutheme.h>
 #include <qt/networkstyle.h>
 #include <qt/optionsmodel.h>
+#include <qt/pages/backuppage.h>
 #include <qt/pages/emailpage.h>
 #include <qt/pages/homepage.h>
 #include <qt/pages/identitypage.h>
 #include <qt/pages/networkpage.h>
-#include <qt/pages/serviceplaceholderpage.h>
 #include <qt/pages/settingspage.h>
+#include <qt/pages/storagepage.h>
 #include <qt/pages/walletpage.h>
 #include <qt/rpcconsole.h>
 
@@ -246,20 +247,8 @@ void CybouMainWindow::buildShell()
         m_pages};
     auto* identity = new IdentityPage{m_desktop_model, m_pages};
     auto* email = new EmailPage{m_desktop_model, [this] { showPage(1); }, m_pages};
-    auto* storage = new ServicePlaceholderPage{tr("Storage"), tr("Encrypted distributed object storage."), CybouTheme::NavIcon::Storage,
-        QStringList{
-            tr("Encrypted, content-addressed objects spread across the network"),
-            tr("Durability through protocol-level replication, not a single provider"),
-            tr("The foundation for Email attachments and Backup"),
-        },
-        tr("Identity \u00b7 BFT finality"), m_pages};
-    auto* backup = new ServicePlaceholderPage{tr("Backup"), tr("Resilient encrypted backup built on CYBOU Storage."), CybouTheme::NavIcon::Backup,
-        QStringList{
-            tr("Encrypted backup of your local CYBOU data"),
-            tr("Resilience inherited from Storage replication"),
-            tr("Restore is bound to the same local identity keys"),
-        },
-        tr("Identity \u00b7 Storage"), m_pages};
+    auto* storage = new StoragePage{m_desktop_model, m_pages};
+    auto* backup = new BackupPage{m_desktop_model, m_pages};
     auto* network_page = new NetworkPage{m_desktop_model, [this] { showDebugWindow(); }, m_pages};
     auto* wallet = new WalletPage{m_desktop_model, m_pages};
     auto* settings = new SettingsPage{m_desktop_model, [this] { optionsClicked(); }, [this] { showDebugWindow(); }, m_pages};

@@ -39,7 +39,7 @@ private Q_SLOTS:
     void identityCreateFollowsCapabilities();
     void emailPageGatesSending();
     void walletPageShowsBalances();
-    void storageAndBackupExposeNoOperations();
+    void storageAndBackupGateActions();
     void networkPageReflectsModel();
     void themeResolvesAllTokens();
     void navIconsRender();
