@@ -5,7 +5,9 @@
 #include <qt/cyboumainwindow.h>
 
 #include <qt/cyboudesktopmodel.h>
+#include <qt/cyboutheme.h>
 #include <qt/networkstyle.h>
+#include <qt/optionsmodel.h>
 #include <qt/pages/homepage.h>
 #include <qt/pages/identitypage.h>
 #include <qt/pages/networkpage.h>
@@ -16,25 +18,28 @@
 #include <QAction>
 #include <QApplication>
 #include <QButtonGroup>
+#include <QCloseEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMenu>
 #include <QMenuBar>
 #include <QPixmap>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
+#include <QSystemTrayIcon>
 #include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
 
 namespace {
 
-QToolButton* NavigationButton(const QString& text, const QIcon& icon, QWidget* parent)
+QToolButton* NavigationButton(const QString& text, CybouTheme::NavIcon icon, QWidget* parent)
 {
     auto* button = new QToolButton{parent};
     button->setText(text);
-    button->setIcon(icon);
+    button->setIcon(CybouTheme::navIcon(icon));
     button->setIconSize(QSize{22, 22});
     button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     button->setCheckable(true);
@@ -52,7 +57,7 @@ CybouMainWindow::CybouMainWindow(
     const NetworkStyle* network_style,
     QWidget* parent)
     : BitcoinGUI{node, platform_style, network_style, parent},
-      m_desktop_model{new CybouDesktopModel{"CYBOU-DEV", this}},
+      m_desktop_model{new CybouDesktopModel{QStringLiteral("CYBOU-DEV"), this}},
       m_pages{new QStackedWidget{this}},
       m_navigation{new QButtonGroup{this}}
 {
@@ -63,20 +68,37 @@ CybouMainWindow::CybouMainWindow(
     buildShell();
     buildMenus();
     applyStyle();
+    buildTrayMenu();
 }
 
 void CybouMainWindow::setClientModel(ClientModel* client_model, interfaces::BlockAndHeaderTipInfo* tip_info)
 {
+    m_client_model = client_model;
     BitcoinGUI::setClientModel(client_model, tip_info);
     m_desktop_model->setClientModel(client_model);
+}
+
+void CybouMainWindow::showPage(int index)
+{
+    if (auto* button = m_navigation->button(index)) button->setChecked(true);
+    m_pages->setCurrentIndex(index);
+    showNormalIfMinimized();
+    show();
+    raise();
+    activateWindow();
 }
 
 void CybouMainWindow::buildShell()
 {
     if (auto* legacy = takeCentralWidget()) {
         legacy->hide();
-        if (qobject_cast<RPCConsole*>(legacy)) {
-            legacy->setParent(nullptr, Qt::Window);
+        if (auto* console = qobject_cast<RPCConsole*>(legacy)) {
+            // Diagnostics is a secondary window owned by the shell (deleted
+            // in ~BitcoinGUI). Closing it must hide it — never destroy it —
+            // and must never take CYBOU down with it. It can be reopened
+            // via Tools -> Node diagnostics any number of times.
+            console->setParent(nullptr, Qt::Window);
+            console->setAttribute(Qt::WA_DeleteOnClose, false);
         } else {
             legacy->setParent(this);
         }
@@ -99,11 +121,12 @@ void CybouMainWindow::buildShell()
 
     auto* brand_row = new QHBoxLayout;
     auto* logo = new QLabel{sidebar};
-    logo->setPixmap(QPixmap{":/icons/cybou"}.scaled(54, 54, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    logo->setPixmap(QPixmap{QStringLiteral(":/icons/cybou")}.scaled(54, 54, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     auto* brand_text = new QVBoxLayout;
     auto* brand = new QLabel{tr("CYBOU"), sidebar};
     brand->setObjectName("brand");
-    auto* network = new QLabel{tr("CYBOU-DEV"), sidebar};
+    // Network badge comes from the desktop model so pages and shell agree.
+    auto* network = new QLabel{m_desktop_model->status().network_name, sidebar};
     network->setObjectName("brandCaption");
     brand_text->addWidget(brand);
     brand_text->addWidget(network);
@@ -113,16 +136,16 @@ void CybouMainWindow::buildShell()
     sidebar_layout->addLayout(brand_row);
     sidebar_layout->addSpacing(22);
 
-    const QList<QPair<QString, QStyle::StandardPixmap>> primary_navigation{
-        {tr("Home"), QStyle::SP_DirHomeIcon},
-        {tr("Identity"), QStyle::SP_FileDialogInfoView},
-        {tr("Email"), QStyle::SP_MessageBoxInformation},
-        {tr("Storage"), QStyle::SP_DriveHDIcon},
-        {tr("Backup"), QStyle::SP_DriveNetIcon},
+    const QList<QPair<QString, CybouTheme::NavIcon>> primary_navigation{
+        {tr("Home"), CybouTheme::NavIcon::Home},
+        {tr("Identity"), CybouTheme::NavIcon::Identity},
+        {tr("Email"), CybouTheme::NavIcon::Email},
+        {tr("Storage"), CybouTheme::NavIcon::Storage},
+        {tr("Backup"), CybouTheme::NavIcon::Backup},
     };
     for (int index = 0; index < primary_navigation.size(); ++index) {
         const auto& item = primary_navigation.at(index);
-        auto* button = NavigationButton(item.first, style()->standardIcon(item.second), sidebar);
+        auto* button = NavigationButton(item.first, item.second, sidebar);
         m_navigation->addButton(button, index);
         sidebar_layout->addWidget(button);
     }
@@ -133,31 +156,28 @@ void CybouMainWindow::buildShell()
     sidebar_layout->addWidget(separator);
     sidebar_layout->addSpacing(6);
 
-    auto* network_button = NavigationButton(tr("Network"), style()->standardIcon(QStyle::SP_ComputerIcon), sidebar);
-    auto* settings_button = NavigationButton(tr("Settings"), style()->standardIcon(QStyle::SP_FileDialogDetailedView), sidebar);
+    auto* network_button = NavigationButton(tr("Network"), CybouTheme::NavIcon::Network, sidebar);
+    auto* settings_button = NavigationButton(tr("Settings"), CybouTheme::NavIcon::Settings, sidebar);
     m_navigation->addButton(network_button, 5);
     m_navigation->addButton(settings_button, 6);
     sidebar_layout->addWidget(network_button);
     sidebar_layout->addWidget(settings_button);
     sidebar_layout->addStretch();
-    auto* sovereignty = new QLabel{tr("Sovereign technology\nfor resilient communication."), sidebar};
+    auto* sovereignty = new QLabel{tr("Sovereign technology\nfor a freer internet."), sidebar};
     sovereignty->setObjectName("sidebarFootnote");
     sovereignty->setWordWrap(true);
     sidebar_layout->addWidget(sovereignty);
 
     auto* home = new HomePage{m_desktop_model,
         [this] { showDebugWindow(); },
-        [this] {
-            m_navigation->button(1)->setChecked(true);
-            m_pages->setCurrentIndex(1);
-        },
+        [this] { showPage(1); },
         m_pages};
     auto* identity = new IdentityPage{m_desktop_model, m_pages};
-    auto* email = new ServicePlaceholderPage{tr("Email"), tr("Encrypted asynchronous messaging registered as a first-class CYBOU protocol operation."), m_pages};
-    auto* storage = new ServicePlaceholderPage{tr("Storage"), tr("Distributed object storage for encrypted content and future attachments."), m_pages};
-    auto* backup = new ServicePlaceholderPage{tr("Backup"), tr("Resilient encrypted backup built on the future storage layer."), m_pages};
+    auto* email = new ServicePlaceholderPage{tr("Email"), tr("Encrypted asynchronous communication."), CybouTheme::NavIcon::Email, m_pages};
+    auto* storage = new ServicePlaceholderPage{tr("Storage"), tr("Encrypted distributed object storage."), CybouTheme::NavIcon::Storage, m_pages};
+    auto* backup = new ServicePlaceholderPage{tr("Backup"), tr("Resilient encrypted backup built on CYBOU Storage."), CybouTheme::NavIcon::Backup, m_pages};
     auto* network_page = new NetworkPage{m_desktop_model, [this] { showDebugWindow(); }, m_pages};
-    auto* settings = new SettingsPage{[this] { optionsClicked(); }, [this] { showDebugWindow(); }, m_pages};
+    auto* settings = new SettingsPage{m_desktop_model, [this] { optionsClicked(); }, [this] { showDebugWindow(); }, m_pages};
     m_pages->addWidget(home);
     m_pages->addWidget(identity);
     m_pages->addWidget(email);
@@ -178,7 +198,7 @@ void CybouMainWindow::buildMenus()
 {
     menuBar()->clear();
     auto* file = menuBar()->addMenu(tr("File"));
-    file->addAction(tr("Hide"), this, &BitcoinGUI::toggleHidden);
+    file->addAction(tr("Hide CYBOU"), this, &BitcoinGUI::toggleHidden);
     file->addSeparator();
     file->addAction(tr("Quit CYBOU"), this, [this] { Q_EMIT quitRequested(); });
 
@@ -194,39 +214,49 @@ void CybouMainWindow::buildMenus()
     help->addAction(tr("About Qt"), qApp, &QApplication::aboutQt);
 }
 
+void CybouMainWindow::buildTrayMenu()
+{
+#ifndef Q_OS_MACOS
+    auto* tray_icon = systemTrayIcon();
+    auto* menu = trayContextMenu();
+    if (!tray_icon || !menu) return;
+
+    // Replace the inherited (Bitcoin-oriented) tray menu with the CYBOU one.
+    // No wallet actions are retained.
+    menu->clear();
+    menu->addAction(tr("Open CYBOU"), this, [this] { showPage(m_pages->currentIndex()); });
+    menu->addAction(tr("Network status"), this, [this] { showPage(5); });
+    menu->addSeparator();
+    menu->addAction(tr("Quit CYBOU"), this, [this] { Q_EMIT quitRequested(); });
+    tray_icon->setContextMenu(menu);
+#endif
+}
+
+void CybouMainWindow::closeEvent(QCloseEvent* event)
+{
+#ifdef Q_OS_MACOS
+    BitcoinGUI::closeEvent(event);
+#else
+    auto* options = m_client_model ? m_client_model->getOptionsModel() : nullptr;
+    if (!options) {
+        // Node not initialized yet: closing the window means quitting.
+        Q_EMIT quitRequested();
+        event->accept();
+        return;
+    }
+    if (options->getMinimizeOnClose() && hasTrayIcon()) {
+        // "Keep running in background": hide CYBOU, node continues, tray remains.
+        hide();
+        event->ignore();
+        return;
+    }
+    BitcoinGUI::closeEvent(event);
+#endif
+}
+
 void CybouMainWindow::applyStyle()
 {
-    setStyleSheet(R"(
-        QMainWindow#cybouMainWindow, QWidget#shell, QStackedWidget { background: #f6f8fa; color: #0b1730; }
-        QMenuBar { background: #ffffff; border-bottom: 1px solid #e4e9ee; padding: 4px 8px; }
-        QMenuBar::item:selected, QMenu::item:selected { background: #dff5f1; color: #087a74; }
-        QFrame#sidebar { background: #ffffff; border-right: 1px solid #e4e9ee; }
-        QLabel#brand { font-size: 23px; font-weight: 800; letter-spacing: 1px; color: #07162b; }
-        QLabel#brandCaption, QLabel#sidebarFootnote, QLabel#mutedText { color: #718096; }
-        QLabel#brandCaption { font-size: 11px; font-weight: 700; color: #0c8e86; }
-        QLabel#sidebarFootnote { font-size: 12px; line-height: 1.4; }
-        QToolButton { border: 0; border-radius: 10px; padding: 9px 12px; text-align: left; color: #42526d; font-size: 14px; }
-        QToolButton:hover { background: #eef7f6; color: #087a74; }
-        QToolButton:checked { background: #d9f4ef; color: #087a74; font-weight: 700; }
-        QFrame#separator { color: #e4e9ee; }
-        QFrame#card { background: #ffffff; border: 1px solid #dfe5ea; border-radius: 14px; }
-        QLabel#eyebrow { color: #31506e; font-size: 11px; font-weight: 800; letter-spacing: 3px; }
-        QLabel#heroTitle { color: #07162b; font-size: 30px; font-weight: 800; }
-        QLabel#heroSubtitle { color: #42526d; font-size: 14px; }
-        QLabel#pageTitle { color: #07162b; font-size: 28px; font-weight: 800; }
-        QLabel#sectionTitle { color: #14233b; font-size: 19px; font-weight: 750; }
-        QLabel#cardLabel { color: #42526d; font-size: 12px; font-weight: 700; }
-        QLabel#cardTitle { color: #07162b; font-size: 21px; font-weight: 800; }
-        QLabel#serviceTitle { color: #07162b; font-size: 16px; font-weight: 750; }
-        QLabel#bodyText { color: #31415d; font-size: 14px; }
-        QLabel#metric { color: #07162b; font-size: 26px; font-weight: 800; }
-        QLabel#statusBadge { background: #d9f4ef; color: #087a74; border-radius: 13px; padding: 6px 12px; font-weight: 700; }
-        QLabel#neutralBadge { background: #eef1f5; color: #68768c; border-radius: 11px; padding: 4px 9px; }
-        QPushButton { min-height: 34px; border-radius: 8px; padding: 4px 16px; font-weight: 700; }
-        QPushButton#primaryButton { background: #087f79; color: white; border: 1px solid #087f79; }
-        QPushButton#primaryButton:hover { background: #066b66; }
-        QPushButton#secondaryButton { background: #ffffff; color: #176d69; border: 1px solid #cfd9df; }
-        QPushButton#secondaryButton:hover { background: #eef8f6; border-color: #9bcfc9; }
-        QPushButton:disabled { background: #edf0f3; color: #98a3b3; border-color: #e1e5e9; }
-    )");
+    if (auto* app = qobject_cast<QApplication*>(QApplication::instance())) {
+        CybouTheme::applyTo(*app);
+    }
 }

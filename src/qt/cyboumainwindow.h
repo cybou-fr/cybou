@@ -7,8 +7,10 @@
 
 #include <qt/bitcoingui.h>
 
+class ClientModel;
 class CybouDesktopModel;
 class QButtonGroup;
+class QCloseEvent;
 class QStackedWidget;
 
 class CybouMainWindow final : public BitcoinGUI
@@ -20,14 +22,20 @@ public:
 
     void setClientModel(ClientModel* client_model = nullptr, interfaces::BlockAndHeaderTipInfo* tip_info = nullptr) override;
 
+protected:
+    void closeEvent(QCloseEvent* event) override;
+
 private:
     CybouDesktopModel* m_desktop_model;
+    ClientModel* m_client_model{nullptr};
     QStackedWidget* m_pages;
     QButtonGroup* m_navigation;
 
     void buildShell();
     void buildMenus();
+    void buildTrayMenu();
     void applyStyle();
+    void showPage(int index);
 };
 
 #endif // BITCOIN_QT_CYBOUMAINWINDOW_H

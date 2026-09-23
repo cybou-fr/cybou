@@ -112,6 +112,10 @@ protected:
     void dropEvent(QDropEvent *event) override;
     bool eventFilter(QObject *object, QEvent *event) override;
 
+    /** CYBOU desktop shell customizes the tray menu built by the base class. */
+    QSystemTrayIcon* systemTrayIcon() const { return trayIcon; }
+    QMenu* trayContextMenu() const { return trayIconMenu.get(); }
+
 private:
     interfaces::Node& m_node;
     WalletController* m_wallet_controller{nullptr};

@@ -5,10 +5,12 @@
 #include <qt/pages/serviceplaceholderpage.h>
 
 #include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QVBoxLayout>
 
-ServicePlaceholderPage::ServicePlaceholderPage(const QString& title, const QString& description, QWidget* parent)
+ServicePlaceholderPage::ServicePlaceholderPage(const QString& title, const QString& description,
+    CybouTheme::NavIcon icon, QWidget* parent)
     : QWidget{parent}
 {
     auto* layout = new QVBoxLayout{this};
@@ -24,16 +26,25 @@ ServicePlaceholderPage::ServicePlaceholderPage(const QString& title, const QStri
     auto* card_layout = new QVBoxLayout{card};
     card_layout->setContentsMargins(28, 26, 28, 26);
     card_layout->setSpacing(12);
-    auto* status = new QLabel{tr("Planned service"), card};
-    status->setObjectName("eyebrow");
+    auto* header = new QHBoxLayout;
+    auto* chip = new QLabel{card};
+    chip->setObjectName("iconChip");
+    chip->setFixedSize(44, 44);
+    chip->setAlignment(Qt::AlignCenter);
+    chip->setPixmap(CybouTheme::iconPixmap(icon, {24, 24}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
     auto* summary = new QLabel{description, card};
     summary->setObjectName("bodyText");
     summary->setWordWrap(true);
-    auto* note = new QLabel{tr("This service is not enabled in the current development build."), card};
+    summary->setAlignment(Qt::AlignVCenter);
+    header->addWidget(chip);
+    header->addWidget(summary, 1);
+    auto* badge = new QLabel{tr("Planned"), card};
+    badge->setObjectName("neutralBadge");
+    header->addWidget(badge, 0, Qt::AlignTop);
+    auto* note = new QLabel{tr("Not available in this development build."), card};
     note->setObjectName("mutedText");
     note->setWordWrap(true);
-    card_layout->addWidget(status);
-    card_layout->addWidget(summary);
+    card_layout->addLayout(header);
     card_layout->addWidget(note);
     layout->addWidget(card);
     layout->addStretch();

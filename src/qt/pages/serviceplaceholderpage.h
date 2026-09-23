@@ -7,10 +7,13 @@
 
 #include <QWidget>
 
+#include <qt/cyboutheme.h>
+
 class ServicePlaceholderPage : public QWidget
 {
 public:
-    ServicePlaceholderPage(const QString& title, const QString& description, QWidget* parent = nullptr);
+    ServicePlaceholderPage(const QString& title, const QString& description, CybouTheme::NavIcon icon,
+        QWidget* parent = nullptr);
 };
 
 #endif // BITCOIN_QT_PAGES_SERVICEPLACEHOLDERPAGE_H
