@@ -57,6 +57,7 @@ enum class NavIcon {
     Email,
     Storage,
     Backup,
+    Wallet,
     Network,
     Settings,
     Diagnostics,

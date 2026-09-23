@@ -23,6 +23,7 @@ QString iconResource(CybouTheme::NavIcon icon)
     case CybouTheme::NavIcon::Email: return QStringLiteral(":/icons/cybou/email");
     case CybouTheme::NavIcon::Storage: return QStringLiteral(":/icons/cybou/storage");
     case CybouTheme::NavIcon::Backup: return QStringLiteral(":/icons/cybou/backup");
+    case CybouTheme::NavIcon::Wallet: return QStringLiteral(":/icons/cybou/wallet");
     case CybouTheme::NavIcon::Network: return QStringLiteral(":/icons/cybou/network");
     case CybouTheme::NavIcon::Settings: return QStringLiteral(":/icons/cybou/settings");
     case CybouTheme::NavIcon::Diagnostics: return QStringLiteral(":/icons/cybou/diagnostics");
@@ -93,6 +94,8 @@ QString CybouTheme::applicationStyleSheet()
         QPushButton#secondaryButton:pressed { background: @mint_soft@; }
         QPushButton#secondaryButton:focus { border-color: @teal@; }
         QPushButton:disabled { background: @surface@; color: @dim@; border-color: @border@; }
+        QPushButton#primaryButton:disabled, QPushButton[primary="true"]:disabled { background: @surface@; color: @dim@; border-color: @border@; }
+        QPushButton#secondaryButton:disabled { background: @surface@; color: @dim@; border-color: @border@; }
 
         QLineEdit, QSpinBox { background: @canvas@; border: 1px solid @border_medium@; border-radius: 8px; padding: 6px 10px; color: @text_primary@; font-size: 14px; min-height: 22px; }
         QLineEdit:focus, QSpinBox:focus { border-color: @teal@; }

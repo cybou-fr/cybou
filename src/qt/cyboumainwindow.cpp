@@ -14,6 +14,7 @@
 #include <qt/pages/networkpage.h>
 #include <qt/pages/serviceplaceholderpage.h>
 #include <qt/pages/settingspage.h>
+#include <qt/pages/walletpage.h>
 #include <qt/rpcconsole.h>
 
 #include <QAction>
@@ -109,7 +110,7 @@ CybouMainWindow::CybouMainWindow(
                 if (widget->objectName() != QLatin1String{"RPCConsole"}) continue;
                 widget->show();
                 qApp->processEvents();
-                widget->grab().save(QDir{shot_dir}.filePath(QStringLiteral("7-diagnostics.png")));
+                widget->grab().save(QDir{shot_dir}.filePath(QStringLiteral("8-diagnostics.png")));
                 widget->hide();
             }
             qApp->quit();
@@ -208,6 +209,7 @@ void CybouMainWindow::buildShell()
         {tr("Email"), CybouTheme::NavIcon::Email},
         {tr("Storage"), CybouTheme::NavIcon::Storage},
         {tr("Backup"), CybouTheme::NavIcon::Backup},
+        {tr("Wallet"), CybouTheme::NavIcon::Wallet},
     };
     for (int index = 0; index < primary_navigation.size(); ++index) {
         const auto& item = primary_navigation.at(index);
@@ -225,10 +227,10 @@ void CybouMainWindow::buildShell()
 
     auto* network_button = NavigationButton(tr("Network"), CybouTheme::NavIcon::Network, sidebar);
     auto* settings_button = NavigationButton(tr("Settings"), CybouTheme::NavIcon::Settings, sidebar);
-    network_button->setObjectName(QStringLiteral("navButton5"));
-    settings_button->setObjectName(QStringLiteral("navButton6"));
-    m_navigation->addButton(network_button, 5);
-    m_navigation->addButton(settings_button, 6);
+    network_button->setObjectName(QStringLiteral("navButton6"));
+    settings_button->setObjectName(QStringLiteral("navButton7"));
+    m_navigation->addButton(network_button, 6);
+    m_navigation->addButton(settings_button, 7);
     sidebar_layout->addWidget(network_button);
     sidebar_layout->addWidget(settings_button);
     sidebar_layout->addStretch();
@@ -240,6 +242,7 @@ void CybouMainWindow::buildShell()
     auto* home = new HomePage{m_desktop_model,
         [this] { showDebugWindow(); },
         [this] { showPage(1); },
+        [this] { showPage(5); },
         m_pages};
     auto* identity = new IdentityPage{m_desktop_model, m_pages};
     auto* email = new EmailPage{m_desktop_model, [this] { showPage(1); }, m_pages};
@@ -258,12 +261,14 @@ void CybouMainWindow::buildShell()
         },
         tr("Identity \u00b7 Storage"), m_pages};
     auto* network_page = new NetworkPage{m_desktop_model, [this] { showDebugWindow(); }, m_pages};
+    auto* wallet = new WalletPage{m_desktop_model, m_pages};
     auto* settings = new SettingsPage{m_desktop_model, [this] { optionsClicked(); }, [this] { showDebugWindow(); }, m_pages};
     m_pages->addWidget(home);
     m_pages->addWidget(identity);
     m_pages->addWidget(email);
     m_pages->addWidget(storage);
     m_pages->addWidget(backup);
+    m_pages->addWidget(wallet);
     m_pages->addWidget(network_page);
     m_pages->addWidget(settings);
 

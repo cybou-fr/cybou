@@ -125,6 +125,8 @@ add_library(bitcoinqt STATIC EXCLUDE_FROM_ALL
   pages/serviceplaceholderpage.h
   pages/settingspage.cpp
   pages/settingspage.h
+  pages/walletpage.cpp
+  pages/walletpage.h
   peertablemodel.cpp
   peertablemodel.h
   peertablesortproxy.cpp

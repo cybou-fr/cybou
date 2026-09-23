@@ -38,6 +38,7 @@ private Q_SLOTS:
     void diagnosticsStaySecondaryWindow();
     void identityCreateFollowsCapabilities();
     void emailPageGatesSending();
+    void walletPageShowsBalances();
     void storageAndBackupExposeNoOperations();
     void networkPageReflectsModel();
     void themeResolvesAllTokens();

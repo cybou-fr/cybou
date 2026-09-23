@@ -16,7 +16,8 @@ class HomePage : public QWidget
 {
 public:
     HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_requested,
-        std::function<void()> identity_requested, QWidget* parent = nullptr);
+        std::function<void()> identity_requested, std::function<void()> wallet_requested,
+        QWidget* parent = nullptr);
 
 private:
     CybouDesktopModel* const m_model;
@@ -25,9 +26,12 @@ private:
     QLabel* m_peer_count;
     QLabel* m_height;
     QLabel* m_identity_state;
+    QLabel* m_balance;
+    QLabel* m_system_balance;
     QLabel* m_footer_state;
     const std::function<void()> m_diagnostics_requested;
     const std::function<void()> m_identity_requested;
+    const std::function<void()> m_wallet_requested;
 
     void refresh();
 };

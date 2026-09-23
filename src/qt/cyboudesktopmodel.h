@@ -7,6 +7,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QLocale>
 
 class ClientModel;
 class OptionsModel;
@@ -50,6 +51,17 @@ struct CybouDesktopStatus {
     quint64 balance{0};
     quint64 system_balance{0};
 };
+
+/**
+ * Canonical CYBOU amount rendering.
+ *
+ * CYBOU is indivisible (decimals = 0, 1 CYBOU = minimum unit), so the
+ * rendering is an integer with locale grouping — never a decimal fraction.
+ */
+inline QString cybouAmountText(quint64 amount)
+{
+    return QLocale{}.toString(amount) + QStringLiteral(" CYBOU");
+}
 
 class CybouDesktopModel : public QObject
 {

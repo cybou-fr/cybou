@@ -64,11 +64,12 @@ QFrame* ServiceCard(const QString& title, const QString& description, CybouTheme
 } // namespace
 
 HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_requested,
-    std::function<void()> identity_requested, QWidget* parent)
+    std::function<void()> identity_requested, std::function<void()> wallet_requested, QWidget* parent)
     : QWidget{parent},
       m_model{model},
       m_diagnostics_requested{std::move(diagnostics_requested)},
-      m_identity_requested{std::move(identity_requested)}
+      m_identity_requested{std::move(identity_requested)},
+      m_wallet_requested{std::move(wallet_requested)}
 {
     auto* root = new QVBoxLayout{this};
     root->setContentsMargins(24, 22, 24, 22);
@@ -148,6 +149,34 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     network_layout->addSpacing(8);
     network_layout->addLayout(metrics);
 
+    auto* wallet_card = Card(this);
+    auto* wallet_layout = new QVBoxLayout{wallet_card};
+    wallet_layout->setContentsMargins(24, 20, 24, 20);
+    wallet_layout->setSpacing(8);
+    auto* wallet_header = new QHBoxLayout;
+    wallet_header->addWidget(IconChip(CybouTheme::NavIcon::Wallet, wallet_card));
+    auto* wallet_label = new QLabel{tr("Balance"), wallet_card};
+    wallet_label->setObjectName("cardLabel");
+    wallet_label->setAlignment(Qt::AlignVCenter);
+    wallet_header->addWidget(wallet_label);
+    wallet_header->addStretch();
+    auto* wallet_badge = new QLabel{tr("funds services"), wallet_card};
+    wallet_badge->setObjectName("statusBadge");
+    wallet_header->addWidget(wallet_badge, 0, Qt::AlignVCenter);
+    wallet_layout->addLayout(wallet_header);
+    m_balance = new QLabel{wallet_card};
+    m_balance->setObjectName("metric");
+    m_system_balance = new QLabel{wallet_card};
+    m_system_balance->setObjectName("mutedText");
+    m_system_balance->setWordWrap(true);
+    auto* wallet_button = new QPushButton{tr("Open wallet"), wallet_card};
+    wallet_button->setObjectName("secondaryButton");
+    connect(wallet_button, &QPushButton::clicked, this, [this] { m_wallet_requested(); });
+    wallet_layout->addWidget(m_balance);
+    wallet_layout->addWidget(m_system_balance);
+    wallet_layout->addStretch();
+    wallet_layout->addWidget(wallet_button, 0, Qt::AlignLeft);
+
     auto* identity_card = Card(this);
     auto* identity_layout = new QVBoxLayout{identity_card};
     identity_layout->setContentsMargins(24, 20, 24, 20);
@@ -174,6 +203,7 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     identity_layout->addWidget(identity_button, 0, Qt::AlignLeft);
 
     primary_row->addWidget(network_card, 1);
+    primary_row->addWidget(wallet_card, 1);
     primary_row->addWidget(identity_card, 1);
     root->addLayout(primary_row);
 
@@ -220,6 +250,9 @@ void HomePage::refresh()
     m_identity_state->setText(status.identity_state == CybouIdentityState::Active
         ? tr("Identity active")
         : tr("No identity created"));
+    m_balance->setText(cybouAmountText(status.balance));
+    m_system_balance->setText(tr("System Balance: %1 — frozen CYBOU that pays protocol fees.")
+        .arg(cybouAmountText(status.system_balance)));
     m_footer_state->setText(status.node_running
         ? tr("Your node is running correctly. Keep CYBOU online to support the network.")
         : tr("The CYBOU node is starting."));

@@ -65,7 +65,7 @@ void CybouShellTests::mainWindowStarts()
     QVERIFY(window);
     QVERIFY(window->centralWidget());
     QVERIFY(window->windowTitle().contains(QStringLiteral("CYBOU")));
-    QCOMPARE(window->pageCount(), 7);
+    QCOMPARE(window->pageCount(), 8);
 }
 
 void CybouShellTests::homePageIsDefault()
@@ -166,6 +166,29 @@ void CybouShellTests::emailPageGatesSending()
     QVERIFY(recipient->text().contains(QStringLiteral(",")));
 }
 
+void CybouShellTests::walletPageShowsBalances()
+{
+    auto window = makeWindow();
+    auto* wallet = window->pageAt(5);
+    QVERIFY(wallet);
+
+    // Amounts render as whole CYBOU (indivisible asset, decimals = 0).
+    const auto labels = wallet->findChildren<QLabel*>();
+    bool found_amount = false;
+    for (const auto* label : labels) {
+        if (label->text().contains(QStringLiteral("CYBOU"))) found_amount = true;
+    }
+    QVERIFY(found_amount);
+
+    // Without an identity all transfer actions stay disabled: Balance
+    // debits require the user's authorization, and the UI offers none.
+    const auto buttons = wallet->findChildren<QPushButton*>();
+    QVERIFY(!buttons.isEmpty());
+    for (const auto* button : buttons) {
+        QVERIFY(!button->isEnabled());
+    }
+}
+
 void CybouShellTests::storageAndBackupExposeNoOperations()
 {
     auto window = makeWindow();
@@ -182,7 +205,7 @@ void CybouShellTests::storageAndBackupExposeNoOperations()
 void CybouShellTests::networkPageReflectsModel()
 {
     auto window = makeWindow();
-    auto* network = window->pageAt(5);
+    auto* network = window->pageAt(6);
     QVERIFY(network);
 
     const QString network_name = window->desktopModel()->status().network_name;

@@ -18,7 +18,9 @@ text-only before Store
 NO permanent per-mail consensus MailMarker
 ```
 
-Current state contains only validation-relevant balances, identity, PoT, authority, counters and fee pools.
+Current state contains only validation-relevant balances, identity, PoT,
+validator set, counters and fee pools. Operator Authority is fixed in the
+network definition, outside mutable consensus state.
 
 Mail history remains block/history data.
 
@@ -33,9 +35,9 @@ Mass-scale Email is gated on Object Storage.
 ## BFT
 
 ```text
-1 validator = dev
-2–3 = integration
-4 = minimum f=1 target
+1 validator = Authority Mode, quorum 1/1, f=0
+2–3 validators = Integration Mode, quorum 2/2 or 3/3, f=0
+4 validators = minimum f=1 BFT target, quorum 3/4
 ```
 
 All v1 validators have equal weight.
@@ -98,6 +100,16 @@ Do not build Balance/System Balance or issuance assumptions on the inherited
 coinbase/subsidy path. The development genesis may be reset when the CYBOU BFT
 and deterministic state-transition layers replace the bootstrap consensus.
 
+The BFT state machine is still a library/simulator. Production block
+production, operation pool, P2P transport, finalized-block sync, and desktop
+verified-state display are not yet wired. Its execution callback must use
+`ExecuteBlockOperations` over the canonical parent state in that integration.
+The simulator uses an explicit test-only root fixture.
+
+The network-definition serialization changed in this hardening milestone.
+Previously initialized disposable DEV state must start from a new genesis;
+existing stored NetworkIDs are intentionally incompatible.
+
 ## v0.0.3 implementation
 
 Implemented skeleton:
@@ -109,6 +121,9 @@ Implemented skeleton:
 - proof-of-work difficulty verification (leading zero bits);
 - network, account ID, and initial authorization commitment bindings;
 - canonical immutable `CybouNetworkDefinitionV1` and domain-separated NetworkID;
+- NetworkID binding for the fixed Operator Authority keyset and the Beta MailTx quota;
+- shared block-operation executor used by the state-store commit path and available to BFT execution callbacks;
+- BFT proposal checks against locally executed state root before prevote;
 - network definition binding of genesis block, genesis state root, protocol parameters and initial validator-set commitment;
 - structural network-definition validation before state initialization, loading or transition;
 - atomic onboarding bonus transition from OnboardingPool to System Balance;
@@ -141,6 +156,12 @@ Implemented skeleton:
 - `MailOpV1` explicitly marked DEV EXPERIMENTAL / NOT WIRE-FROZEN;
 - consensus-operation wiring of Operator Authority signature verification (`ValidatorAdmissionOpV1` and `ValidatorRemovalOpV1`) with domain-separated hybrid `Ed25519 + ML-DSA-65` signatures binding `NetworkID`;
 - tracking active validator set in canonical consensus state (`CybouState`) and enforcing equal weight = 1, unique keys/IDs, and non-empty active set invariants in `CybouStateStore`.
+
+Desktop GUI:
+
+- native wallet page and Home balance card surfacing `Balance` / `System Balance` per doc 52 (whole-CYBOU rendering, one-way lock labeling, local activity ledger, capability-gated actions);
+- full Email client UI enforcing MailTx rules (one recipient, text-only, strict size meter, deterministic size-aware fee line, local read-state);
+- node diagnostics restyled to the CYBOU theme; inherited Bitcoin locale files dropped until real CYBOU translations exist.
 
 Not yet implemented:
 
