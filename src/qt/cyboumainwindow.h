@@ -22,6 +22,12 @@ public:
 
     void setClientModel(ClientModel* client_model = nullptr, interfaces::BlockAndHeaderTipInfo* tip_info = nullptr) override;
 
+    /** Page access used by desktop shell smoke tests. */
+    CybouDesktopModel* desktopModel() const { return m_desktop_model; }
+    QWidget* pageAt(int index) const;
+    int currentPageIndex() const;
+    int pageCount() const;
+
 protected:
     void closeEvent(QCloseEvent* event) override;
 

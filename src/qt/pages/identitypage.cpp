@@ -97,6 +97,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
 
     m_create_button = new QPushButton{tr("Create identity"), card};
     m_create_button->setObjectName("primaryButton");
+    m_create_button->setProperty("cybouId", "createIdentity");
     m_create_button->setEnabled(false);
     m_create_button->setToolTip(tr("Identity creation is not connected to the desktop yet."));
     connect(m_create_button, &QPushButton::clicked, this, [this] { m_model->requestCreateIdentity(); });

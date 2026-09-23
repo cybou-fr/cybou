@@ -9,6 +9,7 @@
 #include <qt/bitcoin.h>
 #include <qt/guiconstants.h>
 #include <qt/test/apptests.h>
+#include <qt/test/cyboushelltests.h>
 #include <qt/test/optiontests.h>
 #include <qt/test/rpcnestedtests.h>
 #include <qt/test/uritests.h>
@@ -89,6 +90,9 @@ int main(int argc, char* argv[])
 
         RPCNestedTests test3(app.node());
         num_test_failures += QTest::qExec(&test3);
+
+        CybouShellTests shell_tests(app.node());
+        num_test_failures += QTest::qExec(&shell_tests);
 
 #ifdef ENABLE_WALLET
         WalletTests test5(app.node());

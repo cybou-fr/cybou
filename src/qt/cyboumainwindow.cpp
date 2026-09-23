@@ -88,6 +88,21 @@ void CybouMainWindow::showPage(int index)
     activateWindow();
 }
 
+QWidget* CybouMainWindow::pageAt(int index) const
+{
+    return m_pages->widget(index);
+}
+
+int CybouMainWindow::currentPageIndex() const
+{
+    return m_pages->currentIndex();
+}
+
+int CybouMainWindow::pageCount() const
+{
+    return m_pages->count();
+}
+
 void CybouMainWindow::buildShell()
 {
     if (auto* legacy = takeCentralWidget()) {
@@ -146,6 +161,7 @@ void CybouMainWindow::buildShell()
     for (int index = 0; index < primary_navigation.size(); ++index) {
         const auto& item = primary_navigation.at(index);
         auto* button = NavigationButton(item.first, item.second, sidebar);
+        button->setObjectName(QStringLiteral("navButton%1").arg(index));
         m_navigation->addButton(button, index);
         sidebar_layout->addWidget(button);
     }
@@ -158,6 +174,8 @@ void CybouMainWindow::buildShell()
 
     auto* network_button = NavigationButton(tr("Network"), CybouTheme::NavIcon::Network, sidebar);
     auto* settings_button = NavigationButton(tr("Settings"), CybouTheme::NavIcon::Settings, sidebar);
+    network_button->setObjectName(QStringLiteral("navButton5"));
+    settings_button->setObjectName(QStringLiteral("navButton6"));
     m_navigation->addButton(network_button, 5);
     m_navigation->addButton(settings_button, 6);
     sidebar_layout->addWidget(network_button);

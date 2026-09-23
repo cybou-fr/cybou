@@ -47,7 +47,8 @@ void TestRpcCommand(RPCConsole* console)
     QCOMPARE(mw_spy.count(), 4);
     const QString output = messagesWidget->toPlainText();
     const QString pattern = QStringLiteral("\"chain\": \"(\\w+)\"");
-    QCOMPARE(FindInConsole(output, pattern), QString("regtest"));
+    // The desktop test environment runs the CYBOU main development chain.
+    QCOMPARE(FindInConsole(output, pattern), QString::fromStdString(Params().GetChainTypeString()));
 }
 } // namespace
 
