@@ -135,22 +135,8 @@ int Main(const int argc, char* argv[])
     if (argc == 4 && std::string_view{argv[1]} == "init-dev") {
         const auto public_key = uint256::FromUserHex(argv[3]);
         if (!public_key || public_key->IsNull()) throw std::runtime_error("invalid validator public key");
-        cybou::CybouState genesis{
-            .onboarding_pool = 10'000'000,
-            .security_reward_pool = 0,
-            .pending_fee_pool = 0,
-            .accounts = {},
-            .validator_set = {.version = cybou::VALIDATOR_SET_VERSION,
-                              .validators = {{.validator_id = *public_key,
-                                              .consensus_public_key = *public_key, .weight = 1}}},
-        };
-        const cybou::CybouNetworkDefinitionV1 definition{
-            .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
-            .genesis_block_id = cybou::CybouStateHash(genesis),
-            .genesis_state_root = cybou::CybouStateHash(genesis),
-            .protocol_parameters = cybou::DevProtocolParameters(),
-            .initial_validator_set_commitment = cybou::ComputeValidatorSetCommitment(genesis.validator_set),
-        };
+        const auto genesis = cybou::CreateDevGenesisState(*public_key);
+        const auto definition = cybou::CreateDevNetworkDefinition(genesis);
         auto definition_bytes = cybou::SerializeNetworkDefinition(definition);
         auto state_bytes = cybou::SerializeCybouState(genesis);
         std::vector<unsigned char> out{'C', 'Y', 'N', '1'};
@@ -189,7 +175,7 @@ int Main(const int argc, char* argv[])
         while (!stopping && synced < count) {
             if (runtime.SyncFromPeer(sync_host, sync_port, 1) > 0) {
                 ++synced;
-                std::cout << "height=" << *runtime.GetFinalizedHeight() << '\n';
+                std::cout << "height=" << *runtime.GetFinalizedHeight() << std::endl;
                 deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
             } else {
                 if (std::chrono::steady_clock::now() >= deadline) {
@@ -240,7 +226,9 @@ int Main(const int argc, char* argv[])
                     stopping = true;
                     break;
                 }
-                std::cout << "height=" << block->block.height << '\n';
+                // std::endl, not '\n': under systemd stdout is a pipe and a
+                // buffered height line never reaches the journal otherwise.
+                std::cout << "height=" << block->block.height << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
             }
         });
