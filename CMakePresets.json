@@ -53,8 +53,7 @@
       "toolchainFile": "$env{VCPKG_ROOT}\\scripts\\buildsystems\\vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-windows",
-        "BUILD_GUI": "ON",
-        "WITH_ZMQ": "ON"
+        "BUILD_GUI": "ON"
       }
     },
     {
@@ -70,8 +69,7 @@
       "toolchainFile": "$env{VCPKG_ROOT}\\scripts\\buildsystems\\vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
-        "BUILD_GUI": "ON",
-        "WITH_ZMQ": "ON"
+        "BUILD_GUI": "ON"
       }
     },
     {
@@ -121,8 +119,7 @@
         "ENABLE_WALLET": "ON",
         "ENABLE_IPC": "ON",
         "WITH_QRENCODE": "ON",
-        "WITH_USDT": "ON",
-        "WITH_ZMQ": "ON"
+        "WITH_USDT": "ON"
       }
     }
   ]

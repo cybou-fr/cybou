@@ -78,10 +78,6 @@ target_link_libraries(bitcoin_consensus
     secp256k1
 )
 
-if(WITH_ZMQ)
-  add_subdirectory(zmq)
-endif()
-
 # Home for common functionality shared by different executables and libraries.
 # Similar to `bitcoin_util` library, but higher-level.
 add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
@@ -252,10 +248,8 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   policy/settings.cpp
   policy/truc_policy.cpp
   private_broadcast.cpp
-  rest.cpp
   rpc/blockchain.cpp
   rpc/external_signer.cpp
-  rpc/fees.cpp
   rpc/mempool.cpp
   rpc/mining.cpp
   rpc/net.cpp
@@ -283,7 +277,6 @@ target_link_libraries(bitcoin_node
     core_interface
     bitcoin_common
     bitcoin_util
-    $<TARGET_NAME_IF_EXISTS:bitcoin_zmq>
     leveldb
     minisketch
     univalue

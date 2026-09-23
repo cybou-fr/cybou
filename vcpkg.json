@@ -11,8 +11,7 @@
   "default-features": [
     "qt",
     "tests",
-    "wallet",
-    "zeromq"
+    "wallet"
   ],
   "features": {
     "qt": {
@@ -43,12 +42,6 @@
       "description": "Enable wallet (SQLite)",
       "dependencies": [
         "sqlite3"
-      ]
-    },
-    "zeromq": {
-      "description": "Enable ZMQ notifications",
-      "dependencies": [
-        "zeromq"
       ]
     }
   },
