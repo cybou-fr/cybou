@@ -62,12 +62,12 @@ CDBWrapper MemoryDb()
     }};
 }
 
-cybou::InviteVoucher NewVoucher()
+cybou::InviteVoucher NewVoucher(const uint256& voucher_id = uint256::FromUserHex("03").value())
 {
     cybou::InviteVoucher voucher{
         .payload{
             .network_id = uint256::ONE,
-            .voucher_id = uint256::FromUserHex("03").value(),
+            .voucher_id = voucher_id,
             .beneficiary_account_id = ACCOUNT_ID,
             .expiry_epoch = 10,
             .organization_id = std::nullopt,
@@ -150,6 +150,58 @@ BOOST_AUTO_TEST_CASE(redeem_and_write_keeps_memory_and_database_in_sync)
     BOOST_CHECK(state == snapshot);
     BOOST_REQUIRE(store.Load());
     BOOST_CHECK(*store.Load().state == snapshot);
+}
+
+BOOST_AUTO_TEST_CASE(finalized_redemption_apply_and_rollback_are_tip_ordered_and_atomic)
+{
+    auto db{MemoryDb()};
+    cybou::InviteRedemptionStateStore store{db};
+    auto state{State()};
+    state.onboarding_pool = 22000;
+    store.Write(state);
+    const auto initial{state};
+    const uint256 block1{uint256::FromUserHex("11").value()};
+    const uint256 block2{uint256::FromUserHex("12").value()};
+
+    BOOST_REQUIRE(store.ApplyFinalizedRedemption(block1, uint256{}, NewVoucher(), Context(), VERIFIER, state));
+    const auto after_block1{state};
+    BOOST_CHECK(store.ApplyFinalizedRedemption(
+        block2, uint256::ONE, NewVoucher(uint256::FromUserHex("05").value()), Context(), VERIFIER, state).error ==
+        cybou::BlockTransitionError::PARENT_MISMATCH);
+    BOOST_REQUIRE(store.ApplyFinalizedRedemption(
+        block2, block1, NewVoucher(uint256::FromUserHex("05").value()), Context(), VERIFIER, state));
+    BOOST_CHECK_EQUAL(state.onboarding_pool, 10000);
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).system_balance, 18000);
+
+    BOOST_CHECK(store.RollbackFinalizedRedemption(block1, state).error == cybou::BlockTransitionError::NOT_CURRENT_TIP);
+    BOOST_REQUIRE(store.RollbackFinalizedRedemption(block2, state));
+    BOOST_CHECK(state == after_block1);
+    BOOST_REQUIRE(store.RollbackFinalizedRedemption(block1, state));
+    BOOST_CHECK(state == initial);
+    BOOST_REQUIRE(store.Load());
+    BOOST_CHECK(*store.Load().state == initial);
+}
+
+BOOST_AUTO_TEST_CASE(finalized_redemption_rejects_state_mismatch_and_corrupt_undo)
+{
+    auto db{MemoryDb()};
+    cybou::InviteRedemptionStateStore store{db};
+    auto state{State()};
+    store.Write(state);
+    const uint256 block{uint256::FromUserHex("21").value()};
+
+    auto stale{state};
+    --stale.onboarding_pool;
+    BOOST_CHECK(store.ApplyFinalizedRedemption(block, uint256{}, NewVoucher(), Context(), VERIFIER, stale).error ==
+        cybou::BlockTransitionError::STATE_MISMATCH);
+    BOOST_REQUIRE(store.ApplyFinalizedRedemption(block, uint256{}, NewVoucher(), Context(), VERIFIER, state));
+
+    const std::string undo_key{"cybou/invite-redemption/undo/v1/" + block.GetHex()};
+    db.Write(undo_key, std::vector<unsigned char>{1, 0});
+    const auto snapshot{state};
+    BOOST_CHECK(store.RollbackFinalizedRedemption(block, state).error ==
+        cybou::BlockTransitionError::MISSING_OR_CORRUPT_UNDO);
+    BOOST_CHECK(state == snapshot);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

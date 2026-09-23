@@ -121,8 +121,10 @@ Implemented skeleton:
   isolated from CYBOU network magic and Base58 prefixes.
 - strongly typed, fixed-width AccountID with null/length validation, integrated
   into Invite Voucher validation and redemption state.
+- atomic finalized-redemption apply/rollback store boundary with per-block undo,
+  CYBOU tip ordering and before/after state-hash verification.
 
 Not yet implemented:
 
 - production Operator Authority signature verification;
-- integration of the voucher state store into finalized block application and rollback.
+- connection of the voucher state-store boundary to the block validation/finality lifecycle.
