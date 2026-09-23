@@ -50,8 +50,8 @@ Choose `EPOCH_BLOCKS` after real block cadence is known.
 ### O-014 Exact PoT score
 Freeze capped System Balance, age, clean-history, activity and penalty contributions.
 
-### O-015 Invite organization delegation
-Define whether an approved organization receives individually signed vouchers or a bounded sub-authority/allocation.
+### O-015 Account Creation anti-Sybil difficulty tuning
+Calibrate the initial PoW target bits and dynamic difficulty adjustment for `AccountCreationWorkV1`.
 
 ### O-021 Operator Authority signature suite
 Benchmark and review a domain-specific hybrid signature profile for rare
@@ -62,7 +62,7 @@ and implementation backend together. Do not copy a changing Internet-Draft wire
 format into consensus.
 
 ### O-022 AccountID and network identifiers — resolved
-AccountID V1 is an opaque nonzero 32-byte identifier. Invite Voucher network_id
+AccountID V1 is an opaque nonzero 32-byte identifier. AccountCreationWork network_id
 is the 32-byte genesis block hash. Both use the internal byte order frozen by
 the V1 canonical serializer; see DEC-156 and DEC-157.
 

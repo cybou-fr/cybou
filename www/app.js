@@ -5,7 +5,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   initLanguageSwitch();
-  initVoucherSimulator();
+  initOnboardingSimulator();
   checkUrlLanguage();
 });
 
@@ -37,9 +37,9 @@ const translations = {
 
     col1Title: "Validé & Testé (v0.0.1)",
     badgeDone: "FONCTIONNEL",
-    col1Item1: "<strong>Enveloppe de bon d'invitation (doc 70) :</strong> validation cryptographique bornée, séparation de domaine anti-rejeu.",
+    col1Item1: "<strong>Création de compte native & sans intermédiaire (doc 70) :</strong> opération AccountCreateOpV1 avec preuve de travail anti-Sybil.",
     col1Item2: "<strong>Identifiant typé AccountId (32 octets) :</strong> gestion déterministe du solde système (<code>SystemBalance</code>).",
-    col1Item3: "<strong>Subvention d'accueil atomique :</strong> transfert de 6 000 CYBOU de <code>OnboardingPool</code> vers <code>SystemBalance</code>.",
+    col1Item3: "<strong>Bonus d'accueil atomique :</strong> transfert immédiat du bonus depuis <code>OnboardingPool</code> vers <code>SystemBalance</code>.",
     col1Item4: "<strong>Persistance d'état LevelDB :</strong> instantanés atomiques avec nommage et isolats stricts CYBOU.",
     col1Item5: "<strong>Définition native MailTx (doc 16) :</strong> opération de premier rang, 1 destinataire, taille bornée, frais prévisibles (sans surenchère).",
     col1Item6: "<strong>Couverture de tests :</strong> 684 tests unitaires validés, élimination intégrale des dépendances et terminologies Bitcoin résiduelles.",
@@ -109,18 +109,18 @@ const translations = {
     dtStack: "Socle technologique",
 
     simLabel: "Validation d'état C++",
-    simTitle: "Simulateur de transition d'état (Invite Voucher).",
-    simDesc: "Démonstration de la transition d'accueil telle qu'implémentée dans les modules src/cybou/voucher.cpp et src/cybou/state.cpp.",
+    simTitle: "Création de compte native & Preuve anti-Sybil.",
+    simDesc: "Démonstration de la création native sans invitation selon AccountCreateOpV1 et AccountCreationWorkV1 (doc 70).",
     simBeneficiary: "Identifiant de compte (AccountId — 32 octets)",
-    simVoucherId: "Code du bon d'invitation (VoucherId)",
-    simSubmit: "Exécuter la transition d'état",
-    simStatusLabel: "Statut de la transition",
-    simStatusReady: "En attente d'exécution",
-    simStatusSuccess: "Admis • Subvention 6 000 CYBOU créditée",
+    simWorkLabel: "Preuve de travail anti-Sybil (CYBOU/ACCOUNT-CREATE-WORK/V1)",
+    simSubmit: "Calculer PoW & Créer le compte",
+    simStatusLabel: "Statut du protocole",
+    simStatusReady: "Prêt à créer l'identité",
+    simStatusSuccess: "Compte créé • Preuve anti-Sybil validée • Bonus crédité",
     simPoolSource: "OnboardingPool (Réserve globale)",
     simBalanceTarget: "SystemBalance (Solde Système)",
-    simReplay: "Séparation anti-rejeu",
-    simQuota: "Quota d'envoi par époque",
+    simAntiSybil: "Anti-Sybil & Intégrité",
+    simQuota: "Quota initial par époque",
 
     faqLabel: "Questions fréquentes",
     faqTitle: "Architecture, Cryptographie & Gouvernance.",
@@ -136,7 +136,7 @@ const translations = {
     faqQ4: "Comment fonctionne le consensus BFT et la tolérance aux pannes ?",
     faqA4: "Le consensus CYBOU repose sur une finalité BFT explicite sans minage énergivore. L'admission des validateurs est soumise à approbation opérateur, et chaque validateur dispose d'un poids égal à 1 (<code>weight = 1</code>). Un quorum minimum de 4 validateurs est strictement requis pour tolérer <code>f=1</code> validateur défaillant ou byzantin. Les époques de confiance (PoT) sont calculées en arithmétique entière à partir de la hauteur de bloc, sans dépendance aux horloges locales.",
     faqQ5: "Quelle est la finalité économique du jeton CYBOU ?",
-    faqA5: "Le jeton CYBOU a une offre maximale stricte et non-gonflable de <strong>100 000 000 000 unités (0 décimale)</strong>. Il n'a aucune vocation spéculative : il sert à réguler l'accès au réseau et prévenir le pourriel (spam). Chaque compte reçoit une subvention de bienvenue de 6 000 CYBOU via bon d'invitation (doc 70). Les frais d'émission sont déterministes selon la taille (pas d'enchères de priorité) et répartis à 75% pour la sécurité du réseau et 25% pour la réserve d'accueil.",
+    faqA5: "Le jeton CYBOU a une offre maximale stricte et non-gonflable de <strong>100 000 000 000 unités (0 décimale)</strong>. Il n'a aucune vocation spéculative : il sert à réguler l'accès au réseau et prévenir le pourriel (spam). Chaque nouveau compte satisfaisant la preuve de travail anti-Sybil reçoit un bonus d'accueil automatique directement sur son Solde Système (doc 70), sans invitation ni approbation centrale. Les frais d'émission sont déterministes selon la taille (pas d'enchères de priorité) et recyclés à 75% pour la sécurité du réseau et 25% pour la réserve d'accueil.",
 
     footNav: "Navigation",
     footDocs: "Spécifications",
@@ -169,9 +169,9 @@ const translations = {
 
     col1Title: "Validated & Tested (v0.0.1)",
     badgeDone: "PASSING",
-    col1Item1: "<strong>Invite Voucher Envelope (doc 70):</strong> bounded cryptographic verification, domain separation against replay.",
+    col1Item1: "<strong>Permissionless Anti-Sybil Onboarding (doc 70):</strong> protocol-native AccountCreateOpV1 with proof-of-work difficulty binding.",
     col1Item2: "<strong>Typed AccountId (32 bytes):</strong> deterministic balance validation and <code>SystemBalance</code> tracking.",
-    col1Item3: "<strong>Atomic Welcome Grant:</strong> 6,000 CYBOU transfer from <code>OnboardingPool</code> to <code>SystemBalance</code>.",
+    col1Item3: "<strong>Atomic Onboarding Bonus:</strong> immediate transfer from <code>OnboardingPool</code> to <code>SystemBalance</code> upon account creation.",
     col1Item4: "<strong>LevelDB Snapshot Persistence:</strong> atomic state snapshots with clean CYBOU namespacing.",
     col1Item5: "<strong>Native MailTx Definition (doc 16):</strong> first-class operation, 1 recipient, bounded payload size, deterministic non-bidding fees.",
     col1Item6: "<strong>Test Coverage:</strong> 684 unit tests passing, complete elimination of legacy Bitcoin terminology and prefixes.",
@@ -241,18 +241,18 @@ const translations = {
     dtStack: "Core Technology Stack",
 
     simLabel: "C++ State Transition",
-    simTitle: "State Transition Simulator (Invite Voucher).",
-    simDesc: "Demonstration of the onboarding state transition implemented in src/cybou/voucher.cpp and src/cybou/state.cpp.",
+    simTitle: "Native Account Creation & Anti-Sybil Proof-of-Work.",
+    simDesc: "Demonstration of permissionless account creation according to AccountCreateOpV1 and AccountCreationWorkV1 (doc 70).",
     simBeneficiary: "Account Identifier (AccountId — 32 bytes)",
-    simVoucherId: "Invite Voucher Code (VoucherId)",
-    simSubmit: "Execute State Transition",
-    simStatusLabel: "Transition Status",
-    simStatusReady: "Awaiting execution",
-    simStatusSuccess: "Admitted • 6,000 CYBOU Welcome Grant Credited",
+    simWorkLabel: "Anti-Sybil Proof-of-Work (CYBOU/ACCOUNT-CREATE-WORK/V1)",
+    simSubmit: "Compute PoW & Create Account",
+    simStatusLabel: "Protocol Status",
+    simStatusReady: "Ready to create identity",
+    simStatusSuccess: "Account Created • Anti-Sybil PoW Validated • Bonus Credited",
     simPoolSource: "OnboardingPool (Global Reserve)",
     simBalanceTarget: "SystemBalance (Credited)",
-    simReplay: "Anti-Replay Domain Separation",
-    simQuota: "Outgoing Quota per Epoch",
+    simAntiSybil: "Anti-Sybil & Integrity",
+    simQuota: "Initial Quota per Epoch",
 
     faqLabel: "Frequently Asked Questions",
     faqTitle: "Architecture, Cryptography & Governance.",
@@ -267,8 +267,7 @@ const translations = {
     faqA3: "Conventional email relies on centralized cloud providers, insecure relay servers, and exposes cleartext metadata and bodies across foreign jurisdictions. CYBOU is a direct peer-to-peer network: each message is a native <code>MailTx</code> verified via BFT, committed with a cryptographic salt (doc 69), and decryptable strictly on the recipient's machine without middlebox servers.",
     faqQ4: "How do BFT consensus and fault tolerance work?",
     faqA4: "CYBOU consensus operates on explicit BFT finality without wasteful mining. Validator admission is approved by the operator, and each validator holds an equal weight of 1 (<code>weight = 1</code>). A strict quorum of 4 validators is required to tolerate <code>f=1</code> faulty node. Proof of Trust (PoT) epochs are computed strictly via integer arithmetic from block height, with zero local wall-clock dependency.",
-    faqQ5: "What is the economic role of the CYBOU token?",
-    faqA5: "The CYBOU token has a fixed, non-inflatable supply ceiling of <strong>100,000,000,000 units (0 decimals)</strong>. It is not speculative: it serves strictly for network anti-spam and deterministic bandwidth allocation. Each account receives a 6,000 CYBOU Welcome Grant via signed Invite Voucher (doc 70). Transaction fees are non-bidding and split 75% for network security and 25% for the onboarding reserve.",
+    faqQ5: "The CYBOU token has a fixed, non-inflatable supply ceiling of <strong>100,000,000,000 units (0 decimals)</strong>. It is not speculative: it serves strictly for network anti-spam and deterministic bandwidth allocation. Newly created accounts satisfying anti-Sybil proof-of-work receive an automatic onboarding bonus (doc 70) credited directly to System Balance without any operator invites or central approval. Transaction fees are non-bidding and split 75% for network security and 25% recycled to the onboarding reserve.",
 
     footNav: "Navigation",
     footDocs: "Specifications",
@@ -325,33 +324,33 @@ function setLanguage(lang, updateUrl = false) {
   }
 }
 
-// --- 2. Interactive Invite Voucher Simulator ---
-function initVoucherSimulator() {
+// --- 2. Interactive Permissionless Onboarding Simulator ---
+function initOnboardingSimulator() {
   const btn = document.getElementById('sim-run-btn');
   const accountInput = document.getElementById('sim-account');
-  const voucherInput = document.getElementById('sim-voucher');
+  const workInput = document.getElementById('sim-work');
   const statusVal = document.getElementById('sim-status-val');
   const sysBalVal = document.getElementById('sim-sysbal-val');
   const poolVal = document.getElementById('sim-pool-val');
 
-  if (!btn || !accountInput || !voucherInput) return;
+  if (!btn || !accountInput) return;
 
   btn.addEventListener('click', () => {
     btn.textContent = currentLang === 'fr' 
-      ? 'Vérification cryptographique en cours...' 
-      : 'Verifying cryptographic signature...';
+      ? 'Calcul de la preuve anti-Sybil...' 
+      : 'Computing anti-Sybil proof-of-work...';
     btn.style.opacity = '0.7';
 
     setTimeout(() => {
       btn.textContent = currentLang === 'fr' 
-        ? 'Exécuter la transition d\'état' 
-        : 'Execute State Transition';
+        ? 'Calculer PoW & Créer le compte' 
+        : 'Compute PoW & Create Account';
       btn.style.opacity = '1';
 
       if (statusVal) {
         statusVal.textContent = currentLang === 'fr' 
-          ? 'Admis • Subvention 6 000 CYBOU créditée' 
-          : 'Admitted • 6,000 CYBOU Welcome Grant Credited';
+          ? 'Compte créé • Preuve anti-Sybil validée • Bonus crédité' 
+          : 'Account Created • Anti-Sybil PoW Validated • Bonus Credited';
         statusVal.className = 'output-val highlight';
       }
       if (sysBalVal) {
@@ -359,7 +358,7 @@ function initVoucherSimulator() {
         sysBalVal.className = 'output-val highlight';
       }
       if (poolVal) {
-        poolVal.textContent = '99 999 994 000 CYBOU';
+        poolVal.textContent = 'Débit atomique confirmé (-6 000)';
       }
     }, 400);
   });

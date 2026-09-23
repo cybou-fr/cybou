@@ -16,13 +16,13 @@
 [ ] priority fee path disabled
 ```
 
-## Invite Voucher
+## Account Creation and Onboarding
 ```text
-[ ] unsigned voucher rejected
-[ ] expired voucher rejected
-[ ] reused voucher rejected
-[ ] valid voucher transfers 6,000 CYBOU OnboardingPool -> SystemBalance
-[ ] identity creation alone gives no grant
+[ ] permissionless AccountCreateOpV1 accepted
+[ ] invalid or insufficient AccountCreationWork rejected
+[ ] duplicate AccountID creation rejected
+[ ] valid creation credits onboarding bonus OnboardingPool -> SystemBalance
+[ ] identity creation alone does not mint tokens
 ```
 
 ## Mail crypto
@@ -57,7 +57,7 @@
 ## PoT
 ```text
 [ ] epoch derived deterministically from finalized height
-[ ] 25 MailTx/epoch enforced for new invited account
+[ ] 25 MailTx/epoch enforced for new account
 [ ] local wall clock/timezone changes do not affect consensus result
 [ ] PoT arithmetic is integer/deterministic
 ```

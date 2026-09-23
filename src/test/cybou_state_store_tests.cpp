@@ -16,39 +16,45 @@ BOOST_FIXTURE_TEST_SUITE(cybou_state_store_tests, BasicTestingSetup)
 
 namespace {
 
+const uint256 NETWORK_ID{uint256::ONE};
 const cybou::AccountId ACCOUNT_ID{uint256::FromUserHex("0a").value()};
-const uint256 VOUCHER_ID{uint256::FromUserHex("02").value()};
-const std::string STATE_KEY{"cybou/invite-redemption/state/v1"};
-const std::string HASH_KEY{"cybou/invite-redemption/hash/v1"};
+const cybou::AccountId ACCOUNT_ID_2{uint256::FromUserHex("0b").value()};
+const uint256 AUTH_KEY{uint256::FromUserHex("42").value()};
+const std::string STATE_KEY{"cybou/state/v1"};
+const std::string HASH_KEY{"cybou/hash/v1"};
 
-class AcceptVerifier final : public cybou::OperatorAuthoritySignatureVerifier
+cybou::AccountAuthorizationV1 ValidAuth()
 {
-    bool Verify(
-        const cybou::OperatorAuthorityKeySet&,
-        const cybou::SignatureBundleV1&,
-        std::span<const unsigned char>) const override
-    {
-        return true;
-    }
-};
-
-const AcceptVerifier VERIFIER;
-const cybou::OperatorAuthorityKeySet KEYSET{
-    .keyset_id = uint256::FromUserHex("04").value(),
-    .active_from_epoch = 1,
-    .retired_from_epoch = 20,
-};
-
-cybou::InviteRedemptionState State()
-{
-    cybou::InviteRedemptionState state{
-        .onboarding_pool = 10000,
-        .accounts{},
-        .consumed_voucher_ids{},
+    return cybou::AccountAuthorizationV1{
+        .auth_key_commitment = AUTH_KEY,
     };
-    state.accounts.emplace(ACCOUNT_ID, cybou::AccountBalanceState{50, 6000});
-    state.consumed_voucher_ids.insert(VOUCHER_ID);
-    return state;
+}
+
+cybou::AccountCreateOpV1 ValidOp(const cybou::AccountId& acc = ACCOUNT_ID)
+{
+    return cybou::AccountCreateOpV1{
+        .version = cybou::ACCOUNT_CREATE_OP_VERSION,
+        .account_id = acc,
+        .initial_authorization = ValidAuth(),
+        .creation_work{
+            .version = cybou::ACCOUNT_CREATION_WORK_VERSION,
+            .network_id = NETWORK_ID,
+            .account_id = acc,
+            .initial_authorization_commitment = cybou::ComputeAuthCommitment(ValidAuth()),
+            .work_epoch = 1,
+            .nonce = 0,
+        },
+    };
+}
+
+cybou::CybouState InitialState()
+{
+    return cybou::CybouState{
+        .onboarding_pool = 20000,
+        .security_reward_pool = 1000,
+        .pending_fee_pool = 500,
+        .accounts{},
+    };
 }
 
 CDBWrapper MemoryDb()
@@ -62,50 +68,21 @@ CDBWrapper MemoryDb()
     }};
 }
 
-cybou::InviteVoucher NewVoucher(const uint256& voucher_id = uint256::FromUserHex("03").value())
-{
-    cybou::InviteVoucher voucher{
-        .payload{
-            .network_id = uint256::ONE,
-            .voucher_id = voucher_id,
-            .beneficiary_account_id = ACCOUNT_ID,
-            .expiry_epoch = 10,
-            .organization_id = std::nullopt,
-        },
-        .signature{},
-    };
-    voucher.signature.authority_keyset_id = KEYSET.keyset_id;
-    voucher.signature.classical_signature[0] = 1;
-    voucher.signature.pq_signature[0] = 1;
-    return voucher;
-}
-
-cybou::InviteVoucherValidationContext Context()
-{
-    return {
-        .expected_network_id = uint256::ONE,
-        .redeemer_account_id = ACCOUNT_ID,
-        .current_epoch = 10,
-        .authority_keyset = &KEYSET,
-    };
-}
-
 } // namespace
 
 BOOST_AUTO_TEST_CASE(state_store_round_trips_and_overwrites_snapshot)
 {
     auto db{MemoryDb()};
-    cybou::InviteRedemptionStateStore store{db};
+    cybou::CybouStateStore store{db};
     BOOST_CHECK(store.Load().error == cybou::StateLoadError::NOT_FOUND);
 
-    auto state{State()};
+    auto state{InitialState()};
     store.Write(state);
     auto loaded{store.Load()};
     BOOST_REQUIRE(loaded);
     BOOST_CHECK(*loaded.state == state);
 
-    state.onboarding_pool = 4000;
-    state.accounts.at(ACCOUNT_ID).system_balance = 12000;
+    state.onboarding_pool = 14000;
     store.Write(state);
     loaded = store.Load();
     BOOST_REQUIRE(loaded);
@@ -115,10 +92,10 @@ BOOST_AUTO_TEST_CASE(state_store_round_trips_and_overwrites_snapshot)
 BOOST_AUTO_TEST_CASE(state_store_rejects_partial_or_hash_mismatched_snapshots)
 {
     auto db{MemoryDb()};
-    cybou::InviteRedemptionStateStore store{db};
-    const auto state{State()};
+    cybou::CybouStateStore store{db};
+    const auto state{InitialState()};
 
-    db.Write(STATE_KEY, cybou::SerializeInviteRedemptionState(state));
+    db.Write(STATE_KEY, cybou::SerializeCybouState(state));
     BOOST_CHECK(store.Load().error == cybou::StateLoadError::CORRUPT);
 
     db.Write(HASH_KEY, uint256::ONE);
@@ -126,80 +103,101 @@ BOOST_AUTO_TEST_CASE(state_store_rejects_partial_or_hash_mismatched_snapshots)
 
     store.Write(state);
     BOOST_REQUIRE(store.Load());
-    auto corrupt_bytes{cybou::SerializeInviteRedemptionState(state)};
+    auto corrupt_bytes{cybou::SerializeCybouState(state)};
     corrupt_bytes.back() ^= 1;
     db.Write(STATE_KEY, corrupt_bytes);
     BOOST_CHECK(store.Load().error == cybou::StateLoadError::CORRUPT);
 }
 
-BOOST_AUTO_TEST_CASE(redeem_and_write_keeps_memory_and_database_in_sync)
+BOOST_AUTO_TEST_CASE(create_account_and_write_keeps_memory_and_database_in_sync)
 {
     auto db{MemoryDb()};
-    cybou::InviteRedemptionStateStore store{db};
-    auto state{State()};
+    cybou::CybouStateStore store{db};
+    auto state{InitialState()};
 
-    const auto result{store.RedeemAndWrite(NewVoucher(), Context(), VERIFIER, state)};
+    const auto result{store.CreateAccountAndWrite(ValidOp(), NETWORK_ID, 1, 1, 0, cybou::DEV_ONBOARDING_BONUS, state)};
     BOOST_REQUIRE(result);
     const auto loaded{store.Load()};
     BOOST_REQUIRE(loaded);
     BOOST_CHECK(*loaded.state == state);
 
     const auto snapshot{state};
-    const auto replay{store.RedeemAndWrite(NewVoucher(), Context(), VERIFIER, state)};
-    BOOST_CHECK(replay.voucher_error == cybou::InviteVoucherError::ALREADY_CONSUMED);
+    const auto replay{store.CreateAccountAndWrite(ValidOp(), NETWORK_ID, 2, 1, 0, cybou::DEV_ONBOARDING_BONUS, state)};
+    BOOST_CHECK(replay.error == cybou::AccountCreateError::ACCOUNT_ALREADY_EXISTS);
     BOOST_CHECK(state == snapshot);
     BOOST_REQUIRE(store.Load());
     BOOST_CHECK(*store.Load().state == snapshot);
 }
 
-BOOST_AUTO_TEST_CASE(finalized_redemption_apply_and_rollback_are_tip_ordered_and_atomic)
+BOOST_AUTO_TEST_CASE(apply_block_and_rollback_are_tip_ordered_and_atomic)
 {
     auto db{MemoryDb()};
-    cybou::InviteRedemptionStateStore store{db};
-    auto state{State()};
-    state.onboarding_pool = 22000;
+    cybou::CybouStateStore store{db};
+    auto state{InitialState()};
     store.Write(state);
     const auto initial{state};
     const uint256 block1{uint256::FromUserHex("11").value()};
     const uint256 block2{uint256::FromUserHex("12").value()};
 
-    BOOST_REQUIRE(store.ApplyFinalizedRedemption(block1, uint256{}, NewVoucher(), Context(), VERIFIER, state));
+    BOOST_REQUIRE(store.ApplyBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 1, 1, 0, cybou::DEV_ONBOARDING_BONUS, state));
     const auto after_block1{state};
-    BOOST_CHECK(store.ApplyFinalizedRedemption(
-        block2, uint256::ONE, NewVoucher(uint256::FromUserHex("05").value()), Context(), VERIFIER, state).error ==
+    BOOST_CHECK(store.ApplyBlock(
+        block2, uint256::ONE, {ValidOp(ACCOUNT_ID_2)}, NETWORK_ID, 2, 1, 0, cybou::DEV_ONBOARDING_BONUS, state).error ==
         cybou::BlockTransitionError::PARENT_MISMATCH);
-    BOOST_REQUIRE(store.ApplyFinalizedRedemption(
-        block2, block1, NewVoucher(uint256::FromUserHex("05").value()), Context(), VERIFIER, state));
-    BOOST_CHECK_EQUAL(state.onboarding_pool, 10000);
-    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).system_balance, 18000);
+    BOOST_REQUIRE(store.ApplyBlock(
+        block2, block1, {ValidOp(ACCOUNT_ID_2)}, NETWORK_ID, 2, 1, 0, cybou::DEV_ONBOARDING_BONUS, state));
+    BOOST_CHECK_EQUAL(state.onboarding_pool, 8000);
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).system_balance, 6000);
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID_2).system_balance, 6000);
 
-    BOOST_CHECK(store.RollbackFinalizedRedemption(block1, state).error == cybou::BlockTransitionError::NOT_CURRENT_TIP);
-    BOOST_REQUIRE(store.RollbackFinalizedRedemption(block2, state));
+    BOOST_CHECK(store.RollbackBlock(block1, state).error == cybou::BlockTransitionError::NOT_CURRENT_TIP);
+    BOOST_REQUIRE(store.RollbackBlock(block2, state));
     BOOST_CHECK(state == after_block1);
-    BOOST_REQUIRE(store.RollbackFinalizedRedemption(block1, state));
+    BOOST_REQUIRE(store.RollbackBlock(block1, state));
     BOOST_CHECK(state == initial);
     BOOST_REQUIRE(store.Load());
     BOOST_CHECK(*store.Load().state == initial);
 }
 
-BOOST_AUTO_TEST_CASE(finalized_redemption_rejects_state_mismatch_and_corrupt_undo)
+BOOST_AUTO_TEST_CASE(apply_block_rejects_duplicate_account)
 {
     auto db{MemoryDb()};
-    cybou::InviteRedemptionStateStore store{db};
-    auto state{State()};
+    cybou::CybouStateStore store{db};
+    auto state{InitialState()};
+    store.Write(state);
+    const uint256 block1{uint256::FromUserHex("11").value()};
+    const uint256 block2{uint256::FromUserHex("12").value()};
+
+    BOOST_REQUIRE(store.ApplyBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 1, 1, 0, cybou::DEV_ONBOARDING_BONUS, state));
+    const auto snapshot{state};
+
+    const auto result{store.ApplyBlock(
+        block2, block1, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 2, 1, 0, cybou::DEV_ONBOARDING_BONUS, state)};
+    BOOST_CHECK(result.error == cybou::BlockTransitionError::INVALID_OPERATION);
+    BOOST_CHECK(result.op_result.error == cybou::AccountCreateError::ACCOUNT_ALREADY_EXISTS);
+    BOOST_CHECK(state == snapshot);
+    BOOST_REQUIRE(store.Load());
+    BOOST_CHECK(*store.Load().state == snapshot);
+}
+
+BOOST_AUTO_TEST_CASE(apply_block_rejects_state_mismatch_and_corrupt_undo)
+{
+    auto db{MemoryDb()};
+    cybou::CybouStateStore store{db};
+    auto state{InitialState()};
     store.Write(state);
     const uint256 block{uint256::FromUserHex("21").value()};
 
     auto stale{state};
     --stale.onboarding_pool;
-    BOOST_CHECK(store.ApplyFinalizedRedemption(block, uint256{}, NewVoucher(), Context(), VERIFIER, stale).error ==
+    BOOST_CHECK(store.ApplyBlock(block, uint256{}, {ValidOp()}, NETWORK_ID, 1, 1, 0, cybou::DEV_ONBOARDING_BONUS, stale).error ==
         cybou::BlockTransitionError::STATE_MISMATCH);
-    BOOST_REQUIRE(store.ApplyFinalizedRedemption(block, uint256{}, NewVoucher(), Context(), VERIFIER, state));
+    BOOST_REQUIRE(store.ApplyBlock(block, uint256{}, {ValidOp()}, NETWORK_ID, 1, 1, 0, cybou::DEV_ONBOARDING_BONUS, state));
 
-    const std::string undo_key{"cybou/invite-redemption/undo/v1/" + block.GetHex()};
+    const std::string undo_key{"cybou/undo/v1/" + block.GetHex()};
     db.Write(undo_key, std::vector<unsigned char>{1, 0});
     const auto snapshot{state};
-    BOOST_CHECK(store.RollbackFinalizedRedemption(block, state).error ==
+    BOOST_CHECK(store.RollbackBlock(block, state).error ==
         cybou::BlockTransitionError::MISSING_OR_CORRUPT_UNDO);
     BOOST_CHECK(state == snapshot);
 }

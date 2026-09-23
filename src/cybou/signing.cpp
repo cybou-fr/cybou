@@ -12,8 +12,6 @@ namespace cybou {
 std::string_view ObjectSigningDomainTag(const ObjectSigningDomain domain)
 {
     switch (domain) {
-    case ObjectSigningDomain::INVITE_VOUCHER:
-        return "CYBOU/SIG/INVITE-VOUCHER/V1";
     case ObjectSigningDomain::VALIDATOR_ADMISSION:
         return "CYBOU/SIG/VALIDATOR-ADMISSION/V1";
     case ObjectSigningDomain::VALIDATOR_REMOVAL:

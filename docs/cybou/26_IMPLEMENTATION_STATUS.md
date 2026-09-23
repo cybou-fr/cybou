@@ -47,18 +47,19 @@ Admission is operator-approved.
 ```text
 block-height-derived epoch
 integer arithmetic
-25 MailTx / epoch for new invited account
+25 MailTx / epoch for new account
 ```
 
 ## Onboarding
 
 ```text
-Operator-signed one-time Invite Voucher
--> 6,000 CYBOU
+Protocol-native AccountCreateOpV1 + AccountCreationWorkV1
+-> Onboarding bonus (Dev: 6,000 CYBOU; Beta/Mainnet: TBD)
 OnboardingPool -> SystemBalance
 ```
 
-Identity creation alone does not receive the grant.
+Permissionless: no operator vouchers or central approval.
+Identity creation alone does not mint tokens; bonus is debited directly from OnboardingPool.
 
 ## Operator keys
 
@@ -102,31 +103,19 @@ and deterministic state-transition layers replace the bootstrap consensus.
 Implemented skeleton:
 
 - distinct Operator Authority / Validator / Release Signing / Treasury domains;
-- bounded Invite Voucher envelope;
-- frozen versioned beneficiary/network-bound canonical voucher payload;
-- suite and authority-keyset binding in the signing preimage;
-- epoch-windowed Operator Authority keyset model;
-- strict structural requirement for both hybrid signature components;
-- exact 6,000 CYBOU structural grant check;
-- deterministic epoch expiry check;
-- consumed-voucher replay check;
-- typed Operator Authority verifier boundary with keyset and epoch checks.
-- atomic one-time Welcome Grant transition from OnboardingPool to System Balance;
-- one Welcome Grant per AccountID: a second valid voucher for an already-onboarded
-  account is rejected as ALREADY_ONBOARDED without state mutation;
-- consensus replay set keyed only by consumed voucher ID.
-- canonical versioned redemption-state encoding and domain-separated state hash.
-- atomic LevelDB snapshot persistence with paired state/hash verification.
-- GitHub Actions headless build gate for CYBOU protocol unit tests.
-- fixed-difficulty transition enforcement and deterministic 100-block fixture hash.
-- full 684-case C++ unit suite passes with upstream Bitcoin protocol vectors
-  isolated from CYBOU network magic and Base58 prefixes.
-- strongly typed, fixed-width AccountID with null/length validation, integrated
-  into Invite Voucher validation and redemption state.
-- atomic finalized-redemption apply/rollback store boundary with per-block undo,
-  CYBOU tip ordering and before/after state-hash verification.
+- permissionless AccountCreateOpV1 and AccountCreationWorkV1 data structures;
+- domain-separated anti-Sybil work hashing (`CYBOU/ACCOUNT-CREATE-WORK/V1`);
+- proof-of-work difficulty verification (leading zero bits);
+- network, account ID, and initial authorization commitment bindings;
+- atomic onboarding bonus transition from OnboardingPool to System Balance;
+- duplicate AccountID prevention;
+- canonical versioned state encoding and domain-separated state hash (`CYBOU/STATE/V1`);
+- atomic LevelDB snapshot persistence with paired state/hash verification (`CybouStateStore`);
+- atomic finalized block apply/rollback store boundary with per-block undo, CYBOU tip ordering and before/after state-hash verification;
+- strongly typed, fixed-width AccountID with null/length validation;
+- full C++ unit test suite covering account creation, signing domains, state transitions, and store rollbacks.
 
 Not yet implemented:
 
-- production Operator Authority signature verification;
-- connection of the voucher state-store boundary to the block validation/finality lifecycle.
+- production Operator Authority signature verification for validator admissions;
+- connection of the state-store boundary to the block validation/finality lifecycle.

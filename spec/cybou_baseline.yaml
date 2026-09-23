@@ -241,11 +241,12 @@ validator_policy:
   bft: true
   equal_weight: 1
   min_for_f1_target: 4
-invite:
-  welcome_grant: 6000
-  voucher_required: true
-  operator_signed: true
-  one_time: true
+onboarding:
+  dev_onboarding_bonus: 6000
+  beta_onboarding_bonus: TBD
+  mainnet_onboarding_bonus: TBD
+  permissionless: true
+  account_creation_work: true
 operator_key_domains:
 - operator_authority
 - operator_validator

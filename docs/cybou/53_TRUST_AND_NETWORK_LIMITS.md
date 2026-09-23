@@ -33,7 +33,7 @@ Over time, account age and clean history become larger parts of PoT.
 
 ## Mail
 
-New valid invited AccountID:
+New valid AccountID:
 
 ```text
 25 outgoing MailTx / PoT epoch

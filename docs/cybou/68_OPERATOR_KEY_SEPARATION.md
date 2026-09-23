@@ -9,8 +9,8 @@ CYBOU must separate operator security domains.
 ```text
 Operator Authority Key
     validator admission/removal
-    Invite Voucher authority
     protocol-defined operator governance actions
+    (MUST NOT participate in ordinary AccountID creation or onboarding)
 
 Operator Validator Key
     BFT consensus votes
@@ -63,7 +63,6 @@ Authority operations must use distinct frozen signing domains, including at
 least:
 
 ```text
-Invite Voucher
 Validator Admission
 Validator Removal
 Protocol Parameter Action

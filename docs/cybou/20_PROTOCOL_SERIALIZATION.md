@@ -55,10 +55,9 @@ CYBOU/MESSAGE/...
 Exact strings/bytes are frozen with the protocol spec.
 
 Key-domain separation and object-signature separation are distinct requirements.
-An Operator Authority key domain does not by itself separate an Invite Voucher
-signature from validator admission, validator removal, or another authority
-operation. Every signed object type therefore requires its own frozen signing
-domain.
+An Operator Authority key domain does not by itself separate a validator admission
+signature from validator removal or protocol parameters. Every signed object type
+therefore requires its own frozen signing domain.
 
 ## Signed-object boundary
 

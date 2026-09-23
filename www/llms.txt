@@ -15,7 +15,7 @@
 - **Proof of Trust (PoT) Epochs:** Deterministic integer-only arithmetic computed strictly from finalized block height. Zero local wall-clock consensus logic to prevent time manipulation.
 - **Tokenomics:**
   - `MAX_SUPPLY`: 100,000,000,000 CYBOU (strictly 0 decimals, integer units only).
-  - `Welcome Grant`: 6,000 CYBOU credited atomically from `OnboardingPool` to `SystemBalance` upon redeeming a one-time operator-signed Invite Voucher (doc 70). Identity creation alone grants no tokens.
+  - `Onboarding`: Permissionless AccountID creation (`AccountCreateOpV1`) with anti-Sybil proof-of-work (`AccountCreationWorkV1`). An onboarding bonus is credited atomically from `OnboardingPool` to `SystemBalance` (doc 70). No operator vouchers or central approval are required.
   - `Fee Split`: Deterministic size-aware fees without bidding/priority wars. Split ratio is 3:1 (75% to Network Security / Validator Pool, 25% to OnboardingPool reserve).
 - **Post-Quantum by Design (PQ by design):**
   - Payload and session encapsulation use the hybrid HPKE standard (RFC 9180): NIST ML-KEM-768 (Kyber) combined with X25519.
@@ -34,8 +34,8 @@
   - Large file attachments defer to future distributed Object Storage.
 
 ## Key Source Code References
-- `src/cybou/voucher.h`, `src/cybou/voucher.cpp`: Invite Voucher envelope verification and anti-replay domain separation.
-- `src/cybou/state.h`, `src/cybou/state.cpp`: Deterministic state transitions, account balance tracking, atomic Welcome Grant redemption, LevelDB persistence.
+- `src/cybou/account_creation.h`, `src/cybou/account_creation.cpp`: Permissionless AccountCreateOpV1 and anti-Sybil AccountCreationWorkV1.
+- `src/cybou/state.h`, `src/cybou/state.cpp`: Deterministic state transitions, account balance tracking, atomic onboarding bonus, LevelDB persistence.
 - `docs/cybou/00_VISION.md`: Scope and architectural principles.
 - `docs/cybou/07_BFT_CONSENSUS.md`: Multi-validator BFT consensus engine.
 - `docs/cybou/16_MAIL_PROTOCOL.md`: MailTx protocol format and fee rules.
@@ -43,6 +43,6 @@
 - `docs/cybou/49_EMAIL_E2EE_HPKE_PQ.md`: Hybrid post-quantum HPKE specification.
 - `docs/cybou/68_OPERATOR_KEY_SEPARATION.md`: 4-way key domain isolation.
 - `docs/cybou/69_MAIL_EVIDENCE_BUNDLE.md`: Inclusion certificates and salted content commitments.
-- `docs/cybou/70_INVITE_VOUCHER_ENVELOPE.md`: Canonical bounded voucher structure.
+- `docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md`: Permissionless account creation and anti-Sybil architecture.
 - `AGENTS.md`: Authoritative engineering constraints.
 - `MANIFEST.md`: SHA-256 integrity inventory of all specification files.

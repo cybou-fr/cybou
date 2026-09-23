@@ -11,7 +11,7 @@ All contributors—human developers and autonomous AI coding agents alike—must
 Before proposing or implementing any changes, you **must read and adhere to**:
 
 1. **[`AGENTS.md`](./AGENTS.md)** — The absolute implementation authority for CYBOU. Hard rules defined there override any unvetted conventions.
-2. **[`docs/cybou/`](./docs/cybou/)** — The architectural design documents covering BFT consensus, MailTx protocol, deterministic fee routing, Proof of Trust (PoT), and identity voucher gates.
+2. **[`docs/cybou/`](./docs/cybou/)** — The architectural design documents covering BFT consensus, MailTx protocol, deterministic fee routing, Proof of Trust (PoT), and permissionless onboarding.
 3. **[`MANIFEST.md`](./MANIFEST.md)** — The cryptographic inventory of authoritative documents.
 
 ### Invariant Rules (Summary from `AGENTS.md`)
@@ -28,9 +28,9 @@ Before proposing or implementing any changes, you **must read and adhere to**:
 - **Economics & Onboarding**:
   - Fixed supply: $100,000,000,000$ CYBOU ($0$ decimals).
   - Deterministic fee router: 4 CYBOU fees $\to$ 3 Security + 1 Onboarding. Priority fee bidding is disabled.
-  - Welcome Grants (6,000 CYBOU) require a valid Operator-signed one-time Invite Voucher. Identity creation alone yields no grant.
+  - Account creation is protocol-native and permissionless via `AccountCreateOpV1`, protected by `AccountCreationWorkV1` anti-Sybil proof-of-work. An automatic onboarding bonus is debited directly from `OnboardingPool` to `SystemBalance` without operator vouchers or invites.
 - **Operator Key Separation**:
-  - Separate keys for Operator Authority, Operator Validator, Release Signing, and Treasury.
+  - Separate keys for Operator Authority, Operator Validator, Release Signing, and Treasury. Operator Authority does NOT participate in ordinary account creation.
 
 ---
 

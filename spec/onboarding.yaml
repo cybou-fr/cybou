@@ -1,0 +1,30 @@
+version: 1
+
+onboarding:
+  automatic: true
+  invitation_required: false
+  operator_approval_required: false
+
+economics:
+  dev_onboarding_bonus: 6000
+  beta_onboarding_bonus: TBD
+  mainnet_onboarding_bonus: TBD
+
+  source: OnboardingPool
+  destination: SystemBalance
+  minted: false
+
+account_creation:
+  operation: AccountCreateOpV1
+
+  work:
+    required: true
+    profile: ACCOUNT_CREATION_WORK_V1
+    target: protocol_parameter
+
+anti_sybil:
+  account_creation_work: true
+  account_id_uniqueness: true
+  proof_of_trust: true
+  new_account_rate_limits: true
+  max_account_creates_per_block: protocol_parameter

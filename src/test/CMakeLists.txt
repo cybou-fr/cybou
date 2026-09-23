@@ -34,6 +34,7 @@ add_executable(test_bitcoin
   coinscachepair_tests.cpp
   coinstatsindex_tests.cpp
   coinsviewoverlay_tests.cpp
+  cybou_account_creation_tests.cpp
   cybou_chainparams_tests.cpp
   cybou_identity_tests.cpp
   cybou_signing_tests.cpp

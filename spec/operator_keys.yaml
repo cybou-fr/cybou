@@ -4,7 +4,7 @@ domains:
     purposes:
     - validator_admission
     - validator_removal
-    - invite_voucher_authorization
+    - protocol_parameter_action
     - enumerated_operator_actions
     target_custody: 2_of_3
   operator_validator:
@@ -17,7 +17,6 @@ domains:
     purposes:
     - company_owned_cybou
 object_signing_domains:
-  invite_voucher: CYBOU/SIG/INVITE-VOUCHER/V1
   validator_admission: CYBOU/SIG/VALIDATOR-ADMISSION/V1
   validator_removal: CYBOU/SIG/VALIDATOR-REMOVAL/V1
   protocol_parameter_action: CYBOU/SIG/PROTOCOL-PARAMETER/V1
@@ -40,3 +39,6 @@ forbidden_cross_domain_powers:
 - decrypt_user_mail
 - arbitrary_user_balance_debit
 - forge_user_signature
+- participate_in_ordinary_account_creation_or_onboarding
+invariants:
+- "Operator Authority MUST NOT participate in ordinary AccountID creation or onboarding."

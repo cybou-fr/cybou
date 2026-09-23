@@ -35,18 +35,19 @@ Security reviewers and contributors should note the mandatory cryptographic gate
 
 ### 4-Way Operator Key Separation
 As specified in [`docs/cybou/68_OPERATOR_KEY_SEPARATION.md`](docs/cybou/68_OPERATOR_KEY_SEPARATION.md), the operator maintains four strictly segregated keys:
-- **Operator Authority Key**: Signs one-time invite vouchers and validator admission proposals.
+- **Operator Authority Key**: Signs validator admission and removal proposals. Does not participate in ordinary user onboarding.
 - **Operator Validator Key**: Signs BFT block proposals and finality votes.
 - **Release Signing Key**: Signs binary releases and package manifests.
 - **Treasury Key**: Manages operational balances and funding reserves.
 
 *Compromise of one key must never implicitly compromise the authority or functions of another.*
 
-### Invite Voucher and State Transition Gates
-Per [`docs/cybou/70_INVITE_VOUCHER_SIGNING_GATE.md`](docs/cybou/70_INVITE_VOUCHER_SIGNING_GATE.md):
-- Welcome Grants (6,000 CYBOU) are redeemable strictly once per `AccountId`.
-- Vouchers must include domain separation, network identifier (`network_id`), and beneficiary binding to prevent cross-account theft or cross-network replay.
-- Deserialization enforces strict integer bounds and error handling.
+### Account Creation Anti-Sybil Gates
+Per [`docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md`](docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md):
+- Account creation is permissionless via `AccountCreateOpV1` bound to `AccountCreationWorkV1`.
+- Anti-Sybil Proof-of-Work enforces minimum leading zero bits on `CYBOU/ACCOUNT-CREATE-WORK/V1` preimages.
+- Network identifier (`network_id`), account ID, and initial authorization commitments are strictly bound.
+- An atomic onboarding bonus is transferred from `OnboardingPool` directly to `SystemBalance`. Duplicate accounts are rejected.
 
 ### End-to-End Encryption
 Mail contents are protected by hybrid Post-Quantum HPKE profiles ([`docs/cybou/49_EMAIL_E2EE_HPKE_PQ.md`](docs/cybou/49_EMAIL_E2EE_HPKE_PQ.md)) and salted content commitments ([`docs/cybou/69_MAIL_EVIDENCE_BUNDLE.md`](docs/cybou/69_MAIL_EVIDENCE_BUNDLE.md)).

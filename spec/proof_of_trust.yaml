@@ -18,7 +18,7 @@ inputs:
   violations:
     negative: true
 mail_policy:
-  new_invited_account_limit_per_epoch: 25
+  new_account_limit_per_epoch: 25
   hard_ceiling_required: true
 payments:
   outgoing_tx_rate_limit: true

@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 class CDBWrapper;
 
@@ -22,7 +23,7 @@ enum class StateLoadError : uint8_t {
 
 struct StateLoadResult {
     StateLoadError error{StateLoadError::NONE};
-    std::optional<InviteRedemptionState> state;
+    std::optional<CybouState> state;
 
     explicit operator bool() const { return error == StateLoadError::NONE && state.has_value(); }
 };
@@ -34,43 +35,52 @@ enum class BlockTransitionError : uint8_t {
     STATE_MISMATCH,
     PARENT_MISMATCH,
     BLOCK_ALREADY_APPLIED,
-    INVALID_REDEMPTION,
+    INVALID_OPERATION,
     NOT_CURRENT_TIP,
     MISSING_OR_CORRUPT_UNDO,
 };
 
 struct BlockTransitionResult {
     BlockTransitionError error{BlockTransitionError::NONE};
-    InviteRedemptionResult redemption{};
+    AccountCreateResult op_result{};
 
     explicit operator bool() const { return error == BlockTransitionError::NONE; }
 };
 
-/** Atomic LevelDB snapshot persistence for the canonical redemption state. */
-class InviteRedemptionStateStore
+/** Atomic LevelDB snapshot persistence for the canonical CYBOU state. */
+class CybouStateStore
 {
 public:
-    explicit InviteRedemptionStateStore(CDBWrapper& db) : m_db{db} {}
+    explicit CybouStateStore(CDBWrapper& db) : m_db{db} {}
 
-    void Write(const InviteRedemptionState& state, bool sync = true);
+    void Write(const CybouState& state, bool sync = true);
     StateLoadResult Load() const;
-    InviteRedemptionResult RedeemAndWrite(
-        const InviteVoucher& voucher,
-        const InviteVoucherValidationContext& context,
-        const OperatorAuthoritySignatureVerifier& verifier,
-        InviteRedemptionState& state,
+
+    AccountCreateResult CreateAccountAndWrite(
+        const AccountCreateOpV1& op,
+        const uint256& network_id,
+        uint64_t block_height,
+        uint64_t epoch,
+        unsigned int required_work_bits,
+        uint64_t onboarding_bonus,
+        CybouState& state,
         bool sync = true);
-    BlockTransitionResult ApplyFinalizedRedemption(
+
+    BlockTransitionResult ApplyBlock(
         const uint256& block_id,
         const uint256& previous_block_id,
-        const InviteVoucher& voucher,
-        const InviteVoucherValidationContext& context,
-        const OperatorAuthoritySignatureVerifier& verifier,
-        InviteRedemptionState& state,
+        const std::vector<AccountCreateOpV1>& ops,
+        const uint256& network_id,
+        uint64_t block_height,
+        uint64_t epoch,
+        unsigned int required_work_bits,
+        uint64_t onboarding_bonus,
+        CybouState& state,
         bool sync = true);
-    BlockTransitionResult RollbackFinalizedRedemption(
+
+    BlockTransitionResult RollbackBlock(
         const uint256& block_id,
-        InviteRedemptionState& state,
+        CybouState& state,
         bool sync = true);
 
 private:

@@ -20,7 +20,7 @@ namespace cybou {
  * AccountID identifies an authorization record; it is not itself a public key
  * and therefore remains stable across device/key rotation. All-zero is the
  * reserved invalid value. Canonical encoding is exactly the uint256 internal
- * byte order already frozen by Invite Voucher V1.
+ * byte order defined by the protocol.
  */
 class AccountId
 {

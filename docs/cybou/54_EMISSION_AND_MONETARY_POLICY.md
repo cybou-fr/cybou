@@ -68,24 +68,15 @@ On a live multi-validator network, the operator validator may receive normal det
 25,000,000,000 CYBOU
 ```
 
-funds Invite Bonus.
+funds the Onboarding Bonus.
 
-v0.10:
-
-```text
-WELCOME_GRANT = 6,000 CYBOU
-```
-
-Gross grants available before any recycling:
+Dev baseline:
 
 ```text
-25,000,000,000 / 6,000
-= 4,166,666 full grants
+DEV_ONBOARDING_BONUS = 6,000 CYBOU (Beta/Mainnet: TBD)
 ```
 
-with a remainder of `4,000 CYBOU`.
-
-## No mint-on-invite
+## No mint-on-onboarding
 
 Creating an AccountID does not mint new CYBOU.
 

@@ -151,11 +151,11 @@
 | DEC-147 | Four active validators is the minimum deployment target when claiming f=1 BFT tolerance | Frozen v0.0.1 |
 | DEC-148 | PoT time/rate logic uses deterministic block-height-derived protocol epochs, never local wall clock | Frozen v0.0.1 |
 | DEC-149 | PoT consensus arithmetic is integer/deterministic | Frozen v0.0.1 |
-| DEC-150 | Welcome Grant requires one-time Operator-signed Invite Voucher | Frozen v0.0.1 |
-| DEC-151 | Identity creation alone does not receive Welcome Grant | Frozen v0.0.1 |
+| DEC-150 | Account creation is permissionless via protocol-native AccountCreateOpV1 with AccountCreationWorkV1 anti-Sybil work | Frozen v0.0.1 |
+| DEC-151 | Identity creation alone does not mint tokens; onboarding bonus is debited from OnboardingPool to SystemBalance | Frozen v0.0.1 |
 | DEC-152 | Operator Authority, Validator, Release Signing and Treasury keys are separate domains | Frozen v0.0.1 |
 | DEC-153 | Operator Authority target custody is 2-of-3 | Frozen operational direction |
 | DEC-154 | MailEvidenceBundle must prove historical sender-key authorization at MailTx height | Frozen v0.0.1 |
 | DEC-155 | Mail content commitment uses random salt/domain separation; no bare predictable plaintext hash | Frozen v0.0.1 |
 | DEC-156 | AccountID V1 is an opaque stable 32-byte identifier; all-zero is invalid and key rotation does not change it | Frozen v0.0.1 |
-| DEC-157 | Invite Voucher network_id V1 is the 32-byte genesis block hash | Frozen v0.0.1 |
+| DEC-157 | AccountCreationWork network_id V1 is the 32-byte genesis block hash | Frozen v0.0.1 |

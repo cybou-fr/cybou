@@ -32,12 +32,18 @@ Read active docs before coding.
 - System Balance trust contribution capped;
 - no local wall-clock consensus logic.
 
-### Invite
-- Welcome Grant requires one-time Operator-signed Invite Voucher;
-- grant = 6,000 CYBOU;
-- source = OnboardingPool;
-- destination = SystemBalance;
-- identity creation alone gives no grant.
+### Onboarding & Anti-Sybil
+- No Voucher architecture.
+- No Operator-authorized ordinary user onboarding.
+- No central account activation.
+- Permissionless protocol-native AccountCreateOp with AccountCreationWork.
+- Account creation requires protocol anti-Sybil validation.
+- Successful AccountCreate atomically funds SystemBalance from OnboardingPool.
+- No service-specific free-credit systems (services consume SystemBalance).
+- DEV, Beta, and Mainnet economic parameters are separate.
+- Beta and Mainnet have separate genesis (Beta balances do not carry to Mainnet).
+- Beta onboarding budget is determined using integrated Email + Storage + Backup economics.
+- Mainnet onboarding bonus is frozen only after aggregate Beta operational data.
 
 ### Operator keys
 Keep separate:

@@ -13,7 +13,7 @@ One Operator Validator, own genesis, 2-node P2P/block propagation.
 - AccountID/device authorization;
 - `.cybou` alias skeleton;
 - separate Operator Authority / Validator / Release / Treasury key domains;
-- Invite Voucher signature verification skeleton.
+- permissionless AccountID creation with anti-Sybil proof-of-work skeleton.
 
 ## v0.0.4 — Typed protocol-operation layer
 Introduce explicit first-class CYBOU operations.
@@ -49,7 +49,7 @@ Do not encode Mail as OP_RETURN/application data inside Bitcoin semantics.
 - integer PoT;
 - block-height-derived PoT epoch;
 - 25 MailTx/epoch new-account baseline;
-- one-time Invite Voucher redemption.
+- permissionless AccountCreateOpV1 and automatic onboarding bonus.
 
 ## v0.1.1 — Checkpoint / snapshot / pruning
 - bounded state;
@@ -80,7 +80,7 @@ Do not encode Mail as OP_RETURN/application data inside Bitcoin semantics.
 ```text
 MAX_SUPPLY = 100,000,000,000
 decimals = 0
-WELCOME_GRANT = 6,000
+DEV_ONBOARDING_BONUS = 6,000
 ```
 
 ```text

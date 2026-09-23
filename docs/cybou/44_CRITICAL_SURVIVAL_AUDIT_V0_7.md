@@ -87,7 +87,7 @@ recipient keys are unauthenticated
 honest validators can finalize conflicting blocks
 operator/admin can debit user Balance
 operator/support requires plaintext
-Invite Vouchers can be replayed
+account creation anti-Sybil work bypassed
 ```
 
 ## Monetary invariant

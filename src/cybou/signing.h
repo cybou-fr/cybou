@@ -23,7 +23,6 @@ namespace cybou {
  * These are distinct from OperatorKeyDomain tags, which separate keys.
  */
 enum class ObjectSigningDomain : uint8_t {
-    INVITE_VOUCHER,
     VALIDATOR_ADMISSION,
     VALIDATOR_REMOVAL,
     PROTOCOL_PARAMETER,

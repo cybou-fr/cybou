@@ -49,7 +49,7 @@ Transactions and blocks achieve immediate, irreversible finality through an oper
 ### Proof of Trust (PoT) Epochs
 Consensus timing and operational quotas are governed by Proof of Trust epochs derived deterministically from finalized block height.
 - Consensus logic uses integer arithmetic exclusively, completely eliminating vulnerabilities related to floating-point nondeterminism or local system wall-clock manipulation.
-- Newly invited accounts receive a verified operational baseline quota (such as 25 outgoing emails per epoch) to maintain network throughput while deterring spam bursts.
+- Newly created accounts receive an operational baseline quota (such as 25 outgoing emails per epoch) to maintain network throughput while deterring spam bursts.
 
 ### Pre-Store Retention Strategy
 To enable mass adoption on consumer devices without prohibitive hardware requirements:
@@ -67,7 +67,7 @@ CYBOU replaces volatile transaction fee markets with deterministic, predictable 
 - **Zero Priority Fee Bidding**: Transaction priority fees are disabled. Senders cannot bid against each other to crowd out normal communication; fees are strictly size-aware and predictable.
 - **Deterministic Fee Flow**: Transaction fees are automatically split at the protocol level: 3 parts are allocated to network security and validator rewards, and 1 part is recycled into the onboarding pool.
 - **Dual Balance Accounting**: User accounts distinguish between transferable liquid Balance and non-withdrawable System Balance (used specifically for protocol operations and message fees).
-- **Voucher-Based Onboarding**: Creating an identity generates no initial tokens. To fund initial usage, new users redeem an operator-signed Invite Voucher granting 6,000 CYBOU of System Balance from the onboarding pool, guarded by strict cryptographic replay and domain-separation checks.
+- **Permissionless Onboarding with Anti-Sybil PoW**: Creating an identity is protocol-native and permissionless. New accounts include proof-of-work (`AccountCreationWorkV1`) to prevent spam, and automatically receive an onboarding bonus credited from the Onboarding Pool into System Balance. No operator invites, vouchers, or central approval are needed.
 
 ---
 
@@ -75,7 +75,7 @@ CYBOU replaces volatile transaction fee markets with deterministic, predictable 
 
 The development of CYBOU follows a disciplined, phased progression:
 
-1. **Architecture Hardening (Current Stage)**: Network quarantine, deterministic state serialization, invite voucher redemption gates, and desktop client hardening (`cybou.exe`).
+1. **Architecture Hardening (Current Stage)**: Network quarantine, deterministic state serialization, permissionless account creation anti-Sybil gates, and desktop client hardening (`cybou.exe`).
 2. **CYBOU Email Beta**: Full local mailbox management (Inbox, Sent, Drafts, Threads), hybrid post-quantum encryption pipeline, and multi-validator BFT testnets.
 3. **Decentralized Object Storage**: Cooperative, encrypted peer-to-peer storage nodes providing resilient hosting for email attachments, verified backups, and large payloads.
 4. **CYBOU Drive & Ecosystem**: Encrypted sovereign file storage, enterprise administrative controls, and pilot deployments for European institutions, legal practitioners, and businesses requiring guaranteed data confidentiality.

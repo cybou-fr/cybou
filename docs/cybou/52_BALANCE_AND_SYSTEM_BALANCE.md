@@ -45,7 +45,7 @@ The CYBOU owner/operator, validators and protocol infrastructure operators canno
 It receives CYBOU from:
 
 ```text
-Invite Bonus
+Onboarding Bonus
 organization sponsorship
 Balance -> System Balance
 other explicit protocol grants
@@ -84,26 +84,26 @@ System Balance
 
 Irreversible.
 
-## Invite Bonus
+## Onboarding Bonus
 
-v0.10 baseline:
-
-```text
-WELCOME_GRANT = 6,000 CYBOU
-```
-
-A valid invited identity receives the entire amount immediately:
+Dev baseline:
 
 ```text
-Invite
--> +6,000 CYBOU System Balance
+DEV_ONBOARDING_BONUS = 6,000 CYBOU (Beta/Mainnet: TBD)
 ```
 
-No vesting.
+A newly created identity satisfying anti-Sybil work receives the bonus automatically:
+
+```text
+AccountCreateOpV1 + AccountCreationWorkV1
+-> +6,000 CYBOU System Balance (from OnboardingPool)
+```
+
+No vesting. No operator approval or invite voucher.
 
 The same System Balance directly contributes to Proof of Trust.
 
-There is no separate Invite Trust Credit.
+There is no separate Trust Credit.
 
 ## Why 6,000
 
@@ -117,7 +117,7 @@ normal-budget design point ~= 15 MailTx/day
 
 ```text
 15 * 365 = 5,475 CYBOU/year
-Welcome Grant = 6,000
+Onboarding Bonus = 6,000
 margin = 525 CYBOU ~= 9.6%
 ```
 

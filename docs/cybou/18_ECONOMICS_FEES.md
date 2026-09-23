@@ -20,16 +20,18 @@ System Balance
     contributes a capped component to PoT
 ```
 
-## Welcome Grant
+## Onboarding Bonus
 
 ```text
-6,000 CYBOU
+Dev Onboarding Bonus: 6,000 CYBOU (Beta/Mainnet: TBD)
 OnboardingPool -> System Balance
 ```
 
-only after redemption of a valid one-time Operator-signed Invite Voucher.
+Granted automatically upon valid protocol-native `AccountCreateOpV1` with anti-Sybil work (`ACCOUNT_CREATION_WORK_V1`).
 
-Identity creation alone does not mint or automatically grant CYBOU.
+No operator vouchers or invites exist.
+
+Identity creation alone does not mint new tokens; bonuses are debited strictly from the pre-allocated `OnboardingPool`.
 
 ## Mail fee
 

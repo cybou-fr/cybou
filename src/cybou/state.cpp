@@ -12,7 +12,7 @@
 
 namespace cybou {
 
-std::vector<unsigned char> SerializeInviteRedemptionState(const InviteRedemptionState& state)
+std::vector<unsigned char> SerializeCybouState(const CybouState& state)
 {
     std::vector<unsigned char> out;
     const auto append_u32le = [&out](const uint32_t value) {
@@ -25,20 +25,23 @@ std::vector<unsigned char> SerializeInviteRedemptionState(const InviteRedemption
         out.insert(out.end(), value.begin(), value.end());
     };
 
-    out.push_back(INVITE_REDEMPTION_STATE_VERSION);
+    out.push_back(CYBOU_STATE_VERSION);
     append_u64le(state.onboarding_pool);
+    append_u64le(state.security_reward_pool);
+    append_u64le(state.pending_fee_pool);
     append_u32le(static_cast<uint32_t>(state.accounts.size()));
-    for (const auto& [account_id, balance] : state.accounts) {
+    for (const auto& [account_id, acc] : state.accounts) {
         append_hash(account_id.Value());
-        append_u64le(balance.balance);
-        append_u64le(balance.system_balance);
+        append_u64le(acc.balance);
+        append_u64le(acc.system_balance);
+        append_u64le(acc.creation_height);
+        append_u64le(acc.creation_epoch);
+        append_hash(acc.initial_auth_commitment);
     }
-    append_u32le(static_cast<uint32_t>(state.consumed_voucher_ids.size()));
-    for (const auto& voucher_id : state.consumed_voucher_ids) append_hash(voucher_id);
     return out;
 }
 
-std::optional<InviteRedemptionState> DeserializeInviteRedemptionState(const std::span<const unsigned char> bytes)
+std::optional<CybouState> DeserializeCybouState(const std::span<const unsigned char> bytes)
 {
     size_t offset{0};
     const auto read_u8 = [&]() -> std::optional<uint8_t> {
@@ -67,39 +70,49 @@ std::optional<InviteRedemptionState> DeserializeInviteRedemptionState(const std:
 
     const auto version{read_u8()};
     const auto onboarding_pool{read_u64le()};
+    const auto security_pool{read_u64le()};
+    const auto pending_pool{read_u64le()};
     const auto account_count{read_u32le()};
-    if (!version || *version != INVITE_REDEMPTION_STATE_VERSION || !onboarding_pool || !account_count ||
-        *account_count > MAX_SERIALIZED_ACCOUNTS) return std::nullopt;
+    if (!version || *version != CYBOU_STATE_VERSION || !onboarding_pool || !security_pool || !pending_pool ||
+        !account_count || *account_count > MAX_SERIALIZED_ACCOUNTS) {
+        return std::nullopt;
+    }
 
-    InviteRedemptionState state{
+    CybouState state{
         .onboarding_pool = *onboarding_pool,
+        .security_reward_pool = *security_pool,
+        .pending_fee_pool = *pending_pool,
         .accounts{},
-        .consumed_voucher_ids{},
     };
     for (uint32_t i = 0; i < *account_count; ++i) {
         const auto account_id_bytes{read_hash()};
         const auto balance{read_u64le()};
         const auto system_balance{read_u64le()};
-        if (!account_id_bytes || !balance || !system_balance) return std::nullopt;
+        const auto creation_height{read_u64le()};
+        const auto creation_epoch{read_u64le()};
+        const auto auth_commitment{read_hash()};
+        if (!account_id_bytes || !balance || !system_balance || !creation_height || !creation_epoch || !auth_commitment) {
+            return std::nullopt;
+        }
         const AccountId account_id{*account_id_bytes};
-        if (account_id.IsNull() ||
-            !state.accounts.emplace(account_id, AccountBalanceState{*balance, *system_balance}).second) return std::nullopt;
-    }
-
-    const auto voucher_count{read_u32le()};
-    if (!voucher_count || *voucher_count > MAX_SERIALIZED_CONSUMED_VOUCHERS) return std::nullopt;
-    for (uint32_t i = 0; i < *voucher_count; ++i) {
-        const auto voucher_id{read_hash()};
-        if (!voucher_id || voucher_id->IsNull() || !state.consumed_voucher_ids.insert(*voucher_id).second) return std::nullopt;
+        if (account_id.IsNull()) return std::nullopt;
+        AccountState acc{
+            .balance = *balance,
+            .system_balance = *system_balance,
+            .creation_height = *creation_height,
+            .creation_epoch = *creation_epoch,
+            .initial_auth_commitment = *auth_commitment,
+        };
+        if (!state.accounts.emplace(account_id, std::move(acc)).second) return std::nullopt;
     }
     if (offset != bytes.size()) return std::nullopt;
     return state;
 }
 
-uint256 InviteRedemptionStateHash(const InviteRedemptionState& state)
+uint256 CybouStateHash(const CybouState& state)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/STATE/INVITE-REDEMPTION/V1"};
-    const auto bytes{SerializeInviteRedemptionState(state)};
+    static constexpr std::string_view DOMAIN{"CYBOU/STATE/V1"};
+    const auto bytes{SerializeCybouState(state)};
     uint256 result;
     CSHA256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
@@ -108,31 +121,50 @@ uint256 InviteRedemptionStateHash(const InviteRedemptionState& state)
     return result;
 }
 
-InviteRedemptionResult RedeemInviteVoucher(
-    const InviteVoucher& voucher,
-    const InviteVoucherValidationContext& context,
-    const OperatorAuthoritySignatureVerifier& verifier,
-    InviteRedemptionState& state)
+AccountCreateResult ApplyAccountCreate(
+    const AccountCreateOpV1& op,
+    const uint256& network_id,
+    const uint64_t block_height,
+    const uint64_t epoch,
+    const unsigned int required_work_bits,
+    const uint64_t onboarding_bonus,
+    CybouState& state,
+    CybouStateDelta& delta)
 {
-    auto validation_context{context};
-    validation_context.voucher_already_consumed = state.consumed_voucher_ids.contains(voucher.payload.voucher_id);
-    const auto voucher_error{ValidateInviteVoucher(voucher, validation_context, verifier)};
-    if (voucher_error != InviteVoucherError::NONE) {
-        return {InviteRedemptionError::INVALID_VOUCHER, voucher_error};
+    const auto validation_error{ValidateAccountCreateOp(op, network_id, required_work_bits)};
+    if (validation_error != AccountCreateValidationError::NONE) {
+        return {AccountCreateError::INVALID_OP, validation_error};
+    }
+    if (state.accounts.contains(op.account_id)) {
+        return {AccountCreateError::ACCOUNT_ALREADY_EXISTS};
+    }
+    if (onboarding_bonus > 0 && state.onboarding_pool < onboarding_bonus) {
+        return {AccountCreateError::INSUFFICIENT_ONBOARDING_POOL};
     }
 
-    const auto account_it{state.accounts.find(voucher.payload.beneficiary_account_id)};
-    if (account_it == state.accounts.end()) return {InviteRedemptionError::ACCOUNT_NOT_FOUND};
-    if (state.onboarding_pool < WELCOME_GRANT) return {InviteRedemptionError::INSUFFICIENT_ONBOARDING_POOL};
-    if (account_it->second.system_balance > std::numeric_limits<uint64_t>::max() - WELCOME_GRANT) {
-        return {InviteRedemptionError::SYSTEM_BALANCE_OVERFLOW};
+    if (onboarding_bonus > 0) {
+        state.onboarding_pool -= onboarding_bonus;
     }
-
-    // No mutation occurs before every failure path above has completed.
-    state.onboarding_pool -= WELCOME_GRANT;
-    account_it->second.system_balance += WELCOME_GRANT;
-    state.consumed_voucher_ids.insert(voucher.payload.voucher_id);
+    AccountState acc{
+        .balance = 0,
+        .system_balance = onboarding_bonus,
+        .creation_height = block_height,
+        .creation_epoch = epoch,
+        .initial_auth_commitment = op.initial_authorization.auth_key_commitment,
+    };
+    state.accounts.emplace(op.account_id, std::move(acc));
+    delta.created_accounts.push_back(op.account_id);
+    delta.onboarding_pool_debited += onboarding_bonus;
+    delta.system_balance_credited += onboarding_bonus;
     return {};
+}
+
+void UndoAccountCreateDelta(const CybouStateDelta& delta, CybouState& state)
+{
+    for (const auto& account_id : delta.created_accounts) {
+        state.accounts.erase(account_id);
+    }
+    state.onboarding_pool += delta.onboarding_pool_debited;
 }
 
 } // namespace cybou

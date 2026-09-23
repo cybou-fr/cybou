@@ -21,13 +21,15 @@ genesis_allocation:
   strategic_reserve:
     amount: 15000000000
     percent: 15
-welcome_grant:
-  amount: 6000
+onboarding_bonus:
+  dev_onboarding_bonus: 6000
+  beta_onboarding_bonus: TBD
+  mainnet_onboarding_bonus: TBD
+  source: OnboardingPool
   destination: SystemBalance
   immediate: true
   vesting: false
-  full_grants_without_recycling: 4166666
-  voucher_required: true
+  permissionless: true
 email_model:
   new_account_recipient_limit_per_day: 25
   normal_budget_recipient_deliveries_per_day: 15

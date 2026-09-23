@@ -449,14 +449,14 @@
   </section>
 
   <!-- ==========================================================================
-       Section: Interactive State Transition Simulator (Voucher Onboarding)
+       Section: Interactive State Transition Simulator (Permissionless Onboarding)
        ========================================================================== -->
   <section class="section" id="simulateur">
     <div class="section-header">
       <div class="section-label" data-i18n="simLabel">Validation d'état C++</div>
-      <h2 class="section-title" data-i18n="simTitle">Simulateur de transition d'état (Invite Voucher).</h2>
+      <h2 class="section-title" data-i18n="simTitle">Création de compte native &amp; Preuve anti-Sybil.</h2>
       <p class="section-description" data-i18n="simDesc">
-        Démonstration de la transition d'accueil telle qu'implémentée dans les modules <code>src/cybou/voucher.cpp</code> et <code>src/cybou/state.cpp</code>.
+        Démonstration de la création native sans invitation selon <code>AccountCreateOpV1</code> et <code>AccountCreationWorkV1</code> (doc 70).
       </p>
     </div>
 
@@ -469,32 +469,32 @@
           </div>
 
           <div class="sim-input-group">
-            <label class="sim-label" for="sim-voucher" data-i18n="simVoucherId">Code du bon d'invitation (VoucherId)</label>
-            <input type="text" class="sim-input" id="sim-voucher" value="VOUCHER-FR-2026-PARIS-0042">
+            <label class="sim-label" for="sim-work" data-i18n="simWorkLabel">Preuve de travail anti-Sybil (CYBOU/ACCOUNT-CREATE-WORK/V1)</label>
+            <input type="text" class="sim-input" id="sim-work" value="Nonce: 0x0000000000042a1f • Cible: 16 bits zéro" readonly>
           </div>
 
-          <button class="sim-button" id="sim-run-btn" type="button" data-i18n="simSubmit">Exécuter la transition d'état</button>
+          <button class="sim-button" id="sim-run-btn" type="button" data-i18n="simSubmit">Calculer PoW &amp; Créer le compte</button>
         </div>
 
         <div class="sim-output-card">
           <div class="output-row">
-            <span class="output-label" data-i18n="simStatusLabel">Statut de la transition</span>
-            <span class="output-val" id="sim-status-val" data-i18n="simStatusReady">En attente d'exécution</span>
+            <span class="output-label" data-i18n="simStatusLabel">Statut du protocole</span>
+            <span class="output-val" id="sim-status-val" data-i18n="simStatusReady">Prêt à créer l'identité</span>
           </div>
           <div class="output-row">
             <span class="output-label" data-i18n="simPoolSource">OnboardingPool (Réserve globale)</span>
-            <span class="output-val" id="sim-pool-val">100 000 000 000 CYBOU</span>
+            <span class="output-val" id="sim-pool-val">Débit atomique du bonus</span>
           </div>
           <div class="output-row">
             <span class="output-label" data-i18n="simBalanceTarget">SystemBalance (Solde Système)</span>
             <span class="output-val" id="sim-sysbal-val">0 CYBOU</span>
           </div>
           <div class="output-row">
-            <span class="output-label" data-i18n="simReplay">Séparation anti-rejeu</span>
-            <span class="output-val" style="color: #059669;">Validé (doc 70)</span>
+            <span class="output-label" data-i18n="simAntiSybil">Anti-Sybil &amp; Intégrité</span>
+            <span class="output-val" style="color: #059669;">Sans intermédiaire (doc 70)</span>
           </div>
           <div class="output-row">
-            <span class="output-label" data-i18n="simQuota">Quota d'envoi par époque</span>
+            <span class="output-label" data-i18n="simQuota">Quota initial par époque</span>
             <span class="output-val">25 MailTx / époque PoT</span>
           </div>
         </div>
@@ -609,7 +609,7 @@
             <li><a href="../docs/cybou/07_BFT_CONSENSUS.md">07_BFT_CONSENSUS.md</a></li>
             <li><a href="../docs/cybou/16_MAIL_PROTOCOL.md">16_MAIL_PROTOCOL.md</a></li>
             <li><a href="../docs/cybou/26_IMPLEMENTATION_STATUS.md">26_STATUS.md</a></li>
-            <li><a href="../docs/cybou/70_INVITE_VOUCHER_ENVELOPE.md">70_VOUCHER.md</a></li>
+            <li><a href="../docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md">70_ANTI_SYBIL.md</a></li>
           </ul>
         </div>
 

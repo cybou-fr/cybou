@@ -22,7 +22,7 @@ The primary architecture, protocol requirements, and design choices are document
 - [`07_BFT_CONSENSUS.md`](../docs/cybou/07_BFT_CONSENSUS.md) — Permissioned BFT explicit finality
 - [`66_BFT_VALIDATOR_SET_HARDENING.md`](../docs/cybou/66_BFT_VALIDATOR_SET_HARDENING.md) — Equal validator weight, minimum $f=1$ set (4 validators)
 - [`57_GLOBAL_PROOF_OF_TRUST_POLICY.md`](../docs/cybou/57_GLOBAL_PROOF_OF_TRUST_POLICY.md) — Deterministic consensus epochs
-- [`67_POT_EPOCHS_AND_INVITE_VOUCHERS.md`](../docs/cybou/67_POT_EPOCHS_AND_INVITE_VOUCHERS.md) — Epoch formulas and voucher gates
+- [`67_POT_EPOCHS_AND_ONBOARDING.md`](../docs/cybou/67_POT_EPOCHS_AND_ONBOARDING.md) — Epoch formulas and onboarding
 
 ### CYBOU Email & MailTx
 - [`16_MAIL_PROTOCOL.md`](../docs/cybou/16_MAIL_PROTOCOL.md) — First-class MailTx operation
@@ -37,7 +37,7 @@ The primary architecture, protocol requirements, and design choices are document
 - [`52_BALANCE_AND_SYSTEM_BALANCE.md`](../docs/cybou/52_BALANCE_AND_SYSTEM_BALANCE.md) — Liquid Balance vs. non-withdrawable System Balance
 - [`54_EMISSION_AND_MONETARY_POLICY.md`](../docs/cybou/54_EMISSION_AND_MONETARY_POLICY.md) — Fixed maximum supply: 100,000,000,000 CYBOU (0 decimals)
 - [`59_DETERMINISTIC_FEE_ROUTER.md`](../docs/cybou/59_DETERMINISTIC_FEE_ROUTER.md) — Deterministic fee router (priority fees disabled)
-- [`70_INVITE_VOUCHER_SIGNING_GATE.md`](../docs/cybou/70_INVITE_VOUCHER_SIGNING_GATE.md) — One-time 6,000 CYBOU Welcome Grant redemption gate
+- [`70_ACCOUNT_CREATION_ANTI_SYBIL.md`](../docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md) — Permissionless account creation and anti-Sybil proof-of-work
 
 ### Security & Cryptography
 - [`09_CRYPTO_PQ.md`](../docs/cybou/09_CRYPTO_PQ.md) — Post-Quantum crypto roadmap

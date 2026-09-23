@@ -13,10 +13,10 @@
 namespace cybou {
 namespace {
 
-const std::string STATE_KEY{"cybou/invite-redemption/state/v1"};
-const std::string HASH_KEY{"cybou/invite-redemption/hash/v1"};
-const std::string TIP_KEY{"cybou/invite-redemption/tip/v1"};
-const std::string UNDO_PREFIX{"cybou/invite-redemption/undo/v1/"};
+const std::string STATE_KEY{"cybou/state/v1"};
+const std::string HASH_KEY{"cybou/hash/v1"};
+const std::string TIP_KEY{"cybou/tip/v1"};
+const std::string UNDO_PREFIX{"cybou/undo/v1/"};
 
 std::string UndoKey(const uint256& block_id) { return UNDO_PREFIX + block_id.GetHex(); }
 
@@ -24,13 +24,13 @@ std::vector<unsigned char> SerializeUndo(
     const std::optional<uint256>& previous_tip,
     const uint256& before_hash,
     const uint256& after_hash,
-    const InviteRedemptionState& before)
+    const CybouState& before)
 {
     std::vector<unsigned char> out{1, static_cast<unsigned char>(previous_tip.has_value())};
     if (previous_tip) out.insert(out.end(), previous_tip->begin(), previous_tip->end());
     out.insert(out.end(), before_hash.begin(), before_hash.end());
     out.insert(out.end(), after_hash.begin(), after_hash.end());
-    const auto state_bytes{SerializeInviteRedemptionState(before)};
+    const auto state_bytes{SerializeCybouState(before)};
     out.insert(out.end(), state_bytes.begin(), state_bytes.end());
     return out;
 }
@@ -39,7 +39,7 @@ struct ParsedUndo {
     std::optional<uint256> previous_tip;
     uint256 before_hash;
     uint256 after_hash;
-    InviteRedemptionState before;
+    CybouState before;
 };
 
 std::optional<ParsedUndo> ParseUndo(const std::vector<unsigned char>& bytes)
@@ -58,22 +58,22 @@ std::optional<ParsedUndo> ParseUndo(const std::vector<unsigned char>& bytes)
     const auto before_hash{read_hash()};
     const auto after_hash{read_hash()};
     if ((bytes[1] == 1 && !previous_tip) || !before_hash || !after_hash) return std::nullopt;
-    const auto before{DeserializeInviteRedemptionState(std::span{bytes}.subspan(offset))};
-    if (!before || InviteRedemptionStateHash(*before) != *before_hash) return std::nullopt;
+    const auto before{DeserializeCybouState(std::span{bytes}.subspan(offset))};
+    if (!before || CybouStateHash(*before) != *before_hash) return std::nullopt;
     return ParsedUndo{previous_tip, *before_hash, *after_hash, *before};
 }
 
 } // namespace
 
-void InviteRedemptionStateStore::Write(const InviteRedemptionState& state, const bool sync)
+void CybouStateStore::Write(const CybouState& state, const bool sync)
 {
     CDBBatch batch{m_db};
-    batch.Write(STATE_KEY, SerializeInviteRedemptionState(state));
-    batch.Write(HASH_KEY, InviteRedemptionStateHash(state));
+    batch.Write(STATE_KEY, SerializeCybouState(state));
+    batch.Write(HASH_KEY, CybouStateHash(state));
     m_db.WriteBatch(batch, sync);
 }
 
-StateLoadResult InviteRedemptionStateStore::Load() const
+StateLoadResult CybouStateStore::Load() const
 {
     std::vector<unsigned char> bytes;
     uint256 stored_hash;
@@ -85,35 +85,42 @@ StateLoadResult InviteRedemptionStateStore::Load() const
     const bool has_hash{m_db.Read(HASH_KEY, stored_hash)};
     if (!has_state || !has_hash) return {StateLoadError::CORRUPT, std::nullopt};
 
-    auto state{DeserializeInviteRedemptionState(bytes)};
-    if (!state || InviteRedemptionStateHash(*state) != stored_hash) {
+    auto state{DeserializeCybouState(bytes)};
+    if (!state || CybouStateHash(*state) != stored_hash) {
         return {StateLoadError::CORRUPT, std::nullopt};
     }
     return {StateLoadError::NONE, std::move(state)};
 }
 
-InviteRedemptionResult InviteRedemptionStateStore::RedeemAndWrite(
-    const InviteVoucher& voucher,
-    const InviteVoucherValidationContext& context,
-    const OperatorAuthoritySignatureVerifier& verifier,
-    InviteRedemptionState& state,
+AccountCreateResult CybouStateStore::CreateAccountAndWrite(
+    const AccountCreateOpV1& op,
+    const uint256& network_id,
+    const uint64_t block_height,
+    const uint64_t epoch,
+    const unsigned int required_work_bits,
+    const uint64_t onboarding_bonus,
+    CybouState& state,
     const bool sync)
 {
     auto candidate{state};
-    auto result{RedeemInviteVoucher(voucher, context, verifier, candidate)};
+    CybouStateDelta delta;
+    auto result{ApplyAccountCreate(op, network_id, block_height, epoch, required_work_bits, onboarding_bonus, candidate, delta)};
     if (!result) return result;
     Write(candidate, sync);
     state = std::move(candidate);
     return result;
 }
 
-BlockTransitionResult InviteRedemptionStateStore::ApplyFinalizedRedemption(
+BlockTransitionResult CybouStateStore::ApplyBlock(
     const uint256& block_id,
     const uint256& previous_block_id,
-    const InviteVoucher& voucher,
-    const InviteVoucherValidationContext& context,
-    const OperatorAuthoritySignatureVerifier& verifier,
-    InviteRedemptionState& state,
+    const std::vector<AccountCreateOpV1>& ops,
+    const uint256& network_id,
+    const uint64_t block_height,
+    const uint64_t epoch,
+    const unsigned int required_work_bits,
+    const uint64_t onboarding_bonus,
+    CybouState& state,
     const bool sync)
 {
     if (block_id.IsNull()) return {BlockTransitionError::INVALID_BLOCK_ID};
@@ -131,15 +138,18 @@ BlockTransitionResult InviteRedemptionStateStore::ApplyFinalizedRedemption(
     }
 
     auto candidate{state};
-    const auto redemption{RedeemInviteVoucher(voucher, context, verifier, candidate)};
-    if (!redemption) return {BlockTransitionError::INVALID_REDEMPTION, redemption};
+    CybouStateDelta delta;
+    for (const auto& op : ops) {
+        const auto res{ApplyAccountCreate(op, network_id, block_height, epoch, required_work_bits, onboarding_bonus, candidate, delta)};
+        if (!res) return {BlockTransitionError::INVALID_OPERATION, res};
+    }
 
     std::optional<uint256> previous_tip;
     if (tip_exists) previous_tip = tip;
-    const uint256 before_hash{InviteRedemptionStateHash(state)};
-    const uint256 after_hash{InviteRedemptionStateHash(candidate)};
+    const uint256 before_hash{CybouStateHash(state)};
+    const uint256 after_hash{CybouStateHash(candidate)};
     CDBBatch batch{m_db};
-    batch.Write(STATE_KEY, SerializeInviteRedemptionState(candidate));
+    batch.Write(STATE_KEY, SerializeCybouState(candidate));
     batch.Write(HASH_KEY, after_hash);
     batch.Write(undo_key, SerializeUndo(previous_tip, before_hash, after_hash, state));
     batch.Write(TIP_KEY, block_id);
@@ -148,9 +158,9 @@ BlockTransitionResult InviteRedemptionStateStore::ApplyFinalizedRedemption(
     return {};
 }
 
-BlockTransitionResult InviteRedemptionStateStore::RollbackFinalizedRedemption(
+BlockTransitionResult CybouStateStore::RollbackBlock(
     const uint256& block_id,
-    InviteRedemptionState& state,
+    CybouState& state,
     const bool sync)
 {
     if (block_id.IsNull()) return {BlockTransitionError::INVALID_BLOCK_ID};
@@ -162,12 +172,12 @@ BlockTransitionResult InviteRedemptionStateStore::RollbackFinalizedRedemption(
     const auto undo{ParseUndo(undo_bytes)};
     if (!undo) return {BlockTransitionError::MISSING_OR_CORRUPT_UNDO};
     const auto loaded{Load()};
-    if (!loaded || *loaded.state != state || InviteRedemptionStateHash(state) != undo->after_hash) {
+    if (!loaded || *loaded.state != state || CybouStateHash(state) != undo->after_hash) {
         return {BlockTransitionError::STATE_MISMATCH};
     }
 
     CDBBatch batch{m_db};
-    batch.Write(STATE_KEY, SerializeInviteRedemptionState(undo->before));
+    batch.Write(STATE_KEY, SerializeCybouState(undo->before));
     batch.Write(HASH_KEY, undo->before_hash);
     batch.Erase(undo_key);
     if (undo->previous_tip) batch.Write(TIP_KEY, *undo->previous_tip);

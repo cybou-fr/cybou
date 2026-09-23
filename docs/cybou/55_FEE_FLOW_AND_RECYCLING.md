@@ -80,7 +80,7 @@ Do not prepay a service that does not exist.
 
 ```text
 Onboarding Pool
-    -> Invite Bonus
+    -> Onboarding Bonus
     -> System Balance
     -> Mail/Payment/etc. fees
     -> PendingFeePool
