@@ -3,7 +3,9 @@
 
 #include <cybou/authority_node.h>
 #include <cybou/block_feed.h>
+#include <cybou/bootstrap_nodes.h>
 #include <cybou/network_definition.h>
+#include <cybou/node_runtime.h>
 #include <cybou/signing.h>
 #include <dbwrapper.h>
 #include <support/cleanse.h>
@@ -22,6 +24,8 @@
 #include <limits>
 #include <mutex>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -108,6 +112,14 @@ uint64_t PositiveCount(const char* value)
 
 int Main(const int argc, char* argv[])
 {
+    if (argc == 2 && std::string_view{argv[1]} == "bootstrap") {
+        // DEV bootstrap seed list (doc 75). Transport metadata only — trust
+        // always comes from the network definition file, never from seeds.
+        for (const auto& endpoint : cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES) {
+            std::cout << endpoint.host << ':' << endpoint.port << '\n';
+        }
+        return 0;
+    }
     if (argc == 3 && std::string_view{argv[1]} == "pubkey") {
         auto key_bytes = ReadFile(argv[2], 32);
         if (key_bytes.size() != 32) throw std::runtime_error("validator key file must contain exactly 32 raw bytes");
@@ -150,28 +162,34 @@ int Main(const int argc, char* argv[])
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node pubkey KEY_FILE | init-dev NETWORK_FILE VALIDATOR_PUBKEY_HEX | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS] | sync NETWORK_FILE DB_DIR PEER_HOST PORT COUNT");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node pubkey KEY_FILE | init-dev NETWORK_FILE VALIDATOR_PUBKEY_HEX | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT");
     const auto network = LoadNetworkFile(argv[2]);
-    CDBWrapper db{{.path = argv[3], .cache_bytes = 8 << 20, .memory_only = false,
-                   .wipe_data = false, .obfuscate = false}};
-    cybou::CybouStateStore store{db, network.definition};
-    if (!store.GetFinalizedHead()) {
-        if (!store.InitializeGenesis(network.genesis)) throw std::runtime_error("cannot initialize genesis");
-    }
-    if (!store.LoadState() || store.GetStoredNetworkId() != store.GetNetworkId()) {
-        throw std::runtime_error("database state or network mismatch");
-    }
     std::signal(SIGINT, Stop);
     std::signal(SIGTERM, Stop);
-    if (std::string_view{argv[1]} == "sync" && argc == 7) {
-        const auto port = Port(argv[5]);
-        const auto count = PositiveCount(argv[6]);
+    // Without explicit PEER_HOST PORT, sync follows the DEV bootstrap list
+    // (doc 75). The bootstrap endpoint is transport metadata — every block
+    // is still verified against the network definition file.
+    if (std::string_view{argv[1]} == "sync" && (argc == 5 || argc == 7)) {
+        const std::string sync_host =
+            argc == 5 ? std::string{cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front().host} : std::string{argv[4]};
+        const uint16_t sync_port =
+            argc == 5 ? cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front().port : Port(argv[5]);
+        cybou::NodeRuntimeConfig config{
+            .network_definition = network.definition,
+            .data_dir = argv[3],
+            .db_cache_bytes = 8 << 20,
+        };
+        cybou::CybouNodeRuntime runtime{std::move(config)};
+        if (!runtime.GetStatus().is_initialized) {
+            if (!runtime.InitializeGenesis(network.genesis)) throw std::runtime_error("cannot initialize genesis");
+        }
+        const auto count = PositiveCount(argc == 5 ? argv[4] : argv[6]);
         uint64_t synced{0};
         auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
         while (!stopping && synced < count) {
-            if (cybou::SyncNextFinalizedBlock(store, argv[4], port)) {
+            if (runtime.SyncFromPeer(sync_host, sync_port, 1) > 0) {
                 ++synced;
-                std::cout << "height=" << *store.GetFinalizedHeight() << '\n';
+                std::cout << "height=" << *runtime.GetFinalizedHeight() << '\n';
                 deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
             } else {
                 if (std::chrono::steady_clock::now() >= deadline) {
@@ -189,13 +207,23 @@ int Main(const int argc, char* argv[])
         std::array<unsigned char, 32> key{};
         std::copy(key_bytes.begin(), key_bytes.end(), key.begin());
         memory_cleanse(key_bytes.data(), key_bytes.size());
-        const auto expected_key = store.GetValidatorSet()->validators.at(0).consensus_public_key;
-        if (cybou::DeriveEd25519PublicKey(key) != expected_key) {
-            memory_cleanse(key.data(), key.size());
-            throw std::runtime_error("validator key does not match network definition");
-        }
-        cybou::CybouAuthorityNode producer{store, key};
+
+        cybou::NodeRuntimeConfig config{
+            .network_definition = network.definition,
+            .data_dir = argv[3],
+            .validator_private_key = key,
+            .db_cache_bytes = 8 << 20,
+        };
         memory_cleanse(key.data(), key.size());
+        cybou::CybouNodeRuntime runtime{std::move(config)};
+        if (!runtime.GetStatus().is_initialized) {
+            if (!runtime.InitializeGenesis(network.genesis)) throw std::runtime_error("cannot initialize genesis");
+        }
+        const auto val_set = runtime.GetValidatorSet();
+        if (!val_set || val_set->validators.empty()) {
+            throw std::runtime_error("validator set is empty");
+        }
+
         const auto port = Port(argv[6]);
         const auto interval_ms = argc == 8 ? PositiveCount(argv[7]) : 1000;
         if (interval_ms > 60000) throw std::runtime_error("block interval exceeds 60 seconds");
@@ -204,19 +232,15 @@ int Main(const int argc, char* argv[])
             boost::asio::ip::make_address(argv[5]), port,
         });
         acceptor.non_blocking(true);
-        std::mutex store_mutex;
         std::jthread blocks([&] {
             while (!stopping) {
-                {
-                    std::lock_guard lock(store_mutex);
-                    const auto result = producer.ProduceNextBlock();
-                    if (!result) {
-                        std::cerr << "block production stopped, error=" << static_cast<int>(result.error) << '\n';
-                        stopping = true;
-                        break;
-                    }
-                    std::cout << "height=" << result.finalized_block->block.height << '\n';
+                const auto block = runtime.ProduceBlock();
+                if (!block) {
+                    std::cerr << "block production stopped\n";
+                    stopping = true;
+                    break;
                 }
+                std::cout << "height=" << block->block.height << '\n';
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
             }
         });
@@ -229,8 +253,7 @@ int Main(const int argc, char* argv[])
                 continue;
             }
             if (ec) throw boost::system::system_error(ec);
-            std::lock_guard lock(store_mutex);
-            cybou::ServeFinalizedBlockRequest(store, socket);
+            cybou::ServeFinalizedBlockRequest(runtime.GetStore(), socket);
         }
         return 0;
     }

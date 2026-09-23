@@ -41,6 +41,21 @@ Both commands reopen the same database after restart and reject a database
 bound to another network definition. The producer validates its key before
 opening the listener. Stop the producer with Ctrl+C for a graceful exit.
 
+## Bootstrap endpoints
+
+`cybou-node bootstrap` prints the compiled-in DEV bootstrap authority list.
+An observer can sync without naming a peer explicitly — it follows that
+list:
+
+```text
+cybou-node sync network.bin observer-db 5
+```
+
+The list is transport metadata only: it is never part of the serialized
+network definition, carries no trust, and applies to the disposable DEV
+network. Beta and Mainnet derive bootstrap sets from operator-approved
+validator admission instead of a compiled-in list.
+
 The listener handles one bounded request at a time. The observer verifies
 every block before committing it. A trusted genesis file is essential: the
 block feed does not negotiate network identity or bootstrap trust.
