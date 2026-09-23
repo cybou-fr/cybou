@@ -70,6 +70,16 @@ public:
         std::span<const unsigned char> message) const = 0;
 };
 
+/** Production Ed25519 + ML-DSA-65 verifier backed by OpenSSL >= 3.5. */
+class OpenSslOperatorAuthoritySignatureVerifier final : public OperatorAuthoritySignatureVerifier
+{
+public:
+    bool Verify(
+        const OperatorAuthorityKeySet& keyset,
+        const SignatureBundleV1& bundle,
+        std::span<const unsigned char> message) const override;
+};
+
 /**
  * Hybrid signature bundle for HYBRID_ED25519_MLDSA65_V1.
  *

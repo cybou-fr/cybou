@@ -109,6 +109,7 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   core_io.cpp
   cybou/identity.cpp
   cybou/signing.cpp
+  cybou/signing_openssl.cpp
   cybou/state.cpp
   deploymentinfo.cpp
   external_signer.cpp
@@ -147,6 +148,7 @@ target_link_libraries(bitcoin_common
     univalue
     secp256k1
     Boost::headers
+    OpenSSL::Crypto
     $<TARGET_NAME_IF_EXISTS:USDT::headers>
     $<$<PLATFORM_ID:Windows>:ws2_32>
 )
