@@ -108,6 +108,8 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   cybou/signing.cpp
   cybou/signing_openssl.cpp
   cybou/state.cpp
+  cybou/validator.cpp
+  cybou/bft.cpp
   deploymentinfo.cpp
   external_signer.cpp
   init/common.cpp
