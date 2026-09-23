@@ -25,6 +25,11 @@ inline std::string BlockKey(const uint256& block_id)
     return "cybou/block/v1/" + block_id.GetHex();
 }
 
+inline std::string MailFilterKey(const uint256& block_id)
+{
+    return "cybou/mail-filter/v1/" + block_id.GetHex();
+}
+
 } // namespace
 
 CybouStateStore::CybouStateStore(
@@ -93,6 +98,8 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     batch.Write(HASH_KEY, CybouStateHash(genesis_state));
     batch.Write(HEAD_KEY, initial_head);
     batch.Write(NETWORK_ID_KEY, m_network_id);
+    const auto genesis_filter{BuildMailDiscoveryFilter(m_network_definition.genesis_block_id, {})};
+    batch.Write(MailFilterKey(m_network_definition.genesis_block_id), SerializeMailDiscoveryFilter(genesis_filter));
     m_db.WriteBatch(batch, sync);
     return {};
 }
@@ -260,6 +267,8 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     batch.Write(HASH_KEY, candidate_root);
     batch.Write(HEAD_KEY, next_head);
     batch.Write(BlockKey(block_id), SerializeFinalizedBlock(finalized_block));
+    const auto mail_filter{BuildBlockMailDiscoveryFilter(block)};
+    batch.Write(MailFilterKey(block_id), SerializeMailDiscoveryFilter(mail_filter));
     m_db.WriteBatch(batch, sync);
     return {};
 }
@@ -271,6 +280,17 @@ std::optional<FinalizedBlockV1> CybouStateStore::GetBlock(const uint256& block_i
         return std::nullopt;
     }
     return DeserializeFinalizedBlock(bytes);
+}
+
+std::optional<CybouMailDiscoveryFilterV1> CybouStateStore::GetBlockMailFilter(const uint256& block_id) const
+{
+    std::vector<unsigned char> bytes;
+    if (!m_db.Read(MailFilterKey(block_id), bytes)) {
+        return std::nullopt;
+    }
+    auto filter{DeserializeMailDiscoveryFilter(bytes)};
+    if (filter && filter->block_id != block_id) return std::nullopt;
+    return filter;
 }
 
 } // namespace cybou

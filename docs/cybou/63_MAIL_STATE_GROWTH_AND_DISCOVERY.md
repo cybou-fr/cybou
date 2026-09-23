@@ -68,6 +68,20 @@ This is an optimization, not part of mail authenticity.
 
 The filter format must be deterministic and privacy-reviewed before freeze.
 
+## Current implementation boundary
+
+The v1 GCS block filter can be built and stored atomically with a finalized block.
+Its filter-header hash can be computed, but the header chain is not yet committed
+to authenticated block headers or served by a light-client protocol. A remote
+filter therefore cannot currently be authenticated by a light client.
+
+The discovery-tag hash accepts a recipient key and per-message salt, but no
+recipient-side salt discovery mechanism has been specified. The current MailOp
+also carries a recipient AccountID in its public serialization. These facts
+prevent a claim of private, body-free mail discovery or social-graph
+unlinkability until the outer MailOp and recipient workflow are redesigned and
+privacy-reviewed.
+
 ## Why this is compatible with pruning
 
 A pruned node can keep compact block/header/filter metadata while discarding old bodies according to retention policy.

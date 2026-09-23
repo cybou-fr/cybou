@@ -7,6 +7,7 @@
 
 #include <cybou/bft.h>
 #include <cybou/block.h>
+#include <cybou/mail_filter.h>
 #include <cybou/network_definition.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/state.h>
@@ -160,6 +161,9 @@ public:
 
     /** Retrieve a persisted finalized block by its block ID. */
     std::optional<FinalizedBlockV1> GetBlock(const uint256& block_id) const;
+
+    /** Retrieve a persisted compact mail discovery filter by block ID. */
+    std::optional<CybouMailDiscoveryFilterV1> GetBlockMailFilter(const uint256& block_id) const;
 
 private:
     CDBWrapper& m_db;
