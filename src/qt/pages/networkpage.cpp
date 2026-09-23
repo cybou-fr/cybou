@@ -36,6 +36,9 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, std::function<void()> diagnos
     m_status = new QLabel{card};
     m_connections = new QLabel{card};
     m_height = new QLabel{card};
+    m_network_id = new QLabel{card};
+    m_network_id->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_network_id->setWordWrap(true);
     m_data_directory = new QLabel{card};
     m_data_directory->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_data_directory->setWordWrap(true);
@@ -43,6 +46,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, std::function<void()> diagnos
     form->addRow(tr("Node status"), m_status);
     form->addRow(tr("Connections"), m_connections);
     form->addRow(tr("Current height"), m_height);
+    form->addRow(tr("Network ID"), m_network_id);
     form->addRow(tr("Data directory"), m_data_directory);
     auto* diagnostics = new QPushButton{tr("Open node diagnostics"), card};
     diagnostics->setObjectName("secondaryButton");
@@ -63,5 +67,6 @@ void NetworkPage::refresh()
     m_status->setText(status.node_running ? tr("Running") : tr("Starting"));
     m_connections->setText(QString::number(status.peer_count));
     m_height->setText(QString::number(status.height));
+    m_network_id->setText(status.network_id.isEmpty() ? tr("Not available yet") : status.network_id);
     m_data_directory->setText(status.data_directory.isEmpty() ? tr("Available after node startup") : status.data_directory);
 }

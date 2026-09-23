@@ -5,6 +5,7 @@
 #include <qt/pages/homepage.h>
 
 #include <qt/cyboudesktopmodel.h>
+#include <qt/cyboutheme.h>
 
 #include <QFrame>
 #include <QHBoxLayout>
@@ -24,22 +25,37 @@ QFrame* Card(QWidget* parent)
     return card;
 }
 
-QFrame* ServiceCard(const QString& title, const QString& description, QWidget* parent)
+/** Small rounded chip with a CYBOU monochrome line icon. */
+QLabel* IconChip(CybouTheme::NavIcon icon, QWidget* parent)
+{
+    auto* chip = new QLabel{parent};
+    chip->setObjectName("iconChip");
+    chip->setFixedSize(40, 40);
+    chip->setAlignment(Qt::AlignCenter);
+    chip->setPixmap(CybouTheme::iconPixmap(icon, {22, 22}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
+    return chip;
+}
+
+QFrame* ServiceCard(const QString& title, const QString& description, CybouTheme::NavIcon icon, QWidget* parent)
 {
     auto* card = Card(parent);
     auto* layout = new QVBoxLayout{card};
     layout->setContentsMargins(20, 18, 20, 18);
-    layout->setSpacing(7);
+    layout->setSpacing(8);
+    auto* header = new QHBoxLayout;
+    header->addWidget(IconChip(icon, card));
     auto* heading = new QLabel{title, card};
     heading->setObjectName("serviceTitle");
+    heading->setAlignment(Qt::AlignVCenter);
+    header->addWidget(heading);
+    header->addStretch();
     auto* badge = new QLabel{QObject::tr("Planned"), card};
     badge->setObjectName("neutralBadge");
-    badge->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+    header->addWidget(badge, 0, Qt::AlignVCenter);
     auto* body = new QLabel{description, card};
     body->setObjectName("mutedText");
     body->setWordWrap(true);
-    layout->addWidget(heading);
-    layout->addWidget(badge);
+    layout->addLayout(header);
     layout->addWidget(body);
     layout->addStretch();
     return card;
@@ -58,25 +74,33 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     root->setContentsMargins(24, 22, 24, 22);
     root->setSpacing(16);
 
+    // Hero: typography plus a soft mint accent — no decorative artwork.
     auto* hero = new QFrame{this};
-    hero->setObjectName("hero");
+    hero->setObjectName("card");
     hero->setMinimumHeight(190);
-    hero->setStyleSheet("QFrame#hero { border-image: url(:/art/cybou-hero) 0 0 0 0 stretch stretch; border-radius: 16px; }");
-    auto* hero_layout = new QVBoxLayout{hero};
+    auto* hero_layout = new QHBoxLayout{hero};
     hero_layout->setContentsMargins(34, 26, 34, 26);
-    hero_layout->setSpacing(7);
+    hero_layout->setSpacing(24);
+    auto* hero_text = new QVBoxLayout;
+    hero_text->setSpacing(8);
     auto* eyebrow = new QLabel{tr("WELCOME TO CYBOU"), hero};
     eyebrow->setObjectName("eyebrow");
     auto* title = new QLabel{tr("Protected communication,\nunder your control."), hero};
     title->setObjectName("heroTitle");
-    auto* subtitle = new QLabel{tr("A decentralized infrastructure for identity, messaging and resilient data services."), hero};
+    auto* subtitle = new QLabel{tr("Sovereign communication infrastructure built around identity, Email, Storage and Backup."), hero};
     subtitle->setObjectName("heroSubtitle");
     subtitle->setWordWrap(true);
-    subtitle->setMaximumWidth(610);
-    hero_layout->addWidget(eyebrow);
-    hero_layout->addWidget(title);
-    hero_layout->addWidget(subtitle);
-    hero_layout->addStretch();
+    hero_text->addWidget(eyebrow);
+    hero_text->addWidget(title);
+    hero_text->addWidget(subtitle);
+    hero_text->addStretch();
+    auto* accent = new QLabel{hero};
+    accent->setObjectName("heroAccent");
+    accent->setFixedSize(150, 150);
+    accent->setPixmap(QPixmap{QStringLiteral(":/icons/cybou")}.scaled(84, 84, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    accent->setAlignment(Qt::AlignCenter);
+    hero_layout->addLayout(hero_text, 1);
+    hero_layout->addWidget(accent, 0, Qt::AlignVCenter);
     root->addWidget(hero);
 
     auto* primary_row = new QHBoxLayout;
@@ -86,8 +110,14 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     auto* network_layout = new QVBoxLayout{network_card};
     network_layout->setContentsMargins(24, 20, 24, 20);
     network_layout->setSpacing(10);
+    auto* network_header = new QHBoxLayout;
+    network_header->addWidget(IconChip(CybouTheme::NavIcon::Network, network_card));
     auto* network_label = new QLabel{tr("Network"), network_card};
     network_label->setObjectName("cardLabel");
+    network_label->setAlignment(Qt::AlignVCenter);
+    network_header->addWidget(network_label);
+    network_header->addStretch();
+    network_layout->addLayout(network_header);
     auto* network_title_row = new QHBoxLayout;
     m_network_name = new QLabel{network_card};
     m_network_name->setObjectName("cardTitle");
@@ -99,14 +129,14 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     auto* metrics = new QHBoxLayout;
     auto* peers_box = new QVBoxLayout;
     auto* peers_label = new QLabel{tr("Connections"), network_card};
-    peers_label->setObjectName("mutedText");
+    peers_label->setObjectName("metricCaption");
     m_peer_count = new QLabel{network_card};
     m_peer_count->setObjectName("metric");
     peers_box->addWidget(peers_label);
     peers_box->addWidget(m_peer_count);
     auto* height_box = new QVBoxLayout;
     auto* height_label = new QLabel{tr("Current height"), network_card};
-    height_label->setObjectName("mutedText");
+    height_label->setObjectName("metricCaption");
     m_height = new QLabel{network_card};
     m_height->setObjectName("metric");
     height_box->addWidget(height_label);
@@ -115,7 +145,6 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     metrics->addSpacing(48);
     metrics->addLayout(height_box);
     metrics->addStretch();
-    network_layout->addWidget(network_label);
     network_layout->addLayout(network_title_row);
     network_layout->addSpacing(8);
     network_layout->addLayout(metrics);
@@ -124,8 +153,14 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     auto* identity_layout = new QVBoxLayout{identity_card};
     identity_layout->setContentsMargins(24, 20, 24, 20);
     identity_layout->setSpacing(8);
+    auto* identity_header = new QHBoxLayout;
+    identity_header->addWidget(IconChip(CybouTheme::NavIcon::Identity, identity_card));
     auto* identity_label = new QLabel{tr("Identity"), identity_card};
     identity_label->setObjectName("cardLabel");
+    identity_label->setAlignment(Qt::AlignVCenter);
+    identity_header->addWidget(identity_label);
+    identity_header->addStretch();
+    identity_layout->addLayout(identity_header);
     m_identity_state = new QLabel{identity_card};
     m_identity_state->setObjectName("cardTitle");
     auto* identity_body = new QLabel{tr("A CYBOU identity will provide protocol-native access to communication services."), identity_card};
@@ -134,7 +169,6 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     auto* identity_button = new QPushButton{tr("View identity"), identity_card};
     identity_button->setObjectName("secondaryButton");
     connect(identity_button, &QPushButton::clicked, this, [this] { m_identity_requested(); });
-    identity_layout->addWidget(identity_label);
     identity_layout->addWidget(m_identity_state);
     identity_layout->addWidget(identity_body);
     identity_layout->addStretch();
@@ -147,7 +181,7 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     auto* services_header = new QHBoxLayout;
     auto* services_title = new QLabel{tr("Services"), this};
     services_title->setObjectName("sectionTitle");
-    auto* services_note = new QLabel{tr("Enabled only when the protocol backend is ready."), this};
+    auto* services_note = new QLabel{tr("Some services will become available in a future version."), this};
     services_note->setObjectName("mutedText");
     services_header->addWidget(services_title);
     services_header->addStretch();
@@ -155,9 +189,9 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     root->addLayout(services_header);
     auto* services = new QHBoxLayout;
     services->setSpacing(14);
-    services->addWidget(ServiceCard(tr("Email"), tr("Encrypted asynchronous messaging."), this));
-    services->addWidget(ServiceCard(tr("Storage"), tr("Secure distributed object storage."), this));
-    services->addWidget(ServiceCard(tr("Backup"), tr("Resilient protection for selected data."), this));
+    services->addWidget(ServiceCard(tr("Email"), tr("Encrypted asynchronous communication."), CybouTheme::NavIcon::Email, this));
+    services->addWidget(ServiceCard(tr("Storage"), tr("Encrypted distributed object storage."), CybouTheme::NavIcon::Storage, this));
+    services->addWidget(ServiceCard(tr("Backup"), tr("Resilient encrypted backup built on CYBOU Storage."), CybouTheme::NavIcon::Backup, this));
     root->addLayout(services);
 
     auto* footer = Card(this);
@@ -184,8 +218,10 @@ void HomePage::refresh()
     m_node_state->setText(status.node_running ? tr("Running") : tr("Starting"));
     m_peer_count->setText(QString::number(status.peer_count));
     m_height->setText(QString::number(status.height));
-    m_identity_state->setText(status.has_identity ? tr("Identity active") : tr("No identity created"));
+    m_identity_state->setText(status.identity_state == CybouIdentityState::Active
+        ? tr("Identity active")
+        : tr("No identity created"));
     m_footer_state->setText(status.node_running
-        ? tr("Your node is running. Network synchronization may still be in progress.")
+        ? tr("Your node is running correctly. Keep CYBOU online to support the network.")
         : tr("The CYBOU node is starting."));
 }

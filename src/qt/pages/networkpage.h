@@ -23,6 +23,7 @@ private:
     QLabel* m_status;
     QLabel* m_connections;
     QLabel* m_height;
+    QLabel* m_network_id;
     QLabel* m_data_directory;
     const std::function<void()> m_diagnostics_requested;
 

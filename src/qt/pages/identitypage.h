@@ -7,22 +7,32 @@
 
 #include <QWidget>
 
+#include <qt/cyboudesktopmodel.h>
+
+#include <QVector>
+
 class CybouDesktopModel;
 class QLabel;
 class QPushButton;
+class QWidget;
 
 class IdentityPage : public QWidget
 {
 public:
-    explicit IdentityPage(CybouDesktopModel* model, QWidget* parent = nullptr);
+    IdentityPage(CybouDesktopModel* model, QWidget* parent = nullptr);
 
 private:
     CybouDesktopModel* const m_model;
     QLabel* m_state_label;
     QLabel* m_detail_label;
+    QLabel* m_active_details;
+    QLabel* m_dev_warning;
     QPushButton* m_create_button;
+    QWidget* m_phase_row;
+    QVector<QLabel*> m_phases;
 
     void refresh();
+    void rebuildForState(CybouIdentityState state);
 };
 
 #endif // BITCOIN_QT_PAGES_IDENTITYPAGE_H

@@ -5,6 +5,7 @@
 #include <qt/cyboudesktopmodel.h>
 
 #include <qt/clientmodel.h>
+#include <qt/optionsmodel.h>
 
 #include <utility>
 
@@ -51,4 +52,29 @@ void CybouDesktopModel::refreshFromClient()
         m_status.data_directory.clear();
     }
     Q_EMIT statusChanged();
+}
+
+OptionsModel* CybouDesktopModel::optionsModel() const
+{
+    return m_client_model ? m_client_model->getOptionsModel() : nullptr;
+}
+
+void CybouDesktopModel::setCapabilities(const CybouCapabilities& capabilities)
+{
+    if (m_capabilities.account_creation == capabilities.account_creation &&
+        m_capabilities.payments == capabilities.payments &&
+        m_capabilities.email == capabilities.email &&
+        m_capabilities.storage == capabilities.storage &&
+        m_capabilities.backup == capabilities.backup) {
+        return;
+    }
+    m_capabilities = capabilities;
+    Q_EMIT capabilitiesChanged();
+}
+
+void CybouDesktopModel::requestCreateIdentity()
+{
+    // The UI boundary ends here: protocol anti-Sybil work, operation
+    // construction and finality handling belong to core.
+    Q_EMIT createIdentityRequested();
 }
