@@ -28,4 +28,21 @@ std::optional<ProtocolOperationV1> DeserializeProtocolOperation(const std::span<
     return ProtocolOperationV1{*account_create};
 }
 
+OperationExecutionResult ApplyProtocolOperation(
+    const ProtocolOperationV1& operation,
+    const ProtocolExecutionContextV1& context,
+    CybouState& state)
+{
+    return std::visit([&](const auto& op) -> OperationExecutionResult {
+        using T = std::decay_t<decltype(op)>;
+        if constexpr (std::is_same_v<T, AccountCreateOpV1>) {
+            const auto res{ApplyAccountCreate(op, context.network_id, context.block_height, context.params, state)};
+            if (!res) {
+                return {OperationExecutionError::ACCOUNT_CREATE_FAILED, res};
+            }
+            return {OperationExecutionError::NONE, res};
+        }
+    }, operation.payload);
+}
+
 } // namespace cybou

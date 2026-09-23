@@ -16,31 +16,33 @@ namespace {
 
 const std::string STATE_KEY{"cybou/state/v1"};
 const std::string HASH_KEY{"cybou/hash/v1"};
-const std::string TIP_KEY{"cybou/tip/v1"};
-const std::string HEIGHT_KEY{"cybou/height/v1"};
+const std::string HEAD_KEY{"cybou/head/v1"};
 const std::string NETWORK_ID_KEY{"cybou/network-id/v1"};
 
 } // namespace
 
 GenesisInitResult CybouStateStore::InitializeGenesis(
     const CybouState& genesis_state,
-    const bool sync,
-    const uint64_t genesis_height)
+    const bool sync)
 {
     if (m_network_definition_error != NetworkDefinitionError::NONE) {
         return {GenesisInitError::INVALID_NETWORK_DEFINITION};
     }
-    if (m_db.Exists(STATE_KEY) || m_db.Exists(HASH_KEY) || m_db.Exists(TIP_KEY) ||
-        m_db.Exists(HEIGHT_KEY) || m_db.Exists(NETWORK_ID_KEY)) {
+    if (m_db.Exists(STATE_KEY) || m_db.Exists(HASH_KEY) || m_db.Exists(HEAD_KEY) ||
+        m_db.Exists(NETWORK_ID_KEY)) {
         return {GenesisInitError::ALREADY_INITIALIZED};
     }
     if (CybouStateHash(genesis_state) != m_network_definition.genesis_state_root) {
         return {GenesisInitError::GENESIS_STATE_MISMATCH};
     }
+    const FinalizedHeadV1 initial_head{
+        .block_id = m_network_definition.genesis_block_id,
+        .height = 0,
+    };
     CDBBatch batch{m_db};
     batch.Write(STATE_KEY, SerializeCybouState(genesis_state));
     batch.Write(HASH_KEY, CybouStateHash(genesis_state));
-    batch.Write(HEIGHT_KEY, genesis_height);
+    batch.Write(HEAD_KEY, initial_head);
     batch.Write(NETWORK_ID_KEY, m_network_id);
     m_db.WriteBatch(batch, sync);
     return {};
@@ -55,18 +57,21 @@ StateLoadResult CybouStateStore::LoadState() const
     uint256 stored_hash;
     const bool state_exists{m_db.Exists(STATE_KEY)};
     const bool hash_exists{m_db.Exists(HASH_KEY)};
-    const bool tip_exists{m_db.Exists(TIP_KEY)};
-    const bool height_exists{m_db.Exists(HEIGHT_KEY)};
+    const bool head_exists{m_db.Exists(HEAD_KEY)};
     const bool network_exists{m_db.Exists(NETWORK_ID_KEY)};
-    if (!state_exists && !hash_exists && !tip_exists && !height_exists && !network_exists) {
+    if (!state_exists && !hash_exists && !head_exists && !network_exists) {
         return {StateLoadError::NOT_FOUND, std::nullopt};
     }
-    if (!state_exists || !hash_exists || !height_exists || !network_exists) {
+    if (!state_exists || !hash_exists || !head_exists || !network_exists) {
         return {StateLoadError::CORRUPT, std::nullopt};
     }
     const auto stored_network_id{GetStoredNetworkId()};
     if (!stored_network_id) return {StateLoadError::CORRUPT, std::nullopt};
     if (*stored_network_id != m_network_id) return {StateLoadError::NETWORK_MISMATCH, std::nullopt};
+
+    const auto head{GetFinalizedHead()};
+    if (!head) return {StateLoadError::CORRUPT, std::nullopt};
+
     const bool has_state{m_db.Read(STATE_KEY, bytes)};
     const bool has_hash{m_db.Read(HASH_KEY, stored_hash)};
     if (!has_state || !has_hash) return {StateLoadError::CORRUPT, std::nullopt};
@@ -85,18 +90,25 @@ std::optional<uint256> CybouStateStore::GetStateRoot() const
     return hash;
 }
 
+std::optional<FinalizedHeadV1> CybouStateStore::GetFinalizedHead() const
+{
+    FinalizedHeadV1 head;
+    if (!m_db.Read(HEAD_KEY, head)) return std::nullopt;
+    return head;
+}
+
 std::optional<uint256> CybouStateStore::GetFinalizedTip() const
 {
-    uint256 tip;
-    if (!m_db.Read(TIP_KEY, tip)) return std::nullopt;
-    return tip;
+    const auto head{GetFinalizedHead()};
+    if (!head) return std::nullopt;
+    return head->block_id;
 }
 
 std::optional<uint64_t> CybouStateStore::GetFinalizedHeight() const
 {
-    uint64_t height;
-    if (!m_db.Read(HEIGHT_KEY, height)) return std::nullopt;
-    return height;
+    const auto head{GetFinalizedHead()};
+    if (!head) return std::nullopt;
+    return head->height;
 }
 
 std::optional<uint256> CybouStateStore::GetStoredNetworkId() const
@@ -110,7 +122,6 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     const uint256& block_id,
     const uint256& previous_block_id,
     const std::vector<ProtocolOperationV1>& ops,
-    const uint64_t block_height,
     const bool sync)
 {
     const auto loaded{LoadState()};
@@ -136,30 +147,37 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
     }
 
-    const auto tip{GetFinalizedTip()};
-    const auto finalized_height{GetFinalizedHeight()};
-    if (!finalized_height) return {BlockTransitionError::CORRUPT_HEAD};
-    if (tip == block_id) return {BlockTransitionError::BLOCK_ALREADY_APPLIED};
-    if ((tip.has_value() && *tip != previous_block_id) ||
-        (!tip.has_value() && !previous_block_id.IsNull())) {
+    const auto head{GetFinalizedHead()};
+    if (!head) return {BlockTransitionError::CORRUPT_HEAD};
+    if (head->block_id == block_id) return {BlockTransitionError::BLOCK_ALREADY_APPLIED};
+    if (head->block_id != previous_block_id) {
         return {BlockTransitionError::PARENT_MISMATCH};
     }
-    if (*finalized_height == std::numeric_limits<uint64_t>::max() || block_height != *finalized_height + 1) {
+    if (head->height == std::numeric_limits<uint64_t>::max()) {
         return {BlockTransitionError::INVALID_HEIGHT};
     }
+    const uint64_t next_height{head->height + 1};
 
     auto candidate{*loaded.state};
+    const ProtocolExecutionContextV1 ctx{
+        .network_id = m_network_id,
+        .block_height = next_height,
+        .params = params,
+    };
     for (const auto& operation : ops) {
-        const auto& op{std::get<AccountCreateOpV1>(operation.payload)};
-        const auto res{ApplyAccountCreate(op, m_network_id, block_height, params, candidate)};
+        const auto res{ApplyProtocolOperation(operation, ctx, candidate)};
         if (!res) return {BlockTransitionError::INVALID_OPERATION, res};
     }
+
+    const FinalizedHeadV1 next_head{
+        .block_id = block_id,
+        .height = next_height,
+    };
 
     CDBBatch batch{m_db};
     batch.Write(STATE_KEY, SerializeCybouState(candidate));
     batch.Write(HASH_KEY, CybouStateHash(candidate));
-    batch.Write(TIP_KEY, block_id);
-    batch.Write(HEIGHT_KEY, block_height);
+    batch.Write(HEAD_KEY, next_head);
     m_db.WriteBatch(batch, sync);
     return {};
 }

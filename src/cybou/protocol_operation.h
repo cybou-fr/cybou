@@ -6,6 +6,8 @@
 #define CYBOU_PROTOCOL_OPERATION_H
 
 #include <cybou/account_creation.h>
+#include <cybou/protocol_params.h>
+#include <cybou/state.h>
 
 #include <cstdint>
 #include <optional>
@@ -37,6 +39,29 @@ struct ProtocolOperationV1 {
 ProtocolOperationType OperationType(const ProtocolOperationV1& operation);
 std::vector<unsigned char> SerializeProtocolOperation(const ProtocolOperationV1& operation);
 std::optional<ProtocolOperationV1> DeserializeProtocolOperation(std::span<const unsigned char> bytes);
+
+struct ProtocolExecutionContextV1 {
+    uint256 network_id;
+    uint64_t block_height{0};
+    const CybouProtocolParameters& params;
+};
+
+enum class OperationExecutionError : uint8_t {
+    NONE,
+    ACCOUNT_CREATE_FAILED,
+};
+
+struct OperationExecutionResult {
+    OperationExecutionError error{OperationExecutionError::NONE};
+    AccountCreateResult account_create_result{};
+
+    explicit operator bool() const { return error == OperationExecutionError::NONE; }
+};
+
+OperationExecutionResult ApplyProtocolOperation(
+    const ProtocolOperationV1& operation,
+    const ProtocolExecutionContextV1& context,
+    CybouState& state);
 
 } // namespace cybou
 

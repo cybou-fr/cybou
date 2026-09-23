@@ -8,6 +8,7 @@
 #include <cybou/network_definition.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/state.h>
+#include <serialize.h>
 
 #include <cstdint>
 #include <optional>
@@ -17,6 +18,18 @@
 class CDBWrapper;
 
 namespace cybou {
+
+struct FinalizedHeadV1 {
+    uint256 block_id;
+    uint64_t height{0};
+
+    SERIALIZE_METHODS(FinalizedHeadV1, obj)
+    {
+        READWRITE(obj.block_id, obj.height);
+    }
+
+    friend bool operator==(const FinalizedHeadV1&, const FinalizedHeadV1&) = default;
+};
 
 enum class StateLoadError : uint8_t {
     NONE,
@@ -63,7 +76,7 @@ enum class BlockTransitionError : uint8_t {
 
 struct BlockTransitionResult {
     BlockTransitionError error{BlockTransitionError::NONE};
-    AccountCreateResult op_result{};
+    OperationExecutionResult op_result{};
 
     explicit operator bool() const { return error == BlockTransitionError::NONE; }
 };
@@ -88,8 +101,8 @@ public:
     {
     }
 
-    /** Persist genesis state and its canonical height. Fails if already initialized. */
-    GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true, uint64_t genesis_height = 0);
+    /** Persist genesis state at height 0. Fails if already initialized. */
+    GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true);
 
     /** Load the canonical state with hash integrity verification. */
     StateLoadResult LoadState() const;
@@ -97,10 +110,13 @@ public:
     /** Hash of the canonical state, if initialized. */
     std::optional<uint256> GetStateRoot() const;
 
-    /** Last finalized block id, if any block has been committed. */
+    /** Canonical finalized head (block id and height). */
+    std::optional<FinalizedHeadV1> GetFinalizedHead() const;
+
+    /** Last finalized block id (genesis block id before any committed child). */
     std::optional<uint256> GetFinalizedTip() const;
 
-    /** Canonical finalized height (genesis height before the first committed child). */
+    /** Canonical finalized height (0 for genesis, monotonically increasing with each finalized block). */
     std::optional<uint64_t> GetFinalizedHeight() const;
 
     /** Network identity derived from the immutable canonical definition. */
@@ -112,14 +128,13 @@ public:
     /**
      * Atomically commit a BFT-finalized block: all operations are executed
      * against a throwaway candidate derived from the canonical state and the
-     * new state, its hash, and the tip are written in one batch. On any
-     * failure the store is left untouched.
+     * new state, its hash, and the updated head are written in one batch. On any
+     * failure the store is left untouched. Height is strictly derived as head.height + 1.
      */
     BlockTransitionResult CommitFinalizedBlock(
         const uint256& block_id,
         const uint256& previous_block_id,
         const std::vector<ProtocolOperationV1>& ops,
-        uint64_t block_height,
         bool sync = true);
 
 private:

@@ -21,6 +21,7 @@ const cybou::AccountId ACCOUNT_ID_2{uint256::FromUserHex("0b").value()};
 const uint256 AUTH_KEY{uint256::FromUserHex("42").value()};
 const std::string STATE_KEY{"cybou/state/v1"};
 const std::string HASH_KEY{"cybou/hash/v1"};
+const std::string HEAD_KEY{"cybou/head/v1"};
 
 cybou::AccountAuthorizationV1 ValidAuth()
 {
@@ -93,9 +94,11 @@ CDBWrapper MemoryDb()
 BOOST_AUTO_TEST_CASE(genesis_initializes_once_and_loads)
 {
     auto db{MemoryDb()};
-    cybou::CybouStateStore store{db, TestNetworkDefinition()};
+    const auto definition{TestNetworkDefinition()};
+    cybou::CybouStateStore store{db, definition};
     BOOST_CHECK(store.LoadState().error == cybou::StateLoadError::NOT_FOUND);
     BOOST_CHECK(!store.GetStateRoot().has_value());
+    BOOST_CHECK(!store.GetFinalizedHead().has_value());
     BOOST_CHECK(!store.GetFinalizedTip().has_value());
     BOOST_CHECK(!store.GetFinalizedHeight().has_value());
     BOOST_CHECK(!store.GetStoredNetworkId().has_value());
@@ -109,6 +112,11 @@ BOOST_AUTO_TEST_CASE(genesis_initializes_once_and_loads)
     BOOST_CHECK(*loaded.state == genesis);
     BOOST_REQUIRE(store.GetStateRoot().has_value());
     BOOST_CHECK(*store.GetStateRoot() == cybou::CybouStateHash(genesis));
+    BOOST_REQUIRE(store.GetFinalizedHead().has_value());
+    BOOST_CHECK(store.GetFinalizedHead()->block_id == definition.genesis_block_id);
+    BOOST_CHECK_EQUAL(store.GetFinalizedHead()->height, 0);
+    BOOST_REQUIRE(store.GetFinalizedTip().has_value());
+    BOOST_CHECK(*store.GetFinalizedTip() == definition.genesis_block_id);
     BOOST_REQUIRE(store.GetFinalizedHeight().has_value());
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 0);
     BOOST_REQUIRE(store.GetStoredNetworkId().has_value());
@@ -167,7 +175,7 @@ BOOST_AUTO_TEST_CASE(network_definition_rejects_invalid_consensus_constants)
         cybou::GenesisInitError::INVALID_NETWORK_DEFINITION);
     BOOST_CHECK(store.LoadState().error == cybou::StateLoadError::INVALID_NETWORK_DEFINITION);
     const uint256 block{uint256::FromUserHex("72").value()};
-    BOOST_CHECK(store.CommitFinalizedBlock(block, uint256{}, {}, 1).error ==
+    BOOST_CHECK(store.CommitFinalizedBlock(block, uint256{}, {}).error ==
         cybou::BlockTransitionError::INVALID_NETWORK_DEFINITION);
     BOOST_CHECK(!store.GetStoredNetworkId().has_value());
 }
@@ -189,6 +197,16 @@ BOOST_AUTO_TEST_CASE(state_store_rejects_partial_or_hash_mismatched_snapshots)
 
         // Hash without state bytes: corrupt.
         db.Write(HASH_KEY, uint256::ONE);
+        BOOST_CHECK(store.LoadState().error == cybou::StateLoadError::CORRUPT);
+    }
+    {
+        auto db{MemoryDb()};
+        cybou::CybouStateStore store{db, TestNetworkDefinition()};
+        const auto genesis{GenesisState()};
+
+        // Missing head: corrupt.
+        BOOST_REQUIRE(store.InitializeGenesis(genesis));
+        db.Erase(HEAD_KEY);
         BOOST_CHECK(store.LoadState().error == cybou::StateLoadError::CORRUPT);
     }
     {
@@ -223,30 +241,37 @@ BOOST_AUTO_TEST_CASE(state_store_rejects_reopen_with_different_network_definitio
     BOOST_CHECK(incompatible.LoadState().error == cybou::StateLoadError::NETWORK_MISMATCH);
 
     const uint256 block{uint256::FromUserHex("71").value()};
-    BOOST_CHECK(incompatible.CommitFinalizedBlock(block, uint256{}, {}, 1).error ==
+    BOOST_CHECK(incompatible.CommitFinalizedBlock(block, uint256{}, {}).error ==
         cybou::BlockTransitionError::NETWORK_MISMATCH);
-    BOOST_CHECK(!original.GetFinalizedTip().has_value());
+    BOOST_REQUIRE(original.GetFinalizedTip().has_value());
+    BOOST_CHECK(*original.GetFinalizedTip() == definition.genesis_block_id);
     BOOST_CHECK_EQUAL(*original.GetFinalizedHeight(), 0);
 }
 
 BOOST_AUTO_TEST_CASE(commit_finalized_block_is_tip_ordered_and_atomic)
 {
     auto db{MemoryDb()};
-    cybou::CybouStateStore store{db, TestNetworkDefinition()};
+    const auto definition{TestNetworkDefinition()};
+    cybou::CybouStateStore store{db, definition};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
     const uint256 block1{uint256::FromUserHex("11").value()};
     const uint256 block2{uint256::FromUserHex("12").value()};
+    const auto genesis_id{definition.genesis_block_id};
 
-    BOOST_REQUIRE(store.CommitFinalizedBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, 1));
+    BOOST_CHECK(store.CommitFinalizedBlock(
+        block1, uint256{}, {ValidOp(ACCOUNT_ID)}).error ==
+        cybou::BlockTransitionError::PARENT_MISMATCH);
+    BOOST_REQUIRE(store.CommitFinalizedBlock(
+        block1, genesis_id, {ValidOp(ACCOUNT_ID)}));
     BOOST_REQUIRE(store.GetFinalizedTip().has_value());
     BOOST_CHECK(*store.GetFinalizedTip() == block1);
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 1);
 
     BOOST_CHECK(store.CommitFinalizedBlock(
-        block2, uint256::ONE, {ValidOp(ACCOUNT_ID_2)}, 2).error ==
+        block2, genesis_id, {ValidOp(ACCOUNT_ID_2)}).error ==
         cybou::BlockTransitionError::PARENT_MISMATCH);
     BOOST_REQUIRE(store.CommitFinalizedBlock(
-        block2, block1, {ValidOp(ACCOUNT_ID_2)}, 2));
+        block2, block1, {ValidOp(ACCOUNT_ID_2)}));
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 2);
 
     const auto loaded{store.LoadState()};
@@ -260,31 +285,35 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_is_tip_ordered_and_atomic)
 BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_replay_of_applied_block)
 {
     auto db{MemoryDb()};
-    cybou::CybouStateStore store{db, TestNetworkDefinition()};
+    const auto definition{TestNetworkDefinition()};
+    cybou::CybouStateStore store{db, definition};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
     const uint256 block1{uint256::FromUserHex("11").value()};
+    const auto genesis_id{definition.genesis_block_id};
 
-    BOOST_REQUIRE(store.CommitFinalizedBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, 1));
-    BOOST_CHECK(store.CommitFinalizedBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, 1).error ==
+    BOOST_REQUIRE(store.CommitFinalizedBlock(block1, genesis_id, {ValidOp(ACCOUNT_ID)}));
+    BOOST_CHECK(store.CommitFinalizedBlock(block1, genesis_id, {ValidOp(ACCOUNT_ID)}).error ==
         cybou::BlockTransitionError::BLOCK_ALREADY_APPLIED);
 }
 
 BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_invalid_operation_without_mutation)
 {
     auto db{MemoryDb()};
-    cybou::CybouStateStore store{db, TestNetworkDefinition()};
+    const auto definition{TestNetworkDefinition()};
+    cybou::CybouStateStore store{db, definition};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
     const uint256 block1{uint256::FromUserHex("11").value()};
     const uint256 block2{uint256::FromUserHex("12").value()};
+    const auto genesis_id{definition.genesis_block_id};
 
-    BOOST_REQUIRE(store.CommitFinalizedBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, 1));
+    BOOST_REQUIRE(store.CommitFinalizedBlock(block1, genesis_id, {ValidOp(ACCOUNT_ID)}));
     const auto snapshot{store.LoadState()};
     BOOST_REQUIRE(snapshot);
 
     const auto result{store.CommitFinalizedBlock(
-        block2, block1, {ValidOp(ACCOUNT_ID)}, 2)};
+        block2, block1, {ValidOp(ACCOUNT_ID)})};
     BOOST_CHECK(result.error == cybou::BlockTransitionError::INVALID_OPERATION);
-    BOOST_CHECK(result.op_result.error == cybou::AccountCreateError::ACCOUNT_ALREADY_EXISTS);
+    BOOST_CHECK(result.op_result.account_create_result.error == cybou::AccountCreateError::ACCOUNT_ALREADY_EXISTS);
     BOOST_REQUIRE(store.LoadState());
     BOOST_CHECK(*store.LoadState().state == *snapshot.state);
     BOOST_REQUIRE(store.GetFinalizedTip().has_value());
@@ -302,13 +331,14 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_too_many_account_creates)
     cybou::CybouStateStore store{db, strict_network};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
     const uint256 block{uint256::FromUserHex("31").value()};
+    const auto genesis_id{strict_network.genesis_block_id};
 
     std::vector<cybou::ProtocolOperationV1> ops{
         ValidOp(ACCOUNT_ID),
         ValidOp(ACCOUNT_ID_2),
     };
 
-    const auto result{store.CommitFinalizedBlock(block, uint256{}, ops, 1)};
+    const auto result{store.CommitFinalizedBlock(block, genesis_id, ops)};
     BOOST_CHECK(result.error == cybou::BlockTransitionError::TOO_MANY_ACCOUNT_CREATES);
     BOOST_CHECK(store.LoadState().error != cybou::StateLoadError::CORRUPT);
 }
@@ -318,25 +348,42 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_requires_initialized_state)
     auto db{MemoryDb()};
     cybou::CybouStateStore store{db, TestNetworkDefinition()};
     const uint256 block{uint256::FromUserHex("11").value()};
-    BOOST_CHECK(store.CommitFinalizedBlock(block, uint256{}, {ValidOp()}, 1).error ==
+    BOOST_CHECK(store.CommitFinalizedBlock(block, uint256{}, {ValidOp()}).error ==
         cybou::BlockTransitionError::STATE_NOT_INITIALIZED);
 }
 
-BOOST_AUTO_TEST_CASE(commit_finalized_block_requires_contiguous_height)
+BOOST_AUTO_TEST_CASE(commit_finalized_block_advances_height_monotonically)
+{
+    auto db{MemoryDb()};
+    const auto definition{TestNetworkDefinition()};
+    cybou::CybouStateStore store{db, definition};
+    BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
+    const auto genesis_id{definition.genesis_block_id};
+    const uint256 block1{uint256::FromUserHex("41").value()};
+    const uint256 block2{uint256::FromUserHex("42").value()};
+
+    BOOST_REQUIRE(store.CommitFinalizedBlock(block1, genesis_id, {ValidOp(ACCOUNT_ID)}));
+    BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 1);
+    BOOST_CHECK(*store.GetFinalizedTip() == block1);
+
+    BOOST_REQUIRE(store.CommitFinalizedBlock(block2, block1, {ValidOp(ACCOUNT_ID_2)}));
+    BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 2);
+    BOOST_CHECK(*store.GetFinalizedTip() == block2);
+}
+
+BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_height_overflow)
 {
     auto db{MemoryDb()};
     cybou::CybouStateStore store{db, TestNetworkDefinition()};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
-    const uint256 block{uint256::FromUserHex("41").value()};
-    const auto before_root{store.GetStateRoot()};
-
-    BOOST_CHECK(store.CommitFinalizedBlock(
-        block, uint256{}, {ValidOp()}, 2).error ==
+    const cybou::FinalizedHeadV1 max_head{
+        .block_id = uint256::FromUserHex("51").value(),
+        .height = std::numeric_limits<uint64_t>::max(),
+    };
+    db.Write(HEAD_KEY, max_head);
+    const uint256 block{uint256::FromUserHex("52").value()};
+    BOOST_CHECK(store.CommitFinalizedBlock(block, max_head.block_id, {}).error ==
         cybou::BlockTransitionError::INVALID_HEIGHT);
-    BOOST_CHECK(!store.GetFinalizedTip().has_value());
-    BOOST_REQUIRE(store.GetFinalizedHeight().has_value());
-    BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 0);
-    BOOST_CHECK(store.GetStateRoot() == before_root);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
