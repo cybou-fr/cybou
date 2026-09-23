@@ -104,6 +104,7 @@ Implemented skeleton:
 
 - distinct Operator Authority / Validator / Release Signing / Treasury domains;
 - permissionless AccountCreateOpV1 and AccountCreationWorkV1 data structures;
+- versioned `ProtocolOperationV1` typed dispatcher with canonical AccountCreate encoding;
 - domain-separated anti-Sybil work hashing (`CYBOU/ACCOUNT-CREATE-WORK/V1`);
 - proof-of-work difficulty verification (leading zero bits);
 - network, account ID, and initial authorization commitment bindings;

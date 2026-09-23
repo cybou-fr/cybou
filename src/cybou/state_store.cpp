@@ -6,6 +6,7 @@
 
 #include <dbwrapper.h>
 
+#include <algorithm>
 #include <limits>
 #include <string>
 #include <vector>
@@ -108,7 +109,7 @@ std::optional<uint256> CybouStateStore::GetStoredNetworkId() const
 BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     const uint256& block_id,
     const uint256& previous_block_id,
-    const std::vector<AccountCreateOpV1>& ops,
+    const std::vector<ProtocolOperationV1>& ops,
     const uint64_t block_height,
     const bool sync)
 {
@@ -127,7 +128,11 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     }
     const auto& params{m_network_definition.protocol_parameters};
     if (block_id.IsNull()) return {BlockTransitionError::INVALID_BLOCK_ID};
-    if (ops.size() > params.max_account_creates_per_block) {
+    const size_t account_create_count{static_cast<size_t>(std::count_if(
+        ops.begin(), ops.end(), [](const auto& operation) {
+            return OperationType(operation) == ProtocolOperationType::ACCOUNT_CREATE;
+        }))};
+    if (account_create_count > params.max_account_creates_per_block) {
         return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
     }
 
@@ -144,7 +149,8 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     }
 
     auto candidate{*loaded.state};
-    for (const auto& op : ops) {
+    for (const auto& operation : ops) {
+        const auto& op{std::get<AccountCreateOpV1>(operation.payload)};
         const auto res{ApplyAccountCreate(op, m_network_id, block_height, params, candidate)};
         if (!res) return {BlockTransitionError::INVALID_OPERATION, res};
     }

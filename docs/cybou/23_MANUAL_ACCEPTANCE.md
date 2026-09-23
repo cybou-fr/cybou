@@ -12,6 +12,7 @@
 [ ] MailTx is an explicit CYBOU operation type
 [ ] MailTx is not OP_RETURN/application blob abuse
 [ ] canonical serialization deterministic
+[ ] unknown protocol operation version/type rejected
 [ ] oversized MailTx rejected
 [ ] priority fee path disabled
 ```

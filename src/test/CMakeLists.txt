@@ -143,6 +143,7 @@ add_executable(cybou-core-test
   cybou_account_creation_tests.cpp
   cybou_chainparams_tests.cpp
   cybou_identity_tests.cpp
+  cybou_protocol_operation_tests.cpp
   cybou_signing_tests.cpp
   cybou_state_tests.cpp
   cybou_state_store_tests.cpp

@@ -6,6 +6,7 @@
 #define CYBOU_STATE_STORE_H
 
 #include <cybou/network_definition.h>
+#include <cybou/protocol_operation.h>
 #include <cybou/state.h>
 
 #include <cstdint>
@@ -117,7 +118,7 @@ public:
     BlockTransitionResult CommitFinalizedBlock(
         const uint256& block_id,
         const uint256& previous_block_id,
-        const std::vector<AccountCreateOpV1>& ops,
+        const std::vector<ProtocolOperationV1>& ops,
         uint64_t block_height,
         bool sync = true);
 

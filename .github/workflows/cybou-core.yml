@@ -80,5 +80,5 @@ jobs:
       - name: Run CYBOU protocol tests
         run: |
           build-ci/bin/cybou-core-test \
-            --run_test=cybou_chainparams_tests,cybou_signing_tests,cybou_identity_tests,cybou_account_creation_tests,cybou_state_tests,cybou_state_store_tests \
+            --run_test=cybou_chainparams_tests,cybou_signing_tests,cybou_identity_tests,cybou_account_creation_tests,cybou_protocol_operation_tests,cybou_state_tests,cybou_state_store_tests \
             --log_level=error

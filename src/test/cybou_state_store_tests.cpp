@@ -303,7 +303,7 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_too_many_account_creates)
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
     const uint256 block{uint256::FromUserHex("31").value()};
 
-    std::vector<cybou::AccountCreateOpV1> ops{
+    std::vector<cybou::ProtocolOperationV1> ops{
         ValidOp(ACCOUNT_ID),
         ValidOp(ACCOUNT_ID_2),
     };
