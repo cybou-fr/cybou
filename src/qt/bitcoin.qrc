@@ -86,4 +86,7 @@
     <qresource prefix="/fonts">
         <file alias="monospace">res/fonts/RobotoMono-Bold.ttf</file>
     </qresource>
+    <qresource prefix="/art">
+        <file alias="cybou-hero">res/cybou-hero.png</file>
+    </qresource>
 </RCC>

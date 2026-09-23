@@ -81,6 +81,10 @@ add_library(bitcoinqt STATIC EXCLUDE_FROM_ALL
   bitcoinunits.h
   clientmodel.cpp
   clientmodel.h
+  cyboudesktopmodel.cpp
+  cyboudesktopmodel.h
+  cyboumainwindow.cpp
+  cyboumainwindow.h
   csvmodelwriter.cpp
   csvmodelwriter.h
   freespacechecker.cpp
@@ -107,6 +111,16 @@ add_library(bitcoinqt STATIC EXCLUDE_FROM_ALL
   optionsdialog.h
   optionsmodel.cpp
   optionsmodel.h
+  pages/homepage.cpp
+  pages/homepage.h
+  pages/identitypage.cpp
+  pages/identitypage.h
+  pages/networkpage.cpp
+  pages/networkpage.h
+  pages/serviceplaceholderpage.cpp
+  pages/serviceplaceholderpage.h
+  pages/settingspage.cpp
+  pages/settingspage.h
   peertablemodel.cpp
   peertablemodel.h
   peertablesortproxy.cpp

@@ -19,6 +19,7 @@
 #include <node/interface_ui.h>
 #include <noui.h>
 #include <qt/bitcoingui.h>
+#include <qt/cyboumainwindow.h>
 #include <qt/clientmodel.h>
 #include <qt/guiconstants.h>
 #include <qt/guiutil.h>
@@ -259,7 +260,7 @@ bool BitcoinApplication::createOptionsModel(bool resetSettings)
 
 void BitcoinApplication::createWindow(const NetworkStyle *networkStyle)
 {
-    window = new BitcoinGUI(node(), platformStyle, networkStyle, nullptr);
+    window = new CybouMainWindow(node(), platformStyle, networkStyle, nullptr);
     connect(window, &BitcoinGUI::quitRequested, this, &BitcoinApplication::requestShutdown);
 
     pollShutdownTimer = new QTimer(window);
