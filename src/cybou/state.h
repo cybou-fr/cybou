@@ -24,6 +24,8 @@ struct AccountState {
     uint64_t creation_height{0};
     uint64_t creation_epoch{0};
     uint256 initial_auth_commitment;
+    uint256 active_authorization_key;
+    uint64_t next_nonce{0};
 
     friend bool operator==(const AccountState&, const AccountState&) = default;
 };
@@ -77,6 +79,48 @@ AccountCreateResult ApplyAccountCreate(
     const uint256& network_id,
     uint64_t block_height,
     const CybouProtocolParameters& params,
+    CybouState& state);
+
+enum class PaymentError : uint8_t {
+    NONE,
+    SENDER_NOT_FOUND,
+    RECIPIENT_NOT_FOUND,
+    SELF_PAYMENT,
+    ZERO_AMOUNT,
+    INSUFFICIENT_BALANCE,
+    FEE_CALCULATION_OVERFLOW,
+    RECIPIENT_OVERFLOW,
+    FEE_POOL_OVERFLOW,
+};
+
+struct PaymentResult {
+    PaymentError error{PaymentError::NONE};
+
+    explicit operator bool() const { return error == PaymentError::NONE; }
+};
+
+PaymentResult ApplyPayment(
+    const AccountId& sender_id,
+    const AccountId& recipient_id,
+    uint64_t amount,
+    uint64_t fee,
+    CybouState& state);
+
+enum class KeyUpdateError : uint8_t {
+    NONE,
+    ACCOUNT_NOT_FOUND,
+    NULL_KEY,
+};
+
+struct KeyUpdateResult {
+    KeyUpdateError error{KeyUpdateError::NONE};
+
+    explicit operator bool() const { return error == KeyUpdateError::NONE; }
+};
+
+KeyUpdateResult ApplyKeyUpdate(
+    const AccountId& account_id,
+    const uint256& new_authorization_key,
     CybouState& state);
 
 } // namespace cybou

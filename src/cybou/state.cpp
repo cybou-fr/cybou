@@ -37,6 +37,8 @@ std::vector<unsigned char> SerializeCybouState(const CybouState& state)
         append_u64le(acc.creation_height);
         append_u64le(acc.creation_epoch);
         append_hash(acc.initial_auth_commitment);
+        append_hash(acc.active_authorization_key);
+        append_u64le(acc.next_nonce);
     }
     return out;
 }
@@ -91,7 +93,10 @@ std::optional<CybouState> DeserializeCybouState(const std::span<const unsigned c
         const auto creation_height{read_u64le()};
         const auto creation_epoch{read_u64le()};
         const auto auth_commitment{read_hash()};
-        if (!account_id_bytes || !balance || !system_balance || !creation_height || !creation_epoch || !auth_commitment) {
+        const auto auth_key{read_hash()};
+        const auto next_nonce{read_u64le()};
+        if (!account_id_bytes || !balance || !system_balance || !creation_height || !creation_epoch ||
+            !auth_commitment || !auth_key || !next_nonce) {
             return std::nullopt;
         }
         const AccountId account_id{*account_id_bytes};
@@ -102,6 +107,8 @@ std::optional<CybouState> DeserializeCybouState(const std::span<const unsigned c
             .creation_height = *creation_height,
             .creation_epoch = *creation_epoch,
             .initial_auth_commitment = *auth_commitment,
+            .active_authorization_key = *auth_key,
+            .next_nonce = *next_nonce,
         };
         if (!state.accounts.emplace(account_id, std::move(acc)).second) return std::nullopt;
     }
@@ -148,8 +155,72 @@ AccountCreateResult ApplyAccountCreate(
         .creation_height = block_height,
         .creation_epoch = EpochForHeight(block_height, params),
         .initial_auth_commitment = op.initial_authorization.authorization_descriptor,
+        .active_authorization_key = op.initial_authorization.authorization_descriptor,
+        .next_nonce = 0,
     };
     state.accounts.emplace(op.account_id, std::move(acc));
+    return {};
+}
+
+PaymentResult ApplyPayment(
+    const AccountId& sender_id,
+    const AccountId& recipient_id,
+    const uint64_t amount,
+    const uint64_t fee,
+    CybouState& state)
+{
+    if (amount == 0) {
+        return {PaymentError::ZERO_AMOUNT};
+    }
+    if (recipient_id.IsNull() || sender_id == recipient_id) {
+        return {PaymentError::SELF_PAYMENT};
+    }
+    auto sender_it{state.accounts.find(sender_id)};
+    if (sender_it == state.accounts.end()) {
+        return {PaymentError::SENDER_NOT_FOUND};
+    }
+    auto recipient_it{state.accounts.find(recipient_id)};
+    if (recipient_it == state.accounts.end()) {
+        return {PaymentError::RECIPIENT_NOT_FOUND};
+    }
+
+    if (amount > std::numeric_limits<uint64_t>::max() - fee) {
+        return {PaymentError::FEE_CALCULATION_OVERFLOW};
+    }
+    const uint64_t total_deduction{amount + fee};
+    if (sender_it->second.balance < total_deduction) {
+        return {PaymentError::INSUFFICIENT_BALANCE};
+    }
+
+    if (recipient_it->second.balance > std::numeric_limits<uint64_t>::max() - amount) {
+        return {PaymentError::RECIPIENT_OVERFLOW};
+    }
+
+    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - fee) {
+        return {PaymentError::FEE_POOL_OVERFLOW};
+    }
+
+    sender_it->second.balance -= total_deduction;
+    recipient_it->second.balance += amount;
+    state.pending_fee_pool += fee;
+    sender_it->second.next_nonce++;
+    return {};
+}
+
+KeyUpdateResult ApplyKeyUpdate(
+    const AccountId& account_id,
+    const uint256& new_authorization_key,
+    CybouState& state)
+{
+    if (new_authorization_key.IsNull()) {
+        return {KeyUpdateError::NULL_KEY};
+    }
+    auto it{state.accounts.find(account_id)};
+    if (it == state.accounts.end()) {
+        return {KeyUpdateError::ACCOUNT_NOT_FOUND};
+    }
+    it->second.active_authorization_key = new_authorization_key;
+    it->second.next_nonce++;
     return {};
 }
 

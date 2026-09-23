@@ -4,17 +4,185 @@
 
 #include <cybou/protocol_operation.h>
 
+#include <crypto/sha256.h>
+
+#include <algorithm>
+#include <limits>
+#include <string_view>
+
 namespace cybou {
+namespace {
+
+std::vector<unsigned char> SerializePaymentOp(const PaymentOpV1& op)
+{
+    std::vector<unsigned char> out;
+    out.push_back(op.version);
+    out.insert(out.end(), op.recipient.Value().begin(), op.recipient.Value().end());
+    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.amount >> (8 * i)));
+    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.fee >> (8 * i)));
+    return out;
+}
+
+std::optional<PaymentOpV1> DeserializePaymentOp(const std::span<const unsigned char> bytes)
+{
+    if (bytes.size() != 1 + 32 + 8 + 8) return std::nullopt;
+    if (bytes[0] != PAYMENT_OP_VERSION) return std::nullopt;
+    uint256 rec_bytes;
+    std::copy_n(bytes.begin() + 1, 32, rec_bytes.begin());
+    const AccountId recipient{rec_bytes};
+    if (recipient.IsNull()) return std::nullopt;
+    uint64_t amount{0};
+    for (int i = 0; i < 8; ++i) amount |= uint64_t{bytes[33 + i]} << (8 * i);
+    uint64_t fee{0};
+    for (int i = 0; i < 8; ++i) fee |= uint64_t{bytes[41 + i]} << (8 * i);
+    return PaymentOpV1{
+        .version = bytes[0],
+        .recipient = recipient,
+        .amount = amount,
+        .fee = fee,
+    };
+}
+
+std::vector<unsigned char> SerializeKeyUpdateOp(const KeyUpdateOpV1& op)
+{
+    std::vector<unsigned char> out;
+    out.push_back(op.version);
+    const auto auth{SerializeAccountAuthorization(op.new_authorization)};
+    out.insert(out.end(), auth.begin(), auth.end());
+    return out;
+}
+
+std::optional<KeyUpdateOpV1> DeserializeKeyUpdateOp(const std::span<const unsigned char> bytes)
+{
+    if (bytes.size() != 1 + 32) return std::nullopt;
+    if (bytes[0] != KEY_UPDATE_OP_VERSION) return std::nullopt;
+    uint256 descriptor;
+    std::copy_n(bytes.begin() + 1, 32, descriptor.begin());
+    if (descriptor.IsNull()) return std::nullopt;
+    return KeyUpdateOpV1{
+        .version = bytes[0],
+        .new_authorization = AccountAuthorizationV1{.authorization_descriptor = descriptor},
+    };
+}
+
+} // namespace
+
+AuthorizedPayloadType PayloadType(const AuthorizedOperationPayloadV1& payload)
+{
+    return std::visit([](const auto& op) -> AuthorizedPayloadType {
+        using T = std::decay_t<decltype(op)>;
+        if constexpr (std::is_same_v<T, PaymentOpV1>) return AuthorizedPayloadType::PAYMENT;
+        if constexpr (std::is_same_v<T, KeyUpdateOpV1>) return AuthorizedPayloadType::KEY_UPDATE;
+    }, payload);
+}
+
+std::vector<unsigned char> SerializeAuthorizedPayload(const AuthorizedOperationPayloadV1& payload)
+{
+    std::vector<unsigned char> out;
+    out.push_back(static_cast<uint8_t>(PayloadType(payload)));
+    const std::vector<unsigned char> body{std::visit([](const auto& op) {
+        using T = std::decay_t<decltype(op)>;
+        if constexpr (std::is_same_v<T, PaymentOpV1>) return SerializePaymentOp(op);
+        if constexpr (std::is_same_v<T, KeyUpdateOpV1>) return SerializeKeyUpdateOp(op);
+    }, payload)};
+    out.insert(out.end(), body.begin(), body.end());
+    return out;
+}
+
+std::optional<AuthorizedOperationPayloadV1> DeserializeAuthorizedPayload(const std::span<const unsigned char> bytes)
+{
+    if (bytes.size() < 2) return std::nullopt;
+    const auto type{static_cast<AuthorizedPayloadType>(bytes[0])};
+    const auto sub{bytes.subspan(1)};
+    switch (type) {
+    case AuthorizedPayloadType::PAYMENT: {
+        const auto op{DeserializePaymentOp(sub)};
+        if (!op) return std::nullopt;
+        return *op;
+    }
+    case AuthorizedPayloadType::KEY_UPDATE: {
+        const auto op{DeserializeKeyUpdateOp(sub)};
+        if (!op) return std::nullopt;
+        return *op;
+    }
+    }
+    return std::nullopt;
+}
+
+std::vector<unsigned char> SerializeAuthorizedOperation(const AuthorizedOperationV1& op)
+{
+    std::vector<unsigned char> out;
+    out.push_back(op.version);
+    out.insert(out.end(), op.account_id.Value().begin(), op.account_id.Value().end());
+    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.nonce >> (8 * i)));
+    out.insert(out.end(), op.signature.begin(), op.signature.end());
+    const auto payload_bytes{SerializeAuthorizedPayload(op.payload)};
+    out.insert(out.end(), payload_bytes.begin(), payload_bytes.end());
+    return out;
+}
+
+std::optional<AuthorizedOperationV1> DeserializeAuthorizedOperation(const std::span<const unsigned char> bytes)
+{
+    static constexpr size_t HEADER_SIZE{1 + 32 + 8 + USER_SIGNATURE_SIZE};
+    if (bytes.size() < HEADER_SIZE + 2) return std::nullopt;
+    if (bytes[0] != AUTHORIZED_OPERATION_VERSION) return std::nullopt;
+    uint256 acc_bytes;
+    std::copy_n(bytes.begin() + 1, 32, acc_bytes.begin());
+    const AccountId account_id{acc_bytes};
+    if (account_id.IsNull()) return std::nullopt;
+    uint64_t nonce{0};
+    for (int i = 0; i < 8; ++i) nonce |= uint64_t{bytes[33 + i]} << (8 * i);
+    std::array<unsigned char, USER_SIGNATURE_SIZE> sig{};
+    std::copy_n(bytes.begin() + 41, USER_SIGNATURE_SIZE, sig.begin());
+    const auto payload{DeserializeAuthorizedPayload(bytes.subspan(HEADER_SIZE))};
+    if (!payload) return std::nullopt;
+    return AuthorizedOperationV1{
+        .version = bytes[0],
+        .account_id = account_id,
+        .nonce = nonce,
+        .payload = *payload,
+        .signature = sig,
+    };
+}
+
+uint256 ComputeUserOperationDigest(
+    const uint256& network_id,
+    const AccountId& account_id,
+    const uint64_t nonce,
+    const AuthorizedOperationPayloadV1& payload)
+{
+    static constexpr std::string_view DOMAIN{"CYBOU/USER_OP/V1"};
+    CSHA256 hasher;
+    hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
+    hasher.Write(network_id.begin(), network_id.size());
+    hasher.Write(account_id.Value().begin(), account_id.Value().size());
+    std::array<unsigned char, 8> nonce_bytes{};
+    for (int i = 0; i < 8; ++i) nonce_bytes[i] = static_cast<unsigned char>(nonce >> (8 * i));
+    hasher.Write(nonce_bytes.data(), nonce_bytes.size());
+    const auto payload_bytes{SerializeAuthorizedPayload(payload)};
+    hasher.Write(payload_bytes.data(), payload_bytes.size());
+    uint256 digest;
+    hasher.Finalize(digest.begin());
+    return digest;
+}
 
 ProtocolOperationType OperationType(const ProtocolOperationV1& operation)
 {
-    return std::visit([](const auto&) { return ProtocolOperationType::ACCOUNT_CREATE; }, operation.payload);
+    return std::visit([](const auto& op) -> ProtocolOperationType {
+        using T = std::decay_t<decltype(op)>;
+        if constexpr (std::is_same_v<T, AccountCreateOpV1>) return ProtocolOperationType::ACCOUNT_CREATE;
+        if constexpr (std::is_same_v<T, AuthorizedOperationV1>) return ProtocolOperationType::AUTHORIZED_OPERATION;
+    }, operation.payload);
 }
 
 std::vector<unsigned char> SerializeProtocolOperation(const ProtocolOperationV1& operation)
 {
     std::vector<unsigned char> out{operation.version, static_cast<uint8_t>(OperationType(operation))};
-    const auto payload{std::visit([](const auto& value) { return SerializeAccountCreateOp(value); }, operation.payload)};
+    const auto payload{std::visit([](const auto& value) -> std::vector<unsigned char> {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<T, AccountCreateOpV1>) return SerializeAccountCreateOp(value);
+        if constexpr (std::is_same_v<T, AuthorizedOperationV1>) return SerializeAuthorizedOperation(value);
+    }, operation.payload)};
     out.insert(out.end(), payload.begin(), payload.end());
     return out;
 }
@@ -22,10 +190,21 @@ std::vector<unsigned char> SerializeProtocolOperation(const ProtocolOperationV1&
 std::optional<ProtocolOperationV1> DeserializeProtocolOperation(const std::span<const unsigned char> bytes)
 {
     if (bytes.size() < 2 || bytes[0] != PROTOCOL_OPERATION_VERSION) return std::nullopt;
-    if (bytes[1] != static_cast<uint8_t>(ProtocolOperationType::ACCOUNT_CREATE)) return std::nullopt;
-    const auto account_create{DeserializeAccountCreateOp(bytes.subspan(2))};
-    if (!account_create) return std::nullopt;
-    return ProtocolOperationV1{*account_create};
+    const auto type{static_cast<ProtocolOperationType>(bytes[1])};
+    const auto payload_bytes{bytes.subspan(2)};
+    switch (type) {
+    case ProtocolOperationType::ACCOUNT_CREATE: {
+        const auto account_create{DeserializeAccountCreateOp(payload_bytes)};
+        if (!account_create) return std::nullopt;
+        return ProtocolOperationV1{*account_create};
+    }
+    case ProtocolOperationType::AUTHORIZED_OPERATION: {
+        const auto auth_op{DeserializeAuthorizedOperation(payload_bytes)};
+        if (!auth_op) return std::nullopt;
+        return ProtocolOperationV1{*auth_op};
+    }
+    }
+    return std::nullopt;
 }
 
 OperationExecutionResult ApplyProtocolOperation(
@@ -38,9 +217,43 @@ OperationExecutionResult ApplyProtocolOperation(
         if constexpr (std::is_same_v<T, AccountCreateOpV1>) {
             const auto res{ApplyAccountCreate(op, context.network_id, context.block_height, context.params, state)};
             if (!res) {
-                return {OperationExecutionError::ACCOUNT_CREATE_FAILED, res};
+                return {OperationExecutionError::ACCOUNT_CREATE_FAILED, res, {}, {}};
             }
-            return {OperationExecutionError::NONE, res};
+            return {OperationExecutionError::NONE, res, {}, {}};
+        }
+        if constexpr (std::is_same_v<T, AuthorizedOperationV1>) {
+            auto account_it{state.accounts.find(op.account_id)};
+            if (account_it == state.accounts.end()) {
+                return {OperationExecutionError::ACCOUNT_NOT_FOUND, {}, {}, {}};
+            }
+            if (op.nonce != account_it->second.next_nonce) {
+                return {OperationExecutionError::BAD_NONCE, {}, {}, {}};
+            }
+            const uint256 digest{ComputeUserOperationDigest(context.network_id, op.account_id, op.nonce, op.payload)};
+            if (!VerifyUserSignature(
+                    account_it->second.active_authorization_key,
+                    op.signature,
+                    std::span<const unsigned char>{digest.begin(), digest.size()})) {
+                return {OperationExecutionError::INVALID_SIGNATURE, {}, {}, {}};
+            }
+
+            return std::visit([&](const auto& payload) -> OperationExecutionResult {
+                using P = std::decay_t<decltype(payload)>;
+                if constexpr (std::is_same_v<P, PaymentOpV1>) {
+                    const auto payment_res{ApplyPayment(op.account_id, payload.recipient, payload.amount, payload.fee, state)};
+                    if (!payment_res) {
+                        return {OperationExecutionError::PAYMENT_FAILED, {}, payment_res, {}};
+                    }
+                    return {OperationExecutionError::NONE, {}, payment_res, {}};
+                }
+                if constexpr (std::is_same_v<P, KeyUpdateOpV1>) {
+                    const auto key_res{ApplyKeyUpdate(op.account_id, payload.new_authorization.authorization_descriptor, state)};
+                    if (!key_res) {
+                        return {OperationExecutionError::KEY_UPDATE_FAILED, {}, {}, key_res};
+                    }
+                    return {OperationExecutionError::NONE, {}, {}, key_res};
+                }
+            }, op.payload);
         }
     }, operation.payload);
 }

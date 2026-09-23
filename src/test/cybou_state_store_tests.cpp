@@ -386,4 +386,75 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_height_overflow)
         cybou::BlockTransitionError::INVALID_HEIGHT);
 }
 
+BOOST_AUTO_TEST_CASE(commit_finalized_block_executes_authorized_payment)
+{
+    std::array<unsigned char, 32> priv1{};
+    priv1.fill(0x55);
+    const auto pub1{cybou::DeriveEd25519PublicKey(priv1)};
+    BOOST_REQUIRE(pub1.has_value());
+
+    std::array<unsigned char, 32> priv2{};
+    priv2.fill(0x66);
+    const auto pub2{cybou::DeriveEd25519PublicKey(priv2)};
+    BOOST_REQUIRE(pub2.has_value());
+
+    auto db{MemoryDb()};
+    const auto definition{TestNetworkDefinition()};
+    const auto net_id{cybou::NetworkId(definition)};
+    cybou::CybouStateStore store{db, definition};
+    BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
+
+    const auto genesis_id{definition.genesis_block_id};
+    const uint256 block1{uint256::FromUserHex("61").value()};
+    const uint256 block2{uint256::FromUserHex("62").value()};
+
+    // Block 1: Onboard Account 1 and Account 2
+    auto op1{ValidOp(ACCOUNT_ID)};
+    op1.initial_authorization = cybou::AccountAuthorizationV1{.authorization_descriptor = *pub1};
+    op1.creation_work.initial_authorization_commitment = cybou::ComputeAuthCommitment(op1.initial_authorization);
+
+    auto op2{ValidOp(ACCOUNT_ID_2)};
+    op2.initial_authorization = cybou::AccountAuthorizationV1{.authorization_descriptor = *pub2};
+    op2.creation_work.initial_authorization_commitment = cybou::ComputeAuthCommitment(op2.initial_authorization);
+
+    BOOST_REQUIRE(store.CommitFinalizedBlock(block1, genesis_id, {op1, op2}));
+
+    // In state, fund Account 1 balance
+    auto current_state{*store.LoadState().state};
+    current_state.accounts.at(ACCOUNT_ID).balance = 5000;
+    // Update store state for test
+    db.Write(STATE_KEY, cybou::SerializeCybouState(current_state));
+    db.Write(HASH_KEY, cybou::CybouStateHash(current_state));
+
+    // Block 2: Authorized payment from Account 1 -> Account 2
+    const cybou::PaymentOpV1 payment{
+        .version = cybou::PAYMENT_OP_VERSION,
+        .recipient = ACCOUNT_ID_2,
+        .amount = 1500,
+        .fee = 100,
+    };
+    const uint256 digest{cybou::ComputeUserOperationDigest(net_id, ACCOUNT_ID, 0, payment)};
+    const auto sig{cybou::SignUserMessage(priv1, std::span<const unsigned char>{digest.begin(), digest.size()})};
+    BOOST_REQUIRE(sig.has_value());
+
+    const cybou::AuthorizedOperationV1 auth_payment{
+        .version = cybou::AUTHORIZED_OPERATION_VERSION,
+        .account_id = ACCOUNT_ID,
+        .nonce = 0,
+        .payload = payment,
+        .signature = *sig,
+    };
+
+    BOOST_REQUIRE(store.CommitFinalizedBlock(block2, block1, {auth_payment}));
+
+    const auto final_state{store.LoadState()};
+    BOOST_REQUIRE(final_state);
+    BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_ID).balance, 3400); // 5000 - 1500 - 100
+    BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_ID).next_nonce, 1);
+    BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_ID_2).balance, 1500);
+    BOOST_CHECK_EQUAL(final_state.state->pending_fee_pool, 600); // initial 500 + 100
+    BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 2);
+    BOOST_CHECK(*store.GetFinalizedTip() == block2);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

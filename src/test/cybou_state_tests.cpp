@@ -91,6 +91,8 @@ BOOST_AUTO_TEST_CASE(account_create_moves_bonus_and_records_account)
     BOOST_CHECK_EQUAL(acc.creation_height, 10);
     BOOST_CHECK_EQUAL(acc.creation_epoch, 1);
     BOOST_CHECK(acc.initial_auth_commitment == AUTH_KEY);
+    BOOST_CHECK(acc.active_authorization_key == AUTH_KEY);
+    BOOST_CHECK_EQUAL(acc.next_nonce, 0);
 }
 
 BOOST_AUTO_TEST_CASE(account_create_rejects_duplicate_account_without_mutation)
@@ -185,6 +187,88 @@ BOOST_AUTO_TEST_CASE(cybou_state_hash_is_sensitive_to_every_field)
     changed = state;
     ++changed.accounts.at(ACCOUNT_ID).creation_height;
     BOOST_CHECK(cybou::CybouStateHash(changed) != root);
+
+    changed = state;
+    ++changed.accounts.at(ACCOUNT_ID).active_authorization_key.begin()[0];
+    BOOST_CHECK(cybou::CybouStateHash(changed) != root);
+
+    changed = state;
+    ++changed.accounts.at(ACCOUNT_ID).next_nonce;
+    BOOST_CHECK(cybou::CybouStateHash(changed) != root);
+}
+
+BOOST_AUTO_TEST_CASE(payment_transfers_balance_and_accrues_fee)
+{
+    auto state{InitialState()};
+    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(ACCOUNT_ID), NETWORK_ID, 10, TEST_PARAMS, state));
+    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(ACCOUNT_ID_2), NETWORK_ID, 10, TEST_PARAMS, state));
+
+    // Fund sender balance
+    state.accounts.at(ACCOUNT_ID).balance = 1000;
+    const uint64_t initial_fee_pool{state.pending_fee_pool};
+
+    const auto res{cybou::ApplyPayment(ACCOUNT_ID, ACCOUNT_ID_2, 400, 50, state)};
+    BOOST_REQUIRE(res);
+
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).balance, 550);
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).next_nonce, 1);
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID_2).balance, 400);
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID_2).next_nonce, 0); // recipient nonce unmodified
+    BOOST_CHECK_EQUAL(state.pending_fee_pool, initial_fee_pool + 50);
+}
+
+BOOST_AUTO_TEST_CASE(payment_validates_invariants)
+{
+    auto state{InitialState()};
+    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(ACCOUNT_ID), NETWORK_ID, 10, TEST_PARAMS, state));
+    state.accounts.at(ACCOUNT_ID).balance = 100;
+    const auto snapshot{state};
+
+    // Zero amount
+    BOOST_CHECK(cybou::ApplyPayment(ACCOUNT_ID, ACCOUNT_ID_2, 0, 10, state).error ==
+        cybou::PaymentError::ZERO_AMOUNT);
+    BOOST_CHECK(state == snapshot);
+
+    // Self payment
+    BOOST_CHECK(cybou::ApplyPayment(ACCOUNT_ID, ACCOUNT_ID, 50, 10, state).error ==
+        cybou::PaymentError::SELF_PAYMENT);
+    BOOST_CHECK(state == snapshot);
+
+    // Recipient not found
+    BOOST_CHECK(cybou::ApplyPayment(ACCOUNT_ID, ACCOUNT_ID_2, 50, 10, state).error ==
+        cybou::PaymentError::RECIPIENT_NOT_FOUND);
+    BOOST_CHECK(state == snapshot);
+
+    // Sender not found
+    BOOST_CHECK(cybou::ApplyPayment(ACCOUNT_ID_2, ACCOUNT_ID, 50, 10, state).error ==
+        cybou::PaymentError::SENDER_NOT_FOUND);
+    BOOST_CHECK(state == snapshot);
+
+    // Insufficient balance (balance is 100, deduction is 100 + 1)
+    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(ACCOUNT_ID_2), NETWORK_ID, 10, TEST_PARAMS, state));
+    BOOST_CHECK(cybou::ApplyPayment(ACCOUNT_ID, ACCOUNT_ID_2, 100, 1, state).error ==
+        cybou::PaymentError::INSUFFICIENT_BALANCE);
+}
+
+BOOST_AUTO_TEST_CASE(key_update_rotates_authorization_key)
+{
+    auto state{InitialState()};
+    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(ACCOUNT_ID), NETWORK_ID, 10, TEST_PARAMS, state));
+
+    const uint256 new_key{uint256::FromUserHex("9988").value()};
+    const auto res{cybou::ApplyKeyUpdate(ACCOUNT_ID, new_key, state)};
+    BOOST_REQUIRE(res);
+
+    BOOST_CHECK(state.accounts.at(ACCOUNT_ID).active_authorization_key == new_key);
+    BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).next_nonce, 1);
+
+    // Null key rejected
+    BOOST_CHECK(cybou::ApplyKeyUpdate(ACCOUNT_ID, uint256{}, state).error ==
+        cybou::KeyUpdateError::NULL_KEY);
+
+    // Unknown account
+    BOOST_CHECK(cybou::ApplyKeyUpdate(ACCOUNT_ID_2, new_key, state).error ==
+        cybou::KeyUpdateError::ACCOUNT_NOT_FOUND);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
