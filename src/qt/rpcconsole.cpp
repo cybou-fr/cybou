@@ -1372,6 +1372,6 @@ void RPCConsole::updateWindowTitle()
     if (chain == ChainType::MAIN) return;
 
     const QString chainType = QString::fromStdString(Params().GetChainTypeString());
-    const QString title = tr("Node window - [%1]").arg(chainType);
+    const QString title = tr("Node diagnostics - [%1]").arg(chainType);
     this->setWindowTitle(title);
 }

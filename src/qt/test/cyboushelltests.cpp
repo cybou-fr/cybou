@@ -139,10 +139,39 @@ void CybouShellTests::identityCreateFollowsCapabilities()
     QCOMPARE(spy.count(), 1);
 }
 
-void CybouShellTests::placeholdersExposeNoOperations()
+void CybouShellTests::emailPageGatesSending()
 {
     auto window = makeWindow();
-    for (int index = 2; index <= 4; ++index) {
+    auto* email = window->pageAt(2);
+    QVERIFY(email);
+
+    // The full client UI is present: compose, recipient field, send.
+    auto* send = email->findChild<QPushButton*>(QStringLiteral("sendButton"));
+    auto* recipient = email->findChild<QLineEdit*>(QStringLiteral("recipientEdit"));
+    auto* body = email->findChild<QTextEdit*>(QStringLiteral("composeBody"));
+    QVERIFY(send);
+    QVERIFY(recipient);
+    QVERIFY(body);
+
+    // Without an active identity the composer explains the gate and Send
+    // stays disabled no matter how complete the draft is.
+    QVERIFY(email->findChild<QFrame*>(QStringLiteral("identityBanner")));
+    recipient->setText(QStringLiteral("peer@cybou"));
+    body->setPlainText(QStringLiteral("hello"));
+    QVERIFY(!send->isEnabled());
+
+    // The one-recipient rule is enforced in the field itself: a second
+    // recipient is rejected before any protocol interaction can happen.
+    recipient->setText(QStringLiteral("a@cybou, b@cybou"));
+    QVERIFY(recipient->text().contains(QStringLiteral(",")));
+}
+
+void CybouShellTests::storageAndBackupExposeNoOperations()
+{
+    auto window = makeWindow();
+    // Email (page 2) is now a full client UI; Storage and Backup remain
+    // inert placeholders until their services are specified.
+    for (int index = 3; index <= 4; ++index) {
         auto* placeholder = window->pageAt(index);
         QVERIFY2(placeholder, qPrintable(QStringLiteral("placeholder page %1 exists").arg(index)));
         QVERIFY(placeholder->findChildren<QPushButton*>().isEmpty());

@@ -37,7 +37,8 @@ private Q_SLOTS:
     void navigationSwitchesPages();
     void diagnosticsStaySecondaryWindow();
     void identityCreateFollowsCapabilities();
-    void placeholdersExposeNoOperations();
+    void emailPageGatesSending();
+    void storageAndBackupExposeNoOperations();
     void networkPageReflectsModel();
     void themeResolvesAllTokens();
     void navIconsRender();

@@ -8,6 +8,7 @@
 #include <qt/cyboutheme.h>
 #include <qt/networkstyle.h>
 #include <qt/optionsmodel.h>
+#include <qt/pages/emailpage.h>
 #include <qt/pages/homepage.h>
 #include <qt/pages/identitypage.h>
 #include <qt/pages/networkpage.h>
@@ -27,6 +28,7 @@
 #include <QMenuBar>
 #include <QPixmap>
 #include <QProcessEnvironment>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -88,7 +90,27 @@ CybouMainWindow::CybouMainWindow(
                 slug.replace(QRegularExpression(QStringLiteral("[^a-z0-9]+")), QStringLiteral("-"));
                 slug = slug.mid(0, 24).replace(QRegularExpression(QStringLiteral("(^-|-$)")), QStringLiteral(""));
                 if (slug.isEmpty()) slug = QStringLiteral("page-%1").arg(i);
+                // For the email page also capture the composer surface.
+                if (slug == QLatin1String{"email"}) {
+                    const auto buttons = m_pages->widget(i)->findChildren<QPushButton*>();
+                    for (auto* button : buttons) {
+                        if (button->text() == tr("Compose")) { button->click(); break; }
+                    }
+                    qApp->processEvents();
+                    this->grab().save(QDir{shot_dir}.filePath(QStringLiteral("%1-%2-compose.png").arg(i).arg(slug)));
+                    m_pages->setCurrentIndex(i);
+                    qApp->processEvents();
+                }
                 this->grab().save(QDir{shot_dir}.filePath(QStringLiteral("%1-%2.png").arg(i).arg(slug)));
+            }
+            // The diagnostics window is a secondary top-level; capture it too.
+            const auto top_levels = qApp->topLevelWidgets();
+            for (QWidget* widget : top_levels) {
+                if (widget->objectName() != QLatin1String{"RPCConsole"}) continue;
+                widget->show();
+                qApp->processEvents();
+                widget->grab().save(QDir{shot_dir}.filePath(QStringLiteral("7-diagnostics.png")));
+                widget->hide();
             }
             qApp->quit();
         });
@@ -220,13 +242,7 @@ void CybouMainWindow::buildShell()
         [this] { showPage(1); },
         m_pages};
     auto* identity = new IdentityPage{m_desktop_model, m_pages};
-    auto* email = new ServicePlaceholderPage{tr("Email"), tr("Encrypted asynchronous communication."), CybouTheme::NavIcon::Email,
-        QStringList{
-            tr("End-to-end encrypted asynchronous delivery between identities"),
-            tr("A first-class protocol operation (MailTx), not a bolt-on message layer"),
-            tr("Inbox, Sent and read-state indexes stay local to your client"),
-        },
-        tr("Identity \u00b7 BFT finality"), m_pages};
+    auto* email = new EmailPage{m_desktop_model, [this] { showPage(1); }, m_pages};
     auto* storage = new ServicePlaceholderPage{tr("Storage"), tr("Encrypted distributed object storage."), CybouTheme::NavIcon::Storage,
         QStringList{
             tr("Encrypted, content-addressed objects spread across the network"),

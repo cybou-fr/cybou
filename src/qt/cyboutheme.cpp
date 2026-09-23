@@ -84,10 +84,10 @@ QString CybouTheme::applicationStyleSheet()
         QLabel#phaseLabelDone { color: @text_secondary@; font-size: 12px; font-weight: 600; }
 
         QPushButton { min-height: 34px; border-radius: 8px; padding: 4px 16px; font-weight: 700; }
-        QPushButton#primaryButton { background: @teal@; color: white; border: 1px solid @teal@; }
-        QPushButton#primaryButton:hover { background: @teal_dark@; border-color: @teal_dark@; }
-        QPushButton#primaryButton:pressed { background: @mint@; border-color: @mint@; }
-        QPushButton#primaryButton:focus { border-color: @teal_dark@; }
+        QPushButton#primaryButton, QPushButton[primary="true"] { background: @teal@; color: white; border: 1px solid @teal@; }
+        QPushButton#primaryButton:hover, QPushButton[primary="true"]:hover { background: @teal_dark@; border-color: @teal_dark@; }
+        QPushButton#primaryButton:pressed, QPushButton[primary="true"]:pressed { background: @mint@; border-color: @mint@; }
+        QPushButton#primaryButton:focus, QPushButton[primary="true"]:focus { border-color: @teal_dark@; }
         QPushButton#secondaryButton { background: @canvas@; color: @teal_dark@; border: 1px solid @border_medium@; }
         QPushButton#secondaryButton:hover { background: @mint_ghost@; border-color: @mint@; }
         QPushButton#secondaryButton:pressed { background: @mint_soft@; }
@@ -111,6 +111,50 @@ QString CybouTheme::applicationStyleSheet()
         QCheckBox::indicator:checked:hover { background: @teal_dark@; border-color: @teal_dark@; }
         QCheckBox:focus { color: @teal_dark@; }
         QCheckBox:focus::indicator { border-color: @teal@; }
+
+        /* Secondary windows (node diagnostics) and any future dialogs must
+           not fall back to the platform dark palette. */
+        QDialog { background: @subtle@; color: @text_primary@; }
+        QWidget#RPCConsole { background: @subtle@; }
+        QDialog QLabel { color: @text_secondary@; }
+        QToolTip { background: @canvas@; color: @text_primary@; border: 1px solid @border@; padding: 4px 8px; }
+        QTabWidget::pane { border: 1px solid @border@; border-radius: 10px; background: @canvas@; top: -1px; }
+        QTabBar::tab { background: @surface@; color: @text_secondary@; padding: 8px 18px; margin-right: 4px;
+                       border-top-left-radius: 8px; border-top-right-radius: 8px; }
+        QTabBar::tab:hover:!selected { background: @mint_ghost@; color: @teal_dark@; }
+        QTabBar::tab:selected { background: @canvas@; color: @teal_dark@; font-weight: 700; }
+        QTabBar::tab:disabled { color: @dim@; }
+        QTableView, QTreeView, QListView { background: @canvas@; alternate-background-color: @subtle@;
+            border: 1px solid @border@; border-radius: 10px; color: @text_primary@; gridline-color: @border@; }
+        QHeaderView { background: @surface@; border: none; }
+        QHeaderView::section { background: @surface@; color: @text_muted@; border: none;
+                               border-bottom: 1px solid @border@; border-right: 1px solid @border@;
+                               padding: 6px 10px; font-weight: 700; }
+        QTableView::item, QTreeView::item { color: @text_secondary@; padding: 4px 6px; }
+        QTableView::item:selected, QTreeView::item:selected, QListView::item:selected { background: @mint_soft@; color: @teal_dark@; }
+        QTextEdit, QPlainTextEdit, QTextBrowser { background: @canvas@; border: 1px solid @border_medium@;
+            border-radius: 8px; padding: 8px 10px; color: @text_primary@; font-size: 14px; }
+        QTextEdit:focus, QPlainTextEdit:focus, QTextBrowser:focus { border-color: @teal@; }
+        QListWidget { background: @canvas@; border: 1px solid @border@; border-radius: 12px; outline: none; }
+        QListWidget::item { padding: 8px 12px; border-bottom: 1px solid @border@; }
+        QListWidget::item:hover { background: @surface@; }
+        QListWidget::item:selected { background: @mint_soft@; }
+        QProgressBar#sizeMeter { border: 1px solid @border@; border-radius: 5px; background: @surface@; }
+        QProgressBar#sizeMeter::chunk { border-radius: 4px; background: @teal@; }
+        QProgressBar#sizeMeter[overLimit="true"]::chunk { background: #dc2626; }
+        QComboBox { background: @canvas@; border: 1px solid @border_medium@; border-radius: 8px;
+                    padding: 5px 10px; color: @text_primary@; min-height: 20px; }
+        QComboBox:focus { border-color: @teal@; }
+        QComboBox::drop-down { border: none; width: 24px; }
+        QComboBox QAbstractItemView { background: @canvas@; border: 1px solid @border@; selection-background-color: @mint_soft@; }
+        QRadioButton { color: @text_primary@; spacing: 6px; }
+        QRadioButton::indicator { width: 16px; height: 16px; border-radius: 8px; border: 1px solid @border_medium@; background: @canvas@; }
+        QRadioButton::indicator:checked { border-color: @teal@; background: @teal@; }
+        QSlider::groove:horizontal { height: 4px; background: @border@; border-radius: 2px; }
+        QSlider::handle:horizontal { width: 16px; height: 16px; margin: -6px 0; border-radius: 8px; background: @teal@; }
+        QSlider::handle:horizontal:hover { background: @teal_dark@; }
+        QGroupBox { color: @text_primary@; border: 1px solid @border@; border-radius: 10px; margin-top: 12px; padding-top: 8px; }
+        QGroupBox::title { subcontrol-origin: margin; left: 10px; color: @text_muted@; }
     )")};
 
     const auto set = [&sheet](const QString& token, const QString& value) {

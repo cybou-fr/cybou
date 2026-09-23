@@ -113,6 +113,8 @@ add_library(bitcoinqt STATIC EXCLUDE_FROM_ALL
   optionsdialog.h
   optionsmodel.cpp
   optionsmodel.h
+  pages/emailpage.cpp
+  pages/emailpage.h
   pages/homepage.cpp
   pages/homepage.h
   pages/identitypage.cpp

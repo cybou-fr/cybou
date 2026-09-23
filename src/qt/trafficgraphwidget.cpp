@@ -58,11 +58,12 @@ void TrafficGraphWidget::paintPath(QPainterPath &path, QQueue<float> &samples)
 void TrafficGraphWidget::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
-    painter.fillRect(rect(), Qt::black);
+    // CYBOU palette: light canvas, teal inbound, amber outbound.
+    painter.fillRect(rect(), QColor{0xf8, 0xf9, 0xfb});
 
     if(fMax <= 0.0f) return;
 
-    QColor axisCol(Qt::gray);
+    QColor axisCol(0xd1, 0xd5, 0xdb);
     int h = height() - YMARGIN * 2;
     painter.setPen(axisCol);
     painter.drawLine(XMARGIN, YMARGIN + h, width() - XMARGIN, YMARGIN + h);
@@ -83,7 +84,7 @@ void TrafficGraphWidget::paintEvent(QPaintEvent *)
     }
     // if we drew 3 or fewer lines, break them up at the next lower order of magnitude
     if(fMax / val <= 3.0f) {
-        axisCol = axisCol.darker();
+        axisCol = axisCol.darker(105);
         val = pow(10.0f, base - 1);
         painter.setPen(axisCol);
         painter.drawText(XMARGIN, YMARGIN + h - h * val / fMax-yMarginText, QString("%1 %2").arg(val).arg(units));
@@ -101,15 +102,15 @@ void TrafficGraphWidget::paintEvent(QPaintEvent *)
     if(!vSamplesIn.empty()) {
         QPainterPath p;
         paintPath(p, vSamplesIn);
-        painter.fillPath(p, QColor(0, 255, 0, 128));
-        painter.setPen(Qt::green);
+        painter.fillPath(p, QColor(5, 150, 105, 110));
+        painter.setPen(QColor{4, 120, 87});
         painter.drawPath(p);
     }
     if(!vSamplesOut.empty()) {
         QPainterPath p;
         paintPath(p, vSamplesOut);
-        painter.fillPath(p, QColor(255, 0, 0, 128));
-        painter.setPen(Qt::red);
+        painter.fillPath(p, QColor(245, 158, 11, 110));
+        painter.setPen(QColor{217, 119, 6});
         painter.drawPath(p);
     }
 }
