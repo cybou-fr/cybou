@@ -1,0 +1,78 @@
+name: CYBOU desktop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/qt/**'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - 'vcpkg.json'
+      - '.github/workflows/cybou-desktop.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cybou-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cybou-desktop:
+    name: CYBOU desktop build and smoke tests
+    runs-on: windows-2025
+    timeout-minutes: 90
+
+    env:
+      VCPKG_ROOT: C:\vcpkg
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6.11 (MinGW) and build tools
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.11.2'
+          arch: win64_mingw
+          modules: ''
+          tools: 'tools_mingw1310 tools_ninja'
+          cache: true
+
+      - name: Set up vcpkg
+        uses: microsoft/run-vcpkg@v11
+        with:
+          vcpkgDirectory: ${{ env.VCPKG_ROOT }}
+          runVcpkgInstall: true
+          prependedCacheKey: cybou-desktop
+
+      # Mirrors the cybou-consumer-qt-mingw preset in CMakePresets.json:
+      # consumer desktop application, no inherited wallet, GUI tests on.
+      - name: Configure desktop build
+        run: |
+          cmake -S . -B build-desktop -G Ninja `
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-mingw-dynamic `
+            -DVCPKG_HOST_TRIPLET=x64-windows `
+            -DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON `
+            -DVCPKG_MANIFEST_FEATURES=tests `
+            -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}/../../.." `
+            -DCYBOU_CONSUMER_BUILD=ON `
+            -DBUILD_TESTS=ON
+
+      - name: Build cybou.exe
+        run: cmake --build build-desktop --target cybou --parallel 4
+
+      - name: Build desktop smoke tests
+        run: cmake --build build-desktop --target test_bitcoin-qt --parallel 4
+
+      # The CTest fixture already forces QT_QPA_PLATFORM=windows and points
+      # QT_PLUGIN_PATH at the deployed plugins for vcpkg triplets. Qt's bin
+      # directory still has to be on PATH so the test executable finds its DLLs.
+      - name: Run desktop smoke tests
+        run: |
+          $env:PATH = "${{ env.Qt6_DIR }}/../../../bin;$env:PATH"
+          ctest --test-dir build-desktop -R test_bitcoin-qt --output-on-failure
