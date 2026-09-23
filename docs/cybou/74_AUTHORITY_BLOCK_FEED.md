@@ -29,9 +29,7 @@ certificate, operations, and state root before changing canonical state.
 
 ## Remaining integration
 
-This is a block-production library and a one-request transport primitive.
-It is not yet a VPS daemon, a peer-discovery network, a mempool gossip
-protocol, a snapshot bootstrap, or a desktop sync service. A supervised
-listener, persistent operator-key loading, retry/backoff, peer limits, and
-end-to-end deployment tests are required before exposing it as a public
-service. The observer needs the same trusted genesis/network definition.
+The standalone DEV process using this library is documented in
+`75_DEV_NODE_RUNBOOK.md`. Operation submission, peer discovery, mempool
+gossip, snapshot bootstrap, and desktop sync still need implementation.
+The observer needs the same trusted genesis/network definition.

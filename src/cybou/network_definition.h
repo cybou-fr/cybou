@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace cybou {
@@ -42,6 +43,7 @@ enum class NetworkDefinitionError : uint8_t {
 
 NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinitionV1& definition);
 std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefinitionV1& definition);
+std::optional<CybouNetworkDefinitionV1> DeserializeNetworkDefinition(std::span<const unsigned char> bytes);
 uint256 NetworkId(const CybouNetworkDefinitionV1& definition);
 
 } // namespace cybou

@@ -198,6 +198,31 @@ cybou::FinalizedBlockV1 MakeFinalizedBlock(
 
 } // namespace
 
+BOOST_AUTO_TEST_CASE(network_definition_roundtrip_rejects_truncation_and_trailing_data)
+{
+    auto definition = TestNetworkDefinition();
+    auto bytes = cybou::SerializeNetworkDefinition(definition);
+    const auto decoded = cybou::DeserializeNetworkDefinition(bytes);
+    BOOST_REQUIRE(decoded);
+    BOOST_CHECK(cybou::SerializeNetworkDefinition(*decoded) == bytes);
+    for (size_t size = 0; size < bytes.size(); ++size) {
+        BOOST_CHECK(!cybou::DeserializeNetworkDefinition(std::span{bytes}.first(size)));
+    }
+    bytes.push_back(0);
+    BOOST_CHECK(!cybou::DeserializeNetworkDefinition(bytes));
+
+    definition.operator_authority = cybou::OperatorAuthorityKeySet{
+        .keyset_id = uint256::ONE,
+        .active_from_epoch = 2,
+        .retired_from_epoch = 5,
+    };
+    const auto authority_bytes = cybou::SerializeNetworkDefinition(definition);
+    const auto decoded_authority = cybou::DeserializeNetworkDefinition(authority_bytes);
+    BOOST_REQUIRE(decoded_authority);
+    BOOST_CHECK(cybou::SerializeNetworkDefinition(*decoded_authority) == authority_bytes);
+    BOOST_CHECK(!cybou::DeserializeNetworkDefinition(std::span{authority_bytes}.first(authority_bytes.size() - 1)));
+}
+
 BOOST_AUTO_TEST_CASE(genesis_initializes_once_and_loads)
 {
     auto db{MemoryDb()};

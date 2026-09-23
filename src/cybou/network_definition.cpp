@@ -6,6 +6,7 @@
 
 #include <crypto/sha256.h>
 
+#include <algorithm>
 #include <string_view>
 
 namespace cybou {
@@ -71,6 +72,96 @@ std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefiniti
         if (authority.retired_from_epoch) append_u64le(*authority.retired_from_epoch);
     }
     return out;
+}
+
+std::optional<CybouNetworkDefinitionV1> DeserializeNetworkDefinition(const std::span<const unsigned char> bytes)
+{
+    size_t pos{0};
+    const auto read_u8 = [&]() -> std::optional<uint8_t> {
+        if (pos >= bytes.size()) return std::nullopt;
+        return bytes[pos++];
+    };
+    const auto read_u32 = [&]() -> std::optional<uint32_t> {
+        if (bytes.size() - pos < 4) return std::nullopt;
+        uint32_t value{0};
+        for (unsigned i = 0; i < 4; ++i) value |= uint32_t{bytes[pos++]} << (8 * i);
+        return value;
+    };
+    const auto read_u64 = [&]() -> std::optional<uint64_t> {
+        if (bytes.size() - pos < 8) return std::nullopt;
+        uint64_t value{0};
+        for (unsigned i = 0; i < 8; ++i) value |= uint64_t{bytes[pos++]} << (8 * i);
+        return value;
+    };
+    const auto read_hash = [&]() -> std::optional<uint256> {
+        if (bytes.size() - pos < 32) return std::nullopt;
+        uint256 value;
+        std::copy_n(bytes.begin() + pos, 32, value.begin());
+        pos += 32;
+        return value;
+    };
+
+    CybouNetworkDefinitionV1 result;
+    const auto version = read_u8();
+    const auto genesis_id = read_hash();
+    const auto genesis_root = read_hash();
+    const auto work_bits = read_u32();
+    const auto epoch_lag = read_u64();
+    const auto max_creates = read_u32();
+    const auto bonus = read_u64();
+    const auto epoch_blocks = read_u64();
+    const auto payment_fee = read_u64();
+    const auto mail_base_fee = read_u64();
+    const auto mail_tier_bytes = read_u64();
+    const auto mail_tier_fee = read_u64();
+    const auto max_mail_size = read_u32();
+    const auto mail_limit = read_u32();
+    const auto set_commitment = read_hash();
+    const auto has_authority = read_u8();
+    if (!version || !genesis_id || !genesis_root || !work_bits || !epoch_lag ||
+        !max_creates || !bonus || !epoch_blocks || !payment_fee || !mail_base_fee ||
+        !mail_tier_bytes || !mail_tier_fee || !max_mail_size || !mail_limit ||
+        !set_commitment || !has_authority || *has_authority > 1) return std::nullopt;
+    result.protocol_version = *version;
+    result.genesis_block_id = *genesis_id;
+    result.genesis_state_root = *genesis_root;
+    result.protocol_parameters = {
+        .account_creation_work_bits = *work_bits,
+        .account_creation_epoch_lag = *epoch_lag,
+        .max_account_creates_per_block = *max_creates,
+        .onboarding_bonus = *bonus,
+        .epoch_blocks = *epoch_blocks,
+        .payment_fee = *payment_fee,
+        .mail_base_fee = *mail_base_fee,
+        .mail_tier_bytes = *mail_tier_bytes,
+        .mail_tier_fee = *mail_tier_fee,
+        .max_mail_ciphertext_size = *max_mail_size,
+        .new_account_mail_limit_per_epoch = *mail_limit,
+    };
+    result.initial_validator_set_commitment = *set_commitment;
+    if (*has_authority) {
+        OperatorAuthorityKeySet authority;
+        const auto keyset_id = read_hash();
+        if (!keyset_id || bytes.size() - pos < authority.ed25519_public_key.size() + authority.mldsa65_public_key.size()) {
+            return std::nullopt;
+        }
+        authority.keyset_id = *keyset_id;
+        std::copy_n(bytes.begin() + pos, authority.ed25519_public_key.size(), authority.ed25519_public_key.begin());
+        pos += authority.ed25519_public_key.size();
+        std::copy_n(bytes.begin() + pos, authority.mldsa65_public_key.size(), authority.mldsa65_public_key.begin());
+        pos += authority.mldsa65_public_key.size();
+        const auto active_from = read_u64();
+        const auto has_retirement = read_u8();
+        if (!active_from || !has_retirement || *has_retirement > 1) return std::nullopt;
+        authority.active_from_epoch = *active_from;
+        if (*has_retirement) {
+            authority.retired_from_epoch = read_u64();
+            if (!authority.retired_from_epoch) return std::nullopt;
+        }
+        result.operator_authority = authority;
+    }
+    if (pos != bytes.size() || ValidateNetworkDefinition(result) != NetworkDefinitionError::NONE) return std::nullopt;
+    return result;
 }
 
 uint256 NetworkId(const CybouNetworkDefinitionV1& definition)

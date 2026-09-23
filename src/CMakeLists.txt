@@ -306,6 +306,10 @@ if(WITH_EMBEDDED_ASMAP)
 endif()
 
 # Bitcoin wrapper executable that can call other executables.
+add_executable(cybou-node cybou_node.cpp)
+target_link_libraries(cybou-node PRIVATE bitcoin_node bitcoin_common bitcoin_util Boost::headers)
+add_windows_application_manifest(cybou-node)
+
 if(BUILD_BITCOIN_BIN)
   add_executable(bitcoin bitcoin.cpp)
   add_windows_resources(bitcoin bitcoin-res.rc)
