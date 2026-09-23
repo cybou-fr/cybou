@@ -350,8 +350,11 @@ OperationExecutionResult ApplyProtocolOperation(
                         return {OperationExecutionError::MAIL_OVERSIZED, {}, {}, {}, {}, {}};
                     }
                     const uint64_t fee{MailFeeForSize(payload.ciphertext.size(), context.params)};
-                    const auto mail_res{ApplyMail(op.account_id, payload.recipient, fee, state)};
+                    const auto mail_res{ApplyMail(op.account_id, payload.recipient, fee, context.block_height, context.params, state)};
                     if (!mail_res) {
+                        if (mail_res.error == MailError::RATE_LIMIT_EXCEEDED) {
+                            return {OperationExecutionError::MAIL_RATE_LIMIT_EXCEEDED, {}, {}, {}, {}, mail_res};
+                        }
                         return {OperationExecutionError::MAIL_FAILED, {}, {}, {}, {}, mail_res};
                     }
                     return {OperationExecutionError::NONE, {}, {}, {}, {}, mail_res};

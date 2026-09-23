@@ -38,6 +38,8 @@ std::vector<unsigned char> SerializeCybouState(const CybouState& state)
         append_u64le(acc.creation_epoch);
         append_hash(acc.active_authorization_key);
         append_u64le(acc.next_nonce);
+        append_u64le(acc.last_mail_epoch);
+        append_u32le(acc.mail_count_in_epoch);
     }
     return out;
 }
@@ -93,8 +95,10 @@ std::optional<CybouState> DeserializeCybouState(const std::span<const unsigned c
         const auto creation_epoch{read_u64le()};
         const auto auth_key{read_hash()};
         const auto next_nonce{read_u64le()};
+        const auto last_mail_epoch{read_u64le()};
+        const auto mail_count_in_epoch{read_u32le()};
         if (!account_id_bytes || !balance || !system_balance || !creation_height || !creation_epoch ||
-            !auth_key || !next_nonce) {
+            !auth_key || !next_nonce || !last_mail_epoch || !mail_count_in_epoch) {
             return std::nullopt;
         }
         const AccountId account_id{*account_id_bytes};
@@ -106,6 +110,8 @@ std::optional<CybouState> DeserializeCybouState(const std::span<const unsigned c
             .creation_epoch = *creation_epoch,
             .active_authorization_key = *auth_key,
             .next_nonce = *next_nonce,
+            .last_mail_epoch = *last_mail_epoch,
+            .mail_count_in_epoch = *mail_count_in_epoch,
         };
         if (!state.accounts.emplace(account_id, std::move(acc)).second) return std::nullopt;
     }
@@ -244,10 +250,43 @@ SystemLockResult ApplySystemLock(
     return {};
 }
 
+uint64_t ComputeProofOfTrustScore(const AccountState& account, uint64_t current_epoch)
+{
+    // Hard rules in AGENTS.md:
+    // - integer arithmetic only
+    // - System Balance trust contribution capped
+    // - block-height-derived deterministic epoch
+    static constexpr uint64_t BASE_SCORE{100};
+    static constexpr uint64_t MAX_SYSTEM_BALANCE_CONTRIBUTION{50};
+    static constexpr uint64_t MAX_AGE_CONTRIBUTION{100};
+
+    // System balance contribution: 1 point per 100 CYBOU of SystemBalance, capped at 50
+    const uint64_t sb_contribution = std::min<uint64_t>(account.system_balance / 100, MAX_SYSTEM_BALANCE_CONTRIBUTION);
+
+    // Account age contribution: 5 points per epoch, capped at 100
+    const uint64_t age_epochs = (current_epoch >= account.creation_epoch) ? (current_epoch - account.creation_epoch) : 0;
+    const uint64_t age_contribution = std::min<uint64_t>(age_epochs * 5, MAX_AGE_CONTRIBUTION);
+
+    return BASE_SCORE + sb_contribution + age_contribution;
+}
+
+uint32_t CalculateMailRateLimit(uint64_t pot_score, const CybouProtocolParameters& params)
+{
+    if (pot_score < 150) {
+        return params.new_account_mail_limit_per_epoch;
+    }
+    if (pot_score < 200) {
+        return DEFAULT_TIER2_MAIL_LIMIT_PER_EPOCH;
+    }
+    return DEFAULT_TIER3_MAIL_LIMIT_PER_EPOCH;
+}
+
 MailResult ApplyMail(
     const AccountId& sender_id,
     const AccountId& recipient_id,
     const uint64_t fee,
+    const uint64_t block_height,
+    const CybouProtocolParameters& params,
     CybouState& state)
 {
     if (recipient_id.IsNull() || sender_id == recipient_id) {
@@ -270,6 +309,21 @@ MailResult ApplyMail(
         return {MailError::INSUFFICIENT_SYSTEM_BALANCE};
     }
 
+    // Rate-limiting check based on PoT epoch
+    const uint64_t current_epoch = EpochForHeight(block_height, params);
+    if (current_epoch > sender.last_mail_epoch) {
+        sender.last_mail_epoch = current_epoch;
+        sender.mail_count_in_epoch = 0;
+    }
+
+    const uint64_t pot_score = ComputeProofOfTrustScore(sender, current_epoch);
+    const uint32_t mail_limit = CalculateMailRateLimit(pot_score, params);
+
+    if (sender.mail_count_in_epoch >= mail_limit) {
+        return {MailError::RATE_LIMIT_EXCEEDED};
+    }
+
+    sender.mail_count_in_epoch++;
     sender.system_balance -= fee;
     state.pending_fee_pool += fee;
     sender.next_nonce++;

@@ -25,9 +25,25 @@ struct AccountState {
     uint64_t creation_epoch{0};
     uint256 active_authorization_key;
     uint64_t next_nonce{0};
+    uint64_t last_mail_epoch{0};
+    uint32_t mail_count_in_epoch{0};
 
     friend bool operator==(const AccountState&, const AccountState&) = default;
 };
+
+/**
+ * Compute deterministic integer Proof of Trust (PoT) score for an account at current epoch.
+ * - Base score: 100
+ * - Capped System Balance contribution: min(system_balance / 100, 50)
+ * - Account age contribution: min(age_epochs * 5, 100)
+ * Range: [100, 250]. Pure integer arithmetic, no floating-point.
+ */
+uint64_t ComputeProofOfTrustScore(const AccountState& account, uint64_t current_epoch);
+
+/**
+ * Calculate the maximum outgoing MailTx allowed in a PoT epoch based on PoT score.
+ */
+uint32_t CalculateMailRateLimit(uint64_t pot_score, const CybouProtocolParameters& params);
 
 /** Canonical state tracking monetary pools and accounts. */
 struct CybouState {
@@ -148,6 +164,7 @@ enum class MailError : uint8_t {
     SELF_MAIL,
     INSUFFICIENT_SYSTEM_BALANCE,
     FEE_POOL_OVERFLOW,
+    RATE_LIMIT_EXCEEDED,
 };
 
 struct MailResult {
@@ -160,6 +177,8 @@ MailResult ApplyMail(
     const AccountId& sender_id,
     const AccountId& recipient_id,
     uint64_t fee,
+    uint64_t block_height,
+    const CybouProtocolParameters& params,
     CybouState& state);
 
 enum class FeeRoutingError : uint8_t {

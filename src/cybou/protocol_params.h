@@ -19,6 +19,9 @@ inline constexpr uint64_t DEFAULT_MAIL_BASE_FEE{4};
 inline constexpr uint64_t DEFAULT_MAIL_TIER_BYTES{1024};
 inline constexpr uint64_t DEFAULT_MAIL_TIER_FEE{1};
 inline constexpr uint32_t DEFAULT_MAX_MAIL_CIPHERTEXT_SIZE{64 * 1024};
+inline constexpr uint32_t DEFAULT_NEW_ACCOUNT_MAIL_LIMIT_PER_EPOCH{25};
+inline constexpr uint32_t DEFAULT_TIER2_MAIL_LIMIT_PER_EPOCH{50};
+inline constexpr uint32_t DEFAULT_TIER3_MAIL_LIMIT_PER_EPOCH{100};
 
 /**
  * Immutable protocol parameters. For DEV/Beta these are fixed network
@@ -38,6 +41,7 @@ struct CybouProtocolParameters {
     uint64_t mail_tier_bytes{DEFAULT_MAIL_TIER_BYTES};
     uint64_t mail_tier_fee{DEFAULT_MAIL_TIER_FEE};
     uint32_t max_mail_ciphertext_size{DEFAULT_MAX_MAIL_CIPHERTEXT_SIZE};
+    uint32_t new_account_mail_limit_per_epoch{DEFAULT_NEW_ACCOUNT_MAIL_LIMIT_PER_EPOCH};
 
     constexpr uint64_t MailFeeForSize(size_t ciphertext_size) const
     {

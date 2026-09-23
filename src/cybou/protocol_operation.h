@@ -138,6 +138,7 @@ enum class OperationExecutionError : uint8_t {
     SYSTEM_LOCK_FAILED,
     MAIL_FAILED,
     MAIL_OVERSIZED,
+    MAIL_RATE_LIMIT_EXCEEDED,
 };
 
 struct OperationExecutionResult {

@@ -325,7 +325,7 @@ BOOST_AUTO_TEST_CASE(mail_operation_deducts_fee_and_keeps_state_bounded)
     state.accounts.at(ACCOUNT_ID).system_balance = 100;
     state.accounts.at(ACCOUNT_ID).balance = 50;
 
-    const auto res1{cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID_2, 10, state)};
+    const auto res1{cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID_2, 10, 10, TEST_PARAMS, state)};
     BOOST_REQUIRE(res1);
     BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).system_balance, 90);
     BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).balance, 50); // user balance untouched
@@ -339,18 +339,18 @@ BOOST_AUTO_TEST_CASE(mail_operation_deducts_fee_and_keeps_state_bounded)
     state.accounts.at(ACCOUNT_ID).system_balance = 4;
     state.accounts.at(ACCOUNT_ID).balance = 20;
 
-    const auto res2{cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID_2, 10, state)};
+    const auto res2{cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID_2, 10, 10, TEST_PARAMS, state)};
     BOOST_CHECK(res2.error == cybou::MailError::INSUFFICIENT_SYSTEM_BALANCE);
     // User balance untouched, system_balance untouched
     BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).system_balance, 4);
     BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).balance, 20);
 
     // Case 3: Invariant violations
-    BOOST_CHECK(cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID, 10, state).error ==
+    BOOST_CHECK(cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID, 10, 10, TEST_PARAMS, state).error ==
         cybou::MailError::SELF_MAIL);
-    BOOST_CHECK(cybou::ApplyMail(ACCOUNT_ID, cybou::AccountId{uint256::FromUserHex("ff").value()}, 10, state).error ==
+    BOOST_CHECK(cybou::ApplyMail(ACCOUNT_ID, cybou::AccountId{uint256::FromUserHex("ff").value()}, 10, 10, TEST_PARAMS, state).error ==
         cybou::MailError::RECIPIENT_NOT_FOUND);
-    BOOST_CHECK(cybou::ApplyMail(cybou::AccountId{uint256::FromUserHex("ff").value()}, ACCOUNT_ID_2, 10, state).error ==
+    BOOST_CHECK(cybou::ApplyMail(cybou::AccountId{uint256::FromUserHex("ff").value()}, ACCOUNT_ID_2, 10, 10, TEST_PARAMS, state).error ==
         cybou::MailError::SENDER_NOT_FOUND);
 }
 
@@ -380,6 +380,83 @@ BOOST_AUTO_TEST_CASE(fee_routing_settles_four_cybou_chunks_without_loss)
     BOOST_CHECK_EQUAL(state.security_reward_pool, 1012);
     BOOST_CHECK_EQUAL(state.onboarding_pool, 5004);
     BOOST_CHECK_EQUAL(state.pending_fee_pool, 0);
+}
+
+BOOST_AUTO_TEST_CASE(pot_score_calculation_and_mail_rate_limit_enforcement)
+{
+    // 1. Integer PoT score calculation checks
+    cybou::AccountState acc{
+        .balance = 0,
+        .system_balance = 0,
+        .creation_height = 0,
+        .creation_epoch = 0,
+        .active_authorization_key = AUTH_KEY,
+        .next_nonce = 0,
+        .last_mail_epoch = 0,
+        .mail_count_in_epoch = 0,
+    };
+
+    // New account at epoch 0 with 0 system balance: base score = 100
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 100);
+    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(100, TEST_PARAMS), 25);
+
+    // System balance contribution capped at 50 (1 per 100 CYBOU)
+    acc.system_balance = 3000;
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 130); // 100 + 30
+    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(130, TEST_PARAMS), 25);
+
+    acc.system_balance = 5000;
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 150); // 100 + 50 (cap reached)
+    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(150, TEST_PARAMS), 50);
+
+    acc.system_balance = 100000; // Large balance cannot exceed 50 cap
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 150);
+
+    // Account age contribution: 5 points per epoch, capped at 100
+    // At epoch 10 with creation_epoch 0: age = 10 epochs -> 50 points
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 10), 200); // 100 + 50 (sb cap) + 50 (age)
+    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(200, TEST_PARAMS), 100);
+
+    // At epoch 30: age contribution reaches max 100 points
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 30), 250); // 100 + 50 + 100
+
+    // 2. Rate limit enforcement in ApplyMail:
+    // Create new account with base limit = 25 at height 10 (epoch 1)
+    auto state{InitialState()};
+    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(ACCOUNT_ID), NETWORK_ID, 10, TEST_PARAMS, state));
+    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(ACCOUNT_ID_2), NETWORK_ID, 10, TEST_PARAMS, state));
+
+    auto& sender = state.accounts.at(ACCOUNT_ID);
+    sender.system_balance = 1000; // PoT score = 100 + 10 = 110 < 150 (baseline tier = 25)
+
+    // Send exactly 25 mails at epoch 1 (height 10..19)
+    for (uint32_t i = 0; i < 25; ++i) {
+        const auto res = cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID_2, 1, 10, TEST_PARAMS, state);
+        BOOST_REQUIRE(res);
+        BOOST_CHECK_EQUAL(sender.mail_count_in_epoch, i + 1);
+    }
+    BOOST_CHECK_EQUAL(sender.mail_count_in_epoch, 25);
+
+    // 26th mail at epoch 1 (height 15) is strictly rejected with RATE_LIMIT_EXCEEDED!
+    const auto over_res = cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID_2, 1, 15, TEST_PARAMS, state);
+    BOOST_CHECK(over_res.error == cybou::MailError::RATE_LIMIT_EXCEEDED);
+    // Counter not incremented, funds not deducted
+    BOOST_CHECK_EQUAL(sender.mail_count_in_epoch, 25);
+
+    // 3. Epoch rollover:
+    // Height 20 is epoch 2 (since epoch_blocks = 10). Limit counter resets!
+    const auto next_epoch_res = cybou::ApplyMail(ACCOUNT_ID, ACCOUNT_ID_2, 1, 20, TEST_PARAMS, state);
+    BOOST_CHECK(next_epoch_res);
+    BOOST_CHECK_EQUAL(sender.last_mail_epoch, 2);
+    BOOST_CHECK_EQUAL(sender.mail_count_in_epoch, 1);
+
+    // 4. State serialization roundtrip preserves rate limiting state
+    const auto serialized = cybou::SerializeCybouState(state);
+    const auto deserialized = cybou::DeserializeCybouState(serialized);
+    BOOST_REQUIRE(deserialized.has_value());
+    BOOST_CHECK(*deserialized == state);
+    BOOST_CHECK_EQUAL(deserialized->accounts.at(ACCOUNT_ID).last_mail_epoch, 2);
+    BOOST_CHECK_EQUAL(deserialized->accounts.at(ACCOUNT_ID).mail_count_in_epoch, 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
