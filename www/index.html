@@ -67,6 +67,44 @@
           "@type": "Organization",
           "name": "CYBOU"
         }
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://cybou.fr/#faq-schema",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Que signifie « Post-Quantique dès la conception » (PQ by design) pour CYBOU ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Contrairement aux systèmes historiques qui patchent a posteriori leurs protocoles, CYBOU intègre nativement le chiffrement hybride HPKE (ML-KEM-768 standard NIST / Kyber et X25519) au cœur de l'enveloppe MailTx dès la v0.0.1 pour éliminer définitivement les attaques 'Harvest Now, Decrypt Later'."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Pourquoi CYBOU n'est-il pas encore disponible au téléchargement public ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Le projet est à l'étape v0.0.1 (baseline d'ingénierie et recherche ouverte). La finalisation du consensus BFT (f=1 dès 4 validateurs à poids égal) et la séparation des clés d'opérateur sont en cours de consolidation technique avant toute diffusion grand public."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Comment fonctionne le consensus BFT et la tolérance aux pannes ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Consensus BFT explicite à poids égal (poids = 1) avec quorum minimum de 4 validateurs pour tolérer f=1 nœud défaillant. Époques Proof of Trust (PoT) calculées strictement en arithmétique entière à partir de la hauteur de bloc, sans horloge locale."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Quelle est l'économie du jeton CYBOU ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Offre maximale absolue et fixe de 100 000 000 000 CYBOU avec strictement 0 décimale. Subvention d'accueil de 6 000 CYBOU via bon d'invitation signé. Frais déterministes fonction de la taille répartis à 75% pour la sécurité et 25% pour l'accueil."
+            }
+          }
+        ]
       }
     ]
   }
@@ -94,6 +132,7 @@
           <li><a href="#mailtx" data-i18n="navMailTx">Protocole MailTx</a></li>
           <li><a href="#factsheet" data-i18n="navSpecs">Fiche technique</a></li>
           <li><a href="#simulateur" data-i18n="navSim">Simulateur</a></li>
+          <li><a href="#faq" data-i18n="navFaq">FAQ</a></li>
         </ul>
       </nav>
 
@@ -118,7 +157,7 @@
 
     <div class="hero-tag">
       <span>🇫🇷</span>
-      <span data-i18n="heroTag">R&amp;D Ouverte • Architecture P2P C++20 • Souveraineté Européenne</span>
+      <span data-i18n="heroTag">R&amp;D Ouverte • PQ by Design • Architecture P2P C++20 • Souveraineté Européenne</span>
     </div>
 
     <h1 class="hero-title">
@@ -241,6 +280,7 @@
       <div class="bento-card bento-span-4">
         <div class="card-icon" aria-hidden="true">🛡️</div>
         <div class="card-content">
+          <span class="faq-badge-pq" style="margin-bottom: 10px;">PQ by Design</span>
           <h3 data-i18n="bento2Title">Chiffrement Post-Quantique HPKE</h3>
           <p data-i18n="bento2Desc">
             Anticipation des attaques par interception et déchiffrement ultérieur grâce au standard hybride ML-KEM-768 et X25519 (RFC 9180).
@@ -442,6 +482,75 @@
   </section>
 
   <!-- ==========================================================================
+       Section: Frequently Asked Questions (FAQ) — PQ by Design Focus
+       ========================================================================== -->
+  <section class="section" id="faq">
+    <div class="section-header">
+      <div class="section-label" data-i18n="faqLabel">Questions fréquentes</div>
+      <h2 class="section-title" data-i18n="faqTitle">Architecture, Cryptographie &amp; Gouvernance.</h2>
+      <p class="section-description" data-i18n="faqDesc">
+        Des réponses précises et transparentes sur nos choix techniques, notre feuille de route et la sécurité post-quantique.
+      </p>
+    </div>
+
+    <div class="faq-grid">
+      <!-- FAQ 1: PQ by Design -->
+      <article class="faq-card pq-focus">
+        <span class="faq-badge-pq" data-i18n="faqPqBadge">Sécurité Post-Quantique • PQ by Design</span>
+        <h3 class="faq-question" data-i18n="faqQ1">Que signifie « Post-Quantique dès la conception » (PQ by design) pour CYBOU ?</h3>
+        <div class="faq-answer">
+          <p data-i18n="faqA1P1">
+            La plupart des systèmes de communication historiques s'appuient sur RSA ou la cryptographie sur les courbes elliptiques classiques. Face à l'émergence des calculateurs quantiques, ils tentent de patcher a posteriori leurs protocoles, exposant toutes les communications passées aux attaques <strong>« Harvest Now, Decrypt Later » (HNDL)</strong> — où des acteurs étatiques enregistrent dès aujourd'hui les flux chiffrés pour les casser demain.
+          </p>
+          <p data-i18n="faqA1P2">
+            Dans CYBOU, la résistance post-quantique n'est pas une option ou une mise à niveau tardive : le protocole est <strong>PQ by design</strong> dès la version <code>v0.0.1</code>. La structure d'enveloppe <code>MailTx</code> et le chiffrement E2EE intègrent nativement le standard hybride <strong>HPKE (RFC 9180)</strong> combinant <strong>ML-KEM-768 (standard NIST / Kyber)</strong> et <strong>X25519</strong>, garantissant qu'aucun message scellé aujourd'hui ne pourra être déchiffré à l'ère quantique.
+          </p>
+        </div>
+      </article>
+
+      <!-- FAQ 2: Project Reality -->
+      <article class="faq-card">
+        <h3 class="faq-question" data-i18n="faqQ2">Pourquoi CYBOU n'est-il pas encore téléchargeable pour le grand public ?</h3>
+        <div class="faq-answer">
+          <p data-i18n="faqA2">
+            Nous refusons le marketing trompeur. CYBOU est actuellement à l'étape <code>v0.0.1</code> (baseline d'ingénierie et de recherche ouverte). Avant d'ouvrir le réseau au grand public, nous finalisons la transition du réseau de bootstrap <code>CYBOU-DEV v0.0.2</code> vers le consensus multi-validateurs BFT (seuil <code>f=1</code> avec 4 validateurs minimum) et la séparation étanche des clés d'opérateur (doc 68). Le code source et les 684 tests unitaires sont publiquement auditables.
+          </p>
+        </div>
+      </article>
+
+      <!-- FAQ 3: Cloud vs CYBOU -->
+      <article class="faq-card">
+        <h3 class="faq-question" data-i18n="faqQ3">En quoi CYBOU diffère-t-il d'une messagerie électronique classique (SMTP/IMAP) ?</h3>
+        <div class="faq-answer">
+          <p data-i18n="faqA3">
+            L'email classique dépend d'infrastructures de cloud centralisées, de serveurs de relais vulnérables aux réquisitions étrangères, et fait circuler les métadonnées et le contenu en clair entre hébergeurs. CYBOU fonctionne en réseau pair-à-pair décentralisé : chaque message est une transaction native <code>MailTx</code> validée par BFT, scellée avec un sel secret (doc 69), et déchiffrable uniquement sur le poste du destinataire sans passerelle intermédiaire.
+          </p>
+        </div>
+      </article>
+
+      <!-- FAQ 4: BFT Consensus -->
+      <article class="faq-card">
+        <h3 class="faq-question" data-i18n="faqQ4">Comment fonctionne le consensus BFT et la tolérance aux pannes ?</h3>
+        <div class="faq-answer">
+          <p data-i18n="faqA4">
+            Le consensus CYBOU repose sur une finalité BFT explicite sans minage énergivore. L'admission des validateurs est soumise à approbation opérateur, et chaque validateur dispose d'un poids égal à 1 (<code>weight = 1</code>). Un quorum minimum de 4 validateurs est strictement requis pour tolérer <code>f=1</code> validateur défaillant ou byzantin. Les époques de confiance (PoT) sont calculées en arithmétique entière à partir de la hauteur de bloc, sans dépendance aux horloges locales.
+          </p>
+        </div>
+      </article>
+
+      <!-- FAQ 5: Tokenomics -->
+      <article class="faq-card">
+        <h3 class="faq-question" data-i18n="faqQ5">Quelle est la finalité économique du jeton CYBOU ?</h3>
+        <div class="faq-answer">
+          <p data-i18n="faqA5">
+            Le jeton CYBOU a une offre maximale stricte et non-gonflable de <strong>100 000 000 000 unités (0 décimale)</strong>. Il n'a aucune vocation spéculative : il sert à réguler l'accès au réseau et prévenir le pourriel (spam). Chaque compte reçoit une subvention de bienvenue de 6 000 CYBOU via bon d'invitation (doc 70). Les frais d'émission sont déterministes selon la taille (pas d'enchères de priorité) et répartis à 75% pour la sécurité du réseau et 25% pour la réserve d'accueil.
+          </p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
        Footer (Apple Style, Clean & Authoritative)
        ========================================================================== -->
   <footer class="footer">
@@ -468,6 +577,7 @@
             <li><a href="#mailtx" data-i18n="navMailTx">Protocole MailTx</a></li>
             <li><a href="#factsheet" data-i18n="navSpecs">Fiche technique</a></li>
             <li><a href="#simulateur" data-i18n="navSim">Simulateur</a></li>
+            <li><a href="#faq" data-i18n="navFaq">FAQ</a></li>
           </ul>
         </div>
 

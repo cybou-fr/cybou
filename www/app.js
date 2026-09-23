@@ -17,9 +17,10 @@ const translations = {
     navMailTx: "Protocole MailTx",
     navSpecs: "Fiche technique",
     navSim: "Simulateur",
+    navFaq: "FAQ",
     navRepo: "Dépôt GitHub",
 
-    heroTag: "R&D Ouverte • Architecture P2P C++20 • Souveraineté Européenne",
+    heroTag: "R&D Ouverte • PQ by Design • Architecture P2P C++20 • Souveraineté Européenne",
     heroAccent: "Messagerie P2P souveraine & registre BFT.",
     heroSubtitle: "Une architecture logicielle conçue en France, émancipée des géants du cloud. Chiffrement hybride post-quantique, finalité BFT explicite et isolation stricte de l'autorité de l'appareil.",
 
@@ -120,6 +121,22 @@ const translations = {
     simReplay: "Séparation anti-rejeu",
     simQuota: "Quota d'envoi par époque",
 
+    faqLabel: "Questions fréquentes",
+    faqTitle: "Architecture, Cryptographie & Gouvernance.",
+    faqDesc: "Des réponses précises et transparentes sur nos choix techniques, notre feuille de route et la sécurité post-quantique.",
+    faqPqBadge: "Sécurité Post-Quantique • PQ by Design",
+    faqQ1: "Que signifie « Post-Quantique dès la conception » (PQ by design) pour CYBOU ?",
+    faqA1P1: "La plupart des systèmes de communication historiques s'appuient sur RSA ou la cryptographie sur les courbes elliptiques classiques. Face à l'émergence des calculateurs quantiques, ils tentent de patcher a posteriori leurs protocoles, exposant toutes les communications passées aux attaques <strong>« Harvest Now, Decrypt Later » (HNDL)</strong> — où des acteurs étatiques enregistrent dès aujourd'hui les flux chiffrés pour les casser demain.",
+    faqA1P2: "Dans CYBOU, la résistance post-quantique n'est pas une option ou une mise à niveau tardive : le protocole est <strong>PQ by design</strong> dès la version <code>v0.0.1</code>. La structure d'enveloppe <code>MailTx</code> et le chiffrement E2EE intègrent nativement le standard hybride <strong>HPKE (RFC 9180)</strong> combinant <strong>ML-KEM-768 (standard NIST / Kyber)</strong> et <strong>X25519</strong>, garantissant qu'aucun message scellé aujourd'hui ne pourra être déchiffré à l'ère quantique.",
+    faqQ2: "Pourquoi CYBOU n'est-il pas encore téléchargeable pour le grand public ?",
+    faqA2: "Nous refusons le marketing trompeur. CYBOU est actuellement à l'étape <code>v0.0.1</code> (baseline d'ingénierie et de recherche ouverte). Avant d'ouvrir le réseau au grand public, nous finalisons la transition du réseau de bootstrap <code>CYBOU-DEV v0.0.2</code> vers le consensus multi-validateurs BFT (seuil <code>f=1</code> avec 4 validateurs minimum) et la séparation étanche des clés d'opérateur (doc 68). Le code source et les 684 tests unitaires sont publiquement auditables.",
+    faqQ3: "En quoi CYBOU diffère-t-il d'une messagerie électronique classique (SMTP/IMAP) ?",
+    faqA3: "L'email classique dépend d'infrastructures de cloud centralisées, de serveurs de relais vulnérables aux réquisitions étrangères, et fait circuler les métadonnées et le contenu en clair entre hébergeurs. CYBOU fonctionne en réseau pair-à-pair décentralisé : chaque message est une transaction native <code>MailTx</code> validée par BFT, scellée avec un sel secret (doc 69), et déchiffrable uniquement sur le poste du destinataire sans passerelle intermédiaire.",
+    faqQ4: "Comment fonctionne le consensus BFT et la tolérance aux pannes ?",
+    faqA4: "Le consensus CYBOU repose sur une finalité BFT explicite sans minage énergivore. L'admission des validateurs est soumise à approbation opérateur, et chaque validateur dispose d'un poids égal à 1 (<code>weight = 1</code>). Un quorum minimum de 4 validateurs est strictement requis pour tolérer <code>f=1</code> validateur défaillant ou byzantin. Les époques de confiance (PoT) sont calculées en arithmétique entière à partir de la hauteur de bloc, sans dépendance aux horloges locales.",
+    faqQ5: "Quelle est la finalité économique du jeton CYBOU ?",
+    faqA5: "Le jeton CYBOU a une offre maximale stricte et non-gonflable de <strong>100 000 000 000 unités (0 décimale)</strong>. Il n'a aucune vocation spéculative : il sert à réguler l'accès au réseau et prévenir le pourriel (spam). Chaque compte reçoit une subvention de bienvenue de 6 000 CYBOU via bon d'invitation (doc 70). Les frais d'émission sont déterministes selon la taille (pas d'enchères de priorité) et répartis à 75% pour la sécurité du réseau et 25% pour la réserve d'accueil.",
+
     footNav: "Navigation",
     footDocs: "Spécifications",
     footGov: "Gouvernance"
@@ -132,9 +149,10 @@ const translations = {
     navMailTx: "MailTx Protocol",
     navSpecs: "Tech Specs",
     navSim: "Simulator",
+    navFaq: "FAQ",
     navRepo: "GitHub Repo",
 
-    heroTag: "Open R&D • C++20 P2P Architecture • European Sovereignty",
+    heroTag: "Open R&D • PQ by Design • C++20 P2P Architecture • European Sovereignty",
     heroAccent: "Sovereign P2P messaging & BFT ledger.",
     heroSubtitle: "Software architecture designed in France, freed from foreign cloud hyper-scalers. Post-quantum hybrid encryption, explicit BFT finality, and exclusive device authority.",
 
@@ -235,6 +253,22 @@ const translations = {
     simReplay: "Anti-Replay Domain Separation",
     simQuota: "Outgoing Quota per Epoch",
 
+    faqLabel: "Frequently Asked Questions",
+    faqTitle: "Architecture, Cryptography & Governance.",
+    faqDesc: "Transparent and rigorous answers regarding our technical foundation, roadmap, and post-quantum security.",
+    faqPqBadge: "Post-Quantum Security • PQ by Design",
+    faqQ1: "What does 'Post-Quantum by design' (PQ by design) mean for CYBOU?",
+    faqA1P1: "Most legacy messaging systems rely on RSA or classical elliptic curve cryptography. Facing the rise of quantum computing, they attempt to patch protocols retroactively, leaving all historically recorded correspondence vulnerable to <strong>'Harvest Now, Decrypt Later' (HNDL)</strong> attacks — where adversaries intercept encrypted traffic today to decrypt it tomorrow.",
+    faqA1P2: "In CYBOU, post-quantum resilience is not an optional future upgrade: the protocol is <strong>PQ by design</strong> from version <code>v0.0.1</code>. The native <code>MailTx</code> envelope structure and E2EE engine embed the hybrid <strong>HPKE (RFC 9180)</strong> standard combining <strong>ML-KEM-768 (NIST standard / Kyber)</strong> and <strong>X25519</strong>, ensuring sealed messages cannot be cracked in the quantum computing era.",
+    faqQ2: "Why isn't CYBOU available for public download yet?",
+    faqA2: "We reject deceptive marketing. CYBOU is currently at the <code>v0.0.1</code> baseline engineering stage. Before public release, we are completing the migration from the bootstrap chain (<code>CYBOU-DEV v0.0.2</code>) to the multi-validator BFT consensus (f=1 fault tolerance at 4+ validators) and strict operator key isolation (doc 68). The full source code and 684 unit tests are auditable on GitHub.",
+    faqQ3: "How does CYBOU differ from standard email (SMTP/IMAP)?",
+    faqA3: "Conventional email relies on centralized cloud providers, insecure relay servers, and exposes cleartext metadata and bodies across foreign jurisdictions. CYBOU is a direct peer-to-peer network: each message is a native <code>MailTx</code> verified via BFT, committed with a cryptographic salt (doc 69), and decryptable strictly on the recipient's machine without middlebox servers.",
+    faqQ4: "How do BFT consensus and fault tolerance work?",
+    faqA4: "CYBOU consensus operates on explicit BFT finality without wasteful mining. Validator admission is approved by the operator, and each validator holds an equal weight of 1 (<code>weight = 1</code>). A strict quorum of 4 validators is required to tolerate <code>f=1</code> faulty node. Proof of Trust (PoT) epochs are computed strictly via integer arithmetic from block height, with zero local wall-clock dependency.",
+    faqQ5: "What is the economic role of the CYBOU token?",
+    faqA5: "The CYBOU token has a fixed, non-inflatable supply ceiling of <strong>100,000,000,000 units (0 decimals)</strong>. It is not speculative: it serves strictly for network anti-spam and deterministic bandwidth allocation. Each account receives a 6,000 CYBOU Welcome Grant via signed Invite Voucher (doc 70). Transaction fees are non-bidding and split 75% for network security and 25% for the onboarding reserve.",
+
     footNav: "Navigation",
     footDocs: "Specifications",
     footGov: "Governance"
@@ -261,14 +295,14 @@ function setLanguage(lang) {
 
   const dict = translations[lang];
   for (const [key, val] of Object.entries(dict)) {
-    const el = document.querySelector(`[data-i18n="${key}"]`);
-    if (el) {
+    const elements = document.querySelectorAll(`[data-i18n="${key}"]`);
+    elements.forEach(el => {
       if (val.includes('<')) {
         el.innerHTML = val;
       } else {
         el.textContent = val;
       }
-    }
+    });
   }
 }
 
