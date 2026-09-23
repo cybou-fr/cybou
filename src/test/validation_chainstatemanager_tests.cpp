@@ -487,6 +487,13 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_activate_snapshot, SnapshotTestSetup)
 //!
 BOOST_FIXTURE_TEST_CASE(chainstatemanager_loadblockindex, TestChain100Setup)
 {
+    // CYBOU: this test exercises the assumeutxo machinery, but CYBOU-DEV
+    // ships no assumeutxo data (m_assumeutxo_data is cleared; see
+    // cybou_chainparams_tests). Creating the snapshot chainstate below would
+    // trigger a fatal "Assumeutxo data not found" in LoadBlockIndex.
+    // assumeutxo is transitional and is replaced by the CYBOU
+    // bootstrap/checkpoint policy at v0.0.4 (spec/bitcoin_code_removal.yaml).
+    if (Params().GetAvailableSnapshotHeights().empty()) return;
     ChainstateManager& chainman = *Assert(m_node.chainman);
     Chainstate& cs1 = chainman.ActiveChainstate();
 
