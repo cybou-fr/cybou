@@ -5,49 +5,49 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   initLanguageSwitch();
+  initMobileMenu();
   checkUrlLanguage();
 });
 
 // --- 1. Language Toggle (French / English) ---
 const translations = {
   fr: {
-    badgeStatus: "v0.0.1 Baseline",
     navStatus: "État du projet",
     navArch: "Piliers",
     navMailTx: "Protocole MailTx",
     navSpecs: "Fiche technique",
     navFaq: "FAQ",
-    navRepo: "Dépôt GitHub",
+    menuLabel: "Menu",
 
     heroTag: "R&D Ouverte • PQ by Design • Architecture P2P C++20 • Souveraineté Européenne",
-    heroAccent: "Messagerie P2P souveraine & registre BFT.",
-    heroSubtitle: "Une architecture logicielle conçue en France, émancipée des géants du cloud. Chiffrement hybride post-quantique, finalité BFT explicite et isolation stricte de l'autorité de l'appareil.",
+    heroAccent: "Infrastructure de communication décentralisée & sécurisée.",
+    heroSubtitle: "Projet R&D conçu en France pour une architecture indépendante des géants du cloud. BFT multi-validateur et chiffrement hybride post-quantique sont des cibles en cours de développement.",
 
-    statusCalloutTitle: "Statut de développement : v0.0.1 (Baseline d'ingénierie & durcissement)",
-    statusCalloutBody: "CYBOU n'est pas un service commercial ou une application de bureau déployée pour le grand public. Le réseau s'exécute actuellement sur une chaîne de démarrage interne (CYBOU-DEV v0.0.2). Cette plateforme présente les fondations architecturales, les transitions d'état formelles en C++ et l'état réel d'avancement du projet.",
+    statusCalloutTitle: "Projet en développement actif",
+    statusCalloutBody: "CYBOU n'est pas encore une infrastructure déployée pour le grand public. Le réseau utilise actuellement une chaîne de développement interne. Cette plateforme présente les fondations architecturales, les transitions d'état formelles en C++ et l'état réel d'avancement du projet.",
 
     heroBtnStatus: "Consulter l'état réel d'avancement",
     heroBtnCode: "Code source (GitHub)",
 
     matrixLabel: "Transparence technique",
-    matrixTitle: "Matrice d'implémentation v0.0.1.",
+    matrixTitle: "Matrice d'implémentation.",
     matrixDesc: "Distinction stricte et vérifiable entre le code validé en tests unitaires, les modules en cours de refonte et les composants de la feuille de route.",
 
-    col1Title: "Validé & Testé (v0.0.1)",
+    col1Title: "Validé & testé",
     badgeDone: "FONCTIONNEL",
     col1Item1: "<strong>Création de compte native & sans intermédiaire (doc 70) :</strong> opération AccountCreateOpV1 avec preuve de travail anti-Sybil.",
     col1Item2: "<strong>Identifiant typé AccountId (32 octets) :</strong> gestion déterministe du solde système (<code>SystemBalance</code>).",
     col1Item3: "<strong>Bonus d'accueil atomique :</strong> transfert immédiat du bonus depuis <code>OnboardingPool</code> vers <code>SystemBalance</code>.",
     col1Item4: "<strong>Persistance d'état LevelDB :</strong> instantanés atomiques avec nommage et isolats stricts CYBOU.",
     col1Item5: "<strong>Définition native MailTx (doc 16) :</strong> opération de premier rang, 1 destinataire, taille bornée, frais prévisibles (sans surenchère).",
-    col1Item6: "<strong>Couverture de tests :</strong> 684 tests unitaires validés, élimination intégrale des dépendances et terminologies Bitcoin résiduelles.",
+    col1Item6: "<strong>Couverture de tests :</strong> tests unitaires publiés pour les transitions CYBOU implémentées ; plusieurs sous-systèmes Bitcoin hérités restent en cours de retrait.",
 
     col2Title: "En cours de consolidation",
     badgeWip: "EN COURS",
     col2Item1: "<strong>Moteur de consensus BFT (doc 07) :</strong> finalité explicite multi-validateurs avec admission contrôlée par l'opérateur (seuil f=1 dès 4 validateurs à poids égal).",
     col2Item2: "<strong>Époques Proof of Trust (PoT) :</strong> calcul arithmétique entier strict dérivé de la hauteur de bloc (zéro dépendance à l'horloge locale).",
     col2Item3: "<strong>Séparation stricte des clés (doc 68) :</strong> 4 domaines isolés (Autorité, Validateur, Signature de release, Trésorerie).",
-    col2Item4: "<strong>Remplacement PoW :</strong> élimination définitive des reliquats de preuve de travail de la chaîne de bootstrap <code>CYBOU-DEV v0.0.2</code>.",
+    col2Item4: "<strong>Remplacement PoW :</strong> élimination définitive des mécanismes hérités de la chaîne de développement.",
 
     col3Title: "Feuille de route planifiée",
     badgePlanned: "PLANIFIÉ",
@@ -58,13 +58,13 @@ const translations = {
 
     archLabel: "Fondations de conception",
     archTitle: "Rupture avec les architectures centralisées.",
-    archDesc: "Les quatre piliers de conception garantissant la souveraineté et l'intégrité pérenne des échanges numériques.",
+    archDesc: "Les quatre piliers qui guident la conception de la souveraineté et de l'intégrité des échanges numériques.",
 
     bento1Title: "Émancipation totale des hébergeurs de cloud tiers",
     bento1Desc: "Aucun serveur central, aucun compte sous juridiction extra-européenne, aucun point unique de censure ou de coupure. Les nœuds pairs échangent directement via un protocole P2P durci en C++20 sans passerelle obligatoire.",
     bento1Metric: "Résilience autonome native au niveau protocolaire",
 
-    bento2Title: "Chiffrement Post-Quantique HPKE",
+    bento2Title: "Profil cible HPKE post-quantique",
     bento2Desc: "Anticipation des attaques par interception et déchiffrement ultérieur grâce au standard hybride cible ML-KEM-768 et X25519 (RFC 9180).",
     bento2Metric: "Standard NIST post-quantique",
 
@@ -83,19 +83,19 @@ const translations = {
     step1Title: "Engagement salé de contenu",
     step1Desc: "Le corps textuel est lié à un sel cryptographique imprédictible (doc 69). L'empreinte résultante garantit l'intégrité sans exposer le contenu en clair aux validateurs.",
 
-    step2Title: "Chiffrement Hybride HPKE",
-    step2Desc: "Chiffrement de bout en bout ciblé pour la clé publique du destinataire avec protection post-quantique. Aucun tiers ne peut accéder au message en clair.",
+    step2Title: "Profil cible Hybride HPKE",
+    step2Desc: "Profil cible de chiffrement de bout en bout pour la clé publique du destinataire. L'intégration MailTx complète et son audit restent à réaliser avant toute revendication de sécurité en production.",
 
     step3Title: "Opération MailTx native",
     step3Desc: "Émission d'une transaction de premier rang (pas de payload arbitraire Bitcoin Script). Frais déterministes fonction de la taille, sans enchère de priorité.",
 
     step4Title: "Consensus BFT & Index Local",
-    step4Desc: "Le bloc est scellé par les validateurs BFT. Aucun état par courrier n'est conservé dans le consensus : le client local indexe ses courriers reçus et envoyés.",
+    step4Desc: "Architecture cible : le bloc finalisé par BFT ne conserve aucun objet d'état permanent par courrier ; le futur client local indexera les courriers reçus et envoyés.",
 
     specLabel: "Spécifications machine & humaine",
     specTitle: "Fiche technique du protocole CYBOU.",
     specDesc: "Données d'ingénierie structurées et indexables pour moteurs de recherche et assistants d'analyse IA.",
-    factsheetHeading: "Paramètres canoniques de l'architecture CYBOU v0.0.1",
+    factsheetHeading: "Paramètres canoniques de l'architecture CYBOU",
 
     dtConsensus: "Modèle de consensus",
     dtPoT: "Époques de confiance (PoT)",
@@ -105,6 +105,8 @@ const translations = {
     dtMailTx: "Format MailTx (v1)",
     dtKeys: "Séparation des clés d'opérateur",
     dtStack: "Socle technologique",
+    dtNetworks: "Réseaux DEV, Beta & Mainnet",
+    ddNetworks: "Genèses et paramètres économiques strictement séparés. L'économie Beta est expérimentale : les soldes Beta ne sont pas reportés sur le Mainnet.",
 
     faqLabel: "Questions fréquentes",
     faqTitle: "Architecture, Cryptographie & Gouvernance.",
@@ -112,13 +114,13 @@ const translations = {
     faqPqBadge: "Sécurité Post-Quantique • PQ by Design",
     faqQ1: "Que signifie « Post-Quantique dès la conception » (PQ by design) pour CYBOU ?",
     faqA1P1: "La plupart des systèmes de communication historiques s'appuient sur RSA ou la cryptographie sur les courbes elliptiques classiques. Face à l'émergence des calculateurs quantiques, ils tentent de patcher a posteriori leurs protocoles, exposant toutes les communications passées aux attaques <strong>« Harvest Now, Decrypt Later » (HNDL)</strong> — où des acteurs étatiques enregistrent dès aujourd'hui les flux chiffrés pour les casser demain.",
-    faqA1P2: "Dans CYBOU, la résistance post-quantique est un principe fondateur : le protocole est pensé <strong>PQ by design</strong> dès la version <code>v0.0.1</code>. La structure d'enveloppe <code>MailTx</code> et le chiffrement E2EE ciblent nativement le standard hybride <strong>HPKE (RFC 9180)</strong> combinant <strong>ML-KEM-768 (standard NIST / Kyber)</strong> et <strong>X25519</strong>, tandis qu'un vérificateur hybride <strong>Ed25519 + ML-DSA-65</strong> est déjà validé pour les signatures d'autorité (OpenSSL >= 3.5), immunisant les flux contre les risques quantiques futurs.",
+    faqA1P2: "Dans CYBOU, la résistance post-quantique est un objectif de conception. Le profil cible <code>MailTx</code> combine <strong>ML-KEM-768</strong> et <strong>X25519</strong>, tandis qu'un vérificateur hybride <strong>Ed25519 + ML-DSA-65</strong> est validé pour les signatures d'autorité (OpenSSL >= 3.5). Le chiffrement MailTx complet, l'audit externe et les migrations de clés restent à réaliser : CYBOU ne revendique pas encore une sécurité post-quantique de production.",
     faqQ2: "Pourquoi CYBOU n'est-il pas encore téléchargeable pour le grand public ?",
-    faqA2: "Nous refusons le marketing trompeur. CYBOU est actuellement à l'étape <code>v0.0.1</code> (baseline d'ingénierie et de recherche ouverte). Avant d'ouvrir le réseau au grand public, nous finalisons la transition du réseau de bootstrap <code>CYBOU-DEV v0.0.2</code> vers le consensus multi-validateurs BFT (seuil <code>f=1</code> avec 4 validateurs minimum) et la séparation étanche des clés d'opérateur (doc 68). Le code source et les 684 tests unitaires sont publiquement auditables.",
+    faqA2: "CYBOU est en phase d'ingénierie et de recherche ouverte. Avant toute ouverture au grand public, le projet doit remplacer le consensus hérité de la chaîne de développement par un moteur BFT multi-validateur testé, intégrer les communications de bout en bout et achever la séparation opérationnelle des clés. Le code source et les tests disponibles sont publiquement consultables.",
     faqQ3: "En quoi CYBOU diffère-t-il d'une messagerie électronique classique (SMTP/IMAP) ?",
-    faqA3: "L'email classique dépend d'infrastructures de cloud centralisées, de serveurs de relais vulnérables aux réquisitions étrangères, et fait circuler les métadonnées et le contenu en clair entre hébergeurs. CYBOU fonctionne en réseau pair-à-pair décentralisé : chaque message est une transaction native <code>MailTx</code> validée par BFT, scellée avec un sel secret (doc 69), et déchiffrable uniquement sur le poste du destinataire sans passerelle intermédiaire.",
+    faqA3: "L'architecture cible CYBOU remplace le modèle SMTP/IMAP centralisé par une opération native <code>MailTx</code>, un engagement de contenu salé et un index local au destinataire. Ce flux complet dépend encore de l'intégration du moteur BFT, du chiffrement MailTx et du client ; il n'est pas présenté comme un service déployé aujourd'hui.",
     faqQ4: "Comment fonctionne le consensus BFT et la tolérance aux pannes ?",
-    faqA4: "Le consensus CYBOU repose sur une finalité BFT explicite sans minage énergivore. L'admission des validateurs est soumise à approbation opérateur, et chaque validateur dispose d'un poids égal à 1 (<code>weight = 1</code>). Un quorum minimum de 4 validateurs est strictement requis pour tolérer <code>f=1</code> validateur défaillant ou byzantin. Les époques de confiance (PoT) sont calculées en arithmétique entière à partir de la hauteur de bloc, sans dépendance aux horloges locales.",
+    faqA4: "Le modèle cible utilise une finalité BFT explicite, des validateurs de poids égal à 1 et une admission approuvée par l'opérateur. Une configuration d'au moins 4 validateurs est requise pour revendiquer une tolérance <code>f=1</code>. Le moteur multi-validateur et ses essais de panne restent en cours ; la chaîne DEV utilise encore son consensus de bootstrap hérité.",
     faqQ5: "Quelle est la finalité économique du jeton CYBOU ?",
     faqA5: "Le jeton CYBOU a une offre maximale stricte et non-gonflable de <strong>100 000 000 000 unités (0 décimale)</strong>. Il n'a aucune vocation spéculative : il sert à réguler l'accès au réseau et prévenir le pourriel (spam). Chaque nouveau compte satisfaisant la preuve de travail anti-Sybil reçoit un bonus d'accueil automatique directement sur son Solde Système (doc 70), sans invitation ni approbation centrale. Les frais d'émission sont déterministes selon la taille (pas d'enchères de priorité) et recyclés à 75% pour la sécurité du réseau et 25% pour la réserve d'accueil.",
 
@@ -128,43 +130,42 @@ const translations = {
   },
 
   en: {
-    badgeStatus: "v0.0.1 Baseline",
     navStatus: "Project Status",
     navArch: "Pillars",
     navMailTx: "MailTx Protocol",
     navSpecs: "Tech Specs",
     navFaq: "FAQ",
-    navRepo: "GitHub Repo",
+    menuLabel: "Menu",
 
     heroTag: "Open R&D • PQ by Design • C++20 P2P Architecture • European Sovereignty",
-    heroAccent: "Sovereign P2P messaging & BFT ledger.",
-    heroSubtitle: "Software architecture designed in France, freed from foreign cloud hyper-scalers. Post-quantum hybrid encryption, explicit BFT finality, and exclusive device authority.",
+    heroAccent: "Decentralized & secure communication infrastructure.",
+    heroSubtitle: "Open R&D project designed in France for independence from foreign cloud hyper-scalers. Multi-validator BFT and hybrid post-quantum encryption remain development targets.",
 
-    statusCalloutTitle: "Development Status: v0.0.1 (Engineering Baseline & Hardening)",
-    statusCalloutBody: "CYBOU is not a consumer product or desktop app deployed for the general public today. The network currently operates on an internal bootstrap chain (CYBOU-DEV v0.0.2). This site documents the architectural foundation, formal C++ state transitions, and real engineering progress.",
+    statusCalloutTitle: "Project in active development",
+    statusCalloutBody: "CYBOU is not yet infrastructure deployed for the general public. The network currently uses an internal development chain. This site documents the architectural foundation, formal C++ state transitions, and real engineering progress.",
 
     heroBtnStatus: "View Implementation Status",
     heroBtnCode: "Source Code (GitHub)",
 
     matrixLabel: "Technical Transparency",
-    matrixTitle: "v0.0.1 Implementation Matrix.",
+    matrixTitle: "Implementation Matrix.",
     matrixDesc: "Strict, verifiable breakdown between tested unit code, active engineering work, and the long-term roadmap.",
 
-    col1Title: "Validated & Tested (v0.0.1)",
+    col1Title: "Validated & tested",
     badgeDone: "PASSING",
     col1Item1: "<strong>Permissionless Anti-Sybil Onboarding (doc 70):</strong> protocol-native AccountCreateOpV1 with proof-of-work difficulty binding.",
     col1Item2: "<strong>Typed AccountId (32 bytes):</strong> deterministic balance validation and <code>SystemBalance</code> tracking.",
     col1Item3: "<strong>Atomic Onboarding Bonus:</strong> immediate transfer from <code>OnboardingPool</code> to <code>SystemBalance</code> upon account creation.",
     col1Item4: "<strong>LevelDB Snapshot Persistence:</strong> atomic state snapshots with clean CYBOU namespacing.",
     col1Item5: "<strong>Native MailTx Definition (doc 16):</strong> first-class operation, 1 recipient, bounded payload size, deterministic non-bidding fees.",
-    col1Item6: "<strong>Test Coverage:</strong> 684 unit tests passing, complete elimination of legacy Bitcoin terminology and prefixes.",
+    col1Item6: "<strong>Test Coverage:</strong> published unit tests cover implemented CYBOU transitions; several inherited Bitcoin subsystems are still being removed.",
 
     col2Title: "In Progress & Hardening",
     badgeWip: "IN PROGRESS",
     col2Item1: "<strong>Multi-Validator BFT Engine (doc 07):</strong> explicit finality with operator-approved admission (f=1 threshold at 4+ validators, equal weight = 1).",
     col2Item2: "<strong>Proof of Trust (PoT) Epochs:</strong> deterministic integer math derived strictly from block height (zero local wall-clock dependency).",
     col2Item3: "<strong>Strict Key Separation (doc 68):</strong> 4 isolated roles (Operator Authority, Validator, Release Signing, Treasury).",
-    col2Item4: "<strong>PoW Retirement:</strong> final deprecation of residual proof-of-work mechanics inherited from the <code>CYBOU-DEV v0.0.2</code> bootstrap chain.",
+    col2Item4: "<strong>PoW Retirement:</strong> final removal of proof-of-work mechanics inherited from the development chain.",
 
     col3Title: "Planned Roadmap",
     badgePlanned: "PLANNED",
@@ -175,14 +176,14 @@ const translations = {
 
     archLabel: "Design Foundations",
     archTitle: "Breaking with Centralized Cloud Architectures.",
-    archDesc: "The four architectural pillars guaranteeing long-term digital sovereignty and communication integrity.",
+    archDesc: "The four architectural pillars guiding long-term digital sovereignty and communication integrity.",
 
     bento1Title: "Zero Foreign Cloud Dependency",
     bento1Desc: "No centralized servers, no accounts under non-European jurisdiction, no single point of censorship or shutdown. Nodes communicate directly via a hardened C++20 P2P protocol without mandatory proxies.",
     bento1Metric: "Native protocol-level autonomous resilience",
 
-    bento2Title: "Post-Quantum HPKE Encryption",
-    bento2Desc: "Future-proof immunity against 'harvest-now-decrypt-later' threats using the target hybrid ML-KEM-768 and X25519 standard (RFC 9180).",
+    bento2Title: "Target Post-Quantum HPKE Profile",
+    bento2Desc: "Target hybrid ML-KEM-768 and X25519 profile designed to address 'harvest-now-decrypt-later' threats; full MailTx integration and external review remain pending.",
     bento2Metric: "NIST post-quantum standard",
 
     bento3Title: "Exclusive Device Authority",
@@ -200,19 +201,19 @@ const translations = {
     step1Title: "Salted Content Commitment",
     step1Desc: "The message body is bound to an unpredictable cryptographic salt (doc 69). The resulting hash commits content without exposing cleartext to validators.",
 
-    step2Title: "Hybrid HPKE Encryption",
-    step2Desc: "End-to-end encryption targeted exclusively to the recipient's public key with post-quantum security. Intermediaries cannot inspect payload contents.",
+    step2Title: "Target Hybrid HPKE Profile",
+    step2Desc: "Target end-to-end encryption profile for the recipient's public key. Full MailTx integration and review remain required before any production security claim.",
 
     step3Title: "First-Class MailTx Operation",
     step3Desc: "Broadcasted as a native first-class transaction (never encoded as arbitrary Bitcoin script). Size-aware deterministic fee without bidding wars.",
 
     step4Title: "BFT Consensus & Local Indexing",
-    step4Desc: "The block is sealed with explicit BFT finality. No per-mail consensus object is stored: the local client retains private Inbox and Sent index trees.",
+    step4Desc: "Target architecture: a BFT-finalized block stores no permanent per-mail state object; the future local client will retain private Inbox and Sent indexes.",
 
     specLabel: "Machine & Human Specifications",
     specTitle: "CYBOU Protocol Technical Factsheet.",
     specDesc: "Structured engineering parameters formatted for search engine indexing and AI knowledge models.",
-    factsheetHeading: "Canonical Architecture Parameters (CYBOU v0.0.1)",
+    factsheetHeading: "Canonical CYBOU Architecture Parameters",
 
     dtConsensus: "Consensus Model",
     dtPoT: "Proof of Trust Epochs (PoT)",
@@ -222,6 +223,8 @@ const translations = {
     dtMailTx: "MailTx Specification (v1)",
     dtKeys: "Operator Key Isolation",
     dtStack: "Core Technology Stack",
+    dtNetworks: "DEV, Beta & Mainnet Networks",
+    ddNetworks: "Strictly separate genesis and economic parameters. Beta economics are experimental: Beta balances do not carry to Mainnet.",
 
     faqLabel: "Frequently Asked Questions",
     faqTitle: "Architecture, Cryptography & Governance.",
@@ -229,13 +232,13 @@ const translations = {
     faqPqBadge: "Post-Quantum Security • PQ by Design",
     faqQ1: "What does 'Post-Quantum by design' (PQ by design) mean for CYBOU?",
     faqA1P1: "Most legacy messaging systems rely on RSA or classical elliptic curve cryptography. Facing the rise of quantum computing, they attempt to patch protocols retroactively, leaving all historically recorded correspondence vulnerable to <strong>'Harvest Now, Decrypt Later' (HNDL)</strong> attacks — where adversaries intercept encrypted traffic today to decrypt it tomorrow.",
-    faqA1P2: "In CYBOU, post-quantum resilience is a core founding principle: the protocol is designed <strong>PQ by design</strong> from version <code>v0.0.1</code>. The native <code>MailTx</code> envelope structure and E2EE engine target the hybrid <strong>HPKE (RFC 9180)</strong> standard combining <strong>ML-KEM-768 (NIST standard / Kyber)</strong> and <strong>X25519</strong>, while an <strong>Ed25519 + ML-DSA-65</strong> hybrid verifier is already validated for authority signatures (OpenSSL >= 3.5), shielding data flows against future quantum risks.",
+    faqA1P2: "Post-quantum resilience is a design objective for CYBOU. The target <code>MailTx</code> profile combines <strong>ML-KEM-768</strong> and <strong>X25519</strong>, while a hybrid <strong>Ed25519 + ML-DSA-65</strong> verifier is validated for authority signatures (OpenSSL >= 3.5). Full MailTx encryption, external review, and key migration remain pending; CYBOU does not yet claim production post-quantum security.",
     faqQ2: "Why isn't CYBOU available for public download yet?",
-    faqA2: "We reject deceptive marketing. CYBOU is currently at the <code>v0.0.1</code> baseline engineering stage. Before public release, we are completing the migration from the bootstrap chain (<code>CYBOU-DEV v0.0.2</code>) to the multi-validator BFT consensus (f=1 fault tolerance at 4+ validators) and strict operator key isolation (doc 68). The full source code and 684 unit tests are auditable on GitHub.",
+    faqA2: "CYBOU is in open engineering and research. Before public release, the project must replace the inherited development-chain consensus with a tested multi-validator BFT engine, integrate communications end to end, and complete operational key separation. The available source code and tests are public for inspection.",
     faqQ3: "How does CYBOU differ from standard email (SMTP/IMAP)?",
-    faqA3: "Conventional email relies on centralized cloud providers, insecure relay servers, and exposes cleartext metadata and bodies across foreign jurisdictions. CYBOU is a direct peer-to-peer network: each message is a native <code>MailTx</code> verified via BFT, committed with a cryptographic salt (doc 69), and decryptable strictly on the recipient's machine without middlebox servers.",
+    faqA3: "The target CYBOU architecture replaces centralized SMTP/IMAP infrastructure with a native <code>MailTx</code>, a salted content commitment, and recipient-owned local indexes. This complete flow still depends on BFT, MailTx encryption, and client integration and is not presented as a deployed service today.",
     faqQ4: "How do BFT consensus and fault tolerance work?",
-    faqA4: "CYBOU consensus operates on explicit BFT finality without wasteful mining. Validator admission is approved by the operator, and each validator holds an equal weight of 1 (<code>weight = 1</code>). A strict quorum of 4 validators is required to tolerate <code>f=1</code> faulty node. Proof of Trust (PoT) epochs are computed strictly via integer arithmetic from block height, with zero local wall-clock dependency.",
+    faqA4: "The target model uses explicit BFT finality, operator-approved validator admission, and equal validator weight of 1. At least 4 validators are required before claiming <code>f=1</code> tolerance. The multi-validator engine and fault tests remain in progress; the DEV chain still uses its inherited bootstrap consensus.",
     faqQ5: "The CYBOU token has a fixed, non-inflatable supply ceiling of <strong>100,000,000,000 units (0 decimals)</strong>. It is not speculative: it serves strictly for network anti-spam and deterministic bandwidth allocation. Newly created accounts satisfying anti-Sybil proof-of-work receive an automatic onboarding bonus (doc 70) credited directly to System Balance without any operator invites or central approval. Transaction fees are non-bidding and split 75% for network security and 25% recycled to the onboarding reserve.",
 
     footNav: "Navigation",
@@ -260,6 +263,31 @@ function initLanguageSwitch() {
 
   btnFr.addEventListener('click', () => setLanguage('fr', true));
   btnEn.addEventListener('click', () => setLanguage('en', true));
+}
+
+function initMobileMenu() {
+  const toggle = document.getElementById('menu-toggle');
+  const menu = document.getElementById('mobile-menu');
+  if (!toggle || !menu) return;
+
+  const closeMenu = () => {
+    menu.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+  };
+
+  toggle.addEventListener('click', () => {
+    const willOpen = menu.hidden;
+    menu.hidden = !willOpen;
+    toggle.setAttribute('aria-expanded', String(willOpen));
+  });
+
+  menu.querySelectorAll('a').forEach(link => link.addEventListener('click', closeMenu));
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      closeMenu();
+      toggle.focus();
+    }
+  });
 }
 
 function setLanguage(lang, updateUrl = false) {
