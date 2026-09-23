@@ -6,9 +6,11 @@
 #define CYBOU_NETWORK_DEFINITION_H
 
 #include <cybou/protocol_params.h>
+#include <cybou/signing.h>
 #include <uint256.h>
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace cybou {
@@ -22,6 +24,7 @@ struct CybouNetworkDefinitionV1 {
     uint256 genesis_state_root;
     CybouProtocolParameters protocol_parameters;
     uint256 initial_validator_set_commitment;
+    std::optional<OperatorAuthorityKeySet> operator_authority;
 
     friend bool operator==(const CybouNetworkDefinitionV1&, const CybouNetworkDefinitionV1&) = default;
 };

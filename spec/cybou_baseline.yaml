@@ -253,3 +253,9 @@ operator_key_domains:
 - operator_validator
 - release_signing
 - treasury
+operator_authority_policy:
+  beta_keyset: fixed_in_network_definition
+  runtime_mutation: forbidden
+mail_rate_policy:
+  beta: one_network_bound_limit_per_account_epoch
+  system_balance_increases_quota: false

@@ -99,3 +99,16 @@
 [ ] historical sender-key authorization verifies
 [ ] plaintext + disclosed salt recomputes ContentCommitment
 ```
+
+## Beta consensus hardening acceptance
+
+- Reopening state with a different Operator Authority keyset or MailTx quota
+  must fail with a network mismatch.
+- A validator whose ID differs from its consensus public key must sign and
+  verify BFT messages using the configured consensus key.
+- A proposal with invalid operations or a mismatched state root must receive
+  no positive prevote, lock, precommit, or finalization.
+- A validator-set transition must refresh the running node's set and index
+  before voting at the next height.
+- A new account with the DEV 6,000 SystemBalance bonus retains the baseline
+  25 MailTx limit per epoch.

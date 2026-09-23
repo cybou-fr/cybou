@@ -31,7 +31,7 @@ Decide whether pre-Store MailTx bodies are later migrated into Store or remain v
 ## BFT / operator authority
 
 ### O-009 Exact BFT protocol — resolved
-Frozen as Tendermint/IBFT style 4-validator state machine with deterministic round leader `(height + round) % 4`, prevote/precommit locking, 3/4 commit votes forming `BftFinalityCertificateV1`, and atomic `CommitFinalizedBlock` validation in `CybouStateStore`. Verified in `cybou::BftSimulator`.
+Frozen as Tendermint/IBFT style N-validator state machine (N >= 1) with deterministic round leader `(height + round) % N`, prevote/precommit locking, quorum `floor(2*N/3)+1` forming `BftFinalityCertificateV1`, and atomic `CommitFinalizedBlock` validation in `CybouStateStore`. Authority Mode (N=1) has 1/1 finality and f=0; f=1 requires at least four validators. Verified in `cybou::BftSimulator`.
 
 ### O-010 Validator admission transaction format — resolved
 Frozen as typed `ValidatorAdmissionOpV1` and `ValidatorRemovalOpV1` protocol operations with domain-separated hybrid `Ed25519 + ML-DSA-65` Operator Authority signatures (`CYBOU/SIG/VALIDATOR-ADMISSION/V1` and `CYBOU/SIG/VALIDATOR-REMOVAL/V1`), binding `NetworkID`. Active validator set is tracked directly in canonical consensus state (`CybouState`) with equal weight = 1, unique validator IDs and consensus keys, and non-empty active set invariants enforced by `CybouStateStore`.

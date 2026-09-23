@@ -72,6 +72,11 @@ Operator Authority
 
 A deployment must not claim tolerance of one Byzantine validator with fewer than 4 validators. Sets with $N < 1$ are strictly rejected by `ValidateValidatorSet`.
 
+For an N=1 Beta deployment, the Operator Validator private key requires an
+encrypted offline recovery copy. If that sole validator key is irretrievably
+lost, the network cannot finalize a validator admission block. Operator
+Authority alone cannot restore finality.
+
 ### Quorum formula
 
 Quorum is calculated directly with integer arithmetic:
@@ -94,7 +99,7 @@ The canonical reference implementation is defined in `cybou::BftValidatorNode` a
 
 - **Height**: Monotonically increasing 64-bit integer, starting at 1 after Genesis.
 - **Round**: 32-bit integer per height, starting at 0.
-- **Proposer selection**: Deterministic round leader `(height + round) % 4`.
+- **Proposer selection**: Deterministic round leader `(height + round) % N`.
 - **Phases**:
   1. `PROPOSE`: Round leader broadcasts `BftProposalMsg` signed over `CYBOU/BFT_PROPOSAL/V1`.
   2. `PREVOTE`: Nodes validate proposal against canonical chain tip and locking rules. If valid, broadcast `BftPrevoteMsg` for `block_id`; otherwise prevote `nil`.

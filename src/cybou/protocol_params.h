@@ -5,6 +5,7 @@
 #ifndef CYBOU_PROTOCOL_PARAMS_H
 #define CYBOU_PROTOCOL_PARAMS_H
 
+#include <cstddef>
 #include <cstdint>
 
 namespace cybou {
@@ -20,8 +21,6 @@ inline constexpr uint64_t DEFAULT_MAIL_TIER_BYTES{1024};
 inline constexpr uint64_t DEFAULT_MAIL_TIER_FEE{1};
 inline constexpr uint32_t DEFAULT_MAX_MAIL_CIPHERTEXT_SIZE{64 * 1024};
 inline constexpr uint32_t DEFAULT_NEW_ACCOUNT_MAIL_LIMIT_PER_EPOCH{25};
-inline constexpr uint32_t DEFAULT_TIER2_MAIL_LIMIT_PER_EPOCH{50};
-inline constexpr uint32_t DEFAULT_TIER3_MAIL_LIMIT_PER_EPOCH{100};
 
 /**
  * Immutable protocol parameters. For DEV/Beta these are fixed network

@@ -58,7 +58,18 @@ std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefiniti
     append_u64le(definition.protocol_parameters.mail_tier_bytes);
     append_u64le(definition.protocol_parameters.mail_tier_fee);
     append_u32le(definition.protocol_parameters.max_mail_ciphertext_size);
+    append_u32le(definition.protocol_parameters.new_account_mail_limit_per_epoch);
     append_hash(definition.initial_validator_set_commitment);
+    out.push_back(definition.operator_authority.has_value() ? 1 : 0);
+    if (definition.operator_authority) {
+        const auto& authority = *definition.operator_authority;
+        append_hash(authority.keyset_id);
+        out.insert(out.end(), authority.ed25519_public_key.begin(), authority.ed25519_public_key.end());
+        out.insert(out.end(), authority.mldsa65_public_key.begin(), authority.mldsa65_public_key.end());
+        append_u64le(authority.active_from_epoch);
+        out.push_back(authority.retired_from_epoch.has_value() ? 1 : 0);
+        if (authority.retired_from_epoch) append_u64le(*authority.retired_from_epoch);
+    }
     return out;
 }
 

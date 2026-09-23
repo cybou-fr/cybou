@@ -298,6 +298,18 @@ BOOST_AUTO_TEST_CASE(state_store_rejects_reopen_with_different_network_definitio
     cybou::CybouStateStore incompatible{db, incompatible_definition};
     BOOST_CHECK(incompatible.LoadState().error == cybou::StateLoadError::NETWORK_MISMATCH);
 
+    auto mail_policy_definition{definition};
+    ++mail_policy_definition.protocol_parameters.new_account_mail_limit_per_epoch;
+    BOOST_CHECK(cybou::NetworkId(mail_policy_definition) != original.GetNetworkId());
+    cybou::CybouStateStore mail_policy_store{db, mail_policy_definition};
+    BOOST_CHECK(mail_policy_store.LoadState().error == cybou::StateLoadError::NETWORK_MISMATCH);
+
+    auto authority_definition{definition};
+    authority_definition.operator_authority = cybou::OperatorAuthorityKeySet{.keyset_id = uint256::ONE};
+    BOOST_CHECK(cybou::NetworkId(authority_definition) != original.GetNetworkId());
+    cybou::CybouStateStore authority_store{db, authority_definition};
+    BOOST_CHECK(authority_store.LoadState().error == cybou::StateLoadError::NETWORK_MISMATCH);
+
     const auto fb = MakeFinalizedBlock(original, {});
     BOOST_CHECK(incompatible.CommitFinalizedBlock(fb, TEST_VALIDATOR_SET).error ==
         cybou::BlockTransitionError::NETWORK_MISMATCH);
@@ -590,7 +602,7 @@ cybou::SignatureBundleV1 CreateStoreMockSignatureBundle(const uint256& keyset_id
 BOOST_AUTO_TEST_CASE(store_genesis_validator_set_validation_and_access)
 {
     auto db = MemoryDb();
-    const auto definition = TestNetworkDefinition();
+    auto definition = TestNetworkDefinition();
     cybou::CybouStateStore store{db, definition};
 
     // 1. Rejects genesis with mismatched validator set commitment
@@ -621,7 +633,7 @@ BOOST_AUTO_TEST_CASE(store_genesis_validator_set_validation_and_access)
 BOOST_AUTO_TEST_CASE(store_commits_block_with_validator_admission_and_removal)
 {
     auto db = MemoryDb();
-    const auto definition = TestNetworkDefinition();
+    auto definition = TestNetworkDefinition();
 
     const uint256 keyset_id{uint256::FromUserHex("aa").value()};
     const cybou::OperatorAuthorityKeySet authority{
@@ -631,7 +643,8 @@ BOOST_AUTO_TEST_CASE(store_commits_block_with_validator_admission_and_removal)
     };
     auto verifier = std::make_shared<MockStoreAuthorityVerifier>();
 
-    cybou::CybouStateStore store{db, definition, authority, verifier};
+    definition.operator_authority = authority;
+    cybou::CybouStateStore store{db, definition, verifier};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
 
     // Create 5th validator node
@@ -665,7 +678,11 @@ BOOST_AUTO_TEST_CASE(store_commits_block_with_validator_admission_and_removal)
 
     // Block 2: regular operation, signed by 4 of the 5 validators (quorum satisfied)
     std::vector<MockVal> four_signers = {all_5_nodes[0], all_5_nodes[1], all_5_nodes[2], all_5_nodes[4]};
-    auto fb2 = MakeFinalizedBlock(store, {ValidOp()}, *val_set_h1, four_signers, std::nullopt, std::nullopt, std::nullopt, verifier.get());
+    auto account_op = ValidOp();
+    account_op.creation_work.network_id = store.GetNetworkId();
+    account_op.proof_of_possession = *cybou::SignUserMessage(
+        AUTH_PRIVKEY, cybou::ComputeAccountPopDigest(store.GetNetworkId(), ACCOUNT_ID, AUTH_KEY));
+    auto fb2 = MakeFinalizedBlock(store, {account_op}, *val_set_h1, four_signers, std::nullopt, std::nullopt, std::nullopt, verifier.get());
     BOOST_REQUIRE(store.CommitFinalizedBlock(fb2));
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 2);
 
@@ -707,7 +724,7 @@ BOOST_AUTO_TEST_CASE(store_rejects_removal_of_last_validator_in_authority_mode)
         .validator_set = authority_val_set,
     };
 
-    const cybou::CybouNetworkDefinitionV1 auth_definition{
+    cybou::CybouNetworkDefinitionV1 auth_definition{
         .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
         .genesis_block_id = uint256::ONE,
         .genesis_state_root = cybou::CybouStateHash(auth_genesis_state),
@@ -723,7 +740,8 @@ BOOST_AUTO_TEST_CASE(store_rejects_removal_of_last_validator_in_authority_mode)
     };
     auto verifier = std::make_shared<MockStoreAuthorityVerifier>();
 
-    cybou::CybouStateStore store{db, auth_definition, authority, verifier};
+    auth_definition.operator_authority = authority;
+    cybou::CybouStateStore store{db, auth_definition, verifier};
     BOOST_REQUIRE(store.InitializeGenesis(auth_genesis_state));
     BOOST_CHECK_EQUAL(store.GetValidatorSet()->Size(), 1);
 

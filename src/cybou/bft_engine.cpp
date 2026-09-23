@@ -118,21 +118,37 @@ BftValidatorNode::BftValidatorNode(
     size_t node_index,
     std::array<unsigned char, 32> private_key_seed,
     uint256 network_id,
-    ValidatorSetV1 validator_set)
+    ValidatorSetV1 validator_set,
+    ExecuteOperations execute_operations)
     : m_node_index{node_index},
       m_private_key_seed{private_key_seed},
       m_network_id{network_id},
       m_validator_set{std::move(validator_set)},
-      m_validator_set_commitment{ComputeValidatorSetCommitment(m_validator_set)}
+      m_validator_set_commitment{ComputeValidatorSetCommitment(m_validator_set)},
+      m_execute_operations{std::move(execute_operations)}
 {
     const auto pub = DeriveEd25519PublicKey(m_private_key_seed);
-    if (pub) {
-        m_validator_id = *pub;
+    if (pub && node_index < m_validator_set.validators.size() &&
+        m_validator_set.validators[node_index].consensus_public_key == *pub) {
+        m_validator_id = m_validator_set.validators[node_index].validator_id;
     }
 }
 
-void BftValidatorNode::SetHeight(uint64_t height, const uint256& last_block_id)
+void BftValidatorNode::SetHeight(uint64_t height, const uint256& last_block_id, ValidatorSetV1 validator_set)
 {
+    m_validator_set = std::move(validator_set);
+    m_validator_set_commitment = ComputeValidatorSetCommitment(m_validator_set);
+    const auto pub = DeriveEd25519PublicKey(m_private_key_seed);
+    m_validator_id = uint256{};
+    if (pub) {
+        for (size_t i = 0; i < m_validator_set.validators.size(); ++i) {
+            if (m_validator_set.validators[i].consensus_public_key == *pub) {
+                m_node_index = i;
+                m_validator_id = m_validator_set.validators[i].validator_id;
+                break;
+            }
+        }
+    }
     m_height = height;
     m_last_block_id = last_block_id;
     m_round = 0;
@@ -140,6 +156,7 @@ void BftValidatorNode::SetHeight(uint64_t height, const uint256& last_block_id)
     m_locked_block.reset();
     m_locked_round = -1;
     m_current_proposal.reset();
+    m_current_proposal_valid = false;
     m_prevotes.clear();
     m_precommits.clear();
     m_prevoted = false;
@@ -149,12 +166,12 @@ void BftValidatorNode::SetHeight(uint64_t height, const uint256& last_block_id)
 
 std::optional<BftProposalMsg> BftValidatorNode::StartRound(
     uint32_t round,
-    const std::vector<ProtocolOperationV1>& pending_ops,
-    const uint256& resulting_state_root)
+    const std::vector<ProtocolOperationV1>& pending_ops)
 {
     m_round = round;
     m_step = BftStep::PROPOSE;
     m_current_proposal.reset();
+    m_current_proposal_valid = false;
     m_prevotes.clear();
     m_precommits.clear();
     m_prevoted = false;
@@ -164,17 +181,21 @@ std::optional<BftProposalMsg> BftValidatorNode::StartRound(
     if (BftLeaderIndex(m_height, m_round, m_validator_set.validators.size()) != m_node_index) {
         return std::nullopt;
     }
+    if (m_validator_id.IsNull()) return std::nullopt;
+    if (!m_execute_operations) return std::nullopt;
 
     CybouBlockV1 block;
     if (m_locked_block.has_value()) {
         block = *m_locked_block;
     } else {
+        const auto state_root = m_execute_operations(pending_ops, m_height);
+        if (!state_root) return std::nullopt;
         block = CybouBlockV1{
             .version = CYBOU_BLOCK_VERSION,
             .parent_block_id = m_last_block_id,
             .height = m_height,
             .operations = pending_ops,
-            .resulting_state_root = resulting_state_root,
+            .resulting_state_root = *state_root,
         };
     }
 
@@ -193,6 +214,7 @@ std::optional<BftProposalMsg> BftValidatorNode::StartRound(
     };
 
     m_current_proposal = proposal;
+    m_current_proposal_valid = true;
     return proposal;
 }
 
@@ -211,11 +233,13 @@ std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposal
 
     const uint256 block_id = ComputeBlockId(proposal.block);
     const uint256 digest = ComputeProposalDigest(m_network_id, m_height, m_round, proposal.proposer_id, block_id);
-    if (!VerifyValidatorSignature(proposal.proposer_id, proposal.signature, digest)) {
+    if (!VerifyValidatorSignature(m_validator_set.validators[leader_idx].consensus_public_key, proposal.signature, digest)) {
         return std::nullopt;
     }
 
     bool valid_block = (proposal.block.height == m_height && proposal.block.parent_block_id == m_last_block_id);
+    const auto computed_root = m_execute_operations ? m_execute_operations(proposal.block.operations, m_height) : std::nullopt;
+    if (!computed_root || *computed_root != proposal.block.resulting_state_root) valid_block = false;
     if (m_locked_block.has_value()) {
         if (ComputeBlockId(*m_locked_block) != block_id) {
             valid_block = false;
@@ -223,6 +247,7 @@ std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposal
     }
 
     m_current_proposal = proposal;
+    m_current_proposal_valid = valid_block;
     m_step = BftStep::PREVOTE;
     m_prevoted = true;
 
@@ -258,6 +283,11 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
         return std::nullopt;
     }
 
+    if (const auto existing = m_prevotes.find(prevote.validator_id);
+        existing != m_prevotes.end() && existing->second != prevote) {
+        return std::nullopt;
+    }
+
     m_prevotes[prevote.validator_id] = prevote;
 
     if (m_precommitted) return std::nullopt;
@@ -275,7 +305,8 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
     const size_t quorum = m_validator_set.QuorumThreshold();
 
     for (const auto& [blk_id, count] : block_counts) {
-        if (count >= quorum && m_current_proposal.has_value()) {
+        if (count >= quorum && m_current_proposal_valid && m_current_proposal.has_value() &&
+            ComputeBlockId(m_current_proposal->block) == blk_id) {
             m_locked_block = m_current_proposal->block;
             m_locked_round = static_cast<int32_t>(m_round);
             m_step = BftStep::PRECOMMIT;
@@ -345,6 +376,8 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
         }
     }
 
+    if (const auto existing = m_precommits.find(precommit.validator_id);
+        existing != m_precommits.end() && existing->second != precommit) return false;
     m_precommits[precommit.validator_id] = precommit;
 
     if (m_step == BftStep::FINALIZED) return true;
@@ -361,7 +394,8 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
 
     const size_t quorum = m_validator_set.QuorumThreshold();
     for (auto& [blk_id, votes] : commit_votes_by_block) {
-        if (votes.size() >= quorum && m_current_proposal.has_value()) {
+        if (votes.size() >= quorum && m_current_proposal_valid && m_current_proposal.has_value() &&
+            ComputeBlockId(m_current_proposal->block) == blk_id) {
             BftFinalityCertificateV1 cert{
                 .version = BFT_FINALITY_CERTIFICATE_VERSION,
                 .network_id = m_network_id,
@@ -415,6 +449,7 @@ void BftValidatorNode::OnRoundTimeout()
         m_round += 1;
         m_step = BftStep::PROPOSE;
         m_current_proposal.reset();
+        m_current_proposal_valid = false;
         m_prevotes.clear();
         m_precommits.clear();
         m_prevoted = false;
@@ -455,7 +490,11 @@ BftSimulator::BftSimulator(const uint256& network_id, size_t validator_count)
 
     for (size_t i = 0; i < validator_count; ++i) {
         m_nodes.push_back(std::make_unique<BftValidatorNode>(
-            i, seeds[i], m_network_id, m_validator_set));
+            i, seeds[i], m_network_id, m_validator_set,
+            [this](const std::vector<ProtocolOperationV1>& ops, uint64_t) -> std::optional<uint256> {
+                if (!ops.empty()) return std::nullopt;
+                return m_expected_state_root;
+            }));
     }
 
     ClearPartition();
@@ -505,18 +544,19 @@ bool BftSimulator::StepRound(
     const uint256& resulting_state_root)
 {
     const size_t n = m_nodes.size();
+    m_expected_state_root = resulting_state_root;
     const size_t leader_idx = BftLeaderIndex(height, round, n);
     std::optional<BftProposalMsg> proposal;
 
     if (m_online[leader_idx]) {
-        proposal = m_nodes[leader_idx]->StartRound(round, ops, resulting_state_root);
+        proposal = m_nodes[leader_idx]->StartRound(round, ops);
     }
 
     std::vector<BftPrevoteMsg> prevotes;
     for (size_t i = 0; i < n; ++i) {
         if (!m_online[i]) continue;
         if (i != leader_idx) {
-            m_nodes[i]->StartRound(round, ops, resulting_state_root);
+            m_nodes[i]->StartRound(round, ops);
         }
         if (proposal.has_value() && m_can_communicate[leader_idx][i]) {
             auto pv = m_nodes[i]->ReceiveProposal(*proposal);

@@ -54,6 +54,10 @@ If one PoT epoch targets approximately one day, the UI may describe it as a dail
 
 Consensus uses the epoch number, not civil time.
 
+The current Beta policy uses one network-bound MailTx limit for all accounts.
+SystemBalance funds fees but does not increase mail quota. Account age remains
+an integer PoT signal; quota tiers require a later explicit policy revision.
+
 ## Integer-only Trust
 
 Consensus PoT calculations use deterministic integer/fixed-rule arithmetic.
@@ -105,7 +109,7 @@ Because the onboarding bonus goes directly to System Balance:
 ```text
 Onboarding Bonus
 -> System Balance
--> initial PoT contribution
+-> no automatic increase in the MailTx quota
 ```
 
 No separate bootstrap-trust token exists.

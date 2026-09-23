@@ -70,7 +70,8 @@ The filter format must be deterministic and privacy-reviewed before freeze.
 
 ## Current implementation boundary
 
-The v1 GCS block filter can be built and stored atomically with a finalized block.
+The v1 GCS block filter is a local, rebuildable experimental index. It can be
+built and stored atomically with a finalized block.
 Its filter-header hash can be computed, but the header chain is not yet committed
 to authenticated block headers or served by a light-client protocol. A remote
 filter therefore cannot currently be authenticated by a light client.

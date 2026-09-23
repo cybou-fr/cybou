@@ -108,15 +108,9 @@ public:
     CybouStateStore(
         CDBWrapper& db,
         CybouNetworkDefinitionV1 network_definition,
-        std::optional<OperatorAuthorityKeySet> operator_authority = std::nullopt,
         std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier = nullptr);
 
-    /** Set or update the active Operator Authority key set and optional verifier. */
-    void SetOperatorAuthority(
-        OperatorAuthorityKeySet keyset,
-        std::shared_ptr<OperatorAuthoritySignatureVerifier> verifier = nullptr);
-
-    const std::optional<OperatorAuthorityKeySet>& GetOperatorAuthority() const { return m_operator_authority; }
+    const std::optional<OperatorAuthorityKeySet>& GetOperatorAuthority() const { return m_network_definition.operator_authority; }
 
     /** Retrieve canonical active validator set from persisted state. */
     std::optional<ValidatorSetV1> GetValidatorSet() const;
@@ -170,7 +164,6 @@ private:
     const CybouNetworkDefinitionV1 m_network_definition;
     const NetworkDefinitionError m_network_definition_error;
     const uint256 m_network_id;
-    std::optional<OperatorAuthorityKeySet> m_operator_authority;
     std::shared_ptr<OperatorAuthoritySignatureVerifier> m_operator_verifier;
 };
 

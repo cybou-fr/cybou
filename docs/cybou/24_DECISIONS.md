@@ -162,5 +162,7 @@
 | DEC-158 | CybouStateStore solely owns canonical CYBOU state; BFT-finalized blocks use candidate-validate-atomic-commit and have no production rollback/reorg/undo path | Frozen v0.0.1 |
 | DEC-159 | Canonical finalized head stores block ID and height; every committed child height equals previous finalized height + 1 | Frozen v0.0.1 |
 | DEC-160 | CYBOU target ledger is account-based with AccountState as the sole balance/authorization/nonce source; inherited UTXO/Script remains transitional only until native Payment and BFT replacement land | Frozen direction |
-| DEC-161 | NetworkID is the domain-separated hash of an immutable network definition binding genesis block, genesis state root, protocol parameters and initial validator-set commitment | Frozen v0.0.1 |
+| DEC-161 | NetworkID is the domain-separated hash of an immutable network definition binding genesis block, genesis state root, protocol parameters and initial validator-set commitment | Extended by DEC-163 |
 | DEC-162 | Canonical state rejects unsupported or structurally invalid network definitions before initialization, loading or block transition | Frozen v0.0.1 |
+| DEC-163 | The immutable network definition also binds the fixed Operator Authority keyset and every consensus MailTx quota parameter; Operator Authority rotation requires a versioned transition, and disposable DEV genesis must reset after this serialization change | Frozen Beta hardening |
+| DEC-164 | Beta MailTx quota is one network-bound limit per account and epoch; SystemBalance pays service fees but does not increase quota | Frozen Beta hardening |

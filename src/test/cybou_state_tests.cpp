@@ -407,27 +407,31 @@ BOOST_AUTO_TEST_CASE(pot_score_calculation_and_mail_rate_limit_enforcement)
 
     // New account at epoch 0 with 0 system balance: base score = 100
     BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 100);
-    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(100, TEST_PARAMS), 25);
+    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(TEST_PARAMS), 25);
 
-    // System balance contribution capped at 50 (1 per 100 CYBOU)
+    // System balance cannot buy additional mail quota.
     acc.system_balance = 3000;
-    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 130); // 100 + 30
-    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(130, TEST_PARAMS), 25);
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 100);
+    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(TEST_PARAMS), 25);
 
     acc.system_balance = 5000;
-    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 150); // 100 + 50 (cap reached)
-    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(150, TEST_PARAMS), 50);
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 100);
+    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(TEST_PARAMS), 25);
 
-    acc.system_balance = 100000; // Large balance cannot exceed 50 cap
-    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 150);
+    acc.system_balance = 6000; // DEV onboarding bonus still gets the base quota.
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 100);
+    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(TEST_PARAMS), 25);
+
+    acc.system_balance = 100000;
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 0), 100);
 
     // Account age contribution: 5 points per epoch, capped at 100
     // At epoch 10 with creation_epoch 0: age = 10 epochs -> 50 points
-    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 10), 200); // 100 + 50 (sb cap) + 50 (age)
-    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(200, TEST_PARAMS), 100);
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 10), 150);
+    BOOST_CHECK_EQUAL(cybou::CalculateMailRateLimit(TEST_PARAMS), 25);
 
     // At epoch 30: age contribution reaches max 100 points
-    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 30), 250); // 100 + 50 + 100
+    BOOST_CHECK_EQUAL(cybou::ComputeProofOfTrustScore(acc, 30), 200);
 
     // 2. Rate limit enforcement in ApplyMail:
     // Create new account with base limit = 25 at height 10 (epoch 1)
@@ -436,7 +440,7 @@ BOOST_AUTO_TEST_CASE(pot_score_calculation_and_mail_rate_limit_enforcement)
     BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(ACCOUNT_ID_2), NETWORK_ID, 10, TEST_PARAMS, state));
 
     auto& sender = state.accounts.at(ACCOUNT_ID);
-    sender.system_balance = 1000; // PoT score = 100 + 10 = 110 < 150 (baseline tier = 25)
+    sender.system_balance = 1000;
 
     // Send exactly 25 mails at epoch 1 (height 10..19)
     for (uint32_t i = 0; i < 25; ++i) {

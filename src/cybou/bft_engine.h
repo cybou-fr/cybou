@@ -99,12 +99,14 @@ class BftValidatorNode
 {
 public:
     using MessageBroadcaster = std::function<void(const BftProposalMsg&, const BftPrevoteMsg*, const BftPrecommitMsg*)>;
+    using ExecuteOperations = std::function<std::optional<uint256>(const std::vector<ProtocolOperationV1>&, uint64_t)>;
 
     BftValidatorNode(
         size_t node_index,
         std::array<unsigned char, 32> private_key_seed,
         uint256 network_id,
-        ValidatorSetV1 validator_set);
+        ValidatorSetV1 validator_set,
+        ExecuteOperations execute_operations);
 
     size_t GetNodeIndex() const { return m_node_index; }
     const uint256& GetValidatorId() const { return m_validator_id; }
@@ -113,13 +115,12 @@ public:
     BftStep GetStep() const { return m_step; }
     const std::optional<FinalizedBlockV1>& GetLatestFinalizedBlock() const { return m_finalized_block; }
 
-    void SetHeight(uint64_t height, const uint256& last_block_id);
+    void SetHeight(uint64_t height, const uint256& last_block_id, ValidatorSetV1 validator_set);
 
     /** Start a new round. If this node is the leader, produces a proposal. */
     std::optional<BftProposalMsg> StartRound(
         uint32_t round,
-        const std::vector<ProtocolOperationV1>& pending_ops,
-        const uint256& resulting_state_root);
+        const std::vector<ProtocolOperationV1>& pending_ops);
 
     /** Handle an incoming proposal message. Returns prevote message if produced. */
     std::optional<BftPrevoteMsg> ReceiveProposal(const BftProposalMsg& proposal);
@@ -141,6 +142,7 @@ private:
     uint256 m_network_id;
     ValidatorSetV1 m_validator_set;
     uint256 m_validator_set_commitment;
+    ExecuteOperations m_execute_operations;
 
     uint64_t m_height{1};
     uint32_t m_round{0};
@@ -153,6 +155,7 @@ private:
 
     // Current round tracking
     std::optional<BftProposalMsg> m_current_proposal;
+    bool m_current_proposal_valid{false};
     std::map<uint256, BftPrevoteMsg> m_prevotes;
     std::map<uint256, BftPrecommitMsg> m_precommits;
     bool m_prevoted{false};
@@ -202,6 +205,7 @@ private:
     std::vector<std::unique_ptr<BftValidatorNode>> m_nodes;
     std::vector<bool> m_online;
     std::vector<std::vector<bool>> m_can_communicate;
+    uint256 m_expected_state_root; // Simulator-only execution fixture.
 };
 
 } // namespace cybou

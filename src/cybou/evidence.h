@@ -41,11 +41,12 @@ bool VerifyOperationInclusion(
     const uint256& expected_operations_root);
 
 /**
- * Self-contained cryptographic evidence bundle for a finalized MailTx.
+ * Evidence bundle for a finalized MailTx. Historical key authorization is
+ * supplied by the exporter and is not independently proven by this bundle.
  * Supports exporting and verifying:
  * - transaction inclusion in block
  * - BFT finality certificate
- * - historical sender-key authorization
+ * - signature against the supplied sender key
  * - salted content commitment
  */
 struct MailEvidenceBundleV1 {

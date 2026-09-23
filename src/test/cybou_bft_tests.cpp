@@ -5,6 +5,7 @@
 #include <cybou/bft.h>
 #include <cybou/bft_engine.h>
 #include <cybou/block.h>
+#include <cybou/block_executor.h>
 #include <cybou/network_definition.h>
 #include <cybou/signing.h>
 #include <cybou/state_store.h>
@@ -64,6 +65,122 @@ CDBWrapper MemoryDb()
 } // namespace
 
 BOOST_FIXTURE_TEST_SUITE(cybou_bft_tests, BasicTestingSetup)
+
+BOOST_AUTO_TEST_CASE(bft_uses_distinct_validator_id_and_reexecutes_before_vote)
+{
+    std::array<unsigned char, 32> seed{};
+    seed[0] = 0x42;
+    const auto pub = *cybou::DeriveEd25519PublicKey(seed);
+    const auto id = uint256::FromUserHex("ab").value();
+    const auto network = uint256::FromUserHex("cd").value();
+    const auto root = uint256::FromUserHex("ef").value();
+    const cybou::ValidatorSetV1 set{
+        .version = cybou::VALIDATOR_SET_VERSION,
+        .validators = {{.validator_id = id, .consensus_public_key = pub, .weight = 1}},
+    };
+    const auto execute = [root](const std::vector<cybou::ProtocolOperationV1>& ops, uint64_t) -> std::optional<uint256> {
+        return ops.empty() ? std::optional<uint256>{root} : std::nullopt;
+    };
+    cybou::BftValidatorNode node{0, seed, network, set, execute};
+    node.SetHeight(1, uint256::ONE, set);
+    BOOST_CHECK(node.GetValidatorId() == id);
+    auto proposal = node.StartRound(0, {});
+    BOOST_REQUIRE(proposal.has_value());
+    BOOST_CHECK(proposal->proposer_id == id);
+    auto valid_prevote = node.ReceiveProposal(*proposal);
+    BOOST_REQUIRE(valid_prevote.has_value());
+    BOOST_CHECK(valid_prevote->block_id == cybou::ComputeBlockId(proposal->block));
+
+    cybou::BftValidatorNode rejecting{0, seed, network, set, execute};
+    rejecting.SetHeight(1, uint256::ONE, set);
+    rejecting.StartRound(0, {});
+    auto forged = *proposal;
+    forged.block.resulting_state_root = uint256::ONE;
+    const auto forged_id = cybou::ComputeBlockId(forged.block);
+    const auto digest = cybou::ComputeProposalDigest(network, 1, 0, id, forged_id);
+    forged.signature = *cybou::SignValidatorVote(seed, digest);
+    const auto nil_prevote = rejecting.ReceiveProposal(forged);
+    BOOST_REQUIRE(nil_prevote.has_value());
+    BOOST_CHECK(!nil_prevote->block_id.has_value());
+    const auto invalid_commit_digest = cybou::ComputeBftCommitDigest(
+        network, forged_id, 1, cybou::ComputeValidatorSetCommitment(set));
+    BOOST_CHECK(!rejecting.ReceivePrecommit(cybou::BftPrecommitMsg{
+        .network_id = network, .height = 1, .round = 0, .validator_id = id,
+        .block_id = forged_id, .signature = *cybou::SignValidatorVote(seed, invalid_commit_digest),
+    }));
+    BOOST_CHECK(rejecting.GetStep() != cybou::BftStep::FINALIZED);
+
+    // A quorum for another block must never lock or finalize the local proposal.
+    const auto other = uint256::FromUserHex("1234").value();
+    const auto other_digest = cybou::ComputePrevoteDigest(network, 1, 0, id, other);
+    cybou::BftPrevoteMsg equivocated{
+        .network_id = network, .height = 1, .round = 0, .validator_id = id,
+        .block_id = other, .signature = *cybou::SignValidatorVote(seed, other_digest),
+    };
+    auto precommit = node.ReceivePrevote(equivocated);
+    BOOST_CHECK(!precommit.has_value());
+    const auto commit_digest = cybou::ComputeBftCommitDigest(
+        network, other, 1, cybou::ComputeValidatorSetCommitment(set));
+    const cybou::BftPrecommitMsg false_commit{
+        .network_id = network, .height = 1, .round = 0, .validator_id = id,
+        .block_id = other, .signature = *cybou::SignValidatorVote(seed, commit_digest),
+    };
+    BOOST_CHECK(!node.ReceivePrecommit(false_commit));
+    BOOST_CHECK(node.GetStep() != cybou::BftStep::FINALIZED);
+
+    auto next_set = set;
+    next_set.validators[0].validator_id = uint256::FromUserHex("ac").value();
+    std::array<unsigned char, 32> other_seed{};
+    other_seed[0] = 0x43;
+    next_set.validators.insert(next_set.validators.begin(), cybou::ValidatorV1{
+        .validator_id = uint256::FromUserHex("aa").value(),
+        .consensus_public_key = *cybou::DeriveEd25519PublicKey(other_seed),
+        .weight = 1,
+    });
+    node.SetHeight(2, cybou::ComputeBlockId(proposal->block), next_set);
+    BOOST_CHECK_EQUAL(node.GetNodeIndex(), 1U);
+    BOOST_CHECK(node.GetValidatorId() == next_set.validators[1].validator_id);
+    BOOST_CHECK(node.StartRound(1, {}).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(bft_executor_rejects_invalid_operations_before_proposal)
+{
+    std::array<unsigned char, 32> seed{};
+    seed[0] = 0x33;
+    const auto pub = *cybou::DeriveEd25519PublicKey(seed);
+    const cybou::ValidatorSetV1 set{
+        .version = cybou::VALIDATOR_SET_VERSION,
+        .validators = {{.validator_id = pub, .consensus_public_key = pub, .weight = 1}},
+    };
+    cybou::CybouState parent;
+    parent.validator_set = set;
+    const cybou::CybouProtocolParameters params{};
+    const auto network = uint256::FromUserHex("ab01").value();
+    auto execute = [&parent, &params, &network](
+        const std::vector<cybou::ProtocolOperationV1>& ops, uint64_t height) -> std::optional<uint256> {
+        const cybou::ProtocolExecutionContextV1 ctx{
+            .network_id = network, .block_height = height, .params = params,
+        };
+        const auto result = cybou::ExecuteBlockOperations(parent, ops, ctx);
+        return result ? std::optional<uint256>{result.state_root} : std::nullopt;
+    };
+    cybou::BftValidatorNode node{0, seed, network, set, execute};
+    node.SetHeight(1, uint256::ONE, set);
+    BOOST_CHECK(node.StartRound(0, {}).has_value());
+    const cybou::PaymentOpV1 invalid_payment{
+        .version = cybou::PAYMENT_OP_VERSION,
+        .recipient = cybou::AccountId{uint256::ONE},
+        .amount = 1,
+    };
+    // A bare authorized operation with no sender account cannot execute.
+    const cybou::AuthorizedOperationV1 invalid_auth{
+        .version = cybou::AUTHORIZED_OPERATION_VERSION,
+        .account_id = cybou::AccountId{uint256::FromUserHex("02").value()},
+        .nonce = 0,
+        .payload = invalid_payment,
+    };
+    BOOST_CHECK(!node.StartRound(0, {cybou::ProtocolOperationV1{invalid_auth}}).has_value());
+}
 
 BOOST_AUTO_TEST_CASE(validator_set_invariants_and_serialization)
 {
@@ -364,7 +481,7 @@ BOOST_AUTO_TEST_CASE(bft_state_machine_simulator_consensus_and_fault_tolerance)
 
     // Advance to height 2
     for (size_t i = 0; i < 4; ++i) {
-        sim.Node(i).SetHeight(2, cybou::ComputeBlockId(sim.Node(i).GetLatestFinalizedBlock()->block));
+        sim.Node(i).SetHeight(2, cybou::ComputeBlockId(sim.Node(i).GetLatestFinalizedBlock()->block), sim.GetValidatorSet());
     }
 
     // Scenario 2: 1 node crash (f=1 fault tolerance with N=4, quorum=3)
@@ -381,7 +498,7 @@ BOOST_AUTO_TEST_CASE(bft_state_machine_simulator_consensus_and_fault_tolerance)
 
     // Advance to height 3
     for (size_t i = 0; i < 4; ++i) {
-        sim.Node(i).SetHeight(3, cybou::ComputeBlockId(sim.Node(0).GetLatestFinalizedBlock()->block));
+        sim.Node(i).SetHeight(3, cybou::ComputeBlockId(sim.Node(0).GetLatestFinalizedBlock()->block), sim.GetValidatorSet());
     }
 
     // Scenario 3: 2 vs 2 network partition ({0, 1} vs {2, 3})
@@ -554,7 +671,7 @@ BOOST_AUTO_TEST_CASE(bft_simulator_authority_mode_n1)
     BOOST_CHECK_EQUAL(sim.Node(0).GetLatestFinalizedBlock()->certificate.commit_votes.size(), 1);
 
     // Step height 2
-    sim.Node(0).SetHeight(2, cybou::ComputeBlockId(sim.Node(0).GetLatestFinalizedBlock()->block));
+    sim.Node(0).SetHeight(2, cybou::ComputeBlockId(sim.Node(0).GetLatestFinalizedBlock()->block), sim.GetValidatorSet());
     BOOST_CHECK(sim.StepRound(2, 0, {}, state_root));
     BOOST_CHECK(sim.Node(0).GetStep() == cybou::BftStep::FINALIZED);
     BOOST_REQUIRE(sim.Node(0).GetLatestFinalizedBlock().has_value());
@@ -562,4 +679,3 @@ BOOST_AUTO_TEST_CASE(bft_simulator_authority_mode_n1)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-

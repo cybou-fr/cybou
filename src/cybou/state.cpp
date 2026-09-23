@@ -259,31 +259,23 @@ uint64_t ComputeProofOfTrustScore(const AccountState& account, uint64_t current_
 {
     // Hard rules in AGENTS.md:
     // - integer arithmetic only
-    // - System Balance trust contribution capped
+    // - System Balance does not buy mail quota in the Beta policy
     // - block-height-derived deterministic epoch
     static constexpr uint64_t BASE_SCORE{100};
-    static constexpr uint64_t MAX_SYSTEM_BALANCE_CONTRIBUTION{50};
     static constexpr uint64_t MAX_AGE_CONTRIBUTION{100};
-
-    // System balance contribution: 1 point per 100 CYBOU of SystemBalance, capped at 50
-    const uint64_t sb_contribution = std::min<uint64_t>(account.system_balance / 100, MAX_SYSTEM_BALANCE_CONTRIBUTION);
 
     // Account age contribution: 5 points per epoch, capped at 100
     const uint64_t age_epochs = (current_epoch >= account.creation_epoch) ? (current_epoch - account.creation_epoch) : 0;
-    const uint64_t age_contribution = std::min<uint64_t>(age_epochs * 5, MAX_AGE_CONTRIBUTION);
+    const uint64_t age_contribution = std::min<uint64_t>(age_epochs, MAX_AGE_CONTRIBUTION / 5) * 5;
 
-    return BASE_SCORE + sb_contribution + age_contribution;
+    return BASE_SCORE + age_contribution;
 }
 
-uint32_t CalculateMailRateLimit(uint64_t pot_score, const CybouProtocolParameters& params)
+uint32_t CalculateMailRateLimit(const CybouProtocolParameters& params)
 {
-    if (pot_score < 150) {
-        return params.new_account_mail_limit_per_epoch;
-    }
-    if (pot_score < 200) {
-        return DEFAULT_TIER2_MAIL_LIMIT_PER_EPOCH;
-    }
-    return DEFAULT_TIER3_MAIL_LIMIT_PER_EPOCH;
+    // Beta uses one network-bound quota. Age and spendable balance cannot
+    // silently change the consensus mail limit.
+    return params.new_account_mail_limit_per_epoch;
 }
 
 MailResult ApplyMail(
@@ -321,8 +313,7 @@ MailResult ApplyMail(
         sender.mail_count_in_epoch = 0;
     }
 
-    const uint64_t pot_score = ComputeProofOfTrustScore(sender, current_epoch);
-    const uint32_t mail_limit = CalculateMailRateLimit(pot_score, params);
+    const uint32_t mail_limit = CalculateMailRateLimit(params);
 
     if (sender.mail_count_in_epoch >= mail_limit) {
         return {MailError::RATE_LIMIT_EXCEEDED};

@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/signing.h>
+#include <cybou/block_executor.h>
 #include <cybou/state_store.h>
 
 #include <dbwrapper.h>
@@ -35,28 +36,14 @@ inline std::string MailFilterKey(const uint256& block_id)
 CybouStateStore::CybouStateStore(
     CDBWrapper& db,
     CybouNetworkDefinitionV1 network_definition,
-    std::optional<OperatorAuthorityKeySet> operator_authority,
     std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier)
     : m_db{db},
       m_network_definition{std::move(network_definition)},
       m_network_definition_error{ValidateNetworkDefinition(m_network_definition)},
       m_network_id{NetworkId(m_network_definition)},
-      m_operator_authority{std::move(operator_authority)},
       m_operator_verifier{std::move(operator_verifier)}
 {
     if (!m_operator_verifier) {
-        m_operator_verifier = std::make_shared<OpenSslOperatorAuthoritySignatureVerifier>();
-    }
-}
-
-void CybouStateStore::SetOperatorAuthority(
-    OperatorAuthorityKeySet keyset,
-    std::shared_ptr<OperatorAuthoritySignatureVerifier> verifier)
-{
-    m_operator_authority = std::move(keyset);
-    if (verifier) {
-        m_operator_verifier = std::move(verifier);
-    } else if (!m_operator_verifier) {
         m_operator_verifier = std::make_shared<OpenSslOperatorAuthoritySignatureVerifier>();
     }
 }
@@ -224,35 +211,21 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     }
 
     const auto& params{m_network_definition.protocol_parameters};
-    const size_t account_create_count{static_cast<size_t>(std::count_if(
-        block.operations.begin(), block.operations.end(), [](const auto& operation) {
-            return OperationType(operation) == ProtocolOperationType::ACCOUNT_CREATE;
-        }))};
-    if (account_create_count > params.max_account_creates_per_block) {
-        return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
-    }
-
-    auto candidate{*loaded.state};
     const ProtocolExecutionContextV1 ctx{
         .network_id = m_network_id,
         .block_height = block.height,
         .params = params,
-        .operator_authority = m_operator_authority ? &*m_operator_authority : nullptr,
+        .operator_authority = m_network_definition.operator_authority ? &*m_network_definition.operator_authority : nullptr,
         .operator_verifier = m_operator_verifier.get(),
     };
-    for (const auto& operation : block.operations) {
-        const auto res{ApplyProtocolOperation(operation, ctx, candidate)};
-        if (!res) return {BlockTransitionError::INVALID_OPERATION, res};
+    auto execution = ExecuteBlockOperations(*loaded.state, block.operations, ctx);
+    if (!execution) {
+        if (execution.too_many_account_creates) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
+        if (execution.fee_routing_failed) return {BlockTransitionError::FEE_ROUTING_FAILED};
+        return {BlockTransitionError::INVALID_OPERATION, execution.operation_result};
     }
-
-    if (candidate.pending_fee_pool > 0) {
-        const auto fee_res = RoutePendingFees(candidate);
-        if (!fee_res) {
-            return {BlockTransitionError::FEE_ROUTING_FAILED};
-        }
-    }
-
-    const uint256 candidate_root = CybouStateHash(candidate);
+    auto& candidate = *execution.state;
+    const uint256 candidate_root = execution.state_root;
     if (candidate_root != block.resulting_state_root) {
         return {BlockTransitionError::STATE_ROOT_MISMATCH};
     }

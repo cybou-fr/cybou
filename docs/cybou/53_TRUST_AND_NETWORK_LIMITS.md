@@ -4,24 +4,18 @@ CYBOU uses one global Proof of Trust (PoT) state per AccountID.
 
 ## Consensus inputs
 
-Conceptually:
-
-```text
-## Consensus formula (Frozen V1)
+## Current Beta score
 
 Implemented in `src/cybou/state.{h,cpp}`:
 
 ```text
-PoT = BaseScore + Capped(SystemBalance) + Capped(Age)
+PoT = BaseScore + Capped(Age)
 ```
 
-Pure integer arithmetic, bounded in `[100, 250]`:
+Pure integer arithmetic, bounded in `[100, 200]`:
 
 1. **BaseScore = 100**: Granted to every legitimately onboarded AccountID that satisfied protocol anti-Sybil work.
-2. **Capped System Balance contribution**:
-   $$C_{\text{sb}} = \min\left(\frac{\text{SystemBalance}}{100}, 50\right)$$
-   1 point per 100 CYBOU in SystemBalance, capped at 50 points (reached at 5,000 CYBOU).
-3. **Account Age contribution**:
+2. **Account Age contribution**:
    $$E_{\text{age}} = \max(0, \text{current\_epoch} - \text{creation\_epoch})$$
    $$C_{\text{age}} = \min(E_{\text{age}} \times 5, 100)$$
    5 points per PoT epoch of existence, capped at 100 points (reached after 20 epochs).
@@ -36,17 +30,19 @@ current_epoch = block_height / params.epoch_blocks
 
 Never use local wall-clock time, timezone, or client timestamps for consensus limits.
 
-## Mail rate limit tiers
+## Mail rate limit
 
-Outgoing `MailTx` rate limits per PoT epoch:
+Outgoing `MailTx` rate limit per protocol epoch:
 
 ```text
-PoT < 150:       25 MailTx / epoch  (Baseline: new account)
-150 <= PoT < 200: 50 MailTx / epoch  (Tier 2: funded or mature)
-PoT >= 200:      100 MailTx / epoch (Tier 3: long-standing clean account)
+params.new_account_mail_limit_per_epoch = 25 (DEV default)
 ```
 
-An account tracks `last_mail_epoch` and `mail_count_in_epoch` in its consensus `AccountState`. When `current_epoch > last_mail_epoch`, the counter automatically resets to zero. Exceeding the tier limit in the same epoch strictly rejects the transaction with `RATE_LIMIT_EXCEEDED` without deducting fees.
+The current Beta policy has one network-bound limit. PoT and SystemBalance do
+not increase it. An account tracks `last_mail_epoch` and
+`mail_count_in_epoch` in its consensus `AccountState`. When `current_epoch >
+last_mail_epoch`, the counter resets to zero. Exceeding the limit in the same
+epoch rejects the operation with `RATE_LIMIT_EXCEEDED` without deducting fees.
 
 ## Payments
 

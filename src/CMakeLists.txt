@@ -190,6 +190,7 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   blockfilter.cpp
   consensus/tx_verify.cpp
   cybou/state_store.cpp
+  cybou/block_executor.cpp
   cybou/network_definition.cpp
   cybou/protocol_operation.cpp
   cybou/mail_filter.cpp

@@ -35,16 +35,15 @@ struct AccountState {
 /**
  * Compute deterministic integer Proof of Trust (PoT) score for an account at current epoch.
  * - Base score: 100
- * - Capped System Balance contribution: min(system_balance / 100, 50)
  * - Account age contribution: min(age_epochs * 5, 100)
- * Range: [100, 250]. Pure integer arithmetic, no floating-point.
+ * Range: [100, 200]. SystemBalance does not affect this Beta score.
  */
 uint64_t ComputeProofOfTrustScore(const AccountState& account, uint64_t current_epoch);
 
 /**
- * Calculate the maximum outgoing MailTx allowed in a PoT epoch based on PoT score.
+ * Calculate the network-bound Beta outgoing MailTx quota per epoch.
  */
-uint32_t CalculateMailRateLimit(uint64_t pot_score, const CybouProtocolParameters& params);
+uint32_t CalculateMailRateLimit(const CybouProtocolParameters& params);
 
 /** Canonical state tracking monetary pools and accounts. */
 struct CybouState {

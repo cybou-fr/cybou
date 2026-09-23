@@ -32,8 +32,9 @@ MailEvidenceBundleV1 {
 1. **Network & Operation integrity**:
    - `network_id` matches verifier network;
    - `mail_operation.payload` is a valid `MailOpV1`.
-2. **Historical sender authorization**:
+2. **Supplied sender key**:
    - `mail_operation.signature` verifies with `sender_authorization.authorization_descriptor` over `ComputeUserOperationDigest(network_id, sender_id, nonce, payload)`.
+   - The bundle does not prove that this key was canonical for the sender at the block height.
 3. **Block transaction inclusion**:
    - `inclusion_proof` verifies that `SerializeProtocolOperation(mail_operation)` is at `operation_index` in `operation_hashes`, and `ComputeOperationsRootFromHashes(operation_hashes) == block_header.operations_root`.
 4. **BFT finality certificate**:
@@ -48,6 +49,12 @@ It is not enough to show that a signing key belongs to an AccountID today.
 The evidence must prove that the sender signing key was authorized for that AccountID at the MailTx finalization height.
 
 This preserves verification after later key rotation or revocation.
+
+The current V1 bundle does not yet meet that requirement. It contains no
+historical account-state or key-transition proof. Its inclusion proof carries
+all operation hashes, so its size is linear in the number of block operations.
+Treat the bundle as finalized inclusion plus signature evidence until a
+historical authorization proof and compact authenticated operation tree exist.
 
 ## Content commitment
 
@@ -91,7 +98,7 @@ ContentCommitment
 sender signature
 block inclusion
 BFT finality
-historical sender-key authorization
+signature against the supplied sender key (historical authorization still requires separate proof)
 ```
 
 ## Time semantics
