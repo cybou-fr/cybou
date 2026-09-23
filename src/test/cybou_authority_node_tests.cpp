@@ -224,7 +224,11 @@ BOOST_AUTO_TEST_CASE(authority_block_transitions_to_four_validator_set)
         .protocol_parameters = cybou::CybouProtocolParameters{},
         .initial_validator_set_commitment = cybou::ComputeValidatorSetCommitment(initial_set),
         .operator_authority = cybou::OperatorAuthorityKeySet{
-            .keyset_id = keyset_id, .active_from_epoch = 0,
+            .keyset_id = keyset_id,
+            .ed25519_public_key = {1},
+            .mldsa65_public_key = {1},
+            .active_from_epoch = 0,
+            .retired_from_epoch = std::nullopt,
         },
     };
     CDBWrapper db{{

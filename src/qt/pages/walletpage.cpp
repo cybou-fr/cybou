@@ -74,7 +74,7 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     balances->addWidget(metricCard(tr("Balance"), CybouTheme::NavIcon::Wallet, this, m_balance), 1);
     balances->addWidget(metricCard(tr("System Balance"), CybouTheme::NavIcon::Wallet, this, m_system_balance), 1);
     root->addLayout(balances);
-    root->addWidget(noteLabel(tr("System Balance funds protocol services (Email fees today, Storage and Backup in the future) and contributes to Proof of Trust. The lock Balance → System Balance is one-way and cannot be reversed."), this));
+    root->addWidget(noteLabel(tr("System Balance funds protocol services (Email fees today, Storage and Backup in the future). It does not boost Proof of Trust in Beta. The lock Balance → System Balance is one-way and cannot be reversed."), this));
 
     // Actions. Debits from Balance require the user's authorization; the
     // protocol never debits Balance on its own — the UI mirrors that.

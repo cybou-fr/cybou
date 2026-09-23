@@ -39,6 +39,9 @@ enum class NetworkDefinitionError : uint8_t {
     INVALID_ACCOUNT_CREATION_WORK_BITS,
     ZERO_MAX_ACCOUNT_CREATES_PER_BLOCK,
     ZERO_EPOCH_BLOCKS,
+    NULL_OPERATOR_AUTHORITY_KEYSET_ID,
+    NULL_OPERATOR_AUTHORITY_KEY,
+    INVALID_OPERATOR_AUTHORITY_EPOCH,
 };
 
 NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinitionV1& definition);

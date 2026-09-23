@@ -36,9 +36,10 @@ struct MockValidator {
         const uint256& network_id,
         const uint256& block_id,
         uint64_t height,
-        const uint256& val_set_commitment) const
+        const uint256& val_set_commitment,
+        uint32_t round = 0) const
     {
-        const uint256 digest = cybou::ComputeBftCommitDigest(network_id, block_id, height, val_set_commitment);
+        const uint256 digest = cybou::ComputeBftCommitDigest(network_id, block_id, height, round, val_set_commitment);
         cybou::BftCommitVoteV1 vote;
         vote.validator_id = validator_id;
         vote.signature = *cybou::SignValidatorVote(seed, digest);

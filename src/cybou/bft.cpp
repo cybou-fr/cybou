@@ -52,6 +52,7 @@ uint256 ComputeBftCommitDigest(
     const uint256& network_id,
     const uint256& block_id,
     uint64_t height,
+    uint32_t round,
     const uint256& validator_set_commitment)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/BFT_COMMIT/V1"};
@@ -65,6 +66,12 @@ uint256 ComputeBftCommitDigest(
         height_bytes[i] = static_cast<unsigned char>(height >> (8 * i));
     }
     hasher.Write(height_bytes, sizeof(height_bytes));
+
+    unsigned char round_bytes[4];
+    for (int i = 0; i < 4; ++i) {
+        round_bytes[i] = static_cast<unsigned char>(round >> (8 * i));
+    }
+    hasher.Write(round_bytes, sizeof(round_bytes));
 
     hasher.Write(validator_set_commitment.begin(), validator_set_commitment.size());
 
@@ -114,6 +121,7 @@ FinalityVerificationError VerifyFinalityCertificate(
         cert.network_id,
         cert.block_id,
         cert.height,
+        cert.round,
         cert.validator_set_commitment);
 
     std::set<uint256> seen_voters;
@@ -146,12 +154,13 @@ FinalityVerificationError VerifyFinalityCertificate(
 std::vector<unsigned char> SerializeFinalityCertificate(const BftFinalityCertificateV1& cert)
 {
     std::vector<unsigned char> out;
-    out.reserve(109 + cert.commit_votes.size() * 96);
+    out.reserve(113 + cert.commit_votes.size() * 96);
 
     out.push_back(cert.version);
     out.insert(out.end(), cert.network_id.begin(), cert.network_id.end());
     out.insert(out.end(), cert.block_id.begin(), cert.block_id.end());
     AppendUint64LE(out, cert.height);
+    AppendUint32LE(out, cert.round);
     out.insert(out.end(), cert.validator_set_commitment.begin(), cert.validator_set_commitment.end());
 
     AppendUint32LE(out, static_cast<uint32_t>(cert.commit_votes.size()));
@@ -166,8 +175,8 @@ std::vector<unsigned char> SerializeFinalityCertificate(const BftFinalityCertifi
 
 std::optional<BftFinalityCertificateV1> DeserializeFinalityCertificate(const std::span<const unsigned char> bytes)
 {
-    static constexpr size_t HEADER_SIZE{1 + 32 + 32 + 8 + 32 + 4}; // 109
-    static constexpr size_t VOTE_SIZE{32 + USER_SIGNATURE_SIZE};     // 96
+    static constexpr size_t HEADER_SIZE{1 + 32 + 32 + 8 + 4 + 32 + 4}; // 113
+    static constexpr size_t VOTE_SIZE{32 + USER_SIGNATURE_SIZE};         // 96
 
     if (bytes.size() < HEADER_SIZE) {
         return std::nullopt;
@@ -188,6 +197,9 @@ std::optional<BftFinalityCertificateV1> DeserializeFinalityCertificate(const std
 
     cert.height = ReadUint64LE(bytes, offset);
     offset += 8;
+
+    cert.round = ReadUint32LE(bytes, offset);
+    offset += 4;
 
     std::copy_n(bytes.begin() + offset, 32, cert.validator_set_commitment.begin());
     offset += 32;

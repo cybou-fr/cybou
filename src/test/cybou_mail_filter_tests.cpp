@@ -124,13 +124,14 @@ cybou::FinalizedBlockV1 MakeFinalizedBlock(
 
     const uint256 block_id = cybou::ComputeBlockId(block);
     const uint256 val_set_comm = cybou::ComputeValidatorSetCommitment(candidate.validator_set);
-    const uint256 digest = cybou::ComputeBftCommitDigest(net_id, block_id, height, val_set_comm);
+    const uint256 digest = cybou::ComputeBftCommitDigest(net_id, block_id, height, 0, val_set_comm);
 
     cybou::BftFinalityCertificateV1 cert{
         .version = cybou::BFT_FINALITY_CERTIFICATE_VERSION,
         .network_id = net_id,
         .block_id = block_id,
         .height = height,
+        .round = 0,
         .validator_set_commitment = val_set_comm,
         .commit_votes = {},
     };

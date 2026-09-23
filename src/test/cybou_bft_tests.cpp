@@ -41,9 +41,10 @@ struct MockValidatorNode {
         const uint256& network_id,
         const uint256& block_id,
         uint64_t height,
-        const uint256& val_set_commitment) const
+        const uint256& val_set_commitment,
+        uint32_t round = 0) const
     {
-        const uint256 digest = cybou::ComputeBftCommitDigest(network_id, block_id, height, val_set_commitment);
+        const uint256 digest = cybou::ComputeBftCommitDigest(network_id, block_id, height, round, val_set_commitment);
         cybou::BftCommitVoteV1 vote;
         vote.validator_id = validator_id;
         vote.signature = *cybou::SignValidatorVote(seed, digest);
@@ -103,7 +104,7 @@ BOOST_AUTO_TEST_CASE(bft_uses_distinct_validator_id_and_reexecutes_before_vote)
     BOOST_REQUIRE(nil_prevote.has_value());
     BOOST_CHECK(!nil_prevote->block_id.has_value());
     const auto invalid_commit_digest = cybou::ComputeBftCommitDigest(
-        network, forged_id, 1, cybou::ComputeValidatorSetCommitment(set));
+        network, forged_id, 1, 0, cybou::ComputeValidatorSetCommitment(set));
     BOOST_CHECK(!rejecting.ReceivePrecommit(cybou::BftPrecommitMsg{
         .network_id = network, .height = 1, .round = 0, .validator_id = id,
         .block_id = forged_id, .signature = *cybou::SignValidatorVote(seed, invalid_commit_digest),
@@ -120,7 +121,7 @@ BOOST_AUTO_TEST_CASE(bft_uses_distinct_validator_id_and_reexecutes_before_vote)
     auto precommit = node.ReceivePrevote(equivocated);
     BOOST_CHECK(!precommit.has_value());
     const auto commit_digest = cybou::ComputeBftCommitDigest(
-        network, other, 1, cybou::ComputeValidatorSetCommitment(set));
+        network, other, 1, 0, cybou::ComputeValidatorSetCommitment(set));
     const cybou::BftPrecommitMsg false_commit{
         .network_id = network, .height = 1, .round = 0, .validator_id = id,
         .block_id = other, .signature = *cybou::SignValidatorVote(seed, commit_digest),
@@ -676,6 +677,200 @@ BOOST_AUTO_TEST_CASE(bft_simulator_authority_mode_n1)
     BOOST_CHECK(sim.Node(0).GetStep() == cybou::BftStep::FINALIZED);
     BOOST_REQUIRE(sim.Node(0).GetLatestFinalizedBlock().has_value());
     BOOST_CHECK_EQUAL(sim.Node(0).GetLatestFinalizedBlock()->block.height, 2);
+}
+
+BOOST_AUTO_TEST_CASE(bft_round_bound_signatures_and_replay_rejection)
+{
+    const uint256 network_id = uint256::FromUserHex("cafe").value();
+    const auto node = MockValidatorNode::Create(0);
+    cybou::ValidatorSetV1 val_set;
+    val_set.validators.push_back(cybou::ValidatorV1{
+        .validator_id = node.validator_id,
+        .consensus_public_key = node.consensus_pubkey,
+        .weight = 1,
+    });
+    const uint256 val_set_commitment = cybou::ComputeValidatorSetCommitment(val_set);
+    const uint256 block_id = uint256::FromUserHex("beef").value();
+
+    // 1. Signature produced in round 0 vs round 1
+    const uint256 digest_round_0 = cybou::ComputeBftCommitDigest(
+        network_id, block_id, 1, 0, val_set_commitment);
+    const auto sig_round_0 = *cybou::SignValidatorVote(node.seed, digest_round_0);
+
+    const uint256 digest_round_1 = cybou::ComputeBftCommitDigest(
+        network_id, block_id, 1, 1, val_set_commitment);
+    const auto sig_round_1 = *cybou::SignValidatorVote(node.seed, digest_round_1);
+
+    // Digests and signatures must be distinct across rounds
+    BOOST_CHECK(digest_round_0 != digest_round_1);
+    BOOST_CHECK(sig_round_0 != sig_round_1);
+
+    // 2. Precommit with round 0 signature replayed as round 1 message must fail
+    cybou::BftValidatorNode validator{
+        0, node.seed, network_id, val_set,
+        [](const std::vector<cybou::ProtocolOperationV1>&, uint64_t) {
+            return uint256::FromUserHex("2222");
+        },
+    };
+    validator.SetHeight(1, uint256::ZERO, val_set);
+    validator.StartRound(1, {});
+
+    const cybou::BftPrecommitMsg replayed_precommit{
+        .network_id = network_id,
+        .height = 1,
+        .round = 1,
+        .validator_id = node.validator_id,
+        .block_id = block_id,
+        .signature = sig_round_0,
+    };
+    BOOST_CHECK(!validator.ReceivePrecommit(replayed_precommit));
+
+    // 3. Certificate round matching: cert for round 1 rejects round 0 vote
+    cybou::BftFinalityCertificateV1 cert_round_1{
+        .version = cybou::BFT_FINALITY_CERTIFICATE_VERSION,
+        .network_id = network_id,
+        .block_id = block_id,
+        .height = 1,
+        .round = 1,
+        .validator_set_commitment = val_set_commitment,
+        .commit_votes = {
+            cybou::BftCommitVoteV1{
+                .validator_id = node.validator_id,
+                .signature = sig_round_0,
+            },
+        },
+    };
+    BOOST_CHECK(cybou::VerifyFinalityCertificate(cert_round_1, val_set, network_id) ==
+                cybou::FinalityVerificationError::INVALID_SIGNATURE);
+
+    // Correct vote for round 1 succeeds
+    cert_round_1.commit_votes[0].signature = sig_round_1;
+    BOOST_CHECK(cybou::VerifyFinalityCertificate(cert_round_1, val_set, network_id) ==
+                cybou::FinalityVerificationError::NONE);
+}
+
+BOOST_AUTO_TEST_CASE(bft_adversarial_split_prevotes_round_recovery)
+{
+    // N=4 network: Quorum = 3.
+    // In round 0, 2 nodes prevote block A, 2 nodes prevote block B.
+    // Neither block achieves 3/4 prevote quorum.
+    // Validators timeout on prevote and issue nil precommits.
+    // Advance to round 1: Round 1 proposer proposes block A.
+    // All nodes prevote block A, reach quorum, lock block A in round 1,
+    // issue round 1 precommits, and achieve finality at round 1.
+    const uint256 network_id = uint256::FromUserHex("cafe").value();
+    std::vector<MockValidatorNode> mock_nodes;
+    cybou::ValidatorSetV1 val_set;
+    for (uint8_t i = 0; i < 4; ++i) {
+        mock_nodes.push_back(MockValidatorNode::Create(i));
+        val_set.validators.push_back(cybou::ValidatorV1{
+            .validator_id = mock_nodes.back().validator_id,
+            .consensus_public_key = mock_nodes.back().consensus_pubkey,
+            .weight = 1,
+        });
+    }
+
+    std::vector<std::unique_ptr<cybou::BftValidatorNode>> nodes;
+    for (size_t i = 0; i < 4; ++i) {
+        nodes.push_back(std::make_unique<cybou::BftValidatorNode>(
+            i, mock_nodes[i].seed, network_id, val_set,
+            [](const std::vector<cybou::ProtocolOperationV1>&, uint64_t) {
+                return uint256::FromUserHex("1111");
+            }
+        ));
+        nodes.back()->SetHeight(1, uint256::ZERO, val_set);
+    }
+
+    // Start round 0: Leader 1 % 4 = 1.
+    const size_t leader_r0 = cybou::BftLeaderIndex(1, 0, 4);
+    BOOST_CHECK_EQUAL(leader_r0, 1);
+    std::optional<cybou::BftProposalMsg> proposal_r0;
+    for (size_t i = 0; i < 4; ++i) {
+        auto prop = nodes[i]->StartRound(0, {});
+        if (i == leader_r0) proposal_r0 = prop;
+    }
+
+    BOOST_REQUIRE(proposal_r0.has_value());
+    const uint256 block_a_id = cybou::ComputeBlockId(proposal_r0->block);
+
+    // Nodes 0 and 1 accept proposal A
+    const auto pv0 = nodes[0]->ReceiveProposal(*proposal_r0);
+    const auto pv1 = nodes[1]->ReceiveProposal(*proposal_r0);
+    BOOST_REQUIRE(pv0 && pv0->block_id == block_a_id);
+    BOOST_REQUIRE(pv1 && pv1->block_id == block_a_id);
+
+    // Byzantine / split behavior: nodes 2 and 3 prevote alternative block B
+    const uint256 block_b_id = uint256::FromUserHex("bbbb").value();
+    const uint256 pv2_digest = cybou::ComputePrevoteDigest(network_id, 1, 0, mock_nodes[2].validator_id, block_b_id);
+    const cybou::BftPrevoteMsg pv2{
+        .network_id = network_id, .height = 1, .round = 0,
+        .validator_id = mock_nodes[2].validator_id, .block_id = block_b_id,
+        .signature = *cybou::SignValidatorVote(mock_nodes[2].seed, pv2_digest),
+    };
+    const uint256 pv3_digest = cybou::ComputePrevoteDigest(network_id, 1, 0, mock_nodes[3].validator_id, block_b_id);
+    const cybou::BftPrevoteMsg pv3{
+        .network_id = network_id, .height = 1, .round = 0,
+        .validator_id = mock_nodes[3].validator_id, .block_id = block_b_id,
+        .signature = *cybou::SignValidatorVote(mock_nodes[3].seed, pv3_digest),
+    };
+
+    // Distribute prevotes to Node 0: receives 2 for A, 2 for B
+    nodes[0]->ReceivePrevote(*pv0);
+    nodes[0]->ReceivePrevote(*pv1);
+    nodes[0]->ReceivePrevote(pv2);
+    nodes[0]->ReceivePrevote(pv3);
+
+    // Neither block reached 3/4 quorum: Node 0 cannot finalize in round 0
+    BOOST_CHECK(nodes[0]->GetStep() != cybou::BftStep::FINALIZED);
+    BOOST_CHECK(!nodes[0]->GetLatestFinalizedBlock().has_value());
+
+    // Advance to round 1: Leader (1 + 1) % 4 = 2.
+    const size_t leader_r1 = cybou::BftLeaderIndex(1, 1, 4);
+    BOOST_CHECK_EQUAL(leader_r1, 2);
+    std::optional<cybou::BftProposalMsg> proposal_r1;
+    for (size_t i = 0; i < 4; ++i) {
+        auto prop = nodes[i]->StartRound(1, {});
+        if (i == leader_r1) proposal_r1 = prop;
+    }
+
+    BOOST_REQUIRE(proposal_r1.has_value());
+    const uint256 block_r1_id = cybou::ComputeBlockId(proposal_r1->block);
+
+    // All 4 nodes receive proposal_r1 and prevote it
+    std::vector<cybou::BftPrevoteMsg> prevotes_r1;
+    for (size_t i = 0; i < 4; ++i) {
+        auto pv = nodes[i]->ReceiveProposal(*proposal_r1);
+        BOOST_REQUIRE(pv.has_value() && pv->block_id == block_r1_id);
+        prevotes_r1.push_back(*pv);
+    }
+
+    // Exchange round 1 prevotes; all nodes lock and emit round 1 precommits
+    std::vector<cybou::BftPrecommitMsg> precommits_r1;
+    for (size_t i = 0; i < 4; ++i) {
+        std::optional<cybou::BftPrecommitMsg> pc;
+        for (const auto& pv : prevotes_r1) {
+            auto res = nodes[i]->ReceivePrevote(pv);
+            if (res) pc = res;
+        }
+        BOOST_REQUIRE(pc.has_value() && pc->block_id == block_r1_id);
+        BOOST_CHECK_EQUAL(pc->round, 1);
+        precommits_r1.push_back(*pc);
+    }
+
+    // Exchange round 1 precommits; all nodes reach finality in round 1
+    for (size_t i = 0; i < 4; ++i) {
+        for (const auto& pc : precommits_r1) {
+            nodes[i]->ReceivePrecommit(pc);
+        }
+        BOOST_CHECK(nodes[i]->GetStep() == cybou::BftStep::FINALIZED);
+        BOOST_REQUIRE(nodes[i]->GetLatestFinalizedBlock().has_value());
+        const auto& cert = nodes[i]->GetLatestFinalizedBlock()->certificate;
+        BOOST_CHECK_EQUAL(cert.round, 1);
+        BOOST_CHECK_EQUAL(cert.height, 1);
+        BOOST_CHECK(cert.block_id == block_r1_id);
+        BOOST_CHECK(cybou::VerifyFinalityCertificate(cert, val_set, network_id) ==
+                    cybou::FinalityVerificationError::NONE);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

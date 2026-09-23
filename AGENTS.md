@@ -29,7 +29,9 @@ Read active docs before coding.
 ### PoT
 - block-height-derived deterministic epoch;
 - integer arithmetic only;
-- System Balance trust contribution capped;
+- System Balance is service budget only (does not boost Beta PoT score);
+- PoT in Beta is account age and protocol history only;
+- deterministic fixed mail quota per epoch;
 - no local wall-clock consensus logic.
 
 ### Onboarding & Anti-Sybil

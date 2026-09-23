@@ -9,11 +9,11 @@ It is not social scoring and does not evaluate external personal behavior.
 ## Global account inputs
 
 ```text
-System Balance
 Account Age
 Clean Protocol History
 Valid Network Activity
 Protocol Violations
+(System Balance funds services but does not boost Beta PoT score)
 ```
 
 ## Deterministic epoch

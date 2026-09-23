@@ -319,7 +319,7 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
             m_precommitted = true;
 
             const uint256 commit_digest = ComputeBftCommitDigest(
-                m_network_id, blk_id, m_height, m_validator_set_commitment);
+                m_network_id, blk_id, m_height, m_round, m_validator_set_commitment);
             const auto sig = SignValidatorVote(m_private_key_seed, commit_digest);
             if (!sig) return std::nullopt;
 
@@ -339,7 +339,6 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
     if (m_prevotes.size() >= quorum) {
         m_step = BftStep::PRECOMMIT;
         m_precommitted = true;
-
         const uint256 nil_digest = ComputePrecommitNilDigest(m_network_id, m_height, m_round, m_validator_id);
         const auto sig = SignValidatorVote(m_private_key_seed, nil_digest);
         if (!sig) return std::nullopt;
@@ -370,7 +369,7 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
 
     if (precommit.block_id.has_value()) {
         const uint256 commit_digest = ComputeBftCommitDigest(
-            m_network_id, *precommit.block_id, m_height, m_validator_set_commitment);
+            m_network_id, *precommit.block_id, m_height, m_round, m_validator_set_commitment);
         if (!VerifyValidatorSignature(val->consensus_public_key, precommit.signature, commit_digest)) {
             return false;
         }
@@ -407,6 +406,7 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
                 .network_id = m_network_id,
                 .block_id = blk_id,
                 .height = m_height,
+                .round = m_round,
                 .validator_set_commitment = m_validator_set_commitment,
                 .commit_votes = std::move(votes),
             };

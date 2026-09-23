@@ -33,6 +33,7 @@ struct BftFinalityCertificateV1 {
     uint256 network_id;
     uint256 block_id;
     uint64_t height{0};
+    uint32_t round{0};
     uint256 validator_set_commitment;
     std::vector<BftCommitVoteV1> commit_votes;
 
@@ -41,12 +42,13 @@ struct BftFinalityCertificateV1 {
 
 /**
  * Compute the domain-separated message digest for validator commit voting:
- * SHA256("CYBOU/BFT_COMMIT/V1" || network_id || block_id || height || validator_set_commitment)
+ * SHA256("CYBOU/BFT_COMMIT/V1" || network_id || block_id || height || round || validator_set_commitment)
  */
 uint256 ComputeBftCommitDigest(
     const uint256& network_id,
     const uint256& block_id,
     uint64_t height,
+    uint32_t round,
     const uint256& validator_set_commitment);
 
 /** Sign a validator BFT vote digest with validator consensus private key seed. */

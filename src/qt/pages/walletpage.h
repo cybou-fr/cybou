@@ -23,8 +23,8 @@ class QPushButton;
  *  - Balance is user-controlled: a debit requires the user's own
  *    authorization; the UI offers no path that contradicts this.
  *  - System Balance is frozen CYBOU assigned to protocol use: it funds
- *    deterministic protocol fees (Email, future services) and contributes
- *    to Proof of Trust. It cannot be transferred, withdrawn or traded.
+ *    deterministic protocol fees (Email, future services). It does not boost
+ *    Proof of Trust in Beta. It cannot be transferred, withdrawn or traded.
  *  - Balance -> System Balance is a one-way LOCK_TO_SYSTEM; the UI renders
  *    it as irreversible and never offers a reverse direction.
  *

@@ -70,6 +70,9 @@ std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
         height == 0 || m_network_definition_error != NetworkDefinitionError::NONE) {
         return std::nullopt;
     }
+    if (operations.empty() && loaded.state->pending_fee_pool == 0) {
+        return GetStateRoot();
+    }
     const ProtocolExecutionContextV1 context{
         .network_id = m_network_id,
         .block_height = height,
@@ -236,22 +239,33 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         return {.error = BlockTransitionError::INVALID_CERTIFICATE, .cert_error = cert_res};
     }
 
-    const auto& params{m_network_definition.protocol_parameters};
-    const ProtocolExecutionContextV1 ctx{
-        .network_id = m_network_id,
-        .block_height = block.height,
-        .params = params,
-        .operator_authority = m_network_definition.operator_authority ? &*m_network_definition.operator_authority : nullptr,
-        .operator_verifier = m_operator_verifier.get(),
-    };
-    auto execution = ExecuteBlockOperations(*loaded.state, block.operations, ctx);
-    if (!execution) {
-        if (execution.too_many_account_creates) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
-        if (execution.fee_routing_failed) return {BlockTransitionError::FEE_ROUTING_FAILED};
-        return {BlockTransitionError::INVALID_OPERATION, execution.operation_result};
+    const bool is_empty_noop_block = block.operations.empty() && loaded.state->pending_fee_pool == 0;
+    uint256 candidate_root;
+    std::optional<CybouState> next_state;
+
+    if (is_empty_noop_block) {
+        const auto current_root = GetStateRoot();
+        if (!current_root) return {BlockTransitionError::CORRUPT_STATE};
+        candidate_root = *current_root;
+    } else {
+        const auto& params{m_network_definition.protocol_parameters};
+        const ProtocolExecutionContextV1 ctx{
+            .network_id = m_network_id,
+            .block_height = block.height,
+            .params = params,
+            .operator_authority = m_network_definition.operator_authority ? &*m_network_definition.operator_authority : nullptr,
+            .operator_verifier = m_operator_verifier.get(),
+        };
+        auto execution = ExecuteBlockOperations(*loaded.state, block.operations, ctx);
+        if (!execution) {
+            if (execution.too_many_account_creates) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
+            if (execution.fee_routing_failed) return {BlockTransitionError::FEE_ROUTING_FAILED};
+            return {BlockTransitionError::INVALID_OPERATION, execution.operation_result};
+        }
+        candidate_root = execution.state_root;
+        next_state = std::move(execution.state);
     }
-    auto& candidate = *execution.state;
-    const uint256 candidate_root = execution.state_root;
+
     if (candidate_root != block.resulting_state_root) {
         return {BlockTransitionError::STATE_ROOT_MISMATCH};
     }
@@ -262,8 +276,10 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     };
 
     CDBBatch batch{m_db};
-    batch.Write(STATE_KEY, SerializeCybouState(candidate));
-    batch.Write(HASH_KEY, candidate_root);
+    if (!is_empty_noop_block) {
+        batch.Write(STATE_KEY, SerializeCybouState(*next_state));
+        batch.Write(HASH_KEY, candidate_root);
+    }
     batch.Write(HEAD_KEY, next_head);
     batch.Write(BlockKey(block_id), SerializeFinalizedBlock(finalized_block));
     batch.Write(BlockHeightKey(block.height), block_id);

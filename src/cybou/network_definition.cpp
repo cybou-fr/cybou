@@ -30,6 +30,21 @@ NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinitionV1&
     if (definition.protocol_parameters.epoch_blocks == 0) {
         return NetworkDefinitionError::ZERO_EPOCH_BLOCKS;
     }
+    if (definition.operator_authority) {
+        const auto& authority = *definition.operator_authority;
+        if (authority.keyset_id.IsNull()) {
+            return NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEYSET_ID;
+        }
+        if (std::all_of(authority.ed25519_public_key.begin(), authority.ed25519_public_key.end(), [](unsigned char b) { return b == 0; })) {
+            return NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEY;
+        }
+        if (std::all_of(authority.mldsa65_public_key.begin(), authority.mldsa65_public_key.end(), [](unsigned char b) { return b == 0; })) {
+            return NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEY;
+        }
+        if (authority.active_from_epoch != 0 || authority.retired_from_epoch.has_value()) {
+            return NetworkDefinitionError::INVALID_OPERATOR_AUTHORITY_EPOCH;
+        }
+    }
     return NetworkDefinitionError::NONE;
 }
 

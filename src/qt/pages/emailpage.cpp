@@ -392,11 +392,28 @@ void EmailPage::showMessage(const Message& message)
     m_evidence_title->setVisible(true);
     m_evidence->setVisible(true);
     const bool verified = message.finality == Finality::Final;
-    for (QLabel* state : m_evidence_states) {
-        state->setText(verified ? tr("verified") : tr("pending"));
-        state->setObjectName(verified ? QStringLiteral("statusBadge") : QStringLiteral("neutralBadge"));
-        state->style()->unpolish(state);
-        state->style()->polish(state);
+    if (m_evidence_states.size() >= 4) {
+        // 0: Transaction inclusion proof
+        m_evidence_states[0]->setText(verified ? tr("verified") : tr("pending"));
+        m_evidence_states[0]->setObjectName(verified ? QStringLiteral("statusBadge") : QStringLiteral("neutralBadge"));
+
+        // 1: BFT finality certificate
+        m_evidence_states[1]->setText(verified ? tr("verified") : tr("pending"));
+        m_evidence_states[1]->setObjectName(verified ? QStringLiteral("statusBadge") : QStringLiteral("neutralBadge"));
+
+        // 2: Historical sender-key authorization
+        // MailEvidenceBundleV1 supplies current signing key but does not yet prove historical canonical state at block height
+        m_evidence_states[2]->setText(tr("not available yet"));
+        m_evidence_states[2]->setObjectName(QStringLiteral("neutralBadge"));
+
+        // 3: Salted, domain-separated content commitment
+        m_evidence_states[3]->setText(verified ? tr("verified") : tr("pending"));
+        m_evidence_states[3]->setObjectName(verified ? QStringLiteral("statusBadge") : QStringLiteral("neutralBadge"));
+
+        for (QLabel* state : m_evidence_states) {
+            state->style()->unpolish(state);
+            state->style()->polish(state);
+        }
     }
 }
 

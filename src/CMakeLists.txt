@@ -196,6 +196,7 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   cybou/network_definition.cpp
   cybou/protocol_operation.cpp
   cybou/mail_filter.cpp
+  cybou/node_runtime.cpp
   dbwrapper.cpp
   deploymentstatus.cpp
   flatfile.cpp

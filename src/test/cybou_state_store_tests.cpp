@@ -173,13 +173,14 @@ cybou::FinalizedBlockV1 MakeFinalizedBlock(
 
     const uint256 val_set_commitment = cybou::ComputeValidatorSetCommitment(val_set);
     const uint256 commit_digest = cybou::ComputeBftCommitDigest(
-        net_id, block_id, height, val_set_commitment);
+        net_id, block_id, height, 0, val_set_commitment);
 
     cybou::BftFinalityCertificateV1 cert{
         .version = cybou::BFT_FINALITY_CERTIFICATE_VERSION,
         .network_id = net_id,
         .block_id = block_id,
         .height = height,
+        .round = 0,
         .validator_set_commitment = val_set_commitment,
         .commit_votes = {},
     };
@@ -213,14 +214,42 @@ BOOST_AUTO_TEST_CASE(network_definition_roundtrip_rejects_truncation_and_trailin
 
     definition.operator_authority = cybou::OperatorAuthorityKeySet{
         .keyset_id = uint256::ONE,
-        .active_from_epoch = 2,
-        .retired_from_epoch = 5,
+        .ed25519_public_key = {1},
+        .mldsa65_public_key = {1},
+        .active_from_epoch = 0,
+        .retired_from_epoch = std::nullopt,
     };
     const auto authority_bytes = cybou::SerializeNetworkDefinition(definition);
     const auto decoded_authority = cybou::DeserializeNetworkDefinition(authority_bytes);
     BOOST_REQUIRE(decoded_authority);
     BOOST_CHECK(cybou::SerializeNetworkDefinition(*decoded_authority) == authority_bytes);
     BOOST_CHECK(!cybou::DeserializeNetworkDefinition(std::span{authority_bytes}.first(authority_bytes.size() - 1)));
+
+    // Invalid authority validations
+    auto bad_auth_def = definition;
+    bad_auth_def.operator_authority->keyset_id = uint256{};
+    BOOST_CHECK(cybou::ValidateNetworkDefinition(bad_auth_def) ==
+                cybou::NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEYSET_ID);
+
+    bad_auth_def = definition;
+    bad_auth_def.operator_authority->ed25519_public_key.fill(0);
+    BOOST_CHECK(cybou::ValidateNetworkDefinition(bad_auth_def) ==
+                cybou::NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEY);
+
+    bad_auth_def = definition;
+    bad_auth_def.operator_authority->mldsa65_public_key.fill(0);
+    BOOST_CHECK(cybou::ValidateNetworkDefinition(bad_auth_def) ==
+                cybou::NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEY);
+
+    bad_auth_def = definition;
+    bad_auth_def.operator_authority->active_from_epoch = 1;
+    BOOST_CHECK(cybou::ValidateNetworkDefinition(bad_auth_def) ==
+                cybou::NetworkDefinitionError::INVALID_OPERATOR_AUTHORITY_EPOCH);
+
+    bad_auth_def = definition;
+    bad_auth_def.operator_authority->retired_from_epoch = 10;
+    BOOST_CHECK(cybou::ValidateNetworkDefinition(bad_auth_def) ==
+                cybou::NetworkDefinitionError::INVALID_OPERATOR_AUTHORITY_EPOCH);
 }
 
 BOOST_AUTO_TEST_CASE(genesis_initializes_once_and_loads)
@@ -349,7 +378,13 @@ BOOST_AUTO_TEST_CASE(state_store_rejects_reopen_with_different_network_definitio
     BOOST_CHECK(mail_policy_store.LoadState().error == cybou::StateLoadError::NETWORK_MISMATCH);
 
     auto authority_definition{definition};
-    authority_definition.operator_authority = cybou::OperatorAuthorityKeySet{.keyset_id = uint256::ONE};
+    authority_definition.operator_authority = cybou::OperatorAuthorityKeySet{
+        .keyset_id = uint256::ONE,
+        .ed25519_public_key = {1},
+        .mldsa65_public_key = {1},
+        .active_from_epoch = 0,
+        .retired_from_epoch = std::nullopt,
+    };
     BOOST_CHECK(cybou::NetworkId(authority_definition) != original.GetNetworkId());
     cybou::CybouStateStore authority_store{db, authority_definition};
     BOOST_CHECK(authority_store.LoadState().error == cybou::StateLoadError::NETWORK_MISMATCH);
@@ -429,7 +464,7 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_state_root_mismatch)
     const uint256 new_bid = cybou::ComputeBlockId(fb1.block);
     fb1.certificate.block_id = new_bid;
     const uint256 digest = cybou::ComputeBftCommitDigest(
-        store.GetNetworkId(), new_bid, 1, cybou::ComputeValidatorSetCommitment(TEST_VALIDATOR_SET));
+        store.GetNetworkId(), new_bid, 1, 0, cybou::ComputeValidatorSetCommitment(TEST_VALIDATOR_SET));
     for (size_t i = 0; i < TEST_VAL_NODES.size(); ++i) {
         fb1.certificate.commit_votes[i].signature = *cybou::SignValidatorVote(TEST_VAL_NODES[i].priv, digest);
     }
@@ -682,8 +717,10 @@ BOOST_AUTO_TEST_CASE(store_commits_block_with_validator_admission_and_removal)
     const uint256 keyset_id{uint256::FromUserHex("aa").value()};
     const cybou::OperatorAuthorityKeySet authority{
         .keyset_id = keyset_id,
+        .ed25519_public_key = {1},
+        .mldsa65_public_key = {1},
         .active_from_epoch = 0,
-        .retired_from_epoch = 100,
+        .retired_from_epoch = std::nullopt,
     };
     auto verifier = std::make_shared<MockStoreAuthorityVerifier>();
 
@@ -779,8 +816,10 @@ BOOST_AUTO_TEST_CASE(store_rejects_removal_of_last_validator_in_authority_mode)
     const uint256 keyset_id{uint256::FromUserHex("aa").value()};
     const cybou::OperatorAuthorityKeySet authority{
         .keyset_id = keyset_id,
+        .ed25519_public_key = {1},
+        .mldsa65_public_key = {1},
         .active_from_epoch = 0,
-        .retired_from_epoch = 100,
+        .retired_from_epoch = std::nullopt,
     };
     auto verifier = std::make_shared<MockStoreAuthorityVerifier>();
 
