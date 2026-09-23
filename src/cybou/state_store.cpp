@@ -55,6 +55,27 @@ std::optional<ValidatorSetV1> CybouStateStore::GetValidatorSet() const
     return loaded.state->validator_set;
 }
 
+std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
+    const std::vector<ProtocolOperationV1>& operations,
+    const uint64_t height) const
+{
+    const auto loaded = LoadState();
+    const auto head = GetFinalizedHead();
+    if (!loaded || !head || height != head->height + 1 ||
+        height == 0 || m_network_definition_error != NetworkDefinitionError::NONE) {
+        return std::nullopt;
+    }
+    const ProtocolExecutionContextV1 context{
+        .network_id = m_network_id,
+        .block_height = height,
+        .params = m_network_definition.protocol_parameters,
+        .operator_authority = m_network_definition.operator_authority ? &*m_network_definition.operator_authority : nullptr,
+        .operator_verifier = m_operator_verifier.get(),
+    };
+    const auto execution = ExecuteBlockOperations(*loaded.state, operations, context);
+    return execution ? std::optional<uint256>{execution.state_root} : std::nullopt;
+}
+
 GenesisInitResult CybouStateStore::InitializeGenesis(
     const CybouState& genesis_state,
     const bool sync)

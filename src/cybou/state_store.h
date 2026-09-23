@@ -133,6 +133,11 @@ public:
     /** Canonical finalized height (0 for genesis, monotonically increasing with each finalized block). */
     std::optional<uint64_t> GetFinalizedHeight() const;
 
+    /** Compute a proposal root from the canonical parent state without committing it. */
+    std::optional<uint256> ComputeCandidateStateRoot(
+        const std::vector<ProtocolOperationV1>& operations,
+        uint64_t height) const;
+
     /** Network identity derived from the immutable canonical definition. */
     const uint256& GetNetworkId() const { return m_network_id; }
 

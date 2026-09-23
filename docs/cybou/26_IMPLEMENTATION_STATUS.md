@@ -104,6 +104,8 @@ The BFT state machine is still a library/simulator. Production block
 production, operation pool, P2P transport, finalized-block sync, and desktop
 verified-state display are not yet wired. Its execution callback must use
 `ExecuteBlockOperations` over the canonical parent state in that integration.
+`CybouStateStore::ComputeCandidateStateRoot` exposes this calculation against
+the persisted canonical state for the next height without committing it.
 The simulator uses an explicit test-only root fixture.
 
 The network-definition serialization changed in this hardening milestone.

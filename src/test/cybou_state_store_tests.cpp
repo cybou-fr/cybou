@@ -230,6 +230,25 @@ BOOST_AUTO_TEST_CASE(genesis_initializes_once_and_loads)
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 0);
 }
 
+BOOST_AUTO_TEST_CASE(candidate_root_uses_canonical_state_and_height)
+{
+    auto db = MemoryDb();
+    cybou::CybouStateStore store{db, TestNetworkDefinition()};
+    BOOST_CHECK(!store.ComputeCandidateStateRoot({}, 1).has_value());
+    BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
+
+    const auto operation = ValidOp();
+    const auto expected = MakeFinalizedBlock(store, {operation});
+    const auto root = store.ComputeCandidateStateRoot({operation}, 1);
+    BOOST_REQUIRE(root.has_value());
+    BOOST_CHECK(*root == expected.block.resulting_state_root);
+    BOOST_CHECK(!store.ComputeCandidateStateRoot({operation}, 2).has_value());
+
+    BOOST_REQUIRE(store.CommitFinalizedBlock(expected));
+    BOOST_CHECK(!store.ComputeCandidateStateRoot({operation}, 1).has_value());
+    BOOST_CHECK(!store.ComputeCandidateStateRoot({operation}, 2).has_value()); // Duplicate account.
+}
+
 BOOST_AUTO_TEST_CASE(genesis_rejects_invalid_definition_or_state_mismatch)
 {
     auto db{MemoryDb()};
