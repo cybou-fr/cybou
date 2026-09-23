@@ -9,7 +9,38 @@ voucher:
   one_time: true
   operator_authority_signature: true
   bearer_voucher: false
-  canonical_signed_payload: REQUIRED_BEFORE_CONSENSUS
+  canonical_signed_payload: FROZEN_V0_0_3_1
+  object_signing_domain: CYBOU/SIG/INVITE-VOUCHER/V1
+  signature_suite: HYBRID_ED25519_MLDSA65_V1
+  signature_suite_rule: BOTH_SIGNATURES_REQUIRED_AND
+  signature_sizes:
+    ed25519: 64
+    mldsa65: 3309
+  payload_encoding:
+    description: >-
+      Signed message is object_signing_domain || canonical_payload.
+      canonical_payload is a fixed-layout byte string: three 32-byte hashes
+      in internal byte order, uint64 little-endian, one presence flag byte,
+      optional 32-byte organization_id. No dynamic-length fields.
+    layout:
+    - field: network_id
+      type: hash32
+    - field: voucher_id
+      type: hash32
+    - field: beneficiary_account_id
+      type: hash32
+    - field: grant_amount
+      type: uint64_le
+      must_equal: 6000
+    - field: expiry_epoch
+      type: uint64_le
+    - field: organization_present
+      type: uint8
+      values: [0, 1]
+    - field: organization_id
+      type: hash32
+      present_if: organization_present == 1
+    size_bytes: [113, 145]
   fields:
   - payload_version
   - network_id
@@ -19,7 +50,5 @@ voucher:
   - expiry_epoch
   - optional_organization_id
   - operator_authority_signature
-  object_signing_domain: REQUIRED_BEFORE_CONSENSUS
-  signature_suite: OPEN
-  candidate_signature_suite: HYBRID_ED25519_ML_DSA_65_BOTH_REQUIRED
   replay_protection: consensus_consumed_voucher_id
+  crypto_verification_status: PENDING_V0_0_3_2_DEV_SEAM_ONLY
