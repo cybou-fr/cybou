@@ -83,15 +83,15 @@
 | DEC-079 | Account exposes `Balance` and `System Balance`; both hold real CYBOU | Frozen |
 | DEC-080 | Balance debits require user authorization; no arbitrary network/admin debit | Frozen |
 | DEC-081 | System Balance is irreversible/non-transferable/non-withdrawable and pays protocol-defined fees | Frozen |
-| DEC-082 | Invite Bonus is credited fully and immediately to System Balance; no vesting | Frozen |
-| DEC-083 | Invite Bonus CYBOU directly contributes to Trust through System Balance; no separate invite-trust token/credit | Frozen |
-| DEC-084 | New invited account Email limit target is approximately 20–30 recipient deliveries/day | Frozen direction |
+| DEC-082 | Onboarding Bonus is credited fully and immediately to System Balance; no vesting | Superseded / Updated to Onboarding Bonus |
+| DEC-083 | Onboarding Bonus CYBOU directly contributes to Trust through System Balance; no separate invite-trust token/credit | Superseded / Updated to Onboarding Bonus |
+| DEC-084 | New onboarded account Email limit target is approximately 20–30 recipient deliveries/day | Superseded by DEC-150 |
 | DEC-085 | Recipient-delivery count, not UI-message count, is used for Email sending limits | Superseded by v0.0.1 |
 | DEC-086 | Trust can raise limits but personal-account limits always retain a hard ceiling | Frozen |
 | DEC-087 | System Balance never creates validator voting power | Frozen |
 | DEC-088 | Monetary model is fixed maximum supply with bootstrap pools and fee recycling | Frozen |
 | DEC-089 | Protocol fees are not burned by default | Frozen current policy |
-| DEC-090 | Invite Bonus is funded from protocol/onboarding supply, not arbitrary mint-on-account-creation | Frozen |
+| DEC-090 | Onboarding Bonus is funded from protocol/onboarding supply, not arbitrary mint-on-account-creation | Superseded by DEC-151 |
 | DEC-091 | Pre-mainnet economic simulation is mandatory even though v0.10 numeric baseline is frozen for implementation | Frozen process rule |
 | DEC-092 | `MAX_SUPPLY = 100,000,000,000 CYBOU` | Frozen v0.10 baseline |
 | DEC-093 | CYBOU has zero decimal places; 1 CYBOU is the minimum unit | Frozen |
@@ -101,9 +101,9 @@
 | DEC-097 | Decentralization target is operational resilience without mandatory CYBOU cloud, not decentralized business ownership | Frozen |
 | DEC-098 | Current owner/operator is the development validator and remains an operator validator in production | Frozen direction |
 | DEC-099 | Production operator validator may receive normal deterministic validator rewards for verified work | Frozen direction |
-| DEC-100 | `WELCOME_GRANT = 6,000 CYBOU` paid fully to System Balance on valid invite | Frozen v0.10 baseline |
+| DEC-100 | Dev onboarding bonus is 6,000 CYBOU; Beta and Mainnet amounts determined separately | Superseded by DEC-150 / DEC-151 |
 | DEC-101 | Standard Email modeling unit targets approximately 1 CYBOU per recipient delivery | Superseded by v0.0.1 |
-| DEC-102 | New invited account Email ceiling starts at 25 recipient deliveries/day | Frozen v0.10 baseline |
+| DEC-102 | New onboarded account Email ceiling starts at 25 recipient deliveries/day | Superseded by DEC-137 |
 | DEC-103 | Proof of Trust is global across Email, payments and all CYBOU services | Frozen |
 | DEC-104 | Each service maps global PoT to its own bounded limits | Frozen |
 | DEC-105 | PoT may limit outgoing payment velocity/volume but cannot confiscate or reassign Balance | Frozen |
@@ -138,7 +138,7 @@
 | DEC-134 | v1 recurrent fee split is 75% Validators / 25% Onboarding | Frozen v0.13 |
 | DEC-135 | v1 Fee Router uses exact 4-CYBOU batches: 3 Security / 1 Onboarding | Frozen v0.13 |
 | DEC-136 | no rewarded generic service-node role exists before Object Storage | Frozen v0.13 |
-| DEC-137 | new invited account baseline is 25 outgoing MailTx/day | Frozen v0.13 |
+| DEC-137 | new onboarded account baseline is 25 outgoing MailTx/day | Frozen v0.0.1 |
 | DEC-138 | finalized MailTx provides cryptographic registration/origin/integrity evidence but is not automatically a legal notarial act | Frozen v0.13 |
 | DEC-139 | Permanent per-MailTx consensus-state MailMarker is rejected | Frozen v0.0.1 |
 | DEC-140 | MailTx existence/authenticity is proven by typed operation + block inclusion + BFT finality, not permanent bounded mail-validation state | Frozen v0.0.1 |

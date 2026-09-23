@@ -73,10 +73,7 @@ signature valid for one authority operation must not be reusable as another.
 
 ## Signature-suite status
 
-The v0.0.3 code contains structural validation only. Its caller-supplied
-signature result is a test seam, not an authorization boundary. Production
-consensus must receive a typed verified result from the Operator Authority
-verifier after canonical serialization and domain-separated verification.
+The primitive hybrid signature verifier (`OpenSslHybridSignatureVerifier` for `Ed25519 + ML-DSA-65`) is implemented in `src/cybou/signing.{h,cpp}` backed by OpenSSL >= 3.5. Consensus-operation wiring and typed boundary integration into block validation remain pending. Production consensus must receive a typed verified result from the Operator Authority verifier after canonical serialization and domain-separated verification.
 
 For rare Operator Authority operations, V1 freezes `Ed25519 + ML-DSA-65` with
 both signatures required. The signature bundle names an epoch-windowed keyset

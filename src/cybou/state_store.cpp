@@ -96,15 +96,14 @@ AccountCreateResult CybouStateStore::CreateAccountAndWrite(
     const AccountCreateOpV1& op,
     const uint256& network_id,
     const uint64_t block_height,
-    const uint64_t epoch,
-    const unsigned int required_work_bits,
-    const uint64_t onboarding_bonus,
+    const uint64_t current_epoch,
+    const CybouProtocolParameters& params,
     CybouState& state,
     const bool sync)
 {
     auto candidate{state};
     CybouStateDelta delta;
-    auto result{ApplyAccountCreate(op, network_id, block_height, epoch, required_work_bits, onboarding_bonus, candidate, delta)};
+    auto result{ApplyAccountCreate(op, network_id, block_height, current_epoch, params, candidate, delta)};
     if (!result) return result;
     Write(candidate, sync);
     state = std::move(candidate);
@@ -117,13 +116,15 @@ BlockTransitionResult CybouStateStore::ApplyBlock(
     const std::vector<AccountCreateOpV1>& ops,
     const uint256& network_id,
     const uint64_t block_height,
-    const uint64_t epoch,
-    const unsigned int required_work_bits,
-    const uint64_t onboarding_bonus,
+    const uint64_t current_epoch,
+    const CybouProtocolParameters& params,
     CybouState& state,
     const bool sync)
 {
     if (block_id.IsNull()) return {BlockTransitionError::INVALID_BLOCK_ID};
+    if (ops.size() > params.max_account_creates_per_block) {
+        return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
+    }
     const auto loaded{Load()};
     if (!loaded) return {BlockTransitionError::STATE_NOT_INITIALIZED};
     if (*loaded.state != state) return {BlockTransitionError::STATE_MISMATCH};
@@ -140,7 +141,7 @@ BlockTransitionResult CybouStateStore::ApplyBlock(
     auto candidate{state};
     CybouStateDelta delta;
     for (const auto& op : ops) {
-        const auto res{ApplyAccountCreate(op, network_id, block_height, epoch, required_work_bits, onboarding_bonus, candidate, delta)};
+        const auto res{ApplyAccountCreate(op, network_id, block_height, current_epoch, params, candidate, delta)};
         if (!res) return {BlockTransitionError::INVALID_OPERATION, res};
     }
 

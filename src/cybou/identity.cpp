@@ -30,7 +30,7 @@ std::vector<unsigned char> SerializeAccountAuthorization(const AccountAuthorizat
 {
     std::vector<unsigned char> out;
     out.reserve(uint256::size());
-    out.insert(out.end(), auth.auth_key_commitment.begin(), auth.auth_key_commitment.end());
+    out.insert(out.end(), auth.authorization_descriptor.begin(), auth.authorization_descriptor.end());
     return out;
 }
 
@@ -39,7 +39,7 @@ uint256 ComputeAuthCommitment(const AccountAuthorizationV1& auth)
     static constexpr std::string_view DOMAIN{"CYBOU/AUTH-COMMITMENT/V1"};
     CSHA256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
-    hasher.Write(auth.auth_key_commitment.begin(), uint256::size());
+    hasher.Write(auth.authorization_descriptor.begin(), uint256::size());
     uint256 result;
     hasher.Finalize(result.begin());
     return result;

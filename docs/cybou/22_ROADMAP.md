@@ -121,3 +121,8 @@ Only after Store.
 ## v0.8 — Sovereignty exercise
 ## v0.9 — Global-readiness review
 ## v1.0 — Production candidate
+
+## BetaNet and Mainnet Progression
+- **Separate Genesis**: BetaNet and Mainnet maintain separate genesis states; Beta balances do not carry forward to Mainnet.
+- **Service Progression**: Email Alpha/Beta -> Storage Beta -> Backup Beta -> multi-service observation window.
+- **Economic Calibration**: Beta onboarding budget is sized from integrated Email + Storage + Backup usage profiles; the Mainnet onboarding bonus is frozen only after analyzing aggregate Beta operational metrics.

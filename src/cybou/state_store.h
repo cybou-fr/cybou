@@ -38,6 +38,7 @@ enum class BlockTransitionError : uint8_t {
     INVALID_OPERATION,
     NOT_CURRENT_TIP,
     MISSING_OR_CORRUPT_UNDO,
+    TOO_MANY_ACCOUNT_CREATES,
 };
 
 struct BlockTransitionResult {
@@ -60,9 +61,8 @@ public:
         const AccountCreateOpV1& op,
         const uint256& network_id,
         uint64_t block_height,
-        uint64_t epoch,
-        unsigned int required_work_bits,
-        uint64_t onboarding_bonus,
+        uint64_t current_epoch,
+        const CybouProtocolParameters& params,
         CybouState& state,
         bool sync = true);
 
@@ -72,9 +72,8 @@ public:
         const std::vector<AccountCreateOpV1>& ops,
         const uint256& network_id,
         uint64_t block_height,
-        uint64_t epoch,
-        unsigned int required_work_bits,
-        uint64_t onboarding_bonus,
+        uint64_t current_epoch,
+        const CybouProtocolParameters& params,
         CybouState& state,
         bool sync = true);
 

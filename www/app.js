@@ -5,7 +5,6 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   initLanguageSwitch();
-  initOnboardingSimulator();
   checkUrlLanguage();
 });
 
@@ -17,7 +16,6 @@ const translations = {
     navArch: "Piliers",
     navMailTx: "Protocole MailTx",
     navSpecs: "Fiche technique",
-    navSim: "Simulateur",
     navFaq: "FAQ",
     navRepo: "Dépôt GitHub",
 
@@ -53,7 +51,7 @@ const translations = {
 
     col3Title: "Feuille de route planifiée",
     badgePlanned: "PLANIFIÉ",
-    col3Item1: "<strong>Encapsulation Post-Quantique HPKE :</strong> intégration production du profil hybride ML-KEM-768 + X25519 (doc 49).",
+    col3Item1: "<strong>Architecture cible Post-Quantique HPKE :</strong> profil hybride ML-KEM-768 + X25519 (spécifié doc 49, tests crypto OpenSSL >= 3.5).",
     col3Item2: "<strong>Stockage d'objets décentralisé :</strong> couche de pré-stockage pour validateurs et stockage d'objets pour pièces jointes à grande échelle.",
     col3Item3: "<strong>Client graphique de bureau :</strong> interface utilisateur native (Inbox, Sent, état de lecture) avec conservation des index localement sur le poste.",
     col3Item4: "<strong>Preuves d'inclusion de correspondance :</strong> certificats de finalité vérifiables hors-chaîne par des tiers certificateurs.",
@@ -67,7 +65,7 @@ const translations = {
     bento1Metric: "Résilience autonome native au niveau protocolaire",
 
     bento2Title: "Chiffrement Post-Quantique HPKE",
-    bento2Desc: "Anticipation des attaques par interception et déchiffrement ultérieur grâce au standard hybride ML-KEM-768 et X25519 (RFC 9180).",
+    bento2Desc: "Anticipation des attaques par interception et déchiffrement ultérieur grâce au standard hybride cible ML-KEM-768 et X25519 (RFC 9180).",
     bento2Metric: "Standard NIST post-quantique",
 
     bento3Title: "Autorité exclusive de l'appareil",
@@ -102,25 +100,11 @@ const translations = {
     dtConsensus: "Modèle de consensus",
     dtPoT: "Époques de confiance (PoT)",
     dtSupply: "Offre maximale (MAX_SUPPLY)",
-    dtGrant: "Subvention d'accueil (Welcome Grant)",
+    dtGrant: "Bonus d'intégration (Onboarding Bonus)",
     dtFees: "Régime des frais de transaction",
     dtMailTx: "Format MailTx (v1)",
     dtKeys: "Séparation des clés d'opérateur",
     dtStack: "Socle technologique",
-
-    simLabel: "Validation d'état C++",
-    simTitle: "Création de compte native & Preuve anti-Sybil.",
-    simDesc: "Démonstration de la création native sans invitation selon AccountCreateOpV1 et AccountCreationWorkV1 (doc 70).",
-    simBeneficiary: "Identifiant de compte (AccountId — 32 octets)",
-    simWorkLabel: "Preuve de travail anti-Sybil (CYBOU/ACCOUNT-CREATE-WORK/V1)",
-    simSubmit: "Calculer PoW & Créer le compte",
-    simStatusLabel: "Statut du protocole",
-    simStatusReady: "Prêt à créer l'identité",
-    simStatusSuccess: "Compte créé • Preuve anti-Sybil validée • Bonus crédité",
-    simPoolSource: "OnboardingPool (Réserve globale)",
-    simBalanceTarget: "SystemBalance (Solde Système)",
-    simAntiSybil: "Anti-Sybil & Intégrité",
-    simQuota: "Quota initial par époque",
 
     faqLabel: "Questions fréquentes",
     faqTitle: "Architecture, Cryptographie & Gouvernance.",
@@ -128,7 +112,7 @@ const translations = {
     faqPqBadge: "Sécurité Post-Quantique • PQ by Design",
     faqQ1: "Que signifie « Post-Quantique dès la conception » (PQ by design) pour CYBOU ?",
     faqA1P1: "La plupart des systèmes de communication historiques s'appuient sur RSA ou la cryptographie sur les courbes elliptiques classiques. Face à l'émergence des calculateurs quantiques, ils tentent de patcher a posteriori leurs protocoles, exposant toutes les communications passées aux attaques <strong>« Harvest Now, Decrypt Later » (HNDL)</strong> — où des acteurs étatiques enregistrent dès aujourd'hui les flux chiffrés pour les casser demain.",
-    faqA1P2: "Dans CYBOU, la résistance post-quantique n'est pas une option ou une mise à niveau tardive : le protocole est <strong>PQ by design</strong> dès la version <code>v0.0.1</code>. La structure d'enveloppe <code>MailTx</code> et le chiffrement E2EE intègrent nativement le standard hybride <strong>HPKE (RFC 9180)</strong> combinant <strong>ML-KEM-768 (standard NIST / Kyber)</strong> et <strong>X25519</strong>, garantissant qu'aucun message scellé aujourd'hui ne pourra être déchiffré à l'ère quantique.",
+    faqA1P2: "Dans CYBOU, la résistance post-quantique est un principe fondateur : le protocole est pensé <strong>PQ by design</strong> dès la version <code>v0.0.1</code>. La structure d'enveloppe <code>MailTx</code> et le chiffrement E2EE ciblent nativement le standard hybride <strong>HPKE (RFC 9180)</strong> combinant <strong>ML-KEM-768 (standard NIST / Kyber)</strong> et <strong>X25519</strong>, tandis qu'un vérificateur hybride <strong>Ed25519 + ML-DSA-65</strong> est déjà validé pour les signatures d'autorité (OpenSSL >= 3.5), immunisant les flux contre les risques quantiques futurs.",
     faqQ2: "Pourquoi CYBOU n'est-il pas encore téléchargeable pour le grand public ?",
     faqA2: "Nous refusons le marketing trompeur. CYBOU est actuellement à l'étape <code>v0.0.1</code> (baseline d'ingénierie et de recherche ouverte). Avant d'ouvrir le réseau au grand public, nous finalisons la transition du réseau de bootstrap <code>CYBOU-DEV v0.0.2</code> vers le consensus multi-validateurs BFT (seuil <code>f=1</code> avec 4 validateurs minimum) et la séparation étanche des clés d'opérateur (doc 68). Le code source et les 684 tests unitaires sont publiquement auditables.",
     faqQ3: "En quoi CYBOU diffère-t-il d'une messagerie électronique classique (SMTP/IMAP) ?",
@@ -149,7 +133,6 @@ const translations = {
     navArch: "Pillars",
     navMailTx: "MailTx Protocol",
     navSpecs: "Tech Specs",
-    navSim: "Simulator",
     navFaq: "FAQ",
     navRepo: "GitHub Repo",
 
@@ -185,7 +168,7 @@ const translations = {
 
     col3Title: "Planned Roadmap",
     badgePlanned: "PLANNED",
-    col3Item1: "<strong>Post-Quantum HPKE Encapsulation:</strong> production integration of hybrid ML-KEM-768 + X25519 (doc 49).",
+    col3Item1: "<strong>Target Post-Quantum HPKE Architecture:</strong> hybrid ML-KEM-768 + X25519 (specified in doc 49, crypto verification with OpenSSL >= 3.5).",
     col3Item2: "<strong>Distributed Object Storage:</strong> validator pre-store staging layer and long-term object storage for attachments at scale.",
     col3Item3: "<strong>Desktop GUI Client:</strong> native desktop user interface (Inbox, Sent, read-state) with index stores owned strictly on the local machine.",
     col3Item4: "<strong>Mail Evidence Bundles:</strong> cryptographically verifiable inclusion certificates and BFT finality proofs for third-party auditing.",
@@ -199,7 +182,7 @@ const translations = {
     bento1Metric: "Native protocol-level autonomous resilience",
 
     bento2Title: "Post-Quantum HPKE Encryption",
-    bento2Desc: "Future-proof immunity against 'harvest-now-decrypt-later' threats using the hybrid ML-KEM-768 and X25519 standard (RFC 9180).",
+    bento2Desc: "Future-proof immunity against 'harvest-now-decrypt-later' threats using the target hybrid ML-KEM-768 and X25519 standard (RFC 9180).",
     bento2Metric: "NIST post-quantum standard",
 
     bento3Title: "Exclusive Device Authority",
@@ -234,25 +217,11 @@ const translations = {
     dtConsensus: "Consensus Model",
     dtPoT: "Proof of Trust Epochs (PoT)",
     dtSupply: "Maximum Supply (MAX_SUPPLY)",
-    dtGrant: "Welcome Grant",
+    dtGrant: "Onboarding Bonus",
     dtFees: "Transaction Fee Structure",
     dtMailTx: "MailTx Specification (v1)",
     dtKeys: "Operator Key Isolation",
     dtStack: "Core Technology Stack",
-
-    simLabel: "C++ State Transition",
-    simTitle: "Native Account Creation & Anti-Sybil Proof-of-Work.",
-    simDesc: "Demonstration of permissionless account creation according to AccountCreateOpV1 and AccountCreationWorkV1 (doc 70).",
-    simBeneficiary: "Account Identifier (AccountId — 32 bytes)",
-    simWorkLabel: "Anti-Sybil Proof-of-Work (CYBOU/ACCOUNT-CREATE-WORK/V1)",
-    simSubmit: "Compute PoW & Create Account",
-    simStatusLabel: "Protocol Status",
-    simStatusReady: "Ready to create identity",
-    simStatusSuccess: "Account Created • Anti-Sybil PoW Validated • Bonus Credited",
-    simPoolSource: "OnboardingPool (Global Reserve)",
-    simBalanceTarget: "SystemBalance (Credited)",
-    simAntiSybil: "Anti-Sybil & Integrity",
-    simQuota: "Initial Quota per Epoch",
 
     faqLabel: "Frequently Asked Questions",
     faqTitle: "Architecture, Cryptography & Governance.",
@@ -260,7 +229,7 @@ const translations = {
     faqPqBadge: "Post-Quantum Security • PQ by Design",
     faqQ1: "What does 'Post-Quantum by design' (PQ by design) mean for CYBOU?",
     faqA1P1: "Most legacy messaging systems rely on RSA or classical elliptic curve cryptography. Facing the rise of quantum computing, they attempt to patch protocols retroactively, leaving all historically recorded correspondence vulnerable to <strong>'Harvest Now, Decrypt Later' (HNDL)</strong> attacks — where adversaries intercept encrypted traffic today to decrypt it tomorrow.",
-    faqA1P2: "In CYBOU, post-quantum resilience is not an optional future upgrade: the protocol is <strong>PQ by design</strong> from version <code>v0.0.1</code>. The native <code>MailTx</code> envelope structure and E2EE engine embed the hybrid <strong>HPKE (RFC 9180)</strong> standard combining <strong>ML-KEM-768 (NIST standard / Kyber)</strong> and <strong>X25519</strong>, ensuring sealed messages cannot be cracked in the quantum computing era.",
+    faqA1P2: "In CYBOU, post-quantum resilience is a core founding principle: the protocol is designed <strong>PQ by design</strong> from version <code>v0.0.1</code>. The native <code>MailTx</code> envelope structure and E2EE engine target the hybrid <strong>HPKE (RFC 9180)</strong> standard combining <strong>ML-KEM-768 (NIST standard / Kyber)</strong> and <strong>X25519</strong>, while an <strong>Ed25519 + ML-DSA-65</strong> hybrid verifier is already validated for authority signatures (OpenSSL >= 3.5), shielding data flows against future quantum risks.",
     faqQ2: "Why isn't CYBOU available for public download yet?",
     faqA2: "We reject deceptive marketing. CYBOU is currently at the <code>v0.0.1</code> baseline engineering stage. Before public release, we are completing the migration from the bootstrap chain (<code>CYBOU-DEV v0.0.2</code>) to the multi-validator BFT consensus (f=1 fault tolerance at 4+ validators) and strict operator key isolation (doc 68). The full source code and 684 unit tests are auditable on GitHub.",
     faqQ3: "How does CYBOU differ from standard email (SMTP/IMAP)?",
@@ -322,44 +291,4 @@ function setLanguage(lang, updateUrl = false) {
       }
     });
   }
-}
-
-// --- 2. Interactive Permissionless Onboarding Simulator ---
-function initOnboardingSimulator() {
-  const btn = document.getElementById('sim-run-btn');
-  const accountInput = document.getElementById('sim-account');
-  const workInput = document.getElementById('sim-work');
-  const statusVal = document.getElementById('sim-status-val');
-  const sysBalVal = document.getElementById('sim-sysbal-val');
-  const poolVal = document.getElementById('sim-pool-val');
-
-  if (!btn || !accountInput) return;
-
-  btn.addEventListener('click', () => {
-    btn.textContent = currentLang === 'fr' 
-      ? 'Calcul de la preuve anti-Sybil...' 
-      : 'Computing anti-Sybil proof-of-work...';
-    btn.style.opacity = '0.7';
-
-    setTimeout(() => {
-      btn.textContent = currentLang === 'fr' 
-        ? 'Calculer PoW & Créer le compte' 
-        : 'Compute PoW & Create Account';
-      btn.style.opacity = '1';
-
-      if (statusVal) {
-        statusVal.textContent = currentLang === 'fr' 
-          ? 'Compte créé • Preuve anti-Sybil validée • Bonus crédité' 
-          : 'Account Created • Anti-Sybil PoW Validated • Bonus Credited';
-        statusVal.className = 'output-val highlight';
-      }
-      if (sysBalVal) {
-        sysBalVal.textContent = '6 000 CYBOU';
-        sysBalVal.className = 'output-val highlight';
-      }
-      if (poolVal) {
-        poolVal.textContent = 'Débit atomique confirmé (-6 000)';
-      }
-    }, 400);
-  });
 }

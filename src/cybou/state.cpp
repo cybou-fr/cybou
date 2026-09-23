@@ -125,37 +125,36 @@ AccountCreateResult ApplyAccountCreate(
     const AccountCreateOpV1& op,
     const uint256& network_id,
     const uint64_t block_height,
-    const uint64_t epoch,
-    const unsigned int required_work_bits,
-    const uint64_t onboarding_bonus,
+    const uint64_t current_epoch,
+    const CybouProtocolParameters& params,
     CybouState& state,
     CybouStateDelta& delta)
 {
-    const auto validation_error{ValidateAccountCreateOp(op, network_id, required_work_bits)};
+    const auto validation_error{ValidateAccountCreateOp(op, network_id, current_epoch, params)};
     if (validation_error != AccountCreateValidationError::NONE) {
         return {AccountCreateError::INVALID_OP, validation_error};
     }
     if (state.accounts.contains(op.account_id)) {
         return {AccountCreateError::ACCOUNT_ALREADY_EXISTS};
     }
-    if (onboarding_bonus > 0 && state.onboarding_pool < onboarding_bonus) {
+    if (params.onboarding_bonus > 0 && state.onboarding_pool < params.onboarding_bonus) {
         return {AccountCreateError::INSUFFICIENT_ONBOARDING_POOL};
     }
 
-    if (onboarding_bonus > 0) {
-        state.onboarding_pool -= onboarding_bonus;
+    if (params.onboarding_bonus > 0) {
+        state.onboarding_pool -= params.onboarding_bonus;
     }
     AccountState acc{
         .balance = 0,
-        .system_balance = onboarding_bonus,
+        .system_balance = params.onboarding_bonus,
         .creation_height = block_height,
-        .creation_epoch = epoch,
-        .initial_auth_commitment = op.initial_authorization.auth_key_commitment,
+        .creation_epoch = current_epoch,
+        .initial_auth_commitment = op.initial_authorization.authorization_descriptor,
     };
     state.accounts.emplace(op.account_id, std::move(acc));
     delta.created_accounts.push_back(op.account_id);
-    delta.onboarding_pool_debited += onboarding_bonus;
-    delta.system_balance_credited += onboarding_bonus;
+    delta.onboarding_pool_debited += params.onboarding_bonus;
+    delta.system_balance_credited += params.onboarding_bonus;
     return {};
 }
 

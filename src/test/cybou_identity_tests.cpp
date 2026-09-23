@@ -45,7 +45,7 @@ BOOST_AUTO_TEST_CASE(account_id_has_one_canonical_fixed_width_encoding)
 BOOST_AUTO_TEST_CASE(account_authorization_serialization_and_commitment)
 {
     cybou::AccountAuthorizationV1 auth{
-        .auth_key_commitment = uint256::FromUserHex("42").value(),
+        .authorization_descriptor = uint256::FromUserHex("42").value(),
     };
 
     const auto bytes{cybou::SerializeAccountAuthorization(auth)};
@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(account_authorization_serialization_and_commitment)
     BOOST_CHECK(!commitment.IsNull());
 
     cybou::AccountAuthorizationV1 other_auth{
-        .auth_key_commitment = uint256::FromUserHex("43").value(),
+        .authorization_descriptor = uint256::FromUserHex("43").value(),
     };
     BOOST_CHECK(cybou::ComputeAuthCommitment(other_auth) != commitment);
 }

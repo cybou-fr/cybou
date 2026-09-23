@@ -22,9 +22,16 @@ const uint256 AUTH_KEY{uint256::FromUserHex("42").value()};
 cybou::AccountAuthorizationV1 ValidAuth()
 {
     return cybou::AccountAuthorizationV1{
-        .auth_key_commitment = AUTH_KEY,
+        .authorization_descriptor = AUTH_KEY,
     };
 }
+
+const cybou::CybouProtocolParameters TEST_PARAMS{
+    .account_creation_work_bits = 0,
+    .account_creation_epoch_lag = 1,
+    .max_account_creates_per_block = 128,
+    .onboarding_bonus = cybou::DEV_ONBOARDING_BONUS,
+};
 
 cybou::AccountCreateOpV1 ValidOp(const cybou::AccountId& acc = ACCOUNT_ID)
 {
@@ -60,7 +67,7 @@ BOOST_AUTO_TEST_CASE(account_create_moves_bonus_and_records_account)
 {
     auto state{InitialState()};
     cybou::CybouStateDelta delta;
-    const auto result{cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, 0, cybou::DEV_ONBOARDING_BONUS, state, delta)};
+    const auto result{cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, TEST_PARAMS, state, delta)};
 
     BOOST_CHECK(result);
     BOOST_CHECK_EQUAL(state.onboarding_pool, 6000);
@@ -81,11 +88,11 @@ BOOST_AUTO_TEST_CASE(account_create_rejects_duplicate_account_without_mutation)
 {
     auto state{InitialState()};
     cybou::CybouStateDelta delta1;
-    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, 0, cybou::DEV_ONBOARDING_BONUS, state, delta1));
+    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, TEST_PARAMS, state, delta1));
     const auto snapshot{state};
 
     cybou::CybouStateDelta delta2;
-    const auto result{cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 101, 1, 0, cybou::DEV_ONBOARDING_BONUS, state, delta2)};
+    const auto result{cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 101, 1, TEST_PARAMS, state, delta2)};
     BOOST_CHECK(result.error == cybou::AccountCreateError::ACCOUNT_ALREADY_EXISTS);
     BOOST_CHECK(state == snapshot);
     BOOST_CHECK(delta2.created_accounts.empty());
@@ -98,7 +105,7 @@ BOOST_AUTO_TEST_CASE(account_create_rejects_insufficient_onboarding_pool)
     const auto snapshot{state};
 
     cybou::CybouStateDelta delta;
-    const auto result{cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, 0, cybou::DEV_ONBOARDING_BONUS, state, delta)};
+    const auto result{cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, TEST_PARAMS, state, delta)};
     BOOST_CHECK(result.error == cybou::AccountCreateError::INSUFFICIENT_ONBOARDING_POOL);
     BOOST_CHECK(state == snapshot);
 }
@@ -108,7 +115,7 @@ BOOST_AUTO_TEST_CASE(undo_account_create_delta_restores_state_atomically)
     auto state{InitialState()};
     const auto initial{state};
     cybou::CybouStateDelta delta;
-    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, 0, cybou::DEV_ONBOARDING_BONUS, state, delta));
+    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, TEST_PARAMS, state, delta));
     BOOST_CHECK(state != initial);
 
     cybou::UndoAccountCreateDelta(delta, state);
@@ -117,9 +124,10 @@ BOOST_AUTO_TEST_CASE(undo_account_create_delta_restores_state_atomically)
 
 BOOST_AUTO_TEST_CASE(state_serialization_round_trip_and_strict)
 {
+    BOOST_CHECK_EQUAL(cybou::CYBOU_STATE_VERSION, 1);
     auto state{InitialState()};
     cybou::CybouStateDelta delta;
-    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, 0, cybou::DEV_ONBOARDING_BONUS, state, delta));
+    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, TEST_PARAMS, state, delta));
 
     const auto bytes{cybou::SerializeCybouState(state)};
     const auto decoded{cybou::DeserializeCybouState(bytes)};
@@ -141,7 +149,7 @@ BOOST_AUTO_TEST_CASE(cybou_state_hash_is_sensitive_to_every_field)
 {
     auto state{InitialState()};
     cybou::CybouStateDelta delta;
-    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, 0, cybou::DEV_ONBOARDING_BONUS, state, delta));
+    BOOST_REQUIRE(cybou::ApplyAccountCreate(ValidOp(), NETWORK_ID, 100, 1, TEST_PARAMS, state, delta));
     const auto root{cybou::CybouStateHash(state)};
 
     auto changed{state};

@@ -7,6 +7,7 @@
 
 #include <cybou/account_creation.h>
 #include <cybou/account_id.h>
+#include <cybou/protocol_params.h>
 #include <uint256.h>
 
 #include <cstdint>
@@ -45,8 +46,7 @@ struct CybouStateDelta {
     friend bool operator==(const CybouStateDelta&, const CybouStateDelta&) = default;
 };
 
-inline constexpr uint8_t CYBOU_STATE_VERSION{3};
-inline constexpr uint64_t DEV_ONBOARDING_BONUS{6000};
+inline constexpr uint8_t CYBOU_STATE_VERSION{1};
 inline constexpr uint32_t MAX_SERIALIZED_ACCOUNTS{1'000'000};
 
 std::vector<unsigned char> SerializeCybouState(const CybouState& state);
@@ -72,9 +72,8 @@ AccountCreateResult ApplyAccountCreate(
     const AccountCreateOpV1& op,
     const uint256& network_id,
     uint64_t block_height,
-    uint64_t epoch,
-    unsigned int required_work_bits,
-    uint64_t onboarding_bonus,
+    uint64_t current_epoch,
+    const CybouProtocolParameters& params,
     CybouState& state,
     CybouStateDelta& delta);
 

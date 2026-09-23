@@ -104,7 +104,7 @@ std::vector<unsigned char> SerializeAccountCreateOp(const AccountCreateOpV1& op)
 
     out.push_back(op.version);
     append_hash(op.account_id.Value());
-    append_hash(op.initial_authorization.auth_key_commitment);
+    append_hash(op.initial_authorization.authorization_descriptor);
     const auto work_bytes{SerializeAccountCreationWork(op.creation_work)};
     out.insert(out.end(), work_bytes.begin(), work_bytes.end());
     return out;
@@ -127,7 +127,7 @@ std::optional<AccountCreateOpV1> DeserializeAccountCreateOp(const std::span<cons
     op.version = read_u8();
     if (op.version != ACCOUNT_CREATE_OP_VERSION) return std::nullopt;
     op.account_id = AccountId{read_hash()};
-    op.initial_authorization.auth_key_commitment = read_hash();
+    op.initial_authorization.authorization_descriptor = read_hash();
     const auto work{DeserializeAccountCreationWork(bytes.subspan(offset))};
     if (!work) return std::nullopt;
     op.creation_work = *work;
@@ -137,7 +137,8 @@ std::optional<AccountCreateOpV1> DeserializeAccountCreateOp(const std::span<cons
 AccountCreateValidationError ValidateAccountCreateOp(
     const AccountCreateOpV1& op,
     const uint256& expected_network_id,
-    const unsigned int required_work_bits)
+    const uint64_t current_epoch,
+    const CybouProtocolParameters& params)
 {
     if (op.version != ACCOUNT_CREATE_OP_VERSION) return AccountCreateValidationError::UNSUPPORTED_VERSION;
     if (op.account_id.IsNull()) return AccountCreateValidationError::NULL_ACCOUNT_ID;
@@ -147,7 +148,13 @@ AccountCreateValidationError ValidateAccountCreateOp(
     if (op.creation_work.initial_authorization_commitment != ComputeAuthCommitment(op.initial_authorization)) {
         return AccountCreateValidationError::AUTH_COMMITMENT_MISMATCH;
     }
-    if (!CheckAccountCreationWork(op.creation_work, required_work_bits)) {
+    if (op.creation_work.work_epoch > current_epoch) {
+        return AccountCreateValidationError::FUTURE_WORK_EPOCH;
+    }
+    if (current_epoch - op.creation_work.work_epoch > params.account_creation_epoch_lag) {
+        return AccountCreateValidationError::EXPIRED_WORK_EPOCH;
+    }
+    if (!CheckAccountCreationWork(op.creation_work, params.account_creation_work_bits)) {
         return AccountCreateValidationError::INSUFFICIENT_WORK;
     }
     return AccountCreateValidationError::NONE;

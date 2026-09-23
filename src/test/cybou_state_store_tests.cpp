@@ -26,9 +26,16 @@ const std::string HASH_KEY{"cybou/hash/v1"};
 cybou::AccountAuthorizationV1 ValidAuth()
 {
     return cybou::AccountAuthorizationV1{
-        .auth_key_commitment = AUTH_KEY,
+        .authorization_descriptor = AUTH_KEY,
     };
 }
+
+const cybou::CybouProtocolParameters PARAMS{
+    .account_creation_work_bits = 0,
+    .account_creation_epoch_lag = 1,
+    .max_account_creates_per_block = 128,
+    .onboarding_bonus = cybou::DEV_ONBOARDING_BONUS,
+};
 
 cybou::AccountCreateOpV1 ValidOp(const cybou::AccountId& acc = ACCOUNT_ID)
 {
@@ -115,14 +122,14 @@ BOOST_AUTO_TEST_CASE(create_account_and_write_keeps_memory_and_database_in_sync)
     cybou::CybouStateStore store{db};
     auto state{InitialState()};
 
-    const auto result{store.CreateAccountAndWrite(ValidOp(), NETWORK_ID, 1, 1, 0, cybou::DEV_ONBOARDING_BONUS, state)};
+    const auto result{store.CreateAccountAndWrite(ValidOp(), NETWORK_ID, 1, 1, PARAMS, state)};
     BOOST_REQUIRE(result);
     const auto loaded{store.Load()};
     BOOST_REQUIRE(loaded);
     BOOST_CHECK(*loaded.state == state);
 
     const auto snapshot{state};
-    const auto replay{store.CreateAccountAndWrite(ValidOp(), NETWORK_ID, 2, 1, 0, cybou::DEV_ONBOARDING_BONUS, state)};
+    const auto replay{store.CreateAccountAndWrite(ValidOp(), NETWORK_ID, 2, 1, PARAMS, state)};
     BOOST_CHECK(replay.error == cybou::AccountCreateError::ACCOUNT_ALREADY_EXISTS);
     BOOST_CHECK(state == snapshot);
     BOOST_REQUIRE(store.Load());
@@ -139,13 +146,13 @@ BOOST_AUTO_TEST_CASE(apply_block_and_rollback_are_tip_ordered_and_atomic)
     const uint256 block1{uint256::FromUserHex("11").value()};
     const uint256 block2{uint256::FromUserHex("12").value()};
 
-    BOOST_REQUIRE(store.ApplyBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 1, 1, 0, cybou::DEV_ONBOARDING_BONUS, state));
+    BOOST_REQUIRE(store.ApplyBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 1, 1, PARAMS, state));
     const auto after_block1{state};
     BOOST_CHECK(store.ApplyBlock(
-        block2, uint256::ONE, {ValidOp(ACCOUNT_ID_2)}, NETWORK_ID, 2, 1, 0, cybou::DEV_ONBOARDING_BONUS, state).error ==
+        block2, uint256::ONE, {ValidOp(ACCOUNT_ID_2)}, NETWORK_ID, 2, 1, PARAMS, state).error ==
         cybou::BlockTransitionError::PARENT_MISMATCH);
     BOOST_REQUIRE(store.ApplyBlock(
-        block2, block1, {ValidOp(ACCOUNT_ID_2)}, NETWORK_ID, 2, 1, 0, cybou::DEV_ONBOARDING_BONUS, state));
+        block2, block1, {ValidOp(ACCOUNT_ID_2)}, NETWORK_ID, 2, 1, PARAMS, state));
     BOOST_CHECK_EQUAL(state.onboarding_pool, 8000);
     BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID).system_balance, 6000);
     BOOST_CHECK_EQUAL(state.accounts.at(ACCOUNT_ID_2).system_balance, 6000);
@@ -168,16 +175,36 @@ BOOST_AUTO_TEST_CASE(apply_block_rejects_duplicate_account)
     const uint256 block1{uint256::FromUserHex("11").value()};
     const uint256 block2{uint256::FromUserHex("12").value()};
 
-    BOOST_REQUIRE(store.ApplyBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 1, 1, 0, cybou::DEV_ONBOARDING_BONUS, state));
+    BOOST_REQUIRE(store.ApplyBlock(block1, uint256{}, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 1, 1, PARAMS, state));
     const auto snapshot{state};
 
     const auto result{store.ApplyBlock(
-        block2, block1, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 2, 1, 0, cybou::DEV_ONBOARDING_BONUS, state)};
+        block2, block1, {ValidOp(ACCOUNT_ID)}, NETWORK_ID, 2, 1, PARAMS, state)};
     BOOST_CHECK(result.error == cybou::BlockTransitionError::INVALID_OPERATION);
     BOOST_CHECK(result.op_result.error == cybou::AccountCreateError::ACCOUNT_ALREADY_EXISTS);
     BOOST_CHECK(state == snapshot);
     BOOST_REQUIRE(store.Load());
     BOOST_CHECK(*store.Load().state == snapshot);
+}
+
+BOOST_AUTO_TEST_CASE(apply_block_rejects_too_many_account_creates)
+{
+    auto db{MemoryDb()};
+    cybou::CybouStateStore store{db};
+    auto state{InitialState()};
+    store.Write(state);
+    const uint256 block{uint256::FromUserHex("31").value()};
+
+    cybou::CybouProtocolParameters strict_params{PARAMS};
+    strict_params.max_account_creates_per_block = 1;
+
+    std::vector<cybou::AccountCreateOpV1> ops{
+        ValidOp(ACCOUNT_ID),
+        ValidOp(ACCOUNT_ID_2),
+    };
+
+    const auto result{store.ApplyBlock(block, uint256{}, ops, NETWORK_ID, 1, 1, strict_params, state)};
+    BOOST_CHECK(result.error == cybou::BlockTransitionError::TOO_MANY_ACCOUNT_CREATES);
 }
 
 BOOST_AUTO_TEST_CASE(apply_block_rejects_state_mismatch_and_corrupt_undo)
@@ -190,9 +217,9 @@ BOOST_AUTO_TEST_CASE(apply_block_rejects_state_mismatch_and_corrupt_undo)
 
     auto stale{state};
     --stale.onboarding_pool;
-    BOOST_CHECK(store.ApplyBlock(block, uint256{}, {ValidOp()}, NETWORK_ID, 1, 1, 0, cybou::DEV_ONBOARDING_BONUS, stale).error ==
+    BOOST_CHECK(store.ApplyBlock(block, uint256{}, {ValidOp()}, NETWORK_ID, 1, 1, PARAMS, stale).error ==
         cybou::BlockTransitionError::STATE_MISMATCH);
-    BOOST_REQUIRE(store.ApplyBlock(block, uint256{}, {ValidOp()}, NETWORK_ID, 1, 1, 0, cybou::DEV_ONBOARDING_BONUS, state));
+    BOOST_REQUIRE(store.ApplyBlock(block, uint256{}, {ValidOp()}, NETWORK_ID, 1, 1, PARAMS, state));
 
     const std::string undo_key{"cybou/undo/v1/" + block.GetHex()};
     db.Write(undo_key, std::vector<unsigned char>{1, 0});

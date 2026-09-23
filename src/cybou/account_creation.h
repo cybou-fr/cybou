@@ -7,6 +7,7 @@
 
 #include <cybou/account_id.h>
 #include <cybou/identity.h>
+#include <cybou/protocol_params.h>
 #include <uint256.h>
 
 #include <cstddef>
@@ -68,13 +69,16 @@ enum class AccountCreateValidationError : uint8_t {
     NETWORK_MISMATCH,
     AUTH_COMMITMENT_MISMATCH,
     ACCOUNT_ID_MISMATCH,
+    FUTURE_WORK_EPOCH,
+    EXPIRED_WORK_EPOCH,
     INSUFFICIENT_WORK,
 };
 
 AccountCreateValidationError ValidateAccountCreateOp(
     const AccountCreateOpV1& op,
     const uint256& expected_network_id,
-    unsigned int required_work_bits);
+    uint64_t current_epoch,
+    const CybouProtocolParameters& params);
 
 } // namespace cybou
 

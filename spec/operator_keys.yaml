@@ -29,7 +29,7 @@ operator_authority_signature_suite:
   combination_rule: BOTH_SIGNATURES_REQUIRED_AND
   canonical_bytes_required: true
   caller_supplied_signature_boolean_allowed_in_consensus: false
-  crypto_verification_status: TYPED_VERIFIER_BOUNDARY_PROVIDER_PENDING
+  crypto_verification_status: PRIMITIVE_VERIFIER_IMPLEMENTED_CONSENSUS_OPERATION_WIRING_PENDING
   keyset:
     identifier: hash32
     ed25519_public_key_bytes: 32

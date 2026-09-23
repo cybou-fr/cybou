@@ -88,7 +88,7 @@
             "name": "Que signifie « Post-Quantique dès la conception » (PQ by design) pour CYBOU ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Contrairement aux systèmes historiques qui patchent a posteriori leurs protocoles, CYBOU intègre nativement le chiffrement hybride HPKE (ML-KEM-768 standard NIST / Kyber et X25519) au cœur de l'enveloppe MailTx dès la v0.0.1 pour éliminer définitivement les attaques 'Harvest Now, Decrypt Later'."
+              "text": "CYBOU retient l'architecture hybride HPKE (ML-KEM-768 standard NIST / Kyber et X25519, RFC 9180) dès sa conception (PQ by design) pour éliminer les attaques 'Harvest Now, Decrypt Later', avec un vérificateur hybride Ed25519 + ML-DSA-65 opérationnel pour les clés d'autorité."
             }
           },
           {
@@ -112,7 +112,7 @@
             "name": "Quelle est l'économie du jeton CYBOU ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Offre maximale absolue et fixe de 100 000 000 000 CYBOU avec strictement 0 décimale. Subvention d'accueil de 6 000 CYBOU via bon d'invitation signé. Frais déterministes fonction de la taille répartis à 75% pour la sécurité et 25% pour l'accueil."
+              "text": "Offre maximale absolue et fixe de 100 000 000 000 CYBOU avec strictement 0 décimale. Bonus d'intégration crédité atomiquement sur le Solde Système lors de la création sans intermédiaire. Frais déterministes fonction de la taille répartis à 75% pour la sécurité et 25% pour l'accueil."
             }
           }
         ]
@@ -142,7 +142,6 @@
           <li><a href="#architecture" data-i18n="navArch">Piliers</a></li>
           <li><a href="#mailtx" data-i18n="navMailTx">Protocole MailTx</a></li>
           <li><a href="#factsheet" data-i18n="navSpecs">Fiche technique</a></li>
-          <li><a href="#simulateur" data-i18n="navSim">Simulateur</a></li>
           <li><a href="#faq" data-i18n="navFaq">FAQ</a></li>
         </ul>
       </nav>
@@ -224,9 +223,9 @@
           <span class="badge-done" data-i18n="badgeDone">FONCTIONNEL</span>
         </div>
         <ul class="status-list">
-          <li data-i18n="col1Item1"><strong>Enveloppe de bon d'invitation (doc 70) :</strong> validation cryptographique bornée, séparation de domaine anti-rejeu.</li>
+          <li data-i18n="col1Item1"><strong>Création de compte native &amp; sans intermédiaire (doc 70) :</strong> opération AccountCreateOpV1 avec preuve de travail anti-Sybil.</li>
           <li data-i18n="col1Item2"><strong>Identifiant typé AccountId (32 octets) :</strong> gestion déterministe du solde système (<code>SystemBalance</code>).</li>
-          <li data-i18n="col1Item3"><strong>Subvention d'accueil atomique :</strong> transfert de 6 000 CYBOU de <code>OnboardingPool</code> vers <code>SystemBalance</code>.</li>
+          <li data-i18n="col1Item3"><strong>Bonus d'accueil atomique :</strong> transfert immédiat du bonus depuis <code>OnboardingPool</code> vers <code>SystemBalance</code>.</li>
           <li data-i18n="col1Item4"><strong>Persistance d'état LevelDB :</strong> instantanés atomiques avec nommage et isolats stricts CYBOU.</li>
           <li data-i18n="col1Item5"><strong>Définition native MailTx (doc 16) :</strong> opération de premier rang, 1 destinataire, taille bornée, frais prévisibles (sans surenchère).</li>
           <li data-i18n="col1Item6"><strong>Couverture de tests :</strong> 684 tests unitaires validés, élimination intégrale des dépendances et terminologies Bitcoin résiduelles.</li>
@@ -254,7 +253,7 @@
           <span class="badge-planned" data-i18n="badgePlanned">PLANIFIÉ</span>
         </div>
         <ul class="status-list">
-          <li data-i18n="col3Item1"><strong>Encapsulation Post-Quantique HPKE :</strong> intégration production du profil hybride ML-KEM-768 + X25519 (doc 49).</li>
+          <li data-i18n="col3Item1"><strong>Architecture cible Post-Quantique HPKE :</strong> profil hybride ML-KEM-768 + X25519 (spécifié doc 49, tests crypto OpenSSL &gt;= 3.5).</li>
           <li data-i18n="col3Item2"><strong>Stockage d'objets décentralisé :</strong> couche de pré-stockage pour validateurs et stockage d'objets pour pièces jointes à grande échelle.</li>
           <li data-i18n="col3Item3"><strong>Client graphique de bureau :</strong> interface utilisateur native (Inbox, Sent, état de lecture) avec conservation des index localement sur le poste.</li>
           <li data-i18n="col3Item4"><strong>Preuves d'inclusion de correspondance :</strong> certificats de finalité vérifiables hors-chaîne par des tiers certificateurs.</li>
@@ -421,8 +420,8 @@
         </div>
 
         <div class="spec-item">
-          <dt data-i18n="dtGrant">Subvention d'accueil (Welcome Grant)</dt>
-          <dd><code>6 000</code> CYBOU transférés atomiquement de <code>OnboardingPool</code> vers <code>SystemBalance</code> via bon d'invitation signé</dd>
+          <dt data-i18n="dtGrant">Bonus d'intégration (Onboarding Bonus)</dt>
+          <dd>Crédité atomiquement depuis <code>OnboardingPool</code> vers <code>SystemBalance</code> lors de la création de compte sans intermédiaire (doc 70)</dd>
         </div>
 
         <div class="spec-item">
@@ -449,60 +448,6 @@
   </section>
 
   <!-- ==========================================================================
-       Section: Interactive State Transition Simulator (Permissionless Onboarding)
-       ========================================================================== -->
-  <section class="section" id="simulateur">
-    <div class="section-header">
-      <div class="section-label" data-i18n="simLabel">Validation d'état C++</div>
-      <h2 class="section-title" data-i18n="simTitle">Création de compte native &amp; Preuve anti-Sybil.</h2>
-      <p class="section-description" data-i18n="simDesc">
-        Démonstration de la création native sans invitation selon <code>AccountCreateOpV1</code> et <code>AccountCreationWorkV1</code> (doc 70).
-      </p>
-    </div>
-
-    <div class="simulator-box">
-      <div class="sim-grid">
-        <div class="sim-controls">
-          <div class="sim-input-group">
-            <label class="sim-label" for="sim-account" data-i18n="simBeneficiary">Identifiant de compte (AccountId — 32 octets)</label>
-            <input type="text" class="sim-input" id="sim-account" value="cybou1q9x0c83a7f4e91bd5c48b7a692ef3d9a102" readonly>
-          </div>
-
-          <div class="sim-input-group">
-            <label class="sim-label" for="sim-work" data-i18n="simWorkLabel">Preuve de travail anti-Sybil (CYBOU/ACCOUNT-CREATE-WORK/V1)</label>
-            <input type="text" class="sim-input" id="sim-work" value="Nonce: 0x0000000000042a1f • Cible: 16 bits zéro" readonly>
-          </div>
-
-          <button class="sim-button" id="sim-run-btn" type="button" data-i18n="simSubmit">Calculer PoW &amp; Créer le compte</button>
-        </div>
-
-        <div class="sim-output-card">
-          <div class="output-row">
-            <span class="output-label" data-i18n="simStatusLabel">Statut du protocole</span>
-            <span class="output-val" id="sim-status-val" data-i18n="simStatusReady">Prêt à créer l'identité</span>
-          </div>
-          <div class="output-row">
-            <span class="output-label" data-i18n="simPoolSource">OnboardingPool (Réserve globale)</span>
-            <span class="output-val" id="sim-pool-val">Débit atomique du bonus</span>
-          </div>
-          <div class="output-row">
-            <span class="output-label" data-i18n="simBalanceTarget">SystemBalance (Solde Système)</span>
-            <span class="output-val" id="sim-sysbal-val">0 CYBOU</span>
-          </div>
-          <div class="output-row">
-            <span class="output-label" data-i18n="simAntiSybil">Anti-Sybil &amp; Intégrité</span>
-            <span class="output-val" style="color: #059669;">Sans intermédiaire (doc 70)</span>
-          </div>
-          <div class="output-row">
-            <span class="output-label" data-i18n="simQuota">Quota initial par époque</span>
-            <span class="output-val">25 MailTx / époque PoT</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ==========================================================================
        Section: Frequently Asked Questions (FAQ) — PQ by Design Focus
        ========================================================================== -->
   <section class="section" id="faq">
@@ -524,7 +469,7 @@
             La plupart des systèmes de communication historiques s'appuient sur RSA ou la cryptographie sur les courbes elliptiques classiques. Face à l'émergence des calculateurs quantiques, ils tentent de patcher a posteriori leurs protocoles, exposant toutes les communications passées aux attaques <strong>« Harvest Now, Decrypt Later » (HNDL)</strong> — où des acteurs étatiques enregistrent dès aujourd'hui les flux chiffrés pour les casser demain.
           </p>
           <p data-i18n="faqA1P2">
-            Dans CYBOU, la résistance post-quantique n'est pas une option ou une mise à niveau tardive : le protocole est <strong>PQ by design</strong> dès la version <code>v0.0.1</code>. La structure d'enveloppe <code>MailTx</code> et le chiffrement E2EE intègrent nativement le standard hybride <strong>HPKE (RFC 9180)</strong> combinant <strong>ML-KEM-768 (standard NIST / Kyber)</strong> et <strong>X25519</strong>, garantissant qu'aucun message scellé aujourd'hui ne pourra être déchiffré à l'ère quantique.
+            Dans CYBOU, la résistance post-quantique est un principe fondateur : le protocole est pensé <strong>PQ by design</strong> dès la version <code>v0.0.1</code>. La structure d'enveloppe <code>MailTx</code> et le chiffrement E2EE ciblent nativement le standard hybride <strong>HPKE (RFC 9180)</strong> combinant <strong>ML-KEM-768 (standard NIST / Kyber)</strong> et <strong>X25519</strong>, tandis qu'un vérificateur hybride <strong>Ed25519 + ML-DSA-65</strong> est déjà validé pour les signatures d'autorité (OpenSSL &gt;= 3.5), immunisant les flux contre les risques quantiques futurs.
           </p>
         </div>
       </article>
@@ -564,7 +509,7 @@
         <h3 class="faq-question" data-i18n="faqQ5">Quelle est la finalité économique du jeton CYBOU ?</h3>
         <div class="faq-answer">
           <p data-i18n="faqA5">
-            Le jeton CYBOU a une offre maximale stricte et non-gonflable de <strong>100 000 000 000 unités (0 décimale)</strong>. Il n'a aucune vocation spéculative : il sert à réguler l'accès au réseau et prévenir le pourriel (spam). Chaque compte reçoit une subvention de bienvenue de 6 000 CYBOU via bon d'invitation (doc 70). Les frais d'émission sont déterministes selon la taille (pas d'enchères de priorité) et répartis à 75% pour la sécurité du réseau et 25% pour la réserve d'accueil.
+            Le jeton CYBOU a une offre maximale stricte et non-gonflable de <strong>100 000 000 000 unités (0 décimale)</strong>. Il n'a aucune vocation spéculative : il sert à réguler l'accès au réseau et prévenir le pourriel (spam). Chaque nouveau compte satisfaisant la preuve de travail anti-Sybil reçoit un bonus d'accueil automatique directement sur son Solde Système (doc 70), sans invitation ni approbation centrale. Les frais d'émission sont déterministes selon la taille (pas d'enchères de priorité) et répartis à 75% pour la sécurité du réseau et 25% pour la réserve d'accueil.
           </p>
         </div>
       </article>
@@ -597,7 +542,6 @@
             <li><a href="#architecture" data-i18n="navArch">Piliers d'architecture</a></li>
             <li><a href="#mailtx" data-i18n="navMailTx">Protocole MailTx</a></li>
             <li><a href="#factsheet" data-i18n="navSpecs">Fiche technique</a></li>
-            <li><a href="#simulateur" data-i18n="navSim">Simulateur</a></li>
             <li><a href="#faq" data-i18n="navFaq">FAQ</a></li>
           </ul>
         </div>

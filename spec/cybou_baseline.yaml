@@ -170,7 +170,7 @@ account_balances:
     pays_protocol_fees: true
     contributes_to_trust: true
     validator_voting_power: false
-invite_bonus:
+onboarding_bonus:
   asset: CYBOU
   destination: System Balance
   credited_immediately: true
@@ -183,7 +183,6 @@ monetary_policy:
   minimum_unit: 1
   emission: fixed
   default_fee_burn: 0
-  welcome_grant: 6000
   genesis_allocation:
     owner_developer_operator: 25000000000
     onboarding_pool: 25000000000

@@ -30,7 +30,7 @@ std::string_view KeyDomainTag(OperatorKeyDomain domain);
  * Represents initial key/authorization binding for permissionless account creation.
  */
 struct AccountAuthorizationV1 {
-    uint256 auth_key_commitment;
+    uint256 authorization_descriptor;
 
     friend bool operator==(const AccountAuthorizationV1&, const AccountAuthorizationV1&) = default;
 };
