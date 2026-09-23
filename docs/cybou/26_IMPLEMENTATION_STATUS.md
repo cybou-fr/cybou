@@ -111,9 +111,11 @@ Implemented skeleton:
 - deterministic epoch expiry check;
 - consumed-voucher replay check;
 - typed Operator Authority verifier boundary with keyset and epoch checks.
+- atomic one-time Welcome Grant transition from OnboardingPool to System Balance;
+- consensus replay set keyed only by consumed voucher ID.
 
 Not yet implemented:
 
 - AccountID;
 - production Operator Authority signature verification;
-- voucher redemption state transition.
+- production persistence/integration of the voucher redemption state.

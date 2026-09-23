@@ -61,4 +61,11 @@ voucher:
   - optional_organization_id
   - operator_authority_signature
   replay_protection: consensus_consumed_voucher_id
+  redemption:
+    atomic: true
+    debit: OnboardingPool
+    credit: beneficiary.SystemBalance
+    amount: 6000
+    failure_mutates_state: false
+    persistent_record: consumed_voucher_id_only
   crypto_verification_status: TYPED_VERIFIER_BOUNDARY_PROVIDER_PENDING

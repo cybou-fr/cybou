@@ -37,6 +37,7 @@ add_executable(test_bitcoin
   cybou_chainparams_tests.cpp
   cybou_identity_tests.cpp
   cybou_signing_tests.cpp
+  cybou_state_tests.cpp
   common_url_tests.cpp
   compress_tests.cpp
   crypto_tests.cpp
