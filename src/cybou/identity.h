@@ -70,9 +70,7 @@ struct InviteVoucherValidationContext {
     uint256 expected_network_id;
     uint256 redeemer_account_id;
     uint64_t current_epoch{0};
-    // DEV-ONLY seam: real hybrid Ed25519+ML-DSA-65 verification replaces this
-    // caller-supplied flag in v0.0.3.2. It must never enter a consensus path.
-    bool operator_authority_signature_valid{false};
+    const OperatorAuthorityKeySet* authority_keyset{nullptr};
     bool voucher_already_consumed{false};
 };
 
@@ -87,6 +85,8 @@ enum class InviteVoucherError : uint8_t {
     EXPIRED,
     NULL_ORGANIZATION_ID,
     MISSING_AUTHORITY_SIGNATURE,
+    UNKNOWN_AUTHORITY_KEYSET,
+    INACTIVE_AUTHORITY_KEYSET,
     INVALID_AUTHORITY_SIGNATURE,
     ALREADY_CONSUMED,
 };
@@ -100,7 +100,8 @@ enum class InviteVoucherError : uint8_t {
  */
 InviteVoucherError ValidateInviteVoucher(
     const InviteVoucher& voucher,
-    const InviteVoucherValidationContext& context);
+    const InviteVoucherValidationContext& context,
+    const OperatorAuthoritySignatureVerifier& verifier);
 
 } // namespace cybou
 

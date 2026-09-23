@@ -63,7 +63,8 @@ std::vector<unsigned char> InviteVoucherSigMessage(
 
 InviteVoucherError ValidateInviteVoucher(
     const InviteVoucher& voucher,
-    const InviteVoucherValidationContext& context)
+    const InviteVoucherValidationContext& context,
+    const OperatorAuthoritySignatureVerifier& verifier)
 {
     const auto& payload{voucher.payload};
     if (payload.payload_version != INVITE_VOUCHER_PAYLOAD_VERSION) return InviteVoucherError::UNSUPPORTED_PAYLOAD_VERSION;
@@ -75,7 +76,12 @@ InviteVoucherError ValidateInviteVoucher(
     if (payload.expiry_epoch < context.current_epoch) return InviteVoucherError::EXPIRED;
     if (payload.organization_id && payload.organization_id->IsNull()) return InviteVoucherError::NULL_ORGANIZATION_ID;
     if (!IsPresent(voucher.signature)) return InviteVoucherError::MISSING_AUTHORITY_SIGNATURE;
-    if (!context.operator_authority_signature_valid) return InviteVoucherError::INVALID_AUTHORITY_SIGNATURE;
+    if (context.authority_keyset == nullptr || context.authority_keyset->keyset_id != voucher.signature.authority_keyset_id) {
+        return InviteVoucherError::UNKNOWN_AUTHORITY_KEYSET;
+    }
+    if (!IsActiveAtEpoch(*context.authority_keyset, context.current_epoch)) return InviteVoucherError::INACTIVE_AUTHORITY_KEYSET;
+    const auto message{InviteVoucherSigMessage(payload, voucher.signature.suite_id, voucher.signature.authority_keyset_id)};
+    if (!verifier.Verify(*context.authority_keyset, voucher.signature, message)) return InviteVoucherError::INVALID_AUTHORITY_SIGNATURE;
     if (context.voucher_already_consumed) return InviteVoucherError::ALREADY_CONSUMED;
     return InviteVoucherError::NONE;
 }

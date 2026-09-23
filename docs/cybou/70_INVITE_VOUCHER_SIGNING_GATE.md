@@ -96,9 +96,11 @@ ML-DSA work is not copied into these immutable V1 bytes.
 
 ## Current code rule
 
-`InviteVoucherValidationContext::operator_authority_signature_valid` is a
-temporary unit-test seam. It must be removed from every production-capable
-validation path when the typed verifier boundary is introduced.
+The caller-supplied `operator_authority_signature_valid` boolean has been
+removed. Voucher validation now requires an `OperatorAuthoritySignatureVerifier`
+and rejects missing, mismatched, or epoch-inactive keysets before invoking it.
+The test implementation is deliberately local to unit tests; a production
+Ed25519 + ML-DSA-65 provider remains required before redemption can ship.
 
 ## Sources reviewed 2026-09-23
 

@@ -110,7 +110,7 @@ Implemented skeleton:
 - exact 6,000 CYBOU structural grant check;
 - deterministic epoch expiry check;
 - consumed-voucher replay check;
-- explicit test seam for a future authority signature verifier.
+- typed Operator Authority verifier boundary with keyset and epoch checks.
 
 Not yet implemented:
 

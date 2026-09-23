@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string_view>
 
 namespace cybou {
@@ -52,6 +53,22 @@ struct OperatorAuthorityKeySet {
 };
 
 bool IsActiveAtEpoch(const OperatorAuthorityKeySet& keyset, uint64_t epoch);
+
+struct SignatureBundleV1;
+
+/**
+ * Cryptographic boundary for Operator Authority signatures.
+ * Implementations must verify BOTH component signatures over the exact message.
+ */
+class OperatorAuthoritySignatureVerifier
+{
+public:
+    virtual ~OperatorAuthoritySignatureVerifier() = default;
+    virtual bool Verify(
+        const OperatorAuthorityKeySet& keyset,
+        const SignatureBundleV1& bundle,
+        std::span<const unsigned char> message) const = 0;
+};
 
 /**
  * Hybrid signature bundle for HYBRID_ED25519_MLDSA65_V1.
