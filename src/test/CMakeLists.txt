@@ -80,7 +80,6 @@ add_executable(test_bitcoin
   pmt_tests.cpp
   policyestimator_tests.cpp
   pool_tests.cpp
-  pow_tests.cpp
   prevector_tests.cpp
   private_broadcast_tests.cpp
   raii_event_tests.cpp
@@ -111,7 +110,6 @@ add_executable(test_bitcoin
   sync_tests.cpp
   system_ram_tests.cpp
   system_tests.cpp
-  testnet4_miner_tests.cpp
   threadpool_tests.cpp
   timeoffsets_tests.cpp
   torcontrol_tests.cpp

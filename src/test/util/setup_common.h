@@ -124,16 +124,10 @@ struct TestingSetup : public ChainTestingSetup {
         TestOpts = {});
 };
 
-/** Identical to TestingSetup, but chain set to regtest */
+/** Identical to TestingSetup; CYBOU-DEV (main) is the development network. */
 struct RegTestingSetup : public TestingSetup {
     RegTestingSetup()
-        : TestingSetup{ChainType::REGTEST} {}
-};
-
-/** Identical to TestingSetup, but chain set to testnet4 */
-struct Testnet4Setup : public TestingSetup {
-    Testnet4Setup()
-        : TestingSetup{ChainType::TESTNET4} {}
+        : TestingSetup{ChainType::MAIN} {}
 };
 
 class CBlock;
@@ -141,11 +135,11 @@ struct CMutableTransaction;
 class CScript;
 
 /**
- * Testing fixture that pre-creates a 100-block REGTEST-mode block chain
+ * Testing fixture that pre-creates a 100-block chain on CYBOU-DEV
  */
 struct TestChain100Setup : public TestingSetup {
     TestChain100Setup(
-        ChainType chain_type = ChainType::REGTEST,
+        ChainType chain_type = ChainType::MAIN,
         TestOpts = {});
 
     /**
@@ -247,7 +241,7 @@ struct TestChain100Setup : public TestingSetup {
  * be used in "hot loops", for example fuzzing or benchmarking.
  */
 template <class T = const BasicTestingSetup>
-std::unique_ptr<T> MakeNoLogFileContext(const ChainType chain_type = ChainType::REGTEST, TestOpts opts = {})
+std::unique_ptr<T> MakeNoLogFileContext(const ChainType chain_type = ChainType::MAIN, TestOpts opts = {})
 {
     opts.extra_args = Cat(
         {

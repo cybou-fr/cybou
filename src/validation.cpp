@@ -42,7 +42,6 @@
 #include <random.h>
 #include <script/script.h>
 #include <script/sigcache.h>
-#include <signet.h>
 #include <tinyformat.h>
 #include <txdb.h>
 #include <txmempool.h>
@@ -3975,11 +3974,6 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
     if (!CheckBlockHeader(block, state, consensusParams, fCheckPOW))
         return false;
 
-    // Signet only: check block solution
-    if (consensusParams.signet_blocks && fCheckPOW && !CheckSignetBlockSolution(block, consensusParams)) {
-        return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-signet-blksig", "signet block signature validation failure");
-    }
-
     // Check the merkle root.
     if (fCheckMerkleRoot && !CheckMerkleRoot(block, state)) {
         return false;
@@ -4527,7 +4521,6 @@ BlockValidationState TestBlockValidity(
         return state;
     }
 
-    // For signets CheckBlock() verifies the challenge iff fCheckPow is set.
     if (!CheckBlock(block, state, chainstate.m_chainman.GetConsensus(), /*fCheckPow=*/check_pow, /*fCheckMerkleRoot=*/check_merkle_root)) {
         // This should never happen, but belt-and-suspenders don't approve the
         // block if it does.

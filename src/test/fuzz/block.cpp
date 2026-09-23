@@ -19,7 +19,7 @@
 
 void initialize_block()
 {
-    SelectParams(ChainType::REGTEST);
+    SelectParams(ChainType::MAIN);
 }
 
 FUZZ_TARGET(block, .init = initialize_block)

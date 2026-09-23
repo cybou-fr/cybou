@@ -147,7 +147,7 @@ typedef struct btck_LoggingConnection btck_LoggingConnection;
  *
  * These are eventually placed into a kernel context through the kernel context
  * options. The parameters describe the properties of a chain, and may be
- * instantiated for either mainnet, testnet, signet, or regtest.
+ * instantiated for the CYBOU-DEV network (main).
  */
 typedef struct btck_ChainParameters btck_ChainParameters;
 
@@ -487,10 +487,6 @@ typedef uint32_t btck_ScriptVerificationFlags;
 
 typedef uint8_t btck_ChainType;
 #define btck_ChainType_MAINNET ((btck_ChainType)(0))
-#define btck_ChainType_TESTNET ((btck_ChainType)(1))
-#define btck_ChainType_TESTNET_4 ((btck_ChainType)(2))
-#define btck_ChainType_SIGNET ((btck_ChainType)(3))
-#define btck_ChainType_REGTEST ((btck_ChainType)(4))
 
 /** @name Transaction
  * Functions for working with transactions.

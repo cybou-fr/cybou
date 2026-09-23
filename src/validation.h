@@ -405,8 +405,6 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
  *         and shouldn't unless there is something wrong with the existing
  *         chainstate. (This is different from functions like AcceptBlock which
  *         can fail trying to save new data.)
- *
- * For signets the challenge verification is skipped when check_pow is false.
  */
 BlockValidationState TestBlockValidity(
     Chainstate& chainstate,

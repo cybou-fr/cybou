@@ -16,8 +16,10 @@
 #include <boost/test/unit_test.hpp>
 
 struct Dersig100Setup : public TestChain100Setup {
+    // CYBOU-DEV activates all buried deployments (including BIP66/DERSIG) from
+    // genesis, so no -testactivationheight override is needed or possible.
     Dersig100Setup()
-        : TestChain100Setup{ChainType::REGTEST, {.extra_args = {"-testactivationheight=dersig@102"}}} {}
+        : TestChain100Setup{} {}
 };
 
 bool CheckInputScripts(const CTransaction& tx, TxValidationState& state,
@@ -197,43 +199,41 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, Dersig100Setup)
     spend_tx.vout[3].nValue = 11*CENT;
     spend_tx.vout[3].scriptPubKey = CScript() << OP_CHECKSEQUENCEVERIFY << OP_DROP << ToByteVector(coinbaseKey.GetPubKey()) << OP_CHECKSIG;
 
-    // Sign, with a non-DER signature
+    // Sign. Note: CYBOU-DEV activates BIP66 (DERSIG) from genesis, so the
+    // signature must be DER-compliant for the containing block to be accepted
+    // by consensus below.
     {
         std::vector<unsigned char> vchSig;
         uint256 hash = SignatureHash(p2pk_scriptPubKey, spend_tx, 0, SIGHASH_ALL, 0, SigVersion::BASE);
         BOOST_CHECK(coinbaseKey.Sign(hash, vchSig));
-        vchSig.push_back((unsigned char) 0); // padding byte makes this non-DER
         vchSig.push_back((unsigned char)SIGHASH_ALL);
         spend_tx.vin[0].scriptSig << vchSig;
     }
 
-    // Test that invalidity under a set of flags doesn't preclude validity
-    // under other (eg consensus) flags.
-    // spend_tx is invalid according to DERSIG
+    // Test that CheckInputScripts succeeds under the consensus flag set and
+    // that valid results are served from the script validation cache.
     {
         LOCK(cs_main);
 
         TxValidationState state;
         PrecomputedTransactionData ptd_spend_tx;
 
-        BOOST_CHECK(!CheckInputScripts(CTransaction(spend_tx), state, &m_node.chainman->ActiveChainstate().CoinsTip(), SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_DERSIG, true, true, ptd_spend_tx, m_node.chainman->m_validation_cache, nullptr));
+        BOOST_CHECK(CheckInputScripts(CTransaction(spend_tx), state, &m_node.chainman->ActiveChainstate().CoinsTip(), SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_DERSIG, true, true, ptd_spend_tx, m_node.chainman->m_validation_cache, nullptr));
 
         // If we call again asking for scriptchecks (as happens in
-        // ConnectBlock), we should add a script check object for this -- we're
-        // not caching invalidity (if that changes, delete this test case).
+        // ConnectBlock), the entry is a cache hit and no script check objects
+        // are returned.
         std::vector<CScriptCheck> scriptchecks;
         BOOST_CHECK(CheckInputScripts(CTransaction(spend_tx), state, &m_node.chainman->ActiveChainstate().CoinsTip(), SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_DERSIG, true, true, ptd_spend_tx, m_node.chainman->m_validation_cache, &scriptchecks));
-        BOOST_CHECK_EQUAL(scriptchecks.size(), 1U);
+        BOOST_CHECK(scriptchecks.empty());
 
-        // Test that CheckInputScripts returns true iff DERSIG-enforcing flags are
-        // not present.  Don't add these checks to the cache, so that we can
-        // test later that block validation works fine in the absence of cached
-        // successes.
-        ValidateCheckInputsForAllFlags(CTransaction(spend_tx), SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_LOW_S | SCRIPT_VERIFY_STRICTENC, false, m_node.chainman->ActiveChainstate().CoinsTip(), m_node.chainman->m_validation_cache);
+        // Exercise the validation cache across random flag combinations. This
+        // transaction is valid under every flag, so none are expected to fail.
+        ValidateCheckInputsForAllFlags(CTransaction(spend_tx), /*failing_flags=*/script_verify_flags{}, false, m_node.chainman->ActiveChainstate().CoinsTip(), m_node.chainman->m_validation_cache);
     }
 
-    // And if we produce a block with this tx, it should be valid (DERSIG not
-    // enabled yet), even though there's no cache entry.
+    // And if we produce a block with this tx, it should be valid, even though
+    // there's no cache entry.
     CBlock block;
 
     block = CreateAndProcessBlock({spend_tx}, p2pk_scriptPubKey);

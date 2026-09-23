@@ -659,81 +659,37 @@ BOOST_AUTO_TEST_CASE(util_GetArg)
 BOOST_AUTO_TEST_CASE(util_GetChainTypeString)
 {
     TestArgsManager test_args;
+    // CYBOU-DEV (main) is the only network. Legacy Bitcoin network flags are
+    // inert: parsing accepts them, but chain selection only honors -chain.
     const auto testnet = std::make_pair("-testnet", ArgsManager::ALLOW_ANY);
     const auto testnet4 = std::make_pair("-testnet4", ArgsManager::ALLOW_ANY);
     const auto regtest = std::make_pair("-regtest", ArgsManager::ALLOW_ANY);
     test_args.SetupArgs({testnet, testnet4, regtest});
 
-    const char* argv_testnet4[] = {"cmd", "-testnet4"};
-    const char* argv_regtest[] = {"cmd", "-regtest"};
-    const char* argv_test_no_reg[] = {"cmd", "-testnet4", "-noregtest"};
-    const char* argv_both[] = {"cmd", "-testnet4", "-regtest"};
+    const char* argv_none[] = {"cmd"};
+    const char* argv_legacy[] = {"cmd", "-testnet4", "-regtest"};
+    const char* argv_chain_main[] = {"cmd", "-chain=main"};
 
-    // regtest in test network section is ignored
-    const char* testnetconf = "testnet4=1\nregtest=0\n[testnet4]\nregtest=1";
     std::string error;
 
-    BOOST_CHECK(test_args.ParseParameters(0, argv_testnet4, error));
+    BOOST_CHECK(test_args.ParseParameters(1, argv_none, error));
     BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "main");
 
-    BOOST_CHECK(test_args.ParseParameters(0, argv_testnet4, error));
+    // Legacy Bitcoin network flags no longer influence chain selection.
+    BOOST_CHECK(test_args.ParseParameters(3, argv_legacy, error));
     BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "main");
 
-    BOOST_CHECK(test_args.ParseParameters(2, argv_testnet4, error));
-    BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "testnet4");
+    BOOST_CHECK(test_args.ParseParameters(2, argv_chain_main, error));
+    BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "main");
 
-    BOOST_CHECK(test_args.ParseParameters(2, argv_regtest, error));
-    BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "regtest");
-
-    BOOST_CHECK(test_args.ParseParameters(3, argv_test_no_reg, error));
-    BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "testnet4");
-
-    BOOST_CHECK(test_args.ParseParameters(3, argv_both, error));
-    BOOST_CHECK_THROW(test_args.GetChainTypeString(), std::runtime_error);
-
-    BOOST_CHECK(test_args.ParseParameters(0, argv_testnet4, error));
-    test_args.ReadConfigString(testnetconf);
-    BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "testnet4");
-
-    BOOST_CHECK(test_args.ParseParameters(2, argv_testnet4, error));
-    test_args.ReadConfigString(testnetconf);
-    BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "testnet4");
-
-    BOOST_CHECK(test_args.ParseParameters(2, argv_regtest, error));
-    test_args.ReadConfigString(testnetconf);
-    BOOST_CHECK_THROW(test_args.GetChainTypeString(), std::runtime_error);
-
-    BOOST_CHECK(test_args.ParseParameters(3, argv_test_no_reg, error));
-    test_args.ReadConfigString(testnetconf);
-    BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "testnet4");
-
-    BOOST_CHECK(test_args.ParseParameters(3, argv_both, error));
-    test_args.ReadConfigString(testnetconf);
-    BOOST_CHECK_THROW(test_args.GetChainTypeString(), std::runtime_error);
-
-    // check setting the network to testnet4 (and thus making
-    // [testnet4] regtest=1 potentially relevant) doesn't break things
-    test_args.SelectConfigNetwork("testnet4");
-
-    BOOST_CHECK(test_args.ParseParameters(0, argv_testnet4, error));
-    test_args.ReadConfigString(testnetconf);
-    BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "testnet4");
-
-    BOOST_CHECK(test_args.ParseParameters(2, argv_testnet4, error));
-    test_args.ReadConfigString(testnetconf);
-    BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "testnet4");
-
-    BOOST_CHECK(test_args.ParseParameters(2, argv_regtest, error));
-    test_args.ReadConfigString(testnetconf);
-    BOOST_CHECK_THROW(test_args.GetChainTypeString(), std::runtime_error);
-
-    BOOST_CHECK(test_args.ParseParameters(2, argv_test_no_reg, error));
-    test_args.ReadConfigString(testnetconf);
-    BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "testnet4");
-
-    BOOST_CHECK(test_args.ParseParameters(3, argv_both, error));
-    test_args.ReadConfigString(testnetconf);
-    BOOST_CHECK_THROW(test_args.GetChainTypeString(), std::runtime_error);
+    // Unknown -chain values are reported back as-is and raise only when the
+    // ChainType is requested.
+    {
+        const char* argv_chain_unknown[] = {"cmd", "-chain=cybou-test"};
+        BOOST_CHECK(test_args.ParseParameters(2, argv_chain_unknown, error));
+        BOOST_CHECK_EQUAL(test_args.GetChainTypeString(), "cybou-test");
+        BOOST_CHECK_THROW(test_args.GetChainType(), std::runtime_error);
+    }
 }
 
 // Test different ways settings can be merged, and verify results. This test can
@@ -777,8 +733,8 @@ struct ArgsMergeTestingSetup : public BasicTestingSetup {
             ForEachNoDup(conf_actions, SET, SECTION_NEGATE, [&] {
                 for (bool soft_set : {false, true}) {
                     for (bool force_set : {false, true}) {
-                        for (const std::string& section : {ChainTypeToString(ChainType::MAIN), ChainTypeToString(ChainType::TESTNET), ChainTypeToString(ChainType::TESTNET4), ChainTypeToString(ChainType::SIGNET)}) {
-                            for (const std::string& network : {ChainTypeToString(ChainType::MAIN), ChainTypeToString(ChainType::TESTNET), ChainTypeToString(ChainType::TESTNET4), ChainTypeToString(ChainType::SIGNET)}) {
+                        for (const std::string& section : {ChainTypeToString(ChainType::MAIN)}) {
+                            for (const std::string& network : {ChainTypeToString(ChainType::MAIN)}) {
                                 for (bool net_specific : {false, true}) {
                                     fn(arg_actions, conf_actions, soft_set, force_set, section, network, net_specific);
                                 }

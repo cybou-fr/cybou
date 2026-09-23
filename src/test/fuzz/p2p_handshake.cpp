@@ -32,7 +32,7 @@ const TestingSetup* g_setup;
 void initialize()
 {
     static const auto testing_setup = MakeNoLogFileContext<const TestingSetup>(
-        /*chain_type=*/ChainType::REGTEST);
+        /*chain_type=*/ChainType::MAIN);
     g_setup = testing_setup.get();
 }
 } // namespace

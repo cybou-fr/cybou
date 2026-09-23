@@ -602,16 +602,6 @@ int GuiMain(int argc, char* argv[])
     }
 
     // The consumer application exposes only the isolated CYBOU-DEV network.
-    // Inherited Bitcoin test networks remain compiled for migration tests but
-    // must never be selectable by the public desktop executable.
-    if (Params().GetChainType() != ChainType::MAIN) {
-        const QString network_error = QObject::tr(
-            "This CYBOU build supports CYBOU-DEV only. Bitcoin testnet, "
-            "testnet4, signet, and regtest are disabled.");
-        InitError(Untranslated(network_error.toStdString()));
-        QMessageBox::critical(nullptr, CLIENT_NAME, network_error);
-        return EXIT_FAILURE;
-    }
 #ifdef ENABLE_WALLET
     // Parse URIs on command line
     PaymentServer::ipcParseCommandLine(argc, argv);

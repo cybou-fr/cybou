@@ -157,10 +157,6 @@ std::list<SectionInfo> ArgsManager::GetUnrecognizedSections() const
 {
     // Section names to be recognized in the config file.
     static const std::set<std::string> available_sections{
-        ChainTypeToString(ChainType::REGTEST),
-        ChainTypeToString(ChainType::SIGNET),
-        ChainTypeToString(ChainType::TESTNET),
-        ChainTypeToString(ChainType::TESTNET4),
         ChainTypeToString(ChainType::MAIN),
     };
 
@@ -816,33 +812,13 @@ std::string ArgsManager::GetChainTypeString() const
 
 std::variant<ChainType, std::string> ArgsManager::GetChainArg() const
 {
-    auto get_net = [&](const std::string& arg) {
-        LOCK(cs_args);
-        common::SettingsValue value = common::GetSetting(m_settings, /* section= */ "", SettingName(arg),
-            /* ignore_default_section_config= */ false,
-            /*ignore_nonpersistent=*/false,
-            /* get_chain_type= */ true);
-        return value.isNull() ? false : value.isBool() ? value.get_bool() : InterpretBool(value.get_str());
-    };
-
-    const bool fRegTest = get_net("-regtest");
-    const bool fSigNet  = get_net("-signet");
-    const bool fTestNet = get_net("-testnet");
-    const bool fTestNet4 = get_net("-testnet4");
     const auto chain_arg = GetArg("-chain");
 
-    if ((int)chain_arg.has_value() + (int)fRegTest + (int)fSigNet + (int)fTestNet + (int)fTestNet4 > 1) {
-        throw std::runtime_error("Invalid combination of -regtest, -signet, -testnet, -testnet4 and -chain. Can use at most one.");
-    }
     if (chain_arg) {
         if (auto parsed = ChainTypeFromString(*chain_arg)) return *parsed;
         // Not a known string, so return original string
         return *chain_arg;
     }
-    if (fRegTest) return ChainType::REGTEST;
-    if (fSigNet) return ChainType::SIGNET;
-    if (fTestNet) return ChainType::TESTNET;
-    if (fTestNet4) return ChainType::TESTNET4;
     return ChainType::MAIN;
 }
 

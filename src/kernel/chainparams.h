@@ -19,7 +19,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 struct AssumeutxoHash : public BaseHash<uint256> {
@@ -108,7 +107,7 @@ public:
     /** Return the chain type string */
     std::string GetChainTypeString() const { return ChainTypeToString(m_chain_type); }
     /** Return the product-facing network name without changing internal chain selectors. */
-    std::string GetNetworkDisplayName() const { return m_chain_type == ChainType::MAIN ? "CYBOU-DEV" : ChainTypeToString(m_chain_type); }
+    std::string GetNetworkDisplayName() const { return "CYBOU-DEV"; }
     /** Return the chain type */
     ChainType GetChainType() const { return m_chain_type; }
     /** Return the list of hostnames to look up for DNS seeds */
@@ -129,38 +128,7 @@ public:
 
     const ChainTxData& TxData() const { return chainTxData; }
 
-    /**
-     * SigNetOptions holds configurations for creating a signet CChainParams.
-     */
-    struct SigNetOptions {
-        std::optional<std::vector<uint8_t>> challenge{};
-        std::optional<std::vector<std::string>> seeds{};
-    };
-
-    /**
-     * VersionBitsParameters holds activation parameters
-     */
-    struct VersionBitsParameters {
-        int64_t start_time;
-        int64_t timeout;
-        int min_activation_height;
-    };
-
-    /**
-     * RegTestOptions holds configurations for creating a regtest CChainParams.
-     */
-    struct RegTestOptions {
-        std::unordered_map<Consensus::DeploymentPos, VersionBitsParameters> version_bits_parameters{};
-        std::unordered_map<Consensus::BuriedDeployment, int> activation_heights{};
-        bool fastprune{false};
-        bool enforce_bip94{false};
-    };
-
-    static std::unique_ptr<const CChainParams> RegTest(const RegTestOptions& options);
-    static std::unique_ptr<const CChainParams> SigNet(const SigNetOptions& options);
     static std::unique_ptr<const CChainParams> Main();
-    static std::unique_ptr<const CChainParams> TestNet();
-    static std::unique_ptr<const CChainParams> TestNet4();
 
 protected:
     CChainParams() = default;

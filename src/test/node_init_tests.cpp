@@ -14,7 +14,7 @@ using node::NodeContext;
 
 //! Like BasicTestingSetup, but using regtest network instead of mainnet.
 struct InitTestSetup : BasicTestingSetup {
-    InitTestSetup() : BasicTestingSetup{ChainType::REGTEST} {}
+    InitTestSetup() : BasicTestingSetup{ChainType::MAIN} {}
 };
 
 BOOST_FIXTURE_TEST_SUITE(node_init_tests, InitTestSetup)

@@ -27,7 +27,7 @@ FUZZ_TARGET(utxo_total_supply)
     SetMockTime(ConsumeTime(fuzzed_data_provider, /*min=*/1296688602)); // regtest genesis block timestamp
     /** The testing setup that creates a chainman only (no chainstate) */
     ChainTestingSetup test_setup{
-        ChainType::REGTEST,
+        ChainType::MAIN,
         {
             .extra_args = {
                 "-testactivationheight=bip34@2",

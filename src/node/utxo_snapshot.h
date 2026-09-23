@@ -96,7 +96,7 @@ public:
                 std::string node_network_string{ChainTypeToString(node_network.value())};
                 throw std::ios_base::failure(strprintf("The network of the snapshot (%s) does not match the network of this node (%s).", network_string, node_network_string));
             } else {
-                throw std::ios_base::failure("This snapshot has been created for an unrecognized network. This could be a custom signet, a new testnet or possibly caused by data corruption.");
+                throw std::ios_base::failure("This snapshot has been created for an unrecognized network. This could be caused by data corruption.");
             }
         }
 

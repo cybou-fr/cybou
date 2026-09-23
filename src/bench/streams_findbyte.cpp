@@ -13,7 +13,7 @@
 
 static void FindByte(benchmark::Bench& bench)
 {
-    const auto testing_setup{MakeNoLogFileContext<const BasicTestingSetup>(ChainType::REGTEST)};
+    const auto testing_setup{MakeNoLogFileContext<const BasicTestingSetup>(ChainType::MAIN)};
     AutoFile file{fsbridge::fopen(testing_setup->m_path_root / "streams_tmp", "w+b")};
     const size_t file_size = 200;
     uint8_t data[file_size] = {0};

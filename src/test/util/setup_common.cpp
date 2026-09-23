@@ -377,7 +377,7 @@ TestingSetup::TestingSetup(
 TestChain100Setup::TestChain100Setup(
     const ChainType chain_type,
     TestOpts opts)
-    : TestingSetup{ChainType::REGTEST, opts}
+    : TestingSetup{chain_type, opts}
 {
     SetMockTime(1598887952);
     constexpr std::array<unsigned char, 32> vchKey = {

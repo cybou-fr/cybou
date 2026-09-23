@@ -8,12 +8,11 @@
 #include <optional>
 #include <string>
 
+// CYBOU has a single sovereign development network (CYBOU-DEV, ChainType::MAIN).
+// Inherited Bitcoin networks (testnet3, testnet4, signet, regtest) were removed;
+// see spec/bitcoin_code_removal.yaml.
 enum class ChainType {
     MAIN,
-    TESTNET,
-    SIGNET,
-    REGTEST,
-    TESTNET4,
 };
 
 std::string ChainTypeToString(ChainType chain);

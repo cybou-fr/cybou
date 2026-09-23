@@ -978,8 +978,8 @@ public:
             // Do not return a template during IBD, because it can have long
             // pauses and sometimes takes a while to get started. Although this
             // is useful in general, it's gated behind the cooldown argument,
-            // because on regtest and single miner signets this would wait
-            // forever if no block was mined in the past day.
+            // because on the CYBOU-DEV network with a single miner this would
+            // wait forever if no block was mined in the past day.
             while (chainman().IsInitialBlockDownload()) {
                 maybe_tip = waitTipChanged(maybe_tip->hash, MillisecondsDouble{1000});
                 if (!maybe_tip || chainman().m_interrupt || WITH_LOCK(notifications().m_tip_block_mutex, return m_interrupt_mining)) return {};

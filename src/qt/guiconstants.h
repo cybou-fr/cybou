@@ -49,10 +49,6 @@ static const int TOOLTIP_WRAP_THRESHOLD = 80;
 #define QAPP_ORG_NAME "CYBOU"
 #define QAPP_ORG_DOMAIN "cybou.fr"
 #define QAPP_APP_NAME_DEFAULT "CYBOU"
-#define QAPP_APP_NAME_TESTNET "CYBOU Dev (inherited testnet disabled)"
-#define QAPP_APP_NAME_TESTNET4 "CYBOU Dev (inherited testnet4 disabled)"
-#define QAPP_APP_NAME_SIGNET "CYBOU Dev (inherited signet disabled)"
-#define QAPP_APP_NAME_REGTEST "CYBOU Dev"
 
 /* One gigabyte (GB) in bytes */
 static constexpr uint64_t GB_BYTES{1000000000};

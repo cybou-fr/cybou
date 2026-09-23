@@ -442,9 +442,9 @@ BOOST_FIXTURE_TEST_CASE(versionbits_computeblockversion, BlockVersionTest)
 {
     VersionBitsCache vbcache;
 
-    // check that any deployment on any chain can conceivably reach both
+    // check that any deployment on the CYBOU-DEV chain can conceivably reach both
     // ACTIVE and FAILED states in roughly the way we expect
-    for (const auto& chain_type: {ChainType::MAIN, ChainType::TESTNET, ChainType::TESTNET4, ChainType::SIGNET, ChainType::REGTEST}) {
+    for (const auto& chain_type: {ChainType::MAIN}) {
         const auto chainParams = CreateChainParams(*m_node.args, chain_type);
         uint32_t chain_all_vbits{0};
         for (int i = 0; i < (int)Consensus::MAX_VERSION_BITS_DEPLOYMENTS; ++i) {
@@ -462,22 +462,25 @@ BOOST_FIXTURE_TEST_CASE(versionbits_computeblockversion, BlockVersionTest)
     }
 
     {
-        // Use regtest/testdummy to ensure we always exercise some
-        // deployment that's not always/never active
-        ArgsManager args;
-        args.ForceSetArg("-vbparams", "testdummy:1199145601:1230767999"); // January 1, 2008 - December 31, 2008
-        const auto chainParams = CreateChainParams(args, ChainType::REGTEST);
-        check_computeblockversion(vbcache, chainParams->GetConsensus(), Consensus::DEPLOYMENT_TESTDUMMY);
+        // Use a modified copy of the CYBOU-DEV params to ensure we always
+        // exercise some deployment that's not always/never active.
+        auto chainParams = CChainParams::Main();
+        Consensus::Params params = chainParams->GetConsensus();
+        params.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
+        params.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
+        check_computeblockversion(vbcache, params, Consensus::DEPLOYMENT_TESTDUMMY);
     }
 
     {
-        // Use regtest/testdummy to ensure we always exercise the
-        // min_activation_height test, even if we're not using that in a
-        // live deployment
-        ArgsManager args;
-        args.ForceSetArg("-vbparams", "testdummy:1199145601:1230767999:403200"); // January 1, 2008 - December 31, 2008, min act height 403200
-        const auto chainParams = CreateChainParams(args, ChainType::REGTEST);
-        check_computeblockversion(vbcache, chainParams->GetConsensus(), Consensus::DEPLOYMENT_TESTDUMMY);
+        // Use a modified copy of the CYBOU-DEV params to ensure we always
+        // exercise the min_activation_height test, even though no live
+        // deployment uses it.
+        auto chainParams = CChainParams::Main();
+        Consensus::Params params = chainParams->GetConsensus();
+        params.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
+        params.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
+        params.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 403200;
+        check_computeblockversion(vbcache, params, Consensus::DEPLOYMENT_TESTDUMMY);
     }
 }
 

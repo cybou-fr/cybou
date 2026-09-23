@@ -651,8 +651,8 @@ BOOST_AUTO_TEST_CASE(btck_context_tests)
     { // test with context options
         ContextOptions options{};
         ChainParams params{ChainType::MAINNET};
-        ChainParams regtest_params{ChainType::REGTEST};
-        CheckHandle(params, regtest_params);
+        ChainParams cybou_params{ChainType::MAINNET};
+        CheckHandle(params, cybou_params);
         options.SetChainParams(params);
         options.SetNotifications(std::make_shared<TestKernelNotifications>());
         Context context{options};
@@ -937,7 +937,7 @@ BOOST_AUTO_TEST_CASE(btck_block_tree_entry_tests)
 {
     auto test_directory{TestDirectory{"block_tree_entry_test_bitcoin_kernel"}};
     auto notifications{std::make_shared<TestKernelNotifications>()};
-    auto context{create_context(notifications, ChainType::REGTEST)};
+    auto context{create_context(notifications, ChainType::MAINNET)};
     auto chainman{create_chainman(
         test_directory,
         /*reindex=*/false,
@@ -980,7 +980,7 @@ BOOST_AUTO_TEST_CASE(btck_chainman_in_memory_tests)
     auto in_memory_test_directory{TestDirectory{"in-memory_test_bitcoin_kernel"}};
 
     auto notifications{std::make_shared<TestKernelNotifications>()};
-    auto context{create_context(notifications, ChainType::REGTEST)};
+    auto context{create_context(notifications, ChainType::MAINNET)};
     auto chainman{create_chainman(
         in_memory_test_directory, /*reindex=*/false, /*wipe_chainstate=*/false,
         /*block_tree_db_in_memory=*/true, /*chainstate_db_in_memory=*/true, context)};
@@ -1004,7 +1004,7 @@ BOOST_AUTO_TEST_CASE(btck_chainman_regtest_tests)
     auto test_directory{TestDirectory{"regtest_test_bitcoin_kernel"}};
 
     auto notifications{std::make_shared<TestKernelNotifications>()};
-    auto context{create_context(notifications, ChainType::REGTEST)};
+    auto context{create_context(notifications, ChainType::MAINNET)};
 
     {
         auto chainman{create_chainman(

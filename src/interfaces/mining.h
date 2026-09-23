@@ -127,7 +127,7 @@ public:
      * @param[in] cooldown wait for tip to be connected and IBD to complete.
      *                     If the best header is ahead of the tip, wait for the
      *                     tip to catch up. It's recommended to disable this on
-     *                     regtest and signets with only one miner, as these
+     *                     the CYBOU-DEV network with a single miner, as this
      *                     could stall.
      * @retval BlockTemplate a block template.
      * @retval std::nullptr if the node is shut down or interrupt() is called.
@@ -150,7 +150,6 @@ public:
      * @param[out] debug      more detailed rejection reason
      * @returns               whether the block is valid
      *
-     * For signets the challenge verification is skipped when check_pow is false.
      */
     virtual bool checkBlock(const CBlock& block, const node::BlockCheckOptions& options, std::string& reason, std::string& debug) = 0;
 

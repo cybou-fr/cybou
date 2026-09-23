@@ -44,7 +44,7 @@ using util::ToString;
 
 void initialize_integer()
 {
-    SelectParams(ChainType::REGTEST);
+    SelectParams(ChainType::MAIN);
 }
 
 FUZZ_TARGET(integer, .init = initialize_integer)
