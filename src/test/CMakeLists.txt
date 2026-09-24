@@ -187,6 +187,8 @@ add_executable(cybou-core-test
   cybou_protocol_operation_tests.cpp
   cybou_signing_tests.cpp
   cybou_state_tests.cpp
+  cybou_evidence_tests.cpp
+  cybou_mail_filter_tests.cpp
 )
 
 add_windows_application_manifest(cybou-core-test)

@@ -3,6 +3,8 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/evidence.h>
+#include <cybou/identity_crypto.h>
+#include <cybou/mail_service.h>
 #include <cybou/network_definition.h>
 #include <cybou/signing.h>
 #include <cybou/validator.h>
@@ -20,19 +22,20 @@ namespace {
 struct MockValidator {
     uint256 validator_id;
     std::array<unsigned char, 32> seed{};
-    uint256 consensus_pubkey;
+    cybou::IdentityHybridPublicKey consensus_pubkey;
 
     static MockValidator Create(uint8_t index)
     {
         MockValidator node;
         node.seed.fill(0);
         node.seed[0] = index;
-        node.consensus_pubkey = cybou::DeriveEd25519PublicKey(node.seed).value();
-        node.validator_id = uint256::FromUserHex(strprintf("%02x", 0xa0 + index)).value();
+        const auto keypair = cybou::GenerateValidatorKeyPair(node.seed).value();
+        node.consensus_pubkey = keypair.public_key;
+        node.validator_id = cybou::ComputeValidatorId(keypair.public_key);
         return node;
     }
 
-    cybou::BftCommitVoteV1 SignCommit(
+    cybou::BftCommitVote SignCommit(
         const uint256& network_id,
         const uint256& block_id,
         uint64_t height,
@@ -40,7 +43,7 @@ struct MockValidator {
         uint32_t round = 0) const
     {
         const uint256 digest = cybou::ComputeBftCommitDigest(network_id, block_id, height, round, val_set_commitment);
-        cybou::BftCommitVoteV1 vote;
+        cybou::BftCommitVote vote;
         vote.validator_id = validator_id;
         vote.signature = *cybou::SignValidatorVote(seed, digest);
         return vote;
@@ -57,26 +60,24 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_creation_and_verification)
 
     // 1. Validator setup (N=1 Authority mode)
     const auto validator = MockValidator::Create(1);
-    cybou::ValidatorSetV1 val_set;
-    val_set.validators.push_back(cybou::ValidatorV1{
+    cybou::ValidatorSet val_set;
+    val_set.validators.push_back(cybou::Validator{
         .validator_id = validator.validator_id,
         .consensus_public_key = validator.consensus_pubkey,
         .weight = 1,
     });
     const uint256 val_set_commitment = cybou::ComputeValidatorSetCommitment(val_set);
 
-    // 2. Sender account and key setup
-    std::array<unsigned char, 32> sender_seed{};
-    sender_seed.fill(0x11);
-    const uint256 sender_pubkey = *cybou::DeriveEd25519PublicKey(sender_seed);
+    // 2. Sender account and device key setup
+    std::array<unsigned char, 32> sender_device_seed{};
+    sender_device_seed.fill(0x11);
+    const auto sender_device_pubkey = *cybou::DeriveIdentityPublicKey(
+        sender_device_seed, cybou::IdentityKeyPurpose::DEVICE);
+    const auto sender_device_id = *cybou::ComputeDeviceKeyId(sender_device_pubkey);
     const cybou::AccountId sender_id{uint256::FromUserHex("5001").value()};
     const cybou::AccountId recipient_id{uint256::FromUserHex("5002").value()};
 
-    const cybou::AccountAuthorizationV1 sender_auth{
-        .authorization_descriptor = sender_pubkey,
-    };
-
-    // 3. Sender creates MailOpV1 with salted content commitment
+    // 3. Sender creates AuthorizedMail with salted content commitment
     const std::string plaintext = "Confidential French pilot communication";
     const std::span<const unsigned char> plaintext_bytes{
         reinterpret_cast<const unsigned char*>(plaintext.data()), plaintext.size()};
@@ -84,29 +85,39 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_creation_and_verification)
     const uint256 salt{uint256::FromUserHex("77778888").value()};
     const uint256 content_commitment = cybou::ComputeMailContentCommitment(salt, plaintext_bytes);
 
-    cybou::MailOpV1 mail_payload{
-        .version = cybou::MAIL_OP_VERSION,
+    cybou::MailPayload mail_payload{
+        .version = cybou::MAIL_TX_VERSION,
         .recipient = recipient_id,
-        .content_commitment = content_commitment,
         .discovery_tag = uint256::FromUserHex("dddd").value(),
+        .content_commitment = content_commitment,
         .ciphertext = {0xca, 0xfe, 0xba, 0xbe}, // Mock ciphertext
     };
 
-    cybou::AuthorizedOperationV1 auth_op{
-        .version = cybou::AUTHORIZED_OPERATION_VERSION,
+    const auto mail_commitment = *cybou::ComputeMailPayloadCommitment(mail_payload);
+
+    cybou::DeviceAuthorization auth{
         .account_id = sender_id,
+        .device_id = sender_device_id,
         .nonce = 0,
-        .payload = mail_payload,
+        .activation_nonce = 0,
+        .kind = cybou::DeviceOperationKind::MAIL,
+        .payload_commitment = mail_commitment,
         .signature = {},
     };
 
-    const uint256 op_digest = cybou::ComputeUserOperationDigest(
-        network_id, sender_id, 0, auth_op.payload);
-    auth_op.signature = *cybou::SignValidatorVote(sender_seed, op_digest);
+    const auto op_digest = *cybou::ComputeDeviceOperationDigest(network_id, auth);
+    auth.signature = *cybou::SignIdentityMessage(
+        sender_device_seed, cybou::IdentityKeyPurpose::DEVICE,
+        std::span<const unsigned char>(op_digest.begin(), op_digest.size()));
+
+    const cybou::AuthorizedMail mail_op{
+        .authorization = auth,
+        .mail = mail_payload,
+    };
 
     // 4. Proposed Block at height 1
-    cybou::ProtocolOperationV1 proto_op{auth_op};
-    cybou::CybouBlockV1 block{
+    cybou::ProtocolOperation proto_op{mail_op};
+    cybou::CybouBlock block{
         .version = cybou::CYBOU_BLOCK_VERSION,
         .parent_block_id = uint256::FromUserHex("1000").value(),
         .height = 1,
@@ -116,11 +127,12 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_creation_and_verification)
     const uint256 block_id = cybou::ComputeBlockId(block);
 
     // 5. BFT Finality Certificate
-    cybou::BftFinalityCertificateV1 cert{
+    cybou::BftFinalityCertificate cert{
         .version = cybou::BFT_FINALITY_CERTIFICATE_VERSION,
         .network_id = network_id,
         .block_id = block_id,
         .height = 1,
+        .round = 0,
         .validator_set_commitment = val_set_commitment,
         .commit_votes = {
             validator.SignCommit(network_id, block_id, 1, val_set_commitment),
@@ -128,7 +140,7 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_creation_and_verification)
     };
 
     // 6. Create MailEvidenceBundle
-    auto bundle_opt = cybou::CreateMailEvidenceBundle(block, 0, cert, sender_auth, network_id);
+    auto bundle_opt = cybou::CreateMailEvidenceBundle(block, 0, cert, sender_device_pubkey, network_id);
     BOOST_REQUIRE(bundle_opt.has_value());
     auto bundle = *bundle_opt;
 
@@ -136,18 +148,12 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_creation_and_verification)
     BOOST_CHECK(cybou::VerifyMailEvidenceBundle(bundle, val_set, network_id) ==
                 cybou::EvidenceVerificationError::NONE);
 
-    // 8. Verify voluntary content disclosure with valid plaintext and salt
-    BOOST_CHECK(cybou::VerifyDisclosedMailContent(bundle, salt, plaintext_bytes));
+    // 8. Verify voluntary content disclosure with valid content commitment
+    BOOST_CHECK(cybou::VerifyDisclosedMailContent(bundle, content_commitment));
 
-    // Wrong salt fails disclosure verification
-    const uint256 wrong_salt{uint256::FromUserHex("9999").value()};
-    BOOST_CHECK(!cybou::VerifyDisclosedMailContent(bundle, wrong_salt, plaintext_bytes));
-
-    // Wrong plaintext fails disclosure verification
-    const std::string tampered_text = "Altered French pilot communication";
-    const std::span<const unsigned char> tampered_bytes{
-        reinterpret_cast<const unsigned char*>(tampered_text.data()), tampered_text.size()};
-    BOOST_CHECK(!cybou::VerifyDisclosedMailContent(bundle, salt, tampered_bytes));
+    // Wrong content commitment fails disclosure verification
+    const uint256 wrong_commitment{uint256::FromUserHex("9999").value()};
+    BOOST_CHECK(!cybou::VerifyDisclosedMailContent(bundle, wrong_commitment));
 
     // 9. Tamper tests:
     // Mismatched network ID
@@ -156,14 +162,14 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_creation_and_verification)
 
     // Tampered sender signature
     auto bad_sig_bundle = bundle;
-    bad_sig_bundle.mail_operation.signature[0] ^= 0xFF;
+    bad_sig_bundle.mail_operation.authorization.signature.ed25519[0] ^= 0xFF;
     BOOST_CHECK(cybou::VerifyMailEvidenceBundle(bad_sig_bundle, val_set, network_id) ==
                 cybou::EvidenceVerificationError::INVALID_OPERATION_SIGNATURE);
 
-    // Replaced sender authorization key (unauthorized key)
-    auto wrong_auth_bundle = bundle;
-    wrong_auth_bundle.sender_authorization.authorization_descriptor = uint256::FromUserHex("9999").value();
-    BOOST_CHECK(cybou::VerifyMailEvidenceBundle(wrong_auth_bundle, val_set, network_id) ==
+    // Replaced sender device key
+    auto wrong_key_bundle = bundle;
+    wrong_key_bundle.sender_device_key.ed25519[0] ^= 0xFF;
+    BOOST_CHECK(cybou::VerifyMailEvidenceBundle(wrong_key_bundle, val_set, network_id) ==
                 cybou::EvidenceVerificationError::INVALID_OPERATION_SIGNATURE);
 
     // Tampered inclusion proof operation hash
@@ -195,81 +201,92 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_serialization_roundtrip)
 {
     const uint256 network_id{uint256::FromUserHex("42").value()};
     const auto validator = MockValidator::Create(1);
-    cybou::ValidatorSetV1 val_set;
-    val_set.validators.push_back(cybou::ValidatorV1{
+    cybou::ValidatorSet val_set;
+    val_set.validators.push_back(cybou::Validator{
         .validator_id = validator.validator_id,
         .consensus_public_key = validator.consensus_pubkey,
         .weight = 1,
     });
     const uint256 val_set_commitment = cybou::ComputeValidatorSetCommitment(val_set);
 
-    std::array<unsigned char, 32> sender_seed{};
-    sender_seed.fill(0x22);
-    const uint256 sender_pubkey = *cybou::DeriveEd25519PublicKey(sender_seed);
+    std::array<unsigned char, 32> sender_device_seed{};
+    sender_device_seed.fill(0x22);
+    const auto sender_device_pubkey = *cybou::DeriveIdentityPublicKey(
+        sender_device_seed, cybou::IdentityKeyPurpose::DEVICE);
+    const auto sender_device_id = *cybou::ComputeDeviceKeyId(sender_device_pubkey);
     const cybou::AccountId sender_id{uint256::FromUserHex("6001").value()};
     const cybou::AccountId recipient_id{uint256::FromUserHex("6002").value()};
-
-    const cybou::AccountAuthorizationV1 sender_auth{
-        .authorization_descriptor = sender_pubkey,
-    };
 
     const std::string plaintext = "Evidence serialization test";
     const std::span<const unsigned char> plaintext_bytes{
         reinterpret_cast<const unsigned char*>(plaintext.data()), plaintext.size()};
     const uint256 salt{uint256::FromUserHex("1234").value()};
+    const uint256 content_commitment = cybou::ComputeMailContentCommitment(salt, plaintext_bytes);
 
-    cybou::MailOpV1 mail_payload{
-        .version = cybou::MAIL_OP_VERSION,
+    cybou::MailPayload mail_payload{
+        .version = cybou::MAIL_TX_VERSION,
         .recipient = recipient_id,
-        .content_commitment = cybou::ComputeMailContentCommitment(salt, plaintext_bytes),
         .discovery_tag = uint256::FromUserHex("baad").value(),
+        .content_commitment = content_commitment,
         .ciphertext = {0x01, 0x02, 0x03},
     };
 
-    cybou::AuthorizedOperationV1 auth_op{
-        .version = cybou::AUTHORIZED_OPERATION_VERSION,
+    const auto mail_commitment = *cybou::ComputeMailPayloadCommitment(mail_payload);
+
+    cybou::DeviceAuthorization auth{
         .account_id = sender_id,
+        .device_id = sender_device_id,
         .nonce = 1,
-        .payload = mail_payload,
+        .activation_nonce = 0,
+        .kind = cybou::DeviceOperationKind::MAIL,
+        .payload_commitment = mail_commitment,
         .signature = {},
     };
 
-    const uint256 op_digest = cybou::ComputeUserOperationDigest(
-        network_id, sender_id, 1, auth_op.payload);
-    auth_op.signature = *cybou::SignValidatorVote(sender_seed, op_digest);
+    const auto op_digest = *cybou::ComputeDeviceOperationDigest(network_id, auth);
+    auth.signature = *cybou::SignIdentityMessage(
+        sender_device_seed, cybou::IdentityKeyPurpose::DEVICE,
+        std::span<const unsigned char>(op_digest.begin(), op_digest.size()));
 
-    cybou::CybouBlockV1 block{
+    const cybou::AuthorizedMail mail_op{
+        .authorization = auth,
+        .mail = mail_payload,
+    };
+
+    cybou::CybouBlock block{
         .version = cybou::CYBOU_BLOCK_VERSION,
         .parent_block_id = uint256::FromUserHex("1000").value(),
         .height = 5,
-        .operations = {cybou::ProtocolOperationV1{auth_op}},
+        .operations = {cybou::ProtocolOperation{mail_op}},
         .resulting_state_root = uint256::FromUserHex("bbbb").value(),
     };
     const uint256 block_id = cybou::ComputeBlockId(block);
 
-    cybou::BftFinalityCertificateV1 cert{
+    cybou::BftFinalityCertificate cert{
         .version = cybou::BFT_FINALITY_CERTIFICATE_VERSION,
         .network_id = network_id,
         .block_id = block_id,
         .height = 5,
+        .round = 0,
         .validator_set_commitment = val_set_commitment,
         .commit_votes = {
             validator.SignCommit(network_id, block_id, 5, val_set_commitment),
         },
     };
 
-    auto bundle = *cybou::CreateMailEvidenceBundle(block, 0, cert, sender_auth, network_id);
+    auto bundle = *cybou::CreateMailEvidenceBundle(block, 0, cert, sender_device_pubkey, network_id);
 
     // Serialization & Deserialization
     const auto serialized = cybou::SerializeMailEvidenceBundle(bundle);
-    const auto deserialized = cybou::DeserializeMailEvidenceBundle(serialized);
+    BOOST_REQUIRE(serialized.has_value());
+    const auto deserialized = cybou::DeserializeMailEvidenceBundle(*serialized);
     BOOST_REQUIRE(deserialized.has_value());
     BOOST_CHECK(*deserialized == bundle);
 
     // Verified roundtrip bundle passes all verification
     BOOST_CHECK(cybou::VerifyMailEvidenceBundle(*deserialized, val_set, network_id) ==
                 cybou::EvidenceVerificationError::NONE);
-    BOOST_CHECK(cybou::VerifyDisclosedMailContent(*deserialized, salt, plaintext_bytes));
+    BOOST_CHECK(cybou::VerifyDisclosedMailContent(*deserialized, content_commitment));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

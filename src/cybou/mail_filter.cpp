@@ -6,6 +6,7 @@
 
 #include <blockfilter.h>
 #include <crypto/sha256.h>
+#include <streams.h>
 
 #include <algorithm>
 #include <string_view>
@@ -184,6 +185,17 @@ std::optional<CybouMailDiscoveryFilter> DeserializeMailDiscoveryFilter(std::span
     }
 
     filter.encoded_filter.assign(bytes.begin() + offset, bytes.end());
+
+    SpanReader stream{filter.encoded_filter};
+    try {
+        uint64_t gcs_n = ReadCompactSize(stream);
+        if (gcs_n != filter.num_elements) {
+            return std::nullopt;
+        }
+    } catch (...) {
+        return std::nullopt;
+    }
+
     return filter;
 }
 

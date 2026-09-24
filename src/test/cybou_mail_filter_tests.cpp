@@ -4,8 +4,12 @@
 
 #include <cybou/mail_filter.h>
 
+#include <cybou/account_creation.h>
 #include <cybou/bft.h>
 #include <cybou/block.h>
+#include <cybou/block_executor.h>
+#include <cybou/identity_crypto.h>
+#include <cybou/mail_service.h>
 #include <cybou/network_definition.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/signing.h>
@@ -23,27 +27,30 @@
 namespace {
 
 struct MockVal {
-    std::array<unsigned char, 32> priv{};
-    uint256 pub;
+    std::array<unsigned char, 32> seed{};
+    uint256 validator_id;
+    cybou::IdentityHybridPublicKey pub;
 };
 
 const std::vector<MockVal> TEST_VAL_NODES = []{
     std::vector<MockVal> nodes;
     for (uint8_t i = 1; i <= 4; ++i) {
         MockVal node;
-        node.priv.fill(0);
-        node.priv[0] = i;
-        node.pub = *cybou::DeriveEd25519PublicKey(node.priv);
+        node.seed.fill(0);
+        node.seed[0] = i;
+        const auto keypair = cybou::GenerateValidatorKeyPair(node.seed).value();
+        node.pub = keypair.public_key;
+        node.validator_id = cybou::ComputeValidatorId(keypair.public_key);
         nodes.push_back(node);
     }
     return nodes;
 }();
 
-const cybou::ValidatorSetV1 TEST_VALIDATOR_SET = []{
-    cybou::ValidatorSetV1 val_set;
+const cybou::ValidatorSet TEST_VALIDATOR_SET = []{
+    cybou::ValidatorSet val_set;
     for (const auto& node : TEST_VAL_NODES) {
-        val_set.validators.push_back(cybou::ValidatorV1{
-            .validator_id = node.pub,
+        val_set.validators.push_back(cybou::Validator{
+            .validator_id = node.validator_id,
             .consensus_public_key = node.pub,
             .weight = 1,
         });
@@ -70,12 +77,12 @@ cybou::CybouState GenesisState()
     };
 }
 
-cybou::CybouNetworkDefinitionV1 TestNetworkDefinition()
+cybou::CybouNetworkDefinition TestNetworkDefinition()
 {
-    return cybou::CybouNetworkDefinitionV1{
+    return cybou::CybouNetworkDefinition{
         .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
         .genesis_block_id = uint256::ONE,
-        .genesis_state_root = cybou::CybouStateHash(GenesisState()),
+        .genesis_state_root = *cybou::CybouStateHash(GenesisState()),
         .protocol_parameters = PARAMS,
         .initial_validator_set_commitment = cybou::ComputeValidatorSetCommitment(TEST_VALIDATOR_SET),
     };
@@ -92,9 +99,9 @@ std::unique_ptr<CDBWrapper> MakeTestDB(const std::filesystem::path& path)
     });
 }
 
-cybou::FinalizedBlockV1 MakeFinalizedBlock(
+cybou::FinalizedBlock MakeFinalizedBlock(
     const cybou::CybouStateStore& store,
-    const std::vector<cybou::ProtocolOperationV1>& ops)
+    const std::vector<cybou::ProtocolOperation>& ops)
 {
     const auto loaded = store.LoadState();
     const uint64_t height = store.GetFinalizedHeight().value_or(0) + 1;
@@ -102,31 +109,23 @@ cybou::FinalizedBlockV1 MakeFinalizedBlock(
     const uint256 net_id = store.GetNetworkId();
 
     cybou::CybouState candidate = loaded && loaded.state ? *loaded.state : GenesisState();
-    const cybou::ProtocolExecutionContextV1 ctx{
-        .network_id = net_id,
-        .block_height = height,
-        .params = PARAMS,
-    };
-    for (const auto& op : ops) {
-        cybou::ApplyProtocolOperation(op, ctx, candidate);
-    }
-    if (candidate.pending_fee_pool > 0) {
-        cybou::RoutePendingFees(candidate);
-    }
+    const auto exec_res = cybou::ExecuteBlockOperations(candidate, ops, net_id, height, PARAMS);
+    BOOST_REQUIRE(exec_res.error == cybou::BlockExecutionError::NONE);
+    candidate = *exec_res.state;
 
-    cybou::CybouBlockV1 block{
+    cybou::CybouBlock block{
         .version = cybou::CYBOU_BLOCK_VERSION,
         .parent_block_id = parent,
         .height = height,
         .operations = ops,
-        .resulting_state_root = cybou::CybouStateHash(candidate),
+        .resulting_state_root = *cybou::CybouStateHash(candidate),
     };
 
     const uint256 block_id = cybou::ComputeBlockId(block);
     const uint256 val_set_comm = cybou::ComputeValidatorSetCommitment(candidate.validator_set);
     const uint256 digest = cybou::ComputeBftCommitDigest(net_id, block_id, height, 0, val_set_comm);
 
-    cybou::BftFinalityCertificateV1 cert{
+    cybou::BftFinalityCertificate cert{
         .version = cybou::BFT_FINALITY_CERTIFICATE_VERSION,
         .network_id = net_id,
         .block_id = block_id,
@@ -136,15 +135,52 @@ cybou::FinalizedBlockV1 MakeFinalizedBlock(
         .commit_votes = {},
     };
     for (size_t i = 0; i < 3; ++i) {
-        cert.commit_votes.push_back(cybou::BftCommitVoteV1{
-            .validator_id = TEST_VAL_NODES[i].pub,
-            .signature = *cybou::SignValidatorVote(TEST_VAL_NODES[i].priv, digest),
+        cert.commit_votes.push_back(cybou::BftCommitVote{
+            .validator_id = TEST_VAL_NODES[i].validator_id,
+            .signature = *cybou::SignValidatorVote(TEST_VAL_NODES[i].seed, digest),
         });
     }
 
-    return cybou::FinalizedBlockV1{
+    return cybou::FinalizedBlock{
         .block = std::move(block),
         .certificate = std::move(cert),
+    };
+}
+
+cybou::AccountCreateOp MakeTestAccountCreate(
+    const cybou::AccountId& acc,
+    std::span<const unsigned char, 32> root_seed,
+    std::span<const unsigned char, 32> device_seed,
+    const uint256& net_id)
+{
+    const auto root_pub = *cybou::DeriveIdentityPublicKey(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto device_pub = *cybou::DeriveIdentityPublicKey(device_seed, cybou::IdentityKeyPurpose::DEVICE);
+
+    cybou::IdentityAuthorization auth{root_pub, device_pub};
+    const auto auth_commitment = *cybou::ComputeIdentityAuthorizationCommitment(auth);
+
+    cybou::AccountCreationWork work{
+        .network_id = net_id,
+        .account_id = acc,
+        .authorization_commitment = auth_commitment,
+        .work_epoch = 0,
+        .nonce = 0,
+    };
+
+    const auto pop_digest = *cybou::ComputeAccountCreatePopDigest(net_id, acc, auth);
+    const auto root_pop = *cybou::SignIdentityMessage(
+        root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT,
+        std::span<const unsigned char>(pop_digest.begin(), pop_digest.size()));
+    const auto device_pop = *cybou::SignIdentityMessage(
+        device_seed, cybou::IdentityKeyPurpose::DEVICE,
+        std::span<const unsigned char>(pop_digest.begin(), pop_digest.size()));
+
+    return cybou::AccountCreateOp{
+        .account_id = acc,
+        .authorization = auth,
+        .work = work,
+        .recovery_pop = root_pop,
+        .device_pop = device_pop,
     };
 }
 
@@ -245,7 +281,7 @@ BOOST_AUTO_TEST_CASE(mail_discovery_filter_positive_and_negative_matching)
 
     // Block ID keying: same tags encoded under another block ID should not match queries against this filter
     const uint256 other_block_id{uint256::FromUserHex("9999999999999999999999999999999999999999999999999999999999999999").value()};
-    cybou::CybouMailDiscoveryFilterV1 filter_with_wrong_block = filter;
+    cybou::CybouMailDiscoveryFilter filter_with_wrong_block = filter;
     filter_with_wrong_block.block_id = other_block_id;
     // With different siphash keys, matching against the original tags will fail
     size_t wrong_matches = 0;
@@ -329,52 +365,33 @@ BOOST_AUTO_TEST_CASE(state_store_mail_filter_persistence_and_retrieval)
     BOOST_CHECK(!store.GetBlockMailFilter(uint256::FromUserHex("1234").value()).has_value());
 
     // Setup an account via AccountCreateOp
-    const std::array<unsigned char, 32> priv = []{
+    const std::array<unsigned char, 32> sender_root_seed = []{
         std::array<unsigned char, 32> k{};
         k[0] = 0x55;
         return k;
     }();
-    const uint256 pub = *cybou::DeriveEd25519PublicKey(priv);
+    const std::array<unsigned char, 32> sender_device_seed = []{
+        std::array<unsigned char, 32> k{};
+        k[0] = 0x56;
+        return k;
+    }();
     const cybou::AccountId sender_acc{uint256::FromUserHex("55").value()};
 
-    cybou::AccountCreateOpV1 create_op{
-        .version = cybou::ACCOUNT_CREATE_OP_VERSION,
-        .account_id = sender_acc,
-        .initial_authorization = cybou::AccountAuthorizationV1{.authorization_descriptor = pub},
-        .creation_work = {
-            .version = cybou::ACCOUNT_CREATION_WORK_VERSION,
-            .network_id = store.GetNetworkId(),
-            .account_id = sender_acc,
-            .initial_authorization_commitment = cybou::ComputeAuthCommitment(cybou::AccountAuthorizationV1{.authorization_descriptor = pub}),
-            .work_epoch = 0,
-            .nonce = 0,
-        },
-    };
-    create_op.proof_of_possession = *cybou::SignUserMessage(
-        priv, cybou::ComputeAccountPopDigest(store.GetNetworkId(), sender_acc, pub));
+    const auto create_op = MakeTestAccountCreate(sender_acc, sender_root_seed, sender_device_seed, store.GetNetworkId());
 
     const cybou::AccountId recipient_acc{uint256::FromUserHex("66").value()};
-    const std::array<unsigned char, 32> recipient_priv = []{
+    const std::array<unsigned char, 32> recipient_root_seed = []{
         std::array<unsigned char, 32> k{};
         k[0] = 0x66;
         return k;
     }();
-    const uint256 recipient_pub = *cybou::DeriveEd25519PublicKey(recipient_priv);
-    cybou::AccountCreateOpV1 recipient_create{
-        .version = cybou::ACCOUNT_CREATE_OP_VERSION,
-        .account_id = recipient_acc,
-        .initial_authorization = cybou::AccountAuthorizationV1{.authorization_descriptor = recipient_pub},
-        .creation_work = {
-            .version = cybou::ACCOUNT_CREATION_WORK_VERSION,
-            .network_id = store.GetNetworkId(),
-            .account_id = recipient_acc,
-            .initial_authorization_commitment = cybou::ComputeAuthCommitment(cybou::AccountAuthorizationV1{.authorization_descriptor = recipient_pub}),
-            .work_epoch = 0,
-            .nonce = 0,
-        },
-    };
-    recipient_create.proof_of_possession = *cybou::SignUserMessage(
-        recipient_priv, cybou::ComputeAccountPopDigest(store.GetNetworkId(), recipient_acc, recipient_pub));
+    const std::array<unsigned char, 32> recipient_device_seed = []{
+        std::array<unsigned char, 32> k{};
+        k[0] = 0x67;
+        return k;
+    }();
+
+    const auto recipient_create = MakeTestAccountCreate(recipient_acc, recipient_root_seed, recipient_device_seed, store.GetNetworkId());
 
     const auto finalized_block1 = MakeFinalizedBlock(store, {create_op, recipient_create});
     const auto res1 = store.CommitFinalizedBlock(finalized_block1);
@@ -387,32 +404,45 @@ BOOST_AUTO_TEST_CASE(state_store_mail_filter_persistence_and_retrieval)
     // Block 1 only had AccountCreateOp, no mail operations
     BOOST_CHECK_EQUAL(filter1->num_elements, 0U);
 
-    // Block 2: Sender sends MailOpV1
+    // Block 2: Sender sends AuthorizedMail
     const uint256 mail_salt{uint256::FromUserHex("aabbccdd").value()};
     const uint256 discovery_tag = cybou::ComputeRecipientDiscoveryTag(recipient_acc.Value(), mail_salt);
     const std::vector<unsigned char> ciphertext{0x01, 0x02, 0x03, 0x04};
     const uint256 content_comm = cybou::ComputeMailContentCommitment(mail_salt, ciphertext);
 
-    const cybou::MailOpV1 mail_op{
-        .version = cybou::MAIL_OP_VERSION,
+    const cybou::MailPayload mail_payload{
+        .version = cybou::MAIL_TX_VERSION,
         .recipient = recipient_acc,
-        .content_commitment = content_comm,
         .discovery_tag = discovery_tag,
+        .content_commitment = content_comm,
         .ciphertext = ciphertext,
     };
 
-    const cybou::AuthorizedOperationPayloadV1 payload{mail_op};
-    const uint256 digest = cybou::ComputeUserOperationDigest(store.GetNetworkId(), sender_acc, 0, payload);
+    const auto sender_dev_pub = *cybou::DeriveIdentityPublicKey(sender_device_seed, cybou::IdentityKeyPurpose::DEVICE);
+    const auto sender_dev_id = *cybou::ComputeDeviceKeyId(sender_dev_pub);
+    const auto mail_comm = *cybou::ComputeMailPayloadCommitment(mail_payload);
 
-    cybou::AuthorizedOperationV1 auth_op{
-        .version = cybou::AUTHORIZED_OPERATION_VERSION,
+    cybou::DeviceAuthorization auth{
         .account_id = sender_acc,
+        .device_id = sender_dev_id,
         .nonce = 0,
-        .payload = payload,
-        .signature = *cybou::SignUserMessage(priv, std::span<const unsigned char>{digest.begin(), digest.size()}),
+        .activation_nonce = 0,
+        .kind = cybou::DeviceOperationKind::MAIL,
+        .payload_commitment = mail_comm,
+        .signature = {},
     };
 
-    const auto finalized_block2 = MakeFinalizedBlock(store, {auth_op});
+    const auto op_digest = *cybou::ComputeDeviceOperationDigest(store.GetNetworkId(), auth);
+    auth.signature = *cybou::SignIdentityMessage(
+        sender_device_seed, cybou::IdentityKeyPurpose::DEVICE,
+        std::span<const unsigned char>(op_digest.begin(), op_digest.size()));
+
+    const cybou::AuthorizedMail auth_mail{
+        .authorization = auth,
+        .mail = mail_payload,
+    };
+
+    const auto finalized_block2 = MakeFinalizedBlock(store, {auth_mail});
     const auto res2 = store.CommitFinalizedBlock(finalized_block2);
     BOOST_REQUIRE(res2);
 
