@@ -1,49 +1,31 @@
-# CYBOU — Sovereign Decentralized Communication Infrastructure
+# CYBOU — project status and source guide
 
-> CYBOU (cybou.fr) is an open C++20 R&D project for sovereign, decentralized and secure communication infrastructure. Messaging is one service within the broader architecture. Multi-validator BFT finality, hybrid post-quantum encryption, storage and full operator-key isolation remain development targets rather than deployed production guarantees.
+CYBOU (https://cybou.fr/) is an open C++20 R&D project designed in France for sovereign communication infrastructure. The source repository is https://github.com/cybou-fr/cybou. The site describes both implemented DEV code and future architecture; it is not a production-service announcement.
 
-## System Overview & Current Development Status
-- **Project Stage:** Architecture hardening and open research.
-- **Not Deployed Infrastructure Today:** The network currently uses an internal development environment. Public releases will follow completion of the multi-validator BFT transition and end-to-end communication stack.
-- **Creator:** Stanislav Saveliev.
-- **Repository:** https://github.com/cybou-fr/cybou
-- **License:** MIT
+## Implemented and tested in the repository
 
-## Canonical Architecture Specifications
-- **Consensus Model:** Explicit Byzantine Fault Tolerance (BFT) with operator-approved validator admission.
-- **Validator Weight:** Equal weight for all active validators (`weight = 1`).
-- **Byzantine Quorum:** Minimum 4 validators strictly required for $f=1$ malicious/offline fault tolerance ($N \ge 3f + 1$).
-- **Proof of Trust (PoT) Epochs:** Deterministic integer-only arithmetic computed strictly from finalized block height. Zero local wall-clock consensus logic to prevent time manipulation.
-- **Tokenomics:**
-  - `MAX_SUPPLY`: 100,000,000,000 CYBOU (strictly 0 decimals, integer units only).
-  - `Onboarding`: Permissionless AccountID creation (`AccountCreateOpV1`) with anti-Sybil proof-of-work (`AccountCreationWorkV1`). An onboarding bonus is credited atomically from `OnboardingPool` to `SystemBalance` (doc 70). No operator vouchers or central approval are required.
-  - `Fee Split`: Deterministic size-aware fees without bidding/priority wars. Split ratio is 3:1 (75% to Network Security / Validator Pool, 25% to OnboardingPool reserve).
-- **Post-Quantum by Design (PQ by design):**
-  - Payload and session encapsulation use the hybrid HPKE standard (RFC 9180): NIST ML-KEM-768 (Kyber) combined with X25519.
-  - Defeats "Harvest Now, Decrypt Later" (HNDL) attacks from adversaries capturing encrypted traffic today.
-  - Salted content commitment (doc 69): validators only verify transaction inclusion and content commitments; no cleartext or per-mail consensus object exists on-chain.
-- **Operator Key Separation (doc 68):**
-  - Strict isolation across 4 distinct key domains:
-    1. Operator Authority Key
-    2. Operator Validator Key
-    3. Release Signing Key
-    4. Treasury Key
-- **Storage Model:**
-  - Desktop nodes may prune canonical chain history.
-  - Active validators maintain required canonical pre-Store MailTx history.
-  - Inbox, Sent, and read-state index trees are owned strictly on the local client machine.
-  - Large file attachments defer to future distributed Object Storage.
+- Protocol-native AccountCreate with anti-Sybil work and an atomic OnboardingPool-to-SystemBalance grant.
+- CYBOU state transitions, LevelDB persistence, finalized-block verification, block-height lookup, and a single-validator DEV block producer (f=0).
+- A standalone experimental DEV node with remote operation submission and verified block synchronization between processes. The inherited Bitcoin bootstrap chain is a separate, transitional path.
+- Core MailTx operation validation, deterministic size-aware fees, compact Mail discovery filters, and evidence bundle code with inclusion and finality proofs.
+- An experimental Qt desktop client with Identity, Wallet, Email, Storage, and Backup pages. Service actions are gated by live capabilities; the complete Email and storage services are not available.
+- Hybrid Ed25519 + ML-DSA-65 operator-authority signature verification in core. This does not establish production post-quantum Email security.
 
-## Key Source Code References
-- `src/cybou/account_creation.h`, `src/cybou/account_creation.cpp`: Permissionless AccountCreateOpV1 and anti-Sybil AccountCreationWorkV1.
-- `src/cybou/state.h`, `src/cybou/state.cpp`: Deterministic state transitions, account balance tracking, atomic onboarding bonus, LevelDB persistence.
-- `docs/cybou/00_VISION.md`: Scope and architectural principles.
-- `docs/cybou/07_BFT_CONSENSUS.md`: Multi-validator BFT consensus engine.
-- `docs/cybou/16_MAIL_PROTOCOL.md`: MailTx protocol format and fee rules.
-- `docs/cybou/26_IMPLEMENTATION_STATUS.md`: Real-world implementation matrix.
-- `docs/cybou/49_EMAIL_E2EE_HPKE_PQ.md`: Hybrid post-quantum HPKE specification.
-- `docs/cybou/68_OPERATOR_KEY_SEPARATION.md`: 4-way key domain isolation.
-- `docs/cybou/69_MAIL_EVIDENCE_BUNDLE.md`: Inclusion certificates and salted content commitments.
-- `docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md`: Permissionless account creation and anti-Sybil architecture.
-- `AGENTS.md`: Authoritative engineering constraints.
-- `MANIFEST.md`: SHA-256 integrity inventory of all specification files.
+## Design targets and remaining work
+
+- Operate independent multi-validator BFT nodes. A minimum of four equal-weight validators is required before claiming f=1 tolerance.
+- Integrate encrypted MailTx delivery, local Inbox/Sent/read-state indexes, and the target hybrid ML-KEM-768 + X25519 profile; perform external security review.
+- Build decentralized Object Storage, Backup, and Drive services and complete operator key custody and public deployment work.
+- DEV, Beta, and Mainnet have separate genesis and economics. Beta balances do not carry to Mainnet. The specified MAX_SUPPLY is 100,000,000,000 CYBOU with zero decimals and fees split 3:1 between Security and Onboarding; the inherited bootstrap chain does not implement this monetary policy.
+
+## Primary repository references
+
+- https://github.com/cybou-fr/cybou/blob/main/AGENTS.md — hard protocol constraints.
+- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/26_IMPLEMENTATION_STATUS.md — implementation status and inherited-chain boundary.
+- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/74_AUTHORITY_BLOCK_FEED.md — authority producer and block feed.
+- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/75_DEV_NODE_RUNBOOK.md — experimental DEV node.
+- https://github.com/cybou-fr/cybou/blob/main/src/cybou_node.cpp — standalone node process.
+- https://github.com/cybou-fr/cybou/blob/main/src/cybou/node_runtime.cpp — runtime shared with desktop.
+- https://github.com/cybou-fr/cybou/blob/main/src/cybou/evidence.cpp — Mail evidence implementation.
+
+License: MIT. Creator: Stanislav Saveliev.

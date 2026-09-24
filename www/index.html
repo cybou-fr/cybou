@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CYBOU — Infrastructure de communication décentralisée et sécurisée</title>
-  <meta name="description" content="CYBOU est un projet R&amp;D C++20 d'infrastructure de communication décentralisée, souveraine et sécurisée. Le consensus BFT multi-validateur et le chiffrement hybride post-quantique sont en cours de développement.">
+  <title>CYBOU — Projet R&amp;D de communication souveraine</title>
+  <meta name="description" content="CYBOU est un projet R&amp;D C++20 de communication souveraine. Un nœud DEV à validateur unique, la synchronisation vérifiée et un client de bureau expérimental existent ; le réseau BFT multi-validateur et le chiffrement MailTx restent à intégrer.">
   <meta name="keywords" content="CYBOU, infrastructure de communication, communications décentralisées, P2P, souveraineté numérique, C++20, BFT, chiffrement post-quantique, France, Europe">
   <meta name="author" content="Stanislav Saveliev">
   <meta name="copyright" content="Stanislav Saveliev">
@@ -20,8 +20,8 @@
 
   <!-- OpenGraph Metadata -->
   <meta property="og:site_name" content="CYBOU">
-  <meta property="og:title" content="CYBOU — Infrastructure de communication décentralisée et sécurisée">
-  <meta property="og:description" content="Spécifications et état d'implémentation de CYBOU : projet R&amp;D pair-à-pair conçu en France, avec BFT et chiffrement hybride post-quantique comme architectures cibles.">
+  <meta property="og:title" content="CYBOU — Projet R&amp;D de communication souveraine">
+  <meta property="og:description" content="État réel de CYBOU : nœud DEV à validateur unique, blocs finalisés vérifiés et client de bureau expérimental. Le service Email et le réseau BFT multi-validateur restent en développement.">
   <meta property="og:image" content="https://cybou.fr/assets/cybou.png">
   <meta property="og:url" content="https://cybou.fr/">
   <meta property="og:type" content="website">
@@ -30,13 +30,13 @@
 
   <!-- Twitter Metadata -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="CYBOU — Infrastructure de communication décentralisée et sécurisée">
-  <meta name="twitter:description" content="Projet R&amp;D C++20 pour une infrastructure de communication souveraine, décentralisée et sécurisée.">
+  <meta name="twitter:title" content="CYBOU — Projet R&amp;D de communication souveraine">
+  <meta name="twitter:description" content="Projet R&amp;D C++20 : nœud DEV et client de bureau expérimentaux, Email et BFT multi-validateur en développement.">
   <meta name="twitter:image" content="https://cybou.fr/assets/cybou.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/cybou.png">
-  <link rel="stylesheet" href="style.css?v=20260923-3">
+  <link rel="stylesheet" href="style.css?v=20260924-1">
 
   <!-- Schema.org JSON-LD Structured Data for Search Engines & AI Models -->
   <script type="application/ld+json">
@@ -49,9 +49,9 @@
         "name": "CYBOU",
         "operatingSystem": "Linux, Windows",
         "applicationCategory": "SecurityApplication, CommunicationApplication",
-        "description": "Open C++20 R&D project for sovereign, decentralized and secure communication infrastructure, targeting multi-validator BFT finality and hybrid post-quantum encryption.",
+        "description": "Open C++20 R&D project with an experimental single-validator DEV node, verified block sync and desktop client. Multi-validator BFT deployment and encrypted MailTx remain development work.",
         "url": "https://cybou.fr",
-        "downloadUrl": "https://github.com/cybou-fr/cybou",
+        "codeRepository": "https://github.com/cybou-fr/cybou",
         "license": "https://github.com/cybou-fr/cybou/blob/main/COPYING",
         "author": {
           "@type": "Person",
@@ -95,7 +95,7 @@
             "name": "Pourquoi CYBOU n'est-il pas encore disponible au téléchargement public ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Le projet est en phase d'ingénierie et de recherche ouverte. Le moteur BFT multi-validateur, l'intégration des communications et la séparation opérationnelle des clés doivent être achevés avant toute diffusion grand public."
+              "text": "Un nœud DEV à validateur unique et un client de bureau expérimental existent. Le service Email chiffré, l'exploitation BFT multi-validateur et la sécurité opérationnelle doivent être achevés avant toute diffusion grand public."
             }
           },
           {
@@ -103,7 +103,7 @@
             "name": "Comment fonctionne le consensus BFT et la tolérance aux pannes ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Consensus BFT explicite à poids égal (poids = 1) avec quorum minimum de 4 validateurs pour tolérer f=1 nœud défaillant. Époques Proof of Trust (PoT) calculées strictement en arithmétique entière à partir de la hauteur de bloc, sans horloge locale."
+              "text": "Le cœur BFT produit des certificats de finalité vérifiables. Le nœud DEV autonome a un seul validateur (f=0). Il faut au moins 4 validateurs indépendants pour revendiquer f=1 ; ce réseau n'est pas encore déployé."
             }
           },
           {
@@ -111,7 +111,7 @@
             "name": "Quelle est l'économie du jeton CYBOU ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Offre maximale absolue et fixe de 100 000 000 000 CYBOU avec strictement 0 décimale. Bonus d'intégration crédité atomiquement sur le Solde Système lors de la création sans intermédiaire. Frais déterministes fonction de la taille répartis à 75% pour la sécurité et 25% pour l'accueil. Les réseaux DEV, Beta et Mainnet ont des genèses et paramètres strictement séparés : l'économie Beta est expérimentale et ses soldes ne sont pas reportés sur le Mainnet."
+              "text": "La spécification fixe une offre maximale de 100 000 000 000 CYBOU avec 0 décimale, un bonus d'accueil depuis OnboardingPool et des frais Mail déterministes répartis 3:1 entre Sécurité et Accueil. La chaîne de bootstrap héritée n'applique pas cette politique. Beta et Mainnet auront des genèses distinctes ; les soldes Beta ne seront pas reportés sur Mainnet."
             }
           }
         ]
@@ -199,7 +199,7 @@
       <div class="status-callout-text">
         <h4 data-i18n="statusCalloutTitle">Projet en développement actif</h4>
         <p data-i18n="statusCalloutBody">
-          CYBOU n'est pas encore une infrastructure déployée pour le grand public. Le réseau utilise actuellement une chaîne de développement interne. Cette plateforme présente les fondations architecturales, les transitions d'état formelles en C++ et l'état réel d'avancement du projet.
+          CYBOU n'est pas encore un service public. Le code comprend un nœud DEV autonome à validateur unique, la synchronisation de blocs vérifiés et une interface de bureau expérimentale. La chaîne Bitcoin héritée reste distincte de ce nouveau chemin d'état ; le service Email complet et un réseau BFT multi-validateur ne sont pas déployés.
         </p>
       </div>
     </aside>
@@ -238,9 +238,9 @@
           <li data-i18n="col1Item1"><strong>Création de compte native &amp; sans intermédiaire (doc 70) :</strong> opération AccountCreateOpV1 avec preuve de travail anti-Sybil.</li>
           <li data-i18n="col1Item2"><strong>Identifiant typé AccountId (32 octets) :</strong> gestion déterministe du solde système (<code>SystemBalance</code>).</li>
           <li data-i18n="col1Item3"><strong>Bonus d'accueil atomique :</strong> transfert immédiat du bonus depuis <code>OnboardingPool</code> vers <code>SystemBalance</code>.</li>
-          <li data-i18n="col1Item4"><strong>Persistance d'état LevelDB :</strong> instantanés atomiques avec nommage et isolats stricts CYBOU.</li>
-          <li data-i18n="col1Item5"><strong>Définition native MailTx (doc 16) :</strong> opération de premier rang, 1 destinataire, taille bornée, frais prévisibles (sans surenchère).</li>
-          <li data-i18n="col1Item6"><strong>Couverture de tests :</strong> tests unitaires publiés pour les transitions CYBOU implémentées ; plusieurs sous-systèmes Bitcoin hérités restent en cours de retrait.</li>
+          <li data-i18n="col1Item4"><strong>État canonique LevelDB :</strong> blocs finalisés, racines d'état, filtres compacts Mail et index de hauteur persistés atomiquement.</li>
+          <li data-i18n="col1Item5"><strong>MailTx, preuve et découverte :</strong> opération native bornée, frais déterministes, preuve d'inclusion et filtre compact implémentés dans le cœur ; livraison Email complète encore absente.</li>
+          <li data-i18n="col1Item6"><strong>Nœud DEV expérimental :</strong> producteur à un validateur, soumission d'opérations et synchronisation vérifiée entre processus, avec tests automatisés.</li>
         </ul>
       </article>
 
@@ -251,10 +251,10 @@
           <span class="badge-wip" data-i18n="badgeWip">EN COURS</span>
         </div>
         <ul class="status-list">
-          <li data-i18n="col2Item1"><strong>Moteur de consensus BFT (doc 07) :</strong> finalité explicite multi-validateurs avec admission contrôlée par l'opérateur (seuil f=1 dès 4 validateurs à poids égal).</li>
-          <li data-i18n="col2Item2"><strong>Époques Proof of Trust (PoT) :</strong> calcul arithmétique entier strict dérivé de la hauteur de bloc (zéro dépendance à l'horloge locale).</li>
-          <li data-i18n="col2Item3"><strong>Séparation stricte des clés (doc 68) :</strong> 4 domaines isolés (Autorité, Validateur, Signature de release, Trésorerie).</li>
-          <li data-i18n="col2Item4"><strong>Remplacement PoW :</strong> élimination définitive des mécanismes hérités de la chaîne de développement.</li>
+          <li data-i18n="col2Item1"><strong>BFT multi-validateur :</strong> moteur et certificats de finalité testés en code ; exploitation de plusieurs validateurs indépendants et tolérance f=1 non démontrées sur un réseau public.</li>
+          <li data-i18n="col2Item2"><strong>Client de bureau :</strong> pages Identity, Wallet, Email, Storage et Backup présentes ; certaines actions restent désactivées tant que le service correspondant n'est pas connecté.</li>
+          <li data-i18n="col2Item3"><strong>Clés et exploitation :</strong> domaines Autorité, Validateur, Release et Trésorerie définis ; garde opérationnelle et déploiement sécurisé encore à consolider.</li>
+          <li data-i18n="col2Item4"><strong>Transition du réseau DEV :</strong> le nouveau nœud BFT à un validateur coexiste avec la chaîne de bootstrap Bitcoin héritée ; l'intégration complète reste à faire.</li>
         </ul>
       </article>
 
@@ -267,8 +267,8 @@
         <ul class="status-list">
           <li data-i18n="col3Item1"><strong>Architecture cible Post-Quantique HPKE :</strong> profil hybride ML-KEM-768 + X25519 (spécifié doc 49, tests crypto OpenSSL &gt;= 3.5).</li>
           <li data-i18n="col3Item2"><strong>Stockage d'objets décentralisé :</strong> couche de pré-stockage pour validateurs et stockage d'objets pour pièces jointes à grande échelle.</li>
-          <li data-i18n="col3Item3"><strong>Client graphique de bureau :</strong> interface utilisateur native (Inbox, Sent, état de lecture) avec conservation des index localement sur le poste.</li>
-          <li data-i18n="col3Item4"><strong>Preuves d'inclusion de correspondance :</strong> certificats de finalité vérifiables hors-chaîne par des tiers certificateurs.</li>
+          <li data-i18n="col3Item3"><strong>Service Email de bout en bout :</strong> chiffrement MailTx, livraison, Inbox/Sent et index de lecture locaux reliés au réseau réel.</li>
+          <li data-i18n="col3Item4"><strong>Réseau opérationnel :</strong> admission et exploitation de 4 validateurs indépendants, stockage d'objets et déploiement public après validation de sécurité.</li>
         </ul>
       </article>
     </div>
@@ -293,12 +293,12 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         </div>
         <div class="card-content">
-          <h3 data-i18n="bento1Title">Émancipation totale des hébergeurs de cloud tiers</h3>
+          <h3 data-i18n="bento1Title">Architecture sans cloud tiers obligatoire</h3>
           <p data-i18n="bento1Desc">
-            Aucun serveur central, aucun compte sous juridiction extra-européenne, aucun point unique de censure ou de coupure. Les nœuds pairs échangent directement via un protocole P2P durci en C++20 sans passerelle obligatoire.
+            Le modèle cible évite les comptes et boîtes aux lettres hébergés par un fournisseur unique. Le réseau DEV actuel utilise un validateur bootstrap connu ; la résilience de plusieurs opérateurs indépendants reste à démontrer.
           </p>
-          <div class="card-metric">100% P2P</div>
-          <div class="card-metric-label" data-i18n="bento1Metric">Résilience autonome native au niveau protocolaire</div>
+          <div class="card-metric">DEV</div>
+          <div class="card-metric-label" data-i18n="bento1Metric">Réseau expérimental, non déployé pour le public</div>
         </div>
       </div>
 
@@ -324,12 +324,12 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
         </div>
         <div class="card-content">
-          <h3 data-i18n="bento3Title">Autorité exclusive de l'appareil</h3>
+          <h3 data-i18n="bento3Title">Clés d'identité gérées sur l'appareil</h3>
           <p data-i18n="bento3Desc">
-            Les clés privées ne transitent jamais sur le réseau. L'opérateur ne détient aucun passe-partout et ne peut modifier les soldes ou intercepter les courriers.
+            Le client gère les clés d'identité localement et les opérations sont autorisées par signature. Le modèle de garde des clés d'opérateur et la sécurité complète des messages restent à valider en exploitation.
           </p>
-          <div class="card-metric">0</div>
-          <div class="card-metric-label" data-i18n="bento3Metric">Accès dérobé ou clé maîtresse centrale</div>
+          <div class="card-metric">LOCAL</div>
+          <div class="card-metric-label" data-i18n="bento3Metric">Gestion des clés d'identité sur l'appareil</div>
         </div>
       </div>
 
@@ -341,9 +341,9 @@
         <div class="card-content">
           <h3 data-i18n="bento4Title">Finalité BFT explicite &amp; Économie déterministe</h3>
           <p data-i18n="bento4Desc">
-            Validation par consensus byzantin à poids égal (poids = 1). Arithmétique entière stricte, réserve plafonnée à 100 milliards de CYBOU, 0 décimale, et répartition déterministe des frais : 3/4 pour la Sécurité et 1/4 pour l'Accueil.
+            Le cœur CYBOU calcule la finalité et les frais avec des règles déterministes. L'offre maximale spécifiée est de 100 milliards de CYBOU (0 décimale), avec 3/4 des frais pour la Sécurité et 1/4 pour l'Accueil ; la chaîne héritée n'applique pas encore cette politique.
           </p>
-          <div class="card-metric">100 Mrd</div>
+          <div class="card-metric" data-i18n="bento4Value">100 Mrd</div>
           <div class="card-metric-label" data-i18n="bento4Metric">Plafond absolu d'unités CYBOU (0 décimale)</div>
         </div>
       </div>
@@ -358,7 +358,7 @@
       <div class="section-label" data-i18n="flowLabel">Ingénierie du message</div>
       <h2 class="section-title" data-i18n="flowTitle">Le cycle de vie d'une transaction MailTx.</h2>
       <p class="section-description" data-i18n="flowDesc">
-        Comment un message textuel est engagé, scellé et enregistré de manière vérifiable sur le réseau.
+        Chemin protocolaire implémenté dans le cœur et étapes restant à relier au service Email complet.
       </p>
     </div>
 
@@ -367,7 +367,7 @@
         <div class="step-num">01 / ENGAGEMENT</div>
         <h4 class="step-title" data-i18n="step1Title">Engagement salé de contenu</h4>
         <p class="step-desc" data-i18n="step1Desc">
-          Le corps textuel est lié à un sel cryptographique imprédictible (doc 69). L'empreinte résultante garantit l'intégrité sans exposer le contenu en clair aux validateurs.
+          Le cœur vérifie un engagement de contenu salé et séparé par domaine (doc 69). Le client de chiffrement et d'envoi reste en développement.
         </p>
       </article>
 
@@ -383,7 +383,7 @@
         <div class="step-num">03 / TRANSACTION</div>
         <h4 class="step-title" data-i18n="step3Title">Opération MailTx native</h4>
         <p class="step-desc" data-i18n="step3Desc">
-          Émission d'une transaction de premier rang (pas de payload arbitraire Bitcoin Script). Frais déterministes fonction de la taille, sans enchère de priorité.
+          Le cœur traite MailTx comme une opération native, avec limite de taille et frais déterministes. La soumission réseau existe en DEV ; l'expérience Email complète n'est pas encore disponible.
         </p>
       </article>
 
@@ -391,7 +391,7 @@
         <div class="step-num">04 / FINALITÉ</div>
         <h4 class="step-title" data-i18n="step4Title">Consensus BFT &amp; Index Local</h4>
         <p class="step-desc" data-i18n="step4Desc">
-          Architecture cible : le bloc finalisé par BFT ne conserve aucun objet d'état permanent par courrier ; le futur client local indexera les courriers reçus et envoyés.
+          Le cœur vérifie certificats de finalité, preuves d'inclusion et filtres compacts de découverte Mail. L'index Inbox/Sent et l'état de lecture relèvent du client local encore à intégrer.
         </p>
       </article>
     </div>
@@ -418,47 +418,47 @@
       <dl class="tech-spec-grid">
         <div class="spec-item">
           <dt data-i18n="dtConsensus">Modèle de consensus</dt>
-          <dd>BFT explicite avec admission opérateur (seuil <code>f=1</code> avec 4 validateurs minimum, poids égal = 1)</dd>
+          <dd data-i18n="ddConsensus">DEV : finalité à un validateur (<code>f=0</code>). Cible : BFT à poids égal, 4 validateurs minimum pour revendiquer <code>f=1</code>.</dd>
         </div>
 
         <div class="spec-item">
           <dt data-i18n="dtPoT">Époques de confiance (PoT)</dt>
-          <dd>Dérivées de la hauteur de bloc, arithmétique entière stricte, zéro horloge locale</dd>
+          <dd data-i18n="ddPoT">Implémentées dans le cœur : hauteur de bloc et arithmétique entière, sans horloge locale dans le consensus.</dd>
         </div>
 
         <div class="spec-item">
           <dt data-i18n="dtSupply">Offre maximale (MAX_SUPPLY)</dt>
-          <dd><code>100 000 000 000</code> CYBOU (strictement 0 décimale)</dd>
+          <dd data-i18n="ddSupply"><code>100 000 000 000</code> CYBOU (0 décimale) dans la spécification ; chaîne de bootstrap héritée non conforme à cette politique.</dd>
         </div>
 
         <div class="spec-item">
           <dt data-i18n="dtGrant">Bonus d'intégration (Onboarding Bonus)</dt>
-          <dd>Crédité atomiquement depuis <code>OnboardingPool</code> vers <code>SystemBalance</code> lors de la création de compte sans intermédiaire (doc 70)</dd>
+          <dd data-i18n="ddGrant">Implémenté dans l'état CYBOU : <code>OnboardingPool</code> vers <code>SystemBalance</code> après AccountCreate anti-Sybil (doc 70).</dd>
         </div>
 
         <div class="spec-item">
           <dt data-i18n="dtFees">Régime des frais de transaction</dt>
-          <dd>Déterministes proportionnels à la taille (priorité désactivée). Répartition : 3/4 Sécurité, 1/4 Accueil</dd>
+          <dd data-i18n="ddFees">Frais Mail déterministes selon la taille, sans priorité ; 3/4 Sécurité et 1/4 Accueil dans le cœur CYBOU.</dd>
         </div>
 
         <div class="spec-item">
           <dt data-i18n="dtMailTx">Format MailTx (v1)</dt>
-          <dd>Transaction native de premier rang, 1 destinataire, texte pur, taille strictement bornée, sans pièces jointes</dd>
+          <dd data-i18n="ddMailTx">Opération native de premier rang, 1 destinataire, texte seul, taille bornée, sans pièces jointes ; service Email non achevé.</dd>
         </div>
 
         <div class="spec-item">
           <dt data-i18n="dtKeys">Séparation des clés d'opérateur</dt>
-          <dd>4 domaines isolés : Autorité Opérateur, Validateur Opérateur, Signature de Release, Trésorerie</dd>
+          <dd data-i18n="ddKeys">4 rôles définis : Autorité, Validateur, Signature de Release, Trésorerie ; garde opérationnelle en préparation.</dd>
         </div>
 
         <div class="spec-item">
           <dt data-i18n="dtStack">Socle technologique</dt>
-          <dd>C++20, CMake, LevelDB, OpenSSL. Prise en charge native Windows (MSVC) et Linux (GCC/Clang)</dd>
+          <dd data-i18n="ddStack">C++20, CMake, LevelDB, OpenSSL, Qt ; tests locaux Windows MinGW pour le cœur et le client.</dd>
         </div>
 
         <div class="spec-item">
           <dt data-i18n="dtNetworks">Réseaux DEV, Beta &amp; Mainnet</dt>
-          <dd data-i18n="ddNetworks">Genèses et paramètres économiques strictement séparés. L'économie Beta est expérimentale : les soldes Beta ne sont pas reportés sur le Mainnet.</dd>
+          <dd data-i18n="ddNetworks">DEV est expérimental. Beta et Mainnet sont prévus avec des genèses et paramètres séparés ; aucun solde Beta ne sera reporté sur Mainnet.</dd>
         </div>
       </dl>
     </div>
@@ -504,7 +504,7 @@
         </button>
         <div class="faq-answer" id="faq-answer-2" aria-hidden="true">
           <p data-i18n="faqA2">
-            CYBOU est en phase d'ingénierie et de recherche ouverte. Avant toute ouverture au grand public, le projet doit remplacer le consensus hérité de la chaîne de développement par un moteur BFT multi-validateur testé, intégrer les communications de bout en bout et achever la séparation opérationnelle des clés. Le code source et les tests disponibles sont publiquement consultables.
+            CYBOU dispose d'un nœud DEV à validateur unique, d'une synchronisation vérifiée et d'une interface de bureau expérimentale. Le service Email chiffré de bout en bout, le fonctionnement de plusieurs validateurs indépendants et la sécurité opérationnelle doivent être achevés avant une diffusion grand public. Le code source et les tests sont consultables.
           </p>
         </div>
       </article>
@@ -530,7 +530,7 @@
         </button>
         <div class="faq-answer" id="faq-answer-4" aria-hidden="true">
           <p data-i18n="faqA4">
-            Le modèle cible utilise une finalité BFT explicite, des validateurs de poids égal à 1 et une admission approuvée par l'opérateur. Une configuration d'au moins 4 validateurs est requise pour revendiquer une tolérance <code>f=1</code>. Le moteur multi-validateur et ses essais de panne restent en cours ; la chaîne DEV utilise encore son consensus de bootstrap hérité.
+            Le cœur implémente votes, certificats de finalité et transition d'ensemble de validateurs à poids égal. Le nœud DEV autonome produit aujourd'hui avec un seul validateur : <code>f=0</code>. Il faut au moins 4 validateurs indépendants pour revendiquer <code>f=1</code> ; ce déploiement n'est pas encore établi. La chaîne de bootstrap Bitcoin héritée est distincte du nouveau chemin d'état CYBOU.
           </p>
         </div>
       </article>
@@ -543,7 +543,7 @@
         </button>
         <div class="faq-answer" id="faq-answer-5" aria-hidden="true">
           <p data-i18n="faqA5">
-            Le jeton CYBOU a une offre maximale stricte et non-gonflable de <strong>100 000 000 000 unités (0 décimale)</strong>. Il n'a aucune vocation spéculative : il sert à réguler l'accès au réseau et prévenir le pourriel (spam). Chaque nouveau compte satisfaisant la preuve de travail anti-Sybil reçoit un bonus d'accueil automatique directement sur son Solde Système (doc 70), sans invitation ni approbation centrale. Les frais d'émission sont déterministes selon la taille (pas d'enchères de priorité) et répartis à 75% pour la sécurité du réseau et 25% pour la réserve d'accueil.
+            La spécification CYBOU fixe une offre maximale de <strong>100 000 000 000 unités (0 décimale)</strong>. Le cœur utilise AccountCreate avec preuve anti-Sybil et crédite le bonus depuis OnboardingPool vers SystemBalance, sans invitation d'opérateur. Les frais Mail sont déterministes selon la taille et répartis à 75% pour la sécurité du réseau et 25% pour l'accueil. La chaîne de bootstrap héritée n'applique pas cette politique monétaire.
           </p>
         </div>
       </article>
@@ -563,9 +563,9 @@
             </div>
             <span>CYBOU</span>
           </div>
-          <p>
-            Infrastructure logicielle européenne pour des communications décentralisées, souveraines et sécurisées.<br>
-            Conçu en France. Indépendant des hébergeurs de cloud tiers.
+          <p data-i18n="footBrand">
+            Projet R&amp;D européen pour une infrastructure de communication souveraine.<br>
+            Conçu en France. Nœud DEV et client de bureau expérimentaux.
           </p>
         </div>
 
@@ -583,20 +583,20 @@
         <div class="footer-col">
           <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footDocs">Spécifications</h4>
           <ul class="footer-links">
-            <li><a href="../docs/cybou/00_VISION.md">00_VISION.md</a></li>
-            <li><a href="../docs/cybou/07_BFT_CONSENSUS.md">07_BFT_CONSENSUS.md</a></li>
-            <li><a href="../docs/cybou/16_MAIL_PROTOCOL.md">16_MAIL_PROTOCOL.md</a></li>
-            <li><a href="../docs/cybou/26_IMPLEMENTATION_STATUS.md">26_STATUS.md</a></li>
-            <li><a href="../docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md">70_ANTI_SYBIL.md</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/00_VISION.md">00_VISION.md</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/07_BFT_CONSENSUS.md">07_BFT_CONSENSUS.md</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/16_MAIL_PROTOCOL.md">16_MAIL_PROTOCOL.md</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/26_IMPLEMENTATION_STATUS.md">26_STATUS.md</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/75_DEV_NODE_RUNBOOK.md">75_DEV_NODE.md</a></li>
           </ul>
         </div>
 
         <div class="footer-col">
           <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footGov">Gouvernance</h4>
           <ul class="footer-links">
-            <li><a href="../AGENTS.md">AGENTS.md (Autorité)</a></li>
-            <li><a href="../MANIFEST.md">MANIFEST.md (SHA-256)</a></li>
-            <li><a href="../SECURITY.md">SECURITY.md</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/AGENTS.md">AGENTS.md (Autorité)</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/MANIFEST.md">MANIFEST.md (SHA-256)</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/SECURITY.md">SECURITY.md</a></li>
             <li><a href="/llms.txt">llms.txt (Contexte IA)</a></li>
             <li><a href="/sitemap.xml">sitemap.xml</a></li>
           </ul>
@@ -621,6 +621,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=20260923-3"></script>
+  <script src="app.js?v=20260924-1"></script>
 </body>
 </html>
