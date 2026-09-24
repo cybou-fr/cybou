@@ -232,7 +232,11 @@ void CybouMainWindow::initCybouRuntime()
             while (!m_sync_stop.load()) {
                 bool bootstrap_reachable = false;
                 try {
-                    const auto sync_res = m_node_runtime->SyncFromPeer(std::string{endpoint.host}, endpoint.port, 2000);
+                    // Small per-iteration batch: a big batch could hold the
+                    // sync thread inside SyncFromPeer for tens of seconds,
+                    // which blocks shutdown (the destructor joins this
+                    // thread). 100 blocks per round keeps join latency low.
+                    const auto sync_res = m_node_runtime->SyncFromPeer(std::string{endpoint.host}, endpoint.port, 100);
                     bootstrap_reachable = sync_res.IsConnected();
                     if (m_mail_service) {
                         m_mail_service->SyncMailbox();

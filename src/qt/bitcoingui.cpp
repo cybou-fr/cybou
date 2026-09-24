@@ -260,7 +260,9 @@ void BitcoinGUI::createActions()
 
     quitAction = new QAction(tr("E&xit"), this);
     quitAction->setStatusTip(tr("Quit application"));
-    quitAction->setShortcut(QKeySequence(tr("Ctrl+Q")));
+    // The quit action lives only in the tray icon's context menu; there is
+    // deliberately no Ctrl+Q shortcut and no File-menu entry so the node can
+    // only be shut down from the tray.
     quitAction->setMenuRole(QAction::QuitRole);
     aboutAction = new QAction(tr("&About %1").arg(CLIENT_NAME), this);
     aboutAction->setStatusTip(tr("Show information about %1").arg(CLIENT_NAME));
@@ -376,7 +378,6 @@ void BitcoinGUI::createMenuBar()
         file->addAction(m_load_psbt_clipboard_action);
         file->addSeparator();
     }
-    file->addAction(quitAction);
 
     QMenu *settings = appMenuBar->addMenu(tr("&Settings"));
     if(walletFrame)
@@ -957,21 +958,16 @@ void BitcoinGUI::changeEvent(QEvent *e)
 void BitcoinGUI::closeEvent(QCloseEvent *event)
 {
 #ifndef Q_OS_MACOS // Ignored on Mac
-    if(clientModel && clientModel->getOptionsModel())
-    {
-        if(!clientModel->getOptionsModel()->getMinimizeOnClose())
-        {
-            // close rpcConsole in case it was open to make some space for the shutdown window
-            rpcConsole->close();
-
-            Q_EMIT quitRequested();
-        }
-        else
-        {
-            QMainWindow::showMinimized();
-            event->ignore();
-        }
+    // CYBOU runs as a tray-resident application: the window close button must
+    // never shut the node down. It hides the window instead; the only way to
+    // quit is the tray icon's context menu. This also prevents the shutdown
+    // window from lingering when the user just wants the window out of the way.
+    if (hasTrayIcon()) {
+        hide();
+    } else {
+        QMainWindow::showMinimized();
     }
+    event->ignore();
 #else
     QMainWindow::closeEvent(event);
 #endif
