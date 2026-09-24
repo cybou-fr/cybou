@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#include <cybou/payment_v2.h>
+#include <cybou/block_executor_v2.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -126,6 +126,50 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_CHECK(state.identities.Find(account)->devices.at(*device_id).next_nonce == 1);
     BOOST_CHECK(ApplyPaymentV2(payment, network_id, params, state) == PaymentErrorV2::INVALID_AUTHORIZATION);
     BOOST_CHECK(state.accounts.at(account).balance == 7);
+    const ProtocolOperationV2 payment_operation{payment};
+    const auto wire = SerializeProtocolOperationV2(payment_operation);
+    BOOST_REQUIRE(wire);
+    const auto decoded_wire = DeserializeProtocolOperationV2(*wire);
+    BOOST_REQUIRE(decoded_wire && std::holds_alternative<AuthorizedPaymentV2>(*decoded_wire));
+    BOOST_CHECK(SerializeProtocolOperationV2(*decoded_wire) == wire);
+    BOOST_CHECK(ComputeOperationIdV2(*decoded_wire) == ComputeOperationIdV2(payment_operation));
+    auto bad_wire = *wire;
+    bad_wire[0] = 1;
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_wire));
+    bad_wire = *wire;
+    bad_wire.back() ^= 1;
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_wire));
+    BOOST_CHECK(!DeserializeProtocolOperationV2(std::span{*wire}.first(wire->size() - 1)));
+    const ProtocolOperationV2 create_operation{create};
+    const auto create_wire = SerializeProtocolOperationV2(create_operation);
+    BOOST_REQUIRE(create_wire);
+    const auto decoded_create = DeserializeProtocolOperationV2(*create_wire);
+    BOOST_REQUIRE(decoded_create && std::holds_alternative<AccountCreateOpV2>(*decoded_create));
+    BOOST_CHECK(SerializeProtocolOperationV2(*decoded_create) == create_wire);
+
+    state.pending_fee_pool = 3; // fixture: next fee completes a 4-unit routing group
+    auto next_payment = payment;
+    next_payment.payment.amount = 1;
+    next_payment.authorization.nonce = 1;
+    next_payment.authorization.payload_commitment = *ComputePaymentPayloadCommitmentV2(next_payment.payment);
+    const auto next_digest = ComputeDeviceOperationDigestV2(network_id, next_payment.authorization);
+    BOOST_REQUIRE(next_digest);
+    const auto next_signature = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *next_digest);
+    BOOST_REQUIRE(next_signature);
+    next_payment.authorization.signature = *next_signature;
+    const auto block_result = ExecuteBlockOperationsV2(state, {ProtocolOperationV2{next_payment}}, network_id, 2, params);
+    BOOST_REQUIRE(block_result);
+    BOOST_CHECK(block_result.state->accounts.at(account).balance == 6);
+    BOOST_CHECK(block_result.state->accounts.at(other_account).balance == 4);
+    BOOST_CHECK(block_result.state->security_reward_pool == 3);
+    BOOST_CHECK(block_result.state->onboarding_pool == 1);
+    BOOST_CHECK(block_result.state->pending_fee_pool == 0);
+    BOOST_CHECK(state.accounts.at(account).balance == 7);
+    BOOST_CHECK(state.pending_fee_pool == 3);
+    const auto replay_block = ExecuteBlockOperationsV2(*block_result.state,
+        {ProtocolOperationV2{next_payment}}, network_id, 3, params);
+    BOOST_CHECK(replay_block.error == BlockExecutionErrorV2::INVALID_PAYMENT);
+    BOOST_CHECK(replay_block.payment_error == PaymentErrorV2::INVALID_AUTHORIZATION);
 }
 
 BOOST_AUTO_TEST_CASE(insufficient_pool_does_not_register_identity)

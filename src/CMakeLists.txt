@@ -112,6 +112,8 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   cybou/identity_registry_v2.cpp
   cybou/state_v2.cpp
   cybou/payment_v2.cpp
+  cybou/protocol_operation_v2.cpp
+  cybou/block_executor_v2.cpp
   cybou/identity_material.cpp
   cybou/identity_vault.cpp
   cybou/recovery_phrase.cpp

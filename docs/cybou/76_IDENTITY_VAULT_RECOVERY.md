@@ -60,8 +60,8 @@ reopen recovery material before account broadcast. Password change rewraps
 the DEK without changing identity. Never log plaintext secrets.
 
 Windows DPAPI may provide optional local unlock convenience, never the only
-means to read the portable file. Legacy CYBK1 may be explicit DEV import input
-but cannot define a V2 AccountID. OpenSSL 3.5 documents ML-DSA and Argon2;
+means to read the portable file. CYBK1 DEV vaults are discarded at the V2
+cutover and cannot define a V2 AccountID. OpenSSL 3.5 documents ML-DSA and Argon2;
 pin provider behavior and verify deterministic keygen vectors before relying
 on phrase recovery. See [ML-DSA](https://docs.openssl.org/3.5/man7/EVP_PKEY-ML-DSA/)
 and [Argon2](https://docs.openssl.org/3.5/man7/EVP_KDF-ARGON2/).

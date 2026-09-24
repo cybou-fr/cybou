@@ -56,16 +56,25 @@ Standalone `CybouStateV2` now combines monetary account fields, pools,
 validator set, and the Identity V2 registry under a version-2 snapshot and
 `CYBOU/STATE/V2` hash domain. Its AccountCreate V2 transition validates work
 and hybrid proofs and atomically assigns the onboarding bonus from
-OnboardingPool to SystemBalance. The `.cybou` name registry, V2 payment/Mail
+OnboardingPool to SystemBalance. The `.cybou` name registry, V2 Mail
 execution, block format, persistence, and DEV activation remain open; this
 snapshot format is still pre-activation and may change before the reset.
 The standalone `payment_v2` transition now uses a fixed 41-byte versioned
 payload, a domain-separated payload commitment, and hybrid device authorization.
 It validates both balances and overflow before debiting the sender, crediting
 the recipient, accumulating the deterministic payment fee, and advancing only
-the signing device's nonce. It is not yet in block execution or the network
-operation codec; genesis funding and the later fee split are still V2 integration
-work.
+the signing device's nonce. It is not yet in block execution; genesis funding
+and the later fee split are still V2 integration work.
+The V2 operation envelope now encodes AccountCreate and device-authorized
+Payment with version byte `02`, strict lengths, and a `CYBOU/OP-ID/V2` hash.
+Its decoder rejects V1 wire bytes. The target is a direct DEV cutover with
+V1 state/vault disposal; Mail, name, validator, block, P2P, and desktop paths
+must be migrated before that reset.
+The V2 block-operation executor now applies AccountCreate and Payment to a
+candidate `CybouStateV2`, enforces the per-block account-create limit, routes
+complete four-fee groups as three Security plus one Onboarding, and computes
+the V2 state root. It is not connected to block encoding, finality, or the
+persisted state store; validator and Mail operations are still missing.
 
 ## Hardened architecture
 

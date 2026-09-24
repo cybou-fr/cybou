@@ -68,6 +68,12 @@ and an eight-byte little-endian amount. Its SHA-256 commitment uses
 `CYBOU/PAYMENT-PAYLOAD/V2`; the device signature binds that commitment and
 the payment kind. The transition consumes the signer's device nonce while
 updating balances and the pending fee pool in the same candidate V2 state.
+The V2 operation envelope uses version `02`, a one-byte operation kind, and
+the canonical AccountCreate or Payment body. It has no V1 decoder. This wire
+format is not yet connected to active blocks or P2P admission.
+The candidate V2 block executor accepts those two operation kinds, applies
+all transitions in canonical order, and computes the V2 state root after fee
+routing. Failed execution discards the candidate without changing its parent.
 
 The target primary example is `stanislav.cybou`. The earlier frozen
 `stan.cybou` example (DEC-004) is superseded by Identity V2's five-character
@@ -78,7 +84,8 @@ semantics are in [the UX contract](78_IDENTITY_DESKTOP_UX.md).
 ## Migration boundary
 
 Identity V2 introduces new operation and state versions; V1 fields are never
-silently reinterpreted. Local crypto, phrase, and vault code can land without a
-network reset. Once V2 authorization, account creation, and name registry are
-integrated together, advance the network definition and perform one intentional
-CYBOU-DEV reset. Beta/Mainnet genesis and economic parameters remain separate.
+silently reinterpreted. The cutover discards V1 DEV state and vaults; there is
+no runtime compatibility decoder or automatic import. Once V2 authorization,
+account creation, and name registry are integrated together, advance the
+network definition and perform one intentional CYBOU-DEV reset. Beta/Mainnet
+genesis and economic parameters remain separate.

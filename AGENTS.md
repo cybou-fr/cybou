@@ -10,6 +10,7 @@ Read active docs before coding.
 - `.cybou` labels follow the 5–32 ASCII rule and finalized commit/work/reveal. No transfer, expiry, or recycling in V1.
 - Keep mail encryption keys separate from identity signing keys; no custom cryptographic primitives.
 - Do not reset DEV until versioned V2 consensus and names integrate together.
+- Cut over DEV directly to V2 after the integration gate; discard V1 DEV state and vaults. Do not build runtime V1/V2 compatibility, automatic import, or a dual operation decoder.
 
 ## Hard rules
 
