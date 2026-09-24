@@ -145,20 +145,15 @@ void CybouMainWindow::initCybouRuntime()
 {
     if (!m_client_model) return;
 
-    // Genesis validator is the DEV authority node on the VPS (bootstrap
-    // list, doc 75): the local runtime joins the same NetworkID and verifies
-    // blocks from it as an observer. Without a local validator key nothing
-    // is produced here — the desktop never forks the DEV chain.
-    const auto val_pub = *uint256::FromUserHex("d9e9551b6d1f7e192d378be0223d9c0a0ef356aff08c23b8b277f72e64663caa");
-    const auto genesis = cybou::CreateDevGenesisState(val_pub);
-    const auto definition = cybou::CreateDevNetworkDefinition(genesis);
-    const auto net_id = cybou::NetworkId(definition);
-
-    m_desktop_model->setNetworkInfo(
-        QStringLiteral("CYBOU-DEV"),
-        QString::fromStdString(net_id.GetHex()));
-
     try {
+        const auto network_path = (gArgs.GetDataDirNet() / "network.bin").std_path();
+        const auto network_file = cybou::LoadCybouNetworkFile(network_path);
+        if (!network_file) throw std::runtime_error("missing or invalid CYBOU network.bin");
+        const auto& genesis = network_file->genesis;
+        const auto& definition = network_file->definition;
+        m_desktop_model->setNetworkInfo(
+            QStringLiteral("CYBOU-DEV"),
+            QString::fromStdString(cybou::NetworkId(definition).GetHex()));
         const std::filesystem::path data_dir = (gArgs.GetDataDirNet() / "cybou_state").std_path();
         // Opt-in local production: only a deliberate validator.key turns the
         // desktop into a producer; by default it observes the bootstrap.
@@ -185,21 +180,14 @@ void CybouMainWindow::initCybouRuntime()
         m_node_runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
         auto init_status = m_node_runtime->GetStatus();
         if (init_status.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH) {
-            qWarning() << "CybouNodeRuntime network mismatch detected; wiping stale dev state.";
-            cybou::NodeRuntimeConfig reset_config{
-                .network_definition = definition,
-                .data_dir = data_dir,
-                .validator_private_key = std::nullopt,
-                .submit_endpoint = std::make_pair(std::string{endpoint.host}, endpoint.port),
-                .db_cache_bytes = 8 << 20,
-                .wipe_data = true,
-            };
-            m_node_runtime.reset();
-            m_node_runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(reset_config));
-            init_status = m_node_runtime->GetStatus();
+            throw std::runtime_error("CYBOU state belongs to another network; DEV reset requires an explicit cutover");
         }
         if (init_status.runtime_state == cybou::NodeRuntimeState::UNINITIALIZED) {
-            m_node_runtime->InitializeGenesis(genesis);
+            if (!m_node_runtime->InitializeGenesis(genesis)) {
+                throw std::runtime_error("cannot initialize CYBOU genesis");
+            }
+        } else if (init_status.runtime_state != cybou::NodeRuntimeState::READY) {
+            throw std::runtime_error("CYBOU state is unavailable or corrupt");
         }
 
         const auto id_key_path = (gArgs.GetDataDirNet() / "identity.key").std_path();

@@ -4,6 +4,7 @@
 
 #include <cybou/bft.h>
 #include <cybou/block_executor.h>
+#include <cybou/network_definition.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -26,6 +27,34 @@ cybou::Validator MakeTestValidator(uint8_t seed_byte)
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(cybou_state_tests)
+
+BOOST_AUTO_TEST_CASE(network_id_commits_to_name_rules)
+{
+    using namespace cybou;
+    std::array<unsigned char, 32> seed{};
+    seed[0] = 0x51;
+    const auto validator = GenerateValidatorKeyPair(seed);
+    BOOST_REQUIRE(validator);
+    const auto definition = CreateDevNetworkDefinition(CreateDevGenesisState(validator->public_key));
+    BOOST_CHECK(ValidateNetworkDefinition(definition) == NetworkDefinitionError::NONE);
+    const auto encoded = SerializeNetworkDefinition(definition);
+    const auto decoded = DeserializeNetworkDefinition(encoded);
+    BOOST_REQUIRE(decoded);
+    BOOST_CHECK(SerializeNetworkDefinition(*decoded) == encoded);
+
+    auto changed = definition;
+    ++changed.protocol_parameters.name_claim_work_bits;
+    BOOST_CHECK(NetworkId(changed) != NetworkId(definition));
+    changed = definition;
+    ++changed.protocol_parameters.name_commit_min_depth;
+    BOOST_CHECK(NetworkId(changed) != NetworkId(definition));
+    changed = definition;
+    ++changed.protocol_parameters.name_commit_max_lifetime;
+    BOOST_CHECK(NetworkId(changed) != NetworkId(definition));
+    changed = definition;
+    --changed.protocol_parameters.max_pending_name_commits;
+    BOOST_CHECK(NetworkId(changed) != NetworkId(definition));
+}
 
 BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
 {

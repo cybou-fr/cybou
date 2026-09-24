@@ -7,6 +7,7 @@
 #include <cybou/network_definition.h>
 #include <cybou/node_runtime.h>
 #include <cybou/signing.h>
+#include <cybou/validator.h>
 #include <dbwrapper.h>
 #include <support/cleanse.h>
 #include <util/strencodings.h>
@@ -62,40 +63,6 @@ void PutU32(std::vector<unsigned char>& out, const uint32_t value)
     for (unsigned i = 0; i < 4; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
 }
 
-uint32_t GetU32(const std::vector<unsigned char>& bytes, const size_t offset)
-{
-    uint32_t value{0};
-    for (unsigned i = 0; i < 4; ++i) value |= uint32_t{bytes[offset + i]} << (8 * i);
-    return value;
-}
-
-struct NetworkFile {
-    cybou::CybouNetworkDefinition definition;
-    cybou::CybouState genesis;
-};
-
-NetworkFile LoadNetworkFile(const std::filesystem::path& path)
-{
-    const auto bytes = ReadFile(path, 16 * 1024 * 1024);
-    if (bytes.size() < 12 || !std::equal(bytes.begin(), bytes.begin() + 4, "CYN1")) {
-        throw std::runtime_error("invalid network file magic");
-    }
-    const uint32_t definition_size = GetU32(bytes, 4);
-    if (definition_size > bytes.size() - 12) throw std::runtime_error("invalid network definition length");
-    const size_t state_length_offset = 8 + definition_size;
-    const uint32_t state_size = GetU32(bytes, state_length_offset);
-    if (state_size != bytes.size() - state_length_offset - 4) throw std::runtime_error("invalid genesis length");
-    const auto definition = cybou::DeserializeNetworkDefinition(
-        std::span<const unsigned char>{bytes.data() + 8, definition_size});
-    const auto genesis = cybou::DeserializeCybouState(
-        std::span<const unsigned char>{bytes.data() + state_length_offset + 4, state_size});
-    if (!definition || !genesis || cybou::CybouStateHash(*genesis) != definition->genesis_state_root ||
-        cybou::ComputeValidatorSetCommitment(genesis->validator_set) != definition->initial_validator_set_commitment) {
-        throw std::runtime_error("invalid genesis or network definition");
-    }
-    return {*definition, *genesis};
-}
-
 uint16_t Port(const char* value)
 {
     const auto number = std::stoul(value);
@@ -120,22 +87,16 @@ int Main(const int argc, char* argv[])
         }
         return 0;
     }
-    if (argc == 3 && std::string_view{argv[1]} == "pubkey") {
-        auto key_bytes = ReadFile(argv[2], 32);
+    if (argc == 4 && std::string_view{argv[1]} == "init-dev") {
+        auto key_bytes = ReadFile(argv[3], 32);
         if (key_bytes.size() != 32) throw std::runtime_error("validator key file must contain exactly 32 raw bytes");
         std::array<unsigned char, 32> key{};
         std::copy(key_bytes.begin(), key_bytes.end(), key.begin());
         memory_cleanse(key_bytes.data(), key_bytes.size());
-        const auto public_key = cybou::DeriveEd25519PublicKey(key);
+        const auto keypair = cybou::GenerateValidatorKeyPair(key);
         memory_cleanse(key.data(), key.size());
-        if (!public_key) throw std::runtime_error("cannot derive validator public key");
-        std::cout << public_key->GetHex() << '\n';
-        return 0;
-    }
-    if (argc == 4 && std::string_view{argv[1]} == "init-dev") {
-        const auto public_key = uint256::FromUserHex(argv[3]);
-        if (!public_key || public_key->IsNull()) throw std::runtime_error("invalid validator public key");
-        const auto genesis = cybou::CreateDevGenesisState(*public_key);
+        if (!keypair) throw std::runtime_error("cannot derive validator key pair");
+        const auto genesis = cybou::CreateDevGenesisState(keypair->public_key);
         const auto definition = cybou::CreateDevNetworkDefinition(genesis);
         auto definition_bytes = cybou::SerializeNetworkDefinition(definition);
         auto state_bytes = cybou::SerializeCybouState(genesis);
@@ -149,8 +110,9 @@ int Main(const int argc, char* argv[])
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node pubkey KEY_FILE | init-dev NETWORK_FILE VALIDATOR_PUBKEY_HEX | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT");
-    const auto network = LoadNetworkFile(argv[2]);
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT");
+    const auto network = cybou::LoadCybouNetworkFile(argv[2]);
+    if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
     std::signal(SIGTERM, Stop);
     // Without explicit PEER_HOST PORT, sync follows the DEV bootstrap list
@@ -162,13 +124,13 @@ int Main(const int argc, char* argv[])
         const uint16_t sync_port =
             argc == 5 ? cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front().port : Port(argv[5]);
         cybou::NodeRuntimeConfig config{
-            .network_definition = network.definition,
+            .network_definition = network->definition,
             .data_dir = argv[3],
             .db_cache_bytes = 8 << 20,
         };
         cybou::CybouNodeRuntime runtime{std::move(config)};
         if (!runtime.GetStatus().is_initialized) {
-            if (!runtime.InitializeGenesis(network.genesis)) throw std::runtime_error("cannot initialize genesis");
+            if (!runtime.InitializeGenesis(network->genesis)) throw std::runtime_error("cannot initialize genesis");
         }
         const auto count = PositiveCount(argc == 5 ? argv[4] : argv[6]);
         uint64_t synced{0};
@@ -196,7 +158,7 @@ int Main(const int argc, char* argv[])
         memory_cleanse(key_bytes.data(), key_bytes.size());
 
         cybou::NodeRuntimeConfig config{
-            .network_definition = network.definition,
+            .network_definition = network->definition,
             .data_dir = argv[3],
             .validator_private_key = key,
             .db_cache_bytes = 8 << 20,
@@ -204,7 +166,7 @@ int Main(const int argc, char* argv[])
         memory_cleanse(key.data(), key.size());
         cybou::CybouNodeRuntime runtime{std::move(config)};
         if (!runtime.GetStatus().is_initialized) {
-            if (!runtime.InitializeGenesis(network.genesis)) throw std::runtime_error("cannot initialize genesis");
+            if (!runtime.InitializeGenesis(network->genesis)) throw std::runtime_error("cannot initialize genesis");
         }
         const auto val_set = runtime.GetValidatorSet();
         if (!val_set || val_set->validators.empty()) {

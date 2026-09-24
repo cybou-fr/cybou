@@ -5,7 +5,7 @@ CYBOU DEV state chain. It does not use the inherited Bitcoin PoW chain.
 
 ## Network setup
 
-Create a 32-byte raw Ed25519 validator seed and keep it private. On Windows,
+Create a 32-byte raw validator seed and keep it private. On Windows,
 PowerShell can create one with a cryptographic random source:
 
 ```powershell
@@ -14,18 +14,21 @@ $key = New-Object byte[] 32
 [System.IO.File]::WriteAllBytes('validator.key', $key)
 ```
 
-Restrict access to that key file before using it on a shared machine. The
-public key printed by `pubkey` is in CYBOU's `uint256` display order:
+Restrict access to that key file before using it on a shared machine.
 
 ```text
-cybou-node pubkey validator.key
-cybou-node init-dev network.bin VALIDATOR_PUBLIC_KEY_HEX
+cybou-node init-dev network.bin validator.key
 ```
+
+`init-dev` derives the Ed25519 and ML-DSA validator public keys from that
+seed. The same seed file must be passed to `serve`.
 
 Copy `network.bin` to the observer by a trusted channel. It contains the
 immutable network definition and genesis state, not the private key. The
 network ID printed by `init-dev` should match on all nodes. `init-dev` refuses
 to overwrite an existing network file.
+Place a trusted copy in the desktop's network data directory as `network.bin`.
+The desktop reads this file and verifies its genesis before joining DEV.
 
 ## Producer and observer
 

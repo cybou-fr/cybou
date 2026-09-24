@@ -9,6 +9,7 @@
 #include <crypto/sha256.h>
 
 #include <algorithm>
+#include <fstream>
 #include <string_view>
 
 namespace cybou {
@@ -31,6 +32,13 @@ NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& d
     }
     if (definition.protocol_parameters.epoch_blocks == 0) {
         return NetworkDefinitionError::ZERO_EPOCH_BLOCKS;
+    }
+    if (definition.protocol_parameters.name_claim_work_bits > uint256::size() * 8 ||
+        definition.protocol_parameters.name_commit_min_depth == 0 ||
+        definition.protocol_parameters.name_commit_max_lifetime < definition.protocol_parameters.name_commit_min_depth ||
+        definition.protocol_parameters.max_pending_name_commits == 0 ||
+        definition.protocol_parameters.max_pending_name_commits > DEFAULT_MAX_PENDING_NAME_COMMITS) {
+        return NetworkDefinitionError::INVALID_NAME_PARAMETERS;
     }
     if (definition.operator_authority) {
         const auto& authority = *definition.operator_authority;
@@ -77,6 +85,10 @@ std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefiniti
     append_u64le(definition.protocol_parameters.mail_tier_fee);
     append_u32le(definition.protocol_parameters.max_mail_ciphertext_size);
     append_u32le(definition.protocol_parameters.new_account_mail_limit_per_epoch);
+    append_u32le(definition.protocol_parameters.name_claim_work_bits);
+    append_u64le(definition.protocol_parameters.name_commit_min_depth);
+    append_u64le(definition.protocol_parameters.name_commit_max_lifetime);
+    append_u32le(definition.protocol_parameters.max_pending_name_commits);
     append_hash(definition.initial_validator_set_commitment);
     out.push_back(definition.operator_authority.has_value() ? 1 : 0);
     if (definition.operator_authority) {
@@ -143,12 +155,17 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
     const auto mail_tier_fee = read_u64le();
     const auto max_mail_size = read_u32le();
     const auto mail_limit = read_u32le();
+    const auto name_work_bits = read_u32le();
+    const auto name_min_depth = read_u64le();
+    const auto name_max_lifetime = read_u64le();
+    const auto max_pending_names = read_u32le();
     const auto validator_commitment = read_hash();
     const auto has_operator = read_u8();
 
     if (!genesis_block_id || !genesis_state_root || !work_bits || !epoch_lag || !max_creates ||
         !onboarding_bonus || !epoch_blocks || !payment_fee || !mail_base_fee || !mail_tier_bytes ||
-        !mail_tier_fee || !max_mail_size || !mail_limit || !validator_commitment || !has_operator) {
+        !mail_tier_fee || !max_mail_size || !mail_limit || !name_work_bits || !name_min_depth ||
+        !name_max_lifetime || !max_pending_names || !validator_commitment || !has_operator) {
         return std::nullopt;
     }
 
@@ -165,6 +182,10 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
     definition.protocol_parameters.mail_tier_fee = *mail_tier_fee;
     definition.protocol_parameters.max_mail_ciphertext_size = *max_mail_size;
     definition.protocol_parameters.new_account_mail_limit_per_epoch = *mail_limit;
+    definition.protocol_parameters.name_claim_work_bits = *name_work_bits;
+    definition.protocol_parameters.name_commit_min_depth = *name_min_depth;
+    definition.protocol_parameters.name_commit_max_lifetime = *name_max_lifetime;
+    definition.protocol_parameters.max_pending_name_commits = *max_pending_names;
     definition.initial_validator_set_commitment = *validator_commitment;
 
     if (*has_operator == 1) {
@@ -199,7 +220,7 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
         return std::nullopt;
     }
 
-    if (pos != bytes.size()) return std::nullopt;
+    if (pos != bytes.size() || ValidateNetworkDefinition(definition) != NetworkDefinitionError::NONE) return std::nullopt;
     return definition;
 }
 
@@ -215,27 +236,35 @@ uint256 NetworkId(const CybouNetworkDefinition& definition)
     return result;
 }
 
-IdentityHybridPublicKey CreateDevValidatorKey(const uint256& seed)
+std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path& path)
 {
-    IdentityHybridPublicKey key;
-    key.purpose = IdentityKeyPurpose::VALIDATOR;
-    std::copy_n(seed.begin(), 32, key.ed25519.begin());
-    if (std::all_of(key.ed25519.begin(), key.ed25519.end(), [](unsigned char b) { return b == 0; })) {
-        key.ed25519[0] = 1;
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (ec || size < 12 || size > 16 * 1024 * 1024) return std::nullopt;
+    std::vector<unsigned char> bytes(size);
+    std::ifstream file(path, std::ios::binary);
+    if (!file || !file.read(reinterpret_cast<char*>(bytes.data()), bytes.size()) ||
+        !std::equal(bytes.begin(), bytes.begin() + 4, "CYN1")) return std::nullopt;
+    const auto read_u32 = [&bytes](size_t offset) {
+        uint32_t value{0};
+        for (unsigned i{0}; i < 4; ++i) value |= uint32_t{bytes[offset + i]} << (8 * i);
+        return value;
+    };
+    const auto definition_size = read_u32(4);
+    if (definition_size > bytes.size() - 12) return std::nullopt;
+    const size_t state_offset = 8 + definition_size;
+    const auto state_size = read_u32(state_offset);
+    if (state_size != bytes.size() - state_offset - 4) return std::nullopt;
+    const auto definition = DeserializeNetworkDefinition(
+        std::span<const unsigned char>{bytes.data() + 8, definition_size});
+    const auto genesis = DeserializeCybouState(
+        std::span<const unsigned char>{bytes.data() + state_offset + 4, state_size});
+    if (!definition || !genesis || CybouStateHash(*genesis) != definition->genesis_state_root ||
+        ComputeValidatorSetCommitment(genesis->validator_set) != definition->initial_validator_set_commitment ||
+        ComputeGenesisBlockId(definition->genesis_state_root, definition->initial_validator_set_commitment) != definition->genesis_block_id) {
+        return std::nullopt;
     }
-    key.ml_dsa.resize(1952);
-    // Expand deterministically with SHA256
-    uint256 block = seed;
-    size_t written{0};
-    while (written < key.ml_dsa.size()) {
-        CSHA256 hasher;
-        hasher.Write(block.begin(), 32);
-        hasher.Finalize(block.begin());
-        size_t to_copy = std::min(size_t{32}, key.ml_dsa.size() - written);
-        std::copy_n(block.begin(), to_copy, key.ml_dsa.begin() + written);
-        written += to_copy;
-    }
-    return key;
+    return CybouNetworkFile{*definition, *genesis};
 }
 
 CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public_key)
@@ -259,11 +288,6 @@ CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public
         },
         .names = {},
     };
-}
-
-CybouState CreateDevGenesisState(const uint256& validator_seed_or_key)
-{
-    return CreateDevGenesisState(CreateDevValidatorKey(validator_seed_or_key));
 }
 
 uint256 ComputeGenesisBlockId(const uint256& state_root, const uint256& validator_set_commitment)

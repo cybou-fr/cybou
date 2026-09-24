@@ -4,7 +4,14 @@
 
 #include <cybou/bft.h>
 #include <cybou/block.h>
+#include <cybou/block_executor.h>
+#include <cybou/identity.h>
+#include <cybou/identity_authorization.h>
+#include <cybou/identity_crypto.h>
 #include <cybou/network_definition.h>
+#include <cybou/payment.h>
+#include <cybou/protocol_operation.h>
+#include <cybou/signing.h>
 #include <cybou/state_store.h>
 #include <cybou/validator.h>
 
@@ -24,43 +31,55 @@ BOOST_FIXTURE_TEST_SUITE(cybou_state_store_tests, BasicTestingSetup)
 
 namespace {
 
-const cybou::AccountId ACCOUNT_ID{uint256::FromUserHex("0a").value()};
-const cybou::AccountId ACCOUNT_ID_2{uint256::FromUserHex("0b").value()};
+const std::string STATE_KEY{"cybou/state"};
+const std::string HASH_KEY{"cybou/hash"};
+const std::string HEAD_KEY{"cybou/head"};
 
-const std::array<unsigned char, 32> AUTH_PRIVKEY = []{
-    std::array<unsigned char, 32> k{};
-    k[0] = 0x42;
-    return k;
-}();
-const uint256 AUTH_KEY = *cybou::DeriveEd25519PublicKey(AUTH_PRIVKEY);
+struct MockValidatorNode {
+    uint256 validator_id;
+    std::array<unsigned char, 32> seed{};
+    cybou::IdentityHybridPublicKey consensus_pubkey;
 
-const std::string STATE_KEY{"cybou/state/v1"};
-const std::string HASH_KEY{"cybou/hash/v1"};
-const std::string HEAD_KEY{"cybou/head/v1"};
+    static MockValidatorNode Create(uint8_t index)
+    {
+        MockValidatorNode node;
+        node.seed.fill(0);
+        node.seed[0] = index;
+        const auto keypair = cybou::GenerateValidatorKeyPair(node.seed).value();
+        node.consensus_pubkey = keypair.public_key;
+        node.validator_id = cybou::ComputeValidatorId(keypair.public_key);
+        return node;
+    }
 
-struct MockVal {
-    std::array<unsigned char, 32> priv{};
-    uint256 pub;
+    cybou::BftCommitVote SignCommit(
+        const uint256& network_id,
+        const uint256& block_id,
+        uint64_t height,
+        const uint256& val_set_commitment,
+        uint32_t round = 0) const
+    {
+        const uint256 digest = cybou::ComputeBftCommitDigest(network_id, block_id, height, round, val_set_commitment);
+        cybou::BftCommitVote vote;
+        vote.validator_id = validator_id;
+        vote.signature = *cybou::SignValidatorVote(seed, digest);
+        return vote;
+    }
 };
 
-const std::vector<MockVal> TEST_VAL_NODES = []{
-    std::vector<MockVal> nodes;
+const std::vector<MockValidatorNode> TEST_VAL_NODES = []{
+    std::vector<MockValidatorNode> nodes;
     for (uint8_t i = 1; i <= 4; ++i) {
-        MockVal node;
-        node.priv.fill(0);
-        node.priv[0] = i;
-        node.pub = *cybou::DeriveEd25519PublicKey(node.priv);
-        nodes.push_back(node);
+        nodes.push_back(MockValidatorNode::Create(i));
     }
     return nodes;
 }();
 
-const cybou::ValidatorSetV1 TEST_VALIDATOR_SET = []{
-    cybou::ValidatorSetV1 val_set;
+const cybou::ValidatorSet TEST_VALIDATOR_SET = []{
+    cybou::ValidatorSet val_set;
     for (const auto& node : TEST_VAL_NODES) {
-        val_set.validators.push_back(cybou::ValidatorV1{
-            .validator_id = node.pub,
-            .consensus_public_key = node.pub,
+        val_set.validators.push_back(cybou::Validator{
+            .validator_id = node.validator_id,
+            .consensus_public_key = node.consensus_pubkey,
             .weight = 1,
         });
     }
@@ -82,43 +101,67 @@ cybou::CybouState GenesisState()
         .security_reward_pool = 1000,
         .pending_fee_pool = 500,
         .accounts{},
+        .identities{},
         .validator_set = TEST_VALIDATOR_SET,
+        .names{},
     };
 }
 
-cybou::CybouNetworkDefinitionV1 TestNetworkDefinition()
+cybou::CybouNetworkDefinition TestNetworkDefinition()
 {
-    return cybou::CybouNetworkDefinitionV1{
+    const auto genesis = GenesisState();
+    return cybou::CybouNetworkDefinition{
         .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
         .genesis_block_id = uint256::ONE,
-        .genesis_state_root = cybou::CybouStateHash(GenesisState()),
+        .genesis_state_root = *cybou::CybouStateHash(genesis),
         .protocol_parameters = PARAMS,
         .initial_validator_set_commitment = cybou::ComputeValidatorSetCommitment(TEST_VALIDATOR_SET),
+        .operator_authority = std::nullopt,
     };
 }
 
-cybou::AccountCreateOpV1 ValidOp(
-    const cybou::AccountId& acc = ACCOUNT_ID,
-    const std::array<unsigned char, 32>& priv = AUTH_PRIVKEY)
-{
-    const uint256 pub = *cybou::DeriveEd25519PublicKey(priv);
-    cybou::AccountCreateOpV1 op{
-        .version = cybou::ACCOUNT_CREATE_OP_VERSION,
-        .account_id = acc,
-        .initial_authorization = cybou::AccountAuthorizationV1{.authorization_descriptor = pub},
-        .creation_work{
-            .version = cybou::ACCOUNT_CREATION_WORK_VERSION,
-            .network_id = cybou::NetworkId(TestNetworkDefinition()),
-            .account_id = acc,
-            .initial_authorization_commitment = cybou::ComputeAuthCommitment(cybou::AccountAuthorizationV1{.authorization_descriptor = pub}),
-            .work_epoch = 0,
-            .nonce = 0,
-        },
-    };
-    op.proof_of_possession = *cybou::SignUserMessage(
-        priv, cybou::ComputeAccountPopDigest(op.creation_work.network_id, acc, pub));
-    return op;
-}
+struct AccountCredentials {
+    cybou::AccountId account_id;
+    std::array<unsigned char, 32> root_seed{};
+    std::array<unsigned char, 32> device_seed{};
+    cybou::IdentityHybridPublicKey root_pubkey;
+    cybou::IdentityHybridPublicKey device_pubkey;
+    cybou::IdentityKeyId device_id{};
+    cybou::IdentityAuthorization auth;
+
+    static AccountCredentials Create(uint8_t id_byte, uint8_t root_byte, uint8_t dev_byte)
+    {
+        AccountCredentials creds;
+        uint256 raw{};
+        raw.begin()[0] = id_byte;
+        creds.account_id = cybou::AccountId{raw};
+        creds.root_seed[0] = root_byte;
+        creds.device_seed[0] = dev_byte;
+        creds.root_pubkey = *cybou::DeriveIdentityPublicKey(creds.root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+        creds.device_pubkey = *cybou::DeriveIdentityPublicKey(creds.device_seed, cybou::IdentityKeyPurpose::DEVICE);
+        creds.device_id = *cybou::ComputeDeviceKeyId(creds.device_pubkey);
+        creds.auth = cybou::IdentityAuthorization{creds.root_pubkey, creds.device_pubkey};
+        return creds;
+    }
+
+    cybou::AccountCreateOp MakeCreateOp(const uint256& network_id) const
+    {
+        const auto commitment = *cybou::ComputeIdentityAuthorizationCommitment(auth);
+        const auto digest = *cybou::ComputeAccountCreatePopDigest(network_id, account_id, auth);
+        const auto root_pop = *cybou::SignIdentityMessage(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, digest);
+        const auto device_pop = *cybou::SignIdentityMessage(device_seed, cybou::IdentityKeyPurpose::DEVICE, digest);
+        return cybou::AccountCreateOp{
+            account_id,
+            auth,
+            {.network_id = network_id, .account_id = account_id, .authorization_commitment = commitment},
+            root_pop,
+            device_pop,
+        };
+    }
+};
+
+const AccountCredentials ACCOUNT_1 = AccountCredentials::Create(0x0a, 0x11, 0x12);
+const AccountCredentials ACCOUNT_2 = AccountCredentials::Create(0x0b, 0x21, 0x22);
 
 CDBWrapper MemoryDb()
 {
@@ -131,15 +174,19 @@ CDBWrapper MemoryDb()
     }};
 }
 
-cybou::FinalizedBlockV1 MakeFinalizedBlock(
+bool StatesEqual(const cybou::CybouState& a, const cybou::CybouState& b)
+{
+    return cybou::SerializeCybouState(a) == cybou::SerializeCybouState(b);
+}
+
+cybou::FinalizedBlock MakeFinalizedBlock(
     const cybou::CybouStateStore& store,
-    const std::vector<cybou::ProtocolOperationV1>& ops,
-    const cybou::ValidatorSetV1& val_set = TEST_VALIDATOR_SET,
-    const std::vector<MockVal>& vals = TEST_VAL_NODES,
+    const std::vector<cybou::ProtocolOperation>& ops,
+    const cybou::ValidatorSet& val_set = TEST_VALIDATOR_SET,
+    const std::vector<MockValidatorNode>& vals = TEST_VAL_NODES,
     std::optional<uint256> override_parent = std::nullopt,
     std::optional<uint64_t> override_height = std::nullopt,
-    std::optional<uint256> override_network_id = std::nullopt,
-    const cybou::OperatorAuthoritySignatureVerifier* op_verifier = nullptr)
+    std::optional<uint256> override_network_id = std::nullopt)
 {
     const auto loaded = store.LoadState();
     const uint64_t height = override_height.value_or(store.GetFinalizedHeight().value_or(0) + 1);
@@ -147,22 +194,10 @@ cybou::FinalizedBlockV1 MakeFinalizedBlock(
     const uint256 net_id = override_network_id.value_or(store.GetNetworkId());
 
     cybou::CybouState candidate = loaded && loaded.state ? *loaded.state : GenesisState();
-    const cybou::ProtocolExecutionContextV1 ctx{
-        .network_id = net_id,
-        .block_height = height,
-        .params = PARAMS,
-        .operator_authority = store.GetOperatorAuthority() ? &*store.GetOperatorAuthority() : nullptr,
-        .operator_verifier = op_verifier,
-    };
-    for (const auto& op : ops) {
-        cybou::ApplyProtocolOperation(op, ctx, candidate);
-    }
-    if (candidate.pending_fee_pool > 0) {
-        cybou::RoutePendingFees(candidate);
-    }
-    const uint256 state_root = cybou::CybouStateHash(candidate);
+    const auto exec_res = cybou::ExecuteBlockOperations(candidate, ops, net_id, height, PARAMS);
+    const uint256 state_root = exec_res.state_root.value_or(uint256{});
 
-    cybou::CybouBlockV1 block{
+    cybou::CybouBlock block{
         .version = cybou::CYBOU_BLOCK_VERSION,
         .parent_block_id = parent,
         .height = height,
@@ -172,10 +207,8 @@ cybou::FinalizedBlockV1 MakeFinalizedBlock(
     const uint256 block_id = cybou::ComputeBlockId(block);
 
     const uint256 val_set_commitment = cybou::ComputeValidatorSetCommitment(val_set);
-    const uint256 commit_digest = cybou::ComputeBftCommitDigest(
-        net_id, block_id, height, 0, val_set_commitment);
 
-    cybou::BftFinalityCertificateV1 cert{
+    cybou::BftFinalityCertificate cert{
         .version = cybou::BFT_FINALITY_CERTIFICATE_VERSION,
         .network_id = net_id,
         .block_id = block_id,
@@ -185,13 +218,10 @@ cybou::FinalizedBlockV1 MakeFinalizedBlock(
         .commit_votes = {},
     };
     for (const auto& v : vals) {
-        cert.commit_votes.push_back(cybou::BftCommitVoteV1{
-            .validator_id = v.pub,
-            .signature = *cybou::SignValidatorVote(v.priv, commit_digest),
-        });
+        cert.commit_votes.push_back(v.SignCommit(net_id, block_id, height, val_set_commitment));
     }
 
-    return cybou::FinalizedBlockV1{
+    return cybou::FinalizedBlock{
         .block = std::move(block),
         .certificate = std::move(cert),
     };
@@ -267,14 +297,14 @@ BOOST_AUTO_TEST_CASE(genesis_initializes_once_and_loads)
 
     const auto loaded{store.LoadState()};
     BOOST_REQUIRE(loaded);
-    BOOST_CHECK(*loaded.state == genesis);
+    BOOST_CHECK(StatesEqual(*loaded.state, genesis));
     BOOST_CHECK_EQUAL(loaded.state->onboarding_pool, 20000);
     BOOST_CHECK_EQUAL(loaded.state->security_reward_pool, 1000);
     BOOST_CHECK_EQUAL(loaded.state->pending_fee_pool, 500);
 
     const auto root{store.GetStateRoot()};
     BOOST_REQUIRE(root.has_value());
-    BOOST_CHECK(*root == cybou::CybouStateHash(genesis));
+    BOOST_CHECK(*root == *cybou::CybouStateHash(genesis));
 
     const auto head{store.GetFinalizedHead()};
     BOOST_REQUIRE(head.has_value());
@@ -291,7 +321,7 @@ BOOST_AUTO_TEST_CASE(candidate_root_uses_canonical_state_and_height)
     BOOST_CHECK(!store.ComputeCandidateStateRoot({}, 1).has_value());
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
 
-    const auto operation = ValidOp();
+    const auto operation = ACCOUNT_1.MakeCreateOp(store.GetNetworkId());
     const auto expected = MakeFinalizedBlock(store, {operation});
     const auto root = store.ComputeCandidateStateRoot({operation}, 1);
     BOOST_REQUIRE(root.has_value());
@@ -349,8 +379,9 @@ BOOST_AUTO_TEST_CASE(state_store_detects_tampering_and_corruption)
         BOOST_REQUIRE(store.InitializeGenesis(genesis));
         BOOST_REQUIRE(store.LoadState());
         auto corrupt_bytes{cybou::SerializeCybouState(genesis)};
-        corrupt_bytes.back() ^= 1;
-        db.Write(STATE_KEY, corrupt_bytes);
+        BOOST_REQUIRE(corrupt_bytes.has_value());
+        corrupt_bytes->back() ^= 1;
+        db.Write(STATE_KEY, *corrupt_bytes);
         BOOST_CHECK(store.LoadState().error == cybou::StateLoadError::CORRUPT);
     }
 }
@@ -405,13 +436,13 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_is_tip_ordered_and_atomic)
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
 
     // Block 1 with wrong parent
-    auto bad_parent_fb = MakeFinalizedBlock(store, {ValidOp(ACCOUNT_ID)}, TEST_VALIDATOR_SET, TEST_VAL_NODES,
+    auto bad_parent_fb = MakeFinalizedBlock(store, {ACCOUNT_1.MakeCreateOp(store.GetNetworkId())}, TEST_VALIDATOR_SET, TEST_VAL_NODES,
         uint256::FromUserHex("99").value());
     BOOST_CHECK(store.CommitFinalizedBlock(bad_parent_fb, TEST_VALIDATOR_SET).error ==
         cybou::BlockTransitionError::PARENT_MISMATCH);
 
     // Block 1 with correct parent
-    auto fb1 = MakeFinalizedBlock(store, {ValidOp(ACCOUNT_ID)});
+    auto fb1 = MakeFinalizedBlock(store, {ACCOUNT_1.MakeCreateOp(store.GetNetworkId())});
     const uint256 block1_id = cybou::ComputeBlockId(fb1.block);
     BOOST_REQUIRE(store.CommitFinalizedBlock(fb1, TEST_VALIDATOR_SET));
     BOOST_REQUIRE(store.GetFinalizedTip().has_value());
@@ -419,22 +450,22 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_is_tip_ordered_and_atomic)
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 1);
 
     // Block 2 with wrong parent
-    auto bad_parent_fb2 = MakeFinalizedBlock(store, {ValidOp(ACCOUNT_ID_2)}, TEST_VALIDATOR_SET, TEST_VAL_NODES,
+    auto bad_parent_fb2 = MakeFinalizedBlock(store, {ACCOUNT_2.MakeCreateOp(store.GetNetworkId())}, TEST_VALIDATOR_SET, TEST_VAL_NODES,
         definition.genesis_block_id);
     BOOST_CHECK(store.CommitFinalizedBlock(bad_parent_fb2, TEST_VALIDATOR_SET).error ==
         cybou::BlockTransitionError::PARENT_MISMATCH);
 
     // Block 2 with correct parent
-    auto fb2 = MakeFinalizedBlock(store, {ValidOp(ACCOUNT_ID_2)});
+    auto fb2 = MakeFinalizedBlock(store, {ACCOUNT_2.MakeCreateOp(store.GetNetworkId())});
     BOOST_REQUIRE(store.CommitFinalizedBlock(fb2, TEST_VALIDATOR_SET));
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 2);
 
     const auto loaded{store.LoadState()};
     BOOST_REQUIRE(loaded);
-    BOOST_CHECK_EQUAL(loaded.state->onboarding_pool, 8125); // 20000 - 12000 + 125 fee routing
-    BOOST_CHECK_EQUAL(loaded.state->accounts.at(ACCOUNT_ID).system_balance, 6000);
-    BOOST_CHECK_EQUAL(loaded.state->accounts.at(ACCOUNT_ID_2).system_balance, 6000);
-    BOOST_CHECK_EQUAL(loaded.state->accounts.at(ACCOUNT_ID_2).creation_epoch, 0);
+    BOOST_CHECK_EQUAL(loaded.state->onboarding_pool, 8125); // Genesis pending fees route 125 to onboarding.
+    BOOST_CHECK_EQUAL(loaded.state->accounts.at(ACCOUNT_1.account_id).system_balance, 6000);
+    BOOST_CHECK_EQUAL(loaded.state->accounts.at(ACCOUNT_2.account_id).system_balance, 6000);
+    BOOST_CHECK_EQUAL(loaded.state->accounts.at(ACCOUNT_2.account_id).creation_epoch, 0);
 }
 
 BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_replay_of_applied_block)
@@ -444,7 +475,7 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_replay_of_applied_block)
     cybou::CybouStateStore store{db, definition};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
 
-    auto fb1 = MakeFinalizedBlock(store, {ValidOp(ACCOUNT_ID)});
+    auto fb1 = MakeFinalizedBlock(store, {ACCOUNT_1.MakeCreateOp(store.GetNetworkId())});
     BOOST_REQUIRE(store.CommitFinalizedBlock(fb1, TEST_VALIDATOR_SET));
     BOOST_CHECK(store.CommitFinalizedBlock(fb1, TEST_VALIDATOR_SET).error ==
         cybou::BlockTransitionError::BLOCK_ALREADY_APPLIED);
@@ -457,16 +488,16 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_state_root_mismatch)
     cybou::CybouStateStore store{db, definition};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
 
-    auto fb1 = MakeFinalizedBlock(store, {ValidOp(ACCOUNT_ID)});
+    auto fb1 = MakeFinalizedBlock(store, {ACCOUNT_1.MakeCreateOp(store.GetNetworkId())});
     // Tamper with state root inside the block
     fb1.block.resulting_state_root = uint256::FromUserHex("beef").value();
     // Update certificate to match the new block ID
     const uint256 new_bid = cybou::ComputeBlockId(fb1.block);
     fb1.certificate.block_id = new_bid;
-    const uint256 digest = cybou::ComputeBftCommitDigest(
-        store.GetNetworkId(), new_bid, 1, 0, cybou::ComputeValidatorSetCommitment(TEST_VALIDATOR_SET));
+    const uint256 val_set_commitment = cybou::ComputeValidatorSetCommitment(TEST_VALIDATOR_SET);
     for (size_t i = 0; i < TEST_VAL_NODES.size(); ++i) {
-        fb1.certificate.commit_votes[i].signature = *cybou::SignValidatorVote(TEST_VAL_NODES[i].priv, digest);
+        fb1.certificate.commit_votes[i] = TEST_VAL_NODES[i].SignCommit(
+            store.GetNetworkId(), new_bid, 1, val_set_commitment);
     }
 
     BOOST_CHECK(store.CommitFinalizedBlock(fb1, TEST_VALIDATOR_SET).error ==
@@ -480,7 +511,7 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_invalid_certificate)
     cybou::CybouStateStore store{db, definition};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
 
-    auto fb1 = MakeFinalizedBlock(store, {ValidOp(ACCOUNT_ID)});
+    auto fb1 = MakeFinalizedBlock(store, {ACCOUNT_1.MakeCreateOp(store.GetNetworkId())});
     // Drop votes to below quorum (< 3)
     fb1.certificate.commit_votes.pop_back();
     fb1.certificate.commit_votes.pop_back();
@@ -495,19 +526,20 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_invalid_operation_without_mu
     cybou::CybouStateStore store{db, definition};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
 
-    auto fb1 = MakeFinalizedBlock(store, {ValidOp(ACCOUNT_ID)});
+    auto fb1 = MakeFinalizedBlock(store, {ACCOUNT_1.MakeCreateOp(store.GetNetworkId())});
     const uint256 block1_id = cybou::ComputeBlockId(fb1.block);
     BOOST_REQUIRE(store.CommitFinalizedBlock(fb1, TEST_VALIDATOR_SET));
     const auto snapshot{store.LoadState()};
     BOOST_REQUIRE(snapshot);
 
     // Duplicate account creation in block 2
-    auto fb2 = MakeFinalizedBlock(store, {ValidOp(ACCOUNT_ID)});
+    auto fb2 = MakeFinalizedBlock(store, {ACCOUNT_1.MakeCreateOp(store.GetNetworkId())});
     const auto result{store.CommitFinalizedBlock(fb2, TEST_VALIDATOR_SET)};
     BOOST_CHECK(result.error == cybou::BlockTransitionError::INVALID_OPERATION);
-    BOOST_CHECK(result.op_result.account_create_result.error == cybou::AccountCreateError::ACCOUNT_ALREADY_EXISTS);
+    BOOST_CHECK(result.op_result.error == cybou::BlockExecutionError::INVALID_ACCOUNT_CREATE);
+    BOOST_CHECK(result.op_result.create_error == cybou::AccountCreateStateError::ACCOUNT_EXISTS);
     BOOST_REQUIRE(store.LoadState());
-    BOOST_CHECK(*store.LoadState().state == *snapshot.state);
+    BOOST_CHECK(StatesEqual(*store.LoadState().state, *snapshot.state));
     BOOST_REQUIRE(store.GetFinalizedTip().has_value());
     BOOST_CHECK(*store.GetFinalizedTip() == block1_id);
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 1);
@@ -523,9 +555,9 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_too_many_account_creates)
     cybou::CybouStateStore store{db, strict_network};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
 
-    std::vector<cybou::ProtocolOperationV1> ops{
-        ValidOp(ACCOUNT_ID),
-        ValidOp(ACCOUNT_ID_2),
+    std::vector<cybou::ProtocolOperation> ops{
+        ACCOUNT_1.MakeCreateOp(store.GetNetworkId()),
+        ACCOUNT_2.MakeCreateOp(store.GetNetworkId()),
     };
     auto fb = MakeFinalizedBlock(store, ops);
 
@@ -538,7 +570,7 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_requires_initialized_state)
 {
     auto db{MemoryDb()};
     cybou::CybouStateStore store{db, TestNetworkDefinition()};
-    auto fb = MakeFinalizedBlock(store, {ValidOp()});
+    auto fb = MakeFinalizedBlock(store, {ACCOUNT_1.MakeCreateOp(store.GetNetworkId())});
     BOOST_CHECK(store.CommitFinalizedBlock(fb, TEST_VALIDATOR_SET).error ==
         cybou::BlockTransitionError::STATE_NOT_INITIALIZED);
 }
@@ -550,13 +582,13 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_advances_height_monotonically)
     cybou::CybouStateStore store{db, definition};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
 
-    auto fb1 = MakeFinalizedBlock(store, {ValidOp(ACCOUNT_ID)});
+    auto fb1 = MakeFinalizedBlock(store, {ACCOUNT_1.MakeCreateOp(store.GetNetworkId())});
     const uint256 block1_id = cybou::ComputeBlockId(fb1.block);
     BOOST_REQUIRE(store.CommitFinalizedBlock(fb1, TEST_VALIDATOR_SET));
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 1);
     BOOST_CHECK(*store.GetFinalizedTip() == block1_id);
 
-    auto fb2 = MakeFinalizedBlock(store, {ValidOp(ACCOUNT_ID_2)});
+    auto fb2 = MakeFinalizedBlock(store, {ACCOUNT_2.MakeCreateOp(store.GetNetworkId())});
     const uint256 block2_id = cybou::ComputeBlockId(fb2.block);
     BOOST_REQUIRE(store.CommitFinalizedBlock(fb2, TEST_VALIDATOR_SET));
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 2);
@@ -568,7 +600,7 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_height_overflow)
     auto db{MemoryDb()};
     cybou::CybouStateStore store{db, TestNetworkDefinition()};
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
-    const cybou::FinalizedHeadV1 max_head{
+    const cybou::FinalizedHead max_head{
         .block_id = uint256::FromUserHex("51").value(),
         .height = std::numeric_limits<uint64_t>::max(),
     };
@@ -581,16 +613,6 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_rejects_height_overflow)
 
 BOOST_AUTO_TEST_CASE(commit_finalized_block_executes_authorized_payment)
 {
-    std::array<unsigned char, 32> priv1{};
-    priv1.fill(0x55);
-    const auto pub1{cybou::DeriveEd25519PublicKey(priv1)};
-    BOOST_REQUIRE(pub1.has_value());
-
-    std::array<unsigned char, 32> priv2{};
-    priv2.fill(0x66);
-    const auto pub2{cybou::DeriveEd25519PublicKey(priv2)};
-    BOOST_REQUIRE(pub2.has_value());
-
     auto db{MemoryDb()};
     const auto definition{TestNetworkDefinition()};
     const auto net_id{cybou::NetworkId(definition)};
@@ -598,8 +620,8 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_executes_authorized_payment)
     BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
 
     // Block 1: Onboard Account 1 and Account 2
-    auto op1{ValidOp(ACCOUNT_ID, priv1)};
-    auto op2{ValidOp(ACCOUNT_ID_2, priv2)};
+    auto op1 = ACCOUNT_1.MakeCreateOp(net_id);
+    auto op2 = ACCOUNT_2.MakeCreateOp(net_id);
 
     auto fb1 = MakeFinalizedBlock(store, {op1, op2});
     const uint256 block1_id = cybou::ComputeBlockId(fb1.block);
@@ -608,40 +630,38 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_executes_authorized_payment)
 
     // In state, fund Account 1 balance
     auto current_state{*store.LoadState().state};
-    current_state.accounts.at(ACCOUNT_ID).balance = 5000;
+    current_state.accounts.at(ACCOUNT_1.account_id).balance = 5000;
     // Update store state for test
-    db.Write(STATE_KEY, cybou::SerializeCybouState(current_state));
-    db.Write(HASH_KEY, cybou::CybouStateHash(current_state));
+    const auto state_bytes = cybou::SerializeCybouState(current_state);
+    BOOST_REQUIRE(state_bytes.has_value());
+    db.Write(STATE_KEY, *state_bytes);
+    db.Write(HASH_KEY, *cybou::CybouStateHash(current_state));
 
     // Block 2: Authorized payment from Account 1 -> Account 2
-    const cybou::PaymentOpV1 payment{
-        .version = cybou::PAYMENT_OP_VERSION,
-        .recipient = ACCOUNT_ID_2,
-        .amount = 1500,
-    };
-    const uint256 digest{cybou::ComputeUserOperationDigest(net_id, ACCOUNT_ID, 0, payment)};
-    const auto sig{cybou::SignUserMessage(priv1, std::span<const unsigned char>{digest.begin(), digest.size()})};
-    BOOST_REQUIRE(sig.has_value());
+    cybou::AuthorizedPayment payment{};
+    payment.payment.recipient = ACCOUNT_2.account_id;
+    payment.payment.amount = 1500;
+    payment.authorization.account_id = ACCOUNT_1.account_id;
+    payment.authorization.device_id = ACCOUNT_1.device_id;
+    payment.authorization.nonce = 0;
+    payment.authorization.activation_nonce = 0;
+    payment.authorization.kind = cybou::DeviceOperationKind::PAYMENT;
+    payment.authorization.payload_commitment = *cybou::ComputePaymentPayloadCommitment(payment.payment);
+    const auto payment_digest = *cybou::ComputeDeviceOperationDigest(net_id, payment.authorization);
+    payment.authorization.signature = *cybou::SignIdentityMessage(
+        ACCOUNT_1.device_seed, cybou::IdentityKeyPurpose::DEVICE, payment_digest);
 
-    const cybou::AuthorizedOperationV1 auth_payment{
-        .version = cybou::AUTHORIZED_OPERATION_VERSION,
-        .account_id = ACCOUNT_ID,
-        .nonce = 0,
-        .payload = payment,
-        .signature = *sig,
-    };
-
-    auto fb2 = MakeFinalizedBlock(store, {auth_payment});
+    auto fb2 = MakeFinalizedBlock(store, {payment});
     const uint256 block2_id = cybou::ComputeBlockId(fb2.block);
     BOOST_REQUIRE(store.CommitFinalizedBlock(fb2, TEST_VALIDATOR_SET));
 
     const auto final_state{store.LoadState()};
     BOOST_REQUIRE(final_state);
-    BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_ID).balance, 3500); // 5000 - 1500
-    BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_ID).system_balance, 5999); // 6000 - 1
-    BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_ID).next_nonce, 1);
-    BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_ID_2).balance, 1500);
-    BOOST_CHECK_EQUAL(final_state.state->pending_fee_pool, 1); // 1 fee in pool (remainder of 4-chunk routing)
+    BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_1.account_id).balance, 3500); // 5000 - 1500
+    BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_1.account_id).system_balance, 5999);
+    BOOST_CHECK_EQUAL(final_state.state->identities.Find(ACCOUNT_1.account_id)->devices.at(ACCOUNT_1.device_id).next_nonce, 1);
+    BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_2.account_id).balance, 1500);
+    BOOST_CHECK_EQUAL(final_state.state->pending_fee_pool, 1);
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 2);
     BOOST_CHECK(*store.GetFinalizedTip() == block2_id);
 
@@ -652,32 +672,6 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_executes_authorized_payment)
     BOOST_CHECK(loaded_fb2->certificate == fb2.certificate);
 }
 
-namespace {
-
-class MockStoreAuthorityVerifier final : public cybou::OperatorAuthoritySignatureVerifier
-{
-public:
-    bool Verify(
-        const cybou::OperatorAuthorityKeySet& keyset,
-        const cybou::SignatureBundleV1& bundle,
-        std::span<const unsigned char> message) const override
-    {
-        return cybou::IsPresent(bundle) && bundle.authority_keyset_id == keyset.keyset_id;
-    }
-};
-
-cybou::SignatureBundleV1 CreateStoreMockSignatureBundle(const uint256& keyset_id)
-{
-    cybou::SignatureBundleV1 bundle;
-    bundle.suite_id = cybou::SignatureSuiteId::HYBRID_ED25519_MLDSA65_V1;
-    bundle.authority_keyset_id = keyset_id;
-    bundle.classical_signature.fill(0x11);
-    bundle.pq_signature.fill(0x22);
-    return bundle;
-}
-
-} // namespace
-
 BOOST_AUTO_TEST_CASE(store_genesis_validator_set_validation_and_access)
 {
     auto db = MemoryDb();
@@ -687,7 +681,6 @@ BOOST_AUTO_TEST_CASE(store_genesis_validator_set_validation_and_access)
     // 1. Rejects genesis with mismatched validator set commitment
     auto bad_genesis = GenesisState();
     bad_genesis.validator_set.validators.pop_back(); // 3 instead of 4
-    // State hash mismatch occurs first if genesis_state_root was derived from original
     const auto bad_res = store.InitializeGenesis(bad_genesis);
     BOOST_CHECK(!bad_res);
 
@@ -704,146 +697,9 @@ BOOST_AUTO_TEST_CASE(store_genesis_validator_set_validation_and_access)
     // 4. Reject block commit with mismatched validator_set parameter
     auto bad_val_set = TEST_VALIDATOR_SET;
     bad_val_set.validators.pop_back();
-    auto fb = MakeFinalizedBlock(store, {ValidOp()});
+    auto fb = MakeFinalizedBlock(store, {ACCOUNT_1.MakeCreateOp(store.GetNetworkId())});
     const auto mismatch_res = store.CommitFinalizedBlock(fb, bad_val_set);
     BOOST_CHECK(mismatch_res.error == cybou::BlockTransitionError::VALIDATOR_SET_MISMATCH);
-}
-
-BOOST_AUTO_TEST_CASE(store_commits_block_with_validator_admission_and_removal)
-{
-    auto db = MemoryDb();
-    auto definition = TestNetworkDefinition();
-
-    const uint256 keyset_id{uint256::FromUserHex("aa").value()};
-    const cybou::OperatorAuthorityKeySet authority{
-        .keyset_id = keyset_id,
-        .ed25519_public_key = {1},
-        .mldsa65_public_key = {1},
-        .active_from_epoch = 0,
-        .retired_from_epoch = std::nullopt,
-    };
-    auto verifier = std::make_shared<MockStoreAuthorityVerifier>();
-
-    definition.operator_authority = authority;
-    cybou::CybouStateStore store{db, definition, verifier};
-    BOOST_REQUIRE(store.InitializeGenesis(GenesisState()));
-
-    // Create 5th validator node
-    MockVal node5;
-    node5.priv.fill(0);
-    node5.priv[0] = 5;
-    node5.pub = *cybou::DeriveEd25519PublicKey(node5.priv);
-
-    const cybou::ValidatorAdmissionOpV1 admission_op{
-        .version = cybou::VALIDATOR_ADMISSION_OP_VERSION,
-        .validator_id = node5.pub,
-        .consensus_public_key = node5.pub,
-        .activation_epoch = 0,
-        .operator_signature = CreateStoreMockSignatureBundle(keyset_id),
-    };
-
-    // Block 1: admit 5th validator, signed by current 4 validators
-    auto fb1 = MakeFinalizedBlock(store, {cybou::ProtocolOperationV1{admission_op}}, TEST_VALIDATOR_SET, TEST_VAL_NODES, std::nullopt, std::nullopt, std::nullopt, verifier.get());
-    BOOST_REQUIRE(store.CommitFinalizedBlock(fb1));
-
-    // Active validator set is now 5
-    const auto val_set_h1 = store.GetValidatorSet();
-    BOOST_REQUIRE(val_set_h1.has_value());
-    BOOST_CHECK_EQUAL(val_set_h1->Size(), 5);
-    BOOST_CHECK_EQUAL(val_set_h1->QuorumThreshold(), 4); // floor(2*5/3) + 1 = 4
-    BOOST_CHECK(val_set_h1->FindValidator(node5.pub) != nullptr);
-
-    // Prepare node list of 5 nodes
-    auto all_5_nodes = TEST_VAL_NODES;
-    all_5_nodes.push_back(node5);
-
-    // Block 2: regular operation, signed by 4 of the 5 validators (quorum satisfied)
-    std::vector<MockVal> four_signers = {all_5_nodes[0], all_5_nodes[1], all_5_nodes[2], all_5_nodes[4]};
-    auto account_op = ValidOp();
-    account_op.creation_work.network_id = store.GetNetworkId();
-    account_op.proof_of_possession = *cybou::SignUserMessage(
-        AUTH_PRIVKEY, cybou::ComputeAccountPopDigest(store.GetNetworkId(), ACCOUNT_ID, AUTH_KEY));
-    auto fb2 = MakeFinalizedBlock(store, {account_op}, *val_set_h1, four_signers, std::nullopt, std::nullopt, std::nullopt, verifier.get());
-    BOOST_REQUIRE(store.CommitFinalizedBlock(fb2));
-    BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 2);
-
-    // Block 3: remove the 5th validator
-    const cybou::ValidatorRemovalOpV1 removal_op{
-        .version = cybou::VALIDATOR_REMOVAL_OP_VERSION,
-        .validator_id = node5.pub,
-        .effective_epoch = 0,
-        .operator_signature = CreateStoreMockSignatureBundle(keyset_id),
-    };
-    auto fb3 = MakeFinalizedBlock(store, {cybou::ProtocolOperationV1{removal_op}}, *val_set_h1, four_signers, std::nullopt, std::nullopt, std::nullopt, verifier.get());
-    BOOST_REQUIRE(store.CommitFinalizedBlock(fb3));
-
-    // Active validator set is back to 4
-    const auto val_set_h3 = store.GetValidatorSet();
-    BOOST_REQUIRE(val_set_h3.has_value());
-    BOOST_CHECK_EQUAL(val_set_h3->Size(), 4);
-    BOOST_CHECK(val_set_h3->FindValidator(node5.pub) == nullptr);
-    BOOST_CHECK(*val_set_h3 == TEST_VALIDATOR_SET);
-}
-
-BOOST_AUTO_TEST_CASE(store_rejects_removal_of_last_validator_in_authority_mode)
-{
-    auto db = MemoryDb();
-
-    // Setup 1-validator Authority Mode network
-    const cybou::ValidatorSetV1 authority_val_set{
-        .version = cybou::VALIDATOR_SET_VERSION,
-        .validators = {
-            cybou::ValidatorV1{.validator_id = TEST_VAL_NODES[0].pub, .consensus_public_key = TEST_VAL_NODES[0].pub, .weight = 1},
-        },
-    };
-
-    cybou::CybouState auth_genesis_state{
-        .onboarding_pool = 20000,
-        .security_reward_pool = 1000,
-        .pending_fee_pool = 500,
-        .accounts{},
-        .validator_set = authority_val_set,
-    };
-
-    cybou::CybouNetworkDefinitionV1 auth_definition{
-        .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
-        .genesis_block_id = uint256::ONE,
-        .genesis_state_root = cybou::CybouStateHash(auth_genesis_state),
-        .protocol_parameters = PARAMS,
-        .initial_validator_set_commitment = cybou::ComputeValidatorSetCommitment(authority_val_set),
-    };
-
-    const uint256 keyset_id{uint256::FromUserHex("aa").value()};
-    const cybou::OperatorAuthorityKeySet authority{
-        .keyset_id = keyset_id,
-        .ed25519_public_key = {1},
-        .mldsa65_public_key = {1},
-        .active_from_epoch = 0,
-        .retired_from_epoch = std::nullopt,
-    };
-    auto verifier = std::make_shared<MockStoreAuthorityVerifier>();
-
-    auth_definition.operator_authority = authority;
-    cybou::CybouStateStore store{db, auth_definition, verifier};
-    BOOST_REQUIRE(store.InitializeGenesis(auth_genesis_state));
-    BOOST_CHECK_EQUAL(store.GetValidatorSet()->Size(), 1);
-
-    // Attempt to remove the sole validator
-    const cybou::ValidatorRemovalOpV1 remove_last_op{
-        .version = cybou::VALIDATOR_REMOVAL_OP_VERSION,
-        .validator_id = TEST_VAL_NODES[0].pub,
-        .effective_epoch = 0,
-        .operator_signature = CreateStoreMockSignatureBundle(keyset_id),
-    };
-
-    auto fb = MakeFinalizedBlock(store, {cybou::ProtocolOperationV1{remove_last_op}}, authority_val_set, {TEST_VAL_NODES[0]}, std::nullopt, std::nullopt, std::nullopt, verifier.get());
-    const auto result = store.CommitFinalizedBlock(fb);
-    BOOST_CHECK(!result);
-    BOOST_CHECK(result.error == cybou::BlockTransitionError::INVALID_OPERATION);
-    BOOST_CHECK(result.op_result.validator_removal_result.error == cybou::ValidatorRemovalError::CANNOT_REMOVE_LAST_VALIDATOR);
-
-    // State is untouched: validator set still has 1 validator
-    BOOST_CHECK_EQUAL(store.GetValidatorSet()->Size(), 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

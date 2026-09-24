@@ -16,24 +16,24 @@
 namespace cybou {
 namespace {
 
-const std::string STATE_KEY{"cybou/state/v2"};
-const std::string HASH_KEY{"cybou/hash/v2"};
-const std::string HEAD_KEY{"cybou/head/v2"};
-const std::string NETWORK_ID_KEY{"cybou/network-id/v2"};
+const std::string STATE_KEY{"cybou/state"};
+const std::string HASH_KEY{"cybou/hash"};
+const std::string HEAD_KEY{"cybou/head"};
+const std::string NETWORK_ID_KEY{"cybou/network-id"};
 
 inline std::string BlockKey(const uint256& block_id)
 {
-    return "cybou/block/v2/" + block_id.GetHex();
+    return "cybou/block/" + block_id.GetHex();
 }
 
 inline std::string BlockHeightKey(const uint64_t height)
 {
-    return "cybou/block-height/v2/" + std::to_string(height);
+    return "cybou/block-height/" + std::to_string(height);
 }
 
 inline std::string MailFilterKey(const uint256& block_id)
 {
-    return "cybou/mail-filter/v2/" + block_id.GetHex();
+    return "cybou/mail-filter/" + block_id.GetHex();
 }
 
 } // namespace

@@ -11,6 +11,7 @@
 #include <uint256.h>
 
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <span>
 #include <vector>
@@ -40,6 +41,7 @@ enum class NetworkDefinitionError : uint8_t {
     INVALID_ACCOUNT_CREATION_WORK_BITS,
     ZERO_MAX_ACCOUNT_CREATES_PER_BLOCK,
     ZERO_EPOCH_BLOCKS,
+    INVALID_NAME_PARAMETERS,
     NULL_OPERATOR_AUTHORITY_KEYSET_ID,
     NULL_OPERATOR_AUTHORITY_KEY,
     INVALID_OPERATOR_AUTHORITY_EPOCH,
@@ -50,11 +52,16 @@ std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefiniti
 std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(std::span<const unsigned char> bytes);
 uint256 NetworkId(const CybouNetworkDefinition& definition);
 
+struct CybouNetworkFile {
+    CybouNetworkDefinition definition;
+    CybouState genesis;
+};
+
+std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path& path);
+
 uint256 ComputeGenesisBlockId(const uint256& state_root, const uint256& validator_set_commitment);
 
-IdentityHybridPublicKey CreateDevValidatorKey(const uint256& seed);
 CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public_key);
-CybouState CreateDevGenesisState(const uint256& validator_seed_or_key);
 CybouNetworkDefinition CreateDevNetworkDefinition(const CybouState& genesis);
 
 // Transition aliases
