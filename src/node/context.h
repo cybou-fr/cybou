@@ -30,7 +30,6 @@ class Chain;
 class ChainClient;
 class Mining;
 class Init;
-class WalletLoader;
 } // namespace interfaces
 namespace kernel {
 struct Context;
@@ -79,7 +78,6 @@ struct NodeContext {
     //! Reference to chain client that should used to load or create wallets
     //! opened by the gui.
     std::unique_ptr<interfaces::Mining> mining;
-    interfaces::WalletLoader* wallet_loader{nullptr};
     std::unique_ptr<CScheduler> scheduler;
     std::function<void()> rpc_interruption_point = [] {};
     //! Issues blocking calls about sync status, errors and warnings

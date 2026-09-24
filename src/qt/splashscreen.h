@@ -14,7 +14,6 @@ class NetworkStyle;
 namespace interfaces {
 class Handler;
 class Node;
-class Wallet;
 };
 
 /** Class for the splashscreen with information of the running client.
@@ -40,9 +39,6 @@ public Q_SLOTS:
     /** Show message and progress */
     void showMessage(const QString &message, int alignment, const QColor &color);
 
-    /** Handle wallet load notifications. */
-    void handleLoadWallet();
-
 protected:
     bool eventFilter(QObject * obj, QEvent * ev) override;
 
@@ -63,10 +59,6 @@ private:
     bool m_shutdown = false;
     std::unique_ptr<interfaces::Handler> m_handler_init_message;
     std::unique_ptr<interfaces::Handler> m_handler_show_progress;
-    std::unique_ptr<interfaces::Handler> m_handler_init_wallet;
-    std::unique_ptr<interfaces::Handler> m_handler_load_wallet;
-    std::list<std::unique_ptr<interfaces::Wallet>> m_connected_wallets;
-    std::list<std::unique_ptr<interfaces::Handler>> m_connected_wallet_handlers;
 };
 
 #endif // BITCOIN_QT_SPLASHSCREEN_H

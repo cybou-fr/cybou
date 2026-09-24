@@ -10,10 +10,8 @@
 #include <common/system.h>
 #include <interfaces/handler.h>
 #include <interfaces/node.h>
-#include <interfaces/wallet.h>
 #include <qt/guiutil.h>
 #include <qt/networkstyle.h>
-#include <qt/walletmodel.h>
 #include <util/translation.h>
 
 #include <functional>
@@ -186,20 +184,6 @@ void SplashScreen::subscribeToCoreSignals()
     m_handler_show_progress = m_node->handleShowProgress([this](const std::string& title, int nProgress, bool resume_possible) {
         ShowProgress(this, title, nProgress, resume_possible);
     });
-    m_handler_init_wallet = m_node->handleInitWallet([this]() { handleLoadWallet(); });
-}
-
-void SplashScreen::handleLoadWallet()
-{
-#ifdef ENABLE_WALLET
-    if (!WalletModel::isWalletEnabled()) return;
-    m_handler_load_wallet = m_node->walletLoader().handleLoadWallet([this](std::unique_ptr<interfaces::Wallet> wallet) {
-        m_connected_wallet_handlers.emplace_back(wallet->handleShowProgress([this](const std::string& title, int nProgress) {
-            ShowProgress(this, title, nProgress, /*resume_possible=*/false);
-        }));
-        m_connected_wallets.emplace_back(std::move(wallet));
-    });
-#endif
 }
 
 void SplashScreen::unsubscribeFromCoreSignals()
@@ -207,11 +191,6 @@ void SplashScreen::unsubscribeFromCoreSignals()
     // Disconnect signals from client
     m_handler_init_message->disconnect();
     m_handler_show_progress->disconnect();
-    for (const auto& handler : m_connected_wallet_handlers) {
-        handler->disconnect();
-    }
-    m_connected_wallet_handlers.clear();
-    m_connected_wallets.clear();
 }
 
 void SplashScreen::showMessage(const QString &message, int alignment, const QColor &color)

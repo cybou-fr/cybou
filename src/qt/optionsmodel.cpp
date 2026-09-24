@@ -11,6 +11,7 @@
 #include <qt/guiutil.h>
 
 #include <common/args.h>
+#include <clientversion.h>
 #include <interfaces/node.h>
 #include <mapport.h>
 #include <net.h>
@@ -20,7 +21,6 @@
 #include <univalue.h>
 #include <util/string.h>
 #include <validation.h>
-#include <wallet/wallet.h>
 
 #include <QDebug>
 #include <QLatin1Char>

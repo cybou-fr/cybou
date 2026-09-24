@@ -276,7 +276,6 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   validation.cpp
   validationinterface.cpp
   versionbits.cpp
-  dummywallet.cpp
 )
 target_link_libraries(bitcoin_node
   PRIVATE

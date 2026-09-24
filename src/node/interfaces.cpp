@@ -19,7 +19,6 @@
 #include <interfaces/mining.h>
 #include <interfaces/node.h>
 #include <interfaces/types.h>
-#include <interfaces/wallet.h>
 #include <kernel/chain.h>
 #include <kernel/context.h>
 #include <kernel/mempool_entry.h>
@@ -81,7 +80,6 @@ using interfaces::Handler;
 using interfaces::MakeSignalHandler;
 using interfaces::Mining;
 using interfaces::Node;
-using interfaces::WalletLoader;
 using kernel::ChainstateRole;
 using node::BlockAssembler;
 using node::BlockWaitOptions;
@@ -367,10 +365,6 @@ public:
                                     TxBroadcast::MEMPOOL_AND_BROADCAST_TO_ALL,
                                     /*wait_callback=*/false);
     }
-    WalletLoader& walletLoader() override
-    {
-        return *Assert(m_context->wallet_loader);
-    }
     std::unique_ptr<Handler> handleInitMessage(InitMessageFn fn) override
     {
         return MakeSignalHandler(::uiInterface.InitMessage_connect(fn));
@@ -386,10 +380,6 @@ public:
     std::unique_ptr<Handler> handleShowProgress(ShowProgressFn fn) override
     {
         return MakeSignalHandler(::uiInterface.ShowProgress_connect(fn));
-    }
-    std::unique_ptr<Handler> handleInitWallet(InitWalletFn fn) override
-    {
-        return MakeSignalHandler(::uiInterface.InitWallet_connect(fn));
     }
     std::unique_ptr<Handler> handleNotifyNumConnectionsChanged(NotifyNumConnectionsChangedFn fn) override
     {

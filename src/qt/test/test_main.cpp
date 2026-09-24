@@ -12,7 +12,6 @@
 #include <qt/test/cyboushelltests.h>
 #include <qt/test/optiontests.h>
 #include <qt/test/rpcnestedtests.h>
-#include <qt/test/uritests.h>
 #include <test/util/setup_common.h>
 #include <util/chaintype.h>
 
@@ -84,9 +83,6 @@ int main(int argc, char* argv[])
 
         OptionTests options_tests(app.node());
         num_test_failures += QTest::qExec(&options_tests);
-
-        URITests test1;
-        num_test_failures += QTest::qExec(&test1);
 
         RPCNestedTests test3(app.node());
         num_test_failures += QTest::qExec(&test3);

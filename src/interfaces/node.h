@@ -36,13 +36,8 @@ namespace node {
 enum class TransactionError;
 struct NodeContext;
 } // namespace node
-namespace wallet {
-class CCoinControl;
-} // namespace wallet
-
 namespace interfaces {
 class Handler;
-class WalletLoader;
 struct BlockTip;
 
 //! Block and header tip information
@@ -210,9 +205,6 @@ public:
     //! Broadcast transaction.
     virtual node::TransactionError broadcastTransaction(CTransactionRef tx, CAmount max_tx_fee, std::string& err_string) = 0;
 
-    //! Get wallet loader.
-    virtual WalletLoader& walletLoader() = 0;
-
     //! Register handler for init messages.
     using InitMessageFn = std::function<void(const std::string& message)>;
     virtual std::unique_ptr<Handler> handleInitMessage(InitMessageFn fn) = 0;
@@ -231,10 +223,6 @@ public:
     //! Register handler for progress messages.
     using ShowProgressFn = std::function<void(const std::string& title, int progress, bool resume_possible)>;
     virtual std::unique_ptr<Handler> handleShowProgress(ShowProgressFn fn) = 0;
-
-    //! Register handler for wallet loader constructed messages.
-    using InitWalletFn = std::function<void()>;
-    virtual std::unique_ptr<Handler> handleInitWallet(InitWalletFn fn) = 0;
 
     //! Register handler for number of connections changed messages.
     using NotifyNumConnectionsChangedFn = std::function<void(int new_num_connections)>;
