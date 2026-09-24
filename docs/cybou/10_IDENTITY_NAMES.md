@@ -1,6 +1,6 @@
 # Identity and `.cybou` names
 
-Status: canonical protocol target. Core cryptography, vault, registry, account creation, payment, and candidate state components exist; the running node and desktop are still being connected to them.
+Status: canonical protocol target. Core cryptography, vault, registry, account creation, payment, state, and the initial desktop create/restore path exist. Mail encryption and name claiming still need product integration.
 
 ## Identity layers
 
@@ -30,4 +30,4 @@ The primary example is `stanislav.cybou`. A label is 5–32 lowercase ASCII byte
 
 ## Network cutover
 
-The canonical state joins monetary accounts, the identity registry, validator set, and eventually name ownership under one state root. Account creation and payment already have strict wire encodings and candidate execution. Mail, names, validator operations, finalized blocks, persistence, transport, and desktop use still require integration. The DEV reset discards obsolete state and vaults; there is no compatibility decoder or automatic import.
+The canonical state joins monetary accounts, the identity registry, validator set, and name ownership under one state root. Account creation, payments, names, finalized blocks, persistence, and the initial desktop create/restore path share that state. PQ Mail confidentiality, broad transport, independent validators, and remaining desktop security controls still require integration. The DEV reset discards obsolete state and vaults; there is no compatibility decoder or automatic import.

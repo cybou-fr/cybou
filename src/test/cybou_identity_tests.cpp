@@ -65,48 +65,38 @@ BOOST_AUTO_TEST_CASE(identity_authorization_serialization_and_commitment)
     BOOST_CHECK(*decoded == auth);
 }
 
-BOOST_AUTO_TEST_CASE(keystore_crash_safe_persistence_and_legacy_migration)
+BOOST_AUTO_TEST_CASE(keystore_uses_random_account_and_portable_vault)
 {
     const auto test_dir = std::filesystem::temp_directory_path() / "cybou_keystore_test";
     std::filesystem::create_directories(test_dir);
-    const auto key_path = test_dir / "test_identity.key";
-    const auto bak_path = test_dir / "test_identity.key.bak";
+    const auto key_path = test_dir / "test_identity.cybou";
     std::filesystem::remove(key_path);
-    std::filesystem::remove(bak_path);
 
-    // 1. Generate new and save
     cybou::CybouKeyStore ks1;
     BOOST_REQUIRE(ks1.GenerateNew());
     const auto acc_id1 = ks1.GetAccountId();
-    BOOST_REQUIRE(acc_id1.has_value());
-    BOOST_REQUIRE(ks1.SaveToFile(key_path));
+    const auto words = ks1.GetRecoveryWords();
+    BOOST_REQUIRE(acc_id1 && words && ks1.GetPublicKey());
+    BOOST_CHECK(acc_id1->Value() != *ks1.GetPublicKey());
+    BOOST_REQUIRE(cybou::DecodeRecoveryWords(*words));
+    BOOST_REQUIRE(ks1.SaveToFile(key_path, "correct horse battery staple"));
     BOOST_CHECK(std::filesystem::exists(key_path));
 
-    // 2. Load into new keystore
     cybou::CybouKeyStore ks2;
-    BOOST_REQUIRE(ks2.LoadFromFile(key_path));
+    BOOST_CHECK(!ks2.LoadFromFile(key_path, "wrong password"));
+    BOOST_REQUIRE(ks2.LoadFromFile(key_path, "correct horse battery staple"));
     BOOST_CHECK(ks2.GetAccountId() == acc_id1);
+    BOOST_CHECK(ks2.GetRecoveryWords() == words);
+    BOOST_CHECK(!ks2.SaveToFile(key_path, "correct horse battery staple"));
 
-    // 3. Save again -> creates .bak
-    BOOST_REQUIRE(ks2.SaveToFile(key_path));
-    BOOST_CHECK(std::filesystem::exists(bak_path));
-
-    // 4. Test legacy 32-byte raw migration
-    const auto legacy_path = test_dir / "legacy_identity.key";
-    std::filesystem::remove(legacy_path);
-    std::array<unsigned char, 32> raw_seed{};
-    raw_seed.fill(0x5a);
+    const auto raw_path = test_dir / "raw.key";
     {
-        std::ofstream out(legacy_path, std::ios::binary);
+        std::ofstream out(raw_path, std::ios::binary);
+        std::array<unsigned char, 32> raw_seed{};
+        raw_seed.fill(0x5a);
         out.write(reinterpret_cast<const char*>(raw_seed.data()), raw_seed.size());
     }
-    BOOST_CHECK_EQUAL(std::filesystem::file_size(legacy_path), 32);
-
-    cybou::CybouKeyStore ks_legacy;
-    BOOST_REQUIRE(ks_legacy.LoadFromFile(legacy_path));
-    BOOST_CHECK(ks_legacy.HasKey());
-    // Auto-migrated to wrapped format
-    BOOST_CHECK(std::filesystem::file_size(legacy_path) > 32);
+    BOOST_CHECK(!ks2.LoadFromFile(raw_path, "correct horse battery staple"));
 
     std::filesystem::remove_all(test_dir);
 }

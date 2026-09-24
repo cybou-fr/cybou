@@ -13,7 +13,7 @@ is the first product.**
 
 The protocol uses a random, stable 256-bit AccountID. A 24-word recovery phrase controls a hybrid Ed25519 and ML-DSA-65 Recovery Root. Each device has a separate Ed25519 and ML-DSA-44 key, an activation number, and its own operation nonce. Encrypted portable vaults hold local recovery and device material.
 
-The current core contains canonical identity registration, account creation, payment authorization, state snapshots, and candidate block execution for this cryptographic profile. These components are being connected to block encoding, persisted state, transport, and the Qt desktop. The running DEV node has not completed that cutover; do not treat its identities or balances as durable assets.
+The native core and Qt identity flow now create random AccountIDs, save a portable CYBV2 vault before AccountCreate, and restore a device from 24 words through a root-authorized operation. The running DEV network has not completed the full PQ Mail and multi-validator cutover; do not treat its identities or balances as durable assets.
 
 ## Services
 
@@ -44,7 +44,7 @@ The desktop client uses Qt 6 and modern C++. Its intended path is:
 Qt application → native CYBOU runtime → peer-to-peer network
 ```
 
-Identity creation and restore must save and verify the portable vault before submitting an operation. Network results are shown as pending until verified finality. The desktop cutover to the PQ identity and state path remains in progress.
+Identity creation and recovery save and verify the portable vault before submitting an operation. Network results remain pending until verified finality. Name claiming, PQ Mail confidentiality, vault password change, and full device management still need desktop integration.
 
 ## Status and documentation
 

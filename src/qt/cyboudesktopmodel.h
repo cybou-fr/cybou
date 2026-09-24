@@ -130,12 +130,15 @@ public:
 
     /** Requests identity creation from the backend.
         The UI only emits the request; protocol behavior belongs to core. */
-    void requestCreateIdentity();
+    void requestCreateIdentity(const QString& vault_password);
+    bool requestRestoreIdentity(const QString& recovery_phrase, const QString& vault_password);
+    bool requestUnlockIdentity(const QString& vault_password);
 
 Q_SIGNALS:
     void statusChanged();
     void capabilitiesChanged();
     void createIdentityRequested();
+    void identityCreationFailed(const QString& reason);
 
 private:
     ClientModel* m_client_model{nullptr};

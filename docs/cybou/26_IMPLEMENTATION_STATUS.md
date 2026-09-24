@@ -17,13 +17,14 @@ CYBOU is experimental. The canonical product target uses hybrid post-quantum aut
 - Validator-set validation, hybrid validator signatures, BFT finality certificates, and a core consensus engine with explicit finality.
 - Canonical operations, name registry, block execution, state store, and standalone authority/observer sync are connected to the native node runtime.
 - The DEV network definition commits to the active name rules. The CLI derives genesis validator keys from the same secret used by the producer; the desktop loads the verified network file.
+- Desktop identity creation uses a random AccountID, confirmed 24-word phrase, and durable CYBV2 vault before AccountCreate. Clean-machine restore resolves the RecoveryKeyID from verified state and submits a root-authorized DeviceAdd before activating the new device.
 
 ## Integration still required
 
-- Integrate random AccountID, 24-word phrase confirmation, portable vault, and clean-machine restore into the desktop identity service. The current seed-based keystore still derives AccountID from Ed25519.
+- Complete password change, vault lock and reauthentication, device management, and recovery when the account already has eight active devices.
 - Complete Mail confidentiality with independent X25519 and ML-KEM keys, usable recipient discovery, encrypted local mailbox storage, and historical sender-key authorization evidence.
 - Complete desktop `.cybou` claim and finalized ownership flows on top of the implemented registry.
-- Move the Qt creation, restore, wallet, and Mail flows onto the canonical runtime and portable vault.
+- Finish Qt wallet and Mail flows against the canonical identity and encryption profiles.
 - Run independent validators with durable crash recovery and verify finality under production topology.
 - Finish operator, release, and treasury signing integration under the PQ key policy.
 - Implement distributed Object Storage and Backup before large attachments and mass-scale Mail.

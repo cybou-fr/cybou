@@ -4,8 +4,14 @@
 #include <cybou/identity_service.h>
 
 #include <random.h>
+#include <support/cleanse.h>
+
+#include <algorithm>
 
 namespace cybou {
+namespace {
+bool IsAuthorizedDevice(const CybouNodeRuntime& runtime, const AccountId& account_id, const CybouKeyStore& keystore);
+}
 
 CybouIdentityService::CybouIdentityService(
     CybouNodeRuntime& runtime,
@@ -17,6 +23,7 @@ CybouIdentityService::CybouIdentityService(
 void CybouIdentityService::SetStoragePath(std::filesystem::path path)
 {
     std::lock_guard lock(m_mutex);
+    if (m_storage_path != path) m_vault_saved = false;
     m_storage_path = std::move(path);
 }
 
@@ -40,45 +47,63 @@ std::optional<AccountId> CybouIdentityService::GetAccountId() const
     return m_keystore.GetAccountId();
 }
 
-bool CybouIdentityService::LoadExistingIdentity(const std::array<unsigned char, 32>& priv_key_seed)
+std::optional<AccountState> CybouIdentityService::GetFinalizedAccountState() const
+{
+    const auto account_id = GetAccountId();
+    return account_id ? m_runtime.GetAccountState(*account_id) : std::nullopt;
+}
+
+std::optional<RecoveryWords> CybouIdentityService::PrepareNewIdentity()
 {
     std::lock_guard lock(m_mutex);
-    if (!m_keystore.LoadFromSeed(priv_key_seed)) return false;
+    if (!m_storage_path || std::filesystem::exists(*m_storage_path) || m_vault_saved) return std::nullopt;
+    if (m_keystore.HasKey()) return m_keystore.GetRecoveryWords();
+    if (!m_keystore.GenerateNew()) return std::nullopt;
+    return m_keystore.GetRecoveryWords();
+}
+
+void CybouIdentityService::DiscardPreparedIdentity()
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_vault_saved && (m_phase.load() == IdentityCreationPhase::IDLE ||
+        m_phase.load() == IdentityCreationPhase::FAILED)) m_keystore.Clear();
+}
+
+bool CybouIdentityService::LoadVault(std::string_view password)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_storage_path || !m_keystore.LoadFromFile(*m_storage_path, password)) return false;
+    m_vault_saved = true;
     const auto acc_id = m_keystore.GetAccountId();
     if (!acc_id) return false;
 
     const auto account_state = m_runtime.GetAccountState(*acc_id);
-    if (account_state.has_value()) {
+    if (account_state && IsAuthorizedDevice(m_runtime, *acc_id, m_keystore)) {
         m_phase.store(IdentityCreationPhase::ACTIVE);
     } else {
         m_phase.store(IdentityCreationPhase::IDLE);
     }
     return true;
-}
-
-bool CybouIdentityService::LoadKeyStore(const std::filesystem::path& path)
-{
-    std::lock_guard lock(m_mutex);
-    if (!m_keystore.LoadFromFile(path)) return false;
-    const auto acc_id = m_keystore.GetAccountId();
-    if (!acc_id) return false;
-
-    const auto account_state = m_runtime.GetAccountState(*acc_id);
-    if (account_state.has_value()) {
-        m_phase.store(IdentityCreationPhase::ACTIVE);
-    } else {
-        m_phase.store(IdentityCreationPhase::IDLE);
-    }
-    return true;
-}
-
-bool CybouIdentityService::SaveKeyStore(const std::filesystem::path& path) const
-{
-    std::lock_guard lock(m_mutex);
-    return m_keystore.SaveToFile(path);
 }
 
 namespace {
+
+struct PasswordWiper {
+    std::string& value;
+    ~PasswordWiper() { if (!value.empty()) memory_cleanse(value.data(), value.size()); }
+};
+
+bool IsAuthorizedDevice(const CybouNodeRuntime& runtime, const AccountId& account_id, const CybouKeyStore& keystore)
+{
+    const auto id = keystore.GetDeviceId();
+    const auto key = keystore.GetDevicePublicKey();
+    const auto loaded = runtime.GetStore().LoadState();
+    if (!id || !key || !loaded || !loaded.state) return false;
+    const auto* record = loaded.state->identities.Find(account_id);
+    if (!record) return false;
+    const auto found = record->devices.find(*id);
+    return found != record->devices.end() && found->second.key == *key;
+}
 
 IdentityCreationResult Failure(
     IdentityCreationPhase phase,
@@ -98,10 +123,11 @@ IdentityCreationResult Failure(
 } // namespace
 
 IdentityCreationResult CybouIdentityService::CreateIdentitySync(
+    std::string password,
     const PhaseCallback& on_phase,
-    const std::optional<std::array<unsigned char, 32>>& user_provided_key,
     const std::chrono::milliseconds timeout)
 {
+    PasswordWiper wipe_password{password};
     m_cancelled.store(false);
 
     // Phase 1: CREATING_KEYS
@@ -112,16 +138,9 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     IdentityAuthorization auth;
     {
         std::lock_guard lock(m_mutex);
-        if (user_provided_key.has_value()) {
-            if (!m_keystore.LoadFromSeed(*user_provided_key)) {
-                m_phase.store(IdentityCreationPhase::FAILED);
-                return Failure(IdentityCreationPhase::FAILED, "Failed to load user-provided key");
-            }
-        } else if (!m_keystore.HasKey()) {
-            if (!m_keystore.GenerateNew()) {
-                m_phase.store(IdentityCreationPhase::FAILED);
-                return Failure(IdentityCreationPhase::FAILED, "Failed to generate local key");
-            }
+        if (!m_keystore.HasKey() || !m_storage_path) {
+            m_phase.store(IdentityCreationPhase::FAILED);
+            return Failure(IdentityCreationPhase::FAILED, "Prepare identity and configure its vault before creation");
         }
         const auto acc_opt = m_keystore.GetAccountId();
         const auto dev_key = m_keystore.GetDevicePublicKey();
@@ -136,20 +155,24 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
             .initial_device = *dev_key,
         };
 
-        // CRITICAL DURABILITY: Persist key to disk BEFORE doing PoW and network broadcast.
-        // This ensures the user NEVER loses their private key if the process crashes, reboots,
-        // or gets killed after the on-chain account creation is mined.
-        if (m_storage_path.has_value()) {
-            if (!m_keystore.SaveToFile(*m_storage_path)) {
+        // A new account cannot be broadcast until the portable vault has been
+        // durably published and authenticated by reopening it.
+        if (!m_vault_saved) {
+            if (password.size() < 12 || !m_keystore.SaveToFile(*m_storage_path, password)) {
                 m_phase.store(IdentityCreationPhase::FAILED);
-                return Failure(IdentityCreationPhase::FAILED, "Failed to persist identity key to disk before broadcast");
+                return Failure(IdentityCreationPhase::FAILED, "Failed to save and verify portable identity vault");
             }
+            m_vault_saved = true;
         }
     }
 
     // Check if account already exists in state
     const auto existing = m_runtime.GetAccountState(account_id);
     if (existing.has_value()) {
+        if (!IsAuthorizedDevice(m_runtime, account_id, m_keystore)) {
+            m_phase.store(IdentityCreationPhase::FAILED);
+            return Failure(IdentityCreationPhase::FAILED, "Local device is not authorized; resume identity restoration", account_id);
+        }
         m_phase.store(IdentityCreationPhase::ACTIVE);
         if (on_phase) on_phase(IdentityCreationPhase::ACTIVE, "Identity active.");
         return IdentityCreationResult{
@@ -264,9 +287,9 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
 }
 
 void CybouIdentityService::CreateIdentityAsync(
+    std::string password,
     PhaseCallback on_phase,
     CompletionCallback on_complete,
-    const std::optional<std::array<unsigned char, 32>>& user_provided_key,
     const std::chrono::milliseconds timeout)
 {
     Cancel();
@@ -274,11 +297,160 @@ void CybouIdentityService::CreateIdentityAsync(
         m_worker.join();
     }
     m_cancelled.store(false);
-    m_worker = std::jthread([this, on_phase = std::move(on_phase), on_complete = std::move(on_complete), user_provided_key, timeout]() {
-        const auto result = CreateIdentitySync(on_phase, user_provided_key, timeout);
+    m_worker = std::jthread([this, password = std::move(password), on_phase = std::move(on_phase), on_complete = std::move(on_complete), timeout]() mutable {
+        const auto result = CreateIdentitySync(std::move(password), on_phase, timeout);
         if (on_complete) {
             on_complete(result);
         }
+    });
+}
+
+IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
+    const RecoveryWords& words,
+    std::string password,
+    const PhaseCallback& on_phase,
+    const std::chrono::milliseconds timeout)
+{
+    PasswordWiper wipe_password{password};
+    m_cancelled.store(false);
+    m_phase.store(IdentityCreationPhase::CREATING_KEYS);
+    if (on_phase) on_phase(IdentityCreationPhase::CREATING_KEYS, "Finding recovery root in verified state...");
+    auto entropy = DecodeRecoveryWords(words);
+    if (!entropy) {
+        m_phase.store(IdentityCreationPhase::FAILED);
+        return Failure(IdentityCreationPhase::FAILED, "Invalid 24-word recovery phrase");
+    }
+    struct EntropyWiper {
+        RecoveryEntropy& value;
+        ~EntropyWiper() { memory_cleanse(value.data(), value.size()); }
+    } wipe_entropy{*entropy};
+    const auto root_key = DeriveIdentityPublicKey(*entropy, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto root_id = root_key ? ComputeRecoveryKeyId(*root_key) : std::nullopt;
+    if (!root_key || !root_id) {
+        m_phase.store(IdentityCreationPhase::FAILED);
+        return Failure(IdentityCreationPhase::FAILED, "Cannot derive recovery root");
+    }
+    const auto loaded = m_runtime.GetStore().LoadState();
+    const auto account = loaded && loaded.state ? loaded.state->identities.FindByRecoveryKeyId(*root_id) : std::nullopt;
+    if (!account || !loaded || !loaded.state) {
+        m_phase.store(IdentityCreationPhase::FAILED);
+        return Failure(IdentityCreationPhase::FAILED, "Recovery root is not in verified state; finish synchronization first");
+    }
+    const auto* record = loaded.state->identities.Find(*account);
+    if (!record || record->recovery_root != *root_key) {
+        m_phase.store(IdentityCreationPhase::FAILED);
+        return Failure(IdentityCreationPhase::FAILED, "Recovery root is unavailable", *account);
+    }
+    std::filesystem::path vault_path;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_storage_path) {
+            m_phase.store(IdentityCreationPhase::FAILED);
+            return Failure(IdentityCreationPhase::FAILED, "Portable vault path is not configured", *account);
+        }
+        vault_path = *m_storage_path;
+        if (std::filesystem::exists(vault_path)) {
+            if (!m_keystore.LoadFromFile(vault_path, password)) {
+                m_phase.store(IdentityCreationPhase::FAILED);
+                return Failure(IdentityCreationPhase::FAILED, "Cannot unlock existing recovery vault", *account);
+            }
+            m_vault_saved = true;
+        } else {
+            if (record->devices.size() >= MAX_ACTIVE_DEVICES) {
+                m_phase.store(IdentityCreationPhase::FAILED);
+                return Failure(IdentityCreationPhase::FAILED, "The account has reached its device limit", *account);
+            }
+            if (password.size() < 12) {
+                m_phase.store(IdentityCreationPhase::FAILED);
+                return Failure(IdentityCreationPhase::FAILED, "Vault password must have at least 12 characters", *account);
+            }
+            IdentityMaterial material;
+            std::copy_n(account->Value().begin(), material.account_id.size(), material.account_id.begin());
+            material.recovery_entropy = *entropy;
+            GetStrongRandBytes(material.device_secret);
+            if (!m_keystore.LoadMaterial(std::move(material)) || !m_keystore.SaveToFile(vault_path, password)) {
+                m_phase.store(IdentityCreationPhase::FAILED);
+                return Failure(IdentityCreationPhase::FAILED, "Cannot save and verify recovery vault", *account);
+            }
+            m_vault_saved = true;
+        }
+        if (m_keystore.GetAccountId() != account || m_keystore.GetRecoveryPublicKey() != root_key) {
+            m_keystore.Clear();
+            m_vault_saved = false;
+            m_phase.store(IdentityCreationPhase::FAILED);
+            return Failure(IdentityCreationPhase::FAILED, "Vault does not match recovery phrase or AccountID", *account);
+        }
+    }
+    if (IsAuthorizedDevice(m_runtime, *account, m_keystore)) {
+        const auto account_state = m_runtime.GetAccountState(*account);
+        m_phase.store(IdentityCreationPhase::ACTIVE);
+        return IdentityCreationResult{true, IdentityCreationPhase::ACTIVE, *account,
+            account_state ? account_state->creation_height : 0,
+            account_state ? account_state->system_balance : 0, {}};
+    }
+
+    const auto device_key = m_keystore.GetDevicePublicKey();
+    if (record->devices.size() >= MAX_ACTIVE_DEVICES) {
+        m_phase.store(IdentityCreationPhase::FAILED);
+        return Failure(IdentityCreationPhase::FAILED, "The account has reached its device limit", *account);
+    }
+    if (!device_key) {
+        m_phase.store(IdentityCreationPhase::FAILED);
+        return Failure(IdentityCreationPhase::FAILED, "Recovered device key is unavailable", *account);
+    }
+    DeviceAdd request{.account_id = *account, .new_device = *device_key,
+        .root_nonce = record->next_root_nonce, .root_signature = {}, .device_pop = {}};
+    const auto digest = ComputeDeviceAddDigest(m_runtime.GetNetworkId(), request);
+    if (!digest) {
+        m_phase.store(IdentityCreationPhase::FAILED);
+        return Failure(IdentityCreationPhase::FAILED, "Cannot sign device recovery", *account);
+    }
+    const auto root_signature = m_keystore.SignRecovery(*digest);
+    const auto device_pop = m_keystore.SignDevice(*digest);
+    if (!root_signature || !device_pop) {
+        m_phase.store(IdentityCreationPhase::FAILED);
+        return Failure(IdentityCreationPhase::FAILED, "Cannot sign device recovery", *account);
+    }
+    request.root_signature = *root_signature;
+    request.device_pop = *device_pop;
+    m_phase.store(IdentityCreationPhase::BROADCASTING);
+    if (on_phase) on_phase(IdentityCreationPhase::BROADCASTING, "Submitting root-authorized DeviceAdd...");
+    if (!m_runtime.SubmitOperation(ProtocolOperation{request})) {
+        m_phase.store(IdentityCreationPhase::FAILED);
+        return Failure(IdentityCreationPhase::FAILED, "DeviceAdd submission was rejected", *account);
+    }
+    m_phase.store(IdentityCreationPhase::WAITING_FOR_FINALITY);
+    if (on_phase) on_phase(IdentityCreationPhase::WAITING_FOR_FINALITY, "Waiting for device authorization finality...");
+    if (m_runtime.GetStatus().is_authority) m_runtime.ProduceBlock();
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!m_cancelled.load() && std::chrono::steady_clock::now() < deadline) {
+        if (IsAuthorizedDevice(m_runtime, *account, m_keystore)) {
+            const auto account_state = m_runtime.GetAccountState(*account);
+            m_phase.store(IdentityCreationPhase::ACTIVE);
+            return IdentityCreationResult{true, IdentityCreationPhase::ACTIVE, *account,
+                account_state ? account_state->creation_height : 0,
+                account_state ? account_state->system_balance : 0, {}};
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    m_phase.store(IdentityCreationPhase::FAILED);
+    return Failure(IdentityCreationPhase::FAILED,
+        m_cancelled.load() ? "Cancelled" : "Timed out waiting for device authorization finality", *account);
+}
+
+void CybouIdentityService::RestoreIdentityAsync(
+    RecoveryWords words, std::string password,
+    PhaseCallback on_phase, CompletionCallback on_complete,
+    const std::chrono::milliseconds timeout)
+{
+    Cancel();
+    if (m_worker.joinable()) m_worker.join();
+    m_cancelled.store(false);
+    m_worker = std::jthread([this, words = std::move(words), password = std::move(password),
+        on_phase = std::move(on_phase), on_complete = std::move(on_complete), timeout]() mutable {
+        const auto result = RestoreIdentitySync(words, std::move(password), on_phase, timeout);
+        for (auto& word : words) std::fill(word.begin(), word.end(), '\0');
+        if (on_complete) on_complete(result);
     });
 }
 

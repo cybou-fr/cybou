@@ -1,6 +1,8 @@
 # 78 — Identity desktop UX contract
 
-Status: target UX. The current IdentityPage has not completed the PQ cutover.
+Status: create and restore entry paths are connected to the PQ identity runtime.
+Name claiming, device management, vault lock, password change, and the full
+security view remain open.
 
 The first screen gives equal prominence to **Create identity** and **Restore
 identity**. All finalized facts come from native core. Local phrase, vault,

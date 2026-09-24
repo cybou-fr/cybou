@@ -190,11 +190,8 @@ void CybouMainWindow::initCybouRuntime()
             throw std::runtime_error("CYBOU state is unavailable or corrupt");
         }
 
-        const auto id_key_path = (gArgs.GetDataDirNet() / "identity.key").std_path();
+        const auto id_key_path = (gArgs.GetDataDirNet() / "identity.cybou").std_path();
         m_identity_service = std::make_unique<cybou::CybouIdentityService>(*m_node_runtime, id_key_path);
-        if (std::filesystem::exists(id_key_path)) {
-            m_identity_service->LoadKeyStore(id_key_path);
-        }
 
         m_desktop_model->setIdentityService(m_identity_service.get());
 
@@ -256,12 +253,6 @@ void CybouMainWindow::initCybouRuntime()
 
         // Connect identity persistence on creation
         connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, [this] {
-            if (m_desktop_model->status().identity_state == CybouIdentityState::Active && m_identity_service) {
-                const auto id_path = (gArgs.GetDataDirNet() / "identity.key").std_path();
-                if (!std::filesystem::exists(id_path)) {
-                    m_identity_service->SaveKeyStore(id_path);
-                }
-            }
         });
     } catch (const std::exception& e) {
         qWarning() << "CybouNodeRuntime initialization error:" << e.what();

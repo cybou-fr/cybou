@@ -66,13 +66,13 @@ public:
 
     /** Account ID if an identity has been initialized or created */
     std::optional<AccountId> GetAccountId() const;
+    std::optional<AccountState> GetFinalizedAccountState() const;
 
-    /** Load an existing identity from raw private key seed (cleansed after loading) */
-    bool LoadExistingIdentity(const std::array<unsigned char, 32>& priv_key_seed);
-
-    /** Load / save protected key from / to file */
-    bool LoadKeyStore(const std::filesystem::path& path);
-    bool SaveKeyStore(const std::filesystem::path& path) const;
+    /** Prepare random local material and return its 24 words for user confirmation. */
+    std::optional<RecoveryWords> PrepareNewIdentity();
+    void DiscardPreparedIdentity();
+    /** Unlock an existing portable vault; no raw-seed or automatic import path. */
+    bool LoadVault(std::string_view password);
 
     /** Access underlying keystore */
     CybouKeyStore& GetKeyStore() { return m_keystore; }
@@ -80,15 +80,27 @@ public:
 
     /** Synchronous identity creation (blocks until complete or error) */
     IdentityCreationResult CreateIdentitySync(
+        std::string password,
         const PhaseCallback& on_phase = nullptr,
-        const std::optional<std::array<unsigned char, 32>>& user_provided_key = std::nullopt,
         std::chrono::milliseconds timeout = std::chrono::seconds(30));
 
     /** Asynchronous identity creation */
     void CreateIdentityAsync(
+        std::string password,
         PhaseCallback on_phase,
         CompletionCallback on_complete,
-        const std::optional<std::array<unsigned char, 32>>& user_provided_key = std::nullopt,
+        std::chrono::milliseconds timeout = std::chrono::seconds(30));
+
+    IdentityCreationResult RestoreIdentitySync(
+        const RecoveryWords& words,
+        std::string password,
+        const PhaseCallback& on_phase = nullptr,
+        std::chrono::milliseconds timeout = std::chrono::seconds(30));
+    void RestoreIdentityAsync(
+        RecoveryWords words,
+        std::string password,
+        PhaseCallback on_phase,
+        CompletionCallback on_complete,
         std::chrono::milliseconds timeout = std::chrono::seconds(30));
 
     /** Cancel ongoing identity creation */
@@ -100,6 +112,7 @@ private:
     std::atomic<bool> m_cancelled{false};
     std::optional<std::filesystem::path> m_storage_path;
     CybouKeyStore m_keystore;
+    bool m_vault_saved{false};
     mutable std::mutex m_mutex;
     std::jthread m_worker;
 };

@@ -5,13 +5,20 @@
 #include <qt/pages/identitypage.h>
 
 #include <qt/cyboutheme.h>
+#include <cybou/identity_service.h>
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <QPushButton>
+#include <QStringList>
 #include <QStyle>
 #include <QVBoxLayout>
+
+#include <filesystem>
 
 namespace {
 
@@ -121,13 +128,24 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     m_create_button->setObjectName("primaryButton");
     m_create_button->setProperty("cybouId", "createIdentity");
     m_create_button->setEnabled(false);
-    m_create_button->setToolTip(tr("Identity creation is not connected to the desktop yet."));
-    connect(m_create_button, &QPushButton::clicked, this, [this] { m_model->requestCreateIdentity(); });
+    m_create_button->setToolTip(tr("Create a portable recovery vault before network submission."));
+    connect(m_create_button, &QPushButton::clicked, this, [this] { startIdentityFlow(); });
+    m_restore_button = new QPushButton{tr("Restore identity"), card};
+    m_restore_button->setObjectName("primaryButton");
+    m_restore_button->setProperty("cybouId", "restoreIdentity");
+    connect(m_restore_button, &QPushButton::clicked, this, [this] { startRestoreFlow(); });
     card_layout->addSpacing(8);
-    card_layout->addWidget(m_create_button, 0, Qt::AlignLeft);
+    auto* actions = new QHBoxLayout;
+    actions->addWidget(m_create_button);
+    actions->addWidget(m_restore_button);
+    actions->addStretch();
+    card_layout->addLayout(actions);
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::identityCreationFailed, this, [this](const QString& reason) {
+        QMessageBox::warning(this, tr("Identity creation failed"), reason);
+    });
 
     // Two-column body: main state card on the left, protocol facts on the right.
     auto* content = new QHBoxLayout;
@@ -202,6 +220,122 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     refresh();
 }
 
+void IdentityPage::startIdentityFlow()
+{
+    auto* service = m_model->identityService();
+    if (!service) return;
+    const auto vault_path = service->GetStoragePath();
+    if (!vault_path) return;
+
+    if (std::filesystem::exists(*vault_path)) {
+        if (!service->GetKeyStore().HasKey()) {
+            bool accepted{false};
+            QString password = QInputDialog::getText(this, tr("Unlock identity"),
+                tr("Vault password"), QLineEdit::Password, {}, &accepted);
+            if (!accepted) return;
+            const bool loaded = m_model->requestUnlockIdentity(password);
+            password.fill(QChar{0});
+            if (!loaded) {
+                QMessageBox::warning(this, tr("Cannot unlock identity"),
+                    tr("The password is incorrect or the vault is damaged."));
+                return;
+            }
+            if (service->GetPhase() == cybou::IdentityCreationPhase::ACTIVE) return;
+        }
+        m_model->requestCreateIdentity({});
+        return;
+    }
+
+    bool accepted{false};
+    QString password = QInputDialog::getText(this, tr("Create identity"),
+        tr("Set a vault password (at least 12 characters)"), QLineEdit::Password, {}, &accepted);
+    if (!accepted) return;
+    if (password.size() < 12) {
+        password.fill(QChar{0});
+        QMessageBox::warning(this, tr("Weak vault password"), tr("Use at least 12 characters."));
+        return;
+    }
+    QString confirmation = QInputDialog::getText(this, tr("Confirm vault password"),
+        tr("Enter the password again"), QLineEdit::Password, {}, &accepted);
+    const bool matches = accepted && password == confirmation;
+    confirmation.fill(QChar{0});
+    if (!matches) {
+        password.fill(QChar{0});
+        if (accepted) QMessageBox::warning(this, tr("Passwords differ"), tr("The passwords did not match."));
+        return;
+    }
+
+    const auto words = service->PrepareNewIdentity();
+    if (!words) {
+        password.fill(QChar{0});
+        QMessageBox::warning(this, tr("Cannot prepare identity"), tr("The local identity material could not be generated."));
+        return;
+    }
+    QStringList numbered_words;
+    for (size_t i{0}; i < words->size(); ++i) {
+        numbered_words << QStringLiteral("%1. %2").arg(i + 1).arg(QString::fromStdString((*words)[i]));
+    }
+    const auto decision = QMessageBox::question(this, tr("Write down your recovery words"),
+        tr("Write these 24 words down in order. They recover your identity on a clean machine.\n\n%1\n\nContinue after you have saved them privately.")
+            .arg(numbered_words.join(QLatin1Char('\n'))),
+        QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (decision != QMessageBox::Ok) {
+        service->DiscardPreparedIdentity();
+        password.fill(QChar{0});
+        return;
+    }
+    for (const size_t index : {size_t{3}, size_t{16}}) {
+        QString answer = QInputDialog::getText(this, tr("Confirm recovery words"),
+            tr("Enter word %1").arg(index + 1), QLineEdit::Normal, {}, &accepted);
+        const bool correct = accepted && answer == QString::fromStdString((*words)[index]);
+        answer.fill(QChar{0});
+        if (!correct) {
+            service->DiscardPreparedIdentity();
+            password.fill(QChar{0});
+            if (accepted) QMessageBox::warning(this, tr("Recovery words differ"), tr("Start again and record the words in order."));
+            return;
+        }
+    }
+    m_model->requestCreateIdentity(password);
+    password.fill(QChar{0});
+}
+
+void IdentityPage::startRestoreFlow()
+{
+    if (!m_model->identityService()) return;
+    bool accepted{false};
+    QString phrase = QInputDialog::getMultiLineText(this, tr("Restore identity"),
+        tr("Enter your 24 recovery words in order"), {}, &accepted);
+    if (!accepted) return;
+    QString password = QInputDialog::getText(this, tr("Recovery vault"),
+        tr("Set a vault password (at least 12 characters)"), QLineEdit::Password, {}, &accepted);
+    if (!accepted) {
+        phrase.fill(QChar{0});
+        return;
+    }
+    if (password.size() < 12) {
+        phrase.fill(QChar{0});
+        password.fill(QChar{0});
+        QMessageBox::warning(this, tr("Weak vault password"), tr("Use at least 12 characters."));
+        return;
+    }
+    QString confirmation = QInputDialog::getText(this, tr("Confirm vault password"),
+        tr("Enter the password again"), QLineEdit::Password, {}, &accepted);
+    const bool matches = accepted && password == confirmation;
+    confirmation.fill(QChar{0});
+    if (!matches) {
+        phrase.fill(QChar{0});
+        password.fill(QChar{0});
+        if (accepted) QMessageBox::warning(this, tr("Passwords differ"), tr("The passwords did not match."));
+        return;
+    }
+    const bool started = m_model->requestRestoreIdentity(phrase, password);
+    phrase.fill(QChar{0});
+    password.fill(QChar{0});
+    if (!started) QMessageBox::warning(this, tr("Invalid recovery phrase"),
+        tr("Enter exactly 24 valid words in their original order."));
+}
+
 void IdentityPage::rebuildForState(CybouIdentityState state)
 {
     const bool creating = state != CybouIdentityState::None && state != CybouIdentityState::Active;
@@ -211,6 +345,7 @@ void IdentityPage::rebuildForState(CybouIdentityState state)
     m_active_details->setVisible(active);
     m_dev_warning->setVisible(active);
     m_create_button->setVisible(!active);
+    m_restore_button->setVisible(!active);
 
     const QVector<CybouIdentityState> flow{
         CybouIdentityState::CreatingKeys,
@@ -251,19 +386,19 @@ void IdentityPage::refresh()
     }
 
     if (status.identity_state != CybouIdentityState::None) {
-        m_state_label->setText(tr("Creating identity"));
+        m_state_label->setText(tr("Processing identity"));
         switch (status.identity_state) {
         case CybouIdentityState::CreatingKeys:
-            m_detail_label->setText(tr("Keys are being generated on this device. They never leave it — losing them means losing the identity."));
+            m_detail_label->setText(tr("Preparing local identity keys and checking verified state."));
             break;
         case CybouIdentityState::PerformingWork:
             m_detail_label->setText(tr("The node is performing AccountCreationWork — protocol anti-Sybil computation. One identity costs real work, so mass registrations stay out."));
             break;
         case CybouIdentityState::Broadcasting:
-            m_detail_label->setText(tr("The signed AccountCreateOp is being broadcast to the validator set."));
+            m_detail_label->setText(tr("The signed identity operation is being submitted to the network."));
             break;
         case CybouIdentityState::WaitingForFinality:
-            m_detail_label->setText(tr("Waiting for a BFT finality certificate. The account becomes real only once validators commit the block — this page flips to Active at that point."));
+            m_detail_label->setText(tr("Waiting for verified BFT finality before activating this device."));
             break;
         case CybouIdentityState::Active:
         case CybouIdentityState::None:
@@ -275,11 +410,17 @@ void IdentityPage::refresh()
     m_state_label->setText(tr("No CYBOU identity"));
     const bool pending = m_model->identityCreationRequestPending();
     m_detail_label->setText(pending
-        ? tr("Creation requested. The node will drive the protocol phases — keys, anti-Sybil work, broadcast and BFT finality — and this page will follow them.")
+        ? tr("Identity operation requested. The node will drive each protocol phase and report finality.")
         : tr("Your identity will be controlled by local keys and registered through a permissionless protocol operation with protocol anti-Sybil work."));
     m_create_button->setEnabled(!pending && m_model->capabilities().account_creation);
-    m_create_button->setText(pending ? tr("Creation requested…") : tr("Create identity"));
+    m_restore_button->setEnabled(!pending && m_model->capabilities().account_creation);
+    const auto* service = m_model->identityService();
+    const auto vault_path = service ? service->GetStoragePath() : std::nullopt;
+    const bool has_vault = vault_path && std::filesystem::exists(*vault_path);
+    m_create_button->setText(pending ? tr("Creation requested…") :
+        has_vault ? (service->GetKeyStore().HasKey() ? tr("Resume account creation") : tr("Unlock identity")) :
+        tr("Create identity"));
     m_create_button->setToolTip(pending
         ? tr("Waiting for the node to pick up the request.")
-        : tr("Identity creation is not connected to the desktop yet."));
+        : tr("Create or unlock a password-protected recovery vault."));
 }

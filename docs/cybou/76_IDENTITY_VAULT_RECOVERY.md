@@ -1,7 +1,7 @@
 # 76 — Identity vault and recovery
 
-Status: target specification. Local phrase and cryptographic envelope code
-exists, but desktop vault and mnemonic restore are not integrated.
+Status: initial desktop creation and clean-machine device restore are integrated.
+Password change, vault lock, and recovery at the active-device limit remain open.
 
 The local `identity_crypto` module has fixed HKDF labels and deterministic
 public-key test vectors. `recovery_phrase` now encodes and decodes 256-bit
@@ -15,7 +15,7 @@ reopening before returning success. The initial `CVID2` payload contains a
 random AccountID, 256-bit recovery entropy, and an independent random initial
 device secret, each 32 bytes in that order after the five-byte payload magic.
 `IdentityMaterial` clears these fields when destroyed. Password change,
-desktop integration, and consensus recovery remain unimplemented.
+password change and full recovery management remain unimplemented.
 
 ## Recovery Root
 
@@ -34,12 +34,14 @@ Local RecoveryKeyID is SHA-256 over the ASCII bytes
 `CYBOU/RECOVERY-KEY-ID/V2`, bytes `02 01` (identifier version and hybrid root
 suite), 32 raw Ed25519 public-key bytes, and 1952 raw ML-DSA-65 public-key
 bytes, in that order. It rejects other key purposes, malformed sizes, and
-all-zero public-key encodings. The consensus mapping and historical rotation
-rules are not yet implemented.
+all-zero public-key encodings. The consensus registry maps RecoveryKeyID to
+AccountID and validates root rotation. Historical Mail authorization evidence
+remains incomplete.
 
 On a clean machine, derive the root from the phrase, find AccountID in verified
-state, generate a fresh device keyset, authorize DeviceAdd with both root
-signatures, wait for finality, and save a new password-protected vault. Loss of
+state, generate a fresh device keyset, durably save a new password-protected
+vault, authorize DeviceAdd with root and new-device signatures, and wait for
+finality. Loss of
 all devices is recoverable if the phrase survives. Loss of devices and phrase
 is unrecoverable.
 

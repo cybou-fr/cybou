@@ -7,6 +7,8 @@
 #include <qt/clientmodel.h>
 #include <qt/optionsmodel.h>
 
+#include <QRegularExpression>
+
 #include <utility>
 
 CybouDesktopModel::CybouDesktopModel(QString network_name, QObject* parent)
@@ -116,7 +118,22 @@ void CybouDesktopModel::setWalletService(cybou::CybouWalletService* wallet_servi
     }
 }
 
-void CybouDesktopModel::requestCreateIdentity()
+bool CybouDesktopModel::requestUnlockIdentity(const QString& vault_password)
+{
+    if (!m_identity_service || !m_identity_service->LoadVault(vault_password.toStdString())) return false;
+    const auto account_id = m_identity_service->GetAccountId();
+    if (m_identity_service->GetPhase() == cybou::IdentityCreationPhase::ACTIVE && account_id) {
+        const auto state = m_identity_service->GetFinalizedAccountState();
+        setIdentityState(CybouIdentityState::Active,
+            QString::fromStdString(account_id->Value().GetHex()),
+            state ? static_cast<int>(state->creation_height) : 0);
+        if (state) setBalances(state->balance, state->system_balance);
+    }
+    Q_EMIT statusChanged();
+    return true;
+}
+
+void CybouDesktopModel::requestCreateIdentity(const QString& vault_password)
 {
     // The UI boundary ends here: protocol anti-Sybil work, operation
     // construction and finality handling belong to core. The flag below is
@@ -130,7 +147,7 @@ void CybouDesktopModel::requestCreateIdentity()
         return;
     }
 
-    m_identity_service->CreateIdentityAsync(
+    m_identity_service->CreateIdentityAsync(vault_password.toStdString(),
         [this](cybou::IdentityCreationPhase phase, const std::string& /*detail*/) {
             QMetaObject::invokeMethod(this, [this, phase] {
                 switch (phase) {
@@ -162,9 +179,48 @@ void CybouDesktopModel::requestCreateIdentity()
                     setBalances(0, result.system_balance);
                 } else {
                     setIdentityState(CybouIdentityState::None);
+                    Q_EMIT identityCreationFailed(QString::fromStdString(result.error_message));
                 }
             }, Qt::QueuedConnection);
         });
+}
+
+bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, const QString& vault_password)
+{
+    if (!m_identity_service) return false;
+    const auto parts = recovery_phrase.trimmed().split(QRegularExpression{QStringLiteral("\\s+")}, Qt::SkipEmptyParts);
+    if (parts.size() != 24) return false;
+    cybou::RecoveryWords words;
+    for (int i{0}; i < parts.size(); ++i) words[i] = parts[i].toStdString();
+    if (!cybou::DecodeRecoveryWords(words)) return false;
+    m_identity_request_pending = true;
+    Q_EMIT statusChanged();
+    m_identity_service->RestoreIdentityAsync(std::move(words), vault_password.toStdString(),
+        [this](cybou::IdentityCreationPhase phase, const std::string&) {
+            QMetaObject::invokeMethod(this, [this, phase] {
+                switch (phase) {
+                case cybou::IdentityCreationPhase::CREATING_KEYS: setIdentityState(CybouIdentityState::CreatingKeys); break;
+                case cybou::IdentityCreationPhase::BROADCASTING: setIdentityState(CybouIdentityState::Broadcasting); break;
+                case cybou::IdentityCreationPhase::WAITING_FOR_FINALITY: setIdentityState(CybouIdentityState::WaitingForFinality); break;
+                case cybou::IdentityCreationPhase::FAILED: setIdentityState(CybouIdentityState::None); break;
+                default: break;
+                }
+            }, Qt::QueuedConnection);
+        },
+        [this](const cybou::IdentityCreationResult& result) {
+            QMetaObject::invokeMethod(this, [this, result] {
+                if (result.success) {
+                    setIdentityState(CybouIdentityState::Active,
+                        QString::fromStdString(result.account_id.Value().GetHex()),
+                        static_cast<int>(result.creation_height));
+                    setBalances(0, result.system_balance);
+                } else {
+                    setIdentityState(CybouIdentityState::None);
+                    Q_EMIT identityCreationFailed(QString::fromStdString(result.error_message));
+                }
+            }, Qt::QueuedConnection);
+        });
+    return true;
 }
 
 void CybouDesktopModel::setFinalityStatus(int last_finalized_height, int validator_count)
