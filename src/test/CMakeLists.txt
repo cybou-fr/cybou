@@ -146,6 +146,7 @@ add_executable(cybou-core-test
   cybou_identity_tests.cpp
   cybou_identity_authorization_v2_tests.cpp
   cybou_identity_crypto_tests.cpp
+  cybou_identity_registry_v2_tests.cpp
   cybou_identity_material_tests.cpp
   cybou_identity_vault_tests.cpp
   cybou_recovery_phrase_tests.cpp

@@ -1,0 +1,98 @@
+// Copyright (c) 2026 The CYBOU developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/license/mit/.
+
+#include <cybou/identity_registry_v2.h>
+
+#include <boost/test/unit_test.hpp>
+
+#include <array>
+
+BOOST_AUTO_TEST_SUITE(cybou_identity_registry_v2_tests)
+
+BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
+{
+    using namespace cybou;
+    std::array<unsigned char, 32> root_seed{}, device_seed{}, second_seed{}, replacement_seed{};
+    for (size_t i{0}; i < 32; ++i) {
+        root_seed[i] = static_cast<unsigned char>(i + 1);
+        device_seed[i] = static_cast<unsigned char>(i + 33);
+        second_seed[i] = static_cast<unsigned char>(i + 65);
+        replacement_seed[i] = static_cast<unsigned char>(i + 97);
+    }
+    uint256 account_bytes{}, network_id{};
+    account_bytes.begin()[0] = 1;
+    network_id.begin()[0] = 2;
+    const AccountId account{account_bytes};
+    const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::DEVICE);
+    const auto second = DeriveIdentityPublicKey(second_seed, IdentityKeyPurpose::DEVICE);
+    const auto replacement = DeriveIdentityPublicKey(replacement_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    BOOST_REQUIRE(root && device && second && replacement);
+    const IdentityAuthorizationV2 auth{*root, *device};
+    const auto commitment = ComputeIdentityAuthorizationCommitmentV2(auth);
+    const auto create_digest = ComputeAccountCreatePopDigestV2(network_id, account, auth);
+    BOOST_REQUIRE(commitment && create_digest);
+    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *create_digest);
+    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *create_digest);
+    BOOST_REQUIRE(root_pop && device_pop);
+    AccountCreateOpV2 create{account, auth,
+        {.network_id = network_id, .account_id = account, .authorization_commitment = *commitment},
+        *root_pop, *device_pop};
+    auto params = DevProtocolParameters();
+    params.account_creation_work_bits = 0;
+    IdentityRegistryV2 registry;
+    BOOST_REQUIRE(registry.Register(create, network_id, 0, params) == IdentityRegistryErrorV2::NONE);
+    BOOST_CHECK(registry.Register(create, network_id, 0, params) == IdentityRegistryErrorV2::ACCOUNT_EXISTS);
+    const auto root_id = ComputeRecoveryKeyId(*root);
+    const auto device_id = ComputeDeviceKeyId(*device);
+    const auto second_id = ComputeDeviceKeyId(*second);
+    BOOST_REQUIRE(root_id && device_id && second_id);
+    BOOST_CHECK(registry.FindByRecoveryKeyId(*root_id) == account);
+    BOOST_REQUIRE(registry.Find(account));
+    BOOST_CHECK(registry.Find(account)->devices.at(*device_id).next_nonce == 0);
+
+    DeviceAddV2 add{.account_id = account, .new_device = *second};
+    const auto add_digest = ComputeDeviceAddDigestV2(network_id, add);
+    BOOST_REQUIRE(add_digest);
+    add.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *add_digest);
+    add.device_pop = *SignIdentityMessage(second_seed, IdentityKeyPurpose::DEVICE, *add_digest);
+    auto damaged_add = add;
+    damaged_add.device_pop.ed25519[0] ^= 1;
+    BOOST_CHECK(registry.AddDevice(damaged_add, network_id) == IdentityRegistryErrorV2::INVALID_SIGNATURE);
+    BOOST_CHECK(registry.Find(account)->next_root_nonce == 0);
+    BOOST_CHECK(registry.AddDevice(add, network_id) == IdentityRegistryErrorV2::NONE);
+    BOOST_CHECK(registry.Find(account)->devices.size() == 2);
+    BOOST_CHECK(registry.Find(account)->devices.at(*device_id).next_nonce == 0);
+    BOOST_CHECK(registry.Find(account)->next_root_nonce == 1);
+    BOOST_CHECK(registry.AddDevice(add, network_id) == IdentityRegistryErrorV2::DEVICE_EXISTS);
+
+    DeviceRevokeV2 revoke{.account_id = account, .device_id = *device_id, .root_nonce = 1};
+    const auto revoke_digest = ComputeDeviceRevokeDigestV2(network_id, revoke);
+    BOOST_REQUIRE(revoke_digest);
+    revoke.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *revoke_digest);
+    BOOST_CHECK(registry.RevokeDevice(revoke, network_id) == IdentityRegistryErrorV2::NONE);
+    BOOST_CHECK(!registry.Find(account)->devices.contains(*device_id));
+    BOOST_CHECK(registry.Find(account)->devices.contains(*second_id));
+    BOOST_CHECK(registry.Find(account)->next_root_nonce == 2);
+    BOOST_CHECK(registry.RevokeDevice(revoke, network_id) == IdentityRegistryErrorV2::DEVICE_NOT_FOUND);
+
+    RecoveryRotateV2 rotate{.account_id = account, .new_root = *replacement, .root_nonce = 2};
+    const auto rotate_digest = ComputeRecoveryRotateDigestV2(network_id, rotate);
+    BOOST_REQUIRE(rotate_digest);
+    rotate.old_root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
+    rotate.new_root_pop = *SignIdentityMessage(replacement_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
+    auto damaged_rotate = rotate;
+    damaged_rotate.new_root_pop.ed25519[0] ^= 1;
+    BOOST_CHECK(registry.RotateRecovery(damaged_rotate, network_id) == IdentityRegistryErrorV2::INVALID_SIGNATURE);
+    BOOST_CHECK(registry.FindByRecoveryKeyId(*root_id) == account);
+    BOOST_CHECK(registry.RotateRecovery(rotate, network_id) == IdentityRegistryErrorV2::NONE);
+    const auto replacement_id = ComputeRecoveryKeyId(*replacement);
+    BOOST_REQUIRE(replacement_id);
+    BOOST_CHECK(!registry.FindByRecoveryKeyId(*root_id));
+    BOOST_CHECK(registry.FindByRecoveryKeyId(*replacement_id) == account);
+    BOOST_CHECK(registry.Find(account)->next_root_nonce == 3);
+    BOOST_CHECK(registry.Find(account)->devices.at(*second_id).next_nonce == 0);
+}
+
+BOOST_AUTO_TEST_SUITE_END()

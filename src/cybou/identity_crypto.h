@@ -43,6 +43,8 @@ bool VerifyIdentityMessage(const IdentityHybridPublicKey& key,
 // The ID changes when either public key changes; AccountID does not.
 std::optional<std::array<unsigned char, 32>> ComputeRecoveryKeyId(
     const IdentityHybridPublicKey& recovery_key);
+std::optional<std::array<unsigned char, 32>> ComputeDeviceKeyId(
+    const IdentityHybridPublicKey& device_key);
 
 } // namespace cybou
 #endif

@@ -176,4 +176,25 @@ std::optional<std::array<unsigned char, 32>> ComputeRecoveryKeyId(
     return id;
 }
 
+std::optional<std::array<unsigned char, 32>> ComputeDeviceKeyId(
+    const IdentityHybridPublicKey& device_key)
+{
+    if (device_key.purpose != IdentityKeyPurpose::DEVICE ||
+        device_key.ml_dsa.size() != PublicSize(IdentityKeyPurpose::DEVICE) ||
+        std::all_of(device_key.ed25519.begin(), device_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
+        std::all_of(device_key.ml_dsa.begin(), device_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
+    constexpr std::string_view domain{"CYBOU/DEVICE-KEY-ID/V2"};
+    constexpr std::array<unsigned char, 2> suite{2, 1};
+    MdCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
+    std::array<unsigned char, 32> id{};
+    unsigned int size{0};
+    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
+        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
+        EVP_DigestUpdate(ctx.get(), suite.data(), suite.size()) != 1 ||
+        EVP_DigestUpdate(ctx.get(), device_key.ed25519.data(), device_key.ed25519.size()) != 1 ||
+        EVP_DigestUpdate(ctx.get(), device_key.ml_dsa.data(), device_key.ml_dsa.size()) != 1 ||
+        EVP_DigestFinal_ex(ctx.get(), id.data(), &size) != 1 || size != id.size()) return std::nullopt;
+    return id;
+}
+
 } // namespace cybou

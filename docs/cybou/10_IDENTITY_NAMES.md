@@ -41,6 +41,11 @@ DeviceAdd, DeviceRevoke, and RecoveryRotate are versioned operations. Each
 device has its own nonce. Revocation changes future authorization and does
 not erase already received ciphertext or historical signatures. Historical
 authorization proofs remain available for MailEvidenceBundle verification.
+The local V2 registry prototype computes DeviceKeyID as SHA-256 over ASCII
+`CYBOU/DEVICE-KEY-ID/V2`, the two bytes `02 01`, and the Ed25519 and
+ML-DSA-44 device public keys. It limits active devices to eight. Root-signed
+add/revoke/rotate requests bind the network, AccountID, root nonce, and target
+key ID to distinct SHA-256 domains. This prototype is not yet consensus state.
 
 The target primary example is `stanislav.cybou`. The earlier frozen
 `stan.cybou` example (DEC-004) is superseded by Identity V2's five-character

@@ -36,6 +36,13 @@ Standalone `account_creation_v2` now canonically encodes and validates V2
 account work and both hybrid proofs of possession. It is not yet in the active
 operation dispatcher or state transition, so the running DEV still creates V1
 accounts.
+The local `identity_registry_v2` prototype registers validated V2 accounts,
+indexes RecoveryKeyID to AccountID, and applies root-authorized device add,
+revoke, and recovery rotation with independent root/device nonce fields.
+Changes require hybrid signatures and new-key proofs of possession; active
+devices are capped at eight. It is not yet serialized into consensus state or
+wired into the active operation dispatcher. Device-signed payment and Mail
+nonce transitions remain to be implemented.
 
 ## Hardened architecture
 
