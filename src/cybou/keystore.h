@@ -54,9 +54,13 @@ public:
     bool HasKey() const;
     std::optional<uint256> GetPublicKey() const;
     std::optional<AccountId> GetAccountId() const;
+    std::optional<uint256> GetX25519PublicKey() const;
 
     /** Sign a digest using the protected Ed25519 private key */
     std::optional<std::array<unsigned char, 64>> Sign(const uint256& digest) const;
+
+    /** Derive a Diffie-Hellman shared secret with a peer X25519 public key using the internal key */
+    std::optional<std::array<unsigned char, 32>> DeriveX25519SharedSecret(const uint256& peer_x25519_pubkey) const;
 
 private:
     struct Impl;

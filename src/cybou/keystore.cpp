@@ -23,6 +23,7 @@ struct CybouKeyStore::Impl {
     std::optional<std::array<unsigned char, 32>> seed;
     std::optional<uint256> public_key;
     std::optional<AccountId> account_id;
+    std::optional<uint256> x25519_public_key;
 
     ~Impl()
     {
@@ -37,6 +38,7 @@ struct CybouKeyStore::Impl {
         }
         public_key.reset();
         account_id.reset();
+        x25519_public_key.reset();
     }
 
     bool SetSeed(std::span<const unsigned char, 32> in_seed)
@@ -52,6 +54,7 @@ struct CybouKeyStore::Impl {
         seed = s;
         public_key = *pub;
         account_id = AccountId{*pub};
+        x25519_public_key = Ed25519PublicKeyToX25519(*pub);
         memory_cleanse(s.data(), s.size());
         return true;
     }
@@ -96,10 +99,24 @@ std::optional<AccountId> CybouKeyStore::GetAccountId() const
     return m_impl->account_id;
 }
 
+std::optional<uint256> CybouKeyStore::GetX25519PublicKey() const
+{
+    return m_impl->x25519_public_key;
+}
+
 std::optional<std::array<unsigned char, 64>> CybouKeyStore::Sign(const uint256& digest) const
 {
     if (!m_impl->seed.has_value()) return std::nullopt;
     return SignUserMessage(*m_impl->seed, digest);
+}
+
+std::optional<std::array<unsigned char, 32>> CybouKeyStore::DeriveX25519SharedSecret(const uint256& peer_x25519_pubkey) const
+{
+    if (!m_impl->seed.has_value()) return std::nullopt;
+    const auto x25519_sk = Ed25519SeedToX25519PrivateKey(*m_impl->seed);
+    if (!x25519_sk) return std::nullopt;
+    auto secret = X25519DeriveSharedSecret(*x25519_sk, peer_x25519_pubkey);
+    return secret;
 }
 
 bool CybouKeyStore::SaveToFile(const std::filesystem::path& path) const

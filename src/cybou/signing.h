@@ -122,6 +122,22 @@ std::optional<std::array<unsigned char, USER_SIGNATURE_SIZE>> SignUserMessage(
     std::span<const unsigned char, 32> private_key,
     std::span<const unsigned char> message);
 
+/** Convert a 32-byte Ed25519 public key to a 32-byte X25519 (Curve25519) Montgomery public key. */
+std::optional<uint256> Ed25519PublicKeyToX25519(const uint256& ed25519_public_key);
+
+/** Derive 32-byte X25519 private scalar from a 32-byte Ed25519 private seed. */
+std::optional<std::array<unsigned char, 32>> Ed25519SeedToX25519PrivateKey(std::span<const unsigned char, 32> seed);
+
+/** Generate an ephemeral X25519 key pair. */
+bool GenerateX25519KeyPair(
+    std::array<unsigned char, 32>& out_private_key,
+    uint256& out_public_key);
+
+/** Perform X25519 Diffie-Hellman key agreement to produce a 32-byte shared secret. */
+std::optional<std::array<unsigned char, 32>> X25519DeriveSharedSecret(
+    std::span<const unsigned char, 32> private_key,
+    const uint256& peer_public_key);
+
 } // namespace cybou
 
 #endif // CYBOU_SIGNING_H
