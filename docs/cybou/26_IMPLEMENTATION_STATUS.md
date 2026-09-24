@@ -42,7 +42,12 @@ revoke, and recovery rotation with independent root/device nonce fields.
 Changes require hybrid signatures and new-key proofs of possession; active
 devices are capped at eight. It is not yet serialized into consensus state or
 wired into the active operation dispatcher. Device-signed payment and Mail
-nonce transitions remain to be implemented.
+transitions remain to be implemented.
+The prototype now verifies hybrid device-operation signatures over a
+network-bound digest and advances only that device's nonce. Re-adding a key
+changes its activation nonce, invalidating signatures from earlier use.
+This must run on a candidate registry and commit atomically with a future V2
+payment or Mail transition; no active monetary operation uses it yet.
 
 ## Hardened architecture
 

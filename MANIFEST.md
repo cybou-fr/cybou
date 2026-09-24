@@ -26,7 +26,7 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/07_BFT_CONSENSUS.md | 132 | 4d486f33d5662237 |
 | docs/cybou/08_P2P.md | 40 | 7e32842afee075d0 |
 | docs/cybou/09_CRYPTO_PQ.md | 36 | 417f778d16a8a492 |
-| docs/cybou/10_IDENTITY_NAMES.md | 62 | d5d5f010c73e1034 |
+| docs/cybou/10_IDENTITY_NAMES.md | 67 | e45ac8f749a21959 |
 | docs/cybou/11_STORAGE_OBJECTS.md | 95 | 5ad361fd3249e7eb |
 | docs/cybou/12_STORAGE_ACCOUNTING_3_TO_1.md | 100 | b20c60860eba40f3 |
 | docs/cybou/13_STORAGE_PROOFS_REPAIR.md | 78 | 169d9dd8ad90ed86 |
@@ -42,7 +42,7 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 114 | 222e5177b983769f |
 | docs/cybou/24_DECISIONS.md | 176 | 147d2bd5d24749cd |
 | docs/cybou/25_OPEN_QUESTIONS.md | 106 | 2b385f00f40e45ee |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 265 | e824f84520ea3e3a |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 270 | 43a5581c601b4761 |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 7b3cdc6050c7cf85 |
 | docs/cybou/28_BITCOIN_DOCUMENTATION_MIGRATION.md | 221 | 63ba6ee5d01c00dc |
 | docs/cybou/29_DOCUMENTATION_AUTHORITY.md | 79 | fad3b5767d5ffa7d |

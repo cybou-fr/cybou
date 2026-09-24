@@ -46,6 +46,11 @@ The local V2 registry prototype computes DeviceKeyID as SHA-256 over ASCII
 ML-DSA-44 device public keys. It limits active devices to eight. Root-signed
 add/revoke/rotate requests bind the network, AccountID, root nonce, and target
 key ID to distinct SHA-256 domains. This prototype is not yet consensus state.
+The local device-operation authorization binds NetworkID, AccountID,
+DeviceKeyID, device nonce, activation nonce, operation kind, and the canonical
+payload commitment. Re-adding a revoked key assigns a new activation nonce,
+so signatures from its earlier activation cannot be replayed. Payment and Mail
+payload encodings and their atomic state transitions are still pending.
 
 The target primary example is `stanislav.cybou`. The earlier frozen
 `stan.cybou` example (DEC-004) is superseded by Identity V2's five-character

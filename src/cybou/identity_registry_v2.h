@@ -21,6 +21,7 @@ inline constexpr size_t MAX_ACTIVE_DEVICES_V2{8};
 struct IdentityDeviceV2 {
     IdentityHybridPublicKey key;
     uint64_t next_nonce{0};
+    uint64_t activation_nonce{0};
 };
 
 struct IdentityRecordV2 {
@@ -52,6 +53,20 @@ struct RecoveryRotateV2 {
     IdentityHybridSignature new_root_pop;
 };
 
+enum class DeviceOperationKindV2 : uint8_t { PAYMENT = 1, MAIL = 2, SYSTEM_LOCK = 3 };
+
+// The payload commitment must be computed from the canonical, complete V2
+// payload encoding by its operation-specific validator.
+struct DeviceAuthorizationV2 {
+    AccountId account_id;
+    IdentityKeyIdV2 device_id{};
+    uint64_t nonce{0};
+    uint64_t activation_nonce{0};
+    DeviceOperationKindV2 kind{DeviceOperationKindV2::PAYMENT};
+    IdentityKeyIdV2 payload_commitment{};
+    IdentityHybridSignature signature;
+};
+
 enum class IdentityRegistryErrorV2 : uint8_t {
     NONE,
     INVALID_CREATE,
@@ -65,6 +80,7 @@ enum class IdentityRegistryErrorV2 : uint8_t {
     BAD_NONCE,
     NONCE_EXHAUSTED,
     INVALID_SIGNATURE,
+    INVALID_PAYLOAD,
 };
 
 std::optional<std::array<unsigned char, 32>> ComputeDeviceAddDigestV2(
@@ -73,6 +89,8 @@ std::optional<std::array<unsigned char, 32>> ComputeDeviceRevokeDigestV2(
     const uint256& network_id, const DeviceRevokeV2& request);
 std::optional<std::array<unsigned char, 32>> ComputeRecoveryRotateDigestV2(
     const uint256& network_id, const RecoveryRotateV2& request);
+std::optional<std::array<unsigned char, 32>> ComputeDeviceOperationDigestV2(
+    const uint256& network_id, const DeviceAuthorizationV2& request);
 
 class IdentityRegistryV2
 {
@@ -83,6 +101,9 @@ public:
     IdentityRegistryErrorV2 AddDevice(const DeviceAddV2& request, const uint256& network_id);
     IdentityRegistryErrorV2 RevokeDevice(const DeviceRevokeV2& request, const uint256& network_id);
     IdentityRegistryErrorV2 RotateRecovery(const RecoveryRotateV2& request, const uint256& network_id);
+    // Apply only to a throwaway candidate registry. Commit it together with the
+    // validated payment/Mail/system state transition, never before it.
+    IdentityRegistryErrorV2 AuthorizeDeviceOperation(const DeviceAuthorizationV2& request, const uint256& network_id);
 
     std::optional<AccountId> FindByRecoveryKeyId(const IdentityKeyIdV2& id) const;
     const IdentityRecordV2* Find(const AccountId& id) const;

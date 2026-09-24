@@ -67,6 +67,27 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     BOOST_CHECK(registry.Find(account)->next_root_nonce == 1);
     BOOST_CHECK(registry.AddDevice(add, network_id) == IdentityRegistryErrorV2::DEVICE_EXISTS);
 
+    DeviceAuthorizationV2 operation{.account_id = account, .device_id = *second_id,
+        .activation_nonce = 1, .kind = DeviceOperationKindV2::PAYMENT};
+    operation.payload_commitment[0] = 0x55;
+    const auto operation_digest = ComputeDeviceOperationDigestV2(network_id, operation);
+    BOOST_REQUIRE(operation_digest);
+    operation.signature = *SignIdentityMessage(second_seed, IdentityKeyPurpose::DEVICE, *operation_digest);
+    auto wrong_kind = operation;
+    wrong_kind.kind = DeviceOperationKindV2::MAIL;
+    BOOST_CHECK(registry.AuthorizeDeviceOperation(wrong_kind, network_id) == IdentityRegistryErrorV2::INVALID_SIGNATURE);
+    auto wrong_payload = operation;
+    wrong_payload.payload_commitment[0] ^= 1;
+    BOOST_CHECK(registry.AuthorizeDeviceOperation(wrong_payload, network_id) == IdentityRegistryErrorV2::INVALID_SIGNATURE);
+    BOOST_CHECK(registry.Find(account)->devices.at(*second_id).next_nonce == 0);
+    auto candidate = registry;
+    BOOST_CHECK(candidate.AuthorizeDeviceOperation(operation, network_id) == IdentityRegistryErrorV2::NONE);
+    BOOST_CHECK(registry.Find(account)->devices.at(*second_id).next_nonce == 0);
+    BOOST_CHECK(registry.AuthorizeDeviceOperation(operation, network_id) == IdentityRegistryErrorV2::NONE);
+    BOOST_CHECK(registry.Find(account)->devices.at(*second_id).next_nonce == 1);
+    BOOST_CHECK(registry.Find(account)->devices.at(*device_id).next_nonce == 0);
+    BOOST_CHECK(registry.AuthorizeDeviceOperation(operation, network_id) == IdentityRegistryErrorV2::BAD_NONCE);
+
     DeviceRevokeV2 revoke{.account_id = account, .device_id = *device_id, .root_nonce = 1};
     const auto revoke_digest = ComputeDeviceRevokeDigestV2(network_id, revoke);
     BOOST_REQUIRE(revoke_digest);
@@ -76,8 +97,22 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     BOOST_CHECK(registry.Find(account)->devices.contains(*second_id));
     BOOST_CHECK(registry.Find(account)->next_root_nonce == 2);
     BOOST_CHECK(registry.RevokeDevice(revoke, network_id) == IdentityRegistryErrorV2::DEVICE_NOT_FOUND);
+    DeviceAuthorizationV2 old_device_operation{.account_id = account, .device_id = *device_id,
+        .kind = DeviceOperationKindV2::PAYMENT};
+    old_device_operation.payload_commitment[0] = 0x44;
+    const auto old_digest = ComputeDeviceOperationDigestV2(network_id, old_device_operation);
+    BOOST_REQUIRE(old_digest);
+    old_device_operation.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *old_digest);
+    DeviceAddV2 readd{.account_id = account, .new_device = *device, .root_nonce = 2};
+    const auto readd_digest = ComputeDeviceAddDigestV2(network_id, readd);
+    BOOST_REQUIRE(readd_digest);
+    readd.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *readd_digest);
+    readd.device_pop = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *readd_digest);
+    BOOST_CHECK(registry.AddDevice(readd, network_id) == IdentityRegistryErrorV2::NONE);
+    BOOST_CHECK(registry.Find(account)->devices.at(*device_id).activation_nonce == 3);
+    BOOST_CHECK(registry.AuthorizeDeviceOperation(old_device_operation, network_id) == IdentityRegistryErrorV2::BAD_NONCE);
 
-    RecoveryRotateV2 rotate{.account_id = account, .new_root = *replacement, .root_nonce = 2};
+    RecoveryRotateV2 rotate{.account_id = account, .new_root = *replacement, .root_nonce = 3};
     const auto rotate_digest = ComputeRecoveryRotateDigestV2(network_id, rotate);
     BOOST_REQUIRE(rotate_digest);
     rotate.old_root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
@@ -91,8 +126,8 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     BOOST_REQUIRE(replacement_id);
     BOOST_CHECK(!registry.FindByRecoveryKeyId(*root_id));
     BOOST_CHECK(registry.FindByRecoveryKeyId(*replacement_id) == account);
-    BOOST_CHECK(registry.Find(account)->next_root_nonce == 3);
-    BOOST_CHECK(registry.Find(account)->devices.at(*second_id).next_nonce == 0);
+    BOOST_CHECK(registry.Find(account)->next_root_nonce == 4);
+    BOOST_CHECK(registry.Find(account)->devices.at(*second_id).next_nonce == 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
