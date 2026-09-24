@@ -52,6 +52,13 @@ The registry now has a standalone canonical V2 snapshot codec. It rejects
 incorrect version, truncation, trailing data, unsorted or duplicate keys,
 invalid key shapes, excess devices, and inconsistent activation nonces.
 The active V1 `CybouState` serializer and state root have not changed.
+Standalone `CybouStateV2` now combines monetary account fields, pools,
+validator set, and the Identity V2 registry under a version-2 snapshot and
+`CYBOU/STATE/V2` hash domain. Its AccountCreate V2 transition validates work
+and hybrid proofs and atomically assigns the onboarding bonus from
+OnboardingPool to SystemBalance. The `.cybou` name registry, V2 payment/Mail
+execution, block format, persistence, and DEV activation remain open; this
+snapshot format is still pre-activation and may change before the reset.
 
 ## Hardened architecture
 

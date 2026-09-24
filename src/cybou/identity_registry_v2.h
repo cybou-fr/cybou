@@ -109,6 +109,7 @@ public:
 
     std::optional<AccountId> FindByRecoveryKeyId(const IdentityKeyIdV2& id) const;
     const IdentityRecordV2* Find(const AccountId& id) const;
+    const std::map<AccountId, IdentityRecordV2>& Accounts() const { return m_accounts; }
 
     friend std::optional<std::vector<unsigned char>> SerializeIdentityRegistryV2(const IdentityRegistryV2& registry);
     friend std::optional<IdentityRegistryV2> DeserializeIdentityRegistryV2(std::span<const unsigned char> bytes);

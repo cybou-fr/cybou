@@ -56,8 +56,13 @@ account count, then ascending AccountID records. Each record stores AccountID,
 raw hybrid root public keys, root nonce, device count, and ascending DeviceKeyID
 entries with raw hybrid device keys, device nonce, and activation nonce.
 RecoveryKeyID and DeviceKeyID are derived during decoding; they are not trusted
-from the snapshot. This component is ready for a future V2 state envelope and
-state-root definition, but neither is active in DEV.
+from the snapshot. It feeds the standalone V2 state envelope described below;
+neither component is active in DEV.
+The standalone `CybouStateV2` prototype now wraps that registry with monetary
+account fields, network pools, and the validator set, using version byte `02`
+and `CYBOU/STATE/V2` for its hash. It validates that every monetary AccountID
+has exactly one identity record. Names and operation dispatch are not yet in
+that prototype, so it is not the final active state format.
 
 The target primary example is `stanislav.cybou`. The earlier frozen
 `stan.cybou` example (DEC-004) is superseded by Identity V2's five-character
