@@ -104,6 +104,7 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   compressor.cpp
   core_io.cpp
   cybou/account_creation.cpp
+  cybou/account_creation_v2.cpp
   cybou/identity.cpp
   cybou/identity_authorization_v2.cpp
   cybou/identity_crypto.cpp

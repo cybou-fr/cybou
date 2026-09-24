@@ -8,8 +8,19 @@ permissionless account-creation work and atomic OnboardingPool funding. This
 page's V1 wire layout describes current DEV only; do not reinterpret it as V2.
 The encrypted recovery vault must be durably saved before V2 broadcast. See
 `10_IDENTITY_NAMES.md` and `76_IDENTITY_VAULT_RECOVERY.md`.
-The local 3331-byte `IdentityAuthorizationV2` serializer and commitment are
-draft inputs for AccountCreate V2; no V2 creation operation is accepted yet.
+The local 3331-byte `IdentityAuthorizationV2` serializer and commitment now
+feed a standalone AccountCreate V2 encoder and validator. The active protocol
+operation dispatcher does not yet accept it.
+
+`AccountCreationWorkV2` retains the fixed 113-byte layout with version `02`
+and SHA-256 domain `CYBOU/ACCOUNT-CREATE-WORK/V2`. It binds NetworkID,
+random AccountID, authorization commitment, height-derived work epoch, and
+nonce. `AccountCreateOpV2` is exactly 9334 bytes: version `02`, 32-byte
+AccountID, 3331-byte authorization, 113-byte work, then root Ed25519 (64)
+and ML-DSA-65 (3309) signatures, then device Ed25519 (64) and ML-DSA-44
+(2420) signatures. Both hybrid proofs sign SHA-256 of ASCII
+`CYBOU/ACCOUNT-POP/V2` followed by NetworkID, AccountID, and authorization
+commitment (32 bytes each). Both components of **both** proofs are required.
 
 This document defines the permissionless, protocol-native account creation mechanism for CYBOU.
 The centralized Operator-signed Voucher architecture has been permanently decommissioned.

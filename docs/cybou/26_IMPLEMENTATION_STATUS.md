@@ -32,6 +32,10 @@ that ID to AccountID exists yet.
 The local `identity_authorization_v2` module has a strict fixed-size hybrid
 root/initial-device descriptor and a domain-separated commitment. It is not
 yet wired into AccountCreate, state, or block serialization.
+Standalone `account_creation_v2` now canonically encodes and validates V2
+account work and both hybrid proofs of possession. It is not yet in the active
+operation dispatcher or state transition, so the running DEV still creates V1
+accounts.
 
 ## Hardened architecture
 

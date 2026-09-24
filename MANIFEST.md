@@ -42,7 +42,7 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 114 | 222e5177b983769f |
 | docs/cybou/24_DECISIONS.md | 176 | 147d2bd5d24749cd |
 | docs/cybou/25_OPEN_QUESTIONS.md | 106 | 2b385f00f40e45ee |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 254 | d10cdcb5e77f197b |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 258 | 0336e0c1bf752907 |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 7b3cdc6050c7cf85 |
 | docs/cybou/28_BITCOIN_DOCUMENTATION_MIGRATION.md | 221 | 63ba6ee5d01c00dc |
 | docs/cybou/29_DOCUMENTATION_AUTHORITY.md | 79 | fad3b5767d5ffa7d |
@@ -85,7 +85,7 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/67_POT_EPOCHS_AND_ONBOARDING.md | 115 | 76a4cf9312ae51f1 |
 | docs/cybou/68_OPERATOR_KEY_SEPARATION.md | 81 | 8b9bb7e6d34e12bb |
 | docs/cybou/69_MAIL_EVIDENCE_BUNDLE.md | 116 | 679d2aeb0b8635bf |
-| docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 96 | 199278ba4886e3bd |
+| docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 107 | e0ce8c3e105ed172 |
 | docs/cybou/71_WINDOWS_MINGW_BUILD.md | 120 | db597f2c58673e3b |
 | docs/cybou/72_DESKTOP_WALLET_UI.md | 74 | 6984dbe4e610b207 |
 | docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 114 | cdf41fa050dd25ab |
