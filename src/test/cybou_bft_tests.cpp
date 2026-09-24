@@ -105,7 +105,13 @@ BOOST_AUTO_TEST_CASE(bft_signing_journal_blocks_restart_equivocation)
         BOOST_CHECK(!restarted.StartRound(0, {}));
         BOOST_CHECK(!restarted.StartRound(1, {}));
         restarted.SetHeight(2, uint256::ONE, set);
-        BOOST_CHECK(restarted.StartRound(0, {}).has_value());
+        const auto proposal = restarted.StartRound(0, {});
+        BOOST_REQUIRE(proposal);
+        const auto prevote = restarted.ReceiveProposal(*proposal);
+        BOOST_REQUIRE(prevote);
+        const auto precommit = restarted.ReceivePrevote(*prevote);
+        BOOST_REQUIRE(precommit);
+        BOOST_CHECK(precommit->block_id.has_value());
     }
     {
         std::ofstream damaged(journal, std::ios::binary | std::ios::trunc);

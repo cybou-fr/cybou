@@ -269,6 +269,9 @@ bool BftValidatorNode::RecordSigningIntent(const BftStep step, const uint256& di
     m_last_signed_round = m_round;
     m_last_signed_step = step;
     m_has_signed = true;
+    // A new height is now journaled by this process. Subsequent steps at
+    // that height belong to the same live round, not to a recovered round.
+    m_restarted = false;
     return true;
 }
 

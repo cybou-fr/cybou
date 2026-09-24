@@ -6,6 +6,7 @@
 #include <cybou/bootstrap_nodes.h>
 #include <cybou/network_definition.h>
 #include <cybou/node_runtime.h>
+#include <cybou/p2p/peer_manager.h>
 #include <cybou/signing.h>
 #include <cybou/validator.h>
 #include <dbwrapper.h>
@@ -14,6 +15,7 @@
 #include <util/translation.h>
 
 #include <boost/asio.hpp>
+#include <openssl/rand.h>
 
 #include <atomic>
 #include <array>
@@ -24,6 +26,7 @@
 #include <iostream>
 #include <limits>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -77,6 +80,20 @@ uint64_t PositiveCount(const char* value)
     return count;
 }
 
+std::optional<cybou::p2p::Hello> LocalHello(const cybou::CybouNodeRuntime& runtime)
+{
+    const auto status = runtime.GetStatus();
+    if (!status.is_initialized) return std::nullopt;
+    std::array<unsigned char, 8> bytes{};
+    if (RAND_bytes(bytes.data(), bytes.size()) != 1) return std::nullopt;
+    uint64_t nonce{0};
+    for (int i = 0; i < 8; ++i) nonce |= uint64_t{bytes[i]} << (8 * i);
+    if (nonce == 0) return std::nullopt;
+    return cybou::p2p::Hello{.network_id = status.network_id,
+        .finalized_height = status.finalized_height, .finalized_tip = status.finalized_tip,
+        .capabilities = 0, .nonce = nonce};
+}
+
 int Main(const int argc, char* argv[])
 {
     if (argc == 2 && std::string_view{argv[1]} == "bootstrap") {
@@ -115,11 +132,27 @@ int Main(const int argc, char* argv[])
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT");
     const auto network = cybou::LoadCybouNetworkFile(argv[2]);
     if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
     std::signal(SIGTERM, Stop);
+    if (std::string_view{argv[1]} == "p2p-probe" && argc == 6) {
+        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+            .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        cybou::CybouNodeRuntime runtime{std::move(config)};
+        if (!runtime.GetStatus().is_initialized && !runtime.InitializeGenesis(network->genesis)) {
+            throw std::runtime_error("cannot initialize genesis");
+        }
+        cybou::p2p::PeerManager peers{runtime};
+        if (!peers.Connect(argv[4], Port(argv[5])) || peers.PingAll() != 1) {
+            throw std::runtime_error("P2P handshake or ping failed");
+        }
+        const auto peer = peers.Peers().front();
+        std::cout << "peer=" << peer.address << ':' << peer.port
+                  << " height=" << peer.hello.finalized_height << std::endl;
+        return 0;
+    }
     // Without explicit PEER_HOST PORT, sync follows the DEV bootstrap list
     // (doc 75). The bootstrap endpoint is transport metadata — every block
     // is still verified against the network definition file.
@@ -155,7 +188,7 @@ int Main(const int argc, char* argv[])
         }
         return synced == count ? 0 : 1;
     }
-    if (std::string_view{argv[1]} == "serve" && (argc == 7 || argc == 8)) {
+    if (std::string_view{argv[1]} == "serve" && (argc == 7 || argc == 8 || argc == 9)) {
         auto key_bytes = ReadFile(argv[4], 32);
         if (key_bytes.size() != 32) throw std::runtime_error("validator key file must contain exactly 32 raw bytes");
         std::array<unsigned char, 32> key{};
@@ -179,9 +212,17 @@ int Main(const int argc, char* argv[])
         }
 
         const auto port = Port(argv[6]);
-        const auto interval_ms = argc == 8 ? PositiveCount(argv[7]) : 1000;
+        const auto interval_ms = argc >= 8 ? PositiveCount(argv[7]) : 1000;
         if (interval_ms > 60000) throw std::runtime_error("block interval exceeds 60 seconds");
         boost::asio::io_context io;
+        std::optional<boost::asio::ip::tcp::acceptor> p2p_acceptor;
+        if (argc == 9) {
+            const auto p2p_port = Port(argv[8]);
+            if (p2p_port == port) throw std::runtime_error("P2P port must differ from block feed port");
+            p2p_acceptor.emplace(io, boost::asio::ip::tcp::endpoint{
+                boost::asio::ip::make_address(argv[5]), p2p_port});
+            p2p_acceptor->non_blocking(true);
+        }
         boost::asio::ip::tcp::acceptor acceptor(io, {
             boost::asio::ip::make_address(argv[5]), port,
         });
@@ -198,6 +239,23 @@ int Main(const int argc, char* argv[])
                 // buffered height line never reaches the journal otherwise.
                 std::cout << "height=" << block->block.height << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
+            }
+        });
+        std::optional<std::jthread> p2p_listener;
+        if (p2p_acceptor) p2p_listener.emplace([&] {
+            while (!stopping) {
+                boost::asio::ip::tcp::socket socket(io);
+                boost::system::error_code ec;
+                p2p_acceptor->accept(socket, ec);
+                if (ec == boost::asio::error::would_block || ec == boost::asio::error::try_again) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+                    continue;
+                }
+                if (ec) { stopping = true; break; }
+                cybou::p2p::PeerSession session{std::move(socket)};
+                const auto hello = LocalHello(runtime);
+                if (!hello || !session.Handshake(*hello)) continue;
+                while (!stopping && session.AnswerPing()) {}
             }
         });
         while (!stopping) {

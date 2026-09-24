@@ -55,6 +55,18 @@ Both commands reopen the same database after restart and reject a database
 bound to another network definition. The producer validates its key before
 opening the listener. Stop the producer with Ctrl+C for a graceful exit.
 
+To exercise the persistent native P2P handshake and health ping, supply a
+separate listener port and probe it from another node database:
+
+```text
+cybou-node serve network.bin producer-db validator.key 127.0.0.1 29460 1000 29461
+cybou-node p2p-probe network.bin observer-db 127.0.0.1 29461
+```
+
+This CYP2 port currently accepts one persistent peer at a time. It reports
+the producer's advertised finalized height but does not transfer blocks or
+operations; `sync` still uses the bounded CYB1 block feed on port 29460.
+
 ## Bootstrap endpoints
 
 `cybou-node bootstrap` prints the compiled-in DEV bootstrap authority list.
