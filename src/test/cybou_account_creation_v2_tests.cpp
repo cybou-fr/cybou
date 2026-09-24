@@ -59,6 +59,9 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
     const auto decoded = cybou::DeserializeAccountCreateOpV2(*bytes);
     BOOST_REQUIRE(decoded);
     BOOST_CHECK(cybou::ValidateAccountCreateOpV2(*decoded, network_id, 0, params) == cybou::AccountCreateV2Error::NONE);
+    uint256 other_network{};
+    other_network.begin()[0] = 0x98;
+    BOOST_CHECK(cybou::ValidateAccountCreateOpV2(*decoded, other_network, 0, params) == cybou::AccountCreateV2Error::NETWORK_MISMATCH);
     auto damaged = *decoded;
     damaged.recovery_pop.ed25519[0] ^= 1;
     BOOST_CHECK(cybou::ValidateAccountCreateOpV2(damaged, network_id, 0, params) == cybou::AccountCreateV2Error::INVALID_RECOVERY_POP);
@@ -68,8 +71,14 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
     damaged = *decoded;
     damaged.work.authorization_commitment[0] ^= 1;
     BOOST_CHECK(cybou::ValidateAccountCreateOpV2(damaged, network_id, 0, params) == cybou::AccountCreateV2Error::COMMITMENT_MISMATCH);
+    damaged = *decoded;
+    damaged.work.work_epoch = 1;
+    BOOST_CHECK(cybou::ValidateAccountCreateOpV2(damaged, network_id, 0, params) == cybou::AccountCreateV2Error::FUTURE_WORK_EPOCH);
     auto truncated = std::span{*bytes}.first(bytes->size() - 1);
     BOOST_CHECK(!cybou::DeserializeAccountCreateOpV2(truncated));
+    auto legacy_version = *bytes;
+    legacy_version[0] = 1;
+    BOOST_CHECK(!cybou::DeserializeAccountCreateOpV2(legacy_version));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
