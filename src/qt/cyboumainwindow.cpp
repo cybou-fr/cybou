@@ -197,7 +197,7 @@ void CybouMainWindow::initCybouRuntime()
         // Update initial finality status:
         const auto status = m_node_runtime->GetStatus();
         m_desktop_model->setFinalityStatus(static_cast<int>(status.finalized_height), static_cast<int>(status.validator_count));
-        m_desktop_model->setChainStatus(static_cast<int>(status.finalized_height), 0);
+        m_desktop_model->setPeerCount(0);
 
         // Bootstrap sync worker: keep pulling verified blocks from the DEV
         // authority and push finality into the model. The runtime is
@@ -218,11 +218,7 @@ void CybouMainWindow::initCybouRuntime()
                     m_desktop_model->setFinalityStatus(
                         static_cast<int>(now.finalized_height),
                         static_cast<int>(now.validator_count));
-                    // The desktop runtime tracks only finalized blocks, so
-                    // the local chain height is the finalized height.
-                    m_desktop_model->setChainStatus(
-                        static_cast<int>(now.finalized_height),
-                        bootstrap_reachable ? 1 : 0);
+                    m_desktop_model->setPeerCount(bootstrap_reachable ? 1 : 0);
                 }, Qt::QueuedConnection);
                 for (int i = 0; i < 15 && !m_sync_stop.load(); ++i) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));

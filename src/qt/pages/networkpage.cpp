@@ -93,7 +93,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, std::function<void()> diagnos
     metrics_row->setSpacing(16);
     metrics_row->addWidget(metricCard(tr("Node status"), this, m_status_metric), 1);
     metrics_row->addWidget(metricCard(tr("Connections"), this, m_connections_metric), 1);
-    metrics_row->addWidget(metricCard(tr("Current height"), this, m_height_metric), 1);
+    metrics_row->addWidget(metricCard(tr("Finalized height"), this, m_height_metric), 1);
     root->addLayout(metrics_row);
 
     auto* card = new QFrame{this};
@@ -122,7 +122,6 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, std::function<void()> diagnos
     auto* finality_title = new QLabel{tr("Finality (BFT)"), finality_card};
     finality_title->setObjectName(QStringLiteral("sectionTitle"));
     finality_layout->addWidget(finality_title);
-    finality_layout->addWidget(metricRow(tr("Last finalized height"), m_finalized_metric, finality_card));
     finality_layout->addWidget(metricRow(tr("Validators"), m_validators_metric, finality_card));
     finality_layout->addWidget(metricRow(tr("Fault tolerance"), m_fault_metric, finality_card));
     const QStringList facts{
@@ -175,14 +174,13 @@ void NetworkPage::refresh()
     m_network->setText(status.network_name);
     m_status_metric->setText(status.node_running ? tr("Running") : tr("Starting"));
     m_connections_metric->setText(QString::number(status.peer_count));
-    m_height_metric->setText(QString::number(status.height));
+    m_height_metric->setText(status.last_finalized_height >= 0
+        ? QString::number(status.last_finalized_height)
+        : tr("Not exposed yet"));
     m_network_id->setText(status.network_id.isEmpty() ? tr("Not available yet") : status.network_id);
     m_data_directory->setText(status.data_directory.isEmpty() ? tr("Available after node startup") : status.data_directory);
 
     const bool finality_known = status.last_finalized_height >= 0;
-    m_finalized_metric->setText(finality_known
-        ? QString::number(status.last_finalized_height)
-        : tr("Not exposed yet"));
     m_validators_metric->setText(status.validator_count > 0
         ? QString::number(status.validator_count)
         : QStringLiteral("—"));

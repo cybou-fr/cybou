@@ -134,13 +134,6 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     m_peer_count->setObjectName("metric");
     peers_box->addWidget(peers_label);
     peers_box->addWidget(m_peer_count);
-    auto* height_box = new QVBoxLayout;
-    auto* height_label = new QLabel{tr("Current height"), network_card};
-    height_label->setObjectName("metricCaption");
-    m_height = new QLabel{network_card};
-    m_height->setObjectName("metric");
-    height_box->addWidget(height_label);
-    height_box->addWidget(m_height);
     auto* finalized_box = new QVBoxLayout;
     auto* finalized_label = new QLabel{tr("Finalized height"), network_card};
     finalized_label->setObjectName("metricCaption");
@@ -149,8 +142,6 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     finalized_box->addWidget(finalized_label);
     finalized_box->addWidget(m_finalized_height);
     metrics->addLayout(peers_box);
-    metrics->addSpacing(40);
-    metrics->addLayout(height_box);
     metrics->addSpacing(40);
     metrics->addLayout(finalized_box);
     metrics->addStretch();
@@ -255,7 +246,6 @@ void HomePage::refresh()
     m_network_name->setText(status.network_name);
     m_node_state->setText(status.node_running ? tr("Running") : tr("Starting"));
     m_peer_count->setText(QString::number(status.peer_count));
-    m_height->setText(QString::number(status.height));
     m_finalized_height->setText(status.last_finalized_height >= 0
         ? QString::number(status.last_finalized_height)
         : QStringLiteral("—"));

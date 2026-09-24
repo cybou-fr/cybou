@@ -40,7 +40,6 @@ private:
     QLabel* m_network;
     QLabel* m_network_id;
     QLabel* m_data_directory;
-    QLabel* m_finalized_metric;
     QLabel* m_validators_metric;
     QLabel* m_fault_metric;
     QLabel* m_finality_hint;
