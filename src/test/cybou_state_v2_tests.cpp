@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#include <cybou/state_v2.h>
+#include <cybou/payment_v2.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -71,6 +71,61 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     damaged = *bytes;
     damaged[1 + 8 * 3 + 4] ^= 1; // monetary AccountID no longer matches identity registry
     BOOST_CHECK(!DeserializeCybouStateV2(damaged));
+
+    std::array<unsigned char, 32> other_root_seed{}, other_device_seed{};
+    other_root_seed[0] = 7;
+    other_device_seed[0] = 8;
+    uint256 raw_other{};
+    raw_other.begin()[0] = 9;
+    const AccountId other_account{raw_other};
+    const auto other_root = DeriveIdentityPublicKey(other_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto other_device = DeriveIdentityPublicKey(other_device_seed, IdentityKeyPurpose::DEVICE);
+    BOOST_REQUIRE(other_root && other_device);
+    const IdentityAuthorizationV2 other_auth{*other_root, *other_device};
+    const auto other_commitment = ComputeIdentityAuthorizationCommitmentV2(other_auth);
+    const auto other_digest = ComputeAccountCreatePopDigestV2(network_id, other_account, other_auth);
+    BOOST_REQUIRE(other_commitment && other_digest);
+    const auto other_root_pop = SignIdentityMessage(other_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *other_digest);
+    const auto other_device_pop = SignIdentityMessage(other_device_seed, IdentityKeyPurpose::DEVICE, *other_digest);
+    BOOST_REQUIRE(other_root_pop && other_device_pop);
+    const AccountCreateOpV2 other_create{other_account, other_auth,
+        {.network_id = network_id, .account_id = other_account, .authorization_commitment = *other_commitment},
+        *other_root_pop, *other_device_pop};
+    state.onboarding_pool = params.onboarding_bonus;
+    BOOST_REQUIRE(ApplyAccountCreateV2(other_create, network_id, 1, params, state) == AccountCreateStateErrorV2::NONE);
+    state.accounts.at(account).balance = 10; // funded fixture; no mint operation in this test
+    AuthorizedPaymentV2 payment{};
+    payment.payment = PaymentPayloadV2{other_account, 3};
+    const auto payment_bytes = SerializePaymentPayloadV2(payment.payment);
+    BOOST_REQUIRE(payment_bytes);
+    const auto decoded_payment = DeserializePaymentPayloadV2(*payment_bytes);
+    BOOST_REQUIRE(decoded_payment);
+    BOOST_CHECK(decoded_payment->recipient == other_account);
+    BOOST_CHECK(decoded_payment->amount == 3);
+    payment.authorization.account_id = account;
+    const auto device_id = ComputeDeviceKeyId(*device);
+    BOOST_REQUIRE(device_id);
+    payment.authorization.device_id = *device_id;
+    payment.authorization.kind = DeviceOperationKindV2::PAYMENT;
+    const auto payment_commitment = ComputePaymentPayloadCommitmentV2(payment.payment);
+    BOOST_REQUIRE(payment_commitment);
+    payment.authorization.payload_commitment = *payment_commitment;
+    const auto payment_digest = ComputeDeviceOperationDigestV2(network_id, payment.authorization);
+    BOOST_REQUIRE(payment_digest);
+    const auto payment_signature = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *payment_digest);
+    BOOST_REQUIRE(payment_signature);
+    payment.authorization.signature = *payment_signature;
+    auto tampered_payment = payment;
+    tampered_payment.payment.amount = 4;
+    BOOST_CHECK(ApplyPaymentV2(tampered_payment, network_id, params, state) == PaymentErrorV2::INVALID_PAYLOAD);
+    BOOST_CHECK(state.accounts.at(account).balance == 10);
+    BOOST_CHECK(ApplyPaymentV2(payment, network_id, params, state) == PaymentErrorV2::NONE);
+    BOOST_CHECK(state.accounts.at(account).balance == 7);
+    BOOST_CHECK(state.accounts.at(other_account).balance == 3);
+    BOOST_CHECK(state.pending_fee_pool == params.payment_fee);
+    BOOST_CHECK(state.identities.Find(account)->devices.at(*device_id).next_nonce == 1);
+    BOOST_CHECK(ApplyPaymentV2(payment, network_id, params, state) == PaymentErrorV2::INVALID_AUTHORIZATION);
+    BOOST_CHECK(state.accounts.at(account).balance == 7);
 }
 
 BOOST_AUTO_TEST_CASE(insufficient_pool_does_not_register_identity)

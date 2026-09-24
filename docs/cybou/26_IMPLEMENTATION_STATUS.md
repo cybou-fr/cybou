@@ -59,6 +59,13 @@ and hybrid proofs and atomically assigns the onboarding bonus from
 OnboardingPool to SystemBalance. The `.cybou` name registry, V2 payment/Mail
 execution, block format, persistence, and DEV activation remain open; this
 snapshot format is still pre-activation and may change before the reset.
+The standalone `payment_v2` transition now uses a fixed 41-byte versioned
+payload, a domain-separated payload commitment, and hybrid device authorization.
+It validates both balances and overflow before debiting the sender, crediting
+the recipient, accumulating the deterministic payment fee, and advancing only
+the signing device's nonce. It is not yet in block execution or the network
+operation codec; genesis funding and the later fee split are still V2 integration
+work.
 
 ## Hardened architecture
 

@@ -63,6 +63,11 @@ account fields, network pools, and the validator set, using version byte `02`
 and `CYBOU/STATE/V2` for its hash. It validates that every monetary AccountID
 has exactly one identity record. Names and operation dispatch are not yet in
 that prototype, so it is not the final active state format.
+The local Payment V2 payload is `02` version, 32 recipient AccountID bytes,
+and an eight-byte little-endian amount. Its SHA-256 commitment uses
+`CYBOU/PAYMENT-PAYLOAD/V2`; the device signature binds that commitment and
+the payment kind. The transition consumes the signer's device nonce while
+updating balances and the pending fee pool in the same candidate V2 state.
 
 The target primary example is `stanislav.cybou`. The earlier frozen
 `stan.cybou` example (DEC-004) is superseded by Identity V2's five-character
