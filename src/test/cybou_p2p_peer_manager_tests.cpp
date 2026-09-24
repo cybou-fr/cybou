@@ -1,0 +1,81 @@
+// Copyright (c) 2026 The CYBOU developers
+// Distributed under the MIT software license, see the accompanying file COPYING.
+
+#include <cybou/p2p/peer_manager.h>
+#include <test/cybou_service_test_fixture.h>
+#include <test/util/setup_common.h>
+
+#include <boost/asio.hpp>
+#include <boost/test/unit_test.hpp>
+
+#include <array>
+#include <thread>
+
+BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, BasicTestingSetup)
+
+BOOST_AUTO_TEST_CASE(manager_tracks_two_live_peers_and_drops_closed_sockets)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor first_acceptor{io, tcp::endpoint{loopback, 0}};
+    tcp::acceptor second_acceptor{io, tcp::endpoint{loopback, 0}};
+    std::array<bool, 2> served{false, false};
+    const auto network = fixture.runtime->GetNetworkId();
+    std::jthread first_server{[&] {
+        tcp::socket socket{io};
+        first_acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        served[0] = session.Handshake({.network_id = network, .finalized_height = 12, .finalized_tip = {}, .capabilities = 0, .nonce = 101}) &&
+            session.AnswerPing();
+    }};
+    std::jthread second_server{[&] {
+        tcp::socket socket{io};
+        second_acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        served[1] = session.Handshake({.network_id = network, .finalized_height = 13, .finalized_tip = {}, .capabilities = 0, .nonce = 102}) &&
+            session.AnswerPing();
+    }};
+
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    const auto address = loopback.to_string();
+    const auto first_port = first_acceptor.local_endpoint().port();
+    const auto second_port = second_acceptor.local_endpoint().port();
+    BOOST_REQUIRE(manager.Connect(address, first_port));
+    BOOST_REQUIRE(manager.Connect(address, second_port));
+    BOOST_CHECK(!manager.Connect(address, first_port));
+    BOOST_CHECK_EQUAL(manager.ConnectedCount(), 2U);
+    const auto peers = manager.Peers();
+    BOOST_REQUIRE_EQUAL(peers.size(), 2U);
+    BOOST_CHECK(peers[0].hello.network_id == network);
+    BOOST_CHECK_EQUAL(manager.PingAll(), 2U);
+    first_server.join();
+    second_server.join();
+    BOOST_CHECK(served[0] && served[1]);
+    BOOST_CHECK_EQUAL(manager.PingAll(), 0U);
+    BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(manager_refuses_wrong_network_peer)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    const auto wrong_network = uint256::FromUserHex("02");
+    BOOST_REQUIRE(wrong_network);
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        session.Handshake({.network_id = *wrong_network, .finalized_height = 0, .finalized_tip = {}, .capabilities = 0, .nonce = 103});
+    }};
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    BOOST_CHECK(!manager.Connect(loopback.to_string(), acceptor.local_endpoint().port()));
+    server.join();
+    BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+}
+
+BOOST_AUTO_TEST_SUITE_END()

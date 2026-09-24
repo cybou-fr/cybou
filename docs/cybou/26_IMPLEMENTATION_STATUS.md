@@ -21,7 +21,7 @@ CYBOU is experimental. The canonical product target uses hybrid post-quantum aut
 - Native and desktop `.cybou` claiming durably save an encrypted local claim before NameCommit, then perform work and NameReveal; only finalized ownership is displayed as the primary name.
 - Four distinct PQ validator keys can be committed to a deterministic DEV genesis, but the current producer remains single-validator Authority Mode. A durable signing high-water mark prevents a validator from signing the last height again after restart; full BFT lock/vote recovery remains open.
 - Canonical AuthorityNode, NodeRuntime, MailService, and WalletService smoke suites are back in the native test target. Mail payload encryption works when given the correct mail public key; the current identity registry does not publish one, so `SendMail` fails closed before submission. Full historical integration coverage still needs restoration.
-- A separate native P2P session layer exchanges bounded HELLO/PING/PONG frames over a persistent TCP socket and rejects a mismatched NetworkID; runtime integration, peer management, and gossip are still open.
+- A separate native P2P session layer exchanges bounded HELLO/PING/PONG frames over persistent TCP sockets. An outbound peer manager uses the runtime's NetworkID and finalized status, tracks up to eight explicit peers, rejects duplicates and wrong-network peers, and removes peers that fail health checks. Runtime scheduling, inbound peer management, block/operation exchange, and gossip remain open.
 
 ## Integration still required
 
