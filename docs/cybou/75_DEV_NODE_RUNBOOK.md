@@ -100,6 +100,18 @@ verified DEV blocks and its identity service pre-saves key material durably
 before submitting AccountCreate remotely, then waiting for finality. A
 successful submission acknowledgment is not finality.
 
+The CYP2 listener also accepts a canonical operation over the persistent
+session. Given a file containing one serialized protocol operation:
+
+```text
+cybou-node p2p-submit network.bin observer-db 127.0.0.1 29461 operation.bin
+```
+
+The command bounds the input to 128 KiB, checks the response OperationID,
+prints the admission status, and exits successfully only for accepted,
+already-pending, or already-finalized operations. It does not wait for a
+finalized block. There is no automatic operation gossip yet.
+
 ## Current limits
 
 This DEV process can also produce empty blocks when no operation is pending.

@@ -38,6 +38,8 @@ public:
     bool Connect(const std::string& numeric_address, uint16_t port);
     size_t PingAll();
     SyncPeerResult SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks);
+    OperationSubmitResult SubmitOperation(const std::string& numeric_address, uint16_t port,
+        const ProtocolOperation& operation);
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
     void DisconnectAll();

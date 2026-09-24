@@ -67,14 +67,16 @@ BOOST_AUTO_TEST_CASE(loopback_session_rejects_network_mismatch)
         tcp::socket socket{io};
         acceptor.accept(socket);
         cybou::p2p::PeerSession peer{std::move(socket)};
-        server_accepted = peer.Handshake({.network_id = uint256::ONE, .nonce = 31});
+        server_accepted = peer.Handshake({.network_id = uint256::ONE,
+            .finalized_height = 0, .finalized_tip = {}, .capabilities = 0, .nonce = 31});
     }};
     tcp::socket socket{io};
     socket.connect(acceptor.local_endpoint());
     cybou::p2p::PeerSession peer{std::move(socket)};
     const auto other_network = uint256::FromUserHex("02");
     BOOST_REQUIRE(other_network);
-    BOOST_CHECK(!peer.Handshake({.network_id = *other_network, .nonce = 32}));
+    BOOST_CHECK(!peer.Handshake({.network_id = *other_network,
+        .finalized_height = 0, .finalized_tip = {}, .capabilities = 0, .nonce = 32}));
     server.join();
     BOOST_CHECK(!server_accepted);
 }

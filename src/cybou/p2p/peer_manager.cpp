@@ -105,6 +105,25 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
     return result;
 }
 
+OperationSubmitResult PeerManager::SubmitOperation(const std::string& numeric_address, uint16_t port,
+    const ProtocolOperation& operation)
+{
+    const auto op_id = ComputeOperationId(operation).value_or(uint256{});
+    const OperationSubmitResult failure{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
+    boost::system::error_code ec;
+    const auto address = boost::asio::ip::make_address(numeric_address, ec);
+    if (ec) return failure;
+    const Endpoint endpoint{address.to_string(), port};
+    auto it = m_peers.find(endpoint);
+    if (it == m_peers.end()) return failure;
+    const auto result = it->second->SubmitOperation(operation);
+    if (!result) {
+        m_peers.erase(it);
+        return failure;
+    }
+    return *result;
+}
+
 std::vector<PeerInfo> PeerManager::Peers() const
 {
     std::vector<PeerInfo> peers;

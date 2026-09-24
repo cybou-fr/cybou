@@ -114,4 +114,53 @@ BOOST_AUTO_TEST_CASE(manager_syncs_two_verified_blocks_on_one_session)
     BOOST_CHECK(observer.GetFinalizedTip() == fixture.runtime->GetFinalizedTip());
 }
 
+BOOST_AUTO_TEST_CASE(manager_submits_canonical_operation_with_separate_acknowledgment)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("p2p-account.cybou");
+    const auto source_block = fixture.runtime->GetBlockAtHeight(1);
+    BOOST_REQUIRE(source_block);
+    BOOST_REQUIRE_EQUAL(source_block->block.operations.size(), 1U);
+    const auto operation = source_block->block.operations.front();
+    const auto op_id = cybou::ComputeOperationId(operation);
+    BOOST_REQUIRE(op_id);
+
+    cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
+        .data_dir = fixture.directory / "other-producer", .validator_private_key = fixture.validator_seed,
+        .memory_only = true, .wipe_data = true};
+    cybou::CybouNodeRuntime receiver{std::move(config)};
+    BOOST_REQUIRE(receiver.InitializeGenesis(fixture.genesis));
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    bool served{false};
+    const auto network = fixture.runtime->GetNetworkId();
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        served = session.Handshake({.network_id = network, .finalized_height = 0,
+            .finalized_tip = {}, .capabilities = 0, .nonce = 105}) &&
+            session.ServeNext(receiver) && session.ServeNext(receiver);
+    }};
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    const auto address = loopback.to_string();
+    const auto port = acceptor.local_endpoint().port();
+    BOOST_REQUIRE(manager.Connect(address, port));
+    const auto submitted = manager.SubmitOperation(address, port, operation);
+    const auto repeated = manager.SubmitOperation(address, port, operation);
+    server.join();
+    BOOST_CHECK(served);
+    BOOST_CHECK(submitted.status == cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_CHECK(submitted.op_id == *op_id);
+    BOOST_CHECK(repeated.status == cybou::OperationSubmitStatus::ALREADY_PENDING);
+    BOOST_CHECK(repeated.op_id == *op_id);
+    BOOST_CHECK_EQUAL(receiver.GetFinalizedHeight().value_or(99), 0U);
+    const auto finalized = receiver.ProduceBlock();
+    BOOST_REQUIRE(finalized);
+    BOOST_CHECK_EQUAL(finalized->block.operations.size(), 1U);
+    BOOST_CHECK(finalized->block.operations.front() == operation);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
