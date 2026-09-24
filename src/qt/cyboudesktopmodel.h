@@ -15,6 +15,7 @@ class OptionsModel;
 namespace cybou {
 class CybouIdentityService;
 class CybouMailService;
+class CybouWalletService;
 }
 
 struct CybouCapabilities {
@@ -123,6 +124,10 @@ public:
     void setMailService(cybou::CybouMailService* mail_service);
     cybou::CybouMailService* mailService() const { return m_mail_service; }
 
+    /** Sets wallet service provider and updates payments capability. */
+    void setWalletService(cybou::CybouWalletService* wallet_service);
+    cybou::CybouWalletService* walletService() const { return m_wallet_service; }
+
     /** Requests identity creation from the backend.
         The UI only emits the request; protocol behavior belongs to core. */
     void requestCreateIdentity();
@@ -136,6 +141,7 @@ private:
     ClientModel* m_client_model{nullptr};
     cybou::CybouIdentityService* m_identity_service{nullptr};
     cybou::CybouMailService* m_mail_service{nullptr};
+    cybou::CybouWalletService* m_wallet_service{nullptr};
     CybouDesktopStatus m_status;
     CybouCapabilities m_capabilities;
     bool m_identity_request_pending{false};

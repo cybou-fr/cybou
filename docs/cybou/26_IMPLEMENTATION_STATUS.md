@@ -213,14 +213,21 @@ Implemented skeleton:
 - local `CybouIdentityService` creation flow, proof of possession, remote
   AccountCreate submission, finality wait, and OS-protected identity
   keystore on Windows;
+- complete encrypted CYBOU Email service (`CybouMailService`) with X25519/ChaCha20-Poly1305
+  E2E encryption, deterministic size-aware fee calculation, local atomic `mailbox.dat` persistence,
+  and 4-way cryptographic evidence bundle verification;
+- native CYBOU wallet transfer service (`CybouWalletService`) managing user-authorized
+  `PaymentOpV1` balance transfers, irreversible `SystemLockOpV1` locks to System Balance,
+  and on-chain activity ledger synchronization;
 - compact Mail discovery filters and Mail evidence bundle construction and
-  verification in core, without a complete Email delivery service.
+  verification in core.
 
 Desktop GUI:
 
 - native wallet page and Home balance card surfacing `Balance` / `System Balance` per doc 52 (whole-CYBOU rendering, one-way lock labeling, local activity ledger, capability-gated actions);
+- interactive Send payment, Receive (AccountID copy), and irreversible Lock to System Balance dialogs wired directly to `CybouWalletService`;
 - Identity page walking the full AccountCreateOp flow (local keys, AccountCreationWork, broadcast, BFT finality, atomic OnboardingPool funding) with per-phase explanations and onboarding economics (DEV/Beta/Mainnet separation, no carry-over, no free credits);
-- full Email client UI enforcing MailTx rules (one recipient, text-only, strict size meter, deterministic size-aware fee line, local read-state);
+- full Email client UI enforcing MailTx rules (one recipient, text-only, strict size meter, deterministic size-aware fee line, local read-state) wired directly to `CybouMailService`;
 - Storage and Backup client UIs (opaque content-addressed object list with pin/prune retention; encrypted backup sets with identity-key restore binding);
 - Network page with explicit-BFT finality section (finalized height, validator count, f = 1 ≥ 4 validators rule) fed by the doc 73 status contract;
 - core → desktop integration contract (doc 73): status fields, capability flags, service data flows, absolute rules both sides obey;
@@ -234,6 +241,5 @@ Not yet implemented:
 - independent multi-validator operation with durable consensus recovery;
 - peer discovery and a native, authenticated P2P message lifecycle beyond
   the bounded DEV TCP block/operation transport;
-- complete encrypted CYBOU Email send/receive and local mailbox indexing;
 - operational Object Storage, Backup, and Drive;
 - removal of inherited Bitcoin PoW, subsidy, wallet, and runtime paths.

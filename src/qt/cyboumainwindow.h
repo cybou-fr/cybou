@@ -20,6 +20,7 @@ namespace cybou {
 class CybouNodeRuntime;
 class CybouIdentityService;
 class CybouMailService;
+class CybouWalletService;
 }
 
 class CybouMainWindow final : public BitcoinGUI
@@ -47,6 +48,7 @@ private:
     std::unique_ptr<cybou::CybouNodeRuntime> m_node_runtime;
     std::unique_ptr<cybou::CybouIdentityService> m_identity_service;
     std::unique_ptr<cybou::CybouMailService> m_mail_service;
+    std::unique_ptr<cybou::CybouWalletService> m_wallet_service;
     QStackedWidget* m_pages;
     QButtonGroup* m_navigation;
 

@@ -77,6 +77,7 @@ void CybouDesktopModel::setNetworkInfo(const QString& network_name, const QStrin
 
 #include <cybou/identity_service.h>
 #include <cybou/mail_service.h>
+#include <cybou/wallet_service.h>
 
 void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity_service)
 {
@@ -99,6 +100,17 @@ void CybouDesktopModel::setMailService(cybou::CybouMailService* mail_service)
     if (m_mail_service && m_status.identity_state == CybouIdentityState::Active) {
         if (!m_capabilities.email) {
             m_capabilities.email = true;
+            Q_EMIT capabilitiesChanged();
+        }
+    }
+}
+
+void CybouDesktopModel::setWalletService(cybou::CybouWalletService* wallet_service)
+{
+    m_wallet_service = wallet_service;
+    if (m_wallet_service && m_status.identity_state == CybouIdentityState::Active) {
+        if (!m_capabilities.payments) {
+            m_capabilities.payments = true;
             Q_EMIT capabilitiesChanged();
         }
     }
@@ -188,9 +200,19 @@ void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString
     if (state == CybouIdentityState::Active || state == CybouIdentityState::None) {
         m_identity_request_pending = false;
     }
-    if (state == CybouIdentityState::Active && m_mail_service && !m_capabilities.email) {
-        m_capabilities.email = true;
-        Q_EMIT capabilitiesChanged();
+    if (state == CybouIdentityState::Active) {
+        bool caps_changed = false;
+        if (m_mail_service && !m_capabilities.email) {
+            m_capabilities.email = true;
+            caps_changed = true;
+        }
+        if (m_wallet_service && !m_capabilities.payments) {
+            m_capabilities.payments = true;
+            caps_changed = true;
+        }
+        if (caps_changed) {
+            Q_EMIT capabilitiesChanged();
+        }
     }
     Q_EMIT statusChanged();
 }

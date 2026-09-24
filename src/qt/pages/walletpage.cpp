@@ -4,16 +4,25 @@
 
 #include <qt/pages/walletpage.h>
 
+#include <cybou/wallet_service.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 
 #include <QBrush>
+#include <QClipboard>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
 #include <QFrame>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSpinBox>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
@@ -82,14 +91,14 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     actions->setSpacing(12);
     m_send = new QPushButton{tr("Send…"), this};
     m_send->setObjectName(QStringLiteral("primaryButton"));
-    connect(m_send, &QPushButton::clicked, this, [this] { actionNotWired(); });
+    connect(m_send, &QPushButton::clicked, this, [this] { onSendClicked(); });
     m_lock = new QPushButton{tr("Lock to System Balance…"), this};
     m_lock->setObjectName(QStringLiteral("secondaryButton"));
     m_lock->setProperty("irreversible", true);
-    connect(m_lock, &QPushButton::clicked, this, [this] { actionNotWired(); });
+    connect(m_lock, &QPushButton::clicked, this, [this] { onLockClicked(); });
     m_receive = new QPushButton{tr("Receive"), this};
     m_receive->setObjectName(QStringLiteral("secondaryButton"));
-    connect(m_receive, &QPushButton::clicked, this, [this] { actionNotWired(); });
+    connect(m_receive, &QPushButton::clicked, this, [this] { onReceiveClicked(); });
     actions->addWidget(m_send);
     actions->addWidget(m_lock);
     actions->addWidget(m_receive);
@@ -105,10 +114,15 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     m_activity->setObjectName(QStringLiteral("messageList"));
     root->addWidget(m_activity, 1);
 
-    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); syncLedger(); });
+    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); syncLedger(); });
+
+    auto* sync_timer = new QTimer{this};
+    connect(sync_timer, &QTimer::timeout, this, [this] { syncLedger(); });
+    sync_timer->start(3000);
 
     refresh();
+    syncLedger();
 }
 
 QString WalletPage::kindText(EntryKind kind)
@@ -197,6 +211,223 @@ void WalletPage::rebuildActivity()
         item->setTextAlignment(Qt::AlignCenter);
         item->setForeground(QBrush{CybouTheme::color(CybouTheme::TEXT_MUTED)});
         item->setSizeHint(QSize{0, 120});
+    }
+}
+
+void WalletPage::onSendClicked()
+{
+    auto* service = m_model->walletService();
+    if (!service) {
+        actionNotWired();
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Send CYBOU"));
+    dialog.setMinimumWidth(440);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->setSpacing(16);
+
+    auto* desc = noteLabel(tr("Enter the recipient Account ID (hex) and the amount of whole CYBOU to transfer. Debits user balance only; deterministic fee of 1 CYBOU is paid from System Balance."), &dialog);
+    layout->addWidget(desc);
+
+    auto* form = new QFormLayout;
+    form->setSpacing(12);
+
+    auto* recipient_edit = new QLineEdit(&dialog);
+    recipient_edit->setPlaceholderText(tr("Recipient Account ID (64-character hex)"));
+    form->addRow(tr("Recipient:"), recipient_edit);
+
+    auto* amount_spin = new QSpinBox(&dialog);
+    amount_spin->setRange(1, 1'000'000'000);
+    amount_spin->setValue(10);
+    amount_spin->setSuffix(QStringLiteral(" CYBOU"));
+    form->addRow(tr("Amount:"), amount_spin);
+
+    layout->addLayout(form);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    const QString to_str = recipient_edit->text().trimmed();
+    const auto rec_u256 = uint256::FromUserHex(to_str.toStdString());
+    if (!rec_u256 || rec_u256->IsNull()) {
+        QMessageBox::warning(this, tr("Invalid Recipient"), tr("Please enter a valid 64-character hex Account ID."));
+        return;
+    }
+
+    const cybou::AccountId recipient{*rec_u256};
+    const uint64_t amount = static_cast<uint64_t>(amount_spin->value());
+
+    const auto res = service->SendPayment(recipient, amount);
+    if (!res) {
+        QMessageBox::warning(this, tr("Payment Failed"), tr("Payment failed: %1").arg(QString::fromStdString(res.error_message)));
+        return;
+    }
+
+    QMessageBox::information(this, tr("Payment Submitted"), tr("Payment of %1 submitted to the network. BFT finality will confirm it shortly.").arg(cybouAmountText(amount)));
+    syncLedger();
+    refresh();
+}
+
+void WalletPage::onLockClicked()
+{
+    auto* service = m_model->walletService();
+    if (!service) {
+        actionNotWired();
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Lock to System Balance"));
+    dialog.setMinimumWidth(440);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->setSpacing(16);
+
+    auto* warning = new QLabel(tr("<b>WARNING: Irreversible Operation</b><br>Locking Balance into System Balance permanently assigns it to protocol services (such as Email fees). System Balance cannot be transferred, traded, or converted back to Balance."), &dialog);
+    warning->setWordWrap(true);
+    warning->setStyleSheet(QStringLiteral("color: #b91c1c;"));
+    layout->addWidget(warning);
+
+    auto* form = new QFormLayout;
+    form->setSpacing(12);
+
+    auto* amount_spin = new QSpinBox(&dialog);
+    amount_spin->setRange(1, 1'000'000'000);
+    amount_spin->setValue(50);
+    amount_spin->setSuffix(QStringLiteral(" CYBOU"));
+    form->addRow(tr("Amount to lock:"), amount_spin);
+
+    layout->addLayout(form);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("Confirm Irreversible Lock"));
+    layout->addWidget(buttons);
+
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    const uint64_t amount = static_cast<uint64_t>(amount_spin->value());
+    const auto res = service->LockToSystemBalance(amount);
+    if (!res) {
+        QMessageBox::warning(this, tr("Lock Failed"), tr("Lock failed: %1").arg(QString::fromStdString(res.error_message)));
+        return;
+    }
+
+    QMessageBox::information(this, tr("Lock Submitted"), tr("Lock of %1 submitted to the network. BFT finality will confirm it shortly.").arg(cybouAmountText(amount)));
+    syncLedger();
+    refresh();
+}
+
+void WalletPage::onReceiveClicked()
+{
+    const auto& status = m_model->status();
+    if (status.identity_state != CybouIdentityState::Active || status.account_id.isEmpty()) {
+        QMessageBox::information(this, tr("No Active Identity"), tr("Create an active CYBOU identity before receiving payments."));
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Receive CYBOU"));
+    dialog.setMinimumWidth(480);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->setSpacing(16);
+
+    auto* desc = noteLabel(tr("Give your Account ID to the sender. Anyone on the CYBOU network can transfer whole CYBOU to this account."), &dialog);
+    layout->addWidget(desc);
+
+    auto* acc_edit = new QLineEdit(status.account_id, &dialog);
+    acc_edit->setReadOnly(true);
+    acc_edit->selectAll();
+    layout->addWidget(acc_edit);
+
+    auto* btn_layout = new QHBoxLayout;
+    auto* copy_btn = new QPushButton(tr("Copy to Clipboard"), &dialog);
+    copy_btn->setObjectName(QStringLiteral("primaryButton"));
+    connect(copy_btn, &QPushButton::clicked, [&] {
+        QGuiApplication::clipboard()->setText(status.account_id);
+        copy_btn->setText(tr("Copied!"));
+    });
+    btn_layout->addWidget(copy_btn);
+
+    auto* close_btn = new QPushButton(tr("Close"), &dialog);
+    close_btn->setObjectName(QStringLiteral("secondaryButton"));
+    connect(close_btn, &QPushButton::clicked, &dialog, &QDialog::accept);
+    btn_layout->addWidget(close_btn);
+
+    layout->addLayout(btn_layout);
+    dialog.exec();
+}
+
+void WalletPage::syncLedger()
+{
+    auto* service = m_model->walletService();
+    if (!service) {
+        return;
+    }
+
+    service->SyncLedger();
+
+    const auto [bal, sys] = service->GetBalances();
+    m_model->setBalances(bal, sys);
+
+    const auto entries = service->GetLedgerEntries();
+    QVector<Entry> loaded;
+    for (const auto& e : entries) {
+        Entry entry;
+        entry.id = QString::fromStdString(e.entry_id.GetHex());
+        entry.amount = e.amount;
+        entry.system_side = e.system_side;
+        entry.counterparty = e.counterparty.IsNull() ? QString{} : QString::fromStdString(e.counterparty.Value().GetHex());
+        entry.at = e.timestamp > 0 ? QDateTime::fromSecsSinceEpoch(static_cast<qint64>(e.timestamp)) : QDateTime::currentDateTime();
+        entry.finality = (e.finality == cybou::WalletEntryFinality::FINAL) ? EntryFinality::Final : EntryFinality::Pending;
+
+        switch (e.kind) {
+        case cybou::WalletEntryKind::ONBOARDING_BONUS:
+            entry.kind = EntryKind::OnboardingBonus;
+            break;
+        case cybou::WalletEntryKind::MAIL_FEE:
+            entry.kind = EntryKind::MailFee;
+            break;
+        case cybou::WalletEntryKind::PAYMENT:
+            entry.kind = EntryKind::Payment;
+            break;
+        case cybou::WalletEntryKind::LOCK_TO_SYSTEM:
+            entry.kind = EntryKind::LockToSystem;
+            break;
+        }
+        loaded.append(entry);
+    }
+
+    bool changed = (m_entries.size() != loaded.size());
+    if (!changed) {
+        for (int i = 0; i < m_entries.size(); ++i) {
+            if (m_entries[i].id != loaded[i].id ||
+                m_entries[i].finality != loaded[i].finality ||
+                m_entries[i].amount != loaded[i].amount) {
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    if (changed) {
+        m_entries = std::move(loaded);
+        rebuildActivity();
     }
 }
 

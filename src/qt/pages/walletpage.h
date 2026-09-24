@@ -76,6 +76,10 @@ private:
 
     void refresh();
     void rebuildActivity();
+    void syncLedger();
+    void onSendClicked();
+    void onLockClicked();
+    void onReceiveClicked();
     void actionNotWired();
     static QString kindText(EntryKind kind);
     static QString finalityText(EntryFinality finality);

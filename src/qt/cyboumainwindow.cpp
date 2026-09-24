@@ -22,6 +22,7 @@
 #include <cybou/bootstrap_nodes.h>
 #include <cybou/identity_service.h>
 #include <cybou/mail_service.h>
+#include <cybou/wallet_service.h>
 #include <cybou/network_definition.h>
 #include <cybou/node_runtime.h>
 #include <support/cleanse.h>
@@ -215,6 +216,9 @@ void CybouMainWindow::initCybouRuntime()
         }
         m_desktop_model->setMailService(m_mail_service.get());
 
+        m_wallet_service = std::make_unique<cybou::CybouWalletService>(*m_node_runtime, m_identity_service->GetKeyStore());
+        m_desktop_model->setWalletService(m_wallet_service.get());
+
         // Update initial finality status:
         const auto status = m_node_runtime->GetStatus();
         m_desktop_model->setFinalityStatus(static_cast<int>(status.finalized_height), static_cast<int>(status.validator_count));
@@ -232,6 +236,13 @@ void CybouMainWindow::initCybouRuntime()
                     bootstrap_reachable = sync_res.IsConnected();
                     if (m_mail_service) {
                         m_mail_service->SyncMailbox();
+                    }
+                    if (m_wallet_service) {
+                        m_wallet_service->SyncLedger();
+                        const auto [bal, sys] = m_wallet_service->GetBalances();
+                        QMetaObject::invokeMethod(this, [this, bal, sys] {
+                            m_desktop_model->setBalances(bal, sys);
+                        }, Qt::QueuedConnection);
                     }
                 } catch (const std::exception& e) {
                     bootstrap_reachable = false;
