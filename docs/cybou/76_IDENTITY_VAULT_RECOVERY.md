@@ -1,14 +1,16 @@
 # 76 — Identity V2 vault and recovery
 
-Status: target specification. Current desktop has no portable V2 vault or
-mnemonic recovery.
+Status: target specification. Local phrase and cryptographic envelope code
+exists, but desktop V2 vault and mnemonic restore are not integrated.
 
 The local `identity_crypto` module has fixed HKDF labels and deterministic
 public-key test vectors. `recovery_phrase` now encodes and decodes 256-bit
 entropy with the BIP-39 English list and eight checksum bits. The recovered
 entropy is passed directly as the 32-byte secret to the Identity V2 HKDF; the
-BIP-39 PBKDF2 wallet seed/passphrase scheme is not used. Vault and consensus
-recovery remain unimplemented.
+BIP-39 PBKDF2 wallet seed/passphrase scheme is not used. The local
+`identity_vault` module seals and opens bounded in-memory CYBV2 envelopes.
+Payload schema, atomic file save, password change, and consensus recovery
+remain unimplemented.
 
 ## Recovery Root
 

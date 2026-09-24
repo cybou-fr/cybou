@@ -20,6 +20,9 @@ AccountCreate, user operations, a vault, or consensus state.
 The local `recovery_phrase` module now maps 256-bit entropy to a checksummed
 24-word BIP-39 English phrase and back; it is not connected to the GUI or
 AccountCreate.
+The local `identity_vault` module can seal/open a bounded CYBV2 envelope
+with Argon2id password KEK, random DEK and AES-256-GCM. There is no file
+persistence, production payload schema, or desktop integration yet.
 
 ## Hardened architecture
 
