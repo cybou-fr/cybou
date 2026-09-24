@@ -309,9 +309,9 @@ bool CybouMailService::LoadMailbox()
 
         item.folder = static_cast<MailFolder>(bytes[offset++]);
 
-        auto s_id = AccountId::FromBytes(bytes.subspan(offset, 32));
+        auto s_id = AccountId::FromBytes(std::span{bytes}.subspan(offset, 32));
         offset += 32;
-        auto r_id = AccountId::FromBytes(bytes.subspan(offset, 32));
+        auto r_id = AccountId::FromBytes(std::span{bytes}.subspan(offset, 32));
         offset += 32;
         if (!s_id || !r_id) return false;
         item.sender = *s_id;
@@ -349,7 +349,7 @@ bool CybouMailService::LoadMailbox()
             const uint32_t ev_len = ReadUint32LE(bytes.data() + offset);
             offset += 4;
             if (offset + ev_len > bytes.size()) return false;
-            item.evidence_bundle = DeserializeMailEvidenceBundle(bytes.subspan(offset, ev_len));
+            item.evidence_bundle = DeserializeMailEvidenceBundle(std::span{bytes}.subspan(offset, ev_len));
             offset += ev_len;
         }
 
@@ -410,15 +410,15 @@ bool CybouMailService::SaveMailbox() const
     }
 
 #ifdef WIN32
+    const std::wstring w_tmp(tmp_path.begin(), tmp_path.end());
+    const std::wstring w_dst(m_mailbox_path.native());
     HANDLE hFile = CreateFileW(
-        tmp_path.c_str(), GENERIC_READ | GENERIC_WRITE,
+        w_tmp.c_str(), GENERIC_READ | GENERIC_WRITE,
         FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile != INVALID_HANDLE_VALUE) {
         FlushFileBuffers(hFile);
         CloseHandle(hFile);
     }
-    const std::wstring w_tmp(tmp_path.begin(), tmp_path.end());
-    const std::wstring w_dst(m_mailbox_path.native());
     if (std::filesystem::exists(m_mailbox_path)) {
         if (!ReplaceFileW(w_dst.c_str(), w_tmp.c_str(), nullptr, REPLACEFILE_WRITE_THROUGH, nullptr, nullptr)) {
             if (!MoveFileExW(w_tmp.c_str(), w_dst.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
@@ -495,9 +495,9 @@ uint256 CybouMailService::SaveDraft(
     }
 
     AccountId rec_id;
-    const uint256 rec_u256 = uint256S(recipient_hex);
-    if (!rec_u256.IsNull()) {
-        rec_id = AccountId{rec_u256};
+    const auto rec_u256 = uint256::FromUserHex(recipient_hex);
+    if (rec_u256.has_value() && !rec_u256->IsNull()) {
+        rec_id = AccountId{*rec_u256};
     }
 
     const auto my_account = m_keystore.GetAccountId().value_or(AccountId{});
@@ -579,7 +579,7 @@ SendMailResult CybouMailService::SendMail(
         return {.error = SendMailError::SENDER_NOT_FOUND, .error_message = "Sender account not found on-chain"};
     }
 
-    const auto& params = m_runtime.GetNetworkDefinition().genesis_state ? m_runtime.GetNetworkDefinition().params : DevProtocolParameters();
+    const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
     const uint64_t current_height = m_runtime.GetFinalizedHeight().value_or(0);
     const uint64_t current_epoch = EpochForHeight(current_height, params);
     if (sender_state->last_mail_epoch == current_epoch &&
@@ -649,8 +649,7 @@ SendMailResult CybouMailService::SendMail(
     const uint256 mail_id = ComputeOperationId(proto_op);
 
     const auto submit_res = m_runtime.SubmitOperation(proto_op);
-    if (submit_res.status != OperationSubmitStatus::ACCEPTED &&
-        submit_res.status != OperationSubmitStatus::ENQUEUED) {
+    if (!submit_res) {
         return {.error = SendMailError::SUBMIT_FAILED, .error_message = "Network rejected operation"};
     }
 
@@ -695,7 +694,7 @@ size_t CybouMailService::SyncMailbox()
         const auto block_opt = m_runtime.GetBlockAtHeight(h);
         if (!block_opt) break;
         const auto& fin_block = *block_opt;
-        const auto block_id = fin_block.block.ComputeBlockId();
+        const auto block_id = ComputeBlockId(fin_block.block);
 
         for (size_t op_idx = 0; op_idx < fin_block.block.operations.size(); ++op_idx) {
             const auto& proto_op = fin_block.block.operations[op_idx];
@@ -720,13 +719,12 @@ size_t CybouMailService::SyncMailbox()
                         item.operation_index = op_idx;
 
                         AccountAuthorizationV1 sender_auth{
-                            .version = 1,
                             .authorization_descriptor = auth_op.account_id.Value()
                         };
                         item.evidence_bundle = CreateMailEvidenceBundle(
                             fin_block.block,
                             op_idx,
-                            fin_block.finality_certificate,
+                            fin_block.certificate,
                             sender_auth,
                             m_runtime.GetNetworkId());
                         changed = true;
@@ -768,13 +766,12 @@ size_t CybouMailService::SyncMailbox()
                     item.fee = MailFeeForSize(mail_op.ciphertext.size(), DevProtocolParameters());
 
                     AccountAuthorizationV1 sender_auth{
-                        .version = 1,
                         .authorization_descriptor = auth_op.account_id.Value()
                     };
                     item.evidence_bundle = CreateMailEvidenceBundle(
                         fin_block.block,
                         op_idx,
-                        fin_block.finality_certificate,
+                        fin_block.certificate,
                         sender_auth,
                         m_runtime.GetNetworkId());
 

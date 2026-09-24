@@ -20,31 +20,40 @@
 
 namespace cybou_mail_service_tests {
 
+using namespace cybou;
+
 namespace {
 
-CybouNetworkDefinitionV1 TestNetworkDefinition()
+CybouState CreateTestGenesis(const uint256& val_pub)
 {
-    CybouNetworkDefinitionV1 net_def;
-    net_def.network_name = "CYBOU-MAIL-TEST";
-    net_def.params = DevProtocolParameters();
+    return CybouState{
+        .onboarding_pool = 1'000'000,
+        .security_reward_pool = 100,
+        .pending_fee_pool = 0,
+        .accounts = {},
+        .validator_set = {
+            .version = VALIDATOR_SET_VERSION,
+            .validators = {{
+                .validator_id = val_pub,
+                .consensus_public_key = val_pub,
+                .weight = 1,
+            }},
+        },
+    };
+}
 
-    CybouState state;
-    state.onboarding_pool = 1'000'000;
-    state.security_reward_pool = 1'000'000;
-    state.pending_fee_pool = 0;
-
-    ValidatorSetV1 val_set;
-    val_set.epoch = 0;
-    val_set.validators.push_back(ValidatorV1{
-        .validator_id = uint256S("0101010101010101010101010101010101010101010101010101010101010101"),
-        .consensus_public_key = uint256S("0202020202020202020202020202020202020202020202020202020202020202"),
-        .weight = 1,
-    });
-    state.validator_set = val_set;
-
-    net_def.genesis_state = state;
-    net_def.genesis_block_id = uint256S("1111111111111111111111111111111111111111111111111111111111111111");
-    return net_def;
+CybouNetworkDefinitionV1 CreateTestNetworkDefinition(const CybouState& genesis)
+{
+    auto params = DevProtocolParameters();
+    params.account_creation_work_bits = 0;
+    return CybouNetworkDefinitionV1{
+        .protocol_version = CYBOU_NETWORK_DEFINITION_VERSION,
+        .genesis_block_id = CybouStateHash(genesis),
+        .genesis_state_root = CybouStateHash(genesis),
+        .protocol_parameters = params,
+        .initial_validator_set_commitment = ComputeValidatorSetCommitment(genesis.validator_set),
+        .operator_authority = std::nullopt,
+    };
 }
 
 } // namespace
@@ -55,8 +64,8 @@ BOOST_AUTO_TEST_CASE(protected_mail_serialization_roundtrip)
 {
     ProtectedMailV1 mail;
     mail.version = 1;
-    mail.sender = AccountId{uint256S("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")};
-    mail.recipient = AccountId{uint256S("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")};
+    mail.sender = AccountId{uint256::FromUserHex("aa").value()};
+    mail.recipient = AccountId{uint256::FromUserHex("bb").value()};
     mail.timestamp = 1774390000;
     mail.subject = "Confidential CYBOU Contract";
     mail.body = "This is a strictly E2E encrypted text message delivered via native BFT consensus.";
@@ -166,9 +175,11 @@ BOOST_AUTO_TEST_CASE(mailbox_persistence_and_sync_lifecycle)
     const auto test_dir = m_args.GetDataDirBase() / "test_mail_service";
     std::filesystem::create_directories(test_dir);
 
-    // Setup network runtime with genesis
-    auto net_def = TestNetworkDefinition();
-    auto& gen_state = *net_def.genesis_state;
+    std::array<unsigned char, 32> val_priv{};
+    val_priv[0] = 0xAA;
+    const auto val_pub = *DeriveEd25519PublicKey(val_priv);
+
+    auto gen_state = CreateTestGenesis(val_pub);
 
     // Create Alice and Bob on-chain in genesis state
     std::array<unsigned char, 32> alice_seed{};
@@ -207,8 +218,8 @@ BOOST_AUTO_TEST_CASE(mailbox_persistence_and_sync_lifecycle)
         .mail_count_in_epoch = 0,
     };
 
-    std::array<unsigned char, 32> val_priv{};
-    val_priv[0] = 0xAA;
+    auto net_def = CreateTestNetworkDefinition(gen_state);
+
     NodeRuntimeConfig runtime_config{
         .network_definition = net_def,
         .data_dir = test_dir / "node",
@@ -238,8 +249,8 @@ BOOST_AUTO_TEST_CASE(mailbox_persistence_and_sync_lifecycle)
 
     // Alice sends mail to Bob
     const auto send_res = alice_mail.SendMail(bob_id, "Welcome to CYBOU", "Native E2E email test message");
-    BOOST_REQUIRE(send_res.success());
-    BOOST_CHECK_EQUAL(send_res.error, SendMailError::NONE);
+    BOOST_REQUIRE(send_res);
+    BOOST_CHECK_EQUAL(static_cast<uint8_t>(send_res.error), static_cast<uint8_t>(SendMailError::NONE));
     BOOST_CHECK_GT(send_res.fee, 0);
 
     // Sent folder now has 1 message with PENDING_FINALITY

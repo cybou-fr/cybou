@@ -21,6 +21,7 @@
 #include <common/args.h>
 #include <cybou/bootstrap_nodes.h>
 #include <cybou/identity_service.h>
+#include <cybou/mail_service.h>
 #include <cybou/network_definition.h>
 #include <cybou/node_runtime.h>
 #include <support/cleanse.h>
@@ -207,6 +208,13 @@ void CybouMainWindow::initCybouRuntime()
 
         m_desktop_model->setIdentityService(m_identity_service.get());
 
+        const auto mailbox_path = (gArgs.GetDataDirNet() / "mailbox.dat").std_path();
+        m_mail_service = std::make_unique<cybou::CybouMailService>(*m_node_runtime, m_identity_service->GetKeyStore(), mailbox_path);
+        if (std::filesystem::exists(mailbox_path)) {
+            m_mail_service->LoadMailbox();
+        }
+        m_desktop_model->setMailService(m_mail_service.get());
+
         // Update initial finality status:
         const auto status = m_node_runtime->GetStatus();
         m_desktop_model->setFinalityStatus(static_cast<int>(status.finalized_height), static_cast<int>(status.validator_count));
@@ -222,6 +230,9 @@ void CybouMainWindow::initCybouRuntime()
                 try {
                     const auto sync_res = m_node_runtime->SyncFromPeer(std::string{endpoint.host}, endpoint.port, 2000);
                     bootstrap_reachable = sync_res.IsConnected();
+                    if (m_mail_service) {
+                        m_mail_service->SyncMailbox();
+                    }
                 } catch (const std::exception& e) {
                     bootstrap_reachable = false;
                     qWarning() << "cybou bootstrap sync error:" << e.what();

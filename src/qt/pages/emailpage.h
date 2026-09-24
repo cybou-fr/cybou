@@ -76,6 +76,7 @@ private:
         QDateTime received;
         bool read{false};
         Finality finality{Finality::Draft};
+        bool has_evidence{false};
     };
 
     CybouDesktopModel* m_model;
@@ -83,6 +84,8 @@ private:
     QVector<Message> m_messages;
     qint64 m_next_id{1};
     Folder m_folder{FOLDER_INBOX};
+
+    void syncMailbox();
 
     QStackedWidget* m_right_stack{nullptr};
     QListWidget* m_folders{nullptr};

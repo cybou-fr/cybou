@@ -19,6 +19,7 @@ class QStackedWidget;
 namespace cybou {
 class CybouNodeRuntime;
 class CybouIdentityService;
+class CybouMailService;
 }
 
 class CybouMainWindow final : public BitcoinGUI
@@ -45,6 +46,7 @@ private:
     ClientModel* m_client_model{nullptr};
     std::unique_ptr<cybou::CybouNodeRuntime> m_node_runtime;
     std::unique_ptr<cybou::CybouIdentityService> m_identity_service;
+    std::unique_ptr<cybou::CybouMailService> m_mail_service;
     QStackedWidget* m_pages;
     QButtonGroup* m_navigation;
 

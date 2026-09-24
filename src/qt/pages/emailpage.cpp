@@ -4,6 +4,7 @@
 
 #include <qt/pages/emailpage.h>
 
+#include <cybou/mail_service.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 
@@ -19,6 +20,7 @@
 #include <QStackedWidget>
 #include <QStyle>
 #include <QTextEdit>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
@@ -107,6 +109,10 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
         Message& message = m_messages[index];
         if (m_folder == FOLDER_INBOX && !message.read) {
             message.read = true;
+            if (auto* service = m_model->mailService()) {
+                const auto id_opt = uint256::FromUserHex(message.id.toStdString());
+                if (id_opt) service->MarkAsRead(*id_opt, true);
+            }
             rebuildFolderList();
         }
         showMessage(message);
@@ -251,8 +257,12 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     connect(m_subject, &QLineEdit::textChanged, this, refresh_meter);
     connect(m_body, &QTextEdit::textChanged, this, refresh_meter);
 
-    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { updateGates(); rebuildFolderList(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { updateGates(); });
+    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { updateGates(); syncMailbox(); });
+    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { updateGates(); syncMailbox(); });
+
+    auto* sync_timer = new QTimer{this};
+    connect(sync_timer, &QTimer::timeout, this, [this] { syncMailbox(); });
+    sync_timer->start(3000);
 
     // Identity banner across the top of the mail view (hidden once active).
     m_banner = new QFrame{mail_view};
@@ -269,8 +279,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     banner_layout->addWidget(m_banner_action, 0, Qt::AlignVCenter);
     mail_layout->insertWidget(0, m_banner);
 
-    rebuildFolderList();
-    rebuildMessageList();
+    syncMailbox();
     refresh_meter();
 }
 
@@ -391,7 +400,7 @@ void EmailPage::showMessage(const Message& message)
     // trustworthy once all four are verified; drafts carry none.
     m_evidence_title->setVisible(true);
     m_evidence->setVisible(true);
-    const bool verified = message.finality == Finality::Final;
+    const bool verified = message.finality == Finality::Final && message.has_evidence;
     if (m_evidence_states.size() >= 4) {
         // 0: Transaction inclusion proof
         m_evidence_states[0]->setText(verified ? tr("verified") : tr("pending"));
@@ -469,44 +478,150 @@ void EmailPage::sendNow()
 {
     // Reachable only once core reports the email capability. The client
     // hands the MailTx to the local node; finality arrives asynchronously.
-    Message outgoing;
-    outgoing.id = QStringLiteral("local-%1").arg(m_next_id++);
-    outgoing.folder = FOLDER_SENT;
-    outgoing.to = m_to->text().trimmed();
-    outgoing.subject = m_subject->text();
-    outgoing.body = m_body->toPlainText();
-    outgoing.received = QDateTime::currentDateTime();
-    outgoing.read = true;
-    outgoing.finality = Finality::PendingFinality;
-    m_messages.append(outgoing);
+    const QString to_str = m_to->text().trimmed();
+    const QString subject_str = m_subject->text();
+    const QString body_str = m_body->toPlainText();
+
+    if (auto* service = m_model->mailService()) {
+        const auto rec_u256 = uint256::FromUserHex(to_str.toStdString());
+        if (!rec_u256 || rec_u256->IsNull()) {
+            m_send_hint->setText(tr("Invalid recipient account ID."));
+            m_send_hint->setVisible(true);
+            return;
+        }
+        const cybou::AccountId recipient{*rec_u256};
+        auto res = service->SendMail(recipient, subject_str.toStdString(), body_str.toStdString());
+        if (!res) {
+            m_send_hint->setText(tr("Send failed: %1").arg(QString::fromStdString(res.error_message)));
+            m_send_hint->setVisible(true);
+            return;
+        }
+    } else {
+        Message outgoing;
+        outgoing.id = QStringLiteral("local-%1").arg(m_next_id++);
+        outgoing.folder = FOLDER_SENT;
+        outgoing.to = to_str;
+        outgoing.subject = subject_str;
+        outgoing.body = body_str;
+        outgoing.received = QDateTime::currentDateTime();
+        outgoing.read = true;
+        outgoing.finality = Finality::PendingFinality;
+        m_messages.append(outgoing);
+    }
+
     m_to->clear();
     m_subject->clear();
     m_body->clear();
-    rebuildFolderList();
-    rebuildMessageList();
+    syncMailbox();
     closeComposer();
 }
 
 void EmailPage::saveDraft()
 {
-    if (m_body->toPlainText().trimmed().isEmpty() && m_subject->text().trimmed().isEmpty()) {
+    const QString to_str = m_to->text().trimmed();
+    const QString subject_str = m_subject->text();
+    const QString body_str = m_body->toPlainText();
+
+    if (body_str.trimmed().isEmpty() && subject_str.trimmed().isEmpty()) {
         closeComposer();
         return;
     }
-    Message draft;
-    draft.id = QStringLiteral("local-%1").arg(m_next_id++);
-    draft.folder = FOLDER_DRAFTS;
-    draft.to = m_to->text().trimmed();
-    draft.subject = m_subject->text();
-    draft.body = m_body->toPlainText();
-    draft.received = QDateTime::currentDateTime();
-    draft.read = true;
-    draft.finality = Finality::Draft;
-    m_messages.append(draft);
+
+    if (auto* service = m_model->mailService()) {
+        service->SaveDraft(to_str.toStdString(), subject_str.toStdString(), body_str.toStdString());
+    } else {
+        Message draft;
+        draft.id = QStringLiteral("local-%1").arg(m_next_id++);
+        draft.folder = FOLDER_DRAFTS;
+        draft.to = to_str;
+        draft.subject = subject_str;
+        draft.body = body_str;
+        draft.received = QDateTime::currentDateTime();
+        draft.read = true;
+        draft.finality = Finality::Draft;
+        m_messages.append(draft);
+    }
+
     m_to->clear();
     m_subject->clear();
     m_body->clear();
-    rebuildFolderList();
-    rebuildMessageList();
+    syncMailbox();
     closeComposer();
 }
+
+void EmailPage::syncMailbox()
+{
+    auto* service = m_model->mailService();
+    if (!service) {
+        rebuildFolderList();
+        rebuildMessageList();
+        return;
+    }
+
+    service->SyncMailbox();
+
+    QList<Message> loaded_messages;
+    const std::vector<cybou::MailFolder> folders = {
+        cybou::MailFolder::INBOX,
+        cybou::MailFolder::SENT,
+        cybou::MailFolder::DRAFTS
+    };
+
+    for (const auto f : folders) {
+        const auto items = service->GetMessages(f);
+        for (const auto& item : items) {
+            Message msg;
+            msg.id = QString::fromStdString(item.mail_id.GetHex());
+            msg.from = QString::fromStdString(item.sender.Value().GetHex());
+            msg.to = QString::fromStdString(item.recipient.Value().GetHex());
+            msg.subject = QString::fromStdString(item.subject);
+            msg.body = QString::fromStdString(item.body);
+            msg.received = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(item.timestamp));
+            msg.read = item.read;
+            msg.has_evidence = item.evidence_bundle.has_value();
+
+            if (item.folder == cybou::MailFolder::INBOX) {
+                msg.folder = FOLDER_INBOX;
+            } else if (item.folder == cybou::MailFolder::SENT) {
+                msg.folder = FOLDER_SENT;
+            } else {
+                msg.folder = FOLDER_DRAFTS;
+            }
+
+            if (item.finality == cybou::MailFinalityStatus::FINAL) {
+                msg.finality = Finality::Final;
+            } else if (item.finality == cybou::MailFinalityStatus::PENDING_FINALITY) {
+                msg.finality = Finality::PendingFinality;
+            } else {
+                msg.finality = Finality::Draft;
+            }
+
+            loaded_messages.append(msg);
+        }
+    }
+
+    bool changed = (m_messages.size() != loaded_messages.size());
+    if (!changed) {
+        for (int i = 0; i < m_messages.size(); ++i) {
+            if (m_messages[i].id != loaded_messages[i].id ||
+                m_messages[i].finality != loaded_messages[i].finality ||
+                m_messages[i].read != loaded_messages[i].read ||
+                m_messages[i].folder != loaded_messages[i].folder ||
+                m_messages[i].has_evidence != loaded_messages[i].has_evidence) {
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    if (changed) {
+        const int current_row = m_list->currentRow();
+        m_messages = std::move(loaded_messages);
+        rebuildFolderList();
+        rebuildMessageList();
+        if (current_row >= 0 && current_row < m_list->count()) {
+            m_list->setCurrentRow(current_row);
+        }
+    }
+}
+

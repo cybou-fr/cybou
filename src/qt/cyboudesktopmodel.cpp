@@ -76,6 +76,7 @@ void CybouDesktopModel::setNetworkInfo(const QString& network_name, const QStrin
 }
 
 #include <cybou/identity_service.h>
+#include <cybou/mail_service.h>
 
 void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity_service)
 {
@@ -88,6 +89,17 @@ void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity
             m_identity_service->GetAccountId().has_value()) {
             const QString acc_hex = QString::fromStdString(m_identity_service->GetAccountId()->Value().GetHex());
             setIdentityState(CybouIdentityState::Active, acc_hex);
+        }
+    }
+}
+
+void CybouDesktopModel::setMailService(cybou::CybouMailService* mail_service)
+{
+    m_mail_service = mail_service;
+    if (m_mail_service && m_status.identity_state == CybouIdentityState::Active) {
+        if (!m_capabilities.email) {
+            m_capabilities.email = true;
+            Q_EMIT capabilitiesChanged();
         }
     }
 }
@@ -175,6 +187,10 @@ void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString
     m_status.creation_height = creation_height;
     if (state == CybouIdentityState::Active || state == CybouIdentityState::None) {
         m_identity_request_pending = false;
+    }
+    if (state == CybouIdentityState::Active && m_mail_service && !m_capabilities.email) {
+        m_capabilities.email = true;
+        Q_EMIT capabilitiesChanged();
     }
     Q_EMIT statusChanged();
 }

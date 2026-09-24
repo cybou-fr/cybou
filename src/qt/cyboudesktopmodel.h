@@ -14,6 +14,7 @@ class OptionsModel;
 
 namespace cybou {
 class CybouIdentityService;
+class CybouMailService;
 }
 
 struct CybouCapabilities {
@@ -118,6 +119,10 @@ public:
     void setIdentityService(cybou::CybouIdentityService* identity_service);
     cybou::CybouIdentityService* identityService() const { return m_identity_service; }
 
+    /** Sets mail service provider and updates email capability. */
+    void setMailService(cybou::CybouMailService* mail_service);
+    cybou::CybouMailService* mailService() const { return m_mail_service; }
+
     /** Requests identity creation from the backend.
         The UI only emits the request; protocol behavior belongs to core. */
     void requestCreateIdentity();
@@ -130,6 +135,7 @@ Q_SIGNALS:
 private:
     ClientModel* m_client_model{nullptr};
     cybou::CybouIdentityService* m_identity_service{nullptr};
+    cybou::CybouMailService* m_mail_service{nullptr};
     CybouDesktopStatus m_status;
     CybouCapabilities m_capabilities;
     bool m_identity_request_pending{false};
