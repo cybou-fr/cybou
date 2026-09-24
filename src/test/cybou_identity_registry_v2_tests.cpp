@@ -53,7 +53,9 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     BOOST_REQUIRE(registry.Find(account));
     BOOST_CHECK(registry.Find(account)->devices.at(*device_id).next_nonce == 0);
 
-    DeviceAddV2 add{.account_id = account, .new_device = *second};
+    DeviceAddV2 add{};
+    add.account_id = account;
+    add.new_device = *second;
     const auto add_digest = ComputeDeviceAddDigestV2(network_id, add);
     BOOST_REQUIRE(add_digest);
     add.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *add_digest);
@@ -68,8 +70,11 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     BOOST_CHECK(registry.Find(account)->next_root_nonce == 1);
     BOOST_CHECK(registry.AddDevice(add, network_id) == IdentityRegistryErrorV2::DEVICE_EXISTS);
 
-    DeviceAuthorizationV2 operation{.account_id = account, .device_id = *second_id,
-        .activation_nonce = 1, .kind = DeviceOperationKindV2::PAYMENT};
+    DeviceAuthorizationV2 operation{};
+    operation.account_id = account;
+    operation.device_id = *second_id;
+    operation.activation_nonce = 1;
+    operation.kind = DeviceOperationKindV2::PAYMENT;
     operation.payload_commitment[0] = 0x55;
     const auto operation_digest = ComputeDeviceOperationDigestV2(network_id, operation);
     BOOST_REQUIRE(operation_digest);
@@ -89,7 +94,10 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     BOOST_CHECK(registry.Find(account)->devices.at(*device_id).next_nonce == 0);
     BOOST_CHECK(registry.AuthorizeDeviceOperation(operation, network_id) == IdentityRegistryErrorV2::BAD_NONCE);
 
-    DeviceRevokeV2 revoke{.account_id = account, .device_id = *device_id, .root_nonce = 1};
+    DeviceRevokeV2 revoke{};
+    revoke.account_id = account;
+    revoke.device_id = *device_id;
+    revoke.root_nonce = 1;
     const auto revoke_digest = ComputeDeviceRevokeDigestV2(network_id, revoke);
     BOOST_REQUIRE(revoke_digest);
     revoke.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *revoke_digest);
@@ -98,13 +106,18 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     BOOST_CHECK(registry.Find(account)->devices.contains(*second_id));
     BOOST_CHECK(registry.Find(account)->next_root_nonce == 2);
     BOOST_CHECK(registry.RevokeDevice(revoke, network_id) == IdentityRegistryErrorV2::DEVICE_NOT_FOUND);
-    DeviceAuthorizationV2 old_device_operation{.account_id = account, .device_id = *device_id,
-        .kind = DeviceOperationKindV2::PAYMENT};
+    DeviceAuthorizationV2 old_device_operation{};
+    old_device_operation.account_id = account;
+    old_device_operation.device_id = *device_id;
+    old_device_operation.kind = DeviceOperationKindV2::PAYMENT;
     old_device_operation.payload_commitment[0] = 0x44;
     const auto old_digest = ComputeDeviceOperationDigestV2(network_id, old_device_operation);
     BOOST_REQUIRE(old_digest);
     old_device_operation.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *old_digest);
-    DeviceAddV2 readd{.account_id = account, .new_device = *device, .root_nonce = 2};
+    DeviceAddV2 readd{};
+    readd.account_id = account;
+    readd.new_device = *device;
+    readd.root_nonce = 2;
     const auto readd_digest = ComputeDeviceAddDigestV2(network_id, readd);
     BOOST_REQUIRE(readd_digest);
     readd.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *readd_digest);
@@ -113,7 +126,10 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     BOOST_CHECK(registry.Find(account)->devices.at(*device_id).activation_nonce == 3);
     BOOST_CHECK(registry.AuthorizeDeviceOperation(old_device_operation, network_id) == IdentityRegistryErrorV2::BAD_NONCE);
 
-    RecoveryRotateV2 rotate{.account_id = account, .new_root = *replacement, .root_nonce = 3};
+    RecoveryRotateV2 rotate{};
+    rotate.account_id = account;
+    rotate.new_root = *replacement;
+    rotate.root_nonce = 3;
     const auto rotate_digest = ComputeRecoveryRotateDigestV2(network_id, rotate);
     BOOST_REQUIRE(rotate_digest);
     rotate.old_root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);

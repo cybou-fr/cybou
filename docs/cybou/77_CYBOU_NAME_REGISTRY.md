@@ -1,6 +1,6 @@
-# 77 — `.cybou` name registry V1 target
+# 77 — `.cybou` name registry
 
-Status: Identity V2 design; no name operations are deployed.
+Status: canonical design; no name operations are deployed.
 
 The label before `.cybou` is exactly 5–32 ASCII lowercase bytes from
 `[a-z0-9-]`; first and last are alphanumeric. Reject uppercase, Unicode,
@@ -11,7 +11,7 @@ are permanently reserved. Initial reserved labels include `cybou`, `admin`,
 parameters; never silently extend them on an existing network.
 
 One AccountID may own one primary name. Claiming is free in CYBOU but requires
-separate anti-Sybil work. V1 has no sale, transfer, expiry, or recycling.
+separate anti-Sybil work. The initial registry has no sale, transfer, expiry, or recycling.
 Names are pseudonymous aliases, not civil identity proof.
 
 ## Commit → work → reveal

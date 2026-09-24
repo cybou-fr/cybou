@@ -1,6 +1,6 @@
 # Building CYBOU from source
 
-CYBOU is experimental software. The native `cybou-node` and Qt desktop are DEV integration targets; the inherited Bitcoin bootstrap runtime remains in the tree. See [implementation status](docs/cybou/26_IMPLEMENTATION_STATUS.md) before using a build as a network node.
+CYBOU is experimental software. The native `cybou-node` and Qt desktop are DEV integration targets. The PQ identity and state cutover is in progress; see [implementation status](docs/cybou/26_IMPLEMENTATION_STATUS.md) before using a build as a network node.
 
 ## Requirements
 
@@ -22,11 +22,11 @@ cmake --build build_cybou_qt_mingw --target cybou cybou-node cybou-core-test -j 
 & build_cybou_qt_mingw/bin/cybou-core-test.exe --log_level=error
 ```
 
-The desktop executable is `build_cybou_qt_mingw/bin/cybou.exe`; the standalone DEV process is `build_cybou_qt_mingw/bin/cybou-node.exe`. The older [MSVC notes](doc/build-windows-msvc.md) describe an inherited build path and are not the verified native CYBOU procedure.
+The desktop executable is `build_cybou_qt_mingw/bin/cybou.exe`; the standalone DEV process is `build_cybou_qt_mingw/bin/cybou-node.exe`.
 
 ## Linux and other platforms
 
-The project has a CMake/vcpkg CI build for the native core and `cybou-node`; see [the core workflow](.github/workflows/cybou-core.yml) for the exact configure, test, and smoke-test commands. Linux desktop and validator deployment need platform-specific verification. [Inherited Unix build notes](doc/build-unix.md) remain useful for dependencies but do not override the CYBOU OpenSSL 3.5 or protocol requirements.
+The project has a CMake/vcpkg CI build for the native core and `cybou-node`; see [the core workflow](.github/workflows/cybou-core.yml) for the exact configure, test, and smoke-test commands. Linux desktop and validator deployment need platform-specific verification.
 
 ## DEV node
 
@@ -34,4 +34,4 @@ Use the [DEV authority-node runbook](docs/cybou/75_DEV_NODE_RUNBOOK.md) to creat
 
 ## Tests
 
-`cybou-core-test` contains native CYBOU protocol tests and is the most direct check of state, BFT, identity, Mail evidence, and transport behavior. `ctest --test-dir <build-dir> --output-on-failure` runs the configured broader suite, which can include inherited Bitcoin tests. The Qt shell tests are separate and require a GUI-capable environment.
+`cybou-core-test` contains native CYBOU protocol tests and is the most direct check of state, BFT, identity, Mail evidence, and transport behavior. `ctest --test-dir <build-dir> --output-on-failure` runs the configured broader suite. The Qt shell tests are separate and require a GUI-capable environment.

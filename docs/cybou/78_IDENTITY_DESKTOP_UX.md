@@ -1,6 +1,6 @@
-# 78 — Identity V2 desktop UX contract
+# 78 — Identity desktop UX contract
 
-Status: target UX. Current IdentityPage implements V1 creation only.
+Status: target UX. The current IdentityPage has not completed the PQ cutover.
 
 The first screen gives equal prominence to **Create identity** and **Restore
 identity**. All finalized facts come from native core. Local phrase, vault,
@@ -11,7 +11,7 @@ and work states must never imply consensus finality.
 1. Set a vault password, generate 24 words locally, and confirm selected
    words without placing them in logs or clipboard by default.
 2. Generate random AccountID and root/device keys. Atomically save and reopen
-   the encrypted vault **before** AccountCreate V2 broadcast.
+   the encrypted vault **before** AccountCreate broadcast.
 3. Perform account work, submit, and show pending until verified BFT finality.
    Keep the vault after network failure so the same identity can retry.
 4. Offer a `.cybou` name. Persist claim salt before NameCommit; show commit,

@@ -10,7 +10,7 @@
 
 // CYBOU has a single sovereign development network (CYBOU-DEV, ChainType::MAIN).
 // Inherited Bitcoin networks (testnet3, testnet4, signet, regtest) were removed;
-// see spec/bitcoin_code_removal.yaml.
+// see the native consensus cutover.
 enum class ChainType {
     MAIN,
 };

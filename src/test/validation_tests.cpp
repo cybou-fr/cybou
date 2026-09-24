@@ -67,14 +67,14 @@ BOOST_AUTO_TEST_CASE(subsidy_limit_test)
     // GetBlockSubsidy is replaced by the CYBOU reward router together with the
     // fee router (3 security + 1 onboarding) and the 100,000,000,000 CYBOU
     // fixed supply (spec/fee_router.yaml, spec/monetary_model.yaml,
-    // spec/bitcoin_code_removal.yaml, with_cybou_reward_router stage). Update
+    // the native consensus cutover, with_cybou_reward_router stage). Update
     // this test in that milestone; do not treat the value below as policy.
     BOOST_CHECK_EQUAL(nSum, CAmount{5078740193000});
 }
 
 //! CYBOU-DEV deliberately ships no assumeutxo snapshot data. The inherited
 //! assumeutxo mechanism is transitional and is replaced by the CYBOU
-//! bounded-history bootstrap/checkpoint policy (spec/bitcoin_code_removal.yaml,
+//! bounded-history bootstrap/checkpoint policy (the native consensus cutover,
 //! transitional section). Until then, snapshot lookups must come back empty.
 BOOST_AUTO_TEST_CASE(test_assumeutxo)
 {

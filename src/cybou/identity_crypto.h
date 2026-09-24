@@ -13,7 +13,14 @@
 
 namespace cybou {
 
-enum class IdentityKeyPurpose : uint8_t { RECOVERY_ROOT = 1, DEVICE = 2 };
+enum class IdentityKeyPurpose : uint8_t {
+    RECOVERY_ROOT = 1,
+    DEVICE = 2,
+    VALIDATOR = 3,
+    OPERATOR_AUTHORITY = 4,
+    RELEASE_SIGNING = 5,
+    TREASURY = 6,
+};
 
 struct IdentityHybridPublicKey {
     IdentityKeyPurpose purpose;

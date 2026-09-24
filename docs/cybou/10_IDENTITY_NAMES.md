@@ -1,91 +1,33 @@
-# 10 — Identity V2 and `.cybou` names
+# Identity and `.cybou` names
 
-Status: frozen target for the next disposable DEV protocol break. Current DEV
-still runs Ed25519-only AccountCreateOpV1, one active authorization key, and
-the CYBK1 local keystore. Nothing on this page claims V2 is deployed.
+Status: canonical protocol target. Core cryptography, vault, registry, account creation, payment, and candidate state components exist; the running node and desktop are still being connected to them.
 
 ## Identity layers
 
 | Layer | Meaning | Rotation |
-|---|---|---|
-| AccountID | Random nonzero 256-bit permanent consensus identifier | Never |
-| Primary `.cybou` name | Human-facing alias bound to AccountID | No transfer or recycling in V1 |
-| Recovery Root | Replaceable hybrid root authorization recovered from 24 words | Yes |
-| Device authorization | Bounded set of hybrid operational keys with independent nonces | Add/revoke |
-| Mail encryption keys | Recipient device confidentiality keys | Yes |
+| --- | --- | --- |
+| AccountID | Random nonzero 256-bit permanent identifier | Never |
+| Primary `.cybou` name | Human-facing alias bound to AccountID | No transfer or recycling |
+| Recovery Root | Hybrid authorization recovered from 24 words | Yes |
+| Device authorization | Bounded operational keyset with independent nonces | Add or revoke |
+| Mail encryption keys | Separate recipient confidentiality keys | Yes |
 
-AccountID is generated independently of every mnemonic, public key, and
-authorization descriptor. Consensus binds a versioned RecoveryKeyID to the
-AccountID. Rotating root or device keys cannot change the AccountID, name,
-balances, or finalized mail history. A `.cybou` name is a pseudonymous alias,
-not a civil identity assertion.
+AccountID is independent of every mnemonic and public key. A versioned RecoveryKeyID maps to the stable AccountID. Rotating keys preserves balances, names, and finalized Mail history. A name is a pseudonymous alias, not a civil identity assertion.
 
-Recovery Root V2 requires both Ed25519 and ML-DSA-65 signatures. Daily device
-authorization requires both Ed25519 and ML-DSA-44 signatures. Missing,
-malformed, or failed components fail closed; V1 signatures cannot be parsed as
-V2. Domain-separated signed bytes, canonical ordering, size bounds, and suite
-identifiers are mandatory before consensus activation. Mail confidentiality
-uses a separate X25519 + ML-KEM-768 target profile; signing keys are not
-encryption keys. See [vault and recovery](76_IDENTITY_VAULT_RECOVERY.md).
+The Recovery Root requires **Ed25519 and ML-DSA-65** signatures. Each operational device requires **Ed25519 and ML-DSA-44** signatures. Both components are mandatory; missing, malformed, or failed components fail closed. Mail encryption uses separate X25519 and ML-KEM-768 keys.
 
-The local `IdentityAuthorizationV2` draft has one canonical 3331-byte form:
-`02` version, `01` root suite, 32 Ed25519 root public-key bytes, 1952
-ML-DSA-65 root public-key bytes, `01` device suite, 32 Ed25519 device
-public-key bytes, and 1312 ML-DSA-44 device public-key bytes. It rejects
-other versions, lengths, purposes, all-zero keys, and reuse of the same
-Ed25519 public key for root and device. Its commitment is SHA-256 of ASCII
-`CYBOU/IDENTITY-AUTH-COMMIT/V2` followed by those exact 3331 bytes. This
-format is implemented locally but is not yet a consensus operation.
+The authorization descriptor has a fixed 3331-byte canonical form: version `02`, root suite `01`, 32-byte Ed25519 root public key, 1952-byte ML-DSA-65 root public key, device suite `01`, 32-byte Ed25519 device public key, and 1312-byte ML-DSA-44 device public key. The domain-separated commitment covers the exact encoding.
 
-DeviceAdd, DeviceRevoke, and RecoveryRotate are versioned operations. Each
-device has its own nonce. Revocation changes future authorization and does
-not erase already received ciphertext or historical signatures. Historical
-authorization proofs remain available for MailEvidenceBundle verification.
-The local V2 registry prototype computes DeviceKeyID as SHA-256 over ASCII
-`CYBOU/DEVICE-KEY-ID/V2`, the two bytes `02 01`, and the Ed25519 and
-ML-DSA-44 device public keys. It limits active devices to eight. Root-signed
-add/revoke/rotate requests bind the network, AccountID, root nonce, and target
-key ID to distinct SHA-256 domains. This prototype is not yet consensus state.
-The local device-operation authorization binds NetworkID, AccountID,
-DeviceKeyID, device nonce, activation nonce, operation kind, and the canonical
-payload commitment. Re-adding a revoked key assigns a new activation nonce,
-so signatures from its earlier activation cannot be replayed. Payment and Mail
-payload encodings and their atomic state transitions are still pending.
-The standalone registry snapshot uses version byte `02`, a little-endian
-account count, then ascending AccountID records. Each record stores AccountID,
-raw hybrid root public keys, root nonce, device count, and ascending DeviceKeyID
-entries with raw hybrid device keys, device nonce, and activation nonce.
-RecoveryKeyID and DeviceKeyID are derived during decoding; they are not trusted
-from the snapshot. It feeds the standalone V2 state envelope described below;
-neither component is active in DEV.
-The standalone `CybouStateV2` prototype now wraps that registry with monetary
-account fields, network pools, and the validator set, using version byte `02`
-and `CYBOU/STATE/V2` for its hash. It validates that every monetary AccountID
-has exactly one identity record. Names and operation dispatch are not yet in
-that prototype, so it is not the final active state format.
-The local Payment V2 payload is `02` version, 32 recipient AccountID bytes,
-and an eight-byte little-endian amount. Its SHA-256 commitment uses
-`CYBOU/PAYMENT-PAYLOAD/V2`; the device signature binds that commitment and
-the payment kind. The transition consumes the signer's device nonce while
-updating balances and the pending fee pool in the same candidate V2 state.
-The V2 operation envelope uses version `02`, a one-byte operation kind, and
-the canonical AccountCreate or Payment body. It has no V1 decoder. This wire
-format is not yet connected to active blocks or P2P admission.
-The candidate V2 block executor accepts those two operation kinds, applies
-all transitions in canonical order, and computes the V2 state root after fee
-routing. Failed execution discards the candidate without changing its parent.
+## Devices and recovery
 
-The target primary example is `stanislav.cybou`. The earlier frozen
-`stan.cybou` example (DEC-004) is superseded by Identity V2's five-character
-minimum. Name grammar, reservations, work, and ordering are defined in
-[the name registry](77_CYBOU_NAME_REGISTRY.md). Desktop create/restore
-semantics are in [the UX contract](78_IDENTITY_DESKTOP_UX.md).
+At most eight devices may be active per account. Root-authorized add, revoke, and recovery rotation operations bind NetworkID, AccountID, root nonce, and target key ID. A new device proves possession of both key components. Each device has its own nonce and activation number; a re-added key receives a new activation number so signatures from its previous activation cannot be replayed.
 
-## Migration boundary
+Revocation changes future authorization without erasing received ciphertext or historical signatures. Historical authorization proofs must remain available for Mail evidence. On a clean machine, the phrase derives RecoveryKeyID; verified state locates AccountID, and the root authorizes a new device.
 
-Identity V2 introduces new operation and state versions; V1 fields are never
-silently reinterpreted. The cutover discards V1 DEV state and vaults; there is
-no runtime compatibility decoder or automatic import. Once V2 authorization,
-account creation, and name registry are integrated together, advance the
-network definition and perform one intentional CYBOU-DEV reset. Beta/Mainnet
-genesis and economic parameters remain separate.
+## Names
+
+The primary example is `stanislav.cybou`. A label is 5–32 lowercase ASCII bytes and follows the grammar and reserved-name rules in the [name registry](77_CYBOU_NAME_REGISTRY.md). Names finalize through commit, work, and reveal. The desktop flow is specified in the [identity UX contract](78_IDENTITY_DESKTOP_UX.md).
+
+## Network cutover
+
+The canonical state joins monetary accounts, the identity registry, validator set, and eventually name ownership under one state root. Account creation and payment already have strict wire encodings and candidate execution. Mail, names, validator operations, finalized blocks, persistence, transport, and desktop use still require integration. The DEV reset discards obsolete state and vaults; there is no compatibility decoder or automatic import.

@@ -100,7 +100,7 @@ BOOST_FIXTURE_TEST_CASE(chainstate_update_tip, TestChain100Setup)
     // chainparams, and CYBOU-DEV deliberately ships none (see
     // cybou_chainparams_tests). assumeutxo is transitional and is replaced
     // by the CYBOU bootstrap/checkpoint policy at v0.0.4
-    // (spec/bitcoin_code_removal.yaml). Revisit this test then.
+    // (the native consensus cutover). Revisit this test then.
     BOOST_TEST_MESSAGE("skipping: no assumeutxo data on CYBOU-DEV");
     if (Params().GetAvailableSnapshotHeights().empty()) return;
     ChainstateManager& chainman = *Assert(m_node.chainman);

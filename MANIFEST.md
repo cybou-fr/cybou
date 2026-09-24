@@ -12,21 +12,18 @@ distinguishes implemented DEV code from production targets.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 79 | f976e28cac4acc2b |
-| README.md | 74 | f9f774ac92c31231 |
-| INSTALL.md | 37 | 3ac0171892ed0ccd |
-| doc/README.md | 86 | 98d281c02e7fd7eb |
+| AGENTS.md | 81 | 463de97a912f0912 |
+| README.md | 52 | bf56a0e1d9a575d6 |
+| INSTALL.md | 37 | 454024375c64518e |
+| doc/README.md | 23 | 9d1744aba569bb1d |
 | docs/cybou/00_VISION.md | 81 | c4925e5bda478519 |
-| docs/cybou/01_BASELINE_AND_SCOPE.md | 59 | 22edcc694bf13c53 |
 | docs/cybou/02_ARCHITECTURE.md | 82 | a508cca78fe1c9f3 |
-| docs/cybou/03_BITCOIN_DERIVATION.md | 59 | c09f5e23e4f58952 |
-| docs/cybou/04_NETWORK_QUARANTINE.md | 53 | f13c2052a4373185 |
 | docs/cybou/05_CHAIN_STATE.md | 131 | 48ccee2f7c0f9411 |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 58 | 1367d15840bc7c3d |
 | docs/cybou/07_BFT_CONSENSUS.md | 132 | 4d486f33d5662237 |
 | docs/cybou/08_P2P.md | 40 | 7e32842afee075d0 |
-| docs/cybou/09_CRYPTO_PQ.md | 36 | 417f778d16a8a492 |
-| docs/cybou/10_IDENTITY_NAMES.md | 91 | c34abab6936035fd |
+| docs/cybou/09_CRYPTO_PQ.md | 20 | 6edaeef51af116ab |
+| docs/cybou/10_IDENTITY_NAMES.md | 33 | 20dd3ad8b422721d |
 | docs/cybou/11_STORAGE_OBJECTS.md | 95 | 5ad361fd3249e7eb |
 | docs/cybou/12_STORAGE_ACCOUNTING_3_TO_1.md | 100 | b20c60860eba40f3 |
 | docs/cybou/13_STORAGE_PROOFS_REPAIR.md | 78 | 169d9dd8ad90ed86 |
@@ -42,17 +39,13 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 114 | 222e5177b983769f |
 | docs/cybou/24_DECISIONS.md | 176 | 147d2bd5d24749cd |
 | docs/cybou/25_OPEN_QUESTIONS.md | 106 | 2b385f00f40e45ee |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 297 | 2135e14f8100f72f |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 34 | 5bdd6c023ac7b4e9 |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 7b3cdc6050c7cf85 |
-| docs/cybou/28_BITCOIN_DOCUMENTATION_MIGRATION.md | 221 | 63ba6ee5d01c00dc |
-| docs/cybou/29_DOCUMENTATION_AUTHORITY.md | 79 | fad3b5767d5ffa7d |
 | docs/cybou/30_REPOSITORY_DOCUMENTATION_CLEANUP.md | 215 | 05597f40cb045934 |
 | docs/cybou/31_IMPLEMENTATION_DETAIL_GATES.md | 101 | 020f7185a750cfd8 |
-| docs/cybou/32_UPSTREAM_REFERENCE_SOURCES.md | 20 | de2fc2cb65c2bda2 |
 | docs/cybou/33_EMAIL_FIRST_PRODUCT_STRATEGY.md | 65 | ee3430d19de85aeb |
 | docs/cybou/34_MAIL_STATE_AND_RETENTION.md | 111 | 072aa5ca428f57f6 |
 | docs/cybou/35_ROADMAP_CHANGE_EMAIL_FIRST.md | 44 | f7ddf5096a47e798 |
-| docs/cybou/36_PROJECT_RENAME_AND_COPYRIGHT_PLAN.md | 15 | 981e9aee26fbdb69 |
 | docs/cybou/37_FRANCE_EU_GLOBAL_STRATEGY.md | 96 | 99058ca64593188d |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 32 | ff24b825809b656a |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 66 | b04c28592379c1db |
@@ -61,7 +54,6 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/42_COMPETITIVE_POSITIONING.md | 57 | 44a9177464721ddc |
 | docs/cybou/43_STRATEGIC_SOURCE_REGISTER.md | 116 | b2c9dc42f9ddbae2 |
 | docs/cybou/44_CRITICAL_SURVIVAL_AUDIT_V0_7.md | 101 | e6c2c86615489c2a |
-| docs/cybou/45_PROJECT_RENAME_MAP.md | 290 | d29235a0809f0af7 |
 | docs/cybou/46_COPYRIGHT_ATTRIBUTION_POLICY.md | 109 | dcfbbc4dff8e93e3 |
 | docs/cybou/47_EMAIL_CHAIN_DELIVERY_MODEL.md | 49 | f2c58498aaa22d88 |
 | docs/cybou/48_CONSENSUS_STAGING_STRATEGY.md | 72 | 6af551c899198bfe |
@@ -91,27 +83,24 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 114 | cdf41fa050dd25ab |
 | docs/cybou/74_AUTHORITY_BLOCK_FEED.md | 53 | 562b2b24f7714005 |
 | docs/cybou/75_DEV_NODE_RUNBOOK.md | 83 | 987f1c29d1364901 |
-| docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 67 | f108ae16d7f53db2 |
-| docs/cybou/77_CYBOU_NAME_REGISTRY.md | 34 | a7e912cf69aebea6 |
-| docs/cybou/78_IDENTITY_DESKTOP_UX.md | 36 | 9e7be64d250581c6 |
+| docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 67 | 3f1e6cd82dba5650 |
+| docs/cybou/77_CYBOU_NAME_REGISTRY.md | 34 | ca0cde7c68805038 |
+| docs/cybou/78_IDENTITY_DESKTOP_UX.md | 36 | d62fd30720ec3f2d |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |
 | spec/bft_validator_policy.yaml | 11 | 1f1934f0f3ea0776 |
-| spec/bitcoin_code_removal.yaml | 153 | a966c965213c1de5 |
-| spec/bitcoin_doc_migration.yaml | 209 | 3d8535234f55471b |
 | spec/circulation_scenarios.csv | 74 | db240cf0d3280644 |
-| spec/cybou_baseline.yaml | 270 | b71e43e7f1a46a02 |
+| spec/cybou_baseline.yaml | 262 | 2bbca623e8af2317 |
 | spec/email_crypto_profile.yaml | 40 | 75512b33cf03cfe0 |
 | spec/fee_router.yaml | 18 | ccebf298d9eb9ec0 |
 | spec/fee_router_test_vectors.csv | 9 | db9274d10b0a3dfa |
-| spec/mail_protocol.yaml | 27 | 104e9cb288c55e92 |
+| spec/mail_protocol.yaml | 27 | 1e7da9541fbc889f |
 | spec/market_strategy.yaml | 42 | 9421f65346373f9e |
 | spec/monetary_model.yaml | 53 | b3f4881bb25221dd |
 | spec/onboarding.yaml | 30 | 4a12ead846d1a692 |
 | spec/operator_keys.yaml | 44 | 7b2daa2586f3f055 |
-| spec/project_rename_map.yaml | 128 | 37d46672c907e3fb |
 | spec/proof_of_trust.yaml | 28 | 6f2e15b465174431 |
 | spec/reward_policy.yaml | 13 | 676e276df9a12277 |
-| spec/survival_gates.yaml | 51 | c0ddefcb3ea4f58a |
+| spec/survival_gates.yaml | 51 | c3df8fd151bb7ecc |
 | spec/validator_reward_test_vectors.csv | 5 | 2f439357448d8aa1 |
 
-Total: 101 files.
+Total: 90 files.

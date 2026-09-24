@@ -1,36 +1,20 @@
-# 09 — Cryptography and PQ migration
+# Cryptographic baseline
 
-## Principle
+CYBOU uses a hybrid post-quantum profile across protocol authorization and confidentiality. There is no classical-only production fallback. Do not invent primitives, combiners, or unauthenticated suite negotiation.
 
-CYBOU is crypto-agile and targets PQ/T hybrid security for Email key establishment.
+## Signing
 
-Do not invent primitives or combiners.
+- Recovery Root: Ed25519 **and** ML-DSA-65.
+- Device operations: Ed25519 **and** ML-DSA-44.
+- Validator votes, operator actions, release signing, and treasury actions: separate keys and domains under the PQ key policy. Their integration into the running node remains work in progress.
+- Both components must verify over the same canonical, domain-separated message. A missing or failed component rejects the operation.
 
-## Email target
+Key purpose, suite identifier, NetworkID, operation kind, account or validator identity, nonce, and canonical payload commitment must be bound wherever applicable. Reusing a key across domains is prohibited.
 
-```text
-HPKE architecture
-KEM target: X25519 + ML-KEM-768 hybrid
-AEAD: ChaCha20-Poly1305 or AES-256-GCM
-sender authenticity: crypto-agile signature layer
-```
+## Mail confidentiality
 
-The exact production suite is frozen only after standards/implementation review.
+Mail signing keys are separate from encryption keys. The target recipient profile combines X25519 and ML-KEM-768 with authenticated suite choice and a standard AEAD. A recipient that requires the hybrid suite cannot be downgraded to classical-only encryption. Plaintext and key material must never enter consensus state.
 
-## Standards status
+## Implementation gate
 
-- HPKE architecture: RFC 9180.
-- ML-KEM: NIST FIPS 203.
-- PQ/T KEMs for HPKE: active IETF work as of September 2026.
-
-Because PQ HPKE identifiers/constructions are still in standards progression, protocol versioning must allow migration without reinterpretation of old ciphertexts.
-
-## Downgrade protection
-
-Suite choice is authenticated/bound.
-
-Never silently fall back from PQ/T hybrid to classical-only for a recipient that requires the hybrid suite.
-
-## Consensus separate
-
-Email HPKE/PQ work is not a reason to force PQ signatures into every consensus vote before benchmarking.
+The running BFT and desktop paths must be moved to this baseline before the DEV reset. Benchmarks, provider validation, fixed test vectors, canonical serialization, and malformed-input tests are required before activation.

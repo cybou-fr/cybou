@@ -6,8 +6,8 @@ project:
   native_asset: CYBOU
   identity_namespace: .cybou
   identity_example: stanislav.cybou
-  identity_v2_target:
-    status: design_not_active
+  identity:
+    status: canonical_pq_baseline_integration_in_progress
     account_id: random_nonzero_256_bit_independent_of_keys
     recovery_words: 24
     recovery_signature: Ed25519_AND_ML-DSA-65
@@ -19,8 +19,6 @@ implementation:
   language: C++20/23
   desktop_framework: Qt 6 Widgets
   build_system: CMake
-  ancestry: Bitcoin Core copy already present in local repository
-  exact_upstream_commit_required_before_edits: true
   desktop_process_model: single-process full node + UI
   application_api:
     rest: false
@@ -28,22 +26,16 @@ implementation:
     grpc: false
     localhost_http: false
 documentation:
-  cybou_docs_authoritative_over_conflicting_bitcoin_docs: true
-  migrate_incrementally_with_code: true
-  preserve_upstream_license_notices: true
-  bitcoin_reference_inventory: v31.1
-  local_tree_must_be_reconciled: true
+  cybou_docs_authoritative: true
+  preserve_required_license_notices: true
 network:
   sovereign: true
-  bitcoin_network_access_in_cybou_build: forbidden
-  bitcoin_ibd_in_manual_cybou_test: forbidden
-  first_manual_launch_requires_quarantine: true
+  foreign_network_access: forbidden
   full_node_by_default: true
   validator_by_default: false
 ledger:
   model: account-based deterministic protocol state
   canonical_account_source: AccountState
-  inherited_utxo_status: transitional_until_native_payment_and_bft
   evm_required: false
   history:
     desktop_mode: bounded
@@ -59,7 +51,7 @@ consensus:
   stake_weighted_pos_required: false
 crypto:
   agile: true
-  post_quantum_target: true
+  post_quantum_baseline: true
   hybrid_transport_target: true
   custom_primitives: false
   downgrade_protection_required: true
@@ -86,8 +78,8 @@ applications:
     first_user_facing_application: true
     model: consensus_registered_mail
     native_cybou_protocol: true
-    text_only_v1: true
-    attachments_v1: false
+    text_only_initial_profile: true
+    attachments_initial_profile: false
     smtp_required_v1: false
     imap_required_v1: false
     pop3_required_v1: false
@@ -244,7 +236,7 @@ mail:
   pre_store_ciphertext_location: block_history
   permanent_per_mail_consensus_state: false
   recipient_discovery_filter: PREFERRED_OPEN_DESIGN
-  attachments_v1: false
+  attachments_initial_profile: false
   future_content_location: CYBOU_Object_Storage
 validator_policy:
   admission: operator_approved

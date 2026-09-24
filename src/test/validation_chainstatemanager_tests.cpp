@@ -469,7 +469,7 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_activate_snapshot, SnapshotTestSetup)
     // chainparams, and CYBOU-DEV deliberately ships none (see
     // cybou_chainparams_tests). assumeutxo is transitional and is replaced
     // by the CYBOU bootstrap/checkpoint policy at v0.0.4
-    // (spec/bitcoin_code_removal.yaml). Revisit this test then.
+    // (the native consensus cutover). Revisit this test then.
     BOOST_TEST_MESSAGE("skipping: no assumeutxo data on CYBOU-DEV");
     if (Params().GetAvailableSnapshotHeights().empty()) return;
     this->SetupSnapshot();
@@ -492,7 +492,7 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_loadblockindex, TestChain100Setup)
     // cybou_chainparams_tests). Creating the snapshot chainstate below would
     // trigger a fatal "Assumeutxo data not found" in LoadBlockIndex.
     // assumeutxo is transitional and is replaced by the CYBOU
-    // bootstrap/checkpoint policy at v0.0.4 (spec/bitcoin_code_removal.yaml).
+    // bootstrap/checkpoint policy at v0.0.4 (the native consensus cutover).
     if (Params().GetAvailableSnapshotHeights().empty()) return;
     ChainstateManager& chainman = *Assert(m_node.chainman);
     Chainstate& cs1 = chainman.ActiveChainstate();
@@ -659,7 +659,7 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_snapshot_init, SnapshotTestSetup)
     // chainparams, and CYBOU-DEV deliberately ships none (see
     // cybou_chainparams_tests). assumeutxo is transitional and is replaced
     // by the CYBOU bootstrap/checkpoint policy at v0.0.4
-    // (spec/bitcoin_code_removal.yaml). Revisit this test then.
+    // (the native consensus cutover). Revisit this test then.
     BOOST_TEST_MESSAGE("skipping: no assumeutxo data on CYBOU-DEV");
     if (Params().GetAvailableSnapshotHeights().empty()) return;
     ChainstateManager& chainman = *Assert(m_node.chainman);
@@ -740,7 +740,7 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_snapshot_completion, SnapshotTestSetup
     // chainparams, and CYBOU-DEV deliberately ships none (see
     // cybou_chainparams_tests). assumeutxo is transitional and is replaced
     // by the CYBOU bootstrap/checkpoint policy at v0.0.4
-    // (spec/bitcoin_code_removal.yaml). Revisit this test then.
+    // (the native consensus cutover). Revisit this test then.
     BOOST_TEST_MESSAGE("skipping: no assumeutxo data on CYBOU-DEV");
     if (Params().GetAvailableSnapshotHeights().empty()) return;
     this->SetupSnapshot();
@@ -827,7 +827,7 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_snapshot_completion_hash_mismatch, Sna
     // chainparams, and CYBOU-DEV deliberately ships none (see
     // cybou_chainparams_tests). assumeutxo is transitional and is replaced
     // by the CYBOU bootstrap/checkpoint policy at v0.0.4
-    // (spec/bitcoin_code_removal.yaml). Revisit this test then.
+    // (the native consensus cutover). Revisit this test then.
     BOOST_TEST_MESSAGE("skipping: no assumeutxo data on CYBOU-DEV");
     if (Params().GetAvailableSnapshotHeights().empty()) return;
     auto chainstates = this->SetupSnapshot();

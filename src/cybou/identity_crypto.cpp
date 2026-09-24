@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 #include <string_view>
 
 namespace cybou {
@@ -27,18 +28,22 @@ const char* Algorithm(IdentityKeyPurpose purpose)
     switch (purpose) {
     case IdentityKeyPurpose::RECOVERY_ROOT: return "ML-DSA-65";
     case IdentityKeyPurpose::DEVICE: return "ML-DSA-44";
+    case IdentityKeyPurpose::VALIDATOR:
+    case IdentityKeyPurpose::OPERATOR_AUTHORITY:
+    case IdentityKeyPurpose::RELEASE_SIGNING:
+    case IdentityKeyPurpose::TREASURY: return "ML-DSA-65";
     }
     return nullptr;
 }
 
 size_t PublicSize(IdentityKeyPurpose purpose)
 {
-    return purpose == IdentityKeyPurpose::RECOVERY_ROOT ? 1952 : 1312;
+    return purpose == IdentityKeyPurpose::DEVICE ? 1312 : 1952;
 }
 
 size_t SignatureSize(IdentityKeyPurpose purpose)
 {
-    return purpose == IdentityKeyPurpose::RECOVERY_ROOT ? 3309 : 2420;
+    return purpose == IdentityKeyPurpose::DEVICE ? 2420 : 3309;
 }
 
 std::optional<std::array<unsigned char, 32>> DeriveSeed(
@@ -47,9 +52,17 @@ std::optional<std::array<unsigned char, 32>> DeriveSeed(
 {
     if (!Algorithm(purpose)) return std::nullopt;
     constexpr std::string_view salt{"CYBOU/IDENTITY-V2/HKDF-SHA256"};
-    const std::string_view info = purpose == IdentityKeyPurpose::RECOVERY_ROOT
-        ? (component == "ED25519" ? "CYBOU/IDENTITY-V2/ROOT/ED25519" : "CYBOU/IDENTITY-V2/ROOT/ML-DSA-65")
-        : (component == "ED25519" ? "CYBOU/IDENTITY-V2/DEVICE/ED25519" : "CYBOU/IDENTITY-V2/DEVICE/ML-DSA-44");
+    std::string_view purpose_label;
+    switch (purpose) {
+    case IdentityKeyPurpose::RECOVERY_ROOT: purpose_label = "ROOT"; break;
+    case IdentityKeyPurpose::DEVICE: purpose_label = "DEVICE"; break;
+    case IdentityKeyPurpose::VALIDATOR: purpose_label = "VALIDATOR"; break;
+    case IdentityKeyPurpose::OPERATOR_AUTHORITY: purpose_label = "OPERATOR"; break;
+    case IdentityKeyPurpose::RELEASE_SIGNING: purpose_label = "RELEASE"; break;
+    case IdentityKeyPurpose::TREASURY: purpose_label = "TREASURY"; break;
+    }
+    const std::string info = std::string{"CYBOU/IDENTITY-V2/"} + std::string{purpose_label} + "/" +
+        (component == "ED25519" ? "ED25519" : Algorithm(purpose));
     Kdf kdf{EVP_KDF_fetch(nullptr, "HKDF", nullptr), EVP_KDF_free};
     if (!kdf) return std::nullopt;
     KdfCtx ctx{EVP_KDF_CTX_new(kdf.get()), EVP_KDF_CTX_free};

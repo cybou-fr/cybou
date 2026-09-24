@@ -1,8 +1,8 @@
 version: '0.13'
 gates:
 - id: S0
-  name: Bitcoin quarantine
-  condition: CYBOU normal build cannot reach Bitcoin networks
+  name: Network isolation
+  condition: CYBOU normal build cannot reach foreign consensus networks
   blocks_next: true
 - id: S1
   name: MailTx E2EE

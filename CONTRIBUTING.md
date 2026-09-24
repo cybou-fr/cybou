@@ -18,7 +18,7 @@ Before proposing or implementing any changes, you **must read and adhere to**:
 
 - **CYBOU Email & MailTx**:
   - `MailTx` is a first-class operation, not an `OP_RETURN` or script payload.
-  - Text-only, single-recipient in v1. No attachments on-chain.
+  - The initial profile is text-only and single-recipient. No attachments in consensus state.
   - No permanent per-mail consensus-state object (state stores validation-relevant counters/roots only).
   - Local clients own mailbox indexing; active validators retain pre-Store history until Object Storage is deployed.
 - **Consensus & Time**:
@@ -28,7 +28,7 @@ Before proposing or implementing any changes, you **must read and adhere to**:
 - **Economics & Onboarding**:
   - Fixed supply: $100,000,000,000$ CYBOU ($0$ decimals).
   - Deterministic fee router: 4 CYBOU fees $\to$ 3 Security + 1 Onboarding. Priority fee bidding is disabled.
-  - Account creation is protocol-native and permissionless via `AccountCreateOpV1`, protected by `AccountCreationWorkV1` anti-Sybil proof-of-work. An automatic onboarding bonus is debited directly from `OnboardingPool` to `SystemBalance` without operator vouchers or invites.
+  - Account creation is protocol-native and permissionless, protected by anti-Sybil work and hybrid root/device proofs. An automatic onboarding bonus is debited directly from `OnboardingPool` to `SystemBalance` without operator vouchers or invites.
 - **Operator Key Separation**:
   - Separate keys for Operator Authority, Operator Validator, Release Signing, and Treasury. Operator Authority does NOT participate in ordinary account creation.
 

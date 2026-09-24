@@ -73,4 +73,27 @@ BOOST_AUTO_TEST_CASE(recovery_key_id_binds_both_public_keys_and_suite)
     BOOST_CHECK(!cybou::ComputeRecoveryKeyId(missing_key));
 }
 
+BOOST_AUTO_TEST_CASE(protocol_roles_have_separate_hybrid_key_domains)
+{
+    std::array<unsigned char, 32> seed{};
+    seed[0] = 17;
+    const std::array<unsigned char, 3> message{1, 2, 3};
+    const auto root = cybou::DeriveIdentityPublicKey(seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+    BOOST_REQUIRE(root);
+    for (const auto purpose : {cybou::IdentityKeyPurpose::VALIDATOR,
+             cybou::IdentityKeyPurpose::OPERATOR_AUTHORITY,
+             cybou::IdentityKeyPurpose::RELEASE_SIGNING,
+             cybou::IdentityKeyPurpose::TREASURY}) {
+        const auto key = cybou::DeriveIdentityPublicKey(seed, purpose);
+        const auto signature = cybou::SignIdentityMessage(seed, purpose, message);
+        BOOST_REQUIRE(key && signature);
+        BOOST_CHECK(key->ml_dsa.size() == 1952);
+        BOOST_CHECK(signature->ml_dsa.size() == 3309);
+        BOOST_CHECK(key->ed25519 != root->ed25519);
+        BOOST_CHECK(key->ml_dsa != root->ml_dsa);
+        BOOST_CHECK(cybou::VerifyIdentityMessage(*key, *signature, message));
+        BOOST_CHECK(!cybou::VerifyIdentityMessage(*root, *signature, message));
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

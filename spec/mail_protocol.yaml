@@ -2,7 +2,7 @@ version: '0.0.1'
 operation_type: MailTx
 first_class_protocol_operation: true
 encoded_as_op_return: false
-v1:
+initial_profile:
   one_recipient: true
   text_only: true
   attachments: false
