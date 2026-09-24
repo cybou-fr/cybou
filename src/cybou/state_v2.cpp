@@ -96,6 +96,106 @@ AccountCreateStateErrorV2 ApplyAccountCreateV2(const AccountCreateOpV2& op,
     return AccountCreateStateErrorV2::NONE;
 }
 
+NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params, CybouStateV2& state)
+{
+    if (op.commit.version != NAME_REGISTRY_VERSION || op.commit.commitment.IsNull()) {
+        return NameCommitError::INVALID_PAYLOAD;
+    }
+    if (op.authorization.kind != DeviceOperationKindV2::NAME_COMMIT) {
+        return NameCommitError::INVALID_AUTHORIZATION;
+    }
+    const auto expected_payload_commitment = ComputeNameCommitPayloadCommitment(op.commit);
+    if (!expected_payload_commitment || op.authorization.payload_commitment != *expected_payload_commitment) {
+        return NameCommitError::INVALID_AUTHORIZATION;
+    }
+    if (!state.accounts.contains(op.authorization.account_id)) {
+        return NameCommitError::ACCOUNT_NOT_FOUND;
+    }
+    if (state.names.account_names.contains(op.authorization.account_id)) {
+        return NameCommitError::ACCOUNT_ALREADY_HAS_NAME;
+    }
+    if (state.names.pending_commits.size() >= params.max_pending_name_commits) {
+        return NameCommitError::COMMITMENT_LIMIT_EXCEEDED;
+    }
+    if (state.names.pending_commits.contains(op.commit.commitment)) {
+        return NameCommitError::COMMITMENT_EXISTS;
+    }
+    if (state.identities.AuthorizeDeviceOperation(op.authorization, network_id) != IdentityRegistryErrorV2::NONE) {
+        return NameCommitError::INVALID_AUTHORIZATION;
+    }
+
+    state.names.pending_commits.emplace(op.commit.commitment, NameCommitRecord{op.authorization.account_id, block_height});
+    return NameCommitError::NONE;
+}
+
+NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params, CybouStateV2& state)
+{
+    if (op.reveal.version != NAME_REGISTRY_VERSION) {
+        return NameRevealError::INVALID_PAYLOAD;
+    }
+    if (op.authorization.kind != DeviceOperationKindV2::NAME_REVEAL) {
+        return NameRevealError::INVALID_AUTHORIZATION;
+    }
+    const auto expected_payload_commitment = ComputeNameRevealPayloadCommitment(op.reveal);
+    if (!expected_payload_commitment || op.authorization.payload_commitment != *expected_payload_commitment) {
+        return NameRevealError::INVALID_AUTHORIZATION;
+    }
+    if (ValidateNameLabel(op.reveal.label) != NameValidationError::NONE) {
+        return NameRevealError::INVALID_LABEL_SYNTAX;
+    }
+    if (!state.accounts.contains(op.authorization.account_id)) {
+        return NameRevealError::ACCOUNT_NOT_FOUND;
+    }
+    if (state.names.account_names.contains(op.authorization.account_id)) {
+        return NameRevealError::ACCOUNT_ALREADY_HAS_NAME;
+    }
+    if (state.names.names.contains(op.reveal.label)) {
+        return NameRevealError::NAME_ALREADY_TAKEN;
+    }
+    const auto expected_commitment = ComputeNameCommitment(network_id, op.authorization.account_id, op.reveal.label, op.reveal.salt);
+    if (op.reveal.work.commitment != expected_commitment) {
+        return NameRevealError::INVALID_WORK_PROOF;
+    }
+    auto commit_it = state.names.pending_commits.find(expected_commitment);
+    if (commit_it == state.names.pending_commits.end()) {
+        return NameRevealError::COMMITMENT_NOT_FOUND;
+    }
+    if (commit_it->second.account_id != op.authorization.account_id) {
+        return NameRevealError::COMMITMENT_ACCOUNT_MISMATCH;
+    }
+    if (block_height < commit_it->second.commit_height + params.name_commit_min_depth) {
+        return NameRevealError::INSUFFICIENT_COMMIT_DEPTH;
+    }
+    if (block_height > commit_it->second.commit_height + params.name_commit_max_lifetime) {
+        return NameRevealError::COMMIT_EXPIRED;
+    }
+
+    if (op.reveal.work.network_id != network_id || op.reveal.work.account_id != op.authorization.account_id) {
+        return NameRevealError::INVALID_WORK_PROOF;
+    }
+    const uint64_t current_epoch = EpochForHeight(block_height, params);
+    if (op.reveal.work.work_epoch > current_epoch ||
+        op.reveal.work.work_epoch + params.account_creation_epoch_lag < current_epoch) {
+        return NameRevealError::INVALID_WORK_PROOF;
+    }
+    if (!CheckNameClaimWork(op.reveal.work, params.name_claim_work_bits)) {
+        return NameRevealError::INVALID_WORK_PROOF;
+    }
+
+    if (state.identities.AuthorizeDeviceOperation(op.authorization, network_id) != IdentityRegistryErrorV2::NONE) {
+        return NameRevealError::INVALID_AUTHORIZATION;
+    }
+
+    state.names.pending_commits.erase(commit_it);
+    state.names.names.emplace(op.reveal.label, op.authorization.account_id);
+    state.names.account_names.emplace(op.authorization.account_id, op.reveal.label);
+    return NameRevealError::NONE;
+}
+
 StateValidationErrorV2 ValidateCybouStateV2(const CybouStateV2& state)
 {
     if (state.accounts.size() > MAX_IDENTITY_REGISTRY_ACCOUNTS_V2) return StateValidationErrorV2::ACCOUNT_LIMIT_EXCEEDED;
@@ -110,6 +210,17 @@ StateValidationErrorV2 ValidateCybouStateV2(const CybouStateV2& state)
         if (!mapped_acc || *mapped_acc != id) return StateValidationErrorV2::DUPLICATE_RECOVERY_BINDING;
     }
     if (ValidateValidatorSetV2(state.validator_set) != ValidatorSetValidationError::NONE) return StateValidationErrorV2::INVALID_VALIDATOR_SET;
+    if (state.names.names.size() != state.names.account_names.size()) return StateValidationErrorV2::INVALID_NAME_REGISTRY;
+    for (const auto& [label, acc] : state.names.names) {
+        if (ValidateNameLabel(label) != NameValidationError::NONE) return StateValidationErrorV2::INVALID_NAME_REGISTRY;
+        auto it = state.names.account_names.find(acc);
+        if (it == state.names.account_names.end() || it->second != label) return StateValidationErrorV2::INVALID_NAME_REGISTRY;
+        if (!state.accounts.contains(acc)) return StateValidationErrorV2::INVALID_NAME_REGISTRY;
+    }
+    for (const auto& [commit, record] : state.names.pending_commits) {
+        if (commit.IsNull() || !state.accounts.contains(record.account_id)) return StateValidationErrorV2::INVALID_NAME_REGISTRY;
+    }
+    if (state.names.pending_commits.size() > DEFAULT_MAX_PENDING_NAME_COMMITS) return StateValidationErrorV2::INVALID_NAME_REGISTRY;
     constexpr uint64_t MAX_SUPPLY{100'000'000'000};
     uint64_t total{0};
     if (state.onboarding_pool > MAX_SUPPLY) return StateValidationErrorV2::BALANCE_OVERFLOW;
@@ -134,6 +245,8 @@ std::optional<std::vector<unsigned char>> SerializeCybouStateV2(const CybouState
     if (!identities || identities->size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
     const auto validators = SerializeValidatorSetV2(state.validator_set);
     if (validators.size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
+    const auto names = SerializeNameRegistry(state.names);
+    if (names.size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
     std::vector<unsigned char> out;
     out.push_back(CYBOU_STATE_VERSION_V2);
     Write64(out, state.onboarding_pool);
@@ -154,6 +267,8 @@ std::optional<std::vector<unsigned char>> SerializeCybouStateV2(const CybouState
     out.insert(out.end(), identities->begin(), identities->end());
     Write32(out, static_cast<uint32_t>(validators.size()));
     out.insert(out.end(), validators.begin(), validators.end());
+    Write32(out, static_cast<uint32_t>(names.size()));
+    out.insert(out.end(), names.begin(), names.end());
     return out;
 }
 
@@ -199,10 +314,18 @@ std::optional<CybouStateV2> DeserializeCybouStateV2(std::span<const unsigned cha
     const auto validator_size = reader.U32();
     if (!validator_size) return std::nullopt;
     const auto validator_bytes = reader.Bytes(*validator_size);
-    if (!validator_bytes || reader.Remaining()) return std::nullopt;
+    if (!validator_bytes) return std::nullopt;
     const auto validators = DeserializeValidatorSetV2(*validator_bytes);
     if (!validators || ValidateValidatorSetV2(*validators) != ValidatorSetValidationError::NONE) return std::nullopt;
     state.validator_set = *validators;
+    const auto names_size = reader.U32();
+    if (!names_size) return std::nullopt;
+    const auto names_bytes = reader.Bytes(*names_size);
+    if (!names_bytes || reader.Remaining()) return std::nullopt;
+    const auto names = DeserializeNameRegistry(*names_bytes);
+    if (!names) return std::nullopt;
+    state.names = *names;
+    if (ValidateCybouStateV2(state) != StateValidationErrorV2::NONE) return std::nullopt;
     return state;
 }
 

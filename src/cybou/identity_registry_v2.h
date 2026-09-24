@@ -65,7 +65,7 @@ struct RecoveryRotateV2 {
     friend bool operator==(const RecoveryRotateV2&, const RecoveryRotateV2&) = default;
 };
 
-enum class DeviceOperationKindV2 : uint8_t { PAYMENT = 1, MAIL = 2, SYSTEM_LOCK = 3 };
+enum class DeviceOperationKindV2 : uint8_t { PAYMENT = 1, MAIL = 2, SYSTEM_LOCK = 3, NAME_COMMIT = 4, NAME_REVEAL = 5 };
 
 // The payload commitment must be computed from the canonical, complete V2
 // payload encoding by its operation-specific validator.

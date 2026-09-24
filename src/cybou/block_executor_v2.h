@@ -21,6 +21,8 @@ enum class BlockExecutionErrorV2 : uint8_t {
     INVALID_DEVICE_REVOKE,
     INVALID_RECOVERY_ROTATE,
     INVALID_SYSTEM_LOCK,
+    INVALID_NAME_COMMIT,
+    INVALID_NAME_REVEAL,
     FEE_ROUTING_OVERFLOW,
     INVALID_STATE,
 };
@@ -32,6 +34,8 @@ struct BlockExecutionResultV2 {
     PaymentErrorV2 payment_error{PaymentErrorV2::NONE};
     IdentityRegistryErrorV2 identity_error{IdentityRegistryErrorV2::NONE};
     SystemLockErrorV2 lock_error{SystemLockErrorV2::NONE};
+    NameCommitError name_commit_error{NameCommitError::NONE};
+    NameRevealError name_reveal_error{NameRevealError::NONE};
     std::optional<CybouStateV2> state;
     std::optional<uint256> state_root;
 

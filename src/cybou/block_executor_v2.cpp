@@ -74,6 +74,22 @@ BlockExecutionResultV2 ExecuteBlockOperationsV2(const CybouStateV2& parent,
                 failure.lock_error = result;
                 return failure;
             }
+        } else if (const auto* commit = std::get_if<AuthorizedNameCommit>(&operations[i])) {
+            const auto result = ApplyNameCommit(*commit, network_id, block_height, params, candidate);
+            if (result != NameCommitError::NONE) {
+                auto failure = fail(BlockExecutionErrorV2::INVALID_NAME_COMMIT);
+                failure.failed_operation_index = i;
+                failure.name_commit_error = result;
+                return failure;
+            }
+        } else if (const auto* reveal = std::get_if<AuthorizedNameReveal>(&operations[i])) {
+            const auto result = ApplyNameReveal(*reveal, network_id, block_height, params, candidate);
+            if (result != NameRevealError::NONE) {
+                auto failure = fail(BlockExecutionErrorV2::INVALID_NAME_REVEAL);
+                failure.failed_operation_index = i;
+                failure.name_reveal_error = result;
+                return failure;
+            }
         }
     }
     const uint64_t chunks = candidate.pending_fee_pool / 4;

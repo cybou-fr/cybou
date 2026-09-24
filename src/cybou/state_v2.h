@@ -6,6 +6,7 @@
 #define CYBOU_STATE_V2_H
 
 #include <cybou/identity_registry_v2.h>
+#include <cybou/name_registry.h>
 #include <cybou/validator.h>
 
 #include <cstdint>
@@ -36,6 +37,7 @@ struct CybouStateV2 {
     std::map<AccountId, AccountStateV2> accounts;
     IdentityRegistryV2 identities;
     ValidatorSetV2 validator_set;
+    NameRegistry names;
 };
 
 enum class AccountCreateStateErrorV2 : uint8_t {
@@ -54,6 +56,14 @@ AccountCreateStateErrorV2 ApplyAccountCreateV2(const AccountCreateOpV2& op,
     const uint256& network_id, uint64_t block_height,
     const CybouProtocolParameters& params, CybouStateV2& state);
 
+NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params, CybouStateV2& state);
+
+NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params, CybouStateV2& state);
+
 enum class StateValidationErrorV2 : uint8_t {
     NONE,
     ACCOUNT_LIMIT_EXCEEDED,
@@ -62,6 +72,7 @@ enum class StateValidationErrorV2 : uint8_t {
     DUPLICATE_RECOVERY_BINDING,
     INVALID_VALIDATOR_SET,
     BALANCE_OVERFLOW,
+    INVALID_NAME_REGISTRY,
 };
 
 StateValidationErrorV2 ValidateCybouStateV2(const CybouStateV2& state);

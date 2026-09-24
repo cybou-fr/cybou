@@ -572,4 +572,207 @@ BOOST_AUTO_TEST_CASE(post_quantum_validator_set_and_bft_certificate)
     BOOST_CHECK(VerifyFinalityCertificateV2(bad_sig_cert, val_set, network_id) == FinalityVerificationError::INVALID_SIGNATURE);
 }
 
+BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
+{
+    using namespace cybou;
+
+    // 1. Syntax validation tests
+    BOOST_CHECK(ValidateNameLabel("alice") == NameValidationError::NONE);
+    BOOST_CHECK(ValidateNameLabel("stanislav") == NameValidationError::NONE);
+    BOOST_CHECK(ValidateNameLabel("node-01") == NameValidationError::NONE);
+    BOOST_CHECK(ValidateNameLabel("a123456789012345678901234567890b") == NameValidationError::NONE); // 32 chars
+    BOOST_CHECK(ValidateNameLabel("") == NameValidationError::EMPTY);
+    BOOST_CHECK(ValidateNameLabel("four") == NameValidationError::TOO_SHORT);
+    BOOST_CHECK(ValidateNameLabel("a123456789012345678901234567890bc") == NameValidationError::TOO_LONG); // 33 chars
+    BOOST_CHECK(ValidateNameLabel("-alice") == NameValidationError::INVALID_START_END);
+    BOOST_CHECK(ValidateNameLabel("alice-") == NameValidationError::INVALID_START_END);
+    BOOST_CHECK(ValidateNameLabel("al--ce") == NameValidationError::CONSECUTIVE_HYPHENS);
+    BOOST_CHECK(ValidateNameLabel("Alice") == NameValidationError::INVALID_CHARACTER);
+    BOOST_CHECK(ValidateNameLabel("ali ce") == NameValidationError::INVALID_CHARACTER);
+    BOOST_CHECK(ValidateNameLabel("ali_ce") == NameValidationError::INVALID_CHARACTER);
+    BOOST_CHECK(ValidateNameLabel("xn--alice") == NameValidationError::IDN_PREFIX);
+    BOOST_CHECK(ValidateNameLabel("12345") == NameValidationError::ALL_DIGITS);
+    BOOST_CHECK(ValidateNameLabel("cybou") == NameValidationError::RESERVED_NAME);
+    BOOST_CHECK(ValidateNameLabel("admin") == NameValidationError::RESERVED_NAME);
+    BOOST_CHECK(ValidateNameLabel("system") == NameValidationError::RESERVED_NAME);
+    BOOST_CHECK(ValidateNameLabel("operator") == NameValidationError::RESERVED_NAME);
+    BOOST_CHECK(ValidateNameLabel("validator") == NameValidationError::RESERVED_NAME);
+
+    // 2. Setup state with an account
+    std::array<unsigned char, 32> root_seed{}, device_seed{};
+    root_seed[0] = 51;
+    device_seed[0] = 52;
+    uint256 raw_account{}, network_id{};
+    raw_account.begin()[0] = 53;
+    network_id.begin()[0] = 54;
+    const AccountId account{raw_account};
+    const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::DEVICE);
+    BOOST_REQUIRE(root && device);
+
+    const IdentityAuthorizationV2 auth{*root, *device};
+    const auto commitment = ComputeIdentityAuthorizationCommitmentV2(auth);
+    const auto pop_digest = ComputeAccountCreatePopDigestV2(network_id, account, auth);
+    BOOST_REQUIRE(commitment && pop_digest);
+    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *pop_digest);
+    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *pop_digest);
+    BOOST_REQUIRE(root_pop && device_pop);
+    const AccountCreateOpV2 create{account, auth,
+        {.network_id = network_id, .account_id = account, .authorization_commitment = *commitment},
+        *root_pop, *device_pop};
+
+    auto params = DevProtocolParameters();
+    params.account_creation_work_bits = 0;
+    params.name_claim_work_bits = 0;
+    params.name_commit_min_depth = 1;
+    params.name_commit_max_lifetime = 100;
+    CybouStateV2 state{};
+    state.onboarding_pool = params.onboarding_bonus;
+    state.validator_set.validators.push_back(MakeTestValidator(55));
+    BOOST_REQUIRE(ApplyAccountCreateV2(create, network_id, 0, params, state) == AccountCreateStateErrorV2::NONE);
+
+    const auto device_id = ComputeDeviceKeyId(*device);
+    BOOST_REQUIRE(device_id.has_value());
+
+    // 3. NameCommit
+    const std::string label = "stanislav";
+    std::array<unsigned char, 32> salt{};
+    salt[0] = 77;
+    const uint256 name_commit_hash = ComputeNameCommitment(network_id, account, label, salt);
+
+    AuthorizedNameCommit commit_op{};
+    commit_op.commit.commitment = name_commit_hash;
+    const auto commit_payload_bytes = SerializeNameCommitPayload(commit_op.commit);
+    BOOST_REQUIRE(commit_payload_bytes.has_value());
+    const auto commit_payload_commitment = ComputeNameCommitPayloadCommitment(commit_op.commit);
+    BOOST_REQUIRE(commit_payload_commitment.has_value());
+
+    commit_op.authorization.account_id = account;
+    commit_op.authorization.device_id = *device_id;
+    commit_op.authorization.nonce = 0;
+    commit_op.authorization.activation_nonce = 0;
+    commit_op.authorization.kind = DeviceOperationKindV2::NAME_COMMIT;
+    commit_op.authorization.payload_commitment = *commit_payload_commitment;
+    const auto commit_digest = ComputeDeviceOperationDigestV2(network_id, commit_op.authorization);
+    BOOST_REQUIRE(commit_digest.has_value());
+    commit_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *commit_digest);
+
+    // Wire serialization check
+    const ProtocolOperationV2 commit_proto_op{commit_op};
+    const auto commit_wire = SerializeProtocolOperationV2(commit_proto_op);
+    BOOST_REQUIRE(commit_wire.has_value());
+    BOOST_CHECK_EQUAL(commit_wire->size(), 2 + AUTHORIZED_NAME_COMMIT_V2_SIZE);
+    const auto decoded_commit_wire = DeserializeProtocolOperationV2(*commit_wire);
+    BOOST_REQUIRE(decoded_commit_wire.has_value());
+    BOOST_CHECK(std::holds_alternative<AuthorizedNameCommit>(*decoded_commit_wire));
+    BOOST_CHECK(ComputeOperationIdV2(*decoded_commit_wire) == ComputeOperationIdV2(commit_proto_op));
+
+    // Execute NameCommit at height 10
+    const auto commit_block = ExecuteBlockOperationsV2(state, {commit_proto_op}, network_id, 10, params);
+    BOOST_REQUIRE(commit_block);
+    BOOST_REQUIRE(commit_block.state->names.pending_commits.contains(name_commit_hash));
+    BOOST_CHECK_EQUAL(commit_block.state->names.pending_commits.at(name_commit_hash).commit_height, 10ULL);
+    BOOST_CHECK_EQUAL(commit_block.state->identities.Find(account)->devices.at(*device_id).next_nonce, 1ULL);
+
+    // 4. NameReveal
+    AuthorizedNameReveal reveal_op{};
+    reveal_op.reveal.label = label;
+    reveal_op.reveal.salt = salt;
+    reveal_op.reveal.work.network_id = network_id;
+    reveal_op.reveal.work.account_id = account;
+    reveal_op.reveal.work.commitment = name_commit_hash;
+    reveal_op.reveal.work.work_epoch = EpochForHeight(12, params);
+    reveal_op.reveal.work.nonce = 0;
+
+    const auto reveal_payload_bytes = SerializeNameRevealPayload(reveal_op.reveal);
+    BOOST_REQUIRE(reveal_payload_bytes.has_value());
+    const auto reveal_payload_commitment = ComputeNameRevealPayloadCommitment(reveal_op.reveal);
+    BOOST_REQUIRE(reveal_payload_commitment.has_value());
+
+    reveal_op.authorization.account_id = account;
+    reveal_op.authorization.device_id = *device_id;
+    reveal_op.authorization.nonce = 1;
+    reveal_op.authorization.activation_nonce = 0;
+    reveal_op.authorization.kind = DeviceOperationKindV2::NAME_REVEAL;
+    reveal_op.authorization.payload_commitment = *reveal_payload_commitment;
+    const auto reveal_digest = ComputeDeviceOperationDigestV2(network_id, reveal_op.authorization);
+    BOOST_REQUIRE(reveal_digest.has_value());
+    reveal_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *reveal_digest);
+
+    // Wire serialization check
+    const ProtocolOperationV2 reveal_proto_op{reveal_op};
+    const auto reveal_wire = SerializeProtocolOperationV2(reveal_proto_op);
+    BOOST_REQUIRE(reveal_wire.has_value());
+    BOOST_CHECK_EQUAL(reveal_wire->size(), 2 + AUTHORIZED_NAME_REVEAL_V2_SIZE);
+    const auto decoded_reveal_wire = DeserializeProtocolOperationV2(*reveal_wire);
+    BOOST_REQUIRE(decoded_reveal_wire.has_value());
+    BOOST_CHECK(std::holds_alternative<AuthorizedNameReveal>(*decoded_reveal_wire));
+    BOOST_CHECK(ComputeOperationIdV2(*decoded_reveal_wire) == ComputeOperationIdV2(reveal_proto_op));
+
+    // Adversarial: Premature reveal at height 10 (needs min depth 1 -> height >= 11)
+    const auto premature_res = ExecuteBlockOperationsV2(*commit_block.state, {reveal_proto_op}, network_id, 10, params);
+    BOOST_CHECK(premature_res.error == BlockExecutionErrorV2::INVALID_NAME_REVEAL);
+    BOOST_CHECK(premature_res.name_reveal_error == NameRevealError::INSUFFICIENT_COMMIT_DEPTH);
+
+    // Successful reveal at height 12
+    const auto reveal_block = ExecuteBlockOperationsV2(*commit_block.state, {reveal_proto_op}, network_id, 12, params);
+    BOOST_REQUIRE(reveal_block);
+    BOOST_CHECK(!reveal_block.state->names.pending_commits.contains(name_commit_hash));
+    BOOST_REQUIRE(reveal_block.state->names.Resolve(label) != nullptr);
+    BOOST_CHECK(*reveal_block.state->names.Resolve(label) == account);
+    BOOST_REQUIRE(reveal_block.state->names.PrimaryName(account) != nullptr);
+    BOOST_CHECK(*reveal_block.state->names.PrimaryName(account) == label);
+    BOOST_CHECK_EQUAL(reveal_block.state->identities.Find(account)->devices.at(*device_id).next_nonce, 2ULL);
+
+    // State serialization roundtrip with names
+    const auto state_bytes = SerializeCybouStateV2(*reveal_block.state);
+    BOOST_REQUIRE(state_bytes.has_value());
+    const auto restored_state = DeserializeCybouStateV2(*state_bytes);
+    BOOST_REQUIRE(restored_state.has_value());
+    BOOST_CHECK(*restored_state->names.Resolve(label) == account);
+    BOOST_CHECK(*restored_state->names.PrimaryName(account) == label);
+    BOOST_CHECK(SerializeCybouStateV2(*restored_state) == state_bytes);
+
+    // 5. Adversarial checks
+    // A. Account already has a name -> cannot commit another name
+    auto second_commit_op = commit_op;
+    second_commit_op.authorization.nonce = 2;
+    const auto sec_digest = ComputeDeviceOperationDigestV2(network_id, second_commit_op.authorization);
+    BOOST_REQUIRE(sec_digest.has_value());
+    second_commit_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *sec_digest);
+    const auto double_commit_res = ExecuteBlockOperationsV2(*reveal_block.state, {second_commit_op}, network_id, 13, params);
+    BOOST_CHECK(double_commit_res.error == BlockExecutionErrorV2::INVALID_NAME_COMMIT);
+    BOOST_CHECK(double_commit_res.name_commit_error == NameCommitError::ACCOUNT_ALREADY_HAS_NAME);
+
+    // B. Expired commit
+    params.name_commit_max_lifetime = 5;
+    const auto expired_res = ExecuteBlockOperationsV2(*commit_block.state, {reveal_proto_op}, network_id, 16, params);
+    BOOST_CHECK(expired_res.error == BlockExecutionErrorV2::INVALID_NAME_REVEAL);
+    BOOST_CHECK(expired_res.name_reveal_error == NameRevealError::COMMIT_EXPIRED);
+    params.name_commit_max_lifetime = 100;
+
+    // C. Tampered commit wire
+    auto bad_commit_wire = *commit_wire;
+    bad_commit_wire[0] = 0;
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_commit_wire));
+    bad_commit_wire = *commit_wire;
+    bad_commit_wire.push_back(0);
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_commit_wire));
+    BOOST_CHECK(!DeserializeProtocolOperationV2(std::span{*commit_wire}.first(commit_wire->size() - 1)));
+
+    // D. Tampered reveal wire
+    auto bad_reveal_wire = *reveal_wire;
+    bad_reveal_wire[0] = 0;
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_reveal_wire));
+    bad_reveal_wire = *reveal_wire;
+    bad_reveal_wire.push_back(0);
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_reveal_wire));
+    BOOST_CHECK(!DeserializeProtocolOperationV2(std::span{*reveal_wire}.first(reveal_wire->size() - 1)));
+
+    // E. State corruption: name references account not in monetary state
+    auto corrupted_state = *reveal_block.state;
+    corrupted_state.accounts.clear();
+    BOOST_CHECK(ValidateCybouStateV2(corrupted_state) == StateValidationErrorV2::ACCOUNT_IDENTITY_COUNT_MISMATCH);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

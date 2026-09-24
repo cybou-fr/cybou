@@ -122,6 +122,54 @@ std::optional<AuthorizedSystemLockV2> DeserializeSystemLock(std::span<const unsi
     return AuthorizedSystemLockV2{.authorization = *auth, .lock = *lock};
 }
 
+std::optional<std::vector<unsigned char>> SerializeNameCommit(const AuthorizedNameCommit& op)
+{
+    const auto commit = SerializeNameCommitPayload(op.commit);
+    if (!commit) return std::nullopt;
+    const auto commitment = ComputeNameCommitPayloadCommitment(op.commit);
+    if (!commitment || *commitment != op.authorization.payload_commitment) return std::nullopt;
+    std::vector<unsigned char> out;
+    out.reserve(AUTHORIZED_NAME_COMMIT_V2_SIZE);
+    if (!SerializeDeviceAuthorization(op.authorization, DeviceOperationKindV2::NAME_COMMIT, out)) return std::nullopt;
+    out.insert(out.end(), commit->begin(), commit->end());
+    if (out.size() != AUTHORIZED_NAME_COMMIT_V2_SIZE) return std::nullopt;
+    return out;
+}
+
+std::optional<AuthorizedNameCommit> DeserializeNameCommit(std::span<const unsigned char> bytes)
+{
+    if (bytes.size() != AUTHORIZED_NAME_COMMIT_V2_SIZE) return std::nullopt;
+    const auto auth = DeserializeDeviceAuthorization(bytes.first(DEVICE_AUTH_WIRE_SIZE), DeviceOperationKindV2::NAME_COMMIT);
+    if (!auth) return std::nullopt;
+    const auto commit = DeserializeNameCommitPayload(bytes.subspan(DEVICE_AUTH_WIRE_SIZE));
+    if (!commit || ComputeNameCommitPayloadCommitment(*commit) != auth->payload_commitment) return std::nullopt;
+    return AuthorizedNameCommit{.authorization = *auth, .commit = *commit};
+}
+
+std::optional<std::vector<unsigned char>> SerializeNameReveal(const AuthorizedNameReveal& op)
+{
+    const auto reveal = SerializeNameRevealPayload(op.reveal);
+    if (!reveal) return std::nullopt;
+    const auto commitment = ComputeNameRevealPayloadCommitment(op.reveal);
+    if (!commitment || *commitment != op.authorization.payload_commitment) return std::nullopt;
+    std::vector<unsigned char> out;
+    out.reserve(AUTHORIZED_NAME_REVEAL_V2_SIZE);
+    if (!SerializeDeviceAuthorization(op.authorization, DeviceOperationKindV2::NAME_REVEAL, out)) return std::nullopt;
+    out.insert(out.end(), reveal->begin(), reveal->end());
+    if (out.size() != AUTHORIZED_NAME_REVEAL_V2_SIZE) return std::nullopt;
+    return out;
+}
+
+std::optional<AuthorizedNameReveal> DeserializeNameReveal(std::span<const unsigned char> bytes)
+{
+    if (bytes.size() != AUTHORIZED_NAME_REVEAL_V2_SIZE) return std::nullopt;
+    const auto auth = DeserializeDeviceAuthorization(bytes.first(DEVICE_AUTH_WIRE_SIZE), DeviceOperationKindV2::NAME_REVEAL);
+    if (!auth) return std::nullopt;
+    const auto reveal = DeserializeNameRevealPayload(bytes.subspan(DEVICE_AUTH_WIRE_SIZE));
+    if (!reveal || ComputeNameRevealPayloadCommitment(*reveal) != auth->payload_commitment) return std::nullopt;
+    return AuthorizedNameReveal{.authorization = *auth, .reveal = *reveal};
+}
+
 std::optional<std::vector<unsigned char>> SerializeDeviceAdd(const DeviceAddV2& op)
 {
     if (op.account_id.IsNull() || op.new_device.purpose != IdentityKeyPurpose::DEVICE ||
@@ -288,6 +336,16 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperationV2(const Pro
         if (!body) return std::nullopt;
         out.push_back(static_cast<unsigned char>(ProtocolOperationKindV2::SYSTEM_LOCK));
         out.insert(out.end(), body->begin(), body->end());
+    } else if (const auto* commit = std::get_if<AuthorizedNameCommit>(&operation)) {
+        const auto body = SerializeNameCommit(*commit);
+        if (!body) return std::nullopt;
+        out.push_back(static_cast<unsigned char>(ProtocolOperationKindV2::NAME_COMMIT));
+        out.insert(out.end(), body->begin(), body->end());
+    } else if (const auto* reveal = std::get_if<AuthorizedNameReveal>(&operation)) {
+        const auto body = SerializeNameReveal(*reveal);
+        if (!body) return std::nullopt;
+        out.push_back(static_cast<unsigned char>(ProtocolOperationKindV2::NAME_REVEAL));
+        out.insert(out.end(), body->begin(), body->end());
     } else {
         return std::nullopt;
     }
@@ -334,6 +392,18 @@ std::optional<ProtocolOperationV2> DeserializeProtocolOperationV2(std::span<cons
         const auto lock = DeserializeSystemLock(bytes.subspan(2));
         if (!lock) return std::nullopt;
         return ProtocolOperationV2{*lock};
+    }
+    case ProtocolOperationKindV2::NAME_COMMIT: {
+        if (bytes.size() != 2 + AUTHORIZED_NAME_COMMIT_V2_SIZE) return std::nullopt;
+        const auto commit = DeserializeNameCommit(bytes.subspan(2));
+        if (!commit) return std::nullopt;
+        return ProtocolOperationV2{*commit};
+    }
+    case ProtocolOperationKindV2::NAME_REVEAL: {
+        if (bytes.size() != 2 + AUTHORIZED_NAME_REVEAL_V2_SIZE) return std::nullopt;
+        const auto reveal = DeserializeNameReveal(bytes.subspan(2));
+        if (!reveal) return std::nullopt;
+        return ProtocolOperationV2{*reveal};
     }
     default:
         return std::nullopt;

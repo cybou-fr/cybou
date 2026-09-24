@@ -58,7 +58,7 @@ std::optional<IdentityKeyIdV2> ComputeRecoveryRotateDigestV2(const uint256& netw
 std::optional<IdentityKeyIdV2> ComputeDeviceOperationDigestV2(const uint256& network_id, const DeviceAuthorizationV2& request)
 {
     const auto kind = static_cast<uint8_t>(request.kind);
-    if (kind < 1 || kind > 3 ||
+    if (kind < 1 || kind > 5 ||
         std::all_of(request.device_id.begin(), request.device_id.end(), [](unsigned char b) { return b == 0; }) ||
         std::all_of(request.payload_commitment.begin(), request.payload_commitment.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
     if (network_id.IsNull() || request.account_id.IsNull()) return std::nullopt;
