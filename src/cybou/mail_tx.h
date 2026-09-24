@@ -7,7 +7,7 @@
 
 #include <crypto/sha256.h>
 #include <cybou/account_id.h>
-#include <cybou/identity_registry_v2.h>
+#include <cybou/identity_registry.h>
 #include <cybou/protocol_params.h>
 #include <uint256.h>
 

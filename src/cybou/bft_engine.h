@@ -33,7 +33,7 @@ struct BftProposalMsg {
     uint64_t height{0};
     uint32_t round{0};
     uint256 proposer_id;
-    CybouBlockV1 block;
+    CybouBlock block;
     ValidatorSignature signature{};
 
     friend bool operator==(const BftProposalMsg&, const BftProposalMsg&) = default;
@@ -99,13 +99,13 @@ class BftValidatorNode
 {
 public:
     using MessageBroadcaster = std::function<void(const BftProposalMsg&, const BftPrevoteMsg*, const BftPrecommitMsg*)>;
-    using ExecuteOperations = std::function<std::optional<uint256>(const std::vector<ProtocolOperationV1>&, uint64_t)>;
+    using ExecuteOperations = std::function<std::optional<uint256>(const std::vector<ProtocolOperation>&, uint64_t)>;
 
     BftValidatorNode(
         size_t node_index,
         std::array<unsigned char, 32> private_key_seed,
         uint256 network_id,
-        ValidatorSetV1 validator_set,
+        ValidatorSet validator_set,
         ExecuteOperations execute_operations);
     ~BftValidatorNode();
 
@@ -114,14 +114,14 @@ public:
     uint64_t GetHeight() const { return m_height; }
     uint32_t GetRound() const { return m_round; }
     BftStep GetStep() const { return m_step; }
-    const std::optional<FinalizedBlockV1>& GetLatestFinalizedBlock() const { return m_finalized_block; }
+    const std::optional<FinalizedBlock>& GetLatestFinalizedBlock() const { return m_finalized_block; }
 
-    void SetHeight(uint64_t height, const uint256& last_block_id, ValidatorSetV1 validator_set);
+    void SetHeight(uint64_t height, const uint256& last_block_id, ValidatorSet validator_set);
 
     /** Start a new round. If this node is the leader, produces a proposal. */
     std::optional<BftProposalMsg> StartRound(
         uint32_t round,
-        const std::vector<ProtocolOperationV1>& pending_ops);
+        const std::vector<ProtocolOperation>& pending_ops);
 
     /** Handle an incoming proposal message. Returns prevote message if produced. */
     std::optional<BftPrevoteMsg> ReceiveProposal(const BftProposalMsg& proposal);
@@ -141,7 +141,7 @@ private:
     std::array<unsigned char, 32> m_private_key_seed;
     uint256 m_validator_id;
     uint256 m_network_id;
-    ValidatorSetV1 m_validator_set;
+    ValidatorSet m_validator_set;
     uint256 m_validator_set_commitment;
     ExecuteOperations m_execute_operations;
 
@@ -151,7 +151,7 @@ private:
     uint256 m_last_block_id;
 
     // Locking state
-    std::optional<CybouBlockV1> m_locked_block;
+    std::optional<CybouBlock> m_locked_block;
     int32_t m_locked_round{-1};
 
     // Current round tracking
@@ -162,7 +162,7 @@ private:
     bool m_prevoted{false};
     bool m_precommitted{false};
 
-    std::optional<FinalizedBlockV1> m_finalized_block;
+    std::optional<FinalizedBlock> m_finalized_block;
 };
 
 /**
@@ -175,7 +175,7 @@ public:
     explicit BftSimulator(const uint256& network_id, size_t validator_count = 4);
 
     /** Get validator set */
-    const ValidatorSetV1& GetValidatorSet() const { return m_validator_set; }
+    const ValidatorSet& GetValidatorSet() const { return m_validator_set; }
 
     /** Number of validators */
     size_t NodeCount() const { return m_nodes.size(); }
@@ -197,12 +197,12 @@ public:
     bool StepRound(
         uint64_t height,
         uint32_t round,
-        const std::vector<ProtocolOperationV1>& ops,
+        const std::vector<ProtocolOperation>& ops,
         const uint256& resulting_state_root);
 
 private:
     uint256 m_network_id;
-    ValidatorSetV1 m_validator_set;
+    ValidatorSet m_validator_set;
     std::vector<std::unique_ptr<BftValidatorNode>> m_nodes;
     std::vector<bool> m_online;
     std::vector<std::vector<bool>> m_can_communicate;

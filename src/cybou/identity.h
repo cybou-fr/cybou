@@ -6,12 +6,12 @@
 #define CYBOU_IDENTITY_H
 
 #include <cybou/account_id.h>
+#include <cybou/identity_authorization.h>
 #include <uint256.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
-#include <vector>
 
 namespace cybou {
 
@@ -24,20 +24,6 @@ enum class OperatorKeyDomain : uint8_t {
 };
 
 std::string_view KeyDomainTag(OperatorKeyDomain domain);
-
-/**
- * Account authorization commitment and descriptor.
- * Represents initial key/authorization binding for permissionless account creation.
- */
-struct AccountAuthorizationV1 {
-    uint256 authorization_descriptor;
-
-    friend bool operator==(const AccountAuthorizationV1&, const AccountAuthorizationV1&) = default;
-};
-
-std::vector<unsigned char> SerializeAccountAuthorization(const AccountAuthorizationV1& auth);
-std::optional<AccountAuthorizationV1> DeserializeAccountAuthorization(std::span<const unsigned char> bytes);
-uint256 ComputeAuthCommitment(const AccountAuthorizationV1& auth);
 
 } // namespace cybou
 

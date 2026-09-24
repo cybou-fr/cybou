@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 The CYBOU developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
@@ -49,7 +49,7 @@ inline uint32_t ReadUint32LE(const std::span<const unsigned char>& bytes, size_t
 
 uint256 ComputeOperationsRootFromHashes(std::span<const uint256> hashes)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/OPS_ROOT/V1"};
+    static constexpr std::string_view DOMAIN{"CYBOU/OPS_ROOT/V2"};
     CSHA256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
 
@@ -68,22 +68,23 @@ uint256 ComputeOperationsRootFromHashes(std::span<const uint256> hashes)
     return root;
 }
 
-uint256 ComputeOperationsRoot(const std::vector<ProtocolOperationV1>& operations)
+uint256 ComputeOperationsRoot(const std::vector<ProtocolOperation>& operations)
 {
     std::vector<uint256> hashes;
     hashes.reserve(operations.size());
     for (const auto& op : operations) {
         const auto serialized = SerializeProtocolOperation(op);
+        if (!serialized) continue;
         uint256 op_hash;
-        CSHA256().Write(serialized.data(), serialized.size()).Finalize(op_hash.begin());
+        CSHA256().Write(serialized->data(), serialized->size()).Finalize(op_hash.begin());
         hashes.push_back(op_hash);
     }
     return ComputeOperationsRootFromHashes(hashes);
 }
 
-uint256 ComputeBlockHeaderId(const CybouBlockHeaderV1& header)
+uint256 ComputeBlockHeaderId(const CybouBlockHeader& header)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/BLOCK/V1"};
+    static constexpr std::string_view DOMAIN{"CYBOU/BLOCK/V2"};
     CSHA256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(&header.version, 1);
@@ -102,9 +103,9 @@ uint256 ComputeBlockHeaderId(const CybouBlockHeaderV1& header)
     return block_id;
 }
 
-CybouBlockHeaderV1 ExtractBlockHeader(const CybouBlockV1& block)
+CybouBlockHeader ExtractBlockHeader(const CybouBlock& block)
 {
-    return CybouBlockHeaderV1{
+    return CybouBlockHeader{
         .version = block.version,
         .parent_block_id = block.parent_block_id,
         .height = block.height,
@@ -113,12 +114,12 @@ CybouBlockHeaderV1 ExtractBlockHeader(const CybouBlockV1& block)
     };
 }
 
-uint256 ComputeBlockId(const CybouBlockV1& block)
+uint256 ComputeBlockId(const CybouBlock& block)
 {
     return ComputeBlockHeaderId(ExtractBlockHeader(block));
 }
 
-std::vector<unsigned char> SerializeBlock(const CybouBlockV1& block)
+std::optional<std::vector<unsigned char>> SerializeBlock(const CybouBlock& block)
 {
     std::vector<unsigned char> out;
     out.reserve(77); // base header size
@@ -132,14 +133,15 @@ std::vector<unsigned char> SerializeBlock(const CybouBlockV1& block)
 
     for (const auto& op : block.operations) {
         const auto serialized_op = SerializeProtocolOperation(op);
-        AppendUint32LE(out, static_cast<uint32_t>(serialized_op.size()));
-        out.insert(out.end(), serialized_op.begin(), serialized_op.end());
+        if (!serialized_op) return std::nullopt;
+        AppendUint32LE(out, static_cast<uint32_t>(serialized_op->size()));
+        out.insert(out.end(), serialized_op->begin(), serialized_op->end());
     }
 
     return out;
 }
 
-std::optional<CybouBlockV1> DeserializeBlock(std::span<const unsigned char> bytes)
+std::optional<CybouBlock> DeserializeBlock(std::span<const unsigned char> bytes)
 {
     static constexpr size_t HEADER_SIZE{1 + 32 + 8 + 32 + 4}; // 77 bytes
     if (bytes.size() < HEADER_SIZE) {
@@ -149,7 +151,7 @@ std::optional<CybouBlockV1> DeserializeBlock(std::span<const unsigned char> byte
         return std::nullopt;
     }
 
-    CybouBlockV1 block;
+    CybouBlock block;
     block.version = bytes[0];
 
     size_t offset{1};
@@ -192,24 +194,26 @@ std::optional<CybouBlockV1> DeserializeBlock(std::span<const unsigned char> byte
     return block;
 }
 
-std::vector<unsigned char> SerializeFinalizedBlock(const FinalizedBlockV1& finalized_block)
+std::optional<std::vector<unsigned char>> SerializeFinalizedBlock(const FinalizedBlock& finalized_block)
 {
     const auto serialized_block = SerializeBlock(finalized_block.block);
+    if (!serialized_block) return std::nullopt;
     const auto serialized_cert = SerializeFinalityCertificate(finalized_block.certificate);
+    if (!serialized_cert) return std::nullopt;
 
     std::vector<unsigned char> out;
-    out.reserve(8 + serialized_block.size() + serialized_cert.size());
+    out.reserve(8 + serialized_block->size() + serialized_cert->size());
 
-    AppendUint32LE(out, static_cast<uint32_t>(serialized_block.size()));
-    out.insert(out.end(), serialized_block.begin(), serialized_block.end());
+    AppendUint32LE(out, static_cast<uint32_t>(serialized_block->size()));
+    out.insert(out.end(), serialized_block->begin(), serialized_block->end());
 
-    AppendUint32LE(out, static_cast<uint32_t>(serialized_cert.size()));
-    out.insert(out.end(), serialized_cert.begin(), serialized_cert.end());
+    AppendUint32LE(out, static_cast<uint32_t>(serialized_cert->size()));
+    out.insert(out.end(), serialized_cert->begin(), serialized_cert->end());
 
     return out;
 }
 
-std::optional<FinalizedBlockV1> DeserializeFinalizedBlock(std::span<const unsigned char> bytes)
+std::optional<FinalizedBlock> DeserializeFinalizedBlock(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < 8) {
         return std::nullopt;
@@ -244,7 +248,7 @@ std::optional<FinalizedBlockV1> DeserializeFinalizedBlock(std::span<const unsign
         return std::nullopt;
     }
 
-    return FinalizedBlockV1{
+    return FinalizedBlock{
         .block = std::move(*block),
         .certificate = std::move(*cert),
     };

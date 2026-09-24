@@ -34,7 +34,7 @@ inline uint32_t ReadUint32LE(const std::span<const unsigned char>& bytes, size_t
 
 uint256 ComputeRecipientDiscoveryTag(const uint256& recipient_key, const uint256& salt)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/DISCOVERY_TAG/V1"};
+    static constexpr std::string_view DOMAIN{"CYBOU/DISCOVERY_TAG/V2"};
     CSHA256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(recipient_key.begin(), recipient_key.size());
@@ -44,7 +44,7 @@ uint256 ComputeRecipientDiscoveryTag(const uint256& recipient_key, const uint256
     return tag;
 }
 
-bool CybouMailDiscoveryFilterV1::Match(const uint256& discovery_tag) const
+bool CybouMailDiscoveryFilter::Match(const uint256& discovery_tag) const
 {
     if (num_elements == 0 || encoded_filter.empty()) {
         return false;
@@ -59,7 +59,7 @@ bool CybouMailDiscoveryFilterV1::Match(const uint256& discovery_tag) const
     }
 }
 
-bool CybouMailDiscoveryFilterV1::MatchAny(std::span<const uint256> discovery_tags) const
+bool CybouMailDiscoveryFilter::MatchAny(std::span<const uint256> discovery_tags) const
 {
     if (num_elements == 0 || encoded_filter.empty() || discovery_tags.empty()) {
         return false;
@@ -78,26 +78,28 @@ bool CybouMailDiscoveryFilterV1::MatchAny(std::span<const uint256> discovery_tag
     }
 }
 
-uint256 CybouMailDiscoveryFilterV1::ComputeFilterHash() const
+uint256 CybouMailDiscoveryFilter::ComputeFilterHash() const
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/MAIL_FILTER/V1"};
+    static constexpr std::string_view DOMAIN{"CYBOU/MAIL_FILTER/V2"};
     CSHA256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(block_id.begin(), block_id.size());
-    unsigned char n_bytes[4];
+
+    unsigned char count_bytes[4];
     for (int i = 0; i < 4; ++i) {
-        n_bytes[i] = static_cast<unsigned char>(num_elements >> (8 * i));
+        count_bytes[i] = static_cast<unsigned char>(num_elements >> (8 * i));
     }
-    hasher.Write(n_bytes, sizeof(n_bytes));
+    hasher.Write(count_bytes, sizeof(count_bytes));
     hasher.Write(encoded_filter.data(), encoded_filter.size());
+
     uint256 hash;
     hasher.Finalize(hash.begin());
     return hash;
 }
 
-uint256 CybouMailDiscoveryFilterV1::ComputeFilterHeader(const uint256& prev_filter_header) const
+uint256 CybouMailDiscoveryFilter::ComputeFilterHeader(const uint256& prev_filter_header) const
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/MAIL_FILTER_HEADER/V1"};
+    static constexpr std::string_view DOMAIN{"CYBOU/MAIL_FILTER_HEADER/V2"};
     CSHA256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(prev_filter_header.begin(), prev_filter_header.size());
@@ -108,7 +110,7 @@ uint256 CybouMailDiscoveryFilterV1::ComputeFilterHeader(const uint256& prev_filt
     return header;
 }
 
-CybouMailDiscoveryFilterV1 BuildMailDiscoveryFilter(const uint256& block_id, std::span<const uint256> discovery_tags)
+CybouMailDiscoveryFilter BuildMailDiscoveryFilter(const uint256& block_id, std::span<const uint256> discovery_tags)
 {
     GCSFilter::Params params(block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M);
     GCSFilter::ElementSet elements;
@@ -119,7 +121,7 @@ CybouMailDiscoveryFilterV1 BuildMailDiscoveryFilter(const uint256& block_id, std
 
     GCSFilter gcs(params, elements);
 
-    CybouMailDiscoveryFilterV1 filter;
+    CybouMailDiscoveryFilter filter;
     filter.version = MAIL_DISCOVERY_FILTER_VERSION;
     filter.block_id = block_id;
     filter.num_elements = gcs.GetN();
@@ -127,36 +129,36 @@ CybouMailDiscoveryFilterV1 BuildMailDiscoveryFilter(const uint256& block_id, std
     return filter;
 }
 
-CybouMailDiscoveryFilterV1 BuildBlockMailDiscoveryFilter(const CybouBlockV1& block)
+CybouMailDiscoveryFilter BuildBlockMailDiscoveryFilter(const CybouBlock& block)
 {
     const uint256 block_id = ComputeBlockId(block);
     std::vector<uint256> tags;
     for (const auto& op : block.operations) {
-        if (std::holds_alternative<AuthorizedOperationV1>(op.payload)) {
-            const auto& auth_op = std::get<AuthorizedOperationV1>(op.payload);
-            if (std::holds_alternative<MailOpV1>(auth_op.payload)) {
-                const auto& mail_op = std::get<MailOpV1>(auth_op.payload);
-                tags.push_back(mail_op.discovery_tag);
-            }
+        if (std::holds_alternative<AuthorizedMail>(op)) {
+            const auto& mail_op = std::get<AuthorizedMail>(op);
+            tags.push_back(mail_op.mail.discovery_tag);
         }
     }
     return BuildMailDiscoveryFilter(block_id, tags);
 }
 
-std::vector<unsigned char> SerializeMailDiscoveryFilter(const CybouMailDiscoveryFilterV1& filter)
+std::vector<unsigned char> SerializeMailDiscoveryFilter(const CybouMailDiscoveryFilter& filter)
 {
     std::vector<unsigned char> out;
+    out.reserve(1 + 32 + 4 + 4 + filter.encoded_filter.size());
+
     out.push_back(filter.version);
     out.insert(out.end(), filter.block_id.begin(), filter.block_id.end());
     AppendUint32LE(out, filter.num_elements);
     AppendUint32LE(out, static_cast<uint32_t>(filter.encoded_filter.size()));
     out.insert(out.end(), filter.encoded_filter.begin(), filter.encoded_filter.end());
+
     return out;
 }
 
-std::optional<CybouMailDiscoveryFilterV1> DeserializeMailDiscoveryFilter(std::span<const unsigned char> bytes)
+std::optional<CybouMailDiscoveryFilter> DeserializeMailDiscoveryFilter(std::span<const unsigned char> bytes)
 {
-    constexpr size_t HEADER_SIZE = 1 + 32 + 4 + 4;
+    static constexpr size_t HEADER_SIZE{1 + 32 + 4 + 4}; // 41 bytes
     if (bytes.size() < HEADER_SIZE) {
         return std::nullopt;
     }
@@ -164,24 +166,24 @@ std::optional<CybouMailDiscoveryFilterV1> DeserializeMailDiscoveryFilter(std::sp
         return std::nullopt;
     }
 
-    CybouMailDiscoveryFilterV1 filter;
+    CybouMailDiscoveryFilter filter;
     filter.version = bytes[0];
-    std::copy_n(bytes.begin() + 1, 32, filter.block_id.begin());
-    filter.num_elements = ReadUint32LE(bytes, 33);
-    const uint32_t encoded_len = ReadUint32LE(bytes, 37);
 
-    if (encoded_len == 0 || bytes.size() != HEADER_SIZE + encoded_len) {
+    size_t offset{1};
+    std::copy_n(bytes.begin() + offset, 32, filter.block_id.begin());
+    offset += 32;
+
+    filter.num_elements = ReadUint32LE(bytes, offset);
+    offset += 4;
+
+    const uint32_t filter_len = ReadUint32LE(bytes, offset);
+    offset += 4;
+
+    if (bytes.size() != HEADER_SIZE + filter_len) {
         return std::nullopt;
     }
 
-    filter.encoded_filter.assign(bytes.begin() + HEADER_SIZE, bytes.end());
-    try {
-        const GCSFilter::Params params(filter.block_id.GetUint64(0), filter.block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M);
-        const GCSFilter decoded(params, filter.encoded_filter, false);
-        if (decoded.GetN() != filter.num_elements) return std::nullopt;
-    } catch (...) {
-        return std::nullopt;
-    }
+    filter.encoded_filter.assign(bytes.begin() + offset, bytes.end());
     return filter;
 }
 

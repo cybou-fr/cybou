@@ -33,13 +33,13 @@ CybouAuthorityNode::~CybouAuthorityNode()
     memory_cleanse(m_validator_private_key.data(), m_validator_private_key.size());
 }
 
-OperationSubmitStatus CybouAuthorityNode::SubmitOperationWithStatus(const ProtocolOperationV1& operation)
+OperationSubmitStatus CybouAuthorityNode::SubmitOperationWithStatus(const ProtocolOperation& operation)
 {
     if (std::find(m_pending.begin(), m_pending.end(), operation) != m_pending.end()) {
         return OperationSubmitStatus::ALREADY_PENDING;
     }
-    if (std::holds_alternative<AccountCreateOpV1>(operation.payload)) {
-        const auto& create = std::get<AccountCreateOpV1>(operation.payload);
+    if (std::holds_alternative<AccountCreateOp>(operation.payload)) {
+        const auto& create = std::get<AccountCreateOp>(operation.payload);
         const auto loaded = m_store.LoadState();
         if (loaded && loaded.state && loaded.state->accounts.contains(create.account_id)) {
             return OperationSubmitStatus::ALREADY_FINALIZED;
@@ -55,7 +55,7 @@ OperationSubmitStatus CybouAuthorityNode::SubmitOperationWithStatus(const Protoc
     return OperationSubmitStatus::ACCEPTED;
 }
 
-bool CybouAuthorityNode::SubmitOperation(const ProtocolOperationV1& operation)
+bool CybouAuthorityNode::SubmitOperation(const ProtocolOperation& operation)
 {
     return SubmitOperationWithStatus(operation) == OperationSubmitStatus::ACCEPTED;
 }
@@ -70,8 +70,8 @@ AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)
     if (set->validators.size() != 1) {
         return Failure(AuthorityProductionError::NOT_AUTHORITY_MODE);
     }
-    const auto public_key = DeriveEd25519PublicKey(m_validator_private_key);
-    if (!public_key || set->validators[0].consensus_public_key != *public_key) {
+    const auto keypair = GenerateValidatorKeyPair(m_validator_private_key);
+    if (!keypair || set->validators[0].consensus_public_key != keypair->public_key) {
         return Failure(AuthorityProductionError::VALIDATOR_KEY_MISMATCH);
     }
     const uint64_t height = head->height + 1;
@@ -81,7 +81,7 @@ AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)
 
     BftValidatorNode validator{
         0, m_validator_private_key, m_store.GetNetworkId(), *set,
-        [this](const std::vector<ProtocolOperationV1>& operations, const uint64_t candidate_height) {
+        [this](const std::vector<ProtocolOperation>& operations, const uint64_t candidate_height) {
             return m_store.ComputeCandidateStateRoot(operations, candidate_height);
         },
     };

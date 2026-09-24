@@ -154,7 +154,7 @@ bool ServeFinalizedBlockRequest(CybouStateStore& store, boost::asio::ip::tcp::so
 }
 
 OperationSubmitResult SubmitOperationRemote(
-    const std::string& host, const uint16_t port, const uint256& network_id, const ProtocolOperationV1& op)
+    const std::string& host, const uint16_t port, const uint256& network_id, const ProtocolOperation& op)
 {
     const auto op_id = ComputeOperationId(op);
     try {

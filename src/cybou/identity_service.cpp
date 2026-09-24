@@ -204,7 +204,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
         return Failure(IdentityCreationPhase::FAILED, "Failed to sign proof of possession", account_id);
     }
 
-    AccountCreateOpV1 op{
+    AccountCreateOp op{
         .version = ACCOUNT_CREATE_OP_VERSION,
         .account_id = account_id,
         .initial_authorization = auth,
@@ -212,7 +212,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
         .proof_of_possession = *pop_sig,
     };
 
-    if (!m_runtime.SubmitOperation(ProtocolOperationV1{op})) {
+    if (!m_runtime.SubmitOperation(ProtocolOperation{op})) {
         m_phase.store(IdentityCreationPhase::FAILED);
         return Failure(IdentityCreationPhase::FAILED, "Failed to submit AccountCreateOp to node runtime", account_id);
     }

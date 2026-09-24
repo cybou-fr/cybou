@@ -2,10 +2,10 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#include <cybou/signing.h>
-#include <cybou/block_executor.h>
 #include <cybou/state_store.h>
 
+#include <cybou/block_executor.h>
+#include <cybou/signing.h>
 #include <dbwrapper.h>
 
 #include <algorithm>
@@ -16,31 +16,31 @@
 namespace cybou {
 namespace {
 
-const std::string STATE_KEY{"cybou/state/v1"};
-const std::string HASH_KEY{"cybou/hash/v1"};
-const std::string HEAD_KEY{"cybou/head/v1"};
-const std::string NETWORK_ID_KEY{"cybou/network-id/v1"};
+const std::string STATE_KEY{"cybou/state/v2"};
+const std::string HASH_KEY{"cybou/hash/v2"};
+const std::string HEAD_KEY{"cybou/head/v2"};
+const std::string NETWORK_ID_KEY{"cybou/network-id/v2"};
 
 inline std::string BlockKey(const uint256& block_id)
 {
-    return "cybou/block/v1/" + block_id.GetHex();
+    return "cybou/block/v2/" + block_id.GetHex();
 }
 
 inline std::string BlockHeightKey(const uint64_t height)
 {
-    return "cybou/block-height/v1/" + std::to_string(height);
+    return "cybou/block-height/v2/" + std::to_string(height);
 }
 
 inline std::string MailFilterKey(const uint256& block_id)
 {
-    return "cybou/mail-filter/v1/" + block_id.GetHex();
+    return "cybou/mail-filter/v2/" + block_id.GetHex();
 }
 
 } // namespace
 
 CybouStateStore::CybouStateStore(
     CDBWrapper& db,
-    CybouNetworkDefinitionV1 network_definition,
+    CybouNetworkDefinition network_definition,
     std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier)
     : m_db{db},
       m_network_definition{std::move(network_definition)},
@@ -53,7 +53,7 @@ CybouStateStore::CybouStateStore(
     }
 }
 
-std::optional<ValidatorSetV1> CybouStateStore::GetValidatorSet() const
+std::optional<ValidatorSet> CybouStateStore::GetValidatorSet() const
 {
     const auto loaded{LoadState()};
     if (!loaded) return std::nullopt;
@@ -61,7 +61,7 @@ std::optional<ValidatorSetV1> CybouStateStore::GetValidatorSet() const
 }
 
 std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
-    const std::vector<ProtocolOperationV1>& operations,
+    const std::vector<ProtocolOperation>& operations,
     const uint64_t height) const
 {
     const auto loaded = LoadState();
@@ -73,15 +73,8 @@ std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
     if (operations.empty() && loaded.state->pending_fee_pool == 0) {
         return GetStateRoot();
     }
-    const ProtocolExecutionContextV1 context{
-        .network_id = m_network_id,
-        .block_height = height,
-        .params = m_network_definition.protocol_parameters,
-        .operator_authority = m_network_definition.operator_authority ? &*m_network_definition.operator_authority : nullptr,
-        .operator_verifier = m_operator_verifier.get(),
-    };
-    const auto execution = ExecuteBlockOperations(*loaded.state, operations, context);
-    return execution ? std::optional<uint256>{execution.state_root} : std::nullopt;
+    const auto execution = ExecuteBlockOperations(*loaded.state, operations, m_network_id, height, m_network_definition.protocol_parameters);
+    return execution ? execution.state_root : std::nullopt;
 }
 
 GenesisInitResult CybouStateStore::InitializeGenesis(
@@ -95,7 +88,8 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
         m_db.Exists(NETWORK_ID_KEY)) {
         return {GenesisInitError::ALREADY_INITIALIZED};
     }
-    if (CybouStateHash(genesis_state) != m_network_definition.genesis_state_root) {
+    const auto state_hash = CybouStateHash(genesis_state);
+    if (!state_hash || *state_hash != m_network_definition.genesis_state_root) {
         return {GenesisInitError::GENESIS_STATE_MISMATCH};
     }
     if (ComputeValidatorSetCommitment(genesis_state.validator_set) !=
@@ -105,13 +99,17 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     if (ValidateValidatorSet(genesis_state.validator_set) != ValidatorSetValidationError::NONE) {
         return {GenesisInitError::INVALID_GENESIS_VALIDATOR_SET};
     }
-    const FinalizedHeadV1 initial_head{
+    const auto serialized_state = SerializeCybouState(genesis_state);
+    if (!serialized_state) {
+        return {GenesisInitError::GENESIS_STATE_MISMATCH};
+    }
+    const FinalizedHead initial_head{
         .block_id = m_network_definition.genesis_block_id,
         .height = 0,
     };
     CDBBatch batch{m_db};
-    batch.Write(STATE_KEY, SerializeCybouState(genesis_state));
-    batch.Write(HASH_KEY, CybouStateHash(genesis_state));
+    batch.Write(STATE_KEY, *serialized_state);
+    batch.Write(HASH_KEY, *state_hash);
     batch.Write(HEAD_KEY, initial_head);
     batch.Write(NETWORK_ID_KEY, m_network_id);
     const auto genesis_filter{BuildMailDiscoveryFilter(m_network_definition.genesis_block_id, {})};
@@ -138,21 +136,24 @@ StateLoadResult CybouStateStore::LoadState() const
         return {StateLoadError::CORRUPT, std::nullopt};
     }
     const auto stored_network_id{GetStoredNetworkId()};
-    if (!stored_network_id) return {StateLoadError::CORRUPT, std::nullopt};
-    if (*stored_network_id != m_network_id) return {StateLoadError::NETWORK_MISMATCH, std::nullopt};
-
-    const auto head{GetFinalizedHead()};
-    if (!head) return {StateLoadError::CORRUPT, std::nullopt};
-
-    const bool has_state{m_db.Read(STATE_KEY, bytes)};
-    const bool has_hash{m_db.Read(HASH_KEY, stored_hash)};
-    if (!has_state || !has_hash) return {StateLoadError::CORRUPT, std::nullopt};
-
-    auto state{DeserializeCybouState(bytes)};
-    if (!state || CybouStateHash(*state) != stored_hash) {
+    if (!stored_network_id) {
         return {StateLoadError::CORRUPT, std::nullopt};
     }
-    return {StateLoadError::NONE, std::move(state)};
+    if (*stored_network_id != m_network_id) {
+        return {StateLoadError::NETWORK_MISMATCH, std::nullopt};
+    }
+    if (!m_db.Read(STATE_KEY, bytes) || !m_db.Read(HASH_KEY, stored_hash)) {
+        return {StateLoadError::CORRUPT, std::nullopt};
+    }
+    auto state{DeserializeCybouState(bytes)};
+    if (!state) {
+        return {StateLoadError::CORRUPT, std::nullopt};
+    }
+    const auto computed_hash = CybouStateHash(*state);
+    if (!computed_hash || *computed_hash != stored_hash) {
+        return {StateLoadError::CORRUPT, std::nullopt};
+    }
+    return {StateLoadError::NONE, std::move(*state)};
 }
 
 std::optional<uint256> CybouStateStore::GetStateRoot() const
@@ -162,9 +163,9 @@ std::optional<uint256> CybouStateStore::GetStateRoot() const
     return hash;
 }
 
-std::optional<FinalizedHeadV1> CybouStateStore::GetFinalizedHead() const
+std::optional<FinalizedHead> CybouStateStore::GetFinalizedHead() const
 {
-    FinalizedHeadV1 head;
+    FinalizedHead head;
     if (!m_db.Read(HEAD_KEY, head)) return std::nullopt;
     return head;
 }
@@ -191,8 +192,8 @@ std::optional<uint256> CybouStateStore::GetStoredNetworkId() const
 }
 
 BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
-    const FinalizedBlockV1& finalized_block,
-    const std::optional<ValidatorSetV1>& validator_set,
+    const FinalizedBlock& finalized_block,
+    const std::optional<ValidatorSet>& validator_set,
     const bool sync)
 {
     const auto loaded{LoadState()};
@@ -249,20 +250,13 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         candidate_root = *current_root;
     } else {
         const auto& params{m_network_definition.protocol_parameters};
-        const ProtocolExecutionContextV1 ctx{
-            .network_id = m_network_id,
-            .block_height = block.height,
-            .params = params,
-            .operator_authority = m_network_definition.operator_authority ? &*m_network_definition.operator_authority : nullptr,
-            .operator_verifier = m_operator_verifier.get(),
-        };
-        auto execution = ExecuteBlockOperations(*loaded.state, block.operations, ctx);
+        auto execution = ExecuteBlockOperations(*loaded.state, block.operations, m_network_id, block.height, params);
         if (!execution) {
-            if (execution.too_many_account_creates) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
-            if (execution.fee_routing_failed) return {BlockTransitionError::FEE_ROUTING_FAILED};
-            return {BlockTransitionError::INVALID_OPERATION, execution.operation_result};
+            if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
+            if (execution.error == BlockExecutionError::FEE_ROUTING_OVERFLOW) return {BlockTransitionError::FEE_ROUTING_FAILED};
+            return BlockTransitionResult{.error = BlockTransitionError::INVALID_OPERATION, .op_result = execution};
         }
-        candidate_root = execution.state_root;
+        candidate_root = *execution.state_root;
         next_state = std::move(execution.state);
     }
 
@@ -270,18 +264,22 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         return {BlockTransitionError::STATE_ROOT_MISMATCH};
     }
 
-    const FinalizedHeadV1 next_head{
+    const FinalizedHead next_head{
         .block_id = block_id,
         .height = block.height,
     };
 
     CDBBatch batch{m_db};
     if (!is_empty_noop_block) {
-        batch.Write(STATE_KEY, SerializeCybouState(*next_state));
+        const auto state_bytes = SerializeCybouState(*next_state);
+        if (!state_bytes) return {BlockTransitionError::CORRUPT_STATE};
+        batch.Write(STATE_KEY, *state_bytes);
         batch.Write(HASH_KEY, candidate_root);
     }
     batch.Write(HEAD_KEY, next_head);
-    batch.Write(BlockKey(block_id), SerializeFinalizedBlock(finalized_block));
+    const auto serialized_finalized = SerializeFinalizedBlock(finalized_block);
+    if (!serialized_finalized) return {BlockTransitionError::CORRUPT_STATE};
+    batch.Write(BlockKey(block_id), *serialized_finalized);
     batch.Write(BlockHeightKey(block.height), block_id);
     const auto mail_filter{BuildBlockMailDiscoveryFilter(block)};
     batch.Write(MailFilterKey(block_id), SerializeMailDiscoveryFilter(mail_filter));
@@ -289,7 +287,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     return {};
 }
 
-std::optional<FinalizedBlockV1> CybouStateStore::GetBlock(const uint256& block_id) const
+std::optional<FinalizedBlock> CybouStateStore::GetBlock(const uint256& block_id) const
 {
     std::vector<unsigned char> bytes;
     if (!m_db.Read(BlockKey(block_id), bytes)) {
@@ -298,7 +296,7 @@ std::optional<FinalizedBlockV1> CybouStateStore::GetBlock(const uint256& block_i
     return DeserializeFinalizedBlock(bytes);
 }
 
-std::optional<FinalizedBlockV1> CybouStateStore::GetBlockAtHeight(const uint64_t height) const
+std::optional<FinalizedBlock> CybouStateStore::GetBlockAtHeight(const uint64_t height) const
 {
     if (height == 0) return std::nullopt;
     uint256 block_id;
@@ -322,7 +320,7 @@ std::optional<FinalizedBlockV1> CybouStateStore::GetBlockAtHeight(const uint64_t
     return block;
 }
 
-std::optional<CybouMailDiscoveryFilterV1> CybouStateStore::GetBlockMailFilter(const uint256& block_id) const
+std::optional<CybouMailDiscoveryFilter> CybouStateStore::GetBlockMailFilter(const uint256& block_id) const
 {
     std::vector<unsigned char> bytes;
     if (!m_db.Read(MailFilterKey(block_id), bytes)) {

@@ -8,6 +8,7 @@
 #include <cybou/account_creation.h>
 #include <cybou/bft.h>
 #include <cybou/block.h>
+#include <cybou/mail_tx.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/validator.h>
 #include <uint256.h>
@@ -20,52 +21,50 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_MAIL_EVIDENCE_VERSION{1};
+inline constexpr uint8_t CYBOU_MAIL_EVIDENCE_VERSION{2};
 
 /**
- * Proof of operation inclusion in a CybouBlockV1 operations list.
+ * Proof of operation inclusion in a CybouBlock operations list.
  * Stores operation index and all operation hashes in the block, which deterministically
  * reconstructs the operations_root committed in the block header.
  */
-struct OperationInclusionProofV1 {
+struct OperationInclusionProof {
     uint32_t operation_index{0};
     std::vector<uint256> operation_hashes;
 
-    friend bool operator==(const OperationInclusionProofV1&, const OperationInclusionProofV1&) = default;
+    friend bool operator==(const OperationInclusionProof&, const OperationInclusionProof&) = default;
 };
 
 /** Verify inclusion proof against an operation and the expected operations_root */
 bool VerifyOperationInclusion(
-    const OperationInclusionProofV1& proof,
-    const ProtocolOperationV1& operation,
+    const OperationInclusionProof& proof,
+    const ProtocolOperation& operation,
     const uint256& expected_operations_root);
 
 /**
- * Evidence bundle for a finalized MailTx. Historical key authorization is
- * supplied by the exporter and is not independently proven by this bundle.
+ * Evidence bundle for a finalized MailTx.
  * Supports exporting and verifying:
  * - transaction inclusion in block
  * - BFT finality certificate
- * - signature against the supplied sender key
+ * - signature against the supplied sender device key
  * - salted content commitment
  */
-struct MailEvidenceBundleV1 {
+struct MailEvidenceBundle {
     uint8_t version{CYBOU_MAIL_EVIDENCE_VERSION};
     uint256 network_id;
-    AuthorizedOperationV1 mail_operation;
-    CybouBlockHeaderV1 block_header;
-    OperationInclusionProofV1 inclusion_proof;
-    BftFinalityCertificateV1 finality_certificate;
-    AccountAuthorizationV1 sender_authorization;
+    AuthorizedMail mail_operation;
+    CybouBlockHeader block_header;
+    OperationInclusionProof inclusion_proof;
+    BftFinalityCertificate finality_certificate;
+    IdentityHybridPublicKey sender_device_key;
 
-    friend bool operator==(const MailEvidenceBundleV1&, const MailEvidenceBundleV1&) = default;
+    friend bool operator==(const MailEvidenceBundle&, const MailEvidenceBundle&) = default;
 };
 
 enum class EvidenceVerificationError : uint8_t {
     NONE,
     UNSUPPORTED_VERSION,
     NETWORK_MISMATCH,
-    NOT_A_MAIL_OPERATION,
     INVALID_OPERATION_SIGNATURE,
     INCLUSION_PROOF_FAILED,
     BLOCK_ID_MISMATCH,
@@ -75,31 +74,30 @@ enum class EvidenceVerificationError : uint8_t {
 
 /** Verify a full MailEvidenceBundle against the network and active validator set */
 EvidenceVerificationError VerifyMailEvidenceBundle(
-    const MailEvidenceBundleV1& bundle,
-    const ValidatorSetV1& validator_set,
+    const MailEvidenceBundle& bundle,
+    const ValidatorSet& validator_set,
     const uint256& expected_network_id);
 
 /**
- * Verify voluntary plaintext and salt disclosure against the bundle's MailOpV1 content_commitment.
- * Returns true if SHA256("CYBOU/MAIL_CONTENT/V1" || salt || plaintext) == content_commitment.
+ * Verify voluntary plaintext and discovery tag disclosure against the bundle's content_commitment.
  */
 bool VerifyDisclosedMailContent(
-    const MailEvidenceBundleV1& bundle,
-    const uint256& salt,
-    std::span<const unsigned char> plaintext);
+    const MailEvidenceBundle& bundle,
+    const uint256& content_commitment);
 
-/**
- * Helper to construct an evidence bundle from block, op index, finality cert, and sender authorization.
- */
-std::optional<MailEvidenceBundleV1> CreateMailEvidenceBundle(
-    const CybouBlockV1& block,
+std::optional<MailEvidenceBundle> CreateMailEvidenceBundle(
+    const CybouBlock& block,
     size_t operation_index,
-    BftFinalityCertificateV1 finality_certificate,
-    AccountAuthorizationV1 sender_authorization,
+    BftFinalityCertificate finality_certificate,
+    IdentityHybridPublicKey sender_device_key,
     const uint256& network_id);
 
-std::vector<unsigned char> SerializeMailEvidenceBundle(const MailEvidenceBundleV1& bundle);
-std::optional<MailEvidenceBundleV1> DeserializeMailEvidenceBundle(std::span<const unsigned char> bytes);
+std::optional<std::vector<unsigned char>> SerializeMailEvidenceBundle(const MailEvidenceBundle& bundle);
+std::optional<MailEvidenceBundle> DeserializeMailEvidenceBundle(std::span<const unsigned char> bytes);
+
+// Transition aliases
+using OperationInclusionProofV1 = OperationInclusionProof;
+using MailEvidenceBundleV1 = MailEvidenceBundle;
 
 } // namespace cybou
 

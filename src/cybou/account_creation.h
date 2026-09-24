@@ -6,94 +6,89 @@
 #define CYBOU_ACCOUNT_CREATION_H
 
 #include <cybou/account_id.h>
-#include <cybou/identity.h>
+#include <cybou/identity_authorization.h>
 #include <cybou/protocol_params.h>
 #include <uint256.h>
 
-#include <cstddef>
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
-#include <vector>
 
 namespace cybou {
 
-inline constexpr uint8_t ACCOUNT_CREATION_WORK_VERSION{1};
-inline constexpr uint8_t ACCOUNT_CREATE_OP_VERSION{1};
-inline constexpr size_t ACCOUNT_CREATION_WORK_SERIALIZED_SIZE{113};
+inline constexpr size_t ACCOUNT_CREATE_WORK_SIZE{113};
+inline constexpr size_t ACCOUNT_CREATE_SIZE{9334};
 
-/**
- * Anti-Sybil Proof-of-Work for permissionless account creation.
- * Binds the account ID and initial authorization to work spent.
- */
-struct AccountCreationWorkV1 {
-    uint8_t version{ACCOUNT_CREATION_WORK_VERSION};
+struct AccountCreationWork {
     uint256 network_id;
     AccountId account_id;
-    uint256 initial_authorization_commitment;
+    std::array<unsigned char, 32> authorization_commitment{};
     uint64_t work_epoch{0};
     uint64_t nonce{0};
-
-    friend bool operator==(const AccountCreationWorkV1&, const AccountCreationWorkV1&) = default;
 };
 
-inline constexpr size_t ACCOUNT_POP_SIGNATURE_SIZE{64};
-
-/**
- * Protocol-native account creation operation.
- */
-struct AccountCreateOpV1 {
-    uint8_t version{ACCOUNT_CREATE_OP_VERSION};
+struct AccountCreateOp {
     AccountId account_id;
-    AccountAuthorizationV1 initial_authorization;
-    AccountCreationWorkV1 creation_work;
-    std::array<unsigned char, ACCOUNT_POP_SIGNATURE_SIZE> proof_of_possession{};
-
-    friend bool operator==(const AccountCreateOpV1&, const AccountCreateOpV1&) = default;
+    IdentityAuthorization authorization;
+    AccountCreationWork work;
+    IdentityHybridSignature recovery_pop;
+    IdentityHybridSignature device_pop;
 };
 
-std::vector<unsigned char> SerializeAccountCreationWork(const AccountCreationWorkV1& work);
-std::optional<AccountCreationWorkV1> DeserializeAccountCreationWork(std::span<const unsigned char> bytes);
-
-uint256 ComputeAccountCreationWorkHash(const AccountCreationWorkV1& work);
-unsigned int CountLeadingZeroBits(const uint256& hash);
-
-/** Check whether work meets difficulty requirement (minimum leading zero bits). */
-bool CheckAccountCreationWork(const AccountCreationWorkV1& work, unsigned int required_leading_zero_bits);
-
-/** Compute domain-separated digest for AccountCreate proof of possession: SHA256("CYBOU/ACCOUNT_POP/V1" || network_id || account_id || pubkey) */
-uint256 ComputeAccountPopDigest(
-    const uint256& network_id,
-    const AccountId& account_id,
-    const uint256& authorization_key);
-
-std::vector<unsigned char> SerializeAccountCreateOp(const AccountCreateOpV1& op);
-std::optional<AccountCreateOpV1> DeserializeAccountCreateOp(std::span<const unsigned char> bytes);
-
-enum class AccountCreateValidationError : uint8_t {
+enum class AccountCreateError : uint8_t {
     NONE,
-    UNSUPPORTED_VERSION,
+    INVALID_FORMAT,
     NULL_ACCOUNT_ID,
-    NULL_NETWORK_ID,
     NETWORK_MISMATCH,
-    AUTH_COMMITMENT_MISMATCH,
     ACCOUNT_ID_MISMATCH,
+    COMMITMENT_MISMATCH,
     FUTURE_WORK_EPOCH,
     EXPIRED_WORK_EPOCH,
     INSUFFICIENT_WORK,
-    INVALID_PROOF_OF_POSSESSION,
+    INVALID_RECOVERY_POP,
+    INVALID_DEVICE_POP,
 };
 
-/**
- * Validate an AccountCreate operation at a given finalized block height.
- * The PoT epoch is derived internally from the height via EpochForHeight();
- * callers must never supply an epoch directly.
- */
-AccountCreateValidationError ValidateAccountCreateOp(
-    const AccountCreateOpV1& op,
-    const uint256& expected_network_id,
-    uint64_t block_height,
-    const CybouProtocolParameters& params);
+std::optional<std::array<unsigned char, ACCOUNT_CREATE_WORK_SIZE>> SerializeAccountCreationWork(
+    const AccountCreationWork& work);
+std::optional<std::array<unsigned char, ACCOUNT_CREATE_SIZE>> SerializeAccountCreateOp(
+    const AccountCreateOp& op);
+std::optional<AccountCreateOp> DeserializeAccountCreateOp(std::span<const unsigned char> bytes);
+std::optional<std::array<unsigned char, 32>> ComputeAccountCreateWorkHash(const AccountCreationWork& work);
+std::optional<std::array<unsigned char, 32>> ComputeAccountCreatePopDigest(
+    const uint256& network_id, const AccountId& account_id,
+    const IdentityAuthorization& authorization);
+AccountCreateError ValidateAccountCreateOp(
+    const AccountCreateOp& op, const uint256& network_id,
+    uint64_t block_height, const CybouProtocolParameters& params);
+
+// Transition aliases
+inline constexpr size_t ACCOUNT_CREATE_V2_WORK_SIZE{ACCOUNT_CREATE_WORK_SIZE};
+inline constexpr size_t ACCOUNT_CREATE_V2_SIZE{ACCOUNT_CREATE_SIZE};
+using AccountCreationWorkV2 = AccountCreationWork;
+using AccountCreateOpV2 = AccountCreateOp;
+using AccountCreateV2Error = AccountCreateError;
+using AccountCreateValidationError = AccountCreateError;
+
+inline std::optional<std::array<unsigned char, ACCOUNT_CREATE_WORK_SIZE>> SerializeAccountCreationWorkV2(
+    const AccountCreationWork& work) { return SerializeAccountCreationWork(work); }
+inline std::optional<std::array<unsigned char, ACCOUNT_CREATE_SIZE>> SerializeAccountCreateOpV2(
+    const AccountCreateOp& op) { return SerializeAccountCreateOp(op); }
+inline std::optional<AccountCreateOp> DeserializeAccountCreateOpV2(std::span<const unsigned char> bytes) {
+    return DeserializeAccountCreateOp(bytes);
+}
+inline std::optional<std::array<unsigned char, 32>> ComputeAccountCreateWorkHashV2(const AccountCreationWork& work) {
+    return ComputeAccountCreateWorkHash(work);
+}
+inline std::optional<std::array<unsigned char, 32>> ComputeAccountCreatePopDigestV2(
+    const uint256& network_id, const AccountId& account_id, const IdentityAuthorization& authorization) {
+    return ComputeAccountCreatePopDigest(network_id, account_id, authorization);
+}
+inline AccountCreateError ValidateAccountCreateOpV2(
+    const AccountCreateOp& op, const uint256& network_id, uint64_t block_height, const CybouProtocolParameters& params) {
+    return ValidateAccountCreateOp(op, network_id, block_height, params);
+}
 
 } // namespace cybou
 

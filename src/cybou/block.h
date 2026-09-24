@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 The CYBOU developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
@@ -16,65 +16,61 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_BLOCK_VERSION{1};
+inline constexpr uint8_t CYBOU_BLOCK_VERSION{2};
 
 /**
  * Canonical CYBOU block format.
  * Cryptographically binds parent, height, operations commitment, and post-execution state root.
  */
-struct CybouBlockV1 {
+struct CybouBlock {
     uint8_t version{CYBOU_BLOCK_VERSION};
     uint256 parent_block_id;
     uint64_t height{0};
-    std::vector<ProtocolOperationV1> operations;
+    std::vector<ProtocolOperation> operations;
     uint256 resulting_state_root;
 
-    friend bool operator==(const CybouBlockV1&, const CybouBlockV1&) = default;
+    friend bool operator==(const CybouBlock&, const CybouBlock&) = default;
 };
 
 /**
  * Canonical block header extracting commitment roots without holding operations payload.
  */
-struct CybouBlockHeaderV1 {
+struct CybouBlockHeader {
     uint8_t version{CYBOU_BLOCK_VERSION};
     uint256 parent_block_id;
     uint64_t height{0};
     uint256 operations_root;
     uint256 resulting_state_root;
 
-    friend bool operator==(const CybouBlockHeaderV1&, const CybouBlockHeaderV1&) = default;
+    friend bool operator==(const CybouBlockHeader&, const CybouBlockHeader&) = default;
 };
 
-/** Compute domain-separated operations commitment root from a sequence of operation hashes: SHA256("CYBOU/OPS_ROOT/V1" || count || hashes) */
 uint256 ComputeOperationsRootFromHashes(std::span<const uint256> hashes);
+uint256 ComputeOperationsRoot(const std::vector<ProtocolOperation>& operations);
+uint256 ComputeBlockHeaderId(const CybouBlockHeader& header);
+uint256 ComputeBlockId(const CybouBlock& block);
+CybouBlockHeader ExtractBlockHeader(const CybouBlock& block);
 
-/** Compute domain-separated operations commitment root: SHA256("CYBOU/OPS_ROOT/V1" || count || hashes) */
-uint256 ComputeOperationsRoot(const std::vector<ProtocolOperationV1>& operations);
-
-/** Compute domain-separated BlockID from header: SHA256("CYBOU/BLOCK/V1" || version || parent || height || ops_root || state_root) */
-uint256 ComputeBlockHeaderId(const CybouBlockHeaderV1& header);
-
-/** Compute domain-separated BlockID: SHA256("CYBOU/BLOCK/V1" || version || parent || height || ops_root || state_root) */
-uint256 ComputeBlockId(const CybouBlockV1& block);
-
-/** Extract header from a full block */
-CybouBlockHeaderV1 ExtractBlockHeader(const CybouBlockV1& block);
-
-std::vector<unsigned char> SerializeBlock(const CybouBlockV1& block);
-std::optional<CybouBlockV1> DeserializeBlock(std::span<const unsigned char> bytes);
+std::optional<std::vector<unsigned char>> SerializeBlock(const CybouBlock& block);
+std::optional<CybouBlock> DeserializeBlock(std::span<const unsigned char> bytes);
 
 /**
- * Finalized CYBOU block containing the canonical block and its BFT 2/3+ finality certificate.
+ * Finalized CYBOU block containing the canonical block and its BFT finality certificate.
  */
-struct FinalizedBlockV1 {
-    CybouBlockV1 block;
-    BftFinalityCertificateV1 certificate;
+struct FinalizedBlock {
+    CybouBlock block;
+    BftFinalityCertificate certificate;
 
-    friend bool operator==(const FinalizedBlockV1&, const FinalizedBlockV1&) = default;
+    friend bool operator==(const FinalizedBlock&, const FinalizedBlock&) = default;
 };
 
-std::vector<unsigned char> SerializeFinalizedBlock(const FinalizedBlockV1& finalized_block);
-std::optional<FinalizedBlockV1> DeserializeFinalizedBlock(std::span<const unsigned char> bytes);
+std::optional<std::vector<unsigned char>> SerializeFinalizedBlock(const FinalizedBlock& finalized_block);
+std::optional<FinalizedBlock> DeserializeFinalizedBlock(std::span<const unsigned char> bytes);
+
+// Transition aliases
+using CybouBlockV1 = CybouBlock;
+using CybouBlockHeaderV1 = CybouBlockHeader;
+using FinalizedBlockV1 = FinalizedBlock;
 
 } // namespace cybou
 

@@ -22,7 +22,7 @@
 namespace cybou {
 
 struct NodeRuntimeConfig {
-    CybouNetworkDefinitionV1 network_definition;
+    CybouNetworkDefinition network_definition;
     std::filesystem::path data_dir;
     std::optional<std::array<unsigned char, 32>> validator_private_key{std::nullopt};
     std::optional<std::pair<std::string, uint16_t>> submit_endpoint{std::nullopt};
@@ -68,7 +68,7 @@ public:
     NodeRuntimeStatus GetStatus() const;
 
     /** Network definition and identifier */
-    const CybouNetworkDefinitionV1& GetNetworkDefinition() const { return m_config.network_definition; }
+    const CybouNetworkDefinition& GetNetworkDefinition() const { return m_config.network_definition; }
     const uint256& GetNetworkId() const { return m_network_id; }
 
     /** Finalized height and head */
@@ -77,22 +77,22 @@ public:
     std::optional<uint256> GetStateRoot() const;
 
     /** Current validator set */
-    std::optional<ValidatorSetV1> GetValidatorSet() const;
+    std::optional<ValidatorSet> GetValidatorSet() const;
 
     /** Account state lookup */
     std::optional<AccountState> GetAccountState(const AccountId& account_id) const;
 
     /** Submit an operation to pending pool (producer) or direct execution */
-    OperationSubmitResult SubmitOperation(ProtocolOperationV1 op);
+    OperationSubmitResult SubmitOperation(ProtocolOperation op);
 
     /** Produce a block if running in authority mode */
-    std::optional<FinalizedBlockV1> ProduceBlock(bool sync = true);
+    std::optional<FinalizedBlock> ProduceBlock(bool sync = true);
 
     /** Commit a finalized block */
-    BlockTransitionResult CommitBlock(const FinalizedBlockV1& block, bool sync = true);
+    BlockTransitionResult CommitBlock(const FinalizedBlock& block, bool sync = true);
 
     /** Block lookup by height */
-    std::optional<FinalizedBlockV1> GetBlockAtHeight(uint64_t height) const;
+    std::optional<FinalizedBlock> GetBlockAtHeight(uint64_t height) const;
 
     /** Sync up to max_blocks from a remote peer block feed */
     SyncPeerResult SyncFromPeer(const std::string& host, uint16_t port, uint64_t max_blocks = 100);

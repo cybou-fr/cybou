@@ -119,7 +119,7 @@ BftValidatorNode::BftValidatorNode(
     size_t node_index,
     std::array<unsigned char, 32> private_key_seed,
     uint256 network_id,
-    ValidatorSetV1 validator_set,
+    ValidatorSet validator_set,
     ExecuteOperations execute_operations)
     : m_node_index{node_index},
       m_private_key_seed{private_key_seed},
@@ -128,9 +128,9 @@ BftValidatorNode::BftValidatorNode(
       m_validator_set_commitment{ComputeValidatorSetCommitment(m_validator_set)},
       m_execute_operations{std::move(execute_operations)}
 {
-    const auto pub = DeriveEd25519PublicKey(m_private_key_seed);
-    if (pub && node_index < m_validator_set.validators.size() &&
-        m_validator_set.validators[node_index].consensus_public_key == *pub) {
+    const auto keypair = GenerateValidatorKeyPair(m_private_key_seed);
+    if (keypair && node_index < m_validator_set.validators.size() &&
+        m_validator_set.validators[node_index].consensus_public_key == keypair->public_key) {
         m_validator_id = m_validator_set.validators[node_index].validator_id;
     }
 }
@@ -140,15 +140,15 @@ BftValidatorNode::~BftValidatorNode()
     memory_cleanse(m_private_key_seed.data(), m_private_key_seed.size());
 }
 
-void BftValidatorNode::SetHeight(uint64_t height, const uint256& last_block_id, ValidatorSetV1 validator_set)
+void BftValidatorNode::SetHeight(uint64_t height, const uint256& last_block_id, ValidatorSet validator_set)
 {
     m_validator_set = std::move(validator_set);
     m_validator_set_commitment = ComputeValidatorSetCommitment(m_validator_set);
-    const auto pub = DeriveEd25519PublicKey(m_private_key_seed);
+    const auto keypair = GenerateValidatorKeyPair(m_private_key_seed);
     m_validator_id = uint256{};
-    if (pub) {
+    if (keypair) {
         for (size_t i = 0; i < m_validator_set.validators.size(); ++i) {
-            if (m_validator_set.validators[i].consensus_public_key == *pub) {
+            if (m_validator_set.validators[i].consensus_public_key == keypair->public_key) {
                 m_node_index = i;
                 m_validator_id = m_validator_set.validators[i].validator_id;
                 break;
@@ -172,7 +172,7 @@ void BftValidatorNode::SetHeight(uint64_t height, const uint256& last_block_id, 
 
 std::optional<BftProposalMsg> BftValidatorNode::StartRound(
     uint32_t round,
-    const std::vector<ProtocolOperationV1>& pending_ops)
+    const std::vector<ProtocolOperation>& pending_ops)
 {
     m_round = round;
     m_step = BftStep::PROPOSE;
@@ -190,13 +190,13 @@ std::optional<BftProposalMsg> BftValidatorNode::StartRound(
     if (m_validator_id.IsNull()) return std::nullopt;
     if (!m_execute_operations) return std::nullopt;
 
-    CybouBlockV1 block;
+    CybouBlock block;
     if (m_locked_block.has_value()) {
         block = *m_locked_block;
     } else {
         const auto state_root = m_execute_operations(pending_ops, m_height);
         if (!state_root) return std::nullopt;
-        block = CybouBlockV1{
+        block = CybouBlock{
             .version = CYBOU_BLOCK_VERSION,
             .parent_block_id = m_last_block_id,
             .height = m_height,
@@ -387,10 +387,10 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
 
     if (m_step == BftStep::FINALIZED) return true;
 
-    std::map<uint256, std::vector<BftCommitVoteV1>> commit_votes_by_block;
+    std::map<uint256, std::vector<BftCommitVote>> commit_votes_by_block;
     for (const auto& [vid, pc] : m_precommits) {
         if (pc.block_id.has_value()) {
-            commit_votes_by_block[*pc.block_id].push_back(BftCommitVoteV1{
+            commit_votes_by_block[*pc.block_id].push_back(BftCommitVote{
                 .validator_id = vid,
                 .signature = pc.signature,
             });
@@ -401,7 +401,7 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
     for (auto& [blk_id, votes] : commit_votes_by_block) {
         if (votes.size() >= quorum && m_current_proposal_valid && m_current_proposal.has_value() &&
             ComputeBlockId(m_current_proposal->block) == blk_id) {
-            BftFinalityCertificateV1 cert{
+            BftFinalityCertificate cert{
                 .version = BFT_FINALITY_CERTIFICATE_VERSION,
                 .network_id = m_network_id,
                 .block_id = blk_id,
@@ -412,7 +412,7 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
             };
 
             if (VerifyFinalityCertificate(cert, m_validator_set, m_network_id) == FinalityVerificationError::NONE) {
-                m_finalized_block = FinalizedBlockV1{
+                m_finalized_block = FinalizedBlock{
                     .block = m_current_proposal->block,
                     .certificate = std::move(cert),
                 };
@@ -486,10 +486,10 @@ BftSimulator::BftSimulator(const uint256& network_id, size_t validator_count)
         std::copy_n(seed_hash.begin(), 32, seed.begin());
         seeds.push_back(seed);
 
-        const auto pub = DeriveEd25519PublicKey(seed);
-        m_validator_set.validators[i] = ValidatorV1{
-            .validator_id = *pub,
-            .consensus_public_key = *pub,
+        const auto keypair = GenerateValidatorKeyPair(seed);
+        m_validator_set.validators[i] = Validator{
+            .validator_id = ComputeValidatorId(keypair->public_key),
+            .consensus_public_key = keypair->public_key,
             .weight = 1,
         };
     }
@@ -497,7 +497,7 @@ BftSimulator::BftSimulator(const uint256& network_id, size_t validator_count)
     for (size_t i = 0; i < validator_count; ++i) {
         m_nodes.push_back(std::make_unique<BftValidatorNode>(
             i, seeds[i], m_network_id, m_validator_set,
-            [this](const std::vector<ProtocolOperationV1>& ops, uint64_t) -> std::optional<uint256> {
+            [this](const std::vector<ProtocolOperation>& ops, uint64_t) -> std::optional<uint256> {
                 if (!ops.empty()) return std::nullopt;
                 return m_expected_state_root;
             }));
@@ -546,7 +546,7 @@ void BftSimulator::ClearPartition()
 bool BftSimulator::StepRound(
     uint64_t height,
     uint32_t round,
-    const std::vector<ProtocolOperationV1>& ops,
+    const std::vector<ProtocolOperation>& ops,
     const uint256& resulting_state_root)
 {
     const size_t n = m_nodes.size();

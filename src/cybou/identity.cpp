@@ -4,8 +4,6 @@
 
 #include <cybou/identity.h>
 
-#include <crypto/sha256.h>
-
 #include <cassert>
 
 namespace cybou {
@@ -24,33 +22,6 @@ std::string_view KeyDomainTag(const OperatorKeyDomain domain)
     }
     assert(false);
     return {};
-}
-
-std::vector<unsigned char> SerializeAccountAuthorization(const AccountAuthorizationV1& auth)
-{
-    std::vector<unsigned char> out;
-    out.reserve(uint256::size());
-    out.insert(out.end(), auth.authorization_descriptor.begin(), auth.authorization_descriptor.end());
-    return out;
-}
-
-std::optional<AccountAuthorizationV1> DeserializeAccountAuthorization(const std::span<const unsigned char> bytes)
-{
-    if (bytes.size() != uint256::size()) return std::nullopt;
-    uint256 desc;
-    std::copy_n(bytes.begin(), uint256::size(), desc.begin());
-    return AccountAuthorizationV1{.authorization_descriptor = desc};
-}
-
-uint256 ComputeAuthCommitment(const AccountAuthorizationV1& auth)
-{
-    static constexpr std::string_view DOMAIN{"CYBOU/AUTH-COMMITMENT/V1"};
-    CSHA256 hasher;
-    hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
-    hasher.Write(auth.authorization_descriptor.begin(), uint256::size());
-    uint256 result;
-    hasher.Finalize(result.begin());
-    return result;
 }
 
 } // namespace cybou

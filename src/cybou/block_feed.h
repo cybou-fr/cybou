@@ -30,13 +30,13 @@ enum class FetchBlockStatus : uint8_t {
 
 struct FetchBlockResult {
     FetchBlockStatus status{FetchBlockStatus::CONNECTION_FAILED};
-    std::optional<FinalizedBlockV1> block{std::nullopt};
+    std::optional<FinalizedBlock> block{std::nullopt};
 
     explicit operator bool() const { return status == FetchBlockStatus::OK && block.has_value(); }
     bool has_value() const { return block.has_value(); }
-    const FinalizedBlockV1* operator->() const { return &*block; }
-    const FinalizedBlockV1& operator*() const { return *block; }
-    const FinalizedBlockV1& value() const { return block.value(); }
+    const FinalizedBlock* operator->() const { return &*block; }
+    const FinalizedBlock& operator*() const { return *block; }
+    const FinalizedBlock& value() const { return block.value(); }
 };
 
 enum class SyncPeerStatus : uint8_t {
@@ -69,7 +69,7 @@ FetchBlockResult FetchFinalizedBlock(
 
 /** Submit a protocol operation to a remote peer (authority / validator). Returns structured result. */
 OperationSubmitResult SubmitOperationRemote(
-    const std::string& host, uint16_t port, const uint256& network_id, const ProtocolOperationV1& op);
+    const std::string& host, uint16_t port, const uint256& network_id, const ProtocolOperation& op);
 
 /** Fetch and atomically verify the next block against this observer's canonical state. */
 bool SyncNextFinalizedBlock(

@@ -7,6 +7,7 @@
 
 #include <cybou/bft.h>
 #include <cybou/block.h>
+#include <cybou/block_executor.h>
 #include <cybou/mail_filter.h>
 #include <cybou/network_definition.h>
 #include <cybou/protocol_operation.h>
@@ -24,16 +25,16 @@ class CDBWrapper;
 
 namespace cybou {
 
-struct FinalizedHeadV1 {
+struct FinalizedHead {
     uint256 block_id;
     uint64_t height{0};
 
-    SERIALIZE_METHODS(FinalizedHeadV1, obj)
+    SERIALIZE_METHODS(FinalizedHead, obj)
     {
         READWRITE(obj.block_id, obj.height);
     }
 
-    friend bool operator==(const FinalizedHeadV1&, const FinalizedHeadV1&) = default;
+    friend bool operator==(const FinalizedHead&, const FinalizedHead&) = default;
 };
 
 enum class StateLoadError : uint8_t {
@@ -87,7 +88,7 @@ enum class BlockTransitionError : uint8_t {
 
 struct BlockTransitionResult {
     BlockTransitionError error{BlockTransitionError::NONE};
-    OperationExecutionResult op_result{};
+    BlockExecutionResult op_result{};
     FinalityVerificationError cert_error{FinalityVerificationError::NONE};
 
     explicit operator bool() const { return error == BlockTransitionError::NONE; }
@@ -107,13 +108,13 @@ class CybouStateStore
 public:
     CybouStateStore(
         CDBWrapper& db,
-        CybouNetworkDefinitionV1 network_definition,
+        CybouNetworkDefinition network_definition,
         std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier = nullptr);
 
     const std::optional<OperatorAuthorityKeySet>& GetOperatorAuthority() const { return m_network_definition.operator_authority; }
 
     /** Retrieve canonical active validator set from persisted state. */
-    std::optional<ValidatorSetV1> GetValidatorSet() const;
+    std::optional<ValidatorSet> GetValidatorSet() const;
 
     /** Persist genesis state at height 0. Fails if already initialized. */
     GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true);
@@ -125,7 +126,7 @@ public:
     std::optional<uint256> GetStateRoot() const;
 
     /** Canonical finalized head (block id and height). */
-    std::optional<FinalizedHeadV1> GetFinalizedHead() const;
+    std::optional<FinalizedHead> GetFinalizedHead() const;
 
     /** Last finalized block id (genesis block id before any committed child). */
     std::optional<uint256> GetFinalizedTip() const;
@@ -135,7 +136,7 @@ public:
 
     /** Compute a proposal root from the canonical parent state without committing it. */
     std::optional<uint256> ComputeCandidateStateRoot(
-        const std::vector<ProtocolOperationV1>& operations,
+        const std::vector<ProtocolOperation>& operations,
         uint64_t height) const;
 
     /** Network identity derived from the immutable canonical definition. */
@@ -154,26 +155,29 @@ public:
      * - atomically writes new state, hash, head, and finalized block in one batch.
      */
     BlockTransitionResult CommitFinalizedBlock(
-        const FinalizedBlockV1& finalized_block,
-        const std::optional<ValidatorSetV1>& validator_set = std::nullopt,
+        const FinalizedBlock& finalized_block,
+        const std::optional<ValidatorSet>& validator_set = std::nullopt,
         bool sync = true);
 
     /** Retrieve a persisted finalized block by its block ID. */
-    std::optional<FinalizedBlockV1> GetBlock(const uint256& block_id) const;
+    std::optional<FinalizedBlock> GetBlock(const uint256& block_id) const;
 
     /** Retrieve a finalized non-genesis block by canonical height. */
-    std::optional<FinalizedBlockV1> GetBlockAtHeight(uint64_t height) const;
+    std::optional<FinalizedBlock> GetBlockAtHeight(uint64_t height) const;
 
     /** Retrieve a persisted compact mail discovery filter by block ID. */
-    std::optional<CybouMailDiscoveryFilterV1> GetBlockMailFilter(const uint256& block_id) const;
+    std::optional<CybouMailDiscoveryFilter> GetBlockMailFilter(const uint256& block_id) const;
 
 private:
     CDBWrapper& m_db;
-    const CybouNetworkDefinitionV1 m_network_definition;
+    const CybouNetworkDefinition m_network_definition;
     const NetworkDefinitionError m_network_definition_error;
     const uint256 m_network_id;
     std::shared_ptr<OperatorAuthoritySignatureVerifier> m_operator_verifier;
 };
+
+// Transition aliases
+using FinalizedHeadV1 = FinalizedHead;
 
 } // namespace cybou
 

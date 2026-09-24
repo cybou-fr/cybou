@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 The CYBOU developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
@@ -17,10 +17,10 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_NETWORK_DEFINITION_VERSION{1};
+inline constexpr uint8_t CYBOU_NETWORK_DEFINITION_VERSION{2};
 
 /** Immutable consensus identity for one DEV, Beta, or Mainnet network. */
-struct CybouNetworkDefinitionV1 {
+struct CybouNetworkDefinition {
     uint8_t protocol_version{CYBOU_NETWORK_DEFINITION_VERSION};
     uint256 genesis_block_id;
     uint256 genesis_state_root;
@@ -28,7 +28,7 @@ struct CybouNetworkDefinitionV1 {
     uint256 initial_validator_set_commitment;
     std::optional<OperatorAuthorityKeySet> operator_authority;
 
-    friend bool operator==(const CybouNetworkDefinitionV1&, const CybouNetworkDefinitionV1&) = default;
+    friend bool operator==(const CybouNetworkDefinition&, const CybouNetworkDefinition&) = default;
 };
 
 enum class NetworkDefinitionError : uint8_t {
@@ -45,15 +45,20 @@ enum class NetworkDefinitionError : uint8_t {
     INVALID_OPERATOR_AUTHORITY_EPOCH,
 };
 
-NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinitionV1& definition);
-std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefinitionV1& definition);
-std::optional<CybouNetworkDefinitionV1> DeserializeNetworkDefinition(std::span<const unsigned char> bytes);
-uint256 NetworkId(const CybouNetworkDefinitionV1& definition);
+NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& definition);
+std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefinition& definition);
+std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(std::span<const unsigned char> bytes);
+uint256 NetworkId(const CybouNetworkDefinition& definition);
 
 uint256 ComputeGenesisBlockId(const uint256& state_root, const uint256& validator_set_commitment);
 
-CybouState CreateDevGenesisState(const uint256& validator_public_key);
-CybouNetworkDefinitionV1 CreateDevNetworkDefinition(const CybouState& genesis);
+IdentityHybridPublicKey CreateDevValidatorKey(const uint256& seed);
+CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public_key);
+CybouState CreateDevGenesisState(const uint256& validator_seed_or_key);
+CybouNetworkDefinition CreateDevNetworkDefinition(const CybouState& genesis);
+
+// Transition aliases
+using CybouNetworkDefinitionV1 = CybouNetworkDefinition;
 
 } // namespace cybou
 

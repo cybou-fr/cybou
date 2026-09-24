@@ -4,347 +4,395 @@
 
 #include <cybou/state.h>
 
-#include <crypto/sha256.h>
+#include <openssl/evp.h>
 
 #include <algorithm>
 #include <limits>
+#include <memory>
+#include <set>
 #include <string_view>
 
 namespace cybou {
+namespace {
+constexpr size_t ACCOUNT_SIZE{32 + 8 * 5 + 4};
 
-std::vector<unsigned char> SerializeCybouState(const CybouState& state)
+void Write32(std::vector<unsigned char>& out, uint32_t value)
 {
-    std::vector<unsigned char> out;
-    const auto append_u32le = [&out](const uint32_t value) {
-        for (unsigned i = 0; i < 4; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
-    };
-    const auto append_u64le = [&out](const uint64_t value) {
-        for (unsigned i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
-    };
-    const auto append_hash = [&out](const uint256& value) {
-        out.insert(out.end(), value.begin(), value.end());
-    };
-
-    out.push_back(CYBOU_STATE_VERSION);
-    append_u64le(state.onboarding_pool);
-    append_u64le(state.security_reward_pool);
-    append_u64le(state.pending_fee_pool);
-    append_u32le(static_cast<uint32_t>(state.accounts.size()));
-    for (const auto& [account_id, acc] : state.accounts) {
-        append_hash(account_id.Value());
-        append_u64le(acc.balance);
-        append_u64le(acc.system_balance);
-        append_u64le(acc.creation_height);
-        append_u64le(acc.creation_epoch);
-        append_hash(acc.active_authorization_key);
-        append_u64le(acc.next_nonce);
-        append_u64le(acc.last_mail_epoch);
-        append_u32le(acc.mail_count_in_epoch);
-    }
-    const auto val_bytes{SerializeValidatorSet(state.validator_set)};
-    out.insert(out.end(), val_bytes.begin(), val_bytes.end());
-    return out;
+    for (unsigned i{0}; i < 4; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
 }
 
-std::optional<CybouState> DeserializeCybouState(const std::span<const unsigned char> bytes)
+void Write64(std::vector<unsigned char>& out, uint64_t value)
 {
-    size_t offset{0};
-    const auto read_u8 = [&]() -> std::optional<uint8_t> {
-        if (offset == bytes.size()) return std::nullopt;
-        return bytes[offset++];
-    };
-    const auto read_u32le = [&]() -> std::optional<uint32_t> {
-        if (bytes.size() - offset < 4) return std::nullopt;
-        uint32_t value{0};
-        for (unsigned i = 0; i < 4; ++i) value |= uint32_t{bytes[offset++]} << (8 * i);
-        return value;
-    };
-    const auto read_u64le = [&]() -> std::optional<uint64_t> {
-        if (bytes.size() - offset < 8) return std::nullopt;
-        uint64_t value{0};
-        for (unsigned i = 0; i < 8; ++i) value |= uint64_t{bytes[offset++]} << (8 * i);
-        return value;
-    };
-    const auto read_hash = [&]() -> std::optional<uint256> {
-        if (bytes.size() - offset < uint256::size()) return std::nullopt;
-        uint256 value;
-        std::copy_n(bytes.begin() + offset, uint256::size(), value.begin());
-        offset += uint256::size();
-        return value;
-    };
-
-    const auto version{read_u8()};
-    const auto onboarding_pool{read_u64le()};
-    const auto security_pool{read_u64le()};
-    const auto pending_pool{read_u64le()};
-    const auto account_count{read_u32le()};
-    if (!version || *version != CYBOU_STATE_VERSION || !onboarding_pool || !security_pool || !pending_pool ||
-        !account_count || *account_count > MAX_SERIALIZED_ACCOUNTS) {
-        return std::nullopt;
-    }
-
-    CybouState state{
-        .onboarding_pool = *onboarding_pool,
-        .security_reward_pool = *security_pool,
-        .pending_fee_pool = *pending_pool,
-        .accounts{},
-        .validator_set{},
-    };
-    for (uint32_t i = 0; i < *account_count; ++i) {
-        const auto account_id_bytes{read_hash()};
-        const auto balance{read_u64le()};
-        const auto system_balance{read_u64le()};
-        const auto creation_height{read_u64le()};
-        const auto creation_epoch{read_u64le()};
-        const auto auth_key{read_hash()};
-        const auto next_nonce{read_u64le()};
-        const auto last_mail_epoch{read_u64le()};
-        const auto mail_count_in_epoch{read_u32le()};
-        if (!account_id_bytes || !balance || !system_balance || !creation_height || !creation_epoch ||
-            !auth_key || !next_nonce || !last_mail_epoch || !mail_count_in_epoch) {
-            return std::nullopt;
-        }
-        const AccountId account_id{*account_id_bytes};
-        if (account_id.IsNull()) return std::nullopt;
-        AccountState acc{
-            .balance = *balance,
-            .system_balance = *system_balance,
-            .creation_height = *creation_height,
-            .creation_epoch = *creation_epoch,
-            .active_authorization_key = *auth_key,
-            .next_nonce = *next_nonce,
-            .last_mail_epoch = *last_mail_epoch,
-            .mail_count_in_epoch = *mail_count_in_epoch,
-        };
-        if (!state.accounts.emplace(account_id, std::move(acc)).second) return std::nullopt;
-    }
-    const auto val_set{DeserializeValidatorSet(bytes.subspan(offset))};
-    if (!val_set) return std::nullopt;
-    state.validator_set = *val_set;
-    return state;
+    for (unsigned i{0}; i < 8; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
 }
 
-uint256 CybouStateHash(const CybouState& state)
+class Reader
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/STATE/V1"};
-    const auto bytes{SerializeCybouState(state)};
-    uint256 result;
-    CSHA256 hasher;
-    hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
-    hasher.Write(bytes.data(), bytes.size());
-    hasher.Finalize(result.begin());
-    return result;
-}
+public:
+    explicit Reader(std::span<const unsigned char> bytes) : m_bytes{bytes} {}
 
-AccountCreateResult ApplyAccountCreate(
-    const AccountCreateOpV1& op,
-    const uint256& network_id,
-    const uint64_t block_height,
-    const CybouProtocolParameters& params,
-    CybouState& state)
-{
-    const auto validation_error{ValidateAccountCreateOp(op, network_id, block_height, params)};
-    if (validation_error != AccountCreateValidationError::NONE) {
-        return {AccountCreateError::INVALID_OP, validation_error};
-    }
-    if (state.accounts.contains(op.account_id)) {
-        return {AccountCreateError::ACCOUNT_ALREADY_EXISTS};
-    }
-    if (params.onboarding_bonus > 0 && state.onboarding_pool < params.onboarding_bonus) {
-        return {AccountCreateError::INSUFFICIENT_ONBOARDING_POOL};
+    std::optional<uint8_t> U8()
+    {
+        if (!Remaining()) return std::nullopt;
+        return m_bytes[m_offset++];
     }
 
-    if (params.onboarding_bonus > 0) {
-        state.onboarding_pool -= params.onboarding_bonus;
+    std::optional<uint32_t> U32()
+    {
+        if (Remaining() < 4) return std::nullopt;
+        uint32_t result{0};
+        for (unsigned i{0}; i < 4; ++i) result |= uint32_t{m_bytes[m_offset++]} << (8 * i);
+        return result;
     }
-    AccountState acc{
+
+    std::optional<uint64_t> U64()
+    {
+        if (Remaining() < 8) return std::nullopt;
+        uint64_t result{0};
+        for (unsigned i{0}; i < 8; ++i) result |= uint64_t{m_bytes[m_offset++]} << (8 * i);
+        return result;
+    }
+
+    std::optional<std::span<const unsigned char>> Bytes(size_t size)
+    {
+        if (size > Remaining()) return std::nullopt;
+        const auto result = m_bytes.subspan(m_offset, size);
+        m_offset += size;
+        return result;
+    }
+
+    size_t Remaining() const { return m_bytes.size() - m_offset; }
+
+private:
+    std::span<const unsigned char> m_bytes;
+    size_t m_offset{0};
+};
+} // namespace
+
+AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params, CybouState& state)
+{
+    if (state.accounts.size() != state.identities.Accounts().size()) return AccountCreateStateError::INCONSISTENT_STATE;
+    for (const auto& [id, account] : state.accounts) {
+        if (!state.identities.Find(id)) return AccountCreateStateError::INCONSISTENT_STATE;
+    }
+    if (state.accounts.size() >= MAX_IDENTITY_REGISTRY_ACCOUNTS) return AccountCreateStateError::ACCOUNT_LIMIT;
+    if (state.accounts.contains(op.account_id)) return AccountCreateStateError::ACCOUNT_EXISTS;
+    if (state.onboarding_pool < params.onboarding_bonus) return AccountCreateStateError::INSUFFICIENT_ONBOARDING_POOL;
+    const auto identity_result = state.identities.Register(op, network_id, block_height, params);
+    switch (identity_result) {
+    case IdentityRegistryError::NONE: break;
+    case IdentityRegistryError::ACCOUNT_EXISTS: return AccountCreateStateError::ACCOUNT_EXISTS;
+    case IdentityRegistryError::RECOVERY_KEY_EXISTS: return AccountCreateStateError::RECOVERY_KEY_EXISTS;
+    default: return AccountCreateStateError::INVALID_CREATE;
+    }
+    state.onboarding_pool -= params.onboarding_bonus;
+    state.accounts.emplace(op.account_id, AccountState{
         .balance = 0,
         .system_balance = params.onboarding_bonus,
         .creation_height = block_height,
         .creation_epoch = EpochForHeight(block_height, params),
-        .active_authorization_key = op.initial_authorization.authorization_descriptor,
-        .next_nonce = 0,
+    });
+    return AccountCreateStateError::NONE;
+}
+
+NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params, CybouState& state)
+{
+    const auto validation = ValidateAuthorizedNameCommit(op, network_id, block_height, params);
+    if (validation != NameCommitError::NONE) return validation;
+
+    const auto account_id = op.authorization.account_id;
+    auto account_it = state.accounts.find(account_id);
+    if (account_it == state.accounts.end()) return NameCommitError::ACCOUNT_NOT_FOUND;
+
+    if (!state.identities.Find(account_id)) return NameCommitError::INCONSISTENT_STATE;
+    if (state.names.account_names.contains(account_id)) return NameCommitError::ACCOUNT_HAS_NAME;
+    if (state.names.pending_commits.size() >= params.max_pending_name_commits) return NameCommitError::COMMIT_LIMIT_REACHED;
+    if (state.names.pending_commits.contains(op.commitment)) return NameCommitError::COMMITMENT_EXISTS;
+
+    for (const auto& [existing_commitment, existing_record] : state.names.pending_commits) {
+        if (existing_record.account_id == account_id) {
+            return NameCommitError::ACCOUNT_HAS_PENDING_COMMIT;
+        }
+    }
+
+    if (account_it->second.system_balance < params.name_registration_fee) {
+        return NameCommitError::INSUFFICIENT_SYSTEM_BALANCE;
+    }
+    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - params.name_registration_fee) {
+        return NameCommitError::FEE_POOL_OVERFLOW;
+    }
+
+    const auto auth_err = state.identities.AuthorizeDeviceOperation(op.authorization, network_id);
+    if (auth_err != IdentityRegistryError::NONE) return NameCommitError::INVALID_AUTHORIZATION;
+
+    account_it->second.system_balance -= params.name_registration_fee;
+    state.pending_fee_pool += params.name_registration_fee;
+
+    PendingNameCommitRecord record{
+        .account_id = account_id,
+        .device_id = op.authorization.device_id,
+        .commit_height = block_height,
     };
-    state.accounts.emplace(op.account_id, std::move(acc));
-    return {};
+    state.names.pending_commits.emplace(op.commitment, std::move(record));
+
+    return NameCommitError::NONE;
 }
 
-PaymentResult ApplyPayment(
-    const AccountId& sender_id,
-    const AccountId& recipient_id,
-    const uint64_t amount,
-    const uint64_t fee,
-    CybouState& state)
+NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params, CybouState& state)
 {
-    if (amount == 0) {
-        return {PaymentError::ZERO_AMOUNT};
+    const auto validation = ValidateAuthorizedNameReveal(op, network_id, block_height, params);
+    if (validation != NameRevealError::NONE) return validation;
+
+    const auto account_id = op.authorization.account_id;
+    auto account_it = state.accounts.find(account_id);
+    if (account_it == state.accounts.end()) return NameRevealError::ACCOUNT_NOT_FOUND;
+
+    if (!state.identities.Find(account_id)) return NameRevealError::INCONSISTENT_STATE;
+    if (state.names.account_names.contains(account_id)) return NameRevealError::ACCOUNT_HAS_NAME;
+    if (state.names.names.contains(op.reveal.label)) return NameRevealError::LABEL_ALREADY_EXISTS;
+
+    const auto expected_commitment = ComputeNameCommitment(
+        network_id, account_id, op.reveal.label, op.reveal.salt);
+    if (!expected_commitment) return NameRevealError::COMMITMENT_NOT_FOUND;
+
+    auto commit_it = state.names.pending_commits.find(*expected_commitment);
+    if (commit_it == state.names.pending_commits.end()) return NameRevealError::COMMITMENT_NOT_FOUND;
+
+    const auto& pending = commit_it->second;
+    if (pending.account_id != account_id) return NameRevealError::COMMITMENT_ACCOUNT_MISMATCH;
+    if (pending.device_id != op.authorization.device_id) return NameRevealError::COMMITMENT_DEVICE_MISMATCH;
+
+    if (block_height < pending.commit_height + params.name_commit_min_age) {
+        return NameRevealError::COMMITMENT_TOO_RECENT;
     }
-    if (recipient_id.IsNull() || sender_id == recipient_id) {
-        return {PaymentError::SELF_PAYMENT};
-    }
-    auto sender_it{state.accounts.find(sender_id)};
-    if (sender_it == state.accounts.end()) {
-        return {PaymentError::SENDER_NOT_FOUND};
-    }
-    auto recipient_it{state.accounts.find(recipient_id)};
-    if (recipient_it == state.accounts.end()) {
-        return {PaymentError::RECIPIENT_NOT_FOUND};
+    if (block_height > pending.commit_height + params.name_commit_max_lifetime) {
+        return NameRevealError::COMMITMENT_EXPIRED;
     }
 
-    if (sender_it->second.balance < amount) {
-        return {PaymentError::INSUFFICIENT_BALANCE};
-    }
-    if (sender_it->second.system_balance < fee) {
-        return {PaymentError::INSUFFICIENT_SYSTEM_BALANCE};
-    }
+    const auto auth_err = state.identities.AuthorizeDeviceOperation(op.authorization, network_id);
+    if (auth_err != IdentityRegistryError::NONE) return NameRevealError::INVALID_AUTHORIZATION;
 
-    if (recipient_it->second.balance > std::numeric_limits<uint64_t>::max() - amount) {
-        return {PaymentError::RECIPIENT_OVERFLOW};
-    }
+    state.names.pending_commits.erase(commit_it);
+    state.names.names.emplace(op.reveal.label, account_id);
+    state.names.account_names.emplace(account_id, op.reveal.label);
 
-    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - fee) {
-        return {PaymentError::FEE_POOL_OVERFLOW};
-    }
-
-    sender_it->second.balance -= amount;
-    sender_it->second.system_balance -= fee;
-    recipient_it->second.balance += amount;
-    state.pending_fee_pool += fee;
-    sender_it->second.next_nonce++;
-    return {};
+    return NameRevealError::NONE;
 }
 
-KeyUpdateResult ApplyKeyUpdate(
-    const AccountId& account_id,
-    const uint256& new_authorization_key,
-    CybouState& state)
+MailError ApplyMail(const AuthorizedMail& op,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params, CybouState& state)
 {
-    if (new_authorization_key.IsNull()) {
-        return {KeyUpdateError::NULL_KEY};
-    }
-    auto it{state.accounts.find(account_id)};
-    if (it == state.accounts.end()) {
-        return {KeyUpdateError::ACCOUNT_NOT_FOUND};
-    }
-    it->second.active_authorization_key = new_authorization_key;
-    it->second.next_nonce++;
-    return {};
-}
+    const auto validation = ValidateAuthorizedMail(op, network_id, block_height, params);
+    if (validation != MailError::NONE) return validation;
 
-SystemLockResult ApplySystemLock(
-    const AccountId& account_id,
-    const uint64_t amount,
-    CybouState& state)
-{
-    if (amount == 0) {
-        return {SystemLockError::ZERO_AMOUNT};
-    }
-    auto it{state.accounts.find(account_id)};
-    if (it == state.accounts.end()) {
-        return {SystemLockError::ACCOUNT_NOT_FOUND};
-    }
-    if (it->second.balance < amount) {
-        return {SystemLockError::INSUFFICIENT_BALANCE};
-    }
-    if (it->second.system_balance > std::numeric_limits<uint64_t>::max() - amount) {
-        return {SystemLockError::SYSTEM_BALANCE_OVERFLOW};
-    }
-    it->second.balance -= amount;
-    it->second.system_balance += amount;
-    it->second.next_nonce++;
-    return {};
-}
+    const auto sender_id = op.authorization.account_id;
+    auto sender_it = state.accounts.find(sender_id);
+    if (sender_it == state.accounts.end()) return MailError::SENDER_NOT_FOUND;
 
-uint64_t ComputeProofOfTrustScore(const AccountState& account, uint64_t current_epoch)
-{
-    // Hard rules in AGENTS.md:
-    // - integer arithmetic only
-    // - System Balance does not buy mail quota in the Beta policy
-    // - block-height-derived deterministic epoch
-    static constexpr uint64_t BASE_SCORE{100};
-    static constexpr uint64_t MAX_AGE_CONTRIBUTION{100};
+    auto recipient_it = state.accounts.find(op.recipient);
+    if (recipient_it == state.accounts.end()) return MailError::RECIPIENT_NOT_FOUND;
 
-    // Account age contribution: 5 points per epoch, capped at 100
-    const uint64_t age_epochs = (current_epoch >= account.creation_epoch) ? (current_epoch - account.creation_epoch) : 0;
-    const uint64_t age_contribution = std::min<uint64_t>(age_epochs, MAX_AGE_CONTRIBUTION / 5) * 5;
-
-    return BASE_SCORE + age_contribution;
-}
-
-uint32_t CalculateMailRateLimit(const CybouProtocolParameters& params)
-{
-    // Beta uses one network-bound quota. Age and spendable balance cannot
-    // silently change the consensus mail limit.
-    return params.new_account_mail_limit_per_epoch;
-}
-
-MailResult ApplyMail(
-    const AccountId& sender_id,
-    const AccountId& recipient_id,
-    const uint64_t fee,
-    const uint64_t block_height,
-    const CybouProtocolParameters& params,
-    CybouState& state)
-{
-    if (recipient_id.IsNull() || sender_id == recipient_id) {
-        return {MailError::SELF_MAIL};
-    }
-    auto sender_it{state.accounts.find(sender_id)};
-    if (sender_it == state.accounts.end()) {
-        return {MailError::SENDER_NOT_FOUND};
-    }
-    auto recipient_it{state.accounts.find(recipient_id)};
-    if (recipient_it == state.accounts.end()) {
-        return {MailError::RECIPIENT_NOT_FOUND};
-    }
-    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - fee) {
-        return {MailError::FEE_POOL_OVERFLOW};
+    if (!state.identities.Find(sender_id) || !state.identities.Find(op.recipient)) {
+        return MailError::INCONSISTENT_STATE;
     }
 
-    auto& sender = sender_it->second;
-    if (sender.system_balance < fee) {
-        return {MailError::INSUFFICIENT_SYSTEM_BALANCE};
-    }
-
-    // Rate-limiting check based on PoT epoch
     const uint64_t current_epoch = EpochForHeight(block_height, params);
-    if (current_epoch > sender.last_mail_epoch) {
-        sender.last_mail_epoch = current_epoch;
-        sender.mail_count_in_epoch = 0;
+    uint32_t current_epoch_count = 0;
+    if (sender_it->second.last_mail_epoch == current_epoch) {
+        current_epoch_count = sender_it->second.mail_count_in_epoch;
     }
 
-    const uint32_t mail_limit = CalculateMailRateLimit(params);
-
-    if (sender.mail_count_in_epoch >= mail_limit) {
-        return {MailError::RATE_LIMIT_EXCEEDED};
+    const uint32_t limit = params.new_account_mail_limit_per_epoch;
+    if (current_epoch_count >= limit) {
+        return MailError::RATE_LIMIT_EXCEEDED;
     }
 
-    sender.mail_count_in_epoch++;
-    sender.system_balance -= fee;
-    state.pending_fee_pool += fee;
-    sender.next_nonce++;
-    return {};
+    if (sender_it->second.system_balance < op.fee) {
+        return MailError::INSUFFICIENT_SYSTEM_BALANCE;
+    }
+    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - op.fee) {
+        return MailError::FEE_POOL_OVERFLOW;
+    }
+
+    const auto auth_err = state.identities.AuthorizeDeviceOperation(op.authorization, network_id);
+    if (auth_err != IdentityRegistryError::NONE) return MailError::INVALID_AUTHORIZATION;
+
+    sender_it->second.system_balance -= op.fee;
+    state.pending_fee_pool += op.fee;
+
+    if (sender_it->second.last_mail_epoch == current_epoch) {
+        sender_it->second.mail_count_in_epoch += 1;
+    } else {
+        sender_it->second.last_mail_epoch = current_epoch;
+        sender_it->second.mail_count_in_epoch = 1;
+    }
+    return MailError::NONE;
 }
 
-FeeRoutingResult RoutePendingFees(CybouState& state)
+StateValidationError ValidateCybouState(const CybouState& state)
 {
-    const uint64_t chunks = state.pending_fee_pool / 4;
-    const uint64_t remainder = state.pending_fee_pool % 4;
-
-    const uint64_t security_addition = chunks * 3;
-    const uint64_t onboarding_addition = chunks * 1;
-
-    if (state.security_reward_pool > std::numeric_limits<uint64_t>::max() - security_addition) {
-        return {FeeRoutingError::SECURITY_POOL_OVERFLOW};
+    if (state.accounts.size() > MAX_IDENTITY_REGISTRY_ACCOUNTS) return StateValidationError::ACCOUNT_LIMIT_EXCEEDED;
+    if (state.accounts.size() != state.identities.Accounts().size()) return StateValidationError::ACCOUNT_IDENTITY_COUNT_MISMATCH;
+    for (const auto& [id, account] : state.accounts) {
+        if (id.IsNull() || !state.identities.Find(id)) return StateValidationError::MISSING_IDENTITY;
     }
-    if (state.onboarding_pool > std::numeric_limits<uint64_t>::max() - onboarding_addition) {
-        return {FeeRoutingError::ONBOARDING_POOL_OVERFLOW};
+    for (const auto& [id, record] : state.identities.Accounts()) {
+        const auto root_id = ComputeRecoveryKeyId(record.recovery_root);
+        if (!root_id) return StateValidationError::DUPLICATE_RECOVERY_BINDING;
+        const auto mapped_acc = state.identities.FindByRecoveryKeyId(*root_id);
+        if (!mapped_acc || *mapped_acc != id) return StateValidationError::DUPLICATE_RECOVERY_BINDING;
     }
+    if (ValidateValidatorSet(state.validator_set) != ValidatorSetValidationError::NONE) return StateValidationError::INVALID_VALIDATOR_SET;
+    if (state.names.names.size() != state.names.account_names.size()) return StateValidationError::INVALID_NAME_REGISTRY;
+    for (const auto& [label, acc] : state.names.names) {
+        if (ValidateNameLabel(label) != NameValidationError::NONE) return StateValidationError::INVALID_NAME_REGISTRY;
+        auto it = state.names.account_names.find(acc);
+        if (it == state.names.account_names.end() || it->second != label) return StateValidationError::INVALID_NAME_REGISTRY;
+        if (!state.accounts.contains(acc)) return StateValidationError::INVALID_NAME_REGISTRY;
+    }
+    std::set<AccountId> committing_accounts;
+    for (const auto& [commit, record] : state.names.pending_commits) {
+        if (commit.IsNull() || !state.accounts.contains(record.account_id)) return StateValidationError::INVALID_NAME_REGISTRY;
+        if (!committing_accounts.insert(record.account_id).second) return StateValidationError::INVALID_NAME_REGISTRY;
+    }
+    if (state.names.pending_commits.size() > DEFAULT_MAX_PENDING_NAME_COMMITS) return StateValidationError::INVALID_NAME_REGISTRY;
+    constexpr uint64_t MAX_SUPPLY{100'000'000'000};
+    const uint64_t total = TotalSupply(state);
+    if (total > MAX_SUPPLY) return StateValidationError::BALANCE_OVERFLOW;
+    return StateValidationError::NONE;
+}
 
-    state.security_reward_pool += security_addition;
-    state.onboarding_pool += onboarding_addition;
-    state.pending_fee_pool = remainder;
-    return {};
+uint64_t TotalSupply(const CybouState& state)
+{
+    constexpr uint64_t MAX_SUPPLY{100'000'000'000};
+    uint64_t total{0};
+    if (state.onboarding_pool > MAX_SUPPLY) return std::numeric_limits<uint64_t>::max();
+    total += state.onboarding_pool;
+    if (state.security_reward_pool > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
+    total += state.security_reward_pool;
+    if (state.pending_fee_pool > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
+    total += state.pending_fee_pool;
+    for (const auto& [id, account] : state.accounts) {
+        if (account.balance > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
+        total += account.balance;
+        if (account.system_balance > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
+        total += account.system_balance;
+    }
+    return total;
+}
+
+std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& state)
+{
+    if (ValidateCybouState(state) != StateValidationError::NONE) return std::nullopt;
+    const auto identities = SerializeIdentityRegistry(state.identities);
+    if (!identities || identities->size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
+    const auto validators = SerializeValidatorSet(state.validator_set);
+    if (validators.size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
+    const auto names = SerializeNameRegistry(state.names);
+    if (names.size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
+    std::vector<unsigned char> out;
+    out.push_back(CYBOU_STATE_VERSION);
+    Write64(out, state.onboarding_pool);
+    Write64(out, state.security_reward_pool);
+    Write64(out, state.pending_fee_pool);
+    Write32(out, static_cast<uint32_t>(state.accounts.size()));
+    for (const auto& [id, account] : state.accounts) {
+        if (id.IsNull() || !state.identities.Find(id)) return std::nullopt;
+        out.insert(out.end(), id.Value().begin(), id.Value().end());
+        Write64(out, account.balance);
+        Write64(out, account.system_balance);
+        Write64(out, account.creation_height);
+        Write64(out, account.creation_epoch);
+        Write64(out, account.last_mail_epoch);
+        Write32(out, account.mail_count_in_epoch);
+    }
+    Write32(out, static_cast<uint32_t>(identities->size()));
+    out.insert(out.end(), identities->begin(), identities->end());
+    Write32(out, static_cast<uint32_t>(validators.size()));
+    out.insert(out.end(), validators.begin(), validators.end());
+    Write32(out, static_cast<uint32_t>(names.size()));
+    out.insert(out.end(), names.begin(), names.end());
+    return out;
+}
+
+std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> bytes)
+{
+    Reader reader{bytes};
+    const auto version = reader.U8();
+    const auto onboarding = reader.U64();
+    const auto security = reader.U64();
+    const auto pending = reader.U64();
+    const auto count = reader.U32();
+    if (!version || *version != CYBOU_STATE_VERSION || !onboarding || !security || !pending ||
+        !count || *count > MAX_IDENTITY_REGISTRY_ACCOUNTS || *count > reader.Remaining() / ACCOUNT_SIZE) return std::nullopt;
+    CybouState state{};
+    state.onboarding_pool = *onboarding;
+    state.security_reward_pool = *security;
+    state.pending_fee_pool = *pending;
+    std::optional<AccountId> prior;
+    for (uint32_t i{0}; i < *count; ++i) {
+        const auto id_bytes = reader.Bytes(AccountId::SIZE);
+        if (!id_bytes) return std::nullopt;
+        const auto id = AccountId::FromBytes(*id_bytes);
+        const auto balance = reader.U64();
+        const auto system = reader.U64();
+        const auto height = reader.U64();
+        const auto epoch = reader.U64();
+        const auto mail_epoch = reader.U64();
+        const auto mail_count = reader.U32();
+        if (!id || (prior && !(*prior < *id)) || !balance || !system || !height || !epoch || !mail_epoch || !mail_count) return std::nullopt;
+        prior = *id;
+        state.accounts.emplace(*id, AccountState{*balance, *system, *height, *epoch, *mail_epoch, *mail_count});
+    }
+    const auto identity_size = reader.U32();
+    if (!identity_size) return std::nullopt;
+    const auto identity_bytes = reader.Bytes(*identity_size);
+    if (!identity_bytes) return std::nullopt;
+    auto identities = DeserializeIdentityRegistry(*identity_bytes);
+    if (!identities || identities->Accounts().size() != state.accounts.size()) return std::nullopt;
+    for (const auto& [id, account] : state.accounts) {
+        if (!identities->Find(id)) return std::nullopt;
+    }
+    state.identities = std::move(*identities);
+    const auto validator_size = reader.U32();
+    if (!validator_size) return std::nullopt;
+    const auto validator_bytes = reader.Bytes(*validator_size);
+    if (!validator_bytes) return std::nullopt;
+    const auto validators = DeserializeValidatorSet(*validator_bytes);
+    if (!validators || ValidateValidatorSet(*validators) != ValidatorSetValidationError::NONE) return std::nullopt;
+    state.validator_set = *validators;
+    const auto names_size = reader.U32();
+    if (!names_size) return std::nullopt;
+    const auto names_bytes = reader.Bytes(*names_size);
+    if (!names_bytes || reader.Remaining()) return std::nullopt;
+    const auto names = DeserializeNameRegistry(*names_bytes);
+    if (!names) return std::nullopt;
+    state.names = *names;
+    if (ValidateCybouState(state) != StateValidationError::NONE) return std::nullopt;
+    return state;
+}
+
+std::optional<uint256> CybouStateHash(const CybouState& state)
+{
+    constexpr std::string_view domain{"CYBOU/STATE/V2"};
+    const auto bytes = SerializeCybouState(state);
+    if (!bytes) return std::nullopt;
+    using DigestCtx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
+    DigestCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
+    uint256 hash;
+    unsigned int size{0};
+    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
+        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
+        EVP_DigestUpdate(ctx.get(), bytes->data(), bytes->size()) != 1 ||
+        EVP_DigestFinal_ex(ctx.get(), hash.begin(), &size) != 1 || size != hash.size()) return std::nullopt;
+    return hash;
 }
 
 } // namespace cybou

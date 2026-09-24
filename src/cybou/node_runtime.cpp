@@ -91,7 +91,7 @@ std::optional<uint256> CybouNodeRuntime::GetStateRoot() const
     return m_store.GetStateRoot();
 }
 
-std::optional<ValidatorSetV1> CybouNodeRuntime::GetValidatorSet() const
+std::optional<ValidatorSet> CybouNodeRuntime::GetValidatorSet() const
 {
     std::lock_guard lock(m_mutex);
     return m_store.GetValidatorSet();
@@ -107,7 +107,7 @@ std::optional<AccountState> CybouNodeRuntime::GetAccountState(const AccountId& a
     return it->second;
 }
 
-OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperationV1 op)
+OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
 {
     const auto op_id = ComputeOperationId(op);
     std::optional<std::pair<std::string, uint16_t>> endpoint;
@@ -134,7 +134,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperationV1 op)
     return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
 }
 
-std::optional<FinalizedBlockV1> CybouNodeRuntime::ProduceBlock(const bool sync)
+std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
 {
     std::lock_guard lock(m_mutex);
     if (!m_authority_node) return std::nullopt;
@@ -145,7 +145,7 @@ std::optional<FinalizedBlockV1> CybouNodeRuntime::ProduceBlock(const bool sync)
     return res.finalized_block;
 }
 
-BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlockV1& block, const bool sync)
+BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block, const bool sync)
 {
     std::lock_guard lock(m_mutex);
     const auto loaded = m_store.LoadState();
@@ -158,7 +158,7 @@ BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlockV1& bloc
     return m_store.CommitFinalizedBlock(block, std::nullopt, sync);
 }
 
-std::optional<FinalizedBlockV1> CybouNodeRuntime::GetBlockAtHeight(const uint64_t height) const
+std::optional<FinalizedBlock> CybouNodeRuntime::GetBlockAtHeight(const uint64_t height) const
 {
     std::lock_guard lock(m_mutex);
     return m_store.GetBlockAtHeight(height);

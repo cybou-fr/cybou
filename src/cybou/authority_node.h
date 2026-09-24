@@ -32,7 +32,7 @@ enum class AuthorityProductionError : uint8_t {
 
 struct AuthorityProductionResult {
     AuthorityProductionError error{AuthorityProductionError::NONE};
-    std::optional<FinalizedBlockV1> finalized_block;
+    std::optional<FinalizedBlock> finalized_block;
     BlockTransitionResult commit_result{};
 
     explicit operator bool() const { return error == AuthorityProductionError::NONE; }
@@ -66,8 +66,8 @@ public:
     ~CybouAuthorityNode();
 
     /** Add an operation only if the complete pending batch executes on the current head. */
-    bool SubmitOperation(const ProtocolOperationV1& operation);
-    OperationSubmitStatus SubmitOperationWithStatus(const ProtocolOperationV1& operation);
+    bool SubmitOperation(const ProtocolOperation& operation);
+    OperationSubmitStatus SubmitOperationWithStatus(const ProtocolOperation& operation);
     size_t PendingCount() const { return m_pending.size(); }
     void ClearPending() { m_pending.clear(); }
 
@@ -77,7 +77,7 @@ public:
 private:
     CybouStateStore& m_store;
     std::array<unsigned char, 32> m_validator_private_key;
-    std::vector<ProtocolOperationV1> m_pending;
+    std::vector<ProtocolOperation> m_pending;
 };
 
 } // namespace cybou
