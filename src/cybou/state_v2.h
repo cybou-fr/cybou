@@ -6,6 +6,7 @@
 #define CYBOU_STATE_V2_H
 
 #include <cybou/identity_registry_v2.h>
+#include <cybou/mail_tx.h>
 #include <cybou/name_registry.h>
 #include <cybou/validator.h>
 
@@ -61,6 +62,10 @@ NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
     const CybouProtocolParameters& params, CybouStateV2& state);
 
 NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params, CybouStateV2& state);
+
+MailError ApplyMail(const AuthorizedMail& op,
     const uint256& network_id, uint64_t block_height,
     const CybouProtocolParameters& params, CybouStateV2& state);
 

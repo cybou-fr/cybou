@@ -90,6 +90,14 @@ BlockExecutionResultV2 ExecuteBlockOperationsV2(const CybouStateV2& parent,
                 failure.name_reveal_error = result;
                 return failure;
             }
+        } else if (const auto* mail = std::get_if<AuthorizedMail>(&operations[i])) {
+            const auto result = ApplyMail(*mail, network_id, block_height, params, candidate);
+            if (result != MailError::NONE) {
+                auto failure = fail(BlockExecutionErrorV2::INVALID_MAIL);
+                failure.failed_operation_index = i;
+                failure.mail_error = result;
+                return failure;
+            }
         }
     }
     const uint64_t chunks = candidate.pending_fee_pool / 4;

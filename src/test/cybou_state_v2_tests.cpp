@@ -775,4 +775,206 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_CHECK(ValidateCybouStateV2(corrupted_state) == StateValidationErrorV2::ACCOUNT_IDENTITY_COUNT_MISMATCH);
 }
 
+BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
+{
+    using namespace cybou;
+
+    // 1. Fee calculation logic
+    auto params = DevProtocolParameters();
+    BOOST_CHECK_EQUAL(params.MailFeeForSize(100), 5ULL);     // 4 + 1
+    BOOST_CHECK_EQUAL(params.MailFeeForSize(1024), 5ULL);    // 4 + 1
+    BOOST_CHECK_EQUAL(params.MailFeeForSize(1025), 6ULL);    // 4 + 2
+    BOOST_CHECK_EQUAL(params.MailFeeForSize(2048), 6ULL);    // 4 + 2
+    BOOST_CHECK_EQUAL(params.MailFeeForSize(64 * 1024), 68ULL); // 4 + 64
+
+    // 2. Setup state with Alice (sender) and Bob (recipient)
+    std::array<unsigned char, 32> alice_root_seed{}, alice_dev_seed{};
+    alice_root_seed[0] = 61;
+    alice_dev_seed[0] = 62;
+    uint256 alice_raw{}, bob_raw{}, network_id{};
+    alice_raw.begin()[0] = 63;
+    bob_raw.begin()[0] = 64;
+    network_id.begin()[0] = 65;
+    const AccountId alice{alice_raw};
+    const AccountId bob{bob_raw};
+
+    std::array<unsigned char, 32> bob_root_seed{}, bob_dev_seed{};
+    bob_root_seed[0] = 71;
+    bob_dev_seed[0] = 72;
+
+    const auto alice_root = DeriveIdentityPublicKey(alice_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto alice_dev = DeriveIdentityPublicKey(alice_dev_seed, IdentityKeyPurpose::DEVICE);
+    const auto bob_root = DeriveIdentityPublicKey(bob_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto bob_dev = DeriveIdentityPublicKey(bob_dev_seed, IdentityKeyPurpose::DEVICE);
+    BOOST_REQUIRE(alice_root && alice_dev && bob_root && bob_dev);
+
+    const auto alice_dev_id = ComputeDeviceKeyId(*alice_dev);
+    const auto bob_dev_id = ComputeDeviceKeyId(*bob_dev);
+    BOOST_REQUIRE(alice_dev_id && bob_dev_id);
+
+    const IdentityAuthorizationV2 alice_auth{*alice_root, *alice_dev};
+    const auto alice_commit = ComputeIdentityAuthorizationCommitmentV2(alice_auth);
+    const auto alice_pop = ComputeAccountCreatePopDigestV2(network_id, alice, alice_auth);
+    const AccountCreateOpV2 create_alice{alice, alice_auth,
+        {.network_id = network_id, .account_id = alice, .authorization_commitment = *alice_commit},
+        *SignIdentityMessage(alice_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *alice_pop),
+        *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *alice_pop)};
+
+    const IdentityAuthorizationV2 bob_auth{*bob_root, *bob_dev};
+    const auto bob_commit = ComputeIdentityAuthorizationCommitmentV2(bob_auth);
+    const auto bob_pop = ComputeAccountCreatePopDigestV2(network_id, bob, bob_auth);
+    const AccountCreateOpV2 create_bob{bob, bob_auth,
+        {.network_id = network_id, .account_id = bob, .authorization_commitment = *bob_commit},
+        *SignIdentityMessage(bob_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *bob_pop),
+        *SignIdentityMessage(bob_dev_seed, IdentityKeyPurpose::DEVICE, *bob_pop)};
+
+    params.account_creation_work_bits = 0;
+    CybouStateV2 state{};
+    state.onboarding_pool = params.onboarding_bonus * 10;
+    state.validator_set.validators.push_back(MakeTestValidator(88));
+    BOOST_REQUIRE(ApplyAccountCreateV2(create_alice, network_id, 0, params, state) == AccountCreateStateErrorV2::NONE);
+    BOOST_REQUIRE(ApplyAccountCreateV2(create_bob, network_id, 0, params, state) == AccountCreateStateErrorV2::NONE);
+
+    // Initial state check
+    BOOST_CHECK_EQUAL(state.accounts.at(alice).system_balance, params.onboarding_bonus);
+    BOOST_CHECK_EQUAL(state.accounts.at(alice).mail_count_in_epoch, 0U);
+
+    // 3. Create MailTx from Alice to Bob
+    MailPayload payload{};
+    payload.recipient = bob;
+    payload.discovery_tag.begin()[0] = 99;
+    payload.content_commitment.begin()[0] = 100;
+    payload.ciphertext = std::vector<unsigned char>(300, 0xAA); // 300 bytes ciphertext -> tier 1 -> fee = 5
+
+    const auto payload_commitment = ComputeMailPayloadCommitment(payload);
+    BOOST_REQUIRE(payload_commitment.has_value());
+
+    AuthorizedMail mail_op{};
+    mail_op.mail = payload;
+    mail_op.authorization.account_id = alice;
+    mail_op.authorization.device_id = *alice_dev_id;
+    mail_op.authorization.nonce = 0;
+    mail_op.authorization.activation_nonce = 0;
+    mail_op.authorization.kind = DeviceOperationKindV2::MAIL;
+    mail_op.authorization.payload_commitment = *payload_commitment;
+    const auto op_digest = ComputeDeviceOperationDigestV2(network_id, mail_op.authorization);
+    BOOST_REQUIRE(op_digest.has_value());
+    mail_op.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *op_digest);
+
+    // Wire serialization roundtrip
+    const ProtocolOperationV2 proto_op{mail_op};
+    const auto wire_bytes = SerializeProtocolOperationV2(proto_op);
+    BOOST_REQUIRE(wire_bytes.has_value());
+    BOOST_CHECK_EQUAL(wire_bytes->size(), 2 + 2597 + MAIL_PAYLOAD_HEADER_SIZE + payload.ciphertext.size());
+
+    const auto decoded_proto_op = DeserializeProtocolOperationV2(*wire_bytes);
+    BOOST_REQUIRE(decoded_proto_op.has_value());
+    BOOST_CHECK(std::holds_alternative<AuthorizedMail>(*decoded_proto_op));
+    BOOST_CHECK(ComputeOperationIdV2(*decoded_proto_op) == ComputeOperationIdV2(proto_op));
+
+    // 4. Execute mail at block height 10 (epoch 0)
+    const auto block_res = ExecuteBlockOperationsV2(state, {proto_op}, network_id, 10, params);
+    BOOST_REQUIRE(block_res);
+    const auto& post_state = *block_res.state;
+
+    // Check balance deduction and counter updates
+    const uint64_t expected_fee = params.MailFeeForSize(payload.ciphertext.size()); // 5
+    BOOST_CHECK_EQUAL(expected_fee, 5ULL);
+    BOOST_CHECK_EQUAL(post_state.accounts.at(alice).system_balance, params.onboarding_bonus - expected_fee);
+    BOOST_CHECK_EQUAL(post_state.accounts.at(alice).last_mail_epoch, 0ULL);
+    BOOST_CHECK_EQUAL(post_state.accounts.at(alice).mail_count_in_epoch, 1U);
+    BOOST_CHECK_EQUAL(post_state.identities.Find(alice)->devices.at(*alice_dev_id).next_nonce, 1ULL);
+
+    // Fee routing check (4 fees -> 3 security + 1 onboarding)
+    // Fee = 5: chunks = 5/4 = 1. security += 3, onboarding += 1, pending %= 4 -> 1 remainder
+    BOOST_CHECK_EQUAL(post_state.pending_fee_pool, 1ULL);
+    BOOST_CHECK_EQUAL(post_state.security_reward_pool, 3ULL);
+    BOOST_CHECK_EQUAL(post_state.onboarding_pool, state.onboarding_pool + 1);
+
+    // State serialization roundtrip: no mail body stored in state
+    const auto state_serialized = SerializeCybouStateV2(post_state);
+    BOOST_REQUIRE(state_serialized.has_value());
+    const auto state_deserialized = DeserializeCybouStateV2(*state_serialized);
+    BOOST_REQUIRE(state_deserialized.has_value());
+    BOOST_CHECK(SerializeCybouStateV2(*state_deserialized) == state_serialized);
+    BOOST_CHECK(state_deserialized->accounts.at(alice) == post_state.accounts.at(alice));
+    BOOST_CHECK(state_deserialized->accounts.at(bob) == post_state.accounts.at(bob));
+
+    // 5. Test quota enforcement: send 24 more mails in epoch 0 to reach 25
+    auto current_state = post_state;
+    uint64_t nonce = 1;
+    for (uint32_t i = 2; i <= 25; ++i) {
+        AuthorizedMail next_mail = mail_op;
+        next_mail.authorization.nonce = nonce++;
+        const auto dig = ComputeDeviceOperationDigestV2(network_id, next_mail.authorization);
+        BOOST_REQUIRE(dig.has_value());
+        next_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig);
+        const auto res = ExecuteBlockOperationsV2(current_state, {ProtocolOperationV2{next_mail}}, network_id, 10 + i, params);
+        BOOST_REQUIRE(res);
+        current_state = *res.state;
+        BOOST_CHECK_EQUAL(current_state.accounts.at(alice).mail_count_in_epoch, i);
+    }
+    BOOST_CHECK_EQUAL(current_state.accounts.at(alice).mail_count_in_epoch, 25U);
+
+    // 26th mail in epoch 0: must fail with MAIL_QUOTA_EXCEEDED
+    AuthorizedMail quota_exceed_mail = mail_op;
+    quota_exceed_mail.authorization.nonce = nonce++;
+    const auto dig_exceed = ComputeDeviceOperationDigestV2(network_id, quota_exceed_mail.authorization);
+    BOOST_REQUIRE(dig_exceed.has_value());
+    quota_exceed_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig_exceed);
+    const auto quota_fail_res = ExecuteBlockOperationsV2(current_state, {ProtocolOperationV2{quota_exceed_mail}}, network_id, 50, params);
+    BOOST_CHECK(quota_fail_res.error == BlockExecutionErrorV2::INVALID_MAIL);
+    BOOST_CHECK(quota_fail_res.mail_error == MailError::MAIL_QUOTA_EXCEEDED);
+
+    // 6. Reset in epoch 1: block height 1024 -> epoch 1
+    const uint64_t epoch1_height = params.epoch_blocks;
+    BOOST_CHECK_EQUAL(EpochForHeight(epoch1_height, params), 1ULL);
+    // Reuse the same mail op with correct nonce
+    quota_exceed_mail.authorization.nonce = nonce - 1; // nonce was not consumed by failed op
+    const auto dig_epoch1 = ComputeDeviceOperationDigestV2(network_id, quota_exceed_mail.authorization);
+    BOOST_REQUIRE(dig_epoch1.has_value());
+    quota_exceed_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig_epoch1);
+    const auto epoch1_res = ExecuteBlockOperationsV2(current_state, {ProtocolOperationV2{quota_exceed_mail}}, network_id, epoch1_height, params);
+    BOOST_REQUIRE(epoch1_res);
+    BOOST_CHECK_EQUAL(epoch1_res.state->accounts.at(alice).last_mail_epoch, 1ULL);
+    BOOST_CHECK_EQUAL(epoch1_res.state->accounts.at(alice).mail_count_in_epoch, 1U);
+
+    // 7. Adversarial checks
+    // A. Recipient not found
+    AuthorizedMail bad_recipient_mail = mail_op;
+    uint256 unknown_raw{};
+    unknown_raw.begin()[0] = 0xFE;
+    bad_recipient_mail.mail.recipient = AccountId{unknown_raw};
+    const auto bad_recip_commit = ComputeMailPayloadCommitment(bad_recipient_mail.mail);
+    BOOST_REQUIRE(bad_recip_commit.has_value());
+    bad_recipient_mail.authorization.payload_commitment = *bad_recip_commit;
+    bad_recipient_mail.authorization.nonce = nonce;
+    const auto dig_bad_recip = ComputeDeviceOperationDigestV2(network_id, bad_recipient_mail.authorization);
+    BOOST_REQUIRE(dig_bad_recip.has_value());
+    bad_recipient_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig_bad_recip);
+    const auto bad_recip_res = ExecuteBlockOperationsV2(*epoch1_res.state, {ProtocolOperationV2{bad_recipient_mail}}, network_id, epoch1_height + 1, params);
+    BOOST_CHECK(bad_recip_res.error == BlockExecutionErrorV2::INVALID_MAIL);
+    BOOST_CHECK(bad_recip_res.mail_error == MailError::RECIPIENT_NOT_FOUND);
+
+    // B. Insufficient system balance
+    auto poor_state = *epoch1_res.state;
+    poor_state.accounts.at(alice).system_balance = 0;
+    AuthorizedMail poor_mail = mail_op;
+    poor_mail.authorization.nonce = nonce;
+    const auto dig_poor = ComputeDeviceOperationDigestV2(network_id, poor_mail.authorization);
+    BOOST_REQUIRE(dig_poor.has_value());
+    poor_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig_poor);
+    const auto poor_res = ExecuteBlockOperationsV2(poor_state, {ProtocolOperationV2{poor_mail}}, network_id, epoch1_height + 1, params);
+    BOOST_CHECK(poor_res.error == BlockExecutionErrorV2::INVALID_MAIL);
+    BOOST_CHECK(poor_res.mail_error == MailError::INSUFFICIENT_SYSTEM_BALANCE);
+
+    // C. Ciphertext size limits
+    MailPayload oversized_payload = payload;
+    oversized_payload.ciphertext = std::vector<unsigned char>(DEFAULT_MAX_MAIL_CIPHERTEXT_SIZE + 1, 0xFF);
+    BOOST_CHECK(!SerializeMailPayload(oversized_payload));
+    MailPayload empty_payload = payload;
+    empty_payload.ciphertext.clear();
+    BOOST_CHECK(!SerializeMailPayload(empty_payload));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

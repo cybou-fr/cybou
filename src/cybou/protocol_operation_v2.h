@@ -6,6 +6,7 @@
 #define CYBOU_PROTOCOL_OPERATION_V2_H
 
 #include <cybou/account_creation_v2.h>
+#include <cybou/mail_tx.h>
 #include <cybou/name_registry.h>
 #include <cybou/payment_v2.h>
 
@@ -34,6 +35,7 @@ enum class ProtocolOperationKindV2 : uint8_t {
     SYSTEM_LOCK = 6,
     NAME_COMMIT = 7,
     NAME_REVEAL = 8,
+    MAIL = 9,
 };
 
 using ProtocolOperationV2 = std::variant<
@@ -44,7 +46,8 @@ using ProtocolOperationV2 = std::variant<
     RecoveryRotateV2,
     AuthorizedSystemLockV2,
     AuthorizedNameCommit,
-    AuthorizedNameReveal>;
+    AuthorizedNameReveal,
+    AuthorizedMail>;
 
 std::optional<std::vector<unsigned char>> SerializeProtocolOperationV2(const ProtocolOperationV2& operation);
 std::optional<ProtocolOperationV2> DeserializeProtocolOperationV2(std::span<const unsigned char> bytes);
@@ -55,6 +58,7 @@ using ProtocolOperationKind = ProtocolOperationKindV2;
 using ProtocolOperation = ProtocolOperationV2;
 using AuthorizedNameCommitV2 = AuthorizedNameCommit;
 using AuthorizedNameRevealV2 = AuthorizedNameReveal;
+using AuthorizedMailV2 = AuthorizedMail;
 inline constexpr size_t AUTHORIZED_PAYMENT_SIZE{AUTHORIZED_PAYMENT_V2_SIZE};
 inline constexpr size_t DEVICE_ADD_SIZE{DEVICE_ADD_V2_SIZE};
 inline constexpr size_t DEVICE_REVOKE_SIZE{DEVICE_REVOKE_V2_SIZE};

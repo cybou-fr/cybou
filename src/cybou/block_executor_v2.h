@@ -23,6 +23,7 @@ enum class BlockExecutionErrorV2 : uint8_t {
     INVALID_SYSTEM_LOCK,
     INVALID_NAME_COMMIT,
     INVALID_NAME_REVEAL,
+    INVALID_MAIL,
     FEE_ROUTING_OVERFLOW,
     INVALID_STATE,
 };
@@ -36,6 +37,7 @@ struct BlockExecutionResultV2 {
     SystemLockErrorV2 lock_error{SystemLockErrorV2::NONE};
     NameCommitError name_commit_error{NameCommitError::NONE};
     NameRevealError name_reveal_error{NameRevealError::NONE};
+    MailError mail_error{MailError::NONE};
     std::optional<CybouStateV2> state;
     std::optional<uint256> state_root;
 

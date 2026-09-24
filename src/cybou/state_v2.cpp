@@ -196,6 +196,60 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
     return NameRevealError::NONE;
 }
 
+MailError ApplyMail(const AuthorizedMail& op,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params, CybouStateV2& state)
+{
+    if (op.mail.version != MAIL_TX_VERSION ||
+        op.mail.recipient.IsNull() ||
+        op.mail.discovery_tag.IsNull() ||
+        op.mail.content_commitment.IsNull() ||
+        op.mail.ciphertext.empty() ||
+        op.mail.ciphertext.size() > params.max_mail_ciphertext_size) {
+        return MailError::INVALID_PAYLOAD;
+    }
+    if (op.authorization.kind != DeviceOperationKindV2::MAIL) {
+        return MailError::INVALID_AUTHORIZATION;
+    }
+    const auto expected_payload_commitment = ComputeMailPayloadCommitment(op.mail);
+    if (!expected_payload_commitment || op.authorization.payload_commitment != *expected_payload_commitment) {
+        return MailError::INVALID_AUTHORIZATION;
+    }
+    auto sender_it = state.accounts.find(op.authorization.account_id);
+    if (sender_it == state.accounts.end()) {
+        return MailError::SENDER_NOT_FOUND;
+    }
+    if (!state.accounts.contains(op.mail.recipient)) {
+        return MailError::RECIPIENT_NOT_FOUND;
+    }
+    const uint64_t fee = params.MailFeeForSize(op.mail.ciphertext.size());
+    if (sender_it->second.system_balance < fee) {
+        return MailError::INSUFFICIENT_SYSTEM_BALANCE;
+    }
+    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - fee) {
+        return MailError::FEE_POOL_OVERFLOW;
+    }
+    const uint64_t current_epoch = EpochForHeight(block_height, params);
+    const uint32_t current_count = (sender_it->second.last_mail_epoch == current_epoch)
+        ? sender_it->second.mail_count_in_epoch
+        : 0;
+    if (current_count >= params.new_account_mail_limit_per_epoch) {
+        return MailError::MAIL_QUOTA_EXCEEDED;
+    }
+    if (state.identities.AuthorizeDeviceOperation(op.authorization, network_id) != IdentityRegistryErrorV2::NONE) {
+        return MailError::INVALID_AUTHORIZATION;
+    }
+    sender_it->second.system_balance -= fee;
+    state.pending_fee_pool += fee;
+    if (sender_it->second.last_mail_epoch == current_epoch) {
+        sender_it->second.mail_count_in_epoch += 1;
+    } else {
+        sender_it->second.last_mail_epoch = current_epoch;
+        sender_it->second.mail_count_in_epoch = 1;
+    }
+    return MailError::NONE;
+}
+
 StateValidationErrorV2 ValidateCybouStateV2(const CybouStateV2& state)
 {
     if (state.accounts.size() > MAX_IDENTITY_REGISTRY_ACCOUNTS_V2) return StateValidationErrorV2::ACCOUNT_LIMIT_EXCEEDED;

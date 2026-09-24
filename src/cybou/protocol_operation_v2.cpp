@@ -346,6 +346,11 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperationV2(const Pro
         if (!body) return std::nullopt;
         out.push_back(static_cast<unsigned char>(ProtocolOperationKindV2::NAME_REVEAL));
         out.insert(out.end(), body->begin(), body->end());
+    } else if (const auto* mail = std::get_if<AuthorizedMail>(&operation)) {
+        const auto body = SerializeAuthorizedMail(*mail);
+        if (!body) return std::nullopt;
+        out.push_back(static_cast<unsigned char>(ProtocolOperationKindV2::MAIL));
+        out.insert(out.end(), body->begin(), body->end());
     } else {
         return std::nullopt;
     }
@@ -404,6 +409,11 @@ std::optional<ProtocolOperationV2> DeserializeProtocolOperationV2(std::span<cons
         const auto reveal = DeserializeNameReveal(bytes.subspan(2));
         if (!reveal) return std::nullopt;
         return ProtocolOperationV2{*reveal};
+    }
+    case ProtocolOperationKindV2::MAIL: {
+        const auto mail = DeserializeAuthorizedMail(bytes.subspan(2));
+        if (!mail) return std::nullopt;
+        return ProtocolOperationV2{*mail};
     }
     default:
         return std::nullopt;
