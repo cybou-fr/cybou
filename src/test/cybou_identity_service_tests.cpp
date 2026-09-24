@@ -223,4 +223,144 @@ BOOST_AUTO_TEST_CASE(name_claim_resumes_after_commit_with_correct_password)
     std::filesystem::remove(claim_path);
 }
 
+BOOST_AUTO_TEST_CASE(name_claim_rejects_stale_local_label_without_new_commit)
+{
+    RuntimeFixture fixture;
+    fixture.definition.protocol_parameters.name_claim_work_bits = 0;
+    cybou::CybouNodeRuntime runtime{fixture.Config()};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+    const auto dir = std::filesystem::temp_directory_path() / "cybou-name-stale-test";
+    std::filesystem::create_directories(dir);
+    const auto path = dir / "identity.cybou";
+    auto claim_path = path;
+    claim_path += ".nameclaim";
+    std::filesystem::remove(path);
+    std::filesystem::remove(claim_path);
+    cybou::CybouIdentityService identity{runtime, path};
+    BOOST_REQUIRE(identity.PrepareNewIdentity());
+    BOOST_REQUIRE(identity.CreateIdentitySync("correct horse battery staple").success);
+    cybou::CybouNameService first{runtime, identity.GetKeyStore(), path};
+    BOOST_CHECK(!first.ClaimSync("stanislav", "correct horse battery staple",
+        [&](cybou::NameClaimPhase phase, const std::string&) {
+            if (phase == cybou::NameClaimPhase::WAITING_FOR_COMMIT) first.Cancel();
+        }).success);
+    const auto height = runtime.GetFinalizedHeight();
+    cybou::CybouNameService second{runtime, identity.GetKeyStore(), path};
+    BOOST_CHECK(!second.ClaimSync("anothername", "correct horse battery staple").success);
+    BOOST_CHECK(runtime.GetFinalizedHeight() == height);
+    std::filesystem::remove(path);
+    std::filesystem::remove(claim_path);
+}
+
+BOOST_AUTO_TEST_CASE(name_work_cancellation_keeps_commit_but_not_name)
+{
+    RuntimeFixture fixture;
+    fixture.definition.protocol_parameters.name_claim_work_bits = 255;
+    cybou::CybouNodeRuntime runtime{fixture.Config()};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+    const auto dir = std::filesystem::temp_directory_path() / "cybou-name-work-cancel-test";
+    std::filesystem::create_directories(dir);
+    const auto path = dir / "identity.cybou";
+    auto claim_path = path;
+    claim_path += ".nameclaim";
+    std::filesystem::remove(path);
+    std::filesystem::remove(claim_path);
+    cybou::CybouIdentityService identity{runtime, path};
+    BOOST_REQUIRE(identity.PrepareNewIdentity());
+    BOOST_REQUIRE(identity.CreateIdentitySync("correct horse battery staple").success);
+    cybou::CybouNameService names{runtime, identity.GetKeyStore(), path};
+    BOOST_CHECK(!names.ClaimSync("stanislav", "correct horse battery staple",
+        [&](cybou::NameClaimPhase phase, const std::string&) {
+            if (phase == cybou::NameClaimPhase::WORKING) names.Cancel();
+        }).success);
+    const auto loaded = runtime.GetStore().LoadState();
+    BOOST_REQUIRE(loaded && loaded.state);
+    BOOST_CHECK_EQUAL(loaded.state->names.pending_commits.size(), 1U);
+    BOOST_CHECK(!loaded.state->names.Resolve("stanislav"));
+    std::filesystem::remove(path);
+    std::filesystem::remove(claim_path);
+}
+
+BOOST_AUTO_TEST_CASE(expired_name_commit_can_restart_with_saved_claim)
+{
+    RuntimeFixture fixture;
+    fixture.definition.protocol_parameters.name_claim_work_bits = 0;
+    fixture.definition.protocol_parameters.name_commit_max_lifetime = 1;
+    cybou::CybouNodeRuntime runtime{fixture.Config()};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+    const auto dir = std::filesystem::temp_directory_path() / "cybou-name-expiry-test";
+    std::filesystem::create_directories(dir);
+    const auto path = dir / "identity.cybou";
+    auto claim_path = path;
+    claim_path += ".nameclaim";
+    std::filesystem::remove(path);
+    std::filesystem::remove(claim_path);
+    cybou::CybouIdentityService identity{runtime, path};
+    BOOST_REQUIRE(identity.PrepareNewIdentity());
+    BOOST_REQUIRE(identity.CreateIdentitySync("correct horse battery staple").success);
+    cybou::CybouNameService first{runtime, identity.GetKeyStore(), path};
+    BOOST_CHECK(!first.ClaimSync("stanislav", "correct horse battery staple",
+        [&](cybou::NameClaimPhase phase, const std::string&) {
+            if (phase == cybou::NameClaimPhase::WAITING_FOR_COMMIT) first.Cancel();
+        }).success);
+    const auto committed = runtime.GetStore().LoadState();
+    BOOST_REQUIRE(committed && committed.state);
+    BOOST_REQUIRE_EQUAL(committed.state->names.pending_commits.size(), 1U);
+    const uint64_t commit_height = committed.state->names.pending_commits.begin()->second.commit_height;
+    while (runtime.GetFinalizedHeight().value_or(0) <= commit_height +
+        fixture.definition.protocol_parameters.name_commit_max_lifetime) {
+        BOOST_REQUIRE(runtime.ProduceBlock());
+    }
+    const auto pruned = runtime.GetStore().LoadState();
+    BOOST_REQUIRE(pruned && pruned.state);
+    BOOST_CHECK(pruned.state->names.pending_commits.empty());
+    cybou::CybouNameService restarted{runtime, identity.GetKeyStore(), path};
+    const auto claimed = restarted.ClaimSync("stanislav", "correct horse battery staple");
+    BOOST_REQUIRE_MESSAGE(claimed.success, claimed.message);
+    BOOST_CHECK(identity.GetFinalizedPrimaryName() == std::optional<std::string>{"stanislav"});
+    std::filesystem::remove(path);
+    std::filesystem::remove(claim_path);
+}
+
+BOOST_AUTO_TEST_CASE(competing_claim_loser_never_gains_ownership)
+{
+    RuntimeFixture fixture;
+    fixture.definition.protocol_parameters.name_claim_work_bits = 0;
+    cybou::CybouNodeRuntime runtime{fixture.Config()};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+    const auto dir = std::filesystem::temp_directory_path() / "cybou-name-race-test";
+    std::filesystem::create_directories(dir);
+    const auto first_path = dir / "first.cybou";
+    const auto second_path = dir / "second.cybou";
+    auto first_claim_path = first_path;
+    auto second_claim_path = second_path;
+    first_claim_path += ".nameclaim";
+    second_claim_path += ".nameclaim";
+    for (const auto& path : {first_path, second_path, first_claim_path, second_claim_path}) std::filesystem::remove(path);
+    cybou::CybouIdentityService first_identity{runtime, first_path};
+    cybou::CybouIdentityService second_identity{runtime, second_path};
+    BOOST_REQUIRE(first_identity.PrepareNewIdentity());
+    BOOST_REQUIRE(second_identity.PrepareNewIdentity());
+    BOOST_REQUIRE(first_identity.CreateIdentitySync("correct horse battery staple").success);
+    BOOST_REQUIRE(second_identity.CreateIdentitySync("correct horse battery staple").success);
+    cybou::CybouNameService first{runtime, first_identity.GetKeyStore(), first_path};
+    cybou::CybouNameService second{runtime, second_identity.GetKeyStore(), second_path};
+    const auto stop_after_commit = [](cybou::CybouNameService& service) {
+        return [&service](cybou::NameClaimPhase phase, const std::string&) {
+            if (phase == cybou::NameClaimPhase::WAITING_FOR_COMMIT) service.Cancel();
+        };
+    };
+    BOOST_CHECK(!first.ClaimSync("stanislav", "correct horse battery staple", stop_after_commit(first)).success);
+    BOOST_CHECK(!second.ClaimSync("stanislav", "correct horse battery staple", stop_after_commit(second)).success);
+    BOOST_REQUIRE(first.ClaimSync("stanislav", "correct horse battery staple").success);
+    BOOST_CHECK(!second.ClaimSync("stanislav", "correct horse battery staple").success);
+    BOOST_CHECK(!second_identity.GetFinalizedPrimaryName());
+    const auto loaded = runtime.GetStore().LoadState();
+    BOOST_REQUIRE(loaded && loaded.state);
+    const auto* owner = loaded.state->names.Resolve("stanislav");
+    BOOST_REQUIRE(owner);
+    BOOST_CHECK(*owner == *first_identity.GetAccountId());
+    for (const auto& path : {first_path, second_path, first_claim_path, second_claim_path}) std::filesystem::remove(path);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -1,9 +1,9 @@
 # 25 — Open questions / blockers v0.0.1
 
-## Identity V2 parameters to freeze before coding/activation
+## Identity parameters to freeze before activation
 
 - End-to-end phrase-to-root vectors across providers and platforms. The BIP-39
-  English list/checksum and Identity V2 HKDF labels are now frozen locally.
+  English list/checksum and identity HKDF labels are now frozen locally.
 - CYBV2 canonical encoding, Argon2id resource bounds, file permissions and
   cross-platform atomic replace behavior.
 - Hybrid signature wire bounds and canonical signed bytes for each operation.
@@ -44,8 +44,11 @@ Decide whether pre-Store MailTx bodies are later migrated into Store or remain v
 ### O-009 Exact BFT protocol — resolved
 Frozen as Tendermint/IBFT style N-validator state machine (N >= 1) with deterministic round leader `(height + round) % N`, prevote/precommit locking, quorum `floor(2*N/3)+1` forming `BftFinalityCertificate`, and atomic `CommitFinalizedBlock` validation in `CybouStateStore`. Authority Mode (N=1) has 1/1 finality and f=0; f=1 requires at least four validators. Verified in `cybou::BftSimulator`.
 
-### O-010 Validator admission transaction format — resolved
-Frozen as typed `ValidatorAdmissionOpV1` and `ValidatorRemovalOpV1` protocol operations with domain-separated hybrid `Ed25519 + ML-DSA-65` Operator Authority signatures (`CYBOU/SIG/VALIDATOR-ADMISSION/V1` and `CYBOU/SIG/VALIDATOR-REMOVAL/V1`), binding `NetworkID`. Active validator set is tracked directly in canonical consensus state (`CybouState`) with equal weight = 1, unique validator IDs and consensus keys, and non-empty active set invariants enforced by `CybouStateStore`.
+### O-010 Validator admission transaction format — open
+The canonical state carries a validator set with equal weight one and unique
+hybrid consensus keys. Typed operator-authorized admission and removal
+operations are not yet implemented in `ProtocolOperation`; their exact wire
+format and PQ authorization policy remain to be frozen before deployment.
 
 ### O-011 Emergency operator succession
 Define operator-unavailable recovery without normal community governance.
@@ -62,7 +65,7 @@ Choose `EPOCH_BLOCKS` after real block cadence is known.
 Freeze capped System Balance, age, clean-history, activity and penalty contributions.
 
 ### O-015 Account Creation anti-Sybil difficulty tuning
-Calibrate the initial PoW target bits and dynamic difficulty adjustment for `AccountCreationWorkV1`.
+Calibrate the initial PoW target bits and dynamic difficulty adjustment for `AccountCreationWork`.
 
 ### O-021 Operator Authority signature suite
 Benchmark and review a domain-specific hybrid signature profile for rare
@@ -73,9 +76,9 @@ and implementation backend together. Do not copy a changing Internet-Draft wire
 format into consensus.
 
 ### O-022 AccountID and network identifiers — resolved
-AccountID V1 is an opaque nonzero 32-byte identifier. AccountCreationWork network_id
+AccountID is an opaque nonzero 32-byte identifier. AccountCreationWork network_id
 is the domain-separated hash of the canonical immutable network definition.
-Both use the internal byte order frozen by the V1 canonical serializer; see
+Both use the internal byte order frozen by the canonical serializer; see
 DEC-156 and DEC-161.
 
 ### O-023 Validator archival mode enforcement
@@ -84,7 +87,9 @@ can reject pruning configurations while pre-Store historical MailTx retention
 is mandatory.
 
 ### O-024 Account authorization and proof of possession — resolved
-Frozen: Account authorization uses Ed25519; `AccountCreateOp` enforces cryptographic Proof of Possession (`CYBOU/ACCOUNT_POP/V1`) over `network_id || account_id || authorization_key`. Verified in `ValidateAccountCreateOp`.
+`AccountCreateOp` requires hybrid Recovery Root (Ed25519 and ML-DSA-65) and
+initial device (Ed25519 and ML-DSA-44) proofs of possession over the canonical
+network-bound authorization digest. Verified in `ValidateAccountCreateOp`.
 
 ## Evidence / legal
 

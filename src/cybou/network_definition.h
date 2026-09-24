@@ -62,6 +62,7 @@ std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path
 uint256 ComputeGenesisBlockId(const uint256& state_root, const uint256& validator_set_commitment);
 
 CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public_key);
+std::optional<CybouState> CreateDevGenesisState(std::span<const IdentityHybridPublicKey> validator_public_keys);
 CybouNetworkDefinition CreateDevNetworkDefinition(const CybouState& genesis);
 
 } // namespace cybou

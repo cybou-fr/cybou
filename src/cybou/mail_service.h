@@ -171,16 +171,8 @@ public:
     /** Unread count in Inbox. */
     size_t GetUnreadCount() const;
 
-    /**
-     * Send an E2E encrypted email:
-     * - validates recipient existence on-chain
-     * - enforces size bounds and computes deterministic integer fee
-     * - encrypts subject and body using recipient's X25519 public key and ChaCha20-Poly1305
-     * - commits domain-separated content commitment and recipient discovery tag
-     * - signs AuthorizedOperation with sender's Ed25519 key
-     * - broadcasts operation via node runtime
-     * - records message into local Sent mailbox with PendingFinality status.
-     */
+    /** Refuses submission until verified identity state publishes independent
+     * recipient mail encryption keys. Protocol MailTx validation remains in core. */
     SendMailResult SendMail(
         const AccountId& recipient,
         const std::string& subject,

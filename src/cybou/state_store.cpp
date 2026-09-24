@@ -70,7 +70,13 @@ std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
         height == 0 || m_network_definition_error != NetworkDefinitionError::NONE) {
         return std::nullopt;
     }
-    if (operations.empty() && loaded.state->pending_fee_pool == 0) {
+    const auto& params = m_network_definition.protocol_parameters;
+    const bool expires_name = std::any_of(loaded.state->names.pending_commits.begin(),
+        loaded.state->names.pending_commits.end(), [&](const auto& item) {
+            return params.name_commit_max_lifetime > 0 && height > item.second.commit_height &&
+                height - item.second.commit_height > params.name_commit_max_lifetime;
+        });
+    if (operations.empty() && loaded.state->pending_fee_pool == 0 && !expires_name) {
         return GetStateRoot();
     }
     const auto execution = ExecuteBlockOperations(*loaded.state, operations, m_network_id, height, m_network_definition.protocol_parameters);
@@ -240,7 +246,13 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         return {.error = BlockTransitionError::INVALID_CERTIFICATE, .cert_error = cert_res};
     }
 
-    const bool is_empty_noop_block = block.operations.empty() && loaded.state->pending_fee_pool == 0;
+    const auto& params = m_network_definition.protocol_parameters;
+    const bool expires_name = std::any_of(loaded.state->names.pending_commits.begin(),
+        loaded.state->names.pending_commits.end(), [&](const auto& item) {
+            return params.name_commit_max_lifetime > 0 && block.height > item.second.commit_height &&
+                block.height - item.second.commit_height > params.name_commit_max_lifetime;
+        });
+    const bool is_empty_noop_block = block.operations.empty() && loaded.state->pending_fee_pool == 0 && !expires_name;
     uint256 candidate_root;
     std::optional<CybouState> next_state;
 
@@ -249,7 +261,6 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         if (!current_root) return {BlockTransitionError::CORRUPT_STATE};
         candidate_root = *current_root;
     } else {
-        const auto& params{m_network_definition.protocol_parameters};
         auto execution = ExecuteBlockOperations(*loaded.state, block.operations, m_network_id, block.height, params);
         if (!execution) {
             if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};

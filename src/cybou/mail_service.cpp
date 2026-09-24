@@ -325,9 +325,9 @@ bool CybouMailService::LoadMailbox()
         offset += 32;
         auto r_id = AccountId::FromBytes(std::span{bytes}.subspan(offset, 32));
         offset += 32;
-        if (!s_id || !r_id) return false;
+        if (!s_id || (!r_id && item.folder != MailFolder::DRAFTS)) return false;
         item.sender = *s_id;
-        item.recipient = *r_id;
+        item.recipient = r_id.value_or(AccountId{});
 
         if (offset + 4 > bytes.size()) return false;
         const uint32_t subj_len = ReadUint32LE(bytes.data() + offset);
@@ -572,8 +572,8 @@ size_t CybouMailService::GetUnreadCount() const
 
 SendMailResult CybouMailService::SendMail(
     const AccountId& recipient,
-    const std::string& subject,
-    const std::string& body)
+    const std::string& /*subject*/,
+    const std::string& /*body*/)
 {
     std::lock_guard lock(m_mutex);
 
@@ -611,125 +611,12 @@ SendMailResult CybouMailService::SendMail(
     if (!rec_identity || rec_identity->devices.empty()) {
         return {.error = SendMailError::RECIPIENT_NOT_FOUND, .error_message = "Recipient identity not found on-chain"};
     }
-    uint256 recipient_encryption_key{};
-    const auto& rec_dev_key = rec_identity->devices.begin()->second.key;
-    std::copy(rec_dev_key.ed25519.begin(), rec_dev_key.ed25519.end(), recipient_encryption_key.begin());
-
-    ProtectedMail mail;
-    mail.version = PROTECTED_MAIL_VERSION;
-    mail.sender = *sender_id;
-    mail.recipient = recipient;
-    mail.timestamp = static_cast<uint64_t>(std::time(nullptr));
-    mail.subject = subject;
-    mail.body = body;
-
-    const auto plain_bytes = mail.Serialize();
-    uint256 salt;
-    GetRandBytes(salt);
-
-    const uint256 content_commitment = ComputeMailContentCommitment(salt, plain_bytes);
-    const uint256 discovery_tag = ComputeRecipientDiscoveryTag(recipient_encryption_key, salt);
-
-    const auto encrypted = EncryptMailPayload(
-        recipient_encryption_key,
-        *sender_id,
-        recipient,
-        salt,
-        mail);
-    if (!encrypted) {
-        return {.error = SendMailError::CRYPTO_FAILURE, .error_message = "Failed to encrypt mail payload"};
-    }
-
-    if (encrypted->size() > params.max_mail_ciphertext_size) {
-        return {.error = SendMailError::OVERSIZED, .error_message = "Mail payload exceeds maximum size"};
-    }
-
-    const uint64_t fee = params.MailFeeForSize(encrypted->size());
-    if (sender_state->system_balance < fee) {
-        return {.error = SendMailError::INSUFFICIENT_SYSTEM_BALANCE, .error_message = "Insufficient system balance for fee"};
-    }
-
-    const auto dev_id = m_keystore.GetDeviceId();
-    if (!dev_id) {
-        return {.error = SendMailError::NO_IDENTITY, .error_message = "No active device key in keystore"};
-    }
-
-    uint64_t nonce = 0;
-    uint64_t activation_nonce = 0;
-    if (loaded.state) {
-        const auto* rec = loaded.state->identities.Find(*sender_id);
-        if (rec) {
-            auto it = rec->devices.find(*dev_id);
-            if (it != rec->devices.end()) {
-                nonce = it->second.next_nonce;
-                activation_nonce = it->second.activation_nonce;
-            }
-        }
-    }
-
-    MailPayload mail_op;
-    mail_op.version = MAIL_TX_VERSION;
-    mail_op.recipient = recipient;
-    mail_op.content_commitment = content_commitment;
-    mail_op.discovery_tag = discovery_tag;
-    mail_op.ciphertext = *encrypted;
-
-    const auto commitment = ComputeMailPayloadCommitment(mail_op);
-    if (!commitment) {
-        return {.error = SendMailError::CRYPTO_FAILURE, .error_message = "Failed to commit mail payload"};
-    }
-
-    DeviceAuthorization auth_op;
-    auth_op.account_id = *sender_id;
-    auth_op.device_id = *dev_id;
-    auth_op.nonce = nonce;
-    auth_op.activation_nonce = activation_nonce;
-    auth_op.kind = DeviceOperationKind::MAIL;
-    auth_op.payload_commitment = *commitment;
-
-    const auto digest = ComputeDeviceOperationDigest(m_runtime.GetNetworkId(), auth_op);
-    if (!digest) {
-        return {.error = SendMailError::CRYPTO_FAILURE, .error_message = "Failed to compute mail digest"};
-    }
-    const auto signature = m_keystore.SignDevice(*digest);
-    if (!signature) {
-        return {.error = SendMailError::CRYPTO_FAILURE, .error_message = "Failed to sign mail operation"};
-    }
-    auth_op.signature = *signature;
-
-    AuthorizedMail auth_mail{
-        .authorization = auth_op,
-        .mail = mail_op,
-    };
-
-    ProtocolOperation proto_op{auth_mail};
-    const auto op_id_opt = ComputeOperationId(proto_op);
-    const uint256 mail_id = op_id_opt.value_or(uint256{});
-
-    const auto submit_res = m_runtime.SubmitOperation(proto_op);
-    if (!submit_res) {
-        return {.error = SendMailError::SUBMIT_FAILED, .error_message = "Network rejected operation"};
-    }
-
-    MailItem item;
-    item.mail_id = mail_id;
-    item.folder = MailFolder::SENT;
-    item.sender = *sender_id;
-    item.recipient = recipient;
-    item.subject = subject;
-    item.body = body;
-    item.timestamp = mail.timestamp;
-    item.read = true;
-    item.finality = MailFinalityStatus::PENDING_FINALITY;
-    item.salt = salt;
-    item.content_commitment = content_commitment;
-    item.discovery_tag = discovery_tag;
-    item.fee = fee;
-
-    m_messages.push_back(std::move(item));
-    SaveMailbox();
-
-    return {.error = SendMailError::NONE, .mail_id = mail_id, .fee = fee};
+    // The identity registry currently publishes device signing keys only.
+    // The local mail secret is derived independently, so encrypting to the
+    // device signing public key would finalize ciphertext the recipient
+    // cannot decrypt. Require a consensus-bound mail key before sending.
+    return {.error = SendMailError::CRYPTO_FAILURE,
+        .error_message = "Recipient mail encryption key is not published in verified identity state"};
 }
 
 size_t CybouMailService::SyncMailbox()

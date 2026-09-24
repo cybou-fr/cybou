@@ -19,12 +19,14 @@ CYBOU is experimental. The canonical product target uses hybrid post-quantum aut
 - The DEV network definition commits to the active name rules. The CLI derives genesis validator keys from the same secret used by the producer; the desktop loads the verified network file.
 - Desktop identity creation uses a random AccountID, confirmed 24-word phrase, and durable CYBV2 vault before AccountCreate. Clean-machine restore resolves the RecoveryKeyID from verified state and submits a root-authorized DeviceAdd before activating the new device.
 - Native and desktop `.cybou` claiming durably save an encrypted local claim before NameCommit, then perform work and NameReveal; only finalized ownership is displayed as the primary name.
+- Four distinct PQ validator keys can be committed to a deterministic DEV genesis, but the current producer remains single-validator Authority Mode. A durable signing high-water mark prevents a validator from signing the last height again after restart; full BFT lock/vote recovery remains open.
+- Canonical AuthorityNode, NodeRuntime, MailService, and WalletService smoke suites are back in the native test target. Mail payload encryption works when given the correct mail public key; the current identity registry does not publish one, so `SendMail` fails closed before submission. Full historical integration coverage still needs restoration.
+- A separate native P2P session layer exchanges bounded HELLO/PING/PONG frames over a persistent TCP socket and rejects a mismatched NetworkID; runtime integration, peer management, and gossip are still open.
 
 ## Integration still required
 
 - Complete password change, vault lock and reauthentication, device management, and recovery when the account already has eight active devices.
 - Complete Mail confidentiality with independent X25519 and ML-KEM keys, usable recipient discovery, encrypted local mailbox storage, and historical sender-key authorization evidence.
-- Complete desktop `.cybou` claim and finalized ownership flows on top of the implemented registry.
 - Finish Qt wallet and Mail flows against the canonical identity and encryption profiles.
 - Run independent validators with durable crash recovery and verify finality under production topology.
 - Finish operator, release, and treasury signing integration under the PQ key policy.

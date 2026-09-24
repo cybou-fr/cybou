@@ -28,7 +28,8 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     auto candidate = parent;
     if (params.name_commit_max_lifetime > 0) {
         std::erase_if(candidate.names.pending_commits, [&](const auto& item) {
-            return block_height > item.second.commit_height + params.name_commit_max_lifetime;
+            return block_height > item.second.commit_height &&
+                block_height - item.second.commit_height > params.name_commit_max_lifetime;
         });
     }
     for (size_t i{0}; i < operations.size(); ++i) {

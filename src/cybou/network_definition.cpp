@@ -290,6 +290,22 @@ CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public
     };
 }
 
+std::optional<CybouState> CreateDevGenesisState(std::span<const IdentityHybridPublicKey> validator_public_keys)
+{
+    if (validator_public_keys.empty()) return std::nullopt;
+    CybouState genesis = CreateDevGenesisState(validator_public_keys.front());
+    auto& validators = genesis.validator_set.validators;
+    for (size_t i = 1; i < validator_public_keys.size(); ++i) {
+        validators.push_back(Validator{.validator_id = ComputeValidatorId(validator_public_keys[i]),
+            .consensus_public_key = validator_public_keys[i], .weight = 1});
+    }
+    std::sort(validators.begin(), validators.end(), [](const Validator& left, const Validator& right) {
+        return left.validator_id < right.validator_id;
+    });
+    if (ValidateValidatorSet(genesis.validator_set) != ValidatorSetValidationError::NONE) return std::nullopt;
+    return genesis;
+}
+
 uint256 ComputeGenesisBlockId(const uint256& state_root, const uint256& validator_set_commitment)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/GENESIS-BLOCK/V2"};

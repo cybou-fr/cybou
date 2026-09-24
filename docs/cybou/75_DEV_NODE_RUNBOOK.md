@@ -23,6 +23,17 @@ cybou-node init-dev network.bin validator.key
 `init-dev` derives the Ed25519 and ML-DSA validator public keys from that
 seed. The same seed file must be passed to `serve`.
 
+For a four-validator genesis, pass four distinct seed files:
+
+```text
+cybou-node init-dev network.bin validator-1.key validator-2.key validator-3.key validator-4.key
+```
+
+The public validator set is sorted by validator ID, so input file order does
+not change NetworkID. Duplicate validator keys are rejected. This prepares a
+shared N=4 genesis for later P2P/BFT integration; the current `serve` command
+still supports only single-validator Authority Mode and cannot run this set.
+
 Copy `network.bin` to the observer by a trusted channel. It contains the
 immutable network definition and genesis state, not the private key. The
 network ID printed by `init-dev` should match on all nodes. `init-dev` refuses
