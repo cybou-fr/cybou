@@ -161,6 +161,16 @@ void CybouDesktopModel::setFinalityStatus(int last_finalized_height, int validat
     Q_EMIT statusChanged();
 }
 
+void CybouDesktopModel::setChainStatus(int height, int peer_count)
+{
+    if (m_status.height == height && m_status.peer_count == peer_count) {
+        return;
+    }
+    m_status.height = height;
+    m_status.peer_count = peer_count;
+    Q_EMIT statusChanged();
+}
+
 void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString& account_id,
     int creation_height)
 {

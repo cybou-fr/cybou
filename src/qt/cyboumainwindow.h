@@ -7,6 +7,9 @@
 
 #include <qt/bitcoingui.h>
 
+#include <atomic>
+#include <thread>
+
 class ClientModel;
 class CybouDesktopModel;
 class QButtonGroup;
@@ -44,6 +47,11 @@ private:
     std::unique_ptr<cybou::CybouIdentityService> m_identity_service;
     QStackedWidget* m_pages;
     QButtonGroup* m_navigation;
+
+    /** Bootstrap sync worker: pulls verified blocks from the DEV bootstrap
+        authority and pushes finality status into the desktop model. */
+    std::thread m_sync_thread;
+    std::atomic_bool m_sync_stop{false};
 
     void buildShell();
     void buildMenus();

@@ -19,12 +19,14 @@
 #include <qt/rpcconsole.h>
 
 #include <common/args.h>
+#include <cybou/bootstrap_nodes.h>
 #include <cybou/identity_service.h>
 #include <cybou/network_definition.h>
 #include <cybou/node_runtime.h>
 #include <support/cleanse.h>
 #include <util/strencodings.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 
@@ -91,7 +93,8 @@ CybouMainWindow::CybouMainWindow(
     // Dev-only screenshot harness: capture every page and quit.
     const auto shot_dir = QProcessEnvironment::systemEnvironment().value(QStringLiteral("CYBOU_SCREENSHOT_DIR"));
     if (!shot_dir.isEmpty()) {
-        QTimer::singleShot(2500, this, [this, shot_dir] {
+        const auto delay_ms = qEnvironmentVariableIntValue("CYBOU_SCREENSHOT_DELAY_MS");
+        QTimer::singleShot(delay_ms > 0 ? delay_ms : 2500, this, [this, shot_dir] {
             QDir{}.mkpath(shot_dir);
             for (int i = 0; i < m_pages->count(); ++i) {
                 m_pages->setCurrentIndex(i);
@@ -129,13 +132,21 @@ CybouMainWindow::CybouMainWindow(
     }
 }
 
-CybouMainWindow::~CybouMainWindow() = default;
+CybouMainWindow::~CybouMainWindow()
+{
+    m_sync_stop.store(true);
+    if (m_sync_thread.joinable()) m_sync_thread.join();
+}
 
 void CybouMainWindow::initCybouRuntime()
 {
     if (!m_client_model) return;
 
-    const auto val_pub = *uint256::FromUserHex("5c6f0fb4018874f31b12941dbf0967ca725dba3c2ddb52fd95f10974dde3888a");
+    // Genesis validator is the DEV authority node on the VPS (bootstrap
+    // list, doc 75): the local runtime joins the same NetworkID and verifies
+    // blocks from it as an observer. Without a local validator key nothing
+    // is produced here — the desktop never forks the DEV chain.
+    const auto val_pub = *uint256::FromUserHex("d9e9551b6d1f7e192d378be0223d9c0a0ef356aff08c23b8b277f72e64663caa");
     const auto genesis = cybou::CreateDevGenesisState(val_pub);
     const auto definition = cybou::CreateDevNetworkDefinition(genesis);
     const auto net_id = cybou::NetworkId(definition);
@@ -146,16 +157,14 @@ void CybouMainWindow::initCybouRuntime()
 
     try {
         const std::filesystem::path data_dir = (gArgs.GetDataDirNet() / "cybou_state").std_path();
+        // Opt-in local production: only a deliberate validator.key turns the
+        // desktop into a producer; by default it observes the bootstrap.
         std::optional<std::array<unsigned char, 32>> val_key;
         const auto key_path = (gArgs.GetDataDirNet() / "validator.key").std_path();
         if (std::filesystem::exists(key_path) && std::filesystem::file_size(key_path) == 32) {
             val_key.emplace();
             std::ifstream kf(key_path, std::ios::binary);
             kf.read(reinterpret_cast<char*>(val_key->data()), 32);
-        } else {
-            // Local DEV fallback validator key to allow block production out of the box
-            val_key.emplace();
-            val_key->fill(1);
         }
 
         cybou::NodeRuntimeConfig config{
@@ -188,6 +197,38 @@ void CybouMainWindow::initCybouRuntime()
         // Update initial finality status:
         const auto status = m_node_runtime->GetStatus();
         m_desktop_model->setFinalityStatus(static_cast<int>(status.finalized_height), static_cast<int>(status.validator_count));
+        m_desktop_model->setChainStatus(static_cast<int>(status.finalized_height), 0);
+
+        // Bootstrap sync worker: keep pulling verified blocks from the DEV
+        // authority and push finality into the model. The runtime is
+        // internally synchronized; the worker is the only writer here.
+        m_sync_thread = std::thread{[this] {
+            const auto& endpoint = cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front();
+            bool bootstrap_reachable = false;
+            while (!m_sync_stop.load()) {
+                try {
+                    m_node_runtime->SyncFromPeer(std::string{endpoint.host}, endpoint.port, 2000);
+                    bootstrap_reachable = true;
+                } catch (const std::exception& e) {
+                    bootstrap_reachable = false;
+                    qWarning() << "cybou bootstrap sync error:" << e.what();
+                }
+                const auto now = m_node_runtime->GetStatus();
+                QMetaObject::invokeMethod(this, [this, now, bootstrap_reachable] {
+                    m_desktop_model->setFinalityStatus(
+                        static_cast<int>(now.finalized_height),
+                        static_cast<int>(now.validator_count));
+                    // The desktop runtime tracks only finalized blocks, so
+                    // the local chain height is the finalized height.
+                    m_desktop_model->setChainStatus(
+                        static_cast<int>(now.finalized_height),
+                        bootstrap_reachable ? 1 : 0);
+                }, Qt::QueuedConnection);
+                for (int i = 0; i < 15 && !m_sync_stop.load(); ++i) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                }
+            }
+        }};
 
         // Connect identity persistence on creation
         connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, [this] {

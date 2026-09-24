@@ -101,6 +101,14 @@ public:
         -1 / 0 mean "not exposed" and render as such. No-op when unchanged. */
     void setFinalityStatus(int last_finalized_height, int validator_count);
 
+    /** Core-facing adapter entry: local chain view of the CYBOU runtime.
+        The desktop runtime only tracks finalized blocks, so the local height
+        equals the last finalized height; peer_count reflects the configured
+        bootstrap authorities currently reachable (DEV: 0 or 1). While the
+        embedded Bitcoin client is idle, this is the authoritative chain
+        status for the CYBOU shell. No-op when unchanged. */
+    void setChainStatus(int height, int peer_count);
+
     /** Core-facing adapter entry (doc 73): core drives identity lifecycle
         transitions only. The GUI never sets these states on its own. */
     void setIdentityState(CybouIdentityState state, const QString& account_id = {},
