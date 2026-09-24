@@ -38,13 +38,6 @@
 #include <util/translation.h>
 #include <validation.h>
 
-#ifdef ENABLE_WALLET
-#include <qt/paymentserver.h>
-#include <qt/walletcontroller.h>
-#include <qt/walletmodel.h>
-#include <wallet/types.h>
-#endif // ENABLE_WALLET
-
 #include <boost/signals2/connection.hpp>
 #include <chrono>
 #include <memory>
@@ -67,9 +60,6 @@ Q_DECLARE_METATYPE(CAmount)
 Q_DECLARE_METATYPE(SynchronizationState)
 Q_DECLARE_METATYPE(SyncType)
 Q_DECLARE_METATYPE(uint256)
-#ifdef ENABLE_WALLET
-Q_DECLARE_METATYPE(wallet::AddressPurpose)
-#endif // ENABLE_WALLET
 
 using util::MakeUnorderedList;
 
@@ -79,10 +69,6 @@ static void RegisterMetaTypes()
     qRegisterMetaType<bool*>();
     qRegisterMetaType<SynchronizationState>();
     qRegisterMetaType<SyncType>();
-  #ifdef ENABLE_WALLET
-    qRegisterMetaType<WalletModel*>();
-    qRegisterMetaType<wallet::AddressPurpose>();
-  #endif // ENABLE_WALLET
     // Register typedefs (see https://doc.qt.io/qt-5/qmetatype.html#qRegisterMetaType)
     // IMPORTANT: if CAmount is no longer a typedef use the normal variant above (see https://doc.qt.io/qt-5/qmetatype.html#qRegisterMetaType-1)
     qRegisterMetaType<CAmount>("CAmount");
@@ -229,13 +215,6 @@ BitcoinApplication::~BitcoinApplication()
     platformStyle = nullptr;
 }
 
-#ifdef ENABLE_WALLET
-void BitcoinApplication::createPaymentServer()
-{
-    paymentServer = new PaymentServer(this);
-}
-#endif
-
 bool BitcoinApplication::createOptionsModel(bool resetSettings)
 {
     optionsModel = new OptionsModel(node(), this);
@@ -359,17 +338,6 @@ void BitcoinApplication::requestShutdown()
     window->setClientModel(nullptr);
     pollShutdownTimer->stop();
 
-#ifdef ENABLE_WALLET
-    // Delete wallet controller here manually, instead of relying on Qt object
-    // tracking (https://doc.qt.io/qt-5/objecttrees.html). This makes sure
-    // walletmodel m_handle_* notification handlers are deleted before wallets
-    // are unloaded, which can simplify wallet implementations. It also avoids
-    // these notifications having to be handled while GUI objects are being
-    // destroyed, making GUI code less fragile as well.
-    delete m_wallet_controller;
-    m_wallet_controller = nullptr;
-#endif // ENABLE_WALLET
-
     delete clientModel;
     clientModel = nullptr;
 
@@ -396,15 +364,6 @@ void BitcoinApplication::initializeResult(bool success, interfaces::BlockAndHead
 
     // If '-min' option passed, start window minimized (iconified) or minimized to tray
     bool start_minimized = gArgs.GetBoolArg("-min", false);
-#ifdef ENABLE_WALLET
-    if (WalletModel::isWalletEnabled()) {
-        m_wallet_controller = new WalletController(*clientModel, platformStyle, this);
-        window->setWalletController(m_wallet_controller, /*show_loading_minimized=*/start_minimized);
-        if (paymentServer) {
-            paymentServer->setOptionsModel(optionsModel);
-        }
-    }
-#endif // ENABLE_WALLET
 
     // Show or minimize window
     if (!start_minimized) {
@@ -416,18 +375,6 @@ void BitcoinApplication::initializeResult(bool success, interfaces::BlockAndHead
     }
     Q_EMIT windowShown(window);
 
-#ifdef ENABLE_WALLET
-    // Now that initialization/startup is done, process any command-line
-    // bitcoin: URIs or payment requests:
-    if (paymentServer) {
-        connect(paymentServer, &PaymentServer::receivedPaymentRequest, window, &BitcoinGUI::handlePaymentRequest);
-        connect(window, &BitcoinGUI::receivedURI, paymentServer, &PaymentServer::handleURIOrFile);
-        connect(paymentServer, &PaymentServer::message, [this](const QString& title, const QString& message, unsigned int style) {
-            window->message(title, message, style);
-        });
-        QTimer::singleShot(100ms, paymentServer, &PaymentServer::uiReady);
-    }
-#endif
     pollShutdownTimer->start(SHUTDOWN_POLLING_DELAY);
 }
 
@@ -527,12 +474,6 @@ int GuiMain(int argc, char* argv[])
     for (int i = 1; i < argc; i++) {
         QString arg(argv[i]);
         bool invalid_token = !arg.startsWith("-");
-#ifdef ENABLE_WALLET
-        if (arg.startsWith(BITCOIN_IPC_PREFIX, Qt::CaseInsensitive)) {
-            invalid_token &= false;
-            payment_server_token_seen = true;
-        }
-#endif
         if (payment_server_token_seen && arg.startsWith("-")) {
             InitError(Untranslated(strprintf("Options ('%s') cannot follow a BIP-21 payment URI", argv[i])));
             QMessageBox::critical(nullptr, CLIENT_NAME,
@@ -603,10 +544,6 @@ int GuiMain(int argc, char* argv[])
     }
 
     // The consumer application exposes only the isolated CYBOU-DEV network.
-#ifdef ENABLE_WALLET
-    // Parse URIs on command line
-    PaymentServer::ipcParseCommandLine(argc, argv);
-#endif
 
     QScopedPointer<const NetworkStyle> networkStyle(NetworkStyle::instantiate(Params().GetChainType()));
     assert(!networkStyle.isNull());
@@ -614,23 +551,6 @@ int GuiMain(int argc, char* argv[])
     QApplication::setApplicationName(networkStyle->getAppName());
     // Re-initialize translations after changing application name (language in network-specific settings can be different)
     initTranslations(qtTranslatorBase, qtTranslator, translatorBase, translator);
-
-#ifdef ENABLE_WALLET
-    /// 8. URI IPC sending
-    // - Do this early as we don't want to bother initializing if we are just calling IPC
-    // - Do this *after* setting up the data directory, as the data directory hash is used in the name
-    // of the server.
-    // - Do this after creating app and setting up translations, so errors are
-    // translated properly.
-    if (PaymentServer::ipcSendCommandLine())
-        exit(EXIT_SUCCESS);
-
-    // Start up the payment server early, too, so impatient users that click on
-    // bitcoin: links repeatedly have their payment requests routed to this process:
-    if (WalletModel::isWalletEnabled()) {
-        app.createPaymentServer();
-    }
-#endif // ENABLE_WALLET
 
     /// 9. Main GUI initialization
     // Install global event filter that makes sure that out-of-focus labels do not contain text cursor.

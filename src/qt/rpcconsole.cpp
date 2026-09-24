@@ -16,9 +16,6 @@
 #include <qt/guiutil.h>
 #include <qt/peertablesortproxy.h>
 #include <qt/platformstyle.h>
-#ifdef ENABLE_WALLET
-#include <qt/walletmodel.h>
-#endif // ENABLE_WALLET
 #include <rpc/client.h>
 #include <rpc/server.h>
 #include <util/strencodings.h>
@@ -442,16 +439,6 @@ RPCConsole::RPCConsole(interfaces::Node& node, const PlatformStyle *_platformSty
 {
     ui->setupUi(this);
     QSettings settings;
-#ifdef ENABLE_WALLET
-    if (WalletModel::isWalletEnabled()) {
-        // RPCConsole widget is a window.
-        if (!restoreGeometry(settings.value("RPCConsoleWindowGeometry").toByteArray())) {
-            // Restore failed (perhaps missing setting), center the window
-            move(QGuiApplication::primaryScreen()->availableGeometry().center() - frameGeometry().center());
-        }
-        ui->splitter->restoreState(settings.value("RPCConsoleWindowPeersTabSplitterSizes").toByteArray());
-    } else
-#endif // ENABLE_WALLET
     {
         // RPCConsole is a child widget.
         ui->splitter->restoreState(settings.value("RPCConsoleWidgetPeersTabSplitterSizes").toByteArray());
@@ -556,13 +543,6 @@ RPCConsole::RPCConsole(interfaces::Node& node, const PlatformStyle *_platformSty
 RPCConsole::~RPCConsole()
 {
     QSettings settings;
-#ifdef ENABLE_WALLET
-    if (WalletModel::isWalletEnabled()) {
-        // RPCConsole widget is a window.
-        settings.setValue("RPCConsoleWindowGeometry", saveGeometry());
-        settings.setValue("RPCConsoleWindowPeersTabSplitterSizes", ui->splitter->saveState());
-    } else
-#endif // ENABLE_WALLET
     {
         // RPCConsole is a child widget.
         settings.setValue("RPCConsoleWidgetPeersTabSplitterSizes", ui->splitter->saveState());
@@ -623,9 +603,6 @@ void RPCConsole::setClientModel(ClientModel *model, int bestblock_height, int64_
     clientModel = model;
 
     bool wallet_enabled{false};
-#ifdef ENABLE_WALLET
-    wallet_enabled = WalletModel::isWalletEnabled();
-#endif // ENABLE_WALLET
     if (model && !wallet_enabled) {
         // Show warning, for example if this is a prerelease version
         connect(model, &ClientModel::alertsChanged, this, &RPCConsole::updateAlerts);
@@ -751,37 +728,6 @@ void RPCConsole::setClientModel(ClientModel *model, int bestblock_height, int64_
         thread.wait();
     }
 }
-
-#ifdef ENABLE_WALLET
-void RPCConsole::addWallet(WalletModel * const walletModel)
-{
-    // use name for text and wallet model for internal data object (to allow to move to a wallet id later)
-    ui->WalletSelector->addItem(walletModel->getDisplayName(), QVariant::fromValue(walletModel));
-    if (ui->WalletSelector->count() == 2) {
-        // First wallet added, set to default to match wallet RPC behavior
-        ui->WalletSelector->setCurrentIndex(1);
-    }
-    if (ui->WalletSelector->count() > 2) {
-        ui->WalletSelector->setVisible(true);
-        ui->WalletSelectorLabel->setVisible(true);
-    }
-}
-
-void RPCConsole::removeWallet(WalletModel * const walletModel)
-{
-    ui->WalletSelector->removeItem(ui->WalletSelector->findData(QVariant::fromValue(walletModel)));
-    if (ui->WalletSelector->count() == 2) {
-        ui->WalletSelector->setVisible(false);
-        ui->WalletSelectorLabel->setVisible(false);
-    }
-}
-
-void RPCConsole::setCurrentWallet(WalletModel* const wallet_model)
-{
-    QVariant data = QVariant::fromValue(wallet_model);
-    ui->WalletSelector->setCurrentIndex(ui->WalletSelector->findData(data));
-}
-#endif
 
 static QString categoryClass(int category)
 {
@@ -1023,18 +969,6 @@ void RPCConsole::on_lineEdit_returnPressed()
     ui->lineEdit->clear();
 
     QString in_use_wallet_name;
-#ifdef ENABLE_WALLET
-    WalletModel* wallet_model = ui->WalletSelector->currentData().value<WalletModel*>();
-    in_use_wallet_name = wallet_model ? wallet_model->getWalletName() : QString();
-    if (m_last_wallet_model != wallet_model) {
-        if (wallet_model) {
-            message(CMD_REQUEST, tr("Executing command using \"%1\" wallet").arg(wallet_model->getWalletName()));
-        } else {
-            message(CMD_REQUEST, tr("Executing command without any wallet"));
-        }
-        m_last_wallet_model = wallet_model;
-    }
-#endif // ENABLE_WALLET
 
     message(CMD_REQUEST, QString::fromStdString(strFilteredCmd));
     //: A console message indicating an entered command is currently being executed.

@@ -153,7 +153,3 @@ target_link_libraries(fuzz
   Boost::headers
   libevent::extra
 )
-
-if(ENABLE_WALLET)
-  add_subdirectory(${PROJECT_SOURCE_DIR}/src/wallet/test/fuzz wallet)
-endif()

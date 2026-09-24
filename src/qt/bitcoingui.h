@@ -78,20 +78,7 @@ public:
         The client model represents the part of the core that communicates with the P2P network, and is wallet-agnostic.
     */
     virtual void setClientModel(ClientModel *clientModel = nullptr, interfaces::BlockAndHeaderTipInfo* tip_info = nullptr);
-#ifdef ENABLE_WALLET
-    void setWalletController(WalletController* wallet_controller, bool show_loading_minimized);
-    WalletController* getWalletController();
-#endif
 
-#ifdef ENABLE_WALLET
-    /** Set the wallet model.
-        The wallet model represents a bitcoin wallet, and offers access to the list of transactions, address book and sending
-        functionality.
-    */
-    void addWallet(WalletModel* walletModel);
-    void removeWallet(WalletModel* walletModel);
-    void removeAllWallets();
-#endif // ENABLE_WALLET
     bool enableWallet = false;
 
     /** Get the tray icon status.
@@ -245,61 +232,12 @@ public Q_SLOTS:
     */
     void message(const QString& title, QString message, unsigned int style, bool* ret = nullptr, const QString& detailed_message = QString());
 
-#ifdef ENABLE_WALLET
-    void setCurrentWallet(WalletModel* wallet_model);
-    void setCurrentWalletBySelectorIndex(int index);
-    /** Set the UI status indicators based on the currently selected wallet.
-    */
-    void updateWalletStatus();
-
-private:
-    /** Set the encryption status as shown in the UI.
-       @param[in] status            current encryption status
-       @see WalletModel::EncryptionStatus
-    */
-    void setEncryptionStatus(int status);
-
-    /** Set the hd-enabled status as shown in the UI.
-     @param[in] hdEnabled         current hd enabled status
-     @see WalletModel::EncryptionStatus
-     */
-    void setHDStatus(bool privkeyDisabled, int hdEnabled);
-
-public Q_SLOTS:
-    bool handlePaymentRequest(const SendCoinsRecipient& recipient);
-
-    /** Show incoming transaction notification for new transactions. */
-    void incomingTransaction(const QString& date, BitcoinUnit unit, const CAmount& amount, const QString& type, const QString& address, const QString& label, const QString& walletName);
-#endif // ENABLE_WALLET
-
 private:
     /** Set the proxy-enabled icon as shown in the UI. */
     void updateProxyIcon();
     void updateWindowTitle();
 
 public Q_SLOTS:
-#ifdef ENABLE_WALLET
-    /** Switch to overview (home) page */
-    void gotoOverviewPage();
-    /** Switch to history (transactions) page */
-    void gotoHistoryPage();
-    /** Switch to receive coins page */
-    void gotoReceiveCoinsPage();
-    /** Switch to send coins page */
-    void gotoSendCoinsPage(QString addr = "");
-
-    /** Show Sign/Verify Message dialog and switch to sign message tab */
-    void gotoSignMessageTab(QString addr = "");
-    /** Show Sign/Verify Message dialog and switch to verify message tab */
-    void gotoVerifyMessageTab(QString addr = "");
-    /** Load Partially Signed Bitcoin Transaction from file or clipboard */
-    void gotoLoadPSBT(bool from_clipboard = false);
-    /** Enable history action when privacy is changed */
-    void enableHistoryAction(bool privacy);
-
-    /** Show open dialog */
-    void openClicked();
-#endif // ENABLE_WALLET
     /** Show configuration dialog */
     void optionsClicked();
     /** Show about dialog */

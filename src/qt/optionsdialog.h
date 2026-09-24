@@ -38,7 +38,7 @@ class OptionsDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit OptionsDialog(QWidget *parent, bool enableWallet);
+    explicit OptionsDialog(QWidget *parent);
     ~OptionsDialog();
 
     enum Tab {

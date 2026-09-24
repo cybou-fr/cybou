@@ -38,8 +38,6 @@ static const char* SettingName(OptionsModel::OptionID option)
     switch (option) {
     case OptionsModel::DatabaseCache: return "dbcache";
     case OptionsModel::ThreadsScriptVerif: return "par";
-    case OptionsModel::SpendZeroConfChange: return "spendzeroconfchange";
-    case OptionsModel::ExternalSignerPath: return "signer";
     case OptionsModel::MapPortNatpmp: return "natpmp";
     case OptionsModel::Listen: return "listen";
     case OptionsModel::Server: return "server";
@@ -202,18 +200,9 @@ bool OptionsModel::Init(bilingual_str& error)
         settings.setValue("strThirdPartyTxUrls", "");
     strThirdPartyTxUrls = settings.value("strThirdPartyTxUrls", "").toString();
 
-    if (!settings.contains("fCoinControlFeatures"))
-        settings.setValue("fCoinControlFeatures", false);
-    fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
-
-    if (!settings.contains("enable_psbt_controls")) {
-        settings.setValue("enable_psbt_controls", false);
-    }
-    m_enable_psbt_controls = settings.value("enable_psbt_controls", false).toBool();
-
     // These are shared with the core or have a command-line parameter
     // and we want command-line parameters to overwrite the GUI settings.
-    for (OptionID option : {DatabaseCache, ThreadsScriptVerif, SpendZeroConfChange, ExternalSignerPath,
+    for (OptionID option : {DatabaseCache, ThreadsScriptVerif,
                             MapPortNatpmp, Listen, Server, Prune, ProxyUse, ProxyUseTor, Language}) {
         std::string setting = SettingName(option);
         if (node().isSettingIgnored(setting)) addOverriddenOption("-" + setting);
@@ -235,12 +224,6 @@ bool OptionsModel::Init(bilingual_str& error)
         settings.setValue("strDataDir", GUIUtil::getDefaultDataDirectory());
 
     // Wallet
-#ifdef ENABLE_WALLET
-    if (!settings.contains("SubFeeFromAmount")) {
-        settings.setValue("SubFeeFromAmount", false);
-    }
-    m_sub_fee_from_amount = settings.value("SubFeeFromAmount", false).toBool();
-#endif
 
     // Display
     if (settings.contains("FontForMoney")) {
@@ -442,14 +425,6 @@ QVariant OptionsModel::getOption(OptionID option, const std::string& suffix) con
         }
     }
 
-#ifdef ENABLE_WALLET
-    case SpendZeroConfChange:
-        return SettingToBool(setting(), wallet::DEFAULT_SPEND_ZEROCONF_CHANGE);
-    case ExternalSignerPath:
-        return QString::fromStdString(SettingToString(setting(), ""));
-    case SubFeeFromAmount:
-        return m_sub_fee_from_amount;
-#endif
     case DisplayUnit:
         return QVariant::fromValue(m_display_bitcoin_unit);
     case ThirdPartyTxUrls:
@@ -458,10 +433,6 @@ QVariant OptionsModel::getOption(OptionID option, const std::string& suffix) con
         return QString::fromStdString(SettingToString(setting(), ""));
     case FontForMoney:
         return QVariant::fromValue(m_font_money);
-    case CoinControlFeatures:
-        return fCoinControlFeatures;
-    case EnablePSBTControls:
-        return settings.value("enable_psbt_controls");
     case Prune:
         return PruneEnabled(setting());
     case PruneSize:
@@ -593,24 +564,6 @@ bool OptionsModel::setOption(OptionID option, const QVariant& value, const std::
         }
         break;
 
-#ifdef ENABLE_WALLET
-    case SpendZeroConfChange:
-        if (changed()) {
-            update(value.toBool());
-            setRestartRequired(true);
-        }
-        break;
-    case ExternalSignerPath:
-        if (changed()) {
-            update(value.toString().toStdString());
-            setRestartRequired(true);
-        }
-        break;
-    case SubFeeFromAmount:
-        m_sub_fee_from_amount = value.toBool();
-        settings.setValue("SubFeeFromAmount", m_sub_fee_from_amount);
-        break;
-#endif
     case DisplayUnit:
         setDisplayUnit(value);
         break;
@@ -636,15 +589,6 @@ bool OptionsModel::setOption(OptionID option, const QVariant& value, const std::
         Q_EMIT fontForMoneyChanged(getFontForMoney());
         break;
     }
-    case CoinControlFeatures:
-        fCoinControlFeatures = value.toBool();
-        settings.setValue("fCoinControlFeatures", fCoinControlFeatures);
-        Q_EMIT coinControlFeaturesChanged(fCoinControlFeatures);
-        break;
-    case EnablePSBTControls:
-        m_enable_psbt_controls = value.toBool();
-        settings.setValue("enable_psbt_controls", m_enable_psbt_controls);
-        break;
     case Prune:
         if (changed()) {
             if (suffix.empty() && !value.toBool()) setOption(option, true, "-prev");
@@ -771,10 +715,6 @@ void OptionsModel::checkAndMigrate()
 
     migrate_setting(DatabaseCache, "nDatabaseCache");
     migrate_setting(ThreadsScriptVerif, "nThreadsScriptVerif");
-#ifdef ENABLE_WALLET
-    migrate_setting(SpendZeroConfChange, "bSpendZeroConfChange");
-    migrate_setting(ExternalSignerPath, "external_signer_path");
-#endif
     migrate_setting(MapPortNatpmp, "fUseNatpmp");
     migrate_setting(Listen, "fListen");
     migrate_setting(Server, "server");

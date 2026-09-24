@@ -55,11 +55,6 @@ public:
 
     void setClientModel(ClientModel *model = nullptr, int bestblock_height = 0, int64_t bestblock_date = 0, double verification_progress = 0.0);
 
-#ifdef ENABLE_WALLET
-    void addWallet(WalletModel* walletModel);
-    void removeWallet(WalletModel* walletModel);
-#endif // ENABLE_WALLET
-
     enum MessageClass {
         MC_ERROR,
         MC_DEBUG,
@@ -136,10 +131,6 @@ public Q_SLOTS:
     void unbanSelectedNode();
     /** set which tab has the focus (is visible) */
     void setTabFocus(enum TabTypes tabType);
-#ifdef ENABLE_WALLET
-    /** Set the current (ie - active) wallet */
-    void setCurrentWallet(WalletModel* wallet_model);
-#endif // ENABLE_WALLET
 
 private:
     struct TranslatedStrings {

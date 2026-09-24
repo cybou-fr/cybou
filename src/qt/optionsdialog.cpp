@@ -86,7 +86,7 @@ void setupFontOptions(QComboBox* cb, QLabel* preview)
     on_font_choice_changed(cb->currentIndex());
 }
 
-OptionsDialog::OptionsDialog(QWidget* parent, bool enableWallet)
+OptionsDialog::OptionsDialog(QWidget* parent)
     : QDialog(parent, GUIUtil::dialog_flags | Qt::WindowMaximizeButtonHint),
       ui(new Ui::OptionsDialog)
 {
@@ -131,20 +131,10 @@ OptionsDialog::OptionsDialog(QWidget* parent, bool enableWallet)
     ui->verticalLayout_Main->removeItem(ui->horizontalSpacer_0_Main);
 #endif
 
-    /* remove Wallet tab and 3rd party-URL textbox in case of -disablewallet */
-    if (!enableWallet) {
-        ui->tabWidget->removeTab(ui->tabWidget->indexOf(ui->tabWallet));
-        ui->thirdPartyTxUrlsLabel->setVisible(false);
-        ui->thirdPartyTxUrls->setVisible(false);
-    }
+    /* The 3rd party transaction URL viewer was a wallet feature. */
+    ui->thirdPartyTxUrlsLabel->setVisible(false);
+    ui->thirdPartyTxUrls->setVisible(false);
 
-#ifdef ENABLE_EXTERNAL_SIGNER
-    ui->externalSignerPath->setToolTip(ui->externalSignerPath->toolTip().arg(CLIENT_NAME));
-#else
-    //: "External signing" means using devices such as hardware wallets.
-    ui->externalSignerPath->setToolTip(tr("Compiled without external signing support (required for external signing)"));
-    ui->externalSignerPath->setEnabled(false);
-#endif
     /* Display elements init */
     QDir translations(":translations");
 
@@ -251,10 +241,7 @@ void OptionsDialog::setModel(OptionsModel *_model)
     connect(ui->prune, &QCheckBox::clicked, this, &OptionsDialog::togglePruneWarning);
     connect(ui->pruneSize, qOverload<int>(&QSpinBox::valueChanged), this, &OptionsDialog::showRestartWarning);
     connect(ui->databaseCache, qOverload<int>(&QSpinBox::valueChanged), this, &OptionsDialog::showRestartWarning);
-    connect(ui->externalSignerPath, &QLineEdit::textChanged, [this]{ showRestartWarning(); });
     connect(ui->threadsScriptVerif, qOverload<int>(&QSpinBox::valueChanged), this, &OptionsDialog::showRestartWarning);
-    /* Wallet */
-    connect(ui->spendZeroConfChange, &QCheckBox::clicked, this, &OptionsDialog::showRestartWarning);
     /* Network */
     connect(ui->allowIncoming, &QCheckBox::clicked, this, &OptionsDialog::showRestartWarning);
     connect(ui->enableServer, &QCheckBox::clicked, this, &OptionsDialog::showRestartWarning);
@@ -283,13 +270,6 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->databaseCache, OptionsModel::DatabaseCache);
     mapper->addMapping(ui->prune, OptionsModel::Prune);
     mapper->addMapping(ui->pruneSize, OptionsModel::PruneSize);
-
-    /* Wallet */
-    mapper->addMapping(ui->spendZeroConfChange, OptionsModel::SpendZeroConfChange);
-    mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
-    mapper->addMapping(ui->subFeeFromAmount, OptionsModel::SubFeeFromAmount);
-    mapper->addMapping(ui->externalSignerPath, OptionsModel::ExternalSignerPath);
-    mapper->addMapping(ui->m_enable_psbt_controls, OptionsModel::EnablePSBTControls);
 
     /* Network */
     mapper->addMapping(ui->mapPortNatpmp, OptionsModel::MapPortNatpmp);

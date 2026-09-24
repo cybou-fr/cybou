@@ -68,7 +68,6 @@ jobs:
             -DBUILD_TESTS=ON \
             -DBUILD_TX=OFF \
             -DBUILD_UTIL=OFF \
-            -DENABLE_WALLET=OFF \
             -DENABLE_EXTERNAL_SIGNER=OFF \
             -DENABLE_IPC=OFF \
             -DWITH_CCACHE=OFF \
