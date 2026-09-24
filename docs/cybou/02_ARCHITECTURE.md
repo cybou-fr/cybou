@@ -6,6 +6,17 @@ bootstrap authority, and submits AccountCreate operations. The Email,
 Storage, Backup, and full P2P paths in the diagram are not yet connected
 end to end. See `26_IMPLEMENTATION_STATUS.md` for the code boundary.
 
+Identity is the platform primitive. Email is the first product built on that
+identity; Storage, Backup and Drive remain gated later services.
+
+## UX invariant
+
+Protocol complexity must not leak into normal user workflows. The normal UI
+should expose names and outcomes such as `stanislav.cybou`, `Sending`,
+`Delivered / Finalized`, `Backup protected` and `Device revoked`, rather than
+AccountID, nonce, epoch, PoW difficulty, validator quorum, ML-DSA, block height
+or OperationID. Advanced and diagnostic views may expose protocol detail.
+
 ## Desktop process
 
 ```text

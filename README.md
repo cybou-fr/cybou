@@ -1,9 +1,13 @@
 # CYBOU
 
-> **CYBOU** — sovereign decentralized communication infrastructure, designed in France.<br>
-> *Infrastructure souveraine de communication décentralisée, conçue en France.*
+> **CYBOU** — European sovereign identity and communication network, designed in France.<br>
+> *Réseau européen souverain d'identité et de communication, conçu en France.*
 
-CYBOU is an open-source peer-to-peer platform for secure communication, digital identity, and sovereign online services. The intended node owns verified state locally and reaches explicit BFT finality without centralized account or cloud providers. **CYBOU Email** is the first application.
+CYBOU is an open-source peer-to-peer network for user-controlled identity,
+secure communication, and sovereign online services. The intended node owns
+verified state locally and reaches explicit BFT finality without centralized
+account or cloud providers. **Identity is the platform primitive; CYBOU Email
+is the first product.**
 
 ## Architecture
 
@@ -18,10 +22,13 @@ The current core contains canonical identity registration, account creation, pay
 | **Identity** | Local key ownership, permissionless anti-Sybil account creation, recovery, device rotation, and `.cybou` names. |
 | **Email** | One-recipient, text-only encrypted MailTx with deterministic size-aware fees and recipient-owned local indexes. |
 | **Wallet** | Native balances, SystemBalance service budget, payments, and protocol fee routing. |
-| **Storage** | Encrypted distributed objects; required before large attachments. |
-| **Backup** | Encrypted decentralized backup and recovery. |
+| **Storage** | Later encrypted distributed objects; required before large attachments. |
+| **Backup** | Later encrypted decentralized backup and recovery. |
 
-The services share one verified CYBOU state. Storage and Backup remain designs rather than operational network services.
+The services share one verified CYBOU state. Storage, Backup, and Drive are
+gated on demonstrated Identity + Email usage and operational maturity. The
+pre-Store Mail design is intentionally bounded for the pilot, not for
+mass-scale Email.
 
 ## Network and economics
 

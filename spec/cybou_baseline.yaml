@@ -68,12 +68,20 @@ storage:
   repair_required: true
 applications:
   order:
-  - Wallet/Identity
+  - Identity
+  - Account State
+  - Economic/SystemBalance
   - Mail Protocol
   - CYBOU Email
   - Object Storage
   - Backup
   - Drive
+  first_product: CYBOU Email
+  later_services_gated: true
+  product_gates:
+  - identity_email_mvp
+  - real_pilot
+  - scale_services
   email:
     first_user_facing_application: true
     model: consensus_registered_mail
@@ -119,11 +127,14 @@ strategy:
   - France
   - European Union
   - Global
-  public_positioning: European sovereign peer-to-peer network, designed in France
+  public_positioning: European sovereign identity and communication network, designed in France
   protocol_global_open: true
   france_only: false
   global_commercial_launch_initially: false
   first_adoption_unit: organization_or_team
+  isolated_consumer_launch: false
+  pq_is_security_property_not_sole_differentiator: true
+  native_asset_is_infrastructure_not_prerequisite_purchase: true
 public_asset_policy:
   ico_before_useful_network: false
   token_sale_before_useful_network: false

@@ -17,6 +17,38 @@ consensus changes are ready together. Acceptance includes clean-machine
 restore, vault tamper rejection, hybrid signature failure tests, revoked
 device rejection, and adversarial name-claim ordering. See docs 10 and 76–78.
 
+## Product gates
+
+Milestone numbers do not authorize a new product surface by themselves.
+Product expansion requires the following evidence.
+
+### Gate A - Identity + Email MVP
+
+Before broad Storage, Backup or Drive work begins, the complete path must
+work on a clean machine and survive restart:
+
+- create and restore an identity;
+- choose and use a `.cybou` name;
+- add and revoke a device;
+- send encrypted mail to an offline recipient;
+- later receive, verify and reply to that mail;
+- preserve canonical identity and mail state across client restarts;
+- pass four-validator restart and fault tests.
+
+### Gate B - Real pilot
+
+Run a controlled pilot with 20-100 real users for 8-12 weeks. Measure repeated
+mail use, recovery by real users, multi-device use, retention, support burden
+and history growth. The pilot is successful only when users continue using the
+product beyond initial novelty.
+
+### Gate C - Scale services
+
+Only after Gate B may the project introduce the minimal Object Storage layer.
+Backup and Drive require separate evidence of operational need and stability.
+Pre-Store Mail is intentionally bounded pilot architecture, not mass-scale
+storage architecture.
+
 ## v0.0.0 — Exact upstream baseline
 Pin exact local Bitcoin Core tag/commit. Build/tests only. No normal Bitcoin-network launch.
 
@@ -120,7 +152,7 @@ Design/test emergency Operator Authority succession without introducing normal D
 ## v0.3.1 — European controlled expansion
 Multiple EU validator operators/providers.
 
-## v0.4.0 — Object Storage
+## v0.4.0 — Object Storage (after Product Gates A and B)
 Encrypted object storage becomes the mail content layer.
 
 New MailTx carries content root/reference rather than large body ciphertext.

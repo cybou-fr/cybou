@@ -1,7 +1,7 @@
 version: '0.0.1'
 positioning:
-  en: CYBOU — a European sovereign peer-to-peer network, designed in France.
-  fr: CYBOU — réseau pair-à-pair souverain européen, conçu en France.
+  en: CYBOU — a European sovereign identity and communication network, designed in France.
+  fr: CYBOU — réseau européen souverain d'identité et de communication, conçu en France.
 ownership:
   commercial_owner_operator: true
   dao: false
@@ -16,7 +16,14 @@ rollout:
   purpose: later commercial expansion after EU maturity
 go_to_market:
   first_product: CYBOU Email
+  product_thesis: Identity is the platform primitive; Email is the first product.
   first_adoption_unit: organization/team
+  isolated_consumer_launch: false
+  later_services:
+  - Object Storage
+  - Backup
+  - Drive
+  service_expansion_requires_product_gates: true
   initial_public_channels: false
   lead_message:
   - sovereign E2E encrypted email
@@ -24,12 +31,14 @@ go_to_market:
   - network-native identity
   - operational resilience
   - European independence
-  - post-quantum migration readiness
+  - user-controlled network identity
   do_not_lead_with:
   - blockchain
   - coin
   - staking
   - UTXO
+  pq_positioning: security_property_not_sole_differentiator
+  native_asset_positioning: infrastructure_not_prerequisite_purchase
 asset:
   ico: false
   public_sale: false

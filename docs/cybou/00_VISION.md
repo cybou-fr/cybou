@@ -1,19 +1,34 @@
 # 00 — Vision
 
-CYBOU is a commercially operated European sovereign peer-to-peer service and network, designed in France.
+CYBOU is a commercially operated European sovereign identity and communication network, designed in France.
 
-The first user-facing application is **CYBOU Email**.
+Identity is the platform primitive. CYBOU Email is the first complete product.
+Object Storage, Backup and Drive are later sovereign services, gated on
+demonstrated product usage and operational maturity.
+
+## Product thesis
+
+A CYBOU user owns:
+
+```text
+identity
+keys
+devices
+verified state
+```
+
+not an account inside a provider database.
 
 ## Public positioning
 
 ```text
-CYBOU — European sovereign email on a peer-to-peer network, designed in France.
+CYBOU — European sovereign identity and communication network, designed in France.
 ```
 
 French:
 
 ```text
-CYBOU — messagerie électronique souveraine européenne sur réseau pair-à-pair, conçue en France.
+CYBOU — réseau européen souverain d'identité et de communication, conçu en France.
 ```
 
 ## Ownership and decentralization
@@ -34,6 +49,28 @@ Failure objective:
 
 Commercial ownership does not create a master key over user funds or E2E Email.
 
+## Product sequence
+
+```text
+CYBOU foundation
+    Identity
+    verified state
+    BFT finality
+    native economic layer
+
+First product
+    CYBOU Email
+
+Later sovereign services
+    Object Storage
+    Backup
+    Drive
+```
+
+CYBOU does not attempt to launch all services at once. Identity and CYBOU
+Email form the first complete product. Storage, Backup and Drive are gated on
+demonstrated real-world usage and operational maturity.
+
 ## Technology trajectory
 
 ```text
@@ -46,7 +83,7 @@ Bitcoin-derived C++ full-node base
     -> bounded-history state sync
     -> BFT explicit finality
     -> independent validators
-    -> cooperative encrypted Object Storage
+    -> cooperative encrypted Object Storage, after product gates
     -> Backup
     -> Drive
 ```
@@ -59,6 +96,10 @@ Email is asynchronous-first:
 - recipient offline availability is natural because mail is consensus-registered;
 - organizations already understand email;
 - CYBOU Email v1 does not depend on SMTP.
+
+The native asset is infrastructure for metering scarce resources, resisting
+abuse, funding validator operation and onboarding. It is not a prerequisite
+purchase for a new user.
 
 ## End-to-end encryption
 

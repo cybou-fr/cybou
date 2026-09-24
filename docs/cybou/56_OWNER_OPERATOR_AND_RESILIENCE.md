@@ -6,6 +6,18 @@ CYBOU is a privately/commercially owned service.
 
 It is not a DAO, foundation or community-owned protocol.
 
+The open network can provide identity, native mail, verification and basic
+participation. Commercial services may include:
+
+- managed organization deployment;
+- managed validators;
+- support and administration;
+- device provisioning;
+- storage and backup capacity;
+- compliance tooling and SLA contracts.
+
+This separates the commercial owner/operator from user-owned protocol state.
+
 The owner/operator may own:
 
 - brand/domain;

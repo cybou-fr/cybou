@@ -1,6 +1,13 @@
 # 44 — Critical survival audit — v0.0.1 architecture
 
-The largest existential risks are cryptographic mistakes, unbounded history/state growth, unsafe BFT, metadata leakage and fork debt.
+The largest existential risks are cryptographic mistakes, unbounded history/state growth, unsafe BFT, metadata leakage, fork debt and premature product scope expansion.
+
+## Critical risk: product scope expansion
+
+CYBOU contains enough architectural surface to become several products:
+Email, Wallet, Storage, Backup and Drive. Feature expansion before Identity
+and Email pilot validation is a survival risk. Do not build a broad service
+suite to compensate for an unfinished core product.
 
 ## Product core
 
@@ -28,6 +35,9 @@ Enforce:
 - no attachments.
 
 Mass-scale Email is gated on Object Storage.
+
+Pre-Store Mail is an intentionally bounded pilot architecture, not the
+mass-scale storage architecture.
 
 ## Critical risk: current-state growth
 
