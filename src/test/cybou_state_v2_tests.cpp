@@ -493,6 +493,14 @@ BOOST_AUTO_TEST_CASE(post_quantum_validator_set_and_bft_certificate)
     BOOST_CHECK(val_set.Mode() == ConsensusMode::BFT);
     BOOST_CHECK(ValidateValidatorSetV2(val_set) == ValidatorSetValidationError::NONE);
 
+    // Hardening check: duplicate ML-DSA-65 key rejection
+    auto dup_ml_set = val_set;
+    dup_ml_set.validators[1].consensus_public_key.ml_dsa = dup_ml_set.validators[0].consensus_public_key.ml_dsa;
+    const auto dup_val_id = ComputeValidatorKeyId(dup_ml_set.validators[1].consensus_public_key);
+    BOOST_REQUIRE(dup_val_id.has_value());
+    std::copy_n(dup_val_id->begin(), 32, dup_ml_set.validators[1].validator_id.begin());
+    BOOST_CHECK(ValidateValidatorSetV2(dup_ml_set) == ValidatorSetValidationError::DUPLICATE_CONSENSUS_KEY);
+
     // Serialization roundtrip
     const auto serialized = SerializeValidatorSetV2(val_set);
     BOOST_CHECK_EQUAL(serialized.size(), 5 + 4 * VALIDATOR_V2_ENTRY_SIZE);
@@ -535,10 +543,16 @@ BOOST_AUTO_TEST_CASE(post_quantum_validator_set_and_bft_certificate)
 
     // Serialization roundtrip
     const auto cert_bytes = SerializeFinalityCertificateV2(cert);
-    BOOST_CHECK_EQUAL(cert_bytes.size(), 113 + 3 * BFT_COMMIT_VOTE_V2_SIZE);
-    const auto decoded_cert = DeserializeFinalityCertificateV2(cert_bytes);
+    BOOST_REQUIRE(cert_bytes.has_value());
+    BOOST_CHECK_EQUAL(cert_bytes->size(), 113 + 3 * BFT_COMMIT_VOTE_V2_SIZE);
+    const auto decoded_cert = DeserializeFinalityCertificateV2(*cert_bytes);
     BOOST_REQUIRE(decoded_cert.has_value());
     BOOST_CHECK(*decoded_cert == cert);
+
+    // Fail-closed malformed certificate serialization
+    auto bad_ml_cert = cert;
+    bad_ml_cert.commit_votes[0].signature.ml_dsa.pop_back(); // 3308 != 3309
+    BOOST_CHECK(!SerializeFinalityCertificateV2(bad_ml_cert).has_value());
 
     // Adversarial verification checks
     // 1. Wrong network
@@ -734,8 +748,17 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_CHECK(SerializeCybouStateV2(*restored_state) == state_bytes);
 
     // 5. Adversarial checks
-    // A. Account already has a name -> cannot commit another name
+    // A0. Account already has a pending commitment -> cannot commit another
     auto second_commit_op = commit_op;
+    second_commit_op.authorization.nonce = 1;
+    const auto sec_digest0 = ComputeDeviceOperationDigestV2(network_id, second_commit_op.authorization);
+    BOOST_REQUIRE(sec_digest0.has_value());
+    second_commit_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *sec_digest0);
+    const auto pending_commit_res = ExecuteBlockOperationsV2(*commit_block.state, {second_commit_op}, network_id, 11, params);
+    BOOST_CHECK(pending_commit_res.error == BlockExecutionErrorV2::INVALID_NAME_COMMIT);
+    BOOST_CHECK(pending_commit_res.name_commit_error == NameCommitError::ACCOUNT_HAS_PENDING_COMMIT);
+
+    // A. Account already has a name -> cannot commit another name
     second_commit_op.authorization.nonce = 2;
     const auto sec_digest = ComputeDeviceOperationDigestV2(network_id, second_commit_op.authorization);
     BOOST_REQUIRE(sec_digest.has_value());
@@ -744,11 +767,22 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_CHECK(double_commit_res.error == BlockExecutionErrorV2::INVALID_NAME_COMMIT);
     BOOST_CHECK(double_commit_res.name_commit_error == NameCommitError::ACCOUNT_ALREADY_HAS_NAME);
 
-    // B. Expired commit
+    // B. Expired commit & deterministic block pruning
     params.name_commit_max_lifetime = 5;
+    // Block at height 16 automatically prunes the expired commit from height 10 (16 > 10 + 5)
+    const auto prune_block = ExecuteBlockOperationsV2(*commit_block.state, {}, network_id, 16, params);
+    BOOST_REQUIRE(prune_block);
+    BOOST_CHECK(!prune_block.state->names.pending_commits.contains(name_commit_hash));
+    BOOST_CHECK(prune_block.state->names.pending_commits.empty());
+
+    // Once pruned, the commitment is no longer found for reveal
     const auto expired_res = ExecuteBlockOperationsV2(*commit_block.state, {reveal_proto_op}, network_id, 16, params);
     BOOST_CHECK(expired_res.error == BlockExecutionErrorV2::INVALID_NAME_REVEAL);
-    BOOST_CHECK(expired_res.name_reveal_error == NameRevealError::COMMIT_EXPIRED);
+    BOOST_CHECK(expired_res.name_reveal_error == NameRevealError::COMMITMENT_NOT_FOUND);
+
+    // Direct ApplyNameReveal check for COMMIT_EXPIRED on unpruned state
+    auto unpruned_state = *commit_block.state;
+    BOOST_CHECK(ApplyNameReveal(reveal_op, network_id, 16, params, unpruned_state) == NameRevealError::COMMIT_EXPIRED);
     params.name_commit_max_lifetime = 100;
 
     // C. Tampered commit wire
@@ -968,13 +1002,30 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     BOOST_CHECK(poor_res.error == BlockExecutionErrorV2::INVALID_MAIL);
     BOOST_CHECK(poor_res.mail_error == MailError::INSUFFICIENT_SYSTEM_BALANCE);
 
-    // C. Ciphertext size limits
-    MailPayload oversized_payload = payload;
-    oversized_payload.ciphertext = std::vector<unsigned char>(DEFAULT_MAX_MAIL_CIPHERTEXT_SIZE + 1, 0xFF);
-    BOOST_CHECK(!SerializeMailPayload(oversized_payload));
+    // C. Ciphertext size limits: wire limit vs consensus execution limit
+    MailPayload wire_oversized_payload = payload;
+    wire_oversized_payload.ciphertext = std::vector<unsigned char>(MAX_MAIL_WIRE_CIPHERTEXT_SIZE + 1, 0xFF);
+    BOOST_CHECK(!SerializeMailPayload(wire_oversized_payload));
     MailPayload empty_payload = payload;
     empty_payload.ciphertext.clear();
     BOOST_CHECK(!SerializeMailPayload(empty_payload));
+
+    // Consensus parameter execution check: payload within wire framing (e.g. 65 KiB)
+    // but exceeding params.max_mail_ciphertext_size (64 KiB) is rejected by consensus
+    MailPayload param_oversized_payload = payload;
+    param_oversized_payload.ciphertext = std::vector<unsigned char>(params.max_mail_ciphertext_size + 1, 0xEE);
+    const auto param_commit = ComputeMailPayloadCommitment(param_oversized_payload);
+    BOOST_REQUIRE(param_commit.has_value());
+    AuthorizedMail param_oversized_mail = mail_op;
+    param_oversized_mail.mail = param_oversized_payload;
+    param_oversized_mail.authorization.payload_commitment = *param_commit;
+    param_oversized_mail.authorization.nonce = nonce;
+    const auto dig_oversized = ComputeDeviceOperationDigestV2(network_id, param_oversized_mail.authorization);
+    BOOST_REQUIRE(dig_oversized.has_value());
+    param_oversized_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig_oversized);
+    const auto param_res = ExecuteBlockOperationsV2(*epoch1_res.state, {ProtocolOperationV2{param_oversized_mail}}, network_id, epoch1_height + 1, params);
+    BOOST_CHECK(param_res.error == BlockExecutionErrorV2::INVALID_MAIL);
+    BOOST_CHECK(param_res.mail_error == MailError::INVALID_PAYLOAD);
 }
 
 BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
@@ -1056,6 +1107,34 @@ BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
     BOOST_REQUIRE(block_res);
     BOOST_CHECK_EQUAL(block_res.state->accounts.at(account).system_balance, params.onboarding_bonus);
     BOOST_CHECK(*block_res.state_root == *state_hash);
+    BOOST_CHECK_EQUAL(TotalSupply(*block_res.state), TotalSupply(parent));
+}
+
+BOOST_AUTO_TEST_CASE(supply_conservation_invariant_check)
+{
+    using namespace cybou;
+
+    CybouState state{};
+    state.onboarding_pool = 1'000'000;
+    state.security_reward_pool = 2'000'000;
+    state.pending_fee_pool = 500;
+
+    uint256 acc_raw{};
+    acc_raw.begin()[0] = 0x11;
+    const AccountId acc{acc_raw};
+    state.accounts.emplace(acc, AccountState{
+        .balance = 3'000'000,
+        .system_balance = 500'000,
+    });
+
+    // Total supply calculation
+    BOOST_CHECK_EQUAL(TotalSupply(state), 1'000'000ULL + 2'000'000ULL + 500ULL + 3'000'000ULL + 500'000ULL);
+
+    // Over-supply check (with valid zero-account state and valid validator set)
+    CybouState overflow_state{};
+    overflow_state.validator_set.validators.push_back(MakeTestValidator(1));
+    overflow_state.onboarding_pool = 100'000'000'001ULL;
+    BOOST_CHECK(ValidateCybouState(overflow_state) == StateValidationError::BALANCE_OVERFLOW);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

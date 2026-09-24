@@ -305,9 +305,21 @@ FinalityVerificationError VerifyFinalityCertificateV2(
     return FinalityVerificationError::NONE;
 }
 
-std::vector<unsigned char> SerializeFinalityCertificateV2(const BftFinalityCertificateV2& cert)
+std::optional<std::vector<unsigned char>> SerializeFinalityCertificateV2(const BftFinalityCertificateV2& cert)
 {
+    if (cert.version != BFT_FINALITY_CERTIFICATE_VERSION_V2 || cert.network_id.IsNull() ||
+        cert.block_id.IsNull() || cert.validator_set_commitment.IsNull()) {
+        return std::nullopt;
+    }
+    for (const auto& vote : cert.commit_votes) {
+        if (vote.validator_id.IsNull() || vote.signature.ml_dsa.size() != 3309 ||
+            std::all_of(vote.signature.ed25519.begin(), vote.signature.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
+            std::all_of(vote.signature.ml_dsa.begin(), vote.signature.ml_dsa.end(), [](unsigned char b) { return b == 0; })) {
+            return std::nullopt;
+        }
+    }
     std::vector<unsigned char> out;
+    out.reserve(113 + cert.commit_votes.size() * BFT_COMMIT_VOTE_V2_SIZE);
     out.push_back(cert.version);
     out.insert(out.end(), cert.network_id.begin(), cert.network_id.end());
     out.insert(out.end(), cert.block_id.begin(), cert.block_id.end());

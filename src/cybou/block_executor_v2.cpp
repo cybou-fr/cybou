@@ -20,11 +20,17 @@ BlockExecutionResultV2 ExecuteBlockOperationsV2(const CybouStateV2& parent,
         return result;
     };
     if (ValidateCybouStateV2(parent) != StateValidationErrorV2::NONE) return fail(BlockExecutionErrorV2::INVALID_STATE);
+    const uint64_t initial_supply = TotalSupply(parent);
     const auto creates = std::count_if(operations.begin(), operations.end(), [](const auto& operation) {
         return std::holds_alternative<AccountCreateOpV2>(operation);
     });
     if (creates > params.max_account_creates_per_block) return fail(BlockExecutionErrorV2::TOO_MANY_ACCOUNT_CREATES);
     auto candidate = parent;
+    if (params.name_commit_max_lifetime > 0) {
+        std::erase_if(candidate.names.pending_commits, [&](const auto& item) {
+            return block_height > item.second.commit_height + params.name_commit_max_lifetime;
+        });
+    }
     for (size_t i{0}; i < operations.size(); ++i) {
         if (const auto* create = std::get_if<AccountCreateOpV2>(&operations[i])) {
             const auto result = ApplyAccountCreateV2(*create, network_id, block_height, params, candidate);
@@ -107,6 +113,8 @@ BlockExecutionResultV2 ExecuteBlockOperationsV2(const CybouStateV2& parent,
     candidate.security_reward_pool += security_addition;
     candidate.onboarding_pool += chunks;
     candidate.pending_fee_pool %= 4;
+    const uint64_t final_supply = TotalSupply(candidate);
+    if (final_supply != initial_supply) return fail(BlockExecutionErrorV2::FEE_ROUTING_OVERFLOW);
     if (ValidateCybouStateV2(candidate) != StateValidationErrorV2::NONE) return fail(BlockExecutionErrorV2::INVALID_STATE);
     const auto root = CybouStateHashV2(candidate);
     if (!root) return fail(BlockExecutionErrorV2::INVALID_STATE);

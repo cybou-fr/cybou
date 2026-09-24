@@ -116,7 +116,7 @@ FinalityVerificationError VerifyFinalityCertificateV2(
     const ValidatorSetV2& validator_set,
     const uint256& expected_network_id);
 
-std::vector<unsigned char> SerializeFinalityCertificateV2(const BftFinalityCertificateV2& cert);
+std::optional<std::vector<unsigned char>> SerializeFinalityCertificateV2(const BftFinalityCertificateV2& cert);
 std::optional<BftFinalityCertificateV2> DeserializeFinalityCertificateV2(std::span<const unsigned char> bytes);
 
 // Unversioned aliases

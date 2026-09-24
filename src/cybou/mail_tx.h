@@ -24,6 +24,8 @@ namespace cybou {
 inline constexpr uint8_t MAIL_TX_VERSION{2};
 inline constexpr size_t MAIL_PAYLOAD_HEADER_SIZE{1 + 32 + 32 + 32 + 4}; // 101 bytes
 inline constexpr size_t AUTHORIZED_MAIL_HEADER_SIZE{2597 + MAIL_PAYLOAD_HEADER_SIZE}; // 2698 bytes
+inline constexpr uint32_t MAX_MAIL_WIRE_CIPHERTEXT_SIZE{1024 * 1024}; // 1 MiB absolute hard wire framing limit
+inline constexpr size_t MAX_MAIL_WIRE_BYTES{AUTHORIZED_MAIL_HEADER_SIZE + MAX_MAIL_WIRE_CIPHERTEXT_SIZE};
 
 struct MailPayload {
     uint8_t version{MAIL_TX_VERSION};
@@ -39,7 +41,7 @@ inline std::optional<std::vector<unsigned char>> SerializeMailPayload(const Mail
 {
     if (payload.version != MAIL_TX_VERSION || payload.recipient.IsNull() ||
         payload.discovery_tag.IsNull() || payload.content_commitment.IsNull() ||
-        payload.ciphertext.empty() || payload.ciphertext.size() > DEFAULT_MAX_MAIL_CIPHERTEXT_SIZE) {
+        payload.ciphertext.empty() || payload.ciphertext.size() > MAX_MAIL_WIRE_CIPHERTEXT_SIZE) {
         return std::nullopt;
     }
     std::vector<unsigned char> out;
@@ -68,7 +70,7 @@ inline std::optional<MailPayload> DeserializeMailPayload(std::span<const unsigne
 
     uint32_t len{0};
     for (int i = 0; i < 4; ++i) len |= uint32_t{bytes[97 + i]} << (8 * i);
-    if (len == 0 || len > DEFAULT_MAX_MAIL_CIPHERTEXT_SIZE || bytes.size() != MAIL_PAYLOAD_HEADER_SIZE + len) {
+    if (len == 0 || len > MAX_MAIL_WIRE_CIPHERTEXT_SIZE || bytes.size() != MAIL_PAYLOAD_HEADER_SIZE + len) {
         return std::nullopt;
     }
 

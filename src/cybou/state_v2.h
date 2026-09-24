@@ -81,6 +81,7 @@ enum class StateValidationErrorV2 : uint8_t {
 };
 
 StateValidationErrorV2 ValidateCybouStateV2(const CybouStateV2& state);
+uint64_t TotalSupply(const CybouStateV2& state);
 
 std::optional<std::vector<unsigned char>> SerializeCybouStateV2(const CybouStateV2& state);
 std::optional<CybouStateV2> DeserializeCybouStateV2(std::span<const unsigned char> bytes);

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <limits>
 #include <memory>
+#include <set>
 #include <string_view>
 
 namespace cybou {
@@ -115,6 +116,11 @@ NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
     }
     if (state.names.account_names.contains(op.authorization.account_id)) {
         return NameCommitError::ACCOUNT_ALREADY_HAS_NAME;
+    }
+    for (const auto& [commit_hash, record] : state.names.pending_commits) {
+        if (record.account_id == op.authorization.account_id) {
+            return NameCommitError::ACCOUNT_HAS_PENDING_COMMIT;
+        }
     }
     if (state.names.pending_commits.size() >= params.max_pending_name_commits) {
         return NameCommitError::COMMITMENT_LIMIT_EXCEEDED;
@@ -271,25 +277,35 @@ StateValidationErrorV2 ValidateCybouStateV2(const CybouStateV2& state)
         if (it == state.names.account_names.end() || it->second != label) return StateValidationErrorV2::INVALID_NAME_REGISTRY;
         if (!state.accounts.contains(acc)) return StateValidationErrorV2::INVALID_NAME_REGISTRY;
     }
+    std::set<AccountId> committing_accounts;
     for (const auto& [commit, record] : state.names.pending_commits) {
         if (commit.IsNull() || !state.accounts.contains(record.account_id)) return StateValidationErrorV2::INVALID_NAME_REGISTRY;
+        if (!committing_accounts.insert(record.account_id).second) return StateValidationErrorV2::INVALID_NAME_REGISTRY;
     }
     if (state.names.pending_commits.size() > DEFAULT_MAX_PENDING_NAME_COMMITS) return StateValidationErrorV2::INVALID_NAME_REGISTRY;
     constexpr uint64_t MAX_SUPPLY{100'000'000'000};
+    const uint64_t total = TotalSupply(state);
+    if (total > MAX_SUPPLY) return StateValidationErrorV2::BALANCE_OVERFLOW;
+    return StateValidationErrorV2::NONE;
+}
+
+uint64_t TotalSupply(const CybouStateV2& state)
+{
+    constexpr uint64_t MAX_SUPPLY{100'000'000'000};
     uint64_t total{0};
-    if (state.onboarding_pool > MAX_SUPPLY) return StateValidationErrorV2::BALANCE_OVERFLOW;
+    if (state.onboarding_pool > MAX_SUPPLY) return std::numeric_limits<uint64_t>::max();
     total += state.onboarding_pool;
-    if (state.security_reward_pool > MAX_SUPPLY - total) return StateValidationErrorV2::BALANCE_OVERFLOW;
+    if (state.security_reward_pool > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
     total += state.security_reward_pool;
-    if (state.pending_fee_pool > MAX_SUPPLY - total) return StateValidationErrorV2::BALANCE_OVERFLOW;
+    if (state.pending_fee_pool > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
     total += state.pending_fee_pool;
     for (const auto& [id, account] : state.accounts) {
-        if (account.balance > MAX_SUPPLY - total) return StateValidationErrorV2::BALANCE_OVERFLOW;
+        if (account.balance > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
         total += account.balance;
-        if (account.system_balance > MAX_SUPPLY - total) return StateValidationErrorV2::BALANCE_OVERFLOW;
+        if (account.system_balance > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
         total += account.system_balance;
     }
-    return StateValidationErrorV2::NONE;
+    return total;
 }
 
 std::optional<std::vector<unsigned char>> SerializeCybouStateV2(const CybouStateV2& state)

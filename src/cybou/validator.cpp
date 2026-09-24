@@ -162,6 +162,7 @@ ValidatorSetValidationError ValidateValidatorSetV2(const ValidatorSetV2& val_set
     }
     std::set<uint256> seen_ids;
     std::set<std::array<unsigned char, 32>> seen_ed25519;
+    std::set<std::vector<unsigned char>> seen_ml_dsa;
     for (const auto& val : val_set.validators) {
         if (val.weight != 1) {
             return ValidatorSetValidationError::INVALID_WEIGHT;
@@ -183,6 +184,9 @@ ValidatorSetValidationError ValidateValidatorSetV2(const ValidatorSetV2& val_set
             return ValidatorSetValidationError::DUPLICATE_VALIDATOR_ID;
         }
         if (!seen_ed25519.insert(val.consensus_public_key.ed25519).second) {
+            return ValidatorSetValidationError::DUPLICATE_CONSENSUS_KEY;
+        }
+        if (!seen_ml_dsa.insert(val.consensus_public_key.ml_dsa).second) {
             return ValidatorSetValidationError::DUPLICATE_CONSENSUS_KEY;
         }
     }
