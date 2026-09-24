@@ -30,5 +30,27 @@ std::optional<IdentityAuthorizationV2> DeserializeIdentityAuthorizationV2(
 std::optional<std::array<unsigned char, 32>> ComputeIdentityAuthorizationCommitmentV2(
     const IdentityAuthorizationV2& authorization);
 
+inline constexpr size_t IDENTITY_AUTHORIZATION_SIZE{IDENTITY_AUTHORIZATION_V2_SIZE};
+using IdentityAuthorizationBytes = std::array<unsigned char, IDENTITY_AUTHORIZATION_SIZE>;
+using IdentityAuthorization = IdentityAuthorizationV2;
+
+inline std::optional<IdentityAuthorizationBytes> SerializeIdentityAuthorization(
+    const IdentityAuthorization& authorization)
+{
+    return SerializeIdentityAuthorizationV2(authorization);
+}
+
+inline std::optional<IdentityAuthorization> DeserializeIdentityAuthorization(
+    std::span<const unsigned char> bytes)
+{
+    return DeserializeIdentityAuthorizationV2(bytes);
+}
+
+inline std::optional<std::array<unsigned char, 32>> ComputeIdentityAuthorizationCommitment(
+    const IdentityAuthorization& authorization)
+{
+    return ComputeIdentityAuthorizationCommitmentV2(authorization);
+}
+
 } // namespace cybou
 #endif

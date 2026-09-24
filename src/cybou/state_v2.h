@@ -87,6 +87,37 @@ std::optional<CybouStateV2> DeserializeCybouStateV2(std::span<const unsigned cha
 std::optional<uint256> CybouStateHashV2(const CybouStateV2& state);
 
 using StateValidationError = StateValidationErrorV2;
+using AccountState = AccountStateV2;
+using CybouState = CybouStateV2;
+using AccountCreateStateError = AccountCreateStateErrorV2;
+inline constexpr uint8_t CYBOU_STATE_VERSION{CYBOU_STATE_VERSION_V2};
+
+inline AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params, CybouState& state)
+{
+    return ApplyAccountCreateV2(op, network_id, block_height, params, state);
+}
+
+inline StateValidationError ValidateCybouState(const CybouState& state)
+{
+    return ValidateCybouStateV2(state);
+}
+
+inline std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& state)
+{
+    return SerializeCybouStateV2(state);
+}
+
+inline std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> bytes)
+{
+    return DeserializeCybouStateV2(bytes);
+}
+
+inline std::optional<uint256> CybouStateHash(const CybouState& state)
+{
+    return CybouStateHashV2(state);
+}
 
 } // namespace cybou
 #endif

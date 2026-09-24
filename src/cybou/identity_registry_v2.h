@@ -151,5 +151,21 @@ std::optional<IdentityRegistryV2> DeserializeIdentityRegistryV2(std::span<const 
 using IdentityRegistry = IdentityRegistryV2;
 using IdentityRegistryError = IdentityRegistryErrorV2;
 
+inline std::optional<std::vector<unsigned char>> SerializeIdentityRegistry(const IdentityRegistry& registry)
+{
+    return SerializeIdentityRegistryV2(registry);
+}
+
+inline std::optional<IdentityRegistry> DeserializeIdentityRegistry(std::span<const unsigned char> bytes)
+{
+    return DeserializeIdentityRegistryV2(bytes);
+}
+
+inline std::optional<std::array<unsigned char, 32>> ComputeDeviceOperationDigest(
+    const uint256& network_id, const DeviceAuthorization& request)
+{
+    return ComputeDeviceOperationDigestV2(network_id, request);
+}
+
 } // namespace cybou
 #endif

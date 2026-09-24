@@ -977,4 +977,85 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     BOOST_CHECK(!SerializeMailPayload(empty_payload));
 }
 
+BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
+{
+    using namespace cybou;
+
+    auto params = DevProtocolParameters();
+    params.account_creation_work_bits = 0;
+
+    // Build unversioned CybouState
+    CybouState state{};
+    state.onboarding_pool = params.onboarding_bonus * 5;
+    state.validator_set.validators.push_back(MakeTestValidator(111));
+
+    uint256 network_id{};
+    network_id.begin()[0] = 0xAA;
+    uint256 acc_raw{};
+    acc_raw.begin()[0] = 0xBB;
+    const AccountId account{acc_raw};
+
+    std::array<unsigned char, 32> root_seed{}, dev_seed{};
+    root_seed[0] = 1;
+    dev_seed[0] = 2;
+    const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto device = DeriveIdentityPublicKey(dev_seed, IdentityKeyPurpose::DEVICE);
+    BOOST_REQUIRE(root && device);
+
+    const IdentityAuthorization auth{*root, *device};
+    const auto commitment = ComputeIdentityAuthorizationCommitment(auth);
+    BOOST_REQUIRE(commitment.has_value());
+    const auto pop_digest = ComputeAccountCreatePopDigest(network_id, account, auth);
+    BOOST_REQUIRE(pop_digest.has_value());
+
+    const AccountCreateOp create_op{
+        .account_id = account,
+        .authorization = auth,
+        .work = {
+            .network_id = network_id,
+            .account_id = account,
+            .authorization_commitment = *commitment,
+            .work_epoch = 0,
+            .nonce = 0,
+        },
+        .recovery_pop = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *pop_digest),
+        .device_pop = *SignIdentityMessage(dev_seed, IdentityKeyPurpose::DEVICE, *pop_digest),
+    };
+
+    // Apply unversioned AccountCreate
+    BOOST_CHECK(ApplyAccountCreate(create_op, network_id, 0, params, state) == AccountCreateStateError::NONE);
+    BOOST_CHECK_EQUAL(state.accounts.at(account).system_balance, params.onboarding_bonus);
+
+    // Unversioned state validation & hashing
+    BOOST_CHECK(ValidateCybouState(state) == StateValidationError::NONE);
+    const auto state_hash = CybouStateHash(state);
+    BOOST_REQUIRE(state_hash.has_value());
+    BOOST_CHECK(!state_hash->IsNull());
+
+    // Unversioned state serialization & deserialization
+    const auto state_bytes = SerializeCybouState(state);
+    BOOST_REQUIRE(state_bytes.has_value());
+    const auto restored_state = DeserializeCybouState(*state_bytes);
+    BOOST_REQUIRE(restored_state.has_value());
+    BOOST_CHECK(SerializeCybouState(*restored_state) == state_bytes);
+
+    // Execute via unversioned BlockExecutor
+    const ProtocolOperation proto_create{create_op};
+    const auto proto_wire = SerializeProtocolOperation(proto_create);
+    BOOST_REQUIRE(proto_wire.has_value());
+    const auto decoded_proto = DeserializeProtocolOperation(*proto_wire);
+    BOOST_REQUIRE(decoded_proto.has_value());
+    const auto op_id = ComputeOperationId(*decoded_proto);
+    BOOST_REQUIRE(op_id.has_value());
+
+    // Execute block with parent state
+    CybouState parent{};
+    parent.onboarding_pool = params.onboarding_bonus * 5;
+    parent.validator_set.validators.push_back(MakeTestValidator(111));
+    const auto block_res = ExecuteBlockOperations(parent, {*decoded_proto}, network_id, 0, params);
+    BOOST_REQUIRE(block_res);
+    BOOST_CHECK_EQUAL(block_res.state->accounts.at(account).system_balance, params.onboarding_bonus);
+    BOOST_CHECK(*block_res.state_root == *state_hash);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

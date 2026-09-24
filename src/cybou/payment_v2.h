@@ -92,5 +92,49 @@ using SystemLockError = SystemLockErrorV2;
 inline constexpr size_t PAYMENT_PAYLOAD_SIZE{PAYMENT_PAYLOAD_SIZE_V2};
 inline constexpr size_t SYSTEM_LOCK_PAYLOAD_SIZE{SYSTEM_LOCK_PAYLOAD_SIZE_V2};
 
+inline std::optional<std::array<unsigned char, PAYMENT_PAYLOAD_SIZE>> SerializePaymentPayload(const PaymentPayload& payment)
+{
+    return SerializePaymentPayloadV2(payment);
+}
+
+inline std::optional<PaymentPayload> DeserializePaymentPayload(std::span<const unsigned char> bytes)
+{
+    return DeserializePaymentPayloadV2(bytes);
+}
+
+inline std::optional<IdentityKeyId> ComputePaymentPayloadCommitment(const PaymentPayload& payment)
+{
+    return ComputePaymentPayloadCommitmentV2(payment);
+}
+
+inline PaymentError ApplyPayment(const AuthorizedPayment& operation,
+    const uint256& network_id, const CybouProtocolParameters& params,
+    CybouStateV2& state)
+{
+    return ApplyPaymentV2(operation, network_id, params, state);
+}
+
+inline std::optional<std::array<unsigned char, SYSTEM_LOCK_PAYLOAD_SIZE>> SerializeSystemLockPayload(const SystemLockPayload& lock)
+{
+    return SerializeSystemLockPayloadV2(lock);
+}
+
+inline std::optional<SystemLockPayload> DeserializeSystemLockPayload(std::span<const unsigned char> bytes)
+{
+    return DeserializeSystemLockPayloadV2(bytes);
+}
+
+inline std::optional<IdentityKeyId> ComputeSystemLockPayloadCommitment(const SystemLockPayload& lock)
+{
+    return ComputeSystemLockPayloadCommitmentV2(lock);
+}
+
+inline SystemLockError ApplySystemLock(const AuthorizedSystemLock& operation,
+    const uint256& network_id,
+    CybouStateV2& state)
+{
+    return ApplySystemLockV2(operation, network_id, state);
+}
+
 } // namespace cybou
 #endif

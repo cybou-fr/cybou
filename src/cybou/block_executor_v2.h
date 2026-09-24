@@ -52,5 +52,13 @@ BlockExecutionResultV2 ExecuteBlockOperationsV2(const CybouStateV2& parent,
 using BlockExecutionError = BlockExecutionErrorV2;
 using BlockExecutionResult = BlockExecutionResultV2;
 
+inline BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
+    const std::vector<ProtocolOperation>& operations,
+    const uint256& network_id, uint64_t block_height,
+    const CybouProtocolParameters& params)
+{
+    return ExecuteBlockOperationsV2(parent, operations, network_id, block_height, params);
+}
+
 } // namespace cybou
 #endif

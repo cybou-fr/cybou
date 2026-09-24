@@ -67,5 +67,20 @@ inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_SIZE{AUTHORIZED_SYSTEM_LOCK_V2_SI
 inline constexpr size_t AUTHORIZED_NAME_COMMIT_SIZE_ALIAS{AUTHORIZED_NAME_COMMIT_V2_SIZE};
 inline constexpr size_t AUTHORIZED_NAME_REVEAL_SIZE_ALIAS{AUTHORIZED_NAME_REVEAL_V2_SIZE};
 
+inline std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const ProtocolOperation& operation)
+{
+    return SerializeProtocolOperationV2(operation);
+}
+
+inline std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const unsigned char> bytes)
+{
+    return DeserializeProtocolOperationV2(bytes);
+}
+
+inline std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation)
+{
+    return ComputeOperationIdV2(operation);
+}
+
 } // namespace cybou
 #endif
