@@ -95,10 +95,6 @@ std::optional<MailEvidenceBundle> CreateMailEvidenceBundle(
 std::optional<std::vector<unsigned char>> SerializeMailEvidenceBundle(const MailEvidenceBundle& bundle);
 std::optional<MailEvidenceBundle> DeserializeMailEvidenceBundle(std::span<const unsigned char> bytes);
 
-// Transition aliases
-using OperationInclusionProofV1 = OperationInclusionProof;
-using MailEvidenceBundleV1 = MailEvidenceBundle;
-
 } // namespace cybou
 
 #endif // CYBOU_EVIDENCE_H

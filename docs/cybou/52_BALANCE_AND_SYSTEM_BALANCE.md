@@ -95,7 +95,7 @@ DEV_ONBOARDING_BONUS = 6,000 CYBOU (Beta/Mainnet: TBD)
 A newly created identity satisfying anti-Sybil work receives the bonus automatically:
 
 ```text
-AccountCreateOpV1 + AccountCreationWorkV1
+AccountCreateOp + AccountCreationWorkV1
 -> +6,000 CYBOU System Balance (from OnboardingPool)
 ```
 

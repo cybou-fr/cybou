@@ -1,107 +1,23 @@
-# 70 — Account Creation Anti-Sybil Architecture
+# 70 — Account creation and anti-Sybil work
 
-## Status
+Status: the canonical consensus operation is implemented. Desktop vault creation and recovery remain to be integrated before the DEV cutover.
 
-Identity V2 will add a new AccountCreate operation with a random AccountID,
-hybrid Recovery Root and initial device authorization, while retaining
-permissionless account-creation work and atomic OnboardingPool funding. This
-page's V1 wire layout describes current DEV only; do not reinterpret it as V2.
-The encrypted recovery vault must be durably saved before V2 broadcast. See
-`10_IDENTITY_NAMES.md` and `76_IDENTITY_VAULT_RECOVERY.md`.
-The local 3331-byte `IdentityAuthorizationV2` serializer and commitment now
-feed a standalone AccountCreate V2 encoder and validator. The active protocol
-operation dispatcher does not yet accept it.
+Account creation is permissionless. No operator approval, voucher, or central activation is involved. A new AccountID is a random nonzero 256-bit identifier independent of the recovery phrase and signing keys.
 
-`AccountCreationWorkV2` retains the fixed 113-byte layout with version `02`
-and SHA-256 domain `CYBOU/ACCOUNT-CREATE-WORK/V2`. It binds NetworkID,
-random AccountID, authorization commitment, height-derived work epoch, and
-nonce. `AccountCreateOpV2` is exactly 9334 bytes: version `02`, 32-byte
-AccountID, 3331-byte authorization, 113-byte work, then root Ed25519 (64)
-and ML-DSA-65 (3309) signatures, then device Ed25519 (64) and ML-DSA-44
-(2420) signatures. Both hybrid proofs sign SHA-256 of ASCII
-`CYBOU/ACCOUNT-POP/V2` followed by NetworkID, AccountID, and authorization
-commitment (32 bytes each). Both components of **both** proofs are required.
+## Canonical operation
 
-This document defines the permissionless, protocol-native account creation mechanism for CYBOU.
-The centralized Operator-signed Voucher architecture has been permanently decommissioned.
-Users create accounts natively through the consensus protocol without central authorization, permission, or invites.
+`AccountCreateOp` contains AccountID, a hybrid Recovery Root and initial device authorization, `AccountCreationWork`, and two proofs of possession. The root proof requires Ed25519 and ML-DSA-65; the device proof requires Ed25519 and ML-DSA-44. Both proofs cover a domain-separated digest bound to NetworkID, AccountID, and the exact authorization commitment.
 
-## Principles
+The work serialization is 113 bytes and binds NetworkID, AccountID, authorization commitment, height-derived work epoch, and nonce. The complete account creation encoding is 9,334 bytes. Version bytes are part of these wire formats. Consensus rejects missing or invalid signature components.
 
-1. **Permissionless Access**: Any user or client node may create an AccountID. No operator signatures, vouchers, or approval gates are permitted.
-2. **Anti-Sybil Proof-of-Work**: To prevent mass account registration and exhaust of the `OnboardingPool`, every account creation operation must include valid work satisfying the network's difficulty parameter.
-3. **Atomic Onboarding Bonus**: Upon first creation of an account, an onboarding bonus is transferred atomically from `OnboardingPool` directly to `SystemBalance`. Identity creation alone never mints new tokens.
-4. **Authority Separation**: Operator Authority keys are restricted to validator admissions and removals. They MUST NOT participate in ordinary user account creation or onboarding.
+## Validation and state transition
 
-## Canonical Data Structures
+Validators check canonical encoding, network and account bindings, authorization commitment, work difficulty, valid epoch range, both proofs of possession, duplicate accounts and recovery keys, the per-block creation limit, and OnboardingPool solvency. Consensus uses block height and immutable network parameters, never local wall-clock time.
 
-### AccountCreationWorkV1
+A successful operation atomically registers the identity, debits the network onboarding bonus from OnboardingPool, and creates the monetary account with zero spendable balance and the bonus in SystemBalance. The state change becomes durable only after BFT finality.
 
-Proof-of-work bound strictly to the target account, network, and initial authorization commitment:
+## Local creation gate
 
-```text
-AccountCreationWorkV1 {
-    version: uint8 (1)
-    network_id: uint256
-    account_id: AccountId (32 bytes)
-    initial_authorization_commitment: uint256 (32 bytes)
-    work_epoch: uint64 (8 bytes LE)
-    nonce: uint64 (8 bytes LE)
-}
-```
+The portable CYBV2 vault must contain the random AccountID, recovery entropy, and independent device secret. It must be durably saved and authenticated by reopening before broadcast. The current desktop identity service still uses the older seed-based keystore; it does not yet satisfy this gate. Do not reset DEV or claim completed desktop onboarding until the vault, phrase confirmation, clean-machine restore, and finalized identity flow are integrated.
 
-Total canonical serialized size: 113 bytes.
-
-Canonical hashing rule:
-
-```text
-WorkHash = SHA-256("CYBOU/ACCOUNT-CREATE-WORK/V1" || canonical_serialized_work)
-```
-
-The computed hash must satisfy the network difficulty target (e.g. minimum leading zero bits).
-
-### AccountCreateOpV1
-
-Consensus operation submitted to validators:
-
-```text
-AccountCreateOpV1 {
-    version: uint8 (1)
-    account_id: AccountId
-    initial_authorization: AccountAuthorizationV1
-    creation_work: AccountCreationWorkV1
-    proof_of_possession: Ed25519 signature (64 bytes)
-}
-```
-
-The proof of possession signs the domain-separated digest
-`SHA256("CYBOU/ACCOUNT_POP/V1" || NetworkID || AccountID || authorization_key)`.
-It prevents registration of an account under a key the creator does not
-control. `AccountCreateOpV1` is canonical DEV code; its wire profile remains
-subject to versioned protocol review.
-
-## Validation and State Transition
-
-When processing `AccountCreateOpV1`:
-
-1. **Op Integrity**: Validate version, non-null fields, work difficulty, and
-   proof of possession of the initial authorization key.
-2. **Network Binding**: `creation_work.network_id` must match the active NetworkID derived from the immutable `CybouNetworkDefinitionV1`.
-3. **Account Binding**: `creation_work.account_id` must match `op.account_id`.
-4. **Auth Binding**: `creation_work.initial_authorization_commitment` must match `ComputeAuthCommitment(op.initial_authorization)`.
-5. **Epoch Binding**: The valid work epoch is derived deterministically from finalized block height and immutable network parameters; caller-supplied wall-clock time is irrelevant.
-6. **Anti-Duplication**: `op.account_id` must not already exist in consensus state.
-7. **Pool Solvency**: `OnboardingPool` must hold sufficient funds for the network bonus.
-8. **Block Limit**: The block must not exceed `max_account_creates_per_block`.
-9. **Candidate State Transition**:
-   - `OnboardingPool` debited by onboarding bonus.
-   - New `AccountState` created with `balance = 0`, `system_balance = onboarding_bonus`, `creation_height = height`, `creation_epoch = epoch`, and the active authorization key. The work commitment is not retained as a separate account-state field.
-   - Any invalid operation rejects the candidate without changing canonical state.
-10. **Finalized Commit**: After BFT finality, candidate state, state root, finalized tip and finalized height are persisted atomically. The height must advance by exactly one. Finalized CYBOU state has no production rollback or per-block undo path.
-
-## Network Economics and Rate Limits
-
-- **Dev Testnet Bonus**: 6,000 CYBOU.
-- **Beta / Mainnet Bonus**: Parameterized and determined by network launch conditions.
-- **Block Limit**: `max_account_creates_per_block` caps consensus throughput for new identities.
-- **Epoch Rate Limits**: New accounts are constrained by Proof of Trust (PoT) outgoing MailTx limits per epoch.
+DEV, Beta, and Mainnet use separate economic parameters and genesis states. Beta balances do not carry to Mainnet.

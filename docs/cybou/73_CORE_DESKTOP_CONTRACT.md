@@ -79,7 +79,7 @@ Each flag flips to true only when the corresponding protocol path is live
 on the node, not when it is planned:
 
 ```text
-account_creation   node accepts AccountCreateOpV1 + AccountCreationWorkV1
+account_creation   node accepts AccountCreateOp + AccountCreationWorkV1
 payments           PaymentOpV1 processing wired
 email              MailOp/MailTx processing wired
 storage            Object Storage placement wired

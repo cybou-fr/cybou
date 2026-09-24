@@ -37,11 +37,11 @@ cybou::CybouState CreateTestGenesis(const uint256& val_pub)
     };
 }
 
-cybou::CybouNetworkDefinitionV1 CreateTestNetworkDefinition(const cybou::CybouState& genesis)
+cybou::CybouNetworkDefinition CreateTestNetworkDefinition(const cybou::CybouState& genesis)
 {
     auto params = cybou::DevProtocolParameters();
     params.account_creation_work_bits = 0;
-    return cybou::CybouNetworkDefinitionV1{
+    return cybou::CybouNetworkDefinition{
         .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
         .genesis_block_id = cybou::CybouStateHash(genesis),
         .genesis_state_root = cybou::CybouStateHash(genesis),
@@ -133,7 +133,7 @@ BOOST_AUTO_TEST_CASE(runtime_submits_operations_and_updates_account_state)
     create_op.proof_of_possession = *cybou::SignUserMessage(
         user_priv, cybou::ComputeAccountPopDigest(runtime.GetNetworkId(), account_id, user_pub));
 
-    BOOST_REQUIRE(runtime.SubmitOperation(cybou::ProtocolOperationV1{create_op}));
+    BOOST_REQUIRE(runtime.SubmitOperation(cybou::ProtocolOperation{create_op}));
 
     // Account does not exist in state prior to block production
     BOOST_CHECK(!runtime.GetAccountState(account_id).has_value());
@@ -229,7 +229,7 @@ BOOST_AUTO_TEST_CASE(remote_operation_submission_over_tcp_network_transport)
         user_priv, cybou::ComputeAccountPopDigest(obs_runtime.GetNetworkId(), account_id, user_pub));
 
     // Submit operation from observer desktop node over network!
-    const auto submit_res = obs_runtime.SubmitOperation(cybou::ProtocolOperationV1{create_op});
+    const auto submit_res = obs_runtime.SubmitOperation(cybou::ProtocolOperation{create_op});
     BOOST_CHECK(submit_res);
     BOOST_CHECK(submit_res.status == cybou::OperationSubmitStatus::ACCEPTED);
     BOOST_CHECK(!submit_res.op_id.IsNull());
@@ -318,7 +318,7 @@ BOOST_AUTO_TEST_CASE(runtime_fail_closed_and_network_mismatch_reset)
 
     // Verify operations fail-closed
     BOOST_CHECK(!rt2->ProduceBlock().has_value());
-    const auto sub_res = rt2->SubmitOperation(cybou::ProtocolOperationV1{});
+    const auto sub_res = rt2->SubmitOperation(cybou::ProtocolOperation{});
     BOOST_CHECK(sub_res.status == cybou::OperationSubmitStatus::NETWORK_MISMATCH);
     BOOST_CHECK(!sub_res);
 
@@ -444,7 +444,7 @@ BOOST_AUTO_TEST_CASE(remote_operation_submission_strict_ack_validation)
     });
 
     const uint256 net_id = uint256::FromUserHex("1111111111111111111111111111111111111111111111111111111111111111").value();
-    cybou::ProtocolOperationV1 dummy_op;
+    cybou::ProtocolOperation dummy_op;
 
     // Test truncated ACK
     mode.store(0);

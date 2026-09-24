@@ -42,7 +42,6 @@ struct WalletLedgerEntry {
 
     friend bool operator==(const WalletLedgerEntry&, const WalletLedgerEntry&) = default;
 };
-using WalletLedgerEntryV1 = WalletLedgerEntry;
 
 enum class WalletOperationError : uint8_t {
     NONE = 0,

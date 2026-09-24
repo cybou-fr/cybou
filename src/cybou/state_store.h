@@ -176,9 +176,6 @@ private:
     std::shared_ptr<OperatorAuthoritySignatureVerifier> m_operator_verifier;
 };
 
-// Transition aliases
-using FinalizedHeadV1 = FinalizedHead;
-
 } // namespace cybou
 
 #endif // CYBOU_STATE_STORE_H

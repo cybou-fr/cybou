@@ -67,11 +67,6 @@ struct FinalizedBlock {
 std::optional<std::vector<unsigned char>> SerializeFinalizedBlock(const FinalizedBlock& finalized_block);
 std::optional<FinalizedBlock> DeserializeFinalizedBlock(std::span<const unsigned char> bytes);
 
-// Transition aliases
-using CybouBlockV1 = CybouBlock;
-using CybouBlockHeaderV1 = CybouBlockHeader;
-using FinalizedBlockV1 = FinalizedBlock;
-
 } // namespace cybou
 
 #endif // CYBOU_BLOCK_H

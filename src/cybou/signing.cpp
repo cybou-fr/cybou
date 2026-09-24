@@ -23,12 +23,12 @@ std::string_view ObjectSigningDomainTag(const ObjectSigningDomain domain)
     return {};
 }
 
-bool IsPresent(const SignatureBundleV1& bundle)
+bool IsPresent(const SignatureBundle& bundle)
 {
     const auto nonzero = [](const auto& sig) {
         return std::ranges::any_of(sig, [](unsigned char b) { return b != 0; });
     };
-    return bundle.suite_id == SignatureSuiteId::HYBRID_ED25519_MLDSA65_V1 &&
+    return bundle.suite_id == SignatureSuiteId::HYBRID_ED25519_MLDSA65 &&
         !bundle.authority_keyset_id.IsNull() &&
         nonzero(bundle.classical_signature) && nonzero(bundle.pq_signature);
 }
@@ -39,10 +39,10 @@ bool IsActiveAtEpoch(const OperatorAuthorityKeySet& keyset, const uint64_t epoch
         (!keyset.retired_from_epoch || epoch < *keyset.retired_from_epoch);
 }
 
-std::vector<unsigned char> SerializeSignatureBundle(const SignatureBundleV1& bundle)
+std::vector<unsigned char> SerializeSignatureBundle(const SignatureBundle& bundle)
 {
     std::vector<unsigned char> out;
-    out.reserve(SIGNATURE_BUNDLE_V1_SIZE);
+    out.reserve(SIGNATURE_BUNDLE_SIZE);
     const auto suite_val = static_cast<uint16_t>(bundle.suite_id);
     out.push_back(static_cast<unsigned char>(suite_val & 0xff));
     out.push_back(static_cast<unsigned char>((suite_val >> 8) & 0xff));
@@ -52,11 +52,11 @@ std::vector<unsigned char> SerializeSignatureBundle(const SignatureBundleV1& bun
     return out;
 }
 
-std::optional<SignatureBundleV1> DeserializeSignatureBundle(const std::span<const unsigned char> bytes)
+std::optional<SignatureBundle> DeserializeSignatureBundle(const std::span<const unsigned char> bytes)
 {
-    if (bytes.size() != SIGNATURE_BUNDLE_V1_SIZE) return std::nullopt;
+    if (bytes.size() != SIGNATURE_BUNDLE_SIZE) return std::nullopt;
     const uint16_t suite_val = static_cast<uint16_t>(bytes[0]) | (static_cast<uint16_t>(bytes[1]) << 8);
-    SignatureBundleV1 bundle;
+    SignatureBundle bundle;
     bundle.suite_id = static_cast<SignatureSuiteId>(suite_val);
     std::copy_n(bytes.begin() + 2, 32, bundle.authority_keyset_id.begin());
     std::copy_n(bytes.begin() + 34, ED25519_SIGNATURE_SIZE, bundle.classical_signature.begin());

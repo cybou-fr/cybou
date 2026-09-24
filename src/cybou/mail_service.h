@@ -61,7 +61,6 @@ struct ProtectedMail {
 
     friend bool operator==(const ProtectedMail&, const ProtectedMail&) = default;
 };
-using ProtectedMailV1 = ProtectedMail;
 
 /**
  * Local client mailbox item.
@@ -88,7 +87,6 @@ struct MailItem {
 
     friend bool operator==(const MailItem&, const MailItem&) = default;
 };
-using MailItemV1 = MailItem;
 
 enum class SendMailError : uint8_t {
     NONE = 0,

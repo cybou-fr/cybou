@@ -36,7 +36,7 @@ std::string_view ObjectSigningDomainTag(ObjectSigningDomain domain);
  * their combination rule; new suites get new identifiers, never a reinterpretation.
  */
 enum class SignatureSuiteId : uint16_t {
-    HYBRID_ED25519_MLDSA65_V1 = 1,
+    HYBRID_ED25519_MLDSA65 = 1,
 };
 
 inline constexpr size_t ED25519_SIGNATURE_SIZE{64};
@@ -54,7 +54,7 @@ struct OperatorAuthorityKeySet {
 
 bool IsActiveAtEpoch(const OperatorAuthorityKeySet& keyset, uint64_t epoch);
 
-struct SignatureBundleV1;
+struct SignatureBundle;
 
 /**
  * Cryptographic boundary for Operator Authority signatures.
@@ -66,7 +66,7 @@ public:
     virtual ~OperatorAuthoritySignatureVerifier() = default;
     virtual bool Verify(
         const OperatorAuthorityKeySet& keyset,
-        const SignatureBundleV1& bundle,
+        const SignatureBundle& bundle,
         std::span<const unsigned char> message) const = 0;
 };
 
@@ -76,35 +76,35 @@ class OpenSslOperatorAuthoritySignatureVerifier final : public OperatorAuthority
 public:
     bool Verify(
         const OperatorAuthorityKeySet& keyset,
-        const SignatureBundleV1& bundle,
+        const SignatureBundle& bundle,
         std::span<const unsigned char> message) const override;
 };
 
 /**
- * Hybrid signature bundle for HYBRID_ED25519_MLDSA65_V1.
+ * Hybrid signature bundle for HYBRID_ED25519_MLDSA65.
  *
  * Both signatures independently cover the same domain-separated canonical
  * message. The bundle is valid only if BOTH verify (AND, not OR). Fixed-size
  * fields: no arbitrary-length vectors on any consensus-adjacent path.
  */
-struct SignatureBundleV1 {
-    SignatureSuiteId suite_id{SignatureSuiteId::HYBRID_ED25519_MLDSA65_V1};
+struct SignatureBundle {
+    SignatureSuiteId suite_id{SignatureSuiteId::HYBRID_ED25519_MLDSA65};
     uint256 authority_keyset_id;
     std::array<unsigned char, ED25519_SIGNATURE_SIZE> classical_signature{};
     std::array<unsigned char, MLDSA65_SIGNATURE_SIZE> pq_signature{};
 
-    friend bool operator==(const SignatureBundleV1&, const SignatureBundleV1&) = default;
+    friend bool operator==(const SignatureBundle&, const SignatureBundle&) = default;
 };
 
-inline constexpr size_t SIGNATURE_BUNDLE_V1_SIZE{
+inline constexpr size_t SIGNATURE_BUNDLE_SIZE{
     2 + 32 + ED25519_SIGNATURE_SIZE + MLDSA65_SIGNATURE_SIZE
 };
 
-std::vector<unsigned char> SerializeSignatureBundle(const SignatureBundleV1& bundle);
-std::optional<SignatureBundleV1> DeserializeSignatureBundle(std::span<const unsigned char> bytes);
+std::vector<unsigned char> SerializeSignatureBundle(const SignatureBundle& bundle);
+std::optional<SignatureBundle> DeserializeSignatureBundle(std::span<const unsigned char> bytes);
 
 /** Structural gate: known suite, non-null keyset, and BOTH signature parts. */
-bool IsPresent(const SignatureBundleV1& bundle);
+bool IsPresent(const SignatureBundle& bundle);
 
 inline constexpr size_t USER_SIGNATURE_SIZE{64};
 

@@ -35,11 +35,11 @@ cybou::CybouState CreateTestGenesis(const uint256& val_pub)
     };
 }
 
-cybou::CybouNetworkDefinitionV1 CreateTestNetworkDefinition(const cybou::CybouState& genesis)
+cybou::CybouNetworkDefinition CreateTestNetworkDefinition(const cybou::CybouState& genesis)
 {
     auto params = cybou::DevProtocolParameters();
     params.account_creation_work_bits = 0; // fast PoW for tests
-    return cybou::CybouNetworkDefinitionV1{
+    return cybou::CybouNetworkDefinition{
         .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
         .genesis_block_id = cybou::CybouStateHash(genesis),
         .genesis_state_root = cybou::CybouStateHash(genesis),

@@ -130,35 +130,6 @@ private:
 std::optional<std::vector<unsigned char>> SerializeIdentityRegistry(const IdentityRegistry& registry);
 std::optional<IdentityRegistry> DeserializeIdentityRegistry(std::span<const unsigned char> bytes);
 
-// Transition aliases
-using IdentityKeyIdV2 = IdentityKeyId;
-inline constexpr size_t MAX_ACTIVE_DEVICES_V2{MAX_ACTIVE_DEVICES};
-inline constexpr uint32_t MAX_IDENTITY_REGISTRY_ACCOUNTS_V2{MAX_IDENTITY_REGISTRY_ACCOUNTS};
-using IdentityDeviceV2 = IdentityDevice;
-using IdentityRecordV2 = IdentityRecord;
-using DeviceAddV2 = DeviceAdd;
-using DeviceRevokeV2 = DeviceRevoke;
-using RecoveryRotateV2 = RecoveryRotate;
-using DeviceOperationKindV2 = DeviceOperationKind;
-using DeviceAuthorizationV2 = DeviceAuthorization;
-using IdentityRegistryErrorV2 = IdentityRegistryError;
-using IdentityRegistryV2 = IdentityRegistry;
-
-inline std::optional<std::array<unsigned char, 32>> ComputeDeviceAddDigestV2(
-    const uint256& network_id, const DeviceAdd& request) { return ComputeDeviceAddDigest(network_id, request); }
-inline std::optional<std::array<unsigned char, 32>> ComputeDeviceRevokeDigestV2(
-    const uint256& network_id, const DeviceRevoke& request) { return ComputeDeviceRevokeDigest(network_id, request); }
-inline std::optional<std::array<unsigned char, 32>> ComputeRecoveryRotateDigestV2(
-    const uint256& network_id, const RecoveryRotate& request) { return ComputeRecoveryRotateDigest(network_id, request); }
-inline std::optional<std::array<unsigned char, 32>> ComputeDeviceOperationDigestV2(
-    const uint256& network_id, const DeviceAuthorization& request) { return ComputeDeviceOperationDigest(network_id, request); }
-inline std::optional<std::vector<unsigned char>> SerializeIdentityRegistryV2(const IdentityRegistry& registry) {
-    return SerializeIdentityRegistry(registry);
-}
-inline std::optional<IdentityRegistry> DeserializeIdentityRegistryV2(std::span<const unsigned char> bytes) {
-    return DeserializeIdentityRegistry(bytes);
-}
-
 } // namespace cybou
 
 #endif // CYBOU_IDENTITY_REGISTRY_H

@@ -98,7 +98,7 @@ Do not encode Mail as OP_RETURN/application data inside Bitcoin semantics.
 - integer PoT;
 - block-height-derived PoT epoch;
 - 25 MailTx/epoch new-account baseline;
-- permissionless AccountCreateOpV1 and automatic onboarding bonus.
+- permissionless AccountCreateOp and automatic onboarding bonus.
 
 ## v0.1.1 — Checkpoint / snapshot / pruning
 - bounded state;

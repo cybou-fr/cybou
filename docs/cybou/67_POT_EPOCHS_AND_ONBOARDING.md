@@ -85,10 +85,10 @@ Canonical work hash domain: `CYBOU/ACCOUNT-CREATE-WORK/V1`.
 
 ## Onboarding bonus
 
-When a valid `AccountCreateOpV1` is applied to consensus:
+When a valid `AccountCreateOp` is applied to consensus:
 
 ```text
-valid AccountCreateOpV1
+valid AccountCreateOp
 + account_id does not exist
 + valid AccountCreationWorkV1 meeting network difficulty
 + matching initial_authorization_commitment

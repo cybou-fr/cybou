@@ -21,7 +21,7 @@ class TestAuthorityVerifier final : public cybou::OperatorAuthoritySignatureVeri
 {
 public:
     bool Verify(const cybou::OperatorAuthorityKeySet& keyset,
-                const cybou::SignatureBundleV1& bundle,
+                const cybou::SignatureBundle& bundle,
                 std::span<const unsigned char>) const override
     {
         return cybou::IsPresent(bundle) && bundle.authority_keyset_id == keyset.keyset_id;
@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(produces_and_persists_verified_authority_blocks)
         .onboarding_bonus = 6000,
         .epoch_blocks = 10,
     };
-    const cybou::CybouNetworkDefinitionV1 definition{
+    const cybou::CybouNetworkDefinition definition{
         .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
         .genesis_block_id = uint256::ONE,
         .genesis_state_root = cybou::CybouStateHash(genesis),
@@ -217,7 +217,7 @@ BOOST_AUTO_TEST_CASE(authority_block_transitions_to_four_validator_set)
         .validator_set = initial_set,
     };
     const auto keyset_id = uint256::FromUserHex("aa").value();
-    const cybou::CybouNetworkDefinitionV1 definition{
+    const cybou::CybouNetworkDefinition definition{
         .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
         .genesis_block_id = uint256::ONE,
         .genesis_state_root = cybou::CybouStateHash(genesis),
@@ -245,7 +245,7 @@ BOOST_AUTO_TEST_CASE(authority_block_transitions_to_four_validator_set)
     for (uint8_t i = 2; i <= 4; ++i) {
         std::array<unsigned char, 32> next_seed{};
         next_seed[0] = static_cast<unsigned char>(0x70 + i);
-        cybou::SignatureBundleV1 signature;
+        cybou::SignatureBundle signature;
         signature.authority_keyset_id = keyset_id;
         signature.classical_signature.fill(0x11);
         signature.pq_signature.fill(0x22);

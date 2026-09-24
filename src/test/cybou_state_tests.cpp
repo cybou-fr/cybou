@@ -96,12 +96,12 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_CHECK(state.accounts.at(account).balance == 0);
     BOOST_CHECK(state.identities.Find(account) != nullptr);
     const auto bytes = SerializeCybouState(state);
-    const auto hash = CybouStateHashV2(state);
+    const auto hash = CybouStateHash(state);
     BOOST_REQUIRE(bytes && hash);
     const auto restored = DeserializeCybouState(*bytes);
     BOOST_REQUIRE(restored);
     BOOST_CHECK(SerializeCybouState(*restored) == bytes);
-    BOOST_CHECK(CybouStateHashV2(*restored) == hash);
+    BOOST_CHECK(CybouStateHash(*restored) == hash);
 
     BOOST_CHECK(ApplyAccountCreate(create, network_id, 1, params, state) == AccountCreateStateError::ACCOUNT_EXISTS);
     BOOST_CHECK(SerializeCybouState(state) == bytes);
@@ -140,9 +140,9 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     state.accounts.at(account).balance = 10; // funded fixture; no mint operation in this test
     AuthorizedPayment payment{};
     payment.payment = PaymentPayload{other_account, 3};
-    const auto payment_bytes = SerializePaymentPayloadV2(payment.payment);
+    const auto payment_bytes = SerializePaymentPayload(payment.payment);
     BOOST_REQUIRE(payment_bytes);
-    const auto decoded_payment = DeserializePaymentPayloadV2(*payment_bytes);
+    const auto decoded_payment = DeserializePaymentPayload(*payment_bytes);
     BOOST_REQUIRE(decoded_payment);
     BOOST_CHECK(decoded_payment->recipient == other_account);
     BOOST_CHECK(decoded_payment->amount == 3);
@@ -151,7 +151,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_REQUIRE(device_id);
     payment.authorization.device_id = *device_id;
     payment.authorization.kind = DeviceOperationKind::PAYMENT;
-    const auto payment_commitment = ComputePaymentPayloadCommitmentV2(payment.payment);
+    const auto payment_commitment = ComputePaymentPayloadCommitment(payment.payment);
     BOOST_REQUIRE(payment_commitment);
     payment.authorization.payload_commitment = *payment_commitment;
     const auto payment_digest = ComputeDeviceOperationDigest(network_id, payment.authorization);
@@ -161,14 +161,14 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     payment.authorization.signature = *payment_signature;
     auto tampered_payment = payment;
     tampered_payment.payment.amount = 4;
-    BOOST_CHECK(ApplyPayment(tampered_payment, network_id, params, state) == PaymentErrorV2::INVALID_PAYLOAD);
+    BOOST_CHECK(ApplyPayment(tampered_payment, network_id, params, state) == PaymentError::INVALID_PAYLOAD);
     BOOST_CHECK(state.accounts.at(account).balance == 10);
-    BOOST_CHECK(ApplyPayment(payment, network_id, params, state) == PaymentErrorV2::NONE);
+    BOOST_CHECK(ApplyPayment(payment, network_id, params, state) == PaymentError::NONE);
     BOOST_CHECK(state.accounts.at(account).balance == 7);
     BOOST_CHECK(state.accounts.at(other_account).balance == 3);
     BOOST_CHECK(state.pending_fee_pool == params.payment_fee);
     BOOST_CHECK(state.identities.Find(account)->devices.at(*device_id).next_nonce == 1);
-    BOOST_CHECK(ApplyPayment(payment, network_id, params, state) == PaymentErrorV2::INVALID_AUTHORIZATION);
+    BOOST_CHECK(ApplyPayment(payment, network_id, params, state) == PaymentError::INVALID_AUTHORIZATION);
     BOOST_CHECK(state.accounts.at(account).balance == 7);
     const ProtocolOperation payment_operation{payment};
     const auto wire = SerializeProtocolOperation(payment_operation);
@@ -195,7 +195,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     auto next_payment = payment;
     next_payment.payment.amount = 1;
     next_payment.authorization.nonce = 1;
-    next_payment.authorization.payload_commitment = *ComputePaymentPayloadCommitmentV2(next_payment.payment);
+    next_payment.authorization.payload_commitment = *ComputePaymentPayloadCommitment(next_payment.payment);
     const auto next_digest = ComputeDeviceOperationDigest(network_id, next_payment.authorization);
     BOOST_REQUIRE(next_digest);
     const auto next_signature = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *next_digest);
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     const auto replay_block = ExecuteBlockOperations(*block_result.state,
         {ProtocolOperation{next_payment}}, network_id, 3, params);
     BOOST_CHECK(replay_block.error == BlockExecutionError::INVALID_PAYMENT);
-    BOOST_CHECK(replay_block.payment_error == PaymentErrorV2::INVALID_AUTHORIZATION);
+    BOOST_CHECK(replay_block.payment_error == PaymentError::INVALID_AUTHORIZATION);
 }
 
 BOOST_AUTO_TEST_CASE(insufficient_pool_does_not_register_identity)
@@ -269,7 +269,7 @@ BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
     add.account_id = account;
     add.new_device = *second_dev;
     add.root_nonce = 0;
-    const auto add_digest = ComputeDeviceAddDigestV2(network_id, add);
+    const auto add_digest = ComputeDeviceAddDigest(network_id, add);
     BOOST_REQUIRE(add_digest);
     add.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *add_digest);
     add.device_pop = *SignIdentityMessage(second_seed, IdentityKeyPurpose::DEVICE, *add_digest);
@@ -277,7 +277,7 @@ BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
     const ProtocolOperation add_op{add};
     const auto add_wire = SerializeProtocolOperation(add_op);
     BOOST_REQUIRE(add_wire);
-    BOOST_CHECK(add_wire->size() == 2 + DEVICE_ADD_V2_SIZE);
+    BOOST_CHECK(add_wire->size() == 2 + DEVICE_ADD_SIZE);
     const auto decoded_add = DeserializeProtocolOperation(*add_wire);
     BOOST_REQUIRE(decoded_add && std::holds_alternative<DeviceAdd>(*decoded_add));
     BOOST_CHECK(SerializeProtocolOperation(*decoded_add) == add_wire);
@@ -312,7 +312,7 @@ BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
     stale_add.account_id = account;
     stale_add.new_device = *third_dev;
     stale_add.root_nonce = 0; // stale nonce (current is 1)
-    const auto stale_digest = ComputeDeviceAddDigestV2(network_id, stale_add);
+    const auto stale_digest = ComputeDeviceAddDigest(network_id, stale_add);
     BOOST_REQUIRE(stale_digest);
     stale_add.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *stale_digest);
     stale_add.device_pop = *SignIdentityMessage(third_seed, IdentityKeyPurpose::DEVICE, *stale_digest);
@@ -327,14 +327,14 @@ BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
     revoke.account_id = account;
     revoke.device_id = *first_device_id;
     revoke.root_nonce = 1;
-    const auto revoke_digest = ComputeDeviceRevokeDigestV2(network_id, revoke);
+    const auto revoke_digest = ComputeDeviceRevokeDigest(network_id, revoke);
     BOOST_REQUIRE(revoke_digest);
     revoke.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *revoke_digest);
 
     const ProtocolOperation revoke_op{revoke};
     const auto revoke_wire = SerializeProtocolOperation(revoke_op);
     BOOST_REQUIRE(revoke_wire);
-    BOOST_CHECK(revoke_wire->size() == 2 + DEVICE_REVOKE_V2_SIZE);
+    BOOST_CHECK(revoke_wire->size() == 2 + DEVICE_REVOKE_SIZE);
     const auto decoded_revoke = DeserializeProtocolOperation(*revoke_wire);
     BOOST_REQUIRE(decoded_revoke && std::holds_alternative<DeviceRevoke>(*decoded_revoke));
     BOOST_CHECK(SerializeProtocolOperation(*decoded_revoke) == revoke_wire);
@@ -360,7 +360,7 @@ BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
     rotate.account_id = account;
     rotate.new_root = *new_root;
     rotate.root_nonce = 2;
-    const auto rotate_digest = ComputeRecoveryRotateDigestV2(network_id, rotate);
+    const auto rotate_digest = ComputeRecoveryRotateDigest(network_id, rotate);
     BOOST_REQUIRE(rotate_digest);
     rotate.old_root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
     rotate.new_root_pop = *SignIdentityMessage(new_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
@@ -368,7 +368,7 @@ BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
     const ProtocolOperation rotate_op{rotate};
     const auto rotate_wire = SerializeProtocolOperation(rotate_op);
     BOOST_REQUIRE(rotate_wire);
-    BOOST_CHECK(rotate_wire->size() == 2 + RECOVERY_ROTATE_V2_SIZE);
+    BOOST_CHECK(rotate_wire->size() == 2 + RECOVERY_ROTATE_SIZE);
     const auto decoded_rotate = DeserializeProtocolOperation(*rotate_wire);
     BOOST_REQUIRE(decoded_rotate && std::holds_alternative<RecoveryRotate>(*decoded_rotate));
     BOOST_CHECK(SerializeProtocolOperation(*decoded_rotate) == rotate_wire);
@@ -430,12 +430,12 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
 
     AuthorizedSystemLock lock{};
     lock.lock.amount = 20;
-    const auto lock_bytes = SerializeSystemLockPayloadV2(lock.lock);
+    const auto lock_bytes = SerializeSystemLockPayload(lock.lock);
     BOOST_REQUIRE(lock_bytes);
-    const auto decoded_lock = DeserializeSystemLockPayloadV2(*lock_bytes);
+    const auto decoded_lock = DeserializeSystemLockPayload(*lock_bytes);
     BOOST_REQUIRE(decoded_lock && decoded_lock->amount == 20);
 
-    const auto lock_commitment = ComputeSystemLockPayloadCommitmentV2(lock.lock);
+    const auto lock_commitment = ComputeSystemLockPayloadCommitment(lock.lock);
     BOOST_REQUIRE(lock_commitment);
 
     lock.authorization.account_id = account;
@@ -478,7 +478,7 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     // Replay stale nonce fails
     const auto replay = ExecuteBlockOperations(*block_res.state, {lock_op}, network_id, 2, params);
     BOOST_CHECK(replay.error == BlockExecutionError::INVALID_SYSTEM_LOCK);
-    BOOST_CHECK(replay.lock_error == SystemLockErrorV2::INVALID_AUTHORIZATION);
+    BOOST_CHECK(replay.lock_error == SystemLockError::INVALID_AUTHORIZATION);
 }
 
 BOOST_AUTO_TEST_CASE(state_validation_invariants)
@@ -514,13 +514,13 @@ BOOST_AUTO_TEST_CASE(post_quantum_validator_set_and_bft_certificate)
     }
 
     ValidatorSet val_set{.validators = validators};
-    BOOST_CHECK(val_set.version == VALIDATOR_SET_VERSION_V2);
+    BOOST_CHECK(val_set.version == VALIDATOR_SET_VERSION);
     BOOST_CHECK_EQUAL(val_set.Size(), 4U);
     BOOST_CHECK_EQUAL(val_set.TotalWeight(), 4U);
     BOOST_CHECK_EQUAL(val_set.FaultTolerance(), 1U);
     BOOST_CHECK_EQUAL(val_set.QuorumThreshold(), 3U);
     BOOST_CHECK(val_set.Mode() == ConsensusMode::BFT);
-    BOOST_CHECK(ValidateValidatorSetV2(val_set) == ValidatorSetValidationError::NONE);
+    BOOST_CHECK(ValidateValidatorSet(val_set) == ValidatorSetValidationError::NONE);
 
     // Hardening check: duplicate ML-DSA-65 key rejection
     auto dup_ml_set = val_set;
@@ -528,16 +528,16 @@ BOOST_AUTO_TEST_CASE(post_quantum_validator_set_and_bft_certificate)
     const auto dup_val_id = ComputeValidatorKeyId(dup_ml_set.validators[1].consensus_public_key);
     BOOST_REQUIRE(dup_val_id.has_value());
     std::copy_n(dup_val_id->begin(), 32, dup_ml_set.validators[1].validator_id.begin());
-    BOOST_CHECK(ValidateValidatorSetV2(dup_ml_set) == ValidatorSetValidationError::DUPLICATE_CONSENSUS_KEY);
+    BOOST_CHECK(ValidateValidatorSet(dup_ml_set) == ValidatorSetValidationError::DUPLICATE_CONSENSUS_KEY);
 
     // Serialization roundtrip
-    const auto serialized = SerializeValidatorSetV2(val_set);
-    BOOST_CHECK_EQUAL(serialized.size(), 5 + 4 * VALIDATOR_V2_ENTRY_SIZE);
-    const auto deserialized = DeserializeValidatorSetV2(serialized);
+    const auto serialized = SerializeValidatorSet(val_set);
+    BOOST_CHECK_EQUAL(serialized.size(), 5 + 4 * VALIDATOR_ENTRY_SIZE);
+    const auto deserialized = DeserializeValidatorSet(serialized);
     BOOST_REQUIRE(deserialized.has_value());
     BOOST_CHECK(*deserialized == val_set);
 
-    const auto commitment = ComputeValidatorSetCommitmentV2(val_set);
+    const auto commitment = ComputeValidatorSetCommitment(val_set);
     BOOST_CHECK(!commitment.IsNull());
 
     // Build BFT Finality Certificate with 3 votes (quorum threshold = 3)
@@ -547,11 +547,11 @@ BOOST_AUTO_TEST_CASE(post_quantum_validator_set_and_bft_certificate)
     const uint64_t height = 1000;
     const uint32_t round = 0;
 
-    const uint256 commit_digest = ComputeBftCommitDigestV2(network_id, block_id, height, round, commitment);
+    const uint256 commit_digest = ComputeBftCommitDigest(network_id, block_id, height, round, commitment);
     std::array<unsigned char, 32> digest_bytes{};
     std::copy_n(commit_digest.begin(), 32, digest_bytes.begin());
 
-    BftFinalityCertificateV2 cert{};
+    BftFinalityCertificate cert{};
     cert.network_id = network_id;
     cert.block_id = block_id;
     cert.height = height;
@@ -561,58 +561,58 @@ BOOST_AUTO_TEST_CASE(post_quantum_validator_set_and_bft_certificate)
     for (size_t i = 0; i < 3; ++i) {
         const auto sig = SignIdentityMessage(seeds[i], IdentityKeyPurpose::VALIDATOR, digest_bytes);
         BOOST_REQUIRE(sig.has_value());
-        cert.commit_votes.push_back(BftCommitVoteV2{
+        cert.commit_votes.push_back(BftCommitVote{
             .validator_id = validators[i].validator_id,
             .signature = *sig,
         });
     }
 
     // Verification succeeds
-    BOOST_CHECK(VerifyFinalityCertificateV2(cert, val_set, network_id) == FinalityVerificationError::NONE);
+    BOOST_CHECK(VerifyFinalityCertificate(cert, val_set, network_id) == FinalityVerificationError::NONE);
 
     // Serialization roundtrip
-    const auto cert_bytes = SerializeFinalityCertificateV2(cert);
+    const auto cert_bytes = SerializeFinalityCertificate(cert);
     BOOST_REQUIRE(cert_bytes.has_value());
-    BOOST_CHECK_EQUAL(cert_bytes->size(), 113 + 3 * BFT_COMMIT_VOTE_V2_SIZE);
-    const auto decoded_cert = DeserializeFinalityCertificateV2(*cert_bytes);
+    BOOST_CHECK_EQUAL(cert_bytes->size(), 113 + 3 * BFT_COMMIT_VOTE_SIZE);
+    const auto decoded_cert = DeserializeFinalityCertificate(*cert_bytes);
     BOOST_REQUIRE(decoded_cert.has_value());
     BOOST_CHECK(*decoded_cert == cert);
 
     // Fail-closed malformed certificate serialization
     auto bad_ml_cert = cert;
     bad_ml_cert.commit_votes[0].signature.ml_dsa.pop_back(); // 3308 != 3309
-    BOOST_CHECK(!SerializeFinalityCertificateV2(bad_ml_cert).has_value());
+    BOOST_CHECK(!SerializeFinalityCertificate(bad_ml_cert).has_value());
 
     // Adversarial verification checks
     // 1. Wrong network
     uint256 wrong_net = network_id;
     wrong_net.begin()[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificateV2(cert, val_set, wrong_net) == FinalityVerificationError::NETWORK_MISMATCH);
+    BOOST_CHECK(VerifyFinalityCertificate(cert, val_set, wrong_net) == FinalityVerificationError::NETWORK_MISMATCH);
 
     // 2. Wrong validator set commitment
     auto bad_commitment_cert = cert;
     bad_commitment_cert.validator_set_commitment.begin()[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificateV2(bad_commitment_cert, val_set, network_id) == FinalityVerificationError::VALIDATOR_SET_MISMATCH);
+    BOOST_CHECK(VerifyFinalityCertificate(bad_commitment_cert, val_set, network_id) == FinalityVerificationError::VALIDATOR_SET_MISMATCH);
 
     // 3. Insufficient votes (2 < 3)
     auto short_cert = cert;
     short_cert.commit_votes.pop_back();
-    BOOST_CHECK(VerifyFinalityCertificateV2(short_cert, val_set, network_id) == FinalityVerificationError::INSUFFICIENT_VOTES);
+    BOOST_CHECK(VerifyFinalityCertificate(short_cert, val_set, network_id) == FinalityVerificationError::INSUFFICIENT_VOTES);
 
     // 4. Duplicate vote
     auto dup_cert = cert;
     dup_cert.commit_votes[2] = dup_cert.commit_votes[0];
-    BOOST_CHECK(VerifyFinalityCertificateV2(dup_cert, val_set, network_id) == FinalityVerificationError::DUPLICATE_VOTE);
+    BOOST_CHECK(VerifyFinalityCertificate(dup_cert, val_set, network_id) == FinalityVerificationError::DUPLICATE_VOTE);
 
     // 5. Unknown validator
     auto unknown_cert = cert;
     unknown_cert.commit_votes[0].validator_id.begin()[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificateV2(unknown_cert, val_set, network_id) == FinalityVerificationError::UNKNOWN_VALIDATOR);
+    BOOST_CHECK(VerifyFinalityCertificate(unknown_cert, val_set, network_id) == FinalityVerificationError::UNKNOWN_VALIDATOR);
 
     // 6. Invalid signature
     auto bad_sig_cert = cert;
     bad_sig_cert.commit_votes[0].signature.ed25519[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificateV2(bad_sig_cert, val_set, network_id) == FinalityVerificationError::INVALID_SIGNATURE);
+    BOOST_CHECK(VerifyFinalityCertificate(bad_sig_cert, val_set, network_id) == FinalityVerificationError::INVALID_SIGNATURE);
 }
 
 BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)

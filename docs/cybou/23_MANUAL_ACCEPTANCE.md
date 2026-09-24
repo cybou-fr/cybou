@@ -19,7 +19,7 @@
 
 ## Account Creation and Onboarding
 ```text
-[ ] permissionless AccountCreateOpV1 accepted
+[ ] permissionless AccountCreateOp accepted
 [ ] invalid or insufficient AccountCreationWork rejected
 [ ] work_epoch is derived from block height and stale/future work is rejected
 [ ] max_account_creates_per_block is enforced

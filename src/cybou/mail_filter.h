@@ -63,7 +63,6 @@ std::vector<unsigned char> SerializeMailDiscoveryFilter(const CybouMailDiscovery
 std::optional<CybouMailDiscoveryFilter> DeserializeMailDiscoveryFilter(std::span<const unsigned char> bytes);
 
 // Transition alias
-using CybouMailDiscoveryFilterV1 = CybouMailDiscoveryFilter;
 
 } // namespace cybou
 

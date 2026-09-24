@@ -36,17 +36,5 @@ bool SaveNewIdentityMaterial(const std::filesystem::path& path,
 std::optional<IdentityMaterial> LoadIdentityMaterial(
     const std::filesystem::path& path, std::string_view password);
 
-// Transition aliases
-using IdentityMaterialV2 = IdentityMaterial;
-inline std::optional<IdentityMaterial> GenerateIdentityMaterialV2() { return GenerateIdentityMaterial(); }
-inline bool SaveNewIdentityMaterialV2(const std::filesystem::path& path,
-    std::string_view password, const IdentityMaterial& material) {
-    return SaveNewIdentityMaterial(path, password, material);
-}
-inline std::optional<IdentityMaterial> LoadIdentityMaterialV2(
-    const std::filesystem::path& path, std::string_view password) {
-    return LoadIdentityMaterial(path, password);
-}
-
 } // namespace cybou
 #endif

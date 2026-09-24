@@ -30,28 +30,5 @@ std::optional<IdentityAuthorization> DeserializeIdentityAuthorization(
 std::optional<std::array<unsigned char, 32>> ComputeIdentityAuthorizationCommitment(
     const IdentityAuthorization& authorization);
 
-// Temporary transition aliases
-inline constexpr size_t IDENTITY_AUTHORIZATION_V2_SIZE{IDENTITY_AUTHORIZATION_SIZE};
-using IdentityAuthorizationBytesV2 = IdentityAuthorizationBytes;
-using IdentityAuthorizationV2 = IdentityAuthorization;
-
-inline std::optional<IdentityAuthorizationBytes> SerializeIdentityAuthorizationV2(
-    const IdentityAuthorization& authorization)
-{
-    return SerializeIdentityAuthorization(authorization);
-}
-
-inline std::optional<IdentityAuthorization> DeserializeIdentityAuthorizationV2(
-    std::span<const unsigned char> bytes)
-{
-    return DeserializeIdentityAuthorization(bytes);
-}
-
-inline std::optional<std::array<unsigned char, 32>> ComputeIdentityAuthorizationCommitmentV2(
-    const IdentityAuthorization& authorization)
-{
-    return ComputeIdentityAuthorizationCommitment(authorization);
-}
-
 } // namespace cybou
 #endif // CYBOU_IDENTITY_AUTHORIZATION_H

@@ -27,7 +27,7 @@ Dev Onboarding Bonus: 6,000 CYBOU (Beta/Mainnet: TBD)
 OnboardingPool -> System Balance
 ```
 
-Granted automatically upon valid protocol-native `AccountCreateOpV1` with anti-Sybil work (`ACCOUNT_CREATION_WORK_V1`).
+Granted automatically upon valid protocol-native `AccountCreateOp` with anti-Sybil work (`ACCOUNT_CREATION_WORK_V1`).
 
 No operator vouchers or invites exist.
 

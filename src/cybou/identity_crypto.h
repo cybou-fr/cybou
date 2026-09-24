@@ -37,8 +37,7 @@ struct IdentityHybridSignature {
     friend bool operator==(const IdentityHybridSignature&, const IdentityHybridSignature&) = default;
 };
 
-// Local V2 foundation only. Consensus encoding and operation-specific signing
-// domains are intentionally separate and have not yet been activated.
+// Hybrid key primitives. Consensus operations define their own signing domains.
 std::optional<IdentityHybridPublicKey> DeriveIdentityPublicKey(
     std::span<const unsigned char, 32> secret,
     IdentityKeyPurpose purpose);

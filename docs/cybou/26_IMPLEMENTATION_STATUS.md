@@ -14,16 +14,18 @@ CYBOU is experimental. The canonical product target uses hybrid post-quantum aut
 - Account creation that moves the onboarding bonus from OnboardingPool to SystemBalance.
 - Device-authorized payments with deterministic fees, overflow checks, and atomic nonce/balance updates on candidate state.
 - Versioned AccountCreate and Payment wire encodings, operation IDs, and a candidate block executor that routes four fee units as three Security plus one Onboarding.
-- Validator-set validation, BFT finality certificates, and a core consensus engine with explicit finality.
+- Validator-set validation, hybrid validator signatures, BFT finality certificates, and a core consensus engine with explicit finality.
+- Canonical operations, name registry, block execution, state store, and standalone authority/observer sync are connected to the native node runtime.
+- The DEV network definition commits to the active name rules. The CLI derives genesis validator keys from the same secret used by the producer; the desktop loads the verified network file.
 
 ## Integration still required
 
-- Connect the canonical identity, operation, and state formats to finalized blocks, the persisted state store, the node runtime, and authenticated peer transport.
-- Complete hybrid-authorized MailTx, encrypted send/receive, recipient discovery, local Inbox/Sent/read-state indexes, and historical sender-key evidence.
-- Complete `.cybou` name commit, work, reveal, and ownership state.
+- Integrate random AccountID, 24-word phrase confirmation, portable vault, and clean-machine restore into the desktop identity service. The current seed-based keystore still derives AccountID from Ed25519.
+- Complete Mail confidentiality with independent X25519 and ML-KEM keys, usable recipient discovery, encrypted local mailbox storage, and historical sender-key authorization evidence.
+- Complete desktop `.cybou` claim and finalized ownership flows on top of the implemented registry.
 - Move the Qt creation, restore, wallet, and Mail flows onto the canonical runtime and portable vault.
 - Run independent validators with durable crash recovery and verify finality under production topology.
-- Move validator, operator, release, and treasury signing to the PQ key policy so every production signature path follows the canonical cryptographic baseline.
+- Finish operator, release, and treasury signing integration under the PQ key policy.
 - Implement distributed Object Storage and Backup before large attachments and mass-scale Mail.
 - Remove obsolete runtime paths, names, files, and documentation before the DEV reset. No compatibility decoder or automatic state/vault import is planned.
 

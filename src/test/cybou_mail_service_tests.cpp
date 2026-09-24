@@ -42,11 +42,11 @@ CybouState CreateTestGenesis(const uint256& val_pub)
     };
 }
 
-CybouNetworkDefinitionV1 CreateTestNetworkDefinition(const CybouState& genesis)
+CybouNetworkDefinition CreateTestNetworkDefinition(const CybouState& genesis)
 {
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
-    return CybouNetworkDefinitionV1{
+    return CybouNetworkDefinition{
         .protocol_version = CYBOU_NETWORK_DEFINITION_VERSION,
         .genesis_block_id = CybouStateHash(genesis),
         .genesis_state_root = CybouStateHash(genesis),
@@ -62,7 +62,7 @@ BOOST_FIXTURE_TEST_SUITE(cybou_mail_service_tests, BasicTestingSetup)
 
 BOOST_AUTO_TEST_CASE(protected_mail_serialization_roundtrip)
 {
-    ProtectedMailV1 mail;
+    ProtectedMail mail;
     mail.version = 1;
     mail.sender = AccountId{uint256::FromUserHex("aa").value()};
     mail.recipient = AccountId{uint256::FromUserHex("bb").value()};
@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(protected_mail_serialization_roundtrip)
     const auto bytes = mail.Serialize();
     BOOST_CHECK_GT(bytes.size(), 81);
 
-    const auto deserialized = ProtectedMailV1::Deserialize(bytes);
+    const auto deserialized = ProtectedMail::Deserialize(bytes);
     BOOST_REQUIRE(deserialized.has_value());
     BOOST_CHECK_EQUAL(deserialized->version, mail.version);
     BOOST_CHECK(deserialized->sender == mail.sender);
@@ -83,10 +83,10 @@ BOOST_AUTO_TEST_CASE(protected_mail_serialization_roundtrip)
     BOOST_CHECK_EQUAL(deserialized->body, mail.body);
 
     // Corrupted input
-    BOOST_CHECK(!ProtectedMailV1::Deserialize(std::span{bytes.data(), 80}));
+    BOOST_CHECK(!ProtectedMail::Deserialize(std::span{bytes.data(), 80}));
     auto bad_bytes = bytes;
     bad_bytes[0] = 99; // invalid version
-    BOOST_CHECK(!ProtectedMailV1::Deserialize(bad_bytes));
+    BOOST_CHECK(!ProtectedMail::Deserialize(bad_bytes));
 }
 
 BOOST_AUTO_TEST_CASE(x25519_diffie_hellman_agreement)
@@ -135,7 +135,7 @@ BOOST_AUTO_TEST_CASE(payload_encrypt_and_decrypt)
     const auto alice_account = alice_keystore.GetAccountId();
     BOOST_REQUIRE(alice_account.has_value());
 
-    ProtectedMailV1 mail;
+    ProtectedMail mail;
     mail.sender = *alice_account;
     mail.recipient = *bob_account;
     mail.timestamp = 1774391111;
@@ -286,7 +286,7 @@ BOOST_AUTO_TEST_CASE(mailbox_persistence_and_sync_lifecycle)
         VerifyDisclosedMailContent(
             *bob_inbox[0].evidence_bundle,
             bob_inbox[0].salt,
-            ProtectedMailV1{
+            ProtectedMail{
                 .version = 1,
                 .sender = alice_id,
                 .recipient = bob_id,

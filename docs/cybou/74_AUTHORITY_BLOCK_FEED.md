@@ -31,7 +31,7 @@ over 32 MiB are rejected. The observer applies each received block through
 certificate, operations, and state root before changing canonical state.
 
 Remote operation submission uses a separate `CYBO` request carrying NetworkID
-and one serialized `ProtocolOperationV1` (maximum 128 KiB). The producer
+and one serialized `ProtocolOperation` (maximum 128 KiB). The producer
 deserializes and candidate-validates the operation, computes OperationID =
 SHA256("CYBOU/OP_ID/V1" || serialized_op), and returns a 33-byte structured
 reply: a 1-byte status (`ACCEPTED`, `ALREADY_PENDING`, `ALREADY_FINALIZED`,

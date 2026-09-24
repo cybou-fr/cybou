@@ -411,7 +411,7 @@ void EmailPage::showMessage(const Message& message)
         m_evidence_states[1]->setObjectName(verified ? QStringLiteral("statusBadge") : QStringLiteral("neutralBadge"));
 
         // 2: Historical sender-key authorization
-        // MailEvidenceBundleV1 supplies current signing key but does not yet prove historical canonical state at block height
+        // MailEvidenceBundle supplies current signing key but does not yet prove historical canonical state at block height
         m_evidence_states[2]->setText(tr("not available yet"));
         m_evidence_states[2]->setObjectName(QStringLiteral("neutralBadge"));
 

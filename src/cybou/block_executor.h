@@ -49,17 +49,5 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const uint256& network_id, uint64_t block_height,
     const CybouProtocolParameters& params);
 
-// Transition aliases
-using BlockExecutionErrorV2 = BlockExecutionError;
-using BlockExecutionResultV2 = BlockExecutionResult;
-
-inline BlockExecutionResult ExecuteBlockOperationsV2(const CybouState& parent,
-    const std::vector<ProtocolOperation>& operations,
-    const uint256& network_id, uint64_t block_height,
-    const CybouProtocolParameters& params)
-{
-    return ExecuteBlockOperations(parent, operations, network_id, block_height, params);
-}
-
 } // namespace cybou
 #endif // CYBOU_BLOCK_EXECUTOR_H

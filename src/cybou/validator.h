@@ -115,16 +115,6 @@ std::vector<unsigned char> SerializeValidatorSet(const ValidatorSet& val_set);
 std::optional<ValidatorSet> DeserializeValidatorSet(std::span<const unsigned char> bytes);
 uint256 ComputeValidatorSetCommitment(const ValidatorSet& val_set);
 
-// Temporary transition aliases
-using ValidatorV2 = Validator;
-using ValidatorSetV2 = ValidatorSet;
-inline constexpr uint8_t VALIDATOR_SET_VERSION_V2{VALIDATOR_SET_VERSION};
-inline constexpr size_t VALIDATOR_V2_ENTRY_SIZE{VALIDATOR_ENTRY_SIZE};
-inline ValidatorSetValidationError ValidateValidatorSetV2(const ValidatorSet& set) { return ValidateValidatorSet(set); }
-inline std::vector<unsigned char> SerializeValidatorSetV2(const ValidatorSet& set) { return SerializeValidatorSet(set); }
-inline std::optional<ValidatorSet> DeserializeValidatorSetV2(std::span<const unsigned char> b) { return DeserializeValidatorSet(b); }
-inline uint256 ComputeValidatorSetCommitmentV2(const ValidatorSet& set) { return ComputeValidatorSetCommitment(set); }
-
 } // namespace cybou
 
 #endif // CYBOU_VALIDATOR_H

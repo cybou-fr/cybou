@@ -64,9 +64,6 @@ uint256 ComputeGenesisBlockId(const uint256& state_root, const uint256& validato
 CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public_key);
 CybouNetworkDefinition CreateDevNetworkDefinition(const CybouState& genesis);
 
-// Transition aliases
-using CybouNetworkDefinitionV1 = CybouNetworkDefinition;
-
 } // namespace cybou
 
 #endif // CYBOU_NETWORK_DEFINITION_H

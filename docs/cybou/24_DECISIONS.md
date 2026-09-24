@@ -151,7 +151,7 @@
 | DEC-147 | Four active validators is the minimum deployment target when claiming f=1 BFT tolerance | Frozen v0.0.1 |
 | DEC-148 | PoT time/rate logic uses deterministic block-height-derived protocol epochs, never local wall clock | Frozen v0.0.1 |
 | DEC-149 | PoT consensus arithmetic is integer/deterministic | Frozen v0.0.1 |
-| DEC-150 | Account creation is permissionless via protocol-native AccountCreateOpV1 with AccountCreationWorkV1 anti-Sybil work | Frozen v0.0.1 |
+| DEC-150 | Account creation is permissionless via protocol-native AccountCreateOp with AccountCreationWorkV1 anti-Sybil work | Frozen v0.0.1 |
 | DEC-151 | Identity creation alone does not mint tokens; onboarding bonus is debited from OnboardingPool to SystemBalance | Frozen v0.0.1 |
 | DEC-152 | Operator Authority, Validator, Release Signing and Treasury keys are separate domains | Frozen v0.0.1 |
 | DEC-153 | Operator Authority target custody is 2-of-3 | Frozen operational direction |

@@ -87,39 +87,5 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
 std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> bytes);
 std::optional<uint256> CybouStateHash(const CybouState& state);
 
-// Temporary transition aliases
-inline constexpr uint8_t CYBOU_STATE_VERSION_V2{CYBOU_STATE_VERSION};
-using AccountStateV2 = AccountState;
-using CybouStateV2 = CybouState;
-using AccountCreateStateErrorV2 = AccountCreateStateError;
-using StateValidationErrorV2 = StateValidationError;
-
-inline AccountCreateStateError ApplyAccountCreateV2(const AccountCreateOp& op,
-    const uint256& network_id, uint64_t block_height,
-    const CybouProtocolParameters& params, CybouState& state)
-{
-    return ApplyAccountCreate(op, network_id, block_height, params, state);
-}
-
-inline StateValidationError ValidateCybouStateV2(const CybouState& state)
-{
-    return ValidateCybouState(state);
-}
-
-inline std::optional<std::vector<unsigned char>> SerializeCybouStateV2(const CybouState& state)
-{
-    return SerializeCybouState(state);
-}
-
-inline std::optional<CybouState> DeserializeCybouStateV2(std::span<const unsigned char> bytes)
-{
-    return DeserializeCybouState(bytes);
-}
-
-inline std::optional<uint256> CybouStateHashV2(const CybouState& state)
-{
-    return CybouStateHash(state);
-}
-
 } // namespace cybou
 #endif // CYBOU_STATE_H

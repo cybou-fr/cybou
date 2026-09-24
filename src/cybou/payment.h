@@ -83,40 +83,5 @@ SystemLockError ApplySystemLock(const AuthorizedSystemLock& operation,
     const uint256& network_id,
     CybouState& state);
 
-// Transition aliases
-using PaymentPayloadV2 = PaymentPayload;
-using AuthorizedPaymentV2 = AuthorizedPayment;
-using PaymentErrorV2 = PaymentError;
-using SystemLockPayloadV2 = SystemLockPayload;
-using AuthorizedSystemLockV2 = AuthorizedSystemLock;
-using SystemLockErrorV2 = SystemLockError;
-inline constexpr size_t PAYMENT_PAYLOAD_SIZE_V2{PAYMENT_PAYLOAD_SIZE};
-inline constexpr size_t SYSTEM_LOCK_PAYLOAD_SIZE_V2{SYSTEM_LOCK_PAYLOAD_SIZE};
-
-inline std::optional<std::array<unsigned char, PAYMENT_PAYLOAD_SIZE>> SerializePaymentPayloadV2(const PaymentPayload& p) {
-    return SerializePaymentPayload(p);
-}
-inline std::optional<PaymentPayload> DeserializePaymentPayloadV2(std::span<const unsigned char> b) {
-    return DeserializePaymentPayload(b);
-}
-inline std::optional<IdentityKeyId> ComputePaymentPayloadCommitmentV2(const PaymentPayload& p) {
-    return ComputePaymentPayloadCommitment(p);
-}
-inline PaymentError ApplyPaymentV2(const AuthorizedPayment& op, const uint256& nid, const CybouProtocolParameters& params, CybouState& s) {
-    return ApplyPayment(op, nid, params, s);
-}
-inline std::optional<std::array<unsigned char, SYSTEM_LOCK_PAYLOAD_SIZE>> SerializeSystemLockPayloadV2(const SystemLockPayload& l) {
-    return SerializeSystemLockPayload(l);
-}
-inline std::optional<SystemLockPayload> DeserializeSystemLockPayloadV2(std::span<const unsigned char> b) {
-    return DeserializeSystemLockPayload(b);
-}
-inline std::optional<IdentityKeyId> ComputeSystemLockPayloadCommitmentV2(const SystemLockPayload& l) {
-    return ComputeSystemLockPayloadCommitment(l);
-}
-inline SystemLockError ApplySystemLockV2(const AuthorizedSystemLock& op, const uint256& nid, CybouState& s) {
-    return ApplySystemLock(op, nid, s);
-}
-
 } // namespace cybou
 #endif // CYBOU_PAYMENT_H

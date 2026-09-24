@@ -7,7 +7,7 @@ Historical protocol operations, including MailTx, belong to block/history data.
 ## Immutable network definition
 
 Each DEV, Beta or Mainnet instance is identified by a domain-separated hash of
-one canonical `CybouNetworkDefinitionV1`:
+one canonical `CybouNetworkDefinition`:
 
 ```text
 protocol version

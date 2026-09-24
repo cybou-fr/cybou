@@ -39,11 +39,11 @@ CybouState CreateTestGenesis(const uint256& val_pub)
     };
 }
 
-CybouNetworkDefinitionV1 CreateTestNetworkDefinition(const CybouState& genesis)
+CybouNetworkDefinition CreateTestNetworkDefinition(const CybouState& genesis)
 {
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
-    return CybouNetworkDefinitionV1{
+    return CybouNetworkDefinition{
         .protocol_version = CYBOU_NETWORK_DEFINITION_VERSION,
         .genesis_block_id = CybouStateHash(genesis),
         .genesis_state_root = CybouStateHash(genesis),

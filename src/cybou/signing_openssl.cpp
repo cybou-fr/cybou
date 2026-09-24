@@ -39,10 +39,10 @@ bool VerifyComponent(
 
 bool OpenSslOperatorAuthoritySignatureVerifier::Verify(
     const OperatorAuthorityKeySet& keyset,
-    const SignatureBundleV1& bundle,
+    const SignatureBundle& bundle,
     const std::span<const unsigned char> message) const
 {
-    if (bundle.suite_id != SignatureSuiteId::HYBRID_ED25519_MLDSA65_V1 ||
+    if (bundle.suite_id != SignatureSuiteId::HYBRID_ED25519_MLDSA65 ||
         bundle.authority_keyset_id != keyset.keyset_id) return false;
     return VerifyComponent("ED25519", keyset.ed25519_public_key, bundle.classical_signature, message) &&
         VerifyComponent("ML-DSA-65", keyset.mldsa65_public_key, bundle.pq_signature, message);

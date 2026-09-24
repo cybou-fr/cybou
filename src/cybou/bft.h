@@ -74,16 +74,6 @@ FinalityVerificationError VerifyFinalityCertificate(
 std::optional<std::vector<unsigned char>> SerializeFinalityCertificate(const BftFinalityCertificate& cert);
 std::optional<BftFinalityCertificate> DeserializeFinalityCertificate(std::span<const unsigned char> bytes);
 
-// Temporary transition aliases
-using BftCommitVoteV2 = BftCommitVote;
-using BftFinalityCertificateV2 = BftFinalityCertificate;
-inline constexpr uint8_t BFT_FINALITY_CERTIFICATE_VERSION_V2{BFT_FINALITY_CERTIFICATE_VERSION};
-inline constexpr size_t BFT_COMMIT_VOTE_V2_SIZE{BFT_COMMIT_VOTE_SIZE};
-inline uint256 ComputeBftCommitDigestV2(const uint256& nid, const uint256& bid, uint64_t h, uint32_t r, const uint256& vc) { return ComputeBftCommitDigest(nid, bid, h, r, vc); }
-inline FinalityVerificationError VerifyFinalityCertificateV2(const BftFinalityCertificate& c, const ValidatorSet& vs, const uint256& enid) { return VerifyFinalityCertificate(c, vs, enid); }
-inline std::optional<std::vector<unsigned char>> SerializeFinalityCertificateV2(const BftFinalityCertificate& c) { return SerializeFinalityCertificate(c); }
-inline std::optional<BftFinalityCertificate> DeserializeFinalityCertificateV2(std::span<const unsigned char> b) { return DeserializeFinalityCertificate(b); }
-
 } // namespace cybou
 
 #endif // CYBOU_BFT_H

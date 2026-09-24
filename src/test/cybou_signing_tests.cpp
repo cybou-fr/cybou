@@ -50,19 +50,19 @@ BOOST_AUTO_TEST_CASE(signature_bundle_v1_has_frozen_hybrid_layout)
 {
     BOOST_CHECK_EQUAL(cybou::ED25519_SIGNATURE_SIZE, 64);
     BOOST_CHECK_EQUAL(cybou::MLDSA65_SIGNATURE_SIZE, 3309);
-    BOOST_CHECK_EQUAL(sizeof(cybou::SignatureBundleV1::classical_signature), cybou::ED25519_SIGNATURE_SIZE);
-    BOOST_CHECK_EQUAL(sizeof(cybou::SignatureBundleV1::pq_signature), cybou::MLDSA65_SIGNATURE_SIZE);
+    BOOST_CHECK_EQUAL(sizeof(cybou::SignatureBundle::classical_signature), cybou::ED25519_SIGNATURE_SIZE);
+    BOOST_CHECK_EQUAL(sizeof(cybou::SignatureBundle::pq_signature), cybou::MLDSA65_SIGNATURE_SIZE);
 
-    const cybou::SignatureBundleV1 empty{};
-    BOOST_CHECK(empty.suite_id == cybou::SignatureSuiteId::HYBRID_ED25519_MLDSA65_V1);
+    const cybou::SignatureBundle empty{};
+    BOOST_CHECK(empty.suite_id == cybou::SignatureSuiteId::HYBRID_ED25519_MLDSA65);
     BOOST_CHECK(!cybou::IsPresent(empty));
 
-    cybou::SignatureBundleV1 classical_only{};
+    cybou::SignatureBundle classical_only{};
     classical_only.authority_keyset_id = uint256::ONE;
     classical_only.classical_signature[0] = 0x01;
     BOOST_CHECK(!cybou::IsPresent(classical_only));
 
-    cybou::SignatureBundleV1 pq_only{};
+    cybou::SignatureBundle pq_only{};
     pq_only.authority_keyset_id = uint256::ONE;
     pq_only.pq_signature[cybou::MLDSA65_SIGNATURE_SIZE - 1] = 0x01;
     BOOST_CHECK(!cybou::IsPresent(pq_only));
