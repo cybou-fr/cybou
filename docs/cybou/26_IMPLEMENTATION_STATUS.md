@@ -13,6 +13,11 @@ local keystore currently sets it from the Ed25519 public key. There is no
 registry, or `.cybou` consensus registry. Docs 10 and 76–78 define the V2
 target; their presence does not mean it is implemented.
 
+Local `identity_crypto` now derives distinct Ed25519/ML-DSA-65 Recovery Root
+and Ed25519/ML-DSA-44 device key pairs from a supplied 32-byte secret using
+HKDF-SHA256, and verifies both signature components. It is not connected to
+AccountCreate, user operations, a mnemonic, a vault, or consensus state.
+
 ## Hardened architecture
 
 CYBOU Email target:

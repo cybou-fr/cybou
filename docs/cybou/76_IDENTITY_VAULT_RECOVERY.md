@@ -3,6 +3,10 @@
 Status: target specification. Current desktop has no portable V2 vault or
 mnemonic recovery.
 
+The local `identity_crypto` module has fixed HKDF labels and deterministic
+public-key test vectors. It accepts 32 secret bytes; mapping from a 24-word
+phrase to that secret is not implemented or frozen yet.
+
 ## Recovery Root
 
 Generate 256 bits from a cryptographic RNG and encode a checksummed 24-word

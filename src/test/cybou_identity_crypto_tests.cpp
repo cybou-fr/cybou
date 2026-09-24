@@ -1,0 +1,48 @@
+// Copyright (c) 2026 The CYBOU developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/license/mit/.
+
+#include <cybou/identity_crypto.h>
+
+#include <boost/test/unit_test.hpp>
+#include <openssl/sha.h>
+#include <util/strencodings.h>
+
+#include <array>
+#include <string_view>
+
+BOOST_AUTO_TEST_SUITE(cybou_identity_crypto_tests)
+
+BOOST_AUTO_TEST_CASE(hybrid_root_and_device_are_deterministic_and_both_required)
+{
+    std::array<unsigned char, 32> secret{};
+    for (size_t i{0}; i < secret.size(); ++i) secret[i] = static_cast<unsigned char>(i);
+    constexpr std::string_view text{"CYBOU/IDENTITY-V2/TEST"};
+    const auto message = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(text.data()), text.size()};
+    for (const auto purpose : {cybou::IdentityKeyPurpose::RECOVERY_ROOT, cybou::IdentityKeyPurpose::DEVICE}) {
+        const auto key = cybou::DeriveIdentityPublicKey(secret, purpose);
+        const auto again = cybou::DeriveIdentityPublicKey(secret, purpose);
+        BOOST_REQUIRE(key && again);
+        BOOST_CHECK(key->ed25519 == again->ed25519);
+        BOOST_CHECK(key->ml_dsa == again->ml_dsa);
+        std::array<unsigned char, SHA256_DIGEST_LENGTH> digest{};
+        SHA256(key->ml_dsa.data(), key->ml_dsa.size(), digest.data());
+        const std::string_view expected = purpose == cybou::IdentityKeyPurpose::RECOVERY_ROOT
+            ? "f06127c8c8fd51c9597f84d1a21751fa5fe616090d48af934b79f15a93bb7c60"
+            : "6379ebbaf5a9bfe23d27a81c06821f76b93d8a8741b4b88fd42db415489a3ff2";
+        BOOST_CHECK_EQUAL(HexStr(digest), expected);
+        const auto signature = cybou::SignIdentityMessage(secret, purpose, message);
+        BOOST_REQUIRE(signature);
+        BOOST_CHECK(cybou::VerifyIdentityMessage(*key, *signature, message));
+        auto bad_classical = *signature;
+        bad_classical.ed25519[0] ^= 1;
+        BOOST_CHECK(!cybou::VerifyIdentityMessage(*key, bad_classical, message));
+        auto bad_pq = *signature;
+        bad_pq.ml_dsa[0] ^= 1;
+        BOOST_CHECK(!cybou::VerifyIdentityMessage(*key, bad_pq, message));
+        std::array<unsigned char, 1> different{42};
+        BOOST_CHECK(!cybou::VerifyIdentityMessage(*key, *signature, different));
+    }
+}
+
+BOOST_AUTO_TEST_SUITE_END()
