@@ -159,6 +159,20 @@ QString CybouTheme::applicationStyleSheet()
         QSlider::handle:horizontal:hover { background: @teal_dark@; }
         QGroupBox { color: @text_primary@; border: 1px solid @border@; border-radius: 10px; margin-top: 12px; padding-top: 8px; }
         QGroupBox::title { subcontrol-origin: margin; left: 10px; color: @text_muted@; }
+
+        /* The page scroll surface must blend into the shell background. */
+        QScrollArea#pageScroll { background: @subtle@; border: none; }
+        QScrollArea#pageScroll > QWidget > QWidget { background: @subtle@; }
+        QScrollBar:vertical { background: @subtle@; width: 12px; margin: 2px; border-radius: 6px; }
+        QScrollBar::handle:vertical { background: @border_medium@; min-height: 40px; border-radius: 5px; }
+        QScrollBar::handle:vertical:hover { background: @text_muted@; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
+        QScrollBar:horizontal { background: @subtle@; height: 12px; margin: 2px; border-radius: 6px; }
+        QScrollBar::handle:horizontal { background: @border_medium@; min-width: 40px; border-radius: 5px; }
+        QScrollBar::handle:horizontal:hover { background: @text_muted@; }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }
     )")};
 
     const auto set = [&sheet](const QString& token, const QString& value) {

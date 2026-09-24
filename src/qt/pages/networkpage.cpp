@@ -54,24 +54,22 @@ QWidget* infoRow(const QString& caption, QLabel*& value_out, QWidget* parent)
     return row;
 }
 
-/** Metric row inside a card: muted caption plus a big value. QFrame#card
-    tiles must NOT be nested inside another card here — nested card frames
-    render blank under the application stylesheet. */
+/** Metric row inside a card: muted caption above a big value, stacked
+    vertically like metricCard. QFrame#card tiles must NOT be nested inside
+    another card — nested card frames render blank under the application
+    stylesheet. */
 QWidget* metricRow(const QString& caption, QLabel*& value_out, QWidget* parent)
 {
     auto* row = new QWidget{parent};
-    auto* layout = new QHBoxLayout{row};
+    auto* layout = new QVBoxLayout{row};
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(24);
+    layout->setSpacing(2);
     auto* caption_label = new QLabel{caption, row};
     caption_label->setObjectName(QStringLiteral("mutedText"));
-    caption_label->setFixedWidth(160);
-    caption_label->setAlignment(Qt::AlignVCenter);
     auto* value = new QLabel{row};
     value->setObjectName(QStringLiteral("metric"));
-    value->setAlignment(Qt::AlignVCenter);
     layout->addWidget(caption_label);
-    layout->addWidget(value, 1);
+    layout->addWidget(value);
     value_out = value;
     return row;
 }

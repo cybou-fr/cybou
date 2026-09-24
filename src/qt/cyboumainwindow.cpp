@@ -46,6 +46,7 @@
 #include <QProcessEnvironment>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QScrollArea>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
@@ -425,8 +426,17 @@ void CybouMainWindow::buildShell()
     connect(m_navigation, &QButtonGroup::idClicked, m_pages, &QStackedWidget::setCurrentIndex);
     m_navigation->button(0)->setChecked(true);
 
+    // Pages stack on a scroll surface: the native pages are taller than the
+    // window at the default size, and a stacked widget without scrolling
+    // squeezes card layouts until labels overlap and clip.
+    auto* page_scroll = new QScrollArea{shell};
+    page_scroll->setObjectName(QStringLiteral("pageScroll"));
+    page_scroll->setWidgetResizable(true);
+    page_scroll->setFrameShape(QFrame::NoFrame);
+    page_scroll->setWidget(m_pages);
+
     shell_layout->addWidget(sidebar);
-    shell_layout->addWidget(m_pages, 1);
+    shell_layout->addWidget(page_scroll, 1);
     setCentralWidget(shell);
 }
 
@@ -435,8 +445,8 @@ void CybouMainWindow::buildMenus()
     menuBar()->clear();
     auto* file = menuBar()->addMenu(tr("File"));
     file->addAction(tr("Hide CYBOU"), this, &BitcoinGUI::toggleHidden);
-    file->addSeparator();
-    file->addAction(tr("Quit CYBOU"), this, [this] { Q_EMIT quitRequested(); });
+    // No File->Quit: the node can only be shut down from the tray icon's
+    // context menu, so closing the window can never accidentally stop it.
 
     auto* settings = menuBar()->addMenu(tr("Settings"));
     settings->addAction(tr("Preferences"), this, &BitcoinGUI::optionsClicked);
