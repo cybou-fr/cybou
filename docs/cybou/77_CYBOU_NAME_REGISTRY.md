@@ -2,7 +2,9 @@
 
 Status: commit, work, reveal, and ownership rules are implemented in the
 canonical core. Desktop reads a finalized primary name from verified state;
-claiming and operational DEV cutover remain open.
+the native name service can submit and resume a claim using a durable encrypted
+claim file beside the identity vault. Desktop claiming and operational DEV
+cutover remain open.
 
 The label before `.cybou` is exactly 5–32 ASCII lowercase bytes from
 `[a-z0-9-]`; first and last are alphanumeric. Reject uppercase, Unicode,
@@ -21,7 +23,8 @@ Names are pseudonymous aliases, not civil identity proof.
 1. Generate a secret random salt and commit to canonical label, AccountID,
    NetworkID, and registry version with a domain-separated hash.
 2. Finalize NameCommit before accepting work or reveal. Save the salt in the
-   encrypted vault before broadcasting the commit.
+   encrypted claim vault beside the identity vault before broadcasting the commit. The file is bound to
+   NetworkID and AccountID and must be retained until reveal finalizes.
 3. NameClaimWork binds NetworkID, AccountID, commitment, deterministic
    height-derived epoch, and nonce. Difficulty and limits are network
    parameters; local wall clock is irrelevant.

@@ -18,6 +18,7 @@ CYBOU is experimental. The canonical product target uses hybrid post-quantum aut
 - Canonical operations, name registry, block execution, state store, and standalone authority/observer sync are connected to the native node runtime.
 - The DEV network definition commits to the active name rules. The CLI derives genesis validator keys from the same secret used by the producer; the desktop loads the verified network file.
 - Desktop identity creation uses a random AccountID, confirmed 24-word phrase, and durable CYBV2 vault before AccountCreate. Clean-machine restore resolves the RecoveryKeyID from verified state and submits a root-authorized DeviceAdd before activating the new device.
+- Native `.cybou` claiming durably saves an encrypted local claim before NameCommit, then performs work and NameReveal; desktop claim controls are pending.
 
 ## Integration still required
 

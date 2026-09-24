@@ -17,7 +17,8 @@ and work states must never imply consensus finality.
    the encrypted vault **before** AccountCreate broadcast.
 3. Perform account work, submit, and show pending until verified BFT finality.
    Keep the vault after network failure so the same identity can retry.
-4. Offer a `.cybou` name. Persist claim salt before NameCommit; show commit,
+4. Offer a `.cybou` name. Persist claim salt in the encrypted local claim file
+   before NameCommit; show commit,
    work, reveal, and finality as separate phases.
 
 The active header shows a finalized primary name, when present; AccountID is
