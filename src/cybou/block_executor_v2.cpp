@@ -19,7 +19,7 @@ BlockExecutionResultV2 ExecuteBlockOperationsV2(const CybouStateV2& parent,
         result.error = error;
         return result;
     };
-    if (!SerializeCybouStateV2(parent)) return fail(BlockExecutionErrorV2::INVALID_STATE);
+    if (ValidateCybouStateV2(parent) != StateValidationErrorV2::NONE) return fail(BlockExecutionErrorV2::INVALID_STATE);
     const auto creates = std::count_if(operations.begin(), operations.end(), [](const auto& operation) {
         return std::holds_alternative<AccountCreateOpV2>(operation);
     });
@@ -34,12 +34,44 @@ BlockExecutionResultV2 ExecuteBlockOperationsV2(const CybouStateV2& parent,
                 failure.create_error = result;
                 return failure;
             }
-        } else {
-            const auto result = ApplyPaymentV2(std::get<AuthorizedPaymentV2>(operations[i]), network_id, params, candidate);
+        } else if (const auto* payment = std::get_if<AuthorizedPaymentV2>(&operations[i])) {
+            const auto result = ApplyPaymentV2(*payment, network_id, params, candidate);
             if (result != PaymentErrorV2::NONE) {
                 auto failure = fail(BlockExecutionErrorV2::INVALID_PAYMENT);
                 failure.failed_operation_index = i;
                 failure.payment_error = result;
+                return failure;
+            }
+        } else if (const auto* add = std::get_if<DeviceAddV2>(&operations[i])) {
+            const auto result = candidate.identities.AddDevice(*add, network_id);
+            if (result != IdentityRegistryErrorV2::NONE) {
+                auto failure = fail(BlockExecutionErrorV2::INVALID_DEVICE_ADD);
+                failure.failed_operation_index = i;
+                failure.identity_error = result;
+                return failure;
+            }
+        } else if (const auto* revoke = std::get_if<DeviceRevokeV2>(&operations[i])) {
+            const auto result = candidate.identities.RevokeDevice(*revoke, network_id);
+            if (result != IdentityRegistryErrorV2::NONE) {
+                auto failure = fail(BlockExecutionErrorV2::INVALID_DEVICE_REVOKE);
+                failure.failed_operation_index = i;
+                failure.identity_error = result;
+                return failure;
+            }
+        } else if (const auto* rotate = std::get_if<RecoveryRotateV2>(&operations[i])) {
+            const auto result = candidate.identities.RotateRecovery(*rotate, network_id);
+            if (result != IdentityRegistryErrorV2::NONE) {
+                auto failure = fail(BlockExecutionErrorV2::INVALID_RECOVERY_ROTATE);
+                failure.failed_operation_index = i;
+                failure.identity_error = result;
+                return failure;
+            }
+        } else if (const auto* lock = std::get_if<AuthorizedSystemLockV2>(&operations[i])) {
+            const auto result = ApplySystemLockV2(*lock, network_id, candidate);
+            if (result != SystemLockErrorV2::NONE) {
+                auto failure = fail(BlockExecutionErrorV2::INVALID_SYSTEM_LOCK);
+                failure.failed_operation_index = i;
+                failure.lock_error = result;
                 return failure;
             }
         }
@@ -51,6 +83,7 @@ BlockExecutionResultV2 ExecuteBlockOperationsV2(const CybouStateV2& parent,
     candidate.security_reward_pool += security_addition;
     candidate.onboarding_pool += chunks;
     candidate.pending_fee_pool %= 4;
+    if (ValidateCybouStateV2(candidate) != StateValidationErrorV2::NONE) return fail(BlockExecutionErrorV2::INVALID_STATE);
     const auto root = CybouStateHashV2(candidate);
     if (!root) return fail(BlockExecutionErrorV2::INVALID_STATE);
     BlockExecutionResultV2 success{};

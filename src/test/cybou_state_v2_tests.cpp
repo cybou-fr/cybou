@@ -184,4 +184,284 @@ BOOST_AUTO_TEST_CASE(insufficient_pool_does_not_register_identity)
     BOOST_CHECK(state.identities.Accounts().empty());
 }
 
+BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
+{
+    using namespace cybou;
+    std::array<unsigned char, 32> root_seed{}, device_seed{}, second_seed{}, new_root_seed{};
+    root_seed[0] = 11;
+    device_seed[0] = 12;
+    second_seed[0] = 13;
+    new_root_seed[0] = 14;
+    uint256 raw_account{}, network_id{}, validator_id{}, validator_key{};
+    raw_account.begin()[0] = 15;
+    network_id.begin()[0] = 16;
+    validator_id.begin()[0] = 17;
+    validator_key.begin()[0] = 18;
+    const AccountId account{raw_account};
+    const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::DEVICE);
+    const auto second_dev = DeriveIdentityPublicKey(second_seed, IdentityKeyPurpose::DEVICE);
+    const auto new_root = DeriveIdentityPublicKey(new_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    BOOST_REQUIRE(root && device && second_dev && new_root);
+
+    const IdentityAuthorizationV2 auth{*root, *device};
+    const auto commitment = ComputeIdentityAuthorizationCommitmentV2(auth);
+    const auto pop_digest = ComputeAccountCreatePopDigestV2(network_id, account, auth);
+    BOOST_REQUIRE(commitment && pop_digest);
+    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *pop_digest);
+    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *pop_digest);
+    BOOST_REQUIRE(root_pop && device_pop);
+    const AccountCreateOpV2 create{account, auth,
+        {.network_id = network_id, .account_id = account, .authorization_commitment = *commitment},
+        *root_pop, *device_pop};
+
+    auto params = DevProtocolParameters();
+    params.account_creation_work_bits = 0;
+    CybouStateV2 state{};
+    state.onboarding_pool = params.onboarding_bonus;
+    state.validator_set.validators.push_back(ValidatorV1{validator_id, validator_key, 1});
+    BOOST_REQUIRE(ApplyAccountCreateV2(create, network_id, 0, params, state) == AccountCreateStateErrorV2::NONE);
+
+    // 1. DeviceAddV2
+    DeviceAddV2 add{};
+    add.account_id = account;
+    add.new_device = *second_dev;
+    add.root_nonce = 0;
+    const auto add_digest = ComputeDeviceAddDigestV2(network_id, add);
+    BOOST_REQUIRE(add_digest);
+    add.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *add_digest);
+    add.device_pop = *SignIdentityMessage(second_seed, IdentityKeyPurpose::DEVICE, *add_digest);
+
+    const ProtocolOperationV2 add_op{add};
+    const auto add_wire = SerializeProtocolOperationV2(add_op);
+    BOOST_REQUIRE(add_wire);
+    BOOST_CHECK(add_wire->size() == 2 + DEVICE_ADD_V2_SIZE);
+    const auto decoded_add = DeserializeProtocolOperationV2(*add_wire);
+    BOOST_REQUIRE(decoded_add && std::holds_alternative<DeviceAddV2>(*decoded_add));
+    BOOST_CHECK(SerializeProtocolOperationV2(*decoded_add) == add_wire);
+    BOOST_CHECK(ComputeOperationIdV2(*decoded_add) == ComputeOperationIdV2(add_op));
+
+    // Damaged wires
+    auto bad_add_wire = *add_wire;
+    bad_add_wire[0] = 1;
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_add_wire));
+    bad_add_wire = *add_wire;
+    bad_add_wire.push_back(0);
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_add_wire));
+    BOOST_CHECK(!DeserializeProtocolOperationV2(std::span{*add_wire}.first(add_wire->size() - 1)));
+
+    // Execute DeviceAdd in block
+    const auto add_block = ExecuteBlockOperationsV2(state, {add_op}, network_id, 1, params);
+    BOOST_REQUIRE(add_block);
+    BOOST_CHECK(add_block.state->identities.Find(account)->devices.size() == 2);
+    BOOST_CHECK(add_block.state->identities.Find(account)->next_root_nonce == 1);
+
+    // Replay of same device add fails with DEVICE_EXISTS
+    const auto replay_add = ExecuteBlockOperationsV2(*add_block.state, {add_op}, network_id, 2, params);
+    BOOST_CHECK(replay_add.error == BlockExecutionErrorV2::INVALID_DEVICE_ADD);
+    BOOST_CHECK(replay_add.identity_error == IdentityRegistryErrorV2::DEVICE_EXISTS);
+
+    // Stale nonce with new device fails with BAD_NONCE
+    std::array<unsigned char, 32> third_seed{};
+    third_seed[0] = 99;
+    const auto third_dev = DeriveIdentityPublicKey(third_seed, IdentityKeyPurpose::DEVICE);
+    BOOST_REQUIRE(third_dev);
+    DeviceAddV2 stale_add{};
+    stale_add.account_id = account;
+    stale_add.new_device = *third_dev;
+    stale_add.root_nonce = 0; // stale nonce (current is 1)
+    const auto stale_digest = ComputeDeviceAddDigestV2(network_id, stale_add);
+    BOOST_REQUIRE(stale_digest);
+    stale_add.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *stale_digest);
+    stale_add.device_pop = *SignIdentityMessage(third_seed, IdentityKeyPurpose::DEVICE, *stale_digest);
+    const auto stale_add_block = ExecuteBlockOperationsV2(*add_block.state, {ProtocolOperationV2{stale_add}}, network_id, 2, params);
+    BOOST_CHECK(stale_add_block.error == BlockExecutionErrorV2::INVALID_DEVICE_ADD);
+    BOOST_CHECK(stale_add_block.identity_error == IdentityRegistryErrorV2::BAD_NONCE);
+
+    // 2. DeviceRevokeV2
+    const auto first_device_id = ComputeDeviceKeyId(*device);
+    BOOST_REQUIRE(first_device_id);
+    DeviceRevokeV2 revoke{};
+    revoke.account_id = account;
+    revoke.device_id = *first_device_id;
+    revoke.root_nonce = 1;
+    const auto revoke_digest = ComputeDeviceRevokeDigestV2(network_id, revoke);
+    BOOST_REQUIRE(revoke_digest);
+    revoke.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *revoke_digest);
+
+    const ProtocolOperationV2 revoke_op{revoke};
+    const auto revoke_wire = SerializeProtocolOperationV2(revoke_op);
+    BOOST_REQUIRE(revoke_wire);
+    BOOST_CHECK(revoke_wire->size() == 2 + DEVICE_REVOKE_V2_SIZE);
+    const auto decoded_revoke = DeserializeProtocolOperationV2(*revoke_wire);
+    BOOST_REQUIRE(decoded_revoke && std::holds_alternative<DeviceRevokeV2>(*decoded_revoke));
+    BOOST_CHECK(SerializeProtocolOperationV2(*decoded_revoke) == revoke_wire);
+    BOOST_CHECK(ComputeOperationIdV2(*decoded_revoke) == ComputeOperationIdV2(revoke_op));
+
+    // Damaged wires
+    auto bad_revoke_wire = *revoke_wire;
+    bad_revoke_wire[0] = 9;
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_revoke_wire));
+    bad_revoke_wire = *revoke_wire;
+    bad_revoke_wire.push_back(0);
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_revoke_wire));
+
+    // Execute DeviceRevoke in block
+    const auto revoke_block = ExecuteBlockOperationsV2(*add_block.state, {revoke_op}, network_id, 2, params);
+    BOOST_REQUIRE(revoke_block);
+    BOOST_CHECK(revoke_block.state->identities.Find(account)->devices.size() == 1);
+    BOOST_CHECK(revoke_block.state->identities.Find(account)->next_root_nonce == 2);
+    BOOST_CHECK(!revoke_block.state->identities.Find(account)->devices.contains(*first_device_id));
+
+    // 3. RecoveryRotateV2
+    RecoveryRotateV2 rotate{};
+    rotate.account_id = account;
+    rotate.new_root = *new_root;
+    rotate.root_nonce = 2;
+    const auto rotate_digest = ComputeRecoveryRotateDigestV2(network_id, rotate);
+    BOOST_REQUIRE(rotate_digest);
+    rotate.old_root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
+    rotate.new_root_pop = *SignIdentityMessage(new_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
+
+    const ProtocolOperationV2 rotate_op{rotate};
+    const auto rotate_wire = SerializeProtocolOperationV2(rotate_op);
+    BOOST_REQUIRE(rotate_wire);
+    BOOST_CHECK(rotate_wire->size() == 2 + RECOVERY_ROTATE_V2_SIZE);
+    const auto decoded_rotate = DeserializeProtocolOperationV2(*rotate_wire);
+    BOOST_REQUIRE(decoded_rotate && std::holds_alternative<RecoveryRotateV2>(*decoded_rotate));
+    BOOST_CHECK(SerializeProtocolOperationV2(*decoded_rotate) == rotate_wire);
+    BOOST_CHECK(ComputeOperationIdV2(*decoded_rotate) == ComputeOperationIdV2(rotate_op));
+
+    // Damaged wires
+    auto bad_rotate_wire = *rotate_wire;
+    bad_rotate_wire.push_back(0);
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_rotate_wire));
+    BOOST_CHECK(!DeserializeProtocolOperationV2(std::span{*rotate_wire}.first(rotate_wire->size() - 1)));
+
+    // Execute RecoveryRotate in block
+    const auto rotate_block = ExecuteBlockOperationsV2(*revoke_block.state, {rotate_op}, network_id, 3, params);
+    BOOST_REQUIRE(rotate_block);
+    const auto new_root_id = ComputeRecoveryKeyId(*new_root);
+    BOOST_REQUIRE(new_root_id);
+    BOOST_CHECK(rotate_block.state->identities.FindByRecoveryKeyId(*new_root_id) == account);
+    BOOST_CHECK(rotate_block.state->identities.Find(account)->recovery_root.ed25519 == new_root->ed25519);
+    BOOST_CHECK(rotate_block.state->identities.Find(account)->next_root_nonce == 3);
+}
+
+BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
+{
+    using namespace cybou;
+    std::array<unsigned char, 32> root_seed{}, device_seed{};
+    root_seed[0] = 21;
+    device_seed[0] = 22;
+    uint256 raw_account{}, network_id{}, validator_id{}, validator_key{};
+    raw_account.begin()[0] = 23;
+    network_id.begin()[0] = 24;
+    validator_id.begin()[0] = 25;
+    validator_key.begin()[0] = 26;
+    const AccountId account{raw_account};
+    const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::DEVICE);
+    BOOST_REQUIRE(root && device);
+
+    const IdentityAuthorizationV2 auth{*root, *device};
+    const auto commitment = ComputeIdentityAuthorizationCommitmentV2(auth);
+    const auto pop_digest = ComputeAccountCreatePopDigestV2(network_id, account, auth);
+    BOOST_REQUIRE(commitment && pop_digest);
+    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *pop_digest);
+    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *pop_digest);
+    BOOST_REQUIRE(root_pop && device_pop);
+    const AccountCreateOpV2 create{account, auth,
+        {.network_id = network_id, .account_id = account, .authorization_commitment = *commitment},
+        *root_pop, *device_pop};
+
+    auto params = DevProtocolParameters();
+    params.account_creation_work_bits = 0;
+    CybouStateV2 state{};
+    state.onboarding_pool = params.onboarding_bonus;
+    state.validator_set.validators.push_back(ValidatorV1{validator_id, validator_key, 1});
+    BOOST_REQUIRE(ApplyAccountCreateV2(create, network_id, 0, params, state) == AccountCreateStateErrorV2::NONE);
+
+    // Fund account balance
+    state.accounts.at(account).balance = 50;
+
+    const auto device_id = ComputeDeviceKeyId(*device);
+    BOOST_REQUIRE(device_id);
+
+    AuthorizedSystemLockV2 lock{};
+    lock.lock.amount = 20;
+    const auto lock_bytes = SerializeSystemLockPayloadV2(lock.lock);
+    BOOST_REQUIRE(lock_bytes);
+    const auto decoded_lock = DeserializeSystemLockPayloadV2(*lock_bytes);
+    BOOST_REQUIRE(decoded_lock && decoded_lock->amount == 20);
+
+    const auto lock_commitment = ComputeSystemLockPayloadCommitmentV2(lock.lock);
+    BOOST_REQUIRE(lock_commitment);
+
+    lock.authorization.account_id = account;
+    lock.authorization.device_id = *device_id;
+    lock.authorization.nonce = 0;
+    lock.authorization.activation_nonce = 0;
+    lock.authorization.kind = DeviceOperationKindV2::SYSTEM_LOCK;
+    lock.authorization.payload_commitment = *lock_commitment;
+    const auto lock_digest = ComputeDeviceOperationDigestV2(network_id, lock.authorization);
+    BOOST_REQUIRE(lock_digest);
+    lock.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *lock_digest);
+
+    // Wire serialization
+    const ProtocolOperationV2 lock_op{lock};
+    const auto lock_wire = SerializeProtocolOperationV2(lock_op);
+    BOOST_REQUIRE(lock_wire);
+    BOOST_CHECK(lock_wire->size() == 2 + AUTHORIZED_SYSTEM_LOCK_V2_SIZE);
+    const auto decoded_wire = DeserializeProtocolOperationV2(*lock_wire);
+    BOOST_REQUIRE(decoded_wire && std::holds_alternative<AuthorizedSystemLockV2>(*decoded_wire));
+    BOOST_CHECK(SerializeProtocolOperationV2(*decoded_wire) == lock_wire);
+    BOOST_CHECK(ComputeOperationIdV2(*decoded_wire) == ComputeOperationIdV2(lock_op));
+
+    // Damaged wires
+    auto bad_lock_wire = *lock_wire;
+    bad_lock_wire[0] = 0;
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_lock_wire));
+    bad_lock_wire = *lock_wire;
+    bad_lock_wire.push_back(0);
+    BOOST_CHECK(!DeserializeProtocolOperationV2(bad_lock_wire));
+    BOOST_CHECK(!DeserializeProtocolOperationV2(std::span{*lock_wire}.first(lock_wire->size() - 1)));
+
+    // Execute in block
+    const auto block_res = ExecuteBlockOperationsV2(state, {lock_op}, network_id, 1, params);
+    BOOST_REQUIRE(block_res);
+    BOOST_CHECK(block_res.state->accounts.at(account).balance == 30);
+    BOOST_CHECK(block_res.state->accounts.at(account).system_balance == params.onboarding_bonus + 20);
+    BOOST_CHECK(block_res.state->pending_fee_pool == 0); // no fee for lock
+    BOOST_CHECK(block_res.state->identities.Find(account)->devices.at(*device_id).next_nonce == 1);
+
+    // Replay stale nonce fails
+    const auto replay = ExecuteBlockOperationsV2(*block_res.state, {lock_op}, network_id, 2, params);
+    BOOST_CHECK(replay.error == BlockExecutionErrorV2::INVALID_SYSTEM_LOCK);
+    BOOST_CHECK(replay.lock_error == SystemLockErrorV2::INVALID_AUTHORIZATION);
+}
+
+BOOST_AUTO_TEST_CASE(state_validation_invariants)
+{
+    using namespace cybou;
+    CybouStateV2 state{};
+    uint256 validator_id{}, validator_key{};
+    validator_id.begin()[0] = 31;
+    validator_key.begin()[0] = 32;
+    state.validator_set.validators.push_back(ValidatorV1{validator_id, validator_key, 1});
+    BOOST_CHECK(ValidateCybouStateV2(state) == StateValidationErrorV2::NONE);
+
+    // Mismatched account count
+    uint256 raw{};
+    raw.begin()[0] = 33;
+    const AccountId acc{raw};
+    state.accounts.emplace(acc, AccountStateV2{.balance = 10});
+    BOOST_CHECK(ValidateCybouStateV2(state) == StateValidationErrorV2::ACCOUNT_IDENTITY_COUNT_MISMATCH);
+
+    // Balance overflow
+    state.accounts.clear();
+    state.onboarding_pool = 100'000'000'001ULL;
+    BOOST_CHECK(ValidateCybouStateV2(state) == StateValidationErrorV2::BALANCE_OVERFLOW);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

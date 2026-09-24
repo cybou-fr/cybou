@@ -17,6 +17,10 @@ enum class BlockExecutionErrorV2 : uint8_t {
     TOO_MANY_ACCOUNT_CREATES,
     INVALID_ACCOUNT_CREATE,
     INVALID_PAYMENT,
+    INVALID_DEVICE_ADD,
+    INVALID_DEVICE_REVOKE,
+    INVALID_RECOVERY_ROTATE,
+    INVALID_SYSTEM_LOCK,
     FEE_ROUTING_OVERFLOW,
     INVALID_STATE,
 };
@@ -26,6 +30,8 @@ struct BlockExecutionResultV2 {
     size_t failed_operation_index{0};
     AccountCreateStateErrorV2 create_error{AccountCreateStateErrorV2::NONE};
     PaymentErrorV2 payment_error{PaymentErrorV2::NONE};
+    IdentityRegistryErrorV2 identity_error{IdentityRegistryErrorV2::NONE};
+    SystemLockErrorV2 lock_error{SystemLockErrorV2::NONE};
     std::optional<CybouStateV2> state;
     std::optional<uint256> state_root;
 
@@ -36,6 +42,9 @@ BlockExecutionResultV2 ExecuteBlockOperationsV2(const CybouStateV2& parent,
     const std::vector<ProtocolOperationV2>& operations,
     const uint256& network_id, uint64_t block_height,
     const CybouProtocolParameters& params);
+
+using BlockExecutionError = BlockExecutionErrorV2;
+using BlockExecutionResult = BlockExecutionResultV2;
 
 } // namespace cybou
 #endif

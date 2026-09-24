@@ -16,15 +16,41 @@
 namespace cybou {
 
 inline constexpr uint8_t PROTOCOL_OPERATION_VERSION_V2{2};
-inline constexpr size_t AUTHORIZED_PAYMENT_V2_SIZE{2574};
+inline constexpr size_t AUTHORIZED_PAYMENT_V2_SIZE{2638};
+inline constexpr size_t DEVICE_ADD_V2_SIZE{7241};
+inline constexpr size_t DEVICE_REVOKE_V2_SIZE{3445};
+inline constexpr size_t RECOVERY_ROTATE_V2_SIZE{8770};
+inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_V2_SIZE{2606};
 
-enum class ProtocolOperationKindV2 : uint8_t { ACCOUNT_CREATE = 1, PAYMENT = 2 };
+enum class ProtocolOperationKindV2 : uint8_t {
+    ACCOUNT_CREATE = 1,
+    PAYMENT = 2,
+    DEVICE_ADD = 3,
+    DEVICE_REVOKE = 4,
+    RECOVERY_ROTATE = 5,
+    SYSTEM_LOCK = 6,
+};
 
-using ProtocolOperationV2 = std::variant<AccountCreateOpV2, AuthorizedPaymentV2>;
+using ProtocolOperationV2 = std::variant<
+    AccountCreateOpV2,
+    AuthorizedPaymentV2,
+    DeviceAddV2,
+    DeviceRevokeV2,
+    RecoveryRotateV2,
+    AuthorizedSystemLockV2>;
 
 std::optional<std::vector<unsigned char>> SerializeProtocolOperationV2(const ProtocolOperationV2& operation);
 std::optional<ProtocolOperationV2> DeserializeProtocolOperationV2(std::span<const unsigned char> bytes);
 std::optional<uint256> ComputeOperationIdV2(const ProtocolOperationV2& operation);
+
+inline constexpr uint8_t PROTOCOL_OPERATION_VERSION{PROTOCOL_OPERATION_VERSION_V2};
+using ProtocolOperationKind = ProtocolOperationKindV2;
+using ProtocolOperation = ProtocolOperationV2;
+inline constexpr size_t AUTHORIZED_PAYMENT_SIZE{AUTHORIZED_PAYMENT_V2_SIZE};
+inline constexpr size_t DEVICE_ADD_SIZE{DEVICE_ADD_V2_SIZE};
+inline constexpr size_t DEVICE_REVOKE_SIZE{DEVICE_REVOKE_V2_SIZE};
+inline constexpr size_t RECOVERY_ROTATE_SIZE{RECOVERY_ROTATE_V2_SIZE};
+inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_SIZE{AUTHORIZED_SYSTEM_LOCK_V2_SIZE};
 
 } // namespace cybou
 #endif

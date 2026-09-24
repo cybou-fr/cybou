@@ -96,11 +96,40 @@ AccountCreateStateErrorV2 ApplyAccountCreateV2(const AccountCreateOpV2& op,
     return AccountCreateStateErrorV2::NONE;
 }
 
+StateValidationErrorV2 ValidateCybouStateV2(const CybouStateV2& state)
+{
+    if (state.accounts.size() > MAX_IDENTITY_REGISTRY_ACCOUNTS_V2) return StateValidationErrorV2::ACCOUNT_LIMIT_EXCEEDED;
+    if (state.accounts.size() != state.identities.Accounts().size()) return StateValidationErrorV2::ACCOUNT_IDENTITY_COUNT_MISMATCH;
+    for (const auto& [id, account] : state.accounts) {
+        if (id.IsNull() || !state.identities.Find(id)) return StateValidationErrorV2::MISSING_IDENTITY;
+    }
+    for (const auto& [id, record] : state.identities.Accounts()) {
+        const auto root_id = ComputeRecoveryKeyId(record.recovery_root);
+        if (!root_id) return StateValidationErrorV2::DUPLICATE_RECOVERY_BINDING;
+        const auto mapped_acc = state.identities.FindByRecoveryKeyId(*root_id);
+        if (!mapped_acc || *mapped_acc != id) return StateValidationErrorV2::DUPLICATE_RECOVERY_BINDING;
+    }
+    if (ValidateValidatorSet(state.validator_set) != ValidatorSetValidationError::NONE) return StateValidationErrorV2::INVALID_VALIDATOR_SET;
+    constexpr uint64_t MAX_SUPPLY{100'000'000'000};
+    uint64_t total{0};
+    if (state.onboarding_pool > MAX_SUPPLY) return StateValidationErrorV2::BALANCE_OVERFLOW;
+    total += state.onboarding_pool;
+    if (state.security_reward_pool > MAX_SUPPLY - total) return StateValidationErrorV2::BALANCE_OVERFLOW;
+    total += state.security_reward_pool;
+    if (state.pending_fee_pool > MAX_SUPPLY - total) return StateValidationErrorV2::BALANCE_OVERFLOW;
+    total += state.pending_fee_pool;
+    for (const auto& [id, account] : state.accounts) {
+        if (account.balance > MAX_SUPPLY - total) return StateValidationErrorV2::BALANCE_OVERFLOW;
+        total += account.balance;
+        if (account.system_balance > MAX_SUPPLY - total) return StateValidationErrorV2::BALANCE_OVERFLOW;
+        total += account.system_balance;
+    }
+    return StateValidationErrorV2::NONE;
+}
+
 std::optional<std::vector<unsigned char>> SerializeCybouStateV2(const CybouStateV2& state)
 {
-    if (state.accounts.size() > MAX_IDENTITY_REGISTRY_ACCOUNTS_V2 ||
-        state.accounts.size() != state.identities.Accounts().size() ||
-        ValidateValidatorSet(state.validator_set) != ValidatorSetValidationError::NONE) return std::nullopt;
+    if (ValidateCybouStateV2(state) != StateValidationErrorV2::NONE) return std::nullopt;
     const auto identities = SerializeIdentityRegistryV2(state.identities);
     if (!identities || identities->size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
     const auto validators = SerializeValidatorSet(state.validator_set);

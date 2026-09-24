@@ -24,12 +24,16 @@ struct IdentityDeviceV2 {
     IdentityHybridPublicKey key;
     uint64_t next_nonce{0};
     uint64_t activation_nonce{0};
+
+    friend bool operator==(const IdentityDeviceV2&, const IdentityDeviceV2&) = default;
 };
 
 struct IdentityRecordV2 {
     IdentityHybridPublicKey recovery_root;
     uint64_t next_root_nonce{0};
     std::map<IdentityKeyIdV2, IdentityDeviceV2> devices;
+
+    friend bool operator==(const IdentityRecordV2&, const IdentityRecordV2&) = default;
 };
 
 struct DeviceAddV2 {
@@ -38,6 +42,8 @@ struct DeviceAddV2 {
     uint64_t root_nonce{0};
     IdentityHybridSignature root_signature;
     IdentityHybridSignature device_pop;
+
+    friend bool operator==(const DeviceAddV2&, const DeviceAddV2&) = default;
 };
 
 struct DeviceRevokeV2 {
@@ -45,6 +51,8 @@ struct DeviceRevokeV2 {
     IdentityKeyIdV2 device_id{};
     uint64_t root_nonce{0};
     IdentityHybridSignature root_signature;
+
+    friend bool operator==(const DeviceRevokeV2&, const DeviceRevokeV2&) = default;
 };
 
 struct RecoveryRotateV2 {
@@ -53,6 +61,8 @@ struct RecoveryRotateV2 {
     uint64_t root_nonce{0};
     IdentityHybridSignature old_root_signature;
     IdentityHybridSignature new_root_pop;
+
+    friend bool operator==(const RecoveryRotateV2&, const RecoveryRotateV2&) = default;
 };
 
 enum class DeviceOperationKindV2 : uint8_t { PAYMENT = 1, MAIL = 2, SYSTEM_LOCK = 3 };
@@ -67,7 +77,21 @@ struct DeviceAuthorizationV2 {
     DeviceOperationKindV2 kind{DeviceOperationKindV2::PAYMENT};
     IdentityKeyIdV2 payload_commitment{};
     IdentityHybridSignature signature;
+
+    friend bool operator==(const DeviceAuthorizationV2&, const DeviceAuthorizationV2&) = default;
 };
+
+// Unversioned aliases for PQ identity types
+using IdentityKeyId = IdentityKeyIdV2;
+using IdentityDevice = IdentityDeviceV2;
+using IdentityRecord = IdentityRecordV2;
+using DeviceAdd = DeviceAddV2;
+using DeviceRevoke = DeviceRevokeV2;
+using RecoveryRotate = RecoveryRotateV2;
+using DeviceOperationKind = DeviceOperationKindV2;
+using DeviceAuthorization = DeviceAuthorizationV2;
+inline constexpr size_t MAX_ACTIVE_DEVICES{MAX_ACTIVE_DEVICES_V2};
+inline constexpr uint32_t MAX_IDENTITY_REGISTRY_ACCOUNTS{MAX_IDENTITY_REGISTRY_ACCOUNTS_V2};
 
 enum class IdentityRegistryErrorV2 : uint8_t {
     NONE,
@@ -123,6 +147,9 @@ private:
 // state-root domain will be defined when monetary and name state are integrated.
 std::optional<std::vector<unsigned char>> SerializeIdentityRegistryV2(const IdentityRegistryV2& registry);
 std::optional<IdentityRegistryV2> DeserializeIdentityRegistryV2(std::span<const unsigned char> bytes);
+
+using IdentityRegistry = IdentityRegistryV2;
+using IdentityRegistryError = IdentityRegistryErrorV2;
 
 } // namespace cybou
 #endif

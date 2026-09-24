@@ -54,9 +54,23 @@ AccountCreateStateErrorV2 ApplyAccountCreateV2(const AccountCreateOpV2& op,
     const uint256& network_id, uint64_t block_height,
     const CybouProtocolParameters& params, CybouStateV2& state);
 
+enum class StateValidationErrorV2 : uint8_t {
+    NONE,
+    ACCOUNT_LIMIT_EXCEEDED,
+    ACCOUNT_IDENTITY_COUNT_MISMATCH,
+    MISSING_IDENTITY,
+    DUPLICATE_RECOVERY_BINDING,
+    INVALID_VALIDATOR_SET,
+    BALANCE_OVERFLOW,
+};
+
+StateValidationErrorV2 ValidateCybouStateV2(const CybouStateV2& state);
+
 std::optional<std::vector<unsigned char>> SerializeCybouStateV2(const CybouStateV2& state);
 std::optional<CybouStateV2> DeserializeCybouStateV2(std::span<const unsigned char> bytes);
 std::optional<uint256> CybouStateHashV2(const CybouStateV2& state);
+
+using StateValidationError = StateValidationErrorV2;
 
 } // namespace cybou
 #endif

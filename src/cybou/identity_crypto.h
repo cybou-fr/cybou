@@ -26,11 +26,15 @@ struct IdentityHybridPublicKey {
     IdentityKeyPurpose purpose;
     std::array<unsigned char, 32> ed25519{};
     std::vector<unsigned char> ml_dsa;
+
+    friend bool operator==(const IdentityHybridPublicKey&, const IdentityHybridPublicKey&) = default;
 };
 
 struct IdentityHybridSignature {
     std::array<unsigned char, 64> ed25519{};
     std::vector<unsigned char> ml_dsa;
+
+    friend bool operator==(const IdentityHybridSignature&, const IdentityHybridSignature&) = default;
 };
 
 // Local V2 foundation only. Consensus encoding and operation-specific signing

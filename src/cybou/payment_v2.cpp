@@ -78,4 +78,58 @@ PaymentErrorV2 ApplyPaymentV2(const AuthorizedPaymentV2& operation,
     return PaymentErrorV2::NONE;
 }
 
+std::optional<std::array<unsigned char, SYSTEM_LOCK_PAYLOAD_SIZE_V2>> SerializeSystemLockPayloadV2(const SystemLockPayloadV2& lock)
+{
+    if (lock.amount == 0) return std::nullopt;
+    std::array<unsigned char, SYSTEM_LOCK_PAYLOAD_SIZE_V2> out{};
+    out[0] = 2;
+    for (unsigned i{0}; i < 8; ++i) out[1 + i] = static_cast<unsigned char>(lock.amount >> (8 * i));
+    return out;
+}
+
+std::optional<SystemLockPayloadV2> DeserializeSystemLockPayloadV2(std::span<const unsigned char> bytes)
+{
+    if (bytes.size() != SYSTEM_LOCK_PAYLOAD_SIZE_V2 || bytes[0] != 2) return std::nullopt;
+    uint64_t amount{0};
+    for (unsigned i{0}; i < 8; ++i) amount |= uint64_t{bytes[1 + i]} << (8 * i);
+    if (!amount) return std::nullopt;
+    return SystemLockPayloadV2{amount};
+}
+
+std::optional<IdentityKeyIdV2> ComputeSystemLockPayloadCommitmentV2(const SystemLockPayloadV2& lock)
+{
+    constexpr std::string_view domain{"CYBOU/SYSTEM-LOCK-PAYLOAD/V2"};
+    const auto bytes = SerializeSystemLockPayloadV2(lock);
+    if (!bytes) return std::nullopt;
+    using DigestCtx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
+    DigestCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
+    IdentityKeyIdV2 digest{};
+    unsigned int size{0};
+    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
+        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
+        EVP_DigestUpdate(ctx.get(), bytes->data(), bytes->size()) != 1 ||
+        EVP_DigestFinal_ex(ctx.get(), digest.data(), &size) != 1 || size != digest.size()) return std::nullopt;
+    return digest;
+}
+
+SystemLockErrorV2 ApplySystemLockV2(const AuthorizedSystemLockV2& operation,
+    const uint256& network_id,
+    CybouStateV2& state)
+{
+    if (operation.authorization.kind != DeviceOperationKindV2::SYSTEM_LOCK) return SystemLockErrorV2::INVALID_AUTHORIZATION;
+    if (operation.lock.amount == 0) return SystemLockErrorV2::ZERO_AMOUNT;
+    const auto commitment = ComputeSystemLockPayloadCommitmentV2(operation.lock);
+    if (!commitment || operation.authorization.payload_commitment != *commitment) return SystemLockErrorV2::INVALID_PAYLOAD;
+    const auto account_id = operation.authorization.account_id;
+    auto account = state.accounts.find(account_id);
+    if (account == state.accounts.end()) return SystemLockErrorV2::ACCOUNT_NOT_FOUND;
+    if (!state.identities.Find(account_id)) return SystemLockErrorV2::INCONSISTENT_STATE;
+    if (account->second.balance < operation.lock.amount) return SystemLockErrorV2::INSUFFICIENT_BALANCE;
+    if (account->second.system_balance > std::numeric_limits<uint64_t>::max() - operation.lock.amount) return SystemLockErrorV2::SYSTEM_BALANCE_OVERFLOW;
+    if (state.identities.AuthorizeDeviceOperation(operation.authorization, network_id) != IdentityRegistryErrorV2::NONE) return SystemLockErrorV2::INVALID_AUTHORIZATION;
+    account->second.balance -= operation.lock.amount;
+    account->second.system_balance += operation.lock.amount;
+    return SystemLockErrorV2::NONE;
+}
+
 } // namespace cybou
