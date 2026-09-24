@@ -27,8 +27,12 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
 bool CybouNodeRuntime::InitializeGenesis(const CybouState& genesis, const bool sync)
 {
     std::lock_guard lock(m_mutex);
-    if (m_store.GetFinalizedHead().has_value()) {
+    const auto loaded = m_store.LoadState();
+    if (loaded.error == StateLoadError::NONE && loaded.state.has_value()) {
         return true;
+    }
+    if (loaded.error != StateLoadError::NOT_FOUND) {
+        return false;
     }
     const auto result = m_store.InitializeGenesis(genesis, sync);
     return result.error == GenesisInitError::NONE;
@@ -110,6 +114,13 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperationV1 op)
     uint256 net_id{};
     {
         std::lock_guard lock(m_mutex);
+        const auto loaded = m_store.LoadState();
+        if (loaded.error == StateLoadError::NETWORK_MISMATCH) {
+            return OperationSubmitResult{.status = OperationSubmitStatus::NETWORK_MISMATCH, .op_id = op_id};
+        }
+        if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) {
+            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
+        }
         if (m_authority_node) {
             const auto status = m_authority_node->SubmitOperationWithStatus(op);
             return OperationSubmitResult{.status = status, .op_id = op_id};
@@ -127,6 +138,8 @@ std::optional<FinalizedBlockV1> CybouNodeRuntime::ProduceBlock(const bool sync)
 {
     std::lock_guard lock(m_mutex);
     if (!m_authority_node) return std::nullopt;
+    const auto loaded = m_store.LoadState();
+    if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
     const auto res = m_authority_node->ProduceNextBlock(sync);
     if (!res) return std::nullopt;
     return res.finalized_block;
@@ -135,6 +148,13 @@ std::optional<FinalizedBlockV1> CybouNodeRuntime::ProduceBlock(const bool sync)
 BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlockV1& block, const bool sync)
 {
     std::lock_guard lock(m_mutex);
+    const auto loaded = m_store.LoadState();
+    if (loaded.error == StateLoadError::NETWORK_MISMATCH) {
+        return BlockTransitionResult{.error = BlockTransitionError::NETWORK_MISMATCH};
+    }
+    if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) {
+        return BlockTransitionResult{.error = BlockTransitionError::STATE_NOT_INITIALIZED};
+    }
     return m_store.CommitFinalizedBlock(block, std::nullopt, sync);
 }
 
@@ -147,6 +167,18 @@ std::optional<FinalizedBlockV1> CybouNodeRuntime::GetBlockAtHeight(const uint64_
 SyncPeerResult CybouNodeRuntime::SyncFromPeer(const std::string& host, const uint16_t port, const uint64_t max_blocks)
 {
     SyncPeerResult result;
+    {
+        std::lock_guard lock(m_mutex);
+        const auto loaded = m_store.LoadState();
+        if (loaded.error == StateLoadError::NETWORK_MISMATCH) {
+            result.status = SyncPeerStatus::NETWORK_MISMATCH;
+            return result;
+        }
+        if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) {
+            result.status = SyncPeerStatus::PROTOCOL_ERROR;
+            return result;
+        }
+    }
     while (result.blocks_applied < max_blocks) {
         uint64_t next_height{0};
         uint256 net_id{};

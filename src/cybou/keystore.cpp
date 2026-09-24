@@ -11,6 +11,9 @@
 #ifdef WIN32
 #include <windows.h>
 #include <wincrypt.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 namespace cybou {
@@ -130,41 +133,90 @@ bool CybouKeyStore::SaveToFile(const std::filesystem::path& path) const
     const auto tmp_path = path.string() + ".tmp";
     const auto bak_path = path.string() + ".bak";
 
+#ifndef WIN32
+    // On POSIX, ensure private key file permissions (0600) before writing
+    std::error_code perm_ec;
+    std::filesystem::remove(tmp_path, perm_ec);
+#endif
+
     std::ofstream out(tmp_path, std::ios::binary | std::ios::out | std::ios::trunc);
-    if (!out) return false;
+    if (!out) {
+        memory_cleanse(file_bytes.data(), file_bytes.size());
+        return false;
+    }
     out.write(reinterpret_cast<const char*>(file_bytes.data()), file_bytes.size());
     out.flush();
-    if (!out.good()) {
+    const bool write_good = out.good();
+    out.close();
+    memory_cleanse(file_bytes.data(), file_bytes.size());
+
+    if (!write_good) {
         std::error_code ec;
         std::filesystem::remove(tmp_path, ec);
         return false;
     }
-    out.close();
 
 #ifdef WIN32
     HANDLE hFile = CreateFileW(std::filesystem::path(tmp_path).c_str(),
                                GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                nullptr, OPEN_EXISTING, 0, nullptr);
-    if (hFile != INVALID_HANDLE_VALUE) {
-        FlushFileBuffers(hFile);
-        CloseHandle(hFile);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        std::error_code ec;
+        std::filesystem::remove(tmp_path, ec);
+        return false;
     }
-#endif
+    const BOOL flush_ok = FlushFileBuffers(hFile);
+    CloseHandle(hFile);
+    if (!flush_ok) {
+        std::error_code ec;
+        std::filesystem::remove(tmp_path, ec);
+        return false;
+    }
 
     std::error_code ec;
-    // Create backup of existing file if present
+    const std::wstring wpath = path.wstring();
+    const std::wstring wtmp = std::filesystem::path(tmp_path).wstring();
+    const std::wstring wbak = std::filesystem::path(bak_path).wstring();
+
+    if (std::filesystem::exists(path, ec)) {
+        // ReplaceFileW atomically replaces path with tmp_path and creates bak_path as backup.
+        // It provides true atomic transactional replacement without a delete-rename window.
+        if (!ReplaceFileW(wpath.c_str(), wtmp.c_str(), wbak.c_str(), REPLACEFILE_WRITE_THROUGH, nullptr, nullptr)) {
+            if (!MoveFileExW(wtmp.c_str(), wpath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+                std::filesystem::remove(tmp_path, ec);
+                return false;
+            }
+        }
+    } else {
+        if (!MoveFileExW(wtmp.c_str(), wpath.c_str(), MOVEFILE_WRITE_THROUGH)) {
+            std::filesystem::remove(tmp_path, ec);
+            return false;
+        }
+    }
+    return true;
+#else
+    int fd = open(tmp_path.c_str(), O_WRONLY);
+    if (fd >= 0) {
+        fchmod(fd, S_IRUSR | S_IWUSR);
+        fsync(fd);
+        close(fd);
+    }
+
+    std::error_code ec;
     if (std::filesystem::exists(path, ec)) {
         std::filesystem::copy_file(path, bak_path, std::filesystem::copy_options::overwrite_existing, ec);
     }
-
-    // Atomic replace
     std::filesystem::rename(tmp_path, path, ec);
     if (ec) {
-        std::filesystem::remove(path, ec);
-        std::filesystem::rename(tmp_path, path, ec);
-        if (ec) return false;
+        std::filesystem::remove(tmp_path, ec);
+        return false;
     }
+    std::filesystem::permissions(path,
+        std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+        std::filesystem::perm_options::replace,
+        ec);
     return true;
+#endif
 }
 
 bool CybouKeyStore::LoadFromFile(const std::filesystem::path& path)
@@ -181,11 +233,12 @@ bool CybouKeyStore::LoadFromFile(const std::filesystem::path& path)
         }
         const bool ok = m_impl->SetSeed(raw_seed);
         memory_cleanse(raw_seed.data(), raw_seed.size());
-        if (ok) {
-            // Immediately migrate to protected format on disk
-            SaveToFile(path);
+        if (!ok) return false;
+        // Require successful migration to protected format
+        if (!SaveToFile(path)) {
+            return false;
         }
-        return ok;
+        return true;
     }
 
     if (file_size < KEYSTORE_MAGIC.size() + 4) return false;

@@ -267,4 +267,202 @@ BOOST_AUTO_TEST_CASE(remote_operation_submission_over_tcp_network_transport)
     }
 }
 
+BOOST_AUTO_TEST_CASE(runtime_fail_closed_and_network_mismatch_reset)
+{
+    const auto test_db_path = std::filesystem::temp_directory_path() / "cybou_test_mismatch_db";
+    std::filesystem::remove_all(test_db_path);
+
+    std::array<unsigned char, 32> val_key1{};
+    val_key1.fill(1);
+    const auto val_pub1 = *cybou::DeriveEd25519PublicKey(val_key1);
+    const auto genesis1 = CreateTestGenesis(val_pub1);
+    const auto def1 = CreateTestNetworkDefinition(genesis1);
+
+    // 1. Initialize DB with network 1
+    {
+        cybou::NodeRuntimeConfig config1{
+            .network_definition = def1,
+            .data_dir = test_db_path,
+            .validator_private_key = val_key1,
+            .memory_only = false,
+            .wipe_data = true,
+        };
+        cybou::CybouNodeRuntime rt1{std::move(config1)};
+        BOOST_REQUIRE(rt1.InitializeGenesis(genesis1));
+        BOOST_CHECK_EQUAL(rt1.GetStatus().runtime_state == cybou::NodeRuntimeState::READY, true);
+    }
+
+    // 2. Open same DB with network 2 (different validator key / network definition)
+    std::array<unsigned char, 32> val_key2{};
+    val_key2.fill(2);
+    const auto val_pub2 = *cybou::DeriveEd25519PublicKey(val_key2);
+    const auto genesis2 = CreateTestGenesis(val_pub2);
+    const auto def2 = CreateTestNetworkDefinition(genesis2);
+
+    std::unique_ptr<cybou::CybouNodeRuntime> rt2;
+    cybou::NodeRuntimeConfig config2{
+        .network_definition = def2,
+        .data_dir = test_db_path,
+        .validator_private_key = val_key2,
+        .memory_only = false,
+        .wipe_data = false,
+    };
+    rt2 = std::make_unique<cybou::CybouNodeRuntime>(std::move(config2));
+
+    // Verify runtime detects NETWORK_MISMATCH
+    const auto status2 = rt2->GetStatus();
+    BOOST_CHECK(status2.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH);
+
+    // Verify InitializeGenesis fails-closed (does not overwrite or claim ok)
+    BOOST_CHECK(!rt2->InitializeGenesis(genesis2));
+
+    // Verify operations fail-closed
+    BOOST_CHECK(!rt2->ProduceBlock().has_value());
+    const auto sub_res = rt2->SubmitOperation(cybou::ProtocolOperationV1{});
+    BOOST_CHECK(sub_res.status == cybou::OperationSubmitStatus::NETWORK_MISMATCH);
+    BOOST_CHECK(!sub_res);
+
+    // Verify sync fails-closed with NETWORK_MISMATCH
+    const auto sync_res = rt2->SyncFromPeer("127.0.0.1", 12345, 1);
+    BOOST_CHECK(sync_res.status == cybou::SyncPeerStatus::NETWORK_MISMATCH);
+
+    // 3. Test GUI reset pattern: old runtime MUST be destroyed first before wipe_data=true
+    rt2.reset(); // Release LevelDB lock!
+
+    cybou::NodeRuntimeConfig reset_config{
+        .network_definition = def2,
+        .data_dir = test_db_path,
+        .validator_private_key = val_key2,
+        .memory_only = false,
+        .wipe_data = true,
+    };
+    rt2 = std::make_unique<cybou::CybouNodeRuntime>(std::move(reset_config));
+    BOOST_REQUIRE(rt2->InitializeGenesis(genesis2));
+    BOOST_CHECK(rt2->GetStatus().runtime_state == cybou::NodeRuntimeState::READY);
+    BOOST_CHECK(rt2->GetNetworkId() == cybou::NetworkId(def2));
+
+    rt2.reset();
+    std::filesystem::remove_all(test_db_path);
+}
+
+BOOST_AUTO_TEST_CASE(block_feed_cyb1_network_mismatch_signaling)
+{
+    std::array<unsigned char, 32> val_key{};
+    val_key.fill(1);
+    const auto val_pub = *cybou::DeriveEd25519PublicKey(val_key);
+    const auto genesis = CreateTestGenesis(val_pub);
+    const auto definition = CreateTestNetworkDefinition(genesis);
+
+    cybou::NodeRuntimeConfig config{
+        .network_definition = definition,
+        .data_dir = "cybou-cyb1-mismatch-test",
+        .validator_private_key = val_key,
+        .memory_only = true,
+        .wipe_data = true,
+    };
+    cybou::CybouNodeRuntime runtime{std::move(config)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(genesis));
+    BOOST_REQUIRE(runtime.ProduceBlock().has_value());
+
+    // Listener
+    boost::asio::io_context io;
+    boost::asio::ip::tcp::acceptor acceptor(io, {boost::asio::ip::make_address("127.0.0.1"), 0});
+    const uint16_t port = acceptor.local_endpoint().port();
+
+    std::atomic<bool> server_running{true};
+    std::thread server_thread([&] {
+        while (server_running.load()) {
+            boost::asio::ip::tcp::socket socket(io);
+            boost::system::error_code ec;
+            acceptor.non_blocking(true);
+            acceptor.accept(socket, ec);
+            if (ec == boost::asio::error::would_block || ec == boost::asio::error::try_again) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                continue;
+            }
+            if (ec) break;
+            cybou::ServeCybouConnection(runtime, socket);
+        }
+    });
+
+    // Request with wrong network ID
+    const uint256 wrong_net_id = uint256::FromUserHex("beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef").value();
+    const auto fetch_res = cybou::FetchFinalizedBlock("127.0.0.1", port, wrong_net_id, 1);
+    BOOST_CHECK(fetch_res.status == cybou::FetchBlockStatus::NETWORK_MISMATCH);
+    BOOST_CHECK(!fetch_res);
+
+    server_running.store(false);
+    acceptor.close();
+    if (server_thread.joinable()) {
+        server_thread.join();
+    }
+}
+
+BOOST_AUTO_TEST_CASE(remote_operation_submission_strict_ack_validation)
+{
+    // Test server sending corrupted op_id or truncated ACK
+    boost::asio::io_context io;
+    boost::asio::ip::tcp::acceptor acceptor(io, {boost::asio::ip::make_address("127.0.0.1"), 0});
+    const uint16_t port = acceptor.local_endpoint().port();
+
+    std::atomic<int> mode{0}; // 0 = truncated (1 byte), 1 = mismatched op_id
+    std::atomic<bool> server_running{true};
+    std::thread server_thread([&] {
+        while (server_running.load()) {
+            boost::asio::ip::tcp::socket socket(io);
+            boost::system::error_code ec;
+            acceptor.non_blocking(true);
+            acceptor.accept(socket, ec);
+            if (ec == boost::asio::error::would_block || ec == boost::asio::error::try_again) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                continue;
+            }
+            if (ec) break;
+
+            // Read request
+            std::array<unsigned char, 4 + 32 + 4> req_header{};
+            boost::asio::read(socket, boost::asio::buffer(req_header));
+            uint32_t len = 0;
+            for (int i = 0; i < 4; ++i) len |= uint32_t{req_header[36 + i]} << (8 * i);
+            std::vector<unsigned char> payload(len);
+            boost::asio::read(socket, boost::asio::buffer(payload));
+
+            if (mode.load() == 0) {
+                // Truncated: send 1 byte status and close socket early
+                unsigned char status = 0x01; // ACCEPTED
+                boost::asio::write(socket, boost::asio::buffer(&status, 1));
+                socket.close();
+            } else if (mode.load() == 1) {
+                // Mismatched OperationID
+                std::array<unsigned char, 33> resp{};
+                resp[0] = 0x01; // ACCEPTED
+                resp.back() = 0x99; // Corrupted ID
+                boost::asio::write(socket, boost::asio::buffer(resp));
+                socket.close();
+            }
+        }
+    });
+
+    const uint256 net_id = uint256::FromUserHex("1111111111111111111111111111111111111111111111111111111111111111").value();
+    cybou::ProtocolOperationV1 dummy_op;
+
+    // Test truncated ACK
+    mode.store(0);
+    const auto res_truncated = cybou::SubmitOperationRemote("127.0.0.1", port, net_id, dummy_op);
+    BOOST_CHECK(res_truncated.status == cybou::OperationSubmitStatus::REJECTED);
+    BOOST_CHECK(!res_truncated);
+
+    // Test mismatched OperationID ACK
+    mode.store(1);
+    const auto res_mismatched = cybou::SubmitOperationRemote("127.0.0.1", port, net_id, dummy_op);
+    BOOST_CHECK(res_mismatched.status == cybou::OperationSubmitStatus::REJECTED);
+    BOOST_CHECK(!res_mismatched);
+
+    server_running.store(false);
+    acceptor.close();
+    if (server_thread.joinable()) {
+        server_thread.join();
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

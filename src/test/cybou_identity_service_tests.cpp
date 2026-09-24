@@ -219,4 +219,75 @@ BOOST_AUTO_TEST_CASE(keystore_encrypts_and_recovers_identity_safely)
     std::filesystem::remove(temp_path);
 }
 
+BOOST_AUTO_TEST_CASE(identity_service_fails_early_if_key_cannot_be_persisted_before_pow)
+{
+    std::array<unsigned char, 32> val_key{};
+    val_key.fill(1);
+    const auto val_pub = *cybou::DeriveEd25519PublicKey(val_key);
+    const auto genesis = CreateTestGenesis(val_pub);
+    const auto definition = CreateTestNetworkDefinition(genesis);
+
+    cybou::NodeRuntimeConfig config{
+        .network_definition = definition,
+        .data_dir = "cybou-identity-presave-fail-test",
+        .validator_private_key = val_key,
+        .memory_only = true,
+        .wipe_data = true,
+    };
+    cybou::CybouNodeRuntime runtime{std::move(config)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(genesis));
+
+    // Storage path in an uncreatable / nonexistent root path
+#ifdef WIN32
+    const std::filesystem::path invalid_path = "Z:\\nonexistent_volume_root_xyz\\test.key";
+#else
+    const std::filesystem::path invalid_path = "/nonexistent_root_dir_xyz/test.key";
+#endif
+
+    cybou::CybouIdentityService service(runtime, invalid_path);
+    const auto result = service.CreateIdentitySync();
+    BOOST_CHECK(!result.success);
+    BOOST_CHECK(result.final_phase == cybou::IdentityCreationPhase::FAILED);
+    BOOST_CHECK_EQUAL(result.error_message, "Failed to persist identity key to disk before broadcast");
+    // Ensure no blocks or operations were produced/processed
+    BOOST_CHECK_EQUAL(runtime.GetFinalizedHeight().value_or(0), 0);
+}
+
+BOOST_AUTO_TEST_CASE(identity_service_pre_saves_valid_key_before_broadcast)
+{
+    std::array<unsigned char, 32> val_key{};
+    val_key.fill(1);
+    const auto val_pub = *cybou::DeriveEd25519PublicKey(val_key);
+    const auto genesis = CreateTestGenesis(val_pub);
+    const auto definition = CreateTestNetworkDefinition(genesis);
+
+    cybou::NodeRuntimeConfig config{
+        .network_definition = definition,
+        .data_dir = "cybou-identity-presave-success-test",
+        .validator_private_key = val_key,
+        .memory_only = true,
+        .wipe_data = true,
+    };
+    cybou::CybouNodeRuntime runtime{std::move(config)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(genesis));
+
+    const auto temp_dir = std::filesystem::temp_directory_path() / "cybou_presave_test";
+    std::filesystem::create_directories(temp_dir);
+    const auto key_path = temp_dir / "valid_presave.key";
+    std::filesystem::remove(key_path);
+
+    cybou::CybouIdentityService service(runtime, key_path);
+    const auto result = service.CreateIdentitySync();
+    BOOST_REQUIRE(result.success);
+    BOOST_CHECK(result.final_phase == cybou::IdentityCreationPhase::ACTIVE);
+
+    // Verify key exists on disk and loads the exact same account
+    BOOST_CHECK(std::filesystem::exists(key_path));
+    cybou::CybouKeyStore loaded_ks;
+    BOOST_REQUIRE(loaded_ks.LoadFromFile(key_path));
+    BOOST_CHECK(loaded_ks.GetAccountId() == result.account_id);
+
+    std::filesystem::remove_all(temp_dir);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

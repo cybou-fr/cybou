@@ -191,6 +191,7 @@ void CybouMainWindow::initCybouRuntime()
                 .db_cache_bytes = 8 << 20,
                 .wipe_data = true,
             };
+            m_node_runtime.reset();
             m_node_runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(reset_config));
             init_status = m_node_runtime->GetStatus();
         }

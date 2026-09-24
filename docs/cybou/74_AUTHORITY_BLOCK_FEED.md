@@ -9,6 +9,8 @@ executor as `CybouStateStore`, obtains a 1/1 BFT certificate, and commits the
 finalized block atomically. The queue clears only after a successful commit.
 
 An operator-authorized transition block can add validators while N=1. The
+N=1 producer supports such a transition when the network definition contains
+an Operator Authority; the current standalone DEV profile does not. The
 old validator finalizes that block; the next height uses the new set. The
 single-validator producer refuses to continue once N is no longer 1.
 

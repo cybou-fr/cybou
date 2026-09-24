@@ -65,6 +65,9 @@ bool ServeCybouConnection(CybouNodeRuntime& runtime, boost::asio::ip::tcp::socke
             std::array<unsigned char, 32 + 8> req_rest{};
             boost::asio::read(socket, boost::asio::buffer(req_rest));
             if (!std::equal(runtime.GetNetworkId().begin(), runtime.GetNetworkId().end(), req_rest.begin())) {
+                std::array<unsigned char, 4> mismatch_len{};
+                WriteU32(mismatch_len, 0xFFFFFFFF);
+                boost::asio::write(socket, boost::asio::buffer(mismatch_len));
                 return false;
             }
             uint64_t height{0};
@@ -128,7 +131,12 @@ bool ServeFinalizedBlockRequest(CybouStateStore& store, boost::asio::ip::tcp::so
         std::array<unsigned char, REQUEST_SIZE> request{};
         boost::asio::read(socket, boost::asio::buffer(request));
         if (!std::equal(REQUEST_MAGIC.begin(), REQUEST_MAGIC.end(), request.begin())) return false;
-        if (!std::equal(store.GetNetworkId().begin(), store.GetNetworkId().end(), request.begin() + 4)) return false;
+        if (!std::equal(store.GetNetworkId().begin(), store.GetNetworkId().end(), request.begin() + 4)) {
+            std::array<unsigned char, 4> mismatch_len{};
+            WriteU32(mismatch_len, 0xFFFFFFFF);
+            boost::asio::write(socket, boost::asio::buffer(mismatch_len));
+            return false;
+        }
 
         uint64_t height{0};
         for (size_t i = 0; i < 8; ++i) height |= uint64_t{request[36 + i]} << (8 * i);
@@ -172,14 +180,22 @@ OperationSubmitResult SubmitOperationRemote(
 
         boost::asio::write(socket, boost::asio::buffer(msg));
 
-        unsigned char status_byte{static_cast<unsigned char>(OperationSubmitStatus::REJECTED)};
-        boost::asio::read(socket, boost::asio::buffer(&status_byte, 1));
-        uint256 confirmed_op_id = op_id;
+        std::array<unsigned char, 33> reply{};
         boost::system::error_code ec;
-        boost::asio::read(socket, boost::asio::buffer(confirmed_op_id.begin(), 32), ec);
+        boost::asio::read(socket, boost::asio::buffer(reply), ec);
+        if (ec) {
+            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
+        }
+
+        const auto status = static_cast<OperationSubmitStatus>(reply[0]);
+        uint256 confirmed_op_id;
+        std::copy_n(reply.begin() + 1, 32, confirmed_op_id.begin());
+        if (status == OperationSubmitStatus::ACCEPTED && confirmed_op_id != op_id) {
+            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = confirmed_op_id};
+        }
 
         return OperationSubmitResult{
-            .status = static_cast<OperationSubmitStatus>(status_byte),
+            .status = status,
             .op_id = confirmed_op_id,
         };
     } catch (const boost::system::system_error&) {
@@ -208,6 +224,9 @@ FetchBlockResult FetchFinalizedBlock(
         std::array<unsigned char, 4> length{};
         boost::asio::read(socket, boost::asio::buffer(length));
         const uint32_t size = ReadU32(length);
+        if (size == 0xFFFFFFFF) {
+            return FetchBlockResult{.status = FetchBlockStatus::NETWORK_MISMATCH, .block = std::nullopt};
+        }
         if (size == 0) {
             return FetchBlockResult{.status = FetchBlockStatus::NOT_FOUND, .block = std::nullopt};
         }
