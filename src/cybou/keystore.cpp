@@ -48,6 +48,7 @@ struct CybouKeyStore::Impl {
         seed = s;
         public_key = *pub;
         account_id = AccountId{*pub};
+        memory_cleanse(s.data(), s.size());
         return true;
     }
 };
@@ -101,6 +102,7 @@ bool CybouKeyStore::SaveToFile(const std::filesystem::path& path) const
 {
     if (!m_impl->seed.has_value()) return false;
 
+    std::vector<unsigned char> file_bytes;
 #ifdef WIN32
     DATA_BLOB plain_blob;
     plain_blob.pbData = const_cast<unsigned char*>(m_impl->seed->data());
@@ -111,29 +113,58 @@ bool CybouKeyStore::SaveToFile(const std::filesystem::path& path) const
         return false;
     }
 
-    std::ofstream out(path, std::ios::binary | std::ios::out | std::ios::trunc);
-    if (!out) {
-        LocalFree(cipher_blob.pbData);
+    file_bytes.reserve(KEYSTORE_MAGIC.size() + 4 + cipher_blob.cbData);
+    file_bytes.insert(file_bytes.end(), KEYSTORE_MAGIC.begin(), KEYSTORE_MAGIC.end());
+    const uint32_t len = static_cast<uint32_t>(cipher_blob.cbData);
+    for (unsigned i = 0; i < 4; ++i) file_bytes.push_back(static_cast<unsigned char>(len >> (8 * i)));
+    file_bytes.insert(file_bytes.end(), cipher_blob.pbData, cipher_blob.pbData + cipher_blob.cbData);
+    LocalFree(cipher_blob.pbData);
+#else
+    file_bytes.reserve(KEYSTORE_MAGIC.size() + 4 + m_impl->seed->size());
+    file_bytes.insert(file_bytes.end(), KEYSTORE_MAGIC.begin(), KEYSTORE_MAGIC.end());
+    const uint32_t len = static_cast<uint32_t>(m_impl->seed->size());
+    for (unsigned i = 0; i < 4; ++i) file_bytes.push_back(static_cast<unsigned char>(len >> (8 * i)));
+    file_bytes.insert(file_bytes.end(), m_impl->seed->begin(), m_impl->seed->end());
+#endif
+
+    const auto tmp_path = path.string() + ".tmp";
+    const auto bak_path = path.string() + ".bak";
+
+    std::ofstream out(tmp_path, std::ios::binary | std::ios::out | std::ios::trunc);
+    if (!out) return false;
+    out.write(reinterpret_cast<const char*>(file_bytes.data()), file_bytes.size());
+    out.flush();
+    if (!out.good()) {
+        std::error_code ec;
+        std::filesystem::remove(tmp_path, ec);
         return false;
     }
+    out.close();
 
-    out.write(reinterpret_cast<const char*>(KEYSTORE_MAGIC.data()), KEYSTORE_MAGIC.size());
-    const uint32_t len = static_cast<uint32_t>(cipher_blob.cbData);
-    out.write(reinterpret_cast<const char*>(&len), sizeof(len));
-    out.write(reinterpret_cast<const char*>(cipher_blob.pbData), cipher_blob.cbData);
-    LocalFree(cipher_blob.pbData);
-    return out.good();
-#else
-    std::ofstream out(path, std::ios::binary | std::ios::out | std::ios::trunc);
-    if (!out) return false;
-    out.write(reinterpret_cast<const char*>(KEYSTORE_MAGIC.data()), KEYSTORE_MAGIC.size());
-    const uint32_t len = static_cast<uint32_t>(m_impl->seed->size());
-    out.write(reinterpret_cast<const char*>(&len), sizeof(len));
-    out.write(reinterpret_cast<const char*>(m_impl->seed->data()), m_impl->seed->size());
-    std::filesystem::permissions(path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-                                 std::filesystem::perm_options::replace);
-    return out.good();
+#ifdef WIN32
+    HANDLE hFile = CreateFileW(std::filesystem::path(tmp_path).c_str(),
+                               GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                               nullptr, OPEN_EXISTING, 0, nullptr);
+    if (hFile != INVALID_HANDLE_VALUE) {
+        FlushFileBuffers(hFile);
+        CloseHandle(hFile);
+    }
 #endif
+
+    std::error_code ec;
+    // Create backup of existing file if present
+    if (std::filesystem::exists(path, ec)) {
+        std::filesystem::copy_file(path, bak_path, std::filesystem::copy_options::overwrite_existing, ec);
+    }
+
+    // Atomic replace
+    std::filesystem::rename(tmp_path, path, ec);
+    if (ec) {
+        std::filesystem::remove(path, ec);
+        std::filesystem::rename(tmp_path, path, ec);
+        if (ec) return false;
+    }
+    return true;
 }
 
 bool CybouKeyStore::LoadFromFile(const std::filesystem::path& path)
@@ -141,13 +172,19 @@ bool CybouKeyStore::LoadFromFile(const std::filesystem::path& path)
     if (!std::filesystem::exists(path)) return false;
     const auto file_size = std::filesystem::file_size(path);
 
-    // Support legacy unencrypted 32-byte key file
+    // Support legacy unencrypted 32-byte key file and migrate immediately to protected format
     if (file_size == 32) {
         std::array<unsigned char, 32> raw_seed{};
-        std::ifstream in(path, std::ios::binary);
-        if (!in || !in.read(reinterpret_cast<char*>(raw_seed.data()), 32)) return false;
+        {
+            std::ifstream in(path, std::ios::binary);
+            if (!in || !in.read(reinterpret_cast<char*>(raw_seed.data()), 32)) return false;
+        }
         const bool ok = m_impl->SetSeed(raw_seed);
         memory_cleanse(raw_seed.data(), raw_seed.size());
+        if (ok) {
+            // Immediately migrate to protected format on disk
+            SaveToFile(path);
+        }
         return ok;
     }
 

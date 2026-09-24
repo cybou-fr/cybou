@@ -49,11 +49,17 @@ using CompletionCallback = std::function<void(const IdentityCreationResult& resu
 
 class CybouIdentityService {
 public:
-    explicit CybouIdentityService(CybouNodeRuntime& runtime);
+    explicit CybouIdentityService(
+        CybouNodeRuntime& runtime,
+        std::optional<std::filesystem::path> storage_path = std::nullopt);
     ~CybouIdentityService();
 
     CybouIdentityService(const CybouIdentityService&) = delete;
     CybouIdentityService& operator=(const CybouIdentityService&) = delete;
+
+    /** Configure persistent storage path for atomic pre-save */
+    void SetStoragePath(std::filesystem::path path);
+    std::optional<std::filesystem::path> GetStoragePath() const;
 
     /** Current identity creation phase */
     IdentityCreationPhase GetPhase() const { return m_phase.load(); }
@@ -92,6 +98,7 @@ private:
     CybouNodeRuntime& m_runtime;
     std::atomic<IdentityCreationPhase> m_phase{IdentityCreationPhase::IDLE};
     std::atomic<bool> m_cancelled{false};
+    std::optional<std::filesystem::path> m_storage_path;
     CybouKeyStore m_keystore;
     mutable std::mutex m_mutex;
     std::jthread m_worker;

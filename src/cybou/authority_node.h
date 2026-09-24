@@ -38,6 +38,26 @@ struct AuthorityProductionResult {
     explicit operator bool() const { return error == AuthorityProductionError::NONE; }
 };
 
+enum class OperationSubmitStatus : uint8_t {
+    REJECTED = 0x00,
+    ACCEPTED = 0x01,
+    ALREADY_PENDING = 0x02,
+    ALREADY_FINALIZED = 0x03,
+    INVALID_PAYLOAD = 0x04,
+    NETWORK_MISMATCH = 0x05,
+};
+
+struct OperationSubmitResult {
+    OperationSubmitStatus status{OperationSubmitStatus::REJECTED};
+    uint256 op_id;
+
+    explicit operator bool() const {
+        return status == OperationSubmitStatus::ACCEPTED ||
+               status == OperationSubmitStatus::ALREADY_PENDING ||
+               status == OperationSubmitStatus::ALREADY_FINALIZED;
+    }
+};
+
 /** Single-validator producer for canonical CYBOU blocks and 1/1 finality. */
 class CybouAuthorityNode
 {
@@ -47,6 +67,7 @@ public:
 
     /** Add an operation only if the complete pending batch executes on the current head. */
     bool SubmitOperation(const ProtocolOperationV1& operation);
+    OperationSubmitStatus SubmitOperationWithStatus(const ProtocolOperationV1& operation);
     size_t PendingCount() const { return m_pending.size(); }
     void ClearPending() { m_pending.clear(); }
 

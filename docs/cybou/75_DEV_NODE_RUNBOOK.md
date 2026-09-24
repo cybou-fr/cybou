@@ -63,12 +63,13 @@ block feed does not negotiate network identity or bootstrap trust.
 ## Operation submission and desktop
 
 The same bounded TCP listener accepts a `CYBO` request for one serialized
-protocol operation (up to 64 KiB) as well as `CYB1` block requests. The
+protocol operation (up to 128 KiB) as well as `CYB1` block requests. The
 authority validates a submitted operation against the pending candidate
-state and includes accepted operations in a later block. The desktop native
-runtime follows verified DEV blocks and its identity service can submit
-AccountCreate remotely, then wait for finality. A successful submission
-acknowledgment is not finality.
+state, returns a structured status code with OperationID, and includes
+accepted operations in a later block. The desktop native runtime follows
+verified DEV blocks and its identity service pre-saves key material durably
+before submitting AccountCreate remotely, then waiting for finality. A
+successful submission acknowledgment is not finality.
 
 ## Current limits
 

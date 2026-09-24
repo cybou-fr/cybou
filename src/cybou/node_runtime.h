@@ -31,6 +31,13 @@ struct NodeRuntimeConfig {
     bool wipe_data{false};
 };
 
+enum class NodeRuntimeState : uint8_t {
+    UNINITIALIZED = 0,
+    READY = 1,
+    NETWORK_MISMATCH = 2,
+    CORRUPT = 3,
+};
+
 struct NodeRuntimeStatus {
     uint256 network_id;
     uint64_t finalized_height{0};
@@ -39,6 +46,7 @@ struct NodeRuntimeStatus {
     size_t validator_count{0};
     bool is_authority{false};
     bool is_initialized{false};
+    NodeRuntimeState runtime_state{NodeRuntimeState::UNINITIALIZED};
 };
 
 /**
@@ -75,7 +83,7 @@ public:
     std::optional<AccountState> GetAccountState(const AccountId& account_id) const;
 
     /** Submit an operation to pending pool (producer) or direct execution */
-    bool SubmitOperation(ProtocolOperationV1 op);
+    OperationSubmitResult SubmitOperation(ProtocolOperationV1 op);
 
     /** Produce a block if running in authority mode */
     std::optional<FinalizedBlockV1> ProduceBlock(bool sync = true);
@@ -87,7 +95,7 @@ public:
     std::optional<FinalizedBlockV1> GetBlockAtHeight(uint64_t height) const;
 
     /** Sync up to max_blocks from a remote peer block feed */
-    uint64_t SyncFromPeer(const std::string& host, uint16_t port, uint64_t max_blocks = 100);
+    SyncPeerResult SyncFromPeer(const std::string& host, uint16_t port, uint64_t max_blocks = 100);
 
     /** Remote operation submit endpoint */
     void SetSubmitEndpoint(const std::string& host, uint16_t port);

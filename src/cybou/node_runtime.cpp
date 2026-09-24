@@ -41,9 +41,20 @@ NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
     status.network_id = m_network_id;
     status.is_authority = (m_authority_node != nullptr);
 
+    const auto loaded = m_store.LoadState();
+    if (loaded.error == StateLoadError::NETWORK_MISMATCH) {
+        status.runtime_state = NodeRuntimeState::NETWORK_MISMATCH;
+    } else if (loaded.error == StateLoadError::CORRUPT || loaded.error == StateLoadError::INVALID_NETWORK_DEFINITION) {
+        status.runtime_state = NodeRuntimeState::CORRUPT;
+    } else if (loaded.error == StateLoadError::NOT_FOUND) {
+        status.runtime_state = NodeRuntimeState::UNINITIALIZED;
+    } else if (loaded.error == StateLoadError::NONE && loaded.state.has_value()) {
+        status.is_initialized = true;
+        status.runtime_state = NodeRuntimeState::READY;
+    }
+
     const auto head = m_store.GetFinalizedHead();
     if (head) {
-        status.is_initialized = true;
         status.finalized_height = head->height;
         status.finalized_tip = head->block_id;
     }
@@ -92,14 +103,16 @@ std::optional<AccountState> CybouNodeRuntime::GetAccountState(const AccountId& a
     return it->second;
 }
 
-bool CybouNodeRuntime::SubmitOperation(ProtocolOperationV1 op)
+OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperationV1 op)
 {
+    const auto op_id = ComputeOperationId(op);
     std::optional<std::pair<std::string, uint16_t>> endpoint;
     uint256 net_id{};
     {
         std::lock_guard lock(m_mutex);
         if (m_authority_node) {
-            return m_authority_node->SubmitOperation(op);
+            const auto status = m_authority_node->SubmitOperationWithStatus(op);
+            return OperationSubmitResult{.status = status, .op_id = op_id};
         }
         endpoint = m_submit_endpoint;
         net_id = m_network_id;
@@ -107,7 +120,7 @@ bool CybouNodeRuntime::SubmitOperation(ProtocolOperationV1 op)
     if (endpoint.has_value()) {
         return SubmitOperationRemote(endpoint->first, endpoint->second, net_id, op);
     }
-    return false;
+    return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
 }
 
 std::optional<FinalizedBlockV1> CybouNodeRuntime::ProduceBlock(const bool sync)
@@ -131,30 +144,54 @@ std::optional<FinalizedBlockV1> CybouNodeRuntime::GetBlockAtHeight(const uint64_
     return m_store.GetBlockAtHeight(height);
 }
 
-uint64_t CybouNodeRuntime::SyncFromPeer(const std::string& host, const uint16_t port, const uint64_t max_blocks)
+SyncPeerResult CybouNodeRuntime::SyncFromPeer(const std::string& host, const uint16_t port, const uint64_t max_blocks)
 {
-    uint64_t synced{0};
-    while (synced < max_blocks) {
+    SyncPeerResult result;
+    while (result.blocks_applied < max_blocks) {
         uint64_t next_height{0};
         uint256 net_id{};
         {
             std::lock_guard lock(m_mutex);
             const auto height = m_store.GetFinalizedHeight();
-            if (!height || *height == std::numeric_limits<uint64_t>::max()) break;
+            if (!height || *height == std::numeric_limits<uint64_t>::max()) {
+                result.status = SyncPeerStatus::PROTOCOL_ERROR;
+                break;
+            }
             next_height = *height + 1;
             net_id = m_network_id;
         }
 
-        auto block = FetchFinalizedBlock(host, port, net_id, next_height);
-        if (!block) break;
+        const auto fetch_res = FetchFinalizedBlock(host, port, net_id, next_height);
+        if (fetch_res.status == FetchBlockStatus::NOT_FOUND) {
+            if (result.blocks_applied == 0) {
+                result.status = SyncPeerStatus::UP_TO_DATE;
+            }
+            break;
+        }
+        if (fetch_res.status == FetchBlockStatus::CONNECTION_FAILED) {
+            result.status = SyncPeerStatus::CONNECTION_FAILED;
+            break;
+        }
+        if (fetch_res.status == FetchBlockStatus::NETWORK_MISMATCH) {
+            result.status = SyncPeerStatus::NETWORK_MISMATCH;
+            break;
+        }
+        if (fetch_res.status == FetchBlockStatus::CORRUPT_BLOCK || !fetch_res.block.has_value()) {
+            result.status = SyncPeerStatus::PROTOCOL_ERROR;
+            break;
+        }
 
         {
             std::lock_guard lock(m_mutex);
-            if (!m_store.CommitFinalizedBlock(*block)) break;
+            if (!m_store.CommitFinalizedBlock(*fetch_res.block)) {
+                result.status = SyncPeerStatus::PROTOCOL_ERROR;
+                break;
+            }
         }
-        ++synced;
+        ++result.blocks_applied;
+        result.status = SyncPeerStatus::BLOCKS_APPLIED;
     }
-    return synced;
+    return result;
 }
 
 void CybouNodeRuntime::SetSubmitEndpoint(const std::string& host, const uint16_t port)

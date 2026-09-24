@@ -229,7 +229,10 @@ BOOST_AUTO_TEST_CASE(remote_operation_submission_over_tcp_network_transport)
         user_priv, cybou::ComputeAccountPopDigest(obs_runtime.GetNetworkId(), account_id, user_pub));
 
     // Submit operation from observer desktop node over network!
-    BOOST_CHECK(obs_runtime.SubmitOperation(cybou::ProtocolOperationV1{create_op}));
+    const auto submit_res = obs_runtime.SubmitOperation(cybou::ProtocolOperationV1{create_op});
+    BOOST_CHECK(submit_res);
+    BOOST_CHECK(submit_res.status == cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_CHECK(!submit_res.op_id.IsNull());
 
     // Authority produces block containing the submitted operation
     const auto block = auth_runtime.ProduceBlock();
@@ -238,9 +241,17 @@ BOOST_AUTO_TEST_CASE(remote_operation_submission_over_tcp_network_transport)
     BOOST_CHECK_EQUAL(block->block.operations.size(), 1);
 
     // Observer syncs block over network from authority
-    const uint64_t synced = obs_runtime.SyncFromPeer("127.0.0.1", port, 1);
-    BOOST_CHECK_EQUAL(synced, 1);
+    const auto sync_res = obs_runtime.SyncFromPeer("127.0.0.1", port, 1);
+    BOOST_CHECK_EQUAL(sync_res.blocks_applied, 1);
+    BOOST_CHECK(sync_res.status == cybou::SyncPeerStatus::BLOCKS_APPLIED);
+    BOOST_CHECK(sync_res.IsConnected());
     BOOST_CHECK_EQUAL(obs_runtime.GetFinalizedHeight().value_or(0), 1);
+
+    // Observer syncs again when no new block exists: must return UP_TO_DATE and IsConnected() == true
+    const auto sync_up_to_date = obs_runtime.SyncFromPeer("127.0.0.1", port, 1);
+    BOOST_CHECK_EQUAL(sync_up_to_date.blocks_applied, 0);
+    BOOST_CHECK(sync_up_to_date.status == cybou::SyncPeerStatus::UP_TO_DATE);
+    BOOST_CHECK(sync_up_to_date.IsConnected());
 
     // Observer now has the account active in its canonical state!
     const auto acc = obs_runtime.GetAccountState(account_id);

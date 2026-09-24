@@ -173,7 +173,7 @@ int Main(const int argc, char* argv[])
         uint64_t synced{0};
         auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
         while (!stopping && synced < count) {
-            if (runtime.SyncFromPeer(sync_host, sync_port, 1) > 0) {
+            if (runtime.SyncFromPeer(sync_host, sync_port, 1).blocks_applied > 0) {
                 ++synced;
                 std::cout << "height=" << *runtime.GetFinalizedHeight() << std::endl;
                 deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);

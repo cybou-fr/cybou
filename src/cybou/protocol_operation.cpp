@@ -485,6 +485,18 @@ std::optional<ProtocolOperationV1> DeserializeProtocolOperation(const std::span<
     return std::nullopt;
 }
 
+uint256 ComputeOperationId(const ProtocolOperationV1& operation)
+{
+    static constexpr std::string_view DOMAIN{"CYBOU/OP_ID/V1"};
+    const auto bytes = SerializeProtocolOperation(operation);
+    CSHA256 hasher;
+    hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
+    hasher.Write(bytes.data(), bytes.size());
+    uint256 out;
+    hasher.Finalize(out.begin());
+    return out;
+}
+
 OperationExecutionResult ApplyProtocolOperation(
     const ProtocolOperationV1& operation,
     const ProtocolExecutionContextV1& context,

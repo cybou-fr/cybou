@@ -83,24 +83,36 @@ bool ServeCybouConnection(CybouNodeRuntime& runtime, boost::asio::ip::tcp::socke
             std::array<unsigned char, 32 + 4> req_rest{};
             boost::asio::read(socket, boost::asio::buffer(req_rest));
             if (!std::equal(runtime.GetNetworkId().begin(), runtime.GetNetworkId().end(), req_rest.begin())) {
+                std::array<unsigned char, 33> resp{};
+                resp[0] = static_cast<unsigned char>(OperationSubmitStatus::NETWORK_MISMATCH);
+                boost::asio::write(socket, boost::asio::buffer(resp));
                 return false;
             }
             std::array<unsigned char, 4> len_bytes{};
             std::copy_n(req_rest.begin() + 32, 4, len_bytes.begin());
             const uint32_t op_size = ReadU32(len_bytes);
             if (op_size == 0 || op_size > MAX_OPERATION_PAYLOAD_BYTES) {
-                unsigned char status{0x00};
-                boost::asio::write(socket, boost::asio::buffer(&status, 1));
+                std::array<unsigned char, 33> resp{};
+                resp[0] = static_cast<unsigned char>(OperationSubmitStatus::INVALID_PAYLOAD);
+                boost::asio::write(socket, boost::asio::buffer(resp));
                 return false;
             }
 
             std::vector<unsigned char> op_bytes(op_size);
             boost::asio::read(socket, boost::asio::buffer(op_bytes));
             const auto op = DeserializeProtocolOperation(op_bytes);
-            const bool success = op.has_value() && runtime.SubmitOperation(*op);
-            unsigned char status = success ? 0x01 : 0x00;
-            boost::asio::write(socket, boost::asio::buffer(&status, 1));
-            return success;
+            if (!op.has_value()) {
+                std::array<unsigned char, 33> resp{};
+                resp[0] = static_cast<unsigned char>(OperationSubmitStatus::INVALID_PAYLOAD);
+                boost::asio::write(socket, boost::asio::buffer(resp));
+                return false;
+            }
+            const auto sub_res = runtime.SubmitOperation(*op);
+            std::array<unsigned char, 33> resp{};
+            resp[0] = static_cast<unsigned char>(sub_res.status);
+            std::copy(sub_res.op_id.begin(), sub_res.op_id.end(), resp.begin() + 1);
+            boost::asio::write(socket, boost::asio::buffer(resp));
+            return static_cast<bool>(sub_res);
         }
 
         return false;
@@ -133,12 +145,15 @@ bool ServeFinalizedBlockRequest(CybouStateStore& store, boost::asio::ip::tcp::so
     }
 }
 
-bool SubmitOperationRemote(
+OperationSubmitResult SubmitOperationRemote(
     const std::string& host, const uint16_t port, const uint256& network_id, const ProtocolOperationV1& op)
 {
+    const auto op_id = ComputeOperationId(op);
     try {
         const auto op_bytes = SerializeProtocolOperation(op);
-        if (op_bytes.empty() || op_bytes.size() > MAX_OPERATION_PAYLOAD_BYTES) return false;
+        if (op_bytes.empty() || op_bytes.size() > MAX_OPERATION_PAYLOAD_BYTES) {
+            return OperationSubmitResult{.status = OperationSubmitStatus::INVALID_PAYLOAD, .op_id = op_id};
+        }
 
         boost::asio::io_context io;
         boost::asio::ip::tcp::resolver resolver(io);
@@ -157,18 +172,27 @@ bool SubmitOperationRemote(
 
         boost::asio::write(socket, boost::asio::buffer(msg));
 
-        unsigned char status{0};
-        boost::asio::read(socket, boost::asio::buffer(&status, 1));
-        return status == 0x01;
+        unsigned char status_byte{static_cast<unsigned char>(OperationSubmitStatus::REJECTED)};
+        boost::asio::read(socket, boost::asio::buffer(&status_byte, 1));
+        uint256 confirmed_op_id = op_id;
+        boost::system::error_code ec;
+        boost::asio::read(socket, boost::asio::buffer(confirmed_op_id.begin(), 32), ec);
+
+        return OperationSubmitResult{
+            .status = static_cast<OperationSubmitStatus>(status_byte),
+            .op_id = confirmed_op_id,
+        };
     } catch (const boost::system::system_error&) {
-        return false;
+        return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
     }
 }
 
-std::optional<FinalizedBlockV1> FetchFinalizedBlock(
+FetchBlockResult FetchFinalizedBlock(
     const std::string& host, const uint16_t port, const uint256& network_id, const uint64_t height)
 {
-    if (height == 0) return std::nullopt;
+    if (height == 0) {
+        return FetchBlockResult{.status = FetchBlockStatus::NOT_FOUND, .block = std::nullopt};
+    }
     try {
         boost::asio::io_context io;
         boost::asio::ip::tcp::resolver resolver(io);
@@ -184,16 +208,25 @@ std::optional<FinalizedBlockV1> FetchFinalizedBlock(
         std::array<unsigned char, 4> length{};
         boost::asio::read(socket, boost::asio::buffer(length));
         const uint32_t size = ReadU32(length);
-        if (size == 0 || size > MAX_FINALIZED_BLOCK_FEED_BYTES) return std::nullopt;
+        if (size == 0) {
+            return FetchBlockResult{.status = FetchBlockStatus::NOT_FOUND, .block = std::nullopt};
+        }
+        if (size > MAX_FINALIZED_BLOCK_FEED_BYTES) {
+            return FetchBlockResult{.status = FetchBlockStatus::CORRUPT_BLOCK, .block = std::nullopt};
+        }
         std::vector<unsigned char> bytes(size);
         boost::asio::read(socket, boost::asio::buffer(bytes));
         auto block = DeserializeFinalizedBlock(bytes);
         if (!block || block->block.height != height ||
-            block->certificate.network_id != network_id ||
-            block->certificate.block_id != ComputeBlockId(block->block)) return std::nullopt;
-        return block;
+            block->certificate.block_id != ComputeBlockId(block->block)) {
+            return FetchBlockResult{.status = FetchBlockStatus::CORRUPT_BLOCK, .block = std::nullopt};
+        }
+        if (block->certificate.network_id != network_id) {
+            return FetchBlockResult{.status = FetchBlockStatus::NETWORK_MISMATCH, .block = std::nullopt};
+        }
+        return FetchBlockResult{.status = FetchBlockStatus::OK, .block = std::move(block)};
     } catch (const boost::system::system_error&) {
-        return std::nullopt;
+        return FetchBlockResult{.status = FetchBlockStatus::CONNECTION_FAILED, .block = std::nullopt};
     }
 }
 
@@ -201,8 +234,8 @@ bool SyncNextFinalizedBlock(CybouStateStore& observer, const std::string& host, 
 {
     const auto height = observer.GetFinalizedHeight();
     if (!height || *height == std::numeric_limits<uint64_t>::max()) return false;
-    auto block = FetchFinalizedBlock(host, port, observer.GetNetworkId(), *height + 1);
-    return block && static_cast<bool>(observer.CommitFinalizedBlock(*block));
+    auto res = FetchFinalizedBlock(host, port, observer.GetNetworkId(), *height + 1);
+    return res && static_cast<bool>(observer.CommitFinalizedBlock(*res.block));
 }
 
 } // namespace cybou

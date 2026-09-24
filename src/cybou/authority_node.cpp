@@ -33,16 +33,31 @@ CybouAuthorityNode::~CybouAuthorityNode()
     memory_cleanse(m_validator_private_key.data(), m_validator_private_key.size());
 }
 
-bool CybouAuthorityNode::SubmitOperation(const ProtocolOperationV1& operation)
+OperationSubmitStatus CybouAuthorityNode::SubmitOperationWithStatus(const ProtocolOperationV1& operation)
 {
-    if (m_pending.size() >= MAX_AUTHORITY_PENDING_OPERATIONS) return false;
+    if (std::find(m_pending.begin(), m_pending.end(), operation) != m_pending.end()) {
+        return OperationSubmitStatus::ALREADY_PENDING;
+    }
+    if (std::holds_alternative<AccountCreateOpV1>(operation.payload)) {
+        const auto& create = std::get<AccountCreateOpV1>(operation.payload);
+        const auto loaded = m_store.LoadState();
+        if (loaded && loaded.state && loaded.state->accounts.contains(create.account_id)) {
+            return OperationSubmitStatus::ALREADY_FINALIZED;
+        }
+    }
+    if (m_pending.size() >= MAX_AUTHORITY_PENDING_OPERATIONS) return OperationSubmitStatus::REJECTED;
     const auto head = m_store.GetFinalizedHead();
-    if (!head || head->height == std::numeric_limits<uint64_t>::max()) return false;
+    if (!head || head->height == std::numeric_limits<uint64_t>::max()) return OperationSubmitStatus::REJECTED;
     auto candidate = m_pending;
     candidate.push_back(operation);
-    if (!m_store.ComputeCandidateStateRoot(candidate, head->height + 1)) return false;
+    if (!m_store.ComputeCandidateStateRoot(candidate, head->height + 1)) return OperationSubmitStatus::REJECTED;
     m_pending.push_back(operation);
-    return true;
+    return OperationSubmitStatus::ACCEPTED;
+}
+
+bool CybouAuthorityNode::SubmitOperation(const ProtocolOperationV1& operation)
+{
+    return SubmitOperationWithStatus(operation) == OperationSubmitStatus::ACCEPTED;
 }
 
 AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)

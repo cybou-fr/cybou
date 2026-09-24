@@ -29,10 +29,17 @@ over 32 MiB are rejected. The observer applies each received block through
 certificate, operations, and state root before changing canonical state.
 
 Remote operation submission uses a separate `CYBO` request carrying NetworkID
-and one serialized `ProtocolOperationV1` (maximum 64 KiB). The producer
-deserializes and candidate-validates the operation before acknowledging it.
-The desktop identity service uses this path to submit AccountCreate to the
-DEV authority; it still waits for block finality before reporting activation.
+and one serialized `ProtocolOperationV1` (maximum 128 KiB). The producer
+deserializes and candidate-validates the operation, computes OperationID =
+SHA256("CYBOU/OP_ID/V1" || serialized_op), and returns a 33-byte structured
+reply: a 1-byte status (`ACCEPTED`, `ALREADY_PENDING`, `ALREADY_FINALIZED`,
+`INVALID_PAYLOAD`, `NETWORK_MISMATCH`, or `REJECTED`) and the 32-byte
+OperationID.
+
+The desktop identity service saves keystore material durably to disk *before*
+PoW and network broadcast using atomic replace and crash-safe `.bak` rotation,
+closing the window where an account could be created on-chain while the private
+key is lost locally. The service waits for block finality before reporting activation.
 
 ## Remaining integration
 

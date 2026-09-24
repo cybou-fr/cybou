@@ -180,12 +180,26 @@ void CybouMainWindow::initCybouRuntime()
         }
 
         m_node_runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
-        if (!m_node_runtime->GetStatus().is_initialized) {
+        auto init_status = m_node_runtime->GetStatus();
+        if (init_status.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH) {
+            qWarning() << "CybouNodeRuntime network mismatch detected; wiping stale dev state.";
+            cybou::NodeRuntimeConfig reset_config{
+                .network_definition = definition,
+                .data_dir = data_dir,
+                .validator_private_key = std::nullopt,
+                .submit_endpoint = std::make_pair(std::string{endpoint.host}, endpoint.port),
+                .db_cache_bytes = 8 << 20,
+                .wipe_data = true,
+            };
+            m_node_runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(reset_config));
+            init_status = m_node_runtime->GetStatus();
+        }
+        if (init_status.runtime_state == cybou::NodeRuntimeState::UNINITIALIZED) {
             m_node_runtime->InitializeGenesis(genesis);
         }
-        m_identity_service = std::make_unique<cybou::CybouIdentityService>(*m_node_runtime);
 
         const auto id_key_path = (gArgs.GetDataDirNet() / "identity.key").std_path();
+        m_identity_service = std::make_unique<cybou::CybouIdentityService>(*m_node_runtime, id_key_path);
         if (std::filesystem::exists(id_key_path)) {
             m_identity_service->LoadKeyStore(id_key_path);
         }
@@ -202,11 +216,11 @@ void CybouMainWindow::initCybouRuntime()
         // internally synchronized; the worker is the only writer here.
         m_sync_thread = std::thread{[this] {
             const auto& endpoint = cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front();
-            bool bootstrap_reachable = false;
             while (!m_sync_stop.load()) {
+                bool bootstrap_reachable = false;
                 try {
-                    m_node_runtime->SyncFromPeer(std::string{endpoint.host}, endpoint.port, 2000);
-                    bootstrap_reachable = true;
+                    const auto sync_res = m_node_runtime->SyncFromPeer(std::string{endpoint.host}, endpoint.port, 2000);
+                    bootstrap_reachable = sync_res.IsConnected();
                 } catch (const std::exception& e) {
                     bootstrap_reachable = false;
                     qWarning() << "cybou bootstrap sync error:" << e.what();

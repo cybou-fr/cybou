@@ -161,6 +161,7 @@ struct ProtocolOperationV1 {
 ProtocolOperationType OperationType(const ProtocolOperationV1& operation);
 std::vector<unsigned char> SerializeProtocolOperation(const ProtocolOperationV1& operation);
 std::optional<ProtocolOperationV1> DeserializeProtocolOperation(std::span<const unsigned char> bytes);
+uint256 ComputeOperationId(const ProtocolOperationV1& operation);
 
 struct ProtocolExecutionContextV1 {
     uint256 network_id;

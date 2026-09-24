@@ -7,9 +7,23 @@
 
 namespace cybou {
 
-CybouIdentityService::CybouIdentityService(CybouNodeRuntime& runtime)
-    : m_runtime{runtime}
+CybouIdentityService::CybouIdentityService(
+    CybouNodeRuntime& runtime,
+    std::optional<std::filesystem::path> storage_path)
+    : m_runtime{runtime}, m_storage_path{std::move(storage_path)}
 {
+}
+
+void CybouIdentityService::SetStoragePath(std::filesystem::path path)
+{
+    std::lock_guard lock(m_mutex);
+    m_storage_path = std::move(path);
+}
+
+std::optional<std::filesystem::path> CybouIdentityService::GetStoragePath() const
+{
+    std::lock_guard lock(m_mutex);
+    return m_storage_path;
 }
 
 CybouIdentityService::~CybouIdentityService()
@@ -117,6 +131,16 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
         }
         account_id = *acc_opt;
         auth.authorization_descriptor = *pubkey;
+
+        // CRITICAL DURABILITY: Persist key to disk BEFORE doing PoW and network broadcast.
+        // This ensures the user NEVER loses their private key if the process crashes, reboots,
+        // or gets killed after the on-chain account creation is mined.
+        if (m_storage_path.has_value()) {
+            if (!m_keystore.SaveToFile(*m_storage_path)) {
+                m_phase.store(IdentityCreationPhase::FAILED);
+                return Failure(IdentityCreationPhase::FAILED, "Failed to persist identity key to disk before broadcast");
+            }
+        }
     }
 
     // Check if account already exists in state

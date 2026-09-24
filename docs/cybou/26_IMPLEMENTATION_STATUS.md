@@ -180,6 +180,16 @@ Implemented skeleton:
 - `CybouNodeRuntime` sharing native state operations between the headless
   process and Qt desktop; a DEV bootstrap endpoint is transport metadata,
   while the network definition remains the trust root;
+- `NodeRuntimeState` tracking runtime health (`UNINITIALIZED`, `READY`,
+  `NETWORK_MISMATCH`, `CORRUPT`) with automated state-mismatch reset in the desktop;
+- crash-safe `CybouKeyStore` atomic persistence (`.tmp`, `FlushFileBuffers`,
+  `.bak` rotation, atomic rename), legacy 32-byte auto-migration, and memory cleansing;
+- `CybouIdentityService` pre-saving key custody to disk before PoW and
+  network broadcast;
+- 128 KiB operation transport framing boundary accommodating full Mail payloads;
+- structured operation submit replies with SHA-256 domain-separated OperationID;
+- fine-grained `SyncPeerResult` distinguishing up-to-date observer state from
+  connectivity loss;
 - local `CybouIdentityService` creation flow, proof of possession, remote
   AccountCreate submission, finality wait, and OS-protected identity
   keystore on Windows;
