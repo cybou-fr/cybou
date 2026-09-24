@@ -1,0 +1,38 @@
+// Copyright (c) 2026 The CYBOU developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/license/mit/.
+
+#include <cybou/identity_material.h>
+#include <cybou/recovery_phrase.h>
+
+#include <boost/test/unit_test.hpp>
+
+#include <algorithm>
+#include <filesystem>
+
+BOOST_AUTO_TEST_SUITE(cybou_identity_material_tests)
+
+BOOST_AUTO_TEST_CASE(random_account_id_and_recovery_entropy_survive_encrypted_save)
+{
+    auto first = cybou::GenerateIdentityMaterialV2();
+    auto second = cybou::GenerateIdentityMaterialV2();
+    BOOST_REQUIRE(first && second);
+    BOOST_CHECK(first->account_id != second->account_id);
+    BOOST_CHECK(first->account_id != first->recovery_entropy);
+    BOOST_CHECK(first->device_secret != first->recovery_entropy);
+    BOOST_CHECK(cybou::DecodeRecoveryWords(cybou::EncodeRecoveryWords(first->recovery_entropy)) == first->recovery_entropy);
+
+    const auto path = std::filesystem::temp_directory_path() / "cybou_identity_material_v2_test.cybv2";
+    std::filesystem::remove(path);
+    BOOST_REQUIRE(cybou::SaveNewIdentityMaterialV2(path, "correct horse battery", *first));
+    auto loaded = cybou::LoadIdentityMaterialV2(path, "correct horse battery");
+    BOOST_REQUIRE(loaded);
+    BOOST_CHECK(loaded->account_id == first->account_id);
+    BOOST_CHECK(loaded->recovery_entropy == first->recovery_entropy);
+    BOOST_CHECK(loaded->device_secret == first->device_secret);
+    BOOST_CHECK(!cybou::LoadIdentityMaterialV2(path, "incorrect password"));
+    BOOST_CHECK(!cybou::SaveNewIdentityMaterialV2(path, "correct horse battery", *second));
+    std::filesystem::remove(path);
+}
+
+BOOST_AUTO_TEST_SUITE_END()

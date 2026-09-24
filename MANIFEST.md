@@ -42,7 +42,7 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 114 | 222e5177b983769f |
 | docs/cybou/24_DECISIONS.md | 176 | 147d2bd5d24749cd |
 | docs/cybou/25_OPEN_QUESTIONS.md | 106 | 2b385f00f40e45ee |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 246 | 101ac38f01e0be94 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 248 | 206fa5e84c801762 |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 7b3cdc6050c7cf85 |
 | docs/cybou/28_BITCOIN_DOCUMENTATION_MIGRATION.md | 221 | 63ba6ee5d01c00dc |
 | docs/cybou/29_DOCUMENTATION_AUTHORITY.md | 79 | fad3b5767d5ffa7d |
@@ -91,7 +91,7 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 114 | cdf41fa050dd25ab |
 | docs/cybou/74_AUTHORITY_BLOCK_FEED.md | 53 | 562b2b24f7714005 |
 | docs/cybou/75_DEV_NODE_RUNBOOK.md | 83 | 987f1c29d1364901 |
-| docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 57 | 7ff4e19d8884d3b9 |
+| docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 60 | a27f1a6ce727e496 |
 | docs/cybou/77_CYBOU_NAME_REGISTRY.md | 34 | a7e912cf69aebea6 |
 | docs/cybou/78_IDENTITY_DESKTOP_UX.md | 36 | 9e7be64d250581c6 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |

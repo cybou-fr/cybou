@@ -11,8 +11,11 @@ BIP-39 PBKDF2 wallet seed/passphrase scheme is not used. The local
 `identity_vault` module seals and opens bounded in-memory CYBV2 envelopes.
 `SaveNewIdentityVault` now writes a new file through a synced temporary file,
 publishes it without overwriting an existing vault, and authenticates it by
-reopening before returning success. Payload schema, password change, desktop
-integration, and consensus recovery remain unimplemented.
+reopening before returning success. The initial `CVID2` payload contains a
+random AccountID, 256-bit recovery entropy, and an independent random initial
+device secret, each 32 bytes in that order after the five-byte payload magic.
+`IdentityMaterialV2` clears these fields when destroyed. Password change,
+desktop integration, and consensus recovery remain unimplemented.
 
 ## Recovery Root
 

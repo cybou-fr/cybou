@@ -23,7 +23,9 @@ AccountCreate.
 The local `identity_vault` module can seal/open a bounded CYBV2 envelope
 with Argon2id password KEK, random DEK and AES-256-GCM. It can durably create
 a new file without overwriting an existing vault and verifies the file by
-reopening it. Production payload schema and desktop integration remain open.
+reopening it. `identity_material` generates a random AccountID independent of
+recovery entropy and device secret, saves the versioned initial payload, and
+loads it from the encrypted vault. Desktop and consensus integration remain open.
 
 ## Hardened architecture
 
