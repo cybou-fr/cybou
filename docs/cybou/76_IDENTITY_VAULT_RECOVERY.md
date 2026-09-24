@@ -30,6 +30,13 @@ Ed25519 and ML-DSA-65 root seeds. RecoveryKeyID commits to the suite and both
 public keys; consensus maps it to the stable random AccountID. Use root
 material only for recovery and critical changes, then cleanse memory.
 
+Local RecoveryKeyID V2 is SHA-256 over the ASCII bytes
+`CYBOU/RECOVERY-KEY-ID/V2`, bytes `02 01` (identifier version and hybrid root
+suite), 32 raw Ed25519 public-key bytes, and 1952 raw ML-DSA-65 public-key
+bytes, in that order. It rejects other key purposes, malformed sizes, and
+all-zero public-key encodings. The consensus mapping and historical rotation
+rules are not yet implemented.
+
 On a clean machine, derive the root from the phrase, find AccountID in verified
 state, generate a fresh device keyset, authorize DeviceAdd with both root
 signatures, wait for finality, and save a new password-protected vault. Loss of

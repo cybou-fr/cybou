@@ -5,10 +5,10 @@
 #include <cybou/identity_crypto.h>
 
 #include <openssl/core_names.h>
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
 #include <openssl/params.h>
-#include <support/cleanse.h>
 
 #include <algorithm>
 #include <memory>
@@ -86,7 +86,7 @@ Key MakeKey(std::span<const unsigned char, 32> secret, IdentityKeyPurpose purpos
             if (EVP_PKEY_CTX_set_params(ctx.get(), params) == 1 && EVP_PKEY_keygen(ctx.get(), &raw) == 1) key.reset(raw);
         }
     }
-    memory_cleanse(seed->data(), seed->size());
+    OPENSSL_cleanse(seed->data(), seed->size());
     return key;
 }
 
@@ -152,6 +152,28 @@ bool VerifyIdentityMessage(const IdentityHybridPublicKey& key,
     if (!algorithm || key.ml_dsa.size() != PublicSize(key.purpose) || signature.ml_dsa.size() != SignatureSize(key.purpose)) return false;
     return Verify("ED25519", key.ed25519, signature.ed25519, message) &&
         Verify(algorithm, key.ml_dsa, signature.ml_dsa, message);
+}
+
+std::optional<std::array<unsigned char, 32>> ComputeRecoveryKeyId(
+    const IdentityHybridPublicKey& recovery_key)
+{
+    if (recovery_key.purpose != IdentityKeyPurpose::RECOVERY_ROOT ||
+        recovery_key.ml_dsa.size() != PublicSize(IdentityKeyPurpose::RECOVERY_ROOT) ||
+        std::all_of(recovery_key.ed25519.begin(), recovery_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
+        std::all_of(recovery_key.ml_dsa.begin(), recovery_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
+
+    constexpr std::string_view domain{"CYBOU/RECOVERY-KEY-ID/V2"};
+    constexpr std::array<unsigned char, 2> suite{2, 1}; // identifier version 2, hybrid root suite 1
+    MdCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
+    std::array<unsigned char, 32> id{};
+    unsigned int size{0};
+    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
+        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
+        EVP_DigestUpdate(ctx.get(), suite.data(), suite.size()) != 1 ||
+        EVP_DigestUpdate(ctx.get(), recovery_key.ed25519.data(), recovery_key.ed25519.size()) != 1 ||
+        EVP_DigestUpdate(ctx.get(), recovery_key.ml_dsa.data(), recovery_key.ml_dsa.size()) != 1 ||
+        EVP_DigestFinal_ex(ctx.get(), id.data(), &size) != 1 || size != id.size()) return std::nullopt;
+    return id;
 }
 
 } // namespace cybou

@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/identity_material.h>
+#include <cybou/identity_crypto.h>
 #include <cybou/recovery_phrase.h>
 
 #include <boost/test/unit_test.hpp>
@@ -30,6 +31,10 @@ BOOST_AUTO_TEST_CASE(random_account_id_and_recovery_entropy_survive_encrypted_sa
     BOOST_CHECK(loaded->account_id == first->account_id);
     BOOST_CHECK(loaded->recovery_entropy == first->recovery_entropy);
     BOOST_CHECK(loaded->device_secret == first->device_secret);
+    const auto root_before = cybou::DeriveIdentityPublicKey(first->recovery_entropy, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto root_after = cybou::DeriveIdentityPublicKey(loaded->recovery_entropy, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+    BOOST_REQUIRE(root_before && root_after);
+    BOOST_CHECK(cybou::ComputeRecoveryKeyId(*root_before) == cybou::ComputeRecoveryKeyId(*root_after));
     BOOST_CHECK(!cybou::LoadIdentityMaterialV2(path, "incorrect password"));
     BOOST_CHECK(!cybou::SaveNewIdentityMaterialV2(path, "correct horse battery", *second));
     std::filesystem::remove(path);

@@ -45,4 +45,32 @@ BOOST_AUTO_TEST_CASE(hybrid_root_and_device_are_deterministic_and_both_required)
     }
 }
 
+BOOST_AUTO_TEST_CASE(recovery_key_id_binds_both_public_keys_and_suite)
+{
+    std::array<unsigned char, 32> entropy{};
+    for (size_t i{0}; i < entropy.size(); ++i) entropy[i] = static_cast<unsigned char>(i);
+    const auto root = cybou::DeriveIdentityPublicKey(entropy, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+    BOOST_REQUIRE(root);
+    const auto id = cybou::ComputeRecoveryKeyId(*root);
+    BOOST_REQUIRE(id);
+    BOOST_CHECK_EQUAL(HexStr(*id), "1ef6e05c9f58218d3bd21f3ae7aeb96ed028e92712d3b85af43d976fbf4a014c");
+    BOOST_CHECK(cybou::ComputeRecoveryKeyId(*root) == id);
+
+    auto altered_ed = *root;
+    altered_ed.ed25519[0] ^= 1;
+    BOOST_CHECK(cybou::ComputeRecoveryKeyId(altered_ed) != id);
+    auto altered_pq = *root;
+    altered_pq.ml_dsa[0] ^= 1;
+    BOOST_CHECK(cybou::ComputeRecoveryKeyId(altered_pq) != id);
+    auto wrong_suite = *root;
+    wrong_suite.purpose = cybou::IdentityKeyPurpose::DEVICE;
+    BOOST_CHECK(!cybou::ComputeRecoveryKeyId(wrong_suite));
+    auto missing_key = *root;
+    missing_key.ml_dsa.clear();
+    BOOST_CHECK(!cybou::ComputeRecoveryKeyId(missing_key));
+    missing_key = *root;
+    missing_key.ed25519.fill(0);
+    BOOST_CHECK(!cybou::ComputeRecoveryKeyId(missing_key));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

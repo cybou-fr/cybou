@@ -39,5 +39,10 @@ bool VerifyIdentityMessage(const IdentityHybridPublicKey& key,
     const IdentityHybridSignature& signature,
     std::span<const unsigned char> message);
 
+// Domain- and suite-bound lookup identifier for an authorized recovery root.
+// The ID changes when either public key changes; AccountID does not.
+std::optional<std::array<unsigned char, 32>> ComputeRecoveryKeyId(
+    const IdentityHybridPublicKey& recovery_key);
+
 } // namespace cybou
 #endif

@@ -26,6 +26,9 @@ a new file without overwriting an existing vault and verifies the file by
 reopening it. `identity_material` generates a random AccountID independent of
 recovery entropy and device secret, saves the versioned initial payload, and
 loads it from the encrypted vault. Desktop and consensus integration remain open.
+`identity_crypto` now computes a domain- and suite-bound RecoveryKeyID from
+both root public keys, with a fixed test vector. No consensus mapping from
+that ID to AccountID exists yet.
 
 ## Hardened architecture
 
