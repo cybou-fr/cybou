@@ -6,6 +6,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <array>
 
 BOOST_AUTO_TEST_SUITE(cybou_identity_registry_v2_tests)
@@ -128,6 +129,33 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     BOOST_CHECK(registry.FindByRecoveryKeyId(*replacement_id) == account);
     BOOST_CHECK(registry.Find(account)->next_root_nonce == 4);
     BOOST_CHECK(registry.Find(account)->devices.at(*second_id).next_nonce == 1);
+
+    const auto snapshot = SerializeIdentityRegistryV2(registry);
+    BOOST_REQUIRE(snapshot);
+    const auto restored = DeserializeIdentityRegistryV2(*snapshot);
+    BOOST_REQUIRE(restored);
+    BOOST_CHECK(SerializeIdentityRegistryV2(*restored) == snapshot);
+    BOOST_CHECK(restored->FindByRecoveryKeyId(*replacement_id) == account);
+    BOOST_CHECK(restored->Find(account)->devices.at(*device_id).activation_nonce == 3);
+    auto damaged_snapshot = *snapshot;
+    damaged_snapshot[0] = 1;
+    BOOST_CHECK(!DeserializeIdentityRegistryV2(damaged_snapshot));
+    damaged_snapshot = *snapshot;
+    damaged_snapshot.push_back(0);
+    BOOST_CHECK(!DeserializeIdentityRegistryV2(damaged_snapshot));
+    BOOST_CHECK(!DeserializeIdentityRegistryV2(std::span{*snapshot}.first(snapshot->size() - 1)));
+    // The canonical wire order is DeviceKeyID order, not insertion order.
+    damaged_snapshot = *snapshot;
+    constexpr size_t first_device_offset{5 + 32 + 1984 + 8 + 1};
+    constexpr size_t device_size{1344 + 8 + 8};
+    for (size_t i{0}; i < device_size; ++i) {
+        std::swap(damaged_snapshot[first_device_offset + i], damaged_snapshot[first_device_offset + device_size + i]);
+    }
+    BOOST_CHECK(!DeserializeIdentityRegistryV2(damaged_snapshot));
+    damaged_snapshot = *snapshot;
+    std::copy_n(damaged_snapshot.begin() + first_device_offset + device_size - 8, 8,
+        damaged_snapshot.begin() + first_device_offset + 2 * device_size - 8);
+    BOOST_CHECK(!DeserializeIdentityRegistryV2(damaged_snapshot));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

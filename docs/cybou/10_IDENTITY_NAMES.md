@@ -51,6 +51,13 @@ DeviceKeyID, device nonce, activation nonce, operation kind, and the canonical
 payload commitment. Re-adding a revoked key assigns a new activation nonce,
 so signatures from its earlier activation cannot be replayed. Payment and Mail
 payload encodings and their atomic state transitions are still pending.
+The standalone registry snapshot uses version byte `02`, a little-endian
+account count, then ascending AccountID records. Each record stores AccountID,
+raw hybrid root public keys, root nonce, device count, and ascending DeviceKeyID
+entries with raw hybrid device keys, device nonce, and activation nonce.
+RecoveryKeyID and DeviceKeyID are derived during decoding; they are not trusted
+from the snapshot. This component is ready for a future V2 state envelope and
+state-root definition, but neither is active in DEV.
 
 The target primary example is `stanislav.cybou`. The earlier frozen
 `stan.cybou` example (DEC-004) is superseded by Identity V2's five-character

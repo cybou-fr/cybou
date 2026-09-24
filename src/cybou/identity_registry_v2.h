@@ -12,11 +12,13 @@
 #include <map>
 #include <optional>
 #include <span>
+#include <vector>
 
 namespace cybou {
 
 using IdentityKeyIdV2 = std::array<unsigned char, 32>;
 inline constexpr size_t MAX_ACTIVE_DEVICES_V2{8};
+inline constexpr uint32_t MAX_IDENTITY_REGISTRY_ACCOUNTS_V2{1'000'000};
 
 struct IdentityDeviceV2 {
     IdentityHybridPublicKey key;
@@ -108,10 +110,18 @@ public:
     std::optional<AccountId> FindByRecoveryKeyId(const IdentityKeyIdV2& id) const;
     const IdentityRecordV2* Find(const AccountId& id) const;
 
+    friend std::optional<std::vector<unsigned char>> SerializeIdentityRegistryV2(const IdentityRegistryV2& registry);
+    friend std::optional<IdentityRegistryV2> DeserializeIdentityRegistryV2(std::span<const unsigned char> bytes);
+
 private:
     std::map<AccountId, IdentityRecordV2> m_accounts;
     std::map<IdentityKeyIdV2, AccountId> m_recovery_index;
 };
+
+// Standalone canonical snapshot component. The enclosing V2 state format and
+// state-root domain will be defined when monetary and name state are integrated.
+std::optional<std::vector<unsigned char>> SerializeIdentityRegistryV2(const IdentityRegistryV2& registry);
+std::optional<IdentityRegistryV2> DeserializeIdentityRegistryV2(std::span<const unsigned char> bytes);
 
 } // namespace cybou
 #endif

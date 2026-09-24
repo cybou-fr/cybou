@@ -48,6 +48,10 @@ network-bound digest and advances only that device's nonce. Re-adding a key
 changes its activation nonce, invalidating signatures from earlier use.
 This must run on a candidate registry and commit atomically with a future V2
 payment or Mail transition; no active monetary operation uses it yet.
+The registry now has a standalone canonical V2 snapshot codec. It rejects
+incorrect version, truncation, trailing data, unsorted or duplicate keys,
+invalid key shapes, excess devices, and inconsistent activation nonces.
+The active V1 `CybouState` serializer and state root have not changed.
 
 ## Hardened architecture
 
