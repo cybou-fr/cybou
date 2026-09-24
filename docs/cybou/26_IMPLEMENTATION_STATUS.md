@@ -29,6 +29,9 @@ loads it from the encrypted vault. Desktop and consensus integration remain open
 `identity_crypto` now computes a domain- and suite-bound RecoveryKeyID from
 both root public keys, with a fixed test vector. No consensus mapping from
 that ID to AccountID exists yet.
+The local `identity_authorization_v2` module has a strict fixed-size hybrid
+root/initial-device descriptor and a domain-separated commitment. It is not
+yet wired into AccountCreate, state, or block serialization.
 
 ## Hardened architecture
 

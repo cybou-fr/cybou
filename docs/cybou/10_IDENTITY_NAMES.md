@@ -28,6 +28,15 @@ identifiers are mandatory before consensus activation. Mail confidentiality
 uses a separate X25519 + ML-KEM-768 target profile; signing keys are not
 encryption keys. See [vault and recovery](76_IDENTITY_VAULT_RECOVERY.md).
 
+The local `IdentityAuthorizationV2` draft has one canonical 3331-byte form:
+`02` version, `01` root suite, 32 Ed25519 root public-key bytes, 1952
+ML-DSA-65 root public-key bytes, `01` device suite, 32 Ed25519 device
+public-key bytes, and 1312 ML-DSA-44 device public-key bytes. It rejects
+other versions, lengths, purposes, all-zero keys, and reuse of the same
+Ed25519 public key for root and device. Its commitment is SHA-256 of ASCII
+`CYBOU/IDENTITY-AUTH-COMMIT/V2` followed by those exact 3331 bytes. This
+format is implemented locally but is not yet a consensus operation.
+
 DeviceAdd, DeviceRevoke, and RecoveryRotate are versioned operations. Each
 device has its own nonce. Revocation changes future authorization and does
 not erase already received ciphertext or historical signatures. Historical

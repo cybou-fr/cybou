@@ -8,6 +8,8 @@ permissionless account-creation work and atomic OnboardingPool funding. This
 page's V1 wire layout describes current DEV only; do not reinterpret it as V2.
 The encrypted recovery vault must be durably saved before V2 broadcast. See
 `10_IDENTITY_NAMES.md` and `76_IDENTITY_VAULT_RECOVERY.md`.
+The local 3331-byte `IdentityAuthorizationV2` serializer and commitment are
+draft inputs for AccountCreate V2; no V2 creation operation is accepted yet.
 
 This document defines the permissionless, protocol-native account creation mechanism for CYBOU.
 The centralized Operator-signed Voucher architecture has been permanently decommissioned.
