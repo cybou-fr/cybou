@@ -93,6 +93,7 @@ void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity
             const QString acc_hex = QString::fromStdString(m_identity_service->GetAccountId()->Value().GetHex());
             setIdentityState(CybouIdentityState::Active, acc_hex);
         }
+        refreshFinalizedName();
     }
 }
 
@@ -225,12 +226,23 @@ bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, c
 
 void CybouDesktopModel::setFinalityStatus(int last_finalized_height, int validator_count)
 {
+    refreshFinalizedName();
     if (m_status.last_finalized_height == last_finalized_height &&
         m_status.validator_count == validator_count) {
         return;
     }
     m_status.last_finalized_height = last_finalized_height;
     m_status.validator_count = validator_count;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::refreshFinalizedName()
+{
+    const auto name = m_identity_service && m_status.identity_state == CybouIdentityState::Active
+        ? m_identity_service->GetFinalizedPrimaryName() : std::nullopt;
+    const QString finalized = name ? QString::fromStdString(*name) + QStringLiteral(".cybou") : QString{};
+    if (m_status.primary_name == finalized) return;
+    m_status.primary_name = finalized;
     Q_EMIT statusChanged();
 }
 
@@ -252,6 +264,7 @@ void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString
     }
     m_status.identity_state = state;
     m_status.account_id = account_id;
+    if (state != CybouIdentityState::Active) m_status.primary_name.clear();
     m_status.creation_height = creation_height;
     if (state == CybouIdentityState::Active || state == CybouIdentityState::None) {
         m_identity_request_pending = false;
@@ -271,6 +284,7 @@ void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString
         }
     }
     Q_EMIT statusChanged();
+    if (state == CybouIdentityState::Active) refreshFinalizedName();
 }
 
 void CybouDesktopModel::setBalances(quint64 balance, quint64 system_balance)

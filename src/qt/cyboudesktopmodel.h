@@ -51,6 +51,7 @@ struct CybouDesktopStatus {
     bool network_active{false};
     CybouIdentityState identity_state{CybouIdentityState::None};
     QString account_id;
+    QString primary_name;
     int creation_height{0};
     QString data_directory;
     quint64 balance{0};
@@ -150,6 +151,7 @@ private:
     bool m_identity_request_pending{false};
 
     void refreshFromClient();
+    void refreshFinalizedName();
 };
 
 #endif // BITCOIN_QT_CYBOUDESKTOPMODEL_H

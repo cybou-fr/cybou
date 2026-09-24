@@ -375,7 +375,7 @@ void IdentityPage::refresh()
     rebuildForState(status.identity_state);
 
     if (status.identity_state == CybouIdentityState::Active) {
-        m_state_label->setText(tr("Identity active"));
+        m_state_label->setText(status.primary_name.isEmpty() ? tr("Identity active") : status.primary_name);
         m_detail_label->setText(tr("Your CYBOU identity is registered on the network."));
         m_active_details->setText(
             tr("AccountID: %1\nCreation height: %2\nNetwork: %3\nSystemBalance was funded atomically from the OnboardingPool at creation.")

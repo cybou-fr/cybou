@@ -53,6 +53,16 @@ std::optional<AccountState> CybouIdentityService::GetFinalizedAccountState() con
     return account_id ? m_runtime.GetAccountState(*account_id) : std::nullopt;
 }
 
+std::optional<std::string> CybouIdentityService::GetFinalizedPrimaryName() const
+{
+    const auto account_id = GetAccountId();
+    if (!account_id) return std::nullopt;
+    const auto loaded = m_runtime.GetStore().LoadState();
+    if (!loaded || !loaded.state) return std::nullopt;
+    const auto* name = loaded.state->names.PrimaryName(*account_id);
+    return name ? std::optional<std::string>{*name} : std::nullopt;
+}
+
 std::optional<RecoveryWords> CybouIdentityService::PrepareNewIdentity()
 {
     std::lock_guard lock(m_mutex);

@@ -1,7 +1,8 @@
 # 77 — `.cybou` name registry
 
 Status: commit, work, reveal, and ownership rules are implemented in the
-canonical core. Desktop claiming and operational DEV cutover remain open.
+canonical core. Desktop reads a finalized primary name from verified state;
+claiming and operational DEV cutover remain open.
 
 The label before `.cybou` is exactly 5–32 ASCII lowercase bytes from
 `[a-z0-9-]`; first and last are alphanumeric. Reject uppercase, Unicode,

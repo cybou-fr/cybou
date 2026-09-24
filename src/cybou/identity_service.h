@@ -67,6 +67,7 @@ public:
     /** Account ID if an identity has been initialized or created */
     std::optional<AccountId> GetAccountId() const;
     std::optional<AccountState> GetFinalizedAccountState() const;
+    std::optional<std::string> GetFinalizedPrimaryName() const;
 
     /** Prepare random local material and return its 24 words for user confirmation. */
     std::optional<RecoveryWords> PrepareNewIdentity();
