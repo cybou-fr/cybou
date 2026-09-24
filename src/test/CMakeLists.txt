@@ -2,6 +2,9 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://opensource.org/license/mit/.
 
+option(BUILD_BITCOIN_TESTS "Build inherited legacy Bitcoin test suite." OFF)
+
+if(BUILD_BITCOIN_TESTS)
 # Do not use generator expressions in test sources because the
 # SOURCES property is processed to gather test suite macros.
 add_executable(cybou-test
@@ -136,6 +139,38 @@ add_executable(cybou-test
   versionbits_tests.cpp
 )
 
+include(TargetDataSources)
+target_json_data_sources(cybou-test
+  data/base58_encode_decode.json
+  data/bip341_wallet_vectors.json
+  data/blockfilters.json
+  data/key_io_invalid.json
+  data/key_io_valid.json
+  data/script_tests.json
+  data/sighash.json
+  data/tx_invalid.json
+  data/tx_valid.json
+)
+target_raw_data_sources(cybou-test NAMESPACE test::data
+  data/asmap.raw
+)
+
+add_windows_application_manifest(cybou-test)
+
+target_link_libraries(cybou-test
+  core_interface
+  test_util
+  bitcoin_cli
+  bitcoin_node
+  bitcoin_consensus
+  minisketch
+  secp256k1
+  Boost::headers
+  libevent::extra
+  $<TARGET_NAME_IF_EXISTS:USDT::headers>
+)
+endif()
+
 # Keep the native CYBOU suites independent from the inherited Bitcoin test
 # universe. This target is the fast architectural/consensus test boundary.
 add_executable(cybou-core-test
@@ -165,37 +200,7 @@ add_executable(cybou-core-test
   cybou_wallet_service_tests.cpp
 )
 
-include(TargetDataSources)
-target_json_data_sources(cybou-test
-  data/base58_encode_decode.json
-  data/bip341_wallet_vectors.json
-  data/blockfilters.json
-  data/key_io_invalid.json
-  data/key_io_valid.json
-  data/script_tests.json
-  data/sighash.json
-  data/tx_invalid.json
-  data/tx_valid.json
-)
-target_raw_data_sources(cybou-test NAMESPACE test::data
-  data/asmap.raw
-)
-
-add_windows_application_manifest(cybou-test)
 add_windows_application_manifest(cybou-core-test)
-
-target_link_libraries(cybou-test
-  core_interface
-  test_util
-  bitcoin_cli
-  bitcoin_node
-  bitcoin_consensus
-  minisketch
-  secp256k1
-  Boost::headers
-  libevent::extra
-  $<TARGET_NAME_IF_EXISTS:USDT::headers>
-)
 
 target_link_libraries(cybou-core-test
   core_interface
@@ -258,8 +263,10 @@ function(add_all_test_targets test_target)
   endforeach()
 endfunction()
 
-add_all_test_targets(cybou-test)
-add_all_test_targets(cybou-core-test)
+if(BUILD_BITCOIN_TESTS)
+  add_all_test_targets(cybou-test)
+  install_binary_component(cybou-test INTERNAL)
+endif()
 
-install_binary_component(cybou-test INTERNAL)
+add_all_test_targets(cybou-core-test)
 install_binary_component(cybou-core-test INTERNAL)
