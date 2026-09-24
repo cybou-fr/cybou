@@ -211,15 +211,28 @@ CybouState CreateDevGenesisState(const uint256& validator_public_key)
     };
 }
 
+uint256 ComputeGenesisBlockId(const uint256& state_root, const uint256& validator_set_commitment)
+{
+    static constexpr std::string_view DOMAIN{"CYBOU/GENESIS-BLOCK/V1"};
+    CSHA256 hasher;
+    hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
+    hasher.Write(state_root.begin(), state_root.size());
+    hasher.Write(validator_set_commitment.begin(), validator_set_commitment.size());
+    uint256 out;
+    hasher.Finalize(out.begin());
+    return out;
+}
+
 CybouNetworkDefinitionV1 CreateDevNetworkDefinition(const CybouState& genesis)
 {
     const uint256 state_root = CybouStateHash(genesis);
+    const uint256 val_commitment = ComputeValidatorSetCommitment(genesis.validator_set);
     return CybouNetworkDefinitionV1{
         .protocol_version = CYBOU_NETWORK_DEFINITION_VERSION,
-        .genesis_block_id = state_root,
+        .genesis_block_id = ComputeGenesisBlockId(state_root, val_commitment),
         .genesis_state_root = state_root,
         .protocol_parameters = DevProtocolParameters(),
-        .initial_validator_set_commitment = ComputeValidatorSetCommitment(genesis.validator_set),
+        .initial_validator_set_commitment = val_commitment,
         .operator_authority = std::nullopt,
     };
 }

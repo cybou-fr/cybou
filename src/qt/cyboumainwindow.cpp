@@ -167,10 +167,12 @@ void CybouMainWindow::initCybouRuntime()
             kf.read(reinterpret_cast<char*>(val_key->data()), 32);
         }
 
+        const auto& endpoint = cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front();
         cybou::NodeRuntimeConfig config{
             .network_definition = definition,
             .data_dir = data_dir,
             .validator_private_key = val_key,
+            .submit_endpoint = std::make_pair(std::string{endpoint.host}, endpoint.port),
             .db_cache_bytes = 8 << 20,
         };
         if (val_key.has_value()) {
@@ -184,12 +186,8 @@ void CybouMainWindow::initCybouRuntime()
         m_identity_service = std::make_unique<cybou::CybouIdentityService>(*m_node_runtime);
 
         const auto id_key_path = (gArgs.GetDataDirNet() / "identity.key").std_path();
-        if (std::filesystem::exists(id_key_path) && std::filesystem::file_size(id_key_path) == 32) {
-            std::array<unsigned char, 32> id_key{};
-            std::ifstream idf(id_key_path, std::ios::binary);
-            idf.read(reinterpret_cast<char*>(id_key.data()), 32);
-            m_identity_service->LoadExistingIdentity(id_key);
-            memory_cleanse(id_key.data(), id_key.size());
+        if (std::filesystem::exists(id_key_path)) {
+            m_identity_service->LoadKeyStore(id_key_path);
         }
 
         m_desktop_model->setIdentityService(m_identity_service.get());
@@ -229,13 +227,9 @@ void CybouMainWindow::initCybouRuntime()
         // Connect identity persistence on creation
         connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, [this] {
             if (m_desktop_model->status().identity_state == CybouIdentityState::Active && m_identity_service) {
-                const auto key = m_identity_service->GetPrivateKeySeed();
-                if (key.has_value()) {
-                    const auto id_path = (gArgs.GetDataDirNet() / "identity.key").std_path();
-                    if (!std::filesystem::exists(id_path)) {
-                        std::ofstream idf(id_path, std::ios::binary | std::ios::out);
-                        idf.write(reinterpret_cast<const char*>(key->data()), key->size());
-                    }
+                const auto id_path = (gArgs.GetDataDirNet() / "identity.key").std_path();
+                if (!std::filesystem::exists(id_path)) {
+                    m_identity_service->SaveKeyStore(id_path);
                 }
             }
         });

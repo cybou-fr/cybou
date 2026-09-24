@@ -50,6 +50,8 @@ std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefiniti
 std::optional<CybouNetworkDefinitionV1> DeserializeNetworkDefinition(std::span<const unsigned char> bytes);
 uint256 NetworkId(const CybouNetworkDefinitionV1& definition);
 
+uint256 ComputeGenesisBlockId(const uint256& state_root, const uint256& validator_set_commitment);
+
 CybouState CreateDevGenesisState(const uint256& validator_public_key);
 CybouNetworkDefinitionV1 CreateDevNetworkDefinition(const CybouState& genesis);
 

@@ -336,7 +336,7 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
         }
     }
 
-    if (m_prevotes.size() >= quorum) {
+    if (nil_counts >= quorum || m_prevotes.size() == m_validator_set.validators.size()) {
         m_step = BftStep::PRECOMMIT;
         m_precommitted = true;
         const uint256 nil_digest = ComputePrecommitNilDigest(m_network_id, m_height, m_round, m_validator_id);

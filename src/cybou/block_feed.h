@@ -15,6 +15,12 @@
 namespace cybou {
 
 inline constexpr uint32_t MAX_FINALIZED_BLOCK_FEED_BYTES{32U * 1024U * 1024U};
+inline constexpr uint32_t MAX_OPERATION_PAYLOAD_BYTES{64U * 1024U};
+
+class CybouNodeRuntime;
+
+/** Serve incoming TCP connection: handles block request (CYB1) or operation submission (CYBO). */
+bool ServeCybouConnection(CybouNodeRuntime& runtime, boost::asio::ip::tcp::socket& socket);
 
 /** Serve one height request on an already accepted socket. No state mutation. */
 bool ServeFinalizedBlockRequest(CybouStateStore& store, boost::asio::ip::tcp::socket& socket);
@@ -22,6 +28,10 @@ bool ServeFinalizedBlockRequest(CybouStateStore& store, boost::asio::ip::tcp::so
 /** Fetch an untrusted finalized block. Callers must validate it via StateStore. */
 std::optional<FinalizedBlockV1> FetchFinalizedBlock(
     const std::string& host, uint16_t port, const uint256& network_id, uint64_t height);
+
+/** Submit a protocol operation to a remote peer (authority / validator). Returns true if accepted. */
+bool SubmitOperationRemote(
+    const std::string& host, uint16_t port, const uint256& network_id, const ProtocolOperationV1& op);
 
 /** Fetch and atomically verify the next block against this observer's canonical state. */
 bool SyncNextFinalizedBlock(

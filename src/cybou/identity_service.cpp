@@ -18,43 +18,50 @@ CybouIdentityService::~CybouIdentityService()
     if (m_worker.joinable()) {
         m_worker.join();
     }
-    std::lock_guard lock(m_mutex);
-    if (m_private_key_seed.has_value()) {
-        memory_cleanse(m_private_key_seed->data(), m_private_key_seed->size());
-    }
 }
 
 std::optional<AccountId> CybouIdentityService::GetAccountId() const
 {
     std::lock_guard lock(m_mutex);
-    return m_account_id;
-}
-
-std::optional<std::array<unsigned char, 32>> CybouIdentityService::GetPrivateKeySeed() const
-{
-    std::lock_guard lock(m_mutex);
-    return m_private_key_seed;
+    return m_keystore.GetAccountId();
 }
 
 bool CybouIdentityService::LoadExistingIdentity(const std::array<unsigned char, 32>& priv_key_seed)
 {
-    const auto pubkey = DeriveEd25519PublicKey(priv_key_seed);
-    if (!pubkey) return false;
-
     std::lock_guard lock(m_mutex);
-    if (m_private_key_seed.has_value()) {
-        memory_cleanse(m_private_key_seed->data(), m_private_key_seed->size());
-    }
-    m_private_key_seed = priv_key_seed;
-    m_account_id = AccountId{*pubkey};
+    if (!m_keystore.LoadFromSeed(priv_key_seed)) return false;
+    const auto acc_id = m_keystore.GetAccountId();
+    if (!acc_id) return false;
 
-    const auto account_state = m_runtime.GetAccountState(*m_account_id);
+    const auto account_state = m_runtime.GetAccountState(*acc_id);
     if (account_state.has_value()) {
         m_phase.store(IdentityCreationPhase::ACTIVE);
     } else {
         m_phase.store(IdentityCreationPhase::IDLE);
     }
     return true;
+}
+
+bool CybouIdentityService::LoadKeyStore(const std::filesystem::path& path)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_keystore.LoadFromFile(path)) return false;
+    const auto acc_id = m_keystore.GetAccountId();
+    if (!acc_id) return false;
+
+    const auto account_state = m_runtime.GetAccountState(*acc_id);
+    if (account_state.has_value()) {
+        m_phase.store(IdentityCreationPhase::ACTIVE);
+    } else {
+        m_phase.store(IdentityCreationPhase::IDLE);
+    }
+    return true;
+}
+
+bool CybouIdentityService::SaveKeyStore(const std::filesystem::path& path) const
+{
+    std::lock_guard lock(m_mutex);
+    return m_keystore.SaveToFile(path);
 }
 
 namespace {
@@ -87,35 +94,29 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     m_phase.store(IdentityCreationPhase::CREATING_KEYS);
     if (on_phase) on_phase(IdentityCreationPhase::CREATING_KEYS, "Generating local keys...");
 
-    std::array<unsigned char, 32> priv_key{};
+    AccountId account_id;
+    AccountAuthorizationV1 auth;
     {
         std::lock_guard lock(m_mutex);
         if (user_provided_key.has_value()) {
-            priv_key = *user_provided_key;
-        } else if (m_private_key_seed.has_value()) {
-            priv_key = *m_private_key_seed;
-        } else {
-            GetStrongRandBytes(priv_key);
+            if (!m_keystore.LoadFromSeed(*user_provided_key)) {
+                m_phase.store(IdentityCreationPhase::FAILED);
+                return Failure(IdentityCreationPhase::FAILED, "Failed to load user-provided key");
+            }
+        } else if (!m_keystore.HasKey()) {
+            if (!m_keystore.GenerateNew()) {
+                m_phase.store(IdentityCreationPhase::FAILED);
+                return Failure(IdentityCreationPhase::FAILED, "Failed to generate local key");
+            }
         }
-    }
-
-    const auto pubkey = DeriveEd25519PublicKey(priv_key);
-    if (!pubkey) {
-        memory_cleanse(priv_key.data(), priv_key.size());
-        m_phase.store(IdentityCreationPhase::FAILED);
-        return Failure(IdentityCreationPhase::FAILED, "Failed to derive Ed25519 public key");
-    }
-
-    const AccountId account_id{*pubkey};
-    const AccountAuthorizationV1 auth{.authorization_descriptor = *pubkey};
-
-    {
-        std::lock_guard lock(m_mutex);
-        if (m_private_key_seed.has_value() && m_private_key_seed->data() != priv_key.data()) {
-            memory_cleanse(m_private_key_seed->data(), m_private_key_seed->size());
+        const auto pubkey = m_keystore.GetPublicKey();
+        const auto acc_opt = m_keystore.GetAccountId();
+        if (!pubkey || !acc_opt) {
+            m_phase.store(IdentityCreationPhase::FAILED);
+            return Failure(IdentityCreationPhase::FAILED, "Invalid identity key");
         }
-        m_private_key_seed = priv_key;
-        m_account_id = account_id;
+        account_id = *acc_opt;
+        auth.authorization_descriptor = *pubkey;
     }
 
     // Check if account already exists in state
@@ -168,8 +169,12 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     m_phase.store(IdentityCreationPhase::BROADCASTING);
     if (on_phase) on_phase(IdentityCreationPhase::BROADCASTING, "Signing and submitting AccountCreateOp...");
 
-    const uint256 pop_digest = ComputeAccountPopDigest(m_runtime.GetNetworkId(), account_id, *pubkey);
-    const auto pop_sig = SignUserMessage(priv_key, pop_digest);
+    const uint256 pop_digest = ComputeAccountPopDigest(m_runtime.GetNetworkId(), account_id, auth.authorization_descriptor);
+    std::optional<std::array<unsigned char, 64>> pop_sig;
+    {
+        std::lock_guard lock(m_mutex);
+        pop_sig = m_keystore.Sign(pop_digest);
+    }
     if (!pop_sig.has_value()) {
         m_phase.store(IdentityCreationPhase::FAILED);
         return Failure(IdentityCreationPhase::FAILED, "Failed to sign proof of possession", account_id);

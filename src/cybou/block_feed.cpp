@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/block_feed.h>
+#include <cybou/node_runtime.h>
 
 #include <boost/asio/connect.hpp>
 #include <boost/asio/read.hpp>
@@ -21,6 +22,7 @@ namespace cybou {
 namespace {
 
 constexpr std::array<unsigned char, 4> REQUEST_MAGIC{'C', 'Y', 'B', '1'};
+constexpr std::array<unsigned char, 4> OP_MAGIC{'C', 'Y', 'B', 'O'};
 constexpr size_t REQUEST_SIZE{4 + 32 + 8};
 
 void WriteU32(std::array<unsigned char, 4>& out, const uint32_t value)
@@ -52,6 +54,61 @@ void SetIoTimeout(boost::asio::ip::tcp::socket& socket)
 
 } // namespace
 
+bool ServeCybouConnection(CybouNodeRuntime& runtime, boost::asio::ip::tcp::socket& socket)
+{
+    try {
+        SetIoTimeout(socket);
+        std::array<unsigned char, 4> magic{};
+        boost::asio::read(socket, boost::asio::buffer(magic));
+
+        if (std::equal(REQUEST_MAGIC.begin(), REQUEST_MAGIC.end(), magic.begin())) {
+            std::array<unsigned char, 32 + 8> req_rest{};
+            boost::asio::read(socket, boost::asio::buffer(req_rest));
+            if (!std::equal(runtime.GetNetworkId().begin(), runtime.GetNetworkId().end(), req_rest.begin())) {
+                return false;
+            }
+            uint64_t height{0};
+            for (size_t i = 0; i < 8; ++i) height |= uint64_t{req_rest[32 + i]} << (8 * i);
+            const auto block = runtime.GetBlockAtHeight(height);
+            const auto bytes = block ? SerializeFinalizedBlock(*block) : std::vector<unsigned char>{};
+            if (bytes.size() > MAX_FINALIZED_BLOCK_FEED_BYTES) return false;
+            std::array<unsigned char, 4> length{};
+            WriteU32(length, static_cast<uint32_t>(bytes.size()));
+            boost::asio::write(socket, boost::asio::buffer(length));
+            if (!bytes.empty()) boost::asio::write(socket, boost::asio::buffer(bytes));
+            return true;
+        }
+
+        if (std::equal(OP_MAGIC.begin(), OP_MAGIC.end(), magic.begin())) {
+            std::array<unsigned char, 32 + 4> req_rest{};
+            boost::asio::read(socket, boost::asio::buffer(req_rest));
+            if (!std::equal(runtime.GetNetworkId().begin(), runtime.GetNetworkId().end(), req_rest.begin())) {
+                return false;
+            }
+            std::array<unsigned char, 4> len_bytes{};
+            std::copy_n(req_rest.begin() + 32, 4, len_bytes.begin());
+            const uint32_t op_size = ReadU32(len_bytes);
+            if (op_size == 0 || op_size > MAX_OPERATION_PAYLOAD_BYTES) {
+                unsigned char status{0x00};
+                boost::asio::write(socket, boost::asio::buffer(&status, 1));
+                return false;
+            }
+
+            std::vector<unsigned char> op_bytes(op_size);
+            boost::asio::read(socket, boost::asio::buffer(op_bytes));
+            const auto op = DeserializeProtocolOperation(op_bytes);
+            const bool success = op.has_value() && runtime.SubmitOperation(*op);
+            unsigned char status = success ? 0x01 : 0x00;
+            boost::asio::write(socket, boost::asio::buffer(&status, 1));
+            return success;
+        }
+
+        return false;
+    } catch (const boost::system::system_error&) {
+        return false;
+    }
+}
+
 bool ServeFinalizedBlockRequest(CybouStateStore& store, boost::asio::ip::tcp::socket& socket)
 {
     try {
@@ -71,6 +128,38 @@ bool ServeFinalizedBlockRequest(CybouStateStore& store, boost::asio::ip::tcp::so
         boost::asio::write(socket, boost::asio::buffer(length));
         if (!bytes.empty()) boost::asio::write(socket, boost::asio::buffer(bytes));
         return true;
+    } catch (const boost::system::system_error&) {
+        return false;
+    }
+}
+
+bool SubmitOperationRemote(
+    const std::string& host, const uint16_t port, const uint256& network_id, const ProtocolOperationV1& op)
+{
+    try {
+        const auto op_bytes = SerializeProtocolOperation(op);
+        if (op_bytes.empty() || op_bytes.size() > MAX_OPERATION_PAYLOAD_BYTES) return false;
+
+        boost::asio::io_context io;
+        boost::asio::ip::tcp::resolver resolver(io);
+        boost::asio::ip::tcp::socket socket(io);
+        boost::asio::connect(socket, resolver.resolve(host, std::to_string(port)));
+        SetIoTimeout(socket);
+
+        std::vector<unsigned char> msg;
+        msg.reserve(4 + 32 + 4 + op_bytes.size());
+        msg.insert(msg.end(), OP_MAGIC.begin(), OP_MAGIC.end());
+        msg.insert(msg.end(), network_id.begin(), network_id.end());
+        std::array<unsigned char, 4> len_bytes{};
+        WriteU32(len_bytes, static_cast<uint32_t>(op_bytes.size()));
+        msg.insert(msg.end(), len_bytes.begin(), len_bytes.end());
+        msg.insert(msg.end(), op_bytes.begin(), op_bytes.end());
+
+        boost::asio::write(socket, boost::asio::buffer(msg));
+
+        unsigned char status{0};
+        boost::asio::read(socket, boost::asio::buffer(&status, 1));
+        return status == 0x01;
     } catch (const boost::system::system_error&) {
         return false;
     }

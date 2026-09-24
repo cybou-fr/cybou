@@ -25,6 +25,7 @@ struct NodeRuntimeConfig {
     CybouNetworkDefinitionV1 network_definition;
     std::filesystem::path data_dir;
     std::optional<std::array<unsigned char, 32>> validator_private_key{std::nullopt};
+    std::optional<std::pair<std::string, uint16_t>> submit_endpoint{std::nullopt};
     size_t db_cache_bytes{8 << 20};
     bool memory_only{false};
     bool wipe_data{false};
@@ -88,6 +89,11 @@ public:
     /** Sync up to max_blocks from a remote peer block feed */
     uint64_t SyncFromPeer(const std::string& host, uint16_t port, uint64_t max_blocks = 100);
 
+    /** Remote operation submit endpoint */
+    void SetSubmitEndpoint(const std::string& host, uint16_t port);
+    bool HasSubmitEndpoint() const;
+    std::optional<std::pair<std::string, uint16_t>> GetSubmitEndpoint() const;
+
     /** Access underlying store */
     CybouStateStore& GetStore() { return m_store; }
     const CybouStateStore& GetStore() const { return m_store; }
@@ -98,6 +104,7 @@ private:
     std::unique_ptr<CDBWrapper> m_db;
     CybouStateStore m_store;
     std::unique_ptr<CybouAuthorityNode> m_authority_node;
+    std::optional<std::pair<std::string, uint16_t>> m_submit_endpoint;
     mutable std::mutex m_mutex;
 };
 

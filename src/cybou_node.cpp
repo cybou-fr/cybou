@@ -241,7 +241,7 @@ int Main(const int argc, char* argv[])
                 continue;
             }
             if (ec) throw boost::system::system_error(ec);
-            cybou::ServeFinalizedBlockRequest(runtime.GetStore(), socket);
+            cybou::ServeCybouConnection(runtime, socket);
         }
         return 0;
     }

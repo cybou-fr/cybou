@@ -105,6 +105,7 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   core_io.cpp
   cybou/account_creation.cpp
   cybou/identity.cpp
+  cybou/keystore.cpp
   cybou/signing.cpp
   cybou/signing_openssl.cpp
   cybou/state.cpp
@@ -153,6 +154,7 @@ target_link_libraries(bitcoin_common
     OpenSSL::Crypto
     $<TARGET_NAME_IF_EXISTS:USDT::headers>
     $<$<PLATFORM_ID:Windows>:ws2_32>
+    $<$<PLATFORM_ID:Windows>:crypt32>
 )
 
 include(InstallBinaryComponent)
@@ -298,6 +300,7 @@ target_link_libraries(bitcoin_node
     $<TARGET_NAME_IF_EXISTS:libevent::extra>
     $<TARGET_NAME_IF_EXISTS:libevent::pthreads>
     $<TARGET_NAME_IF_EXISTS:USDT::headers>
+    $<$<PLATFORM_ID:Windows>:crypt32>
 )
 if(WITH_EMBEDDED_ASMAP)
   target_compile_definitions(bitcoin_node PRIVATE ENABLE_EMBEDDED_ASMAP=1)

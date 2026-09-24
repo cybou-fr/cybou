@@ -179,4 +179,44 @@ BOOST_AUTO_TEST_CASE(identity_service_creates_identity_asynchronously)
     BOOST_CHECK_EQUAL(result.system_balance, definition.protocol_parameters.onboarding_bonus);
 }
 
+BOOST_AUTO_TEST_CASE(keystore_encrypts_and_recovers_identity_safely)
+{
+    cybou::CybouKeyStore ks1;
+    BOOST_CHECK(!ks1.HasKey());
+    BOOST_REQUIRE(ks1.GenerateNew());
+    BOOST_CHECK(ks1.HasKey());
+
+    const auto pub1 = ks1.GetPublicKey();
+    const auto acc1 = ks1.GetAccountId();
+    BOOST_REQUIRE(pub1.has_value() && acc1.has_value());
+    BOOST_CHECK(acc1->Value() == *pub1);
+
+    // Test signing
+    const uint256 test_digest{uint256::FromUserHex("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef").value()};
+    const auto sig1 = ks1.Sign(test_digest);
+    BOOST_REQUIRE(sig1.has_value());
+    BOOST_CHECK(cybou::VerifyUserSignature(*pub1, *sig1, test_digest));
+
+    // Save to temp file
+    const auto temp_path = std::filesystem::temp_directory_path() / "cybou_test_keystore.key";
+    std::filesystem::remove(temp_path);
+    BOOST_REQUIRE(ks1.SaveToFile(temp_path));
+    BOOST_REQUIRE(std::filesystem::exists(temp_path));
+
+    // Load with fresh keystore
+    cybou::CybouKeyStore ks2;
+    BOOST_REQUIRE(ks2.LoadFromFile(temp_path));
+    BOOST_CHECK(ks2.HasKey());
+    BOOST_CHECK_EQUAL(ks2.GetPublicKey()->GetHex(), pub1->GetHex());
+    BOOST_CHECK_EQUAL(ks2.GetAccountId()->Value().GetHex(), acc1->Value().GetHex());
+
+    // Verify fresh keystore can sign identically
+    const auto sig2 = ks2.Sign(test_digest);
+    BOOST_REQUIRE(sig2.has_value());
+    BOOST_CHECK(sig1 == sig2);
+
+    // Clean up
+    std::filesystem::remove(temp_path);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

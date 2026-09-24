@@ -873,4 +873,167 @@ BOOST_AUTO_TEST_CASE(bft_adversarial_split_prevotes_round_recovery)
     }
 }
 
+BOOST_AUTO_TEST_CASE(bft_prevote_liveness_handles_interleaved_nil_and_delivers_block_quorum)
+{
+    // N=4, Q=3. Test that interleaved nil prevote does NOT cause premature nil precommit.
+    const uint256 network_id{uint256::FromUserHex("42").value()};
+    const uint256 root{uint256::FromUserHex("99").value()};
+    std::vector<MockValidatorNode> mocks;
+    cybou::ValidatorSetV1 val_set{.version = cybou::VALIDATOR_SET_VERSION, .validators = {}};
+    for (uint8_t i = 0; i < 4; ++i) {
+        auto m = MockValidatorNode::Create(i);
+        mocks.push_back(m);
+        val_set.validators.push_back({
+            .validator_id = m.validator_id,
+            .consensus_public_key = m.consensus_pubkey,
+            .weight = 1,
+        });
+    }
+
+    const auto execute = [root](const std::vector<cybou::ProtocolOperationV1>& ops, uint64_t) -> std::optional<uint256> {
+        return ops.empty() ? std::optional<uint256>{root} : std::nullopt;
+    };
+
+    // Node 0 under test
+    cybou::BftValidatorNode node0{0, mocks[0].seed, network_id, val_set, execute};
+    node0.SetHeight(1, uint256::ONE, val_set);
+
+    const size_t leader_idx = cybou::BftLeaderIndex(1, 0, 4);
+    cybou::BftValidatorNode leader{leader_idx, mocks[leader_idx].seed, network_id, val_set, execute};
+    leader.SetHeight(1, uint256::ONE, val_set);
+    auto proposal = leader.StartRound(0, {});
+    BOOST_REQUIRE(proposal.has_value());
+    const uint256 block_id = cybou::ComputeBlockId(proposal->block);
+
+    // Node 0 receives proposal and emits its own prevote
+    auto pv0 = node0.ReceiveProposal(*proposal);
+    BOOST_REQUIRE(pv0.has_value() && pv0->block_id == block_id);
+
+    // Node 1 prevotes Block
+    const uint256 pv_digest = cybou::ComputePrevoteDigest(network_id, 1, 0, mocks[1].validator_id, block_id);
+    cybou::BftPrevoteMsg pv1{
+        .network_id = network_id,
+        .height = 1,
+        .round = 0,
+        .validator_id = mocks[1].validator_id,
+        .block_id = block_id,
+        .signature = *cybou::SignValidatorVote(mocks[1].seed, pv_digest),
+    };
+
+    // Node 2 prevotes Nil (delayed or network partitioned)
+    const uint256 nil_digest = cybou::ComputePrevoteDigest(network_id, 1, 0, mocks[2].validator_id, std::nullopt);
+    cybou::BftPrevoteMsg pv2_nil{
+        .network_id = network_id,
+        .height = 1,
+        .round = 0,
+        .validator_id = mocks[2].validator_id,
+        .block_id = std::nullopt,
+        .signature = *cybou::SignValidatorVote(mocks[2].seed, nil_digest),
+    };
+
+    // Node 3 prevotes Block
+    const uint256 pv3_digest = cybou::ComputePrevoteDigest(network_id, 1, 0, mocks[3].validator_id, block_id);
+    cybou::BftPrevoteMsg pv3{
+        .network_id = network_id,
+        .height = 1,
+        .round = 0,
+        .validator_id = mocks[3].validator_id,
+        .block_id = block_id,
+        .signature = *cybou::SignValidatorVote(mocks[3].seed, pv3_digest),
+    };
+
+    // Deliver pv1 to node 0: now 2 votes for Block (node0 + node1). No quorum yet.
+    auto res1 = node0.ReceivePrevote(pv1);
+    BOOST_CHECK(!res1.has_value());
+
+    // Deliver pv2_nil to node 0: now 3 prevotes received (node0=Block, node1=Block, node2=Nil).
+    // Total prevotes = 3 >= quorum (3), BUT Block only has 2 votes and Nil only has 1.
+    // Node 0 MUST NOT precommit nil here! It must wait for the 4th vote.
+    auto res2 = node0.ReceivePrevote(pv2_nil);
+    BOOST_CHECK(!res2.has_value());
+    BOOST_CHECK(node0.GetStep() != cybou::BftStep::PRECOMMIT);
+
+    // Deliver pv3 to node 0: now 3 votes for Block (node0 + node1 + node3) >= quorum (3).
+    // Node 0 MUST lock and produce a precommit for Block!
+    auto res3 = node0.ReceivePrevote(pv3);
+    BOOST_REQUIRE(res3.has_value());
+    BOOST_CHECK(res3->block_id == block_id);
+    BOOST_CHECK(node0.GetStep() == cybou::BftStep::PRECOMMIT);
+}
+
+BOOST_AUTO_TEST_CASE(bft_prevote_all_voted_without_quorum_precommits_nil)
+{
+    // N=4, Q=3. If all 4 validators have voted and no block reached quorum, precommit nil.
+    const uint256 network_id{uint256::FromUserHex("42").value()};
+    const uint256 root{uint256::FromUserHex("99").value()};
+    std::vector<MockValidatorNode> mocks;
+    cybou::ValidatorSetV1 val_set{.version = cybou::VALIDATOR_SET_VERSION, .validators = {}};
+    for (uint8_t i = 0; i < 4; ++i) {
+        auto m = MockValidatorNode::Create(i);
+        mocks.push_back(m);
+        val_set.validators.push_back({
+            .validator_id = m.validator_id,
+            .consensus_public_key = m.consensus_pubkey,
+            .weight = 1,
+        });
+    }
+
+    const auto execute = [root](const std::vector<cybou::ProtocolOperationV1>& ops, uint64_t) -> std::optional<uint256> {
+        return ops.empty() ? std::optional<uint256>{root} : std::nullopt;
+    };
+
+    cybou::BftValidatorNode node0{0, mocks[0].seed, network_id, val_set, execute};
+    node0.SetHeight(1, uint256::ONE, val_set);
+
+    const size_t leader_idx = cybou::BftLeaderIndex(1, 0, 4);
+    cybou::BftValidatorNode leader{leader_idx, mocks[leader_idx].seed, network_id, val_set, execute};
+    leader.SetHeight(1, uint256::ONE, val_set);
+    auto proposal = leader.StartRound(0, {});
+    BOOST_REQUIRE(proposal.has_value());
+    const uint256 block_id = cybou::ComputeBlockId(proposal->block);
+
+    node0.ReceiveProposal(*proposal);
+
+    const uint256 pv_digest = cybou::ComputePrevoteDigest(network_id, 1, 0, mocks[1].validator_id, block_id);
+    cybou::BftPrevoteMsg pv1{
+        .network_id = network_id,
+        .height = 1,
+        .round = 0,
+        .validator_id = mocks[1].validator_id,
+        .block_id = block_id,
+        .signature = *cybou::SignValidatorVote(mocks[1].seed, pv_digest),
+    };
+
+    // Node 2 and Node 3 vote Nil (so total for Block is only 2: node0 + node1)
+    const uint256 nil_digest2 = cybou::ComputePrevoteDigest(network_id, 1, 0, mocks[2].validator_id, std::nullopt);
+    cybou::BftPrevoteMsg pv2_nil{
+        .network_id = network_id,
+        .height = 1,
+        .round = 0,
+        .validator_id = mocks[2].validator_id,
+        .block_id = std::nullopt,
+        .signature = *cybou::SignValidatorVote(mocks[2].seed, nil_digest2),
+    };
+
+    const uint256 nil_digest3 = cybou::ComputePrevoteDigest(network_id, 1, 0, mocks[3].validator_id, std::nullopt);
+    cybou::BftPrevoteMsg pv3_nil{
+        .network_id = network_id,
+        .height = 1,
+        .round = 0,
+        .validator_id = mocks[3].validator_id,
+        .block_id = std::nullopt,
+        .signature = *cybou::SignValidatorVote(mocks[3].seed, nil_digest3),
+    };
+
+    BOOST_CHECK(!node0.ReceivePrevote(pv1).has_value());
+    BOOST_CHECK(!node0.ReceivePrevote(pv2_nil).has_value());
+
+    // When 4th vote arrives (all 4 voted, no block quorum reached):
+    auto res = node0.ReceivePrevote(pv3_nil);
+    BOOST_REQUIRE(res.has_value());
+    BOOST_CHECK(!res->block_id.has_value()); // nil precommit!
+    BOOST_CHECK(node0.GetStep() == cybou::BftStep::PRECOMMIT);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
+

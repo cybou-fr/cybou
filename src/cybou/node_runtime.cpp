@@ -15,7 +15,8 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
           .wipe_data = m_config.wipe_data,
           .obfuscate = false,
       })},
-      m_store{*m_db, m_config.network_definition}
+      m_store{*m_db, m_config.network_definition},
+      m_submit_endpoint{m_config.submit_endpoint}
 {
     if (m_config.validator_private_key.has_value()) {
         m_authority_node = std::make_unique<CybouAuthorityNode>(
@@ -93,9 +94,18 @@ std::optional<AccountState> CybouNodeRuntime::GetAccountState(const AccountId& a
 
 bool CybouNodeRuntime::SubmitOperation(ProtocolOperationV1 op)
 {
-    std::lock_guard lock(m_mutex);
-    if (m_authority_node) {
-        return m_authority_node->SubmitOperation(op);
+    std::optional<std::pair<std::string, uint16_t>> endpoint;
+    uint256 net_id{};
+    {
+        std::lock_guard lock(m_mutex);
+        if (m_authority_node) {
+            return m_authority_node->SubmitOperation(op);
+        }
+        endpoint = m_submit_endpoint;
+        net_id = m_network_id;
+    }
+    if (endpoint.has_value()) {
+        return SubmitOperationRemote(endpoint->first, endpoint->second, net_id, op);
     }
     return false;
 }
@@ -123,12 +133,46 @@ std::optional<FinalizedBlockV1> CybouNodeRuntime::GetBlockAtHeight(const uint64_
 
 uint64_t CybouNodeRuntime::SyncFromPeer(const std::string& host, const uint16_t port, const uint64_t max_blocks)
 {
-    std::lock_guard lock(m_mutex);
     uint64_t synced{0};
-    while (synced < max_blocks && SyncNextFinalizedBlock(m_store, host, port)) {
+    while (synced < max_blocks) {
+        uint64_t next_height{0};
+        uint256 net_id{};
+        {
+            std::lock_guard lock(m_mutex);
+            const auto height = m_store.GetFinalizedHeight();
+            if (!height || *height == std::numeric_limits<uint64_t>::max()) break;
+            next_height = *height + 1;
+            net_id = m_network_id;
+        }
+
+        auto block = FetchFinalizedBlock(host, port, net_id, next_height);
+        if (!block) break;
+
+        {
+            std::lock_guard lock(m_mutex);
+            if (!m_store.CommitFinalizedBlock(*block)) break;
+        }
         ++synced;
     }
     return synced;
+}
+
+void CybouNodeRuntime::SetSubmitEndpoint(const std::string& host, const uint16_t port)
+{
+    std::lock_guard lock(m_mutex);
+    m_submit_endpoint = std::make_pair(host, port);
+}
+
+bool CybouNodeRuntime::HasSubmitEndpoint() const
+{
+    std::lock_guard lock(m_mutex);
+    return m_authority_node != nullptr || m_submit_endpoint.has_value();
+}
+
+std::optional<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetSubmitEndpoint() const
+{
+    std::lock_guard lock(m_mutex);
+    return m_submit_endpoint;
 }
 
 } // namespace cybou

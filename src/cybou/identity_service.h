@@ -6,6 +6,7 @@
 
 #include <cybou/account_creation.h>
 #include <cybou/account_id.h>
+#include <cybou/keystore.h>
 #include <cybou/node_runtime.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/signing.h>
@@ -14,6 +15,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -59,11 +61,16 @@ public:
     /** Account ID if an identity has been initialized or created */
     std::optional<AccountId> GetAccountId() const;
 
-    /** Active private key seed if available */
-    std::optional<std::array<unsigned char, 32>> GetPrivateKeySeed() const;
-
-    /** Load an existing identity private key */
+    /** Load an existing identity from raw private key seed (cleansed after loading) */
     bool LoadExistingIdentity(const std::array<unsigned char, 32>& priv_key_seed);
+
+    /** Load / save protected key from / to file */
+    bool LoadKeyStore(const std::filesystem::path& path);
+    bool SaveKeyStore(const std::filesystem::path& path) const;
+
+    /** Access underlying keystore */
+    CybouKeyStore& GetKeyStore() { return m_keystore; }
+    const CybouKeyStore& GetKeyStore() const { return m_keystore; }
 
     /** Synchronous identity creation (blocks until complete or error) */
     IdentityCreationResult CreateIdentitySync(
@@ -85,8 +92,7 @@ private:
     CybouNodeRuntime& m_runtime;
     std::atomic<IdentityCreationPhase> m_phase{IdentityCreationPhase::IDLE};
     std::atomic<bool> m_cancelled{false};
-    std::optional<std::array<unsigned char, 32>> m_private_key_seed;
-    std::optional<AccountId> m_account_id;
+    CybouKeyStore m_keystore;
     mutable std::mutex m_mutex;
     std::jthread m_worker;
 };
