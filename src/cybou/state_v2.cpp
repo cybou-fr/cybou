@@ -109,7 +109,7 @@ StateValidationErrorV2 ValidateCybouStateV2(const CybouStateV2& state)
         const auto mapped_acc = state.identities.FindByRecoveryKeyId(*root_id);
         if (!mapped_acc || *mapped_acc != id) return StateValidationErrorV2::DUPLICATE_RECOVERY_BINDING;
     }
-    if (ValidateValidatorSet(state.validator_set) != ValidatorSetValidationError::NONE) return StateValidationErrorV2::INVALID_VALIDATOR_SET;
+    if (ValidateValidatorSetV2(state.validator_set) != ValidatorSetValidationError::NONE) return StateValidationErrorV2::INVALID_VALIDATOR_SET;
     constexpr uint64_t MAX_SUPPLY{100'000'000'000};
     uint64_t total{0};
     if (state.onboarding_pool > MAX_SUPPLY) return StateValidationErrorV2::BALANCE_OVERFLOW;
@@ -132,7 +132,7 @@ std::optional<std::vector<unsigned char>> SerializeCybouStateV2(const CybouState
     if (ValidateCybouStateV2(state) != StateValidationErrorV2::NONE) return std::nullopt;
     const auto identities = SerializeIdentityRegistryV2(state.identities);
     if (!identities || identities->size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
-    const auto validators = SerializeValidatorSet(state.validator_set);
+    const auto validators = SerializeValidatorSetV2(state.validator_set);
     if (validators.size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
     std::vector<unsigned char> out;
     out.push_back(CYBOU_STATE_VERSION_V2);
@@ -200,8 +200,8 @@ std::optional<CybouStateV2> DeserializeCybouStateV2(std::span<const unsigned cha
     if (!validator_size) return std::nullopt;
     const auto validator_bytes = reader.Bytes(*validator_size);
     if (!validator_bytes || reader.Remaining()) return std::nullopt;
-    const auto validators = DeserializeValidatorSet(*validator_bytes);
-    if (!validators || ValidateValidatorSet(*validators) != ValidatorSetValidationError::NONE) return std::nullopt;
+    const auto validators = DeserializeValidatorSetV2(*validator_bytes);
+    if (!validators || ValidateValidatorSetV2(*validators) != ValidatorSetValidationError::NONE) return std::nullopt;
     state.validator_set = *validators;
     return state;
 }

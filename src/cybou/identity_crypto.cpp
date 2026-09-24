@@ -210,4 +210,25 @@ std::optional<std::array<unsigned char, 32>> ComputeDeviceKeyId(
     return id;
 }
 
+std::optional<std::array<unsigned char, 32>> ComputeValidatorKeyId(
+    const IdentityHybridPublicKey& validator_key)
+{
+    if (validator_key.purpose != IdentityKeyPurpose::VALIDATOR ||
+        validator_key.ml_dsa.size() != PublicSize(IdentityKeyPurpose::VALIDATOR) ||
+        std::all_of(validator_key.ed25519.begin(), validator_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
+        std::all_of(validator_key.ml_dsa.begin(), validator_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
+    constexpr std::string_view domain{"CYBOU/VALIDATOR-KEY-ID/V2"};
+    constexpr std::array<unsigned char, 2> suite{3, 1};
+    MdCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
+    std::array<unsigned char, 32> id{};
+    unsigned int size{0};
+    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
+        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
+        EVP_DigestUpdate(ctx.get(), suite.data(), suite.size()) != 1 ||
+        EVP_DigestUpdate(ctx.get(), validator_key.ed25519.data(), validator_key.ed25519.size()) != 1 ||
+        EVP_DigestUpdate(ctx.get(), validator_key.ml_dsa.data(), validator_key.ml_dsa.size()) != 1 ||
+        EVP_DigestFinal_ex(ctx.get(), id.data(), &size) != 1 || size != id.size()) return std::nullopt;
+    return id;
+}
+
 } // namespace cybou

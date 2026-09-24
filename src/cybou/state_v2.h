@@ -35,7 +35,7 @@ struct CybouStateV2 {
     uint64_t pending_fee_pool{0};
     std::map<AccountId, AccountStateV2> accounts;
     IdentityRegistryV2 identities;
-    ValidatorSetV1 validator_set;
+    ValidatorSetV2 validator_set;
 };
 
 enum class AccountCreateStateErrorV2 : uint8_t {
