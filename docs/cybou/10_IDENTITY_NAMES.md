@@ -1,75 +1,48 @@
-# 10 — Identity and `.cybou` names
+# 10 — Identity V2 and `.cybou` names
 
-Implementation status: typed AccountID, AccountCreate, local identity keys,
-and proof of possession exist in DEV code. `.cybou` alias registration,
-device rotation, and a global name registry are design targets, not live
-features of the current native runtime.
+Status: frozen target for the next disposable DEV protocol break. Current DEV
+still runs Ed25519-only AccountCreateOpV1, one active authorization key, and
+the CYBK1 local keystore. Nothing on this page claims V2 is deployed.
 
-## Cryptographic identity
+## Identity layers
 
-```text
-AccountID = cryptographic identity
-```
+| Layer | Meaning | Rotation |
+|---|---|---|
+| AccountID | Random nonzero 256-bit permanent consensus identifier | Never |
+| Primary `.cybou` name | Human-facing alias bound to AccountID | No transfer or recycling in V1 |
+| Recovery Root | Replaceable hybrid root authorization recovered from 24 words | Yes |
+| Device authorization | Bounded set of hybrid operational keys with independent nonces | Add/revoke |
+| Mail encryption keys | Recipient device confidentiality keys | Yes |
 
-V1 encodes AccountID as an opaque, stable 32-byte value in internal byte order.
-The all-zero value is invalid. AccountID names an authorization record rather
-than one public key, so authorized device/payment/mail keys may rotate without
-changing the AccountID.
+AccountID is generated independently of every mnemonic, public key, and
+authorization descriptor. Consensus binds a versioned RecoveryKeyID to the
+AccountID. Rotating root or device keys cannot change the AccountID, name,
+balances, or finalized mail history. A `.cybou` name is a pseudonymous alias,
+not a civil identity assertion.
 
-An AccountID may authorize:
+Recovery Root V2 requires both Ed25519 and ML-DSA-65 signatures. Daily device
+authorization requires both Ed25519 and ML-DSA-44 signatures. Missing,
+malformed, or failed components fail closed; V1 signatures cannot be parsed as
+V2. Domain-separated signed bytes, canonical ordering, size bounds, and suite
+identifiers are mandatory before consensus activation. Mail confidentiality
+uses a separate X25519 + ML-KEM-768 target profile; signing keys are not
+encryption keys. See [vault and recovery](76_IDENTITY_VAULT_RECOVERY.md).
 
-- device keys;
-- mail signing/encryption keys;
-- payment keys/authority;
-- optional human-readable `.cybou` alias.
+DeviceAdd, DeviceRevoke, and RecoveryRotate are versioned operations. Each
+device has its own nonce. Revocation changes future authorization and does
+not erase already received ciphertext or historical signatures. Historical
+authorization proofs remain available for MailEvidenceBundle verification.
 
-Identity is not equal to one permanent private key.
+The target primary example is `stanislav.cybou`. The earlier frozen
+`stan.cybou` example (DEC-004) is superseded by Identity V2's five-character
+minimum. Name grammar, reservations, work, and ordering are defined in
+[the name registry](77_CYBOU_NAME_REGISTRY.md). Desktop create/restore
+semantics are in [the UX contract](78_IDENTITY_DESKTOP_UX.md).
 
-## Human-readable alias
+## Migration boundary
 
-Example:
-
-```text
-stan.cybou
-```
-
-Suggested syntax direction:
-
-```text
-[a-z0-9-]
-3..32 characters before .cybou
-```
-
-Exact registration/renewal policy remains versioned protocol design.
-
-## Historical key state
-
-The chain/state must preserve enough authenticated history/commitments to prove which signing keys were authorized for an AccountID at a historical MailTx height.
-
-This is required for MailEvidenceBundle verification.
-
-## Device lifecycle
-
-Support:
-
-```text
-add device
-revoke device
-rotate encryption/signing keys
-```
-
-Revocation affects future authorization.
-
-It cannot erase data or signatures already obtained in the past.
-
-## Mail relation
-
-Native CYBOU Email is a first-class consensus-registered protocol operation.
-
-Identity authorization therefore directly participates in validating MailTx sender authentication.
-
-## Directory
-
-A global searchable real-name directory is not required.
-
-`.cybou` names are aliases, not proof of civil identity.
+Identity V2 introduces new operation and state versions; V1 fields are never
+silently reinterpreted. Local crypto, phrase, and vault code can land without a
+network reset. Once V2 authorization, account creation, and name registry are
+integrated together, advance the network definition and perform one intentional
+CYBOU-DEV reset. Beta/Mainnet genesis and economic parameters remain separate.

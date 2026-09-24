@@ -5,7 +5,16 @@ project:
   windows_binary: cybou.exe
   native_asset: CYBOU
   identity_namespace: .cybou
-  identity_example: stan.cybou
+  identity_example: stanislav.cybou
+  identity_v2_target:
+    status: design_not_active
+    account_id: random_nonzero_256_bit_independent_of_keys
+    recovery_words: 24
+    recovery_signature: Ed25519_AND_ML-DSA-65
+    device_signature: Ed25519_AND_ML-DSA-44
+    vault: CYBV2_Argon2id_AES-256-GCM
+    name_label_length_bytes: [5, 32]
+    name_claim: finalized_commit_work_reveal
 implementation:
   language: C++20/23
   desktop_framework: Qt 6 Widgets

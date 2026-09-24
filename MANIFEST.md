@@ -12,7 +12,7 @@ distinguishes implemented DEV code from production targets.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 69 | 9987e0947eaf5629 |
+| AGENTS.md | 78 | 8bb1c8ac44aba161 |
 | README.md | 74 | f9f774ac92c31231 |
 | INSTALL.md | 37 | 3ac0171892ed0ccd |
 | doc/README.md | 86 | 98d281c02e7fd7eb |
@@ -26,7 +26,7 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/07_BFT_CONSENSUS.md | 132 | 4d486f33d5662237 |
 | docs/cybou/08_P2P.md | 40 | 7e32842afee075d0 |
 | docs/cybou/09_CRYPTO_PQ.md | 36 | 417f778d16a8a492 |
-| docs/cybou/10_IDENTITY_NAMES.md | 75 | 931a1ea69914c49f |
+| docs/cybou/10_IDENTITY_NAMES.md | 48 | bdb5e12709e56b79 |
 | docs/cybou/11_STORAGE_OBJECTS.md | 95 | 5ad361fd3249e7eb |
 | docs/cybou/12_STORAGE_ACCOUNTING_3_TO_1.md | 100 | b20c60860eba40f3 |
 | docs/cybou/13_STORAGE_PROOFS_REPAIR.md | 78 | 169d9dd8ad90ed86 |
@@ -35,14 +35,14 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/16_MAIL_PROTOCOL.md | 64 | aa4ac347cd8ae4b2 |
 | docs/cybou/17_EMAIL.md | 91 | 4680698c066be410 |
 | docs/cybou/18_ECONOMICS_FEES.md | 75 | 95d533abd9db183b |
-| docs/cybou/19_SECURITY_THREAT_MODEL.md | 53 | 25daa9a974d1294a |
+| docs/cybou/19_SECURITY_THREAT_MODEL.md | 60 | 02953badd223059a |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 90 | ed6d627b2f03ec16 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 135 | 59e2caf4782d2b36 |
+| docs/cybou/22_ROADMAP.md | 145 | dc5e34f2cb90b45a |
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 114 | 222e5177b983769f |
-| docs/cybou/24_DECISIONS.md | 168 | 1805b1fa6eb35502 |
-| docs/cybou/25_OPEN_QUESTIONS.md | 95 | 86058a62c6f96265 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 209 | 329b9aadb413d6b7 |
+| docs/cybou/24_DECISIONS.md | 176 | 147d2bd5d24749cd |
+| docs/cybou/25_OPEN_QUESTIONS.md | 106 | 696494ba55bbff35 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 228 | dd56dc999ca49972 |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 7b3cdc6050c7cf85 |
 | docs/cybou/28_BITCOIN_DOCUMENTATION_MIGRATION.md | 221 | 63ba6ee5d01c00dc |
 | docs/cybou/29_DOCUMENTATION_AUTHORITY.md | 79 | fad3b5767d5ffa7d |
@@ -65,7 +65,7 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/46_COPYRIGHT_ATTRIBUTION_POLICY.md | 109 | dcfbbc4dff8e93e3 |
 | docs/cybou/47_EMAIL_CHAIN_DELIVERY_MODEL.md | 49 | f2c58498aaa22d88 |
 | docs/cybou/48_CONSENSUS_STAGING_STRATEGY.md | 72 | 6af551c899198bfe |
-| docs/cybou/49_EMAIL_E2EE_HPKE_PQ.md | 182 | 42d40f5894da8144 |
+| docs/cybou/49_EMAIL_E2EE_HPKE_PQ.md | 187 | 7ead58a68c536597 |
 | docs/cybou/50_EMAIL_SECURITY_MODEL.md | 69 | d78cfa191419f1d6 |
 | docs/cybou/51_EMAIL_PRODUCT_POSITIONING.md | 75 | 711b20494aa1a78d |
 | docs/cybou/52_BALANCE_AND_SYSTEM_BALANCE.md | 142 | f611db804aa22ed2 |
@@ -85,18 +85,21 @@ distinguishes implemented DEV code from production targets.
 | docs/cybou/67_POT_EPOCHS_AND_ONBOARDING.md | 115 | 76a4cf9312ae51f1 |
 | docs/cybou/68_OPERATOR_KEY_SEPARATION.md | 81 | 8b9bb7e6d34e12bb |
 | docs/cybou/69_MAIL_EVIDENCE_BUNDLE.md | 116 | 679d2aeb0b8635bf |
-| docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 87 | 1f82e6b6e7e1f59d |
+| docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 94 | 89b80763caf70802 |
 | docs/cybou/71_WINDOWS_MINGW_BUILD.md | 120 | db597f2c58673e3b |
 | docs/cybou/72_DESKTOP_WALLET_UI.md | 74 | 6984dbe4e610b207 |
-| docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 109 | 5861cd76eaf68032 |
-| docs/cybou/74_AUTHORITY_BLOCK_FEED.md | 44 | 2d4228ae0edb698d |
-| docs/cybou/75_DEV_NODE_RUNBOOK.md | 82 | da04f1dd66e13aaf |
+| docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 114 | cdf41fa050dd25ab |
+| docs/cybou/74_AUTHORITY_BLOCK_FEED.md | 53 | 562b2b24f7714005 |
+| docs/cybou/75_DEV_NODE_RUNBOOK.md | 83 | 987f1c29d1364901 |
+| docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 43 | 8bd7206b941649f7 |
+| docs/cybou/77_CYBOU_NAME_REGISTRY.md | 34 | a7e912cf69aebea6 |
+| docs/cybou/78_IDENTITY_DESKTOP_UX.md | 36 | 9e7be64d250581c6 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |
 | spec/bft_validator_policy.yaml | 11 | 1f1934f0f3ea0776 |
 | spec/bitcoin_code_removal.yaml | 153 | a966c965213c1de5 |
 | spec/bitcoin_doc_migration.yaml | 209 | 3d8535234f55471b |
 | spec/circulation_scenarios.csv | 74 | db240cf0d3280644 |
-| spec/cybou_baseline.yaml | 261 | 6e8fa50d54f0f1c8 |
+| spec/cybou_baseline.yaml | 270 | b71e43e7f1a46a02 |
 | spec/email_crypto_profile.yaml | 40 | 75512b33cf03cfe0 |
 | spec/fee_router.yaml | 18 | ccebf298d9eb9ec0 |
 | spec/fee_router_test_vectors.csv | 9 | db9274d10b0a3dfa |
@@ -111,4 +114,4 @@ distinguishes implemented DEV code from production targets.
 | spec/survival_gates.yaml | 51 | c0ddefcb3ea4f58a |
 | spec/validator_reward_test_vectors.csv | 5 | 2f439357448d8aa1 |
 
-Files excluding manifest: 98
+Total: 101 files.

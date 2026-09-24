@@ -2,6 +2,13 @@
 
 ## Status
 
+Identity V2 will add a new AccountCreate operation with a random AccountID,
+hybrid Recovery Root and initial device authorization, while retaining
+permissionless account-creation work and atomic OnboardingPool funding. This
+page's V1 wire layout describes current DEV only; do not reinterpret it as V2.
+The encrypted recovery vault must be durably saved before V2 broadcast. See
+`10_IDENTITY_NAMES.md` and `76_IDENTITY_VAULT_RECOVERY.md`.
+
 This document defines the permissionless, protocol-native account creation mechanism for CYBOU.
 The centralized Operator-signed Voucher architecture has been permanently decommissioned.
 Users create accounts natively through the consensus protocol without central authorization, permission, or invites.

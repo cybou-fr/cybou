@@ -2,6 +2,15 @@
 
 Read active docs before coding.
 
+### Identity V2 target (not current DEV behavior)
+- Read `docs/cybou/10_IDENTITY_NAMES.md` and `76`–`78` before Identity work.
+- Random stable AccountID is independent of mnemonic and keys.
+- Recovery Root requires Ed25519 AND ML-DSA-65; device authorization requires Ed25519 AND ML-DSA-44. Do not silently reinterpret V1 fields.
+- Portable CYBV2 vault must be durably saved before AccountCreate broadcast. A 24-word recovery path and clean-machine restore are required.
+- `.cybou` labels follow the 5–32 ASCII rule and finalized commit/work/reveal. No transfer, expiry, or recycling in V1.
+- Keep mail encryption keys separate from identity signing keys; no custom cryptographic primitives.
+- Do not reset DEV until versioned V2 consensus and names integrate together.
+
 ## Hard rules
 
 ### Mail

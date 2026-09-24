@@ -5,7 +5,7 @@
 | DEC-001 | Product/network name is CYBOU | Frozen |
 | DEC-002 | Native asset is `CYBOU` | Frozen for development |
 | DEC-003 | Internal human identity namespace is `.cybou` | Frozen for development |
-| DEC-004 | Example identity form is `stan.cybou` | Frozen |
+| DEC-004 | Example identity form is `stan.cybou` | Superseded by DEC-165; four-character label is invalid in V2 |
 | DEC-005 | Windows executable is `cybou.exe` | Frozen |
 | DEC-006 | Desktop is Qt 6 + modern C++ + CMake | Frozen |
 | DEC-007 | Desktop application is itself a full node | Frozen |
@@ -166,3 +166,11 @@
 | DEC-162 | Canonical state rejects unsupported or structurally invalid network definitions before initialization, loading or block transition | Frozen v0.0.1 |
 | DEC-163 | The immutable network definition also binds the fixed Operator Authority keyset and every consensus MailTx quota parameter; Operator Authority rotation requires a versioned transition, and disposable DEV genesis must reset after this serialization change | Frozen Beta hardening |
 | DEC-164 | Beta MailTx quota is one network-bound limit per account and epoch; SystemBalance pays service fees but does not increase quota | Frozen Beta hardening |
+| DEC-165 | Identity V2 AccountID is random nonzero 256-bit, independent of mnemonic and keys; `stanislav.cybou` replaces the four-character example | Frozen V2 target |
+| DEC-166 | A 24-word recovery phrase deterministically yields replaceable hybrid Ed25519 AND ML-DSA-65 Recovery Root; consensus binds RecoveryKeyID to AccountID | Frozen V2 target; encoding/vectors pending |
+| DEC-167 | Bounded device registry uses hybrid Ed25519 AND ML-DSA-44 authorization, independent per-device nonces, and add/revoke operations | Frozen V2 target |
+| DEC-168 | Portable CYBV2 vault uses random DEK with AES-256-GCM and password-derived Argon2id KEK; DPAPI is optional local unlock only | Frozen V2 target; parameters pending |
+| DEC-169 | `.cybou` V1 labels are 5–32 lowercase ASCII bytes with explicit reservations; one permanent primary name per AccountID, no transfer/expiry/recycling | Frozen V2 target |
+| DEC-170 | Name claims require finalized commit, network-bound work, and reveal; first valid finalized reveal wins | Frozen V2 target; bounds pending |
+| DEC-171 | Save and verify encrypted recovery vault before AccountCreate broadcast; create and restore are equal desktop entry paths | Frozen V2 target |
+| DEC-172 | Integrate versioned Identity V2 authorization and names, then perform one intentional disposable CYBOU-DEV reset | Frozen migration direction |

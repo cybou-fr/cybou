@@ -18,6 +18,11 @@ Preferred target remains:
 X25519 + ML-KEM-768
 ```
 
+Identity V2 root/device hybrid *signatures* are separate from this mail
+*encryption* profile. Device signing keys must never be reused as KEM keys;
+recipient-device key authorization and historical sender-key proofs follow
+the versioned identity record in `10_IDENTITY_NAMES.md`.
+
 Do not invent a custom hybrid KEM combiner.
 
 ## v1 MailTx encryption

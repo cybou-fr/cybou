@@ -4,6 +4,15 @@ This is the current code boundary. Frozen protocol decisions remain in
 `24_DECISIONS.md`; this page distinguishes implemented DEV paths from
 production requirements.
 
+## Identity V2 gap
+
+Current DEV has Ed25519-only V1 account authorization, AccountCreate work,
+one active key, and CYBK1 local keystore. AccountID is typed opaque but the
+local keystore currently sets it from the Ed25519 public key. There is no
+24-word recovery, portable password vault, hybrid user authorization, device
+registry, or `.cybou` consensus registry. Docs 10 and 76–78 define the V2
+target; their presence does not mean it is implemented.
+
 ## Hardened architecture
 
 CYBOU Email target:

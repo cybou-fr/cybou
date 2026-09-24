@@ -2,6 +2,11 @@
 
 Boundary between CYBOU core and the desktop GUI. The desktop never invents
 protocol behavior: every state it shows arrives through this contract.
+
+Identity V2 extends this contract only after core support exists: create and
+restore requests, vault/phrase confirmation (local state), verified recovery
+lookup, device add/revoke finality, and name commit/work/reveal finality. The
+current fields below remain V1 DEV behavior. See `78_IDENTITY_DESKTOP_UX.md`.
 `CybouNodeRuntime` implements the native producer/observer boundary; the GUI
 (`src/qt`) consumes its verified state.
 

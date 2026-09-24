@@ -42,6 +42,13 @@ CYBOU does not yet claim:
 
 ## Key-loss reality
 
+Identity V2 targets user-held 24-word Recovery Root, portable encrypted vault,
+and replaceable devices. The current DEV runtime does not implement these.
+Compromise of a device must be contained by finalized revocation; compromise
+of a recovery phrase requires root rotation. Offline password guessing against
+stolen vaults, tampered headers, key substitution, mnemonic transcription,
+and loss of the phrase remain explicit threats. See `76_IDENTITY_VAULT_RECOVERY.md`.
+
 Without:
 
 - a provider recovery authority/KMS;

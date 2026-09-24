@@ -1,5 +1,16 @@
 # 25 — Open questions / blockers v0.0.1
 
+## Identity V2 parameters to freeze before coding/activation
+
+- Exact standardized 24-word list, normalization, checksum, KDF paths and
+  deterministic Ed25519/ML-DSA test vectors.
+- CYBV2 canonical encoding, Argon2id resource bounds, file permissions and
+  cross-platform atomic replace behavior.
+- Hybrid signature wire bounds and canonical signed bytes for each operation.
+- Bounded device count and recovery-rotation conflict rules.
+- Name reserved-list version, commit lifetime/depth, work target, salt length,
+  pending-commit cap, fees, and canonical ordering.
+
 ## Mail / privacy
 
 ### O-001 Recipient discovery tag
