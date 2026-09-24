@@ -6,6 +6,7 @@
 #define CYBOU_IDENTITY_VAULT_H
 
 #include <optional>
+#include <filesystem>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -18,6 +19,13 @@ std::optional<std::vector<unsigned char>> SealIdentityVault(
     std::string_view password, std::span<const unsigned char> payload);
 std::optional<std::vector<unsigned char>> OpenIdentityVault(
     std::string_view password, std::span<const unsigned char> envelope);
+
+// Creates a new vault without replacing an existing identity. Returns true
+// only after a synced write, atomic publication, and authenticated reopen.
+bool SaveNewIdentityVault(const std::filesystem::path& path,
+    std::string_view password, std::span<const unsigned char> payload);
+std::optional<std::vector<unsigned char>> LoadIdentityVault(
+    const std::filesystem::path& path, std::string_view password);
 
 } // namespace cybou
 #endif

@@ -9,8 +9,10 @@ entropy with the BIP-39 English list and eight checksum bits. The recovered
 entropy is passed directly as the 32-byte secret to the Identity V2 HKDF; the
 BIP-39 PBKDF2 wallet seed/passphrase scheme is not used. The local
 `identity_vault` module seals and opens bounded in-memory CYBV2 envelopes.
-Payload schema, atomic file save, password change, and consensus recovery
-remain unimplemented.
+`SaveNewIdentityVault` now writes a new file through a synced temporary file,
+publishes it without overwriting an existing vault, and authenticates it by
+reopening before returning success. Payload schema, password change, desktop
+integration, and consensus recovery remain unimplemented.
 
 ## Recovery Root
 

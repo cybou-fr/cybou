@@ -14,8 +14,18 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <limits>
 #include <memory>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 namespace cybou {
 namespace {
@@ -30,6 +40,7 @@ constexpr uint32_t MEMCOST{65536};
 constexpr uint32_t ITERATIONS{3};
 constexpr uint32_t LANES{1};
 constexpr uint32_t MAX_PAYLOAD{65536};
+constexpr size_t MAX_ENVELOPE{HEADER_SIZE + WRAPPED_DEK_SIZE + MAX_PAYLOAD + TAG_SIZE};
 using CipherCtx = std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)>;
 using Kdf = std::unique_ptr<EVP_KDF, decltype(&EVP_KDF_free)>;
 using KdfCtx = std::unique_ptr<EVP_KDF_CTX, decltype(&EVP_KDF_CTX_free)>;
@@ -44,6 +55,115 @@ uint32_t Load32(const unsigned char* in)
     uint32_t value{0};
     for (int i{0}; i < 4; ++i) value |= uint32_t{in[i]} << (8 * i);
     return value;
+}
+
+std::optional<std::filesystem::path> TemporaryPath(const std::filesystem::path& path)
+{
+    std::array<unsigned char, 16> nonce{};
+    if (RAND_bytes(nonce.data(), nonce.size()) != 1) return std::nullopt;
+    constexpr char digits[] = "0123456789abcdef";
+    std::string suffix{".tmp."};
+    for (const unsigned char byte : nonce) {
+        suffix.push_back(digits[byte >> 4]);
+        suffix.push_back(digits[byte & 15]);
+    }
+    auto temp = path;
+    temp += suffix;
+    return temp;
+}
+
+bool WriteNewFile(const std::filesystem::path& path, std::span<const unsigned char> bytes)
+{
+#ifdef _WIN32
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr,
+        CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    DWORD written{0};
+    const bool ok = WriteFile(file, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) &&
+        written == bytes.size() && FlushFileBuffers(file);
+    CloseHandle(file);
+    if (!ok) DeleteFileW(path.c_str());
+    return ok;
+#else
+    const int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+    if (fd < 0) return false;
+    size_t offset{0};
+    while (offset < bytes.size()) {
+        const ssize_t written = write(fd, bytes.data() + offset, bytes.size() - offset);
+        if (written < 0 && errno == EINTR) continue;
+        if (written <= 0) break;
+        offset += static_cast<size_t>(written);
+    }
+    const bool ok = offset == bytes.size() && fsync(fd) == 0;
+    if (close(fd) != 0 || !ok) {
+        unlink(path.c_str());
+        return false;
+    }
+    return ok;
+#endif
+}
+
+bool PublishNewFile(const std::filesystem::path& temp, const std::filesystem::path& target)
+{
+#ifdef _WIN32
+    return MoveFileExW(temp.c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH) != 0;
+#else
+    if (link(temp.c_str(), target.c_str()) != 0) return false;
+    if (unlink(temp.c_str()) != 0) return false;
+    const auto parent = target.parent_path().empty() ? std::filesystem::path{"."} : target.parent_path();
+    const int dirfd = open(parent.c_str(), O_RDONLY);
+    if (dirfd < 0) return false;
+    const bool ok = fsync(dirfd) == 0;
+    close(dirfd);
+    return ok;
+#endif
+}
+
+std::optional<std::vector<unsigned char>> ReadBoundedFile(const std::filesystem::path& path)
+{
+#ifdef _WIN32
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+        OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return std::nullopt;
+    BY_HANDLE_FILE_INFORMATION info{};
+    LARGE_INTEGER size{};
+    const bool valid = GetFileInformationByHandle(file, &info) &&
+        !(info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) &&
+        GetFileType(file) == FILE_TYPE_DISK && GetFileSizeEx(file, &size) &&
+        size.QuadPart > 0 && size.QuadPart <= static_cast<LONGLONG>(MAX_ENVELOPE);
+    if (!valid) { CloseHandle(file); return std::nullopt; }
+    std::vector<unsigned char> bytes(static_cast<size_t>(size.QuadPart));
+    DWORD read{0};
+    const bool ok = ReadFile(file, bytes.data(), static_cast<DWORD>(bytes.size()), &read, nullptr) &&
+        read == bytes.size();
+    CloseHandle(file);
+    if (!ok) return std::nullopt;
+    return bytes;
+#else
+    int flags = O_RDONLY;
+#ifdef O_NOFOLLOW
+    flags |= O_NOFOLLOW;
+#endif
+    const int fd = open(path.c_str(), flags);
+    if (fd < 0) return std::nullopt;
+    struct stat st{};
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
+        st.st_size > static_cast<off_t>(MAX_ENVELOPE)) {
+        close(fd);
+        return std::nullopt;
+    }
+    std::vector<unsigned char> bytes(static_cast<size_t>(st.st_size));
+    size_t offset{0};
+    while (offset < bytes.size()) {
+        const ssize_t got = read(fd, bytes.data() + offset, bytes.size() - offset);
+        if (got < 0 && errno == EINTR) continue;
+        if (got <= 0) break;
+        offset += static_cast<size_t>(got);
+    }
+    close(fd);
+    if (offset != bytes.size()) return std::nullopt;
+    return bytes;
+#endif
 }
 
 bool DeriveKek(std::string_view password, const unsigned char* salt,
@@ -168,6 +288,35 @@ std::optional<std::vector<unsigned char>> OpenIdentityVault(
         envelope.subspan(HEADER_SIZE + WRAPPED_DEK_SIZE));
     OPENSSL_cleanse(wrapped->data(), wrapped->size());
     return plaintext;
+}
+
+bool SaveNewIdentityVault(const std::filesystem::path& path,
+    std::string_view password, std::span<const unsigned char> payload)
+{
+    if (path.empty() || path.filename().empty()) return false;
+    const auto envelope = SealIdentityVault(password, payload);
+    const auto temp = TemporaryPath(path);
+    if (!envelope || !temp) return false;
+    if (!WriteNewFile(*temp, *envelope)) return false;
+    if (!PublishNewFile(*temp, path)) {
+        std::error_code ec;
+        std::filesystem::remove(*temp, ec);
+        return false;
+    }
+    auto reopened = LoadIdentityVault(path, password);
+    if (!reopened) return false;
+    const bool match = reopened->size() == payload.size() &&
+        CRYPTO_memcmp(reopened->data(), payload.data(), payload.size()) == 0;
+    OPENSSL_cleanse(reopened->data(), reopened->size());
+    return match;
+}
+
+std::optional<std::vector<unsigned char>> LoadIdentityVault(
+    const std::filesystem::path& path, std::string_view password)
+{
+    const auto envelope = ReadBoundedFile(path);
+    if (!envelope) return std::nullopt;
+    return OpenIdentityVault(password, *envelope);
 }
 
 } // namespace cybou
