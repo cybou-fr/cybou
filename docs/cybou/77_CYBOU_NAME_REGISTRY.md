@@ -2,9 +2,8 @@
 
 Status: commit, work, reveal, and ownership rules are implemented in the
 canonical core. Desktop reads a finalized primary name from verified state;
-the native name service can submit and resume a claim using a durable encrypted
-claim file beside the identity vault. Desktop claiming and operational DEV
-cutover remain open.
+the native name service and desktop can submit and resume a claim using a durable
+encrypted claim file beside the identity vault. Operational DEV cutover remains open.
 
 The label before `.cybou` is exactly 5–32 ASCII lowercase bytes from
 `[a-z0-9-]`; first and last are alphanumeric. Reject uppercase, Unicode,

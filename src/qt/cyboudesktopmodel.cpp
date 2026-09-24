@@ -6,6 +6,7 @@
 
 #include <qt/clientmodel.h>
 #include <qt/optionsmodel.h>
+#include <cybou/name_service.h>
 
 #include <QRegularExpression>
 
@@ -15,6 +16,12 @@ CybouDesktopModel::CybouDesktopModel(QString network_name, QObject* parent)
     : QObject{parent}
 {
     m_status.network_name = std::move(network_name);
+}
+
+CybouDesktopModel::~CybouDesktopModel()
+{
+    if (m_name_service) m_name_service->Cancel();
+    if (m_name_worker.joinable()) m_name_worker.join();
 }
 
 void CybouDesktopModel::setClientModel(ClientModel* client_model)
@@ -81,10 +88,19 @@ void CybouDesktopModel::setNetworkInfo(const QString& network_name, const QStrin
 #include <cybou/mail_service.h>
 #include <cybou/wallet_service.h>
 
+#include <support/cleanse.h>
+
 void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity_service)
 {
+    if (m_name_service) m_name_service->Cancel();
+    if (m_name_worker.joinable()) m_name_worker.join();
+    m_name_service.reset();
     m_identity_service = identity_service;
     if (m_identity_service) {
+        if (const auto path = m_identity_service->GetStoragePath()) {
+            m_name_service = std::make_unique<cybou::CybouNameService>(
+                m_identity_service->GetNodeRuntime(), m_identity_service->GetKeyStore(), *path);
+        }
         m_capabilities.account_creation = true;
         Q_EMIT capabilitiesChanged();
 
@@ -95,6 +111,34 @@ void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity
         }
         refreshFinalizedName();
     }
+}
+
+bool CybouDesktopModel::requestClaimName(const QString& label, const QString& vault_password)
+{
+    if (!m_name_service || m_status.identity_state != CybouIdentityState::Active ||
+        m_status.name_claim_pending || !m_status.primary_name.isEmpty()) return false;
+    if (m_name_worker.joinable()) m_name_worker.join();
+    m_status.name_claim_pending = true;
+    m_status.name_claim_status = tr("Saving encrypted name claim...");
+    Q_EMIT statusChanged();
+    m_name_worker = std::jthread([this, name = label.toStdString(), password = vault_password.toStdString()]() mutable {
+        const auto result = m_name_service->ClaimSync(std::move(name), password,
+            [this](cybou::NameClaimPhase, const std::string& detail) {
+                QMetaObject::invokeMethod(this, [this, detail] {
+                    m_status.name_claim_status = QString::fromStdString(detail);
+                    Q_EMIT statusChanged();
+                }, Qt::QueuedConnection);
+            });
+        memory_cleanse(password.data(), password.size());
+        QMetaObject::invokeMethod(this, [this, result] {
+            m_status.name_claim_pending = false;
+            m_status.name_claim_status.clear();
+            refreshFinalizedName();
+            Q_EMIT statusChanged();
+            if (!result.success) Q_EMIT nameClaimFailed(QString::fromStdString(result.message));
+        }, Qt::QueuedConnection);
+    });
+    return true;
 }
 
 void CybouDesktopModel::setMailService(cybou::CybouMailService* mail_service)

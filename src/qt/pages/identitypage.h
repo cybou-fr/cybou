@@ -29,6 +29,7 @@ private:
     QLabel* m_dev_warning;
     QPushButton* m_create_button;
     QPushButton* m_restore_button;
+    QPushButton* m_claim_button;
     QWidget* m_phase_row;
     QWidget* m_steps;
     QVector<QLabel*> m_phases;
@@ -37,6 +38,7 @@ private:
     void rebuildForState(CybouIdentityState state);
     void startIdentityFlow();
     void startRestoreFlow();
+    void startNameClaimFlow();
 };
 
 #endif // BITCOIN_QT_PAGES_IDENTITYPAGE_H

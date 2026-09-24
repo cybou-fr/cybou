@@ -119,6 +119,12 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     m_active_details->setVisible(false);
     card_layout->addWidget(m_active_details);
 
+    m_claim_button = new QPushButton{tr("Claim a .cybou name"), card};
+    m_claim_button->setObjectName("primaryButton");
+    m_claim_button->setVisible(false);
+    connect(m_claim_button, &QPushButton::clicked, this, [this] { startNameClaimFlow(); });
+    card_layout->addWidget(m_claim_button, 0, Qt::AlignLeft);
+
     m_dev_warning = new QLabel{tr("Development network balance. No Mainnet value."), card};
     m_dev_warning->setObjectName("warningBadge");
     m_dev_warning->setVisible(false);
@@ -145,6 +151,9 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::identityCreationFailed, this, [this](const QString& reason) {
         QMessageBox::warning(this, tr("Identity creation failed"), reason);
+    });
+    connect(m_model, &CybouDesktopModel::nameClaimFailed, this, [this](const QString& reason) {
+        QMessageBox::warning(this, tr("Name claim failed"), reason);
     });
 
     // Two-column body: main state card on the left, protocol facts on the right.
@@ -336,6 +345,21 @@ void IdentityPage::startRestoreFlow()
         tr("Enter exactly 24 valid words in their original order."));
 }
 
+void IdentityPage::startNameClaimFlow()
+{
+    bool accepted{false};
+    QString name = QInputDialog::getText(this, tr("Claim a .cybou name"),
+        tr("Enter the lowercase label (5–32 ASCII characters, without .cybou)"),
+        QLineEdit::Normal, {}, &accepted);
+    if (!accepted) return;
+    QString password = QInputDialog::getText(this, tr("Confirm vault password"),
+        tr("Identity vault password"), QLineEdit::Password, {}, &accepted);
+    if (!accepted) { password.fill(QChar{0}); return; }
+    const bool started = m_model->requestClaimName(name, password);
+    password.fill(QChar{0});
+    if (!started) QMessageBox::warning(this, tr("Cannot claim name"), tr("Unlock an active identity before claiming a name."));
+}
+
 void IdentityPage::rebuildForState(CybouIdentityState state)
 {
     const bool creating = state != CybouIdentityState::None && state != CybouIdentityState::Active;
@@ -346,6 +370,8 @@ void IdentityPage::rebuildForState(CybouIdentityState state)
     m_dev_warning->setVisible(active);
     m_create_button->setVisible(!active);
     m_restore_button->setVisible(!active);
+    m_claim_button->setVisible(active && m_model->status().primary_name.isEmpty());
+    m_claim_button->setEnabled(!m_model->status().name_claim_pending);
 
     const QVector<CybouIdentityState> flow{
         CybouIdentityState::CreatingKeys,
@@ -376,7 +402,8 @@ void IdentityPage::refresh()
 
     if (status.identity_state == CybouIdentityState::Active) {
         m_state_label->setText(status.primary_name.isEmpty() ? tr("Identity active") : status.primary_name);
-        m_detail_label->setText(tr("Your CYBOU identity is registered on the network."));
+        m_detail_label->setText(status.name_claim_pending ? status.name_claim_status :
+            tr("Your CYBOU identity is registered on the network."));
         m_active_details->setText(
             tr("AccountID: %1\nCreation height: %2\nNetwork: %3\nSystemBalance was funded atomically from the OnboardingPool at creation.")
                 .arg(status.account_id)

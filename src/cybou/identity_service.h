@@ -78,6 +78,7 @@ public:
     /** Access underlying keystore */
     CybouKeyStore& GetKeyStore() { return m_keystore; }
     const CybouKeyStore& GetKeyStore() const { return m_keystore; }
+    CybouNodeRuntime& GetNodeRuntime() { return m_runtime; }
 
     /** Synchronous identity creation (blocks until complete or error) */
     IdentityCreationResult CreateIdentitySync(

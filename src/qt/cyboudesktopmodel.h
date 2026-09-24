@@ -8,6 +8,8 @@
 #include <QObject>
 #include <QString>
 #include <QLocale>
+#include <memory>
+#include <thread>
 
 class ClientModel;
 class OptionsModel;
@@ -16,6 +18,7 @@ namespace cybou {
 class CybouIdentityService;
 class CybouMailService;
 class CybouWalletService;
+class CybouNameService;
 }
 
 struct CybouCapabilities {
@@ -52,6 +55,8 @@ struct CybouDesktopStatus {
     CybouIdentityState identity_state{CybouIdentityState::None};
     QString account_id;
     QString primary_name;
+    QString name_claim_status;
+    bool name_claim_pending{false};
     int creation_height{0};
     QString data_directory;
     quint64 balance{0};
@@ -81,6 +86,7 @@ class CybouDesktopModel : public QObject
 
 public:
     explicit CybouDesktopModel(QString network_name, QObject* parent = nullptr);
+    ~CybouDesktopModel() override;
 
     const CybouDesktopStatus& status() const { return m_status; }
     const CybouCapabilities& capabilities() const { return m_capabilities; }
@@ -134,18 +140,22 @@ public:
     void requestCreateIdentity(const QString& vault_password);
     bool requestRestoreIdentity(const QString& recovery_phrase, const QString& vault_password);
     bool requestUnlockIdentity(const QString& vault_password);
+    bool requestClaimName(const QString& label, const QString& vault_password);
 
 Q_SIGNALS:
     void statusChanged();
     void capabilitiesChanged();
     void createIdentityRequested();
     void identityCreationFailed(const QString& reason);
+    void nameClaimFailed(const QString& reason);
 
 private:
     ClientModel* m_client_model{nullptr};
     cybou::CybouIdentityService* m_identity_service{nullptr};
     cybou::CybouMailService* m_mail_service{nullptr};
     cybou::CybouWalletService* m_wallet_service{nullptr};
+    std::unique_ptr<cybou::CybouNameService> m_name_service;
+    std::jthread m_name_worker;
     CybouDesktopStatus m_status;
     CybouCapabilities m_capabilities;
     bool m_identity_request_pending{false};

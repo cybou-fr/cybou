@@ -34,6 +34,7 @@ public:
 private:
     CybouNodeRuntime& m_runtime;
     CybouKeyStore& m_keystore;
+    std::filesystem::path m_identity_vault_path;
     std::filesystem::path m_claim_path;
     std::atomic<bool> m_cancelled{false};
 };

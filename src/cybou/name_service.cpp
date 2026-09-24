@@ -4,6 +4,7 @@
 #include <cybou/name_service.h>
 
 #include <cybou/identity_vault.h>
+#include <cybou/identity_material.h>
 #include <cybou/name_registry.h>
 #include <cybou/protocol_operation.h>
 #include <support/cleanse.h>
@@ -112,7 +113,8 @@ std::optional<DeviceAuthorization> SignOperation(CybouNodeRuntime& runtime, Cybo
 
 CybouNameService::CybouNameService(CybouNodeRuntime& runtime, CybouKeyStore& keystore,
     std::filesystem::path identity_vault_path)
-    : m_runtime{runtime}, m_keystore{keystore}, m_claim_path{std::move(identity_vault_path)}
+    : m_runtime{runtime}, m_keystore{keystore}, m_identity_vault_path{std::move(identity_vault_path)},
+      m_claim_path{m_identity_vault_path}
 {
     m_claim_path += ".nameclaim";
 }
@@ -125,6 +127,10 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
     if (ValidateNameLabel(label) != NameValidationError::NONE) return Fail("Invalid .cybou label");
     const auto account = m_keystore.GetAccountId();
     if (!account) return Fail("Unlock an identity first");
+    const auto vault_material = LoadIdentityMaterial(m_identity_vault_path, password);
+    if (!vault_material || AccountId::FromBytes(vault_material->account_id) != account) {
+        return Fail("Identity vault password is incorrect or vault does not match");
+    }
     const auto network = m_runtime.GetNetworkId();
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     auto state = m_runtime.GetStore().LoadState();

@@ -172,18 +172,22 @@ BOOST_AUTO_TEST_CASE(name_commit_requires_durable_encrypted_claim)
     std::filesystem::create_directories(dir);
     const auto path = dir / "identity.cybou";
     std::filesystem::remove(path);
+    auto claim_path = path;
+    claim_path += ".nameclaim";
+    std::filesystem::remove(claim_path);
     cybou::CybouIdentityService identity{runtime, path};
     BOOST_REQUIRE(identity.PrepareNewIdentity());
     BOOST_REQUIRE(identity.CreateIdentitySync("correct horse battery staple").success);
     const auto before = runtime.GetFinalizedHeight();
-    cybou::CybouNameService names{runtime, identity.GetKeyStore(),
-        dir / "missing-parent" / "identity.cybou"};
+    std::filesystem::create_directory(claim_path);
+    cybou::CybouNameService names{runtime, identity.GetKeyStore(), path};
     BOOST_CHECK(!names.ClaimSync("stanislav", "correct horse battery staple").success);
     BOOST_CHECK(runtime.GetFinalizedHeight() == before);
     const auto loaded = runtime.GetStore().LoadState();
     BOOST_REQUIRE(loaded && loaded.state);
     BOOST_CHECK(loaded.state->names.pending_commits.empty());
     std::filesystem::remove(path);
+    std::filesystem::remove(claim_path);
 }
 
 BOOST_AUTO_TEST_CASE(name_claim_resumes_after_commit_with_correct_password)

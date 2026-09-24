@@ -14,8 +14,13 @@ publishes it without overwriting an existing vault, and authenticates it by
 reopening before returning success. The initial `CVID2` payload contains a
 random AccountID, 256-bit recovery entropy, and an independent random initial
 device secret, each 32 bytes in that order after the five-byte payload magic.
-`IdentityMaterial` clears these fields when destroyed. Password change,
-password change and full recovery management remain unimplemented.
+`IdentityMaterial` clears these fields when destroyed. Password change and
+full recovery management remain unimplemented.
+
+An in-progress name claim is saved separately beside the identity vault as an
+encrypted CYBV2 envelope. It binds NetworkID, AccountID, label, and random
+salt, uses the identity vault password, and is saved and reopened before
+NameCommit submission. Preserve this file until NameReveal finalizes.
 
 ## Recovery Root
 
