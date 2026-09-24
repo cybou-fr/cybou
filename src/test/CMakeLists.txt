@@ -215,10 +215,6 @@ target_link_libraries(cybou-core-test
   $<TARGET_NAME_IF_EXISTS:USDT::headers>
 )
 
-if(ENABLE_WALLET)
-  add_subdirectory(${PROJECT_SOURCE_DIR}/src/wallet/test wallet)
-endif()
-
 if(ENABLE_IPC)
   add_subdirectory(${PROJECT_SOURCE_DIR}/src/ipc/test ipc)
 endif()

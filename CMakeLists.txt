@@ -116,23 +116,8 @@ option(BUILD_UTIL_CHAINSTATE "Build experimental bitcoin-chainstate executable."
 option(BUILD_KERNEL_LIB "Build experimental bitcoinkernel library." OFF)
 cmake_dependent_option(BUILD_KERNEL_TEST "Build tests for the experimental bitcoinkernel library." OFF "BUILD_KERNEL_LIB" OFF)
 
-option(ENABLE_WALLET "Enable wallet." OFF)
-if(CYBOU_CONSUMER_BUILD)
-  set(ENABLE_WALLET OFF CACHE BOOL "Build inherited Bitcoin wallet functionality." FORCE)
-endif()
-if(ENABLE_WALLET)
-  if(VCPKG_TARGET_TRIPLET)
-    # Use of the `unofficial::` namespace is a vcpkg package manager convention.
-    find_package(unofficial-sqlite3 CONFIG REQUIRED)
-    add_library(SQLite3::SQLite3 ALIAS unofficial::sqlite3::sqlite3)
-  else()
-    find_package(SQLite3 3.7.17 REQUIRED)
-    if(NOT TARGET SQLite3::SQLite3) # CMake < 4.3
-      add_library(SQLite3::SQLite3 ALIAS SQLite::SQLite3)
-    endif()
-  endif()
-endif()
-cmake_dependent_option(BUILD_WALLET_TOOL "Build bitcoin-wallet tool." OFF "ENABLE_WALLET" OFF)
+set(ENABLE_WALLET OFF)
+set(BUILD_WALLET_TOOL OFF)
 
 option(REDUCE_EXPORTS "Attempt to reduce exported symbols in the resulting executables." OFF)
 option(CMAKE_COMPILE_WARNING_AS_ERROR "Treat compiler warnings as errors." OFF)
