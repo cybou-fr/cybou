@@ -142,7 +142,7 @@ inline std::optional<NameCommitPayload> DeserializeNameCommitPayload(std::span<c
     return payload;
 }
 
-inline std::optional<IdentityKeyIdV2> ComputeNameCommitPayloadCommitment(const NameCommitPayload& payload)
+inline std::optional<IdentityKeyId> ComputeNameCommitPayloadCommitment(const NameCommitPayload& payload)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/NAME-COMMIT-PAYLOAD/V2"};
     const auto bytes = SerializeNameCommitPayload(payload);
@@ -150,13 +150,13 @@ inline std::optional<IdentityKeyIdV2> ComputeNameCommitPayloadCommitment(const N
     CSHA256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(bytes->data(), bytes->size());
-    IdentityKeyIdV2 res{};
+    IdentityKeyId res{};
     hasher.Finalize(res.data());
     return res;
 }
 
 struct AuthorizedNameCommit {
-    DeviceAuthorizationV2 authorization;
+    DeviceAuthorization authorization;
     NameCommitPayload commit;
 
     friend bool operator==(const AuthorizedNameCommit&, const AuthorizedNameCommit&) = default;
@@ -289,7 +289,7 @@ inline std::optional<NameRevealPayload> DeserializeNameRevealPayload(std::span<c
     return payload;
 }
 
-inline std::optional<IdentityKeyIdV2> ComputeNameRevealPayloadCommitment(const NameRevealPayload& payload)
+inline std::optional<IdentityKeyId> ComputeNameRevealPayloadCommitment(const NameRevealPayload& payload)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/NAME-REVEAL-PAYLOAD/V2"};
     const auto bytes = SerializeNameRevealPayload(payload);
@@ -297,13 +297,13 @@ inline std::optional<IdentityKeyIdV2> ComputeNameRevealPayloadCommitment(const N
     CSHA256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(bytes->data(), bytes->size());
-    IdentityKeyIdV2 res{};
+    IdentityKeyId res{};
     hasher.Finalize(res.data());
     return res;
 }
 
 struct AuthorizedNameReveal {
-    DeviceAuthorizationV2 authorization;
+    DeviceAuthorization authorization;
     NameRevealPayload reveal;
 
     friend bool operator==(const AuthorizedNameReveal&, const AuthorizedNameReveal&) = default;

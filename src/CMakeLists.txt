@@ -104,28 +104,24 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   compressor.cpp
   core_io.cpp
   cybou/account_creation.cpp
-  cybou/account_creation_v2.cpp
-  cybou/identity.cpp
-  cybou/identity_authorization_v2.cpp
-  cybou/identity_crypto.cpp
-  cybou/identity_registry_codec_v2.cpp
-  cybou/identity_registry_v2.cpp
-  cybou/state_v2.cpp
-  cybou/payment_v2.cpp
-  cybou/protocol_operation_v2.cpp
-  cybou/block_executor_v2.cpp
-  cybou/identity_material.cpp
-  cybou/identity_vault.cpp
-  cybou/recovery_phrase.cpp
-  cybou/keystore.cpp
-  cybou/signing.cpp
-  cybou/signing_openssl.cpp
-  cybou/state.cpp
-  cybou/validator.cpp
   cybou/bft.cpp
   cybou/bft_engine.cpp
   cybou/block.cpp
   cybou/evidence.cpp
+  cybou/identity.cpp
+  cybou/identity_authorization.cpp
+  cybou/identity_crypto.cpp
+  cybou/identity_material.cpp
+  cybou/identity_registry.cpp
+  cybou/identity_registry_codec.cpp
+  cybou/identity_vault.cpp
+  cybou/keystore.cpp
+  cybou/payment.cpp
+  cybou/recovery_phrase.cpp
+  cybou/signing.cpp
+  cybou/signing_openssl.cpp
+  cybou/state.cpp
+  cybou/validator.cpp
   deploymentinfo.cpp
   external_signer.cpp
   init/common.cpp

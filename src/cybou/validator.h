@@ -27,6 +27,46 @@ enum class ConsensusMode : uint8_t {
     BFT = 3,          // N >= 4 (floor(2N/3) + 1, f >= 1)
 };
 
+using ValidatorSignature = IdentityHybridSignature;
+
+struct ValidatorHybridKeyPair {
+    IdentityHybridPublicKey public_key;
+    std::array<unsigned char, 32> seed{};
+};
+
+inline std::optional<ValidatorHybridKeyPair> GenerateValidatorKeyPair(std::span<const unsigned char, 32> seed)
+{
+    const auto pub = DeriveIdentityPublicKey(seed, IdentityKeyPurpose::VALIDATOR);
+    if (!pub) return std::nullopt;
+    ValidatorHybridKeyPair pair;
+    pair.public_key = *pub;
+    std::copy(seed.begin(), seed.end(), pair.seed.begin());
+    return pair;
+}
+
+inline std::optional<ValidatorHybridKeyPair> GenerateValidatorKeyPair(const std::array<unsigned char, 32>& seed)
+{
+    return GenerateValidatorKeyPair(std::span<const unsigned char, 32>(seed));
+}
+
+inline uint256 ComputeValidatorId(const IdentityHybridPublicKey& pubkey)
+{
+    const auto id = ComputeValidatorKeyId(pubkey);
+    if (!id) return uint256{};
+    uint256 val_id;
+    std::copy_n(id->begin(), 32, val_id.begin());
+    return val_id;
+}
+
+inline bool VerifyValidatorSignature(
+    const IdentityHybridPublicKey& pubkey,
+    const IdentityHybridSignature& signature,
+    const uint256& digest)
+{
+    return VerifyIdentityMessage(pubkey, signature,
+        std::span<const unsigned char>(digest.begin(), digest.size()));
+}
+
 // Post-Quantum Validator representation (Ed25519 + ML-DSA-65)
 struct Validator {
     uint256 validator_id;

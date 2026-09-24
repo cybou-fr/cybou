@@ -83,7 +83,7 @@ inline std::optional<MailPayload> DeserializeMailPayload(std::span<const unsigne
     return payload;
 }
 
-inline std::optional<IdentityKeyIdV2> ComputeMailPayloadCommitment(const MailPayload& payload)
+inline std::optional<IdentityKeyId> ComputeMailPayloadCommitment(const MailPayload& payload)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/MAIL-PAYLOAD/V2"};
     const auto bytes = SerializeMailPayload(payload);
@@ -91,13 +91,13 @@ inline std::optional<IdentityKeyIdV2> ComputeMailPayloadCommitment(const MailPay
     CSHA256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(bytes->data(), bytes->size());
-    IdentityKeyIdV2 res{};
+    IdentityKeyId res{};
     hasher.Finalize(res.data());
     return res;
 }
 
 struct AuthorizedMail {
-    DeviceAuthorizationV2 authorization;
+    DeviceAuthorization authorization;
     MailPayload mail;
 
     friend bool operator==(const AuthorizedMail&, const AuthorizedMail&) = default;
@@ -111,8 +111,8 @@ inline std::optional<std::vector<unsigned char>> SerializeAuthorizedMail(const A
     if (!commitment || *commitment != op.authorization.payload_commitment) return std::nullopt;
     std::vector<unsigned char> out;
     out.reserve(2597 + body->size());
-    // SerializeDeviceAuthorization requires DeviceOperationKindV2::MAIL
-    if (op.authorization.kind != DeviceOperationKindV2::MAIL || op.authorization.account_id.IsNull() ||
+    // SerializeDeviceAuthorization requires DeviceOperationKind::MAIL
+    if (op.authorization.kind != DeviceOperationKind::MAIL || op.authorization.account_id.IsNull() ||
         op.authorization.signature.ml_dsa.size() != 2420 ||
         std::all_of(op.authorization.device_id.begin(), op.authorization.device_id.end(), [](unsigned char b) { return b == 0; }) ||
         std::all_of(op.authorization.payload_commitment.begin(), op.authorization.payload_commitment.end(), [](unsigned char b) { return b == 0; }) ||
@@ -137,7 +137,7 @@ inline std::optional<AuthorizedMail> DeserializeAuthorizedMail(std::span<const u
     if (bytes.size() < 2597 + MAIL_PAYLOAD_HEADER_SIZE) return std::nullopt;
     const auto account = AccountId::FromBytes(bytes.first(32));
     if (!account) return std::nullopt;
-    DeviceAuthorizationV2 auth{};
+    DeviceAuthorization auth{};
     auth.account_id = *account;
     size_t offset{32};
     std::copy_n(bytes.begin() + offset, 32, auth.device_id.begin());
@@ -150,8 +150,8 @@ inline std::optional<AuthorizedMail> DeserializeAuthorizedMail(std::span<const u
     for (int i = 0; i < 8; ++i) activation_nonce |= uint64_t{bytes[offset + i]} << (8 * i);
     auth.activation_nonce = activation_nonce;
     offset += 8;
-    if (bytes[offset++] != static_cast<uint8_t>(DeviceOperationKindV2::MAIL)) return std::nullopt;
-    auth.kind = DeviceOperationKindV2::MAIL;
+    if (bytes[offset++] != static_cast<uint8_t>(DeviceOperationKind::MAIL)) return std::nullopt;
+    auth.kind = DeviceOperationKind::MAIL;
     std::copy_n(bytes.begin() + offset, 32, auth.payload_commitment.begin());
     offset += 32;
     std::copy_n(bytes.begin() + offset, 64, auth.signature.ed25519.begin());

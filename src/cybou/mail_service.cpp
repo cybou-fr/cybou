@@ -52,7 +52,7 @@ inline uint64_t ReadUint64LE(const unsigned char* p)
 
 } // namespace
 
-std::vector<unsigned char> ProtectedMailV1::Serialize() const
+std::vector<unsigned char> ProtectedMail::Serialize() const
 {
     std::vector<unsigned char> out;
     out.push_back(version);
@@ -72,12 +72,12 @@ std::vector<unsigned char> ProtectedMailV1::Serialize() const
     return out;
 }
 
-std::optional<ProtectedMailV1> ProtectedMailV1::Deserialize(std::span<const unsigned char> bytes)
+std::optional<ProtectedMail> ProtectedMail::Deserialize(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < 81) return std::nullopt;
     if (bytes[0] != PROTECTED_MAIL_VERSION) return std::nullopt;
 
-    ProtectedMailV1 mail;
+    ProtectedMail mail;
     mail.version = bytes[0];
 
     auto s_id = AccountId::FromBytes(bytes.subspan(1, 32));
@@ -104,12 +104,24 @@ std::optional<ProtectedMailV1> ProtectedMailV1::Deserialize(std::span<const unsi
     return mail;
 }
 
+uint256 ComputeMailContentCommitment(const uint256& salt, std::span<const unsigned char> plaintext)
+{
+    static constexpr std::string_view DOMAIN{"CYBOU/MAIL_COMMIT/V2"};
+    CSHA256 hasher;
+    hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
+    hasher.Write(salt.begin(), salt.size());
+    hasher.Write(plaintext.data(), plaintext.size());
+    uint256 out;
+    hasher.Finalize(out.begin());
+    return out;
+}
+
 std::optional<std::vector<unsigned char>> EncryptMailPayload(
     const uint256& recipient_ed25519_pubkey,
     const AccountId& sender,
     const AccountId& recipient,
     const uint256& salt,
-    const ProtectedMailV1& mail)
+    const ProtectedMail& mail)
 {
     const auto recipient_x25519 = Ed25519PublicKeyToX25519(recipient_ed25519_pubkey);
     if (!recipient_x25519) return std::nullopt;
@@ -175,7 +187,7 @@ std::optional<std::vector<unsigned char>> EncryptMailPayload(
     return outer;
 }
 
-std::optional<std::pair<uint256, ProtectedMailV1>> DecryptMailPayload(
+std::optional<std::pair<uint256, ProtectedMail>> DecryptMailPayload(
     const CybouKeyStore& keystore,
     const AccountId& sender,
     const AccountId& recipient,
@@ -249,7 +261,7 @@ std::optional<std::pair<uint256, ProtectedMailV1>> DecryptMailPayload(
         return std::nullopt;
     }
 
-    const auto deserialized = ProtectedMailV1::Deserialize(mail_bytes);
+    const auto deserialized = ProtectedMail::Deserialize(mail_bytes);
     if (!deserialized) return std::nullopt;
     if (deserialized->sender != sender || deserialized->recipient != recipient) {
         return std::nullopt;
@@ -303,7 +315,7 @@ bool CybouMailService::LoadMailbox()
     m_messages.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
         if (offset + 32 + 1 + 32 + 32 > bytes.size()) return false;
-        MailItemV1 item;
+        MailItem item;
         std::copy(bytes.begin() + offset, bytes.begin() + offset + 32, item.mail_id.begin());
         offset += 32;
 
@@ -391,10 +403,14 @@ bool CybouMailService::SaveMailbox() const
         AppendUint64LE(bytes, item.fee);
 
         if (item.evidence_bundle.has_value()) {
-            bytes.push_back(1);
             const auto ev_bytes = SerializeMailEvidenceBundle(*item.evidence_bundle);
-            AppendUint32LE(bytes, static_cast<uint32_t>(ev_bytes.size()));
-            bytes.insert(bytes.end(), ev_bytes.begin(), ev_bytes.end());
+            if (ev_bytes) {
+                bytes.push_back(1);
+                AppendUint32LE(bytes, static_cast<uint32_t>(ev_bytes->size()));
+                bytes.insert(bytes.end(), ev_bytes->begin(), ev_bytes->end());
+            } else {
+                bytes.push_back(0);
+            }
         } else {
             bytes.push_back(0);
         }
@@ -441,10 +457,10 @@ bool CybouMailService::SaveMailbox() const
 #endif
 }
 
-std::vector<MailItemV1> CybouMailService::GetMessages(MailFolder folder) const
+std::vector<MailItem> CybouMailService::GetMessages(MailFolder folder) const
 {
     std::lock_guard lock(m_mutex);
-    std::vector<MailItemV1> out;
+    std::vector<MailItem> out;
     for (const auto& item : m_messages) {
         if (item.folder == folder) {
             out.push_back(item);
@@ -454,7 +470,7 @@ std::vector<MailItemV1> CybouMailService::GetMessages(MailFolder folder) const
     return out;
 }
 
-std::optional<MailItemV1> CybouMailService::GetMessage(const uint256& mail_id) const
+std::optional<MailItem> CybouMailService::GetMessage(const uint256& mail_id) const
 {
     std::lock_guard lock(m_mutex);
     for (const auto& item : m_messages) {
@@ -513,7 +529,7 @@ uint256 CybouMailService::SaveDraft(
         }
     }
 
-    MailItemV1 item;
+    MailItem item;
     item.mail_id = id;
     item.folder = MailFolder::DRAFTS;
     item.sender = my_account;
@@ -533,7 +549,7 @@ bool CybouMailService::DeleteMessage(const uint256& mail_id)
 {
     std::lock_guard lock(m_mutex);
     const auto it = std::remove_if(m_messages.begin(), m_messages.end(),
-        [&mail_id](const MailItemV1& m) { return m.mail_id == mail_id; });
+        [&mail_id](const MailItem& m) { return m.mail_id == mail_id; });
     if (it != m_messages.end()) {
         m_messages.erase(it, m_messages.end());
         SaveMailbox();
@@ -583,11 +599,23 @@ SendMailResult CybouMailService::SendMail(
     const uint64_t current_height = m_runtime.GetFinalizedHeight().value_or(0);
     const uint64_t current_epoch = EpochForHeight(current_height, params);
     if (sender_state->last_mail_epoch == current_epoch &&
-        sender_state->mail_count_in_epoch >= CalculateMailRateLimit(params)) {
+        sender_state->mail_count_in_epoch >= params.new_account_mail_limit_per_epoch) {
         return {.error = SendMailError::RATE_LIMIT_EXCEEDED, .error_message = "Mail quota exceeded for current epoch"};
     }
 
-    ProtectedMailV1 mail;
+    const auto loaded = m_runtime.GetStore().LoadState();
+    if (!loaded || !loaded.state) {
+        return {.error = SendMailError::RUNTIME_ERROR, .error_message = "Failed to load state"};
+    }
+    const auto* rec_identity = loaded.state->identities.Find(recipient);
+    if (!rec_identity || rec_identity->devices.empty()) {
+        return {.error = SendMailError::RECIPIENT_NOT_FOUND, .error_message = "Recipient identity not found on-chain"};
+    }
+    uint256 recipient_encryption_key{};
+    const auto& rec_dev_key = rec_identity->devices.begin()->second.key;
+    std::copy(rec_dev_key.ed25519.begin(), rec_dev_key.ed25519.end(), recipient_encryption_key.begin());
+
+    ProtectedMail mail;
     mail.version = PROTECTED_MAIL_VERSION;
     mail.sender = *sender_id;
     mail.recipient = recipient;
@@ -600,10 +628,10 @@ SendMailResult CybouMailService::SendMail(
     GetRandBytes(salt);
 
     const uint256 content_commitment = ComputeMailContentCommitment(salt, plain_bytes);
-    const uint256 discovery_tag = ComputeRecipientDiscoveryTag(recipient_state->active_authorization_key, salt);
+    const uint256 discovery_tag = ComputeRecipientDiscoveryTag(recipient_encryption_key, salt);
 
     const auto encrypted = EncryptMailPayload(
-        recipient_state->active_authorization_key,
+        recipient_encryption_key,
         *sender_id,
         recipient,
         salt,
@@ -616,44 +644,74 @@ SendMailResult CybouMailService::SendMail(
         return {.error = SendMailError::OVERSIZED, .error_message = "Mail payload exceeds maximum size"};
     }
 
-    const uint64_t fee = MailFeeForSize(encrypted->size(), params);
+    const uint64_t fee = params.MailFeeForSize(encrypted->size());
     if (sender_state->system_balance < fee) {
         return {.error = SendMailError::INSUFFICIENT_SYSTEM_BALANCE, .error_message = "Insufficient system balance for fee"};
     }
 
-    MailOpV1 mail_op;
-    mail_op.version = MAIL_OP_VERSION;
+    const auto dev_id = m_keystore.GetDeviceId();
+    if (!dev_id) {
+        return {.error = SendMailError::NO_IDENTITY, .error_message = "No active device key in keystore"};
+    }
+
+    uint64_t nonce = 0;
+    uint64_t activation_nonce = 0;
+    if (loaded.state) {
+        const auto* rec = loaded.state->identities.Find(*sender_id);
+        if (rec) {
+            auto it = rec->devices.find(*dev_id);
+            if (it != rec->devices.end()) {
+                nonce = it->second.next_nonce;
+                activation_nonce = it->second.activation_nonce;
+            }
+        }
+    }
+
+    MailPayload mail_op;
+    mail_op.version = MAIL_TX_VERSION;
     mail_op.recipient = recipient;
     mail_op.content_commitment = content_commitment;
     mail_op.discovery_tag = discovery_tag;
     mail_op.ciphertext = *encrypted;
 
-    AuthorizedOperationV1 auth_op;
-    auth_op.version = AUTHORIZED_OPERATION_VERSION;
-    auth_op.account_id = *sender_id;
-    auth_op.nonce = sender_state->next_nonce;
-    auth_op.payload = mail_op;
+    const auto commitment = ComputeMailPayloadCommitment(mail_op);
+    if (!commitment) {
+        return {.error = SendMailError::CRYPTO_FAILURE, .error_message = "Failed to commit mail payload"};
+    }
 
-    const uint256 digest = ComputeUserOperationDigest(
-        m_runtime.GetNetworkId(),
-        auth_op.account_id,
-        auth_op.nonce,
-        auth_op.payload);
-    const auto signature = m_keystore.Sign(digest);
+    DeviceAuthorization auth_op;
+    auth_op.account_id = *sender_id;
+    auth_op.device_id = *dev_id;
+    auth_op.nonce = nonce;
+    auth_op.activation_nonce = activation_nonce;
+    auth_op.kind = DeviceOperationKind::MAIL;
+    auth_op.payload_commitment = *commitment;
+
+    const auto digest = ComputeDeviceOperationDigest(m_runtime.GetNetworkId(), auth_op);
+    if (!digest) {
+        return {.error = SendMailError::CRYPTO_FAILURE, .error_message = "Failed to compute mail digest"};
+    }
+    const auto signature = m_keystore.SignDevice(*digest);
     if (!signature) {
         return {.error = SendMailError::CRYPTO_FAILURE, .error_message = "Failed to sign mail operation"};
     }
     auth_op.signature = *signature;
 
-    ProtocolOperationV1 proto_op{auth_op};
-    const uint256 mail_id = ComputeOperationId(proto_op);
+    AuthorizedMail auth_mail{
+        .authorization = auth_op,
+        .mail = mail_op,
+    };
+
+    ProtocolOperation proto_op{auth_mail};
+    const auto op_id_opt = ComputeOperationId(proto_op);
+    const uint256 mail_id = op_id_opt.value_or(uint256{});
 
     const auto submit_res = m_runtime.SubmitOperation(proto_op);
     if (!submit_res) {
         return {.error = SendMailError::SUBMIT_FAILED, .error_message = "Network rejected operation"};
     }
 
-    MailItemV1 item;
+    MailItem item;
     item.mail_id = mail_id;
     item.folder = MailFolder::SENT;
     item.sender = *sender_id;
@@ -698,15 +756,26 @@ size_t CybouMailService::SyncMailbox()
 
         for (size_t op_idx = 0; op_idx < fin_block.block.operations.size(); ++op_idx) {
             const auto& proto_op = fin_block.block.operations[op_idx];
-            if (!std::holds_alternative<AuthorizedOperationV1>(proto_op.payload)) {
+            if (!std::holds_alternative<AuthorizedMail>(proto_op)) {
                 continue;
             }
-            const auto& auth_op = std::get<AuthorizedOperationV1>(proto_op.payload);
-            if (!std::holds_alternative<MailOpV1>(auth_op.payload)) {
-                continue;
+            const auto& auth_mail = std::get<AuthorizedMail>(proto_op);
+            const auto& auth_op = auth_mail.authorization;
+            const auto& mail_op = auth_mail.mail;
+            const auto op_id_opt = ComputeOperationId(proto_op);
+            const uint256 op_id = op_id_opt.value_or(uint256{});
+
+            IdentityHybridPublicKey sender_device_key{};
+            const auto loaded = m_runtime.GetStore().LoadState();
+            if (loaded && loaded.state) {
+                const auto* rec = loaded.state->identities.Find(auth_op.account_id);
+                if (rec) {
+                    auto it = rec->devices.find(auth_op.device_id);
+                    if (it != rec->devices.end()) {
+                        sender_device_key = it->second.key;
+                    }
+                }
             }
-            const auto& mail_op = std::get<MailOpV1>(auth_op.payload);
-            const uint256 op_id = ComputeOperationId(proto_op);
 
             if (auth_op.account_id == *my_account) {
                 for (auto& item : m_messages) {
@@ -718,14 +787,11 @@ size_t CybouMailService::SyncMailbox()
                         item.block_id = block_id;
                         item.operation_index = op_idx;
 
-                        AccountAuthorizationV1 sender_auth{
-                            .authorization_descriptor = auth_op.account_id.Value()
-                        };
                         item.evidence_bundle = CreateMailEvidenceBundle(
                             fin_block.block,
                             op_idx,
                             fin_block.certificate,
-                            sender_auth,
+                            sender_device_key,
                             m_runtime.GetNetworkId());
                         changed = true;
                         break;
@@ -736,7 +802,7 @@ size_t CybouMailService::SyncMailbox()
             if (mail_op.recipient == *my_account) {
                 const bool already_present = std::any_of(
                     m_messages.begin(), m_messages.end(),
-                    [&op_id](const MailItemV1& m) { return m.mail_id == op_id; });
+                    [&op_id](const MailItem& m) { return m.mail_id == op_id; });
                 if (already_present) continue;
 
                 const auto decrypted = DecryptMailPayload(
@@ -747,7 +813,7 @@ size_t CybouMailService::SyncMailbox()
                     mail_op.ciphertext);
 
                 if (decrypted) {
-                    MailItemV1 item;
+                    MailItem item;
                     item.mail_id = op_id;
                     item.folder = MailFolder::INBOX;
                     item.sender = decrypted->second.sender;
@@ -765,14 +831,11 @@ size_t CybouMailService::SyncMailbox()
                     item.discovery_tag = mail_op.discovery_tag;
                     item.fee = MailFeeForSize(mail_op.ciphertext.size(), DevProtocolParameters());
 
-                    AccountAuthorizationV1 sender_auth{
-                        .authorization_descriptor = auth_op.account_id.Value()
-                    };
                     item.evidence_bundle = CreateMailEvidenceBundle(
                         fin_block.block,
                         op_idx,
                         fin_block.certificate,
-                        sender_auth,
+                        sender_device_key,
                         m_runtime.GetNetworkId());
 
                     m_messages.push_back(std::move(item));

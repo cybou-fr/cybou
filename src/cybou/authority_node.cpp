@@ -38,8 +38,8 @@ OperationSubmitStatus CybouAuthorityNode::SubmitOperationWithStatus(const Protoc
     if (std::find(m_pending.begin(), m_pending.end(), operation) != m_pending.end()) {
         return OperationSubmitStatus::ALREADY_PENDING;
     }
-    if (std::holds_alternative<AccountCreateOp>(operation.payload)) {
-        const auto& create = std::get<AccountCreateOp>(operation.payload);
+    if (std::holds_alternative<AccountCreateOp>(operation)) {
+        const auto& create = std::get<AccountCreateOp>(operation);
         const auto loaded = m_store.LoadState();
         if (loaded && loaded.state && loaded.state->accounts.contains(create.account_id)) {
             return OperationSubmitStatus::ALREADY_FINALIZED;
@@ -96,7 +96,8 @@ AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)
     }
     const auto& finalized = validator.GetLatestFinalizedBlock();
     if (!finalized) return Failure(AuthorityProductionError::CONSENSUS_FAILED);
-    if (SerializeFinalizedBlock(*finalized).size() > MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES) {
+    const auto serialized = SerializeFinalizedBlock(*finalized);
+    if (!serialized || serialized->size() > MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES) {
         return Failure(AuthorityProductionError::BLOCK_TOO_LARGE);
     }
 

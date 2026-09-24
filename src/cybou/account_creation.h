@@ -26,6 +26,8 @@ struct AccountCreationWork {
     std::array<unsigned char, 32> authorization_commitment{};
     uint64_t work_epoch{0};
     uint64_t nonce{0};
+
+    friend bool operator==(const AccountCreationWork&, const AccountCreationWork&) = default;
 };
 
 struct AccountCreateOp {
@@ -34,6 +36,8 @@ struct AccountCreateOp {
     AccountCreationWork work;
     IdentityHybridSignature recovery_pop;
     IdentityHybridSignature device_pop;
+
+    friend bool operator==(const AccountCreateOp&, const AccountCreateOp&) = default;
 };
 
 enum class AccountCreateError : uint8_t {
@@ -62,6 +66,20 @@ std::optional<std::array<unsigned char, 32>> ComputeAccountCreatePopDigest(
 AccountCreateError ValidateAccountCreateOp(
     const AccountCreateOp& op, const uint256& network_id,
     uint64_t block_height, const CybouProtocolParameters& params);
+
+inline bool CheckAccountCreationWork(const AccountCreationWork& work, unsigned required_bits)
+{
+    const auto hash = ComputeAccountCreateWorkHash(work);
+    if (!hash) return false;
+    if (required_bits > 256) return false;
+    unsigned count{0};
+    for (const unsigned char byte : *hash) {
+        if (byte == 0) { count += 8; continue; }
+        count += std::countl_zero(byte);
+        break;
+    }
+    return count >= required_bits;
+}
 
 // Transition aliases
 inline constexpr size_t ACCOUNT_CREATE_V2_WORK_SIZE{ACCOUNT_CREATE_WORK_SIZE};

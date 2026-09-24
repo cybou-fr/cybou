@@ -101,44 +101,38 @@ NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
     const uint256& network_id, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
-    const auto validation = ValidateAuthorizedNameCommit(op, network_id, block_height, params);
-    if (validation != NameCommitError::NONE) return validation;
-
-    const auto account_id = op.authorization.account_id;
-    auto account_it = state.accounts.find(account_id);
-    if (account_it == state.accounts.end()) return NameCommitError::ACCOUNT_NOT_FOUND;
-
-    if (!state.identities.Find(account_id)) return NameCommitError::INCONSISTENT_STATE;
-    if (state.names.account_names.contains(account_id)) return NameCommitError::ACCOUNT_HAS_NAME;
-    if (state.names.pending_commits.size() >= params.max_pending_name_commits) return NameCommitError::COMMIT_LIMIT_REACHED;
-    if (state.names.pending_commits.contains(op.commitment)) return NameCommitError::COMMITMENT_EXISTS;
-
+    if (op.commit.version != NAME_REGISTRY_VERSION) {
+        return NameCommitError::INVALID_PAYLOAD;
+    }
+    if (op.authorization.kind != DeviceOperationKind::NAME_COMMIT) {
+        return NameCommitError::INVALID_AUTHORIZATION;
+    }
+    const auto expected_payload_commitment = ComputeNameCommitPayloadCommitment(op.commit);
+    if (!expected_payload_commitment || op.authorization.payload_commitment != *expected_payload_commitment) {
+        return NameCommitError::INVALID_AUTHORIZATION;
+    }
+    if (!state.accounts.contains(op.authorization.account_id)) {
+        return NameCommitError::ACCOUNT_NOT_FOUND;
+    }
+    if (state.names.account_names.contains(op.authorization.account_id)) {
+        return NameCommitError::ACCOUNT_ALREADY_HAS_NAME;
+    }
     for (const auto& [existing_commitment, existing_record] : state.names.pending_commits) {
-        if (existing_record.account_id == account_id) {
+        if (existing_record.account_id == op.authorization.account_id) {
             return NameCommitError::ACCOUNT_HAS_PENDING_COMMIT;
         }
     }
-
-    if (account_it->second.system_balance < params.name_registration_fee) {
-        return NameCommitError::INSUFFICIENT_SYSTEM_BALANCE;
+    if (state.names.pending_commits.size() >= params.max_pending_name_commits) {
+        return NameCommitError::COMMITMENT_LIMIT_EXCEEDED;
     }
-    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - params.name_registration_fee) {
-        return NameCommitError::FEE_POOL_OVERFLOW;
+    if (state.names.pending_commits.contains(op.commit.commitment)) {
+        return NameCommitError::COMMITMENT_EXISTS;
+    }
+    if (state.identities.AuthorizeDeviceOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
+        return NameCommitError::INVALID_AUTHORIZATION;
     }
 
-    const auto auth_err = state.identities.AuthorizeDeviceOperation(op.authorization, network_id);
-    if (auth_err != IdentityRegistryError::NONE) return NameCommitError::INVALID_AUTHORIZATION;
-
-    account_it->second.system_balance -= params.name_registration_fee;
-    state.pending_fee_pool += params.name_registration_fee;
-
-    PendingNameCommitRecord record{
-        .account_id = account_id,
-        .device_id = op.authorization.device_id,
-        .commit_height = block_height,
-    };
-    state.names.pending_commits.emplace(op.commitment, std::move(record));
-
+    state.names.pending_commits.emplace(op.commit.commitment, NameCommitRecord{op.authorization.account_id, block_height});
     return NameCommitError::NONE;
 }
 
@@ -146,42 +140,65 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
     const uint256& network_id, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
-    const auto validation = ValidateAuthorizedNameReveal(op, network_id, block_height, params);
-    if (validation != NameRevealError::NONE) return validation;
-
-    const auto account_id = op.authorization.account_id;
-    auto account_it = state.accounts.find(account_id);
-    if (account_it == state.accounts.end()) return NameRevealError::ACCOUNT_NOT_FOUND;
-
-    if (!state.identities.Find(account_id)) return NameRevealError::INCONSISTENT_STATE;
-    if (state.names.account_names.contains(account_id)) return NameRevealError::ACCOUNT_HAS_NAME;
-    if (state.names.names.contains(op.reveal.label)) return NameRevealError::LABEL_ALREADY_EXISTS;
-
-    const auto expected_commitment = ComputeNameCommitment(
-        network_id, account_id, op.reveal.label, op.reveal.salt);
-    if (!expected_commitment) return NameRevealError::COMMITMENT_NOT_FOUND;
-
-    auto commit_it = state.names.pending_commits.find(*expected_commitment);
-    if (commit_it == state.names.pending_commits.end()) return NameRevealError::COMMITMENT_NOT_FOUND;
-
-    const auto& pending = commit_it->second;
-    if (pending.account_id != account_id) return NameRevealError::COMMITMENT_ACCOUNT_MISMATCH;
-    if (pending.device_id != op.authorization.device_id) return NameRevealError::COMMITMENT_DEVICE_MISMATCH;
-
-    if (block_height < pending.commit_height + params.name_commit_min_age) {
-        return NameRevealError::COMMITMENT_TOO_RECENT;
+    if (op.reveal.version != NAME_REGISTRY_VERSION) {
+        return NameRevealError::INVALID_PAYLOAD;
     }
-    if (block_height > pending.commit_height + params.name_commit_max_lifetime) {
-        return NameRevealError::COMMITMENT_EXPIRED;
+    if (op.authorization.kind != DeviceOperationKind::NAME_REVEAL) {
+        return NameRevealError::INVALID_AUTHORIZATION;
+    }
+    const auto expected_payload_commitment = ComputeNameRevealPayloadCommitment(op.reveal);
+    if (!expected_payload_commitment || op.authorization.payload_commitment != *expected_payload_commitment) {
+        return NameRevealError::INVALID_AUTHORIZATION;
+    }
+    if (ValidateNameLabel(op.reveal.label) != NameValidationError::NONE) {
+        return NameRevealError::INVALID_LABEL_SYNTAX;
+    }
+    if (!state.accounts.contains(op.authorization.account_id)) {
+        return NameRevealError::ACCOUNT_NOT_FOUND;
+    }
+    if (state.names.account_names.contains(op.authorization.account_id)) {
+        return NameRevealError::ACCOUNT_ALREADY_HAS_NAME;
+    }
+    if (state.names.names.contains(op.reveal.label)) {
+        return NameRevealError::NAME_ALREADY_TAKEN;
+    }
+    const auto expected_commitment = ComputeNameCommitment(network_id, op.authorization.account_id, op.reveal.label, op.reveal.salt);
+    if (op.reveal.work.commitment != expected_commitment) {
+        return NameRevealError::INVALID_WORK_PROOF;
+    }
+    auto commit_it = state.names.pending_commits.find(expected_commitment);
+    if (commit_it == state.names.pending_commits.end()) {
+        return NameRevealError::COMMITMENT_NOT_FOUND;
+    }
+    if (commit_it->second.account_id != op.authorization.account_id) {
+        return NameRevealError::COMMITMENT_ACCOUNT_MISMATCH;
+    }
+    if (block_height < commit_it->second.commit_height + params.name_commit_min_depth) {
+        return NameRevealError::INSUFFICIENT_COMMIT_DEPTH;
+    }
+    if (block_height > commit_it->second.commit_height + params.name_commit_max_lifetime) {
+        return NameRevealError::COMMIT_EXPIRED;
     }
 
-    const auto auth_err = state.identities.AuthorizeDeviceOperation(op.authorization, network_id);
-    if (auth_err != IdentityRegistryError::NONE) return NameRevealError::INVALID_AUTHORIZATION;
+    if (op.reveal.work.network_id != network_id || op.reveal.work.account_id != op.authorization.account_id) {
+        return NameRevealError::INVALID_WORK_PROOF;
+    }
+    const uint64_t current_epoch = EpochForHeight(block_height, params);
+    if (op.reveal.work.work_epoch > current_epoch ||
+        op.reveal.work.work_epoch + params.account_creation_epoch_lag < current_epoch) {
+        return NameRevealError::INVALID_WORK_PROOF;
+    }
+    if (!CheckNameClaimWork(op.reveal.work, params.name_claim_work_bits)) {
+        return NameRevealError::INVALID_WORK_PROOF;
+    }
+
+    if (state.identities.AuthorizeDeviceOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
+        return NameRevealError::INVALID_AUTHORIZATION;
+    }
 
     state.names.pending_commits.erase(commit_it);
-    state.names.names.emplace(op.reveal.label, account_id);
-    state.names.account_names.emplace(account_id, op.reveal.label);
-
+    state.names.names.emplace(op.reveal.label, op.authorization.account_id);
+    state.names.account_names.emplace(op.authorization.account_id, op.reveal.label);
     return NameRevealError::NONE;
 }
 
@@ -189,44 +206,47 @@ MailError ApplyMail(const AuthorizedMail& op,
     const uint256& network_id, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
-    const auto validation = ValidateAuthorizedMail(op, network_id, block_height, params);
-    if (validation != MailError::NONE) return validation;
-
-    const auto sender_id = op.authorization.account_id;
-    auto sender_it = state.accounts.find(sender_id);
-    if (sender_it == state.accounts.end()) return MailError::SENDER_NOT_FOUND;
-
-    auto recipient_it = state.accounts.find(op.recipient);
-    if (recipient_it == state.accounts.end()) return MailError::RECIPIENT_NOT_FOUND;
-
-    if (!state.identities.Find(sender_id) || !state.identities.Find(op.recipient)) {
-        return MailError::INCONSISTENT_STATE;
+    if (op.mail.version != MAIL_TX_VERSION ||
+        op.mail.recipient.IsNull() ||
+        op.mail.discovery_tag.IsNull() ||
+        op.mail.content_commitment.IsNull() ||
+        op.mail.ciphertext.empty() ||
+        op.mail.ciphertext.size() > params.max_mail_ciphertext_size) {
+        return MailError::INVALID_PAYLOAD;
     }
-
-    const uint64_t current_epoch = EpochForHeight(block_height, params);
-    uint32_t current_epoch_count = 0;
-    if (sender_it->second.last_mail_epoch == current_epoch) {
-        current_epoch_count = sender_it->second.mail_count_in_epoch;
+    if (op.authorization.kind != DeviceOperationKind::MAIL) {
+        return MailError::INVALID_AUTHORIZATION;
     }
-
-    const uint32_t limit = params.new_account_mail_limit_per_epoch;
-    if (current_epoch_count >= limit) {
-        return MailError::RATE_LIMIT_EXCEEDED;
+    const auto expected_payload_commitment = ComputeMailPayloadCommitment(op.mail);
+    if (!expected_payload_commitment || op.authorization.payload_commitment != *expected_payload_commitment) {
+        return MailError::INVALID_AUTHORIZATION;
     }
-
-    if (sender_it->second.system_balance < op.fee) {
+    auto sender_it = state.accounts.find(op.authorization.account_id);
+    if (sender_it == state.accounts.end()) {
+        return MailError::SENDER_NOT_FOUND;
+    }
+    if (!state.accounts.contains(op.mail.recipient)) {
+        return MailError::RECIPIENT_NOT_FOUND;
+    }
+    const uint64_t fee = params.MailFeeForSize(op.mail.ciphertext.size());
+    if (sender_it->second.system_balance < fee) {
         return MailError::INSUFFICIENT_SYSTEM_BALANCE;
     }
-    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - op.fee) {
+    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - fee) {
         return MailError::FEE_POOL_OVERFLOW;
     }
-
-    const auto auth_err = state.identities.AuthorizeDeviceOperation(op.authorization, network_id);
-    if (auth_err != IdentityRegistryError::NONE) return MailError::INVALID_AUTHORIZATION;
-
-    sender_it->second.system_balance -= op.fee;
-    state.pending_fee_pool += op.fee;
-
+    const uint64_t current_epoch = EpochForHeight(block_height, params);
+    const uint32_t current_count = (sender_it->second.last_mail_epoch == current_epoch)
+        ? sender_it->second.mail_count_in_epoch
+        : 0;
+    if (current_count >= params.new_account_mail_limit_per_epoch) {
+        return MailError::MAIL_QUOTA_EXCEEDED;
+    }
+    if (state.identities.AuthorizeDeviceOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
+        return MailError::INVALID_AUTHORIZATION;
+    }
+    sender_it->second.system_balance -= fee;
+    state.pending_fee_pool += fee;
     if (sender_it->second.last_mail_epoch == current_epoch) {
         sender_it->second.mail_count_in_epoch += 1;
     } else {

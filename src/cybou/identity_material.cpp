@@ -22,10 +22,10 @@ bool Nonzero(const std::array<unsigned char, 32>& value)
     return std::any_of(value.begin(), value.end(), [](unsigned char byte) { return byte != 0; });
 }
 
-std::optional<IdentityMaterialV2> Parse(std::span<const unsigned char> bytes)
+std::optional<IdentityMaterial> Parse(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != PAYLOAD_SIZE || !std::equal(MAGIC.begin(), MAGIC.end(), bytes.begin())) return std::nullopt;
-    IdentityMaterialV2 material;
+    IdentityMaterial material;
     auto first = bytes.begin() + MAGIC.size();
     std::copy_n(first, 32, material.account_id.begin());
     std::copy_n(first + 32, 32, material.recovery_entropy.begin());
@@ -35,14 +35,14 @@ std::optional<IdentityMaterialV2> Parse(std::span<const unsigned char> bytes)
 }
 } // namespace
 
-IdentityMaterialV2::IdentityMaterialV2(IdentityMaterialV2&& other) noexcept
+IdentityMaterial::IdentityMaterial(IdentityMaterial&& other) noexcept
     : account_id{other.account_id}, recovery_entropy{other.recovery_entropy},
       device_secret{other.device_secret}
 {
     other.Clear();
 }
 
-IdentityMaterialV2& IdentityMaterialV2::operator=(IdentityMaterialV2&& other) noexcept
+IdentityMaterial& IdentityMaterial::operator=(IdentityMaterial&& other) noexcept
 {
     if (this != &other) {
         Clear();
@@ -54,18 +54,18 @@ IdentityMaterialV2& IdentityMaterialV2::operator=(IdentityMaterialV2&& other) no
     return *this;
 }
 
-IdentityMaterialV2::~IdentityMaterialV2() { Clear(); }
+IdentityMaterial::~IdentityMaterial() { Clear(); }
 
-void IdentityMaterialV2::Clear() noexcept
+void IdentityMaterial::Clear() noexcept
 {
     OPENSSL_cleanse(account_id.data(), account_id.size());
     OPENSSL_cleanse(recovery_entropy.data(), recovery_entropy.size());
     OPENSSL_cleanse(device_secret.data(), device_secret.size());
 }
 
-std::optional<IdentityMaterialV2> GenerateIdentityMaterialV2()
+std::optional<IdentityMaterial> GenerateIdentityMaterial()
 {
-    IdentityMaterialV2 material;
+    IdentityMaterial material;
     auto entropy = GenerateRecoveryEntropy();
     if (!entropy || RAND_bytes(material.account_id.data(), material.account_id.size()) != 1 ||
         RAND_bytes(material.device_secret.data(), material.device_secret.size()) != 1 ||
@@ -75,8 +75,8 @@ std::optional<IdentityMaterialV2> GenerateIdentityMaterialV2()
     return material;
 }
 
-bool SaveNewIdentityMaterialV2(const std::filesystem::path& path,
-    std::string_view password, const IdentityMaterialV2& material)
+bool SaveNewIdentityMaterial(const std::filesystem::path& path,
+    std::string_view password, const IdentityMaterial& material)
 {
     if (!Nonzero(material.account_id) || !Nonzero(material.device_secret)) return false;
     std::array<unsigned char, PAYLOAD_SIZE> payload{};
@@ -89,7 +89,7 @@ bool SaveNewIdentityMaterialV2(const std::filesystem::path& path,
     return saved;
 }
 
-std::optional<IdentityMaterialV2> LoadIdentityMaterialV2(
+std::optional<IdentityMaterial> LoadIdentityMaterial(
     const std::filesystem::path& path, std::string_view password)
 {
     auto payload = LoadIdentityVault(path, password);

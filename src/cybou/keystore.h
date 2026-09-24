@@ -5,6 +5,7 @@
 #define CYBOU_KEYSTORE_H
 
 #include <cybou/account_id.h>
+#include <cybou/identity_crypto.h>
 #include <cybou/signing.h>
 #include <uint256.h>
 
@@ -61,6 +62,13 @@ public:
 
     /** Derive a Diffie-Hellman shared secret with a peer X25519 public key using the internal key */
     std::optional<std::array<unsigned char, 32>> DeriveX25519SharedSecret(const uint256& peer_x25519_pubkey) const;
+
+    /** Post-Quantum device and recovery root access */
+    std::optional<IdentityHybridPublicKey> GetDevicePublicKey() const;
+    std::optional<IdentityHybridPublicKey> GetRecoveryPublicKey() const;
+    std::optional<std::array<unsigned char, 32>> GetDeviceId() const;
+    std::optional<IdentityHybridSignature> SignDevice(std::span<const unsigned char> digest) const;
+    std::optional<IdentityHybridSignature> SignRecovery(std::span<const unsigned char> digest) const;
 
 private:
     struct Impl;

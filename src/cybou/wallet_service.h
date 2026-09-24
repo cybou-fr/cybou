@@ -30,7 +30,7 @@ enum class WalletEntryFinality : uint8_t {
     FINAL = 1,
 };
 
-struct WalletLedgerEntryV1 {
+struct WalletLedgerEntry {
     uint256 entry_id;
     WalletEntryKind kind{WalletEntryKind::ONBOARDING_BONUS};
     int64_t amount{0};        // Positive for credit, negative for debit
@@ -40,8 +40,9 @@ struct WalletLedgerEntryV1 {
     uint64_t height{0};
     WalletEntryFinality finality{WalletEntryFinality::FINAL};
 
-    friend bool operator==(const WalletLedgerEntryV1&, const WalletLedgerEntryV1&) = default;
+    friend bool operator==(const WalletLedgerEntry&, const WalletLedgerEntry&) = default;
 };
+using WalletLedgerEntryV1 = WalletLedgerEntry;
 
 enum class WalletOperationError : uint8_t {
     NONE = 0,
@@ -65,8 +66,8 @@ struct WalletOperationResult {
 };
 
 /**
- * CybouWalletService manages balance queries, payment transactions (PaymentOpV1),
- * irreversible system locks (SystemLockOpV1), and on-chain activity ledger sync.
+ * CybouWalletService manages balance queries, payment transactions (PaymentPayload),
+ * irreversible system locks (SystemLockPayload), and on-chain activity ledger sync.
  */
 class CybouWalletService {
 public:
@@ -86,7 +87,7 @@ public:
     size_t SyncLedger();
 
     /** Get all ledger entries (most recent first) */
-    std::vector<WalletLedgerEntryV1> GetLedgerEntries() const;
+    std::vector<WalletLedgerEntry> GetLedgerEntries() const;
 
     /** Query current balances (balance, system_balance) directly from node runtime state */
     std::pair<uint64_t, uint64_t> GetBalances() const;
@@ -95,7 +96,7 @@ private:
     CybouNodeRuntime& m_runtime;
     CybouKeyStore& m_keystore;
     uint64_t m_last_scanned_height{0};
-    std::vector<WalletLedgerEntryV1> m_entries;
+    std::vector<WalletLedgerEntry> m_entries;
     mutable std::mutex m_mutex;
 };
 

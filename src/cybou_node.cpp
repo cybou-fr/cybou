@@ -70,7 +70,7 @@ uint32_t GetU32(const std::vector<unsigned char>& bytes, const size_t offset)
 }
 
 struct NetworkFile {
-    cybou::CybouNetworkDefinitionV1 definition;
+    cybou::CybouNetworkDefinition definition;
     cybou::CybouState genesis;
 };
 
@@ -139,11 +139,12 @@ int Main(const int argc, char* argv[])
         const auto definition = cybou::CreateDevNetworkDefinition(genesis);
         auto definition_bytes = cybou::SerializeNetworkDefinition(definition);
         auto state_bytes = cybou::SerializeCybouState(genesis);
+        if (!state_bytes) throw std::runtime_error("cannot serialize genesis state");
         std::vector<unsigned char> out{'C', 'Y', 'N', '1'};
         PutU32(out, definition_bytes.size());
         out.insert(out.end(), definition_bytes.begin(), definition_bytes.end());
-        PutU32(out, state_bytes.size());
-        out.insert(out.end(), state_bytes.begin(), state_bytes.end());
+        PutU32(out, state_bytes->size());
+        out.insert(out.end(), state_bytes->begin(), state_bytes->end());
         WriteNewFile(argv[2], out);
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;

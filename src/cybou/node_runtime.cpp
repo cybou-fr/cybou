@@ -109,7 +109,7 @@ std::optional<AccountState> CybouNodeRuntime::GetAccountState(const AccountId& a
 
 OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
 {
-    const auto op_id = ComputeOperationId(op);
+    const uint256 op_id = ComputeOperationId(op).value_or(uint256{});
     std::optional<std::pair<std::string, uint16_t>> endpoint;
     uint256 net_id{};
     {

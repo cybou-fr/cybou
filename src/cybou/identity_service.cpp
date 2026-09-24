@@ -109,7 +109,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     if (on_phase) on_phase(IdentityCreationPhase::CREATING_KEYS, "Generating local keys...");
 
     AccountId account_id;
-    AccountAuthorizationV1 auth;
+    IdentityAuthorization auth;
     {
         std::lock_guard lock(m_mutex);
         if (user_provided_key.has_value()) {
@@ -123,14 +123,18 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
                 return Failure(IdentityCreationPhase::FAILED, "Failed to generate local key");
             }
         }
-        const auto pubkey = m_keystore.GetPublicKey();
         const auto acc_opt = m_keystore.GetAccountId();
-        if (!pubkey || !acc_opt) {
+        const auto dev_key = m_keystore.GetDevicePublicKey();
+        const auto root_key = m_keystore.GetRecoveryPublicKey();
+        if (!acc_opt || !dev_key || !root_key) {
             m_phase.store(IdentityCreationPhase::FAILED);
             return Failure(IdentityCreationPhase::FAILED, "Invalid identity key");
         }
         account_id = *acc_opt;
-        auth.authorization_descriptor = *pubkey;
+        auth = IdentityAuthorization{
+            .recovery_root = *root_key,
+            .initial_device = *dev_key,
+        };
 
         // CRITICAL DURABILITY: Persist key to disk BEFORE doing PoW and network broadcast.
         // This ensures the user NEVER loses their private key if the process crashes, reboots,
@@ -171,11 +175,16 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
     const uint64_t current_epoch = EpochForHeight(height, params);
 
-    AccountCreationWorkV1 work{
-        .version = ACCOUNT_CREATION_WORK_VERSION,
+    const auto auth_commitment = ComputeIdentityAuthorizationCommitment(auth);
+    if (!auth_commitment) {
+        m_phase.store(IdentityCreationPhase::FAILED);
+        return Failure(IdentityCreationPhase::FAILED, "Failed to compute authorization commitment", account_id);
+    }
+
+    AccountCreationWork work{
         .network_id = m_runtime.GetNetworkId(),
         .account_id = account_id,
-        .initial_authorization_commitment = ComputeAuthCommitment(auth),
+        .authorization_commitment = *auth_commitment,
         .work_epoch = current_epoch,
         .nonce = 0,
     };
@@ -193,23 +202,30 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     m_phase.store(IdentityCreationPhase::BROADCASTING);
     if (on_phase) on_phase(IdentityCreationPhase::BROADCASTING, "Signing and submitting AccountCreateOp...");
 
-    const uint256 pop_digest = ComputeAccountPopDigest(m_runtime.GetNetworkId(), account_id, auth.authorization_descriptor);
-    std::optional<std::array<unsigned char, 64>> pop_sig;
+    const auto pop_digest = ComputeAccountCreatePopDigest(m_runtime.GetNetworkId(), account_id, auth);
+    if (!pop_digest) {
+        m_phase.store(IdentityCreationPhase::FAILED);
+        return Failure(IdentityCreationPhase::FAILED, "Failed to compute proof of possession digest", account_id);
+    }
+
+    std::optional<IdentityHybridSignature> rec_pop;
+    std::optional<IdentityHybridSignature> dev_pop;
     {
         std::lock_guard lock(m_mutex);
-        pop_sig = m_keystore.Sign(pop_digest);
+        rec_pop = m_keystore.SignRecovery(*pop_digest);
+        dev_pop = m_keystore.SignDevice(*pop_digest);
     }
-    if (!pop_sig.has_value()) {
+    if (!rec_pop || !dev_pop) {
         m_phase.store(IdentityCreationPhase::FAILED);
         return Failure(IdentityCreationPhase::FAILED, "Failed to sign proof of possession", account_id);
     }
 
     AccountCreateOp op{
-        .version = ACCOUNT_CREATE_OP_VERSION,
         .account_id = account_id,
-        .initial_authorization = auth,
-        .creation_work = work,
-        .proof_of_possession = *pop_sig,
+        .authorization = auth,
+        .work = work,
+        .recovery_pop = *rec_pop,
+        .device_pop = *dev_pop,
     };
 
     if (!m_runtime.SubmitOperation(ProtocolOperation{op})) {

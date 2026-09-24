@@ -1,6 +1,7 @@
 // Copyright (c) 2026 The CYBOU developers
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+#include <crypto/sha256.h>
 #include <cybou/keystore.h>
 #include <random.h>
 #include <support/cleanse.h>
@@ -24,6 +25,10 @@ struct CybouKeyStore::Impl {
     std::optional<uint256> public_key;
     std::optional<AccountId> account_id;
     std::optional<uint256> x25519_public_key;
+    std::optional<IdentityHybridPublicKey> device_key;
+    std::optional<IdentityHybridPublicKey> recovery_root;
+    std::optional<std::array<unsigned char, 32>> device_id;
+    std::optional<std::array<unsigned char, 32>> recovery_entropy;
 
     ~Impl()
     {
@@ -36,9 +41,16 @@ struct CybouKeyStore::Impl {
             memory_cleanse(seed->data(), seed->size());
             seed.reset();
         }
+        if (recovery_entropy.has_value()) {
+            memory_cleanse(recovery_entropy->data(), recovery_entropy->size());
+            recovery_entropy.reset();
+        }
         public_key.reset();
         account_id.reset();
         x25519_public_key.reset();
+        device_key.reset();
+        recovery_root.reset();
+        device_id.reset();
     }
 
     bool SetSeed(std::span<const unsigned char, 32> in_seed)
@@ -55,6 +67,25 @@ struct CybouKeyStore::Impl {
         public_key = *pub;
         account_id = AccountId{*pub};
         x25519_public_key = Ed25519PublicKeyToX25519(*pub);
+
+        const auto dev_pk = DeriveIdentityPublicKey(s, IdentityKeyPurpose::DEVICE);
+        if (dev_pk) {
+            device_key = *dev_pk;
+            device_id = ComputeDeviceKeyId(*dev_pk);
+        }
+
+        CSHA256 root_hasher;
+        static constexpr std::string_view ROOT_DOMAIN{"CYBOU/DEV-TO-ROOT/V2"};
+        root_hasher.Write(reinterpret_cast<const unsigned char*>(ROOT_DOMAIN.data()), ROOT_DOMAIN.size());
+        root_hasher.Write(s.data(), s.size());
+        std::array<unsigned char, 32> rec_ent{};
+        root_hasher.Finalize(rec_ent.data());
+        recovery_entropy = rec_ent;
+        const auto rec_pk = DeriveIdentityPublicKey(rec_ent, IdentityKeyPurpose::RECOVERY_ROOT);
+        if (rec_pk) {
+            recovery_root = *rec_pk;
+        }
+
         memory_cleanse(s.data(), s.size());
         return true;
     }
@@ -117,6 +148,33 @@ std::optional<std::array<unsigned char, 32>> CybouKeyStore::DeriveX25519SharedSe
     if (!x25519_sk) return std::nullopt;
     auto secret = X25519DeriveSharedSecret(*x25519_sk, peer_x25519_pubkey);
     return secret;
+}
+
+std::optional<IdentityHybridPublicKey> CybouKeyStore::GetDevicePublicKey() const
+{
+    return m_impl->device_key;
+}
+
+std::optional<IdentityHybridPublicKey> CybouKeyStore::GetRecoveryPublicKey() const
+{
+    return m_impl->recovery_root;
+}
+
+std::optional<std::array<unsigned char, 32>> CybouKeyStore::GetDeviceId() const
+{
+    return m_impl->device_id;
+}
+
+std::optional<IdentityHybridSignature> CybouKeyStore::SignDevice(std::span<const unsigned char> digest) const
+{
+    if (!m_impl->seed.has_value()) return std::nullopt;
+    return SignIdentityMessage(*m_impl->seed, IdentityKeyPurpose::DEVICE, digest);
+}
+
+std::optional<IdentityHybridSignature> CybouKeyStore::SignRecovery(std::span<const unsigned char> digest) const
+{
+    if (!m_impl->recovery_entropy.has_value()) return std::nullopt;
+    return SignIdentityMessage(*m_impl->recovery_entropy, IdentityKeyPurpose::RECOVERY_ROOT, digest);
 }
 
 bool CybouKeyStore::SaveToFile(const std::filesystem::path& path) const

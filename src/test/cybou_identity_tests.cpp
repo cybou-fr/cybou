@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/identity.h>
+#include <cybou/identity_authorization.h>
 #include <cybou/keystore.h>
 
 #include <boost/test/unit_test.hpp>
@@ -45,22 +46,23 @@ BOOST_AUTO_TEST_CASE(account_id_has_one_canonical_fixed_width_encoding)
     BOOST_CHECK(cybou::AccountId{}.IsNull());
 }
 
-BOOST_AUTO_TEST_CASE(account_authorization_serialization_and_commitment)
+BOOST_AUTO_TEST_CASE(identity_authorization_serialization_and_commitment)
 {
-    cybou::AccountAuthorizationV1 auth{
-        .authorization_descriptor = uint256::FromUserHex("42").value(),
-    };
-
-    const auto bytes{cybou::SerializeAccountAuthorization(auth)};
-    BOOST_CHECK_EQUAL(bytes.size(), 32);
-
-    const auto commitment{cybou::ComputeAuthCommitment(auth)};
-    BOOST_CHECK(!commitment.IsNull());
-
-    cybou::AccountAuthorizationV1 other_auth{
-        .authorization_descriptor = uint256::FromUserHex("43").value(),
-    };
-    BOOST_CHECK(cybou::ComputeAuthCommitment(other_auth) != commitment);
+    std::array<unsigned char, 32> root_seed{};
+    root_seed.fill(1);
+    std::array<unsigned char, 32> dev_seed{};
+    dev_seed.fill(2);
+    const auto root = cybou::DeriveIdentityPublicKey(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto dev = cybou::DeriveIdentityPublicKey(dev_seed, cybou::IdentityKeyPurpose::DEVICE);
+    BOOST_REQUIRE(root && dev);
+    const cybou::IdentityAuthorization auth{*root, *dev};
+    const auto commitment = cybou::ComputeIdentityAuthorizationCommitment(auth);
+    BOOST_REQUIRE(commitment.has_value());
+    const auto bytes = cybou::SerializeIdentityAuthorization(auth);
+    BOOST_REQUIRE(bytes.has_value());
+    const auto decoded = cybou::DeserializeIdentityAuthorization(*bytes);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK(*decoded == auth);
 }
 
 BOOST_AUTO_TEST_CASE(keystore_crash_safe_persistence_and_legacy_migration)

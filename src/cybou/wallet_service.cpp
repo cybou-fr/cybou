@@ -62,41 +62,70 @@ WalletOperationResult CybouWalletService::SendPayment(const AccountId& recipient
         return {.error = WalletOperationError::INSUFFICIENT_SYSTEM_BALANCE, .error_message = "Insufficient system balance for fee"};
     }
 
-    const uint64_t nonce = sender_state->next_nonce;
-    PaymentOpV1 payment_op{
-        .version = PAYMENT_OP_VERSION,
+    const auto dev_id = m_keystore.GetDeviceId();
+    if (!dev_id) {
+        return {.error = WalletOperationError::NO_IDENTITY, .error_message = "No active device key in keystore"};
+    }
+
+    uint64_t nonce = 0;
+    uint64_t activation_nonce = 0;
+    const auto loaded = m_runtime.GetStore().LoadState();
+    if (loaded && loaded.state) {
+        const auto* rec = loaded.state->identities.Find(*my_account);
+        if (rec) {
+            auto it = rec->devices.find(*dev_id);
+            if (it != rec->devices.end()) {
+                nonce = it->second.next_nonce;
+                activation_nonce = it->second.activation_nonce;
+            }
+        }
+    }
+
+    PaymentPayload payment_payload{
         .recipient = recipient,
         .amount = amount,
     };
 
-    const uint256 signing_digest = ComputeUserOperationDigest(
-        m_runtime.GetNetworkId(),
-        *my_account,
-        nonce,
-        payment_op);
+    const auto commitment = ComputePaymentPayloadCommitment(payment_payload);
+    if (!commitment) {
+        return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to commit payment payload"};
+    }
 
-    const auto sig = m_keystore.Sign(signing_digest);
+    DeviceAuthorization auth{
+        .account_id = *my_account,
+        .device_id = *dev_id,
+        .nonce = nonce,
+        .activation_nonce = activation_nonce,
+        .kind = DeviceOperationKind::PAYMENT,
+        .payload_commitment = *commitment,
+    };
+
+    const auto digest = ComputeDeviceOperationDigest(m_runtime.GetNetworkId(), auth);
+    if (!digest) {
+        return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to compute payment digest"};
+    }
+
+    const auto sig = m_keystore.SignDevice(*digest);
     if (!sig) {
         return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to sign payment operation"};
     }
+    auth.signature = *sig;
 
-    AuthorizedOperationV1 auth_op{
-        .version = AUTHORIZED_OPERATION_VERSION,
-        .account_id = *my_account,
-        .nonce = nonce,
-        .payload = payment_op,
-        .signature = *sig,
+    AuthorizedPayment auth_payment{
+        .authorization = auth,
+        .payment = payment_payload,
     };
 
-    ProtocolOperationV1 proto_op{auth_op};
+    ProtocolOperation proto_op{auth_payment};
 
-    const uint256 op_id = ComputeOperationId(proto_op);
+    const auto op_id_opt = ComputeOperationId(proto_op);
+    const uint256 op_id = op_id_opt.value_or(uint256{});
     const auto submit_res = m_runtime.SubmitOperation(proto_op);
     if (!submit_res) {
         return {.error = WalletOperationError::SUBMIT_FAILED, .error_message = "Network rejected payment operation"};
     }
 
-    WalletLedgerEntryV1 pending_entry{
+    WalletLedgerEntry pending_entry{
         .entry_id = op_id,
         .kind = WalletEntryKind::PAYMENT,
         .amount = -static_cast<int64_t>(amount),
@@ -134,40 +163,69 @@ WalletOperationResult CybouWalletService::LockToSystemBalance(const uint64_t amo
         return {.error = WalletOperationError::INSUFFICIENT_BALANCE, .error_message = "Insufficient balance"};
     }
 
-    const uint64_t nonce = sender_state->next_nonce;
-    SystemLockOpV1 lock_op{
-        .version = SYSTEM_LOCK_OP_VERSION,
+    const auto dev_id = m_keystore.GetDeviceId();
+    if (!dev_id) {
+        return {.error = WalletOperationError::NO_IDENTITY, .error_message = "No active device key in keystore"};
+    }
+
+    uint64_t nonce = 0;
+    uint64_t activation_nonce = 0;
+    const auto loaded = m_runtime.GetStore().LoadState();
+    if (loaded && loaded.state) {
+        const auto* rec = loaded.state->identities.Find(*my_account);
+        if (rec) {
+            auto it = rec->devices.find(*dev_id);
+            if (it != rec->devices.end()) {
+                nonce = it->second.next_nonce;
+                activation_nonce = it->second.activation_nonce;
+            }
+        }
+    }
+
+    SystemLockPayload lock_payload{
         .amount = amount,
     };
 
-    const uint256 signing_digest = ComputeUserOperationDigest(
-        m_runtime.GetNetworkId(),
-        *my_account,
-        nonce,
-        lock_op);
+    const auto commitment = ComputeSystemLockPayloadCommitment(lock_payload);
+    if (!commitment) {
+        return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to commit system lock payload"};
+    }
 
-    const auto sig = m_keystore.Sign(signing_digest);
+    DeviceAuthorization auth{
+        .account_id = *my_account,
+        .device_id = *dev_id,
+        .nonce = nonce,
+        .activation_nonce = activation_nonce,
+        .kind = DeviceOperationKind::SYSTEM_LOCK,
+        .payload_commitment = *commitment,
+    };
+
+    const auto digest = ComputeDeviceOperationDigest(m_runtime.GetNetworkId(), auth);
+    if (!digest) {
+        return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to compute system lock digest"};
+    }
+
+    const auto sig = m_keystore.SignDevice(*digest);
     if (!sig) {
         return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to sign system lock operation"};
     }
+    auth.signature = *sig;
 
-    AuthorizedOperationV1 auth_op{
-        .version = AUTHORIZED_OPERATION_VERSION,
-        .account_id = *my_account,
-        .nonce = nonce,
-        .payload = lock_op,
-        .signature = *sig,
+    AuthorizedSystemLock auth_lock{
+        .authorization = auth,
+        .lock = lock_payload,
     };
 
-    ProtocolOperationV1 proto_op{auth_op};
+    ProtocolOperation proto_op{auth_lock};
 
-    const uint256 op_id = ComputeOperationId(proto_op);
+    const auto op_id_opt = ComputeOperationId(proto_op);
+    const uint256 op_id = op_id_opt.value_or(uint256{});
     const auto submit_res = m_runtime.SubmitOperation(proto_op);
     if (!submit_res) {
         return {.error = WalletOperationError::SUBMIT_FAILED, .error_message = "Network rejected system lock operation"};
     }
 
-    WalletLedgerEntryV1 pending_entry{
+    WalletLedgerEntry pending_entry{
         .entry_id = op_id,
         .kind = WalletEntryKind::LOCK_TO_SYSTEM,
         .amount = static_cast<int64_t>(amount),
@@ -206,17 +264,18 @@ size_t CybouWalletService::SyncLedger()
         const auto& fin_block = *block_opt;
 
         for (const auto& proto_op : fin_block.block.operations) {
-            const uint256 op_id = ComputeOperationId(proto_op);
+            const auto op_id_opt = ComputeOperationId(proto_op);
+            const uint256 op_id = op_id_opt.value_or(uint256{});
 
             std::visit([&](const auto& op) {
                 using T = std::decay_t<decltype(op)>;
-                if constexpr (std::is_same_v<T, AccountCreateOpV1>) {
+                if constexpr (std::is_same_v<T, AccountCreateOp>) {
                     if (op.account_id == *my_account) {
                         const auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
                             return e.entry_id == op_id;
                         });
                         if (it == m_entries.end()) {
-                            WalletLedgerEntryV1 entry{
+                            WalletLedgerEntry entry{
                                 .entry_id = op_id,
                                 .kind = WalletEntryKind::ONBOARDING_BONUS,
                                 .amount = static_cast<int64_t>(params.onboarding_bonus),
@@ -230,98 +289,99 @@ size_t CybouWalletService::SyncLedger()
                             new_entries_count++;
                         }
                     }
-                } else if constexpr (std::is_same_v<T, AuthorizedOperationV1>) {
-                    std::visit([&](const auto& payload) {
-                        using P = std::decay_t<decltype(payload)>;
-                        if constexpr (std::is_same_v<P, PaymentOpV1>) {
-                            if (op.account_id == *my_account) {
-                                auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
-                                    return e.entry_id == op_id;
-                                });
-                                if (it != m_entries.end()) {
-                                    it->finality = WalletEntryFinality::FINAL;
-                                    it->height = h;
-                                } else {
-                                    WalletLedgerEntryV1 entry{
-                                        .entry_id = op_id,
-                                        .kind = WalletEntryKind::PAYMENT,
-                                        .amount = -static_cast<int64_t>(payload.amount),
-                                        .system_side = false,
-                                        .counterparty = payload.recipient,
-                                        .timestamp = 0,
-                                        .height = h,
-                                        .finality = WalletEntryFinality::FINAL,
-                                    };
-                                    m_entries.push_back(entry);
-                                    new_entries_count++;
-                                }
-                            } else if (payload.recipient == *my_account) {
-                                const auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
-                                    return e.entry_id == op_id;
-                                });
-                                if (it == m_entries.end()) {
-                                    WalletLedgerEntryV1 entry{
-                                        .entry_id = op_id,
-                                        .kind = WalletEntryKind::PAYMENT,
-                                        .amount = static_cast<int64_t>(payload.amount),
-                                        .system_side = false,
-                                        .counterparty = op.account_id,
-                                        .timestamp = 0,
-                                        .height = h,
-                                        .finality = WalletEntryFinality::FINAL,
-                                    };
-                                    m_entries.push_back(entry);
-                                    new_entries_count++;
-                                }
-                            }
-                        } else if constexpr (std::is_same_v<P, SystemLockOpV1>) {
-                            if (op.account_id == *my_account) {
-                                auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
-                                    return e.entry_id == op_id;
-                                });
-                                if (it != m_entries.end()) {
-                                    it->finality = WalletEntryFinality::FINAL;
-                                    it->height = h;
-                                } else {
-                                    WalletLedgerEntryV1 entry{
-                                        .entry_id = op_id,
-                                        .kind = WalletEntryKind::LOCK_TO_SYSTEM,
-                                        .amount = static_cast<int64_t>(payload.amount),
-                                        .system_side = true,
-                                        .counterparty = AccountId{},
-                                        .timestamp = 0,
-                                        .height = h,
-                                        .finality = WalletEntryFinality::FINAL,
-                                    };
-                                    m_entries.push_back(entry);
-                                    new_entries_count++;
-                                }
-                            }
-                        } else if constexpr (std::is_same_v<P, MailOpV1>) {
-                            if (op.account_id == *my_account) {
-                                const auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
-                                    return e.entry_id == op_id;
-                                });
-                                if (it == m_entries.end()) {
-                                    const uint64_t fee = MailFeeForSize(payload.ciphertext.size(), params);
-                                    WalletLedgerEntryV1 entry{
-                                        .entry_id = op_id,
-                                        .kind = WalletEntryKind::MAIL_FEE,
-                                        .amount = -static_cast<int64_t>(fee),
-                                        .system_side = true,
-                                        .counterparty = payload.recipient,
-                                        .timestamp = 0,
-                                        .height = h,
-                                        .finality = WalletEntryFinality::FINAL,
-                                    };
-                                    m_entries.push_back(entry);
-                                    new_entries_count++;
-                                }
-                            }
+                } else if constexpr (std::is_same_v<T, AuthorizedPayment>) {
+                    const auto& auth = op.authorization;
+                    const auto& payload = op.payment;
+                    if (auth.account_id == *my_account) {
+                        auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
+                            return e.entry_id == op_id;
+                        });
+                        if (it != m_entries.end()) {
+                            it->finality = WalletEntryFinality::FINAL;
+                            it->height = h;
+                        } else {
+                            WalletLedgerEntry entry{
+                                .entry_id = op_id,
+                                .kind = WalletEntryKind::PAYMENT,
+                                .amount = -static_cast<int64_t>(payload.amount),
+                                .system_side = false,
+                                .counterparty = payload.recipient,
+                                .timestamp = 0,
+                                .height = h,
+                                .finality = WalletEntryFinality::FINAL,
+                            };
+                            m_entries.push_back(entry);
+                            new_entries_count++;
                         }
-                    }, op.payload);
+                    } else if (payload.recipient == *my_account) {
+                        const auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
+                            return e.entry_id == op_id;
+                        });
+                        if (it == m_entries.end()) {
+                            WalletLedgerEntry entry{
+                                .entry_id = op_id,
+                                .kind = WalletEntryKind::PAYMENT,
+                                .amount = static_cast<int64_t>(payload.amount),
+                                .system_side = false,
+                                .counterparty = auth.account_id,
+                                .timestamp = 0,
+                                .height = h,
+                                .finality = WalletEntryFinality::FINAL,
+                            };
+                            m_entries.push_back(entry);
+                            new_entries_count++;
+                        }
+                    }
+                } else if constexpr (std::is_same_v<T, AuthorizedSystemLock>) {
+                    const auto& auth = op.authorization;
+                    const auto& payload = op.lock;
+                    if (auth.account_id == *my_account) {
+                        auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
+                            return e.entry_id == op_id;
+                        });
+                        if (it != m_entries.end()) {
+                            it->finality = WalletEntryFinality::FINAL;
+                            it->height = h;
+                        } else {
+                            WalletLedgerEntry entry{
+                                .entry_id = op_id,
+                                .kind = WalletEntryKind::LOCK_TO_SYSTEM,
+                                .amount = static_cast<int64_t>(payload.amount),
+                                .system_side = true,
+                                .counterparty = AccountId{},
+                                .timestamp = 0,
+                                .height = h,
+                                .finality = WalletEntryFinality::FINAL,
+                            };
+                            m_entries.push_back(entry);
+                            new_entries_count++;
+                        }
+                    }
+                } else if constexpr (std::is_same_v<T, AuthorizedMail>) {
+                    const auto& auth = op.authorization;
+                    const auto& payload = op.mail;
+                    if (auth.account_id == *my_account) {
+                        const auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
+                            return e.entry_id == op_id;
+                        });
+                        if (it == m_entries.end()) {
+                            const uint64_t fee = MailFeeForSize(payload.ciphertext.size(), params);
+                            WalletLedgerEntry entry{
+                                .entry_id = op_id,
+                                .kind = WalletEntryKind::MAIL_FEE,
+                                .amount = -static_cast<int64_t>(fee),
+                                .system_side = true,
+                                .counterparty = payload.recipient,
+                                .timestamp = 0,
+                                .height = h,
+                                .finality = WalletEntryFinality::FINAL,
+                            };
+                            m_entries.push_back(entry);
+                            new_entries_count++;
+                        }
+                    }
                 }
-            }, proto_op.payload);
+            }, proto_op);
         }
 
         m_last_scanned_height = h;
@@ -330,7 +390,7 @@ size_t CybouWalletService::SyncLedger()
     return new_entries_count;
 }
 
-std::vector<WalletLedgerEntryV1> CybouWalletService::GetLedgerEntries() const
+std::vector<WalletLedgerEntry> CybouWalletService::GetLedgerEntries() const
 {
     std::lock_guard lock(m_mutex);
     auto sorted = m_entries;

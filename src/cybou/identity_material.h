@@ -14,27 +14,39 @@
 
 namespace cybou {
 
-// Local secret material for the initial V2 device. AccountID is random and
+// Local secret material for the initial device. AccountID is random and
 // independent of both secrets. This type is move-only and clears its arrays.
-struct IdentityMaterialV2 {
+struct IdentityMaterial {
     std::array<unsigned char, 32> account_id{};
     RecoveryEntropy recovery_entropy{};
     std::array<unsigned char, 32> device_secret{};
 
-    IdentityMaterialV2() = default;
-    IdentityMaterialV2(const IdentityMaterialV2&) = delete;
-    IdentityMaterialV2& operator=(const IdentityMaterialV2&) = delete;
-    IdentityMaterialV2(IdentityMaterialV2&& other) noexcept;
-    IdentityMaterialV2& operator=(IdentityMaterialV2&& other) noexcept;
-    ~IdentityMaterialV2();
+    IdentityMaterial() = default;
+    IdentityMaterial(const IdentityMaterial&) = delete;
+    IdentityMaterial& operator=(const IdentityMaterial&) = delete;
+    IdentityMaterial(IdentityMaterial&& other) noexcept;
+    IdentityMaterial& operator=(IdentityMaterial&& other) noexcept;
+    ~IdentityMaterial();
     void Clear() noexcept;
 };
 
-std::optional<IdentityMaterialV2> GenerateIdentityMaterialV2();
-bool SaveNewIdentityMaterialV2(const std::filesystem::path& path,
-    std::string_view password, const IdentityMaterialV2& material);
-std::optional<IdentityMaterialV2> LoadIdentityMaterialV2(
+std::optional<IdentityMaterial> GenerateIdentityMaterial();
+bool SaveNewIdentityMaterial(const std::filesystem::path& path,
+    std::string_view password, const IdentityMaterial& material);
+std::optional<IdentityMaterial> LoadIdentityMaterial(
     const std::filesystem::path& path, std::string_view password);
+
+// Transition aliases
+using IdentityMaterialV2 = IdentityMaterial;
+inline std::optional<IdentityMaterial> GenerateIdentityMaterialV2() { return GenerateIdentityMaterial(); }
+inline bool SaveNewIdentityMaterialV2(const std::filesystem::path& path,
+    std::string_view password, const IdentityMaterial& material) {
+    return SaveNewIdentityMaterial(path, password, material);
+}
+inline std::optional<IdentityMaterial> LoadIdentityMaterialV2(
+    const std::filesystem::path& path, std::string_view password) {
+    return LoadIdentityMaterial(path, password);
+}
 
 } // namespace cybou
 #endif

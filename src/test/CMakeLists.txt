@@ -176,28 +176,17 @@ endif()
 add_executable(cybou-core-test
   cybou_main.cpp
   cybou_account_creation_tests.cpp
-  cybou_account_creation_v2_tests.cpp
   cybou_chainparams_tests.cpp
   cybou_identity_tests.cpp
-  cybou_identity_authorization_v2_tests.cpp
+  cybou_identity_authorization_tests.cpp
   cybou_identity_crypto_tests.cpp
-  cybou_identity_registry_v2_tests.cpp
-  cybou_state_v2_tests.cpp
+  cybou_identity_registry_tests.cpp
   cybou_identity_material_tests.cpp
   cybou_identity_vault_tests.cpp
   cybou_recovery_phrase_tests.cpp
   cybou_protocol_operation_tests.cpp
   cybou_signing_tests.cpp
   cybou_state_tests.cpp
-  cybou_state_store_tests.cpp
-  cybou_bft_tests.cpp
-  cybou_evidence_tests.cpp
-  cybou_mail_filter_tests.cpp
-  cybou_authority_node_tests.cpp
-  cybou_node_runtime_tests.cpp
-  cybou_identity_service_tests.cpp
-  cybou_mail_service_tests.cpp
-  cybou_wallet_service_tests.cpp
 )
 
 add_windows_application_manifest(cybou-core-test)

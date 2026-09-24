@@ -240,7 +240,7 @@ IdentityHybridPublicKey CreateDevValidatorKey(const uint256& seed)
 
 CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public_key)
 {
-    const auto val_id = ComputeValidatorKeyId(validator_public_key);
+    const auto val_id = ComputeValidatorId(validator_public_key);
     return CybouState{
         .onboarding_pool = 10'000'000,
         .security_reward_pool = 0,
@@ -249,11 +249,13 @@ CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public
         .identities = {},
         .validator_set = {
             .version = VALIDATOR_SET_VERSION,
-            .validators = {{
-                .validator_id = val_id.value_or(uint256{}),
-                .consensus_public_key = validator_public_key,
-                .weight = 1,
-            }},
+            .validators = {
+                Validator{
+                    .validator_id = val_id,
+                    .consensus_public_key = validator_public_key,
+                    .weight = 1,
+                },
+            },
         },
         .names = {},
     };

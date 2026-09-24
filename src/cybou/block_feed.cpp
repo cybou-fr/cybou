@@ -73,7 +73,8 @@ bool ServeCybouConnection(CybouNodeRuntime& runtime, boost::asio::ip::tcp::socke
             uint64_t height{0};
             for (size_t i = 0; i < 8; ++i) height |= uint64_t{req_rest[32 + i]} << (8 * i);
             const auto block = runtime.GetBlockAtHeight(height);
-            const auto bytes = block ? SerializeFinalizedBlock(*block) : std::vector<unsigned char>{};
+            const auto bytes_opt = block ? SerializeFinalizedBlock(*block) : std::nullopt;
+            const auto bytes = bytes_opt.value_or(std::vector<unsigned char>{});
             if (bytes.size() > MAX_FINALIZED_BLOCK_FEED_BYTES) return false;
             std::array<unsigned char, 4> length{};
             WriteU32(length, static_cast<uint32_t>(bytes.size()));
@@ -141,7 +142,8 @@ bool ServeFinalizedBlockRequest(CybouStateStore& store, boost::asio::ip::tcp::so
         uint64_t height{0};
         for (size_t i = 0; i < 8; ++i) height |= uint64_t{request[36 + i]} << (8 * i);
         const auto block = store.GetBlockAtHeight(height);
-        const auto bytes = block ? SerializeFinalizedBlock(*block) : std::vector<unsigned char>{};
+        const auto bytes_opt = block ? SerializeFinalizedBlock(*block) : std::nullopt;
+        const auto bytes = bytes_opt.value_or(std::vector<unsigned char>{});
         if (bytes.size() > MAX_FINALIZED_BLOCK_FEED_BYTES) return false;
         std::array<unsigned char, 4> length{};
         WriteU32(length, static_cast<uint32_t>(bytes.size()));
@@ -156,10 +158,11 @@ bool ServeFinalizedBlockRequest(CybouStateStore& store, boost::asio::ip::tcp::so
 OperationSubmitResult SubmitOperationRemote(
     const std::string& host, const uint16_t port, const uint256& network_id, const ProtocolOperation& op)
 {
-    const auto op_id = ComputeOperationId(op);
+    const auto op_id_opt = ComputeOperationId(op);
+    const uint256 op_id = op_id_opt.value_or(uint256{});
     try {
         const auto op_bytes = SerializeProtocolOperation(op);
-        if (op_bytes.empty() || op_bytes.size() > MAX_OPERATION_PAYLOAD_BYTES) {
+        if (!op_bytes || op_bytes->empty() || op_bytes->size() > MAX_OPERATION_PAYLOAD_BYTES) {
             return OperationSubmitResult{.status = OperationSubmitStatus::INVALID_PAYLOAD, .op_id = op_id};
         }
 
@@ -170,13 +173,13 @@ OperationSubmitResult SubmitOperationRemote(
         SetIoTimeout(socket);
 
         std::vector<unsigned char> msg;
-        msg.reserve(4 + 32 + 4 + op_bytes.size());
+        msg.reserve(4 + 32 + 4 + op_bytes->size());
         msg.insert(msg.end(), OP_MAGIC.begin(), OP_MAGIC.end());
         msg.insert(msg.end(), network_id.begin(), network_id.end());
         std::array<unsigned char, 4> len_bytes{};
-        WriteU32(len_bytes, static_cast<uint32_t>(op_bytes.size()));
+        WriteU32(len_bytes, static_cast<uint32_t>(op_bytes->size()));
         msg.insert(msg.end(), len_bytes.begin(), len_bytes.end());
-        msg.insert(msg.end(), op_bytes.begin(), op_bytes.end());
+        msg.insert(msg.end(), op_bytes->begin(), op_bytes->end());
 
         boost::asio::write(socket, boost::asio::buffer(msg));
 

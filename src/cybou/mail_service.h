@@ -44,7 +44,11 @@ enum class MailFinalityStatus : uint8_t {
  * Protected text email payload (doc 49).
  * E2E encrypted inside the MailTx ciphertext. Plaintext never touches consensus state.
  */
-struct ProtectedMailV1 {
+/**
+ * Protected text email payload (doc 49).
+ * E2E encrypted inside the MailTx ciphertext. Plaintext never touches consensus state.
+ */
+struct ProtectedMail {
     uint8_t version{PROTECTED_MAIL_VERSION};
     AccountId sender;
     AccountId recipient;
@@ -53,16 +57,17 @@ struct ProtectedMailV1 {
     std::string body;
 
     std::vector<unsigned char> Serialize() const;
-    static std::optional<ProtectedMailV1> Deserialize(std::span<const unsigned char> bytes);
+    static std::optional<ProtectedMail> Deserialize(std::span<const unsigned char> bytes);
 
-    friend bool operator==(const ProtectedMailV1&, const ProtectedMailV1&) = default;
+    friend bool operator==(const ProtectedMail&, const ProtectedMail&) = default;
 };
+using ProtectedMailV1 = ProtectedMail;
 
 /**
  * Local client mailbox item.
  * The client owns Inbox, Sent, and Draft folders and read-state (AGENTS.md).
  */
-struct MailItemV1 {
+struct MailItem {
     uint256 mail_id;
     MailFolder folder{MailFolder::INBOX};
     AccountId sender;
@@ -79,10 +84,11 @@ struct MailItemV1 {
     uint256 content_commitment{};
     uint256 discovery_tag{};
     uint64_t fee{0};
-    std::optional<MailEvidenceBundleV1> evidence_bundle{std::nullopt};
+    std::optional<MailEvidenceBundle> evidence_bundle{std::nullopt};
 
-    friend bool operator==(const MailItemV1&, const MailItemV1&) = default;
+    friend bool operator==(const MailItem&, const MailItem&) = default;
 };
+using MailItemV1 = MailItem;
 
 enum class SendMailError : uint8_t {
     NONE = 0,
@@ -116,14 +122,16 @@ std::optional<std::vector<unsigned char>> EncryptMailPayload(
     const AccountId& sender,
     const AccountId& recipient,
     const uint256& salt,
-    const ProtectedMailV1& mail);
+    const ProtectedMail& mail);
 
-std::optional<std::pair<uint256, ProtectedMailV1>> DecryptMailPayload(
+std::optional<std::pair<uint256, ProtectedMail>> DecryptMailPayload(
     const CybouKeyStore& keystore,
     const AccountId& sender,
     const AccountId& recipient,
     const uint256& content_commitment,
     std::span<const unsigned char> ciphertext);
+
+uint256 ComputeMailContentCommitment(const uint256& salt, std::span<const unsigned char> plaintext);
 
 /**
  * CybouMailService manages local mailbox indexes (Inbox, Sent, Drafts),
@@ -148,10 +156,10 @@ public:
     bool SaveMailbox() const;
 
     /** Retrieve messages in a given folder. */
-    std::vector<MailItemV1> GetMessages(MailFolder folder) const;
+    std::vector<MailItem> GetMessages(MailFolder folder) const;
 
     /** Retrieve message by ID. */
-    std::optional<MailItemV1> GetMessage(const uint256& mail_id) const;
+    std::optional<MailItem> GetMessage(const uint256& mail_id) const;
 
     /** Mark a message as read/unread. */
     bool MarkAsRead(const uint256& mail_id, bool read);
@@ -171,7 +179,7 @@ public:
      * - enforces size bounds and computes deterministic integer fee
      * - encrypts subject and body using recipient's X25519 public key and ChaCha20-Poly1305
      * - commits domain-separated content commitment and recipient discovery tag
-     * - signs AuthorizedOperationV1 with sender's Ed25519 key
+     * - signs AuthorizedOperation with sender's Ed25519 key
      * - broadcasts operation via node runtime
      * - records message into local Sent mailbox with PendingFinality status.
      */
@@ -195,7 +203,7 @@ private:
     CybouNodeRuntime& m_runtime;
     CybouKeyStore& m_keystore;
     const std::filesystem::path m_mailbox_path;
-    std::vector<MailItemV1> m_messages;
+    std::vector<MailItem> m_messages;
     uint64_t m_last_scanned_height{0};
     mutable std::mutex m_mutex;
 };
