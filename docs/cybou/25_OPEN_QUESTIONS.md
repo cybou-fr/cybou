@@ -2,8 +2,8 @@
 
 ## Identity V2 parameters to freeze before coding/activation
 
-- Exact standardized 24-word list, normalization, checksum, KDF paths and
-  deterministic Ed25519/ML-DSA test vectors.
+- End-to-end phrase-to-root vectors across providers and platforms. The BIP-39
+  English list/checksum and Identity V2 HKDF labels are now frozen locally.
 - CYBV2 canonical encoding, Argon2id resource bounds, file permissions and
   cross-platform atomic replace behavior.
 - Hybrid signature wire bounds and canonical signed bytes for each operation.

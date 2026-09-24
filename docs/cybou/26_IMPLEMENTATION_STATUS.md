@@ -16,7 +16,10 @@ target; their presence does not mean it is implemented.
 Local `identity_crypto` now derives distinct Ed25519/ML-DSA-65 Recovery Root
 and Ed25519/ML-DSA-44 device key pairs from a supplied 32-byte secret using
 HKDF-SHA256, and verifies both signature components. It is not connected to
-AccountCreate, user operations, a mnemonic, a vault, or consensus state.
+AccountCreate, user operations, a vault, or consensus state.
+The local `recovery_phrase` module now maps 256-bit entropy to a checksummed
+24-word BIP-39 English phrase and back; it is not connected to the GUI or
+AccountCreate.
 
 ## Hardened architecture
 

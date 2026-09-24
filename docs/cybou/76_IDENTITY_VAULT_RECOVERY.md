@@ -4,15 +4,21 @@ Status: target specification. Current desktop has no portable V2 vault or
 mnemonic recovery.
 
 The local `identity_crypto` module has fixed HKDF labels and deterministic
-public-key test vectors. It accepts 32 secret bytes; mapping from a 24-word
-phrase to that secret is not implemented or frozen yet.
+public-key test vectors. `recovery_phrase` now encodes and decodes 256-bit
+entropy with the BIP-39 English list and eight checksum bits. The recovered
+entropy is passed directly as the 32-byte secret to the Identity V2 HKDF; the
+BIP-39 PBKDF2 wallet seed/passphrase scheme is not used. Vault and consensus
+recovery remain unimplemented.
 
 ## Recovery Root
 
 Generate 256 bits from a cryptographic RNG and encode a checksummed 24-word
-phrase using a standardized 2048-word list. Freeze the exact list, Unicode
-normalization, checksum, domain-separated KDF, derivation paths, and test
-vectors before implementation. Do not invent a word list. Derive independent
+phrase using the BIP-39 English 2048-word list, pinned to SHA-256
+`2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda`.
+Input is exactly 24 lowercase ASCII list words in canonical order; reject
+unknown words and checksum mismatch. The 256 entropy bits plus the first eight
+SHA-256 checksum bits form 24 consecutive 11-bit indices. This is BIP-39
+mnemonic *encoding*, not BIP-39 PBKDF2 seed derivation. Derive independent
 Ed25519 and ML-DSA-65 root seeds. RecoveryKeyID commits to the suite and both
 public keys; consensus maps it to the stable random AccountID. Use root
 material only for recovery and critical changes, then cleanse memory.
