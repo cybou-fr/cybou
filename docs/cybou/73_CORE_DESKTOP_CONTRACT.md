@@ -2,7 +2,8 @@
 
 Boundary between CYBOU core and the desktop GUI. The desktop never invents
 protocol behavior: every state it shows arrives through this contract.
-Core implements the producer side; the GUI (`src/qt`) is the consumer.
+`CybouNodeRuntime` implements the native producer/observer boundary; the GUI
+(`src/qt`) consumes its verified state.
 
 ## Direction of truth
 
@@ -28,15 +29,22 @@ identity_state                     AccountCreateOp accepted -> CreatingKeys
 account_id, creation_height        from the finalized AccountCreateOp
 balance, system_balance            from AccountState after every
                                    finalized transition that moves them
-network_id                         canonical NetworkID once exposed
-last_finalized_height              from the BFT finality feed (-1 until
-                                   exposed; the GUI never derives it)
-validator_count                    current epoch validator set (equal
-                                   weight 1; 0 until exposed)
+network_id                         canonical DEV NetworkID (already exposed)
+last_finalized_height              from native runtime verified state
+                                   (already exposed; GUI never derives it)
+validator_count                    active validator set from native state
+                                   (already exposed; weight 1)
 ```
 
 `WaitingForFinality` is entered when the op is broadcast and left only when
 a BFT finality certificate commits the block.
+
+The current desktop opens native CYBOU state, polls the DEV bootstrap
+endpoint for finalized blocks, and reports verified height/validator count.
+The bootstrap address supplies transport location, not consensus trust.
+The identity service submits AccountCreate remotely and waits for the
+verified account state before reporting `Active`. Email, Storage, and Backup
+pages remain capability-gated UI until their network services are live.
 
 ## Adapter surface (what core calls)
 

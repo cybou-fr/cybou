@@ -1,65 +1,37 @@
-# Building and Installing CYBOU
+# Building CYBOU from source
 
-This guide provides entrypoint instructions for building and running **CYBOU** from source.
+CYBOU is experimental software. The native `cybou-node` and Qt desktop are DEV integration targets; the inherited Bitcoin bootstrap runtime remains in the tree. See [implementation status](docs/cybou/26_IMPLEMENTATION_STATUS.md) before using a build as a network node.
 
-CYBOU officially supports:
-- **Windows (MSVC)**: Primary platform for the single-process `cybou.exe` desktop application.
-- **Linux (x86_64 / aarch64)**: Infrastructure nodes, active validators, and containerized deployments.
+## Requirements
 
----
+- CMake 3.22 or newer and a C++20 compiler.
+- OpenSSL **3.5 or newer** for the ML-DSA-65 authority-signature verifier.
+- Boost, libevent, and LevelDB dependencies as configured by CMake/vcpkg.
+- Qt 6 for the optional desktop executable `cybou` (`cybou.exe` on Windows).
 
-## Quick Start by Platform
+The repository pins third-party dependencies in [`vcpkg.json`](vcpkg.json). A generic system build will fail configuration if its OpenSSL version is older than 3.5.
 
-### Windows (Recommended for Desktop Users and Developers)
+## Windows desktop and core
 
-Prerequisites:
-- Windows 10/11
-- Visual Studio 2022/2026 with the "Desktop development with C++" workload
-- CMake (bundled with Visual Studio)
-- Python 3
+The currently verified local setup is **Qt MinGW + vcpkg**, documented step by step in [the Windows build procedure](docs/cybou/71_WINDOWS_MINGW_BUILD.md). It configures `build_cybou_qt_mingw` with `BUILD_GUI=ON`, `BUILD_TESTS=ON`, and wallet/IPC disabled.
 
-Full instructions:
-👉 **[Windows MSVC Build Guide](doc/build-windows-msvc.md)**
+After following that procedure, build the native targets:
 
 ```powershell
-# Open Developer PowerShell for VS
-cmake -B build -S .
-cmake --build build --config Release
+cmake --build build_cybou_qt_mingw --target cybou cybou-node cybou-core-test -j 4
+& build_cybou_qt_mingw/bin/cybou-core-test.exe --log_level=error
 ```
 
-The resulting executable is `build/src/qt/Release/cybou.exe`.
+The desktop executable is `build_cybou_qt_mingw/bin/cybou.exe`; the standalone DEV process is `build_cybou_qt_mingw/bin/cybou-node.exe`. The older [MSVC notes](doc/build-windows-msvc.md) describe an inherited build path and are not the verified native CYBOU procedure.
 
----
+## Linux and other platforms
 
-### Linux / Unix (Infrastructure and Validators)
+The project has a CMake/vcpkg CI build for the native core and `cybou-node`; see [the core workflow](.github/workflows/cybou-core.yml) for the exact configure, test, and smoke-test commands. Linux desktop and validator deployment need platform-specific verification. [Inherited Unix build notes](doc/build-unix.md) remain useful for dependencies but do not override the CYBOU OpenSSL 3.5 or protocol requirements.
 
-Prerequisites:
-- Ubuntu 22.04 LTS+, Debian 12+, or Fedora
-- C++20 compliant compiler (GCC 11+ or Clang 14+)
-- CMake 3.22+
-- Boost, libevent, and Qt6 (for GUI)
+## DEV node
 
-Full instructions:
-👉 **[Linux / Unix Build Guide](doc/build-unix.md)**
+Use the [DEV authority-node runbook](docs/cybou/75_DEV_NODE_RUNBOOK.md) to create a trusted network definition, start one validator, and synchronize an observer. DEV authority mode has one validator (`f=0`), and its TCP listener must remain on a trusted private network. Never use development keys or balances as production assets.
 
-```bash
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
-```
+## Tests
 
----
-
-## Dependencies
-
-For complete details on third-party packages, system libraries, and version requirements, consult:
-👉 **[Dependencies Reference](doc/dependencies.md)**
-
----
-
-## Testing the Build
-
-To run the unit test suite after compilation:
-
-```powershell
-ctest --test-dir build --output-on-failure
-```
+`cybou-core-test` contains native CYBOU protocol tests and is the most direct check of state, BFT, identity, Mail evidence, and transport behavior. `ctest --test-dir <build-dir> --output-on-failure` runs the configured broader suite, which can include inherited Bitcoin tests. The Qt shell tests are separate and require a GUI-capable environment.

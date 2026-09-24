@@ -1,8 +1,9 @@
 # 71 — Сборка CYBOU core (Windows, Qt MinGW + vcpkg)
 
 Это **единственная авторитетная процедура сборки** CYBOU core на Windows.
-Воспроизводит конфигурацию `build_cybou_qt_mingw`, на которой собирается
-`test_bitcoin.exe` и GUI.
+Воспроизводит конфигурацию `build_cybou_qt_mingw`, на которой собираются
+`cybou-core-test.exe`, `cybou-node.exe` и Qt GUI. Унаследованный
+`test_bitcoin.exe` остаётся отдельным тестовым набором.
 
 ## Что требуется (один раз)
 
@@ -51,7 +52,7 @@ C:\Users\cybou\vcpkg\vcpkg.exe install ^
 `C:\Qt\6.11.2`, wallet выключен):
 
 ```text
-boost-multi-index, boost-signals2, libevent (override 2.1.12#7), openssl 3.5.x, boost-test
+boost-asio, boost-multi-index, boost-signals2, libevent (override 2.1.12#7), openssl 3.5.x, boost-test
 ```
 
 Первый запуск собирает OpenSSL из исходников (mingw gcc, debug+release) —
@@ -94,13 +95,13 @@ qtbase/qttools/sqlite3/zeromq и vcpkg начнёт собирать Qt (~час
 ## Шаг 3 — сборка
 
 ```bat
-"C:\Program Files\CMake\bin\cmake.exe" --build build_cybou_qt_mingw --target test_bitcoin -j 8
+"C:\Program Files\CMake\bin\cmake.exe" --build build_cybou_qt_mingw --target cybou-core-test cybou-node cybou -j 4
 ```
 
 ## Шаг 4 — запуск CYBOU-протокольных тестов
 
 ```bat
-build_cybou_qt_mingw\bin\test_bitcoin.exe --run_test=cybou_chainparams_tests,cybou_signing_tests,cybou_identity_tests,cybou_state_tests,cybou_state_store_tests,headers_sync_chainwork_tests --log_level=error
+build_cybou_qt_mingw\bin\cybou-core-test.exe --log_level=error
 ```
 
 ## Диагностика типовых падений

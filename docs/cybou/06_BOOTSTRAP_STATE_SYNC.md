@@ -1,5 +1,10 @@
 # 06 — Bootstrap, state sync and bounded history
 
+Current DEV observers start from a trusted genesis/network definition and
+verify subsequent finalized blocks one by one. The bounded-history snapshot
+and checkpoint flow below is not implemented yet; the compiled-in DEV
+bootstrap endpoint is transport metadata, not a trust anchor.
+
 A normal CYBOU desktop node must not require replay of every block from genesis after the network becomes old.
 
 ## Node roles

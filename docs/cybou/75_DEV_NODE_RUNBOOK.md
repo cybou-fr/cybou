@@ -53,18 +53,30 @@ cybou-node sync network.bin observer-db 5
 
 The list is transport metadata only: it is never part of the serialized
 network definition, carries no trust, and applies to the disposable DEV
-network. Beta and Mainnet derive bootstrap sets from operator-approved
-validator admission instead of a compiled-in list.
+network. Beta and Mainnet bootstrap policy will follow operator-approved
+validator admission; those networks are not operational yet.
 
 The listener handles one bounded request at a time. The observer verifies
 every block before committing it. A trusted genesis file is essential: the
 block feed does not negotiate network identity or bootstrap trust.
 
+## Operation submission and desktop
+
+The same bounded TCP listener accepts a `CYBO` request for one serialized
+protocol operation (up to 64 KiB) as well as `CYB1` block requests. The
+authority validates a submitted operation against the pending candidate
+state and includes accepted operations in a later block. The desktop native
+runtime follows verified DEV blocks and its identity service can submit
+AccountCreate remotely, then wait for finality. A successful submission
+acknowledgment is not finality.
+
 ## Current limits
 
-This DEV process produces empty blocks. It has no operation-submission API,
-peer discovery, snapshot sync, authentication, encrypted transport, or desktop
-client connection. Expose the listener only inside a trusted private network
-for now. The standalone `init-dev` profile has no Operator Authority keyset,
-so it cannot admit additional validators. It is separate from future Beta and
-Mainnet genesis and economics.
+This DEV process can also produce empty blocks when no operation is pending.
+It has no peer discovery, snapshot sync, authenticated or encrypted transport,
+durable mempool gossip, or independent multi-validator deployment. Expose the
+listener only inside a trusted private network. The validator key is a raw
+seed file whose filesystem access must be restricted; the desktop identity
+keystore is separate and OS-protected on Windows. The standalone `init-dev`
+profile has no Operator Authority keyset, so it cannot admit additional
+validators. Beta and Mainnet require separate genesis and economics.

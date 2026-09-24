@@ -1,5 +1,11 @@
 # 02 — Architecture
 
+The diagrams below describe the target shared network. Today the Qt desktop
+opens a native `CybouNodeRuntime`, follows verified blocks from a DEV
+bootstrap authority, and submits AccountCreate operations. The Email,
+Storage, Backup, and full P2P paths in the diagram are not yet connected
+end to end. See `26_IMPLEMENTATION_STATUS.md` for the code boundary.
+
 ## Desktop process
 
 ```text

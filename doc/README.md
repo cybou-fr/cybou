@@ -1,9 +1,14 @@
 # CYBOU Documentation Hub
 
-Welcome to the internal technical documentation for **CYBOU** (v0.0.1).
+Welcome to the technical documentation for **CYBOU**. Start with the
+[current implementation status](../docs/cybou/26_IMPLEMENTATION_STATUS.md):
+the native DEV state path and the inherited Bitcoin bootstrap runtime are
+distinct, and only the former has CYBOU BFT finality.
 
 CYBOU is a commercially operated European sovereign peer-to-peer network designed in France.
-Its first core product is **CYBOU Email**, built on first-class on-chain MailTx operations, permissioned BFT explicit finality, deterministic Proof of Trust (PoT) epochs, and zero-priority-fee economic routing.
+Its first planned product is **CYBOU Email**. Native Mail operations, BFT
+certificates, PoT epochs, and deterministic fees exist in core, while complete
+encrypted Email delivery and production multi-validator operation remain open.
 
 ---
 
@@ -17,6 +22,10 @@ The primary architecture, protocol requirements, and design choices are document
 - [`02_ARCHITECTURE.md`](../docs/cybou/02_ARCHITECTURE.md) — NodeCore single-process architecture
 - [`03_BITCOIN_DERIVATION.md`](../docs/cybou/03_BITCOIN_DERIVATION.md) — Derivation rules from Bitcoin Core
 - [`04_NETWORK_QUARANTINE.md`](../docs/cybou/04_NETWORK_QUARANTINE.md) — Network quarantine and port isolation
+- [`26_IMPLEMENTATION_STATUS.md`](../docs/cybou/26_IMPLEMENTATION_STATUS.md) — Current code boundary and remaining integration
+- [`73_CORE_DESKTOP_CONTRACT.md`](../docs/cybou/73_CORE_DESKTOP_CONTRACT.md) — Native runtime to Qt desktop contract
+- [`74_AUTHORITY_BLOCK_FEED.md`](../docs/cybou/74_AUTHORITY_BLOCK_FEED.md) — DEV producer and bounded transport
+- [`75_DEV_NODE_RUNBOOK.md`](../docs/cybou/75_DEV_NODE_RUNBOOK.md) — Standalone DEV node and observer
 
 ### Consensus & Network Time
 - [`07_BFT_CONSENSUS.md`](../docs/cybou/07_BFT_CONSENSUS.md) — Permissioned BFT explicit finality
@@ -49,11 +58,11 @@ The primary architecture, protocol requirements, and design choices are document
 
 ## Building CYBOU
 
-Supported compilation targets for CYBOU v0.0.1:
+Build entrypoint: [`INSTALL.md`](../INSTALL.md).
 
-- **Windows (MSVC)**: [Windows MSVC Build Notes](build-windows-msvc.md) — Primary desktop build.
-- **Linux / Unix**: [Unix Build Notes](build-unix.md) — Infrastructure and validator node build.
-- **Dependencies**: [Dependencies](dependencies.md) — External third-party libraries and requirements.
+- **Windows (verified local setup)**: [Qt MinGW + vcpkg procedure](../docs/cybou/71_WINDOWS_MINGW_BUILD.md).
+- **Linux core CI**: [Native CYBOU workflow](../.github/workflows/cybou-core.yml).
+- **Inherited notes**: [MSVC](build-windows-msvc.md), [Unix](build-unix.md), and [dependencies](dependencies.md) still contain transitional Bitcoin assumptions.
 
 ---
 

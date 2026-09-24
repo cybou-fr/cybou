@@ -1,5 +1,10 @@
 # 10 — Identity and `.cybou` names
 
+Implementation status: typed AccountID, AccountCreate, local identity keys,
+and proof of possession exist in DEV code. `.cybou` alias registration,
+device rotation, and a global name registry are design targets, not live
+features of the current native runtime.
+
 ## Cryptographic identity
 
 ```text

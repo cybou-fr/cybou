@@ -1,5 +1,12 @@
 # 22 — Roadmap v0.0.1 — Architecture hardening
 
+This is a milestone sequence, not a list of completed releases. As of
+2026-09-24, parts of several milestones exist in core and the experimental
+single-validator DEV node, while the complete Email product, independent
+multi-validator network, pruning, and Object Storage remain open. See
+`26_IMPLEMENTATION_STATUS.md` for the current code boundary and
+`75_DEV_NODE_RUNBOOK.md` for the running DEV process.
+
 ## v0.0.0 — Exact upstream baseline
 Pin exact local Bitcoin Core tag/commit. Build/tests only. No normal Bitcoin-network launch.
 

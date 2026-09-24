@@ -1,5 +1,11 @@
 # 07 — BFT consensus core
 
+Implementation status (2026-09-24): the core BFT engine and certificate
+verification are tested across validator-set sizes, while the standalone
+`cybou-node` currently runs only N=1 Authority Mode. Independent
+multi-validator networking and crash-safe operation remain integration work.
+See `26_IMPLEMENTATION_STATUS.md` for the current deployment boundary.
+
 ## Frozen direction
 
 CYBOU uses:
@@ -62,7 +68,7 @@ Operator Authority
    - Fault tolerance $f = 0$ (all nodes must agree; crash of any node pauses progress).
 
 3. **Byzantine BFT Mode ($N \ge 4$)**:
-   - Production decentralized operation (`ConsensusMode::BFT`);
+   - Target production decentralized operation (`ConsensusMode::BFT`);
    - Quorum threshold: $\lfloor 2N / 3 \rfloor + 1$;
    - Fault tolerance: $f = \lfloor (N - 1) / 3 \rfloor \ge 1$;
    - $N=4 \implies Q=3, f=1$;
@@ -103,8 +109,8 @@ The canonical reference implementation is defined in `cybou::BftValidatorNode` a
 - **Phases**:
   1. `PROPOSE`: Round leader broadcasts `BftProposalMsg` signed over `CYBOU/BFT_PROPOSAL/V1`.
   2. `PREVOTE`: Nodes validate proposal against canonical chain tip and locking rules. If valid, broadcast `BftPrevoteMsg` for `block_id`; otherwise prevote `nil`.
-  3. `PRECOMMIT`: When $\ge 3$ prevotes received for `block_id`, node locks on `(block, round)` and broadcasts `BftPrecommitMsg` signed over `CYBOU/BFT_COMMIT/V1`. If $\ge 3$ prevotes received without quorum for a single block (or timeout), precommit `nil`.
-  4. `FINALIZED`: When $\ge 3$ precommits received for `block_id`, their signatures directly assemble `BftFinalityCertificateV1`. The node packages `FinalizedBlockV1{block, cert}`, advances to height + 1, and resets round to 0.
+  3. `PRECOMMIT`: At the validator-set quorum of prevotes for `block_id`, the node locks on `(block, round)` and broadcasts `BftPrecommitMsg` signed over `CYBOU/BFT_COMMIT/V1`. If a quorum forms without one block (or timeout), it precommits `nil`.
+  4. `FINALIZED`: At the validator-set quorum of precommits for `block_id`, their signatures assemble `BftFinalityCertificateV1`. The node packages `FinalizedBlockV1{block, cert}`, advances to height + 1, and resets round to 0.
 
 ## Safety invariant
 

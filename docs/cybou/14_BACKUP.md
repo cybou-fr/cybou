@@ -1,5 +1,8 @@
 # 14 — Backup service
 
+Implementation status: the desktop has a capability-gated Backup page, but
+the decentralized backup, verification, and restore service below is planned.
+
 Backup is a later application of the general durable CYBOU Object Storage layer.
 
 CYBOU Email ships first.

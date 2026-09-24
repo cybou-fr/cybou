@@ -1,5 +1,9 @@
 # 11 — Distributed storage object model
 
+Implementation status: this is a target protocol design. The Qt desktop has
+a capability-gated Storage page, but distributed object placement, retrieval,
+durability proofs, and accounting are not operational in the DEV runtime.
+
 CYBOU storage is a cooperative object network, not a host-price marketplace.
 
 ## Opaque object principle

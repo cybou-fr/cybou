@@ -1,8 +1,12 @@
-# 26 — Implementation status v0.0.1
+# 26 — Implementation status (2026-09-24)
+
+This is the current code boundary. Frozen protocol decisions remain in
+`24_DECISIONS.md`; this page distinguishes implemented DEV paths from
+production requirements.
 
 ## Hardened architecture
 
-CYBOU Email:
+CYBOU Email target:
 
 ```text
 first-class MailTx
@@ -100,19 +104,28 @@ Do not build Balance/System Balance or issuance assumptions on the inherited
 coinbase/subsidy path. The development genesis may be reset when the CYBOU BFT
 and deterministic state-transition layers replace the bootstrap consensus.
 
-The BFT state machine is still a library/simulator. Production block
-production, operation pool, P2P transport, finalized-block sync, and desktop
-verified-state display are not yet wired. Its execution callback must use
-`ExecuteBlockOperations` over the canonical parent state in that integration.
-`CybouStateStore::ComputeCandidateStateRoot` exposes this calculation against
-the persisted canonical state for the next height without committing it.
-The simulator uses an explicit test-only root fixture.
-The N=1 producer and bounded experimental block feed are described in
-`74_AUTHORITY_BLOCK_FEED.md`; they are not yet connected to a daemon or desktop.
+The native CYBOU state path now has a standalone `cybou-node` DEV Authority
+producer, bounded TCP block feed and operation submission, and an observer
+that verifies each finalized block before committing it. The Qt desktop
+creates or opens a local native state store, follows the compiled-in DEV
+bootstrap endpoint, displays verified finality status, and uses the identity
+service to submit AccountCreate operations. `CybouStateStore` remains the
+canonical state owner, with candidate roots computed by
+`ComputeCandidateStateRoot` over its persisted parent state.
 
-The network-definition serialization changed in this hardening milestone.
-Previously initialized disposable DEV state must start from a new genesis;
-existing stored NetworkIDs are intentionally incompatible.
+This path is **N=1 Authority Mode, f=0**. The core BFT engine and simulator
+exercise multi-validator rounds and fault cases, but independent validators,
+crash-safe consensus, peer discovery, authenticated transport, and production
+network operation are not integrated. The inherited Bitcoin bootstrap chain
+still exists separately and must not be described as CYBOU BFT consensus.
+
+See `74_AUTHORITY_BLOCK_FEED.md`, `75_DEV_NODE_RUNBOOK.md`, and
+`73_CORE_DESKTOP_CONTRACT.md` for the respective transport, process, and
+desktop boundaries.
+
+Network-definition and genesis serialization changed during hardening.
+Previously initialized disposable DEV state may require a new genesis;
+stored NetworkIDs are deliberately checked on reopen.
 
 ## v0.0.3 implementation
 
@@ -160,6 +173,18 @@ Implemented skeleton:
 - `MailOpV1` explicitly marked DEV EXPERIMENTAL / NOT WIRE-FROZEN;
 - consensus-operation wiring of Operator Authority signature verification (`ValidatorAdmissionOpV1` and `ValidatorRemovalOpV1`) with domain-separated hybrid `Ed25519 + ML-DSA-65` signatures binding `NetworkID`;
 - tracking active validator set in canonical consensus state (`CybouState`) and enforcing equal weight = 1, unique keys/IDs, and non-empty active set invariants in `CybouStateStore`.
+- `CybouAuthorityNode` N=1 block production using the canonical executor,
+  with a bounded pending-operation queue and stop at validator-set transition;
+- `cybou-node` DEV process with persistent LevelDB, validator key file,
+  verified observer synchronization, and bounded remote operation submission;
+- `CybouNodeRuntime` sharing native state operations between the headless
+  process and Qt desktop; a DEV bootstrap endpoint is transport metadata,
+  while the network definition remains the trust root;
+- local `CybouIdentityService` creation flow, proof of possession, remote
+  AccountCreate submission, finality wait, and OS-protected identity
+  keystore on Windows;
+- compact Mail discovery filters and Mail evidence bundle construction and
+  verification in core, without a complete Email delivery service.
 
 Desktop GUI:
 
@@ -170,7 +195,15 @@ Desktop GUI:
 - Network page with explicit-BFT finality section (finalized height, validator count, f = 1 ≥ 4 validators rule) fed by the doc 73 status contract;
 - core → desktop integration contract (doc 73): status fields, capability flags, service data flows, absolute rules both sides obey;
 - node diagnostics restyled to the CYBOU theme; inherited Bitcoin locale files dropped until real CYBOU translations exist.
+- Qt desktop runtime opens native CYBOU state, follows verified DEV blocks,
+  reports finalized height and validator count, and gates service actions
+  according to connected capabilities.
 
 Not yet implemented:
 
-- connection of the state-store boundary to the P2P wire message lifecycle.
+- independent multi-validator operation with durable consensus recovery;
+- peer discovery and a native, authenticated P2P message lifecycle beyond
+  the bounded DEV TCP block/operation transport;
+- complete encrypted CYBOU Email send/receive and local mailbox indexing;
+- operational Object Storage, Backup, and Drive;
+- removal of inherited Bitcoin PoW, subsidy, wallet, and runtime paths.

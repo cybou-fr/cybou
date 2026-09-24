@@ -50,14 +50,22 @@ AccountCreateOpV1 {
     account_id: AccountId
     initial_authorization: AccountAuthorizationV1
     creation_work: AccountCreationWorkV1
+    proof_of_possession: Ed25519 signature (64 bytes)
 }
 ```
+
+The proof of possession signs the domain-separated digest
+`SHA256("CYBOU/ACCOUNT_POP/V1" || NetworkID || AccountID || authorization_key)`.
+It prevents registration of an account under a key the creator does not
+control. `AccountCreateOpV1` is canonical DEV code; its wire profile remains
+subject to versioned protocol review.
 
 ## Validation and State Transition
 
 When processing `AccountCreateOpV1`:
 
-1. **Op Integrity**: Validate version, non-null fields, and work difficulty.
+1. **Op Integrity**: Validate version, non-null fields, work difficulty, and
+   proof of possession of the initial authorization key.
 2. **Network Binding**: `creation_work.network_id` must match the active NetworkID derived from the immutable `CybouNetworkDefinitionV1`.
 3. **Account Binding**: `creation_work.account_id` must match `op.account_id`.
 4. **Auth Binding**: `creation_work.initial_authorization_commitment` must match `ComputeAuthCommitment(op.initial_authorization)`.
@@ -67,7 +75,7 @@ When processing `AccountCreateOpV1`:
 8. **Block Limit**: The block must not exceed `max_account_creates_per_block`.
 9. **Candidate State Transition**:
    - `OnboardingPool` debited by onboarding bonus.
-   - New `AccountState` created with `balance = 0`, `system_balance = onboarding_bonus`, `creation_height = height`, `creation_epoch = epoch`, `initial_auth_commitment`.
+   - New `AccountState` created with `balance = 0`, `system_balance = onboarding_bonus`, `creation_height = height`, `creation_epoch = epoch`, and the active authorization key. The work commitment is not retained as a separate account-state field.
    - Any invalid operation rejects the candidate without changing canonical state.
 10. **Finalized Commit**: After BFT finality, candidate state, state root, finalized tip and finalized height are persisted atomically. The height must advance by exactly one. Finalized CYBOU state has no production rollback or per-block undo path.
 

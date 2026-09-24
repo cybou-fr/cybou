@@ -1,5 +1,10 @@
 # 17 — CYBOU Email
 
+Implementation status: native bounded Mail operations, deterministic fees,
+compact discovery filters, and evidence verification exist in core. The
+complete encrypted send/receive lifecycle below and local Inbox/Sent indexes
+are not operational yet. The Qt Email page is capability-gated.
+
 CYBOU Email is native E2E encrypted, signed, consensus-registered email.
 
 It is not a realtime messenger and not an SMTP/IMAP mailbox service.
