@@ -5,6 +5,7 @@
 #define CYBOU_P2P_PEER_MANAGER_H
 
 #include <cybou/p2p/session.h>
+#include <cybou/block_feed.h>
 
 #include <boost/asio/io_context.hpp>
 
@@ -36,6 +37,7 @@ public:
     explicit PeerManager(CybouNodeRuntime& runtime);
     bool Connect(const std::string& numeric_address, uint16_t port);
     size_t PingAll();
+    SyncPeerResult SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks);
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
     void DisconnectAll();

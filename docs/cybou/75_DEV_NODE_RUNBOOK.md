@@ -61,11 +61,14 @@ separate listener port and probe it from another node database:
 ```text
 cybou-node serve network.bin producer-db validator.key 127.0.0.1 29460 1000 29461
 cybou-node p2p-probe network.bin observer-db 127.0.0.1 29461
+cybou-node p2p-sync network.bin observer-db 127.0.0.1 29461 5
 ```
 
-This CYP2 port currently accepts one persistent peer at a time. It reports
-the producer's advertised finalized height but does not transfer blocks or
-operations; `sync` still uses the bounded CYB1 block feed on port 29460.
+This CYP2 port currently accepts one persistent peer at a time. `p2p-sync`
+requests up to the specified number of finalized blocks on one connection,
+verifies each block before commit, and exits if the producer has no next block.
+The existing DEV `sync` command still uses the bounded CYB1 block feed on port
+29460. CYP2 does not yet propagate operations or gossip blocks.
 
 ## Bootstrap endpoints
 

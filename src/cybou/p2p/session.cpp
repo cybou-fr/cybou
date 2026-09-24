@@ -2,6 +2,8 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/p2p/session.h>
+#include <cybou/block_feed.h>
+#include <cybou/node_runtime.h>
 
 #include <algorithm>
 #include <array>
@@ -11,6 +13,7 @@ namespace cybou::p2p {
 namespace {
 constexpr size_t HEADER_SIZE{10};
 constexpr size_t HELLO_SIZE{88};
+constexpr auto BLOCK_TRANSFER_TIMEOUT{std::chrono::seconds{30}};
 
 void Put64(std::vector<unsigned char>& out, uint64_t value)
 {
@@ -23,12 +26,24 @@ uint64_t Read64(const unsigned char* data)
     for (int i = 0; i < 8; ++i) value |= uint64_t{data[i]} << (8 * i);
     return value;
 }
+
+void Put32(std::vector<unsigned char>& out, uint32_t value)
+{
+    for (int i = 0; i < 4; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
+}
+
+uint32_t Read32(const unsigned char* data)
+{
+    uint32_t value{0};
+    for (int i = 0; i < 4; ++i) value |= uint32_t{data[i]} << (8 * i);
+    return value;
+}
 } // namespace
 
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
     if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
-        (frame.type != MessageType::HELLO && frame.type != MessageType::PING && frame.type != MessageType::PONG)) return std::nullopt;
+        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 6)) return std::nullopt;
     std::vector<unsigned char> bytes{'C', 'Y', 'P', '2', WIRE_VERSION, static_cast<unsigned char>(frame.type)};
     const auto size = static_cast<uint32_t>(frame.payload.size());
     for (int i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(size >> (8 * i)));
@@ -39,7 +54,7 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < HEADER_SIZE || !std::equal(bytes.begin(), bytes.begin() + 4, "CYP2") ||
-        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 3) return std::nullopt;
+        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 6) return std::nullopt;
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[6 + i]} << (8 * i);
     if (size > MAX_FRAME_PAYLOAD || bytes.size() != HEADER_SIZE + size) return std::nullopt;
@@ -79,9 +94,8 @@ PeerSession::PeerSession(boost::asio::ip::tcp::socket socket) : m_socket{std::mo
     if (ec) m_socket.close();
 }
 
-bool PeerSession::ReadExact(unsigned char* out, size_t length)
+bool PeerSession::ReadExact(unsigned char* out, size_t length, std::chrono::steady_clock::time_point deadline)
 {
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     size_t done{0};
     while (done < length && std::chrono::steady_clock::now() < deadline) {
         boost::system::error_code ec;
@@ -120,19 +134,24 @@ bool PeerSession::Write(const Frame& frame)
     return WriteExact(bytes->data(), bytes->size());
 }
 
-std::optional<Frame> PeerSession::Read()
+std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point deadline)
 {
     std::array<unsigned char, HEADER_SIZE> header{};
-    if (!ReadExact(header.data(), header.size())) return std::nullopt;
+    if (!ReadExact(header.data(), header.size(), deadline)) return std::nullopt;
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{header[6 + i]} << (8 * i);
     if (size > MAX_FRAME_PAYLOAD) return std::nullopt;
     std::vector<unsigned char> bytes{header.begin(), header.end()};
     bytes.resize(HEADER_SIZE + size);
-    if (size && !ReadExact(bytes.data() + HEADER_SIZE, size)) {
+    if (size && !ReadExact(bytes.data() + HEADER_SIZE, size, deadline)) {
         return std::nullopt;
     }
     return DecodeFrame(bytes);
+}
+
+std::optional<Frame> PeerSession::Read()
+{
+    return Read(std::chrono::steady_clock::now() + std::chrono::seconds(5));
 }
 
 bool PeerSession::Handshake(const Hello& local)
@@ -163,6 +182,56 @@ bool PeerSession::AnswerPing()
     const auto request = Read();
     return request && request->type == MessageType::PING && request->payload.size() == 8 &&
         Write(Frame{MessageType::PONG, request->payload});
+}
+
+std::optional<std::vector<unsigned char>> PeerSession::RequestBlock(uint64_t height)
+{
+    if (!m_peer || height == 0) return std::nullopt;
+    std::vector<unsigned char> request;
+    Put64(request, height);
+    if (!Write(Frame{MessageType::GET_BLOCK, request})) return std::nullopt;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    const auto meta = Read(deadline);
+    if (!meta || meta->type != MessageType::BLOCK_META || meta->payload.size() != 4) return std::nullopt;
+    const uint32_t size = Read32(meta->payload.data());
+    if (size > MAX_FINALIZED_BLOCK_FEED_BYTES) return std::nullopt;
+    std::vector<unsigned char> bytes;
+    bytes.reserve(size);
+    while (bytes.size() < size) {
+        const auto chunk = Read(deadline);
+        if (!chunk || chunk->type != MessageType::BLOCK_CHUNK || chunk->payload.empty() ||
+            chunk->payload.size() > size - bytes.size()) return std::nullopt;
+        bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
+    }
+    return bytes;
+}
+
+bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
+{
+    if (!m_peer) return false;
+    const auto request = Read();
+    if (!request) return false;
+    if (request->type == MessageType::PING) {
+        return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});
+    }
+    if (request->type != MessageType::GET_BLOCK || request->payload.size() != 8) return false;
+    const uint64_t height = Read64(request->payload.data());
+    if (height == 0) return false;
+    const auto block = runtime.GetBlockAtHeight(height);
+    auto encoded = block ? SerializeFinalizedBlock(*block) : std::nullopt;
+    if (block && !encoded) return false;
+    const std::vector<unsigned char> empty;
+    const auto& bytes = encoded ? *encoded : empty;
+    if (bytes.size() > MAX_FINALIZED_BLOCK_FEED_BYTES) return false;
+    std::vector<unsigned char> meta;
+    Put32(meta, static_cast<uint32_t>(bytes.size()));
+    if (!Write(Frame{MessageType::BLOCK_META, meta})) return false;
+    for (size_t offset = 0; offset < bytes.size(); offset += MAX_FRAME_PAYLOAD) {
+        const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, bytes.size() - offset);
+        if (!Write(Frame{MessageType::BLOCK_CHUNK,
+            std::vector<unsigned char>{bytes.begin() + offset, bytes.begin() + offset + count}})) return false;
+    }
+    return true;
 }
 
 } // namespace cybou::p2p

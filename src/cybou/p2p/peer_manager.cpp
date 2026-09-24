@@ -9,6 +9,7 @@
 #include <openssl/rand.h>
 
 #include <array>
+#include <limits>
 #include <optional>
 
 namespace cybou::p2p {
@@ -63,6 +64,45 @@ size_t PeerManager::PingAll()
         }
     }
     return healthy;
+}
+
+SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks)
+{
+    SyncPeerResult result;
+    boost::system::error_code ec;
+    const auto address = boost::asio::ip::make_address(numeric_address, ec);
+    if (ec) return result;
+    const Endpoint endpoint{address.to_string(), port};
+    auto it = m_peers.find(endpoint);
+    if (it == m_peers.end()) return result;
+    result.status = SyncPeerStatus::UP_TO_DATE;
+    while (result.blocks_applied < max_blocks) {
+        const auto status = m_runtime.GetStatus();
+        if (!status.is_initialized || status.finalized_height == std::numeric_limits<uint64_t>::max()) {
+            result.status = SyncPeerStatus::PROTOCOL_ERROR;
+            break;
+        }
+        const uint64_t height = status.finalized_height + 1;
+        const auto bytes = it->second->RequestBlock(height);
+        if (!bytes) {
+            result.status = SyncPeerStatus::CONNECTION_FAILED;
+            m_peers.erase(it);
+            break;
+        }
+        if (bytes->empty()) break;
+        const auto block = DeserializeFinalizedBlock(*bytes);
+        if (!block || block->block.height != height ||
+            block->certificate.network_id != status.network_id ||
+            block->certificate.block_id != ComputeBlockId(block->block) ||
+            !m_runtime.CommitBlock(*block)) {
+            result.status = SyncPeerStatus::PROTOCOL_ERROR;
+            m_peers.erase(it);
+            break;
+        }
+        ++result.blocks_applied;
+        result.status = SyncPeerStatus::BLOCKS_APPLIED;
+    }
+    return result;
 }
 
 std::vector<PeerInfo> PeerManager::Peers() const

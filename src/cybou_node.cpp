@@ -132,7 +132,7 @@ int Main(const int argc, char* argv[])
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT");
     const auto network = cybou::LoadCybouNetworkFile(argv[2]);
     if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
@@ -151,6 +151,22 @@ int Main(const int argc, char* argv[])
         const auto peer = peers.Peers().front();
         std::cout << "peer=" << peer.address << ':' << peer.port
                   << " height=" << peer.hello.finalized_height << std::endl;
+        return 0;
+    }
+    if (std::string_view{argv[1]} == "p2p-sync" && argc == 7) {
+        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+            .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        cybou::CybouNodeRuntime runtime{std::move(config)};
+        if (!runtime.GetStatus().is_initialized && !runtime.InitializeGenesis(network->genesis)) {
+            throw std::runtime_error("cannot initialize genesis");
+        }
+        cybou::p2p::PeerManager peers{runtime};
+        const auto port = Port(argv[5]);
+        if (!peers.Connect(argv[4], port)) throw std::runtime_error("P2P handshake failed");
+        const auto result = peers.SyncFromPeer(argv[4], port, PositiveCount(argv[6]));
+        if (!result.IsConnected()) throw std::runtime_error("P2P block sync failed");
+        std::cout << "height=" << *runtime.GetFinalizedHeight()
+                  << " applied=" << result.blocks_applied << std::endl;
         return 0;
     }
     // Without explicit PEER_HOST PORT, sync follows the DEV bootstrap list
@@ -255,7 +271,7 @@ int Main(const int argc, char* argv[])
                 cybou::p2p::PeerSession session{std::move(socket)};
                 const auto hello = LocalHello(runtime);
                 if (!hello || !session.Handshake(*hello)) continue;
-                while (!stopping && session.AnswerPing()) {}
+                while (!stopping && session.ServeNext(runtime)) {}
             }
         });
         while (!stopping) {

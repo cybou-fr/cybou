@@ -14,12 +14,13 @@
 #include <span>
 #include <vector>
 
+namespace cybou { class CybouNodeRuntime; }
 namespace cybou::p2p {
 
 inline constexpr uint32_t MAX_FRAME_PAYLOAD{4096};
 inline constexpr uint8_t WIRE_VERSION{1};
 
-enum class MessageType : uint8_t { HELLO = 1, PING = 2, PONG = 3 };
+enum class MessageType : uint8_t { HELLO = 1, PING = 2, PONG = 3, GET_BLOCK = 4, BLOCK_META = 5, BLOCK_CHUNK = 6 };
 
 struct Frame {
     MessageType type;
@@ -48,13 +49,18 @@ public:
     bool Handshake(const Hello& local);
     bool Ping(uint64_t nonce);
     bool AnswerPing();
+    // Empty bytes mean the height is not available. Nullopt means a protocol
+    // or transport failure; callers must verify returned blocks before commit.
+    std::optional<std::vector<unsigned char>> RequestBlock(uint64_t height);
+    bool ServeNext(CybouNodeRuntime& runtime);
     const std::optional<Hello>& Peer() const { return m_peer; }
     boost::asio::ip::tcp::socket& Socket() { return m_socket; }
 
 private:
-    bool ReadExact(unsigned char* out, size_t length);
+    bool ReadExact(unsigned char* out, size_t length, std::chrono::steady_clock::time_point deadline);
     bool WriteExact(const unsigned char* bytes, size_t length);
     bool Write(const Frame& frame);
+    std::optional<Frame> Read(std::chrono::steady_clock::time_point deadline);
     std::optional<Frame> Read();
     boost::asio::ip::tcp::socket m_socket;
     std::optional<Hello> m_peer;
