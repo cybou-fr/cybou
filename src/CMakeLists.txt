@@ -300,45 +300,10 @@ if(WITH_EMBEDDED_ASMAP)
   )
 endif()
 
-# Bitcoin wrapper executable that can call other executables.
+# CYBOU node daemon executable.
 add_executable(cybou-node cybou_node.cpp)
 target_link_libraries(cybou-node PRIVATE bitcoin_node bitcoin_common bitcoin_util Boost::headers)
 add_windows_application_manifest(cybou-node)
-
-if(BUILD_BITCOIN_BIN)
-  add_executable(bitcoin bitcoin.cpp)
-  add_windows_resources(bitcoin bitcoin-res.rc)
-  add_windows_application_manifest(bitcoin)
-  target_link_libraries(bitcoin core_interface bitcoin_common bitcoin_util)
-  install_binary_component(bitcoin HAS_MANPAGE)
-endif()
-
-# Bitcoin Core bitcoind.
-if(BUILD_DAEMON)
-  add_executable(bitcoind
-    bitcoind.cpp
-    init/bitcoind.cpp
-  )
-  add_windows_resources(bitcoind bitcoind-res.rc)
-  add_windows_application_manifest(bitcoind)
-  target_link_libraries(bitcoind
-    core_interface
-    bitcoin_node
-  )
-  install_binary_component(bitcoind HAS_MANPAGE)
-endif()
-if(ENABLE_IPC AND BUILD_DAEMON)
-  add_executable(bitcoin-node
-    bitcoind.cpp
-    init/bitcoin-node.cpp
-  )
-  target_link_libraries(bitcoin-node
-    core_interface
-    bitcoin_node
-    bitcoin_ipc
-  )
-  install_binary_component(bitcoin-node INTERNAL)
-endif()
 
 
 add_library(bitcoin_cli STATIC EXCLUDE_FROM_ALL
@@ -352,50 +317,6 @@ target_link_libraries(bitcoin_cli
 )
 
 
-# Bitcoin Core RPC client
-if(BUILD_CLI)
-  add_executable(bitcoin-cli bitcoin-cli.cpp)
-  add_windows_resources(bitcoin-cli bitcoin-cli-res.rc)
-  add_windows_application_manifest(bitcoin-cli)
-  target_link_libraries(bitcoin-cli
-    core_interface
-    bitcoin_cli
-    bitcoin_common
-    bitcoin_util
-    libevent::core
-    libevent::extra
-  )
-  install_binary_component(bitcoin-cli HAS_MANPAGE)
-endif()
-
-
-if(BUILD_TX)
-  add_executable(bitcoin-tx bitcoin-tx.cpp)
-  add_windows_resources(bitcoin-tx bitcoin-tx-res.rc)
-  add_windows_application_manifest(bitcoin-tx)
-  target_link_libraries(bitcoin-tx
-    core_interface
-    bitcoin_common
-    bitcoin_util
-    univalue
-  )
-  install_binary_component(bitcoin-tx HAS_MANPAGE)
-endif()
-
-
-if(BUILD_UTIL)
-  add_executable(bitcoin-util bitcoin-util.cpp)
-  add_windows_resources(bitcoin-util bitcoin-util-res.rc)
-  add_windows_application_manifest(bitcoin-util)
-  target_link_libraries(bitcoin-util
-    core_interface
-    bitcoin_common
-    bitcoin_util
-  )
-  install_binary_component(bitcoin-util HAS_MANPAGE)
-endif()
-
-
 if(BUILD_GUI)
   add_subdirectory(qt)
 endif()
@@ -405,18 +326,6 @@ if(BUILD_KERNEL_LIB)
   add_subdirectory(kernel)
   if (BUILD_KERNEL_TEST)
     add_subdirectory(test/kernel)
-  endif()
-  if(BUILD_UTIL_CHAINSTATE)
-    add_executable(bitcoin-chainstate
-      bitcoin-chainstate.cpp
-    )
-    add_windows_application_manifest(bitcoin-chainstate)
-    target_link_libraries(bitcoin-chainstate
-      PRIVATE
-        core_interface
-        bitcoinkernel
-    )
-    install_binary_component(bitcoin-chainstate INTERNAL)
   endif()
 endif()
 

@@ -242,24 +242,6 @@ if(WIN32)
   )
 endif()
 
-if(ENABLE_IPC)
-  add_executable(bitcoin-gui
-    main.cpp
-    ../init/bitcoin-gui.cpp
-  )
-  target_link_libraries(bitcoin-gui
-    core_interface
-    bitcoinqt
-    bitcoin_node
-    bitcoin_ipc
-  )
-  import_plugins(bitcoin-gui)
-  install_binary_component(bitcoin-gui INTERNAL)
-  if(WIN32)
-    set_target_properties(bitcoin-gui PROPERTIES WIN32_EXECUTABLE TRUE)
-  endif()
-endif()
-
 if(BUILD_GUI_TESTS)
   add_subdirectory(test)
 endif()
