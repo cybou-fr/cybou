@@ -23,8 +23,10 @@ AuthorityProductionResult Failure(const AuthorityProductionError error)
 } // namespace
 
 CybouAuthorityNode::CybouAuthorityNode(
-    CybouStateStore& store, std::array<unsigned char, 32> validator_private_key)
-    : m_store{store}, m_validator_private_key{validator_private_key}
+    CybouStateStore& store, std::array<unsigned char, 32> validator_private_key,
+    std::optional<std::filesystem::path> signing_journal)
+    : m_store{store}, m_validator_private_key{validator_private_key},
+      m_signing_journal{std::move(signing_journal)}
 {
 }
 
@@ -83,7 +85,7 @@ AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)
         0, m_validator_private_key, m_store.GetNetworkId(), *set,
         [this](const std::vector<ProtocolOperation>& operations, const uint64_t candidate_height) {
             return m_store.ComputeCandidateStateRoot(operations, candidate_height);
-        },
+        }, m_signing_journal,
     };
     validator.SetHeight(height, head->block_id, *set);
     const auto proposal = validator.StartRound(0, m_pending);

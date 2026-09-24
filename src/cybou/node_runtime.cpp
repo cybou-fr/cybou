@@ -20,7 +20,9 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
 {
     if (m_config.validator_private_key.has_value()) {
         m_authority_node = std::make_unique<CybouAuthorityNode>(
-            m_store, *m_config.validator_private_key);
+            m_store, *m_config.validator_private_key,
+            m_config.memory_only ? std::nullopt :
+                std::optional<std::filesystem::path>{m_config.data_dir / "validator-signing.journal"});
     }
 }
 

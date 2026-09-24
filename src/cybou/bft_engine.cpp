@@ -8,8 +8,18 @@
 #include <crypto/sha256.h>
 
 #include <algorithm>
+#include <fstream>
+#include <filesystem>
 #include <string>
 #include <string_view>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 namespace cybou {
 
@@ -27,6 +37,73 @@ inline void AppendUint32LE(std::vector<unsigned char>& out, uint32_t val)
     for (int i = 0; i < 4; ++i) {
         out.push_back(static_cast<unsigned char>(val >> (8 * i)));
     }
+}
+
+constexpr size_t SIGNING_RECORD_SIZE{4 + 32 + 32 + 8 + 4 + 1 + 32 + 32};
+
+bool WriteSigningRecord(const std::filesystem::path& path, const std::vector<unsigned char>& bytes)
+{
+    auto temp = path;
+    temp += ".tmp";
+#ifdef _WIN32
+    HANDLE file = CreateFileW(temp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+        FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    DWORD written{0};
+    const bool written_ok = WriteFile(file, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) &&
+        written == bytes.size() && FlushFileBuffers(file);
+    CloseHandle(file);
+    if (!written_ok) { DeleteFileW(temp.c_str()); return false; }
+    if (!MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileW(temp.c_str());
+        return false;
+    }
+    return true;
+#else
+    const int fd = open(temp.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR);
+    if (fd < 0) return false;
+    size_t offset{0};
+    while (offset < bytes.size()) {
+        const ssize_t n = write(fd, bytes.data() + offset, bytes.size() - offset);
+        if (n <= 0) break;
+        offset += static_cast<size_t>(n);
+    }
+    const bool written_ok = offset == bytes.size() && fsync(fd) == 0;
+    if (close(fd) != 0 || !written_ok) { unlink(temp.c_str()); return false; }
+    if (rename(temp.c_str(), path.c_str()) != 0) { unlink(temp.c_str()); return false; }
+    const auto parent = path.parent_path().empty() ? std::filesystem::path{"."} : path.parent_path();
+    const int dirfd = open(parent.c_str(), O_RDONLY | O_DIRECTORY);
+    if (dirfd < 0) return false;
+    const bool synced = fsync(dirfd) == 0;
+    close(dirfd);
+    return synced;
+#endif
+}
+
+std::optional<std::vector<unsigned char>> ReadSigningRecord(const std::filesystem::path& path)
+{
+    std::error_code ec;
+    if (std::filesystem::is_symlink(path, ec) || ec || std::filesystem::file_size(path, ec) != SIGNING_RECORD_SIZE || ec) {
+        return std::nullopt;
+    }
+    std::ifstream input(path, std::ios::binary);
+    std::vector<unsigned char> bytes(SIGNING_RECORD_SIZE);
+    if (!input.read(reinterpret_cast<char*>(bytes.data()), bytes.size())) return std::nullopt;
+    return bytes;
+}
+
+uint64_t ReadUint64LE(const unsigned char* bytes)
+{
+    uint64_t value{0};
+    for (int i = 0; i < 8; ++i) value |= uint64_t{bytes[i]} << (8 * i);
+    return value;
+}
+
+uint32_t ReadUint32LE(const unsigned char* bytes)
+{
+    uint32_t value{0};
+    for (int i = 0; i < 4; ++i) value |= uint32_t{bytes[i]} << (8 * i);
+    return value;
 }
 
 } // namespace
@@ -120,19 +197,79 @@ BftValidatorNode::BftValidatorNode(
     std::array<unsigned char, 32> private_key_seed,
     uint256 network_id,
     ValidatorSet validator_set,
-    ExecuteOperations execute_operations)
+    ExecuteOperations execute_operations,
+    std::optional<std::filesystem::path> signing_journal)
     : m_node_index{node_index},
       m_private_key_seed{private_key_seed},
       m_network_id{network_id},
       m_validator_set{std::move(validator_set)},
       m_validator_set_commitment{ComputeValidatorSetCommitment(m_validator_set)},
-      m_execute_operations{std::move(execute_operations)}
+      m_execute_operations{std::move(execute_operations)},
+      m_signing_journal{std::move(signing_journal)}
 {
     const auto keypair = GenerateValidatorKeyPair(m_private_key_seed);
     if (keypair && node_index < m_validator_set.validators.size() &&
         m_validator_set.validators[node_index].consensus_public_key == keypair->public_key) {
         m_validator_id = m_validator_set.validators[node_index].validator_id;
     }
+    if (m_signing_journal) {
+        std::error_code ec;
+        const bool exists = std::filesystem::exists(*m_signing_journal, ec);
+        if (ec) { m_journal_valid = false; return; }
+        if (exists) {
+            const auto bytes = ReadSigningRecord(*m_signing_journal);
+            if (!bytes || !std::equal(bytes->begin(), bytes->begin() + 4, "CBS1") ||
+                !std::equal(m_network_id.begin(), m_network_id.end(), bytes->begin() + 4) ||
+                !std::equal(m_validator_id.begin(), m_validator_id.end(), bytes->begin() + 36) ||
+                (*bytes)[80] > static_cast<unsigned char>(BftStep::PRECOMMIT)) {
+                m_journal_valid = false;
+                return;
+            }
+            uint256 checksum;
+            CSHA256().Write(bytes->data(), SIGNING_RECORD_SIZE - 32).Finalize(checksum.begin());
+            if (!std::equal(checksum.begin(), checksum.end(), bytes->begin() + SIGNING_RECORD_SIZE - 32)) {
+                m_journal_valid = false;
+                return;
+            }
+            m_last_signed_height = ReadUint64LE(bytes->data() + 68);
+            m_last_signed_round = ReadUint32LE(bytes->data() + 76);
+            m_last_signed_step = static_cast<BftStep>((*bytes)[80]);
+            m_has_signed = true;
+            m_restarted = true;
+        }
+    }
+}
+
+bool BftValidatorNode::RecordSigningIntent(const BftStep step, const uint256& digest)
+{
+    if (m_validator_id.IsNull() || !m_journal_valid) return false;
+    if (m_has_signed) {
+        if (m_height < m_last_signed_height || (m_restarted && m_height == m_last_signed_height)) return false;
+        if (m_height == m_last_signed_height &&
+            (m_round < m_last_signed_round ||
+             (m_round == m_last_signed_round && step <= m_last_signed_step))) return false;
+    }
+    if (m_signing_journal) {
+        std::vector<unsigned char> bytes{'C', 'B', 'S', '1'};
+        bytes.insert(bytes.end(), m_network_id.begin(), m_network_id.end());
+        bytes.insert(bytes.end(), m_validator_id.begin(), m_validator_id.end());
+        AppendUint64LE(bytes, m_height);
+        AppendUint32LE(bytes, m_round);
+        bytes.push_back(static_cast<unsigned char>(step));
+        bytes.insert(bytes.end(), digest.begin(), digest.end());
+        uint256 checksum;
+        CSHA256().Write(bytes.data(), bytes.size()).Finalize(checksum.begin());
+        bytes.insert(bytes.end(), checksum.begin(), checksum.end());
+        if (!WriteSigningRecord(*m_signing_journal, bytes)) {
+            m_journal_valid = false;
+            return false;
+        }
+    }
+    m_last_signed_height = m_height;
+    m_last_signed_round = m_round;
+    m_last_signed_step = step;
+    m_has_signed = true;
+    return true;
 }
 
 BftValidatorNode::~BftValidatorNode()
@@ -207,6 +344,7 @@ std::optional<BftProposalMsg> BftValidatorNode::StartRound(
 
     const uint256 block_id = ComputeBlockId(block);
     const uint256 digest = ComputeProposalDigest(m_network_id, m_height, m_round, m_validator_id, block_id);
+    if (!RecordSigningIntent(BftStep::PROPOSE, digest)) return std::nullopt;
     const auto sig = SignValidatorVote(m_private_key_seed, digest);
     if (!sig) return std::nullopt;
 
@@ -259,6 +397,7 @@ std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposal
 
     std::optional<uint256> vote_block = valid_block ? std::optional<uint256>(block_id) : std::nullopt;
     const uint256 prevote_digest = ComputePrevoteDigest(m_network_id, m_height, m_round, m_validator_id, vote_block);
+    if (!RecordSigningIntent(BftStep::PREVOTE, prevote_digest)) return std::nullopt;
     const auto sig = SignValidatorVote(m_private_key_seed, prevote_digest);
     if (!sig) return std::nullopt;
 
@@ -320,6 +459,7 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
 
             const uint256 commit_digest = ComputeBftCommitDigest(
                 m_network_id, blk_id, m_height, m_round, m_validator_set_commitment);
+            if (!RecordSigningIntent(BftStep::PRECOMMIT, commit_digest)) return std::nullopt;
             const auto sig = SignValidatorVote(m_private_key_seed, commit_digest);
             if (!sig) return std::nullopt;
 
@@ -340,6 +480,7 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
         m_step = BftStep::PRECOMMIT;
         m_precommitted = true;
         const uint256 nil_digest = ComputePrecommitNilDigest(m_network_id, m_height, m_round, m_validator_id);
+        if (!RecordSigningIntent(BftStep::PRECOMMIT, nil_digest)) return std::nullopt;
         const auto sig = SignValidatorVote(m_private_key_seed, nil_digest);
         if (!sig) return std::nullopt;
 
@@ -434,6 +575,7 @@ std::optional<BftPrecommitMsg> BftValidatorNode::OnPrevoteTimeout()
     m_precommitted = true;
 
     const uint256 nil_digest = ComputePrecommitNilDigest(m_network_id, m_height, m_round, m_validator_id);
+    if (!RecordSigningIntent(BftStep::PRECOMMIT, nil_digest)) return std::nullopt;
     const auto sig = SignValidatorVote(m_private_key_seed, nil_digest);
     if (!sig) return std::nullopt;
 

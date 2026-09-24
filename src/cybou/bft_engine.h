@@ -13,6 +13,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <optional>
@@ -106,7 +107,8 @@ public:
         std::array<unsigned char, 32> private_key_seed,
         uint256 network_id,
         ValidatorSet validator_set,
-        ExecuteOperations execute_operations);
+        ExecuteOperations execute_operations,
+        std::optional<std::filesystem::path> signing_journal = std::nullopt);
     ~BftValidatorNode();
 
     size_t GetNodeIndex() const { return m_node_index; }
@@ -163,6 +165,17 @@ private:
     bool m_precommitted{false};
 
     std::optional<FinalizedBlock> m_finalized_block;
+
+    // A durable high-water mark. A restarted signer never resumes a partially
+    // signed height because its lock state is not yet persisted.
+    std::optional<std::filesystem::path> m_signing_journal;
+    uint64_t m_last_signed_height{0};
+    uint32_t m_last_signed_round{0};
+    BftStep m_last_signed_step{BftStep::PROPOSE};
+    bool m_has_signed{false};
+    bool m_journal_valid{true};
+    bool m_restarted{false};
+    bool RecordSigningIntent(BftStep step, const uint256& digest);
 };
 
 /**

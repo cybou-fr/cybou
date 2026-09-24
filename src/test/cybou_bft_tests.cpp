@@ -18,6 +18,8 @@
 #include <boost/test/unit_test.hpp>
 
 #include <array>
+#include <filesystem>
+#include <fstream>
 #include <vector>
 
 namespace {
@@ -67,6 +69,54 @@ CDBWrapper MemoryDb()
 } // namespace
 
 BOOST_FIXTURE_TEST_SUITE(cybou_bft_tests, BasicTestingSetup)
+
+BOOST_AUTO_TEST_CASE(bft_signing_journal_blocks_restart_equivocation)
+{
+    const auto dir = std::filesystem::temp_directory_path() / "cybou-bft-signing-test";
+    std::filesystem::create_directories(dir);
+    const auto journal = dir / "validator-signing.journal";
+    std::filesystem::remove(journal);
+    std::filesystem::remove(journal.string() + ".tmp");
+
+    std::array<unsigned char, 32> seed{};
+    seed[0] = 0x7a;
+    const auto key = *cybou::GenerateValidatorKeyPair(seed);
+    const cybou::ValidatorSet set{
+        .version = cybou::VALIDATOR_SET_VERSION,
+        .validators = {{.validator_id = cybou::ComputeValidatorId(key.public_key),
+                        .consensus_public_key = key.public_key, .weight = 1}},
+    };
+    const auto network = uint256::FromUserHex("b00f").value();
+    const auto execute = [](const std::vector<cybou::ProtocolOperation>&, uint64_t) -> std::optional<uint256> {
+        return uint256::ONE;
+    };
+    {
+        cybou::BftValidatorNode first{0, seed, network, set, execute, journal};
+        first.SetHeight(1, uint256::ONE, set);
+        const auto proposal = first.StartRound(0, {});
+        BOOST_REQUIRE(proposal);
+        const auto prevote = first.ReceiveProposal(*proposal);
+        BOOST_REQUIRE(prevote);
+        BOOST_REQUIRE(first.ReceivePrevote(*prevote));
+    }
+    {
+        cybou::BftValidatorNode restarted{0, seed, network, set, execute, journal};
+        restarted.SetHeight(1, uint256::ONE, set);
+        BOOST_CHECK(!restarted.StartRound(0, {}));
+        BOOST_CHECK(!restarted.StartRound(1, {}));
+        restarted.SetHeight(2, uint256::ONE, set);
+        BOOST_CHECK(restarted.StartRound(0, {}).has_value());
+    }
+    {
+        std::ofstream damaged(journal, std::ios::binary | std::ios::trunc);
+        damaged << "broken";
+    }
+    cybou::BftValidatorNode corrupt{0, seed, network, set, execute, journal};
+    corrupt.SetHeight(3, uint256::ONE, set);
+    BOOST_CHECK(!corrupt.StartRound(0, {}));
+    std::filesystem::remove(journal);
+    std::filesystem::remove_all(dir);
+}
 
 BOOST_AUTO_TEST_CASE(bft_uses_distinct_validator_id_and_reexecutes_before_vote)
 {
@@ -526,7 +576,8 @@ BOOST_AUTO_TEST_CASE(bft_state_machine_simulator_consensus_and_fault_tolerance)
 
     // Scenario 4: Heal network partition
     sim.ClearPartition();
-    BOOST_CHECK(sim.StepRound(3, 0, {}, state_root));
+    // Signed round-0 messages cannot be replaced after the partition heals.
+    BOOST_CHECK(sim.StepRound(3, 1, {}, state_root));
     for (size_t i = 0; i < 4; ++i) {
         BOOST_CHECK(sim.Node(i).GetStep() == cybou::BftStep::FINALIZED);
     }
@@ -1054,4 +1105,3 @@ BOOST_AUTO_TEST_CASE(bft_prevote_all_voted_without_quorum_precommits_nil)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-

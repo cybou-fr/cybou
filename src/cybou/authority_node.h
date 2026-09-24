@@ -11,6 +11,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <vector>
 
@@ -62,7 +63,8 @@ struct OperationSubmitResult {
 class CybouAuthorityNode
 {
 public:
-    CybouAuthorityNode(CybouStateStore& store, std::array<unsigned char, 32> validator_private_key);
+    CybouAuthorityNode(CybouStateStore& store, std::array<unsigned char, 32> validator_private_key,
+                       std::optional<std::filesystem::path> signing_journal = std::nullopt);
     ~CybouAuthorityNode();
 
     /** Add an operation only if the complete pending batch executes on the current head. */
@@ -77,6 +79,7 @@ public:
 private:
     CybouStateStore& m_store;
     std::array<unsigned char, 32> m_validator_private_key;
+    std::optional<std::filesystem::path> m_signing_journal;
     std::vector<ProtocolOperation> m_pending;
 };
 
