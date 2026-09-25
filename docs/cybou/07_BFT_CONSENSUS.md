@@ -7,8 +7,12 @@ the outbound CYP2 worker, and has a socket integration test for 3/4 finality
 after the round-0 leader is unavailable. The test uses explicit peer
 configuration. The socket test also covers verified catch-up, outbound
 disconnect/reconnect, and the next height's 4/4 finality.
-Signed proposals from the elected leader can advance a validator up to two
-rounds ahead of its local timer; invalid signatures cannot advance the round.
+Signed proposals from the elected leader can advance a validator up to
+`MAX_FUTURE_ROUND_ADVANCE = 2` rounds ahead of its local timer; invalid
+signatures cannot advance the round. Bounding future round advance prevents
+Byzantine or desynchronized leaders from forcing arbitrary round skips while
+providing sufficient slack (2 rounds) for lagging nodes to resynchronize without
+waiting for multiple local round timeouts.
 Receiving a proposal or producing a precommit advances the local timeout
 phase immediately. A validator restarted after a prevote or precommit still
 abstains on the unfinished height because the

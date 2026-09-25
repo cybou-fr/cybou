@@ -29,6 +29,13 @@ enum class BftStep : uint8_t {
     FINALIZED,
 };
 
+/** Maximum number of future rounds a validator may advance when receiving a signed proposal from the elected leader.
+ *  Rationale: Bounding future round advance prevents Byzantine or desynchronized leaders from forcing arbitrary
+ *  round skips, while providing sufficient slack (2 rounds) for lagging nodes to resynchronize without waiting
+ *  for multiple local round timeouts.
+ */
+inline constexpr uint32_t MAX_FUTURE_ROUND_ADVANCE = 2;
+
 struct BftProposalMsg {
     uint256 network_id;
     uint64_t height{0};

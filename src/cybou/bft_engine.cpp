@@ -586,7 +586,7 @@ std::optional<BftProposalMsg> BftValidatorNode::StartRound(
 std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposalMsg& proposal)
 {
     if (proposal.network_id != m_network_id || proposal.height != m_height ||
-        proposal.round < m_round || proposal.round - m_round > 2) {
+        proposal.round < m_round || proposal.round - m_round > MAX_FUTURE_ROUND_ADVANCE) {
         return std::nullopt;
     }
 

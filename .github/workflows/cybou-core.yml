@@ -84,3 +84,7 @@ jobs:
           producer_pid=$!
           trap 'kill "$producer_pid" 2>/dev/null || true' EXIT
           build-ci/bin/cybou-node sync /tmp/net.def /tmp/cybou-observer 127.0.0.1 29460 1
+
+      - name: Four-process BFT smoke test
+        run: |
+          python3 test/cybou_four_process_smoke.py build-ci/bin/cybou-node

@@ -935,6 +935,29 @@ BOOST_AUTO_TEST_CASE(bft_signed_future_proposal_synchronizes_round)
     BOOST_REQUIRE(vote);
     BOOST_CHECK_EQUAL(vote->round, 1U);
     BOOST_CHECK_EQUAL(receiver.GetRound(), 1U);
+
+    // Verify MAX_FUTURE_ROUND_ADVANCE limit:
+    // Receiver is now at round 1.
+    // A proposal at round 1 + MAX_FUTURE_ROUND_ADVANCE + 1 must be rejected.
+    const size_t far_round = 1 + cybou::MAX_FUTURE_ROUND_ADVANCE + 1;
+    const size_t far_leader = cybou::BftLeaderIndex(1, far_round, set.validators.size());
+    cybou::BftValidatorNode far_proposer{far_leader, keys[far_leader].seed, network_id, set, execute};
+    far_proposer.SetHeight(1, uint256::ZERO, set);
+    const auto far_prop = far_proposer.StartRound(far_round, {});
+    BOOST_REQUIRE(far_prop);
+    BOOST_CHECK(!receiver.ReceiveProposal(*far_prop));
+    BOOST_CHECK_EQUAL(receiver.GetRound(), 1U);
+
+    // A proposal at round 1 + MAX_FUTURE_ROUND_ADVANCE must be accepted.
+    const size_t max_valid_round = 1 + cybou::MAX_FUTURE_ROUND_ADVANCE;
+    const size_t max_valid_leader = cybou::BftLeaderIndex(1, max_valid_round, set.validators.size());
+    cybou::BftValidatorNode max_valid_proposer{max_valid_leader, keys[max_valid_leader].seed, network_id, set, execute};
+    max_valid_proposer.SetHeight(1, uint256::ZERO, set);
+    const auto max_valid_prop = max_valid_proposer.StartRound(max_valid_round, {});
+    BOOST_REQUIRE(max_valid_prop);
+    const auto max_valid_vote = receiver.ReceiveProposal(*max_valid_prop);
+    BOOST_REQUIRE(max_valid_vote);
+    BOOST_CHECK_EQUAL(receiver.GetRound(), max_valid_round);
 }
 
 BOOST_AUTO_TEST_CASE(bft_adversarial_split_prevotes_round_recovery)

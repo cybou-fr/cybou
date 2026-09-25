@@ -181,6 +181,15 @@ int Main(const int argc, char* argv[])
         out.insert(out.end(), state_bytes->begin(), state_bytes->end());
         WriteNewFile(argv[2], out);
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
+        for (size_t val_idx = 0; val_idx < genesis->validator_set.validators.size(); ++val_idx) {
+            const auto& val = genesis->validator_set.validators[val_idx];
+            for (size_t input_idx = 0; input_idx < validator_keys.size(); ++input_idx) {
+                if (validator_keys[input_idx] == val.consensus_public_key) {
+                    std::cout << "validator." << val_idx << "=" << input_idx << '\n';
+                    break;
+                }
+            }
+        }
         return 0;
     }
     if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT [PEERS_FILE]]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-follow-peers NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID");
@@ -497,7 +506,17 @@ int Main(const int argc, char* argv[])
         if (!gossip_endpoints.empty()) gossip_worker.emplace([&] {
             cybou::p2p::PeerManager peers{runtime};
             std::map<std::pair<std::string, uint16_t>, std::chrono::steady_clock::time_point> retry_after;
+            const auto drain_delay_str = std::getenv("CYBOU_CONSENSUS_DRAIN_DELAY_MS");
+            const int drain_delay_ms = drain_delay_str ? std::max(0, std::atoi(drain_delay_str)) : 0;
+            const auto reconnect_interval_str = std::getenv("CYBOU_RECONNECT_INTERVAL_MS");
+            const int reconnect_interval_ms = reconnect_interval_str ? std::max(0, std::atoi(reconnect_interval_str)) : 0;
+            auto last_reconnect = std::chrono::steady_clock::now();
             while (!stopping) {
+                if (reconnect_interval_ms > 0 &&
+                    std::chrono::steady_clock::now() - last_reconnect >= std::chrono::milliseconds(reconnect_interval_ms)) {
+                    peers.DisconnectAll();
+                    last_reconnect = std::chrono::steady_clock::now();
+                }
                 for (const auto& [host, peer_port] : gossip_endpoints) {
                     if (stopping) break;
                     const auto connected = peers.Peers();
@@ -513,6 +532,9 @@ int Main(const int argc, char* argv[])
                         }
                     }
                 }
+                if (drain_delay_ms > 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(drain_delay_ms));
+                }
                 if (!stopping) {
                     runtime.DrainConsensusMessages(peers);
                     peers.FanoutRecentBlocks();
@@ -520,6 +542,9 @@ int Main(const int argc, char* argv[])
                     peers.PingAll();
                 }
                 for (int i = 0; i < 20 && !stopping; ++i) {
+                    if (drain_delay_ms > 0) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(drain_delay_ms));
+                    }
                     runtime.DrainConsensusMessages(peers);
                     std::this_thread::sleep_for(std::chrono::milliseconds(50));
                 }
