@@ -42,9 +42,15 @@ BOOST_AUTO_TEST_CASE(producer_rejects_finalized_operation_replay)
     BOOST_REQUIRE_EQUAL(block->block.operations.size(), 1U);
     cybou::CybouAuthorityNode producer{fixture.runtime->GetStore(), fixture.validator_seed};
     const auto& finalized_op = block->block.operations.front();
+    const auto finalized_id = cybou::ComputeOperationId(finalized_op);
+    BOOST_REQUIRE(finalized_id);
+    BOOST_CHECK(fixture.runtime->GetStore().HasIndexedFinalizedOperation(*finalized_id));
     BOOST_CHECK(producer.SubmitOperationWithStatus(finalized_op) == cybou::OperationSubmitStatus::ALREADY_FINALIZED);
     auto conflicting_op = finalized_op;
     std::get<cybou::AccountCreateOp>(conflicting_op).work.nonce ^= 1;
+    const auto conflicting_id = cybou::ComputeOperationId(conflicting_op);
+    BOOST_REQUIRE(conflicting_id);
+    BOOST_CHECK(!fixture.runtime->GetStore().HasIndexedFinalizedOperation(*conflicting_id));
     BOOST_CHECK(producer.SubmitOperationWithStatus(conflicting_op) == cybou::OperationSubmitStatus::REJECTED);
     BOOST_CHECK_EQUAL(producer.PendingCount(), 0U);
     const auto empty = producer.ProduceNextBlock();

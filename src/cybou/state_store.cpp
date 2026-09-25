@@ -36,6 +36,11 @@ inline std::string MailFilterKey(const uint256& block_id)
     return "cybou/mail-filter/" + block_id.GetHex();
 }
 
+inline std::string OperationKey(const uint256& op_id)
+{
+    return "cybou/operation/" + op_id.GetHex();
+}
+
 } // namespace
 
 CybouStateStore::CybouStateStore(
@@ -292,6 +297,11 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     if (!serialized_finalized) return {BlockTransitionError::CORRUPT_STATE};
     batch.Write(BlockKey(block_id), *serialized_finalized);
     batch.Write(BlockHeightKey(block.height), block_id);
+    for (const auto& operation : block.operations) {
+        const auto op_id = ComputeOperationId(operation);
+        if (!op_id || op_id->IsNull()) return {BlockTransitionError::INVALID_OPERATION};
+        batch.Write(OperationKey(*op_id), block_id);
+    }
     const auto mail_filter{BuildBlockMailDiscoveryFilter(block)};
     batch.Write(MailFilterKey(block_id), SerializeMailDiscoveryFilter(mail_filter));
     m_db.WriteBatch(batch, sync);
@@ -329,6 +339,22 @@ std::optional<FinalizedBlock> CybouStateStore::GetBlockAtHeight(const uint64_t h
         return std::nullopt;
     }
     return block;
+}
+
+bool CybouStateStore::HasIndexedFinalizedOperation(const uint256& op_id) const
+{
+    if (op_id.IsNull()) return false;
+    uint256 block_id;
+    if (!m_db.Read(OperationKey(op_id), block_id)) return false;
+    const auto head = GetFinalizedHead();
+    const auto finalized = GetBlock(block_id);
+    if (!head || !finalized || finalized->block.height == 0 ||
+        finalized->block.height > head->height || ComputeBlockId(finalized->block) != block_id ||
+        finalized->certificate.block_id != block_id ||
+        finalized->certificate.height != finalized->block.height ||
+        finalized->certificate.network_id != m_network_id) return false;
+    return std::any_of(finalized->block.operations.begin(), finalized->block.operations.end(),
+        [&](const ProtocolOperation& operation) { return ComputeOperationId(operation) == op_id; });
 }
 
 std::optional<CybouMailDiscoveryFilter> CybouStateStore::GetBlockMailFilter(const uint256& block_id) const

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 The CYBOU developers
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+#include <cybou/authority_node.h>
 #include <cybou/identity_service.h>
 #include <cybou/identity_material.h>
 #include <cybou/network_definition.h>
@@ -145,6 +146,21 @@ BOOST_AUTO_TEST_CASE(name_claim_saves_secret_before_commit_and_finalizes_owner)
     BOOST_CHECK(!std::filesystem::exists(claim_path));
     const auto claimed = names.ClaimSync("stanislav", "correct horse battery staple");
     BOOST_REQUIRE_MESSAGE(claimed.success, claimed.message);
+    cybou::CybouAuthorityNode producer{runtime.GetStore(), fixture.validator_seed};
+    bool checked_name_operation = false;
+    for (uint64_t height = 2; height <= runtime.GetFinalizedHeight().value_or(0); ++height) {
+        const auto finalized = runtime.GetBlockAtHeight(height);
+        BOOST_REQUIRE(finalized);
+        for (const auto& operation : finalized->block.operations) {
+            if (std::holds_alternative<cybou::AuthorizedNameCommit>(operation) ||
+                std::holds_alternative<cybou::AuthorizedNameReveal>(operation)) {
+                BOOST_CHECK(producer.SubmitOperationWithStatus(operation) ==
+                    cybou::OperationSubmitStatus::ALREADY_FINALIZED);
+                checked_name_operation = true;
+            }
+        }
+    }
+    BOOST_CHECK(checked_name_operation);
     BOOST_CHECK(std::filesystem::exists(claim_path));
     std::ifstream claim_file{claim_path, std::ios::binary};
     const std::string encrypted{std::istreambuf_iterator<char>{claim_file}, std::istreambuf_iterator<char>{}};
