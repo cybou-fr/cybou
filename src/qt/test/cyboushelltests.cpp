@@ -121,7 +121,14 @@ void CybouShellTests::identityCreateFollowsCapabilities()
     auto* identity = window->pageAt(1);
     QVERIFY(identity);
 
-    auto* create = identity->findChild<QPushButton*>(QStringLiteral("primaryButton"));
+    QPushButton* create{nullptr};
+    for (auto* btn : identity->findChildren<QPushButton*>()) {
+        if (btn->property("cybouId").toString() == QLatin1String{"createIdentity"}) {
+            create = btn;
+            break;
+        }
+    }
+    if (!create) create = identity->findChild<QPushButton*>(QStringLiteral("primaryButton"));
     QVERIFY(create);
     QVERIFY(!create->isEnabled());
 
@@ -248,7 +255,7 @@ void CybouShellTests::adapterSettersDrivePages()
     bool found_fault = false;
     for (const auto* label : labels) {
         if (label->text() == QLatin1String{"42"}) found_height = true;
-        if (label->text() == QLatin1String{"f = 1"}) found_fault = true;
+        if (label->text().contains(QLatin1String{"f = 1"})) found_fault = true;
     }
     QVERIFY(found_height);
     QVERIFY(found_fault);

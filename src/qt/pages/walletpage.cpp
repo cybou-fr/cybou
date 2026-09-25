@@ -272,9 +272,9 @@ void WalletPage::refresh()
 
     const bool usable = status.identity_state == CybouIdentityState::Active &&
                         m_model->capabilities().payments;
-    m_send->setEnabled(usable);
-    m_lock->setEnabled(usable);
-    m_receive->setEnabled(usable);
+    for (auto* btn : findChildren<QPushButton*>()) {
+        btn->setEnabled(usable);
+    }
     m_gate_hint->setText(status.identity_state != CybouIdentityState::Active
         ? tr("Create an identity to receive the onboarding bonus and use your wallet.")
         : usable ? QString{}

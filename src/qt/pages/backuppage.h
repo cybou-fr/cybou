@@ -47,6 +47,9 @@ private:
     CybouDesktopModel* m_model;
     QVector<BackupSet> m_sets;
 
+    QLabel* m_hero_title{nullptr};
+    QLabel* m_hero_subtitle{nullptr};
+    QLabel* m_hero_state_pill{nullptr};
     QLabel* m_status_pill{nullptr};
     QLabel* m_last_backup{nullptr};
     QLabel* m_next_backup{nullptr};

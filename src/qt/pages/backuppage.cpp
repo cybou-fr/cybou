@@ -113,13 +113,16 @@ BackupPage::BackupPage(CybouDesktopModel* model, QWidget* parent)
     auto* hero_layout = new QVBoxLayout;
     hero_layout->setSpacing(10);
     hero_layout->addWidget(Eyebrow(tr("BACKUP"), hero));
-    hero_layout->addWidget(HeroTitle(tr("Your data is protected."), hero));
-    hero_layout->addWidget(HeroSubtitle(tr("Your identity, messages, files and device data are safely backed up and ready to recover, whenever you need them."), hero));
+    m_hero_title = HeroTitle(tr("Backup protection is coming."), hero);
+    hero_layout->addWidget(m_hero_title);
+    m_hero_subtitle = HeroSubtitle(tr("Your identity, messages, files and device data will be safely backed up and ready to recover once the Backup service activates."), hero);
+    hero_layout->addWidget(m_hero_subtitle);
     auto* chips = new QHBoxLayout;
     chips->setSpacing(8);
-    chips->addWidget(Pill(tr("Protected"), Tint::Mint, hero));
-    chips->addWidget(Pill(tr("End-to-end encrypted"), Tint::Blue, hero));
-    chips->addWidget(Pill(tr("Ready to recover"), Tint::Indigo, hero));
+    m_hero_state_pill = Pill(tr("Planned"), Tint::Neutral, hero);
+    chips->addWidget(m_hero_state_pill);
+    chips->addWidget(Pill(tr("End-to-end encrypted by design"), Tint::Blue, hero));
+    chips->addWidget(Pill(tr("Ready when Backup activates"), Tint::Indigo, hero));
     chips->addStretch();
     hero_layout->addLayout(chips);
 
@@ -183,7 +186,7 @@ BackupPage::BackupPage(CybouDesktopModel* model, QWidget* parent)
         status_layout->addLayout(header);
 
         statusRow(status_layout, Glyph::CloudUp, tr("Last backup completed"),
-            tr("All selected data is safely backed up and encrypted."), m_last_backup, status);
+            tr("Scheduled backups will be encrypted and stored safely once active."), m_last_backup, status);
         statusRow(status_layout, Glyph::Clock, tr("Next backup"), {}, m_next_backup, status);
         statusRow(status_layout, Glyph::Database, tr("Backup size"), {}, m_backup_size, status);
         statusRow(status_layout, Glyph::Lock, tr("Encryption"), {}, m_encryption, status);
@@ -199,7 +202,7 @@ BackupPage::BackupPage(CybouDesktopModel* model, QWidget* parent)
     protected_row->setSpacing(14);
     protected_row->addWidget(protectedCard(Glyph::User, Tint::Mint, tr("Identity"),
         tr("Your identity, settings and contacts."),
-        tr("Protected"), Tint::Mint, this), 1);
+        tr("Local vault only"), Tint::Mint, this), 1);
     protected_row->addWidget(protectedCard(Glyph::Envelope, Tint::Blue, tr("Mail"),
         tr("Your messages and their local index."),
         tr("Local only"), Tint::Blue, this), 1);
@@ -293,6 +296,10 @@ void BackupPage::refresh()
 
     m_backup_now->setEnabled(usable);
     m_restore->setEnabled(usable);
+    if (m_settings) m_settings->setEnabled(usable);
+    for (auto* btn : findChildren<QPushButton*>()) {
+        btn->setEnabled(usable);
+    }
 
     m_last_backup->setText(m_sets.isEmpty() ? tr("Never") : relTime(m_sets.last().at));
     m_next_backup->setText(usable ? tr("in 24 hours") : tr("\u2014"));
@@ -305,5 +312,22 @@ void BackupPage::refresh()
     m_status_pill->setProperty("tint", usable ? "mint" : "neutral");
     m_status_pill->style()->unpolish(m_status_pill);
     m_status_pill->style()->polish(m_status_pill);
+
+    if (m_hero_title && m_hero_subtitle) {
+        if (usable) {
+            m_hero_title->setText(tr("Your data is protected."));
+            m_hero_subtitle->setText(tr("Your identity, messages, files and device data are safely backed up and ready to recover, whenever you need them."));
+        } else {
+            m_hero_title->setText(tr("Backup protection is coming."));
+            m_hero_subtitle->setText(tr("Your identity, messages, files and device data will be safely backed up and ready to recover once the Backup service activates."));
+        }
+    }
+    if (m_hero_state_pill) {
+        m_hero_state_pill->setText(usable ? tr("Protected") : tr("Planned"));
+        m_hero_state_pill->setProperty("tint", usable ? "mint" : "neutral");
+        m_hero_state_pill->style()->unpolish(m_hero_state_pill);
+        m_hero_state_pill->style()->polish(m_hero_state_pill);
+    }
+
     m_restore_points->setText(tr("%1 restore points available").arg(m_sets.size()));
 }

@@ -419,9 +419,15 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
 void IdentityPage::startIdentityFlow()
 {
     auto* service = m_model->identityService();
-    if (!service) return;
+    if (!service) {
+        m_model->requestCreateIdentity({});
+        return;
+    }
     const auto vault_path = service->GetStoragePath();
-    if (!vault_path) return;
+    if (!vault_path) {
+        m_model->requestCreateIdentity({});
+        return;
+    }
 
     if (std::filesystem::exists(*vault_path)) {
         if (!service->GetKeyStore().HasKey()) {
