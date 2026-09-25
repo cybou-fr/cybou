@@ -315,7 +315,24 @@ def main():
                 print("SIGSTOP/SIGCONT unavailable on this platform; skipping freeze/quorum scenario.")
                 recovered_q = recovered_mid
 
-            # 5. Consecutive heights verification (10-50 heights) with periodic kill/restart churn
+            # 5. Historical catch-up beyond the 32-head gossip window: keep
+            # one validator offline while the network advances ~45 heights,
+            # then rejoin and verify bulk catch-up over a single session.
+            cur_h = max(h for h in recovered_q if h is not None)
+            offline_proc = (cur_h + 1) % 4
+            offline_start = cur_h
+            target_offline = cur_h + 45
+            print(f"Testing historical catch-up: process {offline_proc} offline while the network "
+                  f"advances from {offline_start} to ~{target_offline} (beyond the 32-block gossip window)...")
+            stop_validator(offline_proc)
+            advanced = wait_for(target_offline, [i for i in range(4) if i != offline_proc], timeout=120)
+            print(f"Network advanced to {target_offline} without validator {offline_proc}: {advanced}")
+            processes[offline_proc] = start_validator(offline_proc)
+            rejoined = wait_for_synced(target_offline, range(4), timeout=120)
+            print(f"Rejoined validator {offline_proc} caught up across the gossip window: {rejoined}")
+            recovered_q = rejoined
+
+            # 6. Consecutive heights verification (10-50 heights) with periodic kill/restart churn
             cur_h = max(h for h in recovered_q if h is not None)
             target_final = max(args.target_height, cur_h + 4)
             print(f"Verifying consecutive finality up to height {target_final} with periodic kill/restart...")

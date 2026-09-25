@@ -548,6 +548,25 @@ int Main(const int argc, char* argv[])
                     peers.FanoutRecentOperations();
                     peers.PingAll();
                 }
+                // Historical catch-up: if the furthest-ahead connected peer is
+                // beyond our finalized height (e.g. we were offline for longer
+                // than the 32-head gossip window), bulk-pull the missing blocks
+                // over the client-driven sync path. Bounded per cycle so the
+                // loop keeps servicing consensus traffic.
+                if (!stopping) {
+                    const auto sync_status = runtime.GetStatus();
+                    if (sync_status.is_initialized) {
+                        const auto connected = peers.Peers();
+                        const auto ahead_it = std::max_element(connected.begin(), connected.end(),
+                            [](const cybou::p2p::PeerInfo& a, const cybou::p2p::PeerInfo& b) {
+                                return a.hello.finalized_height < b.hello.finalized_height;
+                            });
+                        if (ahead_it != connected.end() &&
+                            ahead_it->hello.finalized_height > sync_status.finalized_height + 1) {
+                            peers.SyncFromPeer(ahead_it->address, ahead_it->port, 64);
+                        }
+                    }
+                }
                 for (int i = 0; i < 20 && !stopping; ++i) {
                     if (drain_delay_ms > 0) {
                         std::this_thread::sleep_for(std::chrono::milliseconds(drain_delay_ms));

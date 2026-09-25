@@ -647,7 +647,8 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         if (height == 0 || id.IsNull()) return false;
         auto status = runtime.GetStatus();
         if (!status.is_initialized) return false;
-        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        // Fresh deadline per message: a bulk catch-up below performs many
+        // round trips and must not inherit a stale timeout.
         auto acknowledge = [&](BlockAnnounceResult result) {
             std::vector<unsigned char> payload{static_cast<unsigned char>(result)};
             Put64(payload, height);
@@ -655,7 +656,8 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             // Report our current finalized height so the offerer can skip
             // heads we already have on its next fanout cycle.
             Put64(payload, runtime.GetStatus().finalized_height);
-            return Write(Frame{MessageType::BLOCK_RESULT, payload}, deadline);
+            const auto ack_deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+            return Write(Frame{MessageType::BLOCK_RESULT, payload}, ack_deadline);
         };
         // Pulls one block by height over this session and commits it after
         // canonical verification. Returns std::nullopt on transport/protocol
@@ -664,6 +666,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         // (used for catch-up pulls where we only know the height).
         auto fetch_and_commit = [&](uint64_t h, const uint256& expected_id) ->
             std::optional<BlockAnnounceResult> {
+            const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
             std::vector<unsigned char> query;
             Put64(query, h);
             if (!Write(Frame{MessageType::GET_BLOCK, query}, deadline)) return std::nullopt;
@@ -704,24 +707,12 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         }
         if (status.finalized_height == std::numeric_limits<uint64_t>::max() ||
             height != status.finalized_height + 1) {
-            // The peer is ahead of us. Use this very session to pull our next
-            // missing height so one stale offer triggers catch-up immediately
-            // instead of waiting for the peer's fanout to reach our frontier.
-            if (status.finalized_height != std::numeric_limits<uint64_t>::max() &&
-                height > status.finalized_height + 1) {
-                const auto pulled = fetch_and_commit(status.finalized_height + 1, uint256{});
-                if (!pulled) return false;
-                status = runtime.GetStatus();
-                if (height <= status.finalized_height) {
-                    return have_height(height, id) && acknowledge(BlockAnnounceResult::ALREADY_HAVE);
-                }
-                if (height == status.finalized_height + 1 &&
-                    *pulled == BlockAnnounceResult::APPLIED) {
-                    const auto applied = fetch_and_commit(height, id);
-                    if (!applied) return false;
-                    return acknowledge(*applied);
-                }
-            }
+            // The offered height is not our next block. We cannot pull over
+            // this accepted session: the peer's side of this connection is a
+            // client session that never reads (only the accepted side runs
+            // ServeNext), so an unsolicited GET_BLOCK here would deadlock and
+            // kill the session. Historical catch-up is instead driven by the
+            // gossip worker through the client-side SyncFromPeer path.
             return acknowledge(BlockAnnounceResult::GAP);
         }
         const auto applied = fetch_and_commit(height, id);
