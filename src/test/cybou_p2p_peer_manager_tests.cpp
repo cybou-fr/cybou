@@ -79,6 +79,21 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_network_peer)
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
 }
 
+BOOST_AUTO_TEST_CASE(manager_reports_unavailable_endpoint)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    const auto port = acceptor.local_endpoint().port();
+    acceptor.close();
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    BOOST_CHECK(!manager.Connect(loopback.to_string(), port));
+    BOOST_CHECK(manager.LastConnectStatus() == cybou::p2p::PeerConnectStatus::UNAVAILABLE);
+    BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+}
+
 BOOST_AUTO_TEST_CASE(manager_syncs_two_verified_blocks_on_one_session)
 {
     CybouServiceTestFixture fixture;

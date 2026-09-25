@@ -6,9 +6,11 @@
 #include <cybou/node_runtime.h>
 
 #include <boost/asio/ip/address.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <openssl/rand.h>
 
 #include <array>
+#include <chrono>
 #include <limits>
 #include <optional>
 
@@ -42,8 +44,25 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     const auto nonce = RandomNonce();
     if (!nonce) { m_last_connect_status = PeerConnectStatus::LOCAL_FAILURE; return false; }
     boost::asio::ip::tcp::socket socket{m_io};
-    socket.connect({address, port}, ec);
-    if (ec) { m_last_connect_status = PeerConnectStatus::UNAVAILABLE; return false; }
+    boost::asio::steady_timer timer{m_io};
+    timer.expires_after(std::chrono::seconds(5));
+    std::optional<boost::system::error_code> connect_result;
+    socket.async_connect({address, port}, [&](const boost::system::error_code& result) {
+        connect_result = result;
+        timer.cancel();
+    });
+    timer.async_wait([&](const boost::system::error_code& result) {
+        if (!result) {
+            boost::system::error_code ignored;
+            socket.close(ignored);
+        }
+    });
+    m_io.restart();
+    m_io.run();
+    if (!connect_result || *connect_result) {
+        m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
+        return false;
+    }
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip, .capabilities = 0, .nonce = *nonce};
     auto peer = std::make_unique<PeerSession>(std::move(socket));
