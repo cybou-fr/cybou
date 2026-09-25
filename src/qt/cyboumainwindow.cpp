@@ -6,6 +6,7 @@
 
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
+#include <qt/cyboustrip.h>
 #include <qt/networkstyle.h>
 #include <qt/optionsmodel.h>
 #include <qt/pages/backuppage.h>
@@ -37,6 +38,7 @@
 #include <QButtonGroup>
 #include <QCloseEvent>
 #include <QDir>
+#include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -108,6 +110,7 @@ CybouMainWindow::CybouMainWindow(
                 slug.replace(QRegularExpression(QStringLiteral("[^a-z0-9]+")), QStringLiteral("-"));
                 slug = slug.mid(0, 24).replace(QRegularExpression(QStringLiteral("(^-|-$)")), QStringLiteral(""));
                 if (slug.isEmpty()) slug = QStringLiteral("page-%1").arg(i);
+                this->grab().save(QDir{shot_dir}.filePath(QStringLiteral("%1-%2.png").arg(i).arg(slug)));
                 // For the email page also capture the composer surface.
                 if (slug == QLatin1String{"email"}) {
                     const auto buttons = m_pages->widget(i)->findChildren<QPushButton*>();
@@ -116,10 +119,7 @@ CybouMainWindow::CybouMainWindow(
                     }
                     qApp->processEvents();
                     this->grab().save(QDir{shot_dir}.filePath(QStringLiteral("%1-%2-compose.png").arg(i).arg(slug)));
-                    m_pages->setCurrentIndex(i);
-                    qApp->processEvents();
                 }
-                this->grab().save(QDir{shot_dir}.filePath(QStringLiteral("%1-%2.png").arg(i).arg(slug)));
             }
             // The diagnostics window is a secondary top-level; capture it too.
             const auto top_levels = qApp->topLevelWidgets();
@@ -265,6 +265,7 @@ void CybouMainWindow::initCybouRuntime()
                         static_cast<int>(now.finalized_height),
                         static_cast<int>(now.validator_count));
                     m_desktop_model->setPeerCount(bootstrap_reachable ? 1 : 0);
+                    m_desktop_model->setLastSync(QDateTime::currentDateTime());
                 }, Qt::QueuedConnection);
                 for (int i = 0; i < 15 && !m_sync_stop.load(); ++i) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -333,11 +334,30 @@ void CybouMainWindow::buildShell()
 
     auto* shell = new QWidget{this};
     shell->setObjectName("shell");
-    auto* shell_layout = new QHBoxLayout{shell};
+    auto* shell_layout = new QVBoxLayout{shell};
     shell_layout->setContentsMargins(0, 0, 0, 0);
     shell_layout->setSpacing(0);
 
-    auto* sidebar = new QFrame{shell};
+    // Top status strip: connection, sync, unread, balances (sketch header).
+    const auto unread_counter = [this] {
+        if (auto* service = m_desktop_model->mailService()) {
+            int unread = 0;
+            for (const auto& item : service->GetMessages(cybou::MailFolder::INBOX)) {
+                if (!item.read) ++unread;
+            }
+            return unread;
+        }
+        return 0;
+    };
+    m_status_strip = std::make_unique<CybouUi::StatusStrip>(m_desktop_model, unread_counter, shell);
+    shell_layout->addWidget(m_status_strip->frame());
+
+    auto* body = new QWidget{shell};
+    auto* body_layout = new QHBoxLayout{body};
+    body_layout->setContentsMargins(0, 0, 0, 0);
+    body_layout->setSpacing(0);
+
+    auto* sidebar = new QFrame{body};
     sidebar->setObjectName("sidebar");
     sidebar->setFixedWidth(228);
     auto* sidebar_layout = new QVBoxLayout{sidebar};
@@ -435,8 +455,9 @@ void CybouMainWindow::buildShell()
     page_scroll->setFrameShape(QFrame::NoFrame);
     page_scroll->setWidget(m_pages);
 
-    shell_layout->addWidget(sidebar);
-    shell_layout->addWidget(page_scroll, 1);
+    body_layout->addWidget(sidebar);
+    body_layout->addWidget(page_scroll, 1);
+    shell_layout->addWidget(body, 1);
     setCentralWidget(shell);
 }
 

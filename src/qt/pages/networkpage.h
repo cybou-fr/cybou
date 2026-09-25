@@ -12,6 +12,7 @@
 
 class CybouDesktopModel;
 class QLabel;
+class QProgressBar;
 
 /**
  * Network status and BFT finality view.
@@ -34,15 +35,23 @@ public:
 
 private:
     CybouDesktopModel* const m_model;
-    QLabel* m_status_metric;
-    QLabel* m_connections_metric;
-    QLabel* m_height_metric;
-    QLabel* m_network;
-    QLabel* m_network_id;
-    QLabel* m_data_directory;
-    QLabel* m_validators_metric;
-    QLabel* m_fault_metric;
-    QLabel* m_finality_hint;
+    QLabel* m_chip_healthy{nullptr};
+    QLabel* m_chip_synced{nullptr};
+    QLabel* m_health_metric{nullptr};
+    QLabel* m_health_caption{nullptr};
+    QLabel* m_sync_state{nullptr};
+    QProgressBar* m_sync_meter{nullptr};
+    QLabel* m_height_metric{nullptr};
+    QLabel* m_last_sync{nullptr};
+    QLabel* m_services_state{nullptr};
+    QWidget* m_services_rows{nullptr};
+    QLabel* m_validators_metric{nullptr};
+    QLabel* m_validators_caption{nullptr};
+    QLabel* m_peers_metric{nullptr};
+    QLabel* m_outbound_value{nullptr};
+    QLabel* m_inbound_value{nullptr};
+    QWidget* m_diag_rows{nullptr};
+    QLabel* m_finality_hint{nullptr};
     const std::function<void()> m_diagnostics_requested;
 
     void refresh();

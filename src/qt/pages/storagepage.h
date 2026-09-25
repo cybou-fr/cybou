@@ -12,6 +12,7 @@
 
 class CybouDesktopModel;
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QPushButton;
 
@@ -51,17 +52,20 @@ private:
     CybouDesktopModel* m_model;
     QVector<StoredObject> m_objects;
 
-    QLabel* m_account_line{nullptr};
-    QLabel* m_object_count{nullptr};
-    QLabel* m_local_size{nullptr};
-    QLabel* m_prunable_size{nullptr};
+    QLabel* m_all_files_count{nullptr};
+    QLabel* m_usage_value{nullptr};
+    QLabel* m_usage_caption{nullptr};
     QLabel* m_gate_hint{nullptr};
+    QLineEdit* m_search{nullptr};
     QListWidget* m_list{nullptr};
     QPushButton* m_upload{nullptr};
     QPushButton* m_pin{nullptr};
+    QWidget* m_details{nullptr};
+    int m_selected{-1};
 
     void refresh();
     void rebuildList();
+    void showDetails(int index);
     static QString replicationText(Replication replication);
 };
 

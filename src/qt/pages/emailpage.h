@@ -20,6 +20,7 @@ class QProgressBar;
 class QPushButton;
 class QStackedWidget;
 class QTextEdit;
+class QToolButton;
 
 /**
  * Full Email UI shell, shaped by CYBOU protocol rules (AGENTS.md):
@@ -55,8 +56,11 @@ private:
 
     enum Folder {
         FOLDER_INBOX = 0,
+        FOLDER_STARRED,
         FOLDER_SENT,
         FOLDER_DRAFTS,
+        FOLDER_ARCHIVE,
+        FOLDER_TRASH,
         FOLDER_COUNT,
     };
 
@@ -84,6 +88,7 @@ private:
     QVector<Message> m_messages;
     qint64 m_next_id{1};
     Folder m_folder{FOLDER_INBOX};
+    int m_current_message{-1};
 
     void syncMailbox();
 
@@ -93,14 +98,20 @@ private:
     QListWidget* m_list{nullptr};
     QWidget* m_reader{nullptr};
     QLabel* m_reader_hint{nullptr};
-    QLabel* m_reader_headers{nullptr};
+    QLabel* m_reader_subject{nullptr};
+    QLabel* m_reader_avatar{nullptr};
+    QLabel* m_reader_peer{nullptr};
+    QLabel* m_reader_meta{nullptr};
     QLabel* m_reader_body{nullptr};
+    QLabel* m_chip_encrypted{nullptr};
+    QLabel* m_chip_verified{nullptr};
+    QLabel* m_chip_protected{nullptr};
+    QVector<QPushButton*> m_reply_buttons;
+    QToolButton* m_star_button{nullptr};
     QWidget* m_evidence{nullptr};
     QLabel* m_evidence_title{nullptr};
     QVector<QLabel*> m_evidence_states;
     QPushButton* m_compose_button{nullptr};
-    QLabel* m_identity_line{nullptr};
-    QLabel* m_identity_hint{nullptr};
     QFrame* m_banner{nullptr};
     QLabel* m_banner_text{nullptr};
     QPushButton* m_banner_action{nullptr};
@@ -119,13 +130,16 @@ private:
     void rebuildFolderList();
     void rebuildMessageList();
     void showMessage(const Message& message);
+    void clearReader();
     void updateGates();
     void openComposer();
+    void openComposerWith(const QString& to, const QString& subject, const QString& body_prefix);
     void closeComposer();
     void saveDraft();
     qint64 payloadBytes() const;
     bool recipientWellFormed() const;
     static QString finalityText(Finality finality);
+    static QString peerName(const QString& account_hex);
 };
 
 #endif // BITCOIN_QT_PAGES_EMAILPAGE_H

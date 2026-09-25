@@ -12,6 +12,7 @@
 
 class CybouDesktopModel;
 class QLabel;
+class QCheckBox;
 class QListWidget;
 class QPushButton;
 
@@ -46,17 +47,19 @@ private:
     CybouDesktopModel* m_model;
     QVector<BackupSet> m_sets;
 
-    QLabel* m_account_line{nullptr};
+    QLabel* m_status_pill{nullptr};
     QLabel* m_last_backup{nullptr};
+    QLabel* m_next_backup{nullptr};
     QLabel* m_backup_size{nullptr};
-    QLabel* m_key_binding{nullptr};
-    QLabel* m_gate_hint{nullptr};
-    QListWidget* m_list{nullptr};
+    QLabel* m_encryption{nullptr};
+    QLabel* m_health{nullptr};
+    QLabel* m_restore_points{nullptr};
+    QCheckBox* m_auto_backup{nullptr};
     QPushButton* m_backup_now{nullptr};
     QPushButton* m_restore{nullptr};
+    QPushButton* m_settings{nullptr};
 
     void refresh();
-    void rebuildList();
 };
 
 #endif // BITCOIN_QT_PAGES_BACKUPPAGE_H

@@ -4,61 +4,50 @@
 
 #include <qt/pages/homepage.h>
 
+#include <cybou/mail_service.h>
+#include <cybou/wallet_service.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
+#include <qt/cybouui.h>
 
+#include <QClipboard>
 #include <QFrame>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QPixmap>
+#include <QProgressBar>
 #include <QPushButton>
+#include <QSysInfo>
+#include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <utility>
 
+using namespace CybouUi;
+
 namespace {
 
-QFrame* Card(QWidget* parent)
+/** Deterministic accent color for a peer identifier (hex account / name). */
+QRgb peerColor(const QString& peer)
 {
-    auto* card = new QFrame{parent};
-    card->setObjectName("card");
-    return card;
+    static const QRgb palette[] = {
+        CybouTheme::BRAND_TEAL, CybouTheme::BLUE, CybouTheme::INDIGO,
+        CybouTheme::VIOLET, CybouTheme::AMBER, CybouTheme::ROSE,
+    };
+    uint hash = 0;
+    for (const QChar ch : peer) hash = (hash * 31) ^ ch.unicode();
+    return palette[hash % std::size(palette)];
 }
 
-/** Small rounded chip with a CYBOU monochrome line icon. */
-QLabel* IconChip(CybouTheme::NavIcon icon, QWidget* parent)
+/** Remove and delete all items (and their widgets) from a layout. */
+void clearLayout(QLayout* layout)
 {
-    auto* chip = new QLabel{parent};
-    chip->setObjectName("iconChip");
-    chip->setFixedSize(40, 40);
-    chip->setAlignment(Qt::AlignCenter);
-    chip->setPixmap(CybouTheme::iconPixmap(icon, {22, 22}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
-    return chip;
-}
-
-QFrame* ServiceCard(const QString& title, const QString& description, CybouTheme::NavIcon icon, QWidget* parent)
-{
-    auto* card = Card(parent);
-    auto* layout = new QVBoxLayout{card};
-    layout->setContentsMargins(20, 18, 20, 18);
-    layout->setSpacing(8);
-    auto* header = new QHBoxLayout;
-    header->addWidget(IconChip(icon, card));
-    auto* heading = new QLabel{title, card};
-    heading->setObjectName("serviceTitle");
-    heading->setAlignment(Qt::AlignVCenter);
-    header->addWidget(heading);
-    header->addStretch();
-    auto* badge = new QLabel{QObject::tr("Planned"), card};
-    badge->setObjectName("neutralBadge");
-    header->addWidget(badge, 0, Qt::AlignVCenter);
-    auto* body = new QLabel{description, card};
-    body->setObjectName("mutedText");
-    body->setWordWrap(true);
-    layout->addLayout(header);
-    layout->addWidget(body);
-    layout->addStretch();
-    return card;
+    if (!layout) return;
+    while (QLayoutItem* item = layout->takeAt(0)) {
+        if (QWidget* widget = item->widget()) widget->deleteLater();
+        delete item;
+    }
 }
 
 } // namespace
@@ -71,220 +60,305 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
       m_identity_requested{std::move(identity_requested)},
       m_wallet_requested{std::move(wallet_requested)}
 {
-    auto* root = new QVBoxLayout{this};
+    auto* root = new QHBoxLayout{this};
     root->setContentsMargins(24, 22, 24, 22);
-    root->setSpacing(16);
+    root->setSpacing(18);
 
-    // Hero: typography plus the dark logomark tile (mirrors the site's
-    // .hero-logo-box) — the white art must never sit on a light background.
-    auto* hero = new QFrame{this};
-    hero->setObjectName("card");
-    hero->setMinimumHeight(190);
-    auto* hero_layout = new QHBoxLayout{hero};
-    hero_layout->setContentsMargins(34, 26, 34, 26);
-    hero_layout->setSpacing(24);
-    auto* hero_text = new QVBoxLayout;
-    hero_text->setSpacing(8);
-    auto* eyebrow = new QLabel{tr("WELCOME TO CYBOU"), hero};
-    eyebrow->setObjectName("eyebrow");
-    auto* title = new QLabel{tr("Protected communication,\nunder your control."), hero};
-    title->setObjectName("heroTitle");
-    auto* subtitle = new QLabel{tr("Sovereign communication infrastructure built around identity, Email, Storage and Backup."), hero};
-    subtitle->setObjectName("heroSubtitle");
-    subtitle->setWordWrap(true);
-    hero_text->addWidget(eyebrow);
-    hero_text->addWidget(title);
-    hero_text->addWidget(subtitle);
-    hero_text->addStretch();
-    auto* hero_tile = new QLabel{hero};
-    hero_tile->setPixmap(CybouTheme::logoTile({112, 112}, 22, {84, 84}));
-    hero_tile->setFixedSize(112, 112);
-    hero_layout->addLayout(hero_text, 1);
-    hero_layout->addWidget(hero_tile, 0, Qt::AlignVCenter);
-    root->addWidget(hero);
+    auto* left = new QVBoxLayout;
+    left->setSpacing(16);
+    left->addWidget(buildIdentityHero());
 
-    auto* primary_row = new QHBoxLayout;
-    primary_row->setSpacing(16);
+    auto* stats = new QHBoxLayout;
+    stats->setSpacing(14);
+    stats->addWidget(buildMailCard(), 1);
+    stats->addWidget(buildFilesCard(), 1);
+    stats->addWidget(buildDevicesCard(), 1);
+    left->addLayout(stats);
+    left->addStretch();
 
-    auto* network_card = Card(this);
-    auto* network_layout = new QVBoxLayout{network_card};
-    network_layout->setContentsMargins(24, 20, 24, 20);
-    network_layout->setSpacing(10);
-    auto* network_header = new QHBoxLayout;
-    network_header->addWidget(IconChip(CybouTheme::NavIcon::Network, network_card));
-    auto* network_label = new QLabel{tr("Network"), network_card};
-    network_label->setObjectName("cardLabel");
-    network_label->setAlignment(Qt::AlignVCenter);
-    network_header->addWidget(network_label);
-    network_header->addStretch();
-    network_layout->addLayout(network_header);
-    auto* network_title_row = new QHBoxLayout;
-    m_network_name = new QLabel{network_card};
-    m_network_name->setObjectName("cardTitle");
-    m_node_state = new QLabel{network_card};
-    m_node_state->setObjectName("statusBadge");
-    network_title_row->addWidget(m_network_name);
-    network_title_row->addStretch();
-    network_title_row->addWidget(m_node_state);
-    auto* metrics = new QHBoxLayout;
-    auto* peers_box = new QVBoxLayout;
-    auto* peers_label = new QLabel{tr("Connections"), network_card};
-    peers_label->setObjectName("metricCaption");
-    m_peer_count = new QLabel{network_card};
-    m_peer_count->setObjectName("metric");
-    peers_box->addWidget(peers_label);
-    peers_box->addWidget(m_peer_count);
-    auto* finalized_box = new QVBoxLayout;
-    auto* finalized_label = new QLabel{tr("Finalized height"), network_card};
-    finalized_label->setObjectName("metricCaption");
-    m_finalized_height = new QLabel{network_card};
-    m_finalized_height->setObjectName("metric");
-    finalized_box->addWidget(finalized_label);
-    finalized_box->addWidget(m_finalized_height);
-    metrics->addLayout(peers_box);
-    metrics->addSpacing(40);
-    metrics->addLayout(finalized_box);
-    metrics->addStretch();
-    network_layout->addLayout(network_title_row);
-    network_layout->addSpacing(8);
-    network_layout->addLayout(metrics);
-
-    auto* wallet_card = Card(this);
-    auto* wallet_layout = new QVBoxLayout{wallet_card};
-    wallet_layout->setContentsMargins(24, 20, 24, 20);
-    wallet_layout->setSpacing(8);
-    auto* wallet_header = new QHBoxLayout;
-    wallet_header->addWidget(IconChip(CybouTheme::NavIcon::Wallet, wallet_card));
-    auto* wallet_label = new QLabel{tr("Balance"), wallet_card};
-    wallet_label->setObjectName("cardLabel");
-    wallet_label->setAlignment(Qt::AlignVCenter);
-    wallet_header->addWidget(wallet_label);
-    wallet_header->addStretch();
-    auto* wallet_badge = new QLabel{tr("funds services"), wallet_card};
-    wallet_badge->setObjectName("statusBadge");
-    wallet_header->addWidget(wallet_badge, 0, Qt::AlignVCenter);
-    wallet_layout->addLayout(wallet_header);
-    m_balance = new QLabel{wallet_card};
-    m_balance->setObjectName("metric");
-    m_system_balance = new QLabel{wallet_card};
-    m_system_balance->setObjectName("mutedText");
-    m_system_balance->setWordWrap(true);
-    auto* wallet_button = new QPushButton{tr("Open wallet"), wallet_card};
-    wallet_button->setObjectName("secondaryButton");
-    connect(wallet_button, &QPushButton::clicked, this, [this] { m_wallet_requested(); });
-    wallet_layout->addWidget(m_balance);
-    wallet_layout->addWidget(m_system_balance);
-    wallet_layout->addStretch();
-    wallet_layout->addWidget(wallet_button, 0, Qt::AlignLeft);
-
-    auto* identity_card = Card(this);
-    auto* identity_layout = new QVBoxLayout{identity_card};
-    identity_layout->setContentsMargins(24, 20, 24, 20);
-    identity_layout->setSpacing(8);
-    auto* identity_header = new QHBoxLayout;
-    identity_header->addWidget(IconChip(CybouTheme::NavIcon::Identity, identity_card));
-    auto* identity_label = new QLabel{tr("Identity"), identity_card};
-    identity_label->setObjectName("cardLabel");
-    identity_label->setAlignment(Qt::AlignVCenter);
-    identity_header->addWidget(identity_label);
-    identity_header->addStretch();
-    identity_layout->addLayout(identity_header);
-    m_identity_state = new QLabel{identity_card};
-    m_identity_state->setObjectName("cardTitle");
-    m_identity_detail = new QLabel{identity_card};
-    m_identity_detail->setObjectName("mutedText");
-    m_identity_detail->setWordWrap(true);
-    auto* identity_button = new QPushButton{tr("View identity"), identity_card};
-    identity_button->setObjectName("secondaryButton");
-    connect(identity_button, &QPushButton::clicked, this, [this] { m_identity_requested(); });
-    identity_layout->addWidget(m_identity_state);
-    identity_layout->addWidget(m_identity_detail);
-    identity_layout->addStretch();
-    identity_layout->addWidget(identity_button, 0, Qt::AlignLeft);
-
-    primary_row->addWidget(network_card, 1);
-    primary_row->addWidget(wallet_card, 1);
-    primary_row->addWidget(identity_card, 1);
-    root->addLayout(primary_row);
-
-    auto* services_header = new QHBoxLayout;
-    auto* services_title = new QLabel{tr("Services"), this};
-    services_title->setObjectName("sectionTitle");
-    auto* services_note = new QLabel{tr("Some services will become available in a future version."), this};
-    services_note->setObjectName("mutedText");
-    services_header->addWidget(services_title);
-    services_header->addStretch();
-    services_header->addWidget(services_note);
-    root->addLayout(services_header);
-    auto* services = new QHBoxLayout;
-    services->setSpacing(14);
-    services->addWidget(ServiceCard(tr("Email"), tr("Encrypted asynchronous communication."), CybouTheme::NavIcon::Email, this));
-    services->addWidget(ServiceCard(tr("Storage"), tr("Encrypted distributed object storage."), CybouTheme::NavIcon::Storage, this));
-    services->addWidget(ServiceCard(tr("Backup"), tr("Resilient encrypted backup built on CYBOU Storage."), CybouTheme::NavIcon::Backup, this));
-    root->addLayout(services);
-
-    auto* footer = Card(this);
-    auto* footer_layout = new QHBoxLayout{footer};
-    footer_layout->setContentsMargins(22, 14, 18, 14);
-    m_footer_state = new QLabel{footer};
-    m_footer_state->setObjectName("bodyText");
-    auto* diagnostics = new QPushButton{tr("Open node diagnostics"), footer};
-    diagnostics->setObjectName("secondaryButton");
-    connect(diagnostics, &QPushButton::clicked, this, [this] { m_diagnostics_requested(); });
-    footer_layout->addWidget(m_footer_state);
-    footer_layout->addStretch();
-    footer_layout->addWidget(diagnostics);
-    root->addWidget(footer);
+    root->addLayout(left, 3);
+    root->addWidget(buildActivityCard(), 2);
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
+    auto* ticker = new QTimer{this};
+    connect(ticker, &QTimer::timeout, this, [this] { refresh(); });
+    ticker->start(3000);
     refresh();
+}
+
+QWidget* HomePage::buildIdentityHero()
+{
+    auto* hero = new QFrame{this};
+    hero->setObjectName(QStringLiteral("heroHeader"));
+    auto* layout = new QVBoxLayout{hero};
+    layout->setContentsMargins(30, 26, 30, 26);
+    layout->setSpacing(10);
+
+    layout->addWidget(Eyebrow(tr("YOUR IDENTITY"), hero));
+    m_identity_name = HeroTitle({}, hero, true);
+    layout->addWidget(m_identity_name);
+    m_identity_subtitle = HeroSubtitle({}, hero);
+    layout->addWidget(m_identity_subtitle);
+
+    auto* chips = new QHBoxLayout;
+    chips->setSpacing(8);
+    m_chip_protected = Pill(tr("Protected"), Tint::Mint, hero);
+    m_chip_ready = Pill(tr("Ready to use"), Tint::Blue, hero);
+    chips->addWidget(m_chip_protected);
+    chips->addWidget(m_chip_ready);
+    chips->addStretch();
+    layout->addLayout(chips);
+
+    auto* actions = new QHBoxLayout;
+    actions->setSpacing(10);
+    m_share_button = new QPushButton{tr("Share identity"), hero};
+    m_share_button->setObjectName(QStringLiteral("primaryButton"));
+    connect(m_share_button, &QPushButton::clicked, this, [this] {
+        const QString account = m_model->status().account_id;
+        if (account.isEmpty()) return;
+        QGuiApplication::clipboard()->setText(account);
+        m_share_button->setText(tr("Copied!"));
+        QTimer::singleShot(1500, this, [this] { m_share_button->setText(tr("Share identity")); });
+    });
+    m_manage_button = new QPushButton{tr("Manage identity"), hero};
+    m_manage_button->setObjectName(QStringLiteral("secondaryButton"));
+    connect(m_manage_button, &QPushButton::clicked, this, [this] { m_identity_requested(); });
+    actions->addWidget(m_share_button);
+    actions->addWidget(m_manage_button);
+    actions->addStretch();
+    layout->addLayout(actions);
+    return hero;
+}
+
+QWidget* HomePage::buildMailCard()
+{
+    auto* card = Card(this);
+    auto* layout = new QVBoxLayout{card};
+    layout->setContentsMargins(22, 18, 22, 18);
+    layout->setSpacing(10);
+
+    auto* header = new QHBoxLayout;
+    header->addWidget(Chip(Glyph::Envelope, Tint::Mint, card, 38, 19));
+    auto* title = new QLabel{tr("Mail"), card};
+    title->setObjectName(QStringLiteral("serviceTitle"));
+    header->addWidget(title, 0, Qt::AlignVCenter);
+    header->addStretch();
+    auto* open = IconButton(Glyph::ChevronRight, card);
+    connect(open, &QToolButton::clicked, this, [] {});
+    header->addWidget(open, 0, Qt::AlignVCenter);
+    layout->addLayout(header);
+
+    m_mail_metric = new QLabel{card};
+    m_mail_metric->setObjectName(QStringLiteral("metric"));
+    layout->addWidget(m_mail_metric);
+    layout->addWidget(MutedText(tr("Private and encrypted communication."), card));
+
+    m_mail_avatars = new QWidget{card};
+    auto* avatar_row = new QHBoxLayout{m_mail_avatars};
+    avatar_row->setContentsMargins(0, 2, 0, 0);
+    avatar_row->setSpacing(0);
+    layout->addWidget(m_mail_avatars);
+    layout->addStretch();
+    return card;
+}
+
+QWidget* HomePage::buildFilesCard()
+{
+    auto* card = Card(this);
+    auto* layout = new QVBoxLayout{card};
+    layout->setContentsMargins(22, 18, 22, 18);
+    layout->setSpacing(10);
+
+    auto* header = new QHBoxLayout;
+    header->addWidget(Chip(Glyph::Folder, Tint::Blue, card, 38, 19));
+    auto* title = new QLabel{tr("Files"), card};
+    title->setObjectName(QStringLiteral("serviceTitle"));
+    header->addWidget(title, 0, Qt::AlignVCenter);
+    header->addStretch();
+    layout->addLayout(header);
+
+    m_files_metric = new QLabel{card};
+    m_files_metric->setObjectName(QStringLiteral("metric"));
+    layout->addWidget(m_files_metric);
+    m_files_meter = new QProgressBar{card};
+    m_files_meter->setObjectName(QStringLiteral("usageMeter"));
+    m_files_meter->setRange(0, 100);
+    m_files_meter->setValue(0);
+    m_files_meter->setTextVisible(false);
+    layout->addWidget(m_files_meter);
+    m_files_caption = MutedText({}, card);
+    layout->addWidget(m_files_caption);
+    layout->addStretch();
+    return card;
+}
+
+QWidget* HomePage::buildDevicesCard()
+{
+    auto* card = Card(this);
+    auto* layout = new QVBoxLayout{card};
+    layout->setContentsMargins(22, 18, 22, 18);
+    layout->setSpacing(10);
+
+    auto* header = new QHBoxLayout;
+    header->addWidget(Chip(Glyph::Monitor, Tint::Indigo, card, 38, 19));
+    auto* title = new QLabel{tr("Devices"), card};
+    title->setObjectName(QStringLiteral("serviceTitle"));
+    header->addWidget(title, 0, Qt::AlignVCenter);
+    header->addStretch();
+    layout->addLayout(header);
+
+    m_devices_metric = new QLabel{card};
+    m_devices_metric->setObjectName(QStringLiteral("metric"));
+    layout->addWidget(m_devices_metric);
+    layout->addWidget(MutedText(tr("All your devices are synced and protected."), card));
+
+    m_device_rows = new QWidget{card};
+    auto* rows = new QVBoxLayout{m_device_rows};
+    rows->setContentsMargins(0, 2, 0, 0);
+    rows->setSpacing(8);
+    layout->addWidget(m_device_rows);
+    layout->addStretch();
+    return card;
+}
+
+QWidget* HomePage::buildActivityCard()
+{
+    auto* card = Card(this);
+    auto* layout = new QVBoxLayout{card};
+    layout->setContentsMargins(22, 18, 22, 18);
+    layout->setSpacing(6);
+
+    QLabel* link = nullptr;
+    layout->addLayout(SectionHeader(tr("Recent activity"), {}, link, card));
+
+    m_activity_rows = new QWidget{card};
+    auto* rows = new QVBoxLayout{m_activity_rows};
+    rows->setContentsMargins(0, 0, 0, 0);
+    rows->setSpacing(2);
+    layout->addWidget(m_activity_rows);
+
+    m_activity_empty = MutedText(tr("No activity yet. Messages, payments and sync events will appear here."), card);
+    m_activity_empty->setAlignment(Qt::AlignCenter);
+    m_activity_empty->setMinimumHeight(80);
+    layout->addWidget(m_activity_empty);
+    return card;
 }
 
 void HomePage::refresh()
 {
     const auto& status = m_model->status();
-    m_network_name->setText(status.network_name);
-    m_node_state->setText(status.node_running ? tr("Running") : tr("Starting"));
-    m_peer_count->setText(QString::number(status.peer_count));
-    m_finalized_height->setText(status.last_finalized_height >= 0
-        ? QString::number(status.last_finalized_height)
-        : QStringLiteral("—"));
+    const bool active = status.identity_state == CybouIdentityState::Active;
 
-    switch (status.identity_state) {
-    case CybouIdentityState::Active:
-        m_identity_state->setText(tr("Identity active"));
-        m_identity_detail->setText(tr("Your identity is registered and ready."));
-        break;
-    case CybouIdentityState::CreatingKeys:
-        m_identity_state->setText(tr("Creating identity"));
-        m_identity_detail->setText(tr("Generating keys on this device."));
-        break;
-    case CybouIdentityState::PerformingWork:
-        m_identity_state->setText(tr("Creating identity"));
-        m_identity_detail->setText(tr("Performing AccountCreationWork — protocol anti-Sybil computation."));
-        break;
-    case CybouIdentityState::Broadcasting:
-        m_identity_state->setText(tr("Creating identity"));
-        m_identity_detail->setText(tr("Broadcasting AccountCreateOp to the validator set."));
-        break;
-    case CybouIdentityState::WaitingForFinality:
-        m_identity_state->setText(tr("Creating identity"));
-        m_identity_detail->setText(tr("Waiting for a BFT finality certificate."));
-        break;
-    case CybouIdentityState::None:
-        m_identity_state->setText(m_model->identityCreationRequestPending()
-            ? tr("Creation requested")
-            : tr("No identity created"));
-        m_identity_detail->setText(m_model->identityCreationRequestPending()
-            ? tr("The node will drive the protocol phases next.")
-            : tr("A CYBOU identity provides protocol-native access to communication services."));
-        break;
+    // Identity hero.
+    if (active) {
+        m_identity_name->setText(status.primary_name.isEmpty() ? tr("Identity active") : status.primary_name);
+        m_identity_subtitle->setText(tr("Your CYBOU identity for messages, payments and files."));
+        m_chip_protected->setVisible(true);
+        m_chip_ready->setVisible(true);
+        m_share_button->setVisible(!status.account_id.isEmpty());
+        m_manage_button->setText(tr("Manage identity"));
+    } else {
+        m_identity_name->setText(tr("Set up your CYBOU identity"));
+        m_identity_subtitle->setText(tr("One identity for encrypted mail, storage, payments and backup — registered by a permissionless protocol operation, controlled by keys that stay on this device."));
+        m_chip_protected->setVisible(false);
+        m_chip_ready->setVisible(false);
+        m_share_button->setVisible(false);
+        m_manage_button->setText(tr("Create identity"));
     }
 
-    m_balance->setText(cybouAmountText(status.balance));
-    m_system_balance->setText(tr("System Balance: %1 — frozen CYBOU that pays protocol fees.")
-        .arg(cybouAmountText(status.system_balance)));
-    m_footer_state->setText(status.node_running
-        ? tr("Your node is running correctly. Keep CYBOU online to support the network.")
-        : tr("The CYBOU node is starting."));
+    // Mail stat: unread from the local mailbox.
+    QStringList senders;
+    if (auto* mail = m_model->mailService()) {
+        for (const auto& item : mail->GetMessages(cybou::MailFolder::INBOX)) {
+            if (!item.read) {
+                const QString from = QString::fromStdString(item.sender.Value().GetHex());
+                if (!senders.contains(from)) senders.append(from);
+            }
+        }
+    }
+    const int unread = senders.isEmpty() ? 0 : static_cast<int>(m_model->mailService()->GetUnreadCount());
+    m_mail_metric->setText(unread > 0 ? tr("%1 unread").arg(unread) : tr("No unread mail"));
+    clearLayout(m_mail_avatars->layout());
+    auto* avatar_row = qobject_cast<QHBoxLayout*>(m_mail_avatars->layout());
+    avatar_row->setSpacing(-6);
+    const int shown = qMin(senders.size(), 3);
+    for (int i = 0; i < shown; ++i) {
+        avatar_row->addWidget(Avatar(senders.at(i).left(2), peerColor(senders.at(i)), m_mail_avatars, 30));
+    }
+    if (senders.size() > shown) {
+        avatar_row->addWidget(Avatar(QStringLiteral("+%1").arg(senders.size() - shown), CybouTheme::TEXT_MUTED, m_mail_avatars, 30));
+    }
+    avatar_row->addStretch();
+
+    // Files stat: Object Storage is not live yet — the meter stays at zero
+    // until the node reports real usage.
+    m_files_metric->setText(tr("No files yet"));
+    m_files_meter->setValue(0);
+    m_files_caption->setText(tr("Encrypted storage for your files and documents."));
+
+    // Devices: this node only (device authorization lands with the vault sync).
+    clearLayout(m_device_rows->layout());
+    auto* rows = qobject_cast<QVBoxLayout*>(m_device_rows->layout());
+    rows->addWidget(ActivityRow(Glyph::Monitor, Tint::Indigo, QSysInfo::machineHostName(),
+        tr("This device \u00b7 Active now"), {}, m_device_rows));
+    m_devices_metric->setText(tr("1 device"));
+
+    // Recent activity: unread mail + finalized ledger entries + sync.
+    clearLayout(m_activity_rows->layout());
+    auto* activity = qobject_cast<QVBoxLayout*>(m_activity_rows->layout());
+    int rows_shown = 0;
+    if (auto* mail = m_model->mailService()) {
+        const auto inbox = mail->GetMessages(cybou::MailFolder::INBOX);
+        for (int i = inbox.size() - 1; i >= 0 && rows_shown < 4; --i) {
+            const auto& item = inbox.at(i);
+            const QString from = QString::fromStdString(item.sender.Value().GetHex());
+            activity->addWidget(ActivityRow(Glyph::Envelope, Tint::Mint,
+                tr("Message from %1").arg(from.left(12) + QStringLiteral("…")),
+                item.subject.empty() ? tr("(no subject)") : QString::fromStdString(item.subject),
+                relTime(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(item.timestamp))),
+                m_activity_rows, !item.read));
+            ++rows_shown;
+        }
+    }
+    if (auto* wallet = m_model->walletService()) {
+        const auto entries = wallet->GetLedgerEntries();
+        for (int i = entries.size() - 1; i >= 0 && rows_shown < 7; --i) {
+            const auto& entry = entries.at(i);
+            const QString when = relTime(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(entry.timestamp)));
+            switch (entry.kind) {
+            case cybou::WalletEntryKind::PAYMENT: {
+                const QString party = entry.counterparty.IsNull() ? QString{}
+                    : QString::fromStdString(entry.counterparty.Value().GetHex()).left(12) + QStringLiteral("…");
+                activity->addWidget(ActivityRow(entry.amount >= 0 ? Glyph::ArrowDownLeft : Glyph::ArrowUpRight,
+                    entry.amount >= 0 ? Tint::Mint : Tint::Indigo,
+                    entry.amount >= 0 ? tr("Received CYBOU from %1").arg(party) : tr("Sent CYBOU to %1").arg(party),
+                    cybouAmountText(static_cast<quint64>(std::abs(entry.amount))), when, m_activity_rows));
+                break;
+            }
+            case cybou::WalletEntryKind::ONBOARDING_BONUS:
+                activity->addWidget(ActivityRow(Glyph::Sparkles, Tint::Amber, tr("Onboarding bonus"),
+                    cybouAmountText(static_cast<quint64>(entry.amount)), when, m_activity_rows));
+                break;
+            case cybou::WalletEntryKind::MAIL_FEE:
+                activity->addWidget(ActivityRow(Glyph::Envelope, Tint::Blue, tr("Mail service fee"),
+                    cybouAmountText(static_cast<quint64>(std::abs(entry.amount))), when, m_activity_rows));
+                break;
+            case cybou::WalletEntryKind::LOCK_TO_SYSTEM:
+                activity->addWidget(ActivityRow(Glyph::Lock, Tint::Violet, tr("Locked to System Balance"),
+                    cybouAmountText(static_cast<quint64>(entry.amount)), when, m_activity_rows));
+                break;
+            }
+            ++rows_shown;
+        }
+    }
+    if (m_model->lastSync().isValid()) {
+        activity->addWidget(ActivityRow(Glyph::Refresh, Tint::Neutral, tr("Devices synced"),
+            status.last_finalized_height >= 0
+                ? tr("Finalized height %1").arg(status.last_finalized_height)
+                : tr("All data is up to date"),
+            relTime(m_model->lastSync()), m_activity_rows));
+        ++rows_shown;
+    }
+    m_activity_empty->setVisible(rows_shown == 0);
+    m_activity_rows->setVisible(rows_shown > 0);
 }

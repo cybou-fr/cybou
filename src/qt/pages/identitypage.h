@@ -27,12 +27,20 @@ private:
     QLabel* m_detail_label;
     QLabel* m_active_details;
     QLabel* m_dev_warning;
+    QLabel* m_chip_protected;
+    QLabel* m_chip_ready;
+    QPushButton* m_share_button;
+    QPushButton* m_add_device_button;
+    QPushButton* m_security_button;
     QPushButton* m_create_button;
     QPushButton* m_restore_button;
     QPushButton* m_claim_button;
     QWidget* m_phase_row;
     QWidget* m_steps;
     QVector<QLabel*> m_phases;
+    QWidget* m_active_panel;
+    QWidget* m_cards;
+    QWidget* m_advanced;
 
     void refresh();
     void rebuildForState(CybouIdentityState state);

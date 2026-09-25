@@ -65,14 +65,16 @@ private:
     CybouDesktopModel* m_model;
     QVector<Entry> m_entries;
 
-    QLabel* m_account_line{nullptr};
-    QLabel* m_balance{nullptr};
-    QLabel* m_system_balance{nullptr};
+    QLabel* m_available_metric{nullptr};
+    QLabel* m_system_metric{nullptr};
+    QLabel* m_available_caption{nullptr};
+    QLabel* m_system_caption{nullptr};
     QLabel* m_gate_hint{nullptr};
     QListWidget* m_activity{nullptr};
     QPushButton* m_send{nullptr};
-    QPushButton* m_lock{nullptr};
     QPushButton* m_receive{nullptr};
+    QPushButton* m_lock{nullptr};
+    QPushButton* m_view_usage{nullptr};
 
     void refresh();
     void rebuildActivity();

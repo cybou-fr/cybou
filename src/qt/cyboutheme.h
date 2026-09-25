@@ -41,6 +41,20 @@ inline constexpr QRgb BRAND_INDIGO   = 0x4f46e5; // brand indigo
 inline constexpr QRgb MINT_SOFT  = 0xd1fae5; // selected background
 inline constexpr QRgb MINT_GHOST = 0xecfdf5; // hover / chip background
 
+/* Colored chip tints + their glyph accents (sketch icon chips). */
+inline constexpr QRgb BLUE_SOFT   = 0xdbeafe;
+inline constexpr QRgb INDIGO_SOFT = 0xe0e7ff;
+inline constexpr QRgb VIOLET_SOFT = 0xf3e8ff;
+inline constexpr QRgb AMBER_SOFT  = 0xfef3c7;
+inline constexpr QRgb ROSE_SOFT   = 0xffe4e6;
+inline constexpr QRgb BLUE    = 0x2563eb;
+inline constexpr QRgb INDIGO  = 0x4f46e5;
+inline constexpr QRgb VIOLET  = 0x7c3aed;
+inline constexpr QRgb AMBER   = 0xd97706;
+inline constexpr QRgb ROSE    = 0xe11d48;
+inline constexpr QRgb SUCCESS = 0x16a34a;
+inline constexpr QRgb BADGE_RED = 0xef4444;
+
 /** Dark squircle tile behind the white logomark (mirrors www .logo-tile). */
 inline constexpr QRgb LOGO_TILE_BG     = 0x0a0b0e; // near-black tile background
 inline constexpr QRgb LOGO_TILE_BORDER = 0x26272b; // ~rgba(255,255,255,0.12) on the tile

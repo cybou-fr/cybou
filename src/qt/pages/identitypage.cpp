@@ -5,9 +5,12 @@
 #include <qt/pages/identitypage.h>
 
 #include <qt/cyboutheme.h>
+#include <qt/cybouui.h>
 #include <cybou/identity_service.h>
 
+#include <QClipboard>
 #include <QFrame>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
@@ -16,9 +19,15 @@
 #include <QPushButton>
 #include <QStringList>
 #include <QStyle>
+#include <QSysInfo>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <filesystem>
+#include <functional>
+#include <utility>
+
+using namespace CybouUi;
 
 namespace {
 
@@ -35,23 +44,58 @@ QString phaseName(CybouIdentityState state)
     return {};
 }
 
+/** Section card with a tinted chip header and a chevron affordance. */
+QWidget* SectionCard(Glyph glyph, Tint tint, const QString& title, const QString& description,
+    const QString& button_text, std::function<void()> on_button, QWidget* parent)
+{
+    auto* card = Card(parent);
+    auto* layout = new QVBoxLayout{card};
+    layout->setContentsMargins(22, 18, 22, 18);
+    layout->setSpacing(10);
+
+    auto* header = new QHBoxLayout;
+    header->addWidget(Chip(glyph, tint, card, 38, 19));
+    auto* heading = new QLabel{title, card};
+    heading->setObjectName(QStringLiteral("serviceTitle"));
+    header->addWidget(heading, 0, Qt::AlignVCenter);
+    header->addStretch();
+    auto* chevron = new QLabel{card};
+    chevron->setPixmap(glyphPixmap(Glyph::ChevronRight, {16, 16}, CybouTheme::color(CybouTheme::DIM)));
+    header->addWidget(chevron, 0, Qt::AlignVCenter);
+    layout->addLayout(header);
+
+    auto* body = MutedText(description, card);
+    layout->addWidget(body);
+    layout->addStretch();
+
+    if (!button_text.isEmpty()) {
+        auto* button = new QPushButton{button_text, card};
+        button->setObjectName(QStringLiteral("secondaryButton"));
+        if (on_button) QObject::connect(button, &QPushButton::clicked, parent, std::move(on_button));
+        layout->addWidget(button, 0, Qt::AlignLeft);
+    }
+    return card;
+}
+
 } // namespace
 
 IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     : QWidget{parent}, m_model{model}
 {
-    auto* layout = new QVBoxLayout{this};
-    layout->setContentsMargins(34, 32, 34, 32);
-    layout->setSpacing(18);
-    auto* heading = new QLabel{tr("Identity"), this};
-    heading->setObjectName("pageTitle");
-    layout->addWidget(heading);
+    auto* root = new QHBoxLayout{this};
+    root->setContentsMargins(24, 22, 24, 22);
+    root->setSpacing(18);
 
-    auto* card = new QFrame{this};
-    card->setObjectName("card");
-    auto* card_layout = new QVBoxLayout{card};
-    card_layout->setContentsMargins(28, 26, 28, 26);
-    card_layout->setSpacing(12);
+    auto* left = new QVBoxLayout;
+    left->setSpacing(16);
+
+    // ---- Hero: identity state, chips and primary actions ------------------
+    auto* hero = new QFrame{this};
+    hero->setObjectName(QStringLiteral("heroHeader"));
+    auto* hero_layout = new QVBoxLayout{hero};
+    hero_layout->setContentsMargins(30, 26, 30, 26);
+    hero_layout->setSpacing(10);
+    hero_layout->addWidget(Eyebrow(tr("YOUR IDENTITY"), hero));
 
     // Creation phase flow. Invisible until a creation is actually requested
     // by the backend; the UI never advances these phases on its own.
@@ -65,87 +109,270 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
         CybouIdentityState::Active,
     };
     for (const auto state : flow) {
-        auto* phase = new QLabel{phaseName(state), card};
-        phase->setObjectName("phaseLabel");
+        auto* phase = new QLabel{phaseName(state), hero};
+        phase->setObjectName(QStringLiteral("phaseLabel"));
         m_phases.append(phase);
         phases_row->addWidget(phase);
         if (state != CybouIdentityState::Active) {
-            auto* arrow = new QLabel{QStringLiteral("→"), card};
-            arrow->setObjectName("phaseLabel");
+            auto* arrow = new QLabel{QStringLiteral("\u2192"), hero};
+            arrow->setObjectName(QStringLiteral("phaseLabel"));
             phases_row->addWidget(arrow);
         }
     }
     phases_row->addStretch();
-    m_phase_row = new QWidget{card}; // container to toggle the whole flow
+    m_phase_row = new QWidget{hero}; // container to toggle the whole flow
     m_phase_row->setLayout(phases_row);
     m_phase_row->setVisible(false);
-    card_layout->addWidget(m_phase_row);
+    hero_layout->addWidget(m_phase_row);
 
-    m_state_label = new QLabel{card};
-    m_state_label->setObjectName("cardTitle");
-    m_detail_label = new QLabel{card};
-    m_detail_label->setObjectName("bodyText");
-    m_detail_label->setWordWrap(true);
-    card_layout->addWidget(m_state_label);
-    card_layout->addWidget(m_detail_label);
+    m_state_label = HeroTitle({}, hero, true);
+    hero_layout->addWidget(m_state_label);
+    m_detail_label = HeroSubtitle({}, hero);
+    hero_layout->addWidget(m_detail_label);
+
+    auto* chips = new QHBoxLayout;
+    chips->setSpacing(8);
+    m_chip_protected = Pill(tr("Protected"), Tint::Mint, hero);
+    m_chip_ready = Pill(tr("Ready to use"), Tint::Blue, hero);
+    chips->addWidget(m_chip_protected);
+    chips->addWidget(m_chip_ready);
+    chips->addStretch();
+    hero_layout->addLayout(chips);
+
+    auto* actions = new QHBoxLayout;
+    actions->setSpacing(10);
+    m_share_button = new QPushButton{tr("Share identity"), hero};
+    m_share_button->setObjectName(QStringLiteral("primaryButton"));
+    connect(m_share_button, &QPushButton::clicked, this, [this] {
+        const QString account = m_model->status().account_id;
+        if (account.isEmpty()) return;
+        QGuiApplication::clipboard()->setText(account);
+        m_share_button->setText(tr("Copied!"));
+        QTimer::singleShot(1500, this, [this] { m_share_button->setText(tr("Share identity")); });
+    });
+    m_claim_button = new QPushButton{tr("Manage identity"), hero};
+    m_claim_button->setObjectName(QStringLiteral("secondaryButton"));
+    connect(m_claim_button, &QPushButton::clicked, this, [this] { startNameClaimFlow(); });
+    m_add_device_button = new QPushButton{tr("Add device"), hero};
+    m_add_device_button->setObjectName(QStringLiteral("secondaryButton"));
+    connect(m_add_device_button, &QPushButton::clicked, this, [this] {
+        QMessageBox::information(this, tr("Planned"),
+            tr("Device authorization (Ed25519 + ML-DSA-44) arrives with the portable vault sync. For now this device is the only authorized one."));
+    });
+    m_security_button = new QPushButton{tr("Security settings"), hero};
+    m_security_button->setObjectName(QStringLiteral("secondaryButton"));
+    connect(m_security_button, &QPushButton::clicked, this, [this] {
+        QMessageBox::information(this, tr("Planned"),
+            tr("A dedicated security surface (vault password, key rotation, active sessions) is planned. Recovery and restore stay on this page."));
+    });
+    actions->addWidget(m_share_button);
+    actions->addWidget(m_claim_button);
+    actions->addWidget(m_add_device_button);
+    actions->addWidget(m_security_button);
+    actions->addStretch();
+    hero_layout->addLayout(actions);
+
+    m_dev_warning = new QLabel{tr("Development network balance. No Mainnet value."), hero};
+    m_dev_warning->setObjectName(QStringLiteral("warningBadge"));
+    m_dev_warning->setVisible(false);
+    hero_layout->addWidget(m_dev_warning, 0, Qt::AlignLeft);
 
     // What will happen, step by step. Visible only before a creation starts;
     // the numbered list mirrors the protocol phases, nothing more.
-    m_steps = new QWidget{card};
+    m_steps = new QWidget{hero};
     auto* steps_layout = new QVBoxLayout{m_steps};
-    steps_layout->setContentsMargins(0, 0, 0, 0);
+    steps_layout->setContentsMargins(0, 6, 0, 0);
     steps_layout->setSpacing(8);
     const QStringList steps{
         tr("Keys are generated on this device and stay local."),
-        tr("The node performs AccountCreationWork — protocol anti-Sybil computation."),
+        tr("The node performs AccountCreationWork \u2014 protocol anti-Sybil computation."),
         tr("The signed AccountCreateOp is broadcast to the validator set."),
         tr("A BFT finality certificate commits the account."),
         tr("SystemBalance is funded atomically from the OnboardingPool."),
     };
     for (int i = 0; i < steps.size(); ++i) {
         auto* step = new QLabel{QStringLiteral("%1. %2").arg(i + 1).arg(steps.at(i)), m_steps};
-        step->setObjectName("bodyText");
+        step->setObjectName(QStringLiteral("bodyText"));
         step->setWordWrap(true);
         steps_layout->addWidget(step);
     }
     m_steps->setVisible(false);
-    card_layout->addWidget(m_steps);
+    hero_layout->addWidget(m_steps);
 
-    // Active identity facts (populated only from real backend state).
-    m_active_details = new QLabel{card};
-    m_active_details->setObjectName("bodyText");
-    m_active_details->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_active_details->setWordWrap(true);
-    m_active_details->setVisible(false);
-    card_layout->addWidget(m_active_details);
-
-    m_claim_button = new QPushButton{tr("Claim a .cybou name"), card};
-    m_claim_button->setObjectName("primaryButton");
-    m_claim_button->setVisible(false);
-    connect(m_claim_button, &QPushButton::clicked, this, [this] { startNameClaimFlow(); });
-    card_layout->addWidget(m_claim_button, 0, Qt::AlignLeft);
-
-    m_dev_warning = new QLabel{tr("Development network balance. No Mainnet value."), card};
-    m_dev_warning->setObjectName("warningBadge");
-    m_dev_warning->setVisible(false);
-    card_layout->addWidget(m_dev_warning, 0, Qt::AlignLeft);
-
-    m_create_button = new QPushButton{tr("Create identity"), card};
-    m_create_button->setObjectName("primaryButton");
+    m_create_button = new QPushButton{tr("Create identity"), hero};
+    m_create_button->setObjectName(QStringLiteral("primaryButton"));
     m_create_button->setProperty("cybouId", "createIdentity");
     m_create_button->setEnabled(false);
     m_create_button->setToolTip(tr("Create a portable recovery vault before network submission."));
     connect(m_create_button, &QPushButton::clicked, this, [this] { startIdentityFlow(); });
-    m_restore_button = new QPushButton{tr("Restore identity"), card};
-    m_restore_button->setObjectName("primaryButton");
+    m_restore_button = new QPushButton{tr("Restore identity"), hero};
+    m_restore_button->setObjectName(QStringLiteral("primaryButton"));
     m_restore_button->setProperty("cybouId", "restoreIdentity");
     connect(m_restore_button, &QPushButton::clicked, this, [this] { startRestoreFlow(); });
-    card_layout->addSpacing(8);
-    auto* actions = new QHBoxLayout;
-    actions->addWidget(m_create_button);
-    actions->addWidget(m_restore_button);
-    actions->addStretch();
-    card_layout->addLayout(actions);
+    auto* onboarding_actions = new QHBoxLayout;
+    onboarding_actions->addWidget(m_create_button);
+    onboarding_actions->addWidget(m_restore_button);
+    onboarding_actions->addStretch();
+    hero_layout->addLayout(onboarding_actions);
+
+    left->addWidget(hero);
+
+    // ---- Active identity: recovery / devices / trusted contacts -----------
+    m_cards = new QWidget{this};
+    auto* cards_layout = new QHBoxLayout{m_cards};
+    cards_layout->setContentsMargins(0, 0, 0, 0);
+    cards_layout->setSpacing(14);
+
+    auto* recovery = Card(m_cards);
+    auto* recovery_layout = new QVBoxLayout{recovery};
+    recovery_layout->setContentsMargins(22, 18, 22, 18);
+    recovery_layout->setSpacing(10);
+    {
+        auto* header = new QHBoxLayout;
+        header->addWidget(Chip(Glyph::Key, Tint::Mint, recovery, 38, 19));
+        auto* heading = new QLabel{tr("Recovery"), recovery};
+        heading->setObjectName(QStringLiteral("serviceTitle"));
+        header->addWidget(heading, 0, Qt::AlignVCenter);
+        header->addStretch();
+        auto* chevron = new QLabel{recovery};
+        chevron->setPixmap(glyphPixmap(Glyph::ChevronRight, {16, 16}, CybouTheme::color(CybouTheme::DIM)));
+        header->addWidget(chevron, 0, Qt::AlignVCenter);
+        recovery_layout->addLayout(header);
+        recovery_layout->addWidget(MutedText(tr("Your 24-word recovery phrase keeps your identity safe and lets you restore it on any clean machine."), recovery));
+        auto* phrase_row = new QHBoxLayout;
+        auto* phrase_icon = new QLabel{recovery};
+        phrase_icon->setPixmap(glyphPixmap(Glyph::FileText, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
+        phrase_row->addWidget(phrase_icon, 0, Qt::AlignVCenter);
+        auto* phrase_label = new QLabel{tr("Recovery phrase"), recovery};
+        phrase_label->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;")
+            .arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
+        phrase_row->addWidget(phrase_label);
+        phrase_row->addStretch();
+        phrase_row->addWidget(Pill(tr("Backed up and protected"), Tint::Mint, recovery), 0, Qt::AlignVCenter);
+        recovery_layout->addLayout(phrase_row);
+        recovery_layout->addStretch();
+        auto* options = new QPushButton{tr("View recovery options"), recovery};
+        options->setObjectName(QStringLiteral("secondaryButton"));
+        connect(options, &QPushButton::clicked, this, [this] { startRestoreFlow(); });
+        recovery_layout->addWidget(options, 0, Qt::AlignLeft);
+    }
+    cards_layout->addWidget(recovery, 1);
+
+    auto* devices = Card(m_cards);
+    auto* devices_layout = new QVBoxLayout{devices};
+    devices_layout->setContentsMargins(22, 18, 22, 18);
+    devices_layout->setSpacing(10);
+    {
+        auto* header = new QHBoxLayout;
+        header->addWidget(Chip(Glyph::Monitor, Tint::Blue, devices, 38, 19));
+        auto* heading = new QLabel{tr("Devices"), devices};
+        heading->setObjectName(QStringLiteral("serviceTitle"));
+        header->addWidget(heading, 0, Qt::AlignVCenter);
+        header->addStretch();
+        auto* chevron = new QLabel{devices};
+        chevron->setPixmap(glyphPixmap(Glyph::ChevronRight, {16, 16}, CybouTheme::color(CybouTheme::DIM)));
+        header->addWidget(chevron, 0, Qt::AlignVCenter);
+        devices_layout->addLayout(header);
+        devices_layout->addWidget(MutedText(tr("All devices using your identity are synced and protected."), devices));
+        auto* this_device = ActivityRow(Glyph::Monitor, Tint::Indigo, QSysInfo::machineHostName(),
+            tr("This device \u00b7 Active now"), {}, devices);
+        devices_layout->addWidget(this_device);
+        devices_layout->addStretch();
+        auto* manage = new QPushButton{tr("Manage devices"), devices};
+        manage->setObjectName(QStringLiteral("secondaryButton"));
+        connect(manage, &QPushButton::clicked, this, [this] {
+            QMessageBox::information(this, tr("Planned"),
+                tr("Device authorization arrives with the portable vault sync; this node is the only authorized device today."));
+        });
+        devices_layout->addWidget(manage, 0, Qt::AlignLeft);
+    }
+    cards_layout->addWidget(devices, 1);
+
+    auto* contacts = SectionCard(Glyph::Users, Tint::Violet, tr("Trusted contacts"),
+        tr("Share your identity with people you trust so they can find and message you on CYBOU."),
+        tr("Manage trusted contacts"), {}, m_cards);
+    cards_layout->addWidget(contacts, 1);
+    left->addWidget(m_cards);
+
+    // ---- Advanced details --------------------------------------------------
+    m_advanced = Card(this);
+    auto* advanced_layout = new QVBoxLayout{m_advanced};
+    advanced_layout->setContentsMargins(22, 18, 22, 18);
+    advanced_layout->setSpacing(10);
+    {
+        auto* header = new QHBoxLayout;
+        auto* gear = new QLabel{m_advanced};
+        gear->setPixmap(glyphPixmap(Glyph::Gear, {18, 18}, CybouTheme::color(CybouTheme::TEXT_MUTED)));
+        header->addWidget(gear, 0, Qt::AlignVCenter);
+        auto* heading = new QLabel{tr("Advanced details"), m_advanced};
+        heading->setObjectName(QStringLiteral("serviceTitle"));
+        header->addWidget(heading, 0, Qt::AlignVCenter);
+        header->addSpacing(8);
+        header->addWidget(MutedText(tr("Technical information about your identity. You won't need this for everyday use."), m_advanced), 1);
+        auto* chevron = new QLabel{m_advanced};
+        chevron->setPixmap(glyphPixmap(Glyph::ChevronRight, {16, 16}, CybouTheme::color(CybouTheme::DIM)));
+        header->addWidget(chevron, 0, Qt::AlignVCenter);
+        advanced_layout->addLayout(header);
+        m_active_details = new QLabel{m_advanced};
+        m_active_details->setObjectName(QStringLiteral("bodyText"));
+        m_active_details->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        m_active_details->setWordWrap(true);
+        advanced_layout->addWidget(m_active_details);
+    }
+    left->addWidget(m_advanced);
+    left->addStretch();
+    root->addLayout(left, 3);
+
+    // ---- Right panel: identity status --------------------------------------
+    m_active_panel = new QWidget{this};
+    auto* panel_layout = new QVBoxLayout{m_active_panel};
+    panel_layout->setContentsMargins(0, 0, 0, 0);
+    panel_layout->setSpacing(16);
+    auto* status_card = Card(m_active_panel);
+    auto* status_layout = new QVBoxLayout{status_card};
+    status_layout->setContentsMargins(22, 18, 22, 18);
+    status_layout->setSpacing(4);
+    {
+        auto* header = new QHBoxLayout;
+        auto* heading = SectionTitle(tr("Identity status"), status_card);
+        header->addWidget(heading);
+        header->addStretch();
+        header->addWidget(Pill(tr("Protected"), Tint::Mint, status_card), 0, Qt::AlignVCenter);
+        status_layout->addLayout(header);
+        status_layout->addSpacing(6);
+        auto add_status = [this, status_card, status_layout](Glyph glyph, const QString& title, const QString& sub) {
+            auto* row = ActivityRow(glyph, Tint::Mint, title, sub, {}, status_card);
+            status_layout->addWidget(row);
+        };
+        add_status(Glyph::User, tr("Your identity is active"), tr("All services are available"));
+        add_status(Glyph::Lock, tr("Encrypted and private"), tr("Only you control your identity"));
+        add_status(Glyph::Monitor, tr("Ready across your devices"), tr("Use your identity on all your devices"));
+    }
+    panel_layout->addWidget(status_card);
+
+    // Dev facts move below the status card while the identity surface exists.
+    auto* how_card = Card(m_active_panel);
+    auto* how_layout = new QVBoxLayout{how_card};
+    how_layout->setContentsMargins(22, 18, 22, 18);
+    how_layout->setSpacing(8);
+    {
+        how_layout->addWidget(SectionTitle(tr("How identity works"), how_card));
+        const QStringList facts{
+            tr("Your identity is controlled by keys that are generated and stored locally on this device."),
+            tr("Registration is a permissionless protocol operation (AccountCreateOp) \u2014 no operator approval, no central activation."),
+            tr("Protocol anti-Sybil work (AccountCreationWork) keeps mass registrations out."),
+            tr("A successful creation automatically funds your SystemBalance from the OnboardingPool."),
+        };
+        for (const QString& fact : facts) {
+            auto* bullet = new QLabel{QStringLiteral("\u2022 %1").arg(fact), how_card};
+            bullet->setObjectName(QStringLiteral("bodyText"));
+            bullet->setWordWrap(true);
+            how_layout->addWidget(bullet);
+        }
+    }
+    panel_layout->addWidget(how_card);
+    panel_layout->addStretch();
+    root->addWidget(m_active_panel, 2);
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
@@ -155,76 +382,6 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     connect(m_model, &CybouDesktopModel::nameClaimFailed, this, [this](const QString& reason) {
         QMessageBox::warning(this, tr("Name claim failed"), reason);
     });
-
-    // Two-column body: main state card on the left, protocol facts on the right.
-    auto* content = new QHBoxLayout;
-    content->setSpacing(16);
-    content->addWidget(card, 3);
-
-    auto* side = new QVBoxLayout;
-    side->setSpacing(16);
-    auto* how_card = new QFrame{this};
-    how_card->setObjectName("card");
-    auto* how_layout = new QVBoxLayout{how_card};
-    how_layout->setContentsMargins(22, 20, 22, 20);
-    how_layout->setSpacing(10);
-    auto* how_title = new QLabel{tr("How identity works"), how_card};
-    how_title->setObjectName("sectionTitle");
-    how_layout->addWidget(how_title);
-    const QStringList facts{
-        tr("Your identity is controlled by keys that are generated and stored locally on this device."),
-        tr("Registration is a permissionless protocol operation (AccountCreateOp) — no operator approval, no central activation."),
-        tr("Protocol anti-Sybil work (AccountCreationWork) keeps mass registrations out."),
-        tr("A successful creation automatically funds your SystemBalance from the OnboardingPool."),
-    };
-    for (const QString& fact : facts) {
-        auto* bullet = new QLabel{QStringLiteral("\u2022 %1").arg(fact), how_card};
-        bullet->setObjectName("bodyText");
-        bullet->setWordWrap(true);
-        how_layout->addWidget(bullet);
-    }
-
-    auto* econ_card = new QFrame{this};
-    econ_card->setObjectName("card");
-    auto* econ_layout = new QVBoxLayout{econ_card};
-    econ_layout->setContentsMargins(22, 20, 22, 20);
-    econ_layout->setSpacing(10);
-    auto* econ_title = new QLabel{tr("Onboarding economics"), econ_card};
-    econ_title->setObjectName("sectionTitle");
-    econ_layout->addWidget(econ_title);
-    const QStringList econ_facts{
-        tr("DEV, Beta and Mainnet run separate economic parameters and a separate genesis."),
-        tr("Beta balances do not carry over to Mainnet."),
-        tr("The Mainnet onboarding bonus is frozen until aggregate Beta operational data exists."),
-        tr("Services consume SystemBalance — there are no service-specific free credits."),
-    };
-    for (const QString& fact : econ_facts) {
-        auto* bullet = new QLabel{QStringLiteral("\u2022 %1").arg(fact), econ_card};
-        bullet->setObjectName("bodyText");
-        bullet->setWordWrap(true);
-        econ_layout->addWidget(bullet);
-    }
-
-    auto* dev_card = new QFrame{this};
-    dev_card->setObjectName("card");
-    auto* dev_layout = new QVBoxLayout{dev_card};
-    dev_layout->setContentsMargins(22, 20, 22, 20);
-    dev_layout->setSpacing(10);
-    auto* dev_badge = new QLabel{tr("Development network"), dev_card};
-    dev_badge->setObjectName("warningBadge");
-    auto* dev_body = new QLabel{tr("CYBOU-DEV is a development network: balances have no real-world value and the chain may be reset as the protocol evolves."), dev_card};
-    dev_body->setObjectName("mutedText");
-    dev_body->setWordWrap(true);
-    dev_layout->addWidget(dev_badge, 0, Qt::AlignLeft);
-    dev_layout->addWidget(dev_body);
-
-    side->addWidget(how_card);
-    side->addWidget(econ_card);
-    side->addWidget(dev_card);
-    side->addStretch();
-    content->addLayout(side, 2);
-    layout->addLayout(content, 1);
-    layout->addStretch();
 
     refresh();
 }
@@ -349,7 +506,7 @@ void IdentityPage::startNameClaimFlow()
 {
     bool accepted{false};
     QString name = QInputDialog::getText(this, tr("Claim a .cybou name"),
-        tr("Enter the lowercase label (5–32 ASCII characters, without .cybou)"),
+        tr("Enter the lowercase label (5\u201332 ASCII characters, without .cybou)"),
         QLineEdit::Normal, {}, &accepted);
     if (!accepted) return;
     QString password = QInputDialog::getText(this, tr("Confirm vault password"),
@@ -366,12 +523,22 @@ void IdentityPage::rebuildForState(CybouIdentityState state)
     const bool active = state == CybouIdentityState::Active;
     m_phase_row->setVisible(creating);
     m_steps->setVisible(state == CybouIdentityState::None);
-    m_active_details->setVisible(active);
-    m_dev_warning->setVisible(active);
     m_create_button->setVisible(!active);
     m_restore_button->setVisible(!active);
-    m_claim_button->setVisible(active && m_model->status().primary_name.isEmpty());
-    m_claim_button->setEnabled(!m_model->status().name_claim_pending);
+    m_chip_protected->setVisible(active);
+    m_chip_ready->setVisible(active);
+    m_share_button->setVisible(active && !m_model->status().account_id.isEmpty());
+    m_claim_button->setVisible(active);
+    m_claim_button->setText(m_model->status().primary_name.isEmpty()
+        ? tr("Manage identity")
+        : tr("Manage identity"));
+    m_add_device_button->setVisible(active);
+    m_security_button->setVisible(active);
+    m_active_panel->setVisible(active);
+    m_cards->setVisible(active);
+    m_advanced->setVisible(active);
+    m_active_details->setVisible(active);
+    m_dev_warning->setVisible(active);
 
     const QVector<CybouIdentityState> flow{
         CybouIdentityState::CreatingKeys,
@@ -403,12 +570,13 @@ void IdentityPage::refresh()
     if (status.identity_state == CybouIdentityState::Active) {
         m_state_label->setText(status.primary_name.isEmpty() ? tr("Identity active") : status.primary_name);
         m_detail_label->setText(status.name_claim_pending ? status.name_claim_status :
-            tr("Your CYBOU identity is registered on the network."));
+            tr("Your CYBOU identity for messages, payments and files. A single, human-friendly identity that works across all CYBOU services \u2014 you stay in control of your data, devices and who can reach you."));
         m_active_details->setText(
             tr("AccountID: %1\nCreation height: %2\nNetwork: %3\nSystemBalance was funded atomically from the OnboardingPool at creation.")
                 .arg(status.account_id)
                 .arg(status.creation_height)
                 .arg(status.network_name));
+        m_claim_button->setEnabled(!status.name_claim_pending);
         return;
     }
 
@@ -419,7 +587,7 @@ void IdentityPage::refresh()
             m_detail_label->setText(tr("Preparing local identity keys and checking verified state."));
             break;
         case CybouIdentityState::PerformingWork:
-            m_detail_label->setText(tr("The node is performing AccountCreationWork — protocol anti-Sybil computation. One identity costs real work, so mass registrations stay out."));
+            m_detail_label->setText(tr("The node is performing AccountCreationWork \u2014 protocol anti-Sybil computation. One identity costs real work, so mass registrations stay out."));
             break;
         case CybouIdentityState::Broadcasting:
             m_detail_label->setText(tr("The signed identity operation is being submitted to the network."));
@@ -444,7 +612,7 @@ void IdentityPage::refresh()
     const auto* service = m_model->identityService();
     const auto vault_path = service ? service->GetStoragePath() : std::nullopt;
     const bool has_vault = vault_path && std::filesystem::exists(*vault_path);
-    m_create_button->setText(pending ? tr("Creation requested…") :
+    m_create_button->setText(pending ? tr("Creation requested\u2026") :
         has_vault ? (service->GetKeyStore().HasKey() ? tr("Resume account creation") : tr("Unlock identity")) :
         tr("Create identity"));
     m_create_button->setToolTip(pending

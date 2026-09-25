@@ -299,6 +299,12 @@ void CybouDesktopModel::setPeerCount(int peer_count)
     Q_EMIT statusChanged();
 }
 
+void CybouDesktopModel::setLastSync(const QDateTime& when)
+{
+    m_last_sync = when;
+    Q_EMIT statusChanged();
+}
+
 void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString& account_id,
     int creation_height)
 {

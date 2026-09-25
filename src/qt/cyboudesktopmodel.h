@@ -5,6 +5,7 @@
 #ifndef BITCOIN_QT_CYBOUDESKTOPMODEL_H
 #define BITCOIN_QT_CYBOUDESKTOPMODEL_H
 
+#include <QDateTime>
 #include <QObject>
 #include <QString>
 #include <QLocale>
@@ -114,6 +115,12 @@ public:
         reachable (DEV: 0 or 1). No-op when unchanged. */
     void setPeerCount(int peer_count);
 
+    /** Core-facing adapter entry: last successful sync round. Drives the
+        "Synced x ago" indicator in the status strip; invalid until the
+        first round completes. */
+    void setLastSync(const QDateTime& when);
+    QDateTime lastSync() const { return m_last_sync; }
+
     /** Core-facing adapter entry (doc 73): core drives identity lifecycle
         transitions only. The GUI never sets these states on its own. */
     void setIdentityState(CybouIdentityState state, const QString& account_id = {},
@@ -158,6 +165,7 @@ private:
     std::jthread m_name_worker;
     CybouDesktopStatus m_status;
     CybouCapabilities m_capabilities;
+    QDateTime m_last_sync;
     bool m_identity_request_pending{false};
 
     void refreshFromClient();

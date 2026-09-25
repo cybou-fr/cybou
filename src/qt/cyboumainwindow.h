@@ -8,7 +8,12 @@
 #include <qt/bitcoingui.h>
 
 #include <atomic>
+#include <memory>
 #include <thread>
+
+namespace CybouUi {
+class StatusStrip;
+}
 
 class ClientModel;
 class CybouDesktopModel;
@@ -51,6 +56,7 @@ private:
     std::unique_ptr<cybou::CybouWalletService> m_wallet_service;
     QStackedWidget* m_pages;
     QButtonGroup* m_navigation;
+    std::unique_ptr<CybouUi::StatusStrip> m_status_strip;
 
     /** Bootstrap sync worker: pulls verified blocks from the DEV bootstrap
         authority and pushes finality status into the desktop model. */

@@ -52,6 +52,23 @@ QString CybouTheme::applicationStyleSheet()
         QMenu { background: @canvas@; border: 1px solid @border@; color: @text_primary@; }
 
         QFrame#sidebar { background: @canvas@; border-right: 1px solid @border@; }
+        QFrame#statusStrip { background: @canvas@; border-bottom: 1px solid @border@; }
+        QLabel#stripCaption { color: @text_muted@; font-size: 11px; }
+        QLabel#stripValue { color: @text_primary@; font-size: 13px; font-weight: 700; }
+        QLabel#stripValue[tint="teal"] { color: @teal_dark@; }
+        QToolButton#iconButton { border: none; border-radius: 14px; padding: 6px; background: transparent; }
+        QToolButton#iconButton:hover { background: @surface@; }
+        QToolButton#iconButton:checked { background: @mint_soft@; }
+        QLabel#sectionLink { color: @teal_dark@; font-size: 13px; font-weight: 700; }
+        QLabel#rowTitle { color: @text_primary@; font-size: 14px; font-weight: 700; background: transparent; border: none; }
+        QLabel#rowSub { color: @text_muted@; font-size: 12px; background: transparent; border: none; }
+        QLabel#rowMeta { color: @dim@; font-size: 12px; background: transparent; border: none; }
+        QProgressBar#usageMeter { border: none; border-radius: 5px; background: @surface@; min-height: 8px; max-height: 8px; }
+        QProgressBar#usageMeter::chunk { border-radius: 4px; background: @mint@; }
+        QCheckBox#switch { spacing: 10px; }
+        QCheckBox#switch::indicator { width: 40px; height: 22px; border-radius: 11px; border: none; background: @border_medium@; }
+        QCheckBox#switch::indicator:checked { background: @mint@; }
+        QFrame#readerBody { background: @subtle@; border-radius: 10px; }
         QLabel#brand { font-size: 23px; font-weight: 800; letter-spacing: 1px; color: @text_primary@; }
         QLabel#brandCaption { font-size: 11px; font-weight: 700; color: @teal_dark@; }
         QLabel#sidebarFootnote { color: @text_muted@; font-size: 12px; line-height: 1.4; }
@@ -64,9 +81,29 @@ QString CybouTheme::applicationStyleSheet()
 
         QFrame#card { background: @canvas@; border: 1px solid @border@; border-radius: 14px; }
         QFrame#iconChip { background: @mint_ghost@; border-radius: 20px; }
+        QFrame#iconChip[tint="mint"] { background: @mint_soft@; }
+        QFrame#iconChip[tint="blue"] { background: @blue_soft@; }
+        QFrame#iconChip[tint="indigo"] { background: @indigo_soft@; }
+        QFrame#iconChip[tint="violet"] { background: @violet_soft@; }
+        QFrame#iconChip[tint="amber"] { background: @amber_soft@; }
+        QFrame#iconChip[tint="rose"] { background: @rose_soft@; }
+        QLabel#pill { background: @mint_soft@; color: @teal_dark@; border-radius: 11px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
+        QLabel#pill[tint="blue"] { background: @blue_soft@; color: @blue@; }
+        QLabel#pill[tint="indigo"] { background: @indigo_soft@; color: @indigo@; }
+        QLabel#pill[tint="violet"] { background: @violet_soft@; color: @violet@; }
+        QLabel#pill[tint="amber"] { background: @amber_soft@; color: @amber@; }
+        QLabel#pill[tint="rose"] { background: @rose_soft@; color: @rose@; }
+        QLabel#pill[tint="neutral"] { background: @surface@; color: @text_muted@; }
+        QLabel#dot { background: @mint@; border-radius: 4px; }
+        QLabel#dot[tint="blue"] { background: @blue@; }
+        QLabel#dot[tint="amber"] { background: @amber@; }
+        QLabel#dot[tint="muted"] { background: @dim@; }
         QLabel#eyebrow { color: @text_muted@; font-size: 11px; font-weight: 800; letter-spacing: 3px; }
         QLabel#heroTitle { color: @text_primary@; font-size: 30px; font-weight: 800; }
+        QLabel#heroTitleBig { color: @text_primary@; font-size: 34px; font-weight: 800; }
         QLabel#heroSubtitle { color: @text_secondary@; font-size: 14px; }
+        QFrame#heroHeader { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f4fdf8, stop:1 #e5f9ef); border: 1px solid #cdeede; border-radius: 16px; }
+        QFrame#heroPanel { background: @canvas@; border: 1px solid @border@; border-radius: 16px; }
         QLabel#pageTitle { color: @text_primary@; font-size: 28px; font-weight: 800; }
         QLabel#pageSubtitle { color: @text_muted@; font-size: 14px; }
         QLabel#sectionTitle { color: @text_primary@; font-size: 19px; font-weight: 750; }
@@ -85,9 +122,9 @@ QString CybouTheme::applicationStyleSheet()
         QLabel#phaseLabelDone { color: @text_secondary@; font-size: 12px; font-weight: 600; }
 
         QPushButton { min-height: 34px; border-radius: 8px; padding: 4px 16px; font-weight: 700; }
-        QPushButton#primaryButton, QPushButton[primary="true"] { background: @teal@; color: white; border: 1px solid @teal@; }
-        QPushButton#primaryButton:hover, QPushButton[primary="true"]:hover { background: @teal_dark@; border-color: @teal_dark@; }
-        QPushButton#primaryButton:pressed, QPushButton[primary="true"]:pressed { background: @mint@; border-color: @mint@; }
+        QPushButton#primaryButton, QPushButton[primary="true"] { background: @mint@; color: white; border: 1px solid @mint@; }
+        QPushButton#primaryButton:hover, QPushButton[primary="true"]:hover { background: @teal@; border-color: @teal@; }
+        QPushButton#primaryButton:pressed, QPushButton[primary="true"]:pressed { background: @teal_dark@; border-color: @teal_dark@; }
         QPushButton#primaryButton:focus, QPushButton[primary="true"]:focus { border-color: @teal_dark@; }
         QPushButton#secondaryButton { background: @canvas@; color: @teal_dark@; border: 1px solid @border_medium@; }
         QPushButton#secondaryButton:hover { background: @mint_ghost@; border-color: @mint@; }
@@ -192,6 +229,16 @@ QString CybouTheme::applicationStyleSheet()
     set(QStringLiteral("teal_dark"), color(BRAND_TEAL_DARK).name());
     set(QStringLiteral("mint_soft"), color(MINT_SOFT).name());
     set(QStringLiteral("mint_ghost"), color(MINT_GHOST).name());
+    set(QStringLiteral("blue_soft"), color(BLUE_SOFT).name());
+    set(QStringLiteral("indigo_soft"), color(INDIGO_SOFT).name());
+    set(QStringLiteral("violet_soft"), color(VIOLET_SOFT).name());
+    set(QStringLiteral("amber_soft"), color(AMBER_SOFT).name());
+    set(QStringLiteral("rose_soft"), color(ROSE_SOFT).name());
+    set(QStringLiteral("blue"), color(BLUE).name());
+    set(QStringLiteral("indigo"), color(INDIGO).name());
+    set(QStringLiteral("violet"), color(VIOLET).name());
+    set(QStringLiteral("amber"), color(AMBER).name());
+    set(QStringLiteral("rose"), color(ROSE).name());
     // Dark squircle tile behind the white CYBOU logomark, mirroring the
     // website's .logo-tile (white-on-transparent art needs a dark base even
     // on the light desktop shell).

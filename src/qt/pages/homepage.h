@@ -11,6 +11,8 @@
 
 class CybouDesktopModel;
 class QLabel;
+class QProgressBar;
+class QPushButton;
 
 class HomePage : public QWidget
 {
@@ -21,20 +23,31 @@ public:
 
 private:
     CybouDesktopModel* const m_model;
-    QLabel* m_network_name;
-    QLabel* m_node_state;
-    QLabel* m_peer_count;
-    QLabel* m_finalized_height;
-    QLabel* m_identity_state;
-    QLabel* m_identity_detail;
-    QLabel* m_balance;
-    QLabel* m_system_balance;
-    QLabel* m_footer_state;
+    QLabel* m_identity_name;
+    QLabel* m_identity_subtitle;
+    QLabel* m_chip_protected;
+    QLabel* m_chip_ready;
+    QPushButton* m_share_button;
+    QPushButton* m_manage_button;
+    QLabel* m_mail_metric;
+    QWidget* m_mail_avatars;
+    QLabel* m_files_metric;
+    QLabel* m_files_caption;
+    QProgressBar* m_files_meter;
+    QLabel* m_devices_metric;
+    QWidget* m_device_rows;
+    QWidget* m_activity_rows;
+    QLabel* m_activity_empty;
     const std::function<void()> m_diagnostics_requested;
     const std::function<void()> m_identity_requested;
     const std::function<void()> m_wallet_requested;
 
     void refresh();
+    QWidget* buildIdentityHero();
+    QWidget* buildMailCard();
+    QWidget* buildFilesCard();
+    QWidget* buildDevicesCard();
+    QWidget* buildActivityCard();
 };
 
 #endif // BITCOIN_QT_PAGES_HOMEPAGE_H

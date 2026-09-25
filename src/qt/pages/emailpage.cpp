@@ -7,6 +7,7 @@
 #include <cybou/mail_service.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
+#include <qt/cybouui.h>
 
 #include <QBrush>
 #include <QFrame>
@@ -14,6 +15,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -21,9 +23,24 @@
 #include <QStyle>
 #include <QTextEdit>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 
+using namespace CybouUi;
+
 namespace {
+
+/** Deterministic accent color for a peer account (avatar disc). */
+QRgb peerColor(const QString& peer)
+{
+    static const QRgb palette[] = {
+        CybouTheme::BRAND_TEAL, CybouTheme::BLUE, CybouTheme::INDIGO,
+        CybouTheme::VIOLET, CybouTheme::AMBER, CybouTheme::ROSE,
+    };
+    uint hash = 0;
+    for (const QChar ch : peer) hash = (hash * 31) ^ ch.unicode();
+    return palette[hash % std::size(palette)];
+}
 
 QLabel* noteLabel(const QString& text, QWidget* parent)
 {
@@ -48,19 +65,20 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
       m_identity_requested{std::move(identity_requested)}
 {
     auto* root = new QHBoxLayout{this};
-    root->setContentsMargins(34, 32, 34, 32);
-    root->setSpacing(18);
+    root->setContentsMargins(20, 18, 20, 18);
+    root->setSpacing(14);
 
-    // ---- Left rail: compose, folders, identity footer -------------------
+    // ---- Left rail: compose, folders, labels ------------------------------
     auto* rail = new QFrame{this};
     rail->setObjectName(QStringLiteral("card"));
-    rail->setFixedWidth(252);
+    rail->setFixedWidth(232);
     auto* rail_layout = new QVBoxLayout{rail};
-    rail_layout->setContentsMargins(16, 18, 16, 16);
-    rail_layout->setSpacing(12);
+    rail_layout->setContentsMargins(14, 14, 14, 14);
+    rail_layout->setSpacing(10);
 
     m_compose_button = new QPushButton{tr("Compose"), rail};
     m_compose_button->setObjectName(QStringLiteral("primaryButton"));
+    m_compose_button->setIcon(QIcon{glyphPixmap(Glyph::Compose, {16, 16}, QColor{0xffffff})});
     connect(m_compose_button, &QPushButton::clicked, this, [this] { openComposer(); });
     rail_layout->addWidget(m_compose_button);
 
@@ -68,44 +86,89 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     m_folders->setObjectName(QStringLiteral("folderList"));
     m_folders->setUniformItemSizes(true);
     m_folders->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_folders->setFocusPolicy(Qt::NoFocus);
     connect(m_folders, &QListWidget::currentRowChanged, this, [this](int row) {
         if (row < 0 || row >= FOLDER_COUNT) return;
         m_folder = static_cast<Folder>(row);
+        m_current_message = -1;
         rebuildMessageList();
+        clearReader();
     });
     rail_layout->addWidget(m_folders, 1);
 
-    rail_layout->addSpacing(4);
-    m_identity_line = new QLabel{rail};
-    m_identity_line->setObjectName(QStringLiteral("cardLabel"));
-    m_identity_line->setWordWrap(true);
-    m_identity_hint = noteLabel(QString{}, rail);
-    rail_layout->addWidget(m_identity_line);
-    rail_layout->addWidget(m_identity_hint);
+    // Labels: local visual indexes (sketch). Messages carry no label data
+    // until the local label index lands, so rows render without counts.
+    auto* labels_header = new QLabel{tr("LABELS"), rail};
+    labels_header->setObjectName(QStringLiteral("eyebrow"));
+    rail_layout->addWidget(labels_header);
+    struct LabelDef { const char* name; Tint tint; };
+    const LabelDef labels[]{
+        {QT_TR_NOOP("Project"), Tint::Blue},
+        {QT_TR_NOOP("Personal"), Tint::Violet},
+        {QT_TR_NOOP("Finance"), Tint::Mint},
+        {QT_TR_NOOP("Team"), Tint::Amber},
+    };
+    for (const auto& label : labels) {
+        auto* row_widget = new QWidget{rail};
+        auto* row = new QHBoxLayout{row_widget};
+        row->setContentsMargins(8, 5, 8, 5);
+        row->setSpacing(10);
+        row->addWidget(Dot(label.tint, row_widget, 8), 0, Qt::AlignVCenter);
+        auto* name = new QLabel{tr(label.name), row_widget};
+        name->setObjectName(QStringLiteral("bodyText"));
+        row->addWidget(name, 1);
+        row_widget->setToolTip(tr("Label indexes are a local-client feature and arrive with the mailbox label work."));
+        rail_layout->addWidget(row_widget);
+    }
     root->addWidget(rail);
 
-    // ---- Right side: mail view and composer share a stack ---------------
-    m_right_stack = new QStackedWidget{this};
-    root->addWidget(m_right_stack, 1);
+    // ---- Middle: search + message list ------------------------------------
+    auto* middle = new QFrame{this};
+    middle->setObjectName(QStringLiteral("card"));
+    auto* middle_layout = new QVBoxLayout{middle};
+    middle_layout->setContentsMargins(14, 14, 14, 14);
+    middle_layout->setSpacing(10);
 
-    auto* mail_view = new QWidget{m_right_stack};
-    auto* mail_layout = new QVBoxLayout{mail_view};
-    mail_layout->setContentsMargins(0, 0, 0, 0);
-    mail_layout->setSpacing(12);
+    // Identity banner across the top of the mail view (hidden once active).
+    m_banner = new QFrame{middle};
+    m_banner->setObjectName(QStringLiteral("identityBanner"));
+    auto* banner_layout = new QHBoxLayout{m_banner};
+    banner_layout->setContentsMargins(14, 10, 14, 10);
+    banner_layout->setSpacing(10);
+    auto* banner_chip = new QLabel{m_banner};
+    banner_chip->setPixmap(glyphPixmap(Glyph::Info, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
+    banner_layout->addWidget(banner_chip, 0, Qt::AlignVCenter);
+    m_banner_text = new QLabel{m_banner};
+    m_banner_text->setObjectName(QStringLiteral("bodyText"));
+    m_banner_text->setWordWrap(true);
+    m_banner_text->setMinimumWidth(180);
+    banner_layout->addWidget(m_banner_text, 1);
+    m_banner_action = new QPushButton{tr("Create identity"), m_banner};
+    m_banner_action->setObjectName(QStringLiteral("secondaryButton"));
+    connect(m_banner_action, &QPushButton::clicked, this, [this] { m_identity_requested(); });
+    banner_layout->addWidget(m_banner_action, 0, Qt::AlignVCenter);
+    middle_layout->addWidget(m_banner);
 
-    m_search = new QLineEdit{mail_view};
-    m_search->setPlaceholderText(tr("Search subject, sender or body"));
+    auto* search_row = new QHBoxLayout;
+    search_row->setSpacing(8);
+    m_search = new QLineEdit{middle};
+    m_search->setPlaceholderText(tr("Search messages, people or files\u2026"));
     m_search->setClearButtonEnabled(true);
     connect(m_search, &QLineEdit::textChanged, this, [this] { rebuildMessageList(); });
-    mail_layout->addWidget(m_search);
+    search_row->addWidget(m_search, 1);
+    auto* filter = IconButton(Glyph::Sliders, middle, tr("Filter (planned)"));
+    search_row->addWidget(filter, 0, Qt::AlignVCenter);
+    middle_layout->addLayout(search_row);
 
-    m_list = new QListWidget{mail_view};
+    m_list = new QListWidget{middle};
     m_list->setObjectName(QStringLiteral("messageList"));
+    m_list->setFocusPolicy(Qt::NoFocus);
     connect(m_list, &QListWidget::itemSelectionChanged, this, [this] {
         auto* item = m_list->currentItem();
         if (!item) return;
         const int index = item->data(Qt::UserRole).toInt();
         if (index < 0 || index >= m_messages.size()) return;
+        m_current_message = index;
         Message& message = m_messages[index];
         if (m_folder == FOLDER_INBOX && !message.read) {
             message.read = true;
@@ -114,28 +177,97 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
                 if (id_opt) service->MarkAsRead(*id_opt, true);
             }
             rebuildFolderList();
+            rebuildMessageList();
         }
         showMessage(message);
     });
-    mail_layout->addWidget(m_list, 1);
+    middle_layout->addWidget(m_list, 1);
+    root->addWidget(middle, 4);
 
-    // Reader card: headers, body, protocol evidence, local actions.
-    m_reader = new QFrame{mail_view};
-    m_reader->setObjectName(QStringLiteral("card"));
+    // ---- Right: reading pane and composer share a stack -------------------
+    m_right_stack = new QStackedWidget{this};
+    root->addWidget(m_right_stack, 6);
+
+    auto* mail_view = new QWidget{m_right_stack};
+    auto* mail_layout = new QVBoxLayout{mail_view};
+    mail_layout->setContentsMargins(0, 0, 0, 0);
+    mail_layout->setSpacing(0);
+
+    // Reader card: headers, chips, body, protocol evidence, local actions.
+    m_reader = Card(mail_view);
     auto* reader_layout = new QVBoxLayout{m_reader};
     reader_layout->setContentsMargins(22, 18, 22, 18);
     reader_layout->setSpacing(10);
+
+    auto* subject_row = new QHBoxLayout;
+    m_reader_subject = new QLabel{m_reader};
+    m_reader_subject->setObjectName(QStringLiteral("pageTitle"));
+    subject_row->addWidget(m_reader_subject, 1);
+    auto* nav_left = IconButton(Glyph::ChevronLeft, m_reader, tr("Previous message"));
+    auto* nav_right = IconButton(Glyph::ChevronRight, m_reader, tr("Next message"));
+    subject_row->addWidget(nav_left, 0, Qt::AlignVCenter);
+    subject_row->addWidget(nav_right, 0, Qt::AlignVCenter);
+    reader_layout->addLayout(subject_row);
+
+    auto* peer_row = new QHBoxLayout;
+    peer_row->setSpacing(10);
+    m_reader_avatar = new QLabel{m_reader};
+    m_reader_avatar->setFixedSize(40, 40);
+    peer_row->addWidget(m_reader_avatar, 0, Qt::AlignVCenter);
+    auto* peer_column = new QVBoxLayout;
+    peer_column->setSpacing(0);
+    m_reader_peer = new QLabel{m_reader};
+    m_reader_peer->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;")
+        .arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
+    m_reader_meta = new QLabel{m_reader};
+    m_reader_meta->setObjectName(QStringLiteral("rowSub"));
+    m_reader_meta->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
+    peer_column->addWidget(m_reader_peer);
+    peer_column->addWidget(m_reader_meta);
+    peer_row->addLayout(peer_column);
+    peer_row->addStretch();
+    m_star_button = IconButton(Glyph::Star, m_reader, tr("Star (planned)"));
+    auto* more_button = IconButton(Glyph::DotsV, m_reader, tr("Message actions"));
+    auto* more_menu = new QMenu{more_button};
+    auto* mark_unread = more_menu->addAction(tr("Mark as unread"));
+    connect(mark_unread, &QAction::triggered, this, [this] {
+        if (m_current_message < 0 || m_current_message >= m_messages.size()) return;
+        Message& message = m_messages[m_current_message];
+        message.read = false;
+        if (auto* service = m_model->mailService()) {
+            const auto id_opt = uint256::FromUserHex(message.id.toStdString());
+            if (id_opt) service->MarkAsRead(*id_opt, false);
+        }
+        rebuildFolderList();
+        rebuildMessageList();
+    });
+    more_button->setMenu(more_menu);
+    more_button->setPopupMode(QToolButton::InstantPopup);
+    peer_row->addWidget(m_star_button, 0, Qt::AlignVCenter);
+    peer_row->addWidget(more_button, 0, Qt::AlignVCenter);
+    reader_layout->addLayout(peer_row);
+
+    auto* chips_row = new QHBoxLayout;
+    chips_row->setSpacing(6);
+    m_chip_encrypted = Pill(tr("Encrypted"), Tint::Mint, m_reader);
+    m_chip_verified = Pill(tr("Identity verified"), Tint::Blue, m_reader);
+    m_chip_protected = Pill(tr("Protected"), Tint::Mint, m_reader);
+    chips_row->addWidget(m_chip_encrypted);
+    chips_row->addWidget(m_chip_verified);
+    chips_row->addWidget(m_chip_protected);
+    chips_row->addStretch();
+    reader_layout->addLayout(chips_row);
+
     m_reader_hint = noteLabel(tr("Select a message to read it. Read-state stays local to this client."), m_reader);
-    reader_layout->addWidget(m_reader_hint);
-    m_reader_headers = new QLabel{m_reader};
-    m_reader_headers->setObjectName(QStringLiteral("bodyText"));
-    m_reader_headers->setWordWrap(true);
-    m_reader_headers->setVisible(false);
-    reader_layout->addWidget(m_reader_headers);
+    m_reader_hint->setAlignment(Qt::AlignCenter);
+    m_reader_hint->setMinimumHeight(160);
+    reader_layout->addWidget(m_reader_hint, 1);
+
     m_reader_body = new QLabel{m_reader};
     m_reader_body->setObjectName(QStringLiteral("bodyText"));
     m_reader_body->setWordWrap(true);
     m_reader_body->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_reader_body->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_reader_body->setVisible(false);
     reader_layout->addWidget(m_reader_body, 1);
 
@@ -162,11 +294,45 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     }
     m_evidence->setVisible(false);
     reader_layout->addWidget(m_evidence);
-    reader_layout->addSpacing(4);
-    m_reader->setMinimumHeight(220);
-    mail_layout->addWidget(m_reader);
 
-    // ---- Composer --------------------------------------------------------
+    auto* reader_actions = new QHBoxLayout;
+    reader_actions->setSpacing(8);
+    auto* reply = new QPushButton{tr("Reply"), m_reader};
+    reply->setObjectName(QStringLiteral("secondaryButton"));
+    reply->setIcon(QIcon{glyphPixmap(Glyph::Reply, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
+    auto* reply_all = new QPushButton{tr("Reply all"), m_reader};
+    reply_all->setObjectName(QStringLiteral("secondaryButton"));
+    reply_all->setIcon(QIcon{glyphPixmap(Glyph::Reply, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
+    auto* forward = new QPushButton{tr("Forward"), m_reader};
+    forward->setObjectName(QStringLiteral("secondaryButton"));
+    forward->setIcon(QIcon{glyphPixmap(Glyph::Forward, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
+    reader_actions->addWidget(reply);
+    reader_actions->addWidget(reply_all);
+    reader_actions->addWidget(forward);
+    reader_actions->addStretch();
+    reader_layout->addLayout(reader_actions);
+    m_reply_buttons = {reply, reply_all, forward};
+    auto do_reply = [this](bool all) {
+        if (m_current_message < 0 || m_current_message >= m_messages.size()) return;
+        const Message& message = m_messages.at(m_current_message);
+        if (message.folder == FOLDER_SENT) return;
+        const QString quoted = QStringLiteral("\n\n--- %1 ---\n%2")
+            .arg(peerName(message.from), message.body);
+        openComposerWith(message.from, tr("Re: %1").arg(message.subject), quoted);
+    };
+    connect(reply, &QPushButton::clicked, this, [do_reply] { do_reply(false); });
+    connect(reply_all, &QPushButton::clicked, this, [do_reply] { do_reply(true); });
+    connect(forward, &QPushButton::clicked, this, [this] {
+        if (m_current_message < 0 || m_current_message >= m_messages.size()) return;
+        const Message& message = m_messages.at(m_current_message);
+        const QString quoted = QStringLiteral("\n\n--- %1 ---\n%2")
+            .arg(peerName(message.from), message.body);
+        openComposerWith({}, tr("Fwd: %1").arg(message.subject), quoted);
+    });
+
+    mail_layout->addWidget(m_reader, 1);
+
+    // ---- Composer ----------------------------------------------------------
     auto* composer = new QFrame{m_right_stack};
     composer->setObjectName(QStringLiteral("card"));
     auto* compose_layout = new QVBoxLayout{composer};
@@ -174,7 +340,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     compose_layout->setSpacing(10);
 
     auto* compose_title = new QLabel{tr("New message"), composer};
-    compose_title->setObjectName(QStringLiteral("sectionTitle"));
+    compose_title->setObjectName(QStringLiteral("pageTitle"));
     compose_layout->addWidget(compose_title);
     compose_layout->addWidget(noteLabel(tr("CYBOU mail is a first-class protocol operation (MailTx): exactly one recipient, text only, no attachments."), composer));
 
@@ -209,7 +375,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     m_size_label = noteLabel(QString{}, composer);
     meter_row->addWidget(m_size_label);
     compose_layout->addLayout(meter_row);
-    compose_layout->addWidget(noteLabel(tr("Fee: deterministic and size-based — priority fees are not part of the protocol. Distribution: 3 Security, 1 Onboarding."), composer));
+    compose_layout->addWidget(noteLabel(tr("Fee: deterministic and size-based \u2014 priority fees are not part of the protocol. Distribution: 3 Security, 1 Onboarding."), composer));
 
     auto* actions = new QHBoxLayout;
     m_send = new QPushButton{tr("Send"), composer};
@@ -233,7 +399,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     m_right_stack->addWidget(mail_view);
     m_right_stack->addWidget(composer);
 
-    // ---- Wiring -----------------------------------------------------------
+    // ---- Wiring -------------------------------------------------------------
     const auto refresh_meter = [this] {
         const qint64 bytes = payloadBytes();
         m_size_meter->setValue(static_cast<int>(qMin<qint64>(bytes, kMaxMailTxBytes)));
@@ -264,21 +430,6 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     connect(sync_timer, &QTimer::timeout, this, [this] { syncMailbox(); });
     sync_timer->start(3000);
 
-    // Identity banner across the top of the mail view (hidden once active).
-    m_banner = new QFrame{mail_view};
-    m_banner->setObjectName(QStringLiteral("identityBanner"));
-    auto* banner_layout = new QHBoxLayout{m_banner};
-    banner_layout->setContentsMargins(16, 12, 16, 12);
-    m_banner_text = new QLabel{m_banner};
-    m_banner_text->setObjectName(QStringLiteral("bodyText"));
-    m_banner_text->setWordWrap(true);
-    banner_layout->addWidget(m_banner_text, 1);
-    m_banner_action = new QPushButton{tr("Create identity"), m_banner};
-    m_banner_action->setObjectName(QStringLiteral("secondaryButton"));
-    connect(m_banner_action, &QPushButton::clicked, this, [this] { m_identity_requested(); });
-    banner_layout->addWidget(m_banner_action, 0, Qt::AlignVCenter);
-    mail_layout->insertWidget(0, m_banner);
-
     syncMailbox();
     refresh_meter();
 }
@@ -287,7 +438,7 @@ qint64 EmailPage::payloadBytes() const
 {
     // The strict MailTx size covers everything the protocol commits to:
     // subject and body, UTF-8 encoded. No attachments exist to count.
-    return m_subject->text().toUtf8().size() + m_body->toPlainText().toUtf8().size();
+    return m_to->text().toUtf8().size() + m_subject->text().toUtf8().size() + m_body->toPlainText().toUtf8().size();
 }
 
 bool EmailPage::recipientWellFormed() const
@@ -306,9 +457,26 @@ QString EmailPage::finalityText(Finality finality)
     return {};
 }
 
+QString EmailPage::peerName(const QString& account_hex)
+{
+    if (account_hex.isEmpty()) return tr("unknown");
+    if (account_hex.size() <= 16) return account_hex;
+    return account_hex.left(12) + QStringLiteral("\u2026");
+}
+
 void EmailPage::rebuildFolderList()
 {
-    const QStringList names{tr("Inbox"), tr("Sent"), tr("Drafts")};
+    struct FolderDef { const char* name; Glyph glyph; Tint tint; };
+    const FolderDef defs[]{
+        {QT_TR_NOOP("Inbox"), Glyph::Inbox, Tint::Mint},
+        {QT_TR_NOOP("Starred"), Glyph::Star, Tint::Amber},
+        {QT_TR_NOOP("Sent"), Glyph::Send, Tint::Blue},
+        {QT_TR_NOOP("Drafts"), Glyph::FileText, Tint::Violet},
+        {QT_TR_NOOP("Archive"), Glyph::Archive, Tint::Indigo},
+        {QT_TR_NOOP("Trash"), Glyph::Trash, Tint::Rose},
+    };
+    static_assert(std::size(defs) == FOLDER_COUNT);
+
     QSignalBlocker blocker{m_folders};
     const int previous = m_folders->currentRow();
     m_folders->clear();
@@ -322,9 +490,26 @@ void EmailPage::rebuildFolderList()
                 ++count;
             }
         }
+        auto* row_widget = new QFrame{m_folders};
+        auto* row = new QHBoxLayout{row_widget};
+        row->setContentsMargins(10, 7, 10, 7);
+        row->setSpacing(10);
+        auto* icon = new QLabel{row_widget};
+        icon->setPixmap(glyphPixmap(defs[folder].glyph, {17, 17}, CybouTheme::color(tintInk(defs[folder].tint))));
+        row->addWidget(icon, 0, Qt::AlignVCenter);
+        auto* name = new QLabel{tr(defs[folder].name), row_widget};
+        name->setObjectName(QStringLiteral("bodyText"));
+        row->addWidget(name, 1);
+        if (count > 0) {
+            auto* badge = new QLabel{QString::number(count), row_widget};
+            badge->setObjectName(QStringLiteral("pill"));
+            badge->setProperty("tint", folder == FOLDER_INBOX ? "mint" : "neutral");
+            row->addWidget(badge, 0, Qt::AlignVCenter);
+        }
         auto* item = new QListWidgetItem{m_folders};
-        item->setText(count > 0 ? tr("%1 (%2)").arg(names.at(folder)).arg(count) : names.at(folder));
         item->setData(Qt::UserRole, folder);
+        item->setSizeHint(row_widget->sizeHint().expandedTo(QSize{0, 36}));
+        m_folders->setItemWidget(item, row_widget);
     }
     m_folders->setCurrentRow(previous >= 0 ? previous : 0);
 }
@@ -333,6 +518,7 @@ void EmailPage::rebuildMessageList()
 {
     const QString needle = m_search->text().trimmed().toLower();
     m_list->clear();
+    bool has_rows = false;
     for (int i = 0; i < m_messages.size(); ++i) {
         const Message& message = m_messages.at(i);
         if (message.folder != m_folder) continue;
@@ -343,38 +529,61 @@ void EmailPage::rebuildMessageList()
             !message.body.toLower().contains(needle)) {
             continue;
         }
+        has_rows = true;
+        const QString peer = m_folder == FOLDER_SENT || m_folder == FOLDER_DRAFTS ? message.to : message.from;
+
         auto* row = new QFrame{m_list};
         auto* row_layout = new QHBoxLayout{row};
-        row_layout->setContentsMargins(12, 8, 12, 8);
+        row_layout->setContentsMargins(10, 9, 10, 9);
         row_layout->setSpacing(10);
+        row_layout->addWidget(Avatar(peerName(peer).left(2), peerColor(peer), row, 36), 0, Qt::AlignTop);
+
         auto* main = new QVBoxLayout;
         main->setSpacing(2);
-        const QString peer = m_folder == FOLDER_SENT ? message.to : message.from;
+        const QString title_color = message.read
+            ? CybouTheme::color(CybouTheme::TEXT_SECONDARY).name()
+            : CybouTheme::color(CybouTheme::TEXT_PRIMARY).name();
+        auto* name = new QLabel{peerName(peer), row};
+        name->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;").arg(title_color));
         auto* subject = new QLabel{message.subject.isEmpty() ? tr("(no subject)") : message.subject, row};
-        subject->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;")
-            .arg(message.read ? QStringLiteral("#4b5563") : QStringLiteral("#111827")));
-        auto* snippet = new QLabel{tr("with %1 · %2")
-            .arg(peer.isEmpty() ? tr("unknown") : peer,
-                 QLocale{}.toString(message.received, QLocale::ShortFormat)), row};
-        snippet->setObjectName(QStringLiteral("mutedText"));
+        subject->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;").arg(title_color));
+        QString snippet_text = message.body;
+        snippet_text.replace(QLatin1Char('\n'), QLatin1Char(' '));
+        auto* snippet = new QLabel{snippet_text, row};
+        snippet->setObjectName(QStringLiteral("rowSub"));
         snippet->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
+        snippet->setMaximumWidth(260);
+        main->addWidget(name);
         main->addWidget(subject);
-        main->addWidget(snippet);
+        if (!snippet_text.isEmpty()) main->addWidget(snippet);
         row_layout->addLayout(main, 1);
-        auto* badge = new QLabel{finalityText(message.finality), row};
-        badge->setObjectName(message.finality == Finality::Final
-            ? QStringLiteral("statusBadge")
-            : QStringLiteral("neutralBadge"));
-        row_layout->addWidget(badge, 0, Qt::AlignVCenter);
+
+        auto* side = new QVBoxLayout;
+        side->setSpacing(4);
+        auto* time = new QLabel{QLocale{}.toString(message.received, QLocale::ShortFormat), row};
+        time->setObjectName(QStringLiteral("rowMeta"));
+        time->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
+        side->addWidget(time, 0, Qt::AlignRight);
+        if (message.finality == Finality::Final) {
+            auto* encrypted = new QLabel{tr("Encrypted"), row};
+            encrypted->setObjectName(QStringLiteral("pill"));
+            encrypted->setProperty("tint", "mint");
+            side->addWidget(encrypted, 0, Qt::AlignRight);
+        }
+        row_layout->addLayout(side);
+
         auto* item = new QListWidgetItem{m_list};
         item->setData(Qt::UserRole, i);
-        item->setSizeHint(row->sizeHint().expandedTo(QSize{0, 58}));
+        item->setSizeHint(row->sizeHint().expandedTo(QSize{0, 66}));
         m_list->setItemWidget(item, row);
     }
-    if (m_list->count() == 0) {
+    if (!has_rows) {
         auto* item = new QListWidgetItem{m_list};
         item->setFlags(Qt::NoItemFlags);
-        item->setText(tr("No mail here yet.\nMessages appear once your identity is active and the Email service reaches BFT finality."));
+        const bool indexed = m_folder == FOLDER_INBOX || m_folder == FOLDER_SENT || m_folder == FOLDER_DRAFTS;
+        item->setText(indexed
+            ? tr("No mail here yet.\nMessages appear once your identity is active and the Email service reaches BFT finality.")
+            : tr("Nothing here.\nThis local folder fills up as the mailbox index grows."));
         item->setTextAlignment(Qt::AlignCenter);
         item->setForeground(QBrush{CybouTheme::color(CybouTheme::TEXT_MUTED)});
         item->setSizeHint(QSize{0, 120});
@@ -382,25 +591,51 @@ void EmailPage::rebuildMessageList()
     }
 }
 
+void EmailPage::clearReader()
+{
+    m_current_message = -1;
+    m_reader_hint->setVisible(true);
+    m_reader_subject->clear();
+    m_reader_avatar->clear();
+    m_reader_peer->clear();
+    m_reader_meta->clear();
+    m_reader_body->setVisible(false);
+    m_reader_body->clear();
+    m_evidence_title->setVisible(false);
+    m_evidence->setVisible(false);
+    for (QPushButton* button : m_reply_buttons) button->setEnabled(false);
+    m_star_button->setEnabled(false);
+}
+
 void EmailPage::showMessage(const Message& message)
 {
     m_reader_hint->setVisible(false);
-    m_reader_headers->setVisible(true);
     m_reader_body->setVisible(true);
-    const QString direction = message.folder == FOLDER_SENT
-        ? tr("To: %1").arg(message.to)
-        : tr("From: %1").arg(message.from);
-    m_reader_headers->setText(tr("%1\nSubject: %2\n%3 · %4")
-        .arg(direction, message.subject.isEmpty() ? tr("(no subject)") : message.subject,
-             finalityText(message.finality),
-             QLocale{}.toString(message.received, QLocale::ShortFormat)));
+    m_reader_subject->setText(message.subject.isEmpty() ? tr("(no subject)") : message.subject);
+
+    const bool outgoing = message.folder == FOLDER_SENT || message.folder == FOLDER_DRAFTS;
+    const QString peer = outgoing ? message.to : message.from;
+    m_reader_avatar->setPixmap(avatarPixmap(peerName(peer).left(2), peerColor(peer), 40));
+    m_reader_peer->setText(peerName(peer));
+    m_reader_meta->setText(outgoing
+        ? tr("to %1 \u00b7 %2 \u00b7 %3").arg(peerName(message.to), finalityText(message.finality),
+            QLocale{}.toString(message.received, QLocale::ShortFormat))
+        : tr("to you \u00b7 %1 \u00b7 %2").arg(finalityText(message.finality),
+            QLocale{}.toString(message.received, QLocale::ShortFormat)));
     m_reader_body->setText(message.body);
+
+    // Chips mirror real message state; drafts carry no protocol guarantees.
+    const bool final = message.finality == Finality::Final;
+    m_chip_encrypted->setVisible(final);
+    m_chip_verified->setVisible(final);
+    m_chip_protected->setVisible(message.finality != Finality::Draft);
+    m_star_button->setEnabled(final);
 
     // Evidence rows mirror the mail-evidence rules: a message is only
     // trustworthy once all four are verified; drafts carry none.
     m_evidence_title->setVisible(true);
     m_evidence->setVisible(true);
-    const bool verified = message.finality == Finality::Final && message.has_evidence;
+    const bool verified = final && message.has_evidence;
     if (m_evidence_states.size() >= 4) {
         // 0: Transaction inclusion proof
         m_evidence_states[0]->setText(verified ? tr("verified") : tr("pending"));
@@ -424,6 +659,7 @@ void EmailPage::showMessage(const Message& message)
             state->style()->polish(state);
         }
     }
+    for (QPushButton* button : m_reply_buttons) button->setEnabled(message.folder == FOLDER_INBOX);
 }
 
 void EmailPage::updateGates()
@@ -435,15 +671,8 @@ void EmailPage::updateGates()
     m_banner->setVisible(!identity_active);
     m_banner_text->setText(identity_active
         ? QString{}
-        : tr("Email needs an active CYBOU identity. Identity creation is a permissionless protocol operation — your keys never leave this device."));
+        : tr("Email needs an active CYBOU identity. Identity creation is a permissionless protocol operation \u2014 your keys never leave this device."));
     m_banner_action->setVisible(!identity_active);
-
-    m_identity_line->setText(identity_active
-        ? tr("Identity: %1").arg(status.account_id.isEmpty() ? tr("active") : status.account_id)
-        : tr("Identity: not created"));
-    m_identity_hint->setText(email_available
-        ? tr("Email service: available")
-        : tr("Email service: planned — drafts stay local"));
 
     // Send gate: the button is honest about every missing precondition.
     QString gate_reason;
@@ -456,7 +685,7 @@ void EmailPage::updateGates()
     } else if (!identity_active) {
         gate_reason = tr("Create an identity to send mail.");
     } else if (!email_available) {
-        gate_reason = tr("Email service is planned — this draft stays local until MailTx is live.");
+        gate_reason = tr("Email service is planned \u2014 this draft stays local until MailTx is live.");
     }
     m_send->setEnabled(gate_reason.isEmpty());
     m_send_hint->setText(gate_reason);
@@ -467,6 +696,14 @@ void EmailPage::openComposer()
 {
     m_right_stack->setCurrentIndex(1);
     m_to->setFocus();
+}
+
+void EmailPage::openComposerWith(const QString& to, const QString& subject, const QString& body_prefix)
+{
+    m_to->setText(to);
+    m_subject->setText(subject);
+    m_body->setPlainText(body_prefix);
+    openComposer();
 }
 
 void EmailPage::closeComposer()
@@ -624,4 +861,3 @@ void EmailPage::syncMailbox()
         }
     }
 }
-
