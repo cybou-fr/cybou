@@ -1,4 +1,4 @@
-// Copyright (c) 2026 The CYBOU developers
+// Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/authority_node.h>
@@ -462,6 +462,11 @@ int Main(const int argc, char* argv[])
         acceptor.non_blocking(true);
         std::jthread blocks([&] {
             while (!stopping) {
+                if (runtime.GetStatus().validator_count > 1) {
+                    runtime.TickConsensus(std::chrono::milliseconds(interval_ms));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                    continue;
+                }
                 const auto block = runtime.ProduceBlock();
                 if (!block) {
                     if (runtime.GetStatus().validator_count <= 1) {
@@ -498,12 +503,14 @@ int Main(const int argc, char* argv[])
                     }
                 }
                 if (!stopping) {
+                    runtime.DrainConsensusMessages(peers);
                     peers.FanoutRecentBlocks();
                     peers.FanoutRecentOperations();
                     peers.PingAll();
                 }
-                for (int i = 0; i < 5 && !stopping; ++i) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                for (int i = 0; i < 20 && !stopping; ++i) {
+                    runtime.DrainConsensusMessages(peers);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
                 }
             }
         });

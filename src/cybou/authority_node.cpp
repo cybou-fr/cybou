@@ -1,4 +1,4 @@
-// Copyright (c) 2026 The CYBOU developers
+// Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/authority_node.h>
@@ -209,6 +209,18 @@ bool CybouAuthorityNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
         }
     }
     return false;
+}
+
+std::optional<BftPrevoteMsg> CybouAuthorityNode::OnProposalTimeout()
+{
+    if (!EnsureValidator()) return std::nullopt;
+    return m_validator->OnProposalTimeout();
+}
+
+std::optional<BftPrecommitMsg> CybouAuthorityNode::OnPrevoteTimeout()
+{
+    if (!EnsureValidator()) return std::nullopt;
+    return m_validator->OnPrevoteTimeout();
 }
 
 const std::optional<FinalizedBlock>& CybouAuthorityNode::GetLatestFinalizedBlock() const

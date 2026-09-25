@@ -21,7 +21,7 @@ Recommended structure:
 Proposed project collective label:
 
 ```text
-The CYBOU developers
+Stanislav SAVELIEV
 ```
 
 Final holder wording should be revisited if a legal entity/employment structure owns contributions.
@@ -42,7 +42,7 @@ Preserve existing header(s), then add a CYBOU contribution line, e.g.:
 
 ```text
 Copyright (c) 2009-present The Bitcoin Core developers
-Copyright (c) 2026-present The CYBOU developers
+Copyright (c) 2026-present Stanislav SAVELIEV
 ```
 
 Do not rewrite upstream year ranges.
@@ -52,7 +52,7 @@ Do not rewrite upstream year ranges.
 If MIT is retained:
 
 ```text
-Copyright (c) 2026-present The CYBOU developers
+Copyright (c) 2026-present Stanislav SAVELIEV
 Distributed under the MIT software license, see the accompanying file COPYING.
 ```
 

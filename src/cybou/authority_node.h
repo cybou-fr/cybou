@@ -1,4 +1,4 @@
-// Copyright (c) 2026 The CYBOU developers
+// Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #ifndef CYBOU_AUTHORITY_NODE_H
@@ -86,6 +86,8 @@ public:
     std::optional<BftPrevoteMsg> ReceiveProposal(const BftProposalMsg& proposal);
     std::optional<BftPrecommitMsg> ReceivePrevote(const BftPrevoteMsg& prevote);
     bool ReceivePrecommit(const BftPrecommitMsg& precommit);
+    std::optional<BftPrevoteMsg> OnProposalTimeout();
+    std::optional<BftPrecommitMsg> OnPrevoteTimeout();
     const std::optional<FinalizedBlock>& GetLatestFinalizedBlock() const;
     std::optional<size_t> GetValidatorIndex() const;
 

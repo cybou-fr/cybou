@@ -145,6 +145,7 @@ public:
     bool ReceivePrecommit(const BftPrecommitMsg& precommit);
 
     /** Trigger a round timeout: advances step/round when stalled. */
+    std::optional<BftPrevoteMsg> OnProposalTimeout();
     std::optional<BftPrecommitMsg> OnPrevoteTimeout();
     void OnRoundTimeout();
 

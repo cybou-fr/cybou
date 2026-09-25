@@ -2,6 +2,12 @@
 
 Read active docs before coding.
 
+### DEV VPS deployment
+- After changing CYBOU core or `cybou-node`, rebuild `cybou-node` on the DEV VPS and restart `cybou-node.service` in the same task.
+- Connect as `debian@vps-d0669a91.vps.ovh.net` over SSH. The checkout is `/home/debian/cybou`; the service runs `/home/debian/cybou/build/bin/cybou-node`.
+- Run relevant tests before deployment. Preserve the current executable for rollback, build the updated executable on the VPS, restart with systemd, then verify service health, listening port, and advancing block height.
+- Do not reset DEV state or replace the validator key as part of a routine deployment.
+
 ### Identity target
 - Read `docs/cybou/10_IDENTITY_NAMES.md` and `76`–`78` before Identity work.
 - Random stable AccountID is independent of mnemonic and keys.

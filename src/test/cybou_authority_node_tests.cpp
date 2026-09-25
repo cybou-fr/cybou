@@ -1,4 +1,4 @@
-// Copyright (c) 2026 The CYBOU developers
+// Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/authority_node.h>
@@ -7,6 +7,8 @@
 #include <test/util/setup_common.h>
 
 #include <boost/test/unit_test.hpp>
+
+#include <algorithm>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_authority_node_tests, BasicTestingSetup)
 
@@ -247,6 +249,43 @@ BOOST_AUTO_TEST_CASE(n4_bft_distributed_consensus_with_fault_tolerance_and_catch
         BOOST_REQUIRE(blk);
         BOOST_CHECK(cybou::VerifyFinalityCertificate(blk->certificate,
             genesis.validator_set, nodes[i]->GetNetworkId()) == cybou::FinalityVerificationError::NONE);
+        const auto recent = nodes[i]->RecentFinalizedBlocksForGossip();
+        BOOST_REQUIRE(!recent.empty());
+        BOOST_CHECK_EQUAL(recent.back().height, 2U);
+    }
+
+    // Height 3 loses its round-0 leader. The other three validators advance
+    // to round 1 and finalize with the rotated leader.
+    const size_t offline_leader = cybou::BftLeaderIndex(3, 0, 4);
+    const size_t rotated_leader = cybou::BftLeaderIndex(3, 1, 4);
+    std::vector<size_t> survivors;
+    for (size_t i = 0; i < 4; ++i) {
+        if (i != offline_leader) survivors.push_back(i);
+    }
+    BOOST_REQUIRE(std::find(survivors.begin(), survivors.end(), rotated_leader) != survivors.end());
+    for (size_t i : survivors) {
+        if (i != rotated_leader) BOOST_CHECK(!nodes[i]->ProposeConsensusBlock(1));
+    }
+    const auto rotated_proposal = nodes[rotated_leader]->ProposeConsensusBlock(1);
+    BOOST_REQUIRE(rotated_proposal);
+    std::vector<cybou::BftPrevoteMsg> rotated_prevotes;
+    for (size_t i : survivors) {
+        const auto vote = nodes[i]->ReceiveConsensusProposal(*rotated_proposal);
+        BOOST_REQUIRE(vote);
+        rotated_prevotes.push_back(*vote);
+    }
+    std::vector<cybou::BftPrecommitMsg> rotated_precommits;
+    for (size_t i : survivors) {
+        for (const auto& vote : rotated_prevotes) {
+            if (const auto precommit = nodes[i]->ReceiveConsensusPrevote(vote)) {
+                rotated_precommits.push_back(*precommit);
+            }
+        }
+    }
+    BOOST_REQUIRE_EQUAL(rotated_precommits.size(), 3U);
+    for (size_t i : survivors) {
+        for (const auto& vote : rotated_precommits) nodes[i]->ReceiveConsensusPrecommit(vote);
+        BOOST_CHECK_EQUAL(nodes[i]->GetFinalizedHeight().value_or(0), 3U);
     }
 }
 

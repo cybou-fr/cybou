@@ -1,4 +1,4 @@
-// Copyright (c) 2026 The CYBOU developers
+// Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/p2p/peer_manager.h>
@@ -369,10 +369,18 @@ void PeerManager::DisconnectAll()
 size_t PeerManager::BroadcastProposal(const BftProposalMsg& proposal)
 {
     size_t count{0};
-    for (auto& [endpoint, session] : m_peers) {
+    for (auto it = m_peers.begin(); it != m_peers.end();) {
+        auto& [endpoint, session] = *it;
         if (session && session->Peer() && (session->Peer()->capabilities & CAP_CONSENSUS)) {
-            if (session->SendProposal(proposal)) ++count;
+            if (!session->SendProposal(proposal)) {
+                m_announced_operations.erase(endpoint);
+                m_announced_blocks.erase(endpoint);
+                it = m_peers.erase(it);
+                continue;
+            }
+            ++count;
         }
+        ++it;
     }
     return count;
 }
@@ -380,10 +388,18 @@ size_t PeerManager::BroadcastProposal(const BftProposalMsg& proposal)
 size_t PeerManager::BroadcastPrevote(const BftPrevoteMsg& prevote)
 {
     size_t count{0};
-    for (auto& [endpoint, session] : m_peers) {
+    for (auto it = m_peers.begin(); it != m_peers.end();) {
+        auto& [endpoint, session] = *it;
         if (session && session->Peer() && (session->Peer()->capabilities & CAP_CONSENSUS)) {
-            if (session->SendPrevote(prevote)) ++count;
+            if (!session->SendPrevote(prevote)) {
+                m_announced_operations.erase(endpoint);
+                m_announced_blocks.erase(endpoint);
+                it = m_peers.erase(it);
+                continue;
+            }
+            ++count;
         }
+        ++it;
     }
     return count;
 }
@@ -391,10 +407,18 @@ size_t PeerManager::BroadcastPrevote(const BftPrevoteMsg& prevote)
 size_t PeerManager::BroadcastPrecommit(const BftPrecommitMsg& precommit)
 {
     size_t count{0};
-    for (auto& [endpoint, session] : m_peers) {
+    for (auto it = m_peers.begin(); it != m_peers.end();) {
+        auto& [endpoint, session] = *it;
         if (session && session->Peer() && (session->Peer()->capabilities & CAP_CONSENSUS)) {
-            if (session->SendPrecommit(precommit)) ++count;
+            if (!session->SendPrecommit(precommit)) {
+                m_announced_operations.erase(endpoint);
+                m_announced_blocks.erase(endpoint);
+                it = m_peers.erase(it);
+                continue;
+            }
+            ++count;
         }
+        ++it;
     }
     return count;
 }

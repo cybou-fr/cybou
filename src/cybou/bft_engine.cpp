@@ -526,6 +526,12 @@ std::optional<BftProposalMsg> BftValidatorNode::StartRound(
     uint32_t round,
     const std::vector<ProtocolOperation>& pending_ops)
 {
+    if (round < m_round ||
+        (round == m_round &&
+         (m_current_proposal || m_prevoted || m_precommitted ||
+          !m_prevotes.empty() || !m_precommits.empty() || m_step == BftStep::FINALIZED))) {
+        return std::nullopt;
+    }
     m_round = round;
     m_step = BftStep::PROPOSE;
     m_current_proposal.reset();
@@ -781,6 +787,28 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
     }
 
     return false;
+}
+
+std::optional<BftPrevoteMsg> BftValidatorNode::OnProposalTimeout()
+{
+    if (m_prevoted || m_step == BftStep::FINALIZED) return std::nullopt;
+    const uint256 digest = ComputePrevoteDigest(m_network_id, m_height, m_round,
+        m_validator_id, std::nullopt);
+    if (!RecordSigningIntent(BftStep::PREVOTE, digest)) return std::nullopt;
+    const auto signature = SignValidatorVote(m_private_key_seed, digest);
+    if (!signature) return std::nullopt;
+    m_step = BftStep::PREVOTE;
+    m_prevoted = true;
+    BftPrevoteMsg vote{
+        .network_id = m_network_id,
+        .height = m_height,
+        .round = m_round,
+        .validator_id = m_validator_id,
+        .block_id = std::nullopt,
+        .signature = *signature,
+    };
+    m_prevotes[m_validator_id] = vote;
+    return vote;
 }
 
 std::optional<BftPrecommitMsg> BftValidatorNode::OnPrevoteTimeout()

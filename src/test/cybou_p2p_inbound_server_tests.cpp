@@ -1,8 +1,9 @@
-// Copyright (c) 2026 The CYBOU developers
+// Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/p2p/inbound_server.h>
 #include <cybou/p2p/session.h>
+#include <cybou/p2p/peer_manager.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/util/setup_common.h>
 
@@ -10,6 +11,9 @@
 #include <boost/test/unit_test.hpp>
 
 #include <atomic>
+#include <algorithm>
+#include <array>
+#include <chrono>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -82,6 +86,193 @@ BOOST_AUTO_TEST_CASE(listener_closes_peer_with_conflicting_finalized_tip)
     BOOST_REQUIRE(good.Handshake({.network_id = network, .finalized_height = 1,
         .finalized_tip = *fixture.runtime->GetFinalizedTip(), .capabilities = 0, .nonce = 3002}));
     BOOST_CHECK(good.Ping(3));
+}
+
+BOOST_AUTO_TEST_CASE(socket_consensus_rotates_past_offline_leader)
+{
+    using namespace std::chrono_literals;
+    using boost::asio::ip::tcp;
+    std::array<std::array<unsigned char, 32>, 4> seeds{};
+    std::array<cybou::IdentityHybridPublicKey, 4> keys{};
+    for (size_t i = 0; i < 4; ++i) {
+        seeds[i][0] = static_cast<unsigned char>(0xa1 + i);
+        const auto key = cybou::GenerateValidatorKeyPair(seeds[i]);
+        BOOST_REQUIRE(key);
+        keys[i] = key->public_key;
+    }
+    const auto genesis = cybou::CreateDevGenesisState(std::span<const cybou::IdentityHybridPublicKey>{keys});
+    BOOST_REQUIRE(genesis);
+    const auto definition = cybou::CreateDevNetworkDefinition(*genesis);
+    const auto offline = cybou::BftLeaderIndex(1, 0, 4);
+    std::array<std::unique_ptr<cybou::CybouNodeRuntime>, 4> nodes;
+    for (size_t i = 0; i < 4; ++i) {
+        if (i == offline) continue;
+        size_t key_index = 0;
+        while (key_index < 4 && genesis->validator_set.validators[i].consensus_public_key != keys[key_index]) ++key_index;
+        BOOST_REQUIRE(key_index < 4);
+        cybou::NodeRuntimeConfig config{
+            .network_definition = definition,
+            .data_dir = std::filesystem::temp_directory_path() / ("cybou-socket-bft-" + std::to_string(i)),
+            .validator_private_key = seeds[key_index],
+            .memory_only = true,
+            .wipe_data = true,
+        };
+        nodes[i] = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
+        BOOST_REQUIRE(nodes[i]->InitializeGenesis(*genesis));
+    }
+    boost::asio::io_context io;
+    std::array<std::unique_ptr<cybou::p2p::InboundPeerServer>, 4> servers;
+    std::array<std::unique_ptr<cybou::p2p::PeerManager>, 4> peers;
+    std::atomic_bool stop{false};
+    std::vector<std::jthread> listeners;
+    struct StopGuard { std::atomic_bool& flag; ~StopGuard() { flag = true; } } guard{stop};
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    for (size_t i = 0; i < 4; ++i) {
+        if (!nodes[i]) continue;
+        servers[i] = std::make_unique<cybou::p2p::InboundPeerServer>(*nodes[i], io, tcp::endpoint{loopback, 0});
+        peers[i] = std::make_unique<cybou::p2p::PeerManager>(*nodes[i]);
+        listeners.emplace_back([&, i] { servers[i]->Run(stop); });
+    }
+    for (size_t i = 0; i < 4; ++i) {
+        if (!nodes[i]) continue;
+        for (size_t j = 0; j < 4; ++j) {
+            if (i != j && nodes[j]) BOOST_REQUIRE(peers[i]->Connect("127.0.0.1", servers[j]->Port()));
+        }
+    }
+    // Every live validator begins round 0, then its local timeout advances it.
+    for (auto& node : nodes) if (node) node->TickConsensus(1ms);
+    for (int phase = 0; phase < 3; ++phase) {
+        std::this_thread::sleep_for(3ms);
+        for (auto& node : nodes) if (node) node->TickConsensus(1ms);
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + 2s;
+    bool finalized{false};
+    while (std::chrono::steady_clock::now() < deadline) {
+        for (size_t i = 0; i < 4; ++i) if (nodes[i]) nodes[i]->DrainConsensusMessages(*peers[i]);
+        finalized = true;
+        for (const auto& node : nodes) if (node && node->GetFinalizedHeight().value_or(0) != 1) finalized = false;
+        if (finalized) break;
+        std::this_thread::sleep_for(10ms);
+    }
+    BOOST_CHECK(finalized);
+    for (const auto& node : nodes) {
+        if (!node) continue;
+        const auto block = node->GetBlockAtHeight(1);
+        BOOST_REQUIRE(block);
+        BOOST_CHECK_EQUAL(block->certificate.round, 1U);
+        BOOST_CHECK_EQUAL(block->certificate.commit_votes.size(), 3U);
+    }
+
+    // Rejoin the missing validator from the verified block, reconnect a
+    // surviving outbound peer, and finalize the next height through sockets.
+    const auto first_block = nodes[(offline + 1) % 4]->GetBlockAtHeight(1);
+    BOOST_REQUIRE(first_block);
+    size_t recovered_key = 0;
+    while (recovered_key < 4 &&
+        genesis->validator_set.validators[offline].consensus_public_key != keys[recovered_key]) ++recovered_key;
+    BOOST_REQUIRE(recovered_key < 4);
+    cybou::NodeRuntimeConfig recovered_config{
+        .network_definition = definition,
+        .data_dir = std::filesystem::temp_directory_path() / "cybou-socket-bft-recovered",
+        .validator_private_key = seeds[recovered_key],
+        .memory_only = true,
+        .wipe_data = true,
+    };
+    nodes[offline] = std::make_unique<cybou::CybouNodeRuntime>(std::move(recovered_config));
+    BOOST_REQUIRE(nodes[offline]->InitializeGenesis(*genesis));
+    BOOST_REQUIRE(nodes[offline]->CommitBlock(*first_block));
+    servers[offline] = std::make_unique<cybou::p2p::InboundPeerServer>(
+        *nodes[offline], io, tcp::endpoint{loopback, 0});
+    peers[offline] = std::make_unique<cybou::p2p::PeerManager>(*nodes[offline]);
+    listeners.emplace_back([&, offline] { servers[offline]->Run(stop); });
+    const auto reconnecting = (offline + 1) % 4;
+    peers[reconnecting]->DisconnectAll();
+    for (size_t i = 0; i < 4; ++i) {
+        for (size_t j = 0; j < 4; ++j) {
+            if (i == j) continue;
+            const auto connected = peers[i]->Peers();
+            const bool missing = std::none_of(connected.begin(), connected.end(),
+                [&](const auto& peer) { return peer.port == servers[j]->Port(); });
+            if (missing) BOOST_REQUIRE(peers[i]->Connect("127.0.0.1", servers[j]->Port()));
+        }
+    }
+    for (auto& node : nodes) node->TickConsensus(1s);
+    finalized = false;
+    const auto second_deadline = std::chrono::steady_clock::now() + 2s;
+    while (std::chrono::steady_clock::now() < second_deadline) {
+        for (size_t i = 0; i < 4; ++i) nodes[i]->DrainConsensusMessages(*peers[i]);
+        finalized = true;
+        for (const auto& node : nodes) if (node->GetFinalizedHeight().value_or(0) != 2) finalized = false;
+        if (finalized) break;
+        std::this_thread::sleep_for(10ms);
+    }
+    BOOST_CHECK(finalized);
+
+    // Validator 0 equivocates on height 3. Duplicate and conflicting signed
+    // prevotes travel over CYP2; the other three still form a clean quorum.
+    const size_t faulty = 0;
+    size_t faulty_key = 0;
+    while (faulty_key < 4 &&
+        genesis->validator_set.validators[faulty].consensus_public_key != keys[faulty_key]) ++faulty_key;
+    BOOST_REQUIRE(faulty_key < 4);
+    for (size_t i = 0; i < 4; ++i) {
+        if (i == faulty) continue;
+        peers[i]->DisconnectAll();
+        for (size_t j = 0; j < 4; ++j) {
+            if (j != i && j != faulty)
+                BOOST_REQUIRE(peers[i]->Connect("127.0.0.1", servers[j]->Port()));
+        }
+    }
+    for (size_t i = 0; i < 4; ++i) if (i != faulty) nodes[i]->TickConsensus(1s);
+    const auto sign_faulty_vote = [&](const uint256& block_id) {
+        const auto validator_id = genesis->validator_set.validators[faulty].validator_id;
+        const auto digest = cybou::ComputePrevoteDigest(
+            nodes[faulty]->GetNetworkId(), 3, 0, validator_id, block_id);
+        return cybou::BftPrevoteMsg{
+            .network_id = nodes[faulty]->GetNetworkId(),
+            .height = 3,
+            .round = 0,
+            .validator_id = validator_id,
+            .block_id = block_id,
+            .signature = *cybou::SignValidatorVote(seeds[faulty_key], digest),
+        };
+    };
+    const auto first_vote = sign_faulty_vote(uint256::ONE);
+    const auto conflicting_vote = sign_faulty_vote(*uint256::FromUserHex("02"));
+    for (size_t i = 0; i < 4; ++i) {
+        if (i == faulty) continue;
+        tcp::socket socket{io};
+        socket.connect(tcp::endpoint{loopback, servers[i]->Port()});
+        cybou::p2p::PeerSession adversary{std::move(socket)};
+        const auto status = nodes[faulty]->GetStatus();
+        BOOST_REQUIRE(adversary.Handshake({.network_id = status.network_id,
+            .finalized_height = status.finalized_height, .finalized_tip = status.finalized_tip,
+            .capabilities = cybou::p2p::CAP_CONSENSUS, .nonce = 5000 + i}));
+        BOOST_REQUIRE(adversary.SendPrevote(first_vote));
+        BOOST_REQUIRE(adversary.SendPrevote(first_vote));
+        BOOST_REQUIRE(adversary.SendPrevote(conflicting_vote));
+        BOOST_REQUIRE(adversary.Ping(6000 + i));
+    }
+    finalized = false;
+    const auto third_deadline = std::chrono::steady_clock::now() + 2s;
+    while (std::chrono::steady_clock::now() < third_deadline) {
+        for (size_t i = 0; i < 4; ++i) if (i != faulty) nodes[i]->DrainConsensusMessages(*peers[i]);
+        finalized = true;
+        for (size_t i = 0; i < 4; ++i) {
+            if (i != faulty && nodes[i]->GetFinalizedHeight().value_or(0) != 3) finalized = false;
+        }
+        if (finalized) break;
+        std::this_thread::sleep_for(10ms);
+    }
+    BOOST_CHECK(finalized);
+    BOOST_CHECK_EQUAL(nodes[faulty]->GetFinalizedHeight().value_or(0), 2U);
+    for (size_t i = 0; i < 4; ++i) {
+        if (i == faulty) continue;
+        const auto block = nodes[i]->GetBlockAtHeight(3);
+        BOOST_REQUIRE(block);
+        BOOST_CHECK_EQUAL(block->certificate.commit_votes.size(), 3U);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

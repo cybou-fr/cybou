@@ -1,9 +1,16 @@
 # 07 — BFT consensus core
 
-Implementation status (2026-09-24): the core BFT engine and certificate
-verification are tested across validator-set sizes, while the standalone
-`cybou-node` currently runs only N=1 Authority Mode. Independent
-multi-validator networking and crash-safe operation remain integration work.
+Implementation status (2026-09-25): the core BFT engine and certificate
+verification are tested across validator-set sizes. The standalone
+`cybou-node` now drives rounds for N>1, routes proposal/vote messages through
+the outbound CYP2 worker, and has a socket integration test for 3/4 finality
+after the round-0 leader is unavailable. The test uses explicit peer
+configuration. The socket test also covers verified catch-up, outbound
+disconnect/reconnect, and the next height's 4/4 finality. Restart after a
+prevote or precommit still abstains on the unfinished height because the
+signing journal does not persist lock and vote state. The socket test also
+covers duplicate and conflicting signed prevotes from one validator. Longer
+fault runs and live process restart scenarios remain integration work.
 See `26_IMPLEMENTATION_STATUS.md` for the current deployment boundary.
 
 ## Frozen direction

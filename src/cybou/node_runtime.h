@@ -1,4 +1,4 @@
-// Copyright (c) 2026 The CYBOU developers
+// Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #ifndef CYBOU_NODE_RUNTIME_H
@@ -11,6 +11,7 @@
 #include <dbwrapper.h>
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <filesystem>
@@ -20,6 +21,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <variant>
 
 namespace cybou {
 namespace p2p { class PeerManager; }
@@ -113,6 +115,10 @@ public:
     std::optional<BftPrevoteMsg> ReceiveConsensusProposal(const BftProposalMsg& proposal);
     std::optional<BftPrecommitMsg> ReceiveConsensusPrevote(const BftPrevoteMsg& prevote);
     bool ReceiveConsensusPrecommit(const BftPrecommitMsg& precommit);
+    /** Drive one local consensus timeout tick; the interval is a liveness timer. */
+    void TickConsensus(std::chrono::milliseconds round_timeout);
+    /** Called only by the outbound peer worker, which owns its sessions. */
+    void DrainConsensusMessages(p2p::PeerManager& peers);
     void BroadcastConsensusProposal(const BftProposalMsg& proposal);
     void BroadcastConsensusPrevote(const BftPrevoteMsg& prevote);
     void BroadcastConsensusPrecommit(const BftPrecommitMsg& precommit);
@@ -155,6 +161,12 @@ private:
     std::optional<std::pair<std::string, uint16_t>> m_submit_endpoint;
     std::unique_ptr<p2p::PeerManager> m_peer_manager;
     mutable std::mutex m_p2p_mutex;
+    using ConsensusMessage = std::variant<BftProposalMsg, BftPrevoteMsg, BftPrecommitMsg>;
+    std::deque<ConsensusMessage> m_consensus_outbox;
+    uint64_t m_consensus_height{0};
+    uint32_t m_consensus_round{0};
+    uint8_t m_consensus_phase{0}; // propose, prevote, precommit
+    std::chrono::steady_clock::time_point m_round_started{};
     mutable std::mutex m_mutex;
     std::deque<GossipOperation> m_recent_gossip_operations;
     std::set<uint256> m_recent_gossip_ids;

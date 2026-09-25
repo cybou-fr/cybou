@@ -1,4 +1,4 @@
-// Copyright (c) 2026 The CYBOU developers
+// Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
@@ -97,6 +97,7 @@ BOOST_AUTO_TEST_CASE(bft_signing_journal_blocks_restart_equivocation)
         BOOST_REQUIRE(proposal);
         const auto prevote = first.ReceiveProposal(*proposal);
         BOOST_REQUIRE(prevote);
+        BOOST_CHECK(!first.StartRound(0, {}));
         BOOST_REQUIRE(first.ReceivePrevote(*prevote));
     }
     {
@@ -122,6 +123,76 @@ BOOST_AUTO_TEST_CASE(bft_signing_journal_blocks_restart_equivocation)
     BOOST_CHECK(!corrupt.StartRound(0, {}));
     std::filesystem::remove(journal);
     std::filesystem::remove_all(dir);
+}
+
+BOOST_AUTO_TEST_CASE(bft_signing_journal_abstains_after_prevote_restart)
+{
+    const auto dir = std::filesystem::temp_directory_path() / "cybou-bft-prevote-restart";
+    std::filesystem::create_directories(dir);
+    const auto journal = dir / "validator-signing.journal";
+    std::filesystem::remove(journal);
+    std::filesystem::remove(journal.string() + ".tmp");
+    std::array<unsigned char, 32> seed{};
+    seed[0] = 0x7b;
+    const auto key = *cybou::GenerateValidatorKeyPair(seed);
+    const cybou::ValidatorSet set{
+        .version = cybou::VALIDATOR_SET_VERSION,
+        .validators = {{.validator_id = cybou::ComputeValidatorId(key.public_key),
+                        .consensus_public_key = key.public_key, .weight = 1}},
+    };
+    const auto network = uint256::FromUserHex("b010").value();
+    const auto execute = [](const std::vector<cybou::ProtocolOperation>&, uint64_t) -> std::optional<uint256> {
+        return uint256::ONE;
+    };
+    cybou::BftProposalMsg proposal;
+    {
+        cybou::BftValidatorNode first{0, seed, network, set, execute, journal};
+        first.SetHeight(1, uint256::ONE, set);
+        const auto signed_proposal = first.StartRound(0, {});
+        BOOST_REQUIRE(signed_proposal);
+        proposal = *signed_proposal;
+        BOOST_REQUIRE(first.ReceiveProposal(proposal));
+    }
+    {
+        cybou::BftValidatorNode restarted{0, seed, network, set, execute, journal};
+        restarted.SetHeight(1, uint256::ONE, set);
+        BOOST_CHECK(!restarted.ReceiveProposal(proposal));
+        BOOST_CHECK(!restarted.StartRound(1, {}));
+        restarted.SetHeight(2, cybou::ComputeBlockId(proposal.block), set);
+        BOOST_CHECK(restarted.StartRound(0, {}).has_value());
+    }
+    std::filesystem::remove_all(dir);
+}
+
+BOOST_AUTO_TEST_CASE(bft_timeout_emits_one_nil_prevote_and_precommit)
+{
+    std::array<unsigned char, 32> seed{};
+    seed[0] = 0x7c;
+    const auto key = *cybou::GenerateValidatorKeyPair(seed);
+    const cybou::ValidatorSet set{
+        .version = cybou::VALIDATOR_SET_VERSION,
+        .validators = {{.validator_id = cybou::ComputeValidatorId(key.public_key),
+                        .consensus_public_key = key.public_key, .weight = 1}},
+    };
+    const auto network = uint256::FromUserHex("b011").value();
+    const auto execute = [](const std::vector<cybou::ProtocolOperation>&, uint64_t) -> std::optional<uint256> {
+        return uint256::ONE;
+    };
+    cybou::BftValidatorNode node{0, seed, network, set, execute};
+    node.SetHeight(1, uint256::ONE, set);
+    const auto proposal = node.StartRound(0, {});
+    BOOST_REQUIRE(proposal);
+    const auto prevote = node.OnProposalTimeout();
+    BOOST_REQUIRE(prevote);
+    BOOST_CHECK(!prevote->block_id);
+    BOOST_CHECK(!node.OnProposalTimeout());
+    BOOST_CHECK(!node.ReceiveProposal(*proposal));
+    const auto precommit = node.OnPrevoteTimeout();
+    BOOST_REQUIRE(precommit);
+    BOOST_CHECK(!precommit->block_id);
+    BOOST_CHECK(!node.OnPrevoteTimeout());
+    node.OnRoundTimeout();
+    BOOST_CHECK(node.StartRound(1, {}).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(bft_uses_distinct_validator_id_and_reexecutes_before_vote)
