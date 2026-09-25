@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -63,6 +64,8 @@ public:
     PeerSubmitResult SubmitOperationToAny(
         const std::vector<std::pair<std::string, uint16_t>>& endpoints,
         const ProtocolOperation& operation);
+    /** Offer each current pending OperationID once per connected peer. */
+    size_t FanoutPending(size_t max_per_peer = 16);
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
     void DisconnectAll();
@@ -72,6 +75,7 @@ private:
     CybouNodeRuntime& m_runtime;
     boost::asio::io_context m_io;
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;
+    std::map<Endpoint, std::set<uint256>> m_announced_operations;
     PeerConnectStatus m_last_connect_status{PeerConnectStatus::INVALID_REQUEST};
 };
 

@@ -74,6 +74,7 @@ public:
         std::optional<std::string> source_peer = std::nullopt);
     size_t PendingCount() const { return m_pool.Size(); }
     bool HasPendingOperation(const uint256& id) const { return m_pool.Contains(id); }
+    std::vector<ProtocolOperation> PendingOperations() const { return m_pool.Snapshot(); }
     void ClearPending() { m_pool.Clear(); }
     void RevalidatePending() { m_pool.Revalidate(); }
 

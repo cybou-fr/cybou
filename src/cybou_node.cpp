@@ -27,6 +27,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -182,7 +183,7 @@ int Main(const int argc, char* argv[])
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-follow-peers NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT [PEERS_FILE]]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-follow-peers NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID");
     const auto network = cybou::LoadCybouNetworkFile(argv[2]);
     if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
@@ -410,7 +411,7 @@ int Main(const int argc, char* argv[])
         }
         return synced == count ? 0 : 1;
     }
-    if (std::string_view{argv[1]} == "serve" && (argc == 7 || argc == 8 || argc == 9)) {
+    if (std::string_view{argv[1]} == "serve" && (argc == 7 || argc == 8 || argc == 9 || argc == 10)) {
         auto key_bytes = ReadFile(argv[4], 32);
         if (key_bytes.size() != 32) throw std::runtime_error("validator key file must contain exactly 32 raw bytes");
         std::array<unsigned char, 32> key{};
@@ -438,11 +439,22 @@ int Main(const int argc, char* argv[])
         if (interval_ms > 60000) throw std::runtime_error("block interval exceeds 60 seconds");
         boost::asio::io_context io;
         std::optional<cybou::p2p::InboundPeerServer> p2p_server;
-        if (argc == 9) {
+        if (argc >= 9) {
             const auto p2p_port = Port(argv[8]);
             if (p2p_port == port) throw std::runtime_error("P2P port must differ from block feed port");
             p2p_server.emplace(runtime, io, boost::asio::ip::tcp::endpoint{
                 boost::asio::ip::make_address(argv[5]), p2p_port});
+        }
+        const auto gossip_endpoints = argc == 10 ? ReadPeerEndpoints(argv[9]) :
+            std::vector<std::pair<std::string, uint16_t>>{};
+        if (argc == 10) {
+            const auto bind_address = boost::asio::ip::make_address(argv[5]);
+            const auto own_port = Port(argv[8]);
+            for (const auto& [address, peer_port] : gossip_endpoints) {
+                if (address == bind_address.to_string() && peer_port == own_port) {
+                    throw std::runtime_error("P2P peer list contains this listener");
+                }
+            }
         }
         boost::asio::ip::tcp::acceptor acceptor(io, {
             boost::asio::ip::make_address(argv[5]), port,
@@ -464,6 +476,32 @@ int Main(const int argc, char* argv[])
         });
         std::optional<std::jthread> p2p_listener;
         if (p2p_server) p2p_listener.emplace([&] { p2p_server->Run(stopping); });
+        std::optional<std::jthread> gossip_worker;
+        if (!gossip_endpoints.empty()) gossip_worker.emplace([&] {
+            cybou::p2p::PeerManager peers{runtime};
+            std::map<std::pair<std::string, uint16_t>, std::chrono::steady_clock::time_point> retry_after;
+            while (!stopping) {
+                for (const auto& [host, peer_port] : gossip_endpoints) {
+                    if (stopping) break;
+                    const auto connected = peers.Peers();
+                    const bool present = std::any_of(connected.begin(), connected.end(), [&](const auto& peer) {
+                        return peer.address == host && peer.port == peer_port;
+                    });
+                    const auto endpoint = std::make_pair(host, peer_port);
+                    if (!present && std::chrono::steady_clock::now() >= retry_after[endpoint] &&
+                        !peers.Connect(host, peer_port)) {
+                        retry_after[endpoint] = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+                    }
+                }
+                if (!stopping) {
+                    peers.FanoutPending();
+                    peers.PingAll();
+                }
+                for (int i = 0; i < 5 && !stopping; ++i) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                }
+            }
+        });
         while (!stopping) {
             boost::asio::ip::tcp::socket socket(io);
             boost::system::error_code ec;

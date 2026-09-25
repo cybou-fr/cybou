@@ -65,6 +65,19 @@ cybou-node p2p-sync network.bin observer-db 127.0.0.1 29461 5
 cybou-node p2p-follow network.bin observer-db 127.0.0.1 29461
 ```
 
+To offer pending operations to several explicit CYP2 peers, put one numeric
+`IP PORT` endpoint per line in a peer file (at most eight) and pass it after
+the CYP2 listener port:
+
+```text
+cybou-node serve network.bin producer-db validator.key 127.0.0.1 29460 1000 29461 peers.txt
+```
+
+The fanout worker is separate from block production. It announces pending
+OperationIDs to connected peers and sends an operation only when requested.
+This currently runs in single-validator Authority Mode; it does not make a
+four-validator BFT cluster operational.
+
 This CYP2 port accepts up to eight concurrent persistent peers and closes
 connections above that limit. It closes an inbound session whose HELLO tip
 conflicts with the trusted genesis or a locally stored finalized block. `p2p-sync`

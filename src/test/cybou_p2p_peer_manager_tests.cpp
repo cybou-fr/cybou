@@ -483,6 +483,81 @@ BOOST_AUTO_TEST_CASE(manager_submits_canonical_operation_with_separate_acknowled
     BOOST_CHECK(finalized->block.operations.front() == operation);
 }
 
+BOOST_AUTO_TEST_CASE(manager_fans_out_pending_operation_to_two_peers)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("fanout-source.cybou");
+    const auto source = fixture.runtime->GetBlockAtHeight(1);
+    BOOST_REQUIRE(source);
+    BOOST_REQUIRE_EQUAL(source->block.operations.size(), 1U);
+    const auto operation = source->block.operations.front();
+
+    auto config_for = [&](const char* name) {
+        return cybou::NodeRuntimeConfig{.network_definition = fixture.definition,
+            .data_dir = fixture.directory / name, .validator_private_key = fixture.validator_seed,
+            .memory_only = true, .wipe_data = true};
+    };
+    cybou::CybouNodeRuntime sender{config_for("fanout-sender")};
+    cybou::CybouNodeRuntime first{config_for("fanout-first")};
+    cybou::CybouNodeRuntime second{config_for("fanout-second")};
+    cybou::CybouNodeRuntime legacy{config_for("fanout-legacy")};
+    BOOST_REQUIRE(sender.InitializeGenesis(fixture.genesis));
+    BOOST_REQUIRE(first.InitializeGenesis(fixture.genesis));
+    BOOST_REQUIRE(second.InitializeGenesis(fixture.genesis));
+    BOOST_REQUIRE(legacy.InitializeGenesis(fixture.genesis));
+    BOOST_CHECK(sender.SubmitOperation(operation).status == cybou::OperationSubmitStatus::ACCEPTED);
+
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor first_acceptor{io, tcp::endpoint{loopback, 0}};
+    tcp::acceptor second_acceptor{io, tcp::endpoint{loopback, 0}};
+    tcp::acceptor legacy_acceptor{io, tcp::endpoint{loopback, 0}};
+    bool served_first{false}, served_second{false};
+    auto serve_one = [&](tcp::acceptor& acceptor, cybou::CybouNodeRuntime& receiver,
+                         uint64_t nonce, bool& served) {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        served = session.Handshake({.network_id = sender.GetNetworkId(), .finalized_height = 0,
+            .finalized_tip = fixture.definition.genesis_block_id,
+            .capabilities = cybou::p2p::CAP_ACCEPT_OPERATIONS | cybou::p2p::CAP_OP_INVENTORY,
+            .nonce = nonce}) && session.ServeNext(receiver);
+    };
+    std::jthread first_server{[&] { serve_one(first_acceptor, first, 201, served_first); }};
+    std::jthread second_server{[&] { serve_one(second_acceptor, second, 202, served_second); }};
+    std::jthread legacy_server{[&] {
+        tcp::socket socket{io};
+        legacy_acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        session.Handshake({.network_id = sender.GetNetworkId(), .finalized_height = 0,
+            .finalized_tip = fixture.definition.genesis_block_id,
+            .capabilities = cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 203});
+    }};
+    cybou::p2p::PeerManager peers{sender};
+    const auto address = loopback.to_string();
+    BOOST_REQUIRE(peers.Connect(address, first_acceptor.local_endpoint().port()));
+    BOOST_REQUIRE(peers.Connect(address, second_acceptor.local_endpoint().port()));
+    BOOST_REQUIRE(peers.Connect(address, legacy_acceptor.local_endpoint().port()));
+    BOOST_CHECK_EQUAL(peers.FanoutPending(0), 0U);
+    BOOST_CHECK_EQUAL(peers.FanoutPending(1), 2U);
+    BOOST_CHECK_EQUAL(peers.FanoutPending(1), 0U);
+    first_server.join();
+    second_server.join();
+    legacy_server.join();
+    BOOST_CHECK(served_first && served_second);
+    const auto first_block = first.ProduceBlock();
+    const auto second_block = second.ProduceBlock();
+    BOOST_REQUIRE(first_block && second_block);
+    BOOST_CHECK_EQUAL(first_block->block.operations.size(), 1U);
+    BOOST_CHECK_EQUAL(second_block->block.operations.size(), 1U);
+    BOOST_CHECK(first_block->block.operations.front() == operation);
+    BOOST_CHECK(second_block->block.operations.front() == operation);
+    const auto legacy_block = legacy.ProduceBlock();
+    BOOST_REQUIRE(legacy_block);
+    BOOST_CHECK(legacy_block->block.operations.empty());
+}
+
 BOOST_AUTO_TEST_CASE(manager_submits_to_next_peer_when_first_cannot_accept_operations)
 {
     CybouServiceTestFixture fixture;

@@ -76,6 +76,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         m_last_connect_status = PeerConnectStatus::HANDSHAKE_FAILED;
         return false;
     }
+    m_announced_operations.erase(endpoint);
     m_peers.emplace(endpoint, std::move(peer));
     m_last_connect_status = PeerConnectStatus::CONNECTED;
     return true;
@@ -87,6 +88,7 @@ size_t PeerManager::PingAll()
     for (auto it = m_peers.begin(); it != m_peers.end();) {
         const auto nonce = RandomNonce();
         if (!nonce || !it->second->Ping(*nonce)) {
+            m_announced_operations.erase(it->first);
             it = m_peers.erase(it);
         } else {
             ++healthy;
@@ -236,6 +238,59 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
     return result;
 }
 
+size_t PeerManager::FanoutPending(size_t max_per_peer)
+{
+    if (max_per_peer == 0 || max_per_peer > MAX_PENDING_OPERATIONS) return 0;
+    for (auto it = m_announced_operations.begin(); it != m_announced_operations.end();) {
+        if (!m_peers.contains(it->first)) it = m_announced_operations.erase(it);
+        else ++it;
+    }
+    const auto pending = m_runtime.PendingOperations();
+    std::set<uint256> live_ids;
+    for (const auto& operation : pending) {
+        const auto id = ComputeOperationId(operation);
+        if (id) live_ids.insert(*id);
+    }
+    size_t delivered{0};
+    for (auto it = m_peers.begin(); it != m_peers.end();) {
+        auto& announced = m_announced_operations[it->first];
+        for (auto known = announced.begin(); known != announced.end();) {
+            if (!live_ids.contains(*known)) known = announced.erase(known);
+            else ++known;
+        }
+        if (!it->second->Peer() ||
+            !(it->second->Peer()->capabilities & CAP_ACCEPT_OPERATIONS) ||
+            !(it->second->Peer()->capabilities & CAP_OP_INVENTORY)) {
+            ++it;
+            continue;
+        }
+        bool disconnected{false};
+        size_t offered{0};
+        for (const auto& operation : pending) {
+            if (offered >= max_per_peer) break;
+            const auto id = ComputeOperationId(operation);
+            if (!id || announced.contains(*id)) continue;
+            ++offered;
+            const auto response = it->second->AdvertiseOperation(operation);
+            if (!response) {
+                disconnected = true;
+                break;
+            }
+            if (static_cast<bool>(*response)) {
+                announced.insert(*id);
+                ++delivered;
+            }
+        }
+        if (disconnected) {
+            m_announced_operations.erase(it->first);
+            it = m_peers.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    return delivered;
+}
+
 std::vector<PeerInfo> PeerManager::Peers() const
 {
     std::vector<PeerInfo> peers;
@@ -246,6 +301,10 @@ std::vector<PeerInfo> PeerManager::Peers() const
     return peers;
 }
 
-void PeerManager::DisconnectAll() { m_peers.clear(); }
+void PeerManager::DisconnectAll()
+{
+    m_peers.clear();
+    m_announced_operations.clear();
+}
 
 } // namespace cybou::p2p

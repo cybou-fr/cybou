@@ -100,6 +100,7 @@ public:
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
     OperationSubmitResult SubmitPeerOperation(ProtocolOperation op, std::string source_peer);
     std::optional<OperationSubmitStatus> KnownOperationStatus(const uint256& op_id) const;
+    std::vector<ProtocolOperation> PendingOperations() const;
 
     /** Produce a block if running in authority mode */
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);

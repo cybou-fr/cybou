@@ -134,6 +134,12 @@ std::optional<OperationSubmitStatus> CybouNodeRuntime::KnownOperationStatus(cons
     return std::nullopt;
 }
 
+std::vector<ProtocolOperation> CybouNodeRuntime::PendingOperations() const
+{
+    std::lock_guard lock(m_mutex);
+    return m_authority_node ? m_authority_node->PendingOperations() : std::vector<ProtocolOperation>{};
+}
+
 OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
     ProtocolOperation op, std::optional<std::string> source_peer)
 {
