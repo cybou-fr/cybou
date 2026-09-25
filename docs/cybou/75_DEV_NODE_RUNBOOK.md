@@ -97,7 +97,9 @@ retried too. A peer that cannot serve a height it advertised in HELLO is also
 retried after five seconds, allowing other peers to supply that block. The list
 supplies no consensus trust: every block is verified against the trusted
 network definition. A block that conflicts with the peer's HELLO tip at its
-advertised height also excludes that peer.
+advertised height also excludes that peer. After a successful block batch, the
+observer starts the next pass without waiting on remaining endpoints in the
+current pass.
 
 For a local Qt desktop connected to a CYP2 producer, set
 `CYBOU_DEV_P2P_HOST=127.0.0.1` and `CYBOU_DEV_P2P_PORT=29461` before launching

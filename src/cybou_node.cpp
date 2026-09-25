@@ -255,12 +255,14 @@ int Main(const int argc, char* argv[])
         cybou::p2p::PeerManager peers{runtime};
         std::vector<bool> rejected(endpoints.size(), false);
         std::vector<std::chrono::steady_clock::time_point> retry_after(endpoints.size());
+        size_t preferred_peer{0};
         while (!stopping) {
             const auto status = runtime.GetStatus();
             if (!status.is_initialized) throw std::runtime_error("observer state unavailable");
             if (until_height && status.finalized_height >= *until_height) return 0;
             bool progress{false};
-            for (size_t i = 0; i < endpoints.size() && !stopping; ++i) {
+            for (size_t offset = 0; offset < endpoints.size() && !stopping; ++offset) {
+                const size_t i = (preferred_peer + offset) % endpoints.size();
                 if (rejected[i]) continue;
                 if (std::chrono::steady_clock::now() < retry_after[i]) continue;
                 const auto& [host, port] = endpoints[i];
@@ -295,6 +297,10 @@ int Main(const int argc, char* argv[])
                     retry_after[i] = std::chrono::steady_clock::now() + std::chrono::seconds(5);
                 }
                 if (until_height && *runtime.GetFinalizedHeight() >= *until_height) return 0;
+                if (result.blocks_applied > 0) {
+                    preferred_peer = i;
+                    break;
+                }
             }
             if (std::all_of(rejected.begin(), rejected.end(), [](bool value) { return value; })) {
                 throw std::runtime_error("all configured P2P peers rejected");
