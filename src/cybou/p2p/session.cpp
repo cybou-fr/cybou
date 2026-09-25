@@ -87,6 +87,19 @@ std::optional<Hello> DecodeHello(std::span<const unsigned char> bytes)
     return hello;
 }
 
+bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& peer)
+{
+    if (peer.finalized_tip.IsNull()) return false;
+    const auto status = runtime.GetStatus();
+    if (!status.is_initialized) return false;
+    if (peer.finalized_height == 0) {
+        return peer.finalized_tip == runtime.GetNetworkDefinition().genesis_block_id;
+    }
+    if (peer.finalized_height > status.finalized_height) return true;
+    const auto known = runtime.GetBlockAtHeight(peer.finalized_height);
+    return !known || ComputeBlockId(known->block) == peer.finalized_tip;
+}
+
 PeerSession::PeerSession(boost::asio::ip::tcp::socket socket) : m_socket{std::move(socket)}
 {
     boost::system::error_code ec;

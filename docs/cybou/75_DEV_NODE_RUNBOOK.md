@@ -66,7 +66,8 @@ cybou-node p2p-follow network.bin observer-db 127.0.0.1 29461
 ```
 
 This CYP2 port accepts up to eight concurrent persistent peers and closes
-connections above that limit. `p2p-sync`
+connections above that limit. It closes an inbound session whose HELLO tip
+conflicts with the trusted genesis or a locally stored finalized block. `p2p-sync`
 requests up to the specified number of finalized blocks on one connection,
 verifies each block before commit, and exits if the producer has no next block.
 `p2p-follow` keeps the observer running, polls for the next block, and retries

@@ -64,6 +64,7 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame);
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes);
 std::vector<unsigned char> EncodeHello(const Hello& hello);
 std::optional<Hello> DecodeHello(std::span<const unsigned char> bytes);
+bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& peer);
 
 // One persistent TCP socket. The caller owns connection setup and deadlines.
 class PeerSession {
