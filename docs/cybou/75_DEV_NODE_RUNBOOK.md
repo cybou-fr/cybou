@@ -92,7 +92,8 @@ verification failure. A listener that closes without HELLO, including when its
 inbound slots are full, is retried; transfer disconnects and timeouts are
 retried too. The list
 supplies no consensus trust: every block is verified against the trusted
-network definition.
+network definition. A block that conflicts with the peer's HELLO tip at its
+advertised height also excludes that peer.
 
 For a local Qt desktop connected to a CYP2 producer, set
 `CYBOU_DEV_P2P_HOST=127.0.0.1` and `CYBOU_DEV_P2P_PORT=29461` before launching

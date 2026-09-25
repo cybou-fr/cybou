@@ -122,9 +122,11 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
         }
         if (response.status == BlockRequestStatus::NOT_FOUND) break;
         const auto block = DeserializeFinalizedBlock(response.bytes);
+        const auto& announced = *it->second->Peer();
         if (!block || block->block.height != height ||
             block->certificate.network_id != status.network_id ||
             block->certificate.block_id != ComputeBlockId(block->block) ||
+            (height == announced.finalized_height && block->certificate.block_id != announced.finalized_tip) ||
             !m_runtime.CommitBlock(*block)) {
             result.status = SyncPeerStatus::PROTOCOL_ERROR;
             m_peers.erase(it);
