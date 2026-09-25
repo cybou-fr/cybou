@@ -20,12 +20,14 @@
 #include <vector>
 
 namespace cybou {
+namespace p2p { class PeerManager; }
 
 struct NodeRuntimeConfig {
     CybouNetworkDefinition network_definition;
     std::filesystem::path data_dir;
     std::optional<std::array<unsigned char, 32>> validator_private_key{std::nullopt};
     std::optional<std::pair<std::string, uint16_t>> submit_endpoint{std::nullopt};
+    std::optional<std::pair<std::string, uint16_t>> p2p_endpoint{std::nullopt};
     size_t db_cache_bytes{8 << 20};
     bool memory_only{false};
     bool wipe_data{false};
@@ -56,7 +58,7 @@ struct NodeRuntimeStatus {
 class CybouNodeRuntime {
 public:
     explicit CybouNodeRuntime(NodeRuntimeConfig config);
-    ~CybouNodeRuntime() = default;
+    ~CybouNodeRuntime();
 
     CybouNodeRuntime(const CybouNodeRuntime&) = delete;
     CybouNodeRuntime& operator=(const CybouNodeRuntime&) = delete;
@@ -96,6 +98,8 @@ public:
 
     /** Sync up to max_blocks from a remote peer block feed */
     SyncPeerResult SyncFromPeer(const std::string& host, uint16_t port, uint64_t max_blocks = 100);
+    SyncPeerResult SyncFromConfiguredPeer(uint64_t max_blocks = 100);
+    bool HasP2pEndpoint() const { return m_config.p2p_endpoint.has_value(); }
 
     /** Remote operation submit endpoint */
     void SetSubmitEndpoint(const std::string& host, uint16_t port);
@@ -113,6 +117,8 @@ private:
     CybouStateStore m_store;
     std::unique_ptr<CybouAuthorityNode> m_authority_node;
     std::optional<std::pair<std::string, uint16_t>> m_submit_endpoint;
+    std::unique_ptr<p2p::PeerManager> m_peer_manager;
+    mutable std::mutex m_p2p_mutex;
     mutable std::mutex m_mutex;
 };
 

@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/node_runtime.h>
+#include <cybou/p2p/peer_manager.h>
 
 namespace cybou {
 
@@ -24,7 +25,10 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
             m_config.memory_only ? std::nullopt :
                 std::optional<std::filesystem::path>{m_config.data_dir / "validator-signing.journal"});
     }
+    if (m_config.p2p_endpoint) m_peer_manager = std::make_unique<p2p::PeerManager>(*this);
 }
+
+CybouNodeRuntime::~CybouNodeRuntime() = default;
 
 bool CybouNodeRuntime::InitializeGenesis(const CybouState& genesis, const bool sync)
 {
@@ -113,6 +117,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
 {
     const uint256 op_id = ComputeOperationId(op).value_or(uint256{});
     std::optional<std::pair<std::string, uint16_t>> endpoint;
+    std::optional<std::pair<std::string, uint16_t>> p2p_endpoint;
     uint256 net_id{};
     {
         std::lock_guard lock(m_mutex);
@@ -128,7 +133,16 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
             return OperationSubmitResult{.status = status, .op_id = op_id};
         }
         endpoint = m_submit_endpoint;
+        p2p_endpoint = m_config.p2p_endpoint;
         net_id = m_network_id;
+    }
+    if (p2p_endpoint && m_peer_manager) {
+        std::lock_guard p2p_lock(m_p2p_mutex);
+        if (m_peer_manager->ConnectedCount() == 0 &&
+            !m_peer_manager->Connect(p2p_endpoint->first, p2p_endpoint->second)) {
+            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
+        }
+        return m_peer_manager->SubmitOperation(p2p_endpoint->first, p2p_endpoint->second, op);
     }
     if (endpoint.has_value()) {
         return SubmitOperationRemote(endpoint->first, endpoint->second, net_id, op);
@@ -228,6 +242,18 @@ SyncPeerResult CybouNodeRuntime::SyncFromPeer(const std::string& host, const uin
     return result;
 }
 
+SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_blocks)
+{
+    if (!m_config.p2p_endpoint || !m_peer_manager) return {};
+    std::lock_guard p2p_lock(m_p2p_mutex);
+    const auto& [host, port] = *m_config.p2p_endpoint;
+    if (m_peer_manager->ConnectedCount() == 0 && !m_peer_manager->Connect(host, port)) {
+        return SyncPeerResult{.status = m_peer_manager->LastConnectStatus() == p2p::PeerConnectStatus::UNAVAILABLE
+            ? SyncPeerStatus::CONNECTION_FAILED : SyncPeerStatus::PROTOCOL_ERROR};
+    }
+    return m_peer_manager->SyncFromPeer(host, port, max_blocks);
+}
+
 void CybouNodeRuntime::SetSubmitEndpoint(const std::string& host, const uint16_t port)
 {
     std::lock_guard lock(m_mutex);
@@ -237,7 +263,7 @@ void CybouNodeRuntime::SetSubmitEndpoint(const std::string& host, const uint16_t
 bool CybouNodeRuntime::HasSubmitEndpoint() const
 {
     std::lock_guard lock(m_mutex);
-    return m_authority_node != nullptr || m_submit_endpoint.has_value();
+    return m_authority_node != nullptr || m_submit_endpoint.has_value() || m_config.p2p_endpoint.has_value();
 }
 
 std::optional<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetSubmitEndpoint() const

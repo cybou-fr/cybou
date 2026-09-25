@@ -74,6 +74,14 @@ after transport loss; stop it with Ctrl+C. An optional final argument sets an
 exact target height and makes the command exit when that height is reached.
 It stops with an error if the peer handshake or a received block fails
 verification. The endpoint is explicit and does not supply consensus trust.
+
+For a local Qt desktop connected to a CYP2 producer, set
+`CYBOU_DEV_P2P_HOST=127.0.0.1` and `CYBOU_DEV_P2P_PORT=29461` before launching
+the desktop. With a configured CYP2 endpoint, its native runtime uses the same
+persistent session for verified block sync and operation submission. A failed
+handshake or block verification stops that desktop sync worker. Without these
+settings the installed DEV bootstrap continues to use its published CYB1
+endpoint; the remote CYP2 port is not published yet.
 The existing DEV `sync` command still uses the bounded CYB1 block feed on port
 29460. CYP2 does not yet propagate operations or gossip blocks.
 

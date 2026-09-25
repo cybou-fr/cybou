@@ -166,11 +166,24 @@ void CybouMainWindow::initCybouRuntime()
         }
 
         const auto& endpoint = cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front();
+        bool p2p_port_ok{false};
+        const int p2p_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_PORT", &p2p_port_ok);
+        if (qEnvironmentVariableIsSet("CYBOU_DEV_P2P_PORT") &&
+            (!p2p_port_ok || p2p_port <= 0 || p2p_port > 65535)) {
+            throw std::runtime_error("invalid CYBOU_DEV_P2P_PORT");
+        }
+        const QString p2p_host = qEnvironmentVariable("CYBOU_DEV_P2P_HOST");
+        const auto configured_p2p = p2p_port_ok ?
+            std::optional<std::pair<std::string, uint16_t>>{std::make_pair(
+                p2p_host.isEmpty() ? std::string{endpoint.host} : p2p_host.toStdString(),
+                static_cast<uint16_t>(p2p_port))} : std::nullopt;
         cybou::NodeRuntimeConfig config{
             .network_definition = definition,
             .data_dir = data_dir,
             .validator_private_key = val_key,
-            .submit_endpoint = std::make_pair(std::string{endpoint.host}, endpoint.port),
+            .submit_endpoint = configured_p2p ? std::nullopt :
+                std::optional<std::pair<std::string, uint16_t>>{std::make_pair(std::string{endpoint.host}, endpoint.port)},
+            .p2p_endpoint = configured_p2p,
             .db_cache_bytes = 8 << 20,
         };
         if (val_key.has_value()) {
@@ -222,8 +235,16 @@ void CybouMainWindow::initCybouRuntime()
                     // sync thread inside SyncFromPeer for tens of seconds,
                     // which blocks shutdown (the destructor joins this
                     // thread). 100 blocks per round keeps join latency low.
-                    const auto sync_res = m_node_runtime->SyncFromPeer(std::string{endpoint.host}, endpoint.port, 100);
+                    const auto sync_res = m_node_runtime->HasP2pEndpoint() ?
+                        m_node_runtime->SyncFromConfiguredPeer(1) :
+                        m_node_runtime->SyncFromPeer(std::string{endpoint.host}, endpoint.port, 100);
                     bootstrap_reachable = sync_res.IsConnected();
+                    if (m_node_runtime->HasP2pEndpoint() &&
+                        (sync_res.status == cybou::SyncPeerStatus::PROTOCOL_ERROR ||
+                         sync_res.status == cybou::SyncPeerStatus::NETWORK_MISMATCH)) {
+                        qWarning() << "cybou P2P peer rejected by protocol verification";
+                        m_sync_stop.store(true);
+                    }
                     if (m_mail_service) {
                         m_mail_service->SyncMailbox();
                     }

@@ -164,4 +164,50 @@ BOOST_AUTO_TEST_CASE(manager_submits_canonical_operation_with_separate_acknowled
     BOOST_CHECK(finalized->block.operations.front() == operation);
 }
 
+BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured_peer)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("runtime-route.cybou");
+    const auto source = fixture.runtime->GetBlockAtHeight(1);
+    BOOST_REQUIRE(source);
+    const auto operation = source->block.operations.front();
+
+    cybou::NodeRuntimeConfig producer_config{.network_definition = fixture.definition,
+        .data_dir = fixture.directory / "route-producer", .validator_private_key = fixture.validator_seed,
+        .memory_only = true, .wipe_data = true};
+    cybou::CybouNodeRuntime producer{std::move(producer_config)};
+    BOOST_REQUIRE(producer.InitializeGenesis(fixture.genesis));
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    const auto network = producer.GetNetworkId();
+    bool served{false};
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        served = session.Handshake({.network_id = network, .finalized_height = 0,
+            .finalized_tip = {}, .capabilities = 0, .nonce = 106}) &&
+            session.ServeNext(producer) && producer.ProduceBlock().has_value() &&
+            session.ServeNext(producer);
+    }};
+    cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
+        .data_dir = fixture.directory / "route-observer",
+        .p2p_endpoint = std::make_pair(loopback.to_string(), acceptor.local_endpoint().port()),
+        .memory_only = true, .wipe_data = true};
+    cybou::CybouNodeRuntime observer{std::move(observer_config)};
+    BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
+    BOOST_CHECK(observer.HasSubmitEndpoint());
+    const auto submitted = observer.SubmitOperation(operation);
+    BOOST_CHECK(submitted.status == cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(99), 0U);
+    const auto synced = observer.SyncFromConfiguredPeer(1);
+    server.join();
+    BOOST_CHECK(served);
+    BOOST_CHECK_EQUAL(synced.blocks_applied, 1U);
+    BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(0), 1U);
+    BOOST_CHECK(observer.GetFinalizedTip() == producer.GetFinalizedTip());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
