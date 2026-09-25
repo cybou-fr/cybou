@@ -13,7 +13,9 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace cybou {
@@ -38,6 +40,11 @@ struct PeerInfo {
     Hello hello;
 };
 
+struct PeerSubmitResult {
+    OperationSubmitResult submission;
+    std::optional<std::pair<std::string, uint16_t>> endpoint;
+};
+
 // Single-threaded outbound peer set. Callers schedule connection attempts and
 // health checks; this class never supplies consensus trust or auto-discovers peers.
 class PeerManager {
@@ -48,6 +55,9 @@ public:
     size_t PingAll();
     SyncPeerResult SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks);
     OperationSubmitResult SubmitOperation(const std::string& numeric_address, uint16_t port,
+        const ProtocolOperation& operation);
+    PeerSubmitResult SubmitOperationToAny(
+        const std::vector<std::pair<std::string, uint16_t>>& endpoints,
         const ProtocolOperation& operation);
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;

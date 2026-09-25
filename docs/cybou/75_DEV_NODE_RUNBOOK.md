@@ -146,12 +146,16 @@ session. Given a file containing one serialized protocol operation:
 
 ```text
 cybou-node p2p-submit network.bin observer-db 127.0.0.1 29461 operation.bin
+cybou-node p2p-submit-peers network.bin observer-db peers.txt operation.bin
 ```
 
 The command bounds the input to 128 KiB, checks the response OperationID,
 prints the admission status, and exits successfully only for accepted,
 already-pending, or already-finalized operations. It does not wait for a
-finalized block. There is no automatic operation gossip yet.
+finalized block. `p2p-submit-peers` uses the same bounded peer list as
+`p2p-follow-peers`, tries each endpoint until one acknowledges the operation,
+and prints the successful endpoint. A failed or non-accepting peer does not
+stop the remaining attempts. There is no automatic operation gossip yet.
 
 ## Current limits
 

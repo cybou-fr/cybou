@@ -167,7 +167,7 @@ int Main(const int argc, char* argv[])
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-follow-peers NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-follow-peers NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE");
     const auto network = cybou::LoadCybouNetworkFile(argv[2]);
     if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
@@ -308,6 +308,25 @@ int Main(const int argc, char* argv[])
             if (!progress) std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         return 0;
+    }
+    if (std::string_view{argv[1]} == "p2p-submit-peers" && argc == 6) {
+        const auto endpoints = ReadPeerEndpoints(argv[4]);
+        const auto bytes = ReadFile(argv[5], cybou::MAX_OPERATION_PAYLOAD_BYTES);
+        const auto operation = cybou::DeserializeProtocolOperation(bytes);
+        if (!operation) throw std::runtime_error("invalid operation file");
+        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+            .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        cybou::CybouNodeRuntime runtime{std::move(config)};
+        if (!runtime.GetStatus().is_initialized && !runtime.InitializeGenesis(network->genesis)) {
+            throw std::runtime_error("cannot initialize genesis");
+        }
+        cybou::p2p::PeerManager peers{runtime};
+        const auto result = peers.SubmitOperationToAny(endpoints, *operation);
+        std::cout << "status=" << static_cast<unsigned>(result.submission.status)
+                  << " operation=" << result.submission.op_id.GetHex();
+        if (result.endpoint) std::cout << " peer=" << result.endpoint->first << ':' << result.endpoint->second;
+        std::cout << std::endl;
+        return result.submission ? 0 : 1;
     }
     if (std::string_view{argv[1]} == "p2p-submit" && argc == 7) {
         const auto bytes = ReadFile(argv[6], cybou::MAX_OPERATION_PAYLOAD_BYTES);

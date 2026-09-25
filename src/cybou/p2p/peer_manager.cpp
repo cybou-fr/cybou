@@ -10,6 +10,7 @@
 #include <openssl/rand.h>
 
 #include <array>
+#include <algorithm>
 #include <chrono>
 #include <limits>
 #include <optional>
@@ -165,6 +166,30 @@ OperationSubmitResult PeerManager::SubmitOperation(const std::string& numeric_ad
         return failure;
     }
     return *result;
+}
+
+PeerSubmitResult PeerManager::SubmitOperationToAny(
+    const std::vector<std::pair<std::string, uint16_t>>& endpoints,
+    const ProtocolOperation& operation)
+{
+    const auto op_id = ComputeOperationId(operation).value_or(uint256{});
+    PeerSubmitResult result{.submission = {.status = OperationSubmitStatus::REJECTED, .op_id = op_id},
+        .endpoint = std::nullopt};
+    if (endpoints.empty() || endpoints.size() > MAX_OUTBOUND_PEERS) return result;
+    for (const auto& [host, port] : endpoints) {
+        const auto connected = Peers();
+        const bool present = std::any_of(connected.begin(), connected.end(), [&](const PeerInfo& peer) {
+            return peer.address == host && peer.port == port;
+        });
+        if (!present && !Connect(host, port)) continue;
+        const auto submission = SubmitOperation(host, port, operation);
+        if (submission) {
+            result.submission = submission;
+            result.endpoint = std::make_pair(host, port);
+            return result;
+        }
+    }
+    return result;
 }
 
 std::vector<PeerInfo> PeerManager::Peers() const
