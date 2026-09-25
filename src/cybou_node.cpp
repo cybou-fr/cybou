@@ -182,11 +182,33 @@ int Main(const int argc, char* argv[])
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-follow-peers NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-follow-peers NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID");
     const auto network = cybou::LoadCybouNetworkFile(argv[2]);
     if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
     std::signal(SIGTERM, Stop);
+    if (std::string_view{argv[1]} == "operation-status" && argc == 5) {
+        const auto op_id = uint256::FromUserHex(argv[4]);
+        if (!op_id || op_id->IsNull()) throw std::runtime_error("invalid OperationID");
+        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+            .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        cybou::CybouNodeRuntime runtime{std::move(config)};
+        if (!runtime.GetStatus().is_initialized && !runtime.InitializeGenesis(network->genesis)) {
+            throw std::runtime_error("cannot initialize genesis");
+        }
+        const auto result = runtime.FindFinalizedOperation(*op_id);
+        if (result.status == cybou::FinalizedOperationLookupStatus::FOUND) {
+            std::cout << "status=finalized operation=" << op_id->GetHex()
+                      << " height=" << result.height
+                      << " index=" << result.operation_index
+                      << " block=" << result.block_id.GetHex() << std::endl;
+            return 0;
+        }
+        std::cout << "status=" << (result.status == cybou::FinalizedOperationLookupStatus::NOT_FOUND ?
+            "not-found" : "history-unavailable") << " operation=" << op_id->GetHex()
+                  << " scanned_height=" << result.scanned_height << std::endl;
+        return result.status == cybou::FinalizedOperationLookupStatus::NOT_FOUND ? 1 : 2;
+    }
     if (std::string_view{argv[1]} == "p2p-probe" && argc == 6) {
         cybou::NodeRuntimeConfig config{.network_definition = network->definition,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};

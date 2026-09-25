@@ -51,6 +51,18 @@ struct NodeRuntimeStatus {
     NodeRuntimeState runtime_state{NodeRuntimeState::UNINITIALIZED};
 };
 
+enum class FinalizedOperationLookupStatus : uint8_t {
+    FOUND, NOT_FOUND, HISTORY_UNAVAILABLE,
+};
+
+struct FinalizedOperationLookupResult {
+    FinalizedOperationLookupStatus status{FinalizedOperationLookupStatus::HISTORY_UNAVAILABLE};
+    uint64_t scanned_height{0};
+    uint64_t height{0};
+    uint32_t operation_index{0};
+    uint256 block_id;
+};
+
 /**
  * CybouNodeRuntime provides a unified, thread-safe runtime service
  * for both headless (cybou-node) and GUI (cybou desktop).
@@ -95,6 +107,7 @@ public:
 
     /** Block lookup by height */
     std::optional<FinalizedBlock> GetBlockAtHeight(uint64_t height) const;
+    FinalizedOperationLookupResult FindFinalizedOperation(const uint256& op_id) const;
 
     /** Sync up to max_blocks from a remote peer block feed */
     SyncPeerResult SyncFromPeer(const std::string& host, uint16_t port, uint64_t max_blocks = 100);

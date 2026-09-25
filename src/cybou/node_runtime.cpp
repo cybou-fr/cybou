@@ -180,6 +180,49 @@ std::optional<FinalizedBlock> CybouNodeRuntime::GetBlockAtHeight(const uint64_t 
     return m_store.GetBlockAtHeight(height);
 }
 
+FinalizedOperationLookupResult CybouNodeRuntime::FindFinalizedOperation(const uint256& op_id) const
+{
+    FinalizedOperationLookupResult result;
+    const auto status = GetStatus();
+    if (!status.is_initialized || op_id.IsNull()) return result;
+    result.status = FinalizedOperationLookupStatus::NOT_FOUND;
+    uint256 previous_id = m_config.network_definition.genesis_block_id;
+    for (uint64_t height = 1; height <= status.finalized_height; ++height) {
+        const auto finalized = GetBlockAtHeight(height);
+        if (!finalized) {
+            result.status = FinalizedOperationLookupStatus::HISTORY_UNAVAILABLE;
+            return result;
+        }
+        const auto block_id = ComputeBlockId(finalized->block);
+        if (finalized->block.parent_block_id != previous_id ||
+            finalized->certificate.network_id != status.network_id ||
+            finalized->certificate.height != height ||
+            finalized->certificate.block_id != block_id) {
+            result.status = FinalizedOperationLookupStatus::HISTORY_UNAVAILABLE;
+            return result;
+        }
+        for (size_t index = 0; index < finalized->block.operations.size(); ++index) {
+            const auto candidate = ComputeOperationId(finalized->block.operations[index]);
+            if (!candidate) {
+                result.status = FinalizedOperationLookupStatus::HISTORY_UNAVAILABLE;
+                return result;
+            }
+            if (*candidate == op_id) {
+                result.status = FinalizedOperationLookupStatus::FOUND;
+                result.scanned_height = height;
+                result.height = height;
+                result.operation_index = static_cast<uint32_t>(index);
+                result.block_id = block_id;
+                return result;
+            }
+        }
+        previous_id = block_id;
+        result.scanned_height = height;
+        if (height == status.finalized_height) break;
+    }
+    return result;
+}
+
 SyncPeerResult CybouNodeRuntime::SyncFromPeer(const std::string& host, const uint16_t port, const uint64_t max_blocks)
 {
     SyncPeerResult result;

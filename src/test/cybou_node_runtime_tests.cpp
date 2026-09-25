@@ -34,6 +34,18 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     BOOST_REQUIRE(observer.CommitBlock(*block));
     BOOST_CHECK(observer.GetAccountState(*account) == fixture.runtime->GetAccountState(*account));
     BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(0), 1);
+    BOOST_REQUIRE_EQUAL(block->block.operations.size(), 1U);
+    const auto op_id = cybou::ComputeOperationId(block->block.operations.front());
+    BOOST_REQUIRE(op_id);
+    const auto found = observer.FindFinalizedOperation(*op_id);
+    BOOST_CHECK(found.status == cybou::FinalizedOperationLookupStatus::FOUND);
+    BOOST_CHECK_EQUAL(found.height, 1U);
+    BOOST_CHECK_EQUAL(found.operation_index, 0U);
+    BOOST_CHECK(found.block_id == cybou::ComputeBlockId(block->block));
+    const auto missing_id = *op_id == uint256::ONE ? *uint256::FromUserHex("02") : uint256::ONE;
+    const auto missing = observer.FindFinalizedOperation(missing_id);
+    BOOST_CHECK(missing.status == cybou::FinalizedOperationLookupStatus::NOT_FOUND);
+    BOOST_CHECK_EQUAL(missing.scanned_height, 1U);
 }
 
 BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)

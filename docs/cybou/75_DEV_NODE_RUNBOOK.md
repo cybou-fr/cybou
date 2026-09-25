@@ -161,6 +161,19 @@ lost after attempting delivery; `unconfirmed` does not mean the operation was
 rejected. An explicit validator rejection prints its numeric status and peer.
 There is no automatic operation gossip yet.
 
+After syncing finalized blocks, inspect an OperationID against the local
+observer database:
+
+```text
+cybou-node operation-status network.bin observer-db OPERATION_ID
+```
+
+`finalized` reports height, operation index, and BlockID. `not-found` means
+the complete local history through `scanned_height` contains no matching
+operation; a missing or inconsistent historical block produces
+`history-unavailable`. This lookup uses locally verified block history and is
+not an independently exported inclusion proof.
+
 ## Current limits
 
 This DEV process can also produce empty blocks when no operation is pending.
