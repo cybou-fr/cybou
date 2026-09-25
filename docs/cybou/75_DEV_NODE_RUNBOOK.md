@@ -75,6 +75,23 @@ exact target height and makes the command exit when that height is reached.
 It stops with an error if the peer handshake or a received block fails
 verification. The endpoint is explicit and does not supply consensus trust.
 
+For multiple explicit sources, create a plain-text `peers.txt` with one numeric IP
+and port per line, for example:
+
+```text
+127.0.0.1 29461
+127.0.0.2 29461
+```
+
+Then run `cybou-node p2p-follow-peers network.bin observer-db peers.txt`
+with an optional final target height. The file is limited to 4 KiB and eight
+unique endpoints. The observer retries unavailable endpoints after five
+seconds, tries other peers for missing blocks, and excludes endpoints after a
+wrong-network handshake or block verification failure. A listener that closes
+without HELLO, including when its inbound slots are full, is retried. The list
+supplies no consensus trust: every block is verified against the trusted
+network definition.
+
 For a local Qt desktop connected to a CYP2 producer, set
 `CYBOU_DEV_P2P_HOST=127.0.0.1` and `CYBOU_DEV_P2P_PORT=29461` before launching
 the desktop. With a configured CYP2 endpoint, its native runtime uses the same

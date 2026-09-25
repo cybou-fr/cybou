@@ -43,6 +43,14 @@ struct Hello {
     friend bool operator==(const Hello&, const Hello&) = default;
 };
 
+enum class HandshakeStatus : uint8_t {
+    NOT_ATTEMPTED,
+    CONNECTED,
+    UNAVAILABLE,
+    INVALID_PEER,
+    INVALID_LOCAL,
+};
+
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame);
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes);
 std::vector<unsigned char> EncodeHello(const Hello& hello);
@@ -53,6 +61,7 @@ class PeerSession {
 public:
     explicit PeerSession(boost::asio::ip::tcp::socket socket);
     bool Handshake(const Hello& local);
+    HandshakeStatus LastHandshakeStatus() const { return m_handshake_status; }
     bool Ping(uint64_t nonce);
     bool AnswerPing();
     // Empty bytes mean the height is not available. Nullopt means a protocol
@@ -73,6 +82,7 @@ private:
     boost::asio::ip::tcp::socket m_socket;
     std::optional<Hello> m_peer;
     uint64_t m_local_capabilities{0};
+    HandshakeStatus m_handshake_status{HandshakeStatus::NOT_ATTEMPTED};
 };
 
 } // namespace cybou::p2p

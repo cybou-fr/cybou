@@ -67,7 +67,8 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         .finalized_tip = status.finalized_tip, .capabilities = 0, .nonce = *nonce};
     auto peer = std::make_unique<PeerSession>(std::move(socket));
     if (!peer->Handshake(local)) {
-        m_last_connect_status = PeerConnectStatus::HANDSHAKE_FAILED;
+        m_last_connect_status = peer->LastHandshakeStatus() == HandshakeStatus::UNAVAILABLE ?
+            PeerConnectStatus::UNAVAILABLE : PeerConnectStatus::HANDSHAKE_FAILED;
         return false;
     }
     m_peers.emplace(endpoint, std::move(peer));
@@ -99,6 +100,11 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
     const Endpoint endpoint{address.to_string(), port};
     auto it = m_peers.find(endpoint);
     if (it == m_peers.end()) return result;
+    if (!it->second->Peer() || !(it->second->Peer()->capabilities & CAP_SERVE_BLOCKS)) {
+        result.status = SyncPeerStatus::PROTOCOL_ERROR;
+        m_peers.erase(it);
+        return result;
+    }
     result.status = SyncPeerStatus::UP_TO_DATE;
     while (result.blocks_applied < max_blocks) {
         const auto status = m_runtime.GetStatus();

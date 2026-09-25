@@ -161,14 +161,19 @@ std::optional<Frame> PeerSession::Read()
 
 bool PeerSession::Handshake(const Hello& local)
 {
-    if (local.network_id.IsNull() || local.nonce == 0 ||
-        !Write(Frame{MessageType::HELLO, EncodeHello(local)})) return false;
+    m_handshake_status = HandshakeStatus::INVALID_LOCAL;
+    if (local.network_id.IsNull() || local.nonce == 0) return false;
+    m_handshake_status = HandshakeStatus::UNAVAILABLE;
+    if (!Write(Frame{MessageType::HELLO, EncodeHello(local)})) return false;
     const auto frame = Read();
-    if (!frame || frame->type != MessageType::HELLO) return false;
+    if (!frame) return false;
+    m_handshake_status = HandshakeStatus::INVALID_PEER;
+    if (frame->type != MessageType::HELLO) return false;
     const auto peer = DecodeHello(frame->payload);
     if (!peer || peer->network_id != local.network_id || peer->nonce == local.nonce) return false;
     m_peer = *peer;
     m_local_capabilities = local.capabilities;
+    m_handshake_status = HandshakeStatus::CONNECTED;
     return true;
 }
 

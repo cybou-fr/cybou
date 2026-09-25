@@ -94,6 +94,49 @@ BOOST_AUTO_TEST_CASE(manager_reports_unavailable_endpoint)
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
 }
 
+BOOST_AUTO_TEST_CASE(manager_retries_peer_that_closes_without_hello)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        socket.close();
+    }};
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    BOOST_CHECK(!manager.Connect(loopback.to_string(), acceptor.local_endpoint().port()));
+    BOOST_CHECK(manager.LastConnectStatus() == cybou::p2p::PeerConnectStatus::UNAVAILABLE);
+    server.join();
+}
+
+BOOST_AUTO_TEST_CASE(manager_rejects_peer_without_block_service)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    const auto network = fixture.runtime->GetNetworkId();
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        session.Handshake({.network_id = network, .finalized_height = 0,
+            .finalized_tip = {}, .capabilities = 0, .nonce = 107});
+    }};
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    const auto address = loopback.to_string();
+    const auto port = acceptor.local_endpoint().port();
+    BOOST_REQUIRE(manager.Connect(address, port));
+    const auto result = manager.SyncFromPeer(address, port, 1);
+    server.join();
+    BOOST_CHECK(result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR);
+    BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+}
+
 BOOST_AUTO_TEST_CASE(manager_syncs_two_verified_blocks_on_one_session)
 {
     CybouServiceTestFixture fixture;

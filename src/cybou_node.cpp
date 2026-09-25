@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <charconv>
 #include <csignal>
 #include <filesystem>
 #include <fstream>
@@ -28,6 +29,8 @@
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <set>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -69,9 +72,43 @@ void PutU32(std::vector<unsigned char>& out, const uint32_t value)
 
 uint16_t Port(const char* value)
 {
-    const auto number = std::stoul(value);
-    if (number == 0 || number > std::numeric_limits<uint16_t>::max()) throw std::runtime_error("invalid port");
+    unsigned number{0};
+    const std::string_view input{value};
+    const auto parsed = std::from_chars(input.data(), input.data() + input.size(), number);
+    if (parsed.ec != std::errc{} || parsed.ptr != input.data() + input.size() ||
+        number == 0 || number > std::numeric_limits<uint16_t>::max()) {
+        throw std::runtime_error("invalid port");
+    }
     return static_cast<uint16_t>(number);
+}
+
+std::vector<std::pair<std::string, uint16_t>> ReadPeerEndpoints(const std::filesystem::path& path)
+{
+    if (std::filesystem::file_size(path) > 4096) throw std::runtime_error("peer list exceeds 4 KiB");
+    std::ifstream input(path);
+    if (!input) throw std::runtime_error("cannot read peer list");
+    std::vector<std::pair<std::string, uint16_t>> endpoints;
+    std::set<std::pair<std::string, uint16_t>> seen;
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.empty()) continue;
+        std::istringstream fields(line);
+        std::string address_text, port_text, extra;
+        if (!(fields >> address_text >> port_text) || (fields >> extra)) {
+            throw std::runtime_error("invalid peer list entry");
+        }
+        boost::system::error_code ec;
+        const auto address = boost::asio::ip::make_address(address_text, ec);
+        if (ec) throw std::runtime_error("peer list requires numeric IP addresses");
+        const auto endpoint = std::make_pair(address.to_string(), Port(port_text.c_str()));
+        if (!seen.insert(endpoint).second) throw std::runtime_error("duplicate peer list entry");
+        endpoints.push_back(endpoint);
+        if (endpoints.size() > cybou::p2p::MAX_OUTBOUND_PEERS) {
+            throw std::runtime_error("too many peer list entries");
+        }
+    }
+    if (endpoints.empty()) throw std::runtime_error("peer list is empty");
+    return endpoints;
 }
 
 uint64_t PositiveCount(const char* value)
@@ -79,6 +116,17 @@ uint64_t PositiveCount(const char* value)
     const auto count = std::stoull(value);
     if (count == 0 || count > 1'000'000) throw std::runtime_error("invalid count");
     return count;
+}
+
+uint64_t TargetHeight(const char* value)
+{
+    uint64_t height{0};
+    const std::string_view input{value};
+    const auto parsed = std::from_chars(input.data(), input.data() + input.size(), height);
+    if (parsed.ec != std::errc{} || parsed.ptr != input.data() + input.size() || height == 0) {
+        throw std::runtime_error("invalid target height");
+    }
+    return height;
 }
 
 int Main(const int argc, char* argv[])
@@ -119,7 +167,7 @@ int Main(const int argc, char* argv[])
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-follow-peers NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE");
     const auto network = cybou::LoadCybouNetworkFile(argv[2]);
     if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
@@ -163,7 +211,7 @@ int Main(const int argc, char* argv[])
         if (!runtime.GetStatus().is_initialized && !runtime.InitializeGenesis(network->genesis)) {
             throw std::runtime_error("cannot initialize genesis");
         }
-        const auto until_height = argc == 7 ? std::optional<uint64_t>{PositiveCount(argv[6])} : std::nullopt;
+        const auto until_height = argc == 7 ? std::optional<uint64_t>{TargetHeight(argv[6])} : std::nullopt;
         const std::string host{argv[4]};
         const auto port = Port(argv[5]);
         cybou::p2p::PeerManager peers{runtime};
@@ -192,6 +240,66 @@ int Main(const int argc, char* argv[])
             } else if (result.status == cybou::SyncPeerStatus::UP_TO_DATE) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(250));
             }
+        }
+        return 0;
+    }
+    if (std::string_view{argv[1]} == "p2p-follow-peers" && (argc == 5 || argc == 6)) {
+        const auto endpoints = ReadPeerEndpoints(argv[4]);
+        const auto until_height = argc == 6 ? std::optional<uint64_t>{TargetHeight(argv[5])} : std::nullopt;
+        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+            .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        cybou::CybouNodeRuntime runtime{std::move(config)};
+        if (!runtime.GetStatus().is_initialized && !runtime.InitializeGenesis(network->genesis)) {
+            throw std::runtime_error("cannot initialize genesis");
+        }
+        cybou::p2p::PeerManager peers{runtime};
+        std::vector<bool> rejected(endpoints.size(), false);
+        std::vector<std::chrono::steady_clock::time_point> retry_after(endpoints.size());
+        while (!stopping) {
+            const auto status = runtime.GetStatus();
+            if (!status.is_initialized) throw std::runtime_error("observer state unavailable");
+            if (until_height && status.finalized_height >= *until_height) return 0;
+            bool progress{false};
+            for (size_t i = 0; i < endpoints.size() && !stopping; ++i) {
+                if (rejected[i]) continue;
+                if (std::chrono::steady_clock::now() < retry_after[i]) continue;
+                const auto& [host, port] = endpoints[i];
+                const auto connected = peers.Peers();
+                const bool present = std::any_of(connected.begin(), connected.end(), [&](const auto& peer) {
+                    return peer.address == host && peer.port == port;
+                });
+                if (!present && !peers.Connect(host, port)) {
+                    if (peers.LastConnectStatus() != cybou::p2p::PeerConnectStatus::UNAVAILABLE) {
+                        rejected[i] = true;
+                        std::cerr << "P2P peer rejected: " << host << ':' << port << '\n';
+                    } else {
+                        retry_after[i] = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+                    }
+                    continue;
+                }
+                const auto height = runtime.GetFinalizedHeight();
+                if (!height) throw std::runtime_error("observer height unavailable");
+                const uint64_t batch = until_height ? std::min<uint64_t>(100, *until_height - *height) : 100;
+                const auto result = peers.SyncFromPeer(host, port, batch);
+                if (result.blocks_applied > 0) {
+                    progress = true;
+                    std::cout << "height=" << *runtime.GetFinalizedHeight()
+                              << " peer=" << host << ':' << port << std::endl;
+                }
+                if (result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR ||
+                    result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH) {
+                    rejected[i] = true;
+                    std::cerr << "P2P peer failed block verification: " << host << ':' << port << '\n';
+                }
+                if (result.status == cybou::SyncPeerStatus::CONNECTION_FAILED) {
+                    retry_after[i] = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+                }
+                if (until_height && *runtime.GetFinalizedHeight() >= *until_height) return 0;
+            }
+            if (std::all_of(rejected.begin(), rejected.end(), [](bool value) { return value; })) {
+                throw std::runtime_error("all configured P2P peers rejected");
+            }
+            if (!progress) std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         return 0;
     }
