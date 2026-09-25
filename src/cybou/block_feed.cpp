@@ -111,7 +111,10 @@ bool ServeCybouConnection(CybouNodeRuntime& runtime, boost::asio::ip::tcp::socke
                 boost::asio::write(socket, boost::asio::buffer(resp));
                 return false;
             }
-            const auto sub_res = runtime.SubmitOperation(*op);
+            boost::system::error_code endpoint_error;
+            const auto endpoint = socket.remote_endpoint(endpoint_error);
+            if (endpoint_error) return false;
+            const auto sub_res = runtime.SubmitPeerOperation(*op, endpoint.address().to_string());
             std::array<unsigned char, 33> resp{};
             resp[0] = static_cast<unsigned char>(sub_res.status);
             std::copy(sub_res.op_id.begin(), sub_res.op_id.end(), resp.begin() + 1);

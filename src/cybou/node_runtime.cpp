@@ -115,6 +115,17 @@ std::optional<AccountState> CybouNodeRuntime::GetAccountState(const AccountId& a
 
 OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
 {
+    return SubmitOperationInternal(std::move(op), std::nullopt);
+}
+
+OperationSubmitResult CybouNodeRuntime::SubmitPeerOperation(ProtocolOperation op, std::string source_peer)
+{
+    return SubmitOperationInternal(std::move(op), std::move(source_peer));
+}
+
+OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
+    ProtocolOperation op, std::optional<std::string> source_peer)
+{
     const uint256 op_id = ComputeOperationId(op).value_or(uint256{});
     std::optional<std::pair<std::string, uint16_t>> endpoint;
     std::optional<std::pair<std::string, uint16_t>> p2p_endpoint;
@@ -129,7 +140,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
             return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
         }
         if (m_authority_node) {
-            const auto status = m_authority_node->SubmitOperationWithStatus(op);
+            const auto status = m_authority_node->SubmitOperationWithStatus(op, std::move(source_peer));
             return OperationSubmitResult{.status = status, .op_id = op_id};
         }
         endpoint = m_submit_endpoint;
@@ -171,7 +182,9 @@ BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block,
     if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) {
         return BlockTransitionResult{.error = BlockTransitionError::STATE_NOT_INITIALIZED};
     }
-    return m_store.CommitFinalizedBlock(block, std::nullopt, sync);
+    const auto result = m_store.CommitFinalizedBlock(block, std::nullopt, sync);
+    if (result && m_authority_node) m_authority_node->RevalidatePending();
+    return result;
 }
 
 std::optional<FinalizedBlock> CybouNodeRuntime::GetBlockAtHeight(const uint64_t height) const
@@ -278,6 +291,7 @@ SyncPeerResult CybouNodeRuntime::SyncFromPeer(const std::string& host, const uin
                 result.status = SyncPeerStatus::PROTOCOL_ERROR;
                 break;
             }
+            if (m_authority_node) m_authority_node->RevalidatePending();
         }
         ++result.blocks_applied;
         result.status = SyncPeerStatus::BLOCKS_APPLIED;

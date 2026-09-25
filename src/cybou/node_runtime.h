@@ -98,6 +98,7 @@ public:
 
     /** Submit an operation to pending pool (producer) or direct execution */
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
+    OperationSubmitResult SubmitPeerOperation(ProtocolOperation op, std::string source_peer);
 
     /** Produce a block if running in authority mode */
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);
@@ -124,6 +125,7 @@ public:
     const CybouStateStore& GetStore() const { return m_store; }
 
 private:
+    OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
     NodeRuntimeConfig m_config;
     uint256 m_network_id;
     std::unique_ptr<CDBWrapper> m_db;

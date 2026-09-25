@@ -26,7 +26,7 @@ CybouAuthorityNode::CybouAuthorityNode(
     CybouStateStore& store, std::array<unsigned char, 32> validator_private_key,
     std::optional<std::filesystem::path> signing_journal)
     : m_store{store}, m_validator_private_key{validator_private_key},
-      m_signing_journal{std::move(signing_journal)}
+      m_signing_journal{std::move(signing_journal)}, m_pool{store}
 {
 }
 
@@ -35,45 +35,16 @@ CybouAuthorityNode::~CybouAuthorityNode()
     memory_cleanse(m_validator_private_key.data(), m_validator_private_key.size());
 }
 
-OperationSubmitStatus CybouAuthorityNode::SubmitOperationWithStatus(const ProtocolOperation& operation)
+OperationSubmitStatus CybouAuthorityNode::SubmitOperationWithStatus(
+    const ProtocolOperation& operation, std::optional<std::string> source_peer)
 {
-    if (std::find(m_pending.begin(), m_pending.end(), operation) != m_pending.end()) {
-        return OperationSubmitStatus::ALREADY_PENDING;
+    switch (m_pool.Admit(operation, std::move(source_peer))) {
+    case PoolAdmission::ACCEPTED: return OperationSubmitStatus::ACCEPTED;
+    case PoolAdmission::ALREADY_PENDING: return OperationSubmitStatus::ALREADY_PENDING;
+    case PoolAdmission::ALREADY_FINALIZED: return OperationSubmitStatus::ALREADY_FINALIZED;
+    case PoolAdmission::REJECTED: return OperationSubmitStatus::REJECTED;
     }
-    const auto op_id = ComputeOperationId(operation);
-    if (op_id && m_store.HasIndexedFinalizedOperation(*op_id)) {
-        return OperationSubmitStatus::ALREADY_FINALIZED;
-    }
-    if (std::holds_alternative<AccountCreateOp>(operation)) {
-        const auto& create = std::get<AccountCreateOp>(operation);
-        const auto loaded = m_store.LoadState();
-        if (loaded && loaded.state && loaded.state->accounts.contains(create.account_id)) {
-            const auto head = m_store.GetFinalizedHead();
-            if (!head) return OperationSubmitStatus::REJECTED;
-            // AccountCreate is unique per AccountID. Only the exact finalized
-            // operation may be acknowledged as a successful retry.
-            for (uint64_t height = head->height; height > 0; --height) {
-                const auto finalized = m_store.GetBlockAtHeight(height);
-                if (!finalized) return OperationSubmitStatus::REJECTED;
-                for (const auto& prior : finalized->block.operations) {
-                    if (const auto* prior_create = std::get_if<AccountCreateOp>(&prior);
-                        prior_create && prior_create->account_id == create.account_id) {
-                        return prior == operation ? OperationSubmitStatus::ALREADY_FINALIZED
-                                                  : OperationSubmitStatus::REJECTED;
-                    }
-                }
-            }
-            return OperationSubmitStatus::REJECTED;
-        }
-    }
-    if (m_pending.size() >= MAX_AUTHORITY_PENDING_OPERATIONS) return OperationSubmitStatus::REJECTED;
-    const auto head = m_store.GetFinalizedHead();
-    if (!head || head->height == std::numeric_limits<uint64_t>::max()) return OperationSubmitStatus::REJECTED;
-    auto candidate = m_pending;
-    candidate.push_back(operation);
-    if (!m_store.ComputeCandidateStateRoot(candidate, head->height + 1)) return OperationSubmitStatus::REJECTED;
-    m_pending.push_back(operation);
-    return OperationSubmitStatus::ACCEPTED;
+    return OperationSubmitStatus::REJECTED;
 }
 
 bool CybouAuthorityNode::SubmitOperation(const ProtocolOperation& operation)
@@ -96,7 +67,8 @@ AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)
         return Failure(AuthorityProductionError::VALIDATOR_KEY_MISMATCH);
     }
     const uint64_t height = head->height + 1;
-    if (!m_store.ComputeCandidateStateRoot(m_pending, height)) {
+    const auto pending = m_pool.Snapshot();
+    if (!m_store.ComputeCandidateStateRoot(pending, height)) {
         return Failure(AuthorityProductionError::INVALID_PENDING_OPERATIONS);
     }
 
@@ -107,7 +79,7 @@ AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)
         }, m_signing_journal,
     };
     validator.SetHeight(height, head->block_id, *set);
-    const auto proposal = validator.StartRound(0, m_pending);
+    const auto proposal = validator.StartRound(0, pending);
     if (!proposal) return Failure(AuthorityProductionError::CONSENSUS_FAILED);
     const auto prevote = validator.ReceiveProposal(*proposal);
     if (!prevote || !prevote->block_id) return Failure(AuthorityProductionError::CONSENSUS_FAILED);
@@ -129,7 +101,7 @@ AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)
         return failure;
     }
     auto result = AuthorityProductionResult{.finalized_block = *finalized};
-    m_pending.clear();
+    m_pool.Revalidate();
     return result;
 }
 

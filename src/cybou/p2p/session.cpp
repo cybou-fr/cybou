@@ -299,7 +299,10 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         }
         const auto operation = DeserializeProtocolOperation(bytes);
         if (!operation) return false;
-        const auto result = runtime.SubmitOperation(*operation);
+        boost::system::error_code endpoint_error;
+        const auto endpoint = m_socket.remote_endpoint(endpoint_error);
+        if (endpoint_error) return false;
+        const auto result = runtime.SubmitPeerOperation(*operation, endpoint.address().to_string());
         std::vector<unsigned char> response{static_cast<unsigned char>(result.status)};
         response.insert(response.end(), result.op_id.begin(), result.op_id.end());
         return Write(Frame{MessageType::OP_RESULT, response});

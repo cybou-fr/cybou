@@ -58,4 +58,47 @@ BOOST_AUTO_TEST_CASE(producer_rejects_finalized_operation_replay)
     BOOST_CHECK_EQUAL(empty.finalized_block->block.operations.size(), 0U);
 }
 
+BOOST_AUTO_TEST_CASE(operation_pool_bounds_peer_admission_and_revalidates)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("pool-account.cybou");
+    const auto finalized = fixture.runtime->GetBlockAtHeight(1);
+    BOOST_REQUIRE(finalized);
+    BOOST_REQUIRE_EQUAL(finalized->block.operations.size(), 1U);
+    const auto& operation = finalized->block.operations.front();
+    const auto encoded = cybou::SerializeProtocolOperation(operation);
+    BOOST_REQUIRE(encoded);
+
+    cybou::NodeRuntimeConfig config{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "pool-observer",
+        .validator_private_key = fixture.validator_seed,
+        .memory_only = true,
+        .wipe_data = true,
+    };
+    cybou::CybouNodeRuntime observer{std::move(config)};
+    BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
+    cybou::OperationPool too_small{observer.GetStore(),
+        {.max_count = 1, .max_bytes = encoded->size() - 1}};
+    BOOST_CHECK(too_small.Admit(operation) == cybou::PoolAdmission::REJECTED);
+    cybou::OperationPool peer_limited{observer.GetStore(),
+        {.max_count = 1, .max_bytes = encoded->size(), .max_peer_count = 0}};
+    BOOST_CHECK(peer_limited.Admit(operation, std::string{"peer-a"}) == cybou::PoolAdmission::REJECTED);
+    BOOST_CHECK(peer_limited.Admit(operation) == cybou::PoolAdmission::ACCEPTED);
+    BOOST_CHECK(peer_limited.Admit(operation, std::string{"peer-a"}) == cybou::PoolAdmission::ALREADY_PENDING);
+    BOOST_CHECK_EQUAL(peer_limited.Size(), 1U);
+    BOOST_CHECK_EQUAL(peer_limited.Bytes(), encoded->size());
+    BOOST_CHECK(observer.SubmitPeerOperation(operation, "peer-b").status == cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_CHECK(observer.SubmitOperation(operation).status == cybou::OperationSubmitStatus::ALREADY_PENDING);
+    BOOST_REQUIRE(observer.CommitBlock(*finalized));
+    peer_limited.Revalidate();
+    BOOST_CHECK_EQUAL(peer_limited.Size(), 0U);
+    BOOST_CHECK_EQUAL(peer_limited.Bytes(), 0U);
+    BOOST_CHECK(peer_limited.Admit(operation) == cybou::PoolAdmission::ALREADY_FINALIZED);
+    BOOST_CHECK(observer.SubmitOperation(operation).status == cybou::OperationSubmitStatus::ALREADY_FINALIZED);
+    const auto next = observer.ProduceBlock();
+    BOOST_REQUIRE(next);
+    BOOST_CHECK(next->block.operations.empty());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

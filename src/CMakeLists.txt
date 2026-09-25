@@ -180,6 +180,7 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   cybou/state_store.cpp
   cybou/block_executor.cpp
   cybou/authority_node.cpp
+  cybou/operation_pool.cpp
   cybou/block_feed.cpp
   cybou/network_definition.cpp
   cybou/protocol_operation.cpp

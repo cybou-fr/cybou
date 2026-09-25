@@ -5,6 +5,7 @@
 #define CYBOU_AUTHORITY_NODE_H
 
 #include <cybou/block.h>
+#include <cybou/operation_pool.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/state_store.h>
 
@@ -13,11 +14,11 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace cybou {
 
-inline constexpr size_t MAX_AUTHORITY_PENDING_OPERATIONS{256};
 inline constexpr size_t MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES{32U * 1024U * 1024U};
 
 enum class AuthorityProductionError : uint8_t {
@@ -69,9 +70,11 @@ public:
 
     /** Add an operation only if the complete pending batch executes on the current head. */
     bool SubmitOperation(const ProtocolOperation& operation);
-    OperationSubmitStatus SubmitOperationWithStatus(const ProtocolOperation& operation);
-    size_t PendingCount() const { return m_pending.size(); }
-    void ClearPending() { m_pending.clear(); }
+    OperationSubmitStatus SubmitOperationWithStatus(const ProtocolOperation& operation,
+        std::optional<std::string> source_peer = std::nullopt);
+    size_t PendingCount() const { return m_pool.Size(); }
+    void ClearPending() { m_pool.Clear(); }
+    void RevalidatePending() { m_pool.Revalidate(); }
 
     /** Finalize the pending batch, including an empty block when the queue is empty. */
     AuthorityProductionResult ProduceNextBlock(bool sync = true);
@@ -80,7 +83,7 @@ private:
     CybouStateStore& m_store;
     std::array<unsigned char, 32> m_validator_private_key;
     std::optional<std::filesystem::path> m_signing_journal;
-    std::vector<ProtocolOperation> m_pending;
+    OperationPool m_pool;
 };
 
 } // namespace cybou
