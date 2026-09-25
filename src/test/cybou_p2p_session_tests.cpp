@@ -81,4 +81,28 @@ BOOST_AUTO_TEST_CASE(loopback_session_rejects_network_mismatch)
     BOOST_CHECK(!server_accepted);
 }
 
+BOOST_AUTO_TEST_CASE(client_respects_advertised_block_capability)
+{
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    tcp::acceptor acceptor{io, tcp::endpoint{boost::asio::ip::address_v4::loopback(), 0}};
+    bool answered{false};
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession peer{std::move(socket)};
+        answered = peer.Handshake({.network_id = uint256::ONE, .finalized_height = 0,
+            .finalized_tip = {}, .capabilities = 0, .nonce = 41}) && peer.AnswerPing();
+    }};
+    tcp::socket socket{io};
+    socket.connect(acceptor.local_endpoint());
+    cybou::p2p::PeerSession peer{std::move(socket)};
+    BOOST_REQUIRE(peer.Handshake({.network_id = uint256::ONE, .finalized_height = 0,
+        .finalized_tip = {}, .capabilities = 0, .nonce = 42}));
+    BOOST_CHECK(!peer.RequestBlock(1));
+    BOOST_CHECK(peer.Ping(43));
+    server.join();
+    BOOST_CHECK(answered);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

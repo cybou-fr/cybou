@@ -168,6 +168,7 @@ bool PeerSession::Handshake(const Hello& local)
     const auto peer = DecodeHello(frame->payload);
     if (!peer || peer->network_id != local.network_id || peer->nonce == local.nonce) return false;
     m_peer = *peer;
+    m_local_capabilities = local.capabilities;
     return true;
 }
 
@@ -191,7 +192,7 @@ bool PeerSession::AnswerPing()
 
 std::optional<std::vector<unsigned char>> PeerSession::RequestBlock(uint64_t height)
 {
-    if (!m_peer || height == 0) return std::nullopt;
+    if (!m_peer || !(m_peer->capabilities & CAP_SERVE_BLOCKS) || height == 0) return std::nullopt;
     std::vector<unsigned char> request;
     Put64(request, height);
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
@@ -213,7 +214,7 @@ std::optional<std::vector<unsigned char>> PeerSession::RequestBlock(uint64_t hei
 
 std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const ProtocolOperation& operation)
 {
-    if (!m_peer) return std::nullopt;
+    if (!m_peer || !(m_peer->capabilities & CAP_ACCEPT_OPERATIONS)) return std::nullopt;
     const auto bytes = SerializeProtocolOperation(operation);
     const auto op_id = ComputeOperationId(operation);
     if (!bytes || !op_id || bytes->empty() || bytes->size() > MAX_OPERATION_PAYLOAD_BYTES) return std::nullopt;
@@ -243,6 +244,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});
     }
     if (request->type == MessageType::OP_META) {
+        if (!(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) return false;
         if (request->payload.size() != 4) return false;
         const uint32_t size = Read32(request->payload.data());
         if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return false;
@@ -263,6 +265,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         return Write(Frame{MessageType::OP_RESULT, response});
     }
     if (request->type != MessageType::GET_BLOCK || request->payload.size() != 8) return false;
+    if (!(m_local_capabilities & CAP_SERVE_BLOCKS)) return false;
     const uint64_t height = Read64(request->payload.data());
     if (height == 0) return false;
     const auto block = runtime.GetBlockAtHeight(height);

@@ -27,7 +27,9 @@ std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
     for (int i = 0; i < 8; ++i) nonce |= uint64_t{bytes[i]} << (8 * i);
     if (nonce == 0) return std::nullopt;
     return Hello{.network_id = status.network_id, .finalized_height = status.finalized_height,
-        .finalized_tip = status.finalized_tip, .capabilities = 0, .nonce = nonce};
+        .finalized_tip = status.finalized_tip,
+        .capabilities = CAP_SERVE_BLOCKS | (status.is_authority ? CAP_ACCEPT_OPERATIONS : 0),
+        .nonce = nonce};
 }
 
 } // namespace

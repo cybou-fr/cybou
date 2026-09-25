@@ -115,7 +115,8 @@ BOOST_AUTO_TEST_CASE(manager_syncs_two_verified_blocks_on_one_session)
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket)};
         served = session.Handshake({.network_id = network, .finalized_height = 2,
-            .finalized_tip = fixture.runtime->GetFinalizedTip().value(), .capabilities = 0, .nonce = 104}) &&
+            .finalized_tip = fixture.runtime->GetFinalizedTip().value(),
+            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 104}) &&
             session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
     }};
     cybou::p2p::PeerManager manager{observer};
@@ -157,7 +158,7 @@ BOOST_AUTO_TEST_CASE(manager_submits_canonical_operation_with_separate_acknowled
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket)};
         served = session.Handshake({.network_id = network, .finalized_height = 0,
-            .finalized_tip = {}, .capabilities = 0, .nonce = 105}) &&
+            .finalized_tip = {}, .capabilities = cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 105}) &&
             session.ServeNext(receiver) && session.ServeNext(receiver);
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
@@ -203,7 +204,8 @@ BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket)};
         served = session.Handshake({.network_id = network, .finalized_height = 0,
-            .finalized_tip = {}, .capabilities = 0, .nonce = 106}) &&
+            .finalized_tip = {}, .capabilities = cybou::p2p::CAP_SERVE_BLOCKS |
+                cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 106}) &&
             session.ServeNext(producer) && producer.ProduceBlock().has_value() &&
             session.ServeNext(producer);
     }};
