@@ -110,9 +110,9 @@ bool PeerSession::ReadExact(unsigned char* out, size_t length, std::chrono::stea
     return done == length;
 }
 
-bool PeerSession::WriteExact(const unsigned char* bytes, size_t length)
+bool PeerSession::WriteExact(const unsigned char* bytes, size_t length,
+    std::chrono::steady_clock::time_point deadline)
 {
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     size_t done{0};
     while (done < length && std::chrono::steady_clock::now() < deadline) {
         boost::system::error_code ec;
@@ -129,9 +129,14 @@ bool PeerSession::WriteExact(const unsigned char* bytes, size_t length)
 
 bool PeerSession::Write(const Frame& frame)
 {
+    return Write(frame, std::chrono::steady_clock::now() + std::chrono::seconds(5));
+}
+
+bool PeerSession::Write(const Frame& frame, std::chrono::steady_clock::time_point deadline)
+{
     const auto bytes = EncodeFrame(frame);
     if (!bytes) return false;
-    return WriteExact(bytes->data(), bytes->size());
+    return WriteExact(bytes->data(), bytes->size(), deadline);
 }
 
 std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point deadline)
@@ -189,8 +194,8 @@ std::optional<std::vector<unsigned char>> PeerSession::RequestBlock(uint64_t hei
     if (!m_peer || height == 0) return std::nullopt;
     std::vector<unsigned char> request;
     Put64(request, height);
-    if (!Write(Frame{MessageType::GET_BLOCK, request})) return std::nullopt;
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!Write(Frame{MessageType::GET_BLOCK, request}, deadline)) return std::nullopt;
     const auto meta = Read(deadline);
     if (!meta || meta->type != MessageType::BLOCK_META || meta->payload.size() != 4) return std::nullopt;
     const uint32_t size = Read32(meta->payload.data());
@@ -214,13 +219,14 @@ std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const Protocol
     if (!bytes || !op_id || bytes->empty() || bytes->size() > MAX_OPERATION_PAYLOAD_BYTES) return std::nullopt;
     std::vector<unsigned char> meta;
     Put32(meta, static_cast<uint32_t>(bytes->size()));
-    if (!Write(Frame{MessageType::OP_META, meta})) return std::nullopt;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!Write(Frame{MessageType::OP_META, meta}, deadline)) return std::nullopt;
     for (size_t offset = 0; offset < bytes->size(); offset += MAX_FRAME_PAYLOAD) {
         const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, bytes->size() - offset);
         if (!Write(Frame{MessageType::OP_CHUNK,
-            std::vector<unsigned char>{bytes->begin() + offset, bytes->begin() + offset + count}})) return std::nullopt;
+            std::vector<unsigned char>{bytes->begin() + offset, bytes->begin() + offset + count}}, deadline)) return std::nullopt;
     }
-    const auto response = Read(std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT);
+    const auto response = Read(deadline);
     if (!response || response->type != MessageType::OP_RESULT || response->payload.size() != 33 ||
         response->payload[0] > static_cast<uint8_t>(OperationSubmitStatus::NETWORK_MISMATCH) ||
         !std::equal(op_id->begin(), op_id->end(), response->payload.begin() + 1)) return std::nullopt;
@@ -267,11 +273,12 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     if (bytes.size() > MAX_FINALIZED_BLOCK_FEED_BYTES) return false;
     std::vector<unsigned char> meta;
     Put32(meta, static_cast<uint32_t>(bytes.size()));
-    if (!Write(Frame{MessageType::BLOCK_META, meta})) return false;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!Write(Frame{MessageType::BLOCK_META, meta}, deadline)) return false;
     for (size_t offset = 0; offset < bytes.size(); offset += MAX_FRAME_PAYLOAD) {
         const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, bytes.size() - offset);
         if (!Write(Frame{MessageType::BLOCK_CHUNK,
-            std::vector<unsigned char>{bytes.begin() + offset, bytes.begin() + offset + count}})) return false;
+            std::vector<unsigned char>{bytes.begin() + offset, bytes.begin() + offset + count}}, deadline)) return false;
     }
     return true;
 }

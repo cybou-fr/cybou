@@ -63,8 +63,9 @@ public:
 
 private:
     bool ReadExact(unsigned char* out, size_t length, std::chrono::steady_clock::time_point deadline);
-    bool WriteExact(const unsigned char* bytes, size_t length);
+    bool WriteExact(const unsigned char* bytes, size_t length, std::chrono::steady_clock::time_point deadline);
     bool Write(const Frame& frame);
+    bool Write(const Frame& frame, std::chrono::steady_clock::time_point deadline);
     std::optional<Frame> Read(std::chrono::steady_clock::time_point deadline);
     std::optional<Frame> Read();
     boost::asio::ip::tcp::socket m_socket;
