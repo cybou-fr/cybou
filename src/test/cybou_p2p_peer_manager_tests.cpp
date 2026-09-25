@@ -313,8 +313,9 @@ BOOST_AUTO_TEST_CASE(manager_syncs_two_verified_blocks_on_one_session)
         cybou::p2p::PeerSession session{std::move(socket)};
         served = session.Handshake({.network_id = network, .finalized_height = 2,
             .finalized_tip = fixture.runtime->GetFinalizedTip().value(),
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 104}) &&
-            session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
+            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_BLOCK_INVENTORY, .nonce = 104}) &&
+            session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime) &&
+            session.ServeNext(*fixture.runtime);
     }};
     cybou::p2p::PeerManager manager{observer};
     const auto address = loopback.to_string();
@@ -326,6 +327,74 @@ BOOST_AUTO_TEST_CASE(manager_syncs_two_verified_blocks_on_one_session)
     BOOST_CHECK_EQUAL(result.blocks_applied, 2U);
     BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(0), 2U);
     BOOST_CHECK(observer.GetFinalizedTip() == fixture.runtime->GetFinalizedTip());
+}
+
+BOOST_AUTO_TEST_CASE(manager_rejects_block_that_disagrees_with_inventory)
+{
+    CybouServiceTestFixture fixture;
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
+        .data_dir = fixture.directory / "inventory-observer", .memory_only = true, .wipe_data = true};
+    cybou::CybouNodeRuntime observer{std::move(config)};
+    BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
+
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    bool served{false};
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        if (!session.Handshake({.network_id = fixture.runtime->GetNetworkId(),
+            .finalized_height = 1, .finalized_tip = fixture.runtime->GetFinalizedTip().value(),
+            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_BLOCK_INVENTORY,
+            .nonce = 115})) return;
+        std::array<unsigned char, 19> request{};
+        boost::system::error_code error;
+        size_t received{0};
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (received < request.size() && std::chrono::steady_clock::now() < deadline) {
+            const auto count = session.Socket().read_some(
+                boost::asio::buffer(request.data() + received, request.size() - received), error);
+            if (error == boost::asio::error::would_block || error == boost::asio::error::try_again) {
+                error.clear();
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+            if (error) return;
+            received += count;
+        }
+        if (received != request.size()) return;
+        std::vector<unsigned char> inventory{1, 1, 0, 0, 0, 0, 0, 0, 0};
+        inventory.insert(inventory.end(), uint256::ONE.begin(), uint256::ONE.end());
+        const auto frame = cybou::p2p::EncodeFrame({cybou::p2p::MessageType::BLOCK_INV, inventory});
+        if (!frame) return;
+        size_t written{0};
+        while (written < frame->size() && std::chrono::steady_clock::now() < deadline) {
+            const auto count = session.Socket().write_some(
+                boost::asio::buffer(frame->data() + written, frame->size() - written), error);
+            if (error == boost::asio::error::would_block || error == boost::asio::error::try_again) {
+                error.clear();
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+            if (error) return;
+            written += count;
+        }
+        served = written == frame->size() && session.ServeNext(*fixture.runtime);
+    }};
+    cybou::p2p::PeerManager manager{observer};
+    const auto address = loopback.to_string();
+    const auto port = acceptor.local_endpoint().port();
+    BOOST_REQUIRE(manager.Connect(address, port));
+    const auto result = manager.SyncFromPeer(address, port, 1);
+    server.join();
+    BOOST_CHECK(served);
+    BOOST_CHECK(result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR);
+    BOOST_CHECK_EQUAL(result.blocks_applied, 0U);
+    BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(99), 0U);
 }
 
 BOOST_AUTO_TEST_CASE(manager_rejects_block_conflicting_with_announced_finalized_tip)

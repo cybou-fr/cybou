@@ -23,11 +23,13 @@ inline constexpr uint8_t WIRE_VERSION{1};
 inline constexpr uint64_t CAP_SERVE_BLOCKS{1ULL << 0};
 inline constexpr uint64_t CAP_ACCEPT_OPERATIONS{1ULL << 1};
 inline constexpr uint64_t CAP_OP_INVENTORY{1ULL << 2};
+inline constexpr uint64_t CAP_BLOCK_INVENTORY{1ULL << 3};
+inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 
 enum class MessageType : uint8_t {
     HELLO = 1, PING = 2, PONG = 3, GET_BLOCK = 4, BLOCK_META = 5,
     BLOCK_CHUNK = 6, OP_META = 7, OP_CHUNK = 8, OP_RESULT = 9,
-    OP_INV = 10, GET_OP = 11, OP = 12,
+    OP_INV = 10, GET_OP = 11, OP = 12, GET_BLOCKS = 13, BLOCK_INV = 14,
 };
 
 struct Frame {
@@ -62,6 +64,16 @@ struct BlockRequestResult {
     std::vector<unsigned char> bytes;
 };
 
+struct BlockAnnouncement {
+    uint64_t height{0};
+    uint256 block_id;
+};
+
+struct BlockInventoryResult {
+    BlockRequestStatus status{BlockRequestStatus::INVALID_REQUEST};
+    std::vector<BlockAnnouncement> blocks;
+};
+
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame);
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes);
 std::vector<unsigned char> EncodeHello(const Hello& hello);
@@ -78,6 +90,7 @@ public:
     bool AnswerPing();
     // Callers must verify returned blocks before commit.
     BlockRequestResult RequestBlock(uint64_t height);
+    BlockInventoryResult RequestBlockInventory(uint64_t first_height, uint8_t max_blocks);
     std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation);
     std::optional<OperationSubmitResult> AdvertiseOperation(const ProtocolOperation& operation);
     bool ServeNext(CybouNodeRuntime& runtime);

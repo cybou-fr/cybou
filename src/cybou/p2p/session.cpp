@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <thread>
 
 namespace cybou::p2p {
@@ -43,7 +44,7 @@ uint32_t Read32(const unsigned char* data)
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
     if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
-        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 12)) return std::nullopt;
+        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 14)) return std::nullopt;
     std::vector<unsigned char> bytes{'C', 'Y', 'P', '2', WIRE_VERSION, static_cast<unsigned char>(frame.type)};
     const auto size = static_cast<uint32_t>(frame.payload.size());
     for (int i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(size >> (8 * i)));
@@ -54,7 +55,7 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < HEADER_SIZE || !std::equal(bytes.begin(), bytes.begin() + 4, "CYP2") ||
-        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 12) return std::nullopt;
+        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 14) return std::nullopt;
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[6 + i]} << (8 * i);
     if (size > MAX_FRAME_PAYLOAD || bytes.size() != HEADER_SIZE + size) return std::nullopt;
@@ -158,7 +159,7 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     std::array<unsigned char, HEADER_SIZE> header{};
     if (!ReadExact(header.data(), header.size(), deadline)) return std::nullopt;
     if (!std::equal(header.begin(), header.begin() + 4, "CYP2") ||
-        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 12) {
+        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 14) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
         return std::nullopt;
     }
@@ -250,6 +251,47 @@ BlockRequestResult PeerSession::RequestBlock(uint64_t height)
         bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
     }
     return {.status = BlockRequestStatus::OK, .bytes = std::move(bytes)};
+}
+
+BlockInventoryResult PeerSession::RequestBlockInventory(uint64_t first_height, uint8_t max_blocks)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_SERVE_BLOCKS) ||
+        !(m_peer->capabilities & CAP_BLOCK_INVENTORY) || first_height == 0 ||
+        max_blocks == 0 || max_blocks > MAX_BLOCK_INVENTORY ||
+        first_height > std::numeric_limits<uint64_t>::max() - max_blocks + 1) {
+        return {.status = BlockRequestStatus::INVALID_REQUEST, .blocks = {}};
+    }
+    std::vector<unsigned char> request;
+    Put64(request, first_height);
+    request.push_back(max_blocks);
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!Write(Frame{MessageType::GET_BLOCKS, request}, deadline)) {
+        return {.status = BlockRequestStatus::UNAVAILABLE, .blocks = {}};
+    }
+    const auto response = Read(deadline);
+    if (!response) return {.status = m_last_read_status == ReadStatus::INVALID_FRAME ?
+        BlockRequestStatus::INVALID_RESPONSE : BlockRequestStatus::UNAVAILABLE, .blocks = {}};
+    if (response->type != MessageType::BLOCK_INV || response->payload.empty()) {
+        return {.status = BlockRequestStatus::INVALID_RESPONSE, .blocks = {}};
+    }
+    const uint8_t count = response->payload[0];
+    if (count > max_blocks || response->payload.size() != 1U + size_t{count} * 40U) {
+        return {.status = BlockRequestStatus::INVALID_RESPONSE, .blocks = {}};
+    }
+    if (count == 0) return {.status = BlockRequestStatus::NOT_FOUND, .blocks = {}};
+    BlockInventoryResult result{.status = BlockRequestStatus::OK, .blocks = {}};
+    result.blocks.reserve(count);
+    for (uint8_t index{0}; index < count; ++index) {
+        const size_t offset = 1U + size_t{index} * 40U;
+        const uint64_t height = Read64(response->payload.data() + offset);
+        uint256 block_id;
+        std::copy_n(response->payload.begin() + offset + 8, 32, block_id.begin());
+        if (height != first_height + index || block_id.IsNull()) {
+            return {.status = BlockRequestStatus::INVALID_RESPONSE, .blocks = {}};
+        }
+        result.blocks.push_back({height, block_id});
+    }
+    return result;
 }
 
 std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const ProtocolOperation& operation)
@@ -379,6 +421,26 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         std::vector<unsigned char> response{static_cast<unsigned char>(result.status)};
         response.insert(response.end(), result.op_id.begin(), result.op_id.end());
         return Write(Frame{MessageType::OP_RESULT, response});
+    }
+    if (request->type == MessageType::GET_BLOCKS) {
+        if (!(m_local_capabilities & CAP_SERVE_BLOCKS) ||
+            !(m_local_capabilities & CAP_BLOCK_INVENTORY) || request->payload.size() != 9) return false;
+        const uint64_t first_height = Read64(request->payload.data());
+        const uint8_t count = request->payload[8];
+        if (first_height == 0 || count == 0 || count > MAX_BLOCK_INVENTORY ||
+            first_height > std::numeric_limits<uint64_t>::max() - count + 1) return false;
+        std::vector<unsigned char> inventory{0};
+        for (uint8_t index{0}; index < count; ++index) {
+            const uint64_t height = first_height + index;
+            const auto finalized = runtime.GetBlockAtHeight(height);
+            if (!finalized) break;
+            const auto id = ComputeBlockId(finalized->block);
+            if (id.IsNull()) return false;
+            Put64(inventory, height);
+            inventory.insert(inventory.end(), id.begin(), id.end());
+            ++inventory[0];
+        }
+        return Write(Frame{MessageType::BLOCK_INV, inventory});
     }
     if (request->type != MessageType::GET_BLOCK || request->payload.size() != 8) return false;
     if (!(m_local_capabilities & CAP_SERVE_BLOCKS)) return false;

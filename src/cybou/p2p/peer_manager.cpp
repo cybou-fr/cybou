@@ -9,6 +9,7 @@
 #include <boost/asio/steady_timer.hpp>
 #include <openssl/rand.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <limits>
@@ -110,6 +111,8 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
         return result;
     }
     result.status = SyncPeerStatus::UP_TO_DATE;
+    std::vector<BlockAnnouncement> inventory;
+    size_t inventory_cursor{0};
     while (result.blocks_applied < max_blocks) {
         const auto status = m_runtime.GetStatus();
         if (!status.is_initialized || status.finalized_height == std::numeric_limits<uint64_t>::max()) {
@@ -117,6 +120,32 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
             break;
         }
         const uint64_t height = status.finalized_height + 1;
+        const bool use_inventory = (it->second->Peer()->capabilities & CAP_BLOCK_INVENTORY) != 0;
+        if (use_inventory) {
+            if (inventory_cursor < inventory.size() && inventory[inventory_cursor].height != height) {
+                inventory.clear();
+                inventory_cursor = 0;
+            }
+            if (inventory_cursor == inventory.size()) {
+                const auto remaining = std::min<uint64_t>(max_blocks - result.blocks_applied, MAX_BLOCK_INVENTORY);
+                const auto announced = it->second->RequestBlockInventory(height, static_cast<uint8_t>(remaining));
+                if (announced.status == BlockRequestStatus::NOT_FOUND) {
+                    if (height <= it->second->Peer()->finalized_height) {
+                        result.status = SyncPeerStatus::CONNECTION_FAILED;
+                        m_peers.erase(it);
+                    }
+                    break;
+                }
+                if (announced.status != BlockRequestStatus::OK) {
+                    result.status = announced.status == BlockRequestStatus::UNAVAILABLE ?
+                        SyncPeerStatus::CONNECTION_FAILED : SyncPeerStatus::PROTOCOL_ERROR;
+                    m_peers.erase(it);
+                    break;
+                }
+                inventory = announced.blocks;
+                inventory_cursor = 0;
+            }
+        }
         const auto response = it->second->RequestBlock(height);
         if (response.status != BlockRequestStatus::OK && response.status != BlockRequestStatus::NOT_FOUND) {
             result.status = response.status == BlockRequestStatus::UNAVAILABLE ?
@@ -125,7 +154,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
             break;
         }
         if (response.status == BlockRequestStatus::NOT_FOUND) {
-            if (height <= it->second->Peer()->finalized_height) {
+            if (use_inventory || height <= it->second->Peer()->finalized_height) {
                 result.status = SyncPeerStatus::CONNECTION_FAILED;
                 m_peers.erase(it);
             }
@@ -136,12 +165,14 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
         if (!block || block->block.height != height ||
             block->certificate.network_id != status.network_id ||
             block->certificate.block_id != ComputeBlockId(block->block) ||
+            (use_inventory && block->certificate.block_id != inventory[inventory_cursor].block_id) ||
             (height == announced.finalized_height && block->certificate.block_id != announced.finalized_tip) ||
             !m_runtime.CommitBlock(*block)) {
             result.status = SyncPeerStatus::PROTOCOL_ERROR;
             m_peers.erase(it);
             break;
         }
+        if (use_inventory) ++inventory_cursor;
         ++result.blocks_applied;
         result.status = SyncPeerStatus::BLOCKS_APPLIED;
     }

@@ -32,6 +32,11 @@ BOOST_AUTO_TEST_CASE(frame_rejects_bad_size_and_version)
     const auto encoded_inventory = cybou::p2p::EncodeFrame(inventory);
     BOOST_REQUIRE(encoded_inventory);
     BOOST_CHECK(cybou::p2p::DecodeFrame(*encoded_inventory)->payload == inventory.payload);
+    const cybou::p2p::Frame block_inventory{cybou::p2p::MessageType::BLOCK_INV,
+        std::vector<unsigned char>(41, 1)};
+    const auto encoded_blocks = cybou::p2p::EncodeFrame(block_inventory);
+    BOOST_REQUIRE(encoded_blocks);
+    BOOST_CHECK(cybou::p2p::DecodeFrame(*encoded_blocks)->payload == block_inventory.payload);
 }
 
 BOOST_AUTO_TEST_CASE(hello_rejects_missing_finalized_tip)
