@@ -483,7 +483,7 @@ BOOST_AUTO_TEST_CASE(manager_submits_canonical_operation_with_separate_acknowled
     BOOST_CHECK(finalized->block.operations.front() == operation);
 }
 
-BOOST_AUTO_TEST_CASE(manager_fans_out_pending_operation_to_two_peers)
+BOOST_AUTO_TEST_CASE(manager_fans_out_recent_operation_after_finality)
 {
     CybouServiceTestFixture fixture;
     auto identity = fixture.CreateIdentity("fanout-source.cybou");
@@ -506,6 +506,9 @@ BOOST_AUTO_TEST_CASE(manager_fans_out_pending_operation_to_two_peers)
     BOOST_REQUIRE(second.InitializeGenesis(fixture.genesis));
     BOOST_REQUIRE(legacy.InitializeGenesis(fixture.genesis));
     BOOST_CHECK(sender.SubmitOperation(operation).status == cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_REQUIRE(sender.ProduceBlock());
+    BOOST_CHECK(sender.SubmitOperation(operation).status == cybou::OperationSubmitStatus::ALREADY_FINALIZED);
+    BOOST_CHECK_EQUAL(sender.RecentOperationsForGossip().size(), 1U);
 
     boost::asio::io_context io;
     using boost::asio::ip::tcp;
@@ -539,9 +542,9 @@ BOOST_AUTO_TEST_CASE(manager_fans_out_pending_operation_to_two_peers)
     BOOST_REQUIRE(peers.Connect(address, first_acceptor.local_endpoint().port()));
     BOOST_REQUIRE(peers.Connect(address, second_acceptor.local_endpoint().port()));
     BOOST_REQUIRE(peers.Connect(address, legacy_acceptor.local_endpoint().port()));
-    BOOST_CHECK_EQUAL(peers.FanoutPending(0), 0U);
-    BOOST_CHECK_EQUAL(peers.FanoutPending(1), 2U);
-    BOOST_CHECK_EQUAL(peers.FanoutPending(1), 0U);
+    BOOST_CHECK_EQUAL(peers.FanoutRecentOperations(0), 0U);
+    BOOST_CHECK_EQUAL(peers.FanoutRecentOperations(1), 2U);
+    BOOST_CHECK_EQUAL(peers.FanoutRecentOperations(1), 0U);
     first_server.join();
     second_server.join();
     legacy_server.join();

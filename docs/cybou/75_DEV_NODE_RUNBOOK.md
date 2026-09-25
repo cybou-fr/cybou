@@ -73,7 +73,7 @@ the CYP2 listener port:
 cybou-node serve network.bin producer-db validator.key 127.0.0.1 29460 1000 29461 peers.txt
 ```
 
-The fanout worker is separate from block production. It announces pending
+The fanout worker is separate from block production. It announces recently admitted
 OperationIDs to connected peers and sends an operation only when requested.
 This currently runs in single-validator Authority Mode; it does not make a
 four-validator BFT cluster operational.

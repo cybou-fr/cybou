@@ -12,10 +12,12 @@
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <filesystem>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -100,7 +102,7 @@ public:
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
     OperationSubmitResult SubmitPeerOperation(ProtocolOperation op, std::string source_peer);
     std::optional<OperationSubmitStatus> KnownOperationStatus(const uint256& op_id) const;
-    std::vector<ProtocolOperation> PendingOperations() const;
+    std::vector<ProtocolOperation> RecentOperationsForGossip() const;
 
     /** Produce a block if running in authority mode */
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);
@@ -128,6 +130,12 @@ public:
 
 private:
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
+    void RememberOperationForGossip(const ProtocolOperation& op, const uint256& id);
+    struct GossipOperation {
+        ProtocolOperation operation;
+        uint256 id;
+        size_t bytes{0};
+    };
     NodeRuntimeConfig m_config;
     uint256 m_network_id;
     std::unique_ptr<CDBWrapper> m_db;
@@ -137,6 +145,9 @@ private:
     std::unique_ptr<p2p::PeerManager> m_peer_manager;
     mutable std::mutex m_p2p_mutex;
     mutable std::mutex m_mutex;
+    std::deque<GossipOperation> m_recent_gossip_operations;
+    std::set<uint256> m_recent_gossip_ids;
+    size_t m_recent_gossip_bytes{0};
 };
 
 } // namespace cybou

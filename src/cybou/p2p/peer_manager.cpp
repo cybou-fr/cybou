@@ -238,14 +238,14 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
     return result;
 }
 
-size_t PeerManager::FanoutPending(size_t max_per_peer)
+size_t PeerManager::FanoutRecentOperations(size_t max_per_peer)
 {
     if (max_per_peer == 0 || max_per_peer > MAX_PENDING_OPERATIONS) return 0;
     for (auto it = m_announced_operations.begin(); it != m_announced_operations.end();) {
         if (!m_peers.contains(it->first)) it = m_announced_operations.erase(it);
         else ++it;
     }
-    const auto pending = m_runtime.PendingOperations();
+    const auto pending = m_runtime.RecentOperationsForGossip();
     std::set<uint256> live_ids;
     for (const auto& operation : pending) {
         const auto id = ComputeOperationId(operation);

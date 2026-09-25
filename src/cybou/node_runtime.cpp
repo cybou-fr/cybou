@@ -134,10 +134,30 @@ std::optional<OperationSubmitStatus> CybouNodeRuntime::KnownOperationStatus(cons
     return std::nullopt;
 }
 
-std::vector<ProtocolOperation> CybouNodeRuntime::PendingOperations() const
+std::vector<ProtocolOperation> CybouNodeRuntime::RecentOperationsForGossip() const
 {
     std::lock_guard lock(m_mutex);
-    return m_authority_node ? m_authority_node->PendingOperations() : std::vector<ProtocolOperation>{};
+    std::vector<ProtocolOperation> operations;
+    operations.reserve(m_recent_gossip_operations.size());
+    for (const auto& entry : m_recent_gossip_operations) operations.push_back(entry.operation);
+    return operations;
+}
+
+void CybouNodeRuntime::RememberOperationForGossip(const ProtocolOperation& op, const uint256& id)
+{
+    if (id.IsNull() || m_recent_gossip_ids.contains(id)) return;
+    const auto encoded = SerializeProtocolOperation(op);
+    if (!encoded || encoded->empty() || encoded->size() > MAX_PENDING_OPERATION_BYTES) return;
+    while (!m_recent_gossip_operations.empty() &&
+        (m_recent_gossip_operations.size() >= MAX_PENDING_OPERATIONS ||
+         encoded->size() > MAX_PENDING_OPERATION_BYTES - m_recent_gossip_bytes)) {
+        m_recent_gossip_bytes -= m_recent_gossip_operations.front().bytes;
+        m_recent_gossip_ids.erase(m_recent_gossip_operations.front().id);
+        m_recent_gossip_operations.pop_front();
+    }
+    m_recent_gossip_operations.push_back({op, id, encoded->size()});
+    m_recent_gossip_ids.insert(id);
+    m_recent_gossip_bytes += encoded->size();
 }
 
 OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
@@ -158,6 +178,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         }
         if (m_authority_node) {
             const auto status = m_authority_node->SubmitOperationWithStatus(op, std::move(source_peer));
+            if (status == OperationSubmitStatus::ACCEPTED) RememberOperationForGossip(op, op_id);
             return OperationSubmitResult{.status = status, .op_id = op_id};
         }
         endpoint = m_submit_endpoint;

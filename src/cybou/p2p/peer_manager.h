@@ -64,8 +64,8 @@ public:
     PeerSubmitResult SubmitOperationToAny(
         const std::vector<std::pair<std::string, uint16_t>>& endpoints,
         const ProtocolOperation& operation);
-    /** Offer each current pending OperationID once per connected peer. */
-    size_t FanoutPending(size_t max_per_peer = 16);
+    /** Offer each recent admitted OperationID once per connected peer. */
+    size_t FanoutRecentOperations(size_t max_per_peer = 16);
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
     void DisconnectAll();
