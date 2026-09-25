@@ -123,6 +123,17 @@ OperationSubmitResult CybouNodeRuntime::SubmitPeerOperation(ProtocolOperation op
     return SubmitOperationInternal(std::move(op), std::move(source_peer));
 }
 
+std::optional<OperationSubmitStatus> CybouNodeRuntime::KnownOperationStatus(const uint256& op_id) const
+{
+    if (op_id.IsNull()) return std::nullopt;
+    std::lock_guard lock(m_mutex);
+    if (m_authority_node && m_authority_node->HasPendingOperation(op_id)) {
+        return OperationSubmitStatus::ALREADY_PENDING;
+    }
+    if (m_store.HasIndexedFinalizedOperation(op_id)) return OperationSubmitStatus::ALREADY_FINALIZED;
+    return std::nullopt;
+}
+
 OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
     ProtocolOperation op, std::optional<std::string> source_peer)
 {

@@ -22,10 +22,12 @@ inline constexpr uint32_t MAX_FRAME_PAYLOAD{4096};
 inline constexpr uint8_t WIRE_VERSION{1};
 inline constexpr uint64_t CAP_SERVE_BLOCKS{1ULL << 0};
 inline constexpr uint64_t CAP_ACCEPT_OPERATIONS{1ULL << 1};
+inline constexpr uint64_t CAP_OP_INVENTORY{1ULL << 2};
 
 enum class MessageType : uint8_t {
     HELLO = 1, PING = 2, PONG = 3, GET_BLOCK = 4, BLOCK_META = 5,
     BLOCK_CHUNK = 6, OP_META = 7, OP_CHUNK = 8, OP_RESULT = 9,
+    OP_INV = 10, GET_OP = 11, OP = 12,
 };
 
 struct Frame {
@@ -77,6 +79,7 @@ public:
     // Callers must verify returned blocks before commit.
     BlockRequestResult RequestBlock(uint64_t height);
     std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation);
+    std::optional<OperationSubmitResult> AdvertiseOperation(const ProtocolOperation& operation);
     bool ServeNext(CybouNodeRuntime& runtime);
     const std::optional<Hello>& Peer() const { return m_peer; }
     boost::asio::ip::tcp::socket& Socket() { return m_socket; }

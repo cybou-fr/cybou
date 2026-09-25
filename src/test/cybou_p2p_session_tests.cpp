@@ -27,6 +27,11 @@ BOOST_AUTO_TEST_CASE(frame_rejects_bad_size_and_version)
     BOOST_CHECK(!cybou::p2p::DecodeFrame(bad));
     BOOST_CHECK(!cybou::p2p::EncodeFrame({cybou::p2p::MessageType::PING,
         std::vector<unsigned char>(cybou::p2p::MAX_FRAME_PAYLOAD + 1)}));
+    const cybou::p2p::Frame inventory{cybou::p2p::MessageType::OP_INV,
+        std::vector<unsigned char>(32, 1)};
+    const auto encoded_inventory = cybou::p2p::EncodeFrame(inventory);
+    BOOST_REQUIRE(encoded_inventory);
+    BOOST_CHECK(cybou::p2p::DecodeFrame(*encoded_inventory)->payload == inventory.payload);
 }
 
 BOOST_AUTO_TEST_CASE(hello_rejects_missing_finalized_tip)

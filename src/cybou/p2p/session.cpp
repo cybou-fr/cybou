@@ -43,7 +43,7 @@ uint32_t Read32(const unsigned char* data)
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
     if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
-        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 9)) return std::nullopt;
+        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 12)) return std::nullopt;
     std::vector<unsigned char> bytes{'C', 'Y', 'P', '2', WIRE_VERSION, static_cast<unsigned char>(frame.type)};
     const auto size = static_cast<uint32_t>(frame.payload.size());
     for (int i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(size >> (8 * i)));
@@ -54,7 +54,7 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < HEADER_SIZE || !std::equal(bytes.begin(), bytes.begin() + 4, "CYP2") ||
-        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 9) return std::nullopt;
+        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 12) return std::nullopt;
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[6 + i]} << (8 * i);
     if (size > MAX_FRAME_PAYLOAD || bytes.size() != HEADER_SIZE + size) return std::nullopt;
@@ -158,7 +158,7 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     std::array<unsigned char, HEADER_SIZE> header{};
     if (!ReadExact(header.data(), header.size(), deadline)) return std::nullopt;
     if (!std::equal(header.begin(), header.begin() + 4, "CYP2") ||
-        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 9) {
+        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 12) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
         return std::nullopt;
     }
@@ -275,6 +275,45 @@ std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const Protocol
         .op_id = *op_id};
 }
 
+std::optional<OperationSubmitResult> PeerSession::AdvertiseOperation(const ProtocolOperation& operation)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_ACCEPT_OPERATIONS) ||
+        !(m_peer->capabilities & CAP_OP_INVENTORY)) return std::nullopt;
+    const auto id = ComputeOperationId(operation);
+    const auto bytes = SerializeProtocolOperation(operation);
+    if (!id || id->IsNull() || !bytes || bytes->empty() ||
+        bytes->size() > MAX_OPERATION_PAYLOAD_BYTES) return std::nullopt;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!Write(Frame{MessageType::OP_INV, {id->begin(), id->end()}}, deadline)) return std::nullopt;
+    const auto answer = Read(deadline);
+    if (!answer) return std::nullopt;
+    if (answer->type == MessageType::OP_RESULT) {
+        if (answer->payload.size() != 33 ||
+            !std::equal(id->begin(), id->end(), answer->payload.begin() + 1) ||
+            (answer->payload[0] != static_cast<uint8_t>(OperationSubmitStatus::ALREADY_PENDING) &&
+             answer->payload[0] != static_cast<uint8_t>(OperationSubmitStatus::ALREADY_FINALIZED))) return std::nullopt;
+        return OperationSubmitResult{.status = static_cast<OperationSubmitStatus>(answer->payload[0]), .op_id = *id};
+    }
+    if (answer->type != MessageType::GET_OP || answer->payload.size() != 32 ||
+        !std::equal(id->begin(), id->end(), answer->payload.begin())) return std::nullopt;
+
+    std::vector<unsigned char> first;
+    Put32(first, static_cast<uint32_t>(bytes->size()));
+    const size_t first_count = std::min<size_t>(bytes->size(), MAX_FRAME_PAYLOAD - 4);
+    first.insert(first.end(), bytes->begin(), bytes->begin() + first_count);
+    if (!Write(Frame{MessageType::OP, std::move(first)}, deadline)) return std::nullopt;
+    for (size_t offset = first_count; offset < bytes->size(); offset += MAX_FRAME_PAYLOAD) {
+        const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, bytes->size() - offset);
+        if (!Write(Frame{MessageType::OP,
+            {bytes->begin() + offset, bytes->begin() + offset + count}}, deadline)) return std::nullopt;
+    }
+    const auto result = Read(deadline);
+    if (!result || result->type != MessageType::OP_RESULT || result->payload.size() != 33 ||
+        result->payload[0] > static_cast<uint8_t>(OperationSubmitStatus::NETWORK_MISMATCH) ||
+        !std::equal(id->begin(), id->end(), result->payload.begin() + 1)) return std::nullopt;
+    return OperationSubmitResult{.status = static_cast<OperationSubmitStatus>(result->payload[0]), .op_id = *id};
+}
+
 bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
 {
     if (!m_peer) return false;
@@ -282,6 +321,40 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     if (!request) return false;
     if (request->type == MessageType::PING) {
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});
+    }
+    if (request->type == MessageType::OP_INV) {
+        if (!(m_local_capabilities & CAP_ACCEPT_OPERATIONS) ||
+            !(m_local_capabilities & CAP_OP_INVENTORY) || request->payload.size() != 32) return false;
+        uint256 id;
+        std::copy(request->payload.begin(), request->payload.end(), id.begin());
+        if (id.IsNull()) return false;
+        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        if (const auto known = runtime.KnownOperationStatus(id)) {
+            std::vector<unsigned char> response{static_cast<unsigned char>(*known)};
+            response.insert(response.end(), id.begin(), id.end());
+            return Write(Frame{MessageType::OP_RESULT, response}, deadline);
+        }
+        if (!Write(Frame{MessageType::GET_OP, request->payload}, deadline)) return false;
+        const auto first = Read(deadline);
+        if (!first || first->type != MessageType::OP || first->payload.size() < 5) return false;
+        const uint32_t size = Read32(first->payload.data());
+        if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES || first->payload.size() - 4 > size) return false;
+        std::vector<unsigned char> bytes{first->payload.begin() + 4, first->payload.end()};
+        while (bytes.size() < size) {
+            const auto chunk = Read(deadline);
+            if (!chunk || chunk->type != MessageType::OP || chunk->payload.empty() ||
+                chunk->payload.size() > size - bytes.size()) return false;
+            bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
+        }
+        const auto operation = DeserializeProtocolOperation(bytes);
+        if (!operation || ComputeOperationId(*operation) != id) return false;
+        boost::system::error_code endpoint_error;
+        const auto endpoint = m_socket.remote_endpoint(endpoint_error);
+        if (endpoint_error) return false;
+        const auto result = runtime.SubmitPeerOperation(*operation, endpoint.address().to_string());
+        std::vector<unsigned char> response{static_cast<unsigned char>(result.status)};
+        response.insert(response.end(), result.op_id.begin(), result.op_id.end());
+        return Write(Frame{MessageType::OP_RESULT, response}, deadline);
     }
     if (request->type == MessageType::OP_META) {
         if (!(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) return false;

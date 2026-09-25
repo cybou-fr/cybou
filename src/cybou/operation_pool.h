@@ -42,6 +42,7 @@ public:
     void Clear();
     size_t Size() const { return m_entries.size(); }
     size_t Bytes() const { return m_bytes; }
+    bool Contains(const uint256& id) const { return m_ids.contains(id); }
 
 private:
     struct Entry {

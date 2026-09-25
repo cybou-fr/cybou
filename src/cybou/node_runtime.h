@@ -99,6 +99,7 @@ public:
     /** Submit an operation to pending pool (producer) or direct execution */
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
     OperationSubmitResult SubmitPeerOperation(ProtocolOperation op, std::string source_peer);
+    std::optional<OperationSubmitStatus> KnownOperationStatus(const uint256& op_id) const;
 
     /** Produce a block if running in authority mode */
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);

@@ -159,7 +159,9 @@ OperationSubmitResult PeerManager::SubmitOperation(const std::string& numeric_ad
     const Endpoint endpoint{address.to_string(), port};
     auto it = m_peers.find(endpoint);
     if (it == m_peers.end()) return failure;
-    const auto result = it->second->SubmitOperation(operation);
+    const auto result = (it->second->Peer() &&
+        (it->second->Peer()->capabilities & CAP_OP_INVENTORY)) ?
+        it->second->AdvertiseOperation(operation) : it->second->SubmitOperation(operation);
     if (!result) {
         m_peers.erase(it);
         return failure;
@@ -189,7 +191,8 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
         }
         if (it == m_peers.end() || !it->second->Peer() ||
             !(it->second->Peer()->capabilities & CAP_ACCEPT_OPERATIONS)) continue;
-        const auto acknowledgment = it->second->SubmitOperation(operation);
+        const auto acknowledgment = (it->second->Peer()->capabilities & CAP_OP_INVENTORY) ?
+            it->second->AdvertiseOperation(operation) : it->second->SubmitOperation(operation);
         if (!acknowledgment) {
             result.delivery_uncertain = true;
             m_peers.erase(it);

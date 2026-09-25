@@ -28,7 +28,8 @@ std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
     if (nonce == 0) return std::nullopt;
     return Hello{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip,
-        .capabilities = CAP_SERVE_BLOCKS | (status.is_authority ? CAP_ACCEPT_OPERATIONS : 0),
+        .capabilities = CAP_SERVE_BLOCKS |
+            (status.is_authority ? CAP_ACCEPT_OPERATIONS | CAP_OP_INVENTORY : 0),
         .nonce = nonce};
 }
 

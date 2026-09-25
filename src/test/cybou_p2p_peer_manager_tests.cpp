@@ -391,7 +391,8 @@ BOOST_AUTO_TEST_CASE(manager_submits_canonical_operation_with_separate_acknowled
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket)};
         served = session.Handshake({.network_id = network, .finalized_height = 0,
-            .finalized_tip = fixture.definition.genesis_block_id, .capabilities = cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 105}) &&
+            .finalized_tip = fixture.definition.genesis_block_id,
+            .capabilities = cybou::p2p::CAP_ACCEPT_OPERATIONS | cybou::p2p::CAP_OP_INVENTORY, .nonce = 105}) &&
             session.ServeNext(receiver) && session.ServeNext(receiver);
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
