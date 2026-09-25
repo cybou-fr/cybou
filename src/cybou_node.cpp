@@ -447,6 +447,14 @@ int Main(const int argc, char* argv[])
         }
         const auto gossip_endpoints = argc == 10 ? ReadPeerEndpoints(argv[9]) :
             std::vector<std::pair<std::string, uint16_t>>{};
+        if (val_set->validators.size() > 1) {
+            if (!p2p_server || argc != 10) {
+                throw std::runtime_error("multi-validator serve requires a CYP2 listener and peer list");
+            }
+            if (gossip_endpoints.size() < val_set->validators.size() - 1) {
+                throw std::runtime_error("multi-validator peer list must contain at least N-1 endpoints");
+            }
+        }
         if (argc == 10) {
             const auto bind_address = boost::asio::ip::make_address(argv[5]);
             const auto own_port = Port(argv[8]);
@@ -497,9 +505,12 @@ int Main(const int argc, char* argv[])
                         return peer.address == host && peer.port == peer_port;
                     });
                     const auto endpoint = std::make_pair(host, peer_port);
-                    if (!present && std::chrono::steady_clock::now() >= retry_after[endpoint] &&
-                        !peers.Connect(host, peer_port)) {
-                        retry_after[endpoint] = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+                    if (!present && std::chrono::steady_clock::now() >= retry_after[endpoint]) {
+                        if (peers.Connect(host, peer_port)) {
+                            runtime.ReplayConsensusToPeer(peers, host, peer_port);
+                        } else {
+                            retry_after[endpoint] = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+                        }
                     }
                 }
                 if (!stopping) {

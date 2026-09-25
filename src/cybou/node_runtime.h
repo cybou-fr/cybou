@@ -119,6 +119,7 @@ public:
     void TickConsensus(std::chrono::milliseconds round_timeout);
     /** Called only by the outbound peer worker, which owns its sessions. */
     void DrainConsensusMessages(p2p::PeerManager& peers);
+    void ReplayConsensusToPeer(p2p::PeerManager& peers, const std::string& address, uint16_t port);
     void BroadcastConsensusProposal(const BftProposalMsg& proposal);
     void BroadcastConsensusPrevote(const BftPrevoteMsg& prevote);
     void BroadcastConsensusPrecommit(const BftPrecommitMsg& precommit);
@@ -164,6 +165,11 @@ private:
     mutable std::mutex m_p2p_mutex;
     using ConsensusMessage = std::variant<BftProposalMsg, BftPrevoteMsg, BftPrecommitMsg>;
     std::deque<ConsensusMessage> m_consensus_outbox;
+    std::optional<BftProposalMsg> m_replay_proposal;
+    std::optional<BftPrevoteMsg> m_replay_prevote;
+    std::optional<BftPrecommitMsg> m_replay_precommit;
+    uint64_t m_replay_height{0};
+    uint32_t m_replay_round{0};
     uint64_t m_consensus_height{0};
     uint32_t m_consensus_round{0};
     uint8_t m_consensus_phase{0}; // propose, prevote, precommit

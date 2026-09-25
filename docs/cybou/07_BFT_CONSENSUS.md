@@ -6,8 +6,12 @@ verification are tested across validator-set sizes. The standalone
 the outbound CYP2 worker, and has a socket integration test for 3/4 finality
 after the round-0 leader is unavailable. The test uses explicit peer
 configuration. The socket test also covers verified catch-up, outbound
-disconnect/reconnect, and the next height's 4/4 finality. Restart after a
-prevote or precommit still abstains on the unfinished height because the
+disconnect/reconnect, and the next height's 4/4 finality.
+Signed proposals from the elected leader can advance a validator up to two
+rounds ahead of its local timer; invalid signatures cannot advance the round.
+Receiving a proposal or producing a precommit advances the local timeout
+phase immediately. A validator restarted after a prevote or precommit still
+abstains on the unfinished height because the
 signing journal does not persist lock and vote state. Socket tests now recreate
 the validator runtime with its persistent database and journal at each step,
 verify 3/4 finality, and catch up the restarted validator over CYP2. The socket

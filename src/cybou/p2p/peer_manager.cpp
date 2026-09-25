@@ -366,6 +366,27 @@ void PeerManager::DisconnectAll()
     m_announced_blocks.clear();
 }
 
+bool PeerManager::SendConsensusTo(const std::string& address, uint16_t port,
+    const std::optional<BftProposalMsg>& proposal,
+    const std::optional<BftPrevoteMsg>& prevote,
+    const std::optional<BftPrecommitMsg>& precommit)
+{
+    const Endpoint endpoint{address, port};
+    const auto it = m_peers.find(endpoint);
+    if (it == m_peers.end() || !it->second || !it->second->Peer() ||
+        !(it->second->Peer()->capabilities & CAP_CONSENSUS)) return false;
+    auto& session = *it->second;
+    if ((proposal && !session.SendProposal(*proposal)) ||
+        (prevote && !session.SendPrevote(*prevote)) ||
+        (precommit && !session.SendPrecommit(*precommit))) {
+        m_peers.erase(it);
+        m_announced_operations.erase(endpoint);
+        m_announced_blocks.erase(endpoint);
+        return false;
+    }
+    return true;
+}
+
 size_t PeerManager::BroadcastProposal(const BftProposalMsg& proposal)
 {
     size_t count{0};

@@ -283,7 +283,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
             .arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
         phrase_row->addWidget(phrase_label);
         phrase_row->addStretch();
-        phrase_row->addWidget(Pill(tr("Backed up and protected"), Tint::Mint, recovery), 0, Qt::AlignVCenter);
+        phrase_row->addWidget(Pill(tr("Encrypted vault saved"), Tint::Mint, recovery), 0, Qt::AlignVCenter);
         recovery_layout->addLayout(phrase_row);
         recovery_layout->addStretch();
         auto* options = new QPushButton{tr("Show recovery phrase"), recovery};
@@ -573,9 +573,8 @@ void IdentityPage::startShowRecoveryFlow()
     auto* service = m_model->identityService();
     if (!service) return;
 
-    // The keystore only holds the material after an unlock in this session
-    // (or right after creation). Otherwise ask for the vault password.
-    if (!service->GetKeyStore().HasKey()) {
+    // Require the vault password every time recovery words are revealed.
+    {
         bool accepted{false};
         QString password = QInputDialog::getText(this, tr("Identity vault"),
             tr("Identity vault password"), QLineEdit::Password, {}, &accepted);

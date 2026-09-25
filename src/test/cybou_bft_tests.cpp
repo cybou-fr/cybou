@@ -895,6 +895,48 @@ BOOST_AUTO_TEST_CASE(bft_round_bound_signatures_and_replay_rejection)
                 cybou::FinalityVerificationError::NONE);
 }
 
+BOOST_AUTO_TEST_CASE(bft_signed_future_proposal_synchronizes_round)
+{
+    const uint256 network_id = uint256::FromUserHex("cafe").value();
+    std::array<MockValidatorNode, 4> keys{
+        MockValidatorNode::Create(0), MockValidatorNode::Create(1),
+        MockValidatorNode::Create(2), MockValidatorNode::Create(3)};
+    cybou::ValidatorSet set;
+    for (const auto& key : keys) {
+        set.validators.push_back(cybou::Validator{
+            .validator_id = key.validator_id,
+            .consensus_public_key = key.consensus_pubkey,
+            .weight = 1,
+        });
+    }
+    auto execute = [](const std::vector<cybou::ProtocolOperation>&, uint64_t) {
+        return uint256::FromUserHex("1111");
+    };
+    const size_t leader = cybou::BftLeaderIndex(1, 1, set.validators.size());
+    const size_t follower = (leader + 1) % set.validators.size();
+    cybou::BftValidatorNode proposer{leader, keys[leader].seed, network_id, set, execute};
+    cybou::BftValidatorNode receiver{follower, keys[follower].seed, network_id, set, execute};
+    proposer.SetHeight(1, uint256::ZERO, set);
+    receiver.SetHeight(1, uint256::ZERO, set);
+    const auto proposal = proposer.StartRound(1, {});
+    BOOST_REQUIRE(proposal);
+    BOOST_CHECK(!receiver.GetValidatorId().IsNull());
+    BOOST_CHECK(cybou::VerifyValidatorSignature(
+        set.validators[leader].consensus_public_key, proposal->signature,
+        cybou::ComputeProposalDigest(network_id, 1, 1, proposal->proposer_id,
+            cybou::ComputeBlockId(proposal->block))));
+    auto forged = *proposal;
+    forged.signature.ed25519.fill(0);
+    forged.signature.ml_dsa.clear();
+    BOOST_CHECK(!receiver.ReceiveProposal(forged));
+    BOOST_CHECK_EQUAL(receiver.GetRound(), 0U);
+    const auto vote = receiver.ReceiveProposal(*proposal);
+    BOOST_CHECK_EQUAL(receiver.GetRound(), 1U);
+    BOOST_REQUIRE(vote);
+    BOOST_CHECK_EQUAL(vote->round, 1U);
+    BOOST_CHECK_EQUAL(receiver.GetRound(), 1U);
+}
+
 BOOST_AUTO_TEST_CASE(bft_adversarial_split_prevotes_round_recovery)
 {
     // N=4 network: Quorum = 3.

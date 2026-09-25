@@ -75,6 +75,11 @@ public:
     size_t BroadcastProposal(const BftProposalMsg& proposal);
     size_t BroadcastPrevote(const BftPrevoteMsg& prevote);
     size_t BroadcastPrecommit(const BftPrecommitMsg& precommit);
+    /** Replay current-round messages to one newly connected peer. */
+    bool SendConsensusTo(const std::string& address, uint16_t port,
+        const std::optional<BftProposalMsg>& proposal,
+        const std::optional<BftPrevoteMsg>& prevote,
+        const std::optional<BftPrecommitMsg>& precommit);
 
 private:
     using Endpoint = std::pair<std::string, uint16_t>;

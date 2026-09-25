@@ -585,22 +585,36 @@ std::optional<BftProposalMsg> BftValidatorNode::StartRound(
 
 std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposalMsg& proposal)
 {
-    if (m_prevoted) return std::nullopt;
-    if (proposal.network_id != m_network_id || proposal.height != m_height || proposal.round != m_round) {
+    if (proposal.network_id != m_network_id || proposal.height != m_height ||
+        proposal.round < m_round || proposal.round - m_round > 2) {
         return std::nullopt;
     }
 
-    const size_t leader_idx = BftLeaderIndex(m_height, m_round, m_validator_set.validators.size());
+    const size_t leader_idx = BftLeaderIndex(m_height, proposal.round, m_validator_set.validators.size());
     if (leader_idx >= m_validator_set.validators.size()) return std::nullopt;
     if (proposal.proposer_id != m_validator_set.validators[leader_idx].validator_id) {
         return std::nullopt;
     }
 
     const uint256 block_id = ComputeBlockId(proposal.block);
-    const uint256 digest = ComputeProposalDigest(m_network_id, m_height, m_round, proposal.proposer_id, block_id);
+    const uint256 digest = ComputeProposalDigest(m_network_id, m_height, proposal.round, proposal.proposer_id, block_id);
     if (!VerifyValidatorSignature(m_validator_set.validators[leader_idx].consensus_public_key, proposal.signature, digest)) {
         return std::nullopt;
     }
+
+    // A signed proposal from the elected leader is evidence of a later round.
+    // Preserve any block lock while discarding only the older round's votes.
+    if (proposal.round > m_round) {
+        m_round = proposal.round;
+        m_step = BftStep::PROPOSE;
+        m_current_proposal.reset();
+        m_current_proposal_valid = false;
+        m_prevotes.clear();
+        m_precommits.clear();
+        m_prevoted = false;
+        m_precommitted = false;
+    }
+    if (m_prevoted) return std::nullopt;
 
     bool valid_block = (proposal.block.height == m_height && proposal.block.parent_block_id == m_last_block_id);
     const auto computed_root = m_execute_operations ? m_execute_operations(proposal.block.operations, m_height) : std::nullopt;

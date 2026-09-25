@@ -323,11 +323,13 @@ std::optional<BftPrevoteMsg> CybouNodeRuntime::ReceiveConsensusProposal(const Bf
             if (m_consensus_height != proposal.height || m_consensus_round != proposal.round) {
                 m_consensus_height = proposal.height;
                 m_consensus_round = proposal.round;
-                m_consensus_phase = 0;
-                m_round_started = std::chrono::steady_clock::now();
             }
+            m_consensus_phase = 1;
+            m_round_started = std::chrono::steady_clock::now();
             pc = m_authority_node->ReceivePrevote(*pv);
             if (pc) {
+                m_consensus_phase = 2;
+                m_round_started = std::chrono::steady_clock::now();
                 CommitConsensusPrecommit(*pc);
             }
         }
@@ -345,6 +347,8 @@ std::optional<BftPrecommitMsg> CybouNodeRuntime::ReceiveConsensusPrevote(const B
         if (!m_authority_node) return std::nullopt;
         pc = m_authority_node->ReceivePrevote(prevote);
         if (pc) {
+            m_consensus_phase = 2;
+            m_round_started = std::chrono::steady_clock::now();
             CommitConsensusPrecommit(*pc);
         }
     }
@@ -374,6 +378,13 @@ bool CybouNodeRuntime::CommitConsensusPrecommit(const BftPrecommitMsg& precommit
 void CybouNodeRuntime::BroadcastConsensusProposal(const BftProposalMsg& proposal)
 {
     std::lock_guard lock(m_p2p_mutex);
+    if (m_replay_height != proposal.height || m_replay_round != proposal.round) {
+        m_replay_prevote.reset();
+        m_replay_precommit.reset();
+    }
+    m_replay_height = proposal.height;
+    m_replay_round = proposal.round;
+    m_replay_proposal = proposal;
     // Keep at most one potentially large block in the outbound queue.
     std::erase_if(m_consensus_outbox, [](const ConsensusMessage& message) {
         return std::holds_alternative<BftProposalMsg>(message);
@@ -384,13 +395,50 @@ void CybouNodeRuntime::BroadcastConsensusProposal(const BftProposalMsg& proposal
 void CybouNodeRuntime::BroadcastConsensusPrevote(const BftPrevoteMsg& prevote)
 {
     std::lock_guard lock(m_p2p_mutex);
+    if (m_replay_height != prevote.height || m_replay_round != prevote.round) {
+        m_replay_proposal.reset();
+        m_replay_precommit.reset();
+    }
+    m_replay_height = prevote.height;
+    m_replay_round = prevote.round;
+    m_replay_prevote = prevote;
     if (m_consensus_outbox.size() < 256) m_consensus_outbox.emplace_back(prevote);
 }
 
 void CybouNodeRuntime::BroadcastConsensusPrecommit(const BftPrecommitMsg& precommit)
 {
     std::lock_guard lock(m_p2p_mutex);
+    if (m_replay_height != precommit.height || m_replay_round != precommit.round) {
+        m_replay_proposal.reset();
+        m_replay_prevote.reset();
+    }
+    m_replay_height = precommit.height;
+    m_replay_round = precommit.round;
+    m_replay_precommit = precommit;
     if (m_consensus_outbox.size() < 256) m_consensus_outbox.emplace_back(precommit);
+}
+
+void CybouNodeRuntime::ReplayConsensusToPeer(p2p::PeerManager& peers,
+    const std::string& address, uint16_t port)
+{
+    uint64_t height;
+    uint32_t round;
+    {
+        std::lock_guard lock(m_mutex);
+        height = m_consensus_height;
+        round = m_consensus_round;
+    }
+    std::optional<BftProposalMsg> proposal;
+    std::optional<BftPrevoteMsg> prevote;
+    std::optional<BftPrecommitMsg> precommit;
+    {
+        std::lock_guard lock(m_p2p_mutex);
+        if (height != m_replay_height || round != m_replay_round) return;
+        proposal = m_replay_proposal;
+        prevote = m_replay_prevote;
+        precommit = m_replay_precommit;
+    }
+    peers.SendConsensusTo(address, port, proposal, prevote, precommit);
 }
 
 void CybouNodeRuntime::DrainConsensusMessages(p2p::PeerManager& peers)
