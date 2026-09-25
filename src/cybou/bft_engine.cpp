@@ -614,6 +614,8 @@ void BftValidatorNode::SetHeight(uint64_t height, const uint256& last_block_id, 
     m_prevotes.clear();
     m_precommits.clear();
     m_finalized_block.reset();
+    m_future_prevotes.clear();
+    m_future_precommits.clear();
 
     if (m_restarted && m_has_signed && height == m_last_signed_height) {
         m_round = m_last_signed_round;
@@ -646,14 +648,7 @@ std::optional<BftProposalMsg> BftValidatorNode::StartRound(
           !m_prevotes.empty() || !m_precommits.empty() || m_step == BftStep::FINALIZED))) {
         return std::nullopt;
     }
-    m_round = round;
-    m_step = BftStep::PROPOSE;
-    m_current_proposal.reset();
-    m_current_proposal_valid = false;
-    m_prevotes.clear();
-    m_precommits.clear();
-    m_prevoted = false;
-    m_precommitted = false;
+    EnterRound(round);
     m_finalized_block.reset();
 
     if (BftLeaderIndex(m_height, m_round, m_validator_set.validators.size()) != m_node_index) {
@@ -697,6 +692,63 @@ std::optional<BftProposalMsg> BftValidatorNode::StartRound(
     return proposal;
 }
 
+void BftValidatorNode::EnterRound(uint32_t round)
+{
+    m_round = round;
+    m_step = BftStep::PROPOSE;
+    m_current_proposal.reset();
+    m_current_proposal_valid = false;
+    m_prevotes.clear();
+    m_precommits.clear();
+    m_prevoted = false;
+    m_precommitted = false;
+    // Buffered future votes at or below the new round are stale forever.
+    const auto stale_prevotes = m_future_prevotes.upper_bound(round);
+    m_future_prevotes.erase(m_future_prevotes.begin(), stale_prevotes);
+    const auto stale_precommits = m_future_precommits.upper_bound(round);
+    m_future_precommits.erase(m_future_precommits.begin(), stale_precommits);
+}
+
+void BftValidatorNode::BufferFuturePrevote(const BftPrevoteMsg& prevote)
+{
+    auto& votes = m_future_prevotes[prevote.round];
+    votes[prevote.validator_id] = prevote;
+    // Cap the number of buffered rounds; drop the highest (least useful)
+    // rounds first. Honest gradual round movement never relies on the
+    // buffer, only on the MAX_FUTURE_ROUND_ADVANCE window.
+    while (m_future_prevotes.size() > MAX_BUFFERED_FUTURE_ROUNDS) {
+        m_future_prevotes.erase(std::prev(m_future_prevotes.end()));
+    }
+}
+
+void BftValidatorNode::BufferFuturePrecommit(const BftPrecommitMsg& precommit)
+{
+    auto& votes = m_future_precommits[precommit.round];
+    votes[precommit.validator_id] = precommit;
+    while (m_future_precommits.size() > MAX_BUFFERED_FUTURE_ROUNDS) {
+        m_future_precommits.erase(std::prev(m_future_precommits.end()));
+    }
+}
+
+uint32_t BftValidatorNode::QuorumBackedFutureRound() const
+{
+    const size_t quorum = m_validator_set.QuorumThreshold();
+    uint32_t best{0};
+    for (const auto& [round, votes] : m_future_prevotes) {
+        if (round > m_round && votes.size() >= quorum) {
+            best = round;
+            break;
+        }
+    }
+    for (const auto& [round, votes] : m_future_precommits) {
+        if (round > m_round && round < (best ? best : UINT32_MAX) && votes.size() >= quorum) {
+            best = round;
+            break;
+        }
+    }
+    return best;
+}
+
 std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposalMsg& proposal)
 {
     if (proposal.network_id != m_network_id || proposal.height != m_height ||
@@ -719,14 +771,7 @@ std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposal
     // A signed proposal from the elected leader is evidence of a later round.
     // Preserve any block lock while discarding only the older round's votes.
     if (proposal.round > m_round) {
-        m_round = proposal.round;
-        m_step = BftStep::PROPOSE;
-        m_current_proposal.reset();
-        m_current_proposal_valid = false;
-        m_prevotes.clear();
-        m_precommits.clear();
-        m_prevoted = false;
-        m_precommitted = false;
+        EnterRound(proposal.round);
     }
     if (m_prevoted) return std::nullopt;
 
@@ -779,19 +824,27 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
 
     if (prevote.round < m_round) return std::nullopt;
     if (prevote.round > m_round) {
-        // Round synchronization: a validator-signed prevote from a higher
-        // round is evidence the network moved past us. Jump to that round
-        // (locks are preserved) so diverged round clocks reconverge instead
-        // of starving finality. Jumps only ever go forward, and only on
-        // signatures verified against the canonical validator set.
-        m_round = prevote.round;
-        m_step = BftStep::PROPOSE;
-        m_current_proposal.reset();
-        m_current_proposal_valid = false;
-        m_prevotes.clear();
-        m_precommits.clear();
-        m_prevoted = false;
-        m_precommitted = false;
+        // Round synchronization with Byzantine safety:
+        // - a single validator-signed vote advances the round by at most
+        //   MAX_FUTURE_ROUND_ADVANCE (same window as proposals);
+        // - a larger jump requires quorum evidence: >= QuorumThreshold
+        //   verified votes for one future round, buffered until then.
+        // One Byzantine validator therefore cannot drag honest nodes to an
+        // absurd round with a lone signed message.
+        if (prevote.round > m_round + MAX_FUTURE_ROUND_ADVANCE) {
+            BufferFuturePrevote(prevote);
+        }
+        const uint32_t evidence_round = QuorumBackedFutureRound();
+        if (evidence_round > m_round) {
+            EnterRound(evidence_round);
+            for (const auto& [vid, msg] : m_future_prevotes[evidence_round]) {
+                m_prevotes.emplace(vid, msg);
+            }
+        } else if (prevote.round <= m_round + MAX_FUTURE_ROUND_ADVANCE) {
+            EnterRound(prevote.round);
+        } else {
+            return std::nullopt;
+        }
     }
 
     if (const auto existing = m_prevotes.find(prevote.validator_id);
@@ -910,16 +963,22 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
 
     if (precommit.round < m_round) return false;
     if (precommit.round > m_round) {
-        // Round synchronization, same rule as ReceivePrevote: verified
-        // validator-signed evidence from a higher round pulls us forward.
-        m_round = precommit.round;
-        m_step = BftStep::PROPOSE;
-        m_current_proposal.reset();
-        m_current_proposal_valid = false;
-        m_prevotes.clear();
-        m_precommits.clear();
-        m_prevoted = false;
-        m_precommitted = false;
+        // Round synchronization, same Byzantine-safe rule as ReceivePrevote:
+        // bounded single-vote advance, quorum-backed jump via the buffer.
+        if (precommit.round > m_round + MAX_FUTURE_ROUND_ADVANCE) {
+            BufferFuturePrecommit(precommit);
+        }
+        const uint32_t evidence_round = QuorumBackedFutureRound();
+        if (evidence_round > m_round) {
+            EnterRound(evidence_round);
+            for (const auto& [vid, msg] : m_future_precommits[evidence_round]) {
+                m_precommits.emplace(vid, msg);
+            }
+        } else if (precommit.round <= m_round + MAX_FUTURE_ROUND_ADVANCE) {
+            EnterRound(precommit.round);
+        } else {
+            return false;
+        }
     }
 
     if (const auto existing = m_precommits.find(precommit.validator_id);

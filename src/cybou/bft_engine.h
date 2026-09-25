@@ -212,6 +212,26 @@ private:
     bool m_restarted_cbs1{false};
     std::optional<CybouBlock> m_recovered_locked_block;
     int32_t m_recovered_locked_round{-1};
+
+    // Future-round vote buffering. A single validator-signed vote may advance
+    // the round by at most MAX_FUTURE_ROUND_ADVANCE; anything further requires
+    // multi-validator evidence (>= QuorumThreshold verified votes for one
+    // future round). Votes beyond the window are buffered here until that
+    // evidence arrives, so one Byzantine validator cannot drag honest nodes
+    // to an absurd round with a lone signed message.
+    static constexpr size_t MAX_BUFFERED_FUTURE_ROUNDS = 64;
+    std::map<uint32_t, std::map<uint256, BftPrevoteMsg>> m_future_prevotes;
+    std::map<uint32_t, std::map<uint256, BftPrecommitMsg>> m_future_precommits;
+
+    // Round transition shared by proposal/vote paths: locks are preserved,
+    // only the current round's ephemeral state is discarded.
+    void EnterRound(uint32_t round);
+    void BufferFuturePrevote(const BftPrevoteMsg& prevote);
+    void BufferFuturePrecommit(const BftPrecommitMsg& precommit);
+    // Lowest buffered future round (strictly above m_round) that has quorum
+    // evidence, or 0 if there is none.
+    uint32_t QuorumBackedFutureRound() const;
+
     bool RecordSigningIntent(BftStep step, const uint256& digest);
 };
 

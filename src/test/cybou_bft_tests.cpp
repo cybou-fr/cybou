@@ -1457,4 +1457,160 @@ BOOST_AUTO_TEST_CASE(bft_prevote_all_voted_without_quorum_precommits_nil)
     BOOST_CHECK(node0.GetStep() == cybou::BftStep::PRECOMMIT);
 }
 
+BOOST_AUTO_TEST_CASE(bft_byzantine_extreme_round_votes_cannot_drag_honest_quorum)
+{
+    // N=4 (quorum 3). Validator 0 is Byzantine and floods properly signed
+    // prevote/precommit messages at round UINT32_MAX. The three honest
+    // validators must ignore the round drag, stay within the single-vote
+    // advance window, and finalize the height on their own.
+    const uint256 network_id = uint256::FromUserHex("cafe").value();
+    std::vector<MockValidatorNode> mocks;
+    cybou::ValidatorSet val_set;
+    for (uint8_t i = 0; i < 4; ++i) {
+        mocks.push_back(MockValidatorNode::Create(i));
+        val_set.validators.push_back(cybou::Validator{
+            .validator_id = mocks.back().validator_id,
+            .consensus_public_key = mocks.back().consensus_pubkey,
+            .weight = 1,
+        });
+    }
+    const uint256 val_set_commitment = cybou::ComputeValidatorSetCommitment(val_set);
+    const uint32_t extreme_round = std::numeric_limits<uint32_t>::max();
+    const uint256 bogus_block = uint256::FromUserHex("dead").value();
+
+    const uint256 extreme_pv_digest = cybou::ComputePrevoteDigest(
+        network_id, 1, extreme_round, mocks[0].validator_id, bogus_block);
+    const cybou::BftPrevoteMsg extreme_pv{
+        .network_id = network_id, .height = 1, .round = extreme_round,
+        .validator_id = mocks[0].validator_id, .block_id = bogus_block,
+        .signature = *cybou::SignValidatorVote(mocks[0].seed, extreme_pv_digest),
+    };
+    const uint256 extreme_pc_digest = cybou::ComputeBftCommitDigest(
+        network_id, bogus_block, 1, extreme_round, val_set_commitment);
+    const cybou::BftPrecommitMsg extreme_pc{
+        .network_id = network_id, .height = 1, .round = extreme_round,
+        .validator_id = mocks[0].validator_id, .block_id = bogus_block,
+        .signature = *cybou::SignValidatorVote(mocks[0].seed, extreme_pc_digest),
+    };
+
+    auto execute = [](const std::vector<cybou::ProtocolOperation>&, uint64_t) {
+        return uint256::FromUserHex("1111");
+    };
+    std::vector<std::unique_ptr<cybou::BftValidatorNode>> honest;
+    for (size_t i = 1; i < 4; ++i) {
+        honest.push_back(std::make_unique<cybou::BftValidatorNode>(
+            i, mocks[i].seed, network_id, val_set, execute));
+        honest.back()->SetHeight(1, uint256::ZERO, val_set);
+        // The Byzantine flood must not move any honest round clock.
+        BOOST_CHECK(!honest.back()->ReceivePrevote(extreme_pv).has_value());
+        BOOST_CHECK(!honest.back()->ReceivePrecommit(extreme_pc));
+        BOOST_CHECK_EQUAL(honest.back()->GetRound(), 0U);
+    }
+
+    // Honest quorum runs normal round-0 consensus (leader is honest).
+    const size_t leader = cybou::BftLeaderIndex(1, 0, 4);
+    BOOST_CHECK(leader >= 1);
+    std::optional<cybou::BftProposalMsg> proposal;
+    for (auto& node : honest) {
+        if (auto prop = node->StartRound(0, {})) proposal = prop;
+    }
+    BOOST_REQUIRE(proposal.has_value());
+    const uint256 block_id = cybou::ComputeBlockId(proposal->block);
+
+    std::vector<cybou::BftPrevoteMsg> prevotes;
+    for (auto& node : honest) {
+        BOOST_CHECK(!node->ReceivePrevote(extreme_pv).has_value());
+        auto pv = node->ReceiveProposal(*proposal);
+        BOOST_REQUIRE(pv.has_value() && pv->block_id == block_id);
+        prevotes.push_back(*pv);
+        BOOST_CHECK(!node->ReceivePrecommit(extreme_pc));
+        BOOST_CHECK(node->GetRound() <= cybou::MAX_FUTURE_ROUND_ADVANCE);
+    }
+
+    std::vector<cybou::BftPrecommitMsg> precommits;
+    for (auto& node : honest) {
+        std::optional<cybou::BftPrecommitMsg> pc;
+        for (const auto& pv : prevotes) {
+            if (auto res = node->ReceivePrevote(pv)) pc = res;
+        }
+        BOOST_REQUIRE(pc.has_value() && pc->block_id == block_id);
+        precommits.push_back(*pc);
+    }
+
+    for (auto& node : honest) {
+        for (const auto& pc : precommits) {
+            node->ReceivePrecommit(pc);
+        }
+        BOOST_CHECK_EQUAL(node->GetRound(), 0U);
+        BOOST_CHECK(node->GetStep() == cybou::BftStep::FINALIZED);
+        BOOST_REQUIRE(node->GetLatestFinalizedBlock().has_value());
+        const auto& cert = node->GetLatestFinalizedBlock()->certificate;
+        BOOST_CHECK_EQUAL(cert.round, 0);
+        BOOST_CHECK_EQUAL(cert.height, 1);
+        BOOST_CHECK(cert.block_id == block_id);
+        BOOST_CHECK(cybou::VerifyFinalityCertificate(cert, val_set, network_id) ==
+                    cybou::FinalityVerificationError::NONE);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(bft_future_round_jump_requires_quorum_evidence)
+{
+    // Single future vote inside MAX_FUTURE_ROUND_ADVANCE still advances the
+    // round (bounded jump). Beyond the window, votes are buffered and only
+    // a quorum of verified votes for one round triggers the jump, replaying
+    // the buffered votes into the new round.
+    const uint256 network_id = uint256::FromUserHex("cafe").value();
+    std::vector<MockValidatorNode> mocks;
+    cybou::ValidatorSet val_set;
+    for (uint8_t i = 0; i < 4; ++i) {
+        mocks.push_back(MockValidatorNode::Create(i));
+        val_set.validators.push_back(cybou::Validator{
+            .validator_id = mocks.back().validator_id,
+            .consensus_public_key = mocks.back().consensus_pubkey,
+            .weight = 1,
+        });
+    }
+    auto execute = [](const std::vector<cybou::ProtocolOperation>&, uint64_t) {
+        return uint256::FromUserHex("1111");
+    };
+    cybou::BftValidatorNode node{0, mocks[0].seed, network_id, val_set, execute};
+    node.SetHeight(1, uint256::ZERO, val_set);
+
+    const uint256 future_block = uint256::FromUserHex("aaaa").value();
+    auto make_prevote = [&](size_t idx, uint32_t round) {
+        const uint256 digest = cybou::ComputePrevoteDigest(
+            network_id, 1, round, mocks[idx].validator_id, future_block);
+        return cybou::BftPrevoteMsg{
+            .network_id = network_id, .height = 1, .round = round,
+            .validator_id = mocks[idx].validator_id, .block_id = future_block,
+            .signature = *cybou::SignValidatorVote(mocks[idx].seed, digest),
+        };
+    };
+
+    // Bounded jump: round 2 == 0 + MAX_FUTURE_ROUND_ADVANCE is accepted.
+    BOOST_CHECK(!node.ReceivePrevote(make_prevote(1, 2)).has_value());
+    BOOST_CHECK_EQUAL(node.GetRound(), 2U);
+
+    // Round 10 is beyond the window from round 2: buffered, no jump yet.
+    BOOST_CHECK(!node.ReceivePrevote(make_prevote(2, 10)).has_value());
+    BOOST_CHECK(!node.ReceivePrevote(make_prevote(3, 10)).has_value());
+    BOOST_CHECK_EQUAL(node.GetRound(), 2U);
+
+    // Third round-10 vote completes the quorum evidence: jump and replay.
+    BOOST_CHECK(!node.ReceivePrevote(make_prevote(1, 10)).has_value());
+    BOOST_CHECK_EQUAL(node.GetRound(), 10U);
+
+    // The node must be a fully participating round-10 member: it prevotes
+    // the round-10 leader's proposal with a round-10 vote.
+    const size_t leader_r10 = cybou::BftLeaderIndex(1, 10, 4);
+    cybou::BftValidatorNode leader{leader_r10, mocks[leader_r10].seed, network_id, val_set, execute};
+    leader.SetHeight(1, uint256::ZERO, val_set);
+    const auto prop = leader.StartRound(10, {});
+    BOOST_REQUIRE(prop.has_value());
+    const auto pv = node.ReceiveProposal(*prop);
+    BOOST_REQUIRE(pv.has_value());
+    BOOST_CHECK_EQUAL(pv->round, 10U);
+    BOOST_CHECK_EQUAL(node.GetRound(), 10U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
