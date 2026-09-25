@@ -6,6 +6,7 @@
 #include <cybou/bootstrap_nodes.h>
 #include <cybou/network_definition.h>
 #include <cybou/node_runtime.h>
+#include <cybou/p2p/inbound_server.h>
 #include <cybou/p2p/peer_manager.h>
 #include <cybou/signing.h>
 #include <cybou/validator.h>
@@ -15,7 +16,6 @@
 #include <util/translation.h>
 
 #include <boost/asio.hpp>
-#include <openssl/rand.h>
 
 #include <atomic>
 #include <array>
@@ -78,20 +78,6 @@ uint64_t PositiveCount(const char* value)
     const auto count = std::stoull(value);
     if (count == 0 || count > 1'000'000) throw std::runtime_error("invalid count");
     return count;
-}
-
-std::optional<cybou::p2p::Hello> LocalHello(const cybou::CybouNodeRuntime& runtime)
-{
-    const auto status = runtime.GetStatus();
-    if (!status.is_initialized) return std::nullopt;
-    std::array<unsigned char, 8> bytes{};
-    if (RAND_bytes(bytes.data(), bytes.size()) != 1) return std::nullopt;
-    uint64_t nonce{0};
-    for (int i = 0; i < 8; ++i) nonce |= uint64_t{bytes[i]} << (8 * i);
-    if (nonce == 0) return std::nullopt;
-    return cybou::p2p::Hello{.network_id = status.network_id,
-        .finalized_height = status.finalized_height, .finalized_tip = status.finalized_tip,
-        .capabilities = 0, .nonce = nonce};
 }
 
 int Main(const int argc, char* argv[])
@@ -249,13 +235,12 @@ int Main(const int argc, char* argv[])
         const auto interval_ms = argc >= 8 ? PositiveCount(argv[7]) : 1000;
         if (interval_ms > 60000) throw std::runtime_error("block interval exceeds 60 seconds");
         boost::asio::io_context io;
-        std::optional<boost::asio::ip::tcp::acceptor> p2p_acceptor;
+        std::optional<cybou::p2p::InboundPeerServer> p2p_server;
         if (argc == 9) {
             const auto p2p_port = Port(argv[8]);
             if (p2p_port == port) throw std::runtime_error("P2P port must differ from block feed port");
-            p2p_acceptor.emplace(io, boost::asio::ip::tcp::endpoint{
+            p2p_server.emplace(runtime, io, boost::asio::ip::tcp::endpoint{
                 boost::asio::ip::make_address(argv[5]), p2p_port});
-            p2p_acceptor->non_blocking(true);
         }
         boost::asio::ip::tcp::acceptor acceptor(io, {
             boost::asio::ip::make_address(argv[5]), port,
@@ -276,22 +261,7 @@ int Main(const int argc, char* argv[])
             }
         });
         std::optional<std::jthread> p2p_listener;
-        if (p2p_acceptor) p2p_listener.emplace([&] {
-            while (!stopping) {
-                boost::asio::ip::tcp::socket socket(io);
-                boost::system::error_code ec;
-                p2p_acceptor->accept(socket, ec);
-                if (ec == boost::asio::error::would_block || ec == boost::asio::error::try_again) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(25));
-                    continue;
-                }
-                if (ec) { stopping = true; break; }
-                cybou::p2p::PeerSession session{std::move(socket)};
-                const auto hello = LocalHello(runtime);
-                if (!hello || !session.Handshake(*hello)) continue;
-                while (!stopping && session.ServeNext(runtime)) {}
-            }
-        });
+        if (p2p_server) p2p_listener.emplace([&] { p2p_server->Run(stopping); });
         while (!stopping) {
             boost::asio::ip::tcp::socket socket(io);
             boost::system::error_code ec;
@@ -300,7 +270,10 @@ int Main(const int argc, char* argv[])
                 std::this_thread::sleep_for(std::chrono::milliseconds(25));
                 continue;
             }
-            if (ec) throw boost::system::system_error(ec);
+            if (ec) {
+                stopping = true;
+                throw boost::system::system_error(ec);
+            }
             cybou::ServeCybouConnection(runtime, socket);
         }
         return 0;

@@ -64,7 +64,8 @@ cybou-node p2p-probe network.bin observer-db 127.0.0.1 29461
 cybou-node p2p-sync network.bin observer-db 127.0.0.1 29461 5
 ```
 
-This CYP2 port currently accepts one persistent peer at a time. `p2p-sync`
+This CYP2 port accepts up to eight concurrent persistent peers and closes
+connections above that limit. `p2p-sync`
 requests up to the specified number of finalized blocks on one connection,
 verifies each block before commit, and exits if the producer has no next block.
 The existing DEV `sync` command still uses the bounded CYB1 block feed on port
