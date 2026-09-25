@@ -131,8 +131,8 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, std::function<void()> diagnos
     auto* hero_text = new QVBoxLayout;
     hero_text->setSpacing(10);
     hero_text->addWidget(Eyebrow(tr("NETWORK"), hero));
-    hero_text->addWidget(HeroTitle(tr("Connected and in sync."), hero));
-    hero_text->addWidget(HeroSubtitle(tr("Your device is part of the CYBOU network, helping to keep communication services private, resilient and always available."), hero));
+    hero_text->addWidget(HeroTitle(tr("CYBOU network status"), hero));
+    hero_text->addWidget(HeroSubtitle(tr("Local finality, peer connectivity and available services."), hero));
     auto* chips = new QHBoxLayout;
     chips->setSpacing(8);
     m_chip_healthy = Pill(tr("Network healthy"), Tint::Mint, hero);
@@ -249,7 +249,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, std::function<void()> diagnos
         m_services_state = new QLabel{services_card};
         m_services_state->setObjectName(QStringLiteral("cardTitle"));
         services_layout->addWidget(m_services_state);
-        services_layout->addWidget(MutedText(tr("The CYBOU network operates normally."), services_card));
+        services_layout->addWidget(MutedText(tr("Capabilities currently available in this client."), services_card));
         m_services_rows = new QWidget{services_card};
         auto* rows = new QVBoxLayout{m_services_rows};
         rows->setContentsMargins(0, 0, 0, 0);
@@ -293,7 +293,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, std::function<void()> diagnos
         auto* shield = new QLabel{secure};
         shield->setPixmap(glyphPixmap(Glyph::ShieldCheck, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
         secure_layout->addWidget(shield, 0, Qt::AlignVCenter);
-        auto* secure_text = new QLabel{tr("Network is secure"), secure};
+        auto* secure_text = new QLabel{tr("DEV transport security pending"), secure};
         secure_text->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;")
             .arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
         secure_layout->addWidget(secure_text, 1);
@@ -379,22 +379,22 @@ void NetworkPage::refresh()
     const bool finality_known = status.last_finalized_height >= 0;
 
     // Hero chips.
-    m_chip_healthy->setText(connected ? tr("Network healthy") : tr("Connecting"));
+    m_chip_healthy->setText(connected ? tr("Peer reachable") : tr("No peer connected"));
     m_chip_healthy->setProperty("tint", connected ? "mint" : "amber");
     m_chip_healthy->style()->unpolish(m_chip_healthy);
     m_chip_healthy->style()->polish(m_chip_healthy);
     m_chip_synced->setText(m_model->lastSync().isValid()
-        ? tr("Synced %1").arg(relTime(m_model->lastSync()))
-        : tr("Sync pending"));
+        ? tr("Peer checked %1").arg(relTime(m_model->lastSync()))
+        : tr("Peer check pending"));
 
     // Connection health.
-    m_health_metric->setText(connected ? tr("Excellent") : tr("Starting"));
+    m_health_metric->setText(connected ? tr("Connected") : tr("Disconnected"));
     m_health_caption->setText(connected
-        ? tr("Stable connection to the CYBOU network.")
-        : tr("The node is establishing its connection to the CYBOU network."));
+        ? tr("At least one configured peer is reachable.")
+        : tr("No configured peer is currently reachable."));
 
     // Synchronization.
-    m_sync_state->setText(finality_known ? tr("Up to date") : tr("Waiting for finality"));
+    m_sync_state->setText(finality_known ? tr("Finalized height known") : tr("Waiting for finality"));
     m_height_metric->setText(finality_known
         ? QLocale{}.toString(status.last_finalized_height)
         : tr("\u2014"));
@@ -414,7 +414,7 @@ void NetworkPage::refresh()
     for (const auto& service : services) {
         if (!service.online) all_online = false;
     }
-    m_services_state->setText(all_online ? tr("All services online") : tr("Core services online"));
+    m_services_state->setText(all_online ? tr("All services available") : tr("Some services unavailable"));
     clearLayoutDeep(m_services_rows->layout());
     for (const auto& service : services) {
         auto* row = new QHBoxLayout;
@@ -427,7 +427,7 @@ void NetworkPage::refresh()
         auto* label = new QLabel{tr(service.name), m_services_rows};
         label->setObjectName(QStringLiteral("bodyText"));
         row->addWidget(label, 1);
-        auto* state = new QLabel{service.online ? tr("Online") : tr("Planned"), m_services_rows};
+        auto* state = new QLabel{service.online ? tr("Available") : tr("Unavailable"), m_services_rows};
         state->setObjectName(QStringLiteral("rowMeta"));
         state->setStyleSheet(QStringLiteral("background: transparent; border: none; color: %1;")
             .arg(CybouTheme::color(service.online ? CybouTheme::BRAND_TEAL_DARK : CybouTheme::DIM).name()));
@@ -470,7 +470,7 @@ void NetworkPage::refresh()
     add_diag(tr("Network ID"), status.network_id.isEmpty() ? tr("Not available yet") : status.network_id);
     add_diag(tr("Connections"), QString::number(status.peer_count));
     add_diag(tr("Finalized height"), finality_known ? QLocale{}.toString(status.last_finalized_height) : tr("Not exposed yet"));
-    add_diag(tr("Sync status"), m_model->lastSync().isValid() ? tr("Up to date") : tr("Pending"));
+    add_diag(tr("Sync status"), m_model->lastSync().isValid() ? tr("Peer contacted") : tr("Pending"));
     add_diag(tr("Data directory"), status.data_directory.isEmpty() ? tr("Available after node startup") : status.data_directory);
 
     m_finality_hint->setText(finality_known

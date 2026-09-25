@@ -265,7 +265,7 @@ void CybouMainWindow::initCybouRuntime()
                         static_cast<int>(now.finalized_height),
                         static_cast<int>(now.validator_count));
                     m_desktop_model->setPeerCount(bootstrap_reachable ? 1 : 0);
-                    m_desktop_model->setLastSync(QDateTime::currentDateTime());
+                    if (bootstrap_reachable) m_desktop_model->setLastSync(QDateTime::currentDateTime());
                 }, Qt::QueuedConnection);
                 for (int i = 0; i < 15 && !m_sync_stop.load(); ++i) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));

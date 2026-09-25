@@ -144,12 +144,6 @@ bool CybouDesktopModel::requestClaimName(const QString& label, const QString& va
 void CybouDesktopModel::setMailService(cybou::CybouMailService* mail_service)
 {
     m_mail_service = mail_service;
-    if (m_mail_service && m_status.identity_state == CybouIdentityState::Active) {
-        if (!m_capabilities.email) {
-            m_capabilities.email = true;
-            Q_EMIT capabilitiesChanged();
-        }
-    }
 }
 
 void CybouDesktopModel::setWalletService(cybou::CybouWalletService* wallet_service)
@@ -321,10 +315,6 @@ void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString
     }
     if (state == CybouIdentityState::Active) {
         bool caps_changed = false;
-        if (m_mail_service && !m_capabilities.email) {
-            m_capabilities.email = true;
-            caps_changed = true;
-        }
         if (m_wallet_service && !m_capabilities.payments) {
             m_capabilities.payments = true;
             caps_changed = true;
