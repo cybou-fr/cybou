@@ -7,6 +7,7 @@
 #include <boost/asio.hpp>
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <thread>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_p2p_session_tests, BasicTestingSetup)
@@ -26,6 +27,17 @@ BOOST_AUTO_TEST_CASE(frame_rejects_bad_size_and_version)
     BOOST_CHECK(!cybou::p2p::DecodeFrame(bad));
     BOOST_CHECK(!cybou::p2p::EncodeFrame({cybou::p2p::MessageType::PING,
         std::vector<unsigned char>(cybou::p2p::MAX_FRAME_PAYLOAD + 1)}));
+}
+
+BOOST_AUTO_TEST_CASE(hello_rejects_missing_finalized_tip)
+{
+    cybou::p2p::Hello hello{.network_id = uint256::ONE, .finalized_height = 0,
+        .finalized_tip = uint256::ONE, .capabilities = 0, .nonce = 1};
+    const auto encoded = cybou::p2p::EncodeHello(hello);
+    BOOST_CHECK(cybou::p2p::DecodeHello(encoded));
+    auto missing_tip = encoded;
+    std::fill(missing_tip.begin() + 40, missing_tip.begin() + 72, 0);
+    BOOST_CHECK(!cybou::p2p::DecodeHello(missing_tip));
 }
 
 BOOST_AUTO_TEST_CASE(loopback_session_checks_network_and_stays_open_for_ping)
@@ -68,7 +80,7 @@ BOOST_AUTO_TEST_CASE(loopback_session_rejects_network_mismatch)
         acceptor.accept(socket);
         cybou::p2p::PeerSession peer{std::move(socket)};
         server_accepted = peer.Handshake({.network_id = uint256::ONE,
-            .finalized_height = 0, .finalized_tip = {}, .capabilities = 0, .nonce = 31});
+            .finalized_height = 0, .finalized_tip = uint256::ONE, .capabilities = 0, .nonce = 31});
     }};
     tcp::socket socket{io};
     socket.connect(acceptor.local_endpoint());
@@ -76,7 +88,7 @@ BOOST_AUTO_TEST_CASE(loopback_session_rejects_network_mismatch)
     const auto other_network = uint256::FromUserHex("02");
     BOOST_REQUIRE(other_network);
     BOOST_CHECK(!peer.Handshake({.network_id = *other_network,
-        .finalized_height = 0, .finalized_tip = {}, .capabilities = 0, .nonce = 32}));
+        .finalized_height = 0, .finalized_tip = uint256::ONE, .capabilities = 0, .nonce = 32}));
     server.join();
     BOOST_CHECK(!server_accepted);
 }
@@ -92,13 +104,13 @@ BOOST_AUTO_TEST_CASE(client_respects_advertised_block_capability)
         acceptor.accept(socket);
         cybou::p2p::PeerSession peer{std::move(socket)};
         answered = peer.Handshake({.network_id = uint256::ONE, .finalized_height = 0,
-            .finalized_tip = {}, .capabilities = 0, .nonce = 41}) && peer.AnswerPing();
+            .finalized_tip = uint256::ONE, .capabilities = 0, .nonce = 41}) && peer.AnswerPing();
     }};
     tcp::socket socket{io};
     socket.connect(acceptor.local_endpoint());
     cybou::p2p::PeerSession peer{std::move(socket)};
     BOOST_REQUIRE(peer.Handshake({.network_id = uint256::ONE, .finalized_height = 0,
-        .finalized_tip = {}, .capabilities = 0, .nonce = 42}));
+        .finalized_tip = uint256::ONE, .capabilities = 0, .nonce = 42}));
     BOOST_CHECK(peer.RequestBlock(1).status == cybou::p2p::BlockRequestStatus::INVALID_REQUEST);
     BOOST_CHECK(peer.Ping(43));
     server.join();

@@ -83,7 +83,7 @@ std::optional<Hello> DecodeHello(std::span<const unsigned char> bytes)
     std::copy_n(bytes.begin() + 40, 32, hello.finalized_tip.begin());
     hello.capabilities = Read64(bytes.data() + 72);
     hello.nonce = Read64(bytes.data() + 80);
-    if (hello.network_id.IsNull() || hello.nonce == 0) return std::nullopt;
+    if (hello.network_id.IsNull() || hello.finalized_tip.IsNull() || hello.nonce == 0) return std::nullopt;
     return hello;
 }
 
@@ -173,7 +173,7 @@ std::optional<Frame> PeerSession::Read()
 bool PeerSession::Handshake(const Hello& local)
 {
     m_handshake_status = HandshakeStatus::INVALID_LOCAL;
-    if (local.network_id.IsNull() || local.nonce == 0) return false;
+    if (local.network_id.IsNull() || local.finalized_tip.IsNull() || local.nonce == 0) return false;
     m_handshake_status = HandshakeStatus::UNAVAILABLE;
     if (!Write(Frame{MessageType::HELLO, EncodeHello(local)})) return false;
     const auto frame = Read();

@@ -34,7 +34,7 @@ BOOST_AUTO_TEST_CASE(idle_peer_does_not_block_other_peers_and_limit_is_enforced)
         socket.connect(tcp::endpoint{loopback, server.Port()});
         auto client = std::make_unique<cybou::p2p::PeerSession>(std::move(socket));
         BOOST_REQUIRE(client->Handshake({.network_id = network, .finalized_height = 0,
-            .finalized_tip = {}, .capabilities = 0, .nonce = 1000 + i}));
+            .finalized_tip = fixture.definition.genesis_block_id, .capabilities = 0, .nonce = 1000 + i}));
         clients.push_back(std::move(client));
     }
     BOOST_CHECK(clients.back()->Ping(77));
@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(idle_peer_does_not_block_other_peers_and_limit_is_enforced)
     excess_socket.connect(tcp::endpoint{loopback, server.Port()});
     cybou::p2p::PeerSession excess{std::move(excess_socket)};
     BOOST_CHECK(!excess.Handshake({.network_id = network, .finalized_height = 0,
-        .finalized_tip = {}, .capabilities = 0, .nonce = 2000}));
+        .finalized_tip = fixture.definition.genesis_block_id, .capabilities = 0, .nonce = 2000}));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

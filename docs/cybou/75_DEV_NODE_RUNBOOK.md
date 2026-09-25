@@ -89,7 +89,8 @@ unique endpoints. The observer retries unavailable endpoints after five
 seconds, tries other peers for missing blocks, and excludes endpoints after a
 wrong-network handshake, malformed frame or block response, or block
 verification failure. A HELLO tip conflicting with a locally stored block is
-rejected during connection. A listener that closes without HELLO, including when its
+rejected during connection; a height-zero HELLO must name the trusted genesis
+block ID. A listener that closes without HELLO, including when its
 inbound slots are full, is retried; transfer disconnects and timeouts are
 retried too. A peer that cannot serve a height it advertised in HELLO is also
 retried after five seconds, allowing other peers to supply that block. The list
