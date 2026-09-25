@@ -34,38 +34,6 @@ CYBOU reorganizes digital services around **you**: one cryptographically protect
 
 ---
 
-## Core Services
-
-The platform is organized around one identity providing six integrated services:
-
-```text
-                         stanislav.cybou
-                                |
-          +---------------------+---------------------+
-          |                     |                     |
-        Mail                  Files                Wallet
-  Private messaging     Encrypted storage      Service budget
-          |                     |                     |
-          +---------------------+---------------------+
-                                |
-                             Backup
-                    Decentralized recovery
-                                |
-                        Identity & Devices
-                Keys, recovery phrase, authorized devices
-```
-
-| Service | Product Role | Status |
-| --- | --- | --- |
-| **Identity** | Human-readable `.cybou` names, 24-word recovery root, device pairing, and portable CYBV2 vaults. | Tested in core & desktop |
-| **Mail** | First-class private messaging (`MailTx`) with salted content commitments and recipient-owned local indexes. | Core operation tested; end-to-end delivery in progress |
-| **Files** | Decentralized, end-to-end encrypted object storage and sharing. | Planned (staged after Mail pilot) |
-| **Backup** | Encrypted recovery and backup of vaults and application state across nodes. | Planned |
-| **Wallet** | Service funding via `SystemBalance`, native transfers, deterministic fee routing (3/4 Security, 1/4 Onboarding). | Implemented in core & UI |
-| **Devices** | Granular authorization and rotation of laptops, phones, and desktops under the primary identity. | Core verification active |
-
----
-
 ## Architecture & Security Foundation
 
 Behind the user-facing services runs a deterministic, peer-to-peer C++20 engine:
