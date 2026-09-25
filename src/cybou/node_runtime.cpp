@@ -143,6 +143,22 @@ std::vector<ProtocolOperation> CybouNodeRuntime::RecentOperationsForGossip() con
     return operations;
 }
 
+std::vector<FinalizedHead> CybouNodeRuntime::RecentFinalizedBlocksForGossip() const
+{
+    std::lock_guard lock(m_mutex);
+    return {m_recent_finalized_blocks.begin(), m_recent_finalized_blocks.end()};
+}
+
+void CybouNodeRuntime::RememberFinalizedBlockForGossip(const FinalizedBlock& block)
+{
+    const auto id = ComputeBlockId(block.block);
+    if (id.IsNull()) return;
+    if (!m_recent_finalized_blocks.empty() &&
+        m_recent_finalized_blocks.back().height >= block.block.height) return;
+    m_recent_finalized_blocks.push_back({id, block.block.height});
+    if (m_recent_finalized_blocks.size() > 32) m_recent_finalized_blocks.pop_front();
+}
+
 void CybouNodeRuntime::RememberOperationForGossip(const ProtocolOperation& op, const uint256& id)
 {
     if (id.IsNull() || m_recent_gossip_ids.contains(id)) return;
@@ -207,6 +223,7 @@ std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
     if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
     const auto res = m_authority_node->ProduceNextBlock(sync);
     if (!res) return std::nullopt;
+    if (res.finalized_block) RememberFinalizedBlockForGossip(*res.finalized_block);
     return res.finalized_block;
 }
 
@@ -221,7 +238,10 @@ BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block,
         return BlockTransitionResult{.error = BlockTransitionError::STATE_NOT_INITIALIZED};
     }
     const auto result = m_store.CommitFinalizedBlock(block, std::nullopt, sync);
-    if (result && m_authority_node) m_authority_node->RevalidatePending();
+    if (result) {
+        RememberFinalizedBlockForGossip(block);
+        if (m_authority_node) m_authority_node->RevalidatePending();
+    }
     return result;
 }
 
@@ -329,6 +349,7 @@ SyncPeerResult CybouNodeRuntime::SyncFromPeer(const std::string& host, const uin
                 result.status = SyncPeerStatus::PROTOCOL_ERROR;
                 break;
             }
+            RememberFinalizedBlockForGossip(*fetch_res.block);
             if (m_authority_node) m_authority_node->RevalidatePending();
         }
         ++result.blocks_applied;

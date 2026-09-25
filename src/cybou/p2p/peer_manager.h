@@ -66,6 +66,7 @@ public:
         const ProtocolOperation& operation);
     /** Offer each recent admitted OperationID once per connected peer. */
     size_t FanoutRecentOperations(size_t max_per_peer = 16);
+    size_t FanoutRecentBlocks(size_t max_per_peer = 16);
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
     void DisconnectAll();
@@ -76,6 +77,7 @@ private:
     boost::asio::io_context m_io;
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;
     std::map<Endpoint, std::set<uint256>> m_announced_operations;
+    std::map<Endpoint, std::set<uint256>> m_announced_blocks;
     PeerConnectStatus m_last_connect_status{PeerConnectStatus::INVALID_REQUEST};
 };
 

@@ -74,7 +74,9 @@ cybou-node serve network.bin producer-db validator.key 127.0.0.1 29460 1000 2946
 ```
 
 The fanout worker is separate from block production. It announces recently admitted
-OperationIDs to connected peers and sends an operation only when requested.
+OperationIDs and finalized `(height, BlockID)` entries to connected peers and
+sends full bytes only when requested. It keeps at most 32 recent block
+announcements; a peer with a larger gap uses the explicit sync path.
 This currently runs in single-validator Authority Mode; it does not make a
 four-validator BFT cluster operational.
 
@@ -122,7 +124,8 @@ handshake or block verification stops that desktop sync worker. Without these
 settings the installed DEV bootstrap continues to use its published CYB1
 endpoint; the remote CYP2 port is not published yet.
 The existing DEV `sync` command still uses the bounded CYB1 block feed on port
-29460. CYP2 does not yet propagate operations or gossip blocks.
+29460. CYP2 now propagates operations and finalized blocks among explicitly
+configured peers.
 
 ## Bootstrap endpoints
 
@@ -172,7 +175,8 @@ stop the remaining attempts. Both CYP2 submission commands print `unavailable`
 if no accepting peer can be reached and `unconfirmed` if an acknowledgment is
 lost after attempting delivery; `unconfirmed` does not mean the operation was
 rejected. An explicit validator rejection prints its numeric status and peer.
-There is no automatic operation gossip yet.
+The `serve` peer-file worker offers recent operations automatically to its
+explicitly configured peers.
 
 After syncing finalized blocks, inspect an OperationID against the local
 observer database:

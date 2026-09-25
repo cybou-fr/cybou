@@ -494,6 +494,7 @@ int Main(const int argc, char* argv[])
                     }
                 }
                 if (!stopping) {
+                    peers.FanoutRecentBlocks();
                     peers.FanoutRecentOperations();
                     peers.PingAll();
                 }

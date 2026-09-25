@@ -44,7 +44,7 @@ uint32_t Read32(const unsigned char* data)
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
     if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
-        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 14)) return std::nullopt;
+        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 15)) return std::nullopt;
     std::vector<unsigned char> bytes{'C', 'Y', 'P', '2', WIRE_VERSION, static_cast<unsigned char>(frame.type)};
     const auto size = static_cast<uint32_t>(frame.payload.size());
     for (int i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(size >> (8 * i)));
@@ -55,7 +55,7 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < HEADER_SIZE || !std::equal(bytes.begin(), bytes.begin() + 4, "CYP2") ||
-        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 14) return std::nullopt;
+        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 15) return std::nullopt;
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[6 + i]} << (8 * i);
     if (size > MAX_FRAME_PAYLOAD || bytes.size() != HEADER_SIZE + size) return std::nullopt;
@@ -159,7 +159,7 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     std::array<unsigned char, HEADER_SIZE> header{};
     if (!ReadExact(header.data(), header.size(), deadline)) return std::nullopt;
     if (!std::equal(header.begin(), header.begin() + 4, "CYP2") ||
-        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 14) {
+        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 15) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
         return std::nullopt;
     }
@@ -294,6 +294,42 @@ BlockInventoryResult PeerSession::RequestBlockInventory(uint64_t first_height, u
     return result;
 }
 
+std::optional<BlockAnnounceResult> PeerSession::AdvertiseBlock(
+    const BlockAnnouncement& announcement, const FinalizedBlock& block)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_BLOCK_ANNOUNCEMENTS) ||
+        announcement.height == 0 || announcement.block_id.IsNull() ||
+        block.block.height != announcement.height || ComputeBlockId(block.block) != announcement.block_id) return std::nullopt;
+    std::vector<unsigned char> inventory{1};
+    Put64(inventory, announcement.height);
+    inventory.insert(inventory.end(), announcement.block_id.begin(), announcement.block_id.end());
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!Write(Frame{MessageType::BLOCK_INV, inventory}, deadline)) return std::nullopt;
+    const auto answer = Read(deadline);
+    if (!answer) return std::nullopt;
+    if (answer->type == MessageType::GET_BLOCK && answer->payload.size() == 8 &&
+        Read64(answer->payload.data()) == announcement.height) {
+        const auto encoded = SerializeFinalizedBlock(block);
+        if (!encoded || encoded->empty() || encoded->size() > MAX_FINALIZED_BLOCK_FEED_BYTES) return std::nullopt;
+        std::vector<unsigned char> meta;
+        Put32(meta, static_cast<uint32_t>(encoded->size()));
+        if (!Write(Frame{MessageType::BLOCK_META, meta}, deadline)) return std::nullopt;
+        for (size_t offset = 0; offset < encoded->size(); offset += MAX_FRAME_PAYLOAD) {
+            const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, encoded->size() - offset);
+            if (!Write(Frame{MessageType::BLOCK_CHUNK,
+                {encoded->begin() + offset, encoded->begin() + offset + count}}, deadline)) return std::nullopt;
+        }
+    } else if (answer->type != MessageType::BLOCK_RESULT) {
+        return std::nullopt;
+    }
+    const auto result = answer->type == MessageType::BLOCK_RESULT ? answer : Read(deadline);
+    if (!result || result->type != MessageType::BLOCK_RESULT || result->payload.size() != 41 ||
+        result->payload[0] > static_cast<uint8_t>(BlockAnnounceResult::GAP) ||
+        Read64(result->payload.data() + 1) != announcement.height ||
+        !std::equal(announcement.block_id.begin(), announcement.block_id.end(), result->payload.begin() + 9)) return std::nullopt;
+    return static_cast<BlockAnnounceResult>(result->payload[0]);
+}
+
 std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const ProtocolOperation& operation)
 {
     if (!m_peer || !(m_peer->capabilities & CAP_ACCEPT_OPERATIONS)) return std::nullopt;
@@ -421,6 +457,51 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         std::vector<unsigned char> response{static_cast<unsigned char>(result.status)};
         response.insert(response.end(), result.op_id.begin(), result.op_id.end());
         return Write(Frame{MessageType::OP_RESULT, response});
+    }
+    if (request->type == MessageType::BLOCK_INV) {
+        if (!(m_local_capabilities & CAP_BLOCK_ANNOUNCEMENTS) ||
+            request->payload.size() != 41 || request->payload[0] != 1) return false;
+        const uint64_t height = Read64(request->payload.data() + 1);
+        uint256 id;
+        std::copy_n(request->payload.begin() + 9, 32, id.begin());
+        if (height == 0 || id.IsNull()) return false;
+        const auto status = runtime.GetStatus();
+        if (!status.is_initialized) return false;
+        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        auto acknowledge = [&](BlockAnnounceResult result) {
+            std::vector<unsigned char> payload{static_cast<unsigned char>(result)};
+            Put64(payload, height);
+            payload.insert(payload.end(), id.begin(), id.end());
+            return Write(Frame{MessageType::BLOCK_RESULT, payload}, deadline);
+        };
+        if (height <= status.finalized_height) {
+            const auto known = runtime.GetBlockAtHeight(height);
+            return known && ComputeBlockId(known->block) == id &&
+                acknowledge(BlockAnnounceResult::ALREADY_HAVE);
+        }
+        if (status.finalized_height == std::numeric_limits<uint64_t>::max() ||
+            height != status.finalized_height + 1) return acknowledge(BlockAnnounceResult::GAP);
+        std::vector<unsigned char> query;
+        Put64(query, height);
+        if (!Write(Frame{MessageType::GET_BLOCK, query}, deadline)) return false;
+        const auto meta = Read(deadline);
+        if (!meta || meta->type != MessageType::BLOCK_META || meta->payload.size() != 4) return false;
+        const uint32_t size = Read32(meta->payload.data());
+        if (size == 0 || size > MAX_FINALIZED_BLOCK_FEED_BYTES) return false;
+        std::vector<unsigned char> bytes;
+        bytes.reserve(size);
+        while (bytes.size() < size) {
+            const auto chunk = Read(deadline);
+            if (!chunk || chunk->type != MessageType::BLOCK_CHUNK || chunk->payload.empty() ||
+                chunk->payload.size() > size - bytes.size()) return false;
+            bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
+        }
+        const auto block = DeserializeFinalizedBlock(bytes);
+        if (!block || block->block.height != height || ComputeBlockId(block->block) != id ||
+            block->certificate.network_id != status.network_id ||
+            block->certificate.height != height || block->certificate.block_id != id ||
+            !runtime.CommitBlock(*block)) return false;
+        return acknowledge(BlockAnnounceResult::APPLIED);
     }
     if (request->type == MessageType::GET_BLOCKS) {
         if (!(m_local_capabilities & CAP_SERVE_BLOCKS) ||

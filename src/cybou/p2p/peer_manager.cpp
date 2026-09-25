@@ -77,6 +77,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         return false;
     }
     m_announced_operations.erase(endpoint);
+    m_announced_blocks.erase(endpoint);
     m_peers.emplace(endpoint, std::move(peer));
     m_last_connect_status = PeerConnectStatus::CONNECTED;
     return true;
@@ -89,6 +90,7 @@ size_t PeerManager::PingAll()
         const auto nonce = RandomNonce();
         if (!nonce || !it->second->Ping(*nonce)) {
             m_announced_operations.erase(it->first);
+            m_announced_blocks.erase(it->first);
             it = m_peers.erase(it);
         } else {
             ++healthy;
@@ -291,6 +293,58 @@ size_t PeerManager::FanoutRecentOperations(size_t max_per_peer)
     return delivered;
 }
 
+size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
+{
+    if (max_per_peer == 0 || max_per_peer > 32) return 0;
+    for (auto it = m_announced_blocks.begin(); it != m_announced_blocks.end();) {
+        if (!m_peers.contains(it->first)) it = m_announced_blocks.erase(it);
+        else ++it;
+    }
+    const auto recent = m_runtime.RecentFinalizedBlocksForGossip();
+    std::set<uint256> live_ids;
+    for (const auto& head : recent) live_ids.insert(head.block_id);
+    size_t delivered{0};
+    for (auto it = m_peers.begin(); it != m_peers.end();) {
+        auto& announced = m_announced_blocks[it->first];
+        for (auto known = announced.begin(); known != announced.end();) {
+            if (!live_ids.contains(*known)) known = announced.erase(known);
+            else ++known;
+        }
+        if (!it->second->Peer() || !(it->second->Peer()->capabilities & CAP_BLOCK_ANNOUNCEMENTS)) {
+            ++it;
+            continue;
+        }
+        bool disconnected{false};
+        size_t offered{0};
+        for (const auto& head : recent) {
+            if (offered >= max_per_peer) break;
+            if (announced.contains(head.block_id)) continue;
+            const auto block = m_runtime.GetBlockAtHeight(head.height);
+            if (!block || ComputeBlockId(block->block) != head.block_id) continue;
+            ++offered;
+            const auto response = it->second->AdvertiseBlock({head.height, head.block_id}, *block);
+            if (!response) {
+                disconnected = true;
+                break;
+            }
+            if (*response != BlockAnnounceResult::GAP) {
+                announced.insert(head.block_id);
+                ++delivered;
+            } else {
+                break;
+            }
+        }
+        if (disconnected) {
+            m_announced_blocks.erase(it->first);
+            m_announced_operations.erase(it->first);
+            it = m_peers.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    return delivered;
+}
+
 std::vector<PeerInfo> PeerManager::Peers() const
 {
     std::vector<PeerInfo> peers;
@@ -305,6 +359,7 @@ void PeerManager::DisconnectAll()
 {
     m_peers.clear();
     m_announced_operations.clear();
+    m_announced_blocks.clear();
 }
 
 } // namespace cybou::p2p

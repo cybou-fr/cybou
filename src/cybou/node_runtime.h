@@ -103,6 +103,7 @@ public:
     OperationSubmitResult SubmitPeerOperation(ProtocolOperation op, std::string source_peer);
     std::optional<OperationSubmitStatus> KnownOperationStatus(const uint256& op_id) const;
     std::vector<ProtocolOperation> RecentOperationsForGossip() const;
+    std::vector<FinalizedHead> RecentFinalizedBlocksForGossip() const;
 
     /** Produce a block if running in authority mode */
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);
@@ -131,6 +132,7 @@ public:
 private:
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
     void RememberOperationForGossip(const ProtocolOperation& op, const uint256& id);
+    void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
     struct GossipOperation {
         ProtocolOperation operation;
         uint256 id;
@@ -148,6 +150,7 @@ private:
     std::deque<GossipOperation> m_recent_gossip_operations;
     std::set<uint256> m_recent_gossip_ids;
     size_t m_recent_gossip_bytes{0};
+    std::deque<FinalizedHead> m_recent_finalized_blocks;
 };
 
 } // namespace cybou
