@@ -130,6 +130,10 @@ QString CybouTheme::applicationStyleSheet()
         QPushButton#secondaryButton:hover { background: @mint_ghost@; border-color: @mint@; }
         QPushButton#secondaryButton:pressed { background: @mint_soft@; }
         QPushButton#secondaryButton:focus { border-color: @teal@; }
+        QPushButton#softButton { background: @mint_soft@; color: @teal_dark@; border: 1px solid @mint_soft@; }
+        QPushButton#softButton:hover { background: @mint_ghost@; border-color: @mint@; }
+        QPushButton#softButton:pressed { background: @mint@; color: white; }
+        QPushButton#softButton:disabled { background: @surface@; color: @dim@; border-color: @border@; }
         QPushButton:disabled { background: @surface@; color: @dim@; border-color: @border@; }
         QPushButton#primaryButton:disabled, QPushButton[primary="true"]:disabled { background: @surface@; color: @dim@; border-color: @border@; }
         QPushButton#secondaryButton:disabled { background: @surface@; color: @dim@; border-color: @border@; }

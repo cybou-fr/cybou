@@ -300,7 +300,7 @@ void HomePage::refresh()
     clearLayout(m_device_rows->layout());
     auto* rows = qobject_cast<QVBoxLayout*>(m_device_rows->layout());
     rows->addWidget(ActivityRow(Glyph::Monitor, Tint::Indigo, QSysInfo::machineHostName(),
-        tr("This device \u00b7 Active now"), {}, m_device_rows));
+        tr("This device \u00b7 Active now"), {}, m_device_rows, true));
     m_devices_metric->setText(tr("1 device"));
 
     // Recent activity: unread mail + finalized ledger entries + sync.

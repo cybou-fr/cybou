@@ -98,9 +98,17 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
 
     // Labels: local visual indexes (sketch). Messages carry no label data
     // until the local label index lands, so rows render without counts.
+    auto* labels_header_row = new QHBoxLayout;
+    labels_header_row->setContentsMargins(8, 0, 4, 0);
     auto* labels_header = new QLabel{tr("LABELS"), rail};
     labels_header->setObjectName(QStringLiteral("eyebrow"));
-    rail_layout->addWidget(labels_header);
+    labels_header_row->addWidget(labels_header, 0, Qt::AlignVCenter);
+    labels_header_row->addStretch();
+    auto* add_label = IconButton(Glyph::Plus, rail, tr("Create label (planned)"));
+    add_label->setFixedSize(22, 22);
+    add_label->setIconSize(QSize{14, 14});
+    labels_header_row->addWidget(add_label, 0, Qt::AlignVCenter);
+    rail_layout->addLayout(labels_header_row);
     struct LabelDef { const char* name; Tint tint; };
     const LabelDef labels[]{
         {QT_TR_NOOP("Project"), Tint::Blue},

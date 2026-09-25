@@ -55,8 +55,13 @@ public:
         layout->addWidget(sync_icon, 0, Qt::AlignVCenter);
         layout->addWidget(m_sync_text, 0, Qt::AlignVCenter);
 
+        // Notifications: bell with an unread badge.
+        m_bell_icon = new QLabel{m_frame};
+        layout->addWidget(m_bell_icon, 0, Qt::AlignVCenter);
+
         // Unread mail.
         m_unread_icon = new QLabel{m_frame};
+        m_unread_icon->setPixmap(glyphPixmap(Glyph::Envelope, {16, 16}, CybouTheme::color(CybouTheme::TEXT_SECONDARY)));
         m_unread_text = new QLabel{m_frame};
         m_unread_text->setObjectName(QStringLiteral("stripValue"));
         layout->addWidget(m_unread_icon, 0, Qt::AlignVCenter);
@@ -90,7 +95,7 @@ public:
             : QStringLiteral("Sync pending"));
 
         const int unread = m_unread_counter ? m_unread_counter() : 0;
-        m_unread_icon->setPixmap(glyphWithBadge(Glyph::Envelope, {16, 16}, CybouTheme::color(CybouTheme::TEXT_SECONDARY), unread));
+        m_bell_icon->setPixmap(glyphWithBadge(Glyph::Bell, {16, 16}, CybouTheme::color(CybouTheme::TEXT_SECONDARY), unread));
         m_unread_text->setText(unread > 0
             ? QStringLiteral("%1 unread").arg(unread)
             : QStringLiteral("No unread mail"));
@@ -138,6 +143,7 @@ private:
     QLabel* m_connection_dot{nullptr};
     QLabel* m_connection_text{nullptr};
     QLabel* m_sync_text{nullptr};
+    QLabel* m_bell_icon{nullptr};
     QLabel* m_unread_icon{nullptr};
     QLabel* m_unread_text{nullptr};
     QLabel* m_available_caption{nullptr};

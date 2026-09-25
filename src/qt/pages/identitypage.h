@@ -41,6 +41,7 @@ private:
     QWidget* m_active_panel;
     QWidget* m_cards;
     QWidget* m_advanced;
+    QWidget* m_avatar_emblem;
 
     void refresh();
     void rebuildForState(CybouIdentityState state);

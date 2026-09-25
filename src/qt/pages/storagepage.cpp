@@ -175,9 +175,11 @@ StoragePage::StoragePage(CybouDesktopModel* model, QWidget* parent)
         m_search->setClearButtonEnabled(true);
         connect(m_search, &QLineEdit::textChanged, this, [this] { rebuildList(); });
         toolbar->addWidget(m_search, 1);
+        toolbar->addWidget(IconButton(Glyph::Sliders, middle, tr("Filter (planned)")), 0, Qt::AlignVCenter);
         toolbar->addWidget(IconButton(Glyph::ListView, middle, tr("List view")), 0, Qt::AlignVCenter);
         m_upload = new QPushButton{tr("Add object\u2026"), middle};
         m_upload->setObjectName(QStringLiteral("primaryButton"));
+        m_upload->setIcon(QIcon{glyphPixmap(Glyph::Upload, {16, 16}, QColor{0xffffff})});
         connect(m_upload, &QPushButton::clicked, this, [this] {
             QMessageBox::information(this, tr("Not available yet"),
                 tr("Object Storage is not wired to the node in this build. No object was created."));

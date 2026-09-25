@@ -92,8 +92,10 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     // ---- Hero: identity state, chips and primary actions ------------------
     auto* hero = new QFrame{this};
     hero->setObjectName(QStringLiteral("heroHeader"));
-    auto* hero_layout = new QVBoxLayout{hero};
-    hero_layout->setContentsMargins(30, 26, 30, 26);
+    auto* hero_outer = new QHBoxLayout{hero};
+    hero_outer->setContentsMargins(30, 26, 30, 26);
+    hero_outer->setSpacing(20);
+    auto* hero_layout = new QVBoxLayout;
     hero_layout->setSpacing(10);
     hero_layout->addWidget(Eyebrow(tr("YOUR IDENTITY"), hero));
 
@@ -143,6 +145,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     actions->setSpacing(10);
     m_share_button = new QPushButton{tr("Share identity"), hero};
     m_share_button->setObjectName(QStringLiteral("primaryButton"));
+    m_share_button->setIcon(QIcon{glyphPixmap(Glyph::Share, {16, 16}, QColor{0xffffff})});
     connect(m_share_button, &QPushButton::clicked, this, [this] {
         const QString account = m_model->status().account_id;
         if (account.isEmpty()) return;
@@ -152,15 +155,18 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     });
     m_claim_button = new QPushButton{tr("Manage identity"), hero};
     m_claim_button->setObjectName(QStringLiteral("secondaryButton"));
+    m_claim_button->setIcon(QIcon{glyphPixmap(Glyph::Compose, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
     connect(m_claim_button, &QPushButton::clicked, this, [this] { startNameClaimFlow(); });
     m_add_device_button = new QPushButton{tr("Add device"), hero};
     m_add_device_button->setObjectName(QStringLiteral("secondaryButton"));
+    m_add_device_button->setIcon(QIcon{glyphPixmap(Glyph::Plus, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
     connect(m_add_device_button, &QPushButton::clicked, this, [this] {
         QMessageBox::information(this, tr("Planned"),
             tr("Device authorization (Ed25519 + ML-DSA-44) arrives with the portable vault sync. For now this device is the only authorized one."));
     });
     m_security_button = new QPushButton{tr("Security settings"), hero};
     m_security_button->setObjectName(QStringLiteral("secondaryButton"));
+    m_security_button->setIcon(QIcon{glyphPixmap(Glyph::ShieldCheck, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
     connect(m_security_button, &QPushButton::clicked, this, [this] {
         QMessageBox::information(this, tr("Planned"),
             tr("A dedicated security surface (vault password, key rotation, active sessions) is planned. Recovery and restore stay on this page."));
@@ -214,6 +220,30 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     onboarding_actions->addWidget(m_restore_button);
     onboarding_actions->addStretch();
     hero_layout->addLayout(onboarding_actions);
+    hero_layout->addStretch();
+    hero_outer->addLayout(hero_layout, 1);
+
+    // Large avatar emblem with a camera badge (sketch), active state only.
+    m_avatar_emblem = new QWidget{hero};
+    m_avatar_emblem->setFixedSize(116, 116);
+    auto* emblem_disc = new QLabel{m_avatar_emblem};
+    emblem_disc->setFixedSize(116, 116);
+    emblem_disc->setAlignment(Qt::AlignCenter);
+    emblem_disc->setStyleSheet(QStringLiteral(
+        "background: qradialgradient(cx:0.5, cy:0.4, radius:0.9, stop:0 #d9f6e7, stop:1 #b9ecd6);"
+        "border-radius: 58px;"));
+    emblem_disc->setPixmap(glyphPixmap(Glyph::User, {54, 54}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
+    auto* camera_badge = new QLabel{m_avatar_emblem};
+    camera_badge->setFixedSize(30, 30);
+    camera_badge->move(82, 80);
+    camera_badge->setAlignment(Qt::AlignCenter);
+    camera_badge->setStyleSheet(QStringLiteral(
+        "background: #ffffff; border: 1px solid %1; border-radius: 15px;")
+        .arg(CybouTheme::color(CybouTheme::BORDER).name()));
+    camera_badge->setPixmap(glyphPixmap(Glyph::Camera, {15, 15}, CybouTheme::color(CybouTheme::TEXT_SECONDARY)));
+    camera_badge->setToolTip(tr("Profile images are planned; your identity is identified by its name and AccountID."));
+    hero_outer->addWidget(m_avatar_emblem, 0, Qt::AlignVCenter);
+    m_avatar_emblem->setVisible(false);
 
     left->addWidget(hero);
 
@@ -275,7 +305,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
         devices_layout->addLayout(header);
         devices_layout->addWidget(MutedText(tr("All devices using your identity are synced and protected."), devices));
         auto* this_device = ActivityRow(Glyph::Monitor, Tint::Indigo, QSysInfo::machineHostName(),
-            tr("This device \u00b7 Active now"), {}, devices);
+            tr("This device \u00b7 Active now"), {}, devices, true);
         devices_layout->addWidget(this_device);
         devices_layout->addStretch();
         auto* manage = new QPushButton{tr("Manage devices"), devices};
@@ -341,7 +371,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
         status_layout->addLayout(header);
         status_layout->addSpacing(6);
         auto add_status = [this, status_card, status_layout](Glyph glyph, const QString& title, const QString& sub) {
-            auto* row = ActivityRow(glyph, Tint::Mint, title, sub, {}, status_card);
+            auto* row = ActivityRow(glyph, Tint::Mint, title, sub, {}, status_card, true);
             status_layout->addWidget(row);
         };
         add_status(Glyph::User, tr("Your identity is active"), tr("All services are available"));
@@ -538,6 +568,7 @@ void IdentityPage::rebuildForState(CybouIdentityState state)
     m_cards->setVisible(active);
     m_advanced->setVisible(active);
     m_active_details->setVisible(active);
+    m_avatar_emblem->setVisible(active);
     m_dev_warning->setVisible(active);
 
     const QVector<CybouIdentityState> flow{
