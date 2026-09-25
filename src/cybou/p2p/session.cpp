@@ -44,7 +44,7 @@ uint32_t Read32(const unsigned char* data)
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
     if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
-        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 15)) return std::nullopt;
+        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 18)) return std::nullopt;
     std::vector<unsigned char> bytes{'C', 'Y', 'P', '2', WIRE_VERSION, static_cast<unsigned char>(frame.type)};
     const auto size = static_cast<uint32_t>(frame.payload.size());
     for (int i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(size >> (8 * i)));
@@ -55,7 +55,7 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < HEADER_SIZE || !std::equal(bytes.begin(), bytes.begin() + 4, "CYP2") ||
-        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 15) return std::nullopt;
+        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 18) return std::nullopt;
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[6 + i]} << (8 * i);
     if (size > MAX_FRAME_PAYLOAD || bytes.size() != HEADER_SIZE + size) return std::nullopt;
@@ -118,7 +118,11 @@ bool PeerSession::ReadExact(unsigned char* out, size_t length, std::chrono::stea
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
-        if (ec || count == 0) return false;
+        if (ec || count == 0) {
+            boost::system::error_code close_ec;
+            m_socket.close(close_ec);
+            return false;
+        }
         done += count;
     }
     return done == length;
@@ -135,7 +139,11 @@ bool PeerSession::WriteExact(const unsigned char* bytes, size_t length,
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
-        if (ec || count == 0) return false;
+        if (ec || count == 0) {
+            boost::system::error_code close_ec;
+            m_socket.close(close_ec);
+            return false;
+        }
         done += count;
     }
     return done == length;
@@ -159,7 +167,7 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     std::array<unsigned char, HEADER_SIZE> header{};
     if (!ReadExact(header.data(), header.size(), deadline)) return std::nullopt;
     if (!std::equal(header.begin(), header.begin() + 4, "CYP2") ||
-        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 15) {
+        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 18) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
         return std::nullopt;
     }
@@ -392,11 +400,81 @@ std::optional<OperationSubmitResult> PeerSession::AdvertiseOperation(const Proto
     return OperationSubmitResult{.status = static_cast<OperationSubmitStatus>(result->payload[0]), .op_id = *id};
 }
 
+bool PeerSession::SendPrevote(const BftPrevoteMsg& prevote)
+{
+    if (!m_peer) return false;
+    const auto serialized = SerializeBftPrevoteMsg(prevote);
+    if (!serialized || serialized->size() > MAX_FRAME_PAYLOAD) return false;
+    return Write(Frame{MessageType::CONSENSUS_PREVOTE, *serialized});
+}
+
+bool PeerSession::SendPrecommit(const BftPrecommitMsg& precommit)
+{
+    if (!m_peer) return false;
+    const auto serialized = SerializeBftPrecommitMsg(precommit);
+    if (!serialized || serialized->size() > MAX_FRAME_PAYLOAD) return false;
+    return Write(Frame{MessageType::CONSENSUS_PRECOMMIT, *serialized});
+}
+
+bool PeerSession::SendProposal(const BftProposalMsg& proposal)
+{
+    if (!m_peer) return false;
+    const auto serialized = SerializeBftProposalMsg(proposal);
+    if (!serialized || serialized->empty()) return false;
+    std::vector<unsigned char> first;
+    Put32(first, static_cast<uint32_t>(serialized->size()));
+    const size_t first_count = std::min<size_t>(serialized->size(), MAX_FRAME_PAYLOAD - 4);
+    first.insert(first.end(), serialized->begin(), serialized->begin() + first_count);
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!Write(Frame{MessageType::CONSENSUS_PROPOSAL, std::move(first)}, deadline)) return false;
+    for (size_t offset = first_count; offset < serialized->size(); offset += MAX_FRAME_PAYLOAD) {
+        const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, serialized->size() - offset);
+        if (!Write(Frame{MessageType::CONSENSUS_PROPOSAL,
+            {serialized->begin() + offset, serialized->begin() + offset + count}}, deadline)) return false;
+    }
+    return true;
+}
+
+std::optional<BftProposalMsg> PeerSession::ReadProposal(std::chrono::steady_clock::time_point deadline)
+{
+    if (!m_peer) return std::nullopt;
+    const auto first = Read(deadline);
+    if (!first || first->type != MessageType::CONSENSUS_PROPOSAL || first->payload.size() < 5) return std::nullopt;
+    const uint32_t size = Read32(first->payload.data());
+    if (size == 0 || size > MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES + 4096 || first->payload.size() - 4 > size) return std::nullopt;
+    std::vector<unsigned char> bytes{first->payload.begin() + 4, first->payload.end()};
+    while (bytes.size() < size) {
+        const auto chunk = Read(deadline);
+        if (!chunk || chunk->type != MessageType::CONSENSUS_PROPOSAL || chunk->payload.empty() ||
+            chunk->payload.size() > size - bytes.size()) return std::nullopt;
+        bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
+    }
+    return DeserializeBftProposalMsg(bytes);
+}
+
+std::optional<BftPrevoteMsg> PeerSession::ReadPrevote(std::chrono::steady_clock::time_point deadline)
+{
+    if (!m_peer) return std::nullopt;
+    const auto frame = Read(deadline);
+    if (!frame || frame->type != MessageType::CONSENSUS_PREVOTE) return std::nullopt;
+    return DeserializeBftPrevoteMsg(frame->payload);
+}
+
+std::optional<BftPrecommitMsg> PeerSession::ReadPrecommit(std::chrono::steady_clock::time_point deadline)
+{
+    if (!m_peer) return std::nullopt;
+    const auto frame = Read(deadline);
+    if (!frame || frame->type != MessageType::CONSENSUS_PRECOMMIT) return std::nullopt;
+    return DeserializeBftPrecommitMsg(frame->payload);
+}
+
 bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
 {
     if (!m_peer) return false;
     const auto request = Read();
-    if (!request) return false;
+    if (!request) {
+        return m_socket.is_open();
+    }
     if (request->type == MessageType::PING) {
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});
     }
@@ -522,6 +600,38 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             ++inventory[0];
         }
         return Write(Frame{MessageType::BLOCK_INV, inventory});
+    }
+    if (request->type == MessageType::CONSENSUS_PROPOSAL) {
+        if (!(m_local_capabilities & CAP_CONSENSUS) || request->payload.size() < 5) return false;
+        const uint32_t size = Read32(request->payload.data());
+        if (size == 0 || size > MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES + 4096 ||
+            request->payload.size() - 4 > size) return false;
+        std::vector<unsigned char> bytes{request->payload.begin() + 4, request->payload.end()};
+        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        while (bytes.size() < size) {
+            const auto chunk = Read(deadline);
+            if (!chunk || chunk->type != MessageType::CONSENSUS_PROPOSAL || chunk->payload.empty() ||
+                chunk->payload.size() > size - bytes.size()) return false;
+            bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
+        }
+        const auto proposal = DeserializeBftProposalMsg(bytes);
+        if (!proposal) return false;
+        runtime.ReceiveConsensusProposal(*proposal);
+        return true;
+    }
+    if (request->type == MessageType::CONSENSUS_PREVOTE) {
+        if (!(m_local_capabilities & CAP_CONSENSUS)) return false;
+        const auto prevote = DeserializeBftPrevoteMsg(request->payload);
+        if (!prevote) return false;
+        runtime.ReceiveConsensusPrevote(*prevote);
+        return true;
+    }
+    if (request->type == MessageType::CONSENSUS_PRECOMMIT) {
+        if (!(m_local_capabilities & CAP_CONSENSUS)) return false;
+        const auto precommit = DeserializeBftPrecommitMsg(request->payload);
+        if (!precommit) return false;
+        runtime.ReceiveConsensusPrecommit(*precommit);
+        return true;
     }
     if (request->type != MessageType::GET_BLOCK || request->payload.size() != 8) return false;
     if (!(m_local_capabilities & CAP_SERVE_BLOCKS)) return false;

@@ -93,6 +93,16 @@ inline size_t BftLeaderIndex(uint64_t height, uint32_t round, size_t validator_c
     return validator_count == 0 ? 0 : static_cast<size_t>((height + static_cast<uint64_t>(round)) % validator_count);
 }
 
+/** Wire serialization and deserialization for BFT consensus messages */
+std::optional<std::vector<unsigned char>> SerializeBftProposalMsg(const BftProposalMsg& msg);
+std::optional<BftProposalMsg> DeserializeBftProposalMsg(std::span<const unsigned char> bytes);
+
+std::optional<std::vector<unsigned char>> SerializeBftPrevoteMsg(const BftPrevoteMsg& msg);
+std::optional<BftPrevoteMsg> DeserializeBftPrevoteMsg(std::span<const unsigned char> bytes);
+
+std::optional<std::vector<unsigned char>> SerializeBftPrecommitMsg(const BftPrecommitMsg& msg);
+std::optional<BftPrecommitMsg> DeserializeBftPrecommitMsg(std::span<const unsigned char> bytes);
+
 /**
  * Individual BFT validator state machine for N >= 1 consensus.
  */

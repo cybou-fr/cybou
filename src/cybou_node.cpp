@@ -464,9 +464,13 @@ int Main(const int argc, char* argv[])
             while (!stopping) {
                 const auto block = runtime.ProduceBlock();
                 if (!block) {
-                    std::cerr << "block production stopped\n";
-                    stopping = true;
-                    break;
+                    if (runtime.GetStatus().validator_count <= 1) {
+                        std::cerr << "block production stopped\n";
+                        stopping = true;
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
+                    continue;
                 }
                 // std::endl, not '\n': under systemd stdout is a pipe and a
                 // buffered height line never reaches the journal otherwise.

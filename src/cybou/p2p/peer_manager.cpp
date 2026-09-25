@@ -64,8 +64,12 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
         return false;
     }
+    uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS;
+    if (status.is_authority) {
+        caps |= (CAP_ACCEPT_OPERATIONS | CAP_OP_INVENTORY | CAP_CONSENSUS);
+    }
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
-        .finalized_tip = status.finalized_tip, .capabilities = 0, .nonce = *nonce};
+        .finalized_tip = status.finalized_tip, .capabilities = caps, .nonce = *nonce};
     auto peer = std::make_unique<PeerSession>(std::move(socket));
     if (!peer->Handshake(local)) {
         m_last_connect_status = peer->LastHandshakeStatus() == HandshakeStatus::UNAVAILABLE ?
@@ -360,6 +364,39 @@ void PeerManager::DisconnectAll()
     m_peers.clear();
     m_announced_operations.clear();
     m_announced_blocks.clear();
+}
+
+size_t PeerManager::BroadcastProposal(const BftProposalMsg& proposal)
+{
+    size_t count{0};
+    for (auto& [endpoint, session] : m_peers) {
+        if (session && session->Peer() && (session->Peer()->capabilities & CAP_CONSENSUS)) {
+            if (session->SendProposal(proposal)) ++count;
+        }
+    }
+    return count;
+}
+
+size_t PeerManager::BroadcastPrevote(const BftPrevoteMsg& prevote)
+{
+    size_t count{0};
+    for (auto& [endpoint, session] : m_peers) {
+        if (session && session->Peer() && (session->Peer()->capabilities & CAP_CONSENSUS)) {
+            if (session->SendPrevote(prevote)) ++count;
+        }
+    }
+    return count;
+}
+
+size_t PeerManager::BroadcastPrecommit(const BftPrecommitMsg& precommit)
+{
+    size_t count{0};
+    for (auto& [endpoint, session] : m_peers) {
+        if (session && session->Peer() && (session->Peer()->capabilities & CAP_CONSENSUS)) {
+            if (session->SendPrecommit(precommit)) ++count;
+        }
+    }
+    return count;
 }
 
 } // namespace cybou::p2p

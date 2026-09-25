@@ -71,6 +71,11 @@ public:
     std::vector<PeerInfo> Peers() const;
     void DisconnectAll();
 
+    /** BFT consensus broadcasts to connected peers with CAP_CONSENSUS */
+    size_t BroadcastProposal(const BftProposalMsg& proposal);
+    size_t BroadcastPrevote(const BftPrevoteMsg& prevote);
+    size_t BroadcastPrecommit(const BftPrecommitMsg& precommit);
+
 private:
     using Endpoint = std::pair<std::string, uint16_t>;
     CybouNodeRuntime& m_runtime;

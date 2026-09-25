@@ -108,6 +108,15 @@ public:
     /** Produce a block if running in authority mode */
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);
 
+    /** BFT Consensus event handlers and dispatch */
+    std::optional<BftProposalMsg> ProposeConsensusBlock(uint32_t round = 0);
+    std::optional<BftPrevoteMsg> ReceiveConsensusProposal(const BftProposalMsg& proposal);
+    std::optional<BftPrecommitMsg> ReceiveConsensusPrevote(const BftPrevoteMsg& prevote);
+    bool ReceiveConsensusPrecommit(const BftPrecommitMsg& precommit);
+    void BroadcastConsensusProposal(const BftProposalMsg& proposal);
+    void BroadcastConsensusPrevote(const BftPrevoteMsg& prevote);
+    void BroadcastConsensusPrecommit(const BftPrecommitMsg& precommit);
+
     /** Commit a finalized block */
     BlockTransitionResult CommitBlock(const FinalizedBlock& block, bool sync = true);
 

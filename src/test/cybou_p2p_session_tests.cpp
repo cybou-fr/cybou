@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/p2p/session.h>
+#include <cybou/bft_engine.h>
+#include <cybou/block.h>
+#include <cybou/validator.h>
 #include <test/util/setup_common.h>
 
 #include <boost/asio.hpp>
@@ -125,6 +128,115 @@ BOOST_AUTO_TEST_CASE(client_respects_advertised_block_capability)
     BOOST_CHECK(peer.Ping(43));
     server.join();
     BOOST_CHECK(answered);
+}
+
+BOOST_AUTO_TEST_CASE(consensus_message_serialization_and_p2p_exchange)
+{
+    std::array<unsigned char, 32> seed{};
+    seed[0] = 7;
+    const auto keypair = cybou::GenerateValidatorKeyPair(seed).value();
+    const auto val_id = cybou::ComputeValidatorId(keypair.public_key);
+    const uint256 network = uint256::ONE;
+
+    // 1. Prevote serialization
+    const uint256 pv_digest = cybou::ComputePrevoteDigest(network, 10, 2, val_id, uint256::ONE);
+    cybou::BftPrevoteMsg pv{
+        .network_id = network,
+        .height = 10,
+        .round = 2,
+        .validator_id = val_id,
+        .block_id = uint256::ONE,
+        .signature = *cybou::SignValidatorVote(seed, pv_digest),
+    };
+    const auto enc_pv = cybou::SerializeBftPrevoteMsg(pv);
+    BOOST_REQUIRE(enc_pv.has_value());
+    const auto dec_pv = cybou::DeserializeBftPrevoteMsg(*enc_pv);
+    BOOST_REQUIRE(dec_pv.has_value());
+    BOOST_CHECK(*dec_pv == pv);
+
+    // Prevote nil serialization
+    const uint256 pv_nil_digest = cybou::ComputePrevoteDigest(network, 10, 2, val_id, std::nullopt);
+    cybou::BftPrevoteMsg pv_nil{
+        .network_id = network,
+        .height = 10,
+        .round = 2,
+        .validator_id = val_id,
+        .block_id = std::nullopt,
+        .signature = *cybou::SignValidatorVote(seed, pv_nil_digest),
+    };
+    const auto enc_pv_nil = cybou::SerializeBftPrevoteMsg(pv_nil);
+    BOOST_REQUIRE(enc_pv_nil.has_value());
+    const auto dec_pv_nil = cybou::DeserializeBftPrevoteMsg(*enc_pv_nil);
+    BOOST_REQUIRE(dec_pv_nil.has_value());
+    BOOST_CHECK(*dec_pv_nil == pv_nil);
+
+    // 2. Precommit serialization
+    cybou::BftPrecommitMsg pc{
+        .network_id = network,
+        .height = 10,
+        .round = 2,
+        .validator_id = val_id,
+        .block_id = uint256::ONE,
+        .signature = *cybou::SignValidatorVote(seed, pv_digest),
+    };
+    const auto enc_pc = cybou::SerializeBftPrecommitMsg(pc);
+    BOOST_REQUIRE(enc_pc.has_value());
+    const auto dec_pc = cybou::DeserializeBftPrecommitMsg(*enc_pc);
+    BOOST_REQUIRE(dec_pc.has_value());
+    BOOST_CHECK(*dec_pc == pc);
+
+    // 3. Proposal serialization
+    cybou::CybouBlock block;
+    block.height = 10;
+    block.parent_block_id = uint256::ONE;
+    block.resulting_state_root = uint256::ONE;
+    const uint256 block_id = cybou::ComputeBlockId(block);
+    const uint256 prop_digest = cybou::ComputeProposalDigest(network, 10, 2, val_id, block_id);
+    cybou::BftProposalMsg prop{
+        .network_id = network,
+        .height = 10,
+        .round = 2,
+        .proposer_id = val_id,
+        .block = block,
+        .signature = *cybou::SignValidatorVote(seed, prop_digest),
+    };
+    const auto enc_prop = cybou::SerializeBftProposalMsg(prop);
+    BOOST_REQUIRE(enc_prop.has_value());
+    const auto dec_prop = cybou::DeserializeBftProposalMsg(*enc_prop);
+    BOOST_REQUIRE(dec_prop.has_value());
+    BOOST_CHECK(*dec_prop == prop);
+
+    // 4. Over-the-wire P2P exchange over bidirectional PeerSession
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    tcp::acceptor acceptor{io, tcp::endpoint{boost::asio::ip::address_v4::loopback(), 0}};
+    bool server_received_all{false};
+
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession peer{std::move(socket)};
+        BOOST_REQUIRE(peer.Handshake({.network_id = network, .finalized_height = 0,
+            .finalized_tip = uint256::ONE, .capabilities = cybou::p2p::CAP_CONSENSUS, .nonce = 1001}));
+        const auto r_prop = peer.ReadProposal();
+        const auto r_pv = peer.ReadPrevote();
+        const auto r_pc = peer.ReadPrecommit();
+        server_received_all = r_prop && *r_prop == prop &&
+                              r_pv && *r_pv == pv &&
+                              r_pc && *r_pc == pc;
+    }};
+
+    tcp::socket socket{io};
+    socket.connect(acceptor.local_endpoint());
+    cybou::p2p::PeerSession client{std::move(socket)};
+    BOOST_REQUIRE(client.Handshake({.network_id = network, .finalized_height = 0,
+        .finalized_tip = uint256::ONE, .capabilities = cybou::p2p::CAP_CONSENSUS, .nonce = 1002}));
+    BOOST_CHECK(client.SendProposal(prop));
+    BOOST_CHECK(client.SendPrevote(pv));
+    BOOST_CHECK(client.SendPrecommit(pc));
+
+    server.join();
+    BOOST_CHECK(server_received_all);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

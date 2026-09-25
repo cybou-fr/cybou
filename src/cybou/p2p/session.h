@@ -6,6 +6,7 @@
 
 #include <uint256.h>
 #include <cybou/authority_node.h>
+#include <cybou/bft_engine.h>
 
 #include <boost/asio/ip/tcp.hpp>
 
@@ -25,6 +26,7 @@ inline constexpr uint64_t CAP_ACCEPT_OPERATIONS{1ULL << 1};
 inline constexpr uint64_t CAP_OP_INVENTORY{1ULL << 2};
 inline constexpr uint64_t CAP_BLOCK_INVENTORY{1ULL << 3};
 inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
+inline constexpr uint64_t CAP_CONSENSUS{1ULL << 5};
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 
 enum class MessageType : uint8_t {
@@ -32,6 +34,9 @@ enum class MessageType : uint8_t {
     BLOCK_CHUNK = 6, OP_META = 7, OP_CHUNK = 8, OP_RESULT = 9,
     OP_INV = 10, GET_OP = 11, OP = 12, GET_BLOCKS = 13, BLOCK_INV = 14,
     BLOCK_RESULT = 15,
+    CONSENSUS_PROPOSAL = 16,
+    CONSENSUS_PREVOTE = 17,
+    CONSENSUS_PRECOMMIT = 18,
 };
 
 struct Frame {
@@ -99,6 +104,15 @@ public:
         const FinalizedBlock& block);
     std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation);
     std::optional<OperationSubmitResult> AdvertiseOperation(const ProtocolOperation& operation);
+    bool SendProposal(const BftProposalMsg& proposal);
+    bool SendPrevote(const BftPrevoteMsg& prevote);
+    bool SendPrecommit(const BftPrecommitMsg& precommit);
+    std::optional<BftProposalMsg> ReadProposal(
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10});
+    std::optional<BftPrevoteMsg> ReadPrevote(
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10});
+    std::optional<BftPrecommitMsg> ReadPrecommit(
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10});
     bool ServeNext(CybouNodeRuntime& runtime);
     const std::optional<Hello>& Peer() const { return m_peer; }
     boost::asio::ip::tcp::socket& Socket() { return m_socket; }

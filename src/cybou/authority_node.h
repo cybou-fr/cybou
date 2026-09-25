@@ -4,6 +4,7 @@
 #ifndef CYBOU_AUTHORITY_NODE_H
 #define CYBOU_AUTHORITY_NODE_H
 
+#include <cybou/bft_engine.h>
 #include <cybou/block.h>
 #include <cybou/operation_pool.h>
 #include <cybou/protocol_operation.h>
@@ -80,11 +81,22 @@ public:
     /** Finalize the pending batch, including an empty block when the queue is empty. */
     AuthorityProductionResult ProduceNextBlock(bool sync = true);
 
+    /** Multi-validator consensus methods */
+    std::optional<BftProposalMsg> StartConsensusRound(uint32_t round);
+    std::optional<BftPrevoteMsg> ReceiveProposal(const BftProposalMsg& proposal);
+    std::optional<BftPrecommitMsg> ReceivePrevote(const BftPrevoteMsg& prevote);
+    bool ReceivePrecommit(const BftPrecommitMsg& precommit);
+    const std::optional<FinalizedBlock>& GetLatestFinalizedBlock() const;
+    std::optional<size_t> GetValidatorIndex() const;
+
 private:
+    bool EnsureValidator();
+
     CybouStateStore& m_store;
     std::array<unsigned char, 32> m_validator_private_key;
     std::optional<std::filesystem::path> m_signing_journal;
     OperationPool m_pool;
+    std::unique_ptr<BftValidatorNode> m_validator;
 };
 
 } // namespace cybou

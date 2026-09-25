@@ -192,6 +192,218 @@ uint256 ComputePrecommitNilDigest(
     return digest;
 }
 
+std::optional<std::vector<unsigned char>> SerializeBftProposalMsg(const BftProposalMsg& msg)
+{
+    if (msg.network_id.IsNull() || msg.proposer_id.IsNull() || msg.height == 0) return std::nullopt;
+    if (msg.signature.ml_dsa.size() != 3309) return std::nullopt;
+    if (std::all_of(msg.signature.ed25519.begin(), msg.signature.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
+        std::all_of(msg.signature.ml_dsa.begin(), msg.signature.ml_dsa.end(), [](unsigned char b) { return b == 0; })) {
+        return std::nullopt;
+    }
+    const auto block_bytes = SerializeBlock(msg.block);
+    if (!block_bytes) return std::nullopt;
+
+    std::vector<unsigned char> out;
+    out.reserve(32 + 8 + 4 + 32 + 64 + 4 + msg.signature.ml_dsa.size() + 4 + block_bytes->size());
+    out.insert(out.end(), msg.network_id.begin(), msg.network_id.end());
+    AppendUint64LE(out, msg.height);
+    AppendUint32LE(out, msg.round);
+    out.insert(out.end(), msg.proposer_id.begin(), msg.proposer_id.end());
+    out.insert(out.end(), msg.signature.ed25519.begin(), msg.signature.ed25519.end());
+    AppendUint32LE(out, static_cast<uint32_t>(msg.signature.ml_dsa.size()));
+    out.insert(out.end(), msg.signature.ml_dsa.begin(), msg.signature.ml_dsa.end());
+    AppendUint32LE(out, static_cast<uint32_t>(block_bytes->size()));
+    out.insert(out.end(), block_bytes->begin(), block_bytes->end());
+    return out;
+}
+
+std::optional<BftProposalMsg> DeserializeBftProposalMsg(std::span<const unsigned char> bytes)
+{
+    static constexpr size_t MIN_HEADER{32 + 8 + 4 + 32 + 64 + 4 + 4};
+    if (bytes.size() < MIN_HEADER) return std::nullopt;
+    size_t offset{0};
+
+    BftProposalMsg msg;
+    std::copy_n(bytes.begin() + offset, 32, msg.network_id.begin());
+    offset += 32;
+
+    msg.height = ReadUint64LE(bytes.data() + offset);
+    offset += 8;
+
+    msg.round = ReadUint32LE(bytes.data() + offset);
+    offset += 4;
+
+    std::copy_n(bytes.begin() + offset, 32, msg.proposer_id.begin());
+    offset += 32;
+
+    std::copy_n(bytes.begin() + offset, 64, msg.signature.ed25519.begin());
+    offset += 64;
+
+    const uint32_t ml_dsa_len = ReadUint32LE(bytes.data() + offset);
+    offset += 4;
+    if (ml_dsa_len != 3309 || offset + ml_dsa_len + 4 > bytes.size()) return std::nullopt;
+
+    msg.signature.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + ml_dsa_len);
+    offset += ml_dsa_len;
+
+    const uint32_t block_len = ReadUint32LE(bytes.data() + offset);
+    offset += 4;
+    if (offset + block_len != bytes.size()) return std::nullopt;
+
+    const auto block = DeserializeBlock(bytes.subspan(offset, block_len));
+    if (!block || block->height != msg.height) return std::nullopt;
+    msg.block = std::move(*block);
+
+    if (msg.network_id.IsNull() || msg.proposer_id.IsNull() || msg.height == 0) return std::nullopt;
+    return msg;
+}
+
+std::optional<std::vector<unsigned char>> SerializeBftPrevoteMsg(const BftPrevoteMsg& msg)
+{
+    if (msg.network_id.IsNull() || msg.validator_id.IsNull() || msg.height == 0) return std::nullopt;
+    if (msg.signature.ml_dsa.size() != 3309) return std::nullopt;
+    if (std::all_of(msg.signature.ed25519.begin(), msg.signature.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
+        std::all_of(msg.signature.ml_dsa.begin(), msg.signature.ml_dsa.end(), [](unsigned char b) { return b == 0; })) {
+        return std::nullopt;
+    }
+
+    std::vector<unsigned char> out;
+    out.reserve(32 + 8 + 4 + 32 + 1 + (msg.block_id ? 32 : 0) + 64 + 4 + msg.signature.ml_dsa.size());
+    out.insert(out.end(), msg.network_id.begin(), msg.network_id.end());
+    AppendUint64LE(out, msg.height);
+    AppendUint32LE(out, msg.round);
+    out.insert(out.end(), msg.validator_id.begin(), msg.validator_id.end());
+    if (msg.block_id.has_value()) {
+        out.push_back(1);
+        out.insert(out.end(), msg.block_id->begin(), msg.block_id->end());
+    } else {
+        out.push_back(0);
+    }
+    out.insert(out.end(), msg.signature.ed25519.begin(), msg.signature.ed25519.end());
+    AppendUint32LE(out, static_cast<uint32_t>(msg.signature.ml_dsa.size()));
+    out.insert(out.end(), msg.signature.ml_dsa.begin(), msg.signature.ml_dsa.end());
+    return out;
+}
+
+std::optional<BftPrevoteMsg> DeserializeBftPrevoteMsg(std::span<const unsigned char> bytes)
+{
+    static constexpr size_t MIN_HEADER{32 + 8 + 4 + 32 + 1 + 64 + 4 + 3309};
+    if (bytes.size() < MIN_HEADER) return std::nullopt;
+    size_t offset{0};
+
+    BftPrevoteMsg msg;
+    std::copy_n(bytes.begin() + offset, 32, msg.network_id.begin());
+    offset += 32;
+
+    msg.height = ReadUint64LE(bytes.data() + offset);
+    offset += 8;
+
+    msg.round = ReadUint32LE(bytes.data() + offset);
+    offset += 4;
+
+    std::copy_n(bytes.begin() + offset, 32, msg.validator_id.begin());
+    offset += 32;
+
+    const uint8_t has_block_id = bytes[offset++];
+    if (has_block_id == 1) {
+        if (offset + 32 > bytes.size()) return std::nullopt;
+        uint256 id;
+        std::copy_n(bytes.begin() + offset, 32, id.begin());
+        offset += 32;
+        if (id.IsNull()) return std::nullopt;
+        msg.block_id = id;
+    } else if (has_block_id == 0) {
+        msg.block_id = std::nullopt;
+    } else {
+        return std::nullopt;
+    }
+
+    if (offset + 64 + 4 > bytes.size()) return std::nullopt;
+    std::copy_n(bytes.begin() + offset, 64, msg.signature.ed25519.begin());
+    offset += 64;
+
+    const uint32_t ml_dsa_len = ReadUint32LE(bytes.data() + offset);
+    offset += 4;
+    if (ml_dsa_len != 3309 || offset + ml_dsa_len != bytes.size()) return std::nullopt;
+
+    msg.signature.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + ml_dsa_len);
+    if (msg.network_id.IsNull() || msg.validator_id.IsNull() || msg.height == 0) return std::nullopt;
+    return msg;
+}
+
+std::optional<std::vector<unsigned char>> SerializeBftPrecommitMsg(const BftPrecommitMsg& msg)
+{
+    if (msg.network_id.IsNull() || msg.validator_id.IsNull() || msg.height == 0) return std::nullopt;
+    if (msg.signature.ml_dsa.size() != 3309) return std::nullopt;
+    if (std::all_of(msg.signature.ed25519.begin(), msg.signature.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
+        std::all_of(msg.signature.ml_dsa.begin(), msg.signature.ml_dsa.end(), [](unsigned char b) { return b == 0; })) {
+        return std::nullopt;
+    }
+
+    std::vector<unsigned char> out;
+    out.reserve(32 + 8 + 4 + 32 + 1 + (msg.block_id ? 32 : 0) + 64 + 4 + msg.signature.ml_dsa.size());
+    out.insert(out.end(), msg.network_id.begin(), msg.network_id.end());
+    AppendUint64LE(out, msg.height);
+    AppendUint32LE(out, msg.round);
+    out.insert(out.end(), msg.validator_id.begin(), msg.validator_id.end());
+    if (msg.block_id.has_value()) {
+        out.push_back(1);
+        out.insert(out.end(), msg.block_id->begin(), msg.block_id->end());
+    } else {
+        out.push_back(0);
+    }
+    out.insert(out.end(), msg.signature.ed25519.begin(), msg.signature.ed25519.end());
+    AppendUint32LE(out, static_cast<uint32_t>(msg.signature.ml_dsa.size()));
+    out.insert(out.end(), msg.signature.ml_dsa.begin(), msg.signature.ml_dsa.end());
+    return out;
+}
+
+std::optional<BftPrecommitMsg> DeserializeBftPrecommitMsg(std::span<const unsigned char> bytes)
+{
+    static constexpr size_t MIN_HEADER{32 + 8 + 4 + 32 + 1 + 64 + 4 + 3309};
+    if (bytes.size() < MIN_HEADER) return std::nullopt;
+    size_t offset{0};
+
+    BftPrecommitMsg msg;
+    std::copy_n(bytes.begin() + offset, 32, msg.network_id.begin());
+    offset += 32;
+
+    msg.height = ReadUint64LE(bytes.data() + offset);
+    offset += 8;
+
+    msg.round = ReadUint32LE(bytes.data() + offset);
+    offset += 4;
+
+    std::copy_n(bytes.begin() + offset, 32, msg.validator_id.begin());
+    offset += 32;
+
+    const uint8_t has_block_id = bytes[offset++];
+    if (has_block_id == 1) {
+        if (offset + 32 > bytes.size()) return std::nullopt;
+        uint256 id;
+        std::copy_n(bytes.begin() + offset, 32, id.begin());
+        offset += 32;
+        if (id.IsNull()) return std::nullopt;
+        msg.block_id = id;
+    } else if (has_block_id == 0) {
+        msg.block_id = std::nullopt;
+    } else {
+        return std::nullopt;
+    }
+
+    if (offset + 64 + 4 > bytes.size()) return std::nullopt;
+    std::copy_n(bytes.begin() + offset, 64, msg.signature.ed25519.begin());
+    offset += 64;
+
+    const uint32_t ml_dsa_len = ReadUint32LE(bytes.data() + offset);
+    offset += 4;
+    if (ml_dsa_len != 3309 || offset + ml_dsa_len != bytes.size()) return std::nullopt;
+
+    msg.signature.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + ml_dsa_len);
+    if (msg.network_id.IsNull() || msg.validator_id.IsNull() || msg.height == 0) return std::nullopt;
+    return msg;
+}
+
 BftValidatorNode::BftValidatorNode(
     size_t node_index,
     std::array<unsigned char, 32> private_key_seed,

@@ -217,14 +217,115 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
 
 std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
 {
+    std::optional<BftProposalMsg> prop;
+    std::optional<BftPrevoteMsg> pv;
+    std::optional<BftPrecommitMsg> pc;
+    std::optional<FinalizedBlock> finalized;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_authority_node) return std::nullopt;
+        const auto loaded = m_store.LoadState();
+        if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
+        const auto set = m_store.GetValidatorSet();
+        if (!set) return std::nullopt;
+
+        if (set->validators.size() == 1) {
+            const auto res = m_authority_node->ProduceNextBlock(sync);
+            if (!res) return std::nullopt;
+            if (res.finalized_block) RememberFinalizedBlockForGossip(*res.finalized_block);
+            return res.finalized_block;
+        }
+
+        prop = m_authority_node->StartConsensusRound(0);
+        prop = m_authority_node->StartConsensusRound(0);
+        finalized = m_authority_node->GetLatestFinalizedBlock();
+        if (finalized) RememberFinalizedBlockForGossip(*finalized);
+    }
+    if (prop) {
+        BroadcastConsensusProposal(*prop);
+        ReceiveConsensusProposal(*prop);
+    }
+    return finalized;
+}
+
+std::optional<BftProposalMsg> CybouNodeRuntime::ProposeConsensusBlock(const uint32_t round)
+{
+    std::optional<BftProposalMsg> prop;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_authority_node) return std::nullopt;
+        const auto loaded = m_store.LoadState();
+        if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
+        prop = m_authority_node->StartConsensusRound(round);
+    }
+    if (prop) BroadcastConsensusProposal(*prop);
+    return prop;
+}
+
+std::optional<BftPrevoteMsg> CybouNodeRuntime::ReceiveConsensusProposal(const BftProposalMsg& proposal)
+{
+    std::optional<BftPrevoteMsg> pv;
+    std::optional<BftPrecommitMsg> pc;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_authority_node) return std::nullopt;
+        pv = m_authority_node->ReceiveProposal(proposal);
+        if (pv) {
+            pc = m_authority_node->ReceivePrevote(*pv);
+            if (pc) {
+                m_authority_node->ReceivePrecommit(*pc);
+            }
+        }
+    }
+    if (pv) BroadcastConsensusPrevote(*pv);
+    if (pc) BroadcastConsensusPrecommit(*pc);
+    return pv;
+}
+
+std::optional<BftPrecommitMsg> CybouNodeRuntime::ReceiveConsensusPrevote(const BftPrevoteMsg& prevote)
+{
+    std::optional<BftPrecommitMsg> pc;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_authority_node) return std::nullopt;
+        pc = m_authority_node->ReceivePrevote(prevote);
+        if (pc) {
+            m_authority_node->ReceivePrecommit(*pc);
+        }
+    }
+    if (pc) BroadcastConsensusPrecommit(*pc);
+    return pc;
+}
+
+bool CybouNodeRuntime::ReceiveConsensusPrecommit(const BftPrecommitMsg& precommit)
+{
     std::lock_guard lock(m_mutex);
-    if (!m_authority_node) return std::nullopt;
-    const auto loaded = m_store.LoadState();
-    if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
-    const auto res = m_authority_node->ProduceNextBlock(sync);
-    if (!res) return std::nullopt;
-    if (res.finalized_block) RememberFinalizedBlockForGossip(*res.finalized_block);
-    return res.finalized_block;
+    if (!m_authority_node) return false;
+    return m_authority_node->ReceivePrecommit(precommit);
+}
+
+void CybouNodeRuntime::BroadcastConsensusProposal(const BftProposalMsg& proposal)
+{
+    std::lock_guard lock(m_p2p_mutex);
+    if (m_peer_manager) {
+        m_peer_manager->BroadcastProposal(proposal);
+    }
+}
+
+void CybouNodeRuntime::BroadcastConsensusPrevote(const BftPrevoteMsg& prevote)
+{
+    std::lock_guard lock(m_p2p_mutex);
+    if (m_peer_manager) {
+        m_peer_manager->BroadcastPrevote(prevote);
+    }
+}
+
+void CybouNodeRuntime::BroadcastConsensusPrecommit(const BftPrecommitMsg& precommit)
+{
+    std::lock_guard lock(m_p2p_mutex);
+    if (m_peer_manager) {
+        m_peer_manager->BroadcastPrecommit(precommit);
+    }
 }
 
 BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block, const bool sync)
