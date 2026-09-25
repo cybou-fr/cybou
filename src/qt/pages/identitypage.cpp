@@ -6,9 +6,12 @@
 
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
+#include <qt/recoveryphrasedialog.h>
 #include <cybou/identity_service.h>
 
 #include <QClipboard>
+#include <QFile>
+#include <QFileDialog>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -17,6 +20,8 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QDir>
+#include <QRegularExpression>
 #include <QStringList>
 #include <QStyle>
 #include <QSysInfo>
@@ -281,9 +286,9 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
         phrase_row->addWidget(Pill(tr("Backed up and protected"), Tint::Mint, recovery), 0, Qt::AlignVCenter);
         recovery_layout->addLayout(phrase_row);
         recovery_layout->addStretch();
-        auto* options = new QPushButton{tr("View recovery options"), recovery};
+        auto* options = new QPushButton{tr("Show recovery phrase"), recovery};
         options->setObjectName(QStringLiteral("secondaryButton"));
-        connect(options, &QPushButton::clicked, this, [this] { startRestoreFlow(); });
+        connect(options, &QPushButton::clicked, this, [this] { startShowRecoveryFlow(); });
         recovery_layout->addWidget(options, 0, Qt::AlignLeft);
     }
     cards_layout->addWidget(recovery, 1);
@@ -473,30 +478,19 @@ void IdentityPage::startIdentityFlow()
         QMessageBox::warning(this, tr("Cannot prepare identity"), tr("The local identity material could not be generated."));
         return;
     }
-    QStringList numbered_words;
-    for (size_t i{0}; i < words->size(); ++i) {
-        numbered_words << QStringLiteral("%1. %2").arg(i + 1).arg(QString::fromStdString((*words)[i]));
+
+    // The words dialog is selectable, copyable, and offers a file export.
+    // It only accepts after two random words are retyped; canceling means
+    // the identity is not created and the prepared material is discarded.
+    QStringList word_list;
+    for (const auto& word : *words) {
+        word_list << QString::fromStdString(word);
     }
-    const auto decision = QMessageBox::question(this, tr("Write down your recovery words"),
-        tr("Write these 24 words down in order. They recover your identity on a clean machine.\n\n%1\n\nContinue after you have saved them privately.")
-            .arg(numbered_words.join(QLatin1Char('\n'))),
-        QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Cancel);
-    if (decision != QMessageBox::Ok) {
+    RecoveryPhraseDialog phrase_dialog{RecoveryPhraseDialog::Mode::Create, word_list, this};
+    if (phrase_dialog.exec() != QDialog::Accepted) {
         service->DiscardPreparedIdentity();
         password.fill(QChar{0});
         return;
-    }
-    for (const size_t index : {size_t{3}, size_t{16}}) {
-        QString answer = QInputDialog::getText(this, tr("Confirm recovery words"),
-            tr("Enter word %1").arg(index + 1), QLineEdit::Normal, {}, &accepted);
-        const bool correct = accepted && answer == QString::fromStdString((*words)[index]);
-        answer.fill(QChar{0});
-        if (!correct) {
-            service->DiscardPreparedIdentity();
-            password.fill(QChar{0});
-            if (accepted) QMessageBox::warning(this, tr("Recovery words differ"), tr("Start again and record the words in order."));
-            return;
-        }
     }
     m_model->requestCreateIdentity(password);
     password.fill(QChar{0});
@@ -505,10 +499,46 @@ void IdentityPage::startIdentityFlow()
 void IdentityPage::startRestoreFlow()
 {
     if (!m_model->identityService()) return;
+
+    QMessageBox source_box{QMessageBox::Question, tr("Restore identity"),
+        tr("Enter your 24 recovery words in their original order.\n\nPaste them, or load a saved recovery file?"),
+        QMessageBox::Cancel, this};
+    auto* paste_button = source_box.addButton(tr("Paste words"), QMessageBox::AcceptRole);
+    source_box.addButton(tr("Load from file…"), QMessageBox::ActionRole);
+    source_box.exec();
+    if (source_box.clickedButton() != paste_button &&
+        source_box.clickedButton() != source_box.buttons().at(1)) {
+        return;
+    }
+
+    QString phrase;
+    if (source_box.clickedButton() == paste_button) {
+        bool accepted{false};
+        phrase = QInputDialog::getMultiLineText(this, tr("Restore identity"),
+            tr("Enter your 24 recovery words in order, separated by spaces or line breaks"), {}, &accepted);
+        if (!accepted) return;
+    } else {
+        const QString path = QFileDialog::getOpenFileName(this, tr("Load recovery words"),
+            QDir::homePath(), tr("Text file (*.txt);;All files (*)"));
+        if (path.isEmpty()) return;
+        QFile file{path};
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QMessageBox::warning(this, tr("Cannot read file"),
+                tr("The recovery file could not be read:\n%1").arg(path));
+            return;
+        }
+        phrase = QString::fromUtf8(file.readAll());
+    }
+
+    const auto parts = phrase.split(QRegularExpression{QStringLiteral("\\s+")}, Qt::SkipEmptyParts);
+    if (parts.size() != 24) {
+        phrase.fill(QChar{0});
+        QMessageBox::warning(this, tr("Invalid recovery phrase"),
+            tr("The phrase must contain exactly 24 words (found %1).").arg(parts.size()));
+        return;
+    }
+
     bool accepted{false};
-    QString phrase = QInputDialog::getMultiLineText(this, tr("Restore identity"),
-        tr("Enter your 24 recovery words in order"), {}, &accepted);
-    if (!accepted) return;
     QString password = QInputDialog::getText(this, tr("Recovery vault"),
         tr("Set a vault password (at least 12 characters)"), QLineEdit::Password, {}, &accepted);
     if (!accepted) {
@@ -536,6 +566,41 @@ void IdentityPage::startRestoreFlow()
     password.fill(QChar{0});
     if (!started) QMessageBox::warning(this, tr("Invalid recovery phrase"),
         tr("Enter exactly 24 valid words in their original order."));
+}
+
+void IdentityPage::startShowRecoveryFlow()
+{
+    auto* service = m_model->identityService();
+    if (!service) return;
+
+    // The keystore only holds the material after an unlock in this session
+    // (or right after creation). Otherwise ask for the vault password.
+    if (!service->GetKeyStore().HasKey()) {
+        bool accepted{false};
+        QString password = QInputDialog::getText(this, tr("Identity vault"),
+            tr("Identity vault password"), QLineEdit::Password, {}, &accepted);
+        if (!accepted) return;
+        const bool unlocked = m_model->requestUnlockIdentity(password);
+        password.fill(QChar{0});
+        if (!unlocked) {
+            QMessageBox::warning(this, tr("Cannot unlock identity"),
+                tr("The password is incorrect or the vault is damaged."));
+            return;
+        }
+    }
+
+    const auto words = service->GetKeyStore().GetRecoveryWords();
+    if (!words) {
+        QMessageBox::information(this, tr("Recovery phrase unavailable"),
+            tr("The recovery words are not stored in this vault. If you no longer have them written down, create a new identity and transfer your usage to it."));
+        return;
+    }
+    QStringList word_list;
+    for (const auto& word : *words) {
+        word_list << QString::fromStdString(word);
+    }
+    RecoveryPhraseDialog phrase_dialog{RecoveryPhraseDialog::Mode::View, word_list, this};
+    phrase_dialog.exec();
 }
 
 void IdentityPage::startNameClaimFlow()

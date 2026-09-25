@@ -47,6 +47,7 @@ private:
     void rebuildForState(CybouIdentityState state);
     void startIdentityFlow();
     void startRestoreFlow();
+    void startShowRecoveryFlow();
     void startNameClaimFlow();
 };
 

@@ -139,6 +139,8 @@ add_library(bitcoinqt STATIC EXCLUDE_FROM_ALL
   qvalidatedlineedit.h
   qvaluecombobox.cpp
   qvaluecombobox.h
+  recoveryphrasedialog.cpp
+  recoveryphrasedialog.h
   rpcconsole.cpp
   rpcconsole.h
   splashscreen.cpp
