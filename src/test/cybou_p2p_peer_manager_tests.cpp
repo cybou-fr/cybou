@@ -80,6 +80,46 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_network_peer)
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
 }
 
+BOOST_AUTO_TEST_CASE(manager_refuses_hello_tip_conflicting_with_known_block)
+{
+    CybouServiceTestFixture fixture;
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    bool handshake_ok{false};
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        handshake_ok = session.Handshake({.network_id = fixture.runtime->GetNetworkId(),
+            .finalized_height = 1, .finalized_tip = uint256::ONE,
+            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 111});
+    }};
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    BOOST_CHECK(!manager.Connect(loopback.to_string(), acceptor.local_endpoint().port()));
+    server.join();
+    BOOST_CHECK(handshake_ok);
+    BOOST_CHECK(manager.LastConnectStatus() == cybou::p2p::PeerConnectStatus::HANDSHAKE_FAILED);
+    BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+
+    tcp::acceptor matching_acceptor{io, tcp::endpoint{loopback, 0}};
+    bool matching_handshake_ok{false};
+    std::jthread matching_server{[&] {
+        tcp::socket socket{io};
+        matching_acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        matching_handshake_ok = session.Handshake({.network_id = fixture.runtime->GetNetworkId(),
+            .finalized_height = 1, .finalized_tip = *fixture.runtime->GetFinalizedTip(),
+            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 112});
+    }};
+    BOOST_CHECK(manager.Connect(loopback.to_string(), matching_acceptor.local_endpoint().port()));
+    matching_server.join();
+    BOOST_CHECK(matching_handshake_ok);
+    BOOST_CHECK_EQUAL(manager.ConnectedCount(), 1U);
+}
+
 BOOST_AUTO_TEST_CASE(manager_reports_unavailable_endpoint)
 {
     CybouServiceTestFixture fixture;
@@ -190,6 +230,38 @@ BOOST_AUTO_TEST_CASE(manager_distinguishes_malformed_block_response_from_disconn
         BOOST_CHECK(result.status == (malformed ? cybou::SyncPeerStatus::PROTOCOL_ERROR :
             cybou::SyncPeerStatus::CONNECTION_FAILED));
         BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(manager_retries_peer_that_cannot_serve_announced_height)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    for (const bool promises_block : {false, true}) {
+        tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+        bool served{false};
+        std::jthread server{[&] {
+            tcp::socket socket{io};
+            acceptor.accept(socket);
+            cybou::p2p::PeerSession session{std::move(socket)};
+            served = session.Handshake({.network_id = fixture.runtime->GetNetworkId(),
+                .finalized_height = promises_block ? 1ULL : 0ULL, .finalized_tip = {},
+                .capabilities = cybou::p2p::CAP_SERVE_BLOCKS,
+                .nonce = promises_block ? 113ULL : 114ULL}) &&
+                session.ServeNext(*fixture.runtime);
+        }};
+        cybou::p2p::PeerManager manager{*fixture.runtime};
+        const auto address = loopback.to_string();
+        const auto port = acceptor.local_endpoint().port();
+        BOOST_REQUIRE(manager.Connect(address, port));
+        const auto result = manager.SyncFromPeer(address, port, 1);
+        server.join();
+        BOOST_CHECK(served);
+        BOOST_CHECK(result.status == (promises_block ? cybou::SyncPeerStatus::CONNECTION_FAILED :
+            cybou::SyncPeerStatus::UP_TO_DATE));
+        BOOST_CHECK_EQUAL(manager.ConnectedCount(), promises_block ? 0U : 1U);
     }
 }
 

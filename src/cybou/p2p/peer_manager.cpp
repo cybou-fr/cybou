@@ -71,6 +71,14 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
             PeerConnectStatus::UNAVAILABLE : PeerConnectStatus::HANDSHAKE_FAILED;
         return false;
     }
+    const auto& announced = *peer->Peer();
+    if (announced.finalized_height > 0 && announced.finalized_height <= status.finalized_height) {
+        const auto known = m_runtime.GetBlockAtHeight(announced.finalized_height);
+        if (known && ComputeBlockId(known->block) != announced.finalized_tip) {
+            m_last_connect_status = PeerConnectStatus::HANDSHAKE_FAILED;
+            return false;
+        }
+    }
     m_peers.emplace(endpoint, std::move(peer));
     m_last_connect_status = PeerConnectStatus::CONNECTED;
     return true;
@@ -120,7 +128,13 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
             m_peers.erase(it);
             break;
         }
-        if (response.status == BlockRequestStatus::NOT_FOUND) break;
+        if (response.status == BlockRequestStatus::NOT_FOUND) {
+            if (height <= it->second->Peer()->finalized_height) {
+                result.status = SyncPeerStatus::CONNECTION_FAILED;
+                m_peers.erase(it);
+            }
+            break;
+        }
         const auto block = DeserializeFinalizedBlock(response.bytes);
         const auto& announced = *it->second->Peer();
         if (!block || block->block.height != height ||

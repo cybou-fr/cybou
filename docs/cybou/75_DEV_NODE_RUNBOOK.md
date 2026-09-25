@@ -88,9 +88,11 @@ with an optional final target height. The file is limited to 4 KiB and eight
 unique endpoints. The observer retries unavailable endpoints after five
 seconds, tries other peers for missing blocks, and excludes endpoints after a
 wrong-network handshake, malformed frame or block response, or block
-verification failure. A listener that closes without HELLO, including when its
+verification failure. A HELLO tip conflicting with a locally stored block is
+rejected during connection. A listener that closes without HELLO, including when its
 inbound slots are full, is retried; transfer disconnects and timeouts are
-retried too. The list
+retried too. A peer that cannot serve a height it advertised in HELLO is also
+retried after five seconds, allowing other peers to supply that block. The list
 supplies no consensus trust: every block is verified against the trusted
 network definition. A block that conflicts with the peer's HELLO tip at its
 advertised height also excludes that peer.
