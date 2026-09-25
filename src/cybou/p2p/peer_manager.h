@@ -41,8 +41,12 @@ struct PeerInfo {
 };
 
 struct PeerSubmitResult {
-    OperationSubmitResult submission;
+    uint256 op_id;
+    std::optional<OperationSubmitResult> acknowledgment;
     std::optional<std::pair<std::string, uint16_t>> endpoint;
+    bool delivery_uncertain{false};
+
+    explicit operator bool() const { return acknowledgment && static_cast<bool>(*acknowledgment); }
 };
 
 // Single-threaded outbound peer set. Callers schedule connection attempts and

@@ -155,7 +155,11 @@ already-pending, or already-finalized operations. It does not wait for a
 finalized block. `p2p-submit-peers` uses the same bounded peer list as
 `p2p-follow-peers`, tries each endpoint until one acknowledges the operation,
 and prints the successful endpoint. A failed or non-accepting peer does not
-stop the remaining attempts. There is no automatic operation gossip yet.
+stop the remaining attempts. Both CYP2 submission commands print `unavailable`
+if no accepting peer can be reached and `unconfirmed` if an acknowledgment is
+lost after attempting delivery; `unconfirmed` does not mean the operation was
+rejected. An explicit validator rejection prints its numeric status and peer.
+There is no automatic operation gossip yet.
 
 ## Current limits
 

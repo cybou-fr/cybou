@@ -460,8 +460,10 @@ BOOST_AUTO_TEST_CASE(manager_submits_to_next_peer_when_first_cannot_accept_opera
     second_server.join();
     BOOST_CHECK(first_handshake);
     BOOST_CHECK(second_served);
-    BOOST_CHECK(result.submission.status == cybou::OperationSubmitStatus::ACCEPTED);
-    BOOST_CHECK(result.submission.op_id == *op_id);
+    BOOST_REQUIRE(result.acknowledgment);
+    BOOST_CHECK(result.acknowledgment->status == cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_CHECK(result.acknowledgment->op_id == *op_id);
+    BOOST_CHECK(!result.delivery_uncertain);
     BOOST_REQUIRE(result.endpoint);
     BOOST_CHECK_EQUAL(result.endpoint->second, second.local_endpoint().port());
     BOOST_CHECK_EQUAL(receiver.GetFinalizedHeight().value_or(99), 0U);
@@ -469,6 +471,60 @@ BOOST_AUTO_TEST_CASE(manager_submits_to_next_peer_when_first_cannot_accept_opera
     BOOST_REQUIRE(finalized);
     BOOST_CHECK_EQUAL(finalized->block.operations.size(), 1U);
     BOOST_CHECK(finalized->block.operations.front() == operation);
+}
+
+BOOST_AUTO_TEST_CASE(manager_distinguishes_rejection_from_missing_operation_acknowledgment)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("p2p-ack-status.cybou");
+    const auto source = fixture.runtime->GetBlockAtHeight(1);
+    BOOST_REQUIRE(source);
+    const auto operation = source->block.operations.front();
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+
+    cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
+        .data_dir = fixture.directory / "rejecting-observer", .memory_only = true, .wipe_data = true};
+    cybou::CybouNodeRuntime rejecting{std::move(config)};
+    BOOST_REQUIRE(rejecting.InitializeGenesis(fixture.genesis));
+    tcp::acceptor reject_acceptor{io, tcp::endpoint{loopback, 0}};
+    bool rejected_response_sent{false};
+    std::jthread reject_server{[&] {
+        tcp::socket socket{io};
+        reject_acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        rejected_response_sent = session.Handshake({.network_id = fixture.runtime->GetNetworkId(),
+            .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
+            .capabilities = cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 118}) &&
+            session.ServeNext(rejecting);
+    }};
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    const auto address = loopback.to_string();
+    const auto rejected = manager.SubmitOperationToAny({{address, reject_acceptor.local_endpoint().port()}}, operation);
+    reject_server.join();
+    BOOST_CHECK(rejected_response_sent);
+    BOOST_REQUIRE(rejected.acknowledgment);
+    BOOST_CHECK(rejected.acknowledgment->status == cybou::OperationSubmitStatus::REJECTED);
+    BOOST_CHECK(rejected.endpoint);
+    BOOST_CHECK(!rejected.delivery_uncertain);
+
+    tcp::acceptor dropped_acceptor{io, tcp::endpoint{loopback, 0}};
+    bool dropped_handshake{false};
+    std::jthread dropped_server{[&] {
+        tcp::socket socket{io};
+        dropped_acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        dropped_handshake = session.Handshake({.network_id = fixture.runtime->GetNetworkId(),
+            .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
+            .capabilities = cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 119});
+    }};
+    const auto unconfirmed = manager.SubmitOperationToAny({{address, dropped_acceptor.local_endpoint().port()}}, operation);
+    dropped_server.join();
+    BOOST_CHECK(dropped_handshake);
+    BOOST_CHECK(!unconfirmed.acknowledgment);
+    BOOST_CHECK(!unconfirmed.endpoint);
+    BOOST_CHECK(unconfirmed.delivery_uncertain);
 }
 
 BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured_peer)

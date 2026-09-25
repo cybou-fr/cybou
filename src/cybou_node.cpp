@@ -129,6 +129,21 @@ uint64_t TargetHeight(const char* value)
     return height;
 }
 
+int PrintPeerSubmitResult(const cybou::p2p::PeerSubmitResult& result)
+{
+    std::cout << "status=";
+    if (result) std::cout << static_cast<unsigned>(result.acknowledgment->status);
+    else if (result.delivery_uncertain) std::cout << "unconfirmed";
+    else if (result.acknowledgment) std::cout << static_cast<unsigned>(result.acknowledgment->status);
+    else std::cout << "unavailable";
+    std::cout << " operation=" << result.op_id.GetHex();
+    if (result.endpoint && (result || !result.delivery_uncertain)) {
+        std::cout << " peer=" << result.endpoint->first << ':' << result.endpoint->second;
+    }
+    std::cout << std::endl;
+    return result ? 0 : 1;
+}
+
 int Main(const int argc, char* argv[])
 {
     if (argc == 2 && std::string_view{argv[1]} == "bootstrap") {
@@ -322,11 +337,7 @@ int Main(const int argc, char* argv[])
         }
         cybou::p2p::PeerManager peers{runtime};
         const auto result = peers.SubmitOperationToAny(endpoints, *operation);
-        std::cout << "status=" << static_cast<unsigned>(result.submission.status)
-                  << " operation=" << result.submission.op_id.GetHex();
-        if (result.endpoint) std::cout << " peer=" << result.endpoint->first << ':' << result.endpoint->second;
-        std::cout << std::endl;
-        return result.submission ? 0 : 1;
+        return PrintPeerSubmitResult(result);
     }
     if (std::string_view{argv[1]} == "p2p-submit" && argc == 7) {
         const auto bytes = ReadFile(argv[6], cybou::MAX_OPERATION_PAYLOAD_BYTES);
@@ -340,11 +351,7 @@ int Main(const int argc, char* argv[])
         }
         cybou::p2p::PeerManager peers{runtime};
         const auto port = Port(argv[5]);
-        if (!peers.Connect(argv[4], port)) throw std::runtime_error("P2P handshake failed");
-        const auto result = peers.SubmitOperation(argv[4], port, *operation);
-        std::cout << "status=" << static_cast<unsigned>(result.status)
-                  << " operation=" << result.op_id.GetHex() << std::endl;
-        return result ? 0 : 1;
+        return PrintPeerSubmitResult(peers.SubmitOperationToAny({{argv[4], port}}, *operation));
     }
     // Without explicit PEER_HOST PORT, sync follows the DEV bootstrap list
     // (doc 75). The bootstrap endpoint is transport metadata — every block

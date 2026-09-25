@@ -10,7 +10,6 @@
 #include <openssl/rand.h>
 
 #include <array>
-#include <algorithm>
 #include <chrono>
 #include <limits>
 #include <optional>
@@ -173,21 +172,32 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
     const ProtocolOperation& operation)
 {
     const auto op_id = ComputeOperationId(operation).value_or(uint256{});
-    PeerSubmitResult result{.submission = {.status = OperationSubmitStatus::REJECTED, .op_id = op_id},
-        .endpoint = std::nullopt};
+    PeerSubmitResult result{.op_id = op_id, .acknowledgment = std::nullopt,
+        .endpoint = std::nullopt, .delivery_uncertain = false};
     if (endpoints.empty() || endpoints.size() > MAX_OUTBOUND_PEERS) return result;
+    const auto bytes = SerializeProtocolOperation(operation);
+    if (!bytes || bytes->empty() || bytes->size() > MAX_OPERATION_PAYLOAD_BYTES || op_id.IsNull()) return result;
     for (const auto& [host, port] : endpoints) {
-        const auto connected = Peers();
-        const bool present = std::any_of(connected.begin(), connected.end(), [&](const PeerInfo& peer) {
-            return peer.address == host && peer.port == port;
-        });
-        if (!present && !Connect(host, port)) continue;
-        const auto submission = SubmitOperation(host, port, operation);
-        if (submission) {
-            result.submission = submission;
-            result.endpoint = std::make_pair(host, port);
-            return result;
+        boost::system::error_code ec;
+        const auto address = boost::asio::ip::make_address(host, ec);
+        if (ec) continue;
+        const Endpoint endpoint{address.to_string(), port};
+        auto it = m_peers.find(endpoint);
+        if (it == m_peers.end()) {
+            if (!Connect(host, port)) continue;
+            it = m_peers.find(endpoint);
         }
+        if (it == m_peers.end() || !it->second->Peer() ||
+            !(it->second->Peer()->capabilities & CAP_ACCEPT_OPERATIONS)) continue;
+        const auto acknowledgment = it->second->SubmitOperation(operation);
+        if (!acknowledgment) {
+            result.delivery_uncertain = true;
+            m_peers.erase(it);
+            continue;
+        }
+        result.acknowledgment = *acknowledgment;
+        result.endpoint = endpoint;
+        if (*acknowledgment) return result;
     }
     return result;
 }
