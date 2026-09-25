@@ -64,7 +64,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
         return false;
     }
-    uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS;
+    uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
     if (status.is_authority) {
         caps |= (CAP_ACCEPT_OPERATIONS | CAP_OP_INVENTORY | CAP_CONSENSUS);
     }
@@ -442,6 +442,30 @@ size_t PeerManager::BroadcastPrecommit(const BftPrecommitMsg& precommit)
         ++it;
     }
     return count;
+}
+
+size_t PeerManager::DiscoverPeers()
+{
+    size_t added{0};
+    std::vector<std::pair<std::string, uint16_t>> discovered;
+    for (const auto& [endpoint, session] : m_peers) {
+        if (session && session->Peer() && (session->Peer()->capabilities & CAP_PEER_DISCOVERY)) {
+            const auto peers = session->RequestPeers();
+            discovered.insert(discovered.end(), peers.begin(), peers.end());
+        }
+    }
+    if (!discovered.empty()) {
+        const auto before = m_runtime.GetPeerEndpointsForGossip().size();
+        m_runtime.AddDiscoveredPeerEndpoints(discovered);
+        const auto after = m_runtime.GetPeerEndpointsForGossip().size();
+        if (after > before) added = after - before;
+    }
+    return added;
+}
+
+std::vector<std::pair<std::string, uint16_t>> PeerManager::KnownEndpoints() const
+{
+    return m_runtime.GetPeerEndpointsForGossip();
 }
 
 } // namespace cybou::p2p

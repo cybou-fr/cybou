@@ -5,6 +5,7 @@
 #include <cybou/bft_engine.h>
 #include <cybou/block.h>
 #include <cybou/validator.h>
+#include <test/cybou_service_test_fixture.h>
 #include <test/util/setup_common.h>
 
 #include <boost/asio.hpp>
@@ -237,6 +238,94 @@ BOOST_AUTO_TEST_CASE(consensus_message_serialization_and_p2p_exchange)
 
     server.join();
     BOOST_CHECK(server_received_all);
+}
+
+BOOST_AUTO_TEST_CASE(peer_discovery_payload_encode_decode)
+{
+    const std::vector<std::pair<std::string, uint16_t>> endpoints{
+        {"127.0.0.1", 29460},
+        {"192.168.1.100", 8080},
+        {"::1", 29461},
+    };
+    const auto payload = cybou::p2p::EncodePeersPayload(endpoints);
+    BOOST_REQUIRE(!payload.empty());
+    const auto decoded = cybou::p2p::DecodePeersPayload(payload);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_REQUIRE_EQUAL(decoded->size(), 3);
+    BOOST_CHECK_EQUAL((*decoded)[0].first, "127.0.0.1");
+    BOOST_CHECK_EQUAL((*decoded)[0].second, 29460);
+    BOOST_CHECK_EQUAL((*decoded)[1].first, "192.168.1.100");
+    BOOST_CHECK_EQUAL((*decoded)[1].second, 8080);
+    BOOST_CHECK_EQUAL((*decoded)[2].first, "::1");
+    BOOST_CHECK_EQUAL((*decoded)[2].second, 29461);
+
+    // Empty list
+    const auto empty_payload = cybou::p2p::EncodePeersPayload({});
+    BOOST_REQUIRE(!empty_payload.empty());
+    BOOST_CHECK_EQUAL(empty_payload[0], 0);
+    const auto decoded_empty = cybou::p2p::DecodePeersPayload(empty_payload);
+    BOOST_REQUIRE(decoded_empty.has_value());
+    BOOST_CHECK(decoded_empty->empty());
+
+    // Corrupted payload
+    std::vector<unsigned char> bad_payload{1, 99, 1, 2, 3}; // unknown family 99
+    BOOST_CHECK(!cybou::p2p::DecodePeersPayload(bad_payload));
+    std::vector<unsigned char> truncated{1, 4, 127, 0}; // incomplete IPv4
+    BOOST_CHECK(!cybou::p2p::DecodePeersPayload(truncated));
+}
+
+BOOST_AUTO_TEST_CASE(peer_discovery_over_the_wire)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    tcp::acceptor acceptor{io, tcp::endpoint{boost::asio::ip::address_v4::loopback(), 0}};
+    const auto network = fixture.runtime->GetNetworkId();
+
+    const std::vector<std::pair<std::string, uint16_t>> test_peers{
+        {"10.0.0.1", 29460},
+        {"10.0.0.2", 29461},
+    };
+
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession server_session{std::move(socket)};
+        BOOST_REQUIRE(server_session.Handshake({
+            .network_id = network, .finalized_height = 0,
+            .finalized_tip = fixture.definition.genesis_block_id,
+            .capabilities = cybou::p2p::CAP_PEER_DISCOVERY,
+            .nonce = 5001,
+        }));
+        cybou::NodeRuntimeConfig remote_config{.network_definition = fixture.definition,
+            .data_dir = fixture.directory / "remote-peer-discovery",
+            .memory_only = true, .wipe_data = true};
+        cybou::CybouNodeRuntime remote_runtime{std::move(remote_config)};
+        BOOST_REQUIRE(remote_runtime.InitializeGenesis(fixture.genesis));
+        remote_runtime.AddDiscoveredPeerEndpoints(test_peers);
+        BOOST_CHECK(server_session.ServeNext(remote_runtime));
+    }};
+
+    tcp::socket socket{io};
+    socket.connect(acceptor.local_endpoint());
+    cybou::p2p::PeerSession client_session{std::move(socket)};
+    BOOST_REQUIRE(client_session.Handshake({
+        .network_id = network, .finalized_height = 0,
+        .finalized_tip = fixture.definition.genesis_block_id,
+        .capabilities = cybou::p2p::CAP_PEER_DISCOVERY,
+        .nonce = 5002,
+    }));
+
+    // Client requests peers
+    const auto received = client_session.RequestPeers();
+    server.join();
+    BOOST_CHECK_EQUAL(received.size(), 2);
+    if (received.size() == 2) {
+        BOOST_CHECK_EQUAL(received[0].first, "10.0.0.1");
+        BOOST_CHECK_EQUAL(received[0].second, 29460);
+        BOOST_CHECK_EQUAL(received[1].first, "10.0.0.2");
+        BOOST_CHECK_EQUAL(received[1].second, 29461);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

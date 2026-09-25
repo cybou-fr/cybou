@@ -756,4 +756,56 @@ BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured
     BOOST_CHECK(observer.GetFinalizedTip() == producer.GetFinalizedTip());
 }
 
+BOOST_AUTO_TEST_CASE(manager_discovers_peers_from_connected_peer)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    const auto network = fixture.runtime->GetNetworkId();
+
+    const std::vector<std::pair<std::string, uint16_t>> seed_peers{
+        {"192.168.1.50", 29460},
+        {"192.168.1.51", 29460},
+    };
+
+    // Remote node with CAP_PEER_DISCOVERY
+    cybou::NodeRuntimeConfig remote_config{.network_definition = fixture.definition,
+        .data_dir = fixture.directory / "remote-discovery-node",
+        .p2p_endpoint = std::make_pair("192.168.1.49", uint16_t{29460}),
+        .memory_only = true, .wipe_data = true};
+    cybou::CybouNodeRuntime remote_runtime{std::move(remote_config)};
+    BOOST_REQUIRE(remote_runtime.InitializeGenesis(fixture.genesis));
+    remote_runtime.AddDiscoveredPeerEndpoints(seed_peers);
+
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        BOOST_REQUIRE(session.Handshake({
+            .network_id = network, .finalized_height = 0,
+            .finalized_tip = fixture.definition.genesis_block_id,
+            .capabilities = cybou::p2p::CAP_PEER_DISCOVERY,
+            .nonce = 7771,
+        }));
+        session.ServeNext(remote_runtime);
+    }};
+
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    BOOST_REQUIRE(manager.Connect(loopback.to_string(), acceptor.local_endpoint().port()));
+    BOOST_CHECK_EQUAL(manager.ConnectedCount(), 1U);
+
+    // Initial known endpoints on local runtime should be empty
+    BOOST_CHECK_EQUAL(fixture.runtime->GetPeerEndpointsForGossip().size(), 0U);
+
+    // DiscoverPeers queries remote peer and populates local runtime
+    const size_t added = manager.DiscoverPeers();
+    server.join();
+
+    BOOST_CHECK_GE(added, 2U);
+    const auto known = manager.KnownEndpoints();
+    BOOST_CHECK_GE(known.size(), 2U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

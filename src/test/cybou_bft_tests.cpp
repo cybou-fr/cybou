@@ -103,8 +103,15 @@ BOOST_AUTO_TEST_CASE(bft_signing_journal_blocks_restart_equivocation)
     {
         cybou::BftValidatorNode restarted{0, seed, network, set, execute, journal};
         restarted.SetHeight(1, uint256::ONE, set);
+        // Round 0 was already committed by this validator; starting round 0 is blocked.
         BOOST_CHECK(!restarted.StartRound(0, {}));
-        BOOST_CHECK(!restarted.StartRound(1, {}));
+        // CBS2 restores locked round and block: round 1 can proceed with the locked block!
+        BOOST_CHECK_EQUAL(restarted.GetLockedRound(), 0);
+        BOOST_CHECK(restarted.GetLockedBlock().has_value());
+        const auto r1_proposal = restarted.StartRound(1, {});
+        BOOST_REQUIRE(r1_proposal);
+        BOOST_CHECK(r1_proposal->block == *restarted.GetLockedBlock());
+
         restarted.SetHeight(2, uint256::ONE, set);
         const auto proposal = restarted.StartRound(0, {});
         BOOST_REQUIRE(proposal);
@@ -125,7 +132,7 @@ BOOST_AUTO_TEST_CASE(bft_signing_journal_blocks_restart_equivocation)
     std::filesystem::remove_all(dir);
 }
 
-BOOST_AUTO_TEST_CASE(bft_signing_journal_abstains_after_prevote_restart)
+BOOST_AUTO_TEST_CASE(bft_signing_journal_prevote_restart_blocks_equivocation_and_allows_round1)
 {
     const auto dir = std::filesystem::temp_directory_path() / "cybou-bft-prevote-restart";
     std::filesystem::create_directories(dir);
@@ -156,10 +163,166 @@ BOOST_AUTO_TEST_CASE(bft_signing_journal_abstains_after_prevote_restart)
     {
         cybou::BftValidatorNode restarted{0, seed, network, set, execute, journal};
         restarted.SetHeight(1, uint256::ONE, set);
+        // Cannot re-prevote in round 0 after restart
         BOOST_CHECK(!restarted.ReceiveProposal(proposal));
-        BOOST_CHECK(!restarted.StartRound(1, {}));
+        // CBS2 allows advancing to round 1 without height abstention
+        BOOST_CHECK(restarted.StartRound(1, {}).has_value());
         restarted.SetHeight(2, cybou::ComputeBlockId(proposal.block), set);
         BOOST_CHECK(restarted.StartRound(0, {}).has_value());
+    }
+    std::filesystem::remove_all(dir);
+}
+
+BOOST_AUTO_TEST_CASE(bft_signing_journal_cbs1_legacy_fallback)
+{
+    const auto dir = std::filesystem::temp_directory_path() / "cybou-bft-cbs1-fallback";
+    std::filesystem::create_directories(dir);
+    const auto journal = dir / "validator-signing.journal";
+    std::filesystem::remove(journal);
+
+    std::array<unsigned char, 32> seed{};
+    seed[0] = 0x7d;
+    const auto key = *cybou::GenerateValidatorKeyPair(seed);
+    const auto val_id = cybou::ComputeValidatorId(key.public_key);
+    const cybou::ValidatorSet set{
+        .version = cybou::VALIDATOR_SET_VERSION,
+        .validators = {{.validator_id = val_id, .consensus_public_key = key.public_key, .weight = 1}},
+    };
+    const auto network = uint256::FromUserHex("b012").value();
+    const auto execute = [](const std::vector<cybou::ProtocolOperation>&, uint64_t) -> std::optional<uint256> {
+        return uint256::ONE;
+    };
+
+    // Construct a legacy CBS1 record manually (145 bytes)
+    std::vector<unsigned char> cbs1{'C', 'B', 'S', '1'};
+    cbs1.insert(cbs1.end(), network.begin(), network.end());
+    cbs1.insert(cbs1.end(), val_id.begin(), val_id.end());
+    // height = 1
+    for (int i = 0; i < 8; ++i) cbs1.push_back(i == 0 ? 1 : 0);
+    // round = 0
+    for (int i = 0; i < 4; ++i) cbs1.push_back(0);
+    // step = PRECOMMIT (2)
+    cbs1.push_back(2);
+    // digest (32 bytes)
+    cbs1.insert(cbs1.end(), 32, 0xaa);
+    // checksum (SHA-256 of first 113 bytes)
+    uint256 checksum;
+    CSHA256().Write(cbs1.data(), cbs1.size()).Finalize(checksum.begin());
+    cbs1.insert(cbs1.end(), checksum.begin(), checksum.end());
+    BOOST_REQUIRE_EQUAL(cbs1.size(), 145);
+
+    {
+        std::ofstream out(journal, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(cbs1.data()), cbs1.size());
+    }
+
+    // Node starting from CBS1 must abstain on height 1 until block commit / height 2
+    {
+        cybou::BftValidatorNode node{0, seed, network, set, execute, journal};
+        node.SetHeight(1, uint256::ONE, set);
+        BOOST_CHECK(!node.StartRound(0, {}));
+        BOOST_CHECK(!node.StartRound(1, {})); // CBS1 abstention rule
+        // On next height, node resumes normal consensus
+        node.SetHeight(2, uint256::ONE, set);
+        BOOST_CHECK(node.StartRound(0, {}).has_value());
+    }
+    std::filesystem::remove_all(dir);
+}
+
+BOOST_AUTO_TEST_CASE(bft_signing_journal_cbs2_lock_rejects_conflicting_proposal)
+{
+    const auto dir = std::filesystem::temp_directory_path() / "cybou-bft-cbs2-lock";
+    std::filesystem::create_directories(dir);
+    const auto journal = dir / "validator-signing.journal";
+    std::filesystem::remove(journal);
+
+    std::array<unsigned char, 32> seed0{};
+    seed0[0] = 0x81;
+    const auto key0 = *cybou::GenerateValidatorKeyPair(seed0);
+    const auto val0 = cybou::ComputeValidatorId(key0.public_key);
+
+    std::array<unsigned char, 32> seed1{};
+    seed1[0] = 0x82;
+    const auto key1 = *cybou::GenerateValidatorKeyPair(seed1);
+    const auto val1 = cybou::ComputeValidatorId(key1.public_key);
+
+    const cybou::ValidatorSet set{
+        .version = cybou::VALIDATOR_SET_VERSION,
+        .validators = {
+            {.validator_id = val0, .consensus_public_key = key0.public_key, .weight = 1},
+            {.validator_id = val1, .consensus_public_key = key1.public_key, .weight = 1},
+        },
+    };
+    const auto network = uint256::FromUserHex("b013").value();
+    const auto execute = [](const std::vector<cybou::ProtocolOperation>& ops, uint64_t) -> std::optional<uint256> {
+        return ops.empty() ? uint256::ONE : uint256::FromUserHex("cafe").value();
+    };
+
+    // Height 1, Round 1: Leader is (1 + 1) % 2 = 0 (node 0)
+    cybou::CybouBlock blockA;
+    {
+        cybou::BftValidatorNode node0{0, seed0, network, set, execute, journal};
+        node0.SetHeight(1, uint256::ONE, set);
+        const auto prop = node0.StartRound(1, {});
+        BOOST_REQUIRE(prop);
+        blockA = prop->block;
+        const auto prevote0 = node0.ReceiveProposal(*prop);
+        BOOST_REQUIRE(prevote0);
+        // Node 0 receives prevote from node 1 for block A
+        const uint256 blockA_id = cybou::ComputeBlockId(blockA);
+        const uint256 pv1_digest = cybou::ComputePrevoteDigest(network, 1, 1, val1, blockA_id);
+        const auto sig1 = cybou::SignValidatorVote(seed1, pv1_digest);
+        BOOST_REQUIRE(sig1);
+        const cybou::BftPrevoteMsg prevote1{
+            .network_id = network, .height = 1, .round = 1, .validator_id = val1,
+            .block_id = blockA_id, .signature = *sig1,
+        };
+        const auto precommit0 = node0.ReceivePrevote(prevote1);
+        BOOST_REQUIRE(precommit0);
+        BOOST_CHECK(precommit0->block_id.has_value());
+        BOOST_CHECK_EQUAL(node0.GetLockedRound(), 1);
+        BOOST_REQUIRE(node0.GetLockedBlock().has_value());
+        BOOST_CHECK(*node0.GetLockedBlock() == blockA);
+    }
+
+    // Now restart node 0: it should retain the lock on blockA at round 1
+    {
+        cybou::BftValidatorNode restarted0{0, seed0, network, set, execute, journal};
+        restarted0.SetHeight(1, uint256::ONE, set);
+        BOOST_CHECK_EQUAL(restarted0.GetLockedRound(), 1);
+        BOOST_REQUIRE(restarted0.GetLockedBlock().has_value());
+        BOOST_CHECK(*restarted0.GetLockedBlock() == blockA);
+
+        // Height 1, Round 2: Leader is (1 + 2) % 2 = 1 (node 1)
+        // Node 1 proposes conflicting block B
+        const cybou::CybouBlock blockB{
+            .version = cybou::CYBOU_BLOCK_VERSION,
+            .parent_block_id = uint256::ONE,
+            .height = 1,
+            .operations = {cybou::AccountCreateOp{}},
+            .resulting_state_root = uint256::FromUserHex("cafe").value(),
+        };
+        const uint256 blockB_id = cybou::ComputeBlockId(blockB);
+        const uint256 propB_digest = cybou::ComputeProposalDigest(network, 1, 2, val1, blockB_id);
+        const auto sig_propB = cybou::SignValidatorVote(seed1, propB_digest);
+        BOOST_REQUIRE(sig_propB);
+        const cybou::BftProposalMsg proposalB{
+            .network_id = network, .height = 1, .round = 2, .proposer_id = val1,
+            .block = blockB, .signature = *sig_propB,
+        };
+
+        // Restarted node 0 must reject block B because it is locked on block A -> emits nil prevote!
+        const auto prevote_for_B = restarted0.ReceiveProposal(proposalB);
+        BOOST_REQUIRE(prevote_for_B);
+        BOOST_CHECK(!prevote_for_B->block_id.has_value()); // NIL prevote
+
+        // Next round (Round 3): Leader is (1 + 3) % 2 = 0 (node 0)
+        // Leader 0 starts round 3: must propose locked block A!
+        restarted0.OnRoundTimeout(); // round 3
+        BOOST_CHECK_EQUAL(restarted0.GetRound(), 3);
+        const auto propA = restarted0.StartRound(3, {});
+        BOOST_REQUIRE(propA);
+        BOOST_CHECK(propA->block == blockA);
     }
     std::filesystem::remove_all(dir);
 }

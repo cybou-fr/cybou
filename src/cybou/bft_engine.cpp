@@ -39,7 +39,34 @@ inline void AppendUint32LE(std::vector<unsigned char>& out, uint32_t val)
     }
 }
 
-constexpr size_t SIGNING_RECORD_SIZE{4 + 32 + 32 + 8 + 4 + 1 + 32 + 32};
+constexpr size_t SIGNING_RECORD_CBS1_SIZE{4 + 32 + 32 + 8 + 4 + 1 + 32 + 32};
+constexpr size_t SIGNING_RECORD_CBS2_MIN_SIZE{4 + 32 + 32 + 8 + 4 + 1 + 32 + 4 + 4 + 32};
+
+struct SigningRecord {
+    uint8_t version{1};
+    uint256 network_id;
+    uint256 validator_id;
+    uint64_t height{0};
+    uint32_t round{0};
+    BftStep step{BftStep::PROPOSE};
+    uint256 digest;
+    int32_t locked_round{-1};
+    std::optional<CybouBlock> locked_block{std::nullopt};
+};
+
+uint64_t ReadUint64LE(const unsigned char* bytes)
+{
+    uint64_t value{0};
+    for (int i = 0; i < 8; ++i) value |= uint64_t{bytes[i]} << (8 * i);
+    return value;
+}
+
+uint32_t ReadUint32LE(const unsigned char* bytes)
+{
+    uint32_t value{0};
+    for (int i = 0; i < 4; ++i) value |= uint32_t{bytes[i]} << (8 * i);
+    return value;
+}
 
 bool WriteSigningRecord(const std::filesystem::path& path, const std::vector<unsigned char>& bytes)
 {
@@ -80,32 +107,68 @@ bool WriteSigningRecord(const std::filesystem::path& path, const std::vector<uns
 #endif
 }
 
-std::optional<std::vector<unsigned char>> ReadSigningRecord(const std::filesystem::path& path)
+std::optional<SigningRecord> ReadSigningRecord(const std::filesystem::path& path)
 {
     std::error_code ec;
-    if (std::filesystem::is_symlink(path, ec) || ec || std::filesystem::file_size(path, ec) != SIGNING_RECORD_SIZE || ec) {
-        return std::nullopt;
-    }
+    if (std::filesystem::is_symlink(path, ec) || ec) return std::nullopt;
+    const auto file_size = std::filesystem::file_size(path, ec);
+    if (ec || file_size < SIGNING_RECORD_CBS1_SIZE || file_size > 10 * 1024 * 1024) return std::nullopt;
+
     std::ifstream input(path, std::ios::binary);
-    std::vector<unsigned char> bytes(SIGNING_RECORD_SIZE);
+    std::vector<unsigned char> bytes(file_size);
     if (!input.read(reinterpret_cast<char*>(bytes.data()), bytes.size())) return std::nullopt;
-    return bytes;
-}
 
-uint64_t ReadUint64LE(const unsigned char* bytes)
-{
-    uint64_t value{0};
-    for (int i = 0; i < 8; ++i) value |= uint64_t{bytes[i]} << (8 * i);
-    return value;
-}
+    if (file_size == SIGNING_RECORD_CBS1_SIZE && std::equal(bytes.begin(), bytes.begin() + 4, "CBS1")) {
+        uint256 checksum;
+        CSHA256().Write(bytes.data(), SIGNING_RECORD_CBS1_SIZE - 32).Finalize(checksum.begin());
+        if (!std::equal(checksum.begin(), checksum.end(), bytes.begin() + SIGNING_RECORD_CBS1_SIZE - 32)) {
+            return std::nullopt;
+        }
+        if (bytes[80] > static_cast<unsigned char>(BftStep::PRECOMMIT)) return std::nullopt;
+        SigningRecord record;
+        record.version = 1;
+        std::copy_n(bytes.begin() + 4, 32, record.network_id.begin());
+        std::copy_n(bytes.begin() + 36, 32, record.validator_id.begin());
+        record.height = ReadUint64LE(bytes.data() + 68);
+        record.round = ReadUint32LE(bytes.data() + 76);
+        record.step = static_cast<BftStep>(bytes[80]);
+        std::copy_n(bytes.begin() + 81, 32, record.digest.begin());
+        record.locked_round = -1;
+        record.locked_block = std::nullopt;
+        return record;
+    }
 
-uint32_t ReadUint32LE(const unsigned char* bytes)
-{
-    uint32_t value{0};
-    for (int i = 0; i < 4; ++i) value |= uint32_t{bytes[i]} << (8 * i);
-    return value;
-}
+    if (file_size >= SIGNING_RECORD_CBS2_MIN_SIZE && std::equal(bytes.begin(), bytes.begin() + 4, "CBS2")) {
+        uint256 checksum;
+        CSHA256().Write(bytes.data(), file_size - 32).Finalize(checksum.begin());
+        if (!std::equal(checksum.begin(), checksum.end(), bytes.begin() + file_size - 32)) {
+            return std::nullopt;
+        }
+        if (bytes[80] > static_cast<unsigned char>(BftStep::PRECOMMIT)) return std::nullopt;
+        const uint32_t block_len = ReadUint32LE(bytes.data() + 117);
+        if (file_size != SIGNING_RECORD_CBS2_MIN_SIZE + block_len) return std::nullopt;
 
+        SigningRecord record;
+        record.version = 2;
+        std::copy_n(bytes.begin() + 4, 32, record.network_id.begin());
+        std::copy_n(bytes.begin() + 36, 32, record.validator_id.begin());
+        record.height = ReadUint64LE(bytes.data() + 68);
+        record.round = ReadUint32LE(bytes.data() + 76);
+        record.step = static_cast<BftStep>(bytes[80]);
+        std::copy_n(bytes.begin() + 81, 32, record.digest.begin());
+        record.locked_round = static_cast<int32_t>(ReadUint32LE(bytes.data() + 113));
+        if (block_len > 0) {
+            auto blk = DeserializeBlock(std::span<const unsigned char>(bytes.data() + 121, block_len));
+            if (!blk || blk->height != record.height) return std::nullopt;
+            record.locked_block = std::move(*blk);
+        } else {
+            record.locked_block = std::nullopt;
+        }
+        return record;
+    }
+
+    return std::nullopt;
+}
 } // namespace
 
 uint256 ComputeProposalDigest(
@@ -429,25 +492,25 @@ BftValidatorNode::BftValidatorNode(
         const bool exists = std::filesystem::exists(*m_signing_journal, ec);
         if (ec) { m_journal_valid = false; return; }
         if (exists) {
-            const auto bytes = ReadSigningRecord(*m_signing_journal);
-            if (!bytes || !std::equal(bytes->begin(), bytes->begin() + 4, "CBS1") ||
-                !std::equal(m_network_id.begin(), m_network_id.end(), bytes->begin() + 4) ||
-                !std::equal(m_validator_id.begin(), m_validator_id.end(), bytes->begin() + 36) ||
-                (*bytes)[80] > static_cast<unsigned char>(BftStep::PRECOMMIT)) {
+            const auto record = ReadSigningRecord(*m_signing_journal);
+            if (!record || record->network_id != m_network_id || record->validator_id != m_validator_id) {
                 m_journal_valid = false;
                 return;
             }
-            uint256 checksum;
-            CSHA256().Write(bytes->data(), SIGNING_RECORD_SIZE - 32).Finalize(checksum.begin());
-            if (!std::equal(checksum.begin(), checksum.end(), bytes->begin() + SIGNING_RECORD_SIZE - 32)) {
-                m_journal_valid = false;
-                return;
-            }
-            m_last_signed_height = ReadUint64LE(bytes->data() + 68);
-            m_last_signed_round = ReadUint32LE(bytes->data() + 76);
-            m_last_signed_step = static_cast<BftStep>((*bytes)[80]);
+            m_last_signed_height = record->height;
+            m_last_signed_round = record->round;
+            m_last_signed_step = record->step;
             m_has_signed = true;
             m_restarted = true;
+            if (record->version == 1) {
+                m_restarted_cbs1 = true;
+                m_recovered_locked_round = -1;
+                m_recovered_locked_block.reset();
+            } else {
+                m_restarted_cbs1 = false;
+                m_recovered_locked_round = record->locked_round;
+                m_recovered_locked_block = std::move(record->locked_block);
+            }
         }
     }
 }
@@ -456,19 +519,30 @@ bool BftValidatorNode::RecordSigningIntent(const BftStep step, const uint256& di
 {
     if (m_validator_id.IsNull() || !m_journal_valid) return false;
     if (m_has_signed) {
-        if (m_height < m_last_signed_height || (m_restarted && m_height == m_last_signed_height)) return false;
-        if (m_height == m_last_signed_height &&
-            (m_round < m_last_signed_round ||
-             (m_round == m_last_signed_round && step <= m_last_signed_step))) return false;
+        if (m_restarted_cbs1 && m_height == m_last_signed_height) return false;
+        if (m_height < m_last_signed_height) return false;
+        if (m_height == m_last_signed_height) {
+            if (m_round < m_last_signed_round) return false;
+            if (m_round == m_last_signed_round && step <= m_last_signed_step) return false;
+        }
     }
     if (m_signing_journal) {
-        std::vector<unsigned char> bytes{'C', 'B', 'S', '1'};
+        std::vector<unsigned char> block_bytes;
+        if (m_locked_block.has_value()) {
+            const auto opt_bytes = SerializeBlock(*m_locked_block);
+            if (!opt_bytes) return false;
+            block_bytes = std::move(*opt_bytes);
+        }
+        std::vector<unsigned char> bytes{'C', 'B', 'S', '2'};
         bytes.insert(bytes.end(), m_network_id.begin(), m_network_id.end());
         bytes.insert(bytes.end(), m_validator_id.begin(), m_validator_id.end());
         AppendUint64LE(bytes, m_height);
         AppendUint32LE(bytes, m_round);
         bytes.push_back(static_cast<unsigned char>(step));
         bytes.insert(bytes.end(), digest.begin(), digest.end());
+        AppendUint32LE(bytes, static_cast<uint32_t>(m_locked_round));
+        AppendUint32LE(bytes, static_cast<uint32_t>(block_bytes.size()));
+        bytes.insert(bytes.end(), block_bytes.begin(), block_bytes.end());
         uint256 checksum;
         CSHA256().Write(bytes.data(), bytes.size()).Finalize(checksum.begin());
         bytes.insert(bytes.end(), checksum.begin(), checksum.end());
@@ -481,8 +555,6 @@ bool BftValidatorNode::RecordSigningIntent(const BftStep step, const uint256& di
     m_last_signed_round = m_round;
     m_last_signed_step = step;
     m_has_signed = true;
-    // A new height is now journaled by this process. Subsequent steps at
-    // that height belong to the same live round, not to a recovered round.
     m_restarted = false;
     return true;
 }
@@ -509,17 +581,31 @@ void BftValidatorNode::SetHeight(uint64_t height, const uint256& last_block_id, 
     }
     m_height = height;
     m_last_block_id = last_block_id;
-    m_round = 0;
-    m_step = BftStep::PROPOSE;
-    m_locked_block.reset();
-    m_locked_round = -1;
     m_current_proposal.reset();
     m_current_proposal_valid = false;
     m_prevotes.clear();
     m_precommits.clear();
-    m_prevoted = false;
-    m_precommitted = false;
     m_finalized_block.reset();
+
+    if (m_restarted && m_has_signed && height == m_last_signed_height) {
+        m_round = m_last_signed_round;
+        m_step = m_last_signed_step;
+        m_locked_block = m_recovered_locked_block;
+        m_locked_round = m_recovered_locked_round;
+        m_prevoted = (m_last_signed_step >= BftStep::PREVOTE);
+        m_precommitted = (m_last_signed_step >= BftStep::PRECOMMIT);
+    } else {
+        m_round = 0;
+        m_step = BftStep::PROPOSE;
+        m_locked_block.reset();
+        m_locked_round = -1;
+        m_prevoted = false;
+        m_precommitted = false;
+        if (height != m_last_signed_height) {
+            m_restarted = false;
+            m_restarted_cbs1 = false;
+        }
+    }
 }
 
 std::optional<BftProposalMsg> BftValidatorNode::StartRound(

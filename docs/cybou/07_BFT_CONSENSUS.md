@@ -14,14 +14,14 @@ Byzantine or desynchronized leaders from forcing arbitrary round skips while
 providing sufficient slack (2 rounds) for lagging nodes to resynchronize without
 waiting for multiple local round timeouts.
 Receiving a proposal or producing a precommit advances the local timeout
-phase immediately. A validator restarted after a prevote or precommit still
-abstains on the unfinished height because the
-signing journal does not persist lock and vote state. Socket tests now recreate
-the validator runtime with its persistent database and journal at each step,
-verify 3/4 finality, and catch up the restarted validator over CYP2. The socket
-test also covers duplicate and conflicting signed prevotes from one validator.
-Longer fault runs and full OS process restart scenarios remain integration work.
-See `26_IMPLEMENTATION_STATUS.md` for the current deployment boundary.
+phase immediately. The CBS2 signing journal durably records height, round,
+step, locked round, and locked block. After restart, a validator resumes at the
+recorded round without repeating a signing step and enforces its recovered lock.
+Legacy CBS1 journals have no lock data and conservatively prevent further
+signing at that height. Unit and socket tests cover journal recovery, restart,
+3/4 finality, catch-up, and duplicate/conflicting signed prevotes. The
+four-process smoke test adds OS-process restart and churn coverage. See
+`26_IMPLEMENTATION_STATUS.md` for the current deployment boundary.
 
 ## Frozen direction
 

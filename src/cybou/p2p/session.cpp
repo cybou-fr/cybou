@@ -5,6 +5,8 @@
 #include <cybou/block_feed.h>
 #include <cybou/node_runtime.h>
 
+#include <boost/asio/ip/address.hpp>
+
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -44,7 +46,7 @@ uint32_t Read32(const unsigned char* data)
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
     if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
-        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 18)) return std::nullopt;
+        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 20)) return std::nullopt;
     std::vector<unsigned char> bytes{'C', 'Y', 'P', '2', WIRE_VERSION, static_cast<unsigned char>(frame.type)};
     const auto size = static_cast<uint32_t>(frame.payload.size());
     for (int i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(size >> (8 * i)));
@@ -55,7 +57,7 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < HEADER_SIZE || !std::equal(bytes.begin(), bytes.begin() + 4, "CYP2") ||
-        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 18) return std::nullopt;
+        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 20) return std::nullopt;
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[6 + i]} << (8 * i);
     if (size > MAX_FRAME_PAYLOAD || bytes.size() != HEADER_SIZE + size) return std::nullopt;
@@ -86,6 +88,78 @@ std::optional<Hello> DecodeHello(std::span<const unsigned char> bytes)
     hello.nonce = Read64(bytes.data() + 80);
     if (hello.network_id.IsNull() || hello.finalized_tip.IsNull() || hello.nonce == 0) return std::nullopt;
     return hello;
+}
+
+std::vector<unsigned char> EncodePeersPayload(const std::vector<std::pair<std::string, uint16_t>>& peers)
+{
+    std::vector<unsigned char> out;
+    const uint8_t count = static_cast<uint8_t>(std::min<size_t>(peers.size(), 32));
+    out.push_back(count);
+    size_t added = 0;
+    for (const auto& [host, port] : peers) {
+        if (added >= count) break;
+        if (port == 0) continue;
+        boost::system::error_code ec;
+        const auto addr = boost::asio::ip::make_address(host, ec);
+        if (ec) continue;
+        if (addr.is_v4()) {
+            out.push_back(4);
+            const auto bytes = addr.to_v4().to_bytes();
+            out.insert(out.end(), bytes.begin(), bytes.end());
+            out.push_back(static_cast<unsigned char>(port & 0xFF));
+            out.push_back(static_cast<unsigned char>((port >> 8) & 0xFF));
+            ++added;
+        } else if (addr.is_v6()) {
+            out.push_back(6);
+            const auto bytes = addr.to_v6().to_bytes();
+            out.insert(out.end(), bytes.begin(), bytes.end());
+            out.push_back(static_cast<unsigned char>(port & 0xFF));
+            out.push_back(static_cast<unsigned char>((port >> 8) & 0xFF));
+            ++added;
+        }
+    }
+    out[0] = static_cast<uint8_t>(added);
+    return out;
+}
+
+std::optional<std::vector<std::pair<std::string, uint16_t>>> DecodePeersPayload(std::span<const unsigned char> bytes)
+{
+    if (bytes.empty()) return std::nullopt;
+    const uint8_t count = bytes[0];
+    size_t offset = 1;
+    std::vector<std::pair<std::string, uint16_t>> result;
+    result.reserve(count);
+    for (uint8_t i = 0; i < count; ++i) {
+        if (offset >= bytes.size()) return std::nullopt;
+        const uint8_t family = bytes[offset++];
+        if (family == 4) {
+            if (offset + 6 > bytes.size()) return std::nullopt;
+            boost::asio::ip::address_v4::bytes_type v4_bytes;
+            std::copy_n(bytes.begin() + offset, 4, v4_bytes.begin());
+            offset += 4;
+            const uint16_t port = static_cast<uint16_t>(bytes[offset]) |
+                (static_cast<uint16_t>(bytes[offset + 1]) << 8);
+            offset += 2;
+            if (port != 0) {
+                result.emplace_back(boost::asio::ip::make_address_v4(v4_bytes).to_string(), port);
+            }
+        } else if (family == 6) {
+            if (offset + 18 > bytes.size()) return std::nullopt;
+            boost::asio::ip::address_v6::bytes_type v6_bytes;
+            std::copy_n(bytes.begin() + offset, 16, v6_bytes.begin());
+            offset += 16;
+            const uint16_t port = static_cast<uint16_t>(bytes[offset]) |
+                (static_cast<uint16_t>(bytes[offset + 1]) << 8);
+            offset += 2;
+            if (port != 0) {
+                result.emplace_back(boost::asio::ip::make_address_v6(v6_bytes).to_string(), port);
+            }
+        } else {
+            return std::nullopt;
+        }
+    }
+    if (offset != bytes.size()) return std::nullopt;
+    return result;
 }
 
 bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& peer)
@@ -167,7 +241,7 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     std::array<unsigned char, HEADER_SIZE> header{};
     if (!ReadExact(header.data(), header.size(), deadline)) return std::nullopt;
     if (!std::equal(header.begin(), header.begin() + 4, "CYP2") ||
-        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 18) {
+        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 20) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
         return std::nullopt;
     }
@@ -468,12 +542,34 @@ std::optional<BftPrecommitMsg> PeerSession::ReadPrecommit(std::chrono::steady_cl
     return DeserializeBftPrecommitMsg(frame->payload);
 }
 
+std::vector<std::pair<std::string, uint16_t>> PeerSession::RequestPeers(std::chrono::steady_clock::time_point deadline)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_PEER_DISCOVERY)) return {};
+    if (!Write(Frame{MessageType::GET_PEERS, {}}, deadline)) return {};
+    const auto response = Read(deadline);
+    if (!response || response->type != MessageType::PEERS) return {};
+    const auto peers = DecodePeersPayload(response->payload);
+    return peers ? *peers : std::vector<std::pair<std::string, uint16_t>>{};
+}
+
+bool PeerSession::SendPeers(const std::vector<std::pair<std::string, uint16_t>>& peers,
+    std::chrono::steady_clock::time_point deadline)
+{
+    const auto payload = EncodePeersPayload(peers);
+    return Write(Frame{MessageType::PEERS, payload}, deadline);
+}
+
 bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
 {
     if (!m_peer) return false;
     const auto request = Read();
     if (!request) {
         return m_socket.is_open();
+    }
+    if (request->type == MessageType::GET_PEERS) {
+        if (!(m_local_capabilities & CAP_PEER_DISCOVERY)) return false;
+        const auto endpoints = runtime.GetPeerEndpointsForGossip();
+        return SendPeers(endpoints);
     }
     if (request->type == MessageType::PING) {
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});

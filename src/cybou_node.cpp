@@ -504,6 +504,7 @@ int Main(const int argc, char* argv[])
         if (p2p_server) p2p_listener.emplace([&] { p2p_server->Run(stopping); });
         std::optional<std::jthread> gossip_worker;
         if (!gossip_endpoints.empty()) gossip_worker.emplace([&] {
+            runtime.AddDiscoveredPeerEndpoints(gossip_endpoints);
             cybou::p2p::PeerManager peers{runtime};
             std::map<std::pair<std::string, uint16_t>, std::chrono::steady_clock::time_point> retry_after;
             const auto drain_delay_str = std::getenv("CYBOU_CONSENSUS_DRAIN_DELAY_MS");
@@ -517,8 +518,11 @@ int Main(const int argc, char* argv[])
                     peers.DisconnectAll();
                     last_reconnect = std::chrono::steady_clock::now();
                 }
-                for (const auto& [host, peer_port] : gossip_endpoints) {
+                peers.DiscoverPeers();
+                const auto gossip_targets = runtime.GetPeerEndpointsForGossip();
+                for (const auto& [host, peer_port] : gossip_targets) {
                     if (stopping) break;
+                    if (peers.ConnectedCount() >= cybou::p2p::MAX_OUTBOUND_PEERS) break;
                     const auto connected = peers.Peers();
                     const bool present = std::any_of(connected.begin(), connected.end(), [&](const auto& peer) {
                         return peer.address == host && peer.port == peer_port;

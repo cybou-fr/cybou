@@ -141,6 +141,10 @@ public:
     bool HasSubmitEndpoint() const;
     std::optional<std::pair<std::string, uint16_t>> GetSubmitEndpoint() const;
 
+    /** Peer discovery endpoints */
+    std::vector<std::pair<std::string, uint16_t>> GetPeerEndpointsForGossip() const;
+    void AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
+
     /** Access underlying store */
     CybouStateStore& GetStore() { return m_store; }
     const CybouStateStore& GetStore() const { return m_store; }
@@ -179,6 +183,7 @@ private:
     std::set<uint256> m_recent_gossip_ids;
     size_t m_recent_gossip_bytes{0};
     std::deque<FinalizedHead> m_recent_finalized_blocks;
+    std::set<std::pair<std::string, uint16_t>> m_known_peer_endpoints;
 };
 
 } // namespace cybou

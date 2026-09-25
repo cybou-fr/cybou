@@ -71,6 +71,10 @@ public:
     std::vector<PeerInfo> Peers() const;
     void DisconnectAll();
 
+    /** Dynamic peer auto-discovery */
+    size_t DiscoverPeers();
+    std::vector<std::pair<std::string, uint16_t>> KnownEndpoints() const;
+
     /** BFT consensus broadcasts to connected peers with CAP_CONSENSUS */
     size_t BroadcastProposal(const BftProposalMsg& proposal);
     size_t BroadcastPrevote(const BftPrevoteMsg& prevote);

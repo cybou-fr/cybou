@@ -55,12 +55,18 @@ def read_signing_journal(journal_path):
         return None
     try:
         data = journal_path.read_bytes()
-        if len(data) != 145 or data[:4] != b"CBS1":
-            return None
-        height = int.from_bytes(data[68:76], "little")
-        round_no = int.from_bytes(data[76:80], "little")
-        step = data[80]  # 0=PROPOSE, 1=PREVOTE, 2=PRECOMMIT
-        return {"height": height, "round": round_no, "step": step}
+        if len(data) == 145 and data[:4] == b"CBS1":
+            height = int.from_bytes(data[68:76], "little")
+            round_no = int.from_bytes(data[76:80], "little")
+            step = data[80]  # 0=PROPOSE, 1=PREVOTE, 2=PRECOMMIT
+            return {"height": height, "round": round_no, "step": step}
+        elif len(data) >= 153 and data[:4] == b"CBS2":
+            height = int.from_bytes(data[68:76], "little")
+            round_no = int.from_bytes(data[76:80], "little")
+            step = data[80]  # 0=PROPOSE, 1=PREVOTE, 2=PRECOMMIT
+            locked_round = int.from_bytes(data[113:117], "little", signed=True)
+            return {"height": height, "round": round_no, "step": step, "locked_round": locked_round}
+        return None
     except Exception:
         return None
 
@@ -235,7 +241,7 @@ def main():
             degraded_mid = wait_for(target_mid, active)
             print(f"3/4 quorum reached height {target_mid} with process {mid_proc} offline: {degraded_mid}")
 
-            # Restart validator with persisted journal; it must abstain on mid_h and catch up
+            # Restart validator with persisted journal; it must preserve its lock and catch up safely
             print(f"Restarting mid-height killed process {mid_proc}...")
             processes[mid_proc] = start_validator(
                 mid_proc,

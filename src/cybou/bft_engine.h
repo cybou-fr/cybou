@@ -133,6 +133,8 @@ public:
     uint64_t GetHeight() const { return m_height; }
     uint32_t GetRound() const { return m_round; }
     BftStep GetStep() const { return m_step; }
+    int32_t GetLockedRound() const { return m_locked_round; }
+    const std::optional<CybouBlock>& GetLockedBlock() const { return m_locked_block; }
     const std::optional<FinalizedBlock>& GetLatestFinalizedBlock() const { return m_finalized_block; }
 
     void SetHeight(uint64_t height, const uint256& last_block_id, ValidatorSet validator_set);
@@ -184,8 +186,7 @@ private:
 
     std::optional<FinalizedBlock> m_finalized_block;
 
-    // A durable high-water mark. A restarted signer never resumes a partially
-    // signed height because its lock state is not yet persisted.
+    // Durable consensus journal state (CBS2 persists lock and round state).
     std::optional<std::filesystem::path> m_signing_journal;
     uint64_t m_last_signed_height{0};
     uint32_t m_last_signed_round{0};
@@ -193,6 +194,9 @@ private:
     bool m_has_signed{false};
     bool m_journal_valid{true};
     bool m_restarted{false};
+    bool m_restarted_cbs1{false};
+    std::optional<CybouBlock> m_recovered_locked_block;
+    int32_t m_recovered_locked_round{-1};
     bool RecordSigningIntent(BftStep step, const uint256& digest);
 };
 

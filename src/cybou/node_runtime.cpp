@@ -4,6 +4,8 @@
 #include <cybou/node_runtime.h>
 #include <cybou/p2p/peer_manager.h>
 
+#include <boost/asio/ip/address.hpp>
+
 #include <algorithm>
 #include <limits>
 #include <type_traits>
@@ -617,6 +619,38 @@ std::optional<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetSubmitEndpo
 {
     std::lock_guard lock(m_mutex);
     return m_submit_endpoint;
+}
+
+std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetPeerEndpointsForGossip() const
+{
+    std::lock_guard lock(m_mutex);
+    std::vector<std::pair<std::string, uint16_t>> result;
+    if (m_config.p2p_endpoint.has_value()) {
+        result.push_back(*m_config.p2p_endpoint);
+    }
+    for (const auto& ep : m_known_peer_endpoints) {
+        if (result.size() >= 32) break;
+        if (!m_config.p2p_endpoint || ep != *m_config.p2p_endpoint) {
+            result.push_back(ep);
+        }
+    }
+    return result;
+}
+
+void CybouNodeRuntime::AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints)
+{
+    std::lock_guard lock(m_mutex);
+    for (const auto& [host, port] : endpoints) {
+        if (port == 0) continue;
+        boost::system::error_code ec;
+        const auto addr = boost::asio::ip::make_address(host, ec);
+        if (ec) continue;
+        if (m_config.p2p_endpoint && host == m_config.p2p_endpoint->first && port == m_config.p2p_endpoint->second) {
+            continue;
+        }
+        if (m_known_peer_endpoints.size() >= 256) break;
+        m_known_peer_endpoints.emplace(addr.to_string(), port);
+    }
 }
 
 } // namespace cybou

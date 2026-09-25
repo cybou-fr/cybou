@@ -197,9 +197,12 @@ not an independently exported inclusion proof.
 ## Current limits
 
 This DEV process can also produce empty blocks when no operation is pending.
-It has no peer discovery, snapshot sync, authenticated or encrypted transport,
-durable mempool gossip, or independently operated multi-validator deployment. Expose the
-listener only inside a trusted private network. The validator key is a raw
+Peer discovery exchanges bounded numeric endpoints with connected peers and
+adds them to an in-memory list; explicit peer-file endpoints are still needed
+to bootstrap, and discovery provides no consensus trust. The node still has no
+snapshot sync, authenticated or encrypted transport, durable mempool gossip,
+or independently operated multi-validator deployment. Expose the listener
+only inside a trusted private network. The validator key is a raw
 seed file whose filesystem access must be restricted; the desktop identity
 keystore is separate and OS-protected on Windows. The standalone `init-dev`
 profile has no Operator Authority keyset, so it cannot admit additional

@@ -27,6 +27,7 @@ inline constexpr uint64_t CAP_OP_INVENTORY{1ULL << 2};
 inline constexpr uint64_t CAP_BLOCK_INVENTORY{1ULL << 3};
 inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
 inline constexpr uint64_t CAP_CONSENSUS{1ULL << 5};
+inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 
 enum class MessageType : uint8_t {
@@ -37,6 +38,8 @@ enum class MessageType : uint8_t {
     CONSENSUS_PROPOSAL = 16,
     CONSENSUS_PREVOTE = 17,
     CONSENSUS_PRECOMMIT = 18,
+    GET_PEERS = 19,
+    PEERS = 20,
 };
 
 struct Frame {
@@ -87,6 +90,8 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame);
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes);
 std::vector<unsigned char> EncodeHello(const Hello& hello);
 std::optional<Hello> DecodeHello(std::span<const unsigned char> bytes);
+std::vector<unsigned char> EncodePeersPayload(const std::vector<std::pair<std::string, uint16_t>>& peers);
+std::optional<std::vector<std::pair<std::string, uint16_t>>> DecodePeersPayload(std::span<const unsigned char> bytes);
 bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& peer);
 
 // One persistent TCP socket. The caller owns connection setup and deadlines.
@@ -113,6 +118,10 @@ public:
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10});
     std::optional<BftPrecommitMsg> ReadPrecommit(
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10});
+    std::vector<std::pair<std::string, uint16_t>> RequestPeers(
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
+    bool SendPeers(const std::vector<std::pair<std::string, uint16_t>>& peers,
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     bool ServeNext(CybouNodeRuntime& runtime);
     const std::optional<Hello>& Peer() const { return m_peer; }
     boost::asio::ip::tcp::socket& Socket() { return m_socket; }
