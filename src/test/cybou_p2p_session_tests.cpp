@@ -272,6 +272,18 @@ BOOST_AUTO_TEST_CASE(peer_discovery_payload_encode_decode)
     BOOST_CHECK(!cybou::p2p::DecodePeersPayload(bad_payload));
     std::vector<unsigned char> truncated{1, 4, 127, 0}; // incomplete IPv4
     BOOST_CHECK(!cybou::p2p::DecodePeersPayload(truncated));
+
+    // A malicious count beyond MAX_PEER_DISCOVERY_ENTRIES must be rejected even
+    // though 255 entries would comfortably fit in a 4 KiB frame.
+    std::vector<unsigned char> oversized;
+    oversized.push_back(255);
+    for (uint8_t i = 0; i < 255; ++i) {
+        oversized.push_back(4);
+        oversized.insert(oversized.end(), {10, 0, 0, 1});
+        oversized.push_back(0x98);
+        oversized.push_back(0x73);
+    }
+    BOOST_CHECK(!cybou::p2p::DecodePeersPayload(oversized));
 }
 
 BOOST_AUTO_TEST_CASE(peer_discovery_over_the_wire)

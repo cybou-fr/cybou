@@ -29,6 +29,10 @@ inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
 inline constexpr uint64_t CAP_CONSENSUS{1ULL << 5};
 inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
+// Shared bound for the peer discovery list: both the encoder and the decoder
+// must enforce it so a malicious peer cannot stuff a PEERS frame with more
+// entries than an honest node would ever send.
+inline constexpr uint8_t MAX_PEER_DISCOVERY_ENTRIES{32};
 
 enum class MessageType : uint8_t {
     HELLO = 1, PING = 2, PONG = 3, GET_BLOCK = 4, BLOCK_META = 5,
@@ -105,8 +109,10 @@ public:
     // Callers must verify returned blocks before commit.
     BlockRequestResult RequestBlock(uint64_t height);
     BlockInventoryResult RequestBlockInventory(uint64_t first_height, uint8_t max_blocks);
+    // On success, peer_finalized_height receives the peer's finalized height
+    // as reported in the BLOCK_RESULT acknowledgement (0 if not present).
     std::optional<BlockAnnounceResult> AdvertiseBlock(const BlockAnnouncement& announcement,
-        const FinalizedBlock& block);
+        const FinalizedBlock& block, uint64_t& peer_finalized_height);
     std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation);
     std::optional<OperationSubmitResult> AdvertiseOperation(const ProtocolOperation& operation);
     bool SendProposal(const BftProposalMsg& proposal);

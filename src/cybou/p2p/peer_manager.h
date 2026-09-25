@@ -51,7 +51,9 @@ struct PeerSubmitResult {
 };
 
 // Single-threaded outbound peer set. Callers schedule connection attempts and
-// health checks; this class never supplies consensus trust or auto-discovers peers.
+// health checks; this class never supplies consensus trust. Dynamic discovery
+// only collects untrusted routing hints — explicit validator endpoints keep
+// gossip priority, and discovered peers never define consensus connectivity.
 class PeerManager {
 public:
     explicit PeerManager(CybouNodeRuntime& runtime);
@@ -92,6 +94,10 @@ private:
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;
     std::map<Endpoint, std::set<uint256>> m_announced_operations;
     std::map<Endpoint, std::set<uint256>> m_announced_blocks;
+    // Last finalized height each peer reported in a BLOCK_RESULT ack, so the
+    // fanout can skip (and mark announced) heads the peer already finalized
+    // without spending the per-cycle offer budget on ancient history.
+    std::map<Endpoint, uint64_t> m_peer_finalized_heights;
     PeerConnectStatus m_last_connect_status{PeerConnectStatus::INVALID_REQUEST};
 };
 

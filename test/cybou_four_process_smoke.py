@@ -4,14 +4,21 @@
 Includes:
 - Deliberate process startup skew (0, 100ms, 250ms, 400ms).
 - Leader kill using sorted validator mapping from init-dev.
-- Mid-height OS process restart after signing prevote/precommit.
-- Packet/delivery disturbance (delayed drain and periodic reconnect).
+- Deterministic mid-height crash via CYBOU_TEST_EXIT_AFTER_SIGN after a durable
+  prevote signing intent (no journal-polling fallback: the test fails if the
+  crash boundary is not hit).
+- Packet/delivery disturbance (delayed drain) and real periodic reconnect
+  (CYBOU_RECONNECT_INTERVAL_MS is set for every validator).
+- Two validators frozen with SIGSTOP: the remaining pair must stall without
+  quorum, and one resumed validator must rejoin the unfinished height so the
+  height can finalize (resume is required for quorum).
 - 10-50 consecutive heights with periodic kill/restart churn.
 """
 
 import argparse
 import os
 import re
+import signal
 import socket
 import subprocess
 import tempfile
@@ -121,6 +128,10 @@ def main():
 
         def start_validator(index, env_extra=None):
             env = os.environ.copy()
+            # Exercise the production periodic reconnect path in every run.
+            env["CYBOU_RECONNECT_INTERVAL_MS"] = "2500"
+            if index >= 2:
+                env["CYBOU_CONSENSUS_DRAIN_DELAY_MS"] = "25"
             if env_extra:
                 env.update(env_extra)
             log = (root / f"node-{index}.log").open("a", encoding="utf-8")
@@ -184,10 +195,7 @@ def main():
             for index, skew in enumerate(startup_skews):
                 if skew > 0:
                     time.sleep(skew)
-                processes[index] = start_validator(
-                    index,
-                    env_extra={"CYBOU_CONSENSUS_DRAIN_DELAY_MS": "25"} if index >= 2 else None
-                )
+                processes[index] = start_validator(index)
 
             heights = wait_for_synced(2, range(4))
             print(f"Initial 4-process finality reached: {heights}")
@@ -207,34 +215,37 @@ def main():
 
             # Recover leader process and verify catchup
             print(f"Restarting leader process {leader_proc}...")
-            processes[leader_proc] = start_validator(
-                leader_proc,
-                env_extra={"CYBOU_CONSENSUS_DRAIN_DELAY_MS": "25"} if leader_proc >= 2 else None
-            )
+            processes[leader_proc] = start_validator(leader_proc)
             recovered_heights = wait_for_synced(target_after_kill, range(4))
             print(f"Recovered leader {leader_proc}, all synced at {target_after_kill}: {recovered_heights}")
 
-            # 3. Mid-height OS-process restart: kill validator after it signs prevote/precommit
+            # 3. Deterministic mid-height crash: the test hook exits the process
+            # with code 120 immediately after a durable PREVOTE signing intent.
+            # There is no fallback — if the crash boundary is never hit, the
+            # scenario fails instead of silently degrading.
             cur_h = max(h for h in recovered_heights if h is not None)
             mid_h = cur_h + 1
             follower_val_idx = (mid_h + 1) % 4
             mid_proc = val_to_proc[follower_val_idx]
-            print(f"Testing mid-height restart on follower process {mid_proc} for height {mid_h}...")
-            journal_path = root / f"db-{mid_proc}" / "validator-signing.journal"
-            deadline = time.monotonic() + 10
-            killed = False
-            while time.monotonic() < deadline:
-                info = read_signing_journal(journal_path)
-                if info and info["height"] >= mid_h and info["step"] >= 1:
-                    print(f"Detected signed vote at height {info['height']}, step {info['step']}! Terminating...")
-                    stop_validator(mid_proc)
-                    killed = True
-                    break
-                time.sleep(0.01)
-
-            if not killed:
-                print(f"Did not catch mid-height vote in window, stopping process {mid_proc} directly")
-                stop_validator(mid_proc)
+            print(f"Testing deterministic mid-height crash on follower process {mid_proc} "
+                  f"for height {mid_h} (CYBOU_TEST_EXIT_AFTER_SIGN=PREVOTE)...")
+            stop_validator(mid_proc)
+            processes[mid_proc] = start_validator(
+                mid_proc, env_extra={"CYBOU_TEST_EXIT_AFTER_SIGN": "PREVOTE"})
+            deadline = time.monotonic() + 60
+            while processes[mid_proc].poll() is None and time.monotonic() < deadline:
+                time.sleep(0.05)
+            if processes[mid_proc].poll() is None:
+                raise RuntimeError(f"validator {mid_proc} did not hit the deterministic crash boundary in time")
+            if processes[mid_proc].returncode != 120:
+                raise RuntimeError(
+                    f"validator {mid_proc} exited with {processes[mid_proc].returncode}, expected 120 "
+                    "from CYBOU_TEST_EXIT_AFTER_SIGN")
+            info = read_signing_journal(root / f"db-{mid_proc}" / "validator-signing.journal")
+            if not info or info["height"] < mid_h or info["step"] < 1:
+                raise RuntimeError(f"journal after deterministic crash is missing or unexpected: {info}")
+            print(f"Deterministic crash at height {info['height']}, step {info['step']} confirmed.")
+            stop_validator(mid_proc)
 
             active = [idx for idx in range(4) if idx != mid_proc]
             target_mid = mid_h + 2
@@ -243,15 +254,69 @@ def main():
 
             # Restart validator with persisted journal; it must preserve its lock and catch up safely
             print(f"Restarting mid-height killed process {mid_proc}...")
-            processes[mid_proc] = start_validator(
-                mid_proc,
-                env_extra={"CYBOU_CONSENSUS_DRAIN_DELAY_MS": "25"} if mid_proc >= 2 else None
-            )
+            processes[mid_proc] = start_validator(mid_proc)
             recovered_mid = wait_for_synced(target_mid, range(4))
             print(f"Restarted process {mid_proc}, all synced at height {target_mid}: {recovered_mid}")
 
-            # 4. Consecutive heights verification (10-50 heights) with periodic kill/restart churn
+            # 4. Frozen validators required for quorum at an unfinished height:
+            # SIGSTOP two validators right after a finalized height; the remaining
+            # pair must stall (2 < quorum 3). Resuming only one of them must let
+            # the unfinished height finalize — its participation is required.
+            # POSIX only: Windows has no SIGSTOP/SIGCONT, and CI runs on Linux.
+            freeze_supported = hasattr(signal, "SIGSTOP") and hasattr(signal, "SIGCONT")
+
+            def freeze_quorum_attempt(base_h):
+                frozen_a, frozen_b = 0, 1
+                active_pair = [i for i in range(4) if i not in (frozen_a, frozen_b)]
+                print(f"SIGSTOP validators {frozen_a},{frozen_b} right after height {base_h}; "
+                      f"active pair {active_pair} must stall without quorum...")
+                os.kill(processes[frozen_a].pid, signal.SIGSTOP)
+                os.kill(processes[frozen_b].pid, signal.SIGSTOP)
+                try:
+                    deadline = time.monotonic() + 5
+                    while time.monotonic() < deadline:
+                        for i in active_pair:
+                            h = probe(binary, network, root / f"probe-{i}", p2p_ports[i])
+                            if h is not None and h > base_h:
+                                return None  # race lost: height finalized from pre-freeze votes
+                        time.sleep(0.4)
+                    print(f"Active pair stalled at height {base_h} as expected (no quorum without "
+                          f"{frozen_a},{frozen_b}).")
+                    # Resuming frozen_b must be sufficient to finalize the
+                    # unfinished height: 3/4 quorum including the resumed node.
+                    os.kill(processes[frozen_b].pid, signal.SIGCONT)
+                    target_q = base_h + 2
+                    wait_for(target_q, [frozen_b] + active_pair, timeout=90)
+                    print(f"Resumed validator {frozen_b} rejoined the unfinished height; "
+                          f"quorum finalized {target_q}.")
+                    os.kill(processes[frozen_a].pid, signal.SIGCONT)
+                    return target_q
+                finally:
+                    for i in (frozen_a, frozen_b):
+                        if processes[i] and processes[i].poll() is None:
+                            os.kill(processes[i].pid, signal.SIGCONT)
+
             cur_h = max(h for h in recovered_mid if h is not None)
+            frozen_done = None
+            if freeze_supported:
+                for attempt in range(3):
+                    frozen_done = freeze_quorum_attempt(cur_h)
+                    if frozen_done is not None:
+                        break
+                    print("Race lost: height finalized from pre-freeze votes; retrying freeze scenario...")
+                    wait_for_synced(cur_h, range(4))
+                    heights_now = [probe(binary, network, root / f"probe-{i}", p2p_ports[i]) for i in range(4)]
+                    cur_h = max(h for h in heights_now if h is not None)
+                if frozen_done is None:
+                    raise RuntimeError("freeze/quorum scenario lost the race 3 times")
+                recovered_q = wait_for_synced(frozen_done, range(4))
+                print(f"All 4 validators reached height {frozen_done}: {recovered_q}")
+            else:
+                print("SIGSTOP/SIGCONT unavailable on this platform; skipping freeze/quorum scenario.")
+                recovered_q = recovered_mid
+
+            # 5. Consecutive heights verification (10-50 heights) with periodic kill/restart churn
+            cur_h = max(h for h in recovered_q if h is not None)
             target_final = max(args.target_height, cur_h + 4)
             print(f"Verifying consecutive finality up to height {target_final} with periodic kill/restart...")
             churn_cycle = 0
@@ -264,10 +329,7 @@ def main():
                 active = [i for i in range(4) if i != churn_proc]
                 h_active = wait_for(next_target, active, timeout=30)
                 print(f"3/4 active reached {next_target} without validator {churn_proc}: {h_active}")
-                processes[churn_proc] = start_validator(
-                    churn_proc,
-                    env_extra={"CYBOU_CONSENSUS_DRAIN_DELAY_MS": "25"} if churn_proc >= 2 else None
-                )
+                processes[churn_proc] = start_validator(churn_proc)
                 h_all = wait_for_synced(next_target, range(4), timeout=30)
                 cur_h = max(h for h in h_all if h is not None)
                 print(f"All 4 validators reached height {cur_h}: {h_all}")

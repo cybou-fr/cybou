@@ -20,7 +20,7 @@
 
 namespace cybou {
 
-inline constexpr size_t MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES{32U * 1024U * 1024U};
+// MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES is canonical in bft_engine.h.
 
 enum class AuthorityProductionError : uint8_t {
     NONE,
@@ -39,6 +39,14 @@ struct AuthorityProductionResult {
     BlockTransitionResult commit_result{};
 
     explicit operator bool() const { return error == AuthorityProductionError::NONE; }
+};
+
+/** Runtime-facing snapshot of the validator's recovered/advancing BFT state. */
+struct ConsensusProgress {
+    uint64_t height{0};
+    uint32_t round{0};
+    BftStep step{BftStep::PROPOSE};
+    int32_t locked_round{-1};
 };
 
 enum class OperationSubmitStatus : uint8_t {
@@ -90,6 +98,12 @@ public:
     std::optional<BftPrecommitMsg> OnPrevoteTimeout();
     const std::optional<FinalizedBlock>& GetLatestFinalizedBlock() const;
     std::optional<size_t> GetValidatorIndex() const;
+    /**
+     * Current validator progress, forcing lazy validator creation/height sync.
+     * After a CBS2 restart this reports the recovered round/step/lock so the
+     * runtime driver can resume orchestration where the engine actually is.
+     */
+    std::optional<ConsensusProgress> GetConsensusProgress();
 
 private:
     bool EnsureValidator();

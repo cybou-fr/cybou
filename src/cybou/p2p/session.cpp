@@ -93,7 +93,7 @@ std::optional<Hello> DecodeHello(std::span<const unsigned char> bytes)
 std::vector<unsigned char> EncodePeersPayload(const std::vector<std::pair<std::string, uint16_t>>& peers)
 {
     std::vector<unsigned char> out;
-    const uint8_t count = static_cast<uint8_t>(std::min<size_t>(peers.size(), 32));
+    const uint8_t count = static_cast<uint8_t>(std::min<size_t>(peers.size(), MAX_PEER_DISCOVERY_ENTRIES));
     out.push_back(count);
     size_t added = 0;
     for (const auto& [host, port] : peers) {
@@ -126,6 +126,7 @@ std::optional<std::vector<std::pair<std::string, uint16_t>>> DecodePeersPayload(
 {
     if (bytes.empty()) return std::nullopt;
     const uint8_t count = bytes[0];
+    if (count > MAX_PEER_DISCOVERY_ENTRIES) return std::nullopt;
     size_t offset = 1;
     std::vector<std::pair<std::string, uint16_t>> result;
     result.reserve(count);
@@ -377,8 +378,9 @@ BlockInventoryResult PeerSession::RequestBlockInventory(uint64_t first_height, u
 }
 
 std::optional<BlockAnnounceResult> PeerSession::AdvertiseBlock(
-    const BlockAnnouncement& announcement, const FinalizedBlock& block)
+    const BlockAnnouncement& announcement, const FinalizedBlock& block, uint64_t& peer_finalized_height)
 {
+    peer_finalized_height = 0;
     if (!m_peer || !(m_peer->capabilities & CAP_BLOCK_ANNOUNCEMENTS) ||
         announcement.height == 0 || announcement.block_id.IsNull() ||
         block.block.height != announcement.height || ComputeBlockId(block.block) != announcement.block_id) return std::nullopt;
@@ -405,10 +407,14 @@ std::optional<BlockAnnounceResult> PeerSession::AdvertiseBlock(
         return std::nullopt;
     }
     const auto result = answer->type == MessageType::BLOCK_RESULT ? answer : Read(deadline);
-    if (!result || result->type != MessageType::BLOCK_RESULT || result->payload.size() != 41 ||
+    // Payload is [result:1][height:8][id:32] plus, from newer peers, the
+    // acker's finalized height [peer_height:8] (49 bytes total).
+    if (!result || result->type != MessageType::BLOCK_RESULT ||
+        (result->payload.size() != 41 && result->payload.size() != 49) ||
         result->payload[0] > static_cast<uint8_t>(BlockAnnounceResult::GAP) ||
         Read64(result->payload.data() + 1) != announcement.height ||
         !std::equal(announcement.block_id.begin(), announcement.block_id.end(), result->payload.begin() + 9)) return std::nullopt;
+    if (result->payload.size() == 49) peer_finalized_height = Read64(result->payload.data() + 41);
     return static_cast<BlockAnnounceResult>(result->payload[0]);
 }
 
@@ -639,43 +645,88 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         uint256 id;
         std::copy_n(request->payload.begin() + 9, 32, id.begin());
         if (height == 0 || id.IsNull()) return false;
-        const auto status = runtime.GetStatus();
+        auto status = runtime.GetStatus();
         if (!status.is_initialized) return false;
         const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
         auto acknowledge = [&](BlockAnnounceResult result) {
             std::vector<unsigned char> payload{static_cast<unsigned char>(result)};
             Put64(payload, height);
             payload.insert(payload.end(), id.begin(), id.end());
+            // Report our current finalized height so the offerer can skip
+            // heads we already have on its next fanout cycle.
+            Put64(payload, runtime.GetStatus().finalized_height);
             return Write(Frame{MessageType::BLOCK_RESULT, payload}, deadline);
         };
+        // Pulls one block by height over this session and commits it after
+        // canonical verification. Returns std::nullopt on transport/protocol
+        // failure (the session must die); GAP when the peer cannot serve the
+        // block; APPLIED on success. An expected_id of zero skips the id check
+        // (used for catch-up pulls where we only know the height).
+        auto fetch_and_commit = [&](uint64_t h, const uint256& expected_id) ->
+            std::optional<BlockAnnounceResult> {
+            std::vector<unsigned char> query;
+            Put64(query, h);
+            if (!Write(Frame{MessageType::GET_BLOCK, query}, deadline)) return std::nullopt;
+            const auto meta = Read(deadline);
+            if (!meta || meta->type != MessageType::BLOCK_META || meta->payload.size() != 4) return std::nullopt;
+            const uint32_t size = Read32(meta->payload.data());
+            if (size == 0) {
+                return BlockAnnounceResult::GAP; // peer does not have this height
+            }
+            if (size > MAX_FINALIZED_BLOCK_FEED_BYTES) return std::nullopt;
+            std::vector<unsigned char> bytes;
+            bytes.reserve(size);
+            while (bytes.size() < size) {
+                const auto chunk = Read(deadline);
+                if (!chunk || chunk->type != MessageType::BLOCK_CHUNK || chunk->payload.empty() ||
+                    chunk->payload.size() > size - bytes.size()) return std::nullopt;
+                bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
+            }
+            const auto block = DeserializeFinalizedBlock(bytes);
+            if (!block || block->block.height != h ||
+                block->certificate.network_id != status.network_id ||
+                block->certificate.height != h) return std::nullopt;
+            if (!expected_id.IsNull() &&
+                (ComputeBlockId(block->block) != expected_id || block->certificate.block_id != expected_id)) {
+                return std::nullopt;
+            }
+            // A failed commit (duplicate race or state conflict) must not kill
+            // the session; the offered height simply stays unavailable.
+            const bool committed = static_cast<bool>(runtime.CommitBlock(*block));
+            return committed ? BlockAnnounceResult::APPLIED : BlockAnnounceResult::GAP;
+        };
+        auto have_height = [&](uint64_t h, const uint256& expected) {
+            const auto known = runtime.GetBlockAtHeight(h);
+            return known && ComputeBlockId(known->block) == expected;
+        };
         if (height <= status.finalized_height) {
-            const auto known = runtime.GetBlockAtHeight(height);
-            return known && ComputeBlockId(known->block) == id &&
-                acknowledge(BlockAnnounceResult::ALREADY_HAVE);
+            return have_height(height, id) && acknowledge(BlockAnnounceResult::ALREADY_HAVE);
         }
         if (status.finalized_height == std::numeric_limits<uint64_t>::max() ||
-            height != status.finalized_height + 1) return acknowledge(BlockAnnounceResult::GAP);
-        std::vector<unsigned char> query;
-        Put64(query, height);
-        if (!Write(Frame{MessageType::GET_BLOCK, query}, deadline)) return false;
-        const auto meta = Read(deadline);
-        if (!meta || meta->type != MessageType::BLOCK_META || meta->payload.size() != 4) return false;
-        const uint32_t size = Read32(meta->payload.data());
-        if (size == 0 || size > MAX_FINALIZED_BLOCK_FEED_BYTES) return false;
-        std::vector<unsigned char> bytes;
-        bytes.reserve(size);
-        while (bytes.size() < size) {
-            const auto chunk = Read(deadline);
-            if (!chunk || chunk->type != MessageType::BLOCK_CHUNK || chunk->payload.empty() ||
-                chunk->payload.size() > size - bytes.size()) return false;
-            bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
+            height != status.finalized_height + 1) {
+            // The peer is ahead of us. Use this very session to pull our next
+            // missing height so one stale offer triggers catch-up immediately
+            // instead of waiting for the peer's fanout to reach our frontier.
+            if (status.finalized_height != std::numeric_limits<uint64_t>::max() &&
+                height > status.finalized_height + 1) {
+                const auto pulled = fetch_and_commit(status.finalized_height + 1, uint256{});
+                if (!pulled) return false;
+                status = runtime.GetStatus();
+                if (height <= status.finalized_height) {
+                    return have_height(height, id) && acknowledge(BlockAnnounceResult::ALREADY_HAVE);
+                }
+                if (height == status.finalized_height + 1 &&
+                    *pulled == BlockAnnounceResult::APPLIED) {
+                    const auto applied = fetch_and_commit(height, id);
+                    if (!applied) return false;
+                    return acknowledge(*applied);
+                }
+            }
+            return acknowledge(BlockAnnounceResult::GAP);
         }
-        const auto block = DeserializeFinalizedBlock(bytes);
-        if (!block || block->block.height != height || ComputeBlockId(block->block) != id ||
-            block->certificate.network_id != status.network_id ||
-            block->certificate.height != height || block->certificate.block_id != id ||
-            !runtime.CommitBlock(*block)) return false;
-        return acknowledge(BlockAnnounceResult::APPLIED);
+        const auto applied = fetch_and_commit(height, id);
+        if (!applied) return false;
+        return acknowledge(*applied);
     }
     if (request->type == MessageType::GET_BLOCKS) {
         if (!(m_local_capabilities & CAP_SERVE_BLOCKS) ||

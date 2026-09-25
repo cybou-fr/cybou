@@ -12,6 +12,39 @@
 
 namespace cybou {
 
+namespace {
+
+// Discovered routing hints are untrusted. Reject address scopes this node has
+// no business dialing: unspecified, multicast, and (unless the local CYP2
+// listener lives in the same scope) loopback and link-local targets. Without a
+// known local listener the policy stays permissive for DEV tooling.
+bool IsConnectableDiscoveredAddress(
+    const boost::asio::ip::address& addr,
+    const std::optional<std::pair<std::string, uint16_t>>& local_p2p_endpoint)
+{
+    if (addr.is_unspecified() || addr.is_multicast()) return false;
+    if (addr.is_loopback()) {
+        if (!local_p2p_endpoint) return true;
+        boost::system::error_code ec;
+        const auto local = boost::asio::ip::make_address(local_p2p_endpoint->first, ec);
+        return !ec && local.is_loopback();
+    }
+    auto is_link_local = [](const boost::asio::ip::address& a) {
+        if (a.is_v4()) return (a.to_v4().to_uint() & 0xFFFF0000U) == 0xA9FE0000U;
+        const auto bytes = a.to_v6().to_bytes();
+        return bytes[0] == 0xFEU && (bytes[1] & 0xC0U) == 0x80U;
+    };
+    if (is_link_local(addr)) {
+        if (!local_p2p_endpoint) return true;
+        boost::system::error_code ec;
+        const auto local = boost::asio::ip::make_address(local_p2p_endpoint->first, ec);
+        return !ec && is_link_local(local);
+    }
+    return true;
+}
+
+} // namespace
+
 CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     : m_config{std::move(config)},
       m_network_id{NetworkId(m_config.network_definition)},
@@ -267,8 +300,18 @@ void CybouNodeRuntime::TickConsensus(const std::chrono::milliseconds round_timeo
             m_consensus_height = height;
             m_consensus_round = 0;
             m_consensus_phase = 0;
+            // Resume where the engine actually is: after a CBS2 restart the
+            // validator recovers its durable round/step/lock from the signing
+            // journal, and the driver must not restart orchestration at
+            // round 0 and slowly time its way back up.
+            if (const auto progress = m_authority_node->GetConsensusProgress();
+                progress && progress->height == height) {
+                m_consensus_round = progress->round;
+                m_consensus_phase = progress->step == BftStep::PROPOSE ? 0 :
+                    (progress->step == BftStep::PREVOTE ? 1 : 2);
+            }
             m_round_started = now;
-            proposal = m_authority_node->StartConsensusRound(0);
+            proposal = m_authority_node->StartConsensusRound(m_consensus_round);
         } else {
             if (now - m_round_started < round_timeout ||
                 m_consensus_round == std::numeric_limits<uint32_t>::max()) return;
@@ -322,9 +365,8 @@ std::optional<BftPrevoteMsg> CybouNodeRuntime::ReceiveConsensusProposal(const Bf
         if (!m_authority_node) return std::nullopt;
         pv = m_authority_node->ReceiveProposal(proposal);
         if (pv) {
-            if (m_consensus_height != proposal.height || m_consensus_round != proposal.round) {
+            if (m_consensus_height != proposal.height) {
                 m_consensus_height = proposal.height;
-                m_consensus_round = proposal.round;
             }
             m_consensus_phase = 1;
             m_round_started = std::chrono::steady_clock::now();
@@ -335,6 +377,8 @@ std::optional<BftPrevoteMsg> CybouNodeRuntime::ReceiveConsensusProposal(const Bf
                 CommitConsensusPrecommit(*pc);
             }
         }
+        // The engine may have jumped to a higher round while processing.
+        SyncConsensusDriverWithEngine();
     }
     if (pv) BroadcastConsensusPrevote(*pv);
     if (pc) BroadcastConsensusPrecommit(*pc);
@@ -353,6 +397,7 @@ std::optional<BftPrecommitMsg> CybouNodeRuntime::ReceiveConsensusPrevote(const B
             m_round_started = std::chrono::steady_clock::now();
             CommitConsensusPrecommit(*pc);
         }
+        SyncConsensusDriverWithEngine();
     }
     if (pc) BroadcastConsensusPrecommit(*pc);
     return pc;
@@ -362,7 +407,26 @@ bool CybouNodeRuntime::ReceiveConsensusPrecommit(const BftPrecommitMsg& precommi
 {
     std::lock_guard lock(m_mutex);
     if (!m_authority_node) return false;
-    return CommitConsensusPrecommit(precommit);
+    const bool committed = CommitConsensusPrecommit(precommit);
+    SyncConsensusDriverWithEngine();
+    return committed;
+}
+
+void CybouNodeRuntime::SyncConsensusDriverWithEngine()
+{
+    // Caller holds m_mutex. The engine may legitimately run ahead of the
+    // orchestration driver: it jumps rounds on verified higher-round votes.
+    // Follow it so the timeout machine drives the round the engine is in.
+    const auto progress = m_authority_node->GetConsensusProgress();
+    if (!progress || progress->height != m_consensus_height) return;
+    if (progress->round == m_consensus_round && progress->step == BftStep::PROPOSE &&
+        m_consensus_phase == 0) {
+        return;
+    }
+    m_consensus_round = progress->round;
+    m_consensus_phase = progress->step == BftStep::PROPOSE ? 0 :
+        (progress->step == BftStep::PREVOTE ? 1 : 2);
+    m_round_started = std::chrono::steady_clock::now();
 }
 
 bool CybouNodeRuntime::CommitConsensusPrecommit(const BftPrecommitMsg& precommit)
@@ -371,9 +435,20 @@ bool CybouNodeRuntime::CommitConsensusPrecommit(const BftPrecommitMsg& precommit
     const auto finalized = m_authority_node->ReceivePrecommit(precommit);
     if (!finalized) return false;
     const auto set = m_store.GetValidatorSet();
-    if (!set || !m_store.CommitFinalizedBlock(*finalized, *set, true)) return false;
+    if (!set || !m_store.CommitFinalizedBlock(*finalized, *set, true)) {
+        if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
+            std::fprintf(stderr, "[cybou-debug] FINALIZED BUT COMMIT FAILED height=%llu store_height=%llu\n",
+                static_cast<unsigned long long>(finalized->block.height),
+                static_cast<unsigned long long>(m_store.GetFinalizedHead().value_or(FinalizedHead{}).height));
+        }
+        return false;
+    }
     m_authority_node->RevalidatePending();
     RememberFinalizedBlockForGossip(*finalized);
+    if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
+        std::fprintf(stderr, "[cybou-debug] FINALIZED height=%llu\n",
+            static_cast<unsigned long long>(finalized->block.height));
+    }
     return true;
 }
 
@@ -624,32 +699,67 @@ std::optional<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetSubmitEndpo
 std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetPeerEndpointsForGossip() const
 {
     std::lock_guard lock(m_mutex);
+    constexpr size_t MAX_GOSSIP_TARGETS{32};
     std::vector<std::pair<std::string, uint16_t>> result;
-    if (m_config.p2p_endpoint.has_value()) {
-        result.push_back(*m_config.p2p_endpoint);
+    const auto& configured = m_config.p2p_endpoint;
+    if (configured.has_value()) {
+        result.push_back(*configured);
     }
-    for (const auto& ep : m_known_peer_endpoints) {
-        if (result.size() >= 32) break;
-        if (!m_config.p2p_endpoint || ep != *m_config.p2p_endpoint) {
+    // Explicit operator-approved validator peers come first: a flood of
+    // malicious discovered hints must never eclipse the validator topology.
+    for (const auto& ep : m_explicit_peer_endpoints) {
+        if (result.size() >= MAX_GOSSIP_TARGETS) break;
+        if (!configured || ep != *configured) {
+            result.push_back(ep);
+        }
+    }
+    for (const auto& ep : m_discovered_peer_endpoints) {
+        if (result.size() >= MAX_GOSSIP_TARGETS) break;
+        if ((!configured || ep != *configured) &&
+            std::find(result.begin(), result.end(), ep) == result.end()) {
             result.push_back(ep);
         }
     }
     return result;
 }
 
-void CybouNodeRuntime::AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints)
+void CybouNodeRuntime::SetExplicitPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints)
 {
     std::lock_guard lock(m_mutex);
+    m_explicit_peer_endpoints.clear();
     for (const auto& [host, port] : endpoints) {
         if (port == 0) continue;
         boost::system::error_code ec;
         const auto addr = boost::asio::ip::make_address(host, ec);
         if (ec) continue;
-        if (m_config.p2p_endpoint && host == m_config.p2p_endpoint->first && port == m_config.p2p_endpoint->second) {
+        if (m_config.p2p_endpoint && addr.to_string() == m_config.p2p_endpoint->first &&
+            port == m_config.p2p_endpoint->second) {
             continue;
         }
-        if (m_known_peer_endpoints.size() >= 256) break;
-        m_known_peer_endpoints.emplace(addr.to_string(), port);
+        if (m_config.local_p2p_endpoint && addr.to_string() == m_config.local_p2p_endpoint->first &&
+            port == m_config.local_p2p_endpoint->second) {
+            continue;
+        }
+        m_explicit_peer_endpoints.emplace(addr.to_string(), port);
+    }
+}
+
+void CybouNodeRuntime::AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints)
+{
+    std::lock_guard lock(m_mutex);
+    constexpr size_t MAX_DISCOVERED_PEER_ENDPOINTS{256};
+    for (const auto& [host, port] : endpoints) {
+        if (port == 0) continue;
+        boost::system::error_code ec;
+        const auto addr = boost::asio::ip::make_address(host, ec);
+        if (ec) continue;
+        if (!IsConnectableDiscoveredAddress(addr, m_config.local_p2p_endpoint)) continue;
+        const auto canonical = std::make_pair(addr.to_string(), port);
+        if (m_config.p2p_endpoint && canonical == *m_config.p2p_endpoint) continue;
+        if (m_config.local_p2p_endpoint && canonical == *m_config.local_p2p_endpoint) continue;
+        if (m_explicit_peer_endpoints.count(canonical) > 0) continue;
+        if (m_discovered_peer_endpoints.size() >= MAX_DISCOVERED_PEER_ENDPOINTS) break;
+        m_discovered_peer_endpoints.emplace(canonical);
     }
 }
 

@@ -70,6 +70,54 @@ CDBWrapper MemoryDb()
 
 BOOST_FIXTURE_TEST_SUITE(cybou_bft_tests, BasicTestingSetup)
 
+BOOST_AUTO_TEST_CASE(bft_signing_journal_recovers_from_stale_temp_file)
+{
+    const auto dir = std::filesystem::temp_directory_path() / "cybou-bft-signing-tmp-test";
+    std::filesystem::create_directories(dir);
+    const auto journal = dir / "validator-signing.journal";
+    std::filesystem::remove(journal);
+    std::filesystem::remove(journal.string() + ".tmp");
+
+    std::array<unsigned char, 32> seed{};
+    seed[0] = 0x7b;
+    const auto key = *cybou::GenerateValidatorKeyPair(seed);
+    const cybou::ValidatorSet set{
+        .version = cybou::VALIDATOR_SET_VERSION,
+        .validators = {{.validator_id = cybou::ComputeValidatorId(key.public_key),
+                        .consensus_public_key = key.public_key, .weight = 1}},
+    };
+    const auto network = uint256::FromUserHex("b00f").value();
+    const auto execute = [](const std::vector<cybou::ProtocolOperation>&, uint64_t) -> std::optional<uint256> {
+        return uint256::ONE;
+    };
+    {
+        cybou::BftValidatorNode first{0, seed, network, set, execute, journal};
+        first.SetHeight(1, uint256::ONE, set);
+        const auto proposal = first.StartRound(0, {});
+        BOOST_REQUIRE(proposal);
+        const auto prevote = first.ReceiveProposal(*proposal);
+        BOOST_REQUIRE(prevote);
+    }
+    // Simulate a crash between creating the journal temp file and rename():
+    // the next publish with O_EXCL would fail and permanently disable signing.
+    {
+        std::ofstream stale(journal.string() + ".tmp", std::ios::binary | std::ios::trunc);
+        stale << "partial-record";
+    }
+    {
+        cybou::BftValidatorNode restarted{0, seed, network, set, execute, journal};
+        restarted.SetHeight(1, uint256::ONE, set);
+        // Startup recovery discards the stale temp file; round 1 signing works.
+        const auto r1_proposal = restarted.StartRound(1, {});
+        BOOST_REQUIRE(r1_proposal);
+        const auto r1_prevote = restarted.ReceiveProposal(*r1_proposal);
+        BOOST_REQUIRE(r1_prevote);
+    }
+    std::filesystem::remove(journal);
+    std::filesystem::remove(journal.string() + ".tmp");
+    std::filesystem::remove_all(dir);
+}
+
 BOOST_AUTO_TEST_CASE(bft_signing_journal_blocks_restart_equivocation)
 {
     const auto dir = std::filesystem::temp_directory_path() / "cybou-bft-signing-test";

@@ -227,4 +227,15 @@ std::optional<size_t> CybouAuthorityNode::GetValidatorIndex() const
     return m_validator ? std::optional<size_t>{m_validator->GetNodeIndex()} : std::nullopt;
 }
 
+std::optional<ConsensusProgress> CybouAuthorityNode::GetConsensusProgress()
+{
+    if (!EnsureValidator()) return std::nullopt;
+    return ConsensusProgress{
+        .height = m_validator->GetHeight(),
+        .round = m_validator->GetRound(),
+        .step = m_validator->GetStep(),
+        .locked_round = m_validator->GetLockedRound(),
+    };
+}
+
 } // namespace cybou

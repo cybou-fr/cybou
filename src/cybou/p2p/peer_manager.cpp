@@ -82,6 +82,10 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     }
     m_announced_operations.erase(endpoint);
     m_announced_blocks.erase(endpoint);
+    // Seed the fanout frontier from the peer's handshake height. This
+    // knowledge survives reconnects (a peer's chain only grows), so it is
+    // deliberately NOT erased on disconnect or failed consensus sends.
+    m_peer_finalized_heights[endpoint] = peer->Peer()->finalized_height;
     m_peers.emplace(endpoint, std::move(peer));
     m_last_connect_status = PeerConnectStatus::CONNECTED;
     return true;
@@ -318,19 +322,30 @@ size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
             ++it;
             continue;
         }
+        // Heads at or below the peer's reported finalized height are marked
+        // announced without spending the per-cycle offer budget, so the walk
+        // reaches the peer's actual frontier instead of stalling on ancient
+        // blocks after every announced-set reset.
+        const uint64_t peer_frontier = m_peer_finalized_heights[it->first];
         bool disconnected{false};
         size_t offered{0};
         for (const auto& head : recent) {
             if (offered >= max_per_peer) break;
             if (announced.contains(head.block_id)) continue;
+            if (head.height <= peer_frontier) {
+                announced.insert(head.block_id);
+                continue;
+            }
             const auto block = m_runtime.GetBlockAtHeight(head.height);
             if (!block || ComputeBlockId(block->block) != head.block_id) continue;
             ++offered;
-            const auto response = it->second->AdvertiseBlock({head.height, head.block_id}, *block);
+            uint64_t peer_height{0};
+            const auto response = it->second->AdvertiseBlock({head.height, head.block_id}, *block, peer_height);
             if (!response) {
                 disconnected = true;
                 break;
             }
+            if (peer_height > 0) m_peer_finalized_heights[it->first] = peer_height;
             if (*response != BlockAnnounceResult::GAP) {
                 announced.insert(head.block_id);
                 ++delivered;
@@ -362,8 +377,10 @@ std::vector<PeerInfo> PeerManager::Peers() const
 void PeerManager::DisconnectAll()
 {
     m_peers.clear();
-    m_announced_operations.clear();
-    m_announced_blocks.clear();
+    // Deliberately keep m_announced_blocks/m_announced_operations: a peer's
+    // store knowledge persists across sessions. Clearing them restarts fanout
+    // from the oldest recent entries, and with the per-peer offer cap a peer
+    // that is behind never receives the newer blocks it actually needs.
 }
 
 bool PeerManager::SendConsensusTo(const std::string& address, uint16_t port,

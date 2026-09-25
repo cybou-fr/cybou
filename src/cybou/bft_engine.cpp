@@ -8,6 +8,8 @@
 #include <crypto/sha256.h>
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstdio>
 #include <fstream>
 #include <filesystem>
 #include <string>
@@ -112,7 +114,7 @@ std::optional<SigningRecord> ReadSigningRecord(const std::filesystem::path& path
     std::error_code ec;
     if (std::filesystem::is_symlink(path, ec) || ec) return std::nullopt;
     const auto file_size = std::filesystem::file_size(path, ec);
-    if (ec || file_size < SIGNING_RECORD_CBS1_SIZE || file_size > 10 * 1024 * 1024) return std::nullopt;
+    if (ec || file_size < SIGNING_RECORD_CBS1_SIZE || file_size > MAX_SIGNING_RECORD_BYTES) return std::nullopt;
 
     std::ifstream input(path, std::ios::binary);
     std::vector<unsigned char> bytes(file_size);
@@ -488,6 +490,17 @@ BftValidatorNode::BftValidatorNode(
         m_validator_id = m_validator_set.validators[node_index].validator_id;
     }
     if (m_signing_journal) {
+        // Crash recovery for a stale journal temp file. A signature is only
+        // produced after the record has been atomically renamed into place, so
+        // a leftover ".tmp" can never correspond to a signature that was sent;
+        // it is always safe to discard and keeps the next O_EXCL publish from
+        // permanently disabling signing (safety-safe but liveness-bad).
+        std::error_code tmp_ec;
+        auto tmp_path = *m_signing_journal;
+        tmp_path += ".tmp";
+        if (std::filesystem::exists(tmp_path, tmp_ec) && !tmp_ec) {
+            std::filesystem::remove(tmp_path, tmp_ec);
+        }
         std::error_code ec;
         const bool exists = std::filesystem::exists(*m_signing_journal, ec);
         if (ec) { m_journal_valid = false; return; }
@@ -556,6 +569,21 @@ bool BftValidatorNode::RecordSigningIntent(const BftStep step, const uint256& di
     m_last_signed_step = step;
     m_has_signed = true;
     m_restarted = false;
+    // Deterministic crash boundary for the four-process smoke test: exit
+    // immediately after the signing intent is durable, before any signature
+    // for this step is produced. Only active when the test hook is set.
+    if (const char* hook = std::getenv("CYBOU_TEST_EXIT_AFTER_SIGN")) {
+        const std::string_view want{hook};
+        const bool match = want == "ANY" ||
+            (want == "PROPOSE" && step == BftStep::PROPOSE) ||
+            (want == "PREVOTE" && step == BftStep::PREVOTE) ||
+            (want == "PRECOMMIT" && step == BftStep::PRECOMMIT);
+        if (match) {
+            std::fflush(stdout);
+            std::fflush(stderr);
+            std::_Exit(120);
+        }
+    }
     return true;
 }
 
@@ -737,16 +765,33 @@ std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposal
 
 std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevoteMsg& prevote)
 {
-    if (prevote.network_id != m_network_id || prevote.height != m_height || prevote.round != m_round) {
+    if (prevote.network_id != m_network_id || prevote.height != m_height) {
         return std::nullopt;
     }
 
     const auto* val = m_validator_set.FindValidator(prevote.validator_id);
     if (!val) return std::nullopt;
 
-    const uint256 digest = ComputePrevoteDigest(m_network_id, m_height, m_round, prevote.validator_id, prevote.block_id);
+    const uint256 digest = ComputePrevoteDigest(m_network_id, m_height, prevote.round, prevote.validator_id, prevote.block_id);
     if (!VerifyValidatorSignature(val->consensus_public_key, prevote.signature, digest)) {
         return std::nullopt;
+    }
+
+    if (prevote.round < m_round) return std::nullopt;
+    if (prevote.round > m_round) {
+        // Round synchronization: a validator-signed prevote from a higher
+        // round is evidence the network moved past us. Jump to that round
+        // (locks are preserved) so diverged round clocks reconverge instead
+        // of starving finality. Jumps only ever go forward, and only on
+        // signatures verified against the canonical validator set.
+        m_round = prevote.round;
+        m_step = BftStep::PROPOSE;
+        m_current_proposal.reset();
+        m_current_proposal_valid = false;
+        m_prevotes.clear();
+        m_precommits.clear();
+        m_prevoted = false;
+        m_precommitted = false;
     }
 
     if (const auto existing = m_prevotes.find(prevote.validator_id);
@@ -769,6 +814,28 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
     }
 
     const size_t quorum = m_validator_set.QuorumThreshold();
+
+    // Polka unlock: a conflicting lock from an earlier round must not deadlock
+    // the height. If the current round gathers a quorum of prevotes for the
+    // current proposal's block, the lock moves to that block (standard
+    // unlock-on-polka), letting the precommit path below fire. The proposal
+    // is revalidated without the lock clause so an invalid block can never
+    // grab the lock.
+    if (!m_current_proposal_valid && m_current_proposal.has_value() && m_locked_block.has_value()) {
+        const uint256 current_id = ComputeBlockId(m_current_proposal->block);
+        const auto polka = block_counts.find(current_id);
+        if (polka != block_counts.end() && polka->second >= quorum) {
+            const bool valid_apart_from_lock = (m_current_proposal->block.height == m_height &&
+                m_current_proposal->block.parent_block_id == m_last_block_id);
+            const auto root = m_execute_operations ?
+                m_execute_operations(m_current_proposal->block.operations, m_height) : std::nullopt;
+            if (valid_apart_from_lock && root && *root == m_current_proposal->block.resulting_state_root) {
+                m_locked_block = m_current_proposal->block;
+                m_locked_round = static_cast<int32_t>(m_round);
+                m_current_proposal_valid = true;
+            }
+        }
+    }
 
     for (const auto& [blk_id, count] : block_counts) {
         if (count >= quorum && m_current_proposal_valid && m_current_proposal.has_value() &&
@@ -822,25 +889,37 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
 
 bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
 {
-    if (precommit.network_id != m_network_id || precommit.height != m_height || precommit.round != m_round) {
+    if (precommit.network_id != m_network_id || precommit.height != m_height) {
         return false;
     }
 
     const auto* val = m_validator_set.FindValidator(precommit.validator_id);
     if (!val) return false;
 
+    uint256 digest;
     if (precommit.block_id.has_value()) {
-        const uint256 commit_digest = ComputeBftCommitDigest(
-            m_network_id, *precommit.block_id, m_height, m_round, m_validator_set_commitment);
-        if (!VerifyValidatorSignature(val->consensus_public_key, precommit.signature, commit_digest)) {
-            return false;
-        }
+        digest = ComputeBftCommitDigest(
+            m_network_id, *precommit.block_id, m_height, precommit.round, m_validator_set_commitment);
     } else {
-        const uint256 nil_digest = ComputePrecommitNilDigest(
-            m_network_id, m_height, m_round, precommit.validator_id);
-        if (!VerifyValidatorSignature(val->consensus_public_key, precommit.signature, nil_digest)) {
-            return false;
-        }
+        digest = ComputePrecommitNilDigest(
+            m_network_id, m_height, precommit.round, precommit.validator_id);
+    }
+    if (!VerifyValidatorSignature(val->consensus_public_key, precommit.signature, digest)) {
+        return false;
+    }
+
+    if (precommit.round < m_round) return false;
+    if (precommit.round > m_round) {
+        // Round synchronization, same rule as ReceivePrevote: verified
+        // validator-signed evidence from a higher round pulls us forward.
+        m_round = precommit.round;
+        m_step = BftStep::PROPOSE;
+        m_current_proposal.reset();
+        m_current_proposal_valid = false;
+        m_prevotes.clear();
+        m_precommits.clear();
+        m_prevoted = false;
+        m_precommitted = false;
     }
 
     if (const auto existing = m_precommits.find(precommit.validator_id);

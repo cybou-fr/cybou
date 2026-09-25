@@ -427,12 +427,22 @@ int Main(const int argc, char* argv[])
         std::copy(key_bytes.begin(), key_bytes.end(), key.begin());
         memory_cleanse(key_bytes.data(), key_bytes.size());
 
+        const auto port = Port(argv[6]);
+        const auto interval_ms = argc >= 8 ? PositiveCount(argv[7]) : 1000;
+        if (interval_ms > 60000) throw std::runtime_error("block interval exceeds 60 seconds");
+        const auto p2p_port = argc >= 9 ? std::optional<uint16_t>{Port(argv[8])} : std::nullopt;
+        if (p2p_port && *p2p_port == port) throw std::runtime_error("P2P port must differ from block feed port");
+        const auto bind_address = boost::asio::ip::make_address(argv[5]);
+
         cybou::NodeRuntimeConfig config{
             .network_definition = network->definition,
             .data_dir = argv[3],
             .validator_private_key = key,
             .db_cache_bytes = 8 << 20,
         };
+        if (p2p_port) {
+            config.local_p2p_endpoint = std::make_pair(bind_address.to_string(), *p2p_port);
+        }
         memory_cleanse(key.data(), key.size());
         cybou::CybouNodeRuntime runtime{std::move(config)};
         if (!runtime.GetStatus().is_initialized) {
@@ -443,16 +453,10 @@ int Main(const int argc, char* argv[])
             throw std::runtime_error("validator set is empty");
         }
 
-        const auto port = Port(argv[6]);
-        const auto interval_ms = argc >= 8 ? PositiveCount(argv[7]) : 1000;
-        if (interval_ms > 60000) throw std::runtime_error("block interval exceeds 60 seconds");
         boost::asio::io_context io;
         std::optional<cybou::p2p::InboundPeerServer> p2p_server;
-        if (argc >= 9) {
-            const auto p2p_port = Port(argv[8]);
-            if (p2p_port == port) throw std::runtime_error("P2P port must differ from block feed port");
-            p2p_server.emplace(runtime, io, boost::asio::ip::tcp::endpoint{
-                boost::asio::ip::make_address(argv[5]), p2p_port});
+        if (p2p_port) {
+            p2p_server.emplace(runtime, io, boost::asio::ip::tcp::endpoint{bind_address, *p2p_port});
         }
         const auto gossip_endpoints = argc == 10 ? ReadPeerEndpoints(argv[9]) :
             std::vector<std::pair<std::string, uint16_t>>{};
@@ -465,8 +469,7 @@ int Main(const int argc, char* argv[])
             }
         }
         if (argc == 10) {
-            const auto bind_address = boost::asio::ip::make_address(argv[5]);
-            const auto own_port = Port(argv[8]);
+            const auto own_port = *p2p_port;
             for (const auto& [address, peer_port] : gossip_endpoints) {
                 if (address == bind_address.to_string() && peer_port == own_port) {
                     throw std::runtime_error("P2P peer list contains this listener");
@@ -504,7 +507,7 @@ int Main(const int argc, char* argv[])
         if (p2p_server) p2p_listener.emplace([&] { p2p_server->Run(stopping); });
         std::optional<std::jthread> gossip_worker;
         if (!gossip_endpoints.empty()) gossip_worker.emplace([&] {
-            runtime.AddDiscoveredPeerEndpoints(gossip_endpoints);
+            runtime.SetExplicitPeerEndpoints(gossip_endpoints);
             cybou::p2p::PeerManager peers{runtime};
             std::map<std::pair<std::string, uint16_t>, std::chrono::steady_clock::time_point> retry_after;
             const auto drain_delay_str = std::getenv("CYBOU_CONSENSUS_DRAIN_DELAY_MS");

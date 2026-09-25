@@ -36,6 +36,21 @@ enum class BftStep : uint8_t {
  */
 inline constexpr uint32_t MAX_FUTURE_ROUND_ADVANCE = 2;
 
+/**
+ * Maximum serialized size of an authority/proposal block accepted by consensus.
+ * One canonical bound shared by block production, the CYP2 proposal transport,
+ * and the durable signing journal size limit below.
+ */
+inline constexpr size_t MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES{32U * 1024U * 1024U};
+
+/**
+ * Largest durable CBS2 signing record the journal reader accepts: the largest
+ * consensus-valid serialized block plus record header, checksum, and margin.
+ * Keeping this bound tied to the consensus block bound prevents a validator
+ * from locking (and durably recording) a block it would reject after restart.
+ */
+inline constexpr size_t MAX_SIGNING_RECORD_BYTES{MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES + 4096U};
+
 struct BftProposalMsg {
     uint256 network_id;
     uint64_t height{0};

@@ -81,4 +81,78 @@ BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)
     BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(99), 0);
 }
 
+BOOST_AUTO_TEST_CASE(runtime_explicit_peers_take_priority_over_discovered)
+{
+    CybouServiceTestFixture fixture;
+    cybou::NodeRuntimeConfig config{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "peer-priority",
+        .local_p2p_endpoint = std::make_pair("127.0.0.1", uint16_t{29001}),
+        .memory_only = true,
+        .wipe_data = true,
+    };
+    cybou::CybouNodeRuntime runtime{std::move(config)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+
+    // Operator-approved validator endpoints.
+    runtime.SetExplicitPeerEndpoints({{"10.0.0.10", 8333}, {"10.0.0.11", 8333}});
+    // Malicious flood: lexicographically smaller addresses that would eclipse
+    // the validator topology in a single sorted set, plus this node's own
+    // listener, plus out-of-scope targets.
+    std::vector<std::pair<std::string, uint16_t>> flood;
+    for (int i = 1; i <= 40; ++i) {
+        flood.emplace_back("1.1.1." + std::to_string(i), 7000);
+    }
+    flood.emplace_back("127.0.0.1", 29001); // own listener
+    flood.emplace_back("127.0.0.1", 29002); // own address, other port
+    flood.emplace_back("0.0.0.0", 8333);    // unspecified
+    flood.emplace_back("224.0.0.1", 8333);  // multicast
+    flood.emplace_back("169.254.1.1", 8333); // link-local
+    runtime.AddDiscoveredPeerEndpoints(flood);
+
+    const auto gossip = runtime.GetPeerEndpointsForGossip();
+    // Capped at 32 targets: explicit peers first, discovered flood behind them.
+    BOOST_REQUIRE_EQUAL(gossip.size(), 32U);
+    // Explicit validator peers always come first, in front of any discovered
+    // lexicographically-smaller hint.
+    BOOST_CHECK_EQUAL(gossip[0].first, "10.0.0.10");
+    BOOST_CHECK_EQUAL(gossip[1].first, "10.0.0.11");
+    BOOST_CHECK_EQUAL(gossip[0].second, 8333);
+    // Flood addresses are present but strictly behind the explicit peers.
+    for (size_t i = 2; i < gossip.size(); ++i) {
+        BOOST_CHECK(gossip[i].first.rfind("1.1.1.", 0) == 0);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(runtime_discovery_filters_self_and_out_of_scope_addresses)
+{
+    CybouServiceTestFixture fixture;
+    cybou::NodeRuntimeConfig config{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "peer-policy",
+        .local_p2p_endpoint = std::make_pair("203.0.113.5", uint16_t{29001}),
+        .memory_only = true,
+        .wipe_data = true,
+    };
+    cybou::CybouNodeRuntime runtime{std::move(config)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+
+    // With a public listener, loopback/link-local/unspecified/multicast
+    // discovered targets must not be dialed (SSRF-style pivot).
+    runtime.AddDiscoveredPeerEndpoints({
+        {"203.0.113.5", 29001},   // own listener: always rejected
+        {"127.0.0.1", 8333},      // loopback rejected: listener is public
+        {"::1", 8333},            // v6 loopback rejected
+        {"169.254.10.20", 8333},  // v4 link-local rejected
+        {"fe80::1", 8333},        // v6 link-local rejected
+        {"0.0.0.0", 8333},        // unspecified rejected
+        {"::", 8333},             // unspecified v6 rejected
+        {"224.0.0.1", 8333},      // multicast rejected
+        {"198.51.100.7", 8333},   // public: accepted
+    });
+    const auto gossip = runtime.GetPeerEndpointsForGossip();
+    BOOST_REQUIRE_EQUAL(gossip.size(), 1U);
+    BOOST_CHECK_EQUAL(gossip[0].first, "198.51.100.7");
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -32,6 +32,8 @@ struct NodeRuntimeConfig {
     std::optional<std::array<unsigned char, 32>> validator_private_key{std::nullopt};
     std::optional<std::pair<std::string, uint16_t>> submit_endpoint{std::nullopt};
     std::optional<std::pair<std::string, uint16_t>> p2p_endpoint{std::nullopt};
+    /** This node's own CYP2 listener; used to filter self-addresses out of discovery. */
+    std::optional<std::pair<std::string, uint16_t>> local_p2p_endpoint{std::nullopt};
     size_t db_cache_bytes{8 << 20};
     bool memory_only{false};
     bool wipe_data{false};
@@ -143,6 +145,12 @@ public:
 
     /** Peer discovery endpoints */
     std::vector<std::pair<std::string, uint16_t>> GetPeerEndpointsForGossip() const;
+    /**
+     * Replace the explicit validator peer set (operator-approved endpoints).
+     * Explicit peers always come first in gossip targets and cannot be crowded
+     * out by discovered routing hints.
+     */
+    void SetExplicitPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
     void AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
 
     /** Access underlying store */
@@ -152,6 +160,8 @@ public:
 private:
     bool CommitConsensusPrecommit(const BftPrecommitMsg& precommit);
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
+    /** Re-sync the orchestration round/phase with the engine after it jumped rounds. Caller holds m_mutex. */
+    void SyncConsensusDriverWithEngine();
     void RememberOperationForGossip(const ProtocolOperation& op, const uint256& id);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
     struct GossipOperation {
@@ -183,7 +193,9 @@ private:
     std::set<uint256> m_recent_gossip_ids;
     size_t m_recent_gossip_bytes{0};
     std::deque<FinalizedHead> m_recent_finalized_blocks;
-    std::set<std::pair<std::string, uint16_t>> m_known_peer_endpoints;
+    using Endpoint = std::pair<std::string, uint16_t>;
+    std::set<Endpoint> m_explicit_peer_endpoints;
+    std::set<Endpoint> m_discovered_peer_endpoints;
 };
 
 } // namespace cybou

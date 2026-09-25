@@ -37,8 +37,6 @@ This is a permissioned BFT network with a PoA-style admission policy.
 
 ## Equal validator weight
 
-v1:
-
 ```text
 ValidatorWeight = 1
 ```

@@ -12,9 +12,7 @@ Operator-controlled validator admission
 
 This may be described as a PoA admission model, but PoA does not replace the BFT safety state machine.
 
-## Equal validator power v1
-
-v1 freezes:
+## Equal validator power
 
 ```text
 ValidatorWeight = 1
