@@ -1,31 +1,43 @@
-# CYBOU — project status and source guide
+# CYBOU — Identity-Centric Protected Communication
 
-CYBOU (https://cybou.fr/) is an open C++20 R&D project designed in France for sovereign communication infrastructure. The source repository is https://github.com/cybou-fr/cybou. The site describes both implemented DEV code and future architecture; it is not a production-service announcement.
+CYBOU (https://cybou.fr/) is an open-source, sovereign platform built around personal digital identity, designed in France. Source repository: https://github.com/cybou-fr/cybou.
+
+> **Not a blockchain with features — a protected identity with services.**
+
+Instead of fragmenting digital life across third-party corporate platforms (email, cloud storage, backup, wallets), CYBOU organizes secure digital communications and data services around one cryptographic identity (`stanislav.cybou`).
+
+## Core Product Services
+
+1. **Identity:** Human-readable `.cybou` names, 24-word recovery root, portable CYBV2 vault, device authorization without third-party cloud gatekeepers.
+2. **Mail:** First-class private messaging (`MailTx`), salted content commitments, recipient-owned mailbox indexes, deterministic fees, and post-quantum encryption targets.
+3. **Files:** Decentralized end-to-end encrypted object storage for attachments and documents.
+4. **Backup:** Sovereign clean-machine restoration of user state and vaults.
+5. **Wallet:** Service budget (`SystemBalance`) and native utility transfers. Built for service funding, not speculative trading.
+6. **Devices:** Multi-device cryptographic pairing and key rotation under one root identity.
 
 ## Implemented and tested in the repository
 
-- Protocol-native AccountCreate with anti-Sybil work and an atomic OnboardingPool-to-SystemBalance grant.
-- CYBOU state transitions, LevelDB persistence, finalized-block verification, block-height lookup, and a single-validator DEV block producer (f=0).
-- A standalone experimental DEV node with remote operation submission and verified block synchronization between processes. The inherited Bitcoin bootstrap chain is a separate, transitional path.
-- Core MailTx operation validation, deterministic size-aware fees, compact Mail discovery filters, and evidence bundle code with inclusion and finality proofs.
-- An experimental Qt desktop client with Identity, Wallet, Email, Storage, and Backup pages. Service actions are gated by live capabilities; the complete Email and storage services are not available.
-- Hybrid Ed25519 + ML-DSA-65 operator-authority signature verification in core. This does not establish production post-quantum Email security.
+- Protocol-native `AccountCreateOpV1` with anti-Sybil work and an atomic `OnboardingPool`-to-`SystemBalance` service credit.
+- Random stable `AccountId` and human-readable `.cybou` name registry commitments in state.
+- CYBOU state transitions, LevelDB persistence, finalized-block verification, and single-validator DEV block producer (f=0).
+- Standalone experimental DEV node with remote operation submission and verified block synchronization between processes.
+- Core `MailTx` operation validation, deterministic size-aware fees, compact discovery filters, and evidence bundles with inclusion proofs.
+- Qt desktop client structured around the user identity, Mail, Wallet, and services.
+- Hybrid Ed25519 + ML-DSA-65 operator-authority signature verification in core.
 
-## Design targets and remaining work
+## Design targets and remaining engineering work
 
-- Operate independent multi-validator BFT nodes. A minimum of four equal-weight validators is required before claiming f=1 tolerance.
-- Integrate encrypted MailTx delivery, local Inbox/Sent/read-state indexes, and the target hybrid ML-KEM-768 + X25519 profile; perform external security review.
-- Build decentralized Object Storage, Backup, and Drive services and complete operator key custody and public deployment work.
-- DEV, Beta, and Mainnet have separate genesis and economics. Beta balances do not carry to Mainnet. The specified MAX_SUPPLY is 100,000,000,000 CYBOU with zero decimals and fees split 3:1 between Security and Onboarding; the inherited bootstrap chain does not implement this monetary policy.
+- Multi-validator BFT: admission and live operation of at least 4 equal-weight validators for f=1 fault tolerance.
+- End-to-end MailTx delivery, local mailbox indexes, and target hybrid HPKE ML-KEM-768 + X25519 post-quantum encryption profile.
+- Decentralized Object Storage, Backup, and Drive services.
+- Separate genesis for DEV, Beta, and Mainnet. Total supply capped at 100,000,000,000 CYBOU (0 decimals).
 
 ## Primary repository references
 
-- https://github.com/cybou-fr/cybou/blob/main/AGENTS.md — hard protocol constraints.
-- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/26_IMPLEMENTATION_STATUS.md — implementation status and inherited-chain boundary.
-- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/74_AUTHORITY_BLOCK_FEED.md — authority producer and block feed.
-- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/75_DEV_NODE_RUNBOOK.md — experimental DEV node.
-- https://github.com/cybou-fr/cybou/blob/main/src/cybou_node.cpp — standalone node process.
-- https://github.com/cybou-fr/cybou/blob/main/src/cybou/node_runtime.cpp — runtime shared with desktop.
-- https://github.com/cybou-fr/cybou/blob/main/src/cybou/evidence.cpp — Mail evidence implementation.
+- https://github.com/cybou-fr/cybou/blob/main/README.md — product overview and architecture.
+- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/79_IDENTITY_CENTRIC_PRODUCT_UX.md — identity-centric product UX contract.
+- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/10_IDENTITY_NAMES.md — identity and `.cybou` name architecture.
+- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/26_IMPLEMENTATION_STATUS.md — implementation status and subsystem matrix.
+- https://github.com/cybou-fr/cybou/blob/main/AGENTS.md — hard protocol rules.
 
 License: MIT. Creator: Stanislav Saveliev.

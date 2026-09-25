@@ -12,6 +12,8 @@ The central rule is simple:
 
 > The user operates an identity and its services. The user does not operate a
 > blockchain, validator set, cryptographic suite, peer graph, or state machine.
+>
+> **Not a blockchain with features — a protected identity with services.**
 
 CYBOU must remain technically transparent and diagnosable, but protocol detail
 is progressively disclosed rather than placed in the primary workflow.

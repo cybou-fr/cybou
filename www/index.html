@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CYBOU — Projet R&amp;D de communication souveraine</title>
-  <meta name="description" content="CYBOU est un projet R&amp;D C++20 de communication souveraine. Un nœud DEV à validateur unique, la synchronisation vérifiée et un client de bureau expérimental existent ; le réseau BFT multi-validateur et le chiffrement MailTx restent à intégrer.">
-  <meta name="keywords" content="CYBOU, infrastructure de communication, communications décentralisées, P2P, souveraineté numérique, C++20, BFT, chiffrement post-quantique, France, Europe">
+  <title>CYBOU — Identité &amp; communications protégées</title>
+  <meta name="description" content="CYBOU est une plateforme souveraine de communication protégée articulée autour de l'identité numérique : messagerie chiffrée, stockage d'objets, sauvegarde et budget de service, sans dépendance au cloud.">
+  <meta name="keywords" content="CYBOU, identité numérique, communication sécurisée, messagerie chiffrée, souveraineté numérique, post-quantique, P2P, France, Europe">
   <meta name="author" content="Stanislav Saveliev">
   <meta name="copyright" content="Stanislav Saveliev">
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
@@ -20,8 +20,8 @@
 
   <!-- OpenGraph Metadata -->
   <meta property="og:site_name" content="CYBOU">
-  <meta property="og:title" content="CYBOU — Projet R&amp;D de communication souveraine">
-  <meta property="og:description" content="État réel de CYBOU : nœud DEV à validateur unique, blocs finalisés vérifiés et client de bureau expérimental. Le service Email et le réseau BFT multi-validateur restent en développement.">
+  <meta property="og:title" content="CYBOU — Identité &amp; communications protégées">
+  <meta property="og:description" content="Une seule identité. Des communications privées. Vos données sous votre contrôle. Messagerie chiffrée, stockage et sauvegarde souveraine sans intermédiaire.">
   <meta property="og:image" content="https://cybou.fr/assets/cybou.png">
   <meta property="og:url" content="https://cybou.fr/">
   <meta property="og:type" content="website">
@@ -30,8 +30,8 @@
 
   <!-- Twitter Metadata -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="CYBOU — Projet R&amp;D de communication souveraine">
-  <meta name="twitter:description" content="Projet R&amp;D C++20 : nœud DEV et client de bureau expérimentaux, Email et BFT multi-validateur en développement.">
+  <meta name="twitter:title" content="CYBOU — Identité &amp; communications protégées">
+  <meta name="twitter:description" content="Une seule identité. Des communications privées. Vos données sous votre contrôle. Messagerie chiffrée, stockage et sauvegarde souveraine.">
   <meta name="twitter:image" content="https://cybou.fr/assets/cybou.png">
 
   <!-- Favicon -->
@@ -141,8 +141,9 @@
 
       <nav class="desktop-nav" aria-label="Navigation principale">
         <ul class="nav-links">
+          <li><a href="#services" data-i18n="navServices">Services</a></li>
           <li><a href="#statut" data-i18n="navStatus">État du projet</a></li>
-          <li><a href="#architecture" data-i18n="navArch">Piliers</a></li>
+          <li><a href="#architecture" data-i18n="navArch">Fondations</a></li>
           <li><a href="#mailtx" data-i18n="navMailTx">Protocole MailTx</a></li>
           <li><a href="#factsheet" data-i18n="navSpecs">Fiche technique</a></li>
           <li><a href="#faq" data-i18n="navFaq">FAQ</a></li>
@@ -160,8 +161,9 @@
       </div>
     </div>
     <nav class="mobile-menu" id="mobile-menu" aria-label="Navigation mobile" hidden>
+      <a href="#services" data-i18n="navServices">Services</a>
       <a href="#statut" data-i18n="navStatus">État du projet</a>
-      <a href="#architecture" data-i18n="navArch">Piliers</a>
+      <a href="#architecture" data-i18n="navArch">Fondations</a>
       <a href="#mailtx" data-i18n="navMailTx">Protocole MailTx</a>
       <a href="#factsheet" data-i18n="navSpecs">Fiche technique</a>
       <a href="#faq" data-i18n="navFaq">FAQ</a>
@@ -179,17 +181,21 @@
 
     <div class="hero-tag">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-      <span data-i18n="heroTag">R&amp;D Ouverte • PQ by Design • Architecture P2P C++20 • Souveraineté Européenne</span>
+      <span data-i18n="heroTag">Identité Souveraine • Communications Protégées • Cryptographie Post-Quantique</span>
     </div>
 
     <h1 class="hero-title">
       CYBOU<br>
-      <span class="accent-text" data-i18n="heroAccent">Infrastructure de communication décentralisée &amp; sécurisée.</span>
+      <span class="accent-text" data-i18n="heroAccent">Une identité unique. Des communications privées. Vos données sous votre contrôle.</span>
     </h1>
 
     <p class="hero-subtitle" data-i18n="heroSubtitle">
-      Projet R&amp;D conçu en France pour une architecture indépendante des géants du cloud. BFT multi-validateur et chiffrement hybride post-quantique sont des cibles en cours de développement.
+      CYBOU réunit identité numérique protégée, messagerie confidentielle, stockage chiffré, sauvegarde et budget de service — réunis en une plateforme souveraine, indépendante des monopoles du cloud.
     </p>
+
+    <div class="hero-slogan-pill">
+      <span data-i18n="heroPillSlogan">Pas un projet blockchain de spéculation — une identité protégée avec ses services.</span>
+    </div>
 
     <!-- Transparent Reality Callout -->
     <aside class="status-callout" role="note">
@@ -197,21 +203,120 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </div>
       <div class="status-callout-text">
-        <h4 data-i18n="statusCalloutTitle">Projet en développement actif</h4>
+        <h4 data-i18n="statusCalloutTitle">Architecture centrée sur l'identité en développement actif</h4>
         <p data-i18n="statusCalloutBody">
-          CYBOU n'est pas encore un service public. Le code comprend un nœud DEV autonome à validateur unique, la synchronisation de blocs vérifiés et une interface de bureau expérimentale. La chaîne Bitcoin héritée reste distincte de ce nouveau chemin d'état ; le service Email complet et un réseau BFT multi-validateur ne sont pas déployés.
+          CYBOU n'est pas un token de spéculation ni un service commercial public aujourd'hui. Le code comprend un nœud DEV autonome à validateur unique, la gestion d'identité par clés locales et une interface de bureau expérimentale. L'intégration de la messagerie chiffrée complète et d'un réseau BFT multi-validateur indépendant reste le travail actif en cours.
         </p>
       </div>
     </aside>
 
     <div class="hero-buttons">
-      <a href="#statut" class="btn-primary" data-i18n="heroBtnStatus">
-        Consulter l'état réel d'avancement
+      <a href="#services" class="btn-primary">
+        <span data-i18n="heroBtnServices">Découvrir les services</span>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </a>
-      <a href="https://github.com/cybou-fr/cybou" target="_blank" rel="noopener noreferrer" class="btn-secondary" data-i18n="heroBtnCode">
-        Code source (GitHub)
+      <a href="#statut" class="btn-secondary" data-i18n="heroBtnStatus">
+        Consulter l'état réel d'avancement
       </a>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Section: Core Services (Identity-Centric Ecosystem)
+       ========================================================================== -->
+  <section class="section" id="services">
+    <div class="section-header">
+      <div class="section-label" data-i18n="servicesLabel">Écosystème unifié</div>
+      <h2 class="section-title" data-i18n="servicesTitle">Une seule identité. Vos services essentiels.</h2>
+      <p class="section-description" data-i18n="servicesDesc">
+        Au lieu d'éparpiller vos données entre des silos tiers, CYBOU structure votre vie numérique autour d'une identité cryptographique dont vous détenez le contrôle exclusif.
+      </p>
+    </div>
+
+    <div class="services-grid">
+      <!-- 1. Identity -->
+      <article class="service-card">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div class="service-card-tag" data-i18n="srvIdentityTag">Fondation</div>
+        <h3 data-i18n="srvIdentityTitle">Identité souveraine</h3>
+        <p data-i18n="srvIdentityDesc">Noms lisibles (stanislav.cybou), racine de récupération 24 mots et coffre-fort portable CYBV2. Zéro mot de passe centralisé, zéro tiers de confiance.</p>
+        <div class="service-status-pill">
+          <span class="dot ready"></span>
+          <span data-i18n="srvIdentityStatus">Testé dans le cœur & bureau</span>
+        </div>
+      </article>
+
+      <!-- 2. Mail -->
+      <article class="service-card">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        </div>
+        <div class="service-card-tag" data-i18n="srvMailTag">Communication</div>
+        <h3 data-i18n="srvMailTitle">Messagerie privée (Mail)</h3>
+        <p data-i18n="srvMailDesc">Opération MailTx native avec chiffrement post-quantique, preuve d'inclusion et index de boîte aux lettres détenu par le destinataire sur son appareil.</p>
+        <div class="service-status-pill">
+          <span class="dot wip"></span>
+          <span data-i18n="srvMailStatus">Format testé, livraison E2EE en cours</span>
+        </div>
+      </article>
+
+      <!-- 3. Files -->
+      <article class="service-card">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div class="service-card-tag" data-i18n="srvFilesTag">Données</div>
+        <h3 data-i18n="srvFilesTitle">Stockage chiffré (Files)</h3>
+        <p data-i18n="srvFilesDesc">Stockage d'objets distribué et chiffré de bout en bout pour documents et pièces jointes. Vos fichiers restent confidentiels et inaccessibles aux hébergeurs.</p>
+        <div class="service-status-pill">
+          <span class="dot"></span>
+          <span data-i18n="srvFilesStatus">Planifié après le pilote Mail</span>
+        </div>
+      </article>
+
+      <!-- 4. Backup -->
+      <article class="service-card">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        </div>
+        <div class="service-card-tag" data-i18n="srvBackupTag">Continuité</div>
+        <h3 data-i18n="srvBackupTitle">Sauvegarde souveraine</h3>
+        <p data-i18n="srvBackupDesc">Restauration complète de votre environnement numérique sur machine neuve via votre phrase de récupération, sans dépendre d'un cloud propriétaire.</p>
+        <div class="service-status-pill">
+          <span class="dot"></span>
+          <span data-i18n="srvBackupStatus">Planifié</span>
+        </div>
+      </article>
+
+      <!-- 5. Wallet -->
+      <article class="service-card">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+        </div>
+        <div class="service-card-tag" data-i18n="srvWalletTag">Usage</div>
+        <h3 data-i18n="srvWalletTitle">Budget de service (Wallet)</h3>
+        <p data-i18n="srvWalletDesc">Deux soldes étanches : SystemBalance pour financer vos services et Balance disponible. Un outil utilitaire, pas un véhicule de spéculation.</p>
+        <div class="service-status-pill">
+          <span class="dot ready"></span>
+          <span data-i18n="srvWalletStatus">Validé dans le cœur & l'interface</span>
+        </div>
+      </article>
+
+      <!-- 6. Devices -->
+      <article class="service-card">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="4" rx="2"/><line x1="2" x2="22" y1="20" y2="20"/></svg>
+        </div>
+        <div class="service-card-tag" data-i18n="srvDevicesTag">Sécurité</div>
+        <h3 data-i18n="srvDevicesTitle">Contrôle des appareils</h3>
+        <p data-i18n="srvDevicesDesc">Autorisez ordinateurs portables et téléphones par signature cryptographique liée à votre identité racine, sans jamais divulguer vos clés maîtresses.</p>
+        <div class="service-status-pill">
+          <span class="dot ready"></span>
+          <span data-i18n="srvDevicesStatus">Vérification active dans le cœur</span>
+        </div>
+      </article>
     </div>
   </section>
 

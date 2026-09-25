@@ -13,22 +13,59 @@ document.addEventListener('DOMContentLoaded', () => {
 // --- 1. Language Toggle (French / English) ---
 const translations = {
   fr: {
+    navServices: "Services",
     navStatus: "État du projet",
-    navArch: "Piliers",
+    navArch: "Fondations",
     navMailTx: "Protocole MailTx",
     navSpecs: "Fiche technique",
     navFaq: "FAQ",
     menuLabel: "Menu",
 
-    heroTag: "R&D Ouverte • PQ by Design • Architecture P2P C++20 • Souveraineté Européenne",
-    heroAccent: "Infrastructure de communication décentralisée & sécurisée.",
-    heroSubtitle: "Projet R&D conçu en France pour une architecture indépendante des géants du cloud. BFT multi-validateur et chiffrement hybride post-quantique sont des cibles en cours de développement.",
+    heroTag: "Identité Souveraine • Communications Protégées • Cryptographie Post-Quantique",
+    heroAccent: "Une identité unique. Des communications privées. Vos données sous votre contrôle.",
+    heroSubtitle: "CYBOU réunit identité numérique protégée, messagerie confidentielle, stockage chiffré, sauvegarde et budget de service — réunis en une plateforme souveraine, indépendante des monopoles du cloud.",
+    heroPillSlogan: "Pas un projet blockchain de spéculation — une identité protégée avec ses services.",
 
-    statusCalloutTitle: "Projet en développement actif",
-    statusCalloutBody: "CYBOU n'est pas encore un service public. Le code comprend un nœud DEV autonome à validateur unique, la synchronisation de blocs vérifiés et une interface de bureau expérimentale. La chaîne Bitcoin héritée reste distincte de ce nouveau chemin d'état ; le service Email complet et un réseau BFT multi-validateur ne sont pas déployés.",
+    statusCalloutTitle: "Architecture centrée sur l'identité en développement actif",
+    statusCalloutBody: "CYBOU n'est pas un token de spéculation ni un service commercial public aujourd'hui. Le code comprend un nœud DEV autonome à validateur unique, la gestion d'identité par clés locales et une interface de bureau expérimentale. L'intégration de la messagerie chiffrée complète et d'un réseau BFT multi-validateur indépendant reste le travail actif en cours.",
 
+    heroBtnServices: "Découvrir les services",
     heroBtnStatus: "Consulter l'état réel d'avancement",
     heroBtnCode: "Code source (GitHub)",
+
+    servicesLabel: "Écosystème unifié",
+    servicesTitle: "Une seule identité. Vos services essentiels.",
+    servicesDesc: "Au lieu d'éparpiller vos données entre des silos tiers, CYBOU structure votre vie numérique autour d'une identité cryptographique dont vous détenez le contrôle exclusif.",
+
+    srvIdentityTag: "Fondation",
+    srvIdentityTitle: "Identité souveraine",
+    srvIdentityDesc: "Noms lisibles (stanislav.cybou), racine de récupération 24 mots et coffre-fort portable CYBV2. Zéro mot de passe centralisé, zéro tiers de confiance.",
+    srvIdentityStatus: "Testé dans le cœur & bureau",
+
+    srvMailTag: "Communication",
+    srvMailTitle: "Messagerie privée (Mail)",
+    srvMailDesc: "Opération MailTx native avec chiffrement post-quantique, preuve d'inclusion et index de boîte aux lettres détenu par le destinataire sur son appareil.",
+    srvMailStatus: "Format testé, livraison E2EE en cours",
+
+    srvFilesTag: "Données",
+    srvFilesTitle: "Stockage chiffré (Files)",
+    srvFilesDesc: "Stockage d'objets distribué et chiffré de bout en bout pour documents et pièces jointes. Vos fichiers restent confidentiels et inaccessibles aux hébergeurs.",
+    srvFilesStatus: "Planifié après le pilote Mail",
+
+    srvBackupTag: "Continuité",
+    srvBackupTitle: "Sauvegarde souveraine",
+    srvBackupDesc: "Restauration complète de votre environnement numérique sur machine neuve via votre phrase de récupération, sans dépendre d'un cloud propriétaire.",
+    srvBackupStatus: "Planifié",
+
+    srvWalletTag: "Usage",
+    srvWalletTitle: "Budget de service (Wallet)",
+    srvWalletDesc: "Deux soldes étanches : SystemBalance pour financer vos services et Balance disponible. Un outil utilitaire, pas un véhicule de spéculation.",
+    srvWalletStatus: "Validé dans le cœur & l'interface",
+
+    srvDevicesTag: "Sécurité",
+    srvDevicesTitle: "Contrôle des appareils",
+    srvDevicesDesc: "Autorisez ordinateurs portables et téléphones par signature cryptographique liée à votre identité racine, sans jamais divulguer vos clés maîtresses.",
+    srvDevicesStatus: "Vérification active dans le cœur",
 
     matrixLabel: "Transparence technique",
     matrixTitle: "Matrice d'implémentation.",
@@ -141,22 +178,59 @@ const translations = {
   },
 
   en: {
+    navServices: "Services",
     navStatus: "Project Status",
-    navArch: "Pillars",
+    navArch: "Foundations",
     navMailTx: "MailTx Protocol",
     navSpecs: "Tech Specs",
     navFaq: "FAQ",
     menuLabel: "Menu",
 
-    heroTag: "Open R&D • PQ by Design • C++20 P2P Architecture • European Sovereignty",
-    heroAccent: "Decentralized & secure communication infrastructure.",
-    heroSubtitle: "Open R&D project designed in France for independence from foreign cloud hyper-scalers. Multi-validator BFT and hybrid post-quantum encryption remain development targets.",
+    heroTag: "Sovereign Identity • Protected Communication • Post-Quantum Security",
+    heroAccent: "One identity. Private communication. Your data under your control.",
+    heroSubtitle: "CYBOU unites protected digital identity, private messaging, encrypted storage, decentralized backup, and service funding in one sovereign platform, free from cloud monopolies.",
+    heroPillSlogan: "Not a blockchain with features — a protected identity with services.",
 
-    statusCalloutTitle: "Project in active development",
-    statusCalloutBody: "CYBOU is not yet a public service. The code includes an experimental single-validator DEV node, verified block sync, and a desktop interface. The inherited Bitcoin bootstrap chain is separate from this new state path; complete Email service and an operational multi-validator BFT network are not deployed.",
+    statusCalloutTitle: "Identity-centric platform in active development",
+    statusCalloutBody: "CYBOU is not a speculative token or a commercial public service today. The codebase includes an experimental single-validator DEV node, local key-managed identity, and a desktop client. Full end-to-end encrypted mail delivery and an operational multi-validator BFT network remain our active development targets.",
 
+    heroBtnServices: "Explore Services",
     heroBtnStatus: "View Implementation Status",
     heroBtnCode: "Source Code (GitHub)",
+
+    servicesLabel: "Unified Ecosystem",
+    servicesTitle: "One identity. Your essential services.",
+    servicesDesc: "Instead of scattering your data across third-party platform silos, CYBOU organizes your digital life around a cryptographic identity under your exclusive control.",
+
+    srvIdentityTag: "Foundation",
+    srvIdentityTitle: "Sovereign Identity",
+    srvIdentityDesc: "Human-readable names (stanislav.cybou), 24-word recovery root, and portable CYBV2 vault. Zero centralized passwords or third-party gatekeepers.",
+    srvIdentityStatus: "Tested in core & desktop",
+
+    srvMailTag: "Communication",
+    srvMailTitle: "Private Messaging (Mail)",
+    srvMailDesc: "Native MailTx operation with post-quantum encryption targets, inclusion proofs, and mailbox indexes owned locally on your device.",
+    srvMailStatus: "Format tested, E2EE delivery in progress",
+
+    srvFilesTag: "Data",
+    srvFilesTitle: "Encrypted Files & Storage",
+    srvFilesDesc: "Distributed, end-to-end encrypted object storage for documents and attachments. Your files remain confidential and unreadable to hosts.",
+    srvFilesStatus: "Planned after Mail pilot",
+
+    srvBackupTag: "Continuity",
+    srvBackupTitle: "Resilient Backup",
+    srvBackupDesc: "Clean-machine restoration of your digital environment using your recovery phrase, without dependence on proprietary cloud vendors.",
+    srvBackupStatus: "Planned",
+
+    srvWalletTag: "Utility",
+    srvWalletTitle: "Service Funding (Wallet)",
+    srvWalletDesc: "Two dedicated balance tiers: SystemBalance to fund services frictionlessly, and spendable Balance. A protocol utility, never speculative trading.",
+    srvWalletStatus: "Validated in core & UI",
+
+    srvDevicesTag: "Security",
+    srvDevicesTitle: "Device Authority",
+    srvDevicesDesc: "Authorize laptops and mobile devices via cryptographic signatures from your identity root, without ever exposing master secrets.",
+    srvDevicesStatus: "Core verification active",
 
     matrixLabel: "Technical Transparency",
     matrixTitle: "Implementation Matrix.",

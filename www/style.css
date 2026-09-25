@@ -345,6 +345,19 @@ a {
   flex-shrink: 0;
 }
 
+.hero-slogan-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 14px;
+  padding: 6px 18px;
+  background: rgba(5, 150, 105, 0.08);
+  border: 1px solid rgba(5, 150, 105, 0.25);
+  border-radius: var(--radius-pill);
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--brand-teal-dark);
+}
+
 .hero-title {
   font-size: clamp(2.8rem, 6vw, 4.8rem);
   font-weight: 700;
@@ -997,13 +1010,90 @@ a {
   margin-top: 4px;
 }
 
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.service-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: 32px 28px;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--transition-smooth), border-color var(--transition-smooth), box-shadow var(--transition-smooth);
+  display: flex;
+  flex-direction: column;
+}
+
+.service-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-mint);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.service-card-tag {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--brand-teal-dark);
+  margin-bottom: 8px;
+}
+
+.service-card h3 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  letter-spacing: -0.015em;
+}
+
+.service-card p {
+  font-size: 0.98rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  flex-grow: 1;
+}
+
+.service-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.service-status-pill .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+
+.service-status-pill .dot.ready {
+  background: var(--brand-teal);
+}
+
+.service-status-pill .dot.wip {
+  background: var(--status-amber);
+}
+
 /* Responsive */
 @media (max-width: 992px) {
+  .services-grid { grid-template-columns: 1fr 1fr; }
   .status-grid { grid-template-columns: 1fr; }
   .bento-span-8, .bento-span-4, .bento-span-6 { grid-column: span 12; }
   .flow-container { grid-template-columns: 1fr 1fr; }
   .tech-spec-grid { grid-template-columns: 1fr; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 680px) {
+  .services-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 1400px) {
