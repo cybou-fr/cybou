@@ -84,34 +84,58 @@
         "mainEntity": [
           {
             "@type": "Question",
-            "name": "Que signifie « Post-Quantique dès la conception » (PQ by design) pour CYBOU ?",
+            "name": "Qu'est-ce que CYBOU en termes simples ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "CYBOU spécifie une architecture cible hybride HPKE combinant ML-KEM-768 et X25519. Un vérificateur hybride Ed25519 + ML-DSA-65 est validé pour les signatures d'autorité, mais le MailTx E2EE complet reste planifié et aucune garantie de sécurité post-quantique en production n'est revendiquée."
+              "text": "CYBOU est une plateforme souveraine de communication protégée articulée autour de votre identité personnelle. Avec une seule identité vérifiable, vous accédez à une messagerie privée, un stockage chiffré, une sauvegarde décentralisée et la gestion de vos appareils sans dépendre d'un cloud centralisé."
             }
           },
           {
             "@type": "Question",
-            "name": "Pourquoi CYBOU n'est-il pas encore disponible au téléchargement public ?",
+            "name": "En quoi CYBOU diffère-t-il des services comme Gmail, Proton ou iCloud ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Un nœud DEV à validateur unique et un client de bureau expérimental existent. Le service Email chiffré, l'exploitation BFT multi-validateur et la sécurité opérationnelle doivent être achevés avant toute diffusion grand public."
+              "text": "Contrairement aux plateformes centralisées, CYBOU ne stocke pas vos clés sur ses serveurs. Vos clés cryptographiques sont gérées sur votre appareil, l'index de votre boîte de réception reste local et le réseau P2P vérifie les échanges sans intermédiaire commercial."
             }
           },
           {
             "@type": "Question",
-            "name": "Comment fonctionne le consensus BFT et la tolérance aux pannes ?",
+            "name": "Comment fonctionnent les noms .cybou et la récupération de compte ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Le cœur BFT produit des certificats de finalité vérifiables. Le nœud DEV autonome a un seul validateur (f=0). Il faut au moins 4 validateurs indépendants pour revendiquer f=1 ; ce réseau n'est pas encore déployé."
+              "text": "Les adresses .cybou sont des identifiants lisibles enregistrés sur un registre décentralisé. Une phrase de récupération unique de 24 mots protège votre racine d'identité et permet de restaurer l'ensemble de vos accès sur machine neuve."
             }
           },
           {
             "@type": "Question",
-            "name": "Quelle est l'économie du jeton CYBOU ?",
+            "name": "Pourquoi y a-t-il un portefeuille (Wallet) et pourquoi n'est-ce pas de la spéculation ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "La spécification fixe une offre maximale de 100 000 000 000 CYBOU avec 0 décimale, un bonus d'accueil depuis OnboardingPool et des frais Mail déterministes répartis 3:1 entre Sécurité et Accueil. La chaîne de bootstrap héritée n'applique pas cette politique. Beta et Mainnet auront des genèses distinctes ; les soldes Beta ne seront pas reportés sur Mainnet."
+              "text": "Le portefeuille CYBOU est un budget de service utilitaire. Le solde SystemBalance finance automatiquement les opérations réseau (messages, enregistrement de noms, stockage) sans abonnement bancaire ni publicité."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Que signifie « Post-Quantique dès la conception » (PQ by design) ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "CYBOU adopte dès sa conception les algorithmes post-quantiques du NIST (ML-KEM pour le chiffrement et ML-DSA pour les signatures) afin de protéger les correspondances contre les attaques 'Harvest Now, Decrypt Later'."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Comment sont gérés les appareils et que faire en cas de perte ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Chaque appareil possède ses propres clés autorisées par votre racine d'identité. En cas de perte, l'appareil peut être révoqué depuis un autre équipement ou via la phrase de 24 mots sans compromettre votre compte."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Quel est l'état réel d'avancement et puis-je utiliser CYBOU dès aujourd'hui ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "CYBOU est un projet open source en développement actif. Le code comprend un cœur C++20 testé, un nœud DEV autonome, la gestion d'identité et un client de bureau expérimental Qt 6. Le réseau BFT multi-validateur et la livraison d'emails complète sont en cours d'intégration."
             }
           }
         ]
@@ -575,80 +599,105 @@
   <section class="section" id="faq">
     <div class="section-header">
       <div class="section-label" data-i18n="faqLabel">Questions fréquentes</div>
-      <h2 class="section-title" data-i18n="faqTitle">Architecture, Cryptographie &amp; Gouvernance.</h2>
+      <h2 class="section-title" data-i18n="faqTitle">Comprendre CYBOU.</h2>
       <p class="section-description" data-i18n="faqDesc">
-        Des réponses précises et transparentes sur nos choix techniques, notre feuille de route et la sécurité post-quantique.
+        Des réponses claires et concrètes sur le fonctionnement de l'identité, la protection de vos données, l'utilité du portefeuille et la sécurité post-quantique.
       </p>
     </div>
 
     <div class="faq-grid">
-      <!-- FAQ 1: PQ by Design -->
-      <article class="faq-card pq-focus is-open">
+      <!-- FAQ 1: What is CYBOU -->
+      <article class="faq-card is-open">
         <button class="faq-trigger" type="button" aria-expanded="true" aria-controls="faq-answer-1">
           <span class="faq-heading">
-            <span class="faq-badge-pq" data-i18n="faqPqBadge">Sécurité Post-Quantique • PQ by Design</span>
-            <span class="faq-question" data-i18n="faqQ1">Que signifie « Post-Quantique dès la conception » (PQ by design) pour CYBOU ?</span>
+            <span class="faq-question" data-i18n="faqQ1">Qu'est-ce que CYBOU en termes simples ?</span>
           </span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-1" aria-hidden="false">
-          <p data-i18n="faqA1P1">
-            La plupart des systèmes de communication historiques s'appuient sur RSA ou la cryptographie sur les courbes elliptiques classiques. Face à l'émergence des calculateurs quantiques, ils tentent de patcher a posteriori leurs protocoles, exposant toutes les communications passées aux attaques <strong>« Harvest Now, Decrypt Later » (HNDL)</strong> — où des acteurs étatiques enregistrent dès aujourd'hui les flux chiffrés pour les casser demain.
-          </p>
-          <p data-i18n="faqA1P2">
-            Dans CYBOU, la résistance post-quantique est un objectif de conception. Le profil cible <code>MailTx</code> combine <strong>ML-KEM-768</strong> et <strong>X25519</strong>, tandis qu'un vérificateur hybride <strong>Ed25519 + ML-DSA-65</strong> est validé pour les signatures d'autorité (OpenSSL &gt;= 3.5). Le chiffrement MailTx complet, l'audit externe et les migrations de clés restent à réaliser : CYBOU ne revendique pas encore une sécurité post-quantique de production.
+          <p data-i18n="faqA1">
+            CYBOU n'est ni un simple portefeuille crypto, ni un nouveau réseau social dépendant d'un géant du cloud. C'est une plateforme souveraine de communication protégée articulée autour de votre identité personnelle. Vous disposez d'un nom unique (comme <code>stanislav.cybou</code>), et à partir de cette identité, vous envoyez des messages privés chiffrés de bout en bout, stockez vos documents, sauvegardez vos états et contrôlez vos appareils, sans qu'aucune entreprise ne puisse lire vos correspondances ni fermer votre compte.
           </p>
         </div>
       </article>
 
-      <!-- FAQ 2: Project Reality -->
+      <!-- FAQ 2: CYBOU vs Big Tech -->
       <article class="faq-card">
         <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-2">
-          <span class="faq-question" data-i18n="faqQ2">Pourquoi CYBOU n'est-il pas encore téléchargeable pour le grand public ?</span>
+          <span class="faq-question" data-i18n="faqQ2">En quoi CYBOU diffère-t-il des services comme Gmail, Proton ou iCloud ?</span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-2" aria-hidden="true">
           <p data-i18n="faqA2">
-            CYBOU dispose d'un nœud DEV à validateur unique, d'une synchronisation vérifiée et d'une interface de bureau expérimentale. Le service Email chiffré de bout en bout, le fonctionnement de plusieurs validateurs indépendants et la sécurité opérationnelle doivent être achevés avant une diffusion grand public. Le code source et les tests sont consultables.
+            Les services centralisés imposent la dépendance à leurs serveurs : ils hébergent vos boîtes aux lettres, gèrent vos accès et collectent des métadonnées (adresses IP, graphes de contacts, horodatages). Chez CYBOU, il n'y a pas de serveur central ni d'hébergeur obligatoire. Vos clés cryptographiques sont créées et stockées exclusivement sur votre appareil. L'index de votre boîte de réception vous appartient localement, et vos messages sont vérifiés par un réseau pair-à-pair sans intermédiaire commercial.
           </p>
         </div>
       </article>
 
-      <!-- FAQ 3: Cloud vs CYBOU -->
+      <!-- FAQ 3: Names and Recovery -->
       <article class="faq-card">
         <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-3">
-          <span class="faq-question" data-i18n="faqQ3">En quoi CYBOU diffère-t-il d'une messagerie électronique classique (SMTP/IMAP) ?</span>
+          <span class="faq-question" data-i18n="faqQ3">Comment fonctionnent les noms .cybou et la récupération de compte ?</span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-3" aria-hidden="true">
           <p data-i18n="faqA3">
-            L'architecture cible CYBOU remplace le modèle SMTP/IMAP centralisé par une opération native <code>MailTx</code>, un engagement de contenu salé et un index local au destinataire. Ce flux complet dépend encore de l'intégration du moteur BFT, du chiffrement MailTx et du client ; il n'est pas présenté comme un service déployé aujourd'hui.
+            Au lieu d'adresses cryptographiques complexes, vous choisissez un nom simple (de 5 à 32 caractères, ex: <code>alice.cybou</code>) enregistré sur un registre décentralisé sans autorité commerciale. Votre identité racine est protégée par une phrase de récupération unique de 24 mots. Si vous changez d'ordinateur ou réinstallez votre système, ces 24 mots suffisent pour restaurer votre identité et vos accès sur une machine neuve, de manière autonome et sans formulaire d'assistance.
           </p>
         </div>
       </article>
 
-      <!-- FAQ 4: BFT Consensus -->
+      <!-- FAQ 4: Wallet & Utility -->
       <article class="faq-card">
         <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-4">
-          <span class="faq-question" data-i18n="faqQ4">Comment fonctionne le consensus BFT et la tolérance aux pannes ?</span>
+          <span class="faq-question" data-i18n="faqQ4">Pourquoi y a-t-il un portefeuille (Wallet) et pourquoi n'est-ce pas un outil de spéculation ?</span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-4" aria-hidden="true">
           <p data-i18n="faqA4">
-            Le cœur implémente votes, certificats de finalité et transition d'ensemble de validateurs à poids égal. Le nœud DEV autonome produit aujourd'hui avec un seul validateur : <code>f=0</code>. Il faut au moins 4 validateurs indépendants pour revendiquer <code>f=1</code> ; ce déploiement n'est pas encore établi. La chaîne de bootstrap Bitcoin héritée est distincte du nouveau chemin d'état CYBOU.
+            Dans CYBOU, le portefeuille n'est pas conçu pour le trading ou la spéculation, mais comme un moteur utilitaire de services. Il sépare deux soldes : <code>SystemBalance</code> (un budget dédié alloué dès la création du compte pour payer automatiquement les frais anti-spam de messages, l'enregistrement de noms et le stockage) et le solde disponible (<code>Balance</code>). Cela permet au réseau de fonctionner de façon pérenne et autonome, sans nécessiter d'abonnement par carte bancaire ni publicité.
           </p>
         </div>
       </article>
 
-      <!-- FAQ 5: Tokenomics -->
-      <article class="faq-card">
+      <!-- FAQ 5: PQ Security -->
+      <article class="faq-card pq-focus">
         <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-5">
-          <span class="faq-question" data-i18n="faqQ5">Quelle est la finalité économique du jeton CYBOU ?</span>
+          <span class="faq-heading">
+            <span class="faq-badge-pq" data-i18n="faqPqBadge">Sécurité Post-Quantique • PQ by Design</span>
+            <span class="faq-question" data-i18n="faqQ5">Que signifie « Post-Quantique dès la conception » (PQ by design) et pourquoi est-ce crucial aujourd'hui ?</span>
+          </span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-5" aria-hidden="true">
           <p data-i18n="faqA5">
-            La spécification CYBOU fixe une offre maximale de <strong>100 000 000 000 unités (0 décimale)</strong>. Le cœur utilise AccountCreate avec preuve anti-Sybil et crédite le bonus depuis OnboardingPool vers SystemBalance, sans invitation d'opérateur. Les frais Mail sont déterministes selon la taille et répartis à 75% pour la sécurité du réseau et 25% pour l'accueil. La chaîne de bootstrap héritée n'applique pas cette politique monétaire.
+            Les chiffrements actuels (RSA, courbes elliptiques classiques) deviendront vulnérables avec l'arrivée des calculateurs quantiques. Les agences d'interception pratiquent déjà l'attaque <strong>« Harvest Now, Decrypt Later »</strong> : intercepter et stocker des données chiffrées aujourd'hui pour les décrypter demain. CYBOU intègre nativement les standards post-quantiques du NIST (ML-KEM pour le chiffrement et ML-DSA pour les signatures), garantissant que vos échanges privés d'aujourd'hui resteront protégés pour les décennies à venir.
+          </p>
+        </div>
+      </article>
+
+      <!-- FAQ 6: Device Authority & Loss -->
+      <article class="faq-card">
+        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-6">
+          <span class="faq-question" data-i18n="faqQ6">Comment sont gérés les appareils et que faire en cas de perte ?</span>
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer" id="faq-answer-6" aria-hidden="true">
+          <p data-i18n="faqA6">
+            Votre phrase racine de 24 mots reste confidentielle et hors ligne. Chaque appareil (ordinateur, téléphone) génère sa propre paire de clés cryptographiques, autorisée par votre racine. Si un appareil est égaré ou volé, vous pouvez révoquer son accès depuis un autre appareil approuvé ou via votre phrase racine, sans compromettre vos clés maîtresses ni devoir réinitialiser tout votre compte.
+          </p>
+        </div>
+      </article>
+
+      <!-- FAQ 7: Real Status -->
+      <article class="faq-card">
+        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-7">
+          <span class="faq-question" data-i18n="faqQ7">Quel est l'état réel d'avancement et puis-je utiliser CYBOU dès aujourd'hui ?</span>
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer" id="faq-answer-7" aria-hidden="true">
+          <p data-i18n="faqA7">
+            CYBOU est en développement actif (phase R&amp;D ouverte). Le code source comprend un cœur C++20 testé, un nœud DEV autonome avec synchronisation vérifiée, la gestion d'identité locale et un client de bureau expérimental (Qt 6). La livraison finale des emails chiffrés de bout en bout et le réseau BFT multi-validateur indépendant sont en cours d'intégration. Le projet est entièrement open source (licence MIT) avec des spécifications publiques.
           </p>
         </div>
       </article>
