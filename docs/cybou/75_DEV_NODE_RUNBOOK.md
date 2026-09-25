@@ -30,9 +30,10 @@ cybou-node init-dev network.bin validator-1.key validator-2.key validator-3.key 
 ```
 
 The public validator set is sorted by validator ID, so input file order does
-not change NetworkID. Duplicate validator keys are rejected. This prepares a
-shared N=4 genesis for later P2P/BFT integration; the current `serve` command
-still supports only single-validator Authority Mode and cannot run this set.
+not change NetworkID. Duplicate validator keys are rejected. `serve` can run
+this shared N=4 genesis with each validator's own key and explicit CYP2 peer
+files. The set needs three live validators to finalize; a single N=4 process
+does not produce blocks on its own.
 
 Copy `network.bin` to the observer by a trusted channel. It contains the
 immutable network definition and genesis state, not the private key. The
@@ -77,8 +78,10 @@ The fanout worker is separate from block production. It announces recently admit
 OperationIDs and finalized `(height, BlockID)` entries to connected peers and
 sends full bytes only when requested. It keeps at most 32 recent block
 announcements; a peer with a larger gap uses the explicit sync path.
-This currently runs in single-validator Authority Mode; it does not make a
-four-validator BFT cluster operational.
+For N>1 the worker also sends queued proposal, prevote, and precommit messages.
+Each validator needs explicit outbound connections to the other validators.
+The current socket tests cover 3/4 finality and leader rotation; this is still
+an experimental DEV setup, not an independently operated production cluster.
 
 This CYP2 port accepts up to eight concurrent persistent peers and closes
 connections above that limit. It closes an inbound session whose HELLO tip
@@ -195,7 +198,7 @@ not an independently exported inclusion proof.
 
 This DEV process can also produce empty blocks when no operation is pending.
 It has no peer discovery, snapshot sync, authenticated or encrypted transport,
-durable mempool gossip, or independent multi-validator deployment. Expose the
+durable mempool gossip, or independently operated multi-validator deployment. Expose the
 listener only inside a trusted private network. The validator key is a raw
 seed file whose filesystem access must be restricted; the desktop identity
 keystore is separate and OS-protected on Windows. The standalone `init-dev`

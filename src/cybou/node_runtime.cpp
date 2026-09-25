@@ -276,18 +276,12 @@ void CybouNodeRuntime::TickConsensus(const std::chrono::milliseconds round_timeo
                 prevote = m_authority_node->OnProposalTimeout();
                 if (prevote) {
                     precommit = m_authority_node->ReceivePrevote(*prevote);
-                    if (precommit && m_authority_node->ReceivePrecommit(*precommit)) {
-                        if (const auto& block = m_authority_node->GetLatestFinalizedBlock())
-                            RememberFinalizedBlockForGossip(*block);
-                    }
+                    if (precommit) CommitConsensusPrecommit(*precommit);
                 }
             } else if (m_consensus_phase == 1) {
                 m_consensus_phase = 2;
                 precommit = m_authority_node->OnPrevoteTimeout();
-                if (precommit && m_authority_node->ReceivePrecommit(*precommit)) {
-                    if (const auto& block = m_authority_node->GetLatestFinalizedBlock())
-                        RememberFinalizedBlockForGossip(*block);
-                }
+                if (precommit) CommitConsensusPrecommit(*precommit);
             } else {
                 ++m_consensus_round;
                 m_consensus_phase = 0;
@@ -334,10 +328,7 @@ std::optional<BftPrevoteMsg> CybouNodeRuntime::ReceiveConsensusProposal(const Bf
             }
             pc = m_authority_node->ReceivePrevote(*pv);
             if (pc) {
-                if (m_authority_node->ReceivePrecommit(*pc)) {
-                    if (const auto& block = m_authority_node->GetLatestFinalizedBlock())
-                        RememberFinalizedBlockForGossip(*block);
-                }
+                CommitConsensusPrecommit(*pc);
             }
         }
     }
@@ -354,10 +345,7 @@ std::optional<BftPrecommitMsg> CybouNodeRuntime::ReceiveConsensusPrevote(const B
         if (!m_authority_node) return std::nullopt;
         pc = m_authority_node->ReceivePrevote(prevote);
         if (pc) {
-            if (m_authority_node->ReceivePrecommit(*pc)) {
-                if (const auto& block = m_authority_node->GetLatestFinalizedBlock())
-                    RememberFinalizedBlockForGossip(*block);
-            }
+            CommitConsensusPrecommit(*pc);
         }
     }
     if (pc) BroadcastConsensusPrecommit(*pc);
@@ -368,12 +356,19 @@ bool CybouNodeRuntime::ReceiveConsensusPrecommit(const BftPrecommitMsg& precommi
 {
     std::lock_guard lock(m_mutex);
     if (!m_authority_node) return false;
-    const bool finalized = m_authority_node->ReceivePrecommit(precommit);
-    if (finalized) {
-        if (const auto& block = m_authority_node->GetLatestFinalizedBlock())
-            RememberFinalizedBlockForGossip(*block);
-    }
-    return finalized;
+    return CommitConsensusPrecommit(precommit);
+}
+
+bool CybouNodeRuntime::CommitConsensusPrecommit(const BftPrecommitMsg& precommit)
+{
+    // Caller holds m_mutex. Commit and gossip bookkeeping share this boundary.
+    const auto finalized = m_authority_node->ReceivePrecommit(precommit);
+    if (!finalized) return false;
+    const auto set = m_store.GetValidatorSet();
+    if (!set || !m_store.CommitFinalizedBlock(*finalized, *set, true)) return false;
+    m_authority_node->RevalidatePending();
+    RememberFinalizedBlockForGossip(*finalized);
+    return true;
 }
 
 void CybouNodeRuntime::BroadcastConsensusProposal(const BftProposalMsg& proposal)

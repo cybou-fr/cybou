@@ -196,19 +196,12 @@ std::optional<BftPrecommitMsg> CybouAuthorityNode::ReceivePrevote(const BftPrevo
     return m_validator->ReceivePrevote(prevote);
 }
 
-bool CybouAuthorityNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
+std::optional<FinalizedBlock> CybouAuthorityNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
 {
-    if (!EnsureValidator()) return false;
-    if (precommit.height != m_validator->GetHeight()) return false;
-    if (!m_validator->ReceivePrecommit(precommit)) return false;
-    if (const auto& finalized = m_validator->GetLatestFinalizedBlock()) {
-        const auto set = m_store.GetValidatorSet();
-        if (set && m_store.CommitFinalizedBlock(*finalized, *set, true)) {
-            m_pool.Revalidate();
-            return true;
-        }
-    }
-    return false;
+    if (!EnsureValidator()) return std::nullopt;
+    if (precommit.height != m_validator->GetHeight()) return std::nullopt;
+    if (!m_validator->ReceivePrecommit(precommit)) return std::nullopt;
+    return m_validator->GetLatestFinalizedBlock();
 }
 
 std::optional<BftPrevoteMsg> CybouAuthorityNode::OnProposalTimeout()

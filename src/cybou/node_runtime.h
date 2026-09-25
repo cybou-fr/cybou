@@ -145,6 +145,7 @@ public:
     const CybouStateStore& GetStore() const { return m_store; }
 
 private:
+    bool CommitConsensusPrecommit(const BftPrecommitMsg& precommit);
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
     void RememberOperationForGossip(const ProtocolOperation& op, const uint256& id);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);

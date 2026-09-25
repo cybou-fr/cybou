@@ -8,9 +8,11 @@ after the round-0 leader is unavailable. The test uses explicit peer
 configuration. The socket test also covers verified catch-up, outbound
 disconnect/reconnect, and the next height's 4/4 finality. Restart after a
 prevote or precommit still abstains on the unfinished height because the
-signing journal does not persist lock and vote state. The socket test also
-covers duplicate and conflicting signed prevotes from one validator. Longer
-fault runs and live process restart scenarios remain integration work.
+signing journal does not persist lock and vote state. Socket tests now recreate
+the validator runtime with its persistent database and journal at each step,
+verify 3/4 finality, and catch up the restarted validator over CYP2. The socket
+test also covers duplicate and conflicting signed prevotes from one validator.
+Longer fault runs and full OS process restart scenarios remain integration work.
 See `26_IMPLEMENTATION_STATUS.md` for the current deployment boundary.
 
 ## Frozen direction

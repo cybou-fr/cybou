@@ -85,7 +85,7 @@ public:
     std::optional<BftProposalMsg> StartConsensusRound(uint32_t round);
     std::optional<BftPrevoteMsg> ReceiveProposal(const BftProposalMsg& proposal);
     std::optional<BftPrecommitMsg> ReceivePrevote(const BftPrevoteMsg& prevote);
-    bool ReceivePrecommit(const BftPrecommitMsg& precommit);
+    std::optional<FinalizedBlock> ReceivePrecommit(const BftPrecommitMsg& precommit);
     std::optional<BftPrevoteMsg> OnProposalTimeout();
     std::optional<BftPrecommitMsg> OnPrevoteTimeout();
     const std::optional<FinalizedBlock>& GetLatestFinalizedBlock() const;
