@@ -44,7 +44,22 @@ OperationSubmitStatus CybouAuthorityNode::SubmitOperationWithStatus(const Protoc
         const auto& create = std::get<AccountCreateOp>(operation);
         const auto loaded = m_store.LoadState();
         if (loaded && loaded.state && loaded.state->accounts.contains(create.account_id)) {
-            return OperationSubmitStatus::ALREADY_FINALIZED;
+            const auto head = m_store.GetFinalizedHead();
+            if (!head) return OperationSubmitStatus::REJECTED;
+            // AccountCreate is unique per AccountID. Only the exact finalized
+            // operation may be acknowledged as a successful retry.
+            for (uint64_t height = head->height; height > 0; --height) {
+                const auto finalized = m_store.GetBlockAtHeight(height);
+                if (!finalized) return OperationSubmitStatus::REJECTED;
+                for (const auto& prior : finalized->block.operations) {
+                    if (const auto* prior_create = std::get_if<AccountCreateOp>(&prior);
+                        prior_create && prior_create->account_id == create.account_id) {
+                        return prior == operation ? OperationSubmitStatus::ALREADY_FINALIZED
+                                                  : OperationSubmitStatus::REJECTED;
+                    }
+                }
+            }
+            return OperationSubmitStatus::REJECTED;
         }
     }
     if (m_pending.size() >= MAX_AUTHORITY_PENDING_OPERATIONS) return OperationSubmitStatus::REJECTED;
