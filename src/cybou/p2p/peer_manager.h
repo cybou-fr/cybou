@@ -24,6 +24,14 @@ namespace cybou::p2p {
 
 inline constexpr size_t MAX_OUTBOUND_PEERS{8};
 
+enum class PeerConnectStatus : uint8_t {
+    CONNECTED,
+    UNAVAILABLE,
+    HANDSHAKE_FAILED,
+    INVALID_REQUEST,
+    LOCAL_FAILURE,
+};
+
 struct PeerInfo {
     std::string address;
     uint16_t port{0};
@@ -36,6 +44,7 @@ class PeerManager {
 public:
     explicit PeerManager(CybouNodeRuntime& runtime);
     bool Connect(const std::string& numeric_address, uint16_t port);
+    PeerConnectStatus LastConnectStatus() const { return m_last_connect_status; }
     size_t PingAll();
     SyncPeerResult SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks);
     OperationSubmitResult SubmitOperation(const std::string& numeric_address, uint16_t port,
@@ -49,6 +58,7 @@ private:
     CybouNodeRuntime& m_runtime;
     boost::asio::io_context m_io;
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;
+    PeerConnectStatus m_last_connect_status{PeerConnectStatus::INVALID_REQUEST};
 };
 
 } // namespace cybou::p2p

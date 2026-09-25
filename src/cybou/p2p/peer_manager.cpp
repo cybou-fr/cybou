@@ -30,6 +30,7 @@ PeerManager::PeerManager(CybouNodeRuntime& runtime) : m_runtime{runtime} {}
 
 bool PeerManager::Connect(const std::string& numeric_address, const uint16_t port)
 {
+    m_last_connect_status = PeerConnectStatus::INVALID_REQUEST;
     if (port == 0 || m_peers.size() >= MAX_OUTBOUND_PEERS) return false;
     boost::system::error_code ec;
     const auto address = boost::asio::ip::make_address(numeric_address, ec);
@@ -39,15 +40,19 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     const auto status = m_runtime.GetStatus();
     if (!status.is_initialized) return false;
     const auto nonce = RandomNonce();
-    if (!nonce) return false;
+    if (!nonce) { m_last_connect_status = PeerConnectStatus::LOCAL_FAILURE; return false; }
     boost::asio::ip::tcp::socket socket{m_io};
     socket.connect({address, port}, ec);
-    if (ec) return false;
+    if (ec) { m_last_connect_status = PeerConnectStatus::UNAVAILABLE; return false; }
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip, .capabilities = 0, .nonce = *nonce};
     auto peer = std::make_unique<PeerSession>(std::move(socket));
-    if (!peer->Handshake(local)) return false;
+    if (!peer->Handshake(local)) {
+        m_last_connect_status = PeerConnectStatus::HANDSHAKE_FAILED;
+        return false;
+    }
     m_peers.emplace(endpoint, std::move(peer));
+    m_last_connect_status = PeerConnectStatus::CONNECTED;
     return true;
 }
 

@@ -18,6 +18,7 @@
 #include <boost/asio.hpp>
 
 #include <atomic>
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <csignal>
@@ -118,7 +119,7 @@ int Main(const int argc, char* argv[])
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE");
     const auto network = cybou::LoadCybouNetworkFile(argv[2]);
     if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
@@ -153,6 +154,45 @@ int Main(const int argc, char* argv[])
         if (!result.IsConnected()) throw std::runtime_error("P2P block sync failed");
         std::cout << "height=" << *runtime.GetFinalizedHeight()
                   << " applied=" << result.blocks_applied << std::endl;
+        return 0;
+    }
+    if (std::string_view{argv[1]} == "p2p-follow" && (argc == 6 || argc == 7)) {
+        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+            .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        cybou::CybouNodeRuntime runtime{std::move(config)};
+        if (!runtime.GetStatus().is_initialized && !runtime.InitializeGenesis(network->genesis)) {
+            throw std::runtime_error("cannot initialize genesis");
+        }
+        const auto until_height = argc == 7 ? std::optional<uint64_t>{PositiveCount(argv[6])} : std::nullopt;
+        const std::string host{argv[4]};
+        const auto port = Port(argv[5]);
+        cybou::p2p::PeerManager peers{runtime};
+        while (!stopping) {
+            const auto status = runtime.GetStatus();
+            if (!status.is_initialized) throw std::runtime_error("observer state unavailable");
+            if (until_height && status.finalized_height >= *until_height) return 0;
+            if (peers.ConnectedCount() == 0 && !peers.Connect(host, port)) {
+                if (peers.LastConnectStatus() != cybou::p2p::PeerConnectStatus::UNAVAILABLE) {
+                    throw std::runtime_error("P2P peer handshake or local setup failed");
+                }
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                continue;
+            }
+            const uint64_t batch = until_height ? std::min<uint64_t>(100, *until_height - status.finalized_height) : 100;
+            const auto result = peers.SyncFromPeer(host, port, batch);
+            if (result.blocks_applied > 0) {
+                std::cout << "height=" << *runtime.GetFinalizedHeight() << std::endl;
+            }
+            if (result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR ||
+                result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH) {
+                throw std::runtime_error("P2P block verification failed");
+            }
+            if (result.status == cybou::SyncPeerStatus::CONNECTION_FAILED) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            } else if (result.status == cybou::SyncPeerStatus::UP_TO_DATE) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            }
+        }
         return 0;
     }
     if (std::string_view{argv[1]} == "p2p-submit" && argc == 7) {

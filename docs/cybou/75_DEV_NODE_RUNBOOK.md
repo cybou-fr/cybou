@@ -62,12 +62,18 @@ separate listener port and probe it from another node database:
 cybou-node serve network.bin producer-db validator.key 127.0.0.1 29460 1000 29461
 cybou-node p2p-probe network.bin observer-db 127.0.0.1 29461
 cybou-node p2p-sync network.bin observer-db 127.0.0.1 29461 5
+cybou-node p2p-follow network.bin observer-db 127.0.0.1 29461
 ```
 
 This CYP2 port accepts up to eight concurrent persistent peers and closes
 connections above that limit. `p2p-sync`
 requests up to the specified number of finalized blocks on one connection,
 verifies each block before commit, and exits if the producer has no next block.
+`p2p-follow` keeps the observer running, polls for the next block, and retries
+after transport loss; stop it with Ctrl+C. An optional final argument sets an
+exact target height and makes the command exit when that height is reached.
+It stops with an error if the peer handshake or a received block fails
+verification. The endpoint is explicit and does not supply consensus trust.
 The existing DEV `sync` command still uses the bounded CYB1 block feed on port
 29460. CYP2 does not yet propagate operations or gossip blocks.
 
