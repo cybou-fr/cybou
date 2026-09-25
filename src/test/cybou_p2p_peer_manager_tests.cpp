@@ -9,6 +9,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <array>
+#include <chrono>
 #include <thread>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, BasicTestingSetup)
@@ -135,6 +136,61 @@ BOOST_AUTO_TEST_CASE(manager_rejects_peer_without_block_service)
     server.join();
     BOOST_CHECK(result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR);
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(manager_distinguishes_malformed_block_response_from_disconnect)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    const auto network = fixture.runtime->GetNetworkId();
+    for (const bool malformed : {true, false}) {
+        tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+        bool served{false};
+        std::jthread server{[&] {
+            tcp::socket socket{io};
+            acceptor.accept(socket);
+            cybou::p2p::PeerSession session{std::move(socket)};
+            served = session.Handshake({.network_id = network, .finalized_height = 1,
+                .finalized_tip = {}, .capabilities = cybou::p2p::CAP_SERVE_BLOCKS,
+                .nonce = malformed ? 108ULL : 109ULL});
+            std::array<unsigned char, 18> request{};
+            size_t received{0};
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            while (served && received < request.size() && std::chrono::steady_clock::now() < deadline) {
+                boost::system::error_code ec;
+                const auto count = session.Socket().read_some(
+                    boost::asio::buffer(request.data() + received, request.size() - received), ec);
+                if (ec == boost::asio::error::would_block || ec == boost::asio::error::try_again) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    continue;
+                }
+                if (ec) { served = false; break; }
+                received += count;
+            }
+            served = served && received == request.size();
+            if (served && malformed) {
+                const auto frame = cybou::p2p::EncodeFrame({cybou::p2p::MessageType::BLOCK_META,
+                    {0xff, 0xff, 0xff, 0x7f}});
+                if (frame) {
+                    boost::system::error_code ec;
+                    boost::asio::write(session.Socket(), boost::asio::buffer(*frame), ec);
+                    served = !ec;
+                }
+            }
+        }};
+        cybou::p2p::PeerManager manager{*fixture.runtime};
+        const auto address = loopback.to_string();
+        const auto port = acceptor.local_endpoint().port();
+        BOOST_REQUIRE(manager.Connect(address, port));
+        const auto result = manager.SyncFromPeer(address, port, 1);
+        server.join();
+        BOOST_CHECK(served);
+        BOOST_CHECK(result.status == (malformed ? cybou::SyncPeerStatus::PROTOCOL_ERROR :
+            cybou::SyncPeerStatus::CONNECTION_FAILED));
+        BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(manager_syncs_two_verified_blocks_on_one_session)

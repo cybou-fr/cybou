@@ -99,7 +99,7 @@ BOOST_AUTO_TEST_CASE(client_respects_advertised_block_capability)
     cybou::p2p::PeerSession peer{std::move(socket)};
     BOOST_REQUIRE(peer.Handshake({.network_id = uint256::ONE, .finalized_height = 0,
         .finalized_tip = {}, .capabilities = 0, .nonce = 42}));
-    BOOST_CHECK(!peer.RequestBlock(1));
+    BOOST_CHECK(peer.RequestBlock(1).status == cybou::p2p::BlockRequestStatus::INVALID_REQUEST);
     BOOST_CHECK(peer.Ping(43));
     server.join();
     BOOST_CHECK(answered);

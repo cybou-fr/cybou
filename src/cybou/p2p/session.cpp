@@ -141,17 +141,28 @@ bool PeerSession::Write(const Frame& frame, std::chrono::steady_clock::time_poin
 
 std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point deadline)
 {
+    m_last_read_status = ReadStatus::UNAVAILABLE;
     std::array<unsigned char, HEADER_SIZE> header{};
     if (!ReadExact(header.data(), header.size(), deadline)) return std::nullopt;
+    if (!std::equal(header.begin(), header.begin() + 4, "CYP2") ||
+        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 9) {
+        m_last_read_status = ReadStatus::INVALID_FRAME;
+        return std::nullopt;
+    }
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{header[6 + i]} << (8 * i);
-    if (size > MAX_FRAME_PAYLOAD) return std::nullopt;
+    if (size > MAX_FRAME_PAYLOAD) {
+        m_last_read_status = ReadStatus::INVALID_FRAME;
+        return std::nullopt;
+    }
     std::vector<unsigned char> bytes{header.begin(), header.end()};
     bytes.resize(HEADER_SIZE + size);
     if (size && !ReadExact(bytes.data() + HEADER_SIZE, size, deadline)) {
         return std::nullopt;
     }
-    return DecodeFrame(bytes);
+    auto frame = DecodeFrame(bytes);
+    m_last_read_status = frame ? ReadStatus::OK : ReadStatus::INVALID_FRAME;
+    return frame;
 }
 
 std::optional<Frame> PeerSession::Read()
@@ -166,7 +177,10 @@ bool PeerSession::Handshake(const Hello& local)
     m_handshake_status = HandshakeStatus::UNAVAILABLE;
     if (!Write(Frame{MessageType::HELLO, EncodeHello(local)})) return false;
     const auto frame = Read();
-    if (!frame) return false;
+    if (!frame) {
+        if (m_last_read_status == ReadStatus::INVALID_FRAME) m_handshake_status = HandshakeStatus::INVALID_PEER;
+        return false;
+    }
     m_handshake_status = HandshakeStatus::INVALID_PEER;
     if (frame->type != MessageType::HELLO) return false;
     const auto peer = DecodeHello(frame->payload);
@@ -195,26 +209,34 @@ bool PeerSession::AnswerPing()
         Write(Frame{MessageType::PONG, request->payload});
 }
 
-std::optional<std::vector<unsigned char>> PeerSession::RequestBlock(uint64_t height)
+BlockRequestResult PeerSession::RequestBlock(uint64_t height)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_SERVE_BLOCKS) || height == 0) return std::nullopt;
+    if (!m_peer || !(m_peer->capabilities & CAP_SERVE_BLOCKS) || height == 0)
+        return {.status = BlockRequestStatus::INVALID_REQUEST, .bytes = {}};
     std::vector<unsigned char> request;
     Put64(request, height);
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-    if (!Write(Frame{MessageType::GET_BLOCK, request}, deadline)) return std::nullopt;
+    if (!Write(Frame{MessageType::GET_BLOCK, request}, deadline))
+        return {.status = BlockRequestStatus::UNAVAILABLE, .bytes = {}};
     const auto meta = Read(deadline);
-    if (!meta || meta->type != MessageType::BLOCK_META || meta->payload.size() != 4) return std::nullopt;
+    if (!meta) return {.status = m_last_read_status == ReadStatus::INVALID_FRAME ?
+        BlockRequestStatus::INVALID_RESPONSE : BlockRequestStatus::UNAVAILABLE, .bytes = {}};
+    if (meta->type != MessageType::BLOCK_META || meta->payload.size() != 4)
+        return {.status = BlockRequestStatus::INVALID_RESPONSE, .bytes = {}};
     const uint32_t size = Read32(meta->payload.data());
-    if (size > MAX_FINALIZED_BLOCK_FEED_BYTES) return std::nullopt;
+    if (size > MAX_FINALIZED_BLOCK_FEED_BYTES) return {.status = BlockRequestStatus::INVALID_RESPONSE, .bytes = {}};
+    if (size == 0) return {.status = BlockRequestStatus::NOT_FOUND, .bytes = {}};
     std::vector<unsigned char> bytes;
     bytes.reserve(size);
     while (bytes.size() < size) {
         const auto chunk = Read(deadline);
-        if (!chunk || chunk->type != MessageType::BLOCK_CHUNK || chunk->payload.empty() ||
-            chunk->payload.size() > size - bytes.size()) return std::nullopt;
+        if (!chunk) return {.status = m_last_read_status == ReadStatus::INVALID_FRAME ?
+            BlockRequestStatus::INVALID_RESPONSE : BlockRequestStatus::UNAVAILABLE, .bytes = {}};
+        if (chunk->type != MessageType::BLOCK_CHUNK || chunk->payload.empty() ||
+            chunk->payload.size() > size - bytes.size()) return {.status = BlockRequestStatus::INVALID_RESPONSE, .bytes = {}};
         bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
     }
-    return bytes;
+    return {.status = BlockRequestStatus::OK, .bytes = std::move(bytes)};
 }
 
 std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const ProtocolOperation& operation)

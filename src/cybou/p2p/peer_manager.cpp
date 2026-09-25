@@ -113,14 +113,15 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
             break;
         }
         const uint64_t height = status.finalized_height + 1;
-        const auto bytes = it->second->RequestBlock(height);
-        if (!bytes) {
-            result.status = SyncPeerStatus::CONNECTION_FAILED;
+        const auto response = it->second->RequestBlock(height);
+        if (response.status != BlockRequestStatus::OK && response.status != BlockRequestStatus::NOT_FOUND) {
+            result.status = response.status == BlockRequestStatus::UNAVAILABLE ?
+                SyncPeerStatus::CONNECTION_FAILED : SyncPeerStatus::PROTOCOL_ERROR;
             m_peers.erase(it);
             break;
         }
-        if (bytes->empty()) break;
-        const auto block = DeserializeFinalizedBlock(*bytes);
+        if (response.status == BlockRequestStatus::NOT_FOUND) break;
+        const auto block = DeserializeFinalizedBlock(response.bytes);
         if (!block || block->block.height != height ||
             block->certificate.network_id != status.network_id ||
             block->certificate.block_id != ComputeBlockId(block->block) ||

@@ -51,6 +51,15 @@ enum class HandshakeStatus : uint8_t {
     INVALID_LOCAL,
 };
 
+enum class BlockRequestStatus : uint8_t {
+    OK, NOT_FOUND, UNAVAILABLE, INVALID_RESPONSE, INVALID_REQUEST,
+};
+
+struct BlockRequestResult {
+    BlockRequestStatus status{BlockRequestStatus::INVALID_REQUEST};
+    std::vector<unsigned char> bytes;
+};
+
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame);
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes);
 std::vector<unsigned char> EncodeHello(const Hello& hello);
@@ -64,9 +73,8 @@ public:
     HandshakeStatus LastHandshakeStatus() const { return m_handshake_status; }
     bool Ping(uint64_t nonce);
     bool AnswerPing();
-    // Empty bytes mean the height is not available. Nullopt means a protocol
-    // or transport failure; callers must verify returned blocks before commit.
-    std::optional<std::vector<unsigned char>> RequestBlock(uint64_t height);
+    // Callers must verify returned blocks before commit.
+    BlockRequestResult RequestBlock(uint64_t height);
     std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation);
     bool ServeNext(CybouNodeRuntime& runtime);
     const std::optional<Hello>& Peer() const { return m_peer; }
@@ -79,6 +87,8 @@ private:
     bool Write(const Frame& frame, std::chrono::steady_clock::time_point deadline);
     std::optional<Frame> Read(std::chrono::steady_clock::time_point deadline);
     std::optional<Frame> Read();
+    enum class ReadStatus : uint8_t { OK, UNAVAILABLE, INVALID_FRAME };
+    ReadStatus m_last_read_status{ReadStatus::UNAVAILABLE};
     boost::asio::ip::tcp::socket m_socket;
     std::optional<Hello> m_peer;
     uint64_t m_local_capabilities{0};
