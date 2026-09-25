@@ -168,15 +168,8 @@ target_link_libraries(bitcoin_common
 include(InstallBinaryComponent)
 
 
-# P2P and RPC server functionality used by `bitcoind` and `bitcoin-qt` executables.
-add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
-  addrdb.cpp
-  addrman.cpp
-  banman.cpp
-  bip324.cpp
-  blockencodings.cpp
-  blockfilter.cpp
-  consensus/tx_verify.cpp
+# CYBOU node runtime and P2P library.
+add_library(cybou_node STATIC
   cybou/state_store.cpp
   cybou/block_executor.cpp
   cybou/authority_node.cpp
@@ -193,7 +186,32 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   cybou/p2p/session.cpp
   cybou/p2p/inbound_server.cpp
   cybou/p2p/peer_manager.cpp
+  blockfilter.cpp
   dbwrapper.cpp
+)
+target_link_libraries(cybou_node
+  PUBLIC
+    core_interface
+    bitcoin_common
+    bitcoin_util
+    leveldb
+    minisketch
+    univalue
+    Boost::headers
+  PRIVATE
+    $<TARGET_NAME_IF_EXISTS:libevent::core>
+    $<TARGET_NAME_IF_EXISTS:libevent::extra>
+    $<$<PLATFORM_ID:Windows>:crypt32>
+)
+
+# P2P and RPC server functionality used by `bitcoind` and `bitcoin-qt` executables.
+add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
+  addrdb.cpp
+  addrman.cpp
+  banman.cpp
+  bip324.cpp
+  blockencodings.cpp
+  consensus/tx_verify.cpp
   deploymentstatus.cpp
   flatfile.cpp
   headerssync.cpp
@@ -281,6 +299,7 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
 target_link_libraries(bitcoin_node
   PRIVATE
     core_interface
+    cybou_node
     bitcoin_common
     bitcoin_util
     leveldb
@@ -303,7 +322,7 @@ endif()
 
 # CYBOU node daemon executable.
 add_executable(cybou-node cybou_node.cpp)
-target_link_libraries(cybou-node PRIVATE bitcoin_node bitcoin_common bitcoin_util Boost::headers)
+target_link_libraries(cybou-node PRIVATE cybou_node)
 add_windows_application_manifest(cybou-node)
 
 
