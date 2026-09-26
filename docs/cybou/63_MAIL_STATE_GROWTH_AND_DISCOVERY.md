@@ -72,6 +72,9 @@ The filter format must be deterministic and privacy-reviewed before freeze.
 
 The v1 GCS block filter is a local, rebuildable experimental index. It can be
 built and stored atomically with a finalized block.
+Each block filter is limited to 100,000 distinct discovery tags. Decoders reject
+larger declared counts before processing the encoded values; matching and count
+validation stream values without allocating an array proportional to that count.
 Its filter-header hash can be computed, but the header chain is not yet committed
 to authenticated block headers or served by a light-client protocol. A remote
 filter therefore cannot currently be authenticated by a light client.

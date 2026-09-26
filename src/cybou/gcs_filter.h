@@ -16,6 +16,7 @@ struct Params {
     uint64_t siphash_k1{0};
     uint8_t p{0};
     uint32_t m{1};
+    uint32_t max_elements{100'000};
 };
 
 using Element = std::vector<unsigned char>;

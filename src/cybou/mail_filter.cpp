@@ -49,7 +49,7 @@ bool CybouMailDiscoveryFilter::Match(const uint256& discovery_tag) const
     if (num_elements == 0 || encoded_filter.empty()) {
         return false;
     }
-    const gcs::Params params{block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M};
+    const gcs::Params params{block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M, MAX_MAIL_DISCOVERY_FILTER_ELEMENTS};
     try {
         return gcs::Match(params, encoded_filter, discovery_tag);
     } catch (...) {
@@ -62,7 +62,7 @@ bool CybouMailDiscoveryFilter::MatchAny(std::span<const uint256> discovery_tags)
     if (num_elements == 0 || encoded_filter.empty() || discovery_tags.empty()) {
         return false;
     }
-    const gcs::Params params{block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M};
+    const gcs::Params params{block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M, MAX_MAIL_DISCOVERY_FILTER_ELEMENTS};
     try {
         std::vector<gcs::Element> elements;
         elements.reserve(discovery_tags.size());
@@ -109,7 +109,7 @@ uint256 CybouMailDiscoveryFilter::ComputeFilterHeader(const uint256& prev_filter
 
 CybouMailDiscoveryFilter BuildMailDiscoveryFilter(const uint256& block_id, std::span<const uint256> discovery_tags)
 {
-    const gcs::Params params{block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M};
+    const gcs::Params params{block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M, MAX_MAIL_DISCOVERY_FILTER_ELEMENTS};
     std::vector<gcs::Element> elements;
     elements.reserve(discovery_tags.size());
     for (const auto& tag : discovery_tags) {
@@ -181,7 +181,7 @@ std::optional<CybouMailDiscoveryFilter> DeserializeMailDiscoveryFilter(std::span
     filter.encoded_filter.assign(bytes.begin() + offset, bytes.end());
 
     try {
-        const gcs::Params params{filter.block_id.GetUint64(0), filter.block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M};
+        const gcs::Params params{filter.block_id.GetUint64(0), filter.block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M, MAX_MAIL_DISCOVERY_FILTER_ELEMENTS};
         const uint32_t gcs_n = gcs::ElementCount(params, filter.encoded_filter);
         if (gcs_n != filter.num_elements) {
             return std::nullopt;

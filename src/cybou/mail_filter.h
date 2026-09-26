@@ -18,6 +18,7 @@ namespace cybou {
 inline constexpr uint8_t MAIL_DISCOVERY_FILTER_VERSION{2};
 inline constexpr uint8_t GCS_PARAM_P{19};
 inline constexpr uint32_t GCS_PARAM_M{784931};
+inline constexpr uint32_t MAX_MAIL_DISCOVERY_FILTER_ELEMENTS{100'000};
 
 /**
  * Compute domain-separated recipient discovery tag:

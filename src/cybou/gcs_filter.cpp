@@ -22,24 +22,29 @@ uint64_t HashToRange(const Params& params, const uint64_t range, const std::span
     return FastRange64(hash, range);
 }
 
-std::vector<uint64_t> DecodeValues(const Params& params, const std::span<const unsigned char> encoded)
+uint32_t ReadCount(const Params& params, SpanReader& stream)
 {
-    SpanReader stream{encoded};
     const uint64_t count = ReadCompactSize(stream);
     if (count > std::numeric_limits<uint32_t>::max()) throw std::ios_base::failure("GCS element count exceeds uint32");
+    if (count > params.max_elements) throw std::ios_base::failure("GCS element count exceeds configured limit");
+    return static_cast<uint32_t>(count);
+}
 
-    std::vector<uint64_t> values;
-    values.reserve(static_cast<size_t>(count));
+template <typename Visitor>
+uint32_t ForEachValue(const Params& params, const std::span<const unsigned char> encoded, Visitor&& visitor)
+{
+    SpanReader stream{encoded};
+    const uint32_t count = ReadCount(params, stream);
     BitStreamReader bitreader{stream};
     uint64_t value{0};
-    for (uint64_t i = 0; i < count; ++i) {
+    for (uint32_t i = 0; i < count; ++i) {
         const uint64_t delta = GolombRiceDecode(bitreader, params.p);
         if (delta > std::numeric_limits<uint64_t>::max() - value) throw std::ios_base::failure("GCS value overflow");
         value += delta;
-        values.push_back(value);
+        visitor(value);
     }
     if (!stream.empty()) throw std::ios_base::failure("encoded GCS filter contains excess data");
-    return values;
+    return count;
 }
 
 std::vector<uint64_t> HashElements(const Params& params, const uint64_t range, std::span<const Element> elements)
@@ -59,6 +64,7 @@ std::vector<unsigned char> Build(const Params& params, std::span<const Element> 
     std::sort(unique_elements.begin(), unique_elements.end());
     unique_elements.erase(std::unique(unique_elements.begin(), unique_elements.end()), unique_elements.end());
     if (unique_elements.size() > std::numeric_limits<uint32_t>::max()) throw std::invalid_argument("GCS element count exceeds uint32");
+    if (unique_elements.size() > params.max_elements) throw std::invalid_argument("GCS element count exceeds configured limit");
 
     const uint32_t count = static_cast<uint32_t>(unique_elements.size());
     const uint64_t range = static_cast<uint64_t>(count) * params.m;
@@ -81,35 +87,37 @@ std::vector<unsigned char> Build(const Params& params, std::span<const Element> 
 
 uint32_t ElementCount(const Params& params, const std::span<const unsigned char> encoded)
 {
-    const auto values = DecodeValues(params, encoded);
-    if (values.size() > std::numeric_limits<uint32_t>::max()) throw std::ios_base::failure("GCS element count exceeds uint32");
-    return static_cast<uint32_t>(values.size());
+    return ForEachValue(params, encoded, [](uint64_t) {});
 }
 
 bool Match(const Params& params, const std::span<const unsigned char> encoded, const std::span<const unsigned char> element)
 {
-    const auto values = DecodeValues(params, encoded);
-    if (values.empty()) return false;
-    const uint64_t range = static_cast<uint64_t>(values.size()) * params.m;
+    SpanReader count_stream{encoded};
+    const uint32_t count = ReadCount(params, count_stream);
+    if (count == 0) {
+        ForEachValue(params, encoded, [](uint64_t) {});
+        return false;
+    }
+    const uint64_t range = static_cast<uint64_t>(count) * params.m;
     const uint64_t query = HashToRange(params, range, element);
-    return std::binary_search(values.begin(), values.end(), query);
+    bool found{false};
+    ForEachValue(params, encoded, [&](uint64_t value) { found = found || value == query; });
+    return found;
 }
 
 bool MatchAny(const Params& params, const std::span<const unsigned char> encoded, const std::span<const Element> elements)
 {
-    const auto values = DecodeValues(params, encoded);
-    if (values.empty() || elements.empty()) return false;
-    const uint64_t range = static_cast<uint64_t>(values.size()) * params.m;
-    const auto queries = HashElements(params, range, elements);
-
-    size_t value_index{0};
+    SpanReader count_stream{encoded};
+    const uint32_t count = ReadCount(params, count_stream);
+    const uint64_t range = static_cast<uint64_t>(count) * params.m;
+    const auto queries = count == 0 || elements.empty() ? std::vector<uint64_t>{} : HashElements(params, range, elements);
     size_t query_index{0};
-    while (value_index < values.size() && query_index < queries.size()) {
-        if (values[value_index] == queries[query_index]) return true;
-        if (values[value_index] < queries[query_index]) ++value_index;
-        else ++query_index;
-    }
-    return false;
+    bool found{false};
+    ForEachValue(params, encoded, [&](uint64_t value) {
+        while (query_index < queries.size() && queries[query_index] < value) ++query_index;
+        if (query_index < queries.size() && queries[query_index] == value) found = true;
+    });
+    return found;
 }
 
 } // namespace cybou::gcs
