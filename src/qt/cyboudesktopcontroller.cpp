@@ -122,17 +122,27 @@ void CybouDesktopController::start()
             [this](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status,
                 const size_t connected_peer_count) {
                 const bool bootstrap_reachable = sync_result.IsConnected();
-                if (sync_result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR ||
-                    sync_result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH) {
-                    const auto message = sync_result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH
-                        ? QStringLiteral("Configured peer belongs to another CYBOU network.")
-                        : QStringLiteral("Configured peer failed CYBOU protocol verification.");
+                const bool local_state_unavailable =
+                    runtime_status.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH ||
+                    runtime_status.runtime_state == cybou::NodeRuntimeState::CORRUPT;
+                if (local_state_unavailable) {
+                    const auto message = runtime_status.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH
+                        ? QStringLiteral("Local CYBOU state belongs to another network.")
+                        : QStringLiteral("Local CYBOU state is corrupt or unavailable.");
                     qWarning() << message;
                     QMetaObject::invokeMethod(m_model, [model = m_model, message] {
                         model->setPeerCount(0);
                         model->setSyncError(message);
                     }, Qt::QueuedConnection);
                     return false;
+                }
+                QString sync_error;
+                if (sync_result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR ||
+                    sync_result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH) {
+                    sync_error = sync_result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH
+                        ? QStringLiteral("A peer belongs to another CYBOU network; retrying other peers.")
+                        : QStringLiteral("A peer failed CYBOU protocol verification; retrying other peers.");
+                    qWarning() << sync_error;
                 }
                 try {
                     if (m_mail_service) m_mail_service->SyncMailbox();
@@ -146,8 +156,8 @@ void CybouDesktopController::start()
                 } catch (const std::exception& e) {
                     qWarning() << "cybou desktop service refresh error:" << e.what();
                 }
-                QMetaObject::invokeMethod(m_model, [model = m_model, runtime_status, bootstrap_reachable, connected_peer_count] {
-                    model->setSyncError({});
+                QMetaObject::invokeMethod(m_model, [model = m_model, runtime_status, bootstrap_reachable, connected_peer_count, sync_error] {
+                    model->setSyncError(sync_error);
                     model->setFinalityStatus(static_cast<int>(runtime_status.finalized_height),
                         static_cast<int>(runtime_status.validator_count));
                     model->setNodeStatus(true, static_cast<int>(connected_peer_count), true);

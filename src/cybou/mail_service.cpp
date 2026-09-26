@@ -746,7 +746,8 @@ size_t CybouMailService::SyncMailbox()
                     item.salt = decrypted->first;
                     item.content_commitment = mail_op.content_commitment;
                     item.discovery_tag = mail_op.discovery_tag;
-                    item.fee = MailFeeForSize(mail_op.ciphertext.size(), DevProtocolParameters());
+                    item.fee = MailFeeForSize(mail_op.ciphertext.size(),
+                        m_runtime.GetNetworkDefinition().protocol_parameters);
 
                     item.evidence_bundle = CreateMailEvidenceBundle(
                         fin_block.block,

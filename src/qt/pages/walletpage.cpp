@@ -12,6 +12,7 @@
 
 #include <QBrush>
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -22,6 +23,8 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
+#include <QMetaObject>
+#include <QPointer>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
@@ -269,7 +272,7 @@ void WalletPage::refresh()
     const bool usable = status.identity_state == CybouIdentityState::Active &&
                         m_model->capabilities().payments;
     for (auto* btn : findChildren<QPushButton*>()) {
-        btn->setEnabled(usable);
+        btn->setEnabled(usable && !m_operation_pending);
     }
     m_gate_hint->setText(status.identity_state != CybouIdentityState::Active
         ? tr("Create an identity to receive the onboarding bonus and use your wallet.")
@@ -414,16 +417,26 @@ void WalletPage::onSendClicked()
 
     const cybou::AccountId recipient{*rec_u256};
     const uint64_t amount = static_cast<uint64_t>(amount_spin->value());
-
-    const auto res = service->SendPayment(recipient, amount);
-    if (!res) {
-        QMessageBox::warning(this, tr("Payment Failed"), tr("Payment failed: %1").arg(QString::fromStdString(res.error_message)));
-        return;
-    }
-
-    QMessageBox::information(this, tr("Payment Submitted"), tr("Payment of %1 submitted to the network. BFT finality will confirm it shortly.").arg(cybouAmountText(amount)));
-    refreshLedgerView();
+    m_operation_pending = true;
     refresh();
+    const QPointer<WalletPage> guard{this};
+    service->SendPaymentAsync(recipient, amount, [guard, amount](cybou::WalletOperationResult result) {
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [guard, amount, result = std::move(result)] {
+            if (!guard) return;
+            auto* page = guard.data();
+            page->m_operation_pending = false;
+            page->refresh();
+            if (!result) {
+                QMessageBox::warning(page, page->tr("Payment Failed"),
+                    page->tr("Payment failed: %1").arg(QString::fromStdString(result.error_message)));
+            } else {
+                QMessageBox::information(page, page->tr("Payment Submitted"),
+                    page->tr("Payment of %1 submitted to the network. BFT finality will confirm it shortly.").arg(cybouAmountText(amount)));
+            }
+            page->refreshLedgerView();
+            page->refresh();
+        }, Qt::QueuedConnection);
+    });
 }
 
 void WalletPage::onLockClicked()
@@ -469,15 +482,26 @@ void WalletPage::onLockClicked()
     }
 
     const uint64_t amount = static_cast<uint64_t>(amount_spin->value());
-    const auto res = service->LockToSystemBalance(amount);
-    if (!res) {
-        QMessageBox::warning(this, tr("Transfer Failed"), tr("Transfer failed: %1").arg(QString::fromStdString(res.error_message)));
-        return;
-    }
-
-    QMessageBox::information(this, tr("Transfer Submitted"), tr("Transfer of %1 submitted to the network. BFT finality will confirm it shortly.").arg(cybouAmountText(amount)));
-    refreshLedgerView();
+    m_operation_pending = true;
     refresh();
+    const QPointer<WalletPage> guard{this};
+    service->LockToSystemBalanceAsync(amount, [guard, amount](cybou::WalletOperationResult result) {
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [guard, amount, result = std::move(result)] {
+            if (!guard) return;
+            auto* page = guard.data();
+            page->m_operation_pending = false;
+            page->refresh();
+            if (!result) {
+                QMessageBox::warning(page, page->tr("Transfer Failed"),
+                    page->tr("Transfer failed: %1").arg(QString::fromStdString(result.error_message)));
+            } else {
+                QMessageBox::information(page, page->tr("Transfer Submitted"),
+                    page->tr("Transfer of %1 submitted to the network. BFT finality will confirm it shortly.").arg(cybouAmountText(amount)));
+            }
+            page->refreshLedgerView();
+            page->refresh();
+        }, Qt::QueuedConnection);
+    });
 }
 
 void WalletPage::onReceiveClicked()

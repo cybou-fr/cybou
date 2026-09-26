@@ -7,6 +7,11 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+
 BOOST_FIXTURE_TEST_SUITE(cybou_wallet_service_tests, BasicTestingSetup)
 
 BOOST_AUTO_TEST_CASE(wallet_reads_finalized_balances_and_rejects_invalid_payments)
@@ -33,6 +38,36 @@ BOOST_AUTO_TEST_CASE(wallet_reads_finalized_balances_and_rejects_invalid_payment
     BOOST_CHECK(entries[0].finality == cybou::WalletEntryFinality::FINAL);
     BOOST_CHECK_EQUAL(entries[0].amount, static_cast<int64_t>(system_balance));
     BOOST_CHECK_EQUAL(wallet.SyncLedger(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(wallet_async_payment_completion_runs_off_caller_thread)
+{
+    CybouServiceTestFixture fixture;
+    auto alice = fixture.CreateIdentity("wallet-async-alice.cybou");
+    const auto alice_id = alice->GetAccountId();
+    BOOST_REQUIRE(alice_id);
+    cybou::CybouWalletService wallet{*fixture.runtime, alice->GetKeyStore()};
+
+    std::mutex mutex;
+    std::condition_variable ready;
+    bool completed{false};
+    bool completed_off_caller{false};
+    cybou::WalletOperationError result_error{cybou::WalletOperationError::NONE};
+    const auto caller_thread = std::this_thread::get_id();
+    wallet.SendPaymentAsync(*alice_id, 1, [&](cybou::WalletOperationResult result) {
+        {
+            std::lock_guard lock(mutex);
+            completed = true;
+            completed_off_caller = std::this_thread::get_id() != caller_thread;
+            result_error = result.error;
+        }
+        ready.notify_one();
+    });
+
+    std::unique_lock lock(mutex);
+    BOOST_REQUIRE(ready.wait_for(lock, std::chrono::seconds{5}, [&] { return completed; }));
+    BOOST_CHECK(completed_off_caller);
+    BOOST_CHECK(result_error == cybou::WalletOperationError::SELF_PAYMENT);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

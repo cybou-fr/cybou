@@ -125,9 +125,11 @@ current pass.
 
 For a local Qt desktop connected to a CYP2 producer, set
 `CYBOU_DEV_P2P_HOST=127.0.0.1` and `CYBOU_DEV_P2P_PORT=29461` before launching
-the desktop. With a configured CYP2 endpoint, its native runtime uses the same
-persistent session for verified block sync and operation submission. A failed
-handshake or block verification stops that desktop sync worker. Without these
+the desktop. With a configured CYP2 endpoint, its native runtime uses persistent
+sessions for verified block sync and operation submission. A peer that fails
+its handshake or block verification is dropped and retried later; the desktop
+keeps its network worker running for other peers. Local state or network-
+definition failure stops that worker. Without these
 settings the installed DEV bootstrap continues to use its published CYB1
 endpoint; the remote CYP2 port is not published yet.
 The existing DEV `sync` command still uses the bounded CYB1 block feed on port

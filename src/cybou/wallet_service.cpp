@@ -10,8 +10,45 @@ namespace cybou {
 
 CybouWalletService::CybouWalletService(CybouNodeRuntime& runtime, CybouKeyStore& keystore)
     : m_runtime(runtime),
-      m_keystore(keystore)
+      m_keystore(keystore),
+      m_worker([this](std::stop_token) {
+          for (;;) {
+              std::function<void()> task;
+              {
+                  std::unique_lock lock(m_worker_mutex);
+                  m_worker_cv.wait(lock, [this] { return m_worker_stopping || !m_worker_tasks.empty(); });
+                  if (m_worker_stopping && m_worker_tasks.empty()) return;
+                  task = std::move(m_worker_tasks.front());
+                  m_worker_tasks.pop();
+              }
+              try {
+                  task();
+              } catch (...) {
+                  // Each operation reports its own result; keep the worker alive
+                  // if a completion callback unexpectedly throws.
+              }
+          }
+      })
 {
+}
+
+CybouWalletService::~CybouWalletService()
+{
+    {
+        std::lock_guard lock(m_worker_mutex);
+        m_worker_stopping = true;
+    }
+    m_worker_cv.notify_all();
+}
+
+void CybouWalletService::Enqueue(std::function<void()> task)
+{
+    {
+        std::lock_guard lock(m_worker_mutex);
+        if (m_worker_stopping) return;
+        m_worker_tasks.push(std::move(task));
+    }
+    m_worker_cv.notify_one();
 }
 
 std::pair<uint64_t, uint64_t> CybouWalletService::GetBalances() const
@@ -239,6 +276,42 @@ WalletOperationResult CybouWalletService::LockToSystemBalance(const uint64_t amo
     m_entries.insert(m_entries.begin(), pending_entry);
 
     return {.error = WalletOperationError::NONE, .op_id = op_id};
+}
+
+void CybouWalletService::SendPaymentAsync(const AccountId& recipient, const uint64_t amount,
+    std::function<void(WalletOperationResult)> completion)
+{
+    Enqueue([this, recipient, amount, completion = std::move(completion)]() mutable {
+        WalletOperationResult result;
+        try {
+            result = SendPayment(recipient, amount);
+        } catch (const std::exception& e) {
+            result = {.error = WalletOperationError::SUBMIT_FAILED, .error_message = e.what()};
+        } catch (...) {
+            result = {.error = WalletOperationError::SUBMIT_FAILED, .error_message = "Unexpected wallet operation failure"};
+        }
+        if (completion) {
+            try { completion(std::move(result)); } catch (...) { }
+        }
+    });
+}
+
+void CybouWalletService::LockToSystemBalanceAsync(const uint64_t amount,
+    std::function<void(WalletOperationResult)> completion)
+{
+    Enqueue([this, amount, completion = std::move(completion)]() mutable {
+        WalletOperationResult result;
+        try {
+            result = LockToSystemBalance(amount);
+        } catch (const std::exception& e) {
+            result = {.error = WalletOperationError::SUBMIT_FAILED, .error_message = e.what()};
+        } catch (...) {
+            result = {.error = WalletOperationError::SUBMIT_FAILED, .error_message = "Unexpected wallet operation failure"};
+        }
+        if (completion) {
+            try { completion(std::move(result)); } catch (...) { }
+        }
+    });
 }
 
 size_t CybouWalletService::SyncLedger()

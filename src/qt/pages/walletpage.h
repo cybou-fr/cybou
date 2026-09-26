@@ -75,6 +75,7 @@ private:
     QPushButton* m_receive{nullptr};
     QPushButton* m_lock{nullptr};
     QPushButton* m_view_usage{nullptr};
+    bool m_operation_pending{false};
 
     void refresh();
     void rebuildActivity();

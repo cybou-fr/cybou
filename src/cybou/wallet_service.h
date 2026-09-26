@@ -11,9 +11,13 @@
 #include <uint256.h>
 
 #include <cstdint>
+#include <condition_variable>
+#include <functional>
 #include <mutex>
 #include <optional>
+#include <queue>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace cybou {
@@ -71,7 +75,7 @@ struct WalletOperationResult {
 class CybouWalletService {
 public:
     explicit CybouWalletService(CybouNodeRuntime& runtime, CybouKeyStore& keystore);
-    ~CybouWalletService() = default;
+    ~CybouWalletService();
 
     CybouWalletService(const CybouWalletService&) = delete;
     CybouWalletService& operator=(const CybouWalletService&) = delete;
@@ -81,6 +85,12 @@ public:
 
     /** Lock an amount from Balance to System Balance (one-way, irreversible) */
     WalletOperationResult LockToSystemBalance(uint64_t amount);
+
+    /** Submit wallet operations off the caller's thread. Completion runs on the worker thread. */
+    void SendPaymentAsync(const AccountId& recipient, uint64_t amount,
+        std::function<void(WalletOperationResult)> completion);
+    void LockToSystemBalanceAsync(uint64_t amount,
+        std::function<void(WalletOperationResult)> completion);
 
     /** Sync ledger entries against newly finalized BFT blocks */
     size_t SyncLedger();
@@ -98,6 +108,13 @@ private:
     std::vector<WalletLedgerEntry> m_entries;
     mutable std::mutex m_mutex;
     std::mutex m_sync_mutex;
+    std::mutex m_worker_mutex;
+    std::condition_variable m_worker_cv;
+    std::queue<std::function<void()>> m_worker_tasks;
+    bool m_worker_stopping{false};
+    std::jthread m_worker;
+
+    void Enqueue(std::function<void()> task);
 };
 
 } // namespace cybou

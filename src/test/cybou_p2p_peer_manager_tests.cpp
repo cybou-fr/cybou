@@ -827,9 +827,14 @@ BOOST_AUTO_TEST_CASE(runtime_discovers_and_syncs_from_a_second_peer)
     const auto loopback = boost::asio::ip::address_v4::loopback();
     tcp::acceptor seed_acceptor{io, tcp::endpoint{loopback, 0}};
     tcp::acceptor source_acceptor{io, tcp::endpoint{loopback, 0}};
+    tcp::acceptor* seed_listener{&seed_acceptor};
+    tcp::acceptor* source_listener{&source_acceptor};
+    if (seed_listener->local_endpoint().port() > source_listener->local_endpoint().port()) {
+        std::swap(seed_listener, source_listener);
+    }
     const auto network = fixture.runtime->GetNetworkId();
-    const auto seed_endpoint = std::make_pair(loopback.to_string(), seed_acceptor.local_endpoint().port());
-    const auto source_endpoint = std::make_pair(loopback.to_string(), source_acceptor.local_endpoint().port());
+    const auto seed_endpoint = std::make_pair(loopback.to_string(), seed_listener->local_endpoint().port());
+    const auto source_endpoint = std::make_pair(loopback.to_string(), source_listener->local_endpoint().port());
 
     cybou::NodeRuntimeConfig seed_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "multi-peer-seed", .memory_only = true, .wipe_data = true};
@@ -841,21 +846,25 @@ BOOST_AUTO_TEST_CASE(runtime_discovers_and_syncs_from_a_second_peer)
     std::atomic_bool source_served{false};
     std::jthread seed_server{[&] {
         tcp::socket socket{io};
-        seed_acceptor.accept(socket);
+        seed_listener->accept(socket);
         cybou::p2p::PeerSession session{std::move(socket)};
         const bool handshake = session.Handshake({.network_id = network, .finalized_height = 0,
             .finalized_tip = fixture.definition.genesis_block_id,
             .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_PEER_DISCOVERY, .nonce = 7811});
-        seed_served = handshake && session.ServeNext(seed) && session.ServeNext(seed) && session.ServeNext(seed);
+        seed_served = handshake && session.ServeNext(seed) && session.ServeNext(seed) &&
+            session.ServeNext(seed) && session.ServeNext(seed);
     }};
     std::jthread source_server{[&] {
         tcp::socket socket{io};
-        source_acceptor.accept(socket);
+        source_listener->accept(socket);
         cybou::p2p::PeerSession session{std::move(socket)};
-        const bool handshake = session.Handshake({.network_id = network, .finalized_height = 1,
-            .finalized_tip = block->certificate.block_id,
+        // Both peers advertise the same stale HELLO snapshot. The source's
+        // canonical store is already ahead, so stopping at the first
+        // UP_TO_DATE peer would mask its new block.
+        const bool handshake = session.Handshake({.network_id = network, .finalized_height = 0,
+            .finalized_tip = fixture.definition.genesis_block_id,
             .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 7812});
-        source_served = handshake && session.ServeNext(*fixture.runtime);
+        source_served = handshake && session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
     }};
 
     cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,

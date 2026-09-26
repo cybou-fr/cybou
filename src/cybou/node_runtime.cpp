@@ -715,6 +715,14 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     if (!m_config.p2p_endpoint || !m_peer_manager) return {};
     std::lock_guard p2p_lock(m_p2p_mutex);
 
+    const auto local_status = GetStatus();
+    if (local_status.runtime_state == NodeRuntimeState::NETWORK_MISMATCH) {
+        return SyncPeerResult{.status = SyncPeerStatus::NETWORK_MISMATCH};
+    }
+    if (local_status.runtime_state == NodeRuntimeState::CORRUPT || !local_status.is_initialized) {
+        return SyncPeerResult{.status = SyncPeerStatus::PROTOCOL_ERROR};
+    }
+
     auto explicit_endpoints = GetExplicitPeerEndpoints();
     if (std::find(explicit_endpoints.begin(), explicit_endpoints.end(), *m_config.p2p_endpoint) ==
         explicit_endpoints.end()) {
@@ -748,21 +756,34 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
         return SyncPeerResult{.status = SyncPeerStatus::CONNECTION_FAILED};
     }
     std::sort(peers.begin(), peers.end(), [](const p2p::PeerInfo& left, const p2p::PeerInfo& right) {
-        return left.hello.finalized_height > right.hello.finalized_height;
+        if (left.hello.finalized_height != right.hello.finalized_height) {
+            return left.hello.finalized_height > right.hello.finalized_height;
+        }
+        if (left.address != right.address) return left.address < right.address;
+        return left.port < right.port;
     });
 
     SyncPeerResult result{.status = SyncPeerStatus::CONNECTION_FAILED};
+    bool any_peer_up_to_date{false};
+    const auto retry_after = std::chrono::steady_clock::now() + std::chrono::seconds{5};
     for (const auto& peer : peers) {
         const auto attempt = m_peer_manager->SyncFromPeer(peer.address, peer.port, max_blocks);
-        if (attempt.IsConnected()) {
+        if (attempt.status == SyncPeerStatus::BLOCKS_APPLIED) {
             result = attempt;
             break;
         }
+        // HELLO height is only a snapshot from connection time. A peer that
+        // reports UP_TO_DATE may have stopped advancing while another
+        // connected peer has newer blocks, so keep checking the whole set.
+        // Peer protocol failures are isolated to that session by PeerManager;
+        // they must not become a fatal network-service result.
+        if (attempt.status == SyncPeerStatus::UP_TO_DATE) any_peer_up_to_date = true;
         if (attempt.status == SyncPeerStatus::PROTOCOL_ERROR ||
             attempt.status == SyncPeerStatus::NETWORK_MISMATCH) {
-            result = attempt;
+            m_peer_retry_after[{peer.address, peer.port}] = retry_after;
         }
     }
+    if (any_peer_up_to_date) result.status = SyncPeerStatus::UP_TO_DATE;
     m_peer_manager->FanoutRecentBlocks();
     return result;
 }
