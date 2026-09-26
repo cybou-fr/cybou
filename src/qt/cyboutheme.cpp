@@ -182,6 +182,7 @@ QString CybouTheme::applicationStyleSheet()
         QTextEdit:focus, QPlainTextEdit:focus, QTextBrowser:focus { border-color: @teal@; }
         QListWidget { background: @canvas@; border: 1px solid @border@; border-radius: 12px; outline: none; }
         QListWidget::item { padding: 8px 12px; border-bottom: 1px solid @border@; }
+        QListWidget#folderList::item { padding: 0px; }
         QListWidget::item:hover { background: @surface@; }
         QListWidget::item:selected { background: @mint_soft@; }
         QProgressBar#sizeMeter { border: 1px solid @border@; border-radius: 5px; background: @surface@; }

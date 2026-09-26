@@ -81,9 +81,11 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     auto* activity = buildActivityCard();
     activity->setMinimumWidth(240);
     activity->setMaximumWidth(380);
-    activity->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    // Keep the activity card at its content height; the page scrolls when
+    // the summary cards need more room instead of stretching an empty feed.
+    activity->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
     root->addLayout(left, 2);
-    root->addWidget(activity, 1);
+    root->addWidget(activity, 0, Qt::AlignTop);
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     auto* ticker = new QTimer{this};
