@@ -97,6 +97,7 @@ private:
     uint64_t m_last_scanned_height{0};
     std::vector<WalletLedgerEntry> m_entries;
     mutable std::mutex m_mutex;
+    std::mutex m_sync_mutex;
 };
 
 } // namespace cybou

@@ -196,6 +196,7 @@ private:
     std::vector<MailItem> m_messages;
     uint64_t m_last_scanned_height{0};
     mutable std::mutex m_mutex;
+    std::mutex m_sync_mutex;
 };
 
 } // namespace cybou

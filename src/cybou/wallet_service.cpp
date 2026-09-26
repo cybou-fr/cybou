@@ -243,7 +243,15 @@ WalletOperationResult CybouWalletService::LockToSystemBalance(const uint64_t amo
 
 size_t CybouWalletService::SyncLedger()
 {
-    std::lock_guard lock(m_mutex);
+    std::lock_guard sync_lock(m_sync_mutex);
+
+    std::vector<WalletLedgerEntry> original_entries;
+    uint64_t original_height{0};
+    {
+        std::lock_guard lock(m_mutex);
+        original_entries = m_entries;
+        original_height = m_last_scanned_height;
+    }
 
     const auto my_account = m_keystore.GetAccountId();
     if (!my_account) {
@@ -255,10 +263,11 @@ size_t CybouWalletService::SyncLedger()
         return 0;
     }
 
-    size_t new_entries_count = 0;
+    auto working_entries = original_entries;
     const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
 
-    for (uint64_t h = m_last_scanned_height + 1; h <= *tip_height; ++h) {
+    uint64_t scanned_height = original_height;
+    for (uint64_t h = original_height + 1; h <= *tip_height; ++h) {
         const auto block_opt = m_runtime.GetBlockAtHeight(h);
         if (!block_opt) break;
         const auto& fin_block = *block_opt;
@@ -271,10 +280,10 @@ size_t CybouWalletService::SyncLedger()
                 using T = std::decay_t<decltype(op)>;
                 if constexpr (std::is_same_v<T, AccountCreateOp>) {
                     if (op.account_id == *my_account) {
-                        const auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
+                        const auto it = std::find_if(working_entries.begin(), working_entries.end(), [&](const auto& e) {
                             return e.entry_id == op_id;
                         });
-                        if (it == m_entries.end()) {
+                        if (it == working_entries.end()) {
                             WalletLedgerEntry entry{
                                 .entry_id = op_id,
                                 .kind = WalletEntryKind::ONBOARDING_BONUS,
@@ -285,18 +294,17 @@ size_t CybouWalletService::SyncLedger()
                                 .height = h,
                                 .finality = WalletEntryFinality::FINAL,
                             };
-                            m_entries.push_back(entry);
-                            new_entries_count++;
+                            working_entries.push_back(entry);
                         }
                     }
                 } else if constexpr (std::is_same_v<T, AuthorizedPayment>) {
                     const auto& auth = op.authorization;
                     const auto& payload = op.payment;
                     if (auth.account_id == *my_account) {
-                        auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
+                        auto it = std::find_if(working_entries.begin(), working_entries.end(), [&](const auto& e) {
                             return e.entry_id == op_id;
                         });
-                        if (it != m_entries.end()) {
+                        if (it != working_entries.end()) {
                             it->finality = WalletEntryFinality::FINAL;
                             it->height = h;
                         } else {
@@ -310,14 +318,13 @@ size_t CybouWalletService::SyncLedger()
                                 .height = h,
                                 .finality = WalletEntryFinality::FINAL,
                             };
-                            m_entries.push_back(entry);
-                            new_entries_count++;
+                            working_entries.push_back(entry);
                         }
                     } else if (payload.recipient == *my_account) {
-                        const auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
+                        const auto it = std::find_if(working_entries.begin(), working_entries.end(), [&](const auto& e) {
                             return e.entry_id == op_id;
                         });
-                        if (it == m_entries.end()) {
+                        if (it == working_entries.end()) {
                             WalletLedgerEntry entry{
                                 .entry_id = op_id,
                                 .kind = WalletEntryKind::PAYMENT,
@@ -328,18 +335,17 @@ size_t CybouWalletService::SyncLedger()
                                 .height = h,
                                 .finality = WalletEntryFinality::FINAL,
                             };
-                            m_entries.push_back(entry);
-                            new_entries_count++;
+                            working_entries.push_back(entry);
                         }
                     }
                 } else if constexpr (std::is_same_v<T, AuthorizedSystemLock>) {
                     const auto& auth = op.authorization;
                     const auto& payload = op.lock;
                     if (auth.account_id == *my_account) {
-                        auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
+                        auto it = std::find_if(working_entries.begin(), working_entries.end(), [&](const auto& e) {
                             return e.entry_id == op_id;
                         });
-                        if (it != m_entries.end()) {
+                        if (it != working_entries.end()) {
                             it->finality = WalletEntryFinality::FINAL;
                             it->height = h;
                         } else {
@@ -353,18 +359,17 @@ size_t CybouWalletService::SyncLedger()
                                 .height = h,
                                 .finality = WalletEntryFinality::FINAL,
                             };
-                            m_entries.push_back(entry);
-                            new_entries_count++;
+                            working_entries.push_back(entry);
                         }
                     }
                 } else if constexpr (std::is_same_v<T, AuthorizedMail>) {
                     const auto& auth = op.authorization;
                     const auto& payload = op.mail;
                     if (auth.account_id == *my_account) {
-                        const auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& e) {
+                        const auto it = std::find_if(working_entries.begin(), working_entries.end(), [&](const auto& e) {
                             return e.entry_id == op_id;
                         });
-                        if (it == m_entries.end()) {
+                        if (it == working_entries.end()) {
                             const uint64_t fee = MailFeeForSize(payload.ciphertext.size(), params);
                             WalletLedgerEntry entry{
                                 .entry_id = op_id,
@@ -376,24 +381,43 @@ size_t CybouWalletService::SyncLedger()
                                 .height = h,
                                 .finality = WalletEntryFinality::FINAL,
                             };
-                            m_entries.push_back(entry);
-                            new_entries_count++;
+                            working_entries.push_back(entry);
                         }
                     }
                 }
             }, proto_op);
         }
 
-        m_last_scanned_height = h;
+        scanned_height = h;
     }
 
-    return new_entries_count;
+    size_t committed_entries_count{0};
+    {
+        std::lock_guard lock(m_mutex);
+        for (const auto& scanned_entry : working_entries) {
+            const auto existing = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& entry) {
+                return entry.entry_id == scanned_entry.entry_id;
+            });
+            if (existing == m_entries.end()) {
+                m_entries.push_back(scanned_entry);
+                ++committed_entries_count;
+            } else if (scanned_entry.finality == WalletEntryFinality::FINAL) {
+                existing->finality = WalletEntryFinality::FINAL;
+                existing->height = scanned_entry.height;
+            }
+        }
+        m_last_scanned_height = std::max(m_last_scanned_height, scanned_height);
+    }
+    return committed_entries_count;
 }
 
 std::vector<WalletLedgerEntry> CybouWalletService::GetLedgerEntries() const
 {
-    std::lock_guard lock(m_mutex);
-    auto sorted = m_entries;
+    std::vector<WalletLedgerEntry> sorted;
+    {
+        std::lock_guard lock(m_mutex);
+        sorted = m_entries;
+    }
     std::stable_sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
         if (a.height != b.height) return a.height > b.height;
         return a.timestamp > b.timestamp;

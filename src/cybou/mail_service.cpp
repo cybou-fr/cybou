@@ -285,6 +285,7 @@ CybouMailService::CybouMailService(
 
 bool CybouMailService::LoadMailbox()
 {
+    std::lock_guard sync_lock(m_sync_mutex);
     std::lock_guard lock(m_mutex);
     m_messages.clear();
 
@@ -623,7 +624,7 @@ SendMailResult CybouMailService::SendMail(
 
 size_t CybouMailService::SyncMailbox()
 {
-    std::lock_guard lock(m_mutex);
+    std::lock_guard sync_lock(m_sync_mutex);
 
     const auto my_account = m_keystore.GetAccountId();
     if (!my_account || my_account->IsNull()) {
@@ -634,10 +635,37 @@ size_t CybouMailService::SyncMailbox()
     if (!current_height_opt) return 0;
     const uint64_t current_height = *current_height_opt;
 
-    size_t new_inbox_count = 0;
-    bool changed = false;
+    std::vector<std::pair<uint256, uint256>> sent_snapshot;
+    std::vector<uint256> known_mail_ids;
+    uint64_t original_height{0};
+    {
+        std::lock_guard lock(m_mutex);
+        original_height = m_last_scanned_height;
+        sent_snapshot.reserve(m_messages.size());
+        known_mail_ids.reserve(m_messages.size());
+        for (const auto& item : m_messages) {
+            known_mail_ids.push_back(item.mail_id);
+            if (item.folder == MailFolder::SENT) {
+                sent_snapshot.emplace_back(item.mail_id, item.content_commitment);
+            }
+        }
+    }
 
-    for (uint64_t h = m_last_scanned_height + 1; h <= current_height; ++h) {
+    struct SentFinalityUpdate {
+        uint256 original_mail_id;
+        uint256 content_commitment;
+        uint256 mail_id;
+        uint64_t block_height{0};
+        uint256 block_id;
+        size_t operation_index{0};
+        std::optional<MailEvidenceBundle> evidence_bundle;
+    };
+    std::vector<SentFinalityUpdate> sent_updates;
+    std::vector<MailItem> received_messages;
+
+    uint64_t scanned_height = original_height;
+
+    for (uint64_t h = original_height + 1; h <= current_height; ++h) {
         const auto block_opt = m_runtime.GetBlockAtHeight(h);
         if (!block_opt) break;
         const auto& fin_block = *block_opt;
@@ -667,31 +695,31 @@ size_t CybouMailService::SyncMailbox()
             }
 
             if (auth_op.account_id == *my_account) {
-                for (auto& item : m_messages) {
-                    if (item.folder == MailFolder::SENT &&
-                        (item.mail_id == op_id || item.content_commitment == mail_op.content_commitment)) {
-                        item.mail_id = op_id;
-                        item.finality = MailFinalityStatus::FINAL;
-                        item.block_height = h;
-                        item.block_id = block_id;
-                        item.operation_index = op_idx;
-
-                        item.evidence_bundle = CreateMailEvidenceBundle(
-                            fin_block.block,
-                            op_idx,
-                            fin_block.certificate,
-                            sender_device_key,
-                            m_runtime.GetNetworkId());
-                        changed = true;
+                for (const auto& [mail_id, content_commitment] : sent_snapshot) {
+                    if (mail_id == op_id || content_commitment == mail_op.content_commitment) {
+                        const bool already_updated = std::any_of(sent_updates.begin(), sent_updates.end(),
+                            [&](const SentFinalityUpdate& update) { return update.original_mail_id == mail_id; });
+                        if (!already_updated) {
+                            sent_updates.push_back(SentFinalityUpdate{
+                                .original_mail_id = mail_id,
+                                .content_commitment = content_commitment,
+                                .mail_id = op_id,
+                                .block_height = h,
+                                .block_id = block_id,
+                                .operation_index = op_idx,
+                                .evidence_bundle = CreateMailEvidenceBundle(
+                                    fin_block.block, op_idx, fin_block.certificate,
+                                    sender_device_key, m_runtime.GetNetworkId()),
+                            });
+                        }
                         break;
                     }
                 }
             }
 
             if (mail_op.recipient == *my_account) {
-                const bool already_present = std::any_of(
-                    m_messages.begin(), m_messages.end(),
-                    [&op_id](const MailItem& m) { return m.mail_id == op_id; });
+                const bool already_present = std::find(known_mail_ids.begin(), known_mail_ids.end(), op_id) !=
+                    known_mail_ids.end();
                 if (already_present) continue;
 
                 const auto decrypted = DecryptMailPayload(
@@ -727,18 +755,47 @@ size_t CybouMailService::SyncMailbox()
                         sender_device_key,
                         m_runtime.GetNetworkId());
 
-                    m_messages.push_back(std::move(item));
-                    new_inbox_count++;
-                    changed = true;
+                    known_mail_ids.push_back(op_id);
+                    received_messages.push_back(std::move(item));
                 }
             }
         }
-        m_last_scanned_height = h;
-        changed = true;
+        scanned_height = h;
     }
 
-    if (changed) {
-        SaveMailbox();
+    size_t new_inbox_count{0};
+    {
+        std::lock_guard lock(m_mutex);
+        bool changed = false;
+        for (const auto& update : sent_updates) {
+            const auto live = std::find_if(m_messages.begin(), m_messages.end(), [&](const MailItem& item) {
+                return item.folder == MailFolder::SENT &&
+                    (item.mail_id == update.original_mail_id ||
+                        item.content_commitment == update.content_commitment);
+            });
+            if (live == m_messages.end()) continue;
+            live->mail_id = update.mail_id;
+            live->finality = MailFinalityStatus::FINAL;
+            live->block_height = update.block_height;
+            live->block_id = update.block_id;
+            live->operation_index = update.operation_index;
+            live->evidence_bundle = update.evidence_bundle;
+            changed = true;
+        }
+        for (auto& received : received_messages) {
+            const bool already_present = std::any_of(m_messages.begin(), m_messages.end(), [&](const MailItem& item) {
+                return item.mail_id == received.mail_id;
+            });
+            if (already_present) continue;
+            m_messages.push_back(std::move(received));
+            ++new_inbox_count;
+            changed = true;
+        }
+        if (m_last_scanned_height < scanned_height) {
+            m_last_scanned_height = scanned_height;
+            changed = true;
+        }
+        if (changed) SaveMailbox();
     }
     return new_inbox_count;
 }
