@@ -10,7 +10,6 @@
 #include <cybou/signing.h>
 #include <cybou/state_store.h>
 #include <cybou/validator.h>
-#include <dbwrapper.h>
 #include <test/util/setup_common.h>
 #include <tinyformat.h>
 #include <uint256.h>
@@ -55,14 +54,13 @@ struct MockValidatorNode {
     }
 };
 
-CDBWrapper MemoryDb()
+cybou::KVStore MemoryDb()
 {
-    return CDBWrapper{{
+    return cybou::KVStore{{
         .path = "cybou-bft-test",
         .cache_bytes = 1 << 20,
         .memory_only = true,
         .wipe_data = true,
-        .obfuscate = false,
     }};
 }
 

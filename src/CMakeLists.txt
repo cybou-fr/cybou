@@ -173,6 +173,7 @@ include(InstallBinaryComponent)
 
 # CYBOU node runtime and P2P library.
 add_library(cybou_node STATIC
+  cybou/kv_store.cpp
   cybou/state_store.cpp
   cybou/block_executor.cpp
   cybou/authority_node.cpp
@@ -190,7 +191,6 @@ add_library(cybou_node STATIC
   cybou/p2p/inbound_server.cpp
   cybou/p2p/peer_manager.cpp
   blockfilter.cpp
-  dbwrapper.cpp
 )
 target_link_libraries(cybou_node
   PUBLIC
@@ -209,6 +209,7 @@ target_link_libraries(cybou_node
 
 # P2P and RPC server functionality used by `bitcoind` and `bitcoin-qt` executables.
 add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
+  dbwrapper.cpp
   addrdb.cpp
   addrman.cpp
   banman.cpp

@@ -6,7 +6,6 @@
 
 #include <cybou/block_executor.h>
 #include <cybou/signing.h>
-#include <dbwrapper.h>
 
 #include <algorithm>
 #include <limits>
@@ -44,7 +43,7 @@ inline std::string OperationKey(const uint256& op_id)
 } // namespace
 
 CybouStateStore::CybouStateStore(
-    CDBWrapper& db,
+    KVStore& db,
     CybouNetworkDefinition network_definition,
     std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier)
     : m_db{db},
@@ -118,7 +117,7 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
         .block_id = m_network_definition.genesis_block_id,
         .height = 0,
     };
-    CDBBatch batch{m_db};
+    KVStore::Batch batch;
     batch.Write(STATE_KEY, *serialized_state);
     batch.Write(HASH_KEY, *state_hash);
     batch.Write(HEAD_KEY, initial_head);
@@ -285,7 +284,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         .height = block.height,
     };
 
-    CDBBatch batch{m_db};
+    KVStore::Batch batch;
     if (!is_empty_noop_block) {
         const auto state_bytes = SerializeCybouState(*next_state);
         if (!state_bytes) return {BlockTransitionError::CORRUPT_STATE};

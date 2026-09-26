@@ -21,6 +21,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <array>
+#include <filesystem>
 #include <limits>
 #include <optional>
 #include <span>
@@ -28,6 +29,37 @@
 #include <vector>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_state_store_tests, BasicTestingSetup)
+
+BOOST_AUTO_TEST_CASE(kv_store_reads_and_writes_existing_dbwrapper_format)
+{
+    const auto path = m_args.GetDataDirBase() / "cybou-kv-compat";
+    std::filesystem::remove_all(path);
+    const std::string key{"cybou-state-key"};
+    const std::string original{"existing-state-value"};
+    const std::string updated{"updated-state-value"};
+
+    {
+        CDBWrapper old_db{{.path = path, .cache_bytes = 1 << 20, .wipe_data = true, .obfuscate = false}};
+        old_db.Write(key, original, true);
+    }
+
+    {
+        cybou::KVStore new_db{{.path = path, .cache_bytes = 1 << 20}};
+        std::string actual;
+        BOOST_REQUIRE(new_db.Read(key, actual));
+        BOOST_CHECK_EQUAL(actual, original);
+        new_db.Write(key, updated, true);
+    }
+
+    {
+        CDBWrapper old_db{{.path = path, .cache_bytes = 1 << 20, .obfuscate = false}};
+        std::string actual;
+        BOOST_REQUIRE(old_db.Read(key, actual));
+        BOOST_CHECK_EQUAL(actual, updated);
+    }
+
+    std::filesystem::remove_all(path);
+}
 
 namespace {
 
@@ -163,14 +195,13 @@ struct AccountCredentials {
 const AccountCredentials ACCOUNT_1 = AccountCredentials::Create(0x0a, 0x11, 0x12);
 const AccountCredentials ACCOUNT_2 = AccountCredentials::Create(0x0b, 0x21, 0x22);
 
-CDBWrapper MemoryDb()
+cybou::KVStore MemoryDb()
 {
-    return CDBWrapper{{
+    return cybou::KVStore{{
         .path = "cybou-state-store-test",
         .cache_bytes = 1 << 20,
         .memory_only = true,
         .wipe_data = true,
-        .obfuscate = false,
     }};
 }
 

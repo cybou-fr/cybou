@@ -8,7 +8,6 @@
 #include <cybou/block_feed.h>
 #include <cybou/network_definition.h>
 #include <cybou/state_store.h>
-#include <dbwrapper.h>
 
 #include <array>
 #include <chrono>
@@ -174,7 +173,7 @@ private:
     };
     NodeRuntimeConfig m_config;
     uint256 m_network_id;
-    std::unique_ptr<CDBWrapper> m_db;
+    std::unique_ptr<KVStore> m_db;
     CybouStateStore m_store;
     std::unique_ptr<CybouAuthorityNode> m_authority_node;
     std::optional<std::pair<std::string, uint16_t>> m_submit_endpoint;

@@ -15,7 +15,6 @@
 #include <cybou/signing.h>
 #include <cybou/state_store.h>
 #include <cybou/validator.h>
-#include <dbwrapper.h>
 #include <test/util/setup_common.h>
 #include <uint256.h>
 
@@ -88,14 +87,13 @@ cybou::CybouNetworkDefinition TestNetworkDefinition()
     };
 }
 
-std::unique_ptr<CDBWrapper> MakeTestDB(const std::filesystem::path& path)
+std::unique_ptr<cybou::KVStore> MakeTestDB(const std::filesystem::path& path)
 {
-    return std::make_unique<CDBWrapper>(DBParams{
+    return std::make_unique<cybou::KVStore>(cybou::KVStoreOptions{
         .path = path,
         .cache_bytes = 1 << 20,
         .memory_only = true,
         .wipe_data = true,
-        .obfuscate = false,
     });
 }
 

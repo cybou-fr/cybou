@@ -76,12 +76,11 @@ bool IsConnectableDiscoveredAddress(
 CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     : m_config{std::move(config)},
       m_network_id{NetworkId(m_config.network_definition)},
-      m_db{std::make_unique<CDBWrapper>(DBParams{
+      m_db{std::make_unique<KVStore>(KVStoreOptions{
           .path = m_config.data_dir,
           .cache_bytes = m_config.db_cache_bytes,
           .memory_only = m_config.memory_only,
           .wipe_data = m_config.wipe_data,
-          .obfuscate = false,
       })},
       m_store{*m_db, m_config.network_definition},
       m_submit_endpoint{m_config.submit_endpoint}

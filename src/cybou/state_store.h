@@ -9,6 +9,7 @@
 #include <cybou/block.h>
 #include <cybou/block_executor.h>
 #include <cybou/mail_filter.h>
+#include <cybou/kv_store.h>
 #include <cybou/network_definition.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/state.h>
@@ -20,8 +21,6 @@
 #include <optional>
 #include <utility>
 #include <vector>
-
-class CDBWrapper;
 
 namespace cybou {
 
@@ -107,7 +106,7 @@ class CybouStateStore
 {
 public:
     CybouStateStore(
-        CDBWrapper& db,
+        KVStore& db,
         CybouNetworkDefinition network_definition,
         std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier = nullptr);
 
@@ -172,7 +171,7 @@ public:
     std::optional<CybouMailDiscoveryFilter> GetBlockMailFilter(const uint256& block_id) const;
 
 private:
-    CDBWrapper& m_db;
+    KVStore& m_db;
     const CybouNetworkDefinition m_network_definition;
     const NetworkDefinitionError m_network_definition_error;
     const uint256 m_network_id;
