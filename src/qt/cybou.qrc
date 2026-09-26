@@ -1,0 +1,16 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file alias="logo">res/icons/cybou.png</file>
+    </qresource>
+    <qresource prefix="/icons/cybou">
+        <file alias="home">res/icons/cybou/home.svg</file>
+        <file alias="identity">res/icons/cybou/identity.svg</file>
+        <file alias="email">res/icons/cybou/email.svg</file>
+        <file alias="storage">res/icons/cybou/storage.svg</file>
+        <file alias="backup">res/icons/cybou/backup.svg</file>
+        <file alias="wallet">res/icons/cybou/wallet.svg</file>
+        <file alias="network">res/icons/cybou/network.svg</file>
+        <file alias="settings">res/icons/cybou/settings.svg</file>
+        <file alias="diagnostics">res/icons/cybou/diagnostics.svg</file>
+    </qresource>
+</RCC>

@@ -46,6 +46,7 @@ std::filesystem::path ToFilesystemPath(const QString& path)
 
 int CybouQtMain(int argc, char* argv[])
 {
+    Q_INIT_RESOURCE(cybou);
     QApplication app{argc, argv};
     QCoreApplication::setOrganizationName(QStringLiteral("CYBOU"));
     QCoreApplication::setApplicationName(QStringLiteral("CYBOU"));

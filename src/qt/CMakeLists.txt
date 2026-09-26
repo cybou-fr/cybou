@@ -57,6 +57,7 @@ set(CMAKE_AUTORCC OFF)
 configure_file(bitcoin_locale.qrc bitcoin_locale.qrc USE_SOURCE_PERMISSIONS COPYONLY)
 qt6_add_resources(BITCOIN_QRC bitcoin.qrc)
 qt6_add_resources(BITCOIN_LOCALE_QRC ${CMAKE_CURRENT_BINARY_DIR}/bitcoin_locale.qrc)
+qt6_add_resources(CYBOU_QRC cybou.qrc)
 # See: https://bugreports.qt.io/browse/QTBUG-141858.
 get_target_property(warn_flags warn_interface INTERFACE_COMPILE_OPTIONS)
 if("-Wtrailing-whitespace=any" IN_LIST warn_flags)
@@ -215,7 +216,7 @@ add_library(cybou_qt STATIC
   pages/walletpage.h
   recoveryphrasedialog.cpp
   recoveryphrasedialog.h
-  ${BITCOIN_QRC}
+  ${CYBOU_QRC}
 )
 target_compile_definitions(cybou_qt PUBLIC QT_NO_KEYWORDS QT_USE_QSTRINGBUILDER)
 target_include_directories(cybou_qt PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>)

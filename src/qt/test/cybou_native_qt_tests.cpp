@@ -10,8 +10,8 @@
 
 int main(int argc, char* argv[])
 {
-    // Force the CYBOU icon resources out of the cybou_qt static archive.
-    Q_INIT_RESOURCE(bitcoin);
+    // Force CYBOU's own icon resources out of the cybou_qt static archive.
+    Q_INIT_RESOURCE(cybou);
     QApplication app{argc, argv};
     QCoreApplication::setOrganizationName(QStringLiteral("CYBOU"));
     QCoreApplication::setApplicationName(QStringLiteral("CYBOU-native-qt-test"));
