@@ -106,6 +106,10 @@ option(CYBOU_CONSUMER_BUILD "Build only the CYBOU desktop consumer application."
 option(BUILD_GUI "Build CYBOU desktop executable." OFF)
 
 option(BUILD_TESTS "Build test and other unit test executables." ON)
+option(CYBOU_ENABLE_TEST_HOOKS "Enable deterministic crash hooks in CYBOU test builds." OFF)
+if(CYBOU_ENABLE_TEST_HOOKS AND NOT BUILD_TESTS)
+  message(FATAL_ERROR "CYBOU_ENABLE_TEST_HOOKS requires BUILD_TESTS=ON.")
+endif()
 
 option(BUILD_KERNEL_LIB "Build experimental bitcoinkernel library." OFF)
 cmake_dependent_option(BUILD_KERNEL_TEST "Build tests for the experimental bitcoinkernel library." OFF "BUILD_KERNEL_LIB" OFF)

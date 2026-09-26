@@ -569,9 +569,10 @@ bool BftValidatorNode::RecordSigningIntent(const BftStep step, const uint256& di
     m_last_signed_step = step;
     m_has_signed = true;
     m_restarted = false;
+#if defined(CYBOU_ENABLE_TEST_HOOKS)
     // Deterministic crash boundary for the four-process smoke test: exit
     // immediately after the signing intent is durable, before any signature
-    // for this step is produced. Only active when the test hook is set.
+    // for this step is produced. This code is omitted from normal binaries.
     if (const char* hook = std::getenv("CYBOU_TEST_EXIT_AFTER_SIGN")) {
         const std::string_view want{hook};
         const bool match = want == "ANY" ||
@@ -584,6 +585,7 @@ bool BftValidatorNode::RecordSigningIntent(const BftStep step, const uint256& di
             std::_Exit(120);
         }
     }
+#endif
     return true;
 }
 

@@ -164,6 +164,9 @@ target_link_libraries(bitcoin_common
     $<$<PLATFORM_ID:Windows>:ws2_32>
     $<$<PLATFORM_ID:Windows>:crypt32>
 )
+if(CYBOU_ENABLE_TEST_HOOKS)
+  target_compile_definitions(bitcoin_common PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
+endif()
 
 include(InstallBinaryComponent)
 

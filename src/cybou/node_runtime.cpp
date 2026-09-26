@@ -18,22 +18,50 @@ namespace {
 // no business dialing: unspecified, multicast, and (unless the local CYP2
 // listener lives in the same scope) loopback and link-local targets. Without a
 // known local listener the policy stays permissive for DEV tooling.
+bool IsPrivateAddress(const boost::asio::ip::address& addr)
+{
+    const auto is_private_v4 = [](const uint32_t value) {
+        return (value & 0xFF000000U) == 0x0A000000U ||
+            (value & 0xFFF00000U) == 0xAC100000U ||
+            (value & 0xFFFF0000U) == 0xC0A80000U;
+    };
+    if (addr.is_v4()) {
+        return is_private_v4(addr.to_v4().to_uint());
+    }
+    const auto bytes = addr.to_v6().to_bytes();
+    if (addr.to_v6().is_v4_mapped()) {
+        const uint32_t value = (static_cast<uint32_t>(bytes[12]) << 24) |
+            (static_cast<uint32_t>(bytes[13]) << 16) |
+            (static_cast<uint32_t>(bytes[14]) << 8) | static_cast<uint32_t>(bytes[15]);
+        return is_private_v4(value);
+    }
+    return (bytes[0] & 0xFEU) == 0xFCU; // Unique-local IPv6 (fc00::/7).
+}
+
 bool IsConnectableDiscoveredAddress(
     const boost::asio::ip::address& addr,
     const std::optional<std::pair<std::string, uint16_t>>& local_p2p_endpoint)
 {
+    auto is_link_local = [](const boost::asio::ip::address& a) {
+        if (a.is_v4()) return (a.to_v4().to_uint() & 0xFFFF0000U) == 0xA9FE0000U;
+        const auto bytes = a.to_v6().to_bytes();
+        return bytes[0] == 0xFEU && (bytes[1] & 0xC0U) == 0x80U;
+    };
     if (addr.is_unspecified() || addr.is_multicast()) return false;
+    if (IsPrivateAddress(addr) && local_p2p_endpoint) {
+        boost::system::error_code ec;
+        const auto local = boost::asio::ip::make_address(local_p2p_endpoint->first, ec);
+        if (!ec && !IsPrivateAddress(local) && !local.is_loopback() && !is_link_local(local) &&
+            !local.is_unspecified() && !local.is_multicast()) {
+            return false;
+        }
+    }
     if (addr.is_loopback()) {
         if (!local_p2p_endpoint) return true;
         boost::system::error_code ec;
         const auto local = boost::asio::ip::make_address(local_p2p_endpoint->first, ec);
         return !ec && local.is_loopback();
     }
-    auto is_link_local = [](const boost::asio::ip::address& a) {
-        if (a.is_v4()) return (a.to_v4().to_uint() & 0xFFFF0000U) == 0xA9FE0000U;
-        const auto bytes = a.to_v6().to_bytes();
-        return bytes[0] == 0xFEU && (bytes[1] & 0xC0U) == 0x80U;
-    };
     if (is_link_local(addr)) {
         if (!local_p2p_endpoint) return true;
         boost::system::error_code ec;

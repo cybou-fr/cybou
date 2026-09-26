@@ -136,23 +136,62 @@ BOOST_AUTO_TEST_CASE(runtime_discovery_filters_self_and_out_of_scope_addresses)
     };
     cybou::CybouNodeRuntime runtime{std::move(config)};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+    runtime.SetExplicitPeerEndpoints({
+        {"10.0.0.7", 8333}, {"172.16.0.7", 8333}, {"192.168.0.7", 8333},
+    });
 
     // With a public listener, loopback/link-local/unspecified/multicast
-    // discovered targets must not be dialed (SSRF-style pivot).
+    // and private discovered targets must not be dialed (SSRF-style pivot).
     runtime.AddDiscoveredPeerEndpoints({
         {"203.0.113.5", 29001},   // own listener: always rejected
         {"127.0.0.1", 8333},      // loopback rejected: listener is public
         {"::1", 8333},            // v6 loopback rejected
         {"169.254.10.20", 8333},  // v4 link-local rejected
         {"fe80::1", 8333},        // v6 link-local rejected
+        {"10.1.2.3", 8333},       // RFC1918 rejected: listener is public
+        {"172.31.2.3", 8333},     // RFC1918 rejected: listener is public
+        {"192.168.2.3", 8333},    // RFC1918 rejected: listener is public
+        {"fd00::1", 8333},        // unique-local rejected: listener is public
+        {"::ffff:10.1.2.3", 8333}, // mapped RFC1918 rejected as well
         {"0.0.0.0", 8333},        // unspecified rejected
         {"::", 8333},             // unspecified v6 rejected
         {"224.0.0.1", 8333},      // multicast rejected
         {"198.51.100.7", 8333},   // public: accepted
     });
     const auto gossip = runtime.GetPeerEndpointsForGossip();
-    BOOST_REQUIRE_EQUAL(gossip.size(), 1U);
-    BOOST_CHECK_EQUAL(gossip[0].first, "198.51.100.7");
+    BOOST_REQUIRE_EQUAL(gossip.size(), 4U);
+    BOOST_CHECK_EQUAL(gossip[0].first, "10.0.0.7");
+    BOOST_CHECK_EQUAL(gossip[1].first, "172.16.0.7");
+    BOOST_CHECK_EQUAL(gossip[2].first, "192.168.0.7");
+    BOOST_CHECK_EQUAL(gossip[3].first, "198.51.100.7");
+}
+
+BOOST_AUTO_TEST_CASE(runtime_private_listener_accepts_private_discovery)
+{
+    CybouServiceTestFixture fixture;
+    cybou::NodeRuntimeConfig config{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "private-peer-policy",
+        .local_p2p_endpoint = std::make_pair("10.1.1.1", uint16_t{29001}),
+        .memory_only = true,
+        .wipe_data = true,
+    };
+    cybou::CybouNodeRuntime runtime{std::move(config)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+    runtime.AddDiscoveredPeerEndpoints({
+        {"10.1.1.1", 29001},    // own listener remains rejected
+        {"10.1.1.2", 29002},    // private discovery is allowed on private nodes
+        {"172.16.2.3", 29003},
+        {"192.168.2.4", 29004},
+        {"198.51.100.5", 29005},
+    });
+
+    const auto gossip = runtime.GetPeerEndpointsForGossip();
+    BOOST_REQUIRE_EQUAL(gossip.size(), 4U);
+    BOOST_CHECK_EQUAL(gossip[0].first, "10.1.1.2");
+    BOOST_CHECK_EQUAL(gossip[1].first, "172.16.2.3");
+    BOOST_CHECK_EQUAL(gossip[2].first, "192.168.2.4");
+    BOOST_CHECK_EQUAL(gossip[3].first, "198.51.100.5");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
