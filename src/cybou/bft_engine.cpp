@@ -707,6 +707,26 @@ void BftValidatorNode::EnterRound(uint32_t round)
     m_future_prevotes.erase(m_future_prevotes.begin(), stale_prevotes);
     const auto stale_precommits = m_future_precommits.upper_bound(round);
     m_future_precommits.erase(m_future_precommits.begin(), stale_precommits);
+    // The triggering quorum was moved out before entering the round and is
+    // replayed by the caller after this cleanup.
+}
+
+void BftValidatorNode::EnterRoundWithPrevoteEvidence(
+    const uint32_t round, std::map<uint256, BftPrevoteMsg> evidence)
+{
+    EnterRound(round);
+    for (auto& [validator_id, vote] : evidence) {
+        m_prevotes.emplace(validator_id, std::move(vote));
+    }
+}
+
+void BftValidatorNode::EnterRoundWithPrecommitEvidence(
+    const uint32_t round, std::map<uint256, BftPrecommitMsg> evidence)
+{
+    EnterRound(round);
+    for (auto& [validator_id, vote] : evidence) {
+        m_precommits.emplace(validator_id, std::move(vote));
+    }
 }
 
 void BftValidatorNode::BufferFuturePrevote(const BftPrevoteMsg& prevote)
@@ -823,28 +843,19 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
     }
 
     if (prevote.round < m_round) return std::nullopt;
-    if (prevote.round > m_round) {
-        // Round synchronization with Byzantine safety:
-        // - a single validator-signed vote advances the round by at most
-        //   MAX_FUTURE_ROUND_ADVANCE (same window as proposals);
-        // - a larger jump requires quorum evidence: >= QuorumThreshold
-        //   verified votes for one future round, buffered until then.
-        // One Byzantine validator therefore cannot drag honest nodes to an
-        // absurd round with a lone signed message.
-        if (prevote.round > m_round + MAX_FUTURE_ROUND_ADVANCE) {
-            BufferFuturePrevote(prevote);
-        }
+    const bool vote_was_future = prevote.round > m_round;
+    if (vote_was_future) {
+        BufferFuturePrevote(prevote);
         const uint32_t evidence_round = QuorumBackedFutureRound();
-        if (evidence_round > m_round) {
-            EnterRound(evidence_round);
-            for (const auto& [vid, msg] : m_future_prevotes[evidence_round]) {
-                m_prevotes.emplace(vid, msg);
-            }
-        } else if (prevote.round <= m_round + MAX_FUTURE_ROUND_ADVANCE) {
-            EnterRound(prevote.round);
-        } else {
+        if (evidence_round <= m_round) {
             return std::nullopt;
         }
+        auto evidence_it = m_future_prevotes.find(evidence_round);
+        if (evidence_it == m_future_prevotes.end()) return std::nullopt;
+        auto evidence = std::move(evidence_it->second);
+        m_future_prevotes.erase(evidence_it);
+        EnterRoundWithPrevoteEvidence(evidence_round, std::move(evidence));
+        if (prevote.round != m_round) return std::nullopt;
     }
 
     if (const auto existing = m_prevotes.find(prevote.validator_id);
@@ -962,23 +973,19 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
     }
 
     if (precommit.round < m_round) return false;
-    if (precommit.round > m_round) {
-        // Round synchronization, same Byzantine-safe rule as ReceivePrevote:
-        // bounded single-vote advance, quorum-backed jump via the buffer.
-        if (precommit.round > m_round + MAX_FUTURE_ROUND_ADVANCE) {
-            BufferFuturePrecommit(precommit);
-        }
+    const bool vote_was_future = precommit.round > m_round;
+    if (vote_was_future) {
+        BufferFuturePrecommit(precommit);
         const uint32_t evidence_round = QuorumBackedFutureRound();
-        if (evidence_round > m_round) {
-            EnterRound(evidence_round);
-            for (const auto& [vid, msg] : m_future_precommits[evidence_round]) {
-                m_precommits.emplace(vid, msg);
-            }
-        } else if (precommit.round <= m_round + MAX_FUTURE_ROUND_ADVANCE) {
-            EnterRound(precommit.round);
-        } else {
+        if (evidence_round <= m_round) {
             return false;
         }
+        auto evidence_it = m_future_precommits.find(evidence_round);
+        if (evidence_it == m_future_precommits.end()) return false;
+        auto evidence = std::move(evidence_it->second);
+        m_future_precommits.erase(evidence_it);
+        EnterRoundWithPrecommitEvidence(evidence_round, std::move(evidence));
+        if (precommit.round != m_round) return false;
     }
 
     if (const auto existing = m_precommits.find(precommit.validator_id);

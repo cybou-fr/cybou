@@ -525,7 +525,6 @@ int Main(const int argc, char* argv[])
                 const auto gossip_targets = runtime.GetPeerEndpointsForGossip();
                 for (const auto& [host, peer_port] : gossip_targets) {
                     if (stopping) break;
-                    if (peers.ConnectedCount() >= cybou::p2p::MAX_OUTBOUND_PEERS) break;
                     const auto connected = peers.Peers();
                     const bool present = std::any_of(connected.begin(), connected.end(), [&](const auto& peer) {
                         return peer.address == host && peer.port == peer_port;

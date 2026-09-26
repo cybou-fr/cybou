@@ -1555,10 +1555,8 @@ BOOST_AUTO_TEST_CASE(bft_byzantine_extreme_round_votes_cannot_drag_honest_quorum
 
 BOOST_AUTO_TEST_CASE(bft_future_round_jump_requires_quorum_evidence)
 {
-    // Single future vote inside MAX_FUTURE_ROUND_ADVANCE still advances the
-    // round (bounded jump). Beyond the window, votes are buffered and only
-    // a quorum of verified votes for one round triggers the jump, replaying
-    // the buffered votes into the new round.
+    // Every future vote is buffered. Only a quorum of verified votes for one
+    // round advances the node, regardless of how close that round is.
     const uint256 network_id = uint256::FromUserHex("cafe").value();
     std::vector<MockValidatorNode> mocks;
     cybou::ValidatorSet val_set;
@@ -1576,41 +1574,34 @@ BOOST_AUTO_TEST_CASE(bft_future_round_jump_requires_quorum_evidence)
     cybou::BftValidatorNode node{0, mocks[0].seed, network_id, val_set, execute};
     node.SetHeight(1, uint256::ZERO, val_set);
 
-    const uint256 future_block = uint256::FromUserHex("aaaa").value();
-    auto make_prevote = [&](size_t idx, uint32_t round) {
+    auto make_nil_prevote = [&](size_t idx, uint32_t round) {
         const uint256 digest = cybou::ComputePrevoteDigest(
-            network_id, 1, round, mocks[idx].validator_id, future_block);
+            network_id, 1, round, mocks[idx].validator_id, std::nullopt);
         return cybou::BftPrevoteMsg{
             .network_id = network_id, .height = 1, .round = round,
-            .validator_id = mocks[idx].validator_id, .block_id = future_block,
+            .validator_id = mocks[idx].validator_id, .block_id = std::nullopt,
             .signature = *cybou::SignValidatorVote(mocks[idx].seed, digest),
         };
     };
 
-    // Bounded jump: round 2 == 0 + MAX_FUTURE_ROUND_ADVANCE is accepted.
-    BOOST_CHECK(!node.ReceivePrevote(make_prevote(1, 2)).has_value());
-    BOOST_CHECK_EQUAL(node.GetRound(), 2U);
+    // A lone nearby vote cannot advance the round.
+    BOOST_CHECK(!node.ReceivePrevote(make_nil_prevote(1, 2)).has_value());
+    BOOST_CHECK_EQUAL(node.GetRound(), 0U);
 
-    // Round 10 is beyond the window from round 2: buffered, no jump yet.
-    BOOST_CHECK(!node.ReceivePrevote(make_prevote(2, 10)).has_value());
-    BOOST_CHECK(!node.ReceivePrevote(make_prevote(3, 10)).has_value());
-    BOOST_CHECK_EQUAL(node.GetRound(), 2U);
+    // A single vote at a far future round also has no effect.
+    BOOST_CHECK(!node.ReceivePrevote(make_nil_prevote(1, 10)).has_value());
+    BOOST_CHECK_EQUAL(node.GetRound(), 0U);
+    BOOST_CHECK(!node.ReceivePrevote(make_nil_prevote(2, 10)).has_value());
+    BOOST_CHECK_EQUAL(node.GetRound(), 0U);
 
-    // Third round-10 vote completes the quorum evidence: jump and replay.
-    BOOST_CHECK(!node.ReceivePrevote(make_prevote(1, 10)).has_value());
+    // Third round-10 NIL prevote completes quorum and is replayed. The node
+    // immediately emits its own NIL precommit based on the replayed votes.
+    const auto precommit = node.ReceivePrevote(make_nil_prevote(3, 10));
     BOOST_CHECK_EQUAL(node.GetRound(), 10U);
+    BOOST_REQUIRE(precommit.has_value());
+    BOOST_CHECK_EQUAL(precommit->round, 10U);
+    BOOST_CHECK(!precommit->block_id.has_value());
 
-    // The node must be a fully participating round-10 member: it prevotes
-    // the round-10 leader's proposal with a round-10 vote.
-    const size_t leader_r10 = cybou::BftLeaderIndex(1, 10, 4);
-    cybou::BftValidatorNode leader{leader_r10, mocks[leader_r10].seed, network_id, val_set, execute};
-    leader.SetHeight(1, uint256::ZERO, val_set);
-    const auto prop = leader.StartRound(10, {});
-    BOOST_REQUIRE(prop.has_value());
-    const auto pv = node.ReceiveProposal(*prop);
-    BOOST_REQUIRE(pv.has_value());
-    BOOST_CHECK_EQUAL(pv->round, 10U);
-    BOOST_CHECK_EQUAL(node.GetRound(), 10U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
