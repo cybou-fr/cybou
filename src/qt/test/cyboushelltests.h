@@ -14,9 +14,8 @@ class CybouMainWindow;
 /**
  * Desktop shell smoke tests.
  *
- * These tests require no live network and no node model: they verify the
- * CYBOU-native shell structure, navigation, diagnostics window lifetime
- * and capability-driven feature availability.
+ * These tests require no live network: they verify the CYBOU-native shell,
+ * capability-driven feature availability, and desktop runtime lifecycle.
  */
 class CybouShellTests : public QObject
 {
@@ -40,6 +39,8 @@ private Q_SLOTS:
     void themeResolvesAllTokens();
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();
+    void runtimeStartupFailureCanBeRetried();
+    void runtimeRejectsStateFromAnotherNetwork();
 
 private:
     std::unique_ptr<CybouMainWindow> makeWindow();

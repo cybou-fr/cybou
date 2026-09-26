@@ -4,9 +4,13 @@
 
 #include <qt/test/cyboushelltests.h>
 
+#include <qt/cyboudesktopcontroller.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboumainwindow.h>
 #include <qt/cyboutheme.h>
+
+#include <cybou/network_definition.h>
+#include <cybou/validator.h>
 
 #include <QApplication>
 #include <QLabel>
@@ -18,8 +22,84 @@
 #include <QTest>
 #include <QToolButton>
 #include <QDialog>
+#include <QFile>
+#include <QTemporaryDir>
 
 #include <algorithm>
+#include <array>
+#include <cstdint>
+#include <vector>
+
+namespace {
+void AppendUint32LE(std::vector<unsigned char>& out, uint32_t value)
+{
+    for (int i = 0; i < 4; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
+}
+
+bool WriteNetworkFile(const QString& path, const unsigned char seed_byte)
+{
+    std::array<unsigned char, 32> seed{};
+    seed[0] = seed_byte;
+    const auto keypair = cybou::GenerateValidatorKeyPair(seed);
+    if (!keypair) return false;
+    const auto genesis = cybou::CreateDevGenesisState(keypair->public_key);
+    const auto definition = cybou::CreateDevNetworkDefinition(genesis);
+    const auto definition_bytes = cybou::SerializeNetworkDefinition(definition);
+    const auto state_bytes = cybou::SerializeCybouState(genesis);
+    if (!state_bytes) return false;
+
+    std::vector<unsigned char> bytes{'C', 'Y', 'N', '1'};
+    AppendUint32LE(bytes, static_cast<uint32_t>(definition_bytes.size()));
+    bytes.insert(bytes.end(), definition_bytes.begin(), definition_bytes.end());
+    AppendUint32LE(bytes, static_cast<uint32_t>(state_bytes->size()));
+    bytes.insert(bytes.end(), state_bytes->begin(), state_bytes->end());
+
+    QFile file{path};
+    return file.open(QIODevice::WriteOnly | QIODevice::Truncate) &&
+        file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<qint64>(bytes.size())) == static_cast<qint64>(bytes.size());
+}
+
+class ScopedEnvironment final
+{
+public:
+    ScopedEnvironment(const char* name, const QByteArray& value)
+        : m_name{name}, m_was_set{qEnvironmentVariableIsSet(name)}, m_previous{qgetenv(name)}
+    {
+        qputenv(name, value);
+    }
+
+    ~ScopedEnvironment()
+    {
+        if (m_was_set) qputenv(m_name.constData(), m_previous);
+        else qunsetenv(m_name.constData());
+    }
+
+private:
+    QByteArray m_name;
+    bool m_was_set;
+    QByteArray m_previous;
+};
+
+class ScopedUnsetEnvironment final
+{
+public:
+    explicit ScopedUnsetEnvironment(const char* name)
+        : m_name{name}, m_was_set{qEnvironmentVariableIsSet(name)}, m_previous{qgetenv(name)}
+    {
+        qunsetenv(name);
+    }
+
+    ~ScopedUnsetEnvironment()
+    {
+        if (m_was_set) qputenv(m_name.constData(), m_previous);
+    }
+
+private:
+    QByteArray m_name;
+    bool m_was_set;
+    QByteArray m_previous;
+};
+} // namespace
 
 CybouShellTests::~CybouShellTests() = default;
 
@@ -291,4 +371,53 @@ void CybouShellTests::closingWithoutNodeRequestsQuit()
     QSignalSpy spy{window.get(), &CybouMainWindow::quitRequested};
     window->close();
     QVERIFY(spy.count() > 0);
+}
+
+void CybouShellTests::runtimeStartupFailureCanBeRetried()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
+    ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
+    ScopedUnsetEnvironment validator_mode{"CYBOU_DEV_VALIDATOR"};
+
+    CybouDesktopModel model{QStringLiteral("CYBOU-DEV")};
+    CybouDesktopController controller{&model, directory.path().toStdString()};
+    QSignalSpy failures{&controller, &CybouDesktopController::startupFailed};
+    controller.start();
+    QCOMPARE(failures.count(), 1);
+    QVERIFY(!model.status().node_running);
+
+    QVERIFY(WriteNetworkFile(directory.filePath(QStringLiteral("network.bin")), 0x31));
+    controller.start();
+    QCOMPARE(failures.count(), 1);
+    QVERIFY(model.status().node_running);
+}
+
+void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
+    ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
+    ScopedUnsetEnvironment validator_mode{"CYBOU_DEV_VALIDATOR"};
+    QVERIFY(WriteNetworkFile(directory.filePath(QStringLiteral("network.bin")), 0x32));
+
+    {
+        CybouDesktopModel model{QStringLiteral("CYBOU-DEV")};
+        CybouDesktopController controller{&model, directory.path().toStdString()};
+        QSignalSpy failures{&controller, &CybouDesktopController::startupFailed};
+        controller.start();
+        QCOMPARE(failures.count(), 0);
+        QVERIFY(model.status().node_running);
+    }
+
+    QVERIFY(WriteNetworkFile(directory.filePath(QStringLiteral("network.bin")), 0x33));
+    CybouDesktopModel model{QStringLiteral("CYBOU-DEV")};
+    CybouDesktopController controller{&model, directory.path().toStdString()};
+    QSignalSpy failures{&controller, &CybouDesktopController::startupFailed};
+    controller.start();
+    QCOMPARE(failures.count(), 1);
+    QVERIFY(failures.takeFirst().at(0).toString().contains(QStringLiteral("belongs to another network")));
+    QVERIFY(!model.status().node_running);
 }
