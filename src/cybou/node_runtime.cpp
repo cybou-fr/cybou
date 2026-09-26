@@ -712,6 +712,35 @@ SyncPeerResult CybouNodeRuntime::SyncFromPeer(const std::string& host, const uin
     return result;
 }
 
+void CybouNodeRuntime::SchedulePeerRetry(
+    const std::pair<std::string, uint16_t>& endpoint, const PeerFailureClass failure)
+{
+    auto& retry = m_peer_retry_after[endpoint];
+    const auto now = std::chrono::steady_clock::now();
+    const auto backoff = [](uint32_t failures, const uint32_t base_seconds, const uint32_t max_seconds) {
+        uint32_t delay = base_seconds;
+        while (failures > 1 && delay < max_seconds) {
+            delay = std::min(max_seconds, delay * 2);
+            --failures;
+        }
+        return std::chrono::seconds{delay};
+    };
+
+    switch (failure) {
+    case PeerFailureClass::TEMPORARY:
+        retry.temporary_failures = std::min<uint32_t>(retry.temporary_failures + 1, 16);
+        retry.retry_after = now + backoff(retry.temporary_failures, 5, 300);
+        break;
+    case PeerFailureClass::PROTOCOL:
+        retry.protocol_failures = std::min<uint32_t>(retry.protocol_failures + 1, 16);
+        retry.retry_after = now + backoff(retry.protocol_failures, 1800, 86400);
+        break;
+    case PeerFailureClass::WRONG_NETWORK:
+        retry.retry_after = now + std::chrono::hours{24};
+        break;
+    }
+}
+
 SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_blocks)
 {
     if (!m_config.p2p_endpoint || !m_peer_manager) return {};
@@ -749,13 +778,25 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
             const bool connected = std::any_of(connected_before_dial.begin(), connected_before_dial.end(),
                 [&](const p2p::PeerInfo& peer) { return peer.address == endpoint.first && peer.port == endpoint.second; });
             const auto retry = m_peer_retry_after.find(endpoint);
-            return !connected && (retry == m_peer_retry_after.end() || now >= retry->second);
+            return !connected && (retry == m_peer_retry_after.end() || now >= retry->second.retry_after);
         });
         if (candidate != targets.end()) {
             if (m_peer_manager->Connect(candidate->first, candidate->second)) {
                 m_peer_retry_after.erase(*candidate);
             } else {
-                m_peer_retry_after[*candidate] = now + std::chrono::seconds{5};
+                switch (m_peer_manager->LastConnectStatus()) {
+                case p2p::PeerConnectStatus::UNAVAILABLE:
+                    SchedulePeerRetry(*candidate, PeerFailureClass::TEMPORARY);
+                    break;
+                case p2p::PeerConnectStatus::WRONG_NETWORK:
+                    SchedulePeerRetry(*candidate, PeerFailureClass::WRONG_NETWORK);
+                    break;
+                case p2p::PeerConnectStatus::HANDSHAKE_FAILED:
+                    SchedulePeerRetry(*candidate, PeerFailureClass::PROTOCOL);
+                    break;
+                default:
+                    break;
+                }
             }
         }
     }
@@ -774,7 +815,6 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
 
     SyncPeerResult result{.status = SyncPeerStatus::CONNECTION_FAILED};
     bool any_peer_up_to_date{false};
-    const auto retry_after = std::chrono::steady_clock::now() + std::chrono::seconds{5};
     for (const auto& peer : peers) {
         const auto attempt = m_peer_manager->SyncFromPeer(peer.address, peer.port, max_blocks);
         if (attempt.status == SyncPeerStatus::BLOCKS_APPLIED) {
@@ -786,10 +826,15 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
         // connected peer has newer blocks, so keep checking the whole set.
         // Peer protocol failures are isolated to that session by PeerManager;
         // they must not become a fatal network-service result.
-        if (attempt.status == SyncPeerStatus::UP_TO_DATE) any_peer_up_to_date = true;
-        if (attempt.status == SyncPeerStatus::PROTOCOL_ERROR ||
-            attempt.status == SyncPeerStatus::NETWORK_MISMATCH) {
-            m_peer_retry_after[{peer.address, peer.port}] = retry_after;
+        if (attempt.status == SyncPeerStatus::UP_TO_DATE) {
+            any_peer_up_to_date = true;
+            m_peer_retry_after.erase({peer.address, peer.port});
+        } else if (attempt.status == SyncPeerStatus::CONNECTION_FAILED) {
+            SchedulePeerRetry({peer.address, peer.port}, PeerFailureClass::TEMPORARY);
+        } else if (attempt.status == SyncPeerStatus::NETWORK_MISMATCH) {
+            SchedulePeerRetry({peer.address, peer.port}, PeerFailureClass::WRONG_NETWORK);
+        } else if (attempt.status == SyncPeerStatus::PROTOCOL_ERROR) {
+            SchedulePeerRetry({peer.address, peer.port}, PeerFailureClass::PROTOCOL);
         }
     }
     if (any_peer_up_to_date) result.status = SyncPeerStatus::UP_TO_DATE;

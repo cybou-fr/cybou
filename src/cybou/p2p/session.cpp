@@ -281,7 +281,11 @@ bool PeerSession::Handshake(const Hello& local)
     m_handshake_status = HandshakeStatus::INVALID_PEER;
     if (frame->type != MessageType::HELLO) return false;
     const auto peer = DecodeHello(frame->payload);
-    if (!peer || peer->network_id != local.network_id || peer->nonce == local.nonce) return false;
+    if (!peer || peer->nonce == local.nonce) return false;
+    if (peer->network_id != local.network_id) {
+        m_handshake_status = HandshakeStatus::WRONG_NETWORK;
+        return false;
+    }
     m_peer = *peer;
     m_local_capabilities = local.capabilities;
     m_handshake_status = HandshakeStatus::CONNECTED;

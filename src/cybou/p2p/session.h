@@ -66,6 +66,7 @@ enum class HandshakeStatus : uint8_t {
     CONNECTED,
     UNAVAILABLE,
     INVALID_PEER,
+    WRONG_NETWORK,
     INVALID_LOCAL,
 };
 

@@ -28,40 +28,26 @@ BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
     using boost::asio::ip::tcp;
     const auto loopback = boost::asio::ip::address_v4::loopback();
     tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    tcp::acceptor recovery_acceptor{io, tcp::endpoint{loopback, 0}};
     std::atomic_bool peer_served_bad_block{false};
     std::atomic_bool peer_served_valid_block{false};
-    std::jthread peer{[&] {
-        {
-            tcp::socket socket{io};
-            acceptor.accept(socket);
-            cybou::p2p::PeerSession session{std::move(socket)};
-            const auto foreign_block = foreign.runtime->GetBlockAtHeight(1);
-            if (foreign_block && session.Handshake({
-                    .network_id = local.runtime->GetNetworkId(),
-                    .finalized_height = 1,
-                    .finalized_tip = cybou::ComputeBlockId(foreign_block->block),
-                    .capabilities = cybou::p2p::CAP_SERVE_BLOCKS,
-                    .nonce = 29001}) && session.ServeNext(*foreign.runtime)) {
-                peer_served_bad_block.store(true);
-            }
-        }
-
-        // The runtime quarantines this endpoint for five seconds after its
-        // invalid block. Once it retries, let the same endpoint recover and
-        // serve the canonical local block.
-        std::this_thread::sleep_for(std::chrono::milliseconds{5200});
+    std::jthread bad_peer{[&] {
         tcp::socket socket{io};
-        acceptor.non_blocking(true);
-        boost::system::error_code accept_error;
-        const auto accept_deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-        while (std::chrono::steady_clock::now() < accept_deadline) {
-            acceptor.accept(socket, accept_error);
-            if (!accept_error) break;
-            if (accept_error != boost::asio::error::would_block && accept_error != boost::asio::error::try_again) return;
-            accept_error.clear();
-            std::this_thread::sleep_for(std::chrono::milliseconds{5});
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        const auto foreign_block = foreign.runtime->GetBlockAtHeight(1);
+        if (foreign_block && session.Handshake({
+                .network_id = local.runtime->GetNetworkId(),
+                .finalized_height = 1,
+                .finalized_tip = cybou::ComputeBlockId(foreign_block->block),
+                .capabilities = cybou::p2p::CAP_SERVE_BLOCKS,
+                .nonce = 29001}) && session.ServeNext(*foreign.runtime)) {
+            peer_served_bad_block.store(true);
         }
-        if (accept_error) return;
+    }};
+    std::jthread recovery_peer{[&] {
+        tcp::socket socket{io};
+        recovery_acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket)};
         const auto valid_block = local.runtime->GetBlockAtHeight(1);
         if (valid_block && session.Handshake({
@@ -85,6 +71,9 @@ BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
         .genesis = local.genesis,
     }};
     service.Start();
+    service.Runtime().SetExplicitPeerEndpoints({
+        {loopback.to_string(), recovery_acceptor.local_endpoint().port()},
+    });
 
     std::mutex mutex;
     std::condition_variable changed;
@@ -113,7 +102,8 @@ BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
         BOOST_REQUIRE(changed.wait_for(lock, std::chrono::seconds{10}, [&] { return callbacks >= 2 && recovered; }));
     }
     service.StopNetwork();
-    peer.join();
+    bad_peer.join();
+    recovery_peer.join();
 
     BOOST_CHECK(peer_served_bad_block.load());
     BOOST_CHECK(peer_served_valid_block.load());

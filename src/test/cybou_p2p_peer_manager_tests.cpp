@@ -116,7 +116,7 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_network_peer)
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
     BOOST_CHECK(!manager.Connect(loopback.to_string(), acceptor.local_endpoint().port()));
-    BOOST_CHECK(manager.LastConnectStatus() == cybou::p2p::PeerConnectStatus::HANDSHAKE_FAILED);
+    BOOST_CHECK(manager.LastConnectStatus() == cybou::p2p::PeerConnectStatus::WRONG_NETWORK);
     server.join();
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
 }

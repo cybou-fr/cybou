@@ -31,6 +31,7 @@ enum class PeerConnectStatus : uint8_t {
     CONNECTED,
     UNAVAILABLE,
     HANDSHAKE_FAILED,
+    WRONG_NETWORK,
     INVALID_REQUEST,
     LOCAL_FAILURE,
 };

@@ -95,8 +95,11 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         .finalized_tip = status.finalized_tip, .capabilities = caps, .nonce = *nonce};
     auto peer = std::make_unique<PeerSession>(std::move(socket));
     if (!peer->Handshake(local)) {
-        m_last_connect_status = peer->LastHandshakeStatus() == HandshakeStatus::UNAVAILABLE ?
-            PeerConnectStatus::UNAVAILABLE : PeerConnectStatus::HANDSHAKE_FAILED;
+        switch (peer->LastHandshakeStatus()) {
+        case HandshakeStatus::UNAVAILABLE: m_last_connect_status = PeerConnectStatus::UNAVAILABLE; break;
+        case HandshakeStatus::WRONG_NETWORK: m_last_connect_status = PeerConnectStatus::WRONG_NETWORK; break;
+        default: m_last_connect_status = PeerConnectStatus::HANDSHAKE_FAILED; break;
+        }
         return false;
     }
     if (!MatchesKnownFinalizedChain(m_runtime, *peer->Peer())) {

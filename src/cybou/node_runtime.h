@@ -162,9 +162,16 @@ public:
     const CybouStateStore& GetStore() const { return m_store; }
 
 private:
+    enum class PeerFailureClass : uint8_t { TEMPORARY, PROTOCOL, WRONG_NETWORK };
+    struct PeerRetryState {
+        std::chrono::steady_clock::time_point retry_after{};
+        uint32_t temporary_failures{0};
+        uint32_t protocol_failures{0};
+    };
     bool CommitConsensusPrecommit(const BftPrecommitMsg& precommit);
     bool CommitConsensusFinalized(const FinalizedBlock& finalized);
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
+    void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
     /** Re-sync the orchestration round/phase with the engine after it jumped rounds. Caller holds m_mutex. */
     void SyncConsensusDriverWithEngine();
     void RememberOperationForGossip(const ProtocolOperation& op, const uint256& id);
@@ -182,7 +189,7 @@ private:
     std::optional<std::pair<std::string, uint16_t>> m_submit_endpoint;
     std::unique_ptr<p2p::PeerManager> m_peer_manager;
     mutable std::mutex m_p2p_mutex;
-    std::map<std::pair<std::string, uint16_t>, std::chrono::steady_clock::time_point> m_peer_retry_after;
+    std::map<std::pair<std::string, uint16_t>, PeerRetryState> m_peer_retry_after;
     std::chrono::steady_clock::time_point m_next_peer_ping{};
     std::chrono::steady_clock::time_point m_next_peer_discovery{};
     using ConsensusMessage = std::variant<BftProposalMsg, BftPrevoteMsg, BftPrecommitMsg>;
