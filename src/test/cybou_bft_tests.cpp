@@ -1743,7 +1743,8 @@ BOOST_AUTO_TEST_CASE(bft_one_validator_cannot_fill_future_round_buffer)
     BOOST_CHECK(!node.ReceivePrevote(make_prevote(2, 9)));
     BOOST_CHECK_EQUAL(node.GetRound(), 0U);
     BOOST_CHECK(!node.ReceivePrevote(make_prevote(3, 9)));
-    BOOST_CHECK_EQUAL(node.GetRound(), 0U);
+    BOOST_CHECK_EQUAL(node.GetRound(), 9U);
+    BOOST_CHECK(node.GetStep() == cybou::BftStep::PROPOSE);
     BOOST_CHECK(node.ReceivePrevote(make_prevote(0, 9)));
     BOOST_CHECK_EQUAL(node.GetRound(), 9U);
 }
