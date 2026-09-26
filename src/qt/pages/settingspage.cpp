@@ -17,6 +17,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QSystemTrayIcon>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QSettings>
@@ -157,7 +158,11 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
         layout->setSpacing(12);
 
         m_run_in_background = new QCheckBox{tr("Keep CYBOU running in the background when the window is closed"), general_body};
-        m_run_in_background->setToolTip(tr("When enabled, closing the window hides CYBOU and the node keeps running. Use File -> Quit CYBOU to shut down."));
+        const bool tray_available = QSystemTrayIcon::isSystemTrayAvailable();
+        m_run_in_background->setEnabled(tray_available);
+        m_run_in_background->setToolTip(tray_available
+            ? tr("When enabled, closing the window hides CYBOU and the node keeps running. Use File -> Quit CYBOU to shut down.")
+            : tr("A system tray is required to keep CYBOU running after the window closes. File -> Quit CYBOU remains available."));
         connect(m_run_in_background, &QCheckBox::toggled, this, [this](bool checked) {
             QSettings{}.setValue(QStringLiteral("desktop/run_in_background"), checked);
         });

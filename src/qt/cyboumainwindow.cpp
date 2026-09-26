@@ -343,9 +343,10 @@ void CybouMainWindow::buildMenus()
 {
     menuBar()->clear();
     auto* file = menuBar()->addMenu(tr("File"));
-    file->addAction(tr("Hide CYBOU"), this, &QWidget::hide);
-    // No File->Quit: the node can only be shut down from the tray icon's
-    // context menu, so closing the window can never accidentally stop it.
+    if (QSystemTrayIcon::isSystemTrayAvailable()) {
+        file->addAction(tr("Hide CYBOU"), this, &QWidget::hide);
+    }
+    file->addAction(tr("Quit CYBOU"), this, [this] { Q_EMIT quitRequested(); });
 
     auto* settings = menuBar()->addMenu(tr("Settings"));
     settings->addAction(tr("Preferences"), this, [this] { showPage(7); });
