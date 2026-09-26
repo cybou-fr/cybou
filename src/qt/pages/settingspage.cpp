@@ -6,10 +6,10 @@
 
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cybouui.h>
-#include <qt/guiutil.h>
 
 #include <QCheckBox>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -261,7 +261,10 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
         connect(diagnostics, &QPushButton::clicked, this, [this] { m_diagnostics_requested(); });
         auto* debug_log = new QPushButton{tr("Open debug log"), advanced_body};
         debug_log->setObjectName(QStringLiteral("secondaryButton"));
-        connect(debug_log, &QPushButton::clicked, this, [] { GUIUtil::openDebugLogfile(); });
+        connect(debug_log, &QPushButton::clicked, this, [this] {
+            const QString dir = m_model->status().data_directory;
+            if (!dir.isEmpty()) QDesktopServices::openUrl(QUrl::fromLocalFile(QDir{dir}.filePath(QStringLiteral("debug.log"))));
+        });
         tools_row->addWidget(diagnostics);
         tools_row->addWidget(debug_log);
         tools_row->addStretch();

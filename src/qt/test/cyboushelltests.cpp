@@ -36,7 +36,7 @@ CybouShellTests::~CybouShellTests() = default;
 
 std::unique_ptr<CybouMainWindow> CybouShellTests::makeWindow()
 {
-    return std::make_unique<CybouMainWindow>();
+    return std::make_unique<CybouMainWindow>(std::filesystem::path{});
 }
 
 void CybouShellTests::mainWindowStarts()

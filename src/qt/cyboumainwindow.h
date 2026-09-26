@@ -7,6 +7,7 @@
 
 #include <QMainWindow>
 
+#include <filesystem>
 #include <memory>
 
 namespace CybouUi {
@@ -27,7 +28,7 @@ class CybouMainWindow final : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit CybouMainWindow(QWidget* parent = nullptr);
+    explicit CybouMainWindow(std::filesystem::path data_directory = {}, QWidget* parent = nullptr);
     ~CybouMainWindow() override;
 
     void startRuntime();

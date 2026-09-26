@@ -239,7 +239,7 @@ bool BitcoinApplication::createOptionsModel(bool resetSettings)
 
 void BitcoinApplication::createWindow(const NetworkStyle *networkStyle)
 {
-    window = new CybouMainWindow(nullptr);
+    window = new CybouMainWindow(gArgs.GetDataDirNet().std_path(), nullptr);
     connect(window, &CybouMainWindow::quitRequested, this, &BitcoinApplication::requestShutdown);
 
     pollShutdownTimer = new QTimer(window);

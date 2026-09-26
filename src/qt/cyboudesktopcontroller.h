@@ -6,6 +6,7 @@
 #define BITCOIN_QT_CYBOUDESKTOPCONTROLLER_H
 
 #include <atomic>
+#include <filesystem>
 #include <memory>
 #include <thread>
 
@@ -24,13 +25,15 @@ class CybouWalletService;
 class CybouDesktopController final : public QObject
 {
 public:
-    explicit CybouDesktopController(CybouDesktopModel* model, QObject* parent = nullptr);
+    explicit CybouDesktopController(CybouDesktopModel* model,
+        std::filesystem::path data_directory, QObject* parent = nullptr);
     ~CybouDesktopController() override;
 
     void start();
 
 private:
     CybouDesktopModel* m_model;
+    std::filesystem::path m_data_directory;
     std::unique_ptr<cybou::CybouNodeRuntime> m_node_runtime;
     std::unique_ptr<cybou::CybouIdentityService> m_identity_service;
     std::unique_ptr<cybou::CybouMailService> m_mail_service;

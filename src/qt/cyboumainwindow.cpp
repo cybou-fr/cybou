@@ -66,10 +66,11 @@ QToolButton* NavigationButton(const QString& text, CybouTheme::NavIcon icon, QWi
 } // namespace
 
 CybouMainWindow::CybouMainWindow(
+    std::filesystem::path data_directory,
     QWidget* parent)
     : QMainWindow{parent},
       m_desktop_model{new CybouDesktopModel{QStringLiteral("CYBOU-DEV"), this}},
-      m_controller{std::make_unique<CybouDesktopController>(m_desktop_model)},
+      m_controller{std::make_unique<CybouDesktopController>(m_desktop_model, std::move(data_directory))},
       m_pages{new QStackedWidget{this}},
       m_navigation{new QButtonGroup{this}}
 {

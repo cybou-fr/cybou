@@ -6,7 +6,6 @@
 
 #include <qt/cyboudesktopmodel.h>
 
-#include <common/args.h>
 #include <cybou/bootstrap_nodes.h>
 #include <cybou/identity_service.h>
 #include <cybou/mail_service.h>
@@ -27,8 +26,9 @@
 
 #include <QDebug>
 
-CybouDesktopController::CybouDesktopController(CybouDesktopModel* model, QObject* parent)
-    : QObject{parent}, m_model{model}
+CybouDesktopController::CybouDesktopController(CybouDesktopModel* model,
+    std::filesystem::path data_directory, QObject* parent)
+    : QObject{parent}, m_model{model}, m_data_directory{std::move(data_directory)}
 {
 }
 
@@ -41,7 +41,7 @@ void CybouDesktopController::start()
 {
     if (m_node_runtime) return;
     try {
-        const auto network_path = (gArgs.GetDataDirNet() / "network.bin").std_path();
+        const auto network_path = m_data_directory / "network.bin";
         const auto network_file = cybou::LoadCybouNetworkFile(network_path);
         if (!network_file) throw std::runtime_error("missing or invalid CYBOU network.bin");
         const auto& genesis = network_file->genesis;
@@ -49,9 +49,9 @@ void CybouDesktopController::start()
         m_model->setNetworkInfo(
             QStringLiteral("CYBOU-DEV"),
             QString::fromStdString(cybou::NetworkId(definition).GetHex()));
-        const std::filesystem::path data_dir = (gArgs.GetDataDirNet() / "cybou_state").std_path();
+        const std::filesystem::path data_dir = m_data_directory / "cybou_state";
         std::optional<std::array<unsigned char, 32>> val_key;
-        const auto key_path = (gArgs.GetDataDirNet() / "validator.key").std_path();
+        const auto key_path = m_data_directory / "validator.key";
         if (std::filesystem::exists(key_path) && std::filesystem::file_size(key_path) == 32) {
             val_key.emplace();
             std::ifstream key_file{key_path, std::ios::binary};
@@ -93,13 +93,13 @@ void CybouDesktopController::start()
         } else if (init_status.runtime_state != cybou::NodeRuntimeState::READY) {
             throw std::runtime_error("CYBOU state is unavailable or corrupt");
         }
-        m_model->setNodeStatus(true, 0, true, QString::fromStdString(data_dir.string()));
+        m_model->setNodeStatus(true, 0, true, QString::fromStdString(m_data_directory.string()));
 
-        const auto identity_path = (gArgs.GetDataDirNet() / "identity.cybou").std_path();
+        const auto identity_path = m_data_directory / "identity.cybou";
         m_identity_service = std::make_unique<cybou::CybouIdentityService>(*m_node_runtime, identity_path);
         m_model->setIdentityService(m_identity_service.get());
 
-        const auto mailbox_path = (gArgs.GetDataDirNet() / "mailbox.dat").std_path();
+        const auto mailbox_path = m_data_directory / "mailbox.dat";
         m_mail_service = std::make_unique<cybou::CybouMailService>(
             *m_node_runtime, m_identity_service->GetKeyStore(), mailbox_path);
         if (std::filesystem::exists(mailbox_path)) m_mail_service->LoadMailbox();

@@ -183,6 +183,44 @@ target_link_libraries(bitcoinqt
     $<$<PLATFORM_ID:Windows>:shlwapi>
 )
 
+# CYBOU's native desktop target intentionally contains only its Qt pages,
+# desktop model, controller, and recovery UI. Bitcoin's Qt shell stays in the
+# legacy target above while the remaining runtime dependencies are removed.
+add_library(cybou_qt STATIC
+  cyboudesktopcontroller.cpp
+  cyboudesktopcontroller.h
+  cyboudesktopmodel.cpp
+  cyboudesktopmodel.h
+  cyboumainwindow.cpp
+  cyboumainwindow.h
+  cyboustrip.h
+  cyboutheme.cpp
+  cyboutheme.h
+  cybouui.h
+  pages/backuppage.cpp
+  pages/backuppage.h
+  pages/emailpage.cpp
+  pages/emailpage.h
+  pages/homepage.cpp
+  pages/homepage.h
+  pages/identitypage.cpp
+  pages/identitypage.h
+  pages/networkpage.cpp
+  pages/networkpage.h
+  pages/settingspage.cpp
+  pages/settingspage.h
+  pages/storagepage.cpp
+  pages/storagepage.h
+  pages/walletpage.cpp
+  pages/walletpage.h
+  recoveryphrasedialog.cpp
+  recoveryphrasedialog.h
+  ${BITCOIN_QRC}
+)
+target_compile_definitions(cybou_qt PUBLIC QT_NO_KEYWORDS QT_USE_QSTRINGBUILDER)
+target_include_directories(cybou_qt PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>)
+target_link_libraries(cybou_qt PUBLIC Qt6::Widgets Qt6::Svg PRIVATE cybou_node)
+
 if(WITH_DBUS)
   target_link_libraries(bitcoinqt PRIVATE Qt6::DBus)
 endif()
@@ -213,16 +251,15 @@ add_subdirectory(locale)
 
 add_executable(cybou
   main.cpp
-  ../init/bitcoin-qt.cpp
+  cybouapplication.cpp
+  cybouapplication.h
 )
 
 add_windows_resources(cybou res/cybou-res.rc)
 add_windows_application_manifest(cybou)
 
 target_link_libraries(cybou
-  core_interface
-  bitcoinqt
-  bitcoin_node
+  cybou_qt
 )
 
 import_plugins(cybou)
