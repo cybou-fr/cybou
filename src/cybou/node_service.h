@@ -9,15 +9,28 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
+#include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 namespace cybou {
 
 struct CybouNodeServiceConfig {
     NodeRuntimeConfig runtime;
     CybouState genesis;
+};
+
+struct CybouAuthorityServiceConfig {
+    std::string bind_address;
+    uint16_t block_feed_port{0};
+    std::optional<uint16_t> p2p_port;
+    uint64_t block_interval_ms{1000};
+    std::vector<std::pair<std::string, uint16_t>> peers;
 };
 
 /** Owns node runtime startup and the observer's periodic verified sync loop. */
@@ -39,6 +52,8 @@ public:
         std::chrono::milliseconds interval,
         ObserverUpdate update);
     void StopObserverSync();
+    /** Run the authority block-feed, consensus, inbound CYP2, and gossip loops. */
+    int RunAuthority(const CybouAuthorityServiceConfig& config, std::atomic_bool& stopping);
 
     CybouNodeRuntime& Runtime() { return *m_runtime; }
     const CybouNodeRuntime& Runtime() const { return *m_runtime; }

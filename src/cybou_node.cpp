@@ -8,7 +8,6 @@
 #include <cybou/network_definition.h>
 #include <cybou/node_runtime.h>
 #include <cybou/node_service.h>
-#include <cybou/p2p/inbound_server.h>
 #include <cybou/p2p/peer_manager.h>
 #include <cybou/signing.h>
 #include <cybou/validator.h>
@@ -26,8 +25,6 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
-#include <map>
-#include <mutex>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -441,149 +438,15 @@ int Main(const int argc, char* argv[])
             .genesis = network->genesis,
         }};
         node_service.Start();
-        auto& runtime = node_service.Runtime();
-        const auto val_set = runtime.GetValidatorSet();
-        if (!val_set || val_set->validators.empty()) {
-            throw std::runtime_error("validator set is empty");
-        }
-
-        boost::asio::io_context io;
-        std::optional<cybou::p2p::InboundPeerServer> p2p_server;
-        if (p2p_port) {
-            p2p_server.emplace(runtime, io, boost::asio::ip::tcp::endpoint{bind_address, *p2p_port});
-        }
         const auto gossip_endpoints = argc == 10 ? ReadPeerEndpoints(argv[9]) :
             std::vector<std::pair<std::string, uint16_t>>{};
-        if (val_set->validators.size() > 1) {
-            if (!p2p_server || argc != 10) {
-                throw std::runtime_error("multi-validator serve requires a CYP2 listener and peer list");
-            }
-            if (gossip_endpoints.size() < val_set->validators.size() - 1) {
-                throw std::runtime_error("multi-validator peer list must contain at least N-1 endpoints");
-            }
-        }
-        if (argc == 10) {
-            const auto own_port = *p2p_port;
-            for (const auto& [address, peer_port] : gossip_endpoints) {
-                if (address == bind_address.to_string() && peer_port == own_port) {
-                    throw std::runtime_error("P2P peer list contains this listener");
-                }
-            }
-        }
-        boost::asio::ip::tcp::acceptor acceptor(io, {
-            boost::asio::ip::make_address(argv[5]), port,
-        });
-        acceptor.non_blocking(true);
-        std::jthread blocks([&] {
-            while (!stopping) {
-                if (runtime.GetStatus().validator_count > 1) {
-                    runtime.TickConsensus(std::chrono::milliseconds(interval_ms));
-                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                    continue;
-                }
-                const auto block = runtime.ProduceBlock();
-                if (!block) {
-                    if (runtime.GetStatus().validator_count <= 1) {
-                        std::cerr << "block production stopped\n";
-                        stopping = true;
-                        break;
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
-                    continue;
-                }
-                // std::endl, not '\n': under systemd stdout is a pipe and a
-                // buffered height line never reaches the journal otherwise.
-                std::cout << "height=" << block->block.height << std::endl;
-                std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
-            }
-        });
-        std::optional<std::jthread> p2p_listener;
-        if (p2p_server) p2p_listener.emplace([&] { p2p_server->Run(stopping); });
-        std::optional<std::jthread> gossip_worker;
-        if (!gossip_endpoints.empty()) gossip_worker.emplace([&] {
-            runtime.SetExplicitPeerEndpoints(gossip_endpoints);
-            cybou::p2p::PeerManager peers{runtime};
-            std::map<std::pair<std::string, uint16_t>, std::chrono::steady_clock::time_point> retry_after;
-            const auto drain_delay_str = std::getenv("CYBOU_CONSENSUS_DRAIN_DELAY_MS");
-            const int drain_delay_ms = drain_delay_str ? std::max(0, std::atoi(drain_delay_str)) : 0;
-            const auto reconnect_interval_str = std::getenv("CYBOU_RECONNECT_INTERVAL_MS");
-            const int reconnect_interval_ms = reconnect_interval_str ? std::max(0, std::atoi(reconnect_interval_str)) : 0;
-            auto last_reconnect = std::chrono::steady_clock::now();
-            while (!stopping) {
-                if (reconnect_interval_ms > 0 &&
-                    std::chrono::steady_clock::now() - last_reconnect >= std::chrono::milliseconds(reconnect_interval_ms)) {
-                    peers.DisconnectAll();
-                    last_reconnect = std::chrono::steady_clock::now();
-                }
-                peers.DiscoverPeers();
-                const auto gossip_targets = runtime.GetPeerEndpointsForGossip();
-                for (const auto& [host, peer_port] : gossip_targets) {
-                    if (stopping) break;
-                    const auto connected = peers.Peers();
-                    const bool present = std::any_of(connected.begin(), connected.end(), [&](const auto& peer) {
-                        return peer.address == host && peer.port == peer_port;
-                    });
-                    const auto endpoint = std::make_pair(host, peer_port);
-                    if (!present && std::chrono::steady_clock::now() >= retry_after[endpoint]) {
-                        if (peers.Connect(host, peer_port)) {
-                            runtime.ReplayConsensusToPeer(peers, host, peer_port);
-                        } else {
-                            retry_after[endpoint] = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-                        }
-                    }
-                }
-                if (drain_delay_ms > 0) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(drain_delay_ms));
-                }
-                if (!stopping) {
-                    runtime.DrainConsensusMessages(peers);
-                    peers.FanoutRecentBlocks();
-                    peers.FanoutRecentOperations();
-                    peers.PingAll();
-                }
-                // Historical catch-up: if the furthest-ahead connected peer is
-                // beyond our finalized height (e.g. we were offline for longer
-                // than the 32-head gossip window), bulk-pull the missing blocks
-                // over the client-driven sync path. Bounded per cycle so the
-                // loop keeps servicing consensus traffic.
-                if (!stopping) {
-                    const auto sync_status = runtime.GetStatus();
-                    if (sync_status.is_initialized) {
-                        const auto connected = peers.Peers();
-                        const auto ahead_it = std::max_element(connected.begin(), connected.end(),
-                            [](const cybou::p2p::PeerInfo& a, const cybou::p2p::PeerInfo& b) {
-                                return a.hello.finalized_height < b.hello.finalized_height;
-                            });
-                        if (ahead_it != connected.end() &&
-                            ahead_it->hello.finalized_height > sync_status.finalized_height + 1) {
-                            peers.SyncFromPeer(ahead_it->address, ahead_it->port, 64);
-                        }
-                    }
-                }
-                for (int i = 0; i < 20 && !stopping; ++i) {
-                    if (drain_delay_ms > 0) {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(drain_delay_ms));
-                    }
-                    runtime.DrainConsensusMessages(peers);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                }
-            }
-        });
-        while (!stopping) {
-            boost::asio::ip::tcp::socket socket(io);
-            boost::system::error_code ec;
-            acceptor.accept(socket, ec);
-            if (ec == boost::asio::error::would_block || ec == boost::asio::error::try_again) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(25));
-                continue;
-            }
-            if (ec) {
-                stopping = true;
-                throw boost::system::system_error(ec);
-            }
-            cybou::ServeCybouConnection(runtime, socket);
-        }
-        return 0;
+        return node_service.RunAuthority(cybou::CybouAuthorityServiceConfig{
+            .bind_address = bind_address.to_string(),
+            .block_feed_port = port,
+            .p2p_port = p2p_port,
+            .block_interval_ms = interval_ms,
+            .peers = gossip_endpoints,
+        }, stopping);
     }
     throw std::runtime_error("invalid command or arguments");
 }
