@@ -82,7 +82,7 @@ int main(int argc, char* argv[])
         RPCNestedTests test3(app.node());
         num_test_failures += QTest::qExec(&test3);
 
-        CybouShellTests shell_tests(app.node());
+        CybouShellTests shell_tests;
         num_test_failures += QTest::qExec(&shell_tests);
 
         if (num_test_failures) {

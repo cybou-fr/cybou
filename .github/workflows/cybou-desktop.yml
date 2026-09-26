@@ -68,7 +68,7 @@ jobs:
         run: cmake --build build-desktop --target cybou --parallel 4
 
       - name: Build desktop smoke tests
-        run: cmake --build build-desktop --target test_cybou-qt --parallel 4
+        run: cmake --build build-desktop --target test_cybou-qt test_cybou-native-qt --parallel 4
 
       # The CTest fixture already forces QT_QPA_PLATFORM=windows and points
       # QT_PLUGIN_PATH at the deployed plugins for vcpkg triplets. Qt's bin
@@ -76,4 +76,4 @@ jobs:
       - name: Run desktop smoke tests
         run: |
           $env:PATH = "${{ env.Qt6_DIR }}/../../../bin;$env:PATH"
-          ctest --test-dir build-desktop -R test_cybou-qt --output-on-failure
+          ctest --test-dir build-desktop -R 'test_cybou(-native)?-qt' --output-on-failure

@@ -10,9 +10,6 @@
 #include <memory>
 
 class CybouMainWindow;
-namespace interfaces {
-class Node;
-}
 
 /**
  * Desktop shell smoke tests.
@@ -26,7 +23,7 @@ class CybouShellTests : public QObject
     Q_OBJECT
 
 public:
-    explicit CybouShellTests(interfaces::Node& node);
+    CybouShellTests() = default;
     ~CybouShellTests() override;
 
 private Q_SLOTS:

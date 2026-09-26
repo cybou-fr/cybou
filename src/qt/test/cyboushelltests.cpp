@@ -21,17 +21,6 @@
 
 #include <algorithm>
 
-#include <util/chaintype.h>
-
-namespace {
-
-} // namespace
-
-CybouShellTests::CybouShellTests(interfaces::Node& node)
-{
-    (void)node;
-}
-
 CybouShellTests::~CybouShellTests() = default;
 
 std::unique_ptr<CybouMainWindow> CybouShellTests::makeWindow()
