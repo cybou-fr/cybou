@@ -161,6 +161,7 @@ public:
 
 private:
     bool CommitConsensusPrecommit(const BftPrecommitMsg& precommit);
+    bool CommitConsensusFinalized(const FinalizedBlock& finalized);
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
     /** Re-sync the orchestration round/phase with the engine after it jumped rounds. Caller holds m_mutex. */
     void SyncConsensusDriverWithEngine();

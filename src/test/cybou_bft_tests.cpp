@@ -1604,4 +1604,144 @@ BOOST_AUTO_TEST_CASE(bft_future_round_jump_requires_quorum_evidence)
 
 }
 
+BOOST_AUTO_TEST_CASE(bft_future_block_prevote_quorum_replayed_after_proposal)
+{
+    const uint256 network_id = uint256::FromUserHex("b10c").value();
+    std::vector<MockValidatorNode> mocks;
+    cybou::ValidatorSet val_set;
+    for (uint8_t i = 0; i < 4; ++i) {
+        mocks.push_back(MockValidatorNode::Create(i));
+        val_set.validators.push_back(cybou::Validator{
+            .validator_id = mocks.back().validator_id,
+            .consensus_public_key = mocks.back().consensus_pubkey,
+            .weight = 1,
+        });
+    }
+    const auto execute = [](const std::vector<cybou::ProtocolOperation>& ops, uint64_t) -> std::optional<uint256> {
+        return ops.empty() ? std::optional<uint256>{uint256::FromUserHex("1111").value()} : std::nullopt;
+    };
+
+    cybou::BftValidatorNode node{0, mocks[0].seed, network_id, val_set, execute};
+    node.SetHeight(1, uint256::ZERO, val_set);
+    constexpr uint32_t round = 10;
+    const size_t leader_index = cybou::BftLeaderIndex(1, round, val_set.validators.size());
+    cybou::BftValidatorNode leader{leader_index, mocks[leader_index].seed, network_id, val_set, execute};
+    leader.SetHeight(1, uint256::ZERO, val_set);
+    const auto proposal = leader.StartRound(round, {});
+    BOOST_REQUIRE(proposal);
+    const uint256 block_id = cybou::ComputeBlockId(proposal->block);
+
+    for (size_t i = 1; i < 4; ++i) {
+        const uint256 digest = cybou::ComputePrevoteDigest(
+            network_id, 1, round, mocks[i].validator_id, block_id);
+        const cybou::BftPrevoteMsg vote{
+            .network_id = network_id, .height = 1, .round = round,
+            .validator_id = mocks[i].validator_id, .block_id = block_id,
+            .signature = *cybou::SignValidatorVote(mocks[i].seed, digest),
+        };
+        BOOST_CHECK(!node.ReceivePrevote(vote));
+    }
+    BOOST_CHECK_EQUAL(node.GetRound(), round);
+    BOOST_CHECK(node.GetStep() == cybou::BftStep::PROPOSE);
+
+    const auto result = node.ReceiveProposal(*proposal);
+    BOOST_REQUIRE(result.prevote);
+    BOOST_REQUIRE(result.precommit);
+    BOOST_CHECK_EQUAL(result.precommit->round, round);
+    BOOST_CHECK(result.precommit->block_id == block_id);
+}
+
+BOOST_AUTO_TEST_CASE(bft_future_block_precommit_quorum_replayed_after_proposal)
+{
+    const uint256 network_id = uint256::FromUserHex("b10d").value();
+    std::vector<MockValidatorNode> mocks;
+    cybou::ValidatorSet val_set;
+    for (uint8_t i = 0; i < 4; ++i) {
+        mocks.push_back(MockValidatorNode::Create(i));
+        val_set.validators.push_back(cybou::Validator{
+            .validator_id = mocks.back().validator_id,
+            .consensus_public_key = mocks.back().consensus_pubkey,
+            .weight = 1,
+        });
+    }
+    const auto execute = [](const std::vector<cybou::ProtocolOperation>& ops, uint64_t) -> std::optional<uint256> {
+        return ops.empty() ? std::optional<uint256>{uint256::FromUserHex("2222").value()} : std::nullopt;
+    };
+
+    cybou::BftValidatorNode node{0, mocks[0].seed, network_id, val_set, execute};
+    node.SetHeight(1, uint256::ZERO, val_set);
+    constexpr uint32_t round = 10;
+    const size_t leader_index = cybou::BftLeaderIndex(1, round, val_set.validators.size());
+    cybou::BftValidatorNode leader{leader_index, mocks[leader_index].seed, network_id, val_set, execute};
+    leader.SetHeight(1, uint256::ZERO, val_set);
+    const auto proposal = leader.StartRound(round, {});
+    BOOST_REQUIRE(proposal);
+    const uint256 block_id = cybou::ComputeBlockId(proposal->block);
+    const uint256 set_commitment = cybou::ComputeValidatorSetCommitment(val_set);
+
+    for (size_t i = 1; i < 4; ++i) {
+        const uint256 digest = cybou::ComputeBftCommitDigest(
+            network_id, block_id, 1, round, set_commitment);
+        const cybou::BftPrecommitMsg vote{
+            .network_id = network_id, .height = 1, .round = round,
+            .validator_id = mocks[i].validator_id, .block_id = block_id,
+            .signature = *cybou::SignValidatorVote(mocks[i].seed, digest),
+        };
+        BOOST_CHECK(!node.ReceivePrecommit(vote));
+    }
+    BOOST_CHECK_EQUAL(node.GetRound(), round);
+    BOOST_CHECK(node.GetStep() == cybou::BftStep::PROPOSE);
+
+    const auto result = node.ReceiveProposal(*proposal);
+    BOOST_REQUIRE(result.prevote);
+    BOOST_REQUIRE(node.GetLatestFinalizedBlock());
+    BOOST_CHECK(result.finalized);
+    const auto& finalized = *node.GetLatestFinalizedBlock();
+    BOOST_CHECK_EQUAL(finalized.block.height, 1U);
+    BOOST_CHECK(cybou::ComputeBlockId(finalized.block) == block_id);
+    BOOST_CHECK(cybou::VerifyFinalityCertificate(finalized.certificate, val_set, network_id) ==
+                cybou::FinalityVerificationError::NONE);
+}
+
+BOOST_AUTO_TEST_CASE(bft_one_validator_cannot_fill_future_round_buffer)
+{
+    const uint256 network_id = uint256::FromUserHex("b10e").value();
+    std::vector<MockValidatorNode> mocks;
+    cybou::ValidatorSet val_set;
+    for (uint8_t i = 0; i < 4; ++i) {
+        mocks.push_back(MockValidatorNode::Create(i));
+        val_set.validators.push_back(cybou::Validator{
+            .validator_id = mocks.back().validator_id,
+            .consensus_public_key = mocks.back().consensus_pubkey,
+            .weight = 1,
+        });
+    }
+    const auto execute = [](const std::vector<cybou::ProtocolOperation>&, uint64_t) {
+        return uint256::FromUserHex("3333");
+    };
+    cybou::BftValidatorNode node{0, mocks[0].seed, network_id, val_set, execute};
+    node.SetHeight(1, uint256::ZERO, val_set);
+
+    const auto make_prevote = [&](size_t validator_index, uint32_t round) {
+        const uint256 digest = cybou::ComputePrevoteDigest(
+            network_id, 1, round, mocks[validator_index].validator_id, std::nullopt);
+        return cybou::BftPrevoteMsg{
+            .network_id = network_id, .height = 1, .round = round,
+            .validator_id = mocks[validator_index].validator_id, .block_id = std::nullopt,
+            .signature = *cybou::SignValidatorVote(mocks[validator_index].seed, digest),
+        };
+    };
+
+    for (uint32_t round = 1; round <= 8; ++round) {
+        BOOST_CHECK(!node.ReceivePrevote(make_prevote(1, round)));
+    }
+    BOOST_CHECK(!node.ReceivePrevote(make_prevote(1, 9)));
+    BOOST_CHECK(!node.ReceivePrevote(make_prevote(2, 9)));
+    BOOST_CHECK_EQUAL(node.GetRound(), 0U);
+    BOOST_CHECK(!node.ReceivePrevote(make_prevote(3, 9)));
+    BOOST_CHECK_EQUAL(node.GetRound(), 0U);
+    BOOST_CHECK(node.ReceivePrevote(make_prevote(0, 9)));
+    BOOST_CHECK_EQUAL(node.GetRound(), 9U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

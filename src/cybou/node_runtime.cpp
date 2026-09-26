@@ -363,18 +363,23 @@ std::optional<BftPrevoteMsg> CybouNodeRuntime::ReceiveConsensusProposal(const Bf
     {
         std::lock_guard lock(m_mutex);
         if (!m_authority_node) return std::nullopt;
-        pv = m_authority_node->ReceiveProposal(proposal);
+        const auto result = m_authority_node->ReceiveProposal(proposal);
+        pv = result.prevote;
+        pc = result.precommit;
+        if (pv && !pc && !result.finalized) {
+            pc = m_authority_node->ReceivePrevote(*pv);
+        }
         if (pv) {
             if (m_consensus_height != proposal.height) {
                 m_consensus_height = proposal.height;
             }
-            m_consensus_phase = 1;
+            m_consensus_phase = pc ? 2 : 1;
             m_round_started = std::chrono::steady_clock::now();
-            pc = m_authority_node->ReceivePrevote(*pv);
             if (pc) {
-                m_consensus_phase = 2;
-                m_round_started = std::chrono::steady_clock::now();
                 CommitConsensusPrecommit(*pc);
+            } else if (result.finalized) {
+                const auto& finalized = m_authority_node->GetLatestFinalizedBlock();
+                if (finalized) CommitConsensusFinalized(*finalized);
             }
         }
         // The engine may have jumped to a higher round while processing.
@@ -434,20 +439,26 @@ bool CybouNodeRuntime::CommitConsensusPrecommit(const BftPrecommitMsg& precommit
     // Caller holds m_mutex. Commit and gossip bookkeeping share this boundary.
     const auto finalized = m_authority_node->ReceivePrecommit(precommit);
     if (!finalized) return false;
+    return CommitConsensusFinalized(*finalized);
+}
+
+bool CybouNodeRuntime::CommitConsensusFinalized(const FinalizedBlock& finalized)
+{
+    // Caller holds m_mutex. Commit and gossip bookkeeping share this boundary.
     const auto set = m_store.GetValidatorSet();
-    if (!set || !m_store.CommitFinalizedBlock(*finalized, *set, true)) {
+    if (!set || !m_store.CommitFinalizedBlock(finalized, *set, true)) {
         if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
             std::fprintf(stderr, "[cybou-debug] FINALIZED BUT COMMIT FAILED height=%llu store_height=%llu\n",
-                static_cast<unsigned long long>(finalized->block.height),
+                static_cast<unsigned long long>(finalized.block.height),
                 static_cast<unsigned long long>(m_store.GetFinalizedHead().value_or(FinalizedHead{}).height));
         }
         return false;
     }
     m_authority_node->RevalidatePending();
-    RememberFinalizedBlockForGossip(*finalized);
+    RememberFinalizedBlockForGossip(finalized);
     if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
         std::fprintf(stderr, "[cybou-debug] FINALIZED height=%llu\n",
-            static_cast<unsigned long long>(finalized->block.height));
+            static_cast<unsigned long long>(finalized.block.height));
     }
     return true;
 }

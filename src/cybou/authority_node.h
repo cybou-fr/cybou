@@ -91,7 +91,7 @@ public:
 
     /** Multi-validator consensus methods */
     std::optional<BftProposalMsg> StartConsensusRound(uint32_t round);
-    std::optional<BftPrevoteMsg> ReceiveProposal(const BftProposalMsg& proposal);
+    BftProposalResult ReceiveProposal(const BftProposalMsg& proposal);
     std::optional<BftPrecommitMsg> ReceivePrevote(const BftPrevoteMsg& prevote);
     std::optional<FinalizedBlock> ReceivePrecommit(const BftPrecommitMsg& precommit);
     std::optional<BftPrevoteMsg> OnProposalTimeout();

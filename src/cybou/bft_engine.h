@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <span>
 #include <vector>
 
@@ -82,6 +83,20 @@ struct BftPrecommitMsg {
     ValidatorSignature signature{};
 
     friend bool operator==(const BftPrecommitMsg&, const BftPrecommitMsg&) = default;
+};
+
+/** Messages emitted while accepting a proposal. A proposal may complete
+ * previously buffered prevote or precommit quorums, so callers must relay
+ * both the local prevote and any resulting precommit. */
+struct BftProposalResult {
+    std::optional<BftPrevoteMsg> prevote;
+    std::optional<BftPrecommitMsg> precommit;
+    bool finalized{false};
+
+    bool has_value() const { return prevote.has_value(); }
+    explicit operator bool() const { return has_value(); }
+    const BftPrevoteMsg* operator->() const { return prevote ? &*prevote : nullptr; }
+    const BftPrevoteMsg& operator*() const { return *prevote; }
 };
 
 /** Compute domain-separated digest for proposal message */
@@ -159,8 +174,8 @@ public:
         uint32_t round,
         const std::vector<ProtocolOperation>& pending_ops);
 
-    /** Handle an incoming proposal message. Returns prevote message if produced. */
-    std::optional<BftPrevoteMsg> ReceiveProposal(const BftProposalMsg& proposal);
+    /** Handle a proposal and return any prevote/precommit it produces. */
+    BftProposalResult ReceiveProposal(const BftProposalMsg& proposal);
 
     /** Handle an incoming prevote message. Returns precommit message if quorum reached. */
     std::optional<BftPrecommitMsg> ReceivePrevote(const BftPrevoteMsg& prevote);
@@ -217,6 +232,7 @@ private:
     // one future round arrives. This prevents one validator from advancing
     // peers merely by signing a vote for a later round.
     static constexpr size_t MAX_BUFFERED_FUTURE_ROUNDS = 64;
+    static constexpr size_t MAX_BUFFERED_FUTURE_ROUNDS_PER_VALIDATOR = 8;
     std::map<uint32_t, std::map<uint256, BftPrevoteMsg>> m_future_prevotes;
     std::map<uint32_t, std::map<uint256, BftPrecommitMsg>> m_future_precommits;
 
@@ -225,8 +241,11 @@ private:
     void EnterRound(uint32_t round);
     void EnterRoundWithPrevoteEvidence(uint32_t round, std::map<uint256, BftPrevoteMsg> evidence);
     void EnterRoundWithPrecommitEvidence(uint32_t round, std::map<uint256, BftPrecommitMsg> evidence);
-    void BufferFuturePrevote(const BftPrevoteMsg& prevote);
-    void BufferFuturePrecommit(const BftPrecommitMsg& precommit);
+    bool CanBufferFutureRound(const uint256& validator_id, uint32_t round) const;
+    bool BufferFuturePrevote(const BftPrevoteMsg& prevote);
+    bool BufferFuturePrecommit(const BftPrecommitMsg& precommit);
+    std::optional<BftPrecommitMsg> EvaluatePrevoteQuorum();
+    bool EvaluatePrecommitQuorum();
     // Lowest buffered future round (strictly above m_round) that has quorum
     // evidence, or 0 if there is none.
     uint32_t QuorumBackedFutureRound() const;

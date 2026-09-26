@@ -116,14 +116,19 @@ AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)
     if (set->validators.size() == 1) {
         const auto proposal = m_validator->StartRound(0, pending);
         if (!proposal) return Failure(AuthorityProductionError::CONSENSUS_FAILED);
-        const auto prevote = m_validator->ReceiveProposal(*proposal);
-        if (!prevote || !prevote->block_id) return Failure(AuthorityProductionError::CONSENSUS_FAILED);
-        const auto precommit = m_validator->ReceivePrevote(*prevote);
-        if (!precommit || !precommit->block_id || !m_validator->ReceivePrecommit(*precommit)) {
-            return Failure(AuthorityProductionError::CONSENSUS_FAILED);
+        const auto proposal_result = m_validator->ReceiveProposal(*proposal);
+        if (!proposal_result || !proposal_result->block_id) return Failure(AuthorityProductionError::CONSENSUS_FAILED);
+        auto precommit = proposal_result.precommit;
+        if (!precommit && !proposal_result.finalized) {
+            precommit = m_validator->ReceivePrevote(*proposal_result);
+        }
+        if (precommit && precommit->block_id) {
+            m_validator->ReceivePrecommit(*precommit);
         }
         const auto& finalized = m_validator->GetLatestFinalizedBlock();
-        if (!finalized) return Failure(AuthorityProductionError::CONSENSUS_FAILED);
+        if (!finalized || !precommit || !precommit->block_id) {
+            return Failure(AuthorityProductionError::CONSENSUS_FAILED);
+        }
         const auto serialized = SerializeFinalizedBlock(*finalized);
         if (!serialized || serialized->size() > MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES) {
             return Failure(AuthorityProductionError::BLOCK_TOO_LARGE);
@@ -150,9 +155,12 @@ AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)
 
     const auto proposal = m_validator->StartRound(0, pending);
     if (!proposal) return Failure(AuthorityProductionError::CONSENSUS_FAILED);
-    const auto prevote = m_validator->ReceiveProposal(*proposal);
-    if (!prevote || !prevote->block_id) return Failure(AuthorityProductionError::CONSENSUS_FAILED);
-    const auto precommit = m_validator->ReceivePrevote(*prevote);
+    const auto proposal_result = m_validator->ReceiveProposal(*proposal);
+    if (!proposal_result || !proposal_result->block_id) return Failure(AuthorityProductionError::CONSENSUS_FAILED);
+    auto precommit = proposal_result.precommit;
+    if (!precommit && !proposal_result.finalized) {
+        precommit = m_validator->ReceivePrevote(*proposal_result);
+    }
     if (precommit && precommit->block_id) {
         m_validator->ReceivePrecommit(*precommit);
     }
@@ -182,10 +190,10 @@ std::optional<BftProposalMsg> CybouAuthorityNode::StartConsensusRound(uint32_t r
     return m_validator->StartRound(round, pending);
 }
 
-std::optional<BftPrevoteMsg> CybouAuthorityNode::ReceiveProposal(const BftProposalMsg& proposal)
+BftProposalResult CybouAuthorityNode::ReceiveProposal(const BftProposalMsg& proposal)
 {
-    if (!EnsureValidator()) return std::nullopt;
-    if (proposal.height != m_validator->GetHeight()) return std::nullopt;
+    if (!EnsureValidator()) return {};
+    if (proposal.height != m_validator->GetHeight()) return {};
     return m_validator->ReceiveProposal(proposal);
 }
 

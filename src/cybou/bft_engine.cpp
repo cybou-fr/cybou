@@ -729,25 +729,52 @@ void BftValidatorNode::EnterRoundWithPrecommitEvidence(
     }
 }
 
-void BftValidatorNode::BufferFuturePrevote(const BftPrevoteMsg& prevote)
+bool BftValidatorNode::CanBufferFutureRound(const uint256& validator_id, const uint32_t round) const
 {
-    auto& votes = m_future_prevotes[prevote.round];
-    votes[prevote.validator_id] = prevote;
+    std::set<uint32_t> buffered_rounds;
+    for (const auto& [buffered_round, votes] : m_future_prevotes) {
+        if (votes.contains(validator_id)) buffered_rounds.insert(buffered_round);
+    }
+    for (const auto& [buffered_round, votes] : m_future_precommits) {
+        if (votes.contains(validator_id)) buffered_rounds.insert(buffered_round);
+    }
+    if (buffered_rounds.contains(round)) return true;
+    return buffered_rounds.size() < MAX_BUFFERED_FUTURE_ROUNDS_PER_VALIDATOR;
+}
+
+bool BftValidatorNode::BufferFuturePrevote(const BftPrevoteMsg& prevote)
+{
+    auto round = m_future_prevotes.find(prevote.round);
+    if (round != m_future_prevotes.end()) {
+        const auto existing = round->second.find(prevote.validator_id);
+        if (existing != round->second.end()) return existing->second == prevote;
+    }
+    if (!CanBufferFutureRound(prevote.validator_id, prevote.round)) return false;
+
+    m_future_prevotes[prevote.round].emplace(prevote.validator_id, prevote);
     // Cap the number of buffered rounds; drop the highest (least useful)
     // rounds first. Honest gradual round movement never relies on the
     // buffer, only on the MAX_FUTURE_ROUND_ADVANCE window.
     while (m_future_prevotes.size() > MAX_BUFFERED_FUTURE_ROUNDS) {
         m_future_prevotes.erase(std::prev(m_future_prevotes.end()));
     }
+    return true;
 }
 
-void BftValidatorNode::BufferFuturePrecommit(const BftPrecommitMsg& precommit)
+bool BftValidatorNode::BufferFuturePrecommit(const BftPrecommitMsg& precommit)
 {
-    auto& votes = m_future_precommits[precommit.round];
-    votes[precommit.validator_id] = precommit;
+    auto round = m_future_precommits.find(precommit.round);
+    if (round != m_future_precommits.end()) {
+        const auto existing = round->second.find(precommit.validator_id);
+        if (existing != round->second.end()) return existing->second == precommit;
+    }
+    if (!CanBufferFutureRound(precommit.validator_id, precommit.round)) return false;
+
+    m_future_precommits[precommit.round].emplace(precommit.validator_id, precommit);
     while (m_future_precommits.size() > MAX_BUFFERED_FUTURE_ROUNDS) {
         m_future_precommits.erase(std::prev(m_future_precommits.end()));
     }
+    return true;
 }
 
 uint32_t BftValidatorNode::QuorumBackedFutureRound() const
@@ -769,23 +796,23 @@ uint32_t BftValidatorNode::QuorumBackedFutureRound() const
     return best;
 }
 
-std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposalMsg& proposal)
+BftProposalResult BftValidatorNode::ReceiveProposal(const BftProposalMsg& proposal)
 {
     if (proposal.network_id != m_network_id || proposal.height != m_height ||
         proposal.round < m_round || proposal.round - m_round > MAX_FUTURE_ROUND_ADVANCE) {
-        return std::nullopt;
+        return {};
     }
 
     const size_t leader_idx = BftLeaderIndex(m_height, proposal.round, m_validator_set.validators.size());
-    if (leader_idx >= m_validator_set.validators.size()) return std::nullopt;
+    if (leader_idx >= m_validator_set.validators.size()) return {};
     if (proposal.proposer_id != m_validator_set.validators[leader_idx].validator_id) {
-        return std::nullopt;
+        return {};
     }
 
     const uint256 block_id = ComputeBlockId(proposal.block);
     const uint256 digest = ComputeProposalDigest(m_network_id, m_height, proposal.round, proposal.proposer_id, block_id);
     if (!VerifyValidatorSignature(m_validator_set.validators[leader_idx].consensus_public_key, proposal.signature, digest)) {
-        return std::nullopt;
+        return {};
     }
 
     // A signed proposal from the elected leader is evidence of a later round.
@@ -793,7 +820,7 @@ std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposal
     if (proposal.round > m_round) {
         EnterRound(proposal.round);
     }
-    if (m_prevoted) return std::nullopt;
+    if (m_prevoted) return {};
 
     bool valid_block = (proposal.block.height == m_height && proposal.block.parent_block_id == m_last_block_id);
     const auto computed_root = m_execute_operations ? m_execute_operations(proposal.block.operations, m_height) : std::nullopt;
@@ -811,9 +838,9 @@ std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposal
 
     std::optional<uint256> vote_block = valid_block ? std::optional<uint256>(block_id) : std::nullopt;
     const uint256 prevote_digest = ComputePrevoteDigest(m_network_id, m_height, m_round, m_validator_id, vote_block);
-    if (!RecordSigningIntent(BftStep::PREVOTE, prevote_digest)) return std::nullopt;
+    if (!RecordSigningIntent(BftStep::PREVOTE, prevote_digest)) return {};
     const auto sig = SignValidatorVote(m_private_key_seed, prevote_digest);
-    if (!sig) return std::nullopt;
+    if (!sig) return {};
 
     BftPrevoteMsg msg{
         .network_id = m_network_id,
@@ -824,8 +851,23 @@ std::optional<BftPrevoteMsg> BftValidatorNode::ReceiveProposal(const BftProposal
         .signature = *sig,
     };
 
+    // Re-evaluate votes replayed before the proposal existed. Keep the newly
+    // signed local prevote out of this pass so the normal proposal->prevote
+    // path can still drive a one-validator set through its local vote.
+    auto precommit = EvaluatePrevoteQuorum();
+    if (const auto existing = m_prevotes.find(m_validator_id);
+        existing != m_prevotes.end() && existing->second != msg) {
+        return {};
+    }
     m_prevotes[m_validator_id] = msg;
-    return msg;
+    // Proposal and its delayed quorum evidence can be delivered in either
+    // order. Recheck already received commits after the block becomes known.
+    EvaluatePrecommitQuorum();
+    return BftProposalResult{
+        .prevote = msg,
+        .precommit = std::move(precommit),
+        .finalized = m_finalized_block.has_value(),
+    };
 }
 
 std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevoteMsg& prevote)
@@ -845,7 +887,7 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
     if (prevote.round < m_round) return std::nullopt;
     const bool vote_was_future = prevote.round > m_round;
     if (vote_was_future) {
-        BufferFuturePrevote(prevote);
+        if (!BufferFuturePrevote(prevote)) return std::nullopt;
         const uint32_t evidence_round = QuorumBackedFutureRound();
         if (evidence_round <= m_round) {
             return std::nullopt;
@@ -865,6 +907,11 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
 
     m_prevotes[prevote.validator_id] = prevote;
 
+    return EvaluatePrevoteQuorum();
+}
+
+std::optional<BftPrecommitMsg> BftValidatorNode::EvaluatePrevoteQuorum()
+{
     if (m_precommitted) return std::nullopt;
 
     std::map<uint256, size_t> block_counts;
@@ -975,7 +1022,7 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
     if (precommit.round < m_round) return false;
     const bool vote_was_future = precommit.round > m_round;
     if (vote_was_future) {
-        BufferFuturePrecommit(precommit);
+        if (!BufferFuturePrecommit(precommit)) return false;
         const uint32_t evidence_round = QuorumBackedFutureRound();
         if (evidence_round <= m_round) {
             return false;
@@ -992,6 +1039,13 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
         existing != m_precommits.end() && existing->second != precommit) return false;
     m_precommits[precommit.validator_id] = precommit;
 
+    if (m_step == BftStep::FINALIZED) return true;
+
+    return EvaluatePrecommitQuorum();
+}
+
+bool BftValidatorNode::EvaluatePrecommitQuorum()
+{
     if (m_step == BftStep::FINALIZED) return true;
 
     std::map<uint256, std::vector<BftCommitVote>> commit_votes_by_block;
@@ -1189,18 +1243,19 @@ bool BftSimulator::StepRound(
     }
 
     std::vector<BftPrevoteMsg> prevotes;
+    std::vector<BftPrecommitMsg> precommits;
     for (size_t i = 0; i < n; ++i) {
         if (!m_online[i]) continue;
         if (i != leader_idx) {
             m_nodes[i]->StartRound(round, ops);
         }
         if (proposal.has_value() && m_can_communicate[leader_idx][i]) {
-            auto pv = m_nodes[i]->ReceiveProposal(*proposal);
-            if (pv) prevotes.push_back(*pv);
+            auto result = m_nodes[i]->ReceiveProposal(*proposal);
+            if (result.prevote) prevotes.push_back(*result.prevote);
+            if (result.precommit) precommits.push_back(*result.precommit);
         }
     }
 
-    std::vector<BftPrecommitMsg> precommits;
     for (size_t i = 0; i < n; ++i) {
         if (!m_online[i]) continue;
         for (const auto& pv : prevotes) {
