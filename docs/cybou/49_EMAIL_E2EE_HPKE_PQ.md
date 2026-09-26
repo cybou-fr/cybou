@@ -25,6 +25,13 @@ the versioned identity record in `10_IDENTITY_NAMES.md`.
 
 Do not invent a custom hybrid KEM combiner.
 
+OpenSSL 3.5 provides FIPS 203 ML-KEM encapsulation, but its documented
+hybrid ECDHE + ML-KEM algorithms are intended primarily for TLS and do not
+define standard public/private key formats. Do not treat those TLS key types
+as a Mail HPKE suite or key-package format. Mail implementation remains
+blocked on a finalized PQ/T HPKE profile with interoperable key encoding.
+See [OpenSSL's KEM API notes](https://docs.openssl.org/3.5/man1/openssl-pkeyutl/).
+
 ## v1 MailTx encryption
 
 Before Object Storage:
