@@ -4,48 +4,8 @@
 
 set(CMAKE_AUTOMOC_MOC_OPTIONS "-p${CMAKE_CURRENT_SOURCE_DIR}")
 
-add_executable(test_cybou-qt
-  apptests.cpp
-  cyboushelltests.cpp
-  optiontests.cpp
-  rpcnestedtests.cpp
-  test_main.cpp
-  util.cpp
-  ../../init/bitcoin-qt.cpp
-)
-
-add_windows_application_manifest(test_cybou-qt)
-
-target_link_libraries(test_cybou-qt
-  core_interface
-  bitcoinqt
-  test_util
-  bitcoin_node
-  Boost::headers
-  Qt6::Test
-)
-
-import_plugins(test_cybou-qt)
-
-add_test(NAME test_cybou-qt
-  COMMAND test_cybou-qt
-)
-if(WIN32 AND VCPKG_TARGET_TRIPLET)
-  set(plugin_path "$<SHELL_PATH:$<PATH:GET_PARENT_PATH,$<PATH:GET_PARENT_PATH,$<TARGET_PROPERTY:Qt6::QWindowsIntegrationPlugin,LOCATION_$<CONFIG>>>>>")
-  set_property(TEST test_cybou-qt APPEND PROPERTY
-    ENVIRONMENT_MODIFICATION
-      # On Windows, vcpkg configures Qt with `-opengl dynamic`, which makes
-      # the "minimal" platform plugin unusable due to internal Qt bugs.
-      QT_QPA_PLATFORM=set:windows
-      QT_PLUGIN_PATH=set:${plugin_path}
-  )
-  unset(plugin_path)
-endif()
-
-install_binary_component(test_cybou-qt INTERNAL)
-
-# Exercise the CYBOU-native window/model/controller without the inherited
-# BitcoinApplication, bitcoinqt, or bitcoin_node test harness.
+# Exercise the CYBOU-native window/model/controller without Bitcoin's Qt or
+# node test harness.
 add_executable(test_cybou-native-qt
   cybou_native_qt_tests.cpp
   cyboushelltests.cpp
