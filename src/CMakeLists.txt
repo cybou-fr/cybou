@@ -177,7 +177,6 @@ target_link_libraries(cybou_core
   PRIVATE
     Boost::headers
     OpenSSL::Crypto
-    secp256k1
 )
 if(CYBOU_ENABLE_TEST_HOOKS)
   target_compile_definitions(cybou_core PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
@@ -210,11 +209,9 @@ add_library(cybou_node STATIC
 target_link_libraries(cybou_node
   PUBLIC
     cybou_core
-    leveldb
-    minisketch
-    univalue
     Boost::headers
   PRIVATE
+    leveldb
     $<TARGET_NAME_IF_EXISTS:libevent::core>
     $<TARGET_NAME_IF_EXISTS:libevent::extra>
     OpenSSL::Crypto

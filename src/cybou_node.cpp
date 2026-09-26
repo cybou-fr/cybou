@@ -11,10 +11,7 @@
 #include <cybou/p2p/peer_manager.h>
 #include <cybou/signing.h>
 #include <cybou/validator.h>
-#include <dbwrapper.h>
 #include <support/cleanse.h>
-#include <util/strencodings.h>
-#include <util/translation.h>
 
 #include <boost/asio.hpp>
 
@@ -38,8 +35,6 @@
 #include <string_view>
 #include <thread>
 #include <vector>
-
-const TranslateFn G_TRANSLATION_FUN{nullptr};
 
 namespace {
 std::atomic_bool stopping{false};
