@@ -62,6 +62,43 @@ BOOST_AUTO_TEST_CASE(manager_tracks_two_live_peers_and_drops_closed_sockets)
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
 }
 
+BOOST_AUTO_TEST_CASE(manager_pings_only_the_requested_peer_budget_and_rotates)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor first_acceptor{io, tcp::endpoint{loopback, 0}};
+    tcp::acceptor second_acceptor{io, tcp::endpoint{loopback, 0}};
+    std::array<bool, 2> served{false, false};
+    const auto network = fixture.runtime->GetNetworkId();
+    std::jthread first_server{[&] {
+        tcp::socket socket{io};
+        first_acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        served[0] = session.Handshake({.network_id = network, .finalized_height = 0,
+            .finalized_tip = fixture.definition.genesis_block_id, .capabilities = 0, .nonce = 1801}) &&
+            session.AnswerPing();
+    }};
+    std::jthread second_server{[&] {
+        tcp::socket socket{io};
+        second_acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        served[1] = session.Handshake({.network_id = network, .finalized_height = 0,
+            .finalized_tip = fixture.definition.genesis_block_id, .capabilities = 0, .nonce = 1802}) &&
+            session.AnswerPing();
+    }};
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    const auto address = loopback.to_string();
+    BOOST_REQUIRE(manager.Connect(address, first_acceptor.local_endpoint().port()));
+    BOOST_REQUIRE(manager.Connect(address, second_acceptor.local_endpoint().port()));
+    BOOST_CHECK_EQUAL(manager.PingSome(1), 1U);
+    BOOST_CHECK_EQUAL(manager.PingSome(1), 1U);
+    first_server.join();
+    second_server.join();
+    BOOST_CHECK(served[0] && served[1]);
+}
+
 BOOST_AUTO_TEST_CASE(manager_refuses_wrong_network_peer)
 {
     CybouServiceTestFixture fixture;
@@ -937,7 +974,8 @@ BOOST_AUTO_TEST_CASE(manager_discovers_peers_from_connected_peer)
     BOOST_CHECK_EQUAL(fixture.runtime->GetPeerEndpointsForGossip().size(), 0U);
 
     // DiscoverPeers queries remote peer and populates local runtime
-    const size_t added = manager.DiscoverPeers();
+    BOOST_CHECK_EQUAL(manager.DiscoverPeers(0), 0U);
+    const size_t added = manager.DiscoverPeers(1);
     server.join();
 
     BOOST_CHECK_GE(added, 2U);

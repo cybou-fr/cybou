@@ -183,6 +183,8 @@ private:
     std::unique_ptr<p2p::PeerManager> m_peer_manager;
     mutable std::mutex m_p2p_mutex;
     std::map<std::pair<std::string, uint16_t>, std::chrono::steady_clock::time_point> m_peer_retry_after;
+    std::chrono::steady_clock::time_point m_next_peer_ping{};
+    std::chrono::steady_clock::time_point m_next_peer_discovery{};
     using ConsensusMessage = std::variant<BftProposalMsg, BftPrevoteMsg, BftPrecommitMsg>;
     std::deque<ConsensusMessage> m_consensus_outbox;
     std::optional<BftProposalMsg> m_replay_proposal;

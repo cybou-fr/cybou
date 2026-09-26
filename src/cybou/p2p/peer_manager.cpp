@@ -142,6 +142,37 @@ size_t PeerManager::PingAll()
     return healthy;
 }
 
+size_t PeerManager::PingSome(const size_t max_peers)
+{
+    if (max_peers == 0 || m_peers.empty()) return 0;
+    std::vector<Endpoint> targets;
+    auto it = m_ping_cursor ? m_peers.upper_bound(*m_ping_cursor) : m_peers.begin();
+    if (it == m_peers.end()) it = m_peers.begin();
+    const size_t limit = std::min(max_peers, m_peers.size());
+    for (size_t scanned = 0; scanned < m_peers.size() && targets.size() < limit; ++scanned) {
+        if (it == m_peers.end()) it = m_peers.begin();
+        const auto endpoint = it->first;
+        ++it;
+        m_ping_cursor = endpoint;
+        targets.push_back(endpoint);
+    }
+
+    size_t healthy{0};
+    for (const auto& endpoint : targets) {
+        const auto peer = m_peers.find(endpoint);
+        if (peer == m_peers.end()) continue;
+        const auto nonce = RandomNonce();
+        if (!nonce || !peer->second->Ping(*nonce)) {
+            m_announced_operations.erase(endpoint);
+            m_announced_blocks.erase(endpoint);
+            m_peers.erase(peer);
+        } else {
+            ++healthy;
+        }
+    }
+    return healthy;
+}
+
 SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks)
 {
     SyncPeerResult result;
@@ -498,15 +529,29 @@ size_t PeerManager::BroadcastPrecommit(const BftPrecommitMsg& precommit)
     return count;
 }
 
-size_t PeerManager::DiscoverPeers()
+size_t PeerManager::DiscoverPeers(const size_t max_sessions)
 {
+    if (max_sessions == 0 || m_peers.empty()) return 0;
     size_t added{0};
     std::vector<std::pair<std::string, uint16_t>> discovered;
-    for (const auto& [endpoint, session] : m_peers) {
-        if (session && session->Peer() && (session->Peer()->capabilities & CAP_PEER_DISCOVERY)) {
-            const auto peers = session->RequestPeers();
-            discovered.insert(discovered.end(), peers.begin(), peers.end());
-        }
+    std::vector<Endpoint> targets;
+    auto it = m_discovery_cursor ? m_peers.upper_bound(*m_discovery_cursor) : m_peers.begin();
+    if (it == m_peers.end()) it = m_peers.begin();
+    size_t scanned{0};
+    while (scanned < m_peers.size() && targets.size() < max_sessions) {
+        if (it == m_peers.end()) it = m_peers.begin();
+        const auto endpoint = it->first;
+        const auto peer = it->second ? it->second->Peer() : std::nullopt;
+        ++it;
+        ++scanned;
+        m_discovery_cursor = endpoint;
+        if (peer && (peer->capabilities & CAP_PEER_DISCOVERY)) targets.push_back(endpoint);
+    }
+    for (const auto& endpoint : targets) {
+        const auto session = m_peers.find(endpoint);
+        if (session == m_peers.end() || !session->second) continue;
+        const auto peers = session->second->RequestPeers();
+        discovered.insert(discovered.end(), peers.begin(), peers.end());
     }
     if (!discovered.empty()) {
         const auto before = m_runtime.GetPeerEndpointsForGossip().size();

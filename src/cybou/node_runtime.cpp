@@ -731,8 +731,15 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
         explicit_endpoints.push_back(*m_config.p2p_endpoint);
     }
     m_peer_manager->SetExplicitEndpoints(explicit_endpoints);
-    m_peer_manager->PingAll();
-    m_peer_manager->DiscoverPeers();
+    const auto maintenance_now = std::chrono::steady_clock::now();
+    const bool have_connected_peers = m_peer_manager->ConnectedCount() != 0;
+    if (have_connected_peers && maintenance_now >= m_next_peer_discovery) {
+        m_next_peer_discovery = maintenance_now + std::chrono::seconds{60};
+        m_peer_manager->DiscoverPeers(1);
+    } else if (have_connected_peers && maintenance_now >= m_next_peer_ping) {
+        m_next_peer_ping = maintenance_now + std::chrono::seconds{15};
+        m_peer_manager->PingSome(1);
+    }
 
     const auto targets = GetPeerEndpointsForGossip();
     const auto connected_before_dial = m_peer_manager->Peers();

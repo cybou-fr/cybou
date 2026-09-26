@@ -66,6 +66,8 @@ public:
      */
     void SetExplicitEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
     size_t PingAll();
+    /** Ping at most max_peers, rotating the starting peer on each call. */
+    size_t PingSome(size_t max_peers);
     SyncPeerResult SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks);
     OperationSubmitResult SubmitOperation(const std::string& numeric_address, uint16_t port,
         const ProtocolOperation& operation);
@@ -80,7 +82,7 @@ public:
     void DisconnectAll();
 
     /** Dynamic peer auto-discovery */
-    size_t DiscoverPeers();
+    size_t DiscoverPeers(size_t max_sessions = MAX_OUTBOUND_PEERS);
     std::vector<std::pair<std::string, uint16_t>> KnownEndpoints() const;
 
     /** BFT consensus broadcasts to connected peers with CAP_CONSENSUS */
@@ -98,6 +100,8 @@ private:
     CybouNodeRuntime& m_runtime;
     boost::asio::io_context m_io;
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;
+    std::optional<Endpoint> m_ping_cursor;
+    std::optional<Endpoint> m_discovery_cursor;
     std::map<Endpoint, std::set<uint256>> m_announced_operations;
     std::map<Endpoint, std::set<uint256>> m_announced_blocks;
     // Last finalized height each peer reported in a BLOCK_RESULT ack, so the
