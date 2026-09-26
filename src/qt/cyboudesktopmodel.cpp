@@ -66,10 +66,15 @@ void CybouDesktopModel::setNetworkInfo(const QString& network_name, const QStrin
 
 void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity_service)
 {
+    if (m_identity_service == identity_service) return;
     if (m_name_service) m_name_service->Cancel();
     if (m_name_worker.joinable()) m_name_worker.join();
     m_name_service.reset();
     m_identity_service = identity_service;
+    if (!m_identity_service && m_capabilities.account_creation) {
+        m_capabilities.account_creation = false;
+        Q_EMIT capabilitiesChanged();
+    }
     if (m_identity_service) {
         if (const auto path = m_identity_service->GetStoragePath()) {
             m_name_service = std::make_unique<cybou::CybouNameService>(
@@ -128,6 +133,9 @@ void CybouDesktopModel::setWalletService(cybou::CybouWalletService* wallet_servi
             m_capabilities.payments = true;
             Q_EMIT capabilitiesChanged();
         }
+    } else if (!m_wallet_service && m_capabilities.payments) {
+        m_capabilities.payments = false;
+        Q_EMIT capabilitiesChanged();
     }
 }
 

@@ -11,6 +11,7 @@
 #include <thread>
 
 #include <QObject>
+#include <QString>
 
 class CybouDesktopModel;
 
@@ -24,12 +25,16 @@ class CybouWalletService;
 /** Owns the native CYBOU runtime and its services for one desktop session. */
 class CybouDesktopController final : public QObject
 {
+    Q_OBJECT
 public:
     explicit CybouDesktopController(CybouDesktopModel* model,
         std::filesystem::path data_directory, QObject* parent = nullptr);
     ~CybouDesktopController() override;
 
     void start();
+
+Q_SIGNALS:
+    void startupFailed(const QString& reason);
 
 private:
     CybouDesktopModel* m_model;

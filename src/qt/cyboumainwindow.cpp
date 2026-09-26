@@ -74,6 +74,12 @@ CybouMainWindow::CybouMainWindow(
       m_pages{new QStackedWidget{this}},
       m_navigation{new QButtonGroup{this}}
 {
+    connect(m_controller.get(), &CybouDesktopController::startupFailed, this,
+        [this](const QString& reason) {
+            QTimer::singleShot(0, this, [this, reason] {
+                QMessageBox::critical(this, tr("CYBOU startup failed"), reason);
+            });
+        });
     setObjectName("cybouMainWindow");
     setWindowTitle(tr("CYBOU — Protected communication infrastructure"));
     setMinimumSize(1040, 720);

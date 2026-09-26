@@ -40,6 +40,7 @@ CybouDesktopController::~CybouDesktopController()
 void CybouDesktopController::start()
 {
     if (m_node_runtime) return;
+    m_sync_stop.store(false);
     try {
         const auto network_path = m_data_directory / "network.bin";
         const auto network_file = cybou::LoadCybouNetworkFile(network_path);
@@ -154,7 +155,19 @@ void CybouDesktopController::start()
             }
         }};
     } catch (const std::exception& e) {
-        qWarning() << "CybouNodeRuntime initialization error:" << e.what();
+        const QString reason = QString::fromLocal8Bit(e.what());
+        qWarning() << "CYBOU desktop startup error:" << reason;
+        m_sync_stop.store(true);
+        if (m_sync_thread.joinable()) m_sync_thread.join();
+        m_model->setIdentityService(nullptr);
+        m_model->setMailService(nullptr);
+        m_model->setWalletService(nullptr);
+        m_wallet_service.reset();
+        m_mail_service.reset();
+        m_identity_service.reset();
+        m_node_runtime.reset();
+        m_model->setNodeStatus(false, 0, false);
+        Q_EMIT startupFailed(reason);
     }
 }
 
