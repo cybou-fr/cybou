@@ -109,11 +109,10 @@ QFrame* PlannedBody(const QString& text, QWidget* parent)
 
 } // namespace
 
-SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> preferences_requested,
-    std::function<void()> diagnostics_requested, QWidget* parent)
+SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagnostics_requested,
+    QWidget* parent)
     : QWidget{parent},
       m_model{model},
-      m_preferences_requested{std::move(preferences_requested)},
       m_diagnostics_requested{std::move(diagnostics_requested)}
 {
     auto* root = new QVBoxLayout{this};

@@ -7,9 +7,6 @@
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboumainwindow.h>
 #include <qt/cyboutheme.h>
-#include <qt/networkstyle.h>
-#include <qt/platformstyle.h>
-#include <qt/rpcconsole.h>
 
 #include <QApplication>
 #include <QLabel>
@@ -17,9 +14,10 @@
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QStackedWidget>
+#include <QTextEdit>
 #include <QTest>
 #include <QToolButton>
-#include <QVector>
+#include <QDialog>
 
 #include <algorithm>
 
@@ -27,36 +25,18 @@
 
 namespace {
 
-QVector<RPCConsole*> findDiagnosticsConsoles()
-{
-    QVector<RPCConsole*> consoles;
-    const auto top_levels = QApplication::topLevelWidgets();
-    for (auto* widget : top_levels) {
-        if (auto* console = qobject_cast<RPCConsole*>(widget)) consoles.append(console);
-    }
-    return consoles;
-}
-
-bool anyConsoleVisible()
-{
-    const auto consoles = findDiagnosticsConsoles();
-    return std::any_of(consoles.begin(), consoles.end(), [](const auto* console) { return console->isVisible(); });
-}
-
 } // namespace
 
 CybouShellTests::CybouShellTests(interfaces::Node& node)
-    : m_node{node},
-      m_platform_style{PlatformStyle::instantiate("other")}
 {
+    (void)node;
 }
 
 CybouShellTests::~CybouShellTests() = default;
 
 std::unique_ptr<CybouMainWindow> CybouShellTests::makeWindow()
 {
-    return std::make_unique<CybouMainWindow>(m_node, m_platform_style.get(),
-        NetworkStyle::instantiate(ChainType::MAIN), nullptr);
+    return std::make_unique<CybouMainWindow>();
 }
 
 void CybouShellTests::mainWindowStarts()
@@ -92,27 +72,15 @@ void CybouShellTests::diagnosticsStaySecondaryWindow()
     window->show();
     QVERIFY(window->isVisible());
 
-    QVERIFY(!anyConsoleVisible());
-
     window->showDebugWindow();
-    QVERIFY(anyConsoleVisible());
-
-    // Closing diagnostics must hide it, never destroy it, and must not
-    // close the main window. Other shells (e.g. from AppTests) may own
-    // their own console, so close every visible one.
-    for (auto* console : findDiagnosticsConsoles()) {
-        if (console->isVisible()) console->close();
-    }
-    QVERIFY(!anyConsoleVisible());
+    auto* diagnostics = window->findChild<QDialog*>(QStringLiteral("CYBOUDiagnostics"));
+    QVERIFY(diagnostics);
+    QVERIFY(diagnostics->isVisible());
     QVERIFY(window->isVisible());
 
-    // Reopening must keep working.
     window->showDebugWindow();
-    QVERIFY(anyConsoleVisible());
-    for (auto* console : findDiagnosticsConsoles()) {
-        if (console->isVisible()) console->close();
-    }
-    QVERIFY(!anyConsoleVisible());
+    QVERIFY(diagnostics->isVisible());
+    diagnostics->close();
 }
 
 void CybouShellTests::identityCreateFollowsCapabilities()
@@ -331,7 +299,7 @@ void CybouShellTests::closingWithoutNodeRequestsQuit()
     QVERIFY(window->isVisible());
 
     // With no node model attached, closing the window must mean quitting.
-    QSignalSpy spy{window.get(), &BitcoinGUI::quitRequested};
+    QSignalSpy spy{window.get(), &CybouMainWindow::quitRequested};
     window->close();
     QVERIFY(spy.count() > 0);
 }

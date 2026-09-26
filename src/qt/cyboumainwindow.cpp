@@ -8,7 +8,6 @@
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 #include <qt/cyboustrip.h>
-#include <qt/networkstyle.h>
 #include <qt/pages/backuppage.h>
 #include <qt/pages/emailpage.h>
 #include <qt/pages/homepage.h>
@@ -17,7 +16,6 @@
 #include <qt/pages/settingspage.h>
 #include <qt/pages/storagepage.h>
 #include <qt/pages/walletpage.h>
-#include <qt/rpcconsole.h>
 
 #include <cybou/mail_service.h>
 
@@ -27,11 +25,13 @@
 #include <QCloseEvent>
 #include <QDir>
 #include <QDateTime>
+#include <QDialog>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QPixmap>
 #include <QProcessEnvironment>
 #include <QPushButton>
@@ -42,8 +42,8 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QSystemTrayIcon>
+#include <QTextEdit>
 #include <QTimer>
-#include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -66,11 +66,8 @@ QToolButton* NavigationButton(const QString& text, CybouTheme::NavIcon icon, QWi
 } // namespace
 
 CybouMainWindow::CybouMainWindow(
-    interfaces::Node& node,
-    const PlatformStyle* platform_style,
-    const NetworkStyle* network_style,
     QWidget* parent)
-    : BitcoinGUI{node, platform_style, network_style, parent},
+    : QMainWindow{parent},
       m_desktop_model{new CybouDesktopModel{QStringLiteral("CYBOU-DEV"), this}},
       m_controller{std::make_unique<CybouDesktopController>(m_desktop_model)},
       m_pages{new QStackedWidget{this}},
@@ -121,14 +118,11 @@ CybouMainWindow::CybouMainWindow(
                     this->grab().save(QDir{shot_dir}.filePath(QStringLiteral("%1-%2-compose.png").arg(i).arg(slug)));
                 }
             }
-            // The diagnostics window is a secondary top-level; capture it too.
-            const auto top_levels = qApp->topLevelWidgets();
-            for (QWidget* widget : top_levels) {
-                if (widget->objectName() != QLatin1String{"RPCConsole"}) continue;
-                widget->show();
+            if (m_diagnostics) {
+                m_diagnostics->show();
                 qApp->processEvents();
-                widget->grab().save(QDir{shot_dir}.filePath(QStringLiteral("8-diagnostics.png")));
-                widget->hide();
+                m_diagnostics->grab().save(QDir{shot_dir}.filePath(QStringLiteral("8-diagnostics.png")));
+                m_diagnostics->hide();
             }
             qApp->quit();
         });
@@ -139,18 +133,47 @@ CybouMainWindow::~CybouMainWindow()
 {
 }
 
-void CybouMainWindow::setClientModel(ClientModel* client_model, interfaces::BlockAndHeaderTipInfo* tip_info)
+void CybouMainWindow::startRuntime()
 {
-    m_client_model = client_model;
-    BitcoinGUI::setClientModel(client_model, tip_info);
-    if (client_model) m_controller->start();
+    m_controller->start();
+}
+
+void CybouMainWindow::showDebugWindow()
+{
+    if (!m_diagnostics) {
+        m_diagnostics = new QDialog{this, Qt::Window};
+        m_diagnostics->setObjectName(QStringLiteral("CYBOUDiagnostics"));
+        m_diagnostics->setWindowTitle(tr("CYBOU diagnostics"));
+        m_diagnostics->resize(640, 360);
+        auto* layout = new QVBoxLayout{m_diagnostics};
+        auto* details = new QTextEdit{m_diagnostics};
+        details->setObjectName(QStringLiteral("diagnosticsDetails"));
+        details->setReadOnly(true);
+        layout->addWidget(details);
+        const auto update_details = [this, details] {
+            const auto& status = m_desktop_model->status();
+            details->setPlainText(tr("Network: %1\nNetwork ID: %2\nNode running: %3\nPeers: %4\n"
+                                     "Finalized height: %5\nValidators: %6\nData directory: %7")
+                .arg(status.network_name, status.network_id,
+                    status.node_running ? tr("yes") : tr("no"))
+                .arg(status.peer_count)
+                .arg(status.last_finalized_height)
+                .arg(status.validator_count)
+                .arg(status.data_directory));
+        };
+        connect(m_desktop_model, &CybouDesktopModel::statusChanged, m_diagnostics, update_details);
+        update_details();
+    }
+    m_diagnostics->show();
+    m_diagnostics->raise();
+    m_diagnostics->activateWindow();
 }
 
 void CybouMainWindow::showPage(int index)
 {
     if (auto* button = m_navigation->button(index)) button->setChecked(true);
     m_pages->setCurrentIndex(index);
-    showNormalIfMinimized();
+    if (isMinimized()) showNormal();
     show();
     raise();
     activateWindow();
@@ -173,22 +196,6 @@ int CybouMainWindow::pageCount() const
 
 void CybouMainWindow::buildShell()
 {
-    if (auto* legacy = takeCentralWidget()) {
-        legacy->hide();
-        if (auto* console = qobject_cast<RPCConsole*>(legacy)) {
-            // Diagnostics is a secondary window owned by the shell (deleted
-            // in ~BitcoinGUI). Closing it must hide it — never destroy it —
-            // and must never take CYBOU down with it. It can be reopened
-            // via Tools -> Node diagnostics any number of times.
-            console->setParent(nullptr, Qt::Window);
-            console->setAttribute(Qt::WA_DeleteOnClose, false);
-        } else {
-            legacy->setParent(this);
-        }
-    }
-    for (auto* toolbar : findChildren<QToolBar*>()) toolbar->hide();
-    statusBar()->hide();
-
     auto* shell = new QWidget{this};
     shell->setObjectName("shell");
     auto* shell_layout = new QVBoxLayout{shell};
@@ -290,7 +297,7 @@ void CybouMainWindow::buildShell()
     auto* backup = new BackupPage{m_desktop_model, m_pages};
     auto* network_page = new NetworkPage{m_desktop_model, [this] { showDebugWindow(); }, m_pages};
     auto* wallet = new WalletPage{m_desktop_model, m_pages};
-    auto* settings = new SettingsPage{m_desktop_model, [this] { optionsClicked(); }, [this] { showDebugWindow(); }, m_pages};
+    auto* settings = new SettingsPage{m_desktop_model, [this] { showDebugWindow(); }, m_pages};
     m_pages->addWidget(home);
     m_pages->addWidget(identity);
     m_pages->addWidget(email);
@@ -329,47 +336,45 @@ void CybouMainWindow::buildMenus()
 {
     menuBar()->clear();
     auto* file = menuBar()->addMenu(tr("File"));
-    file->addAction(tr("Hide CYBOU"), this, &BitcoinGUI::toggleHidden);
+    file->addAction(tr("Hide CYBOU"), this, &QWidget::hide);
     // No File->Quit: the node can only be shut down from the tray icon's
     // context menu, so closing the window can never accidentally stop it.
 
     auto* settings = menuBar()->addMenu(tr("Settings"));
-    settings->addAction(tr("Preferences"), this, &BitcoinGUI::optionsClicked);
+    settings->addAction(tr("Preferences"), this, [this] { showPage(7); });
 
     auto* tools = menuBar()->addMenu(tr("Tools"));
-    tools->addAction(tr("Node diagnostics"), this, &BitcoinGUI::showDebugWindow);
-    tools->addAction(tr("Developer console"), this, &BitcoinGUI::showDebugWindowActivateConsole);
+    tools->addAction(tr("Node diagnostics"), this, &CybouMainWindow::showDebugWindow);
 
     auto* help = menuBar()->addMenu(tr("Help"));
-    help->addAction(tr("About CYBOU"), this, &BitcoinGUI::aboutClicked);
+    help->addAction(tr("About CYBOU"), this, [this] {
+        QMessageBox::about(this, tr("About CYBOU"),
+            tr("CYBOU is protected communication infrastructure built around user controlled keys."));
+    });
     help->addAction(tr("About Qt"), qApp, &QApplication::aboutQt);
 }
 
 void CybouMainWindow::buildTrayMenu()
 {
-#ifndef Q_OS_MACOS
-    auto* tray_icon = systemTrayIcon();
-    auto* menu = trayContextMenu();
-    if (!tray_icon || !menu) return;
-
-    // Replace the inherited (Bitcoin-oriented) tray menu with the CYBOU one.
-    // No wallet actions are retained.
-    menu->clear();
-    menu->addAction(tr("Open CYBOU"), this, [this] { showPage(m_pages->currentIndex()); });
-    menu->addAction(tr("Network status"), this, [this] { showPage(5); });
-    menu->addSeparator();
-    menu->addAction(tr("Quit CYBOU"), this, [this] { Q_EMIT quitRequested(); });
-    tray_icon->setContextMenu(menu);
-#endif
+    if (!QSystemTrayIcon::isSystemTrayAvailable()) return;
+    m_tray_menu = new QMenu{this};
+    m_tray_menu->addAction(tr("Open CYBOU"), this, [this] { showPage(m_pages->currentIndex()); });
+    m_tray_menu->addAction(tr("Network status"), this, [this] { showPage(6); });
+    m_tray_menu->addSeparator();
+    m_tray_menu->addAction(tr("Quit CYBOU"), this, [this] { Q_EMIT quitRequested(); });
+    m_tray_icon = new QSystemTrayIcon{windowIcon(), this};
+    m_tray_icon->setToolTip(tr("CYBOU"));
+    m_tray_icon->setContextMenu(m_tray_menu);
+    connect(m_tray_icon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::Trigger) showPage(m_pages->currentIndex());
+    });
+    m_tray_icon->show();
 }
 
 void CybouMainWindow::closeEvent(QCloseEvent* event)
 {
-#ifdef Q_OS_MACOS
-    BitcoinGUI::closeEvent(event);
-#else
     if (QSettings{}.value(QStringLiteral("desktop/run_in_background"), false).toBool() &&
-        QSystemTrayIcon::isSystemTrayAvailable()) {
+        m_tray_icon && m_tray_icon->isVisible()) {
         // "Keep running in background": hide CYBOU, node continues, tray remains.
         hide();
         event->ignore();
@@ -377,7 +382,6 @@ void CybouMainWindow::closeEvent(QCloseEvent* event)
     }
     Q_EMIT quitRequested();
     event->accept();
-#endif
 }
 
 void CybouMainWindow::applyStyle()

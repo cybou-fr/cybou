@@ -5,52 +5,20 @@
 #include <qt/test/apptests.h>
 
 #include <chainparams.h>
-#include <key.h>
 #include <logging.h>
 #include <qt/bitcoin.h>
-#include <qt/bitcoingui.h>
+#include <qt/cyboumainwindow.h>
 #include <qt/networkstyle.h>
-#include <qt/rpcconsole.h>
 #include <test/util/setup_common.h>
 #include <validation.h>
 
-#include <QAction>
-#include <QLineEdit>
-#include <QRegularExpression>
+#include <QDialog>
 #include <QScopedPointer>
-#include <QSignalSpy>
 #include <QString>
 #include <QTest>
-#include <QTextEdit>
 #include <QtGlobal>
 #include <QtTest/QtTestWidgets>
 #include <QtTest/QtTestGui>
-
-namespace {
-//! Regex find a string group inside of the console output
-QString FindInConsole(const QString& output, const QString& pattern)
-{
-    const QRegularExpression re(pattern);
-    return re.match(output).captured(1);
-}
-
-//! Call getblockchaininfo RPC and check first field of JSON output.
-void TestRpcCommand(RPCConsole* console)
-{
-    QTextEdit* messagesWidget = console->findChild<QTextEdit*>("messagesWidget");
-    QLineEdit* lineEdit = console->findChild<QLineEdit*>("lineEdit");
-    QSignalSpy mw_spy(messagesWidget, &QTextEdit::textChanged);
-    QVERIFY(mw_spy.isValid());
-    QTest::keyClicks(lineEdit, "getblockchaininfo");
-    QTest::keyClick(lineEdit, Qt::Key_Return);
-    QVERIFY(mw_spy.wait(1000));
-    QCOMPARE(mw_spy.count(), 4);
-    const QString output = messagesWidget->toPlainText();
-    const QString pattern = QStringLiteral("\"chain\": \"(\\w+)\"");
-    // The desktop test environment runs the CYBOU main development chain.
-    QCOMPARE(FindInConsole(output, pattern), QString::fromStdString(Params().GetChainTypeString()));
-}
-} // namespace
 
 //! Entry point for BitcoinApplication tests.
 void AppTests::appTests()
@@ -85,21 +53,14 @@ void AppTests::appTests()
     LogInstance().DisconnectTestLogger();
 }
 
-//! Entry point for BitcoinGUI tests.
-void AppTests::guiTests(BitcoinGUI* window)
+//! Entry point for CYBOU desktop tests.
+void AppTests::guiTests(CybouMainWindow* window)
 {
     HandleCallback callback{"guiTests", *this};
-    connect(window, &BitcoinGUI::consoleShown, this, &AppTests::consoleTests);
-    expectCallback("consoleTests");
-    QAction* action = window->findChild<QAction*>("openRPCConsoleAction");
-    action->activate(QAction::Trigger);
-}
-
-//! Entry point for RPCConsole tests.
-void AppTests::consoleTests(RPCConsole* console)
-{
-    HandleCallback callback{"consoleTests", *this};
-    TestRpcCommand(console);
+    QVERIFY(window);
+    QVERIFY(window->centralWidget());
+    window->showDebugWindow();
+    QVERIFY(window->findChild<QDialog*>(QStringLiteral("CYBOUDiagnostics")));
 }
 
 //! Destructor to shut down after the last expected callback completes.

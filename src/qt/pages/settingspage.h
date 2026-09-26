@@ -18,8 +18,8 @@ class QSpinBox;
 class SettingsPage : public QWidget
 {
 public:
-    SettingsPage(CybouDesktopModel* model, std::function<void()> preferences_requested,
-        std::function<void()> diagnostics_requested, QWidget* parent = nullptr);
+    SettingsPage(CybouDesktopModel* model, std::function<void()> diagnostics_requested,
+        QWidget* parent = nullptr);
 
 private:
     CybouDesktopModel* const m_model;
@@ -29,7 +29,6 @@ private:
     QSpinBox* m_proxy_port;
     QCheckBox* m_listen;
     QLabel* m_data_directory;
-    const std::function<void()> m_preferences_requested;
     const std::function<void()> m_diagnostics_requested;
 
     void refresh();

@@ -5,7 +5,7 @@
 #ifndef BITCOIN_QT_CYBOUMAINWINDOW_H
 #define BITCOIN_QT_CYBOUMAINWINDOW_H
 
-#include <qt/bitcoingui.h>
+#include <QMainWindow>
 
 #include <memory>
 
@@ -13,22 +13,25 @@ namespace CybouUi {
 class StatusStrip;
 }
 
-class ClientModel;
 class CybouDesktopModel;
 class CybouDesktopController;
 class QButtonGroup;
 class QCloseEvent;
+class QDialog;
+class QMenu;
 class QStackedWidget;
+class QSystemTrayIcon;
 
-class CybouMainWindow final : public BitcoinGUI
+class CybouMainWindow final : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    CybouMainWindow(interfaces::Node& node, const PlatformStyle* platform_style, const NetworkStyle* network_style, QWidget* parent = nullptr);
+    explicit CybouMainWindow(QWidget* parent = nullptr);
     ~CybouMainWindow() override;
 
-    void setClientModel(ClientModel* client_model = nullptr, interfaces::BlockAndHeaderTipInfo* tip_info = nullptr) override;
+    void startRuntime();
+    void showDebugWindow();
 
     /** Page access used by desktop shell smoke tests. */
     CybouDesktopModel* desktopModel() const { return m_desktop_model; }
@@ -36,16 +39,21 @@ public:
     int currentPageIndex() const;
     int pageCount() const;
 
+Q_SIGNALS:
+    void quitRequested();
+
 protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
     CybouDesktopModel* m_desktop_model;
-    ClientModel* m_client_model{nullptr};
     std::unique_ptr<CybouDesktopController> m_controller;
     QStackedWidget* m_pages;
     QButtonGroup* m_navigation;
     std::unique_ptr<CybouUi::StatusStrip> m_status_strip;
+    QSystemTrayIcon* m_tray_icon{nullptr};
+    QMenu* m_tray_menu{nullptr};
+    QDialog* m_diagnostics{nullptr};
 
     void buildShell();
     void buildMenus();

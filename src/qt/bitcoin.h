@@ -16,7 +16,7 @@
 
 #include <QApplication>
 
-class BitcoinGUI;
+class CybouMainWindow;
 class ClientModel;
 class NetworkStyle;
 class OptionsModel;
@@ -80,7 +80,7 @@ public Q_SLOTS:
 Q_SIGNALS:
     void requestedInitialize();
     void requestedShutdown();
-    void windowShown(BitcoinGUI* window);
+    void windowShown(CybouMainWindow* window);
 
 protected:
     bool event(QEvent* e) override;
@@ -89,7 +89,7 @@ private:
     std::optional<InitExecutor> m_executor;
     OptionsModel* optionsModel{nullptr};
     ClientModel* clientModel{nullptr};
-    BitcoinGUI* window{nullptr};
+    CybouMainWindow* window{nullptr};
     QTimer* pollShutdownTimer{nullptr};
     const PlatformStyle* platformStyle{nullptr};
     std::unique_ptr<QWidget> shutdownWindow;

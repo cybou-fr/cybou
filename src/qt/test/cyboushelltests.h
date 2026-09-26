@@ -10,8 +10,6 @@
 #include <memory>
 
 class CybouMainWindow;
-class PlatformStyle;
-
 namespace interfaces {
 class Node;
 }
@@ -47,9 +45,6 @@ private Q_SLOTS:
     void closingWithoutNodeRequestsQuit();
 
 private:
-    interfaces::Node& m_node;
-    std::unique_ptr<const PlatformStyle> m_platform_style;
-
     std::unique_ptr<CybouMainWindow> makeWindow();
 };
 

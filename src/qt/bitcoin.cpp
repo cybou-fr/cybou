@@ -239,13 +239,13 @@ bool BitcoinApplication::createOptionsModel(bool resetSettings)
 
 void BitcoinApplication::createWindow(const NetworkStyle *networkStyle)
 {
-    window = new CybouMainWindow(node(), platformStyle, networkStyle, nullptr);
-    connect(window, &BitcoinGUI::quitRequested, this, &BitcoinApplication::requestShutdown);
+    window = new CybouMainWindow(nullptr);
+    connect(window, &CybouMainWindow::quitRequested, this, &BitcoinApplication::requestShutdown);
 
     pollShutdownTimer = new QTimer(window);
     connect(pollShutdownTimer, &QTimer::timeout, [this]{
         if (!QApplication::activeModalWidget()) {
-            window->detectShutdown();
+            if (node().shutdownRequested()) requestShutdown();
         }
     });
 }
@@ -322,9 +322,6 @@ void BitcoinApplication::requestShutdown()
 
     qDebug() << __func__ << ": Requesting shutdown";
 
-    // Must disconnect node signals otherwise current thread can deadlock since
-    // no event loop is running.
-    window->unsubscribeFromCoreSignals();
     // Request node shutdown, which can interrupt long operations, like
     // rescanning a wallet.
     node().startShutdown();
@@ -333,9 +330,6 @@ void BitcoinApplication::requestShutdown()
         clientModel->stop();
     }
 
-    // Unsetting the client model can cause the current thread to wait for node
-    // to complete an operation, like wait for a RPC execution to complete.
-    window->setClientModel(nullptr);
     pollShutdownTimer->stop();
 
     delete clientModel;
@@ -360,7 +354,7 @@ void BitcoinApplication::initializeResult(bool success, interfaces::BlockAndHead
     // Log this only after AppInitMain finishes, as then logging setup is guaranteed complete
     qInfo() << "Platform customization:" << platformStyle->getName();
     clientModel = new ClientModel(node(), optionsModel);
-    window->setClientModel(clientModel, &tip_info);
+    window->startRuntime();
 
     // If '-min' option passed, start window minimized (iconified) or minimized to tray
     bool start_minimized = gArgs.GetBoolArg("-min", false);
@@ -368,8 +362,6 @@ void BitcoinApplication::initializeResult(bool success, interfaces::BlockAndHead
     // Show or minimize window
     if (!start_minimized) {
         window->show();
-    } else if (clientModel->getOptionsModel()->getMinimizeToTray() && window->hasTrayIcon()) {
-        // do nothing as the window is managed by the tray icon
     } else {
         window->showMinimized();
     }

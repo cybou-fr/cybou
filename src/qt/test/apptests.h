@@ -11,8 +11,7 @@
 #include <utility>
 
 class BitcoinApplication;
-class BitcoinGUI;
-class RPCConsole;
+class CybouMainWindow;
 
 class AppTests : public QObject
 {
@@ -22,8 +21,7 @@ public:
 
 private Q_SLOTS:
     void appTests();
-    void guiTests(BitcoinGUI* window);
-    void consoleTests(RPCConsole* console);
+    void guiTests(CybouMainWindow* window);
 
 private:
     //! Add expected callback name to list of pending callbacks.
