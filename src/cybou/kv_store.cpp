@@ -85,6 +85,24 @@ KVStore::KVStore(const KVStoreOptions& config)
         impl.memory_environment = leveldb::NewMemEnv(leveldb::Env::Default());
         impl.options.env = impl.memory_environment;
     } else {
+        if (config.wipe_data) {
+            if (config.path.empty()) {
+                throw std::runtime_error("refusing to wipe CYBOU database at an empty path");
+            }
+            std::error_code ec;
+            const auto absolute_path = std::filesystem::absolute(config.path, ec).lexically_normal();
+            if (ec) throw std::runtime_error("cannot resolve CYBOU database path: " + ec.message());
+            if (absolute_path == absolute_path.root_path()) {
+                throw std::runtime_error("refusing to wipe CYBOU database at a filesystem root");
+            }
+            if (std::filesystem::exists(absolute_path, ec) && !ec) {
+                const auto canonical_path = std::filesystem::weakly_canonical(absolute_path, ec);
+                if (ec) throw std::runtime_error("cannot canonicalize CYBOU database path: " + ec.message());
+                if (canonical_path == canonical_path.root_path()) {
+                    throw std::runtime_error("refusing to wipe CYBOU database at a filesystem root");
+                }
+            }
+        }
         std::error_code ec;
         std::filesystem::create_directories(config.path, ec);
         if (ec) throw std::runtime_error("cannot create CYBOU database directory: " + ec.message());
