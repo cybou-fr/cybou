@@ -7,9 +7,7 @@
 
 #include <qt/bitcoingui.h>
 
-#include <atomic>
 #include <memory>
-#include <thread>
 
 namespace CybouUi {
 class StatusStrip;
@@ -17,16 +15,10 @@ class StatusStrip;
 
 class ClientModel;
 class CybouDesktopModel;
+class CybouDesktopController;
 class QButtonGroup;
 class QCloseEvent;
 class QStackedWidget;
-
-namespace cybou {
-class CybouNodeRuntime;
-class CybouIdentityService;
-class CybouMailService;
-class CybouWalletService;
-}
 
 class CybouMainWindow final : public BitcoinGUI
 {
@@ -50,25 +42,16 @@ protected:
 private:
     CybouDesktopModel* m_desktop_model;
     ClientModel* m_client_model{nullptr};
-    std::unique_ptr<cybou::CybouNodeRuntime> m_node_runtime;
-    std::unique_ptr<cybou::CybouIdentityService> m_identity_service;
-    std::unique_ptr<cybou::CybouMailService> m_mail_service;
-    std::unique_ptr<cybou::CybouWalletService> m_wallet_service;
+    std::unique_ptr<CybouDesktopController> m_controller;
     QStackedWidget* m_pages;
     QButtonGroup* m_navigation;
     std::unique_ptr<CybouUi::StatusStrip> m_status_strip;
-
-    /** Bootstrap sync worker: pulls verified blocks from the DEV bootstrap
-        authority and pushes finality status into the desktop model. */
-    std::thread m_sync_thread;
-    std::atomic_bool m_sync_stop{false};
 
     void buildShell();
     void buildMenus();
     void buildTrayMenu();
     void applyStyle();
     void showPage(int index);
-    void initCybouRuntime();
 };
 
 #endif // BITCOIN_QT_CYBOUMAINWINDOW_H

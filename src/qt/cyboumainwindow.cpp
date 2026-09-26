@@ -4,6 +4,7 @@
 
 #include <qt/cyboumainwindow.h>
 
+#include <qt/cyboudesktopcontroller.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 #include <qt/cyboustrip.h>
@@ -19,19 +20,7 @@
 #include <qt/pages/walletpage.h>
 #include <qt/rpcconsole.h>
 
-#include <common/args.h>
-#include <cybou/bootstrap_nodes.h>
-#include <cybou/identity_service.h>
 #include <cybou/mail_service.h>
-#include <cybou/wallet_service.h>
-#include <cybou/network_definition.h>
-#include <cybou/node_runtime.h>
-#include <support/cleanse.h>
-#include <util/strencodings.h>
-
-#include <chrono>
-#include <filesystem>
-#include <fstream>
 
 #include <QAction>
 #include <QApplication>
@@ -83,6 +72,7 @@ CybouMainWindow::CybouMainWindow(
     QWidget* parent)
     : BitcoinGUI{node, platform_style, network_style, parent},
       m_desktop_model{new CybouDesktopModel{QStringLiteral("CYBOU-DEV"), this}},
+      m_controller{std::make_unique<CybouDesktopController>(m_desktop_model)},
       m_pages{new QStackedWidget{this}},
       m_navigation{new QButtonGroup{this}}
 {
@@ -147,156 +137,13 @@ CybouMainWindow::CybouMainWindow(
 
 CybouMainWindow::~CybouMainWindow()
 {
-    m_sync_stop.store(true);
-    if (m_sync_thread.joinable()) m_sync_thread.join();
-}
-
-void CybouMainWindow::initCybouRuntime()
-{
-    if (!m_client_model) return;
-
-    try {
-        const auto network_path = (gArgs.GetDataDirNet() / "network.bin").std_path();
-        const auto network_file = cybou::LoadCybouNetworkFile(network_path);
-        if (!network_file) throw std::runtime_error("missing or invalid CYBOU network.bin");
-        const auto& genesis = network_file->genesis;
-        const auto& definition = network_file->definition;
-        m_desktop_model->setNetworkInfo(
-            QStringLiteral("CYBOU-DEV"),
-            QString::fromStdString(cybou::NetworkId(definition).GetHex()));
-        const std::filesystem::path data_dir = (gArgs.GetDataDirNet() / "cybou_state").std_path();
-        // Opt-in local production: only a deliberate validator.key turns the
-        // desktop into a producer; by default it observes the bootstrap.
-        std::optional<std::array<unsigned char, 32>> val_key;
-        const auto key_path = (gArgs.GetDataDirNet() / "validator.key").std_path();
-        if (std::filesystem::exists(key_path) && std::filesystem::file_size(key_path) == 32) {
-            val_key.emplace();
-            std::ifstream kf(key_path, std::ios::binary);
-            kf.read(reinterpret_cast<char*>(val_key->data()), 32);
-        }
-
-        const auto& endpoint = cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front();
-        bool p2p_port_ok{false};
-        const int p2p_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_PORT", &p2p_port_ok);
-        if (qEnvironmentVariableIsSet("CYBOU_DEV_P2P_PORT") &&
-            (!p2p_port_ok || p2p_port <= 0 || p2p_port > 65535)) {
-            throw std::runtime_error("invalid CYBOU_DEV_P2P_PORT");
-        }
-        const QString p2p_host = qEnvironmentVariable("CYBOU_DEV_P2P_HOST");
-        const auto configured_p2p = p2p_port_ok ?
-            std::optional<std::pair<std::string, uint16_t>>{std::make_pair(
-                p2p_host.isEmpty() ? std::string{endpoint.host} : p2p_host.toStdString(),
-                static_cast<uint16_t>(p2p_port))} : std::nullopt;
-        cybou::NodeRuntimeConfig config{
-            .network_definition = definition,
-            .data_dir = data_dir,
-            .validator_private_key = val_key,
-            .submit_endpoint = configured_p2p ? std::nullopt :
-                std::optional<std::pair<std::string, uint16_t>>{std::make_pair(std::string{endpoint.host}, endpoint.port)},
-            .p2p_endpoint = configured_p2p,
-            .db_cache_bytes = 8 << 20,
-        };
-        if (val_key.has_value()) {
-            memory_cleanse(val_key->data(), val_key->size());
-        }
-
-        m_node_runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
-        auto init_status = m_node_runtime->GetStatus();
-        if (init_status.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH) {
-            throw std::runtime_error("CYBOU state belongs to another network; DEV reset requires an explicit cutover");
-        }
-        if (init_status.runtime_state == cybou::NodeRuntimeState::UNINITIALIZED) {
-            if (!m_node_runtime->InitializeGenesis(genesis)) {
-                throw std::runtime_error("cannot initialize CYBOU genesis");
-            }
-        } else if (init_status.runtime_state != cybou::NodeRuntimeState::READY) {
-            throw std::runtime_error("CYBOU state is unavailable or corrupt");
-        }
-
-        const auto id_key_path = (gArgs.GetDataDirNet() / "identity.cybou").std_path();
-        m_identity_service = std::make_unique<cybou::CybouIdentityService>(*m_node_runtime, id_key_path);
-
-        m_desktop_model->setIdentityService(m_identity_service.get());
-
-        const auto mailbox_path = (gArgs.GetDataDirNet() / "mailbox.dat").std_path();
-        m_mail_service = std::make_unique<cybou::CybouMailService>(*m_node_runtime, m_identity_service->GetKeyStore(), mailbox_path);
-        if (std::filesystem::exists(mailbox_path)) {
-            m_mail_service->LoadMailbox();
-        }
-        m_desktop_model->setMailService(m_mail_service.get());
-
-        m_wallet_service = std::make_unique<cybou::CybouWalletService>(*m_node_runtime, m_identity_service->GetKeyStore());
-        m_desktop_model->setWalletService(m_wallet_service.get());
-
-        // Update initial finality status:
-        const auto status = m_node_runtime->GetStatus();
-        m_desktop_model->setFinalityStatus(static_cast<int>(status.finalized_height), static_cast<int>(status.validator_count));
-        m_desktop_model->setPeerCount(0);
-
-        // Bootstrap sync worker: keep pulling verified blocks from the DEV
-        // authority and push finality into the model. The runtime is
-        // internally synchronized; the worker is the only writer here.
-        m_sync_thread = std::thread{[this] {
-            const auto& endpoint = cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front();
-            while (!m_sync_stop.load()) {
-                bool bootstrap_reachable = false;
-                try {
-                    // Small per-iteration batch: a big batch could hold the
-                    // sync thread inside SyncFromPeer for tens of seconds,
-                    // which blocks shutdown (the destructor joins this
-                    // thread). 100 blocks per round keeps join latency low.
-                    const auto sync_res = m_node_runtime->HasP2pEndpoint() ?
-                        m_node_runtime->SyncFromConfiguredPeer(1) :
-                        m_node_runtime->SyncFromPeer(std::string{endpoint.host}, endpoint.port, 100);
-                    bootstrap_reachable = sync_res.IsConnected();
-                    if (m_node_runtime->HasP2pEndpoint() &&
-                        (sync_res.status == cybou::SyncPeerStatus::PROTOCOL_ERROR ||
-                         sync_res.status == cybou::SyncPeerStatus::NETWORK_MISMATCH)) {
-                        qWarning() << "cybou P2P peer rejected by protocol verification";
-                        m_sync_stop.store(true);
-                    }
-                    if (m_mail_service) {
-                        m_mail_service->SyncMailbox();
-                    }
-                    if (m_wallet_service) {
-                        m_wallet_service->SyncLedger();
-                        const auto [bal, sys] = m_wallet_service->GetBalances();
-                        QMetaObject::invokeMethod(this, [this, bal, sys] {
-                            m_desktop_model->setBalances(bal, sys);
-                        }, Qt::QueuedConnection);
-                    }
-                } catch (const std::exception& e) {
-                    bootstrap_reachable = false;
-                    qWarning() << "cybou bootstrap sync error:" << e.what();
-                }
-                const auto now = m_node_runtime->GetStatus();
-                QMetaObject::invokeMethod(this, [this, now, bootstrap_reachable] {
-                    m_desktop_model->setFinalityStatus(
-                        static_cast<int>(now.finalized_height),
-                        static_cast<int>(now.validator_count));
-                    m_desktop_model->setPeerCount(bootstrap_reachable ? 1 : 0);
-                    if (bootstrap_reachable) m_desktop_model->setLastSync(QDateTime::currentDateTime());
-                }, Qt::QueuedConnection);
-                for (int i = 0; i < 15 && !m_sync_stop.load(); ++i) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                }
-            }
-        }};
-
-        // Connect identity persistence on creation
-        connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, [this] {
-        });
-    } catch (const std::exception& e) {
-        qWarning() << "CybouNodeRuntime initialization error:" << e.what();
-    }
 }
 
 void CybouMainWindow::setClientModel(ClientModel* client_model, interfaces::BlockAndHeaderTipInfo* tip_info)
 {
     m_client_model = client_model;
     BitcoinGUI::setClientModel(client_model, tip_info);
-    m_desktop_model->setClientModel(client_model);
-    initCybouRuntime();
+    m_controller->setClientModel(client_model);
 }
 
 void CybouMainWindow::showPage(int index)

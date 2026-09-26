@@ -83,6 +83,8 @@ add_library(bitcoinqt STATIC EXCLUDE_FROM_ALL
   clientmodel.h
   cyboudesktopmodel.cpp
   cyboudesktopmodel.h
+  cyboudesktopcontroller.cpp
+  cyboudesktopcontroller.h
   cyboumainwindow.cpp
   cyboumainwindow.h
   cyboutheme.cpp
