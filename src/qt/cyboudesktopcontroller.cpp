@@ -52,11 +52,22 @@ void CybouDesktopController::start()
             QString::fromStdString(cybou::NetworkId(definition).GetHex()));
         const std::filesystem::path data_dir = m_data_directory / "cybou_state";
         std::optional<std::array<unsigned char, 32>> val_key;
-        const auto key_path = m_data_directory / "validator.key";
-        if (std::filesystem::exists(key_path) && std::filesystem::file_size(key_path) == 32) {
+        const QString validator_mode = qEnvironmentVariable("CYBOU_DEV_VALIDATOR");
+        if (!validator_mode.isEmpty() && validator_mode != QLatin1String{"1"}) {
+            throw std::runtime_error("CYBOU_DEV_VALIDATOR must be unset or set to 1");
+        }
+        if (validator_mode == QLatin1String{"1"}) {
+            const auto key_path = m_data_directory / "validator.key";
+            if (!std::filesystem::exists(key_path) || std::filesystem::file_size(key_path) != 32) {
+                throw std::runtime_error("validator mode requires a 32-byte validator.key");
+            }
             val_key.emplace();
             std::ifstream key_file{key_path, std::ios::binary};
             key_file.read(reinterpret_cast<char*>(val_key->data()), 32);
+            if (key_file.gcount() != 32) {
+                memory_cleanse(val_key->data(), val_key->size());
+                throw std::runtime_error("cannot read 32-byte validator.key");
+            }
         }
 
         const auto& endpoint = cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front();
