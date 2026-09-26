@@ -453,6 +453,13 @@ void CybouMainWindow::buildShell()
     page_scroll->setObjectName(QStringLiteral("pageScroll"));
     page_scroll->setWidgetResizable(true);
     page_scroll->setFrameShape(QFrame::NoFrame);
+
+    page_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    page_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    m_pages->setMinimumWidth(0);
+    m_pages->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+
     page_scroll->setWidget(m_pages);
 
     body_layout->addWidget(sidebar);

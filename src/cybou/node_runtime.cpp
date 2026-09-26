@@ -744,6 +744,12 @@ void CybouNodeRuntime::SetExplicitPeerEndpoints(const std::vector<std::pair<std:
     }
 }
 
+std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetExplicitPeerEndpoints() const
+{
+    std::lock_guard lock(m_mutex);
+    return {m_explicit_peer_endpoints.begin(), m_explicit_peer_endpoints.end()};
+}
+
 void CybouNodeRuntime::AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints)
 {
     std::lock_guard lock(m_mutex);

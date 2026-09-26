@@ -59,6 +59,12 @@ public:
     explicit PeerManager(CybouNodeRuntime& runtime);
     bool Connect(const std::string& numeric_address, uint16_t port);
     PeerConnectStatus LastConnectStatus() const { return m_last_connect_status; }
+    /**
+     * Mark endpoints as explicit validator peers. At capacity, connecting an
+     * explicit endpoint evicts a connected non-explicit peer so operator-
+     * approved validators can never be crowded out by discovered hints.
+     */
+    void SetExplicitEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
     size_t PingAll();
     SyncPeerResult SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks);
     OperationSubmitResult SubmitOperation(const std::string& numeric_address, uint16_t port,
@@ -98,6 +104,8 @@ private:
     // fanout can skip (and mark announced) heads the peer already finalized
     // without spending the per-cycle offer budget on ancient history.
     std::map<Endpoint, uint64_t> m_peer_finalized_heights;
+    // Operator-approved validator endpoints (canonical address:port form).
+    std::set<Endpoint> m_explicit_endpoints;
     PeerConnectStatus m_last_connect_status{PeerConnectStatus::INVALID_REQUEST};
 };
 

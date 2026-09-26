@@ -68,7 +68,7 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     left->setSpacing(16);
     left->addWidget(buildIdentityHero());
 
-    auto* stats = new QHBoxLayout;
+    auto* stats = new QVBoxLayout;
     stats->setSpacing(14);
     stats->addWidget(buildMailCard(), 1);
     stats->addWidget(buildFilesCard(), 1);

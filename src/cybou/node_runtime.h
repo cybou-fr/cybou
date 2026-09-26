@@ -151,6 +151,8 @@ public:
      * out by discovered routing hints.
      */
     void SetExplicitPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
+    /** The explicit validator peer set as last configured. */
+    std::vector<std::pair<std::string, uint16_t>> GetExplicitPeerEndpoints() const;
     void AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
 
     /** Access underlying store */

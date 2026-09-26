@@ -29,17 +29,40 @@ std::optional<uint64_t> RandomNonce()
 
 } // namespace
 
-PeerManager::PeerManager(CybouNodeRuntime& runtime) : m_runtime{runtime} {}
+PeerManager::PeerManager(CybouNodeRuntime& runtime) : m_runtime{runtime}
+{
+    SetExplicitEndpoints(m_runtime.GetExplicitPeerEndpoints());
+}
 
 bool PeerManager::Connect(const std::string& numeric_address, const uint16_t port)
 {
     m_last_connect_status = PeerConnectStatus::INVALID_REQUEST;
-    if (port == 0 || m_peers.size() >= MAX_OUTBOUND_PEERS) return false;
+    if (port == 0) return false;
     boost::system::error_code ec;
     const auto address = boost::asio::ip::make_address(numeric_address, ec);
     if (ec) return false;
     const Endpoint endpoint{address.to_string(), port};
     if (m_peers.contains(endpoint)) return false;
+    if (m_peers.size() >= MAX_OUTBOUND_PEERS) {
+        if (!m_explicit_endpoints.contains(endpoint)) {
+            // Discovered endpoints never displace existing connections.
+            m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
+            return false;
+        }
+        // Explicit validator endpoint: evict a connected non-explicit peer
+        // to make room. Frontier knowledge for the evicted endpoint is kept
+        // (its chain only grows, so the knowledge stays valid on reconnect).
+        const auto victim = std::find_if(m_peers.begin(), m_peers.end(), [&](const auto& entry) {
+            return !m_explicit_endpoints.contains(entry.first);
+        });
+        if (victim == m_peers.end()) {
+            m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
+            return false;
+        }
+        m_announced_operations.erase(victim->first);
+        m_announced_blocks.erase(victim->first);
+        m_peers.erase(victim);
+    }
     const auto status = m_runtime.GetStatus();
     if (!status.is_initialized) return false;
     const auto nonce = RandomNonce();
@@ -89,6 +112,17 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     m_peers.emplace(endpoint, std::move(peer));
     m_last_connect_status = PeerConnectStatus::CONNECTED;
     return true;
+}
+
+void PeerManager::SetExplicitEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints)
+{
+    m_explicit_endpoints.clear();
+    for (const auto& [host, port] : endpoints) {
+        if (port == 0) continue;
+        boost::system::error_code ec;
+        const auto address = boost::asio::ip::make_address(host, ec);
+        if (!ec) m_explicit_endpoints.emplace(address.to_string(), port);
+    }
 }
 
 size_t PeerManager::PingAll()

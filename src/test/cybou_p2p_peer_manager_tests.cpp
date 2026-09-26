@@ -9,8 +9,12 @@
 #include <boost/test/unit_test.hpp>
 
 #include <array>
+#include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <memory>
 #include <thread>
+#include <vector>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, BasicTestingSetup)
 
@@ -78,6 +82,61 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_network_peer)
     BOOST_CHECK(manager.LastConnectStatus() == cybou::p2p::PeerConnectStatus::HANDSHAKE_FAILED);
     server.join();
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(explicit_validator_peer_evicts_discovered_peer_at_capacity)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    const auto network = fixture.runtime->GetNetworkId();
+    std::vector<std::unique_ptr<tcp::acceptor>> acceptors;
+    std::vector<std::unique_ptr<tcp::acceptor>> replacement_acceptors;
+    std::vector<std::jthread> replacement_servers;
+    std::vector<uint16_t> ports;
+    std::array<std::atomic_bool, cybou::p2p::MAX_OUTBOUND_PEERS> handshakes{};
+    for (size_t i = 0; i < handshakes.size(); ++i) {
+        acceptors.push_back(std::make_unique<tcp::acceptor>(io, tcp::endpoint{loopback, 0}));
+        ports.push_back(acceptors.back()->local_endpoint().port());
+        replacement_servers.emplace_back([&, i] {
+            tcp::socket socket{io};
+            acceptors[i]->accept(socket);
+            cybou::p2p::PeerSession session{std::move(socket)};
+            handshakes[i] = session.Handshake({.network_id = network,
+                .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
+                .capabilities = 0, .nonce = 200 + i});
+        });
+    }
+    replacement_acceptors.push_back(std::make_unique<tcp::acceptor>(io, tcp::endpoint{loopback, 0}));
+    const auto replacement_port = replacement_acceptors.back()->local_endpoint().port();
+
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    const auto address = loopback.to_string();
+    for (size_t i = 0; i < cybou::p2p::MAX_OUTBOUND_PEERS; ++i) {
+        BOOST_REQUIRE(manager.Connect(address, ports[i]));
+    }
+    BOOST_CHECK(!manager.Connect(address, ports.back())); // discovered peers cannot displace connections
+    BOOST_CHECK_EQUAL(manager.ConnectedCount(), cybou::p2p::MAX_OUTBOUND_PEERS);
+    manager.SetExplicitEndpoints({{address, replacement_port}});
+    replacement_servers.emplace_back([&] {
+        tcp::socket socket{io};
+        replacement_acceptors.back()->accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        handshakes.back() = session.Handshake({.network_id = network,
+            .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
+            .capabilities = 0, .nonce = 300});
+    });
+    BOOST_REQUIRE(manager.Connect(address, replacement_port)); // explicit validator replaces a discovered peer
+    BOOST_CHECK_EQUAL(manager.ConnectedCount(), cybou::p2p::MAX_OUTBOUND_PEERS);
+    const auto peers = manager.Peers();
+    BOOST_REQUIRE_EQUAL(peers.size(), cybou::p2p::MAX_OUTBOUND_PEERS);
+    BOOST_CHECK(std::any_of(peers.begin(), peers.end(), [&](const auto& peer) {
+        return peer.address == address && peer.port == replacement_port;
+    }));
+    manager.DisconnectAll();
+    for (auto& server : replacement_servers) server.join();
+    BOOST_CHECK(std::all_of(handshakes.begin(), handshakes.end(), [](const auto& ok) { return ok.load(); }));
 }
 
 BOOST_AUTO_TEST_CASE(manager_refuses_hello_tip_conflicting_with_known_block)
