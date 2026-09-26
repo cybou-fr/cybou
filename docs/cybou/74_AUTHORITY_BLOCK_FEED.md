@@ -47,7 +47,17 @@ key is lost locally. The service waits for block finality before reporting activ
 
 The standalone DEV process using this library is documented in
 `75_DEV_NODE_RUNBOOK.md`. The Qt desktop follows verified blocks through
-`CybouNodeRuntime`. Peer discovery, authenticated transport, mempool gossip,
-snapshot bootstrap, and independent multi-validator operation still need
-implementation. The observer needs the same trusted genesis/network
-definition; a bootstrap endpoint is not a trust source.
+`CybouNodeRuntime`; with an explicit CYP2 seed it can maintain multiple
+outbound sessions, exchange bounded peer-discovery hints, sync verified
+finalized blocks, and fan out recent blocks and admitted operations. The
+compiled desktop default still uses the available CYB1 endpoint because no
+remote CYP2 bootstrap endpoint has been published.
+
+CYP2 discovery and gossip are initial bounded implementations, not
+authenticated transport: peer addresses remain untrusted routing hints, and
+consensus trust comes from the locally provisioned network definition and
+verification of every finalized block. Snapshot bootstrap is not implemented.
+The four-process BFT smoke exercises local consensus and recovery, but
+independently operated multi-validator deployments remain unverified. The
+observer needs the same trusted genesis/network definition; a bootstrap
+endpoint is not a trust source.
