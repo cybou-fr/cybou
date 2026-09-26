@@ -9,7 +9,6 @@
 #include <qt/cyboutheme.h>
 #include <qt/cyboustrip.h>
 #include <qt/networkstyle.h>
-#include <qt/optionsmodel.h>
 #include <qt/pages/backuppage.h>
 #include <qt/pages/emailpage.h>
 #include <qt/pages/homepage.h>
@@ -36,6 +35,7 @@
 #include <QPixmap>
 #include <QProcessEnvironment>
 #include <QPushButton>
+#include <QSettings>
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QStackedWidget>
@@ -143,7 +143,7 @@ void CybouMainWindow::setClientModel(ClientModel* client_model, interfaces::Bloc
 {
     m_client_model = client_model;
     BitcoinGUI::setClientModel(client_model, tip_info);
-    m_controller->setClientModel(client_model);
+    if (client_model) m_controller->start();
 }
 
 void CybouMainWindow::showPage(int index)
@@ -368,20 +368,15 @@ void CybouMainWindow::closeEvent(QCloseEvent* event)
 #ifdef Q_OS_MACOS
     BitcoinGUI::closeEvent(event);
 #else
-    auto* options = m_client_model ? m_client_model->getOptionsModel() : nullptr;
-    if (!options) {
-        // Node not initialized yet: closing the window means quitting.
-        Q_EMIT quitRequested();
-        event->accept();
-        return;
-    }
-    if (options->getMinimizeOnClose() && hasTrayIcon()) {
+    if (QSettings{}.value(QStringLiteral("desktop/run_in_background"), false).toBool() &&
+        QSystemTrayIcon::isSystemTrayAvailable()) {
         // "Keep running in background": hide CYBOU, node continues, tray remains.
         hide();
         event->ignore();
         return;
     }
-    BitcoinGUI::closeEvent(event);
+    Q_EMIT quitRequested();
+    event->accept();
 #endif
 }
 

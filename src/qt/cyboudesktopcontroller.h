@@ -11,7 +11,6 @@
 
 #include <QObject>
 
-class ClientModel;
 class CybouDesktopModel;
 
 namespace cybou {
@@ -28,11 +27,10 @@ public:
     explicit CybouDesktopController(CybouDesktopModel* model, QObject* parent = nullptr);
     ~CybouDesktopController() override;
 
-    void setClientModel(ClientModel* client_model);
+    void start();
 
 private:
     CybouDesktopModel* m_model;
-    ClientModel* m_client_model{nullptr};
     std::unique_ptr<cybou::CybouNodeRuntime> m_node_runtime;
     std::unique_ptr<cybou::CybouIdentityService> m_identity_service;
     std::unique_ptr<cybou::CybouMailService> m_mail_service;
@@ -40,7 +38,6 @@ private:
     std::thread m_sync_thread;
     std::atomic_bool m_sync_stop{false};
 
-    void start();
     void stop();
 };
 

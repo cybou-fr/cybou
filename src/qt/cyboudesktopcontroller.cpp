@@ -37,15 +37,9 @@ CybouDesktopController::~CybouDesktopController()
     stop();
 }
 
-void CybouDesktopController::setClientModel(ClientModel* client_model)
-{
-    m_client_model = client_model;
-    m_model->setClientModel(client_model);
-    if (client_model && !m_node_runtime) start();
-}
-
 void CybouDesktopController::start()
 {
+    if (m_node_runtime) return;
     try {
         const auto network_path = (gArgs.GetDataDirNet() / "network.bin").std_path();
         const auto network_file = cybou::LoadCybouNetworkFile(network_path);
@@ -99,6 +93,7 @@ void CybouDesktopController::start()
         } else if (init_status.runtime_state != cybou::NodeRuntimeState::READY) {
             throw std::runtime_error("CYBOU state is unavailable or corrupt");
         }
+        m_model->setNodeStatus(true, 0, true, QString::fromStdString(data_dir.string()));
 
         const auto identity_path = (gArgs.GetDataDirNet() / "identity.cybou").std_path();
         m_identity_service = std::make_unique<cybou::CybouIdentityService>(*m_node_runtime, identity_path);
@@ -150,7 +145,7 @@ void CybouDesktopController::start()
                 QMetaObject::invokeMethod(m_model, [model = m_model, runtime_status, bootstrap_reachable] {
                     model->setFinalityStatus(static_cast<int>(runtime_status.finalized_height),
                         static_cast<int>(runtime_status.validator_count));
-                    model->setPeerCount(bootstrap_reachable ? 1 : 0);
+                    model->setNodeStatus(true, bootstrap_reachable ? 1 : 0, true);
                     if (bootstrap_reachable) model->setLastSync(QDateTime::currentDateTime());
                 }, Qt::QueuedConnection);
                 for (int i = 0; i < 15 && !m_sync_stop.load(); ++i) {

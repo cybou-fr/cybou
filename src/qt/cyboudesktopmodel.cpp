@@ -4,8 +4,6 @@
 
 #include <qt/cyboudesktopmodel.h>
 
-#include <qt/clientmodel.h>
-#include <qt/optionsmodel.h>
 #include <cybou/name_service.h>
 
 #include <QRegularExpression>
@@ -24,41 +22,17 @@ CybouDesktopModel::~CybouDesktopModel()
     if (m_name_worker.joinable()) m_name_worker.join();
 }
 
-void CybouDesktopModel::setClientModel(ClientModel* client_model)
+void CybouDesktopModel::setNodeStatus(bool running, int peer_count, bool network_active,
+    const QString& data_directory)
 {
-    if (m_client_model) disconnect(m_client_model, nullptr, this, nullptr);
-    m_client_model = client_model;
-    m_status.node_running = client_model != nullptr;
-
-    if (m_client_model) {
-        connect(m_client_model, &ClientModel::numConnectionsChanged, this, [this](const int count) {
-            m_status.peer_count = count;
-            Q_EMIT statusChanged();
-        });
-        connect(m_client_model, &ClientModel::networkActiveChanged, this, [this](const bool active) {
-            m_status.network_active = active;
-            Q_EMIT statusChanged();
-        });
-    }
-
-    refreshFromClient();
-}
-
-void CybouDesktopModel::refreshFromClient()
-{
-    if (m_client_model) {
-        m_status.peer_count = m_client_model->getNumConnections();
-        m_status.data_directory = m_client_model->dataDir();
-    } else {
-        m_status.peer_count = 0;
-        m_status.data_directory.clear();
-    }
+    if (m_status.node_running == running && m_status.peer_count == peer_count &&
+        m_status.network_active == network_active &&
+        (data_directory.isEmpty() || m_status.data_directory == data_directory)) return;
+    m_status.node_running = running;
+    m_status.peer_count = peer_count;
+    m_status.network_active = network_active;
+    if (!data_directory.isEmpty()) m_status.data_directory = data_directory;
     Q_EMIT statusChanged();
-}
-
-OptionsModel* CybouDesktopModel::optionsModel() const
-{
-    return m_client_model ? m_client_model->getOptionsModel() : nullptr;
 }
 
 void CybouDesktopModel::setCapabilities(const CybouCapabilities& capabilities)

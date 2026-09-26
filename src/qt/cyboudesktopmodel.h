@@ -12,8 +12,6 @@
 #include <memory>
 #include <thread>
 
-class ClientModel;
-class OptionsModel;
 
 namespace cybou {
 class CybouIdentityService;
@@ -95,8 +93,8 @@ public:
         picked the request up yet (identity state still None). This is a
         UI-side request tracker only — protocol phases are driven by core. */
     bool identityCreationRequestPending() const { return m_identity_request_pending; }
-    void setClientModel(ClientModel* client_model);
-    OptionsModel* optionsModel() const;
+    void setNodeStatus(bool running, int peer_count, bool network_active,
+        const QString& data_directory = {});
 
     /** Drives capability flags; called by the core-facing adapter when a
         backend capability becomes available. */
@@ -157,7 +155,6 @@ Q_SIGNALS:
     void nameClaimFailed(const QString& reason);
 
 private:
-    ClientModel* m_client_model{nullptr};
     cybou::CybouIdentityService* m_identity_service{nullptr};
     cybou::CybouMailService* m_mail_service{nullptr};
     cybou::CybouWalletService* m_wallet_service{nullptr};
@@ -168,7 +165,6 @@ private:
     QDateTime m_last_sync;
     bool m_identity_request_pending{false};
 
-    void refreshFromClient();
     void refreshFinalizedName();
 };
 
