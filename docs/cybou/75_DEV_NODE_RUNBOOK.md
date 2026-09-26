@@ -41,11 +41,10 @@ network ID printed by `init-dev` should match on all nodes. `init-dev` refuses
 to overwrite an existing network file.
 Place a trusted copy in the desktop's network data directory as `network.bin`.
 The desktop reads this file and verifies its genesis before joining DEV.
-The desktop runs as an observer by default, even if `validator.key` is present.
-To opt a desktop into DEV validator mode, set `CYBOU_DEV_VALIDATOR=1` before
-launch; the key must be exactly 32 bytes in the desktop data directory. Any
-other non-empty value is rejected. Keep validator mode limited to controlled
-DEV operations.
+The desktop is observer-only, even if `validator.key` is present.
+`CYBOU_DEV_VALIDATOR` is rejected because the desktop does not yet run the
+complete validator networking and consensus lifecycle. Run `cybou-node serve`
+as shown below for DEV validation.
 
 ## Producer and observer
 

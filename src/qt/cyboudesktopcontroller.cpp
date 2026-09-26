@@ -12,14 +12,12 @@
 #include <cybou/network_definition.h>
 #include <cybou/node_runtime.h>
 #include <cybou/wallet_service.h>
-#include <support/cleanse.h>
 
 #include <QDateTime>
 #include <QMetaObject>
 
 #include <chrono>
 #include <filesystem>
-#include <fstream>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -51,23 +49,9 @@ void CybouDesktopController::start()
             QStringLiteral("CYBOU-DEV"),
             QString::fromStdString(cybou::NetworkId(definition).GetHex()));
         const std::filesystem::path data_dir = m_data_directory / "cybou_state";
-        std::optional<std::array<unsigned char, 32>> val_key;
-        const QString validator_mode = qEnvironmentVariable("CYBOU_DEV_VALIDATOR");
-        if (!validator_mode.isEmpty() && validator_mode != QLatin1String{"1"}) {
-            throw std::runtime_error("CYBOU_DEV_VALIDATOR must be unset or set to 1");
-        }
-        if (validator_mode == QLatin1String{"1"}) {
-            const auto key_path = m_data_directory / "validator.key";
-            if (!std::filesystem::exists(key_path) || std::filesystem::file_size(key_path) != 32) {
-                throw std::runtime_error("validator mode requires a 32-byte validator.key");
-            }
-            val_key.emplace();
-            std::ifstream key_file{key_path, std::ios::binary};
-            key_file.read(reinterpret_cast<char*>(val_key->data()), 32);
-            if (key_file.gcount() != 32) {
-                memory_cleanse(val_key->data(), val_key->size());
-                throw std::runtime_error("cannot read 32-byte validator.key");
-            }
+        if (qEnvironmentVariableIsSet("CYBOU_DEV_VALIDATOR")) {
+            throw std::runtime_error(
+                "desktop validator mode is disabled; run cybou-node serve for DEV validation");
         }
 
         const auto& endpoint = cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front();
@@ -85,14 +69,12 @@ void CybouDesktopController::start()
         cybou::NodeRuntimeConfig config{
             .network_definition = definition,
             .data_dir = data_dir,
-            .validator_private_key = val_key,
+            .validator_private_key = std::nullopt,
             .submit_endpoint = configured_p2p ? std::nullopt :
                 std::optional<std::pair<std::string, uint16_t>>{std::make_pair(std::string{endpoint.host}, endpoint.port)},
             .p2p_endpoint = configured_p2p,
             .db_cache_bytes = 8 << 20,
         };
-        if (val_key) memory_cleanse(val_key->data(), val_key->size());
-
         m_node_runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
         const auto init_status = m_node_runtime->GetStatus();
         if (init_status.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH) {
@@ -186,4 +168,9 @@ void CybouDesktopController::stop()
 {
     m_sync_stop.store(true);
     if (m_sync_thread.joinable()) m_sync_thread.join();
+    if (m_model) {
+        m_model->setIdentityService(nullptr);
+        m_model->setMailService(nullptr);
+        m_model->setWalletService(nullptr);
+    }
 }

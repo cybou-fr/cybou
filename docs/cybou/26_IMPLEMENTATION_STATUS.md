@@ -1,6 +1,6 @@
 # Implementation status
 
-CYBOU is experimental. The canonical product target uses hybrid post-quantum authorization, explicit BFT finality, and one verified state shared by Identity, Email, Wallet, Storage, and Backup. The current DEV node and Qt desktop are still being connected to that target. A development reset will follow the integration of identity, names, operations, blocks, and persistence.
+CYBOU is experimental. The canonical product target uses hybrid post-quantum authorization, explicit BFT finality, and one verified state shared by Identity, Email, Wallet, Storage, and Backup. The standalone DEV node and native Qt desktop use the canonical CYBOU runtime; the desktop is currently observer-only. A development reset will follow the integration of identity, names, operations, blocks, and persistence.
 
 ## Implemented core components
 
@@ -18,6 +18,7 @@ CYBOU is experimental. The canonical product target uses hybrid post-quantum aut
 - Canonical operations, name registry, block execution, state store, and standalone authority/observer sync are connected to the native node runtime.
 - The DEV network definition commits to the active name rules. The CLI derives genesis validator keys from the same secret used by the producer; the desktop loads the verified network file.
 - Desktop identity creation uses a random AccountID, confirmed 24-word phrase, and durable CYBV2 vault before AccountCreate. Clean-machine restore resolves the RecoveryKeyID from verified state and submits a root-authorized DeviceAdd before activating the new device.
+- The desktop runs as an observer. Setting `CYBOU_DEV_VALIDATOR` fails closed until the desktop shares the complete validator networking and consensus lifecycle with `cybou-node`.
 - Native and desktop `.cybou` claiming durably save an encrypted local claim before NameCommit, then perform work and NameReveal; only finalized ownership is displayed as the primary name.
 - Four distinct PQ validator keys can be committed to a deterministic DEV genesis, and the node serves N>1 validator clusters over CYP2 with a four-process smoke test as a CI regression gate. The CBS2 signing journal persists round and lock state so a restarted validator can safely resume an unfinished height; legacy CBS1 journals conservatively abstain at that height.
 - Canonical AuthorityNode, NodeRuntime, MailService, and WalletService smoke suites are back in the native test target. Mail payload encryption works when given the correct mail public key; the current identity registry does not publish one, so `SendMail` fails closed before submission. Full historical integration coverage still needs restoration.
