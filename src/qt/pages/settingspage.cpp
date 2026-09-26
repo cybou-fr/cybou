@@ -11,10 +11,12 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFrame>
+#include <QFileInfo>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QSystemTrayIcon>
@@ -268,7 +270,17 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
         debug_log->setObjectName(QStringLiteral("secondaryButton"));
         connect(debug_log, &QPushButton::clicked, this, [this] {
             const QString dir = m_model->status().data_directory;
-            if (!dir.isEmpty()) QDesktopServices::openUrl(QUrl::fromLocalFile(QDir{dir}.filePath(QStringLiteral("debug.log"))));
+            if (dir.isEmpty()) return;
+            const QString path = QDir{dir}.filePath(QStringLiteral("debug.log"));
+            if (!QFileInfo{path}.isFile()) {
+                QMessageBox::information(this, tr("Debug log unavailable"),
+                    tr("CYBOU has not created a debug log in this data directory yet. Open Diagnostics to inspect the current node status."));
+                return;
+            }
+            if (!QDesktopServices::openUrl(QUrl::fromLocalFile(path))) {
+                QMessageBox::warning(this, tr("Could not open debug log"),
+                    tr("The system could not open the debug log: %1").arg(path));
+            }
         });
         tools_row->addWidget(diagnostics);
         tools_row->addWidget(debug_log);
