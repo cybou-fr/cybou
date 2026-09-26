@@ -273,7 +273,10 @@ def main():
                 os.kill(processes[frozen_a].pid, signal.SIGSTOP)
                 os.kill(processes[frozen_b].pid, signal.SIGSTOP)
                 try:
-                    deadline = time.monotonic() + 5
+                    # Keep the pause within the protocol's bounded two-round
+                    # catch-up window. Longer pauses let the live pair advance
+                    # beyond what a single resumed validator can safely join.
+                    deadline = time.monotonic() + 1.0
                     while time.monotonic() < deadline:
                         for i in active_pair:
                             h = probe(binary, network, root / f"probe-{i}", p2p_ports[i])
