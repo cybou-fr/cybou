@@ -66,7 +66,7 @@ std::pair<uint64_t, uint64_t> CybouWalletService::GetBalances() const
 
 WalletOperationResult CybouWalletService::SendPayment(const AccountId& recipient, const uint64_t amount)
 {
-    std::lock_guard lock(m_mutex);
+    std::lock_guard operation_lock(m_operation_mutex);
 
     const auto my_account = m_keystore.GetAccountId();
     if (!my_account) {
@@ -173,14 +173,20 @@ WalletOperationResult CybouWalletService::SendPayment(const AccountId& recipient
         .height = m_runtime.GetFinalizedHeight().value_or(0),
         .finality = WalletEntryFinality::PENDING,
     };
-    m_entries.insert(m_entries.begin(), pending_entry);
+    {
+        std::lock_guard lock(m_mutex);
+        const auto existing = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& entry) {
+            return entry.entry_id == pending_entry.entry_id;
+        });
+        if (existing == m_entries.end()) m_entries.insert(m_entries.begin(), pending_entry);
+    }
 
     return {.error = WalletOperationError::NONE, .op_id = op_id};
 }
 
 WalletOperationResult CybouWalletService::LockToSystemBalance(const uint64_t amount)
 {
-    std::lock_guard lock(m_mutex);
+    std::lock_guard operation_lock(m_operation_mutex);
 
     const auto my_account = m_keystore.GetAccountId();
     if (!my_account) {
@@ -273,7 +279,13 @@ WalletOperationResult CybouWalletService::LockToSystemBalance(const uint64_t amo
         .height = m_runtime.GetFinalizedHeight().value_or(0),
         .finality = WalletEntryFinality::PENDING,
     };
-    m_entries.insert(m_entries.begin(), pending_entry);
+    {
+        std::lock_guard lock(m_mutex);
+        const auto existing = std::find_if(m_entries.begin(), m_entries.end(), [&](const auto& entry) {
+            return entry.entry_id == pending_entry.entry_id;
+        });
+        if (existing == m_entries.end()) m_entries.insert(m_entries.begin(), pending_entry);
+    }
 
     return {.error = WalletOperationError::NONE, .op_id = op_id};
 }

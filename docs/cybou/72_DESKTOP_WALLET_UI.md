@@ -74,6 +74,8 @@ precondition. Disabled-state honesty is a hard rule: the desktop never
 pretends to create an operation.
 
 Payment and one-way lock submissions run on the wallet service worker. A
-network wait for peer synchronization or operation acknowledgment therefore
-does not block the Qt event loop; results return to the page through a queued
-UI callback.
+separate operation mutex serializes nonce selection and submission, while the
+ledger mutex is held only for short entry updates and snapshots. A network wait
+for peer synchronization or operation acknowledgment therefore does not block
+the Qt event loop or ledger readers; results return to the page through a
+queued UI callback.

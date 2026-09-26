@@ -107,6 +107,9 @@ private:
     uint64_t m_last_scanned_height{0};
     std::vector<WalletLedgerEntry> m_entries;
     mutable std::mutex m_mutex;
+    // Serialize nonce selection and operation submission without blocking
+    // ledger readers while the runtime waits on the network.
+    std::mutex m_operation_mutex;
     std::mutex m_sync_mutex;
     std::mutex m_worker_mutex;
     std::condition_variable m_worker_cv;
