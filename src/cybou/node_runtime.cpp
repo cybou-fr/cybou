@@ -269,11 +269,17 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
     }
     if (p2p_endpoint && m_peer_manager) {
         std::lock_guard p2p_lock(m_p2p_mutex);
-        if (m_peer_manager->ConnectedCount() == 0 &&
-            !m_peer_manager->Connect(p2p_endpoint->first, p2p_endpoint->second)) {
+        auto connected = m_peer_manager->Peers();
+        if (connected.empty() && !m_peer_manager->Connect(p2p_endpoint->first, p2p_endpoint->second)) {
             return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
         }
-        return m_peer_manager->SubmitOperation(p2p_endpoint->first, p2p_endpoint->second, op);
+        connected = m_peer_manager->Peers();
+        std::vector<std::pair<std::string, uint16_t>> accepting_candidates;
+        accepting_candidates.reserve(connected.size());
+        for (const auto& peer : connected) accepting_candidates.emplace_back(peer.address, peer.port);
+        const auto submitted = m_peer_manager->SubmitOperationToAny(accepting_candidates, op);
+        return submitted.acknowledgment.value_or(
+            OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id});
     }
     if (endpoint.has_value()) {
         return SubmitOperationRemote(endpoint->first, endpoint->second, net_id, op);
@@ -708,12 +714,63 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
 {
     if (!m_config.p2p_endpoint || !m_peer_manager) return {};
     std::lock_guard p2p_lock(m_p2p_mutex);
-    const auto& [host, port] = *m_config.p2p_endpoint;
-    if (m_peer_manager->ConnectedCount() == 0 && !m_peer_manager->Connect(host, port)) {
-        return SyncPeerResult{.status = m_peer_manager->LastConnectStatus() == p2p::PeerConnectStatus::UNAVAILABLE
-            ? SyncPeerStatus::CONNECTION_FAILED : SyncPeerStatus::PROTOCOL_ERROR};
+
+    auto explicit_endpoints = GetExplicitPeerEndpoints();
+    if (std::find(explicit_endpoints.begin(), explicit_endpoints.end(), *m_config.p2p_endpoint) ==
+        explicit_endpoints.end()) {
+        explicit_endpoints.push_back(*m_config.p2p_endpoint);
     }
-    return m_peer_manager->SyncFromPeer(host, port, max_blocks);
+    m_peer_manager->SetExplicitEndpoints(explicit_endpoints);
+    m_peer_manager->PingAll();
+    m_peer_manager->DiscoverPeers();
+
+    const auto targets = GetPeerEndpointsForGossip();
+    const auto connected_before_dial = m_peer_manager->Peers();
+    if (connected_before_dial.size() < p2p::MAX_OUTBOUND_PEERS) {
+        const auto now = std::chrono::steady_clock::now();
+        const auto candidate = std::find_if(targets.begin(), targets.end(), [&](const auto& endpoint) {
+            const bool connected = std::any_of(connected_before_dial.begin(), connected_before_dial.end(),
+                [&](const p2p::PeerInfo& peer) { return peer.address == endpoint.first && peer.port == endpoint.second; });
+            const auto retry = m_peer_retry_after.find(endpoint);
+            return !connected && (retry == m_peer_retry_after.end() || now >= retry->second);
+        });
+        if (candidate != targets.end()) {
+            if (m_peer_manager->Connect(candidate->first, candidate->second)) {
+                m_peer_retry_after.erase(*candidate);
+            } else {
+                m_peer_retry_after[*candidate] = now + std::chrono::seconds{5};
+            }
+        }
+    }
+
+    auto peers = m_peer_manager->Peers();
+    if (peers.empty()) {
+        return SyncPeerResult{.status = SyncPeerStatus::CONNECTION_FAILED};
+    }
+    std::sort(peers.begin(), peers.end(), [](const p2p::PeerInfo& left, const p2p::PeerInfo& right) {
+        return left.hello.finalized_height > right.hello.finalized_height;
+    });
+
+    SyncPeerResult result{.status = SyncPeerStatus::CONNECTION_FAILED};
+    for (const auto& peer : peers) {
+        const auto attempt = m_peer_manager->SyncFromPeer(peer.address, peer.port, max_blocks);
+        if (attempt.IsConnected()) {
+            result = attempt;
+            break;
+        }
+        if (attempt.status == SyncPeerStatus::PROTOCOL_ERROR ||
+            attempt.status == SyncPeerStatus::NETWORK_MISMATCH) {
+            result = attempt;
+        }
+    }
+    m_peer_manager->FanoutRecentBlocks();
+    return result;
+}
+
+size_t CybouNodeRuntime::ConnectedPeerCount() const
+{
+    std::lock_guard p2p_lock(m_p2p_mutex);
+    return m_peer_manager ? m_peer_manager->ConnectedCount() : 0;
 }
 
 void CybouNodeRuntime::SetSubmitEndpoint(const std::string& host, const uint16_t port)

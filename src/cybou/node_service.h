@@ -33,10 +33,16 @@ struct CybouAuthorityServiceConfig {
     std::vector<std::pair<std::string, uint16_t>> peers;
 };
 
-/** Owns node runtime startup and the observer's periodic verified sync loop. */
+struct CybouNetworkServiceConfig {
+    std::chrono::milliseconds sync_interval{3000};
+    uint64_t sync_batch_size{64};
+    std::optional<std::pair<std::string, uint16_t>> listen_endpoint;
+};
+
+/** Owns node runtime startup and the observer's network lifecycle. */
 class CybouNodeService final {
 public:
-    using ObserverUpdate = std::function<bool(const SyncPeerResult&, const NodeRuntimeStatus&)>;
+    using NetworkUpdate = std::function<bool(const SyncPeerResult&, const NodeRuntimeStatus&, size_t)>;
 
     explicit CybouNodeService(CybouNodeServiceConfig config);
     ~CybouNodeService();
@@ -46,12 +52,12 @@ public:
 
     /** Open or initialize the local state, rejecting corrupt and foreign state. */
     void Start();
-    /** Start the single background observer sync worker. */
-    void StartObserverSync(
-        std::pair<std::string, uint16_t> bootstrap_peer,
-        std::chrono::milliseconds interval,
-        ObserverUpdate update);
-    void StopObserverSync();
+    /** Start shared observer P2P maintenance, verified sync, and optional inbound CYP2. */
+    void StartNetwork(
+        std::pair<std::string, uint16_t> fallback_peer,
+        CybouNetworkServiceConfig config,
+        NetworkUpdate update);
+    void StopNetwork();
     /** Run the authority block-feed, consensus, inbound CYP2, and gossip loops. */
     int RunAuthority(const CybouAuthorityServiceConfig& config, std::atomic_bool& stopping);
 
@@ -59,11 +65,14 @@ public:
     const CybouNodeRuntime& Runtime() const { return *m_runtime; }
 
 private:
+    struct ObserverListener;
     std::unique_ptr<CybouNodeRuntime> m_runtime;
+    std::unique_ptr<ObserverListener> m_observer_listener;
     CybouState m_genesis;
     bool m_started{false};
-    std::atomic_bool m_stop_sync{false};
+    std::atomic_bool m_stop_network{false};
     std::thread m_sync_thread;
+    std::thread m_listener_thread;
 };
 
 } // namespace cybou

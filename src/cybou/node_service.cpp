@@ -27,9 +27,19 @@ CybouNodeService::CybouNodeService(CybouNodeServiceConfig config)
 {
 }
 
+struct CybouNodeService::ObserverListener {
+    boost::asio::io_context io;
+    p2p::InboundPeerServer server;
+
+    ObserverListener(CybouNodeRuntime& runtime, const boost::asio::ip::tcp::endpoint& endpoint)
+        : server{runtime, io, endpoint}
+    {
+    }
+};
+
 CybouNodeService::~CybouNodeService()
 {
-    StopObserverSync();
+    StopNetwork();
 }
 
 void CybouNodeService::Start()
@@ -49,51 +59,72 @@ void CybouNodeService::Start()
     m_started = true;
 }
 
-void CybouNodeService::StartObserverSync(
-    std::pair<std::string, uint16_t> bootstrap_peer,
-    const std::chrono::milliseconds interval,
-    ObserverUpdate update)
+void CybouNodeService::StartNetwork(
+    std::pair<std::string, uint16_t> fallback_peer,
+    CybouNetworkServiceConfig config,
+    NetworkUpdate update)
 {
-    if (!m_started) throw std::logic_error("CYBOU node service must be started before observer sync");
-    if (m_runtime->GetStatus().is_authority) throw std::logic_error("authority runtime cannot start observer sync");
-    if (m_sync_thread.joinable()) throw std::logic_error("observer sync is already running");
-    if (interval <= std::chrono::milliseconds::zero()) throw std::invalid_argument("observer sync interval must be positive");
+    if (!m_started) throw std::logic_error("CYBOU node service must be started before network service");
+    if (m_runtime->GetStatus().is_authority) throw std::logic_error("authority runtime cannot start observer network service");
+    if (m_sync_thread.joinable() || m_listener_thread.joinable()) throw std::logic_error("observer network service is already running");
+    if (config.sync_interval <= std::chrono::milliseconds::zero()) throw std::invalid_argument("network sync interval must be positive");
+    if (config.sync_batch_size == 0 || config.sync_batch_size > 128) throw std::invalid_argument("invalid network sync batch size");
+    if (config.listen_endpoint && !m_runtime->HasP2pEndpoint()) {
+        throw std::invalid_argument("inbound CYP2 requires a configured outbound CYP2 peer");
+    }
+    if (fallback_peer.second == 0) throw std::invalid_argument("fallback peer port must be nonzero");
 
-    m_stop_sync.store(false);
-    m_sync_thread = std::thread{[this, peer = std::move(bootstrap_peer), interval, update = std::move(update)] {
-        while (!m_stop_sync.load()) {
+    m_stop_network.store(false);
+    try {
+        if (config.listen_endpoint) {
+            const auto address = boost::asio::ip::make_address(config.listen_endpoint->first);
+            if (config.listen_endpoint->second == 0) throw std::invalid_argument("network listener port must be nonzero");
+            m_observer_listener = std::make_unique<ObserverListener>(*m_runtime,
+                boost::asio::ip::tcp::endpoint{address, config.listen_endpoint->second});
+            m_listener_thread = std::thread{[this] { m_observer_listener->server.Run(m_stop_network); }};
+        }
+        m_sync_thread = std::thread{[this, peer = std::move(fallback_peer), config, update = std::move(update)] {
+        while (!m_stop_network.load()) {
             SyncPeerResult result;
             try {
-                result = m_runtime->HasP2pEndpoint() ? m_runtime->SyncFromConfiguredPeer(64) :
+                result = m_runtime->HasP2pEndpoint() ? m_runtime->SyncFromConfiguredPeer(config.sync_batch_size) :
                     m_runtime->SyncFromPeer(peer.first, peer.second, 100);
             } catch (...) {
                 result.status = SyncPeerStatus::PROTOCOL_ERROR;
             }
 
             try {
-                if (!update(result, m_runtime->GetStatus())) {
-                    m_stop_sync.store(true);
+                const auto connected = m_runtime->HasP2pEndpoint() ? m_runtime->ConnectedPeerCount() :
+                    static_cast<size_t>(result.IsConnected() ? 1 : 0);
+                if (!update(result, m_runtime->GetStatus(), connected)) {
+                    m_stop_network.store(true);
                 }
             } catch (...) {
                 // Keep an observer alive if a UI callback fails; protocol sync
                 // remains owned by this worker and can be retried next cycle.
             }
 
-            auto remaining = interval;
+            auto remaining = config.sync_interval;
             constexpr auto SLEEP_SLICE = std::chrono::milliseconds{200};
-            while (remaining > std::chrono::milliseconds::zero() && !m_stop_sync.load()) {
+            while (remaining > std::chrono::milliseconds::zero() && !m_stop_network.load()) {
                 const auto sleep_for = std::min(remaining, SLEEP_SLICE);
                 std::this_thread::sleep_for(sleep_for);
                 remaining -= sleep_for;
             }
         }
-    }};
+        }};
+    } catch (...) {
+        StopNetwork();
+        throw;
+    }
 }
 
-void CybouNodeService::StopObserverSync()
+void CybouNodeService::StopNetwork()
 {
-    m_stop_sync.store(true);
+    m_stop_network.store(true);
     if (m_sync_thread.joinable()) m_sync_thread.join();
+    if (m_listener_thread.joinable()) m_listener_thread.join();
+    m_observer_listener.reset();
 }
 
 int CybouNodeService::RunAuthority(const CybouAuthorityServiceConfig& config, std::atomic_bool& stopping)

@@ -795,7 +795,7 @@ BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured
             .finalized_tip = fixture.definition.genesis_block_id, .capabilities = cybou::p2p::CAP_SERVE_BLOCKS |
                 cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 106}) &&
             session.ServeNext(producer) && producer.ProduceBlock().has_value() &&
-            session.ServeNext(producer);
+            session.ServeNext(producer) && session.ServeNext(producer);
     }};
     cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "route-observer",
@@ -813,6 +813,7 @@ BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured
     BOOST_CHECK_EQUAL(synced.blocks_applied, 1U);
     BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(0), 1U);
     BOOST_CHECK(observer.GetFinalizedTip() == producer.GetFinalizedTip());
+    BOOST_CHECK_EQUAL(observer.ConnectedPeerCount(), 1U);
 }
 
 BOOST_AUTO_TEST_CASE(manager_discovers_peers_from_connected_peer)

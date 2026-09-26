@@ -16,6 +16,8 @@
 #include <QDateTime>
 #include <QMetaObject>
 
+#include <boost/asio/ip/address.hpp>
+
 #include <chrono>
 #include <filesystem>
 #include <optional>
@@ -65,6 +67,19 @@ void CybouDesktopController::start()
             std::optional<std::pair<std::string, uint16_t>>{std::make_pair(
                 p2p_host.isEmpty() ? std::string{endpoint.host} : p2p_host.toStdString(),
                 static_cast<uint16_t>(p2p_port))} : std::nullopt;
+        cybou::CybouNetworkServiceConfig network_config;
+        bool listen_port_ok{false};
+        const int listen_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_LISTEN_PORT", &listen_port_ok);
+        if (qEnvironmentVariableIsSet("CYBOU_DEV_P2P_LISTEN_PORT") &&
+            (!listen_port_ok || listen_port <= 0 || listen_port > 65535)) {
+            throw std::runtime_error("invalid CYBOU_DEV_P2P_LISTEN_PORT");
+        }
+        if (listen_port_ok) {
+            const auto listen_host = qEnvironmentVariable("CYBOU_DEV_P2P_LISTEN_HOST", "127.0.0.1");
+            const auto bind_address = boost::asio::ip::make_address(listen_host.toStdString());
+            const auto listener = std::make_pair(bind_address.to_string(), static_cast<uint16_t>(listen_port));
+            network_config.listen_endpoint = listener;
+        }
         cybou::NodeRuntimeConfig config{
             .network_definition = definition,
             .data_dir = data_dir,
@@ -72,6 +87,7 @@ void CybouDesktopController::start()
             .submit_endpoint = configured_p2p ? std::nullopt :
                 std::optional<std::pair<std::string, uint16_t>>{std::make_pair(std::string{endpoint.host}, endpoint.port)},
             .p2p_endpoint = configured_p2p,
+            .local_p2p_endpoint = network_config.listen_endpoint,
             .db_cache_bytes = 8 << 20,
         };
         m_node_service = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
@@ -100,10 +116,11 @@ void CybouDesktopController::start()
             static_cast<int>(status.validator_count));
         m_model->setPeerCount(0);
 
-        m_node_service->StartObserverSync(
+        m_node_service->StartNetwork(
             {std::string{endpoint.host}, endpoint.port},
-            std::chrono::seconds{3},
-            [this](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status) {
+            network_config,
+            [this](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status,
+                const size_t connected_peer_count) {
                 const bool bootstrap_reachable = sync_result.IsConnected();
                 if (sync_result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR ||
                     sync_result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH) {
@@ -129,11 +146,11 @@ void CybouDesktopController::start()
                 } catch (const std::exception& e) {
                     qWarning() << "cybou desktop service refresh error:" << e.what();
                 }
-                QMetaObject::invokeMethod(m_model, [model = m_model, runtime_status, bootstrap_reachable] {
+                QMetaObject::invokeMethod(m_model, [model = m_model, runtime_status, bootstrap_reachable, connected_peer_count] {
                     model->setSyncError({});
                     model->setFinalityStatus(static_cast<int>(runtime_status.finalized_height),
                         static_cast<int>(runtime_status.validator_count));
-                    model->setNodeStatus(true, bootstrap_reachable ? 1 : 0, true);
+                    model->setNodeStatus(true, static_cast<int>(connected_peer_count), true);
                     if (bootstrap_reachable) model->setLastSync(QDateTime::currentDateTime());
                 }, Qt::QueuedConnection);
                 return true;
@@ -141,7 +158,7 @@ void CybouDesktopController::start()
     } catch (const std::exception& e) {
         const QString reason = QString::fromLocal8Bit(e.what());
         qWarning() << "CYBOU desktop startup error:" << reason;
-        if (m_node_service) m_node_service->StopObserverSync();
+        if (m_node_service) m_node_service->StopNetwork();
         m_model->setIdentityService(nullptr);
         m_model->setMailService(nullptr);
         m_model->setWalletService(nullptr);
@@ -157,7 +174,7 @@ void CybouDesktopController::start()
 
 void CybouDesktopController::stop()
 {
-    if (m_node_service) m_node_service->StopObserverSync();
+    if (m_node_service) m_node_service->StopNetwork();
     if (m_model) {
         m_model->setIdentityService(nullptr);
         m_model->setMailService(nullptr);

@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <deque>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -134,7 +135,9 @@ public:
 
     /** Sync up to max_blocks from a remote peer block feed */
     SyncPeerResult SyncFromPeer(const std::string& host, uint16_t port, uint64_t max_blocks = 100);
+    /** Maintain discovered CYP2 sessions, fail over across peers, and sync verified blocks. */
     SyncPeerResult SyncFromConfiguredPeer(uint64_t max_blocks = 100);
+    size_t ConnectedPeerCount() const;
     bool HasP2pEndpoint() const { return m_config.p2p_endpoint.has_value(); }
 
     /** Remote operation submit endpoint */
@@ -179,6 +182,7 @@ private:
     std::optional<std::pair<std::string, uint16_t>> m_submit_endpoint;
     std::unique_ptr<p2p::PeerManager> m_peer_manager;
     mutable std::mutex m_p2p_mutex;
+    std::map<std::pair<std::string, uint16_t>, std::chrono::steady_clock::time_point> m_peer_retry_after;
     using ConsensusMessage = std::variant<BftProposalMsg, BftPrevoteMsg, BftPrecommitMsg>;
     std::deque<ConsensusMessage> m_consensus_outbox;
     std::optional<BftProposalMsg> m_replay_proposal;
