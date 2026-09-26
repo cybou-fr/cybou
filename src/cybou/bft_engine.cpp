@@ -779,7 +779,7 @@ bool BftValidatorNode::BufferFuturePrecommit(const BftPrecommitMsg& precommit)
     return true;
 }
 
-uint32_t BftValidatorNode::QuorumBackedFutureRound() const
+uint32_t BftValidatorNode::EvidenceBackedFutureRound() const
 {
     const size_t advance_threshold = RoundAdvanceThreshold(
         m_validator_set.validators.size(), m_validator_set.QuorumThreshold());
@@ -891,7 +891,7 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
     const bool vote_was_future = prevote.round > m_round;
     if (vote_was_future) {
         if (!BufferFuturePrevote(prevote)) return std::nullopt;
-        const uint32_t evidence_round = QuorumBackedFutureRound();
+        const uint32_t evidence_round = EvidenceBackedFutureRound();
         if (evidence_round <= m_round) {
             return std::nullopt;
         }
@@ -1026,7 +1026,7 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
     const bool vote_was_future = precommit.round > m_round;
     if (vote_was_future) {
         if (!BufferFuturePrecommit(precommit)) return false;
-        const uint32_t evidence_round = QuorumBackedFutureRound();
+        const uint32_t evidence_round = EvidenceBackedFutureRound();
         if (evidence_round <= m_round) {
             return false;
         }

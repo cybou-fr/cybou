@@ -51,6 +51,7 @@ struct CybouDesktopStatus {
     int peer_count{0};
     bool node_running{false};
     bool network_active{false};
+    QString sync_error;
     CybouIdentityState identity_state{CybouIdentityState::None};
     QString account_id;
     QString primary_name;
@@ -112,6 +113,8 @@ public:
         peer_count reflects the configured bootstrap authorities currently
         reachable (DEV: 0 or 1). No-op when unchanged. */
     void setPeerCount(int peer_count);
+    /** Core adapter entry: last fatal network synchronization error, if any. */
+    void setSyncError(const QString& error);
 
     /** Core-facing adapter entry: last successful sync round. Drives the
         "Synced x ago" indicator in the status strip; invalid until the

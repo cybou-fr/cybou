@@ -439,7 +439,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     };
     connect(m_to, &QLineEdit::textChanged, this, [this, refresh_meter] {
         const bool separators = m_to->text().contains(QRegularExpression(QStringLiteral("[,;]")));
-        m_to_hint->setText(tr("CYBOU mail v1 supports exactly one recipient."));
+        m_to_hint->setText(tr("CYBOU Mail supports exactly one recipient per message."));
         m_to_hint->setVisible(separators);
         m_to_hint->setStyleSheet(QStringLiteral("color: #dc2626;"));
         refresh_meter();

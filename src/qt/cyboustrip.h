@@ -87,8 +87,10 @@ public:
     {
         const auto& status = m_model->status();
         const bool connected = status.node_running && status.peer_count > 0;
-        m_connection_text->setText(connected ? QStringLiteral("Connected") : QStringLiteral("Connecting"));
-        m_connection_dot->setProperty("tint", connected ? "mint" : "amber");
+        m_connection_text->setText(!status.sync_error.isEmpty()
+            ? QStringLiteral("Connection error")
+            : (connected ? QStringLiteral("Connected") : QStringLiteral("Connecting")));
+        m_connection_dot->setProperty("tint", connected && status.sync_error.isEmpty() ? "mint" : "amber");
         restyle(m_connection_dot);
 
         m_sync_text->setText(m_model->lastSync().isValid()

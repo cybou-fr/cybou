@@ -239,8 +239,9 @@ private:
     std::optional<CybouBlock> m_recovered_locked_block;
     int32_t m_recovered_locked_round{-1};
 
-    // Future-round votes are buffered until a quorum of verified votes for
-    // one future round arrives. This prevents one validator from advancing
+    // Future-round votes are buffered until the round-advance evidence
+    // threshold of distinct verified validators is met. This threshold is
+    // lower than finality quorum and prevents one validator from advancing
     // peers merely by signing a vote for a later round.
     static constexpr size_t MAX_BUFFERED_FUTURE_ROUNDS = 64;
     static constexpr size_t MAX_BUFFERED_FUTURE_ROUNDS_PER_VALIDATOR = 8;
@@ -257,9 +258,9 @@ private:
     bool BufferFuturePrecommit(const BftPrecommitMsg& precommit);
     std::optional<BftPrecommitMsg> EvaluatePrevoteQuorum();
     bool EvaluatePrecommitQuorum();
-    // Lowest buffered future round (strictly above m_round) that has quorum
-    // evidence, or 0 if there is none.
-    uint32_t QuorumBackedFutureRound() const;
+    // Lowest buffered future round (strictly above m_round) that has enough
+    // distinct-validator round-advance evidence, or 0 if there is none.
+    uint32_t EvidenceBackedFutureRound() const;
 
     bool RecordSigningIntent(BftStep step, const uint256& digest);
 };

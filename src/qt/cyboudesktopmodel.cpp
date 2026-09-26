@@ -275,6 +275,13 @@ void CybouDesktopModel::setPeerCount(int peer_count)
     Q_EMIT statusChanged();
 }
 
+void CybouDesktopModel::setSyncError(const QString& error)
+{
+    if (m_status.sync_error == error) return;
+    m_status.sync_error = error;
+    Q_EMIT statusChanged();
+}
+
 void CybouDesktopModel::setLastSync(const QDateTime& when)
 {
     m_last_sync = when;

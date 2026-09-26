@@ -297,6 +297,17 @@ void CybouShellTests::adapterSettersDrivePages()
     QVERIFY(found_height);
     QVERIFY(found_fault);
 
+    const QString sync_error = QStringLiteral("Configured peer belongs to another CYBOU network.");
+    model->setSyncError(sync_error);
+    QCOMPARE(model->status().sync_error, sync_error);
+    bool found_sync_error = false;
+    for (const auto* label : network->findChildren<QLabel*>()) {
+        if (label->text() == sync_error) found_sync_error = true;
+    }
+    QVERIFY(found_sync_error);
+    model->setSyncError({});
+    QVERIFY(model->status().sync_error.isEmpty());
+
     // Identity lifecycle and balances flow through the same boundary.
     model->setIdentityState(CybouIdentityState::Active, QStringLiteral("acct-1"), 42);
     QCOMPARE(model->status().identity_state, CybouIdentityState::Active);

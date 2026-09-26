@@ -379,8 +379,10 @@ void NetworkPage::refresh()
     const bool finality_known = status.last_finalized_height >= 0;
 
     // Hero chips.
-    m_chip_healthy->setText(connected ? tr("Peer reachable") : tr("No peer connected"));
-    m_chip_healthy->setProperty("tint", connected ? "mint" : "amber");
+    m_chip_healthy->setText(!status.sync_error.isEmpty()
+        ? tr("Peer rejected")
+        : (connected ? tr("Peer reachable") : tr("No peer connected")));
+    m_chip_healthy->setProperty("tint", connected && status.sync_error.isEmpty() ? "mint" : "amber");
     m_chip_healthy->style()->unpolish(m_chip_healthy);
     m_chip_healthy->style()->polish(m_chip_healthy);
     m_chip_synced->setText(m_model->lastSync().isValid()
@@ -388,10 +390,14 @@ void NetworkPage::refresh()
         : tr("Peer check pending"));
 
     // Connection health.
-    m_health_metric->setText(connected ? tr("Connected") : tr("Disconnected"));
-    m_health_caption->setText(connected
-        ? tr("At least one configured peer is reachable.")
-        : tr("No configured peer is currently reachable."));
+    m_health_metric->setText(!status.sync_error.isEmpty()
+        ? tr("Peer error")
+        : (connected ? tr("Connected") : tr("Disconnected")));
+    m_health_caption->setText(!status.sync_error.isEmpty()
+        ? status.sync_error
+        : (connected
+            ? tr("At least one configured peer is reachable.")
+            : tr("No configured peer is currently reachable.")));
 
     // Synchronization.
     m_sync_state->setText(finality_known ? tr("Finalized height known") : tr("Waiting for finality"));
@@ -470,7 +476,9 @@ void NetworkPage::refresh()
     add_diag(tr("Network ID"), status.network_id.isEmpty() ? tr("Not available yet") : status.network_id);
     add_diag(tr("Connections"), QString::number(status.peer_count));
     add_diag(tr("Finalized height"), finality_known ? QLocale{}.toString(status.last_finalized_height) : tr("Not exposed yet"));
-    add_diag(tr("Sync status"), m_model->lastSync().isValid() ? tr("Peer contacted") : tr("Pending"));
+    add_diag(tr("Sync status"), !status.sync_error.isEmpty()
+        ? status.sync_error
+        : (m_model->lastSync().isValid() ? tr("Peer contacted") : tr("Pending")));
     add_diag(tr("Data directory"), status.data_directory.isEmpty() ? tr("Available after node startup") : status.data_directory);
 
     m_finality_hint->setText(finality_known

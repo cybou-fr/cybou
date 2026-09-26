@@ -64,7 +64,7 @@ void CybouNodeService::StartObserverSync(
         while (!m_stop_sync.load()) {
             SyncPeerResult result;
             try {
-                result = m_runtime->HasP2pEndpoint() ? m_runtime->SyncFromConfiguredPeer(1) :
+                result = m_runtime->HasP2pEndpoint() ? m_runtime->SyncFromConfiguredPeer(64) :
                     m_runtime->SyncFromPeer(peer.first, peer.second, 100);
             } catch (...) {
                 result.status = SyncPeerStatus::PROTOCOL_ERROR;

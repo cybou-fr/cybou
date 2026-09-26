@@ -89,7 +89,6 @@ void CybouDesktopController::start()
         const auto mailbox_path = m_data_directory / "mailbox.dat";
         m_mail_service = std::make_unique<cybou::CybouMailService>(
             runtime, m_identity_service->GetKeyStore(), mailbox_path);
-        if (std::filesystem::exists(mailbox_path)) m_mail_service->LoadMailbox();
         m_model->setMailService(m_mail_service.get());
 
         m_wallet_service = std::make_unique<cybou::CybouWalletService>(
@@ -106,10 +105,16 @@ void CybouDesktopController::start()
             std::chrono::seconds{3},
             [this](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status) {
                 const bool bootstrap_reachable = sync_result.IsConnected();
-                if (m_node_service->Runtime().HasP2pEndpoint() &&
-                    (sync_result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR ||
-                     sync_result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH)) {
-                    qWarning() << "cybou P2P peer rejected by protocol verification";
+                if (sync_result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR ||
+                    sync_result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH) {
+                    const auto message = sync_result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH
+                        ? QStringLiteral("Configured peer belongs to another CYBOU network.")
+                        : QStringLiteral("Configured peer failed CYBOU protocol verification.");
+                    qWarning() << message;
+                    QMetaObject::invokeMethod(m_model, [model = m_model, message] {
+                        model->setPeerCount(0);
+                        model->setSyncError(message);
+                    }, Qt::QueuedConnection);
                     return false;
                 }
                 try {
@@ -125,6 +130,7 @@ void CybouDesktopController::start()
                     qWarning() << "cybou desktop service refresh error:" << e.what();
                 }
                 QMetaObject::invokeMethod(m_model, [model = m_model, runtime_status, bootstrap_reachable] {
+                    model->setSyncError({});
                     model->setFinalityStatus(static_cast<int>(runtime_status.finalized_height),
                         static_cast<int>(runtime_status.validator_count));
                     model->setNodeStatus(true, bootstrap_reachable ? 1 : 0, true);
@@ -144,6 +150,7 @@ void CybouDesktopController::start()
         m_identity_service.reset();
         m_node_service.reset();
         m_model->setNodeStatus(false, 0, false);
+        m_model->setSyncError(reason);
         Q_EMIT startupFailed(reason);
     }
 }
