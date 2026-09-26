@@ -78,7 +78,7 @@ private:
 
     void refresh();
     void rebuildActivity();
-    void syncLedger();
+    void refreshLedgerView();
     void onSendClicked();
     void onLockClicked();
     void onReceiveClicked();

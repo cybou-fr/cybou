@@ -25,7 +25,6 @@
 #include <QStackedWidget>
 #include <QStyle>
 #include <QTextEdit>
-#include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -448,14 +447,10 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     connect(m_subject, &QLineEdit::textChanged, this, refresh_meter);
     connect(m_body, &QTextEdit::textChanged, this, refresh_meter);
 
-    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { updateGates(); syncMailbox(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { updateGates(); syncMailbox(); });
+    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { updateGates(); refreshMailboxView(); });
+    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { updateGates(); refreshMailboxView(); });
 
-    auto* sync_timer = new QTimer{this};
-    connect(sync_timer, &QTimer::timeout, this, [this] { syncMailbox(); });
-    sync_timer->start(3000);
-
-    syncMailbox();
+    refreshMailboxView();
     refresh_meter();
 }
 
@@ -820,7 +815,7 @@ void EmailPage::sendNow()
     m_to->clear();
     m_subject->clear();
     m_body->clear();
-    syncMailbox();
+    refreshMailboxView();
     closeComposer();
 }
 
@@ -853,11 +848,11 @@ void EmailPage::saveDraft()
     m_to->clear();
     m_subject->clear();
     m_body->clear();
-    syncMailbox();
+    refreshMailboxView();
     closeComposer();
 }
 
-void EmailPage::syncMailbox()
+void EmailPage::refreshMailboxView()
 {
     auto* service = m_model->mailService();
     if (!service) {
@@ -865,8 +860,6 @@ void EmailPage::syncMailbox()
         rebuildMessageList();
         return;
     }
-
-    service->SyncMailbox();
 
     QList<Message> loaded_messages;
     const std::vector<cybou::MailFolder> folders = {

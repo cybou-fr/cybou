@@ -24,7 +24,6 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
-#include <QTimer>
 #include <QVBoxLayout>
 
 using namespace CybouUi;
@@ -232,15 +231,11 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     m_gate_hint = noteLabel({}, this);
     root->addWidget(m_gate_hint);
 
-    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); syncLedger(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); syncLedger(); });
-
-    auto* sync_timer = new QTimer{this};
-    connect(sync_timer, &QTimer::timeout, this, [this] { syncLedger(); });
-    sync_timer->start(3000);
+    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); refreshLedgerView(); });
+    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); refreshLedgerView(); });
 
     refresh();
-    syncLedger();
+    refreshLedgerView();
 }
 
 QString WalletPage::kindText(EntryKind kind)
@@ -427,7 +422,7 @@ void WalletPage::onSendClicked()
     }
 
     QMessageBox::information(this, tr("Payment Submitted"), tr("Payment of %1 submitted to the network. BFT finality will confirm it shortly.").arg(cybouAmountText(amount)));
-    syncLedger();
+    refreshLedgerView();
     refresh();
 }
 
@@ -481,7 +476,7 @@ void WalletPage::onLockClicked()
     }
 
     QMessageBox::information(this, tr("Transfer Submitted"), tr("Transfer of %1 submitted to the network. BFT finality will confirm it shortly.").arg(cybouAmountText(amount)));
-    syncLedger();
+    refreshLedgerView();
     refresh();
 }
 
@@ -526,14 +521,12 @@ void WalletPage::onReceiveClicked()
     dialog.exec();
 }
 
-void WalletPage::syncLedger()
+void WalletPage::refreshLedgerView()
 {
     auto* service = m_model->walletService();
     if (!service) {
         return;
     }
-
-    service->SyncLedger();
 
     const auto [bal, sys] = service->GetBalances();
     m_model->setBalances(bal, sys);

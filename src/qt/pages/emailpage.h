@@ -95,7 +95,7 @@ private:
     Folder m_folder{FOLDER_INBOX};
     int m_current_message{-1};
 
-    void syncMailbox();
+    void refreshMailboxView();
 
     QStackedWidget* m_right_stack{nullptr};
     QListWidget* m_folders{nullptr};
