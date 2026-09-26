@@ -24,6 +24,7 @@
 #include <array>
 #include <filesystem>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -64,13 +65,16 @@ BOOST_AUTO_TEST_CASE(kv_store_reads_and_writes_existing_dbwrapper_format)
 
 BOOST_AUTO_TEST_CASE(kv_store_refuses_unsafe_wipe_paths)
 {
-    BOOST_CHECK_THROW((cybou::KVStore{.path = {}, .wipe_data = true}), std::runtime_error);
+    BOOST_CHECK_THROW((std::make_unique<cybou::KVStore>(cybou::KVStoreOptions{
+        .path = {}, .wipe_data = true})), std::runtime_error);
     const auto root = std::filesystem::current_path().root_path();
     BOOST_REQUIRE(!root.empty());
-    BOOST_CHECK_THROW((cybou::KVStore{.path = root, .wipe_data = true}), std::runtime_error);
+    BOOST_CHECK_THROW((std::make_unique<cybou::KVStore>(cybou::KVStoreOptions{
+        .path = root, .wipe_data = true})), std::runtime_error);
 
     const auto root_alias = root / "cybou-wipe-guard" / ".." / "..";
-    BOOST_CHECK_THROW((cybou::KVStore{.path = root_alias, .wipe_data = true}), std::runtime_error);
+    BOOST_CHECK_THROW((std::make_unique<cybou::KVStore>(cybou::KVStoreOptions{
+        .path = root_alias, .wipe_data = true})), std::runtime_error);
 }
 
 namespace {
