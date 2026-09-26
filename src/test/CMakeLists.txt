@@ -189,6 +189,7 @@ add_executable(cybou-core-test
   cybou_p2p_peer_manager_tests.cpp
   cybou_p2p_inbound_server_tests.cpp
   cybou_authority_node_tests.cpp
+  cybou_node_service_tests.cpp
   cybou_node_runtime_tests.cpp
   cybou_mail_service_tests.cpp
   cybou_wallet_service_tests.cpp
