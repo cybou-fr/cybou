@@ -19,6 +19,7 @@
 #include <QMenu>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QRegularExpression>
 #include <QStackedWidget>
 #include <QStyle>
@@ -180,6 +181,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     m_list = new QListWidget{middle};
     m_list->setObjectName(QStringLiteral("messageList"));
     m_list->setFocusPolicy(Qt::NoFocus);
+    m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     connect(m_list, &QListWidget::itemSelectionChanged, this, [this] {
         auto* item = m_list->currentItem();
         if (!item) return;
@@ -456,6 +458,38 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     refresh_meter();
 }
 
+void EmailPage::loadScreenshotFixture()
+{
+    Message message;
+    message.id = QStringLiteral("screenshot-fixture");
+    message.folder = FOLDER_INBOX;
+    message.from = QStringLiteral("8a4c51f1d65c7e93b10d42e6a7295f8c");
+    message.to = QStringLiteral("4d21b67a93c8520fbe16d4305a728c91");
+    message.subject = tr("A protected update for the project team");
+    message.body = tr("Hello,\n\nThe latest review is complete. The protocol evidence below is attached to this message, and the content remains protected on this device.\n\nBest,\nAlex");
+    message.received = QDateTime::currentDateTime();
+    message.read = true;
+    message.finality = Finality::Final;
+    message.has_evidence = true;
+    m_messages = {message};
+    m_folder = FOLDER_INBOX;
+    m_current_message = -1;
+    rebuildFolderList();
+    rebuildMessageList();
+    m_list->setCurrentRow(0);
+}
+
+void EmailPage::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    if (!m_list) return;
+    const int selected_row = m_list->currentRow();
+    rebuildMessageList();
+    if (selected_row >= 0 && selected_row < m_list->count()) {
+        m_list->setCurrentRow(selected_row);
+    }
+}
+
 qint64 EmailPage::payloadBytes() const
 {
     // The strict MailTx size covers everything the protocol commits to:
@@ -539,6 +573,9 @@ void EmailPage::rebuildFolderList()
 void EmailPage::rebuildMessageList()
 {
     const QString needle = m_search->text().trimmed().toLower();
+    const int list_width = m_list->viewport()->width();
+    const bool compact = list_width < 420;
+    const bool narrow = list_width < 300;
     m_list->clear();
     bool has_rows = false;
     for (int i = 0; i < m_messages.size(); ++i) {
@@ -555,6 +592,7 @@ void EmailPage::rebuildMessageList()
         const QString peer = m_folder == FOLDER_SENT || m_folder == FOLDER_DRAFTS ? message.to : message.from;
 
         auto* row = new QFrame{m_list};
+        row->setMinimumWidth(0);
         auto* row_layout = new QHBoxLayout{row};
         row_layout->setContentsMargins(10, 9, 10, 9);
         row_layout->setSpacing(10);
@@ -569,30 +607,40 @@ void EmailPage::rebuildMessageList()
         name->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;").arg(title_color));
         auto* subject = new QLabel{message.subject.isEmpty() ? tr("(no subject)") : message.subject, row};
         subject->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;").arg(title_color));
+        subject->setWordWrap(true);
+        subject->setMinimumWidth(0);
+        subject->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         QString snippet_text = message.body;
         snippet_text.replace(QLatin1Char('\n'), QLatin1Char(' '));
-        auto* snippet = new QLabel{snippet_text, row};
-        snippet->setObjectName(QStringLiteral("rowSub"));
-        snippet->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
-        snippet->setMaximumWidth(260);
         main->addWidget(name);
         main->addWidget(subject);
-        if (!snippet_text.isEmpty()) main->addWidget(snippet);
+        if (!snippet_text.isEmpty() && !narrow) {
+            auto* snippet = new QLabel{snippet_text, row};
+            snippet->setObjectName(QStringLiteral("rowSub"));
+            snippet->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
+            snippet->setMaximumWidth(260);
+            snippet->setWordWrap(true);
+            snippet->setMinimumWidth(0);
+            snippet->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+            main->addWidget(snippet);
+        }
         row_layout->addLayout(main, 1);
 
-        auto* side = new QVBoxLayout;
-        side->setSpacing(4);
-        auto* time = new QLabel{QLocale{}.toString(message.received, QLocale::ShortFormat), row};
-        time->setObjectName(QStringLiteral("rowMeta"));
-        time->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
-        side->addWidget(time, 0, Qt::AlignRight);
-        if (message.finality == Finality::Final) {
-            auto* encrypted = new QLabel{tr("Encrypted"), row};
-            encrypted->setObjectName(QStringLiteral("pill"));
-            encrypted->setProperty("tint", "mint");
-            side->addWidget(encrypted, 0, Qt::AlignRight);
+        if (!compact) {
+            auto* side = new QVBoxLayout;
+            side->setSpacing(4);
+            auto* time = new QLabel{QLocale{}.toString(message.received, QLocale::ShortFormat), row};
+            time->setObjectName(QStringLiteral("rowMeta"));
+            time->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
+            side->addWidget(time, 0, Qt::AlignRight);
+            if (message.finality == Finality::Final) {
+                auto* encrypted = new QLabel{tr("Encrypted"), row};
+                encrypted->setObjectName(QStringLiteral("pill"));
+                encrypted->setProperty("tint", "mint");
+                side->addWidget(encrypted, 0, Qt::AlignRight);
+            }
+            row_layout->addLayout(side);
         }
-        row_layout->addLayout(side);
 
         auto* item = new QListWidgetItem{m_list};
         item->setData(Qt::UserRole, i);

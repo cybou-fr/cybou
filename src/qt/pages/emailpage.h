@@ -18,6 +18,7 @@ class QLineEdit;
 class QListWidget;
 class QProgressBar;
 class QPushButton;
+class QResizeEvent;
 class QStackedWidget;
 class QTextEdit;
 class QToolButton;
@@ -48,6 +49,10 @@ class EmailPage : public QWidget
 public:
     EmailPage(CybouDesktopModel* model, std::function<void()> identity_requested,
         QWidget* parent = nullptr);
+    void loadScreenshotFixture();
+
+protected:
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     /** Strict MailTx ceiling in bytes. Placeholder until core exports the

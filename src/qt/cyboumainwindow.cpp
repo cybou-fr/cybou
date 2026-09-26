@@ -89,7 +89,10 @@ CybouMainWindow::CybouMainWindow(
     setObjectName("cybouMainWindow");
     setWindowTitle(tr("CYBOU — Protected communication infrastructure"));
     setMinimumSize(1040, 720);
-    resize(1280, 860);
+    const int screenshot_width = qEnvironmentVariableIntValue("CYBOU_SCREENSHOT_WIDTH");
+    const int screenshot_height = qEnvironmentVariableIntValue("CYBOU_SCREENSHOT_HEIGHT");
+    resize(screenshot_width > 0 ? screenshot_width : 1280,
+        screenshot_height > 0 ? screenshot_height : 860);
     buildShell();
     buildMenus();
     applyStyle();
@@ -113,6 +116,13 @@ CybouMainWindow::CybouMainWindow(
                 this->grab().save(QDir{shot_dir}.filePath(QStringLiteral("%1-%2.png").arg(i).arg(slug)));
                 // For the email page also capture the composer surface.
                 if (slug == QLatin1String{"email"}) {
+                    if (qEnvironmentVariableIsSet("CYBOU_SCREENSHOT_EMAIL_MESSAGE")) {
+                        if (auto* email = static_cast<EmailPage*>(m_pages->widget(i))) {
+                            email->loadScreenshotFixture();
+                            qApp->processEvents();
+                            this->grab().save(QDir{shot_dir}.filePath(QStringLiteral("%1-%2-message.png").arg(i).arg(slug)));
+                        }
+                    }
                     const auto buttons = m_pages->widget(i)->findChildren<QPushButton*>();
                     for (auto* button : buttons) {
                         if (button->text() == tr("Compose")) { button->click(); break; }
