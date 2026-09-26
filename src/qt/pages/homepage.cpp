@@ -60,6 +60,8 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
       m_identity_requested{std::move(identity_requested)},
       m_wallet_requested{std::move(wallet_requested)}
 {
+    setMinimumWidth(0);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     auto* root = new QHBoxLayout{this};
     root->setContentsMargins(24, 22, 24, 22);
     root->setSpacing(18);
@@ -70,14 +72,18 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
 
     auto* stats = new QVBoxLayout;
     stats->setSpacing(14);
-    stats->addWidget(buildMailCard(), 1);
-    stats->addWidget(buildFilesCard(), 1);
-    stats->addWidget(buildDevicesCard(), 1);
+    stats->addWidget(buildMailCard());
+    stats->addWidget(buildFilesCard());
+    stats->addWidget(buildDevicesCard());
     left->addLayout(stats);
     left->addStretch();
 
-    root->addLayout(left, 3);
-    root->addWidget(buildActivityCard(), 2);
+    auto* activity = buildActivityCard();
+    activity->setMinimumWidth(240);
+    activity->setMaximumWidth(380);
+    activity->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    root->addLayout(left, 2);
+    root->addWidget(activity, 1);
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     auto* ticker = new QTimer{this};
@@ -133,6 +139,8 @@ QWidget* HomePage::buildIdentityHero()
 QWidget* HomePage::buildMailCard()
 {
     auto* card = Card(this);
+    card->setMinimumWidth(0);
+    card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     auto* layout = new QVBoxLayout{card};
     layout->setContentsMargins(22, 18, 22, 18);
     layout->setSpacing(10);
@@ -165,6 +173,8 @@ QWidget* HomePage::buildMailCard()
 QWidget* HomePage::buildFilesCard()
 {
     auto* card = Card(this);
+    card->setMinimumWidth(0);
+    card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     auto* layout = new QVBoxLayout{card};
     layout->setContentsMargins(22, 18, 22, 18);
     layout->setSpacing(10);
@@ -195,6 +205,8 @@ QWidget* HomePage::buildFilesCard()
 QWidget* HomePage::buildDevicesCard()
 {
     auto* card = Card(this);
+    card->setMinimumWidth(0);
+    card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     auto* layout = new QVBoxLayout{card};
     layout->setContentsMargins(22, 18, 22, 18);
     layout->setSpacing(10);

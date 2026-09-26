@@ -11,6 +11,7 @@
 
 #include <QBrush>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -64,14 +65,18 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
       m_model{model},
       m_identity_requested{std::move(identity_requested)}
 {
+    setMinimumWidth(0);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     auto* root = new QHBoxLayout{this};
-    root->setContentsMargins(20, 18, 20, 18);
-    root->setSpacing(14);
+    root->setContentsMargins(14, 16, 14, 16);
+    root->setSpacing(12);
 
     // ---- Left rail: compose, folders, labels ------------------------------
     auto* rail = new QFrame{this};
     rail->setObjectName(QStringLiteral("card"));
-    rail->setFixedWidth(232);
+    rail->setMinimumWidth(176);
+    rail->setMaximumWidth(220);
+    rail->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     auto* rail_layout = new QVBoxLayout{rail};
     rail_layout->setContentsMargins(14, 14, 14, 14);
     rail_layout->setSpacing(10);
@@ -133,6 +138,8 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     // ---- Middle: search + message list ------------------------------------
     auto* middle = new QFrame{this};
     middle->setObjectName(QStringLiteral("card"));
+    middle->setMinimumWidth(0);
+    middle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     auto* middle_layout = new QVBoxLayout{middle};
     middle_layout->setContentsMargins(14, 14, 14, 14);
     middle_layout->setSpacing(10);
@@ -140,21 +147,23 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     // Identity banner across the top of the mail view (hidden once active).
     m_banner = new QFrame{middle};
     m_banner->setObjectName(QStringLiteral("identityBanner"));
-    auto* banner_layout = new QHBoxLayout{m_banner};
+    auto* banner_layout = new QGridLayout{m_banner};
     banner_layout->setContentsMargins(14, 10, 14, 10);
     banner_layout->setSpacing(10);
     auto* banner_chip = new QLabel{m_banner};
     banner_chip->setPixmap(glyphPixmap(Glyph::Info, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
-    banner_layout->addWidget(banner_chip, 0, Qt::AlignVCenter);
+    banner_layout->addWidget(banner_chip, 0, 0, Qt::AlignTop);
     m_banner_text = new QLabel{m_banner};
     m_banner_text->setObjectName(QStringLiteral("bodyText"));
     m_banner_text->setWordWrap(true);
-    m_banner_text->setMinimumWidth(180);
-    banner_layout->addWidget(m_banner_text, 1);
+    m_banner_text->setMinimumWidth(0);
+    m_banner_text->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    banner_layout->addWidget(m_banner_text, 0, 1);
     m_banner_action = new QPushButton{tr("Create identity"), m_banner};
     m_banner_action->setObjectName(QStringLiteral("secondaryButton"));
     connect(m_banner_action, &QPushButton::clicked, this, [this] { m_identity_requested(); });
-    banner_layout->addWidget(m_banner_action, 0, Qt::AlignVCenter);
+    banner_layout->addWidget(m_banner_action, 1, 1, Qt::AlignLeft);
+    banner_layout->setColumnStretch(1, 1);
     middle_layout->addWidget(m_banner);
 
     auto* search_row = new QHBoxLayout;
@@ -190,11 +199,13 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
         showMessage(message);
     });
     middle_layout->addWidget(m_list, 1);
-    root->addWidget(middle, 4);
+    root->addWidget(middle, 5);
 
     // ---- Right: reading pane and composer share a stack -------------------
     m_right_stack = new QStackedWidget{this};
-    root->addWidget(m_right_stack, 6);
+    m_right_stack->setMinimumWidth(0);
+    m_right_stack->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    root->addWidget(m_right_stack, 7);
 
     auto* mail_view = new QWidget{m_right_stack};
     auto* mail_layout = new QVBoxLayout{mail_view};
@@ -210,6 +221,9 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     auto* subject_row = new QHBoxLayout;
     m_reader_subject = new QLabel{m_reader};
     m_reader_subject->setObjectName(QStringLiteral("pageTitle"));
+    m_reader_subject->setWordWrap(true);
+    m_reader_subject->setMinimumWidth(0);
+    m_reader_subject->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     subject_row->addWidget(m_reader_subject, 1);
     auto* nav_left = IconButton(Glyph::ChevronLeft, m_reader, tr("Previous message"));
     auto* nav_right = IconButton(Glyph::ChevronRight, m_reader, tr("Next message"));
