@@ -103,25 +103,6 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   common/url.cpp
   compressor.cpp
   core_io.cpp
-  cybou/account_creation.cpp
-  cybou/bft.cpp
-  cybou/bft_engine.cpp
-  cybou/block.cpp
-  cybou/evidence.cpp
-  cybou/identity.cpp
-  cybou/identity_authorization.cpp
-  cybou/identity_crypto.cpp
-  cybou/identity_material.cpp
-  cybou/identity_registry.cpp
-  cybou/identity_registry_codec.cpp
-  cybou/identity_vault.cpp
-  cybou/keystore.cpp
-  cybou/payment.cpp
-  cybou/recovery_phrase.cpp
-  cybou/signing.cpp
-  cybou/signing_openssl.cpp
-  cybou/state.cpp
-  cybou/validator.cpp
   deploymentinfo.cpp
   external_signer.cpp
   init/common.cpp
@@ -164,8 +145,41 @@ target_link_libraries(bitcoin_common
     $<$<PLATFORM_ID:Windows>:ws2_32>
     $<$<PLATFORM_ID:Windows>:crypt32>
 )
+
+# CYBOU consensus and identity implementation, kept separate from the
+# inherited Bitcoin common library.
+add_library(cybou_core STATIC
+  cybou/account_creation.cpp
+  cybou/bft.cpp
+  cybou/bft_engine.cpp
+  cybou/block.cpp
+  cybou/evidence.cpp
+  cybou/identity.cpp
+  cybou/identity_authorization.cpp
+  cybou/identity_crypto.cpp
+  cybou/identity_material.cpp
+  cybou/identity_registry.cpp
+  cybou/identity_registry_codec.cpp
+  cybou/identity_vault.cpp
+  cybou/keystore.cpp
+  cybou/payment.cpp
+  cybou/recovery_phrase.cpp
+  cybou/signing.cpp
+  cybou/signing_openssl.cpp
+  cybou/state.cpp
+  cybou/validator.cpp
+)
+target_link_libraries(cybou_core
+  PUBLIC
+    bitcoin_consensus
+    bitcoin_util
+  PRIVATE
+    Boost::headers
+    OpenSSL::Crypto
+    secp256k1
+)
 if(CYBOU_ENABLE_TEST_HOOKS)
-  target_compile_definitions(bitcoin_common PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
+  target_compile_definitions(cybou_core PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
 endif()
 
 include(InstallBinaryComponent)
@@ -194,8 +208,7 @@ add_library(cybou_node STATIC
 )
 target_link_libraries(cybou_node
   PUBLIC
-    core_interface
-    bitcoin_common
+    cybou_core
     bitcoin_util
     leveldb
     minisketch

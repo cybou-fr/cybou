@@ -205,6 +205,8 @@ add_executable(cybou-core-test
 add_windows_application_manifest(cybou-core-test)
 
 target_link_libraries(cybou-core-test
+  cybou_core
+  cybou_node
   core_interface
   test_util
   bitcoin_cli
