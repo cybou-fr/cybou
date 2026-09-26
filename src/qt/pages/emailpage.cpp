@@ -5,6 +5,7 @@
 #include <qt/pages/emailpage.h>
 
 #include <cybou/mail_service.h>
+#include <cybou/hex.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
@@ -192,7 +193,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
         if (m_folder == FOLDER_INBOX && !message.read) {
             message.read = true;
             if (auto* service = m_model->mailService()) {
-                const auto id_opt = uint256::FromUserHex(message.id.toStdString());
+                const auto id_opt = cybou::ParseUint256UserHex(message.id.toStdString());
                 if (id_opt) service->MarkAsRead(*id_opt, true);
             }
             rebuildFolderList();
@@ -259,7 +260,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
         Message& message = m_messages[m_current_message];
         message.read = false;
         if (auto* service = m_model->mailService()) {
-            const auto id_opt = uint256::FromUserHex(message.id.toStdString());
+            const auto id_opt = cybou::ParseUint256UserHex(message.id.toStdString());
             if (id_opt) service->MarkAsRead(*id_opt, false);
         }
         rebuildFolderList();
@@ -790,7 +791,7 @@ void EmailPage::sendNow()
     const QString body_str = m_body->toPlainText();
 
     if (auto* service = m_model->mailService()) {
-        const auto rec_u256 = uint256::FromUserHex(to_str.toStdString());
+        const auto rec_u256 = cybou::ParseUint256UserHex(to_str.toStdString());
         if (!rec_u256 || rec_u256->IsNull()) {
             m_send_hint->setText(tr("Invalid recipient account ID."));
             m_send_hint->setVisible(true);

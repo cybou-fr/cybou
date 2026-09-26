@@ -180,6 +180,7 @@ add_executable(cybou-core-test
   cybou_identity_tests.cpp
   cybou_identity_authorization_tests.cpp
   cybou_identity_crypto_tests.cpp
+  cybou_hex_tests.cpp
   cybou_identity_registry_tests.cpp
   cybou_identity_material_tests.cpp
   cybou_identity_service_tests.cpp

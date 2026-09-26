@@ -2,15 +2,17 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/mail_service.h>
+#include <cybou/hex.h>
 
 #include <crypto/chacha20poly1305.h>
 #include <crypto/common.h>
 #include <crypto/hkdf_sha256_32.h>
 #include <crypto/sha256.h>
-#include <random.h>
+#include <openssl/rand.h>
 #include <support/cleanse.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <ctime>
 #include <fstream>
 #include <string_view>
@@ -507,11 +509,11 @@ uint256 CybouMailService::SaveDraft(
     if (existing_id.has_value()) {
         id = *existing_id;
     } else {
-        GetRandBytes(id);
+        if (RAND_bytes(id.begin(), static_cast<int>(id.size())) != 1) std::abort();
     }
 
     AccountId rec_id;
-    const auto rec_u256 = uint256::FromUserHex(recipient_hex);
+    const auto rec_u256 = ParseUint256UserHex(recipient_hex);
     if (rec_u256.has_value() && !rec_u256->IsNull()) {
         rec_id = AccountId{*rec_u256};
     }

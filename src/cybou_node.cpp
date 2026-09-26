@@ -4,6 +4,7 @@
 #include <cybou/authority_node.h>
 #include <cybou/block_feed.h>
 #include <cybou/bootstrap_nodes.h>
+#include <cybou/hex.h>
 #include <cybou/network_definition.h>
 #include <cybou/node_runtime.h>
 #include <cybou/p2p/inbound_server.h>
@@ -198,7 +199,7 @@ int Main(const int argc, char* argv[])
     std::signal(SIGINT, Stop);
     std::signal(SIGTERM, Stop);
     if (std::string_view{argv[1]} == "operation-status" && argc == 5) {
-        const auto op_id = uint256::FromUserHex(argv[4]);
+        const auto op_id = cybou::ParseUint256UserHex(argv[4]);
         if (!op_id || op_id->IsNull()) throw std::runtime_error("invalid OperationID");
         cybou::NodeRuntimeConfig config{.network_definition = network->definition,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};

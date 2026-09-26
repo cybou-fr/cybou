@@ -154,6 +154,7 @@ add_library(cybou_core STATIC
   cybou/bft_engine.cpp
   cybou/block.cpp
   cybou/evidence.cpp
+  cybou/hex.cpp
   cybou/identity.cpp
   cybou/identity_authorization.cpp
   cybou/identity_crypto.cpp
@@ -172,7 +173,7 @@ add_library(cybou_core STATIC
 target_link_libraries(cybou_core
   PUBLIC
     bitcoin_consensus
-    bitcoin_util
+    bitcoin_crypto
   PRIVATE
     Boost::headers
     OpenSSL::Crypto
@@ -209,7 +210,6 @@ add_library(cybou_node STATIC
 target_link_libraries(cybou_node
   PUBLIC
     cybou_core
-    bitcoin_util
     leveldb
     minisketch
     univalue
@@ -217,6 +217,7 @@ target_link_libraries(cybou_node
   PRIVATE
     $<TARGET_NAME_IF_EXISTS:libevent::core>
     $<TARGET_NAME_IF_EXISTS:libevent::extra>
+    OpenSSL::Crypto
     $<$<PLATFORM_ID:Windows>:crypt32>
 )
 

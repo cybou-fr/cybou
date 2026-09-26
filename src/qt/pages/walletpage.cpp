@@ -5,6 +5,7 @@
 #include <qt/pages/walletpage.h>
 
 #include <cybou/wallet_service.h>
+#include <cybou/hex.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
@@ -410,7 +411,7 @@ void WalletPage::onSendClicked()
     }
 
     const QString to_str = recipient_edit->text().trimmed();
-    const auto rec_u256 = uint256::FromUserHex(to_str.toStdString());
+    const auto rec_u256 = cybou::ParseUint256UserHex(to_str.toStdString());
     if (!rec_u256 || rec_u256->IsNull()) {
         QMessageBox::warning(this, tr("Invalid Recipient"), tr("Please enter a valid 64-character hex Account ID."));
         return;

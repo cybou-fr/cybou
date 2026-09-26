@@ -2,8 +2,8 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/identity_service.h>
+#include <openssl/rand.h>
 
-#include <random.h>
 #include <support/cleanse.h>
 
 #include <algorithm>
@@ -377,7 +377,10 @@ IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
             IdentityMaterial material;
             std::copy_n(account->Value().begin(), material.account_id.size(), material.account_id.begin());
             material.recovery_entropy = *entropy;
-            GetStrongRandBytes(material.device_secret);
+            if (RAND_priv_bytes(material.device_secret.data(), static_cast<int>(material.device_secret.size())) != 1) {
+                m_phase.store(IdentityCreationPhase::FAILED);
+                return Failure(IdentityCreationPhase::FAILED, "Secure random generator failed", *account);
+            }
             if (!m_keystore.LoadMaterial(std::move(material)) || !m_keystore.SaveToFile(vault_path, password)) {
                 m_phase.store(IdentityCreationPhase::FAILED);
                 return Failure(IdentityCreationPhase::FAILED, "Cannot save and verify recovery vault", *account);
