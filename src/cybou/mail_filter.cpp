@@ -3,10 +3,9 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/mail_filter.h>
+#include <cybou/gcs_filter.h>
 
-#include <blockfilter.h>
 #include <crypto/sha256.h>
-#include <streams.h>
 
 #include <algorithm>
 #include <string_view>
@@ -50,11 +49,9 @@ bool CybouMailDiscoveryFilter::Match(const uint256& discovery_tag) const
     if (num_elements == 0 || encoded_filter.empty()) {
         return false;
     }
-    GCSFilter::Params params(block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M);
+    const gcs::Params params{block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M};
     try {
-        GCSFilter gcs(params, encoded_filter, false);
-        GCSFilter::Element elem(discovery_tag.begin(), discovery_tag.end());
-        return gcs.Match(elem);
+        return gcs::Match(params, encoded_filter, discovery_tag);
     } catch (...) {
         return false;
     }
@@ -65,15 +62,14 @@ bool CybouMailDiscoveryFilter::MatchAny(std::span<const uint256> discovery_tags)
     if (num_elements == 0 || encoded_filter.empty() || discovery_tags.empty()) {
         return false;
     }
-    GCSFilter::Params params(block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M);
+    const gcs::Params params{block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M};
     try {
-        GCSFilter gcs(params, encoded_filter, false);
-        GCSFilter::ElementSet elements;
+        std::vector<gcs::Element> elements;
         elements.reserve(discovery_tags.size());
         for (const auto& tag : discovery_tags) {
-            elements.emplace(tag.begin(), tag.end());
+            elements.emplace_back(tag.begin(), tag.end());
         }
-        return gcs.MatchAny(elements);
+        return gcs::MatchAny(params, encoded_filter, elements);
     } catch (...) {
         return false;
     }
@@ -113,20 +109,18 @@ uint256 CybouMailDiscoveryFilter::ComputeFilterHeader(const uint256& prev_filter
 
 CybouMailDiscoveryFilter BuildMailDiscoveryFilter(const uint256& block_id, std::span<const uint256> discovery_tags)
 {
-    GCSFilter::Params params(block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M);
-    GCSFilter::ElementSet elements;
+    const gcs::Params params{block_id.GetUint64(0), block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M};
+    std::vector<gcs::Element> elements;
     elements.reserve(discovery_tags.size());
     for (const auto& tag : discovery_tags) {
-        elements.emplace(tag.begin(), tag.end());
+        elements.emplace_back(tag.begin(), tag.end());
     }
-
-    GCSFilter gcs(params, elements);
 
     CybouMailDiscoveryFilter filter;
     filter.version = MAIL_DISCOVERY_FILTER_VERSION;
     filter.block_id = block_id;
-    filter.num_elements = gcs.GetN();
-    filter.encoded_filter = gcs.GetEncoded();
+    filter.encoded_filter = gcs::Build(params, elements);
+    filter.num_elements = gcs::ElementCount(params, filter.encoded_filter);
     return filter;
 }
 
@@ -186,9 +180,9 @@ std::optional<CybouMailDiscoveryFilter> DeserializeMailDiscoveryFilter(std::span
 
     filter.encoded_filter.assign(bytes.begin() + offset, bytes.end());
 
-    SpanReader stream{filter.encoded_filter};
     try {
-        uint64_t gcs_n = ReadCompactSize(stream);
+        const gcs::Params params{filter.block_id.GetUint64(0), filter.block_id.GetUint64(1), GCS_PARAM_P, GCS_PARAM_M};
+        const uint32_t gcs_n = gcs::ElementCount(params, filter.encoded_filter);
         if (gcs_n != filter.num_elements) {
             return std::nullopt;
         }

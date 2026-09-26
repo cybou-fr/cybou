@@ -181,6 +181,7 @@ add_library(cybou_node STATIC
   cybou/block_feed.cpp
   cybou/network_definition.cpp
   cybou/protocol_operation.cpp
+  cybou/gcs_filter.cpp
   cybou/mail_filter.cpp
   cybou/mail_service.cpp
   cybou/wallet_service.cpp
@@ -190,7 +191,6 @@ add_library(cybou_node STATIC
   cybou/p2p/session.cpp
   cybou/p2p/inbound_server.cpp
   cybou/p2p/peer_manager.cpp
-  blockfilter.cpp
 )
 target_link_libraries(cybou_node
   PUBLIC
@@ -210,6 +210,7 @@ target_link_libraries(cybou_node
 # P2P and RPC server functionality used by `bitcoind` and `bitcoin-qt` executables.
 add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   dbwrapper.cpp
+  blockfilter.cpp
   addrdb.cpp
   addrman.cpp
   banman.cpp

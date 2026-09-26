@@ -15,6 +15,7 @@
 #include <cybou/signing.h>
 #include <cybou/state_store.h>
 #include <cybou/validator.h>
+#include <blockfilter.h>
 #include <test/util/setup_common.h>
 #include <uint256.h>
 
@@ -185,6 +186,24 @@ cybou::AccountCreateOp MakeTestAccountCreate(
 } // namespace
 
 BOOST_FIXTURE_TEST_SUITE(cybou_mail_filter_tests, BasicTestingSetup)
+
+BOOST_AUTO_TEST_CASE(mail_gcs_encoding_matches_legacy_blockfilter)
+{
+    const uint256 block_id{uint256::FromUserHex("4242424242424242424242424242424242424242424242424242424242424242").value()};
+    uint256 second_tag;
+    second_tag.begin()[0] = 2;
+    std::vector<uint256> tags{uint256::ONE, second_tag, uint256::ONE};
+    const auto native_filter = cybou::BuildMailDiscoveryFilter(block_id, tags);
+
+    GCSFilter::Params params{block_id.GetUint64(0), block_id.GetUint64(1), cybou::GCS_PARAM_P, cybou::GCS_PARAM_M};
+    GCSFilter::ElementSet elements;
+    for (const auto& tag : tags) elements.emplace(tag.begin(), tag.end());
+    const GCSFilter legacy_filter{params, elements};
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        native_filter.encoded_filter.begin(), native_filter.encoded_filter.end(),
+        legacy_filter.GetEncoded().begin(), legacy_filter.GetEncoded().end());
+    BOOST_CHECK_EQUAL(native_filter.num_elements, legacy_filter.GetN());
+}
 
 BOOST_AUTO_TEST_CASE(recipient_discovery_tag_derivation)
 {
