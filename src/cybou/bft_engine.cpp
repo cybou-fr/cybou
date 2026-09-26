@@ -781,16 +781,17 @@ bool BftValidatorNode::BufferFuturePrecommit(const BftPrecommitMsg& precommit)
 
 uint32_t BftValidatorNode::QuorumBackedFutureRound() const
 {
-    const size_t quorum = m_validator_set.QuorumThreshold();
+    const size_t advance_threshold = RoundAdvanceThreshold(
+        m_validator_set.validators.size(), m_validator_set.QuorumThreshold());
     uint32_t best{0};
     for (const auto& [round, votes] : m_future_prevotes) {
-        if (round > m_round && votes.size() >= quorum) {
+        if (round > m_round && votes.size() >= advance_threshold) {
             best = round;
             break;
         }
     }
     for (const auto& [round, votes] : m_future_precommits) {
-        if (round > m_round && round < (best ? best : UINT32_MAX) && votes.size() >= quorum) {
+        if (round > m_round && round < (best ? best : UINT32_MAX) && votes.size() >= advance_threshold) {
             best = round;
             break;
         }

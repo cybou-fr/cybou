@@ -10,8 +10,8 @@ Includes:
 - Packet/delivery disturbance (delayed drain) and real periodic reconnect
   (CYBOU_RECONNECT_INTERVAL_MS is set for every validator).
 - Two validators frozen with SIGSTOP: the remaining pair must stall without
-  quorum, and one resumed validator must rejoin the unfinished height so the
-  height can finalize (resume is required for quorum).
+  quorum while advancing at least five rounds; a resumed validator must use
+  f+1 future-round evidence to rejoin, then the height finalizes at 3/4 quorum.
 - 10-50 consecutive heights with periodic kill/restart churn.
 """
 
@@ -273,10 +273,9 @@ def main():
                 os.kill(processes[frozen_a].pid, signal.SIGSTOP)
                 os.kill(processes[frozen_b].pid, signal.SIGSTOP)
                 try:
-                    # Keep the pause within the protocol's bounded two-round
-                    # catch-up window. Longer pauses let the live pair advance
-                    # beyond what a single resumed validator can safely join.
-                    deadline = time.monotonic() + 1.0
+                    # Keep the two live validators stalled for long enough to
+                    # advance well beyond the bounded proposal catch-up window.
+                    deadline = time.monotonic() + 6.0
                     while time.monotonic() < deadline:
                         for i in active_pair:
                             h = probe(binary, network, root / f"probe-{i}", p2p_ports[i])
@@ -285,6 +284,16 @@ def main():
                         time.sleep(0.4)
                     print(f"Active pair stalled at height {base_h} as expected (no quorum without "
                           f"{frozen_a},{frozen_b}).")
+                    live_rounds = [
+                        read_signing_journal(root / f"db-{i}" / "validator-signing.journal")
+                        for i in active_pair
+                    ]
+                    if any(not info or info["height"] <= base_h or info["round"] < 5
+                           for info in live_rounds):
+                        raise RuntimeError(
+                            f"live validators did not reach five rounds while stalled: {live_rounds}")
+                    print(f"Active pair reached rounds {[info['round'] for info in live_rounds]} "
+                          "without finalizing; resuming one validator...")
                     # Resuming frozen_b must be sufficient to finalize the
                     # unfinished height: 3/4 quorum including the resumed node.
                     os.kill(processes[frozen_b].pid, signal.SIGCONT)

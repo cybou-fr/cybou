@@ -13,6 +13,14 @@ signatures cannot advance the round. Bounding future round advance prevents
 Byzantine or desynchronized leaders from forcing arbitrary round skips while
 providing sufficient slack (2 rounds) for lagging nodes to resynchronize without
 waiting for multiple local round timeouts.
+Verified future prevotes or precommits from distinct validators can also advance
+the local round once `RoundAdvanceThreshold = N - quorum + 1` is reached. This
+is `f + 1` for the supported equal-weight quorum, so at least one signer is
+honest under the configured fault budget. It is only round-progress evidence:
+proposal acceptance, locking, precommit, and finality retain their existing
+proposal-validation and `floor(2N/3)+1` quorum requirements. In particular, a
+single Byzantine validator cannot advance peers by signing arbitrary future
+rounds.
 Receiving a proposal or producing a precommit advances the local timeout
 phase immediately. The CBS2 signing journal durably records height, round,
 step, locked round, and locked block. After restart, a validator resumes at the
@@ -20,7 +28,9 @@ recorded round without repeating a signing step and enforces its recovered lock.
 Legacy CBS1 journals have no lock data and conservatively prevent further
 signing at that height. Unit and socket tests cover journal recovery, restart,
 3/4 finality, catch-up, and duplicate/conflicting signed prevotes. The
-four-process smoke test adds OS-process restart and churn coverage. See
+four-process smoke test adds OS-process restart and churn coverage, including
+resuming one validator after the live pair has stalled through at least five
+rounds. See
 `26_IMPLEMENTATION_STATUS.md` for the current deployment boundary.
 
 ## Frozen direction

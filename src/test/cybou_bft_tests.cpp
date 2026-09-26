@@ -1551,10 +1551,13 @@ BOOST_AUTO_TEST_CASE(bft_byzantine_extreme_round_votes_cannot_drag_honest_quorum
     }
 }
 
-BOOST_AUTO_TEST_CASE(bft_future_round_jump_requires_quorum_evidence)
+BOOST_AUTO_TEST_CASE(bft_future_round_jump_uses_fault_threshold_not_finality_quorum)
 {
-    // Every future vote is buffered. Only a quorum of verified votes for one
-    // round advances the node, regardless of how close that round is.
+    BOOST_CHECK_EQUAL(cybou::RoundAdvanceThreshold(4, 3), 2U);
+    BOOST_CHECK_EQUAL(cybou::RoundAdvanceThreshold(7, 5), 3U);
+    BOOST_CHECK_EQUAL(cybou::RoundAdvanceThreshold(1, 1), 1U);
+    // A Byzantine fault budget plus one distinct vote proves honest progress
+    // in a future round. Advancing the round does not imply a consensus quorum.
     const uint256 network_id = uint256::FromUserHex("cafe").value();
     std::vector<MockValidatorNode> mocks;
     cybou::ValidatorSet val_set;
@@ -1589,11 +1592,14 @@ BOOST_AUTO_TEST_CASE(bft_future_round_jump_requires_quorum_evidence)
     // A single vote at a far future round also has no effect.
     BOOST_CHECK(!node.ReceivePrevote(make_nil_prevote(1, 10)).has_value());
     BOOST_CHECK_EQUAL(node.GetRound(), 0U);
-    BOOST_CHECK(!node.ReceivePrevote(make_nil_prevote(2, 10)).has_value());
-    BOOST_CHECK_EQUAL(node.GetRound(), 0U);
 
-    // Third round-10 NIL prevote completes quorum and is replayed. The node
-    // immediately emits its own NIL precommit based on the replayed votes.
+    // f+1 votes advance to the round but cannot trigger a precommit/finality.
+    BOOST_CHECK(!node.ReceivePrevote(make_nil_prevote(2, 10)).has_value());
+    BOOST_CHECK_EQUAL(node.GetRound(), 10U);
+    BOOST_CHECK(node.GetStep() == cybou::BftStep::PROPOSE);
+
+    // The third round-10 NIL prevote completes the actual quorum and only then
+    // permits the local NIL precommit.
     const auto precommit = node.ReceivePrevote(make_nil_prevote(3, 10));
     BOOST_CHECK_EQUAL(node.GetRound(), 10U);
     BOOST_REQUIRE(precommit.has_value());

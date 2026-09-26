@@ -11,6 +11,7 @@
 #include <uint256.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <filesystem>
@@ -36,6 +37,16 @@ enum class BftStep : uint8_t {
  *  for multiple local round timeouts.
  */
 inline constexpr uint32_t MAX_FUTURE_ROUND_ADVANCE = 2;
+
+/** Minimum distinct signed votes that prove honest participation in a future round.
+ *  This advances round state only; proposal/precommit/finality still require
+ *  the validator-set quorum.
+ */
+inline constexpr size_t RoundAdvanceThreshold(const size_t validator_count, const size_t quorum)
+{
+    if (validator_count == 0 || quorum == 0 || quorum > validator_count) return validator_count;
+    return validator_count - quorum + 1;
+}
 
 /**
  * Maximum serialized size of an authority/proposal block accepted by consensus.
