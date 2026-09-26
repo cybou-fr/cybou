@@ -200,6 +200,8 @@ add_library(cybou_node STATIC
   cybou/mail_service.cpp
   cybou/wallet_service.cpp
   cybou/node_runtime.cpp
+  cybou/node_service.h
+  cybou/node_service.cpp
   cybou/identity_service.cpp
   cybou/name_service.cpp
   cybou/p2p/session.cpp

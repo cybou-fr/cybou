@@ -10,7 +10,7 @@
 #include <cybou/identity_service.h>
 #include <cybou/mail_service.h>
 #include <cybou/network_definition.h>
-#include <cybou/node_runtime.h>
+#include <cybou/node_service.h>
 #include <cybou/wallet_service.h>
 
 #include <QDateTime>
@@ -37,8 +37,7 @@ CybouDesktopController::~CybouDesktopController()
 
 void CybouDesktopController::start()
 {
-    if (m_node_runtime) return;
-    m_sync_stop.store(false);
+    if (m_node_service) return;
     try {
         const auto network_path = m_data_directory / "network.bin";
         const auto network_file = cybou::LoadCybouNetworkFile(network_path);
@@ -75,54 +74,45 @@ void CybouDesktopController::start()
             .p2p_endpoint = configured_p2p,
             .db_cache_bytes = 8 << 20,
         };
-        m_node_runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
-        const auto init_status = m_node_runtime->GetStatus();
-        if (init_status.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH) {
-            throw std::runtime_error("CYBOU state belongs to another network; DEV reset requires an explicit cutover");
-        }
-        if (init_status.runtime_state == cybou::NodeRuntimeState::UNINITIALIZED) {
-            if (!m_node_runtime->InitializeGenesis(genesis)) {
-                throw std::runtime_error("cannot initialize CYBOU genesis");
-            }
-        } else if (init_status.runtime_state != cybou::NodeRuntimeState::READY) {
-            throw std::runtime_error("CYBOU state is unavailable or corrupt");
-        }
+        m_node_service = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
+            .runtime = std::move(config),
+            .genesis = genesis,
+        });
+        m_node_service->Start();
+        auto& runtime = m_node_service->Runtime();
         m_model->setNodeStatus(true, 0, true, QString::fromStdString(m_data_directory.string()));
 
         const auto identity_path = m_data_directory / "identity.cybou";
-        m_identity_service = std::make_unique<cybou::CybouIdentityService>(*m_node_runtime, identity_path);
+        m_identity_service = std::make_unique<cybou::CybouIdentityService>(runtime, identity_path);
         m_model->setIdentityService(m_identity_service.get());
 
         const auto mailbox_path = m_data_directory / "mailbox.dat";
         m_mail_service = std::make_unique<cybou::CybouMailService>(
-            *m_node_runtime, m_identity_service->GetKeyStore(), mailbox_path);
+            runtime, m_identity_service->GetKeyStore(), mailbox_path);
         if (std::filesystem::exists(mailbox_path)) m_mail_service->LoadMailbox();
         m_model->setMailService(m_mail_service.get());
 
         m_wallet_service = std::make_unique<cybou::CybouWalletService>(
-            *m_node_runtime, m_identity_service->GetKeyStore());
+            runtime, m_identity_service->GetKeyStore());
         m_model->setWalletService(m_wallet_service.get());
 
-        const auto status = m_node_runtime->GetStatus();
+        const auto status = runtime.GetStatus();
         m_model->setFinalityStatus(static_cast<int>(status.finalized_height),
             static_cast<int>(status.validator_count));
         m_model->setPeerCount(0);
 
-        m_sync_thread = std::thread{[this] {
-            const auto& bootstrap = cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front();
-            while (!m_sync_stop.load()) {
-                bool bootstrap_reachable = false;
+        m_node_service->StartObserverSync(
+            {std::string{endpoint.host}, endpoint.port},
+            std::chrono::seconds{3},
+            [this](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status) {
+                const bool bootstrap_reachable = sync_result.IsConnected();
+                if (m_node_service->Runtime().HasP2pEndpoint() &&
+                    (sync_result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR ||
+                     sync_result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH)) {
+                    qWarning() << "cybou P2P peer rejected by protocol verification";
+                    return false;
+                }
                 try {
-                    const auto sync_result = m_node_runtime->HasP2pEndpoint() ?
-                        m_node_runtime->SyncFromConfiguredPeer(1) :
-                        m_node_runtime->SyncFromPeer(std::string{bootstrap.host}, bootstrap.port, 100);
-                    bootstrap_reachable = sync_result.IsConnected();
-                    if (m_node_runtime->HasP2pEndpoint() &&
-                        (sync_result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR ||
-                         sync_result.status == cybou::SyncPeerStatus::NETWORK_MISMATCH)) {
-                        qWarning() << "cybou P2P peer rejected by protocol verification";
-                        m_sync_stop.store(true);
-                    }
                     if (m_mail_service) m_mail_service->SyncMailbox();
                     if (m_wallet_service) {
                         m_wallet_service->SyncLedger();
@@ -132,33 +122,27 @@ void CybouDesktopController::start()
                         }, Qt::QueuedConnection);
                     }
                 } catch (const std::exception& e) {
-                    bootstrap_reachable = false;
-                    qWarning() << "cybou bootstrap sync error:" << e.what();
+                    qWarning() << "cybou desktop service refresh error:" << e.what();
                 }
-                const auto runtime_status = m_node_runtime->GetStatus();
                 QMetaObject::invokeMethod(m_model, [model = m_model, runtime_status, bootstrap_reachable] {
                     model->setFinalityStatus(static_cast<int>(runtime_status.finalized_height),
                         static_cast<int>(runtime_status.validator_count));
                     model->setNodeStatus(true, bootstrap_reachable ? 1 : 0, true);
                     if (bootstrap_reachable) model->setLastSync(QDateTime::currentDateTime());
                 }, Qt::QueuedConnection);
-                for (int i = 0; i < 15 && !m_sync_stop.load(); ++i) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                }
-            }
-        }};
+                return true;
+            });
     } catch (const std::exception& e) {
         const QString reason = QString::fromLocal8Bit(e.what());
         qWarning() << "CYBOU desktop startup error:" << reason;
-        m_sync_stop.store(true);
-        if (m_sync_thread.joinable()) m_sync_thread.join();
+        if (m_node_service) m_node_service->StopObserverSync();
         m_model->setIdentityService(nullptr);
         m_model->setMailService(nullptr);
         m_model->setWalletService(nullptr);
         m_wallet_service.reset();
         m_mail_service.reset();
         m_identity_service.reset();
-        m_node_runtime.reset();
+        m_node_service.reset();
         m_model->setNodeStatus(false, 0, false);
         Q_EMIT startupFailed(reason);
     }
@@ -166,8 +150,7 @@ void CybouDesktopController::start()
 
 void CybouDesktopController::stop()
 {
-    m_sync_stop.store(true);
-    if (m_sync_thread.joinable()) m_sync_thread.join();
+    if (m_node_service) m_node_service->StopObserverSync();
     if (m_model) {
         m_model->setIdentityService(nullptr);
         m_model->setMailService(nullptr);
