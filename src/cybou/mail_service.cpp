@@ -636,15 +636,12 @@ size_t CybouMailService::SyncMailbox()
     const uint64_t current_height = *current_height_opt;
 
     std::vector<std::pair<uint256, uint256>> sent_snapshot;
-    std::vector<uint256> known_mail_ids;
     uint64_t original_height{0};
     {
         std::lock_guard lock(m_mutex);
         original_height = m_last_scanned_height;
         sent_snapshot.reserve(m_messages.size());
-        known_mail_ids.reserve(m_messages.size());
         for (const auto& item : m_messages) {
-            known_mail_ids.push_back(item.mail_id);
             if (item.folder == MailFolder::SENT) {
                 sent_snapshot.emplace_back(item.mail_id, item.content_commitment);
             }
@@ -661,7 +658,6 @@ size_t CybouMailService::SyncMailbox()
         std::optional<MailEvidenceBundle> evidence_bundle;
     };
     std::vector<SentFinalityUpdate> sent_updates;
-    std::vector<MailItem> received_messages;
 
     uint64_t scanned_height = original_height;
 
@@ -717,54 +713,13 @@ size_t CybouMailService::SyncMailbox()
                 }
             }
 
-            if (mail_op.recipient == *my_account) {
-                const bool already_present = std::find(known_mail_ids.begin(), known_mail_ids.end(), op_id) !=
-                    known_mail_ids.end();
-                if (already_present) continue;
-
-                const auto decrypted = DecryptMailPayload(
-                    m_keystore,
-                    auth_op.account_id,
-                    mail_op.recipient,
-                    mail_op.content_commitment,
-                    mail_op.ciphertext);
-
-                if (decrypted) {
-                    MailItem item;
-                    item.mail_id = op_id;
-                    item.folder = MailFolder::INBOX;
-                    item.sender = decrypted->second.sender;
-                    item.recipient = decrypted->second.recipient;
-                    item.subject = decrypted->second.subject;
-                    item.body = decrypted->second.body;
-                    item.timestamp = decrypted->second.timestamp;
-                    item.read = false;
-                    item.finality = MailFinalityStatus::FINAL;
-                    item.block_height = h;
-                    item.block_id = block_id;
-                    item.operation_index = op_idx;
-                    item.salt = decrypted->first;
-                    item.content_commitment = mail_op.content_commitment;
-                    item.discovery_tag = mail_op.discovery_tag;
-                    item.fee = MailFeeForSize(mail_op.ciphertext.size(),
-                        m_runtime.GetNetworkDefinition().protocol_parameters);
-
-                    item.evidence_bundle = CreateMailEvidenceBundle(
-                        fin_block.block,
-                        op_idx,
-                        fin_block.certificate,
-                        sender_device_key,
-                        m_runtime.GetNetworkId());
-
-                    known_mail_ids.push_back(op_id);
-                    received_messages.push_back(std::move(item));
-                }
-            }
+            // There is no production-supported ciphertext suite or published
+            // recipient hybrid key package yet. Never decrypt the experimental
+            // X25519-only prototype from consensus history.
         }
         scanned_height = h;
     }
 
-    size_t new_inbox_count{0};
     {
         std::lock_guard lock(m_mutex);
         bool changed = false;
@@ -783,22 +738,13 @@ size_t CybouMailService::SyncMailbox()
             live->evidence_bundle = update.evidence_bundle;
             changed = true;
         }
-        for (auto& received : received_messages) {
-            const bool already_present = std::any_of(m_messages.begin(), m_messages.end(), [&](const MailItem& item) {
-                return item.mail_id == received.mail_id;
-            });
-            if (already_present) continue;
-            m_messages.push_back(std::move(received));
-            ++new_inbox_count;
-            changed = true;
-        }
         if (m_last_scanned_height < scanned_height) {
             m_last_scanned_height = scanned_height;
             changed = true;
         }
         if (changed) SaveMailbox();
     }
-    return new_inbox_count;
+    return 0;
 }
 
 uint64_t CybouMailService::GetLastScannedHeight() const

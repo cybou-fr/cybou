@@ -11,7 +11,7 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_mail_service_tests, BasicTestingSetup)
 
-BOOST_AUTO_TEST_CASE(separate_mail_key_encrypts_and_decrypts_payload)
+BOOST_AUTO_TEST_CASE(experimental_mail_cipher_prototype_round_trips)
 {
     cybou::CybouKeyStore sender;
     cybou::CybouKeyStore recipient;

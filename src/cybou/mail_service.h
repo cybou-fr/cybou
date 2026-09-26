@@ -113,7 +113,9 @@ struct SendMailResult {
 };
 
 /**
- * E2E Encryption and Decryption Primitives for CYBOU Email (RFC 9180 HPKE / AEAD).
+ * Experimental X25519-only Mail prototype helpers. These are not RFC 9180 HPKE,
+ * do not implement the required hybrid profile, and must not be used by the
+ * production send/receive path.
  */
 std::optional<std::vector<unsigned char>> EncryptMailPayload(
     const uint256& recipient_ed25519_pubkey,
@@ -179,10 +181,10 @@ public:
         const std::string& body);
 
     /**
-     * Synchronize mailbox against newly finalized BFT blocks from the node runtime.
-     * Discovers incoming MailTx, decrypts ciphertext locally, verifies content commitment,
-     * updates outgoing Sent finality to Final, and attaches cryptographic evidence bundles.
-     * Returns count of new messages received.
+     * Synchronize local Sent finality against newly finalized BFT blocks.
+     * Incoming decryption remains disabled until the standardized hybrid key
+     * package and ciphertext profile are integrated.
+     * Returns count of newly received messages (currently always zero).
      */
     size_t SyncMailbox();
 
