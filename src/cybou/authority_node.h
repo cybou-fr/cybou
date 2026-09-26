@@ -61,6 +61,9 @@ enum class OperationSubmitStatus : uint8_t {
 struct OperationSubmitResult {
     OperationSubmitStatus status{OperationSubmitStatus::REJECTED};
     uint256 op_id;
+    // Local transport metadata: no acknowledgment after sending does not prove
+    // that the remote authority rejected the operation.
+    bool delivery_uncertain{false};
 
     explicit operator bool() const {
         return status == OperationSubmitStatus::ACCEPTED ||

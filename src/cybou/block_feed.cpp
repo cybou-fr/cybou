@@ -163,6 +163,7 @@ OperationSubmitResult SubmitOperationRemote(
 {
     const auto op_id_opt = ComputeOperationId(op);
     const uint256 op_id = op_id_opt.value_or(uint256{});
+    bool request_write_started{false};
     try {
         const auto op_bytes = SerializeProtocolOperation(op);
         if (!op_bytes || op_bytes->empty() || op_bytes->size() > MAX_OPERATION_PAYLOAD_BYTES) {
@@ -184,20 +185,27 @@ OperationSubmitResult SubmitOperationRemote(
         msg.insert(msg.end(), len_bytes.begin(), len_bytes.end());
         msg.insert(msg.end(), op_bytes->begin(), op_bytes->end());
 
+        request_write_started = true;
         boost::asio::write(socket, boost::asio::buffer(msg));
 
         std::array<unsigned char, 33> reply{};
         boost::system::error_code ec;
         boost::asio::read(socket, boost::asio::buffer(reply), ec);
         if (ec) {
-            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
+            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id,
+                .delivery_uncertain = true};
         }
 
         const auto status = static_cast<OperationSubmitStatus>(reply[0]);
         uint256 confirmed_op_id;
         std::copy_n(reply.begin() + 1, 32, confirmed_op_id.begin());
-        if (status == OperationSubmitStatus::ACCEPTED && confirmed_op_id != op_id) {
-            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = confirmed_op_id};
+        if (reply[0] > static_cast<uint8_t>(OperationSubmitStatus::NETWORK_MISMATCH)) {
+            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id,
+                .delivery_uncertain = true};
+        }
+        if (confirmed_op_id != op_id) {
+            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id,
+                .delivery_uncertain = true};
         }
 
         return OperationSubmitResult{
@@ -205,7 +213,8 @@ OperationSubmitResult SubmitOperationRemote(
             .op_id = confirmed_op_id,
         };
     } catch (const boost::system::system_error&) {
-        return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
+        return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id,
+            .delivery_uncertain = request_write_started};
     }
 }
 

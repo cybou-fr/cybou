@@ -760,11 +760,16 @@ BOOST_AUTO_TEST_CASE(manager_distinguishes_rejection_from_missing_operation_ackn
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
             .capabilities = cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 119});
     }};
-    const auto unconfirmed = manager.SubmitOperationToAny({{address, dropped_acceptor.local_endpoint().port()}}, operation);
+    cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
+        .data_dir = fixture.directory / "unconfirmed-observer",
+        .p2p_endpoint = std::make_pair(address, dropped_acceptor.local_endpoint().port()),
+        .memory_only = true, .wipe_data = true};
+    cybou::CybouNodeRuntime observer{std::move(observer_config)};
+    BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
+    const auto unconfirmed = observer.SubmitOperation(operation);
     dropped_server.join();
     BOOST_CHECK(dropped_handshake);
-    BOOST_CHECK(!unconfirmed.acknowledgment);
-    BOOST_CHECK(!unconfirmed.endpoint);
+    BOOST_CHECK(unconfirmed.status == cybou::OperationSubmitStatus::REJECTED);
     BOOST_CHECK(unconfirmed.delivery_uncertain);
 }
 

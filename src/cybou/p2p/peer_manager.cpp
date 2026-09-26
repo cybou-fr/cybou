@@ -277,7 +277,10 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
         }
         result.acknowledgment = *acknowledgment;
         result.endpoint = endpoint;
-        if (*acknowledgment) return result;
+        if (*acknowledgment) {
+            result.delivery_uncertain = false;
+            return result;
+        }
     }
     return result;
 }

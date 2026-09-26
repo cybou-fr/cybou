@@ -278,8 +278,10 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         accepting_candidates.reserve(connected.size());
         for (const auto& peer : connected) accepting_candidates.emplace_back(peer.address, peer.port);
         const auto submitted = m_peer_manager->SubmitOperationToAny(accepting_candidates, op);
-        return submitted.acknowledgment.value_or(
+        auto result = submitted.acknowledgment.value_or(
             OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id});
+        result.delivery_uncertain = submitted.delivery_uncertain;
+        return result;
     }
     if (endpoint.has_value()) {
         return SubmitOperationRemote(endpoint->first, endpoint->second, net_id, op);

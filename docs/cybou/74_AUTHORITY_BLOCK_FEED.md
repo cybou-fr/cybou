@@ -37,6 +37,11 @@ SHA256("CYBOU/OP_ID/V1" || serialized_op), and returns a 33-byte structured
 reply: a 1-byte status (`ACCEPTED`, `ALREADY_PENDING`, `ALREADY_FINALIZED`,
 `INVALID_PAYLOAD`, `NETWORK_MISMATCH`, or `REJECTED`) and the 32-byte
 OperationID.
+On the client, a transport failure after the request write begins is marked
+`delivery_uncertain`; it is distinct from an explicit `REJECTED` reply and is
+local metadata, not an additional wire status. Callers must reconcile an
+uncertain operation by its OperationID instead of assuming that its nonce is
+free for reuse.
 
 The desktop identity service saves keystore material durably to disk *before*
 PoW and network broadcast using atomic replace and crash-safe `.bak` rotation,
