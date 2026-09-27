@@ -11,12 +11,13 @@ Bitcoin utility APIs.
 The Bitcoin cryptography dependency therefore remains; migrating SHA-256 does
 not by itself remove it.
 
-The remaining `bitcoin_util` edge has multiple distinct owners, so it cannot
-be dropped by changing one CMake link line:
+The remaining inherited utility use has multiple distinct owners, so the
+final `bitcoin_util` link closure cannot be removed by changing one CMake link
+line:
 
-- `cybou_base` exports inherited `uint256` headers and builds `uint256.cpp`;
-  these use inherited endian, span, and hex/string helpers. Its static link
-  interface reaches `bitcoin_crypto` through `bitcoin_util`.
+- `cybou_base` exports the inherited `uint256` type and builds its object with
+  standard-library code; its `bitcoin_util` link edge has been removed. The
+  header still uses inherited compile-time endian, span, and hex helpers.
 - `cybou_node` uses inherited `DataStream`/`SpanReader` serialization for its
   local LevelDB records. Those bytes form the existing local database format.
 - The GCS filter uses inherited `CSipHasher`; its FastRange64,
@@ -38,11 +39,12 @@ compatibility coverage; SipHash remains an additional crypto blocker.
 - `cybou_core` no longer links `bitcoin_crypto`; the remaining inherited
   `CSipHasher` consumer is `cybou_node`'s GCS filter, so that target now owns
   the direct dependency. This makes direct source ownership accurate but does
-  not remove the library from the final link closure: `cybou_base` still links
-  `bitcoin_util`, whose static link interface pulls in `bitcoin_crypto`.
-- This is an initial target-boundary extraction only. The `uint256` header and
-  implementation still use inherited Bitcoin utility APIs, and the target
-  links `bitcoin_util`; this does not yet remove the `bitcoin_crypto` dependency.
+  not remove the library from the final link closure.
+- `uint256.cpp` now formats the existing reversed-byte hex representation
+  directly with standard-library code. A CYBOU test covers exact round-trip
+  output. `cybou_base` no longer links `bitcoin_util`; inherited utility
+  helpers remain in the shared `uint256.h` for compile-time and serialization
+  interfaces, and other targets still require Bitcoin utility code.
 - CYBOU secret-cleansing call sites now use
   `cybou/crypto/cleanse.h`, backed by OpenSSL `OPENSSL_cleanse`; direct
   `support/cleanse.h` use has been removed from `src/cybou`.
@@ -127,10 +129,9 @@ production path. See `16_MAIL_PROTOCOL.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
    are no direct inherited crypto or cleanse includes under `src/cybou` outside
    the approved wrappers.
 6. The direct `bitcoin_crypto` edge was moved from `cybou_core` to
-   `cybou_node`, where GCS SipHash uses it. FastRange64 is now CYBOU-owned.
-   The final link closure still gets `bitcoin_crypto` transitively through
-   `cybou_base -> bitcoin_util`. Remove
-   the remaining legacy link paths only after `uint256` and GCS no longer need
+   `cybou_node`, where GCS SipHash uses it. FastRange64 is CYBOU-owned, and
+   `cybou_base` no longer links `bitcoin_util`. Other legacy link paths remain
+   until `uint256` headers, node serialization, and GCS no longer need
    inherited utility or crypto symbols. Verify the final link graph for
    `cybou_core`, `cybou_node`, and the desktop executable.
 7. Treat Mail KEM and CYP2 transport confidentiality as separate protocol

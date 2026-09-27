@@ -5,22 +5,23 @@
 
 #include <uint256.h>
 
-#include <util/strencodings.h>
-
 template <unsigned int BITS>
 std::string base_blob<BITS>::GetHex() const
 {
-    uint8_t m_data_rev[WIDTH];
+    constexpr char HEX_DIGITS[] = "0123456789abcdef";
+    std::string result(WIDTH * 2, '0');
     for (int i = 0; i < WIDTH; ++i) {
-        m_data_rev[i] = m_data[WIDTH - 1 - i];
+        const uint8_t byte = m_data[WIDTH - 1 - i];
+        result[2 * i] = HEX_DIGITS[byte >> 4];
+        result[2 * i + 1] = HEX_DIGITS[byte & 0x0f];
     }
-    return HexStr(m_data_rev);
+    return result;
 }
 
 template <unsigned int BITS>
 std::string base_blob<BITS>::ToString() const
 {
-    return (GetHex());
+    return GetHex();
 }
 
 // Explicit instantiations for base_blob<160>

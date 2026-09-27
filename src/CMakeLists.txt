@@ -59,15 +59,10 @@ if(ENABLE_IPC)
 endif()
 
 # CYBOU-owned dependency boundary for consensus-neutral hash-value types.
-# The uint256 implementation is shared with Bitcoin targets, but CYBOU core
-# should not need the Bitcoin consensus library to use it.
+# The shared uint256 implementation uses only standard-library code here.
 add_library(cybou_base STATIC
   cybou/fast_range.h
   uint256.cpp
-)
-target_link_libraries(cybou_base
-  PUBLIC
-    bitcoin_util
 )
 
 add_library(bitcoin_consensus STATIC EXCLUDE_FROM_ALL

@@ -34,4 +34,13 @@ BOOST_AUTO_TEST_CASE(parse_user_uint256_hex)
     }
 }
 
+BOOST_AUTO_TEST_CASE(uint256_hex_output_preserves_legacy_byte_order)
+{
+    constexpr std::string_view expected{"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"};
+    const auto value = uint256::FromHex(expected);
+    BOOST_REQUIRE(value);
+    BOOST_CHECK_EQUAL(value->GetHex(), expected);
+    BOOST_CHECK_EQUAL(value->ToString(), expected);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
