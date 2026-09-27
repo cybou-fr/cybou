@@ -8,11 +8,15 @@
 #include <cybou/validator.h>
 
 #include <test/util/setup_common.h>
+#include <test/cybou_service_test_fixture.h>
 
 #include <boost/asio.hpp>
 #include <boost/test/unit_test.hpp>
 
 #include <array>
+#include <atomic>
+#include <barrier>
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -261,6 +265,59 @@ BOOST_AUTO_TEST_CASE(recovery_device_add_uses_journaled_root_nonce_coordinator_p
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     BOOST_CHECK(!ec);
+}
+
+BOOST_AUTO_TEST_CASE(concurrent_execute_reserves_only_one_device_operation)
+{
+    CybouServiceTestFixture fixture{0x69};
+    auto identity = fixture.CreateIdentity("coordinator-concurrent.cybou");
+    const auto account = identity->GetAccountId();
+    BOOST_REQUIRE(account);
+    auto& coordinator = fixture.runtime->GetDeviceOperationCoordinator(identity->GetKeyStore());
+
+    std::array<cybou::NameCommitPayload, 2> payloads;
+    std::array<cybou::IdentityKeyId, 2> commitments{};
+    for (size_t i = 0; i < payloads.size(); ++i) {
+        std::array<unsigned char, 32> salt{};
+        salt[0] = static_cast<unsigned char>(0x70 + i);
+        const std::string label = i == 0 ? "firstcy" : "secondcy";
+        payloads[i].commitment = cybou::ComputeNameCommitment(
+            fixture.runtime->GetNetworkId(), *account, label, salt);
+        const auto digest = cybou::ComputeNameCommitPayloadCommitment(payloads[i]);
+        BOOST_REQUIRE(digest);
+        commitments[i] = *digest;
+    }
+
+    std::barrier start{3};
+    std::atomic<unsigned> builders_called{0};
+    std::array<cybou::DeviceOperationResult, 2> results;
+    std::array<std::thread, 2> callers;
+    for (size_t i = 0; i < callers.size(); ++i) {
+        callers[i] = std::thread{[&, i] {
+            start.arrive_and_wait();
+            results[i] = coordinator.Execute(cybou::DeviceOperationKind::NAME_COMMIT, commitments[i],
+                [&, i](const cybou::DeviceAuthorization& authorization)
+                    -> std::optional<cybou::ProtocolOperation> {
+                    builders_called.fetch_add(1);
+                    return cybou::ProtocolOperation{
+                        cybou::AuthorizedNameCommit{authorization, payloads[i]}};
+                });
+        }};
+    }
+    start.arrive_and_wait();
+    for (auto& caller : callers) caller.join();
+
+    const auto accepted_count = std::count_if(results.begin(), results.end(), [](const auto& result) {
+        return result.phase == cybou::DeviceOperationPhase::ACCEPTED;
+    });
+    const auto conflict_count = std::count_if(results.begin(), results.end(), [](const auto& result) {
+        return result.phase == cybou::DeviceOperationPhase::CONFLICT;
+    });
+    BOOST_CHECK_EQUAL(accepted_count, 1U);
+    BOOST_CHECK_EQUAL(conflict_count, 1U);
+    BOOST_CHECK_EQUAL(builders_called.load(), 1U);
+    BOOST_CHECK(!results[0].op_id.IsNull());
+    BOOST_CHECK(results[0].op_id == results[1].op_id);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
