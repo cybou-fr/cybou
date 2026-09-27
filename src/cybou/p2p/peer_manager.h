@@ -88,6 +88,8 @@ public:
         const StorageEncryptedChunk& chunk);
     std::optional<StorageWriteResult> CommitStorageManifest(
         const std::string& address, uint16_t port, const StoragePublicManifest& manifest);
+    std::optional<StorageWriteResult> AbortStorageObject(
+        const std::string& address, uint16_t port, const StorageObjectId& object_id, uint32_t chunk_count);
     std::optional<StoragePublicManifest> GetStorageManifest(
         const std::string& address, uint16_t port, const StorageObjectId& object_id);
     std::optional<StorageEncryptedChunk> GetStorageChunk(

@@ -9,7 +9,10 @@
 #include <cybou/storage_store.h>
 
 #include <filesystem>
+#include <string>
 #include <string_view>
+
+namespace cybou::p2p { class PeerManager; }
 
 namespace cybou {
 
@@ -22,6 +25,8 @@ enum class StorageTransferStatus : uint8_t {
     IO_ERROR,
     PROVIDER_ERROR,
     INTEGRITY_ERROR,
+    CLEANUP_FAILED,
+    COMMIT_UNCERTAIN,
 };
 
 struct StorageTransferResult {
@@ -34,11 +39,30 @@ struct StorageTransferResult {
     }
 };
 
-/** Local client-side file upload/download against a durable ciphertext store. */
+/** One connected CYP2 storage provider, used by a caller-owned peer worker. */
+class PeerStorageProvider final : public StorageObjectProvider {
+public:
+    PeerStorageProvider(p2p::PeerManager& peers, std::string address, uint16_t port);
+    bool SupportsAbortUncommittedUpload() const override;
+    StorageWriteResult PutChunk(const StorageObjectId& object_id,
+        const StorageEncryptedChunk& chunk) override;
+    StorageWriteResult CommitManifest(const StoragePublicManifest& manifest) override;
+    bool AbortUncommittedObject(const StorageObjectId& object_id, uint32_t chunk_count) override;
+    std::optional<StoragePublicManifest> GetManifest(const StorageObjectId& object_id) const override;
+    std::optional<StorageEncryptedChunk> GetChunk(
+        const StorageObjectId& object_id, uint32_t index) const override;
+
+private:
+    p2p::PeerManager& m_peers;
+    std::string m_address;
+    uint16_t m_port{0};
+};
+
+/** Client-side file transfer through either a local or a connected peer provider. */
 class StorageService final {
 public:
     StorageService(std::span<const unsigned char, 32> network_id, AccountId account_id,
-        const CybouKeyStore& keystore, StorageObjectStore& store,
+        const CybouKeyStore& keystore, StorageObjectProvider& store,
         std::filesystem::path private_manifest_dir);
 
     StorageTransferResult UploadFile(
@@ -52,7 +76,7 @@ private:
     std::array<unsigned char, 32> m_network_id{};
     AccountId m_account_id;
     const CybouKeyStore& m_keystore;
-    StorageObjectStore& m_store;
+    StorageObjectProvider& m_store;
     std::filesystem::path m_private_manifest_dir;
 };
 

@@ -46,7 +46,7 @@ uint32_t Read32(const unsigned char* data)
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
     if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
-        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 27)) return std::nullopt;
+        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > MAX_MESSAGE_TYPE)) return std::nullopt;
     std::vector<unsigned char> bytes{'C', 'Y', 'P', '2', WIRE_VERSION, static_cast<unsigned char>(frame.type)};
     const auto size = static_cast<uint32_t>(frame.payload.size());
     for (int i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(size >> (8 * i)));
@@ -57,7 +57,7 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < HEADER_SIZE || !std::equal(bytes.begin(), bytes.begin() + 4, "CYP2") ||
-        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 27) return std::nullopt;
+        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > MAX_MESSAGE_TYPE) return std::nullopt;
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[6 + i]} << (8 * i);
     if (size > MAX_FRAME_PAYLOAD || bytes.size() != HEADER_SIZE + size) return std::nullopt;
@@ -242,7 +242,7 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     std::array<unsigned char, HEADER_SIZE> header{};
     if (!ReadExact(header.data(), header.size(), deadline)) return std::nullopt;
     if (!std::equal(header.begin(), header.begin() + 4, "CYP2") ||
-        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 27) {
+        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > MAX_MESSAGE_TYPE) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
         return std::nullopt;
     }
@@ -627,6 +627,24 @@ std::optional<StorageWriteResult> PeerSession::CommitStorageManifest(const Stora
     return result;
 }
 
+std::optional<StorageWriteResult> PeerSession::AbortStorageObject(
+    const StorageObjectId& object_id, const uint32_t chunk_count)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_STORAGE) ||
+        !(m_peer->capabilities & CAP_STORAGE_ABORT) || object_id == StorageObjectId{} ||
+        chunk_count > STORAGE_OBJECT_MAX_CHUNKS) return std::nullopt;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    std::vector<unsigned char> payload{object_id.begin(), object_id.end()};
+    Put32(payload, chunk_count);
+    if (!Write(Frame{MessageType::STORAGE_ABORT, payload}, deadline)) return std::nullopt;
+    const auto response = Read(deadline);
+    if (!response || response->type != MessageType::STORAGE_RESULT || response->payload.size() != 33 ||
+        response->payload[0] > static_cast<uint8_t>(StorageWriteStatus::DISABLED)) return std::nullopt;
+    StorageWriteResult result{static_cast<StorageWriteStatus>(response->payload[0])};
+    std::copy_n(response->payload.begin() + 1, result.commitment.size(), result.commitment.begin());
+    return result;
+}
+
 std::optional<StoragePublicManifest> PeerSession::GetStorageManifest(const StorageObjectId& object_id)
 {
     if (!m_peer || !(m_peer->capabilities & CAP_STORAGE) || object_id == StorageObjectId{}) return std::nullopt;
@@ -698,6 +716,18 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     const auto request = Read();
     if (!request) {
         return m_socket.is_open();
+    }
+    if (request->type == MessageType::STORAGE_ABORT) {
+        if (!(m_local_capabilities & CAP_STORAGE_ABORT) || request->payload.size() != 36) return false;
+        StorageObjectId object_id{};
+        std::copy_n(request->payload.begin(), object_id.size(), object_id.begin());
+        const uint32_t chunk_count = Read32(request->payload.data() + 32);
+        if (object_id == StorageObjectId{} || chunk_count > STORAGE_OBJECT_MAX_CHUNKS) return false;
+        const bool aborted = runtime.AbortStoredObject(object_id, chunk_count);
+        const StorageWriteResult result{aborted ? StorageWriteStatus::STORED : StorageWriteStatus::INVALID};
+        std::vector<unsigned char> payload{static_cast<unsigned char>(result.status)};
+        payload.insert(payload.end(), result.commitment.begin(), result.commitment.end());
+        return Write(Frame{MessageType::STORAGE_RESULT, payload});
     }
     if (request->type == MessageType::STORAGE_PUT_CHUNK || request->type == MessageType::STORAGE_COMMIT) {
         if (!(m_local_capabilities & CAP_STORAGE)) return false;

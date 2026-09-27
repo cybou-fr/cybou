@@ -88,7 +88,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         return false;
     }
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
-    if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE;
+    if (m_runtime.HasStorageProvider()) caps |= (CAP_STORAGE | CAP_STORAGE_ABORT);
     if (status.is_authority) {
         caps |= (CAP_ACCEPT_OPERATIONS | CAP_OP_INVENTORY | CAP_CONSENSUS);
     }
@@ -495,6 +495,29 @@ std::optional<StorageWriteResult> PeerManager::CommitStorageManifest(
     auto* session = FindStorageSession(address, port, &endpoint);
     if (!session) return std::nullopt;
     auto result = session->CommitStorageManifest(manifest);
+    if (!result) {
+        m_peers.erase(endpoint);
+        m_announced_operations.erase(endpoint);
+        m_announced_blocks.erase(endpoint);
+    }
+    return result;
+}
+
+std::optional<StorageWriteResult> PeerManager::AbortStorageObject(
+    const std::string& address, const uint16_t port, const StorageObjectId& object_id,
+    const uint32_t chunk_count)
+{
+    Endpoint endpoint;
+    auto* session = FindStorageSession(address, port, &endpoint);
+    // PUT may have applied even when its acknowledgment was lost. Reconnect
+    // once so cleanup can cover that ambiguous last chunk.
+    if (!session && Connect(address, port)) {
+        session = FindStorageSession(address, port, &endpoint);
+    }
+    if (!session || !session->Peer() || !(session->Peer()->capabilities & CAP_STORAGE_ABORT)) {
+        return std::nullopt;
+    }
+    auto result = session->AbortStorageObject(object_id, chunk_count);
     if (!result) {
         m_peers.erase(endpoint);
         m_announced_operations.erase(endpoint);

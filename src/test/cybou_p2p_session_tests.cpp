@@ -7,6 +7,7 @@
 #include <cybou/block.h>
 #include <cybou/validator.h>
 #include <cybou/storage_crypto.h>
+#include <cybou/storage_service.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/util/setup_common.h>
 
@@ -14,6 +15,9 @@
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <thread>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_p2p_session_tests, BasicTestingSetup)
@@ -201,6 +205,92 @@ BOOST_AUTO_TEST_CASE(loopback_storage_provider_put_commit_and_get_round_trip)
     BOOST_CHECK_EQUAL(client.PingAll(), 1U);
     server.join();
     BOOST_CHECK(server_ok);
+}
+
+BOOST_AUTO_TEST_CASE(storage_service_roundtrips_file_through_connected_cyp2_provider)
+{
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    tcp::acceptor acceptor{io, tcp::endpoint{boost::asio::ip::address_v4::loopback(), 0}};
+    CybouServiceTestFixture fixture;
+    const auto network = fixture.runtime->GetNetworkId();
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto root = std::filesystem::temp_directory_path() /
+        ("cybou-peer-storage-service-" + std::to_string(unique));
+    std::filesystem::create_directories(root);
+    const auto identity_path = root / "identity.cybou";
+    const auto key_ring_path = root / "identity.storage-keys.cybou";
+    const auto source_path = root / "source.bin";
+    const auto oversized_path = root / "oversized.bin";
+    const auto destination_path = root / "destination.bin";
+    constexpr std::string_view password{"peer storage integration test"};
+    const std::vector<unsigned char> original(4093, 0x6d);
+    {
+        std::ofstream output(source_path, std::ios::binary);
+        BOOST_REQUIRE(output);
+        output.write(reinterpret_cast<const char*>(original.data()),
+            static_cast<std::streamsize>(original.size()));
+        BOOST_REQUIRE(output.good());
+    }
+    {
+        std::ofstream output(oversized_path, std::ios::binary);
+        BOOST_REQUIRE(output);
+        std::vector<unsigned char> oversized(cybou::STORAGE_OBJECT_CHUNK_SIZE + 73, 0x3c);
+        output.write(reinterpret_cast<const char*>(oversized.data()),
+            static_cast<std::streamsize>(oversized.size()));
+        BOOST_REQUIRE(output.good());
+    }
+
+    cybou::CybouKeyStore keys;
+    BOOST_REQUIRE(keys.GenerateNew());
+    const auto account = keys.GetAccountId();
+    BOOST_REQUIRE(account);
+    BOOST_REQUIRE(keys.SaveToFile(identity_path, password));
+    BOOST_REQUIRE(keys.CreateStorageKeyRing(key_ring_path, password));
+    std::array<unsigned char, 32> network_id{};
+    std::copy(network.begin(), network.end(), network_id.begin());
+
+    bool server_ok{false};
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        if (!session.Handshake({.network_id = network, .finalized_height = 0,
+                .finalized_tip = fixture.definition.genesis_block_id,
+                .capabilities = cybou::p2p::CAP_STORAGE | cybou::p2p::CAP_STORAGE_ABORT,
+                .nonce = 7101})) return;
+        cybou::NodeRuntimeConfig provider_config{.network_definition = fixture.definition,
+            .data_dir = root / "provider", .storage_enabled = true,
+            .storage_capacity_bytes = cybou::STORAGE_OBJECT_CHUNK_SIZE + 100};
+        cybou::CybouNodeRuntime provider{std::move(provider_config)};
+        if (!provider.InitializeGenesis(fixture.genesis)) return;
+        for (int i = 0; i < 8; ++i) {
+            if (!session.ServeNext(provider)) return;
+        }
+        server_ok = true;
+    }};
+
+    cybou::p2p::PeerManager peers{*fixture.runtime};
+    const auto address = boost::asio::ip::address_v4::loopback().to_string();
+    const auto port = acceptor.local_endpoint().port();
+    BOOST_REQUIRE(peers.Connect(address, port));
+    cybou::PeerStorageProvider provider{peers, address, port};
+    BOOST_REQUIRE(provider.SupportsAbortUncommittedUpload());
+    cybou::StorageService service(network_id, *account, keys, provider, root / "private-manifests");
+    const auto failed = service.UploadFile(oversized_path, password);
+    BOOST_CHECK(failed.status == cybou::StorageTransferStatus::PROVIDER_ERROR);
+    const auto uploaded = service.UploadFile(source_path, password);
+    BOOST_REQUIRE(uploaded.status == cybou::StorageTransferStatus::STORED);
+    const auto downloaded = service.DownloadFile(uploaded.object_id, destination_path, password);
+    BOOST_REQUIRE(downloaded.status == cybou::StorageTransferStatus::RETRIEVED);
+    std::ifstream input(destination_path, std::ios::binary);
+    const std::vector<unsigned char> fetched{
+        std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
+    BOOST_CHECK(fetched == original);
+    input.close();
+    server.join();
+    BOOST_CHECK(server_ok);
+    std::filesystem::remove_all(root);
 }
 
 BOOST_AUTO_TEST_CASE(consensus_message_serialization_and_p2p_exchange)

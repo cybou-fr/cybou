@@ -3,12 +3,15 @@
 Implementation status (2026-09-27): CYBOU has a bounded encrypted-chunk
 profile, a durable network-bound provider store, opt-in CYP2 upload, manifest
 commit and retrieval, and a local client file roundtrip through the encrypted
-Storage Key Ring. The outbound peer manager can enumerate connected
-`CAP_STORAGE` peers and route bounded object operations through one selected
-session. This is still not a complete distributed Storage service:
-StorageService uses only its local provider, and automated provider
-connection/selection, multi-peer placement, leases, durability proofs, audits,
-repair, retention, and accounting are not operational.
+Storage Key Ring. StorageService can use the local provider or one explicitly
+selected, already-connected CYP2 provider. The peer-backed path uploads and
+retrieves a file and uses `CAP_STORAGE_ABORT` to release chunks after a failed
+uncommitted upload. Lost commit acknowledgments return an uncertain result and
+retain the encrypted private metadata; failed cleanup is reported separately.
+This is still not a complete distributed Storage service:
+automatic provider connection/selection, multi-peer placement, leases,
+durability proofs, audits, repair, retention, and accounting are not
+operational. A successful one-provider upload makes no durability promise.
 The provider stores ciphertext bytes, their opaque identifiers, and a public
 manifest; it receives no file metadata or key material. Storage is disabled by
 default and can be enabled for `cybou-node serve` by supplying a positive

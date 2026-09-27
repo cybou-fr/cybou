@@ -3,7 +3,8 @@
 Status: canonical target for Files objects and Mail attachments. Provisional
 local v1 chunk encryption, public manifest commitments, durable provider/CYP2
 ciphertext transfer, an encrypted AccountID-bound Storage Key Ring with
-durable epochs, and a local file upload/download roundtrip are implemented.
+durable epochs, and file upload/download through either the local store or one
+explicitly selected connected CYP2 provider are implemented.
 Local device X25519 and ML-KEM-768 private
 material is generated and encrypted in the identity vault. Device KEM
 publication/wrapping, Storage Master Key device wrapping, client-side
@@ -178,7 +179,10 @@ consensus records. Their lease/accounting aggregation is defined in docs 11–13
 - durable local provider and bounded CYP2 PUT/commit/GET ciphertext transfer;
 - outbound `PeerManager` enumeration of connected `CAP_STORAGE` sessions and
   routing for those bounded storage calls;
-- local file upload, private metadata save, and verified no-overwrite download.
+- `CAP_STORAGE_ABORT` cleanup of uncommitted chunks, required before the client
+  uploads to a peer;
+- local or single-peer file upload, private metadata save, and verified
+  no-overwrite download.
 
 These local encodings and key lifecycle remain provisional until reviewed
 cross-implementation vectors and protocol freeze.

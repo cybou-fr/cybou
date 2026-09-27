@@ -30,14 +30,30 @@ enum class StorageWriteStatus : uint8_t {
 struct StorageWriteResult {
     StorageWriteStatus status{StorageWriteStatus::INVALID};
     StorageChunkId commitment{};
+    /** False when a remote request may have applied but its acknowledgment was lost. */
+    bool response_received{true};
     explicit operator bool() const
     {
         return status == StorageWriteStatus::STORED || status == StorageWriteStatus::ALREADY_STORED;
     }
 };
 
+/** Client-facing operations shared by local and remote ciphertext providers. */
+class StorageObjectProvider {
+public:
+    virtual ~StorageObjectProvider() = default;
+    virtual bool SupportsAbortUncommittedUpload() const = 0;
+    virtual StorageWriteResult PutChunk(const StorageObjectId& object_id,
+        const StorageEncryptedChunk& chunk) = 0;
+    virtual StorageWriteResult CommitManifest(const StoragePublicManifest& manifest) = 0;
+    virtual bool AbortUncommittedObject(const StorageObjectId& object_id, uint32_t chunk_count) = 0;
+    virtual std::optional<StoragePublicManifest> GetManifest(const StorageObjectId& object_id) const = 0;
+    virtual std::optional<StorageEncryptedChunk> GetChunk(
+        const StorageObjectId& object_id, uint32_t index) const = 0;
+};
+
 /** Durable, network-bound provider-side ciphertext storage. */
-class StorageObjectStore final
+class StorageObjectStore final : public StorageObjectProvider
 {
 public:
     StorageObjectStore(
@@ -50,12 +66,15 @@ public:
     StorageObjectStore(const StorageObjectStore&) = delete;
     StorageObjectStore& operator=(const StorageObjectStore&) = delete;
 
-    StorageWriteResult PutChunk(const StorageObjectId& object_id, const StorageEncryptedChunk& chunk);
-    StorageWriteResult CommitManifest(const StoragePublicManifest& manifest);
+    bool SupportsAbortUncommittedUpload() const override { return true; }
+    StorageWriteResult PutChunk(const StorageObjectId& object_id,
+        const StorageEncryptedChunk& chunk) override;
+    StorageWriteResult CommitManifest(const StoragePublicManifest& manifest) override;
     /** Remove only an uncommitted sequential upload after its client aborts. */
-    bool AbortUncommittedObject(const StorageObjectId& object_id, uint32_t chunk_count);
-    std::optional<StoragePublicManifest> GetManifest(const StorageObjectId& object_id) const;
-    std::optional<StorageEncryptedChunk> GetChunk(const StorageObjectId& object_id, uint32_t index) const;
+    bool AbortUncommittedObject(const StorageObjectId& object_id, uint32_t chunk_count) override;
+    std::optional<StoragePublicManifest> GetManifest(const StorageObjectId& object_id) const override;
+    std::optional<StorageEncryptedChunk> GetChunk(
+        const StorageObjectId& object_id, uint32_t index) const override;
     uint64_t UsedBytes() const;
     uint64_t CapacityBytes() const { return m_capacity_bytes; }
 

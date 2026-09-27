@@ -164,6 +164,7 @@ public:
     bool HasStorageProvider() const { return m_storage_store != nullptr; }
     StorageWriteResult StoreEncryptedChunk(const StorageObjectId& object_id, const StorageEncryptedChunk& chunk);
     StorageWriteResult CommitStoredManifest(const StoragePublicManifest& manifest);
+    bool AbortStoredObject(const StorageObjectId& object_id, uint32_t chunk_count);
     std::optional<StoragePublicManifest> GetStoredManifest(const StorageObjectId& object_id) const;
     std::optional<StorageEncryptedChunk> GetStoredChunk(const StorageObjectId& object_id, uint32_t index) const;
 

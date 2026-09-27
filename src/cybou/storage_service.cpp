@@ -6,6 +6,7 @@
 
 #include <cybou/crypto/cleanse.h>
 #include <cybou/identity_vault.h>
+#include <cybou/p2p/peer_manager.h>
 
 #include <openssl/rand.h>
 
@@ -205,9 +206,56 @@ bool EnsureDirectory(const std::filesystem::path& path)
 }
 } // namespace
 
+PeerStorageProvider::PeerStorageProvider(
+    p2p::PeerManager& peers, std::string address, const uint16_t port)
+    : m_peers{peers}, m_address{std::move(address)}, m_port{port}
+{
+}
+
+bool PeerStorageProvider::SupportsAbortUncommittedUpload() const
+{
+    const auto peers = m_peers.StoragePeers();
+    return std::any_of(peers.begin(), peers.end(), [&](const p2p::PeerInfo& peer) {
+        return peer.address == m_address && peer.port == m_port &&
+            (peer.hello.capabilities & p2p::CAP_STORAGE_ABORT);
+    });
+}
+
+StorageWriteResult PeerStorageProvider::PutChunk(
+    const StorageObjectId& object_id, const StorageEncryptedChunk& chunk)
+{
+    const auto result = m_peers.PutStorageChunk(m_address, m_port, object_id, chunk);
+    return result.value_or(StorageWriteResult{StorageWriteStatus::DISABLED, {}, false});
+}
+
+StorageWriteResult PeerStorageProvider::CommitManifest(const StoragePublicManifest& manifest)
+{
+    const auto result = m_peers.CommitStorageManifest(m_address, m_port, manifest);
+    return result.value_or(StorageWriteResult{StorageWriteStatus::DISABLED, {}, false});
+}
+
+bool PeerStorageProvider::AbortUncommittedObject(
+    const StorageObjectId& object_id, const uint32_t chunk_count)
+{
+    const auto result = m_peers.AbortStorageObject(m_address, m_port, object_id, chunk_count);
+    return result && static_cast<bool>(*result);
+}
+
+std::optional<StoragePublicManifest> PeerStorageProvider::GetManifest(
+    const StorageObjectId& object_id) const
+{
+    return m_peers.GetStorageManifest(m_address, m_port, object_id);
+}
+
+std::optional<StorageEncryptedChunk> PeerStorageProvider::GetChunk(
+    const StorageObjectId& object_id, const uint32_t index) const
+{
+    return m_peers.GetStorageChunk(m_address, m_port, object_id, index);
+}
+
 StorageService::StorageService(const std::span<const unsigned char, 32> network_id,
     const AccountId account_id, const CybouKeyStore& keystore,
-    StorageObjectStore& store, std::filesystem::path private_manifest_dir)
+    StorageObjectProvider& store, std::filesystem::path private_manifest_dir)
     : m_account_id{account_id}, m_keystore{keystore}, m_store{store},
       m_private_manifest_dir{std::move(private_manifest_dir)}
 {
@@ -223,6 +271,9 @@ StorageTransferResult StorageService::UploadFile(
     const std::filesystem::path& source, const std::string_view vault_password)
 {
     if (m_account_id.IsNull() || IsZero(m_network_id) || source.empty() || m_private_manifest_dir.empty()) return {};
+    if (!m_store.SupportsAbortUncommittedUpload()) {
+        return {.status = StorageTransferStatus::PROVIDER_ERROR};
+    }
     const auto active_account = m_keystore.GetAccountId();
     if (!active_account || *active_account != m_account_id) return {};
     std::error_code ec;
@@ -247,63 +298,75 @@ StorageTransferResult StorageService::UploadFile(
     if (!input) return {.status = StorageTransferStatus::IO_ERROR};
     std::vector<StorageChunkDescriptor> descriptors;
     descriptors.reserve(context->ChunkCount());
-    uint32_t stored_count{0};
-    auto abort = [&] { (void)m_store.AbortUncommittedObject(metadata->object_id, stored_count); };
+    const auto abort = [&] {
+        // A PUT may reach the provider even when its acknowledgment is lost.
+        // ObjectID is freshly generated, so clean the complete expected range.
+        return m_store.AbortUncommittedObject(metadata->object_id, context->ChunkCount());
+    };
     for (uint32_t index = 0; index < context->ChunkCount(); ++index) {
         const auto expected_size = context->ExpectedPlaintextChunkSize(index);
         if (!expected_size) {
-            abort();
-            return {.status = StorageTransferStatus::INVALID};
+            return {.status = abort() ? StorageTransferStatus::INVALID : StorageTransferStatus::CLEANUP_FAILED,
+                .object_id = metadata->object_id};
         }
         std::vector<unsigned char> plaintext(*expected_size);
         if (!plaintext.empty()) {
             input.read(reinterpret_cast<char*>(plaintext.data()), static_cast<std::streamsize>(plaintext.size()));
             if (input.gcount() != static_cast<std::streamsize>(plaintext.size())) {
                 crypto::CleanseMemory(plaintext.data(), plaintext.size());
-                abort();
-                return {.status = StorageTransferStatus::IO_ERROR};
+                return {.status = abort() ? StorageTransferStatus::IO_ERROR : StorageTransferStatus::CLEANUP_FAILED,
+                    .object_id = metadata->object_id};
             }
         }
         auto chunk = context->EncryptChunk(index, plaintext);
         crypto::CleanseMemory(plaintext.data(), plaintext.size());
         if (!chunk) {
-            abort();
-            return {.status = StorageTransferStatus::INVALID};
+            return {.status = abort() ? StorageTransferStatus::INVALID : StorageTransferStatus::CLEANUP_FAILED,
+                .object_id = metadata->object_id};
         }
         const auto write = m_store.PutChunk(metadata->object_id, *chunk);
         if (!write) {
-            abort();
-            return {.status = StorageTransferStatus::PROVIDER_ERROR};
+            return {.status = abort() ? StorageTransferStatus::PROVIDER_ERROR : StorageTransferStatus::CLEANUP_FAILED,
+                .object_id = metadata->object_id};
         }
-        ++stored_count;
         descriptors.push_back({.chunk_id = chunk->chunk_id,
             .ciphertext_size = static_cast<uint32_t>(chunk->ciphertext_and_tag.size())});
     }
     char trailing_byte{};
     input.read(&trailing_byte, 1);
     if (input.gcount() != 0 || !input.eof()) {
-        abort();
-        return {.status = StorageTransferStatus::IO_ERROR};
+        return {.status = abort() ? StorageTransferStatus::IO_ERROR : StorageTransferStatus::CLEANUP_FAILED,
+            .object_id = metadata->object_id};
     }
 
     const auto manifest = BuildStoragePublicManifestFromDescriptors(m_network_id, metadata->object_id, descriptors);
     if (!manifest) {
-        abort();
-        return {.status = StorageTransferStatus::INVALID};
+        return {.status = abort() ? StorageTransferStatus::INVALID : StorageTransferStatus::CLEANUP_FAILED,
+            .object_id = metadata->object_id};
     }
     auto private_payload = EncodePrivateManifest(m_account_id, m_network_id, *metadata, manifest->commitment);
     const auto private_manifest_path = PrivateManifestPath(metadata->object_id);
     const bool saved = SaveNewIdentityVault(private_manifest_path, vault_password, private_payload);
     crypto::CleanseMemory(private_payload.data(), private_payload.size());
     if (!saved) {
-        abort();
-        return {.status = StorageTransferStatus::IO_ERROR};
+        return {.status = abort() ? StorageTransferStatus::IO_ERROR : StorageTransferStatus::CLEANUP_FAILED,
+            .object_id = metadata->object_id};
     }
     const auto committed = m_store.CommitManifest(*manifest);
+    if (!committed.response_received) {
+        // The provider may already have committed. Keep private metadata so
+        // the owner can retry retrieval instead of losing the ObjectID.
+        return {.status = StorageTransferStatus::COMMIT_UNCERTAIN,
+            .object_id = metadata->object_id, .manifest_commitment = manifest->commitment};
+    }
     if (!committed) {
-        abort();
+        if (!abort()) {
+            return {.status = StorageTransferStatus::CLEANUP_FAILED,
+                .object_id = metadata->object_id, .manifest_commitment = manifest->commitment};
+        }
         std::filesystem::remove(private_manifest_path, ec);
-        return {.status = StorageTransferStatus::PROVIDER_ERROR};
+        return {.status = StorageTransferStatus::PROVIDER_ERROR,
+            .object_id = metadata->object_id, .manifest_commitment = manifest->commitment};
     }
     return {.status = StorageTransferStatus::STORED,
         .object_id = metadata->object_id, .manifest_commitment = manifest->commitment};

@@ -30,6 +30,8 @@ inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
 inline constexpr uint64_t CAP_CONSENSUS{1ULL << 5};
 inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
 inline constexpr uint64_t CAP_STORAGE{1ULL << 7};
+/** Provider supports explicit cleanup of uncommitted sequential uploads. */
+inline constexpr uint64_t CAP_STORAGE_ABORT{1ULL << 8};
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder
 // must enforce it so a malicious peer cannot stuff a PEERS frame with more
@@ -53,7 +55,9 @@ enum class MessageType : uint8_t {
     STORAGE_GET_CHUNK = 25,
     STORAGE_RESULT = 26,
     STORAGE_DATA = 27,
+    STORAGE_ABORT = 28,
 };
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::STORAGE_ABORT)};
 
 struct Frame {
     MessageType type;
@@ -141,6 +145,8 @@ public:
     std::optional<StorageWriteResult> PutStorageChunk(const StorageObjectId& object_id,
         const StorageEncryptedChunk& chunk);
     std::optional<StorageWriteResult> CommitStorageManifest(const StoragePublicManifest& manifest);
+    std::optional<StorageWriteResult> AbortStorageObject(
+        const StorageObjectId& object_id, uint32_t chunk_count);
     std::optional<StoragePublicManifest> GetStorageManifest(const StorageObjectId& object_id);
     std::optional<StorageEncryptedChunk> GetStorageChunk(const StorageObjectId& object_id, uint32_t index);
     bool ServeNext(CybouNodeRuntime& runtime);

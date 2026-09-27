@@ -123,6 +123,12 @@ StorageWriteResult CybouNodeRuntime::CommitStoredManifest(const StoragePublicMan
     return m_storage_store->CommitManifest(manifest);
 }
 
+bool CybouNodeRuntime::AbortStoredObject(
+    const StorageObjectId& object_id, const uint32_t chunk_count)
+{
+    return m_storage_store && m_storage_store->AbortUncommittedObject(object_id, chunk_count);
+}
+
 std::optional<StoragePublicManifest> CybouNodeRuntime::GetStoredManifest(const StorageObjectId& object_id) const
 {
     if (!m_storage_store) return std::nullopt;

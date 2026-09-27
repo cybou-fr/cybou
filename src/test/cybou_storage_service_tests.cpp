@@ -15,6 +15,40 @@
 #include <vector>
 
 namespace {
+class CommitAckLostProvider final : public cybou::StorageObjectProvider {
+public:
+    explicit CommitAckLostProvider(cybou::StorageObjectStore& store) : m_store{store} {}
+    bool SupportsAbortUncommittedUpload() const override { return true; }
+    cybou::StorageWriteResult PutChunk(const cybou::StorageObjectId& object_id,
+        const cybou::StorageEncryptedChunk& chunk) override
+    {
+        return m_store.PutChunk(object_id, chunk);
+    }
+    cybou::StorageWriteResult CommitManifest(const cybou::StoragePublicManifest& manifest) override
+    {
+        auto result = m_store.CommitManifest(manifest);
+        if (result) result.response_received = false;
+        return result;
+    }
+    bool AbortUncommittedObject(const cybou::StorageObjectId& object_id, uint32_t chunk_count) override
+    {
+        return m_store.AbortUncommittedObject(object_id, chunk_count);
+    }
+    std::optional<cybou::StoragePublicManifest> GetManifest(
+        const cybou::StorageObjectId& object_id) const override
+    {
+        return m_store.GetManifest(object_id);
+    }
+    std::optional<cybou::StorageEncryptedChunk> GetChunk(
+        const cybou::StorageObjectId& object_id, uint32_t index) const override
+    {
+        return m_store.GetChunk(object_id, index);
+    }
+
+private:
+    cybou::StorageObjectStore& m_store;
+};
+
 std::vector<unsigned char> ReadFile(const std::filesystem::path& path)
 {
     std::ifstream input(path, std::ios::binary);
@@ -86,6 +120,19 @@ BOOST_AUTO_TEST_CASE(file_roundtrip_survives_restart_and_aborted_upload_is_clean
         BOOST_CHECK(first_chunk->ciphertext_and_tag.size() == cybou::STORAGE_OBJECT_CHUNK_SIZE + 16);
         BOOST_CHECK(!std::equal(original.begin(), original.begin() + cybou::STORAGE_OBJECT_CHUNK_SIZE,
             first_chunk->ciphertext_and_tag.begin()));
+
+        cybou::StorageObjectStore uncertain_store(root / "uncertain-provider", network_id,
+            cybou::STORAGE_OBJECT_CHUNK_SIZE + (256U << 10));
+        CommitAckLostProvider uncertain_provider{uncertain_store};
+        cybou::StorageService uncertain_service(network_id, *account, keys, uncertain_provider,
+            root / "uncertain-manifests");
+        const auto uncertain_upload = uncertain_service.UploadFile(input_path, PASSWORD);
+        BOOST_REQUIRE(uncertain_upload.status == cybou::StorageTransferStatus::COMMIT_UNCERTAIN);
+        BOOST_CHECK(uncertain_upload.object_id != cybou::StorageObjectId{});
+        const auto uncertain_download = uncertain_service.DownloadFile(uncertain_upload.object_id,
+            root / "uncertain-output.bin", PASSWORD);
+        BOOST_REQUIRE(uncertain_download.status == cybou::StorageTransferStatus::RETRIEVED);
+        BOOST_CHECK(ReadFile(root / "uncertain-output.bin") == original);
 
         const auto empty_upload = service.UploadFile(empty_path, PASSWORD);
         BOOST_REQUIRE(empty_upload.status == cybou::StorageTransferStatus::STORED);
