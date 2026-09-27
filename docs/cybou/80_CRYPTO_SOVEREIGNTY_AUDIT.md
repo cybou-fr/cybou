@@ -19,8 +19,9 @@ not by itself remove it.
   `bitcoin_consensus`.
 - `cybou_core` no longer links `bitcoin_crypto`; the remaining inherited
   `CSipHasher` consumer is `cybou_node`'s GCS filter, so that target now owns
-  the direct dependency. This narrows the legacy crypto edge without changing
-  SipHash behavior or removing it from the runtime link graph.
+  the direct dependency. This makes direct source ownership accurate but does
+  not remove the library from the final link closure: `cybou_base` still links
+  `bitcoin_util`, whose static link interface pulls in `bitcoin_crypto`.
 - This is an initial target-boundary extraction only. The `uint256` header and
   implementation still use inherited Bitcoin utility APIs, and the target
   links `bitcoin_util`; this does not yet remove the `bitcoin_crypto` dependency.
@@ -95,10 +96,11 @@ production path. See `16_MAIL_PROTOCOL.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
 5. Secret cleansing now routes through one CYBOU-owned interface. Verify there
    are no direct inherited crypto or cleanse includes under `src/cybou` outside
    the approved wrappers.
-6. `bitcoin_crypto` is removed from the `cybou_core` interface and retained as
-   a private `cybou_node` dependency for GCS SipHash. Remove that final runtime
-   dependency only after SipHash has an approved implementation that meets the
-   measured filter performance constraint. Verify the final link graph for
+6. The direct `bitcoin_crypto` edge was moved from `cybou_core` to
+   `cybou_node`, where GCS SipHash uses it. The final link closure still gets
+   `bitcoin_crypto` transitively through `cybou_base -> bitcoin_util`. Remove
+   the remaining legacy link paths only after `uint256` and GCS no longer need
+   inherited utility or crypto symbols. Verify the final link graph for
    `cybou_core`, `cybou_node`, and the desktop executable.
 7. Treat Mail KEM and CYP2 transport confidentiality as separate protocol
    projects. Mail waits for a finalized interoperable PQ/T HPKE/key-package
