@@ -149,6 +149,32 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
         const auto device_id = identity.GetKeyStore().GetDeviceId();
         BOOST_REQUIRE(device_id);
         BOOST_CHECK_EQUAL(record->devices.at(*device_id).next_nonce, 0U);
+
+        std::array<unsigned char, 32> competing_salt{};
+        competing_salt[0] = 0x53;
+        const auto competing_commitment = cybou::ComputeNameCommitment(
+            network_id, *account, "competingcy", competing_salt);
+        const cybou::NameCommitPayload competing_payload{.commitment = competing_commitment};
+        const auto competing_digest = cybou::ComputeNameCommitPayloadCommitment(competing_payload);
+        BOOST_REQUIRE(competing_digest);
+        auto& producer_coordinator = producer.GetDeviceOperationCoordinator(identity.GetKeyStore());
+        const auto competing = producer_coordinator.Execute(cybou::DeviceOperationKind::NAME_COMMIT,
+            *competing_digest,
+            [&](const cybou::DeviceAuthorization& authorization) -> std::optional<cybou::ProtocolOperation> {
+                return cybou::ProtocolOperation{cybou::AuthorizedNameCommit{authorization, competing_payload}};
+            });
+        BOOST_REQUIRE(competing.phase == cybou::DeviceOperationPhase::ACCEPTED);
+        const auto nonce_advance_block = producer.ProduceBlock();
+        BOOST_REQUIRE(nonce_advance_block);
+        BOOST_REQUIRE(restarted.CommitBlock(*nonce_advance_block));
+        const auto nonce_advanced_conflict = coordinator.Execute(
+            cybou::DeviceOperationKind::PAYMENT, *payment_commitment,
+            [&](const cybou::DeviceAuthorization&) -> std::optional<cybou::ProtocolOperation> {
+                BOOST_ERROR("A new operation builder must not run after nonce history conflicts");
+                return std::nullopt;
+            });
+        BOOST_CHECK(nonce_advanced_conflict.phase == cybou::DeviceOperationPhase::CONFLICT);
+        BOOST_CHECK(nonce_advanced_conflict.op_id == operation_id);
     }
     remote.join();
     acceptor.close();
@@ -186,6 +212,41 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     corrupt_journal.back() ^= 0x01;
     verify_fail_closed(corrupt_journal);
     verify_fail_closed(std::vector<unsigned char>(valid_journal.begin(), valid_journal.begin() + 12));
+
+    std::array<unsigned char, 32> foreign_validator_seed{};
+    foreign_validator_seed[0] = 0x6a;
+    const auto foreign_validator = cybou::GenerateValidatorKeyPair(foreign_validator_seed);
+    BOOST_REQUIRE(foreign_validator);
+    const auto foreign_genesis = cybou::CreateDevGenesisState(foreign_validator->public_key);
+    auto foreign_definition = cybou::CreateDevNetworkDefinition(foreign_genesis);
+    foreign_definition.protocol_parameters.account_creation_work_bits = 0;
+    const auto foreign_data = root / "foreign-client";
+    std::filesystem::create_directories(foreign_data);
+    {
+        std::ofstream output{foreign_data / "device-operation.cydop", std::ios::binary | std::ios::trunc};
+        output.write(reinterpret_cast<const char*>(valid_journal.data()),
+            static_cast<std::streamsize>(valid_journal.size()));
+    }
+    {
+        cybou::NodeRuntimeConfig foreign_config{
+            .network_definition = foreign_definition,
+            .data_dir = foreign_data,
+            .memory_only = false,
+            .wipe_data = false,
+        };
+        cybou::CybouNodeRuntime foreign_runtime{std::move(foreign_config)};
+        BOOST_REQUIRE(foreign_runtime.InitializeGenesis(foreign_genesis));
+        BOOST_REQUIRE(foreign_runtime.GetNetworkId() != network_id);
+        auto& foreign_coordinator = foreign_runtime.GetDeviceOperationCoordinator(identity.GetKeyStore());
+        bool foreign_builder_called{false};
+        const auto foreign_result = foreign_coordinator.Execute(cybou::DeviceOperationKind::NAME_COMMIT,
+            cybou::IdentityKeyId{}, [&](const cybou::DeviceAuthorization&) -> std::optional<cybou::ProtocolOperation> {
+                foreign_builder_called = true;
+                return std::nullopt;
+            });
+        BOOST_CHECK(foreign_result.phase == cybou::DeviceOperationPhase::CONFLICT);
+        BOOST_CHECK(!foreign_builder_called);
+    }
 
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
