@@ -11,6 +11,23 @@ Bitcoin utility APIs.
 The Bitcoin cryptography dependency therefore remains; migrating SHA-256 does
 not by itself remove it.
 
+The remaining `bitcoin_util` edge has multiple distinct owners, so it cannot
+be dropped by changing one CMake link line:
+
+- `cybou_base` exports inherited `uint256` headers and builds `uint256.cpp`;
+  these use inherited endian, span, and hex/string helpers. Its static link
+  interface reaches `bitcoin_crypto` through `bitcoin_util`.
+- `cybou_node` uses inherited `DataStream`/`SpanReader` serialization for its
+  local LevelDB records. Those bytes form the existing local database format.
+- The GCS filter uses inherited stream, FastRange, and Golomb-Rice utilities,
+  plus `CSipHasher`; its encoded bytes are checked against the inherited
+  block-filter implementation.
+
+The actual MinGW link command confirms `bitcoin_util` and `bitcoin_crypto` are
+still in the final CYBOU test executable's link closure. A true removal needs
+separate CYBOU-owned hash-value and serialization APIs with explicit byte
+compatibility coverage; SipHash remains an additional crypto blocker.
+
 ## Progress
 
 - A `cybou_base` target now owns the `uint256.cpp` object, and
