@@ -43,6 +43,16 @@ not by itself remove it.
   tags, malformed lengths, and zero plaintext after authentication failure.
   The inherited AEAD API remains only as a test oracle; the prototype's X25519-
   only Mail profile remains disabled and is not the target PQ Mail suite.
+- SipHash remains on the inherited `CSipHasher` implementation in the GCS
+  filter. A local MinGW benchmark on OpenSSL 3.5.2 compared 32-byte elements:
+  `CSipHasher` measured 26.11 ns/hash and `EVP_MAC` SipHash measured
+  54.78 ns/hash (one context reused, with per-message reinitialization and an
+  explicit 8-byte output size). The EVP result matched `CSipHasher` for the
+  benchmark vector; the existing Mail GCS test also checks encoded-filter
+  parity against the inherited block-filter implementation. The roughly 2.1x
+  slowdown is not acceptable for this hot path, so no SipHash migration was
+  made. Revisit only with a faster provider/API path or a different approved
+  performance constraint; do not replace it with a CYBOU-authored primitive.
 
 The root `CMakeLists.txt` requires OpenSSL 3.5. The active PQ baseline in
 `09_CRYPTO_PQ.md` names X25519 + ML-KEM-768 as the Mail target and explicitly
@@ -68,9 +78,11 @@ production path. See `16_MAIL_PROTOCOL.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
    operation IDs, block IDs, state roots, network IDs, validator commitments,
    name commitments, and Mail commitments. Keep SHA-256 as the consensus
    function; a provider change is not a hash-suite change.
-4. Benchmark SipHash before choosing EVP_MAC for the filter hot path; preserve
-   its exact output. Review provider policy and failure behavior for the crypto
-   wrappers before widening their use.
+4. SipHash benchmarked on the active Windows/OpenSSL build; retain inherited
+   `CSipHasher` for now due to EVP_MAC's approximately 2.1x cost. Revisit only
+   with a faster provider/API path, preserving exact output. Review provider
+   policy and failure behavior for the crypto wrappers before widening their
+   use.
 5. Replace inherited secret-cleansing calls through one CYBOU-owned interface,
    then verify there are no direct inherited crypto or cleanse includes under
    `src/cybou` outside the approved wrapper.
