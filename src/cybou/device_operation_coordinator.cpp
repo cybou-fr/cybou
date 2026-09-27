@@ -40,6 +40,7 @@ enum class JournalOperationKind : uint8_t {
     NAME_REVEAL = 5,
     RECOVERY_DEVICE_ADD = 6,
     ROOT_DEVICE_REVOKE = 7,
+    RECOVERY_ROOT_ROTATE = 8,
 };
 
 void Append64(std::vector<unsigned char>& out, uint64_t value)
@@ -144,7 +145,8 @@ const DeviceAdd* RecoveredDeviceAddOf(const ProtocolOperation& operation)
 bool IsRootAuthorizedOperation(JournalOperationKind kind)
 {
     return kind == JournalOperationKind::RECOVERY_DEVICE_ADD ||
-        kind == JournalOperationKind::ROOT_DEVICE_REVOKE;
+        kind == JournalOperationKind::ROOT_DEVICE_REVOKE ||
+        kind == JournalOperationKind::RECOVERY_ROOT_ROTATE;
 }
 
 std::optional<IdentityKeyId> RecoveredDeviceId(const DeviceAdd& operation)
@@ -223,7 +225,7 @@ bool DeviceOperationCoordinator::LoadJournal()
     entry->activation_nonce = Read64(std::span<const unsigned char>{bytes}.subspan(offset, 8)); offset += 8;
     const uint8_t kind = bytes[offset++];
     if (kind < static_cast<uint8_t>(JournalOperationKind::PAYMENT) ||
-        kind > static_cast<uint8_t>(JournalOperationKind::ROOT_DEVICE_REVOKE)) {
+        kind > static_cast<uint8_t>(JournalOperationKind::RECOVERY_ROOT_ROTATE)) {
         m_load_error = "Device operation journal kind is invalid";
         return false;
     }
@@ -247,6 +249,7 @@ bool DeviceOperationCoordinator::LoadJournal()
     const auto* root_add = RecoveredDeviceAddOf(*operation);
     const auto root_device_id = root_add ? RecoveredDeviceId(*root_add) : std::nullopt;
     const auto* root_revoke = std::get_if<DeviceRevoke>(&*operation);
+    const auto* root_rotate = std::get_if<RecoveryRotate>(&*operation);
     const bool valid_device_operation = auth && !IsRootAuthorizedOperation(entry->kind) &&
         auth->account_id == entry->account_id && auth->device_id == entry->device_id &&
         auth->nonce == entry->nonce && auth->activation_nonce == entry->activation_nonce &&
@@ -261,7 +264,12 @@ bool DeviceOperationCoordinator::LoadJournal()
         root_revoke && root_revoke->account_id == entry->account_id &&
         root_revoke->root_nonce == entry->nonce && root_revoke->device_id == entry->payload_commitment &&
         entry->device_id == IdentityKeyId{} && entry->activation_nonce == 0;
-    if ((!valid_device_operation && !valid_root_device_add && !valid_root_device_revoke) ||
+    const auto rotated_root_id = root_rotate ? ComputeRecoveryKeyId(root_rotate->new_root) : std::nullopt;
+    const bool valid_root_rotation = entry->kind == JournalOperationKind::RECOVERY_ROOT_ROTATE &&
+        root_rotate && rotated_root_id && root_rotate->account_id == entry->account_id &&
+        root_rotate->root_nonce == entry->nonce && *rotated_root_id == entry->payload_commitment &&
+        entry->device_id == IdentityKeyId{} && entry->activation_nonce == 0;
+    if ((!valid_device_operation && !valid_root_device_add && !valid_root_device_revoke && !valid_root_rotation) ||
         entry->network_id != m_runtime.GetNetworkId()) {
         m_load_error = "Device operation journal binding is invalid";
         return false;
@@ -354,6 +362,68 @@ DeviceOperationResult DeviceOperationCoordinator::Reconcile(JournalEntry& entry)
     }
     const auto loaded = m_runtime.GetStore().LoadState();
     const auto* record = loaded && loaded.state ? loaded.state->identities.Find(entry.account_id) : nullptr;
+    if (entry.kind == JournalOperationKind::RECOVERY_ROOT_ROTATE) {
+        const auto operation = DeserializeProtocolOperation(entry.operation_bytes);
+        const auto* rotate = operation ? std::get_if<RecoveryRotate>(&*operation) : nullptr;
+        if (!record || !rotate) {
+            entry.phase = DeviceOperationPhase::CONFLICT;
+            SaveJournal(entry);
+            return {.phase = entry.phase, .op_id = entry.op_id,
+                .error = "Recovery rotation account or journal operation is unavailable"};
+        }
+        if (record->recovery_root == rotate->new_root) {
+            const auto lookup = m_runtime.FindFinalizedOperation(entry.op_id);
+            if (lookup.status == FinalizedOperationLookupStatus::FOUND) {
+                entry.phase = DeviceOperationPhase::FINALIZED;
+                SaveJournal(entry);
+                return {.phase = entry.phase, .op_id = entry.op_id, .finalized_height = lookup.height};
+            }
+            entry.phase = DeviceOperationPhase::CONFLICT;
+            SaveJournal(entry);
+            return {.phase = entry.phase, .op_id = entry.op_id,
+                .error = "Recovery root changed but the rotation OperationID is absent from history"};
+        }
+        const auto old_root = m_keystore.GetRecoveryPublicKey();
+        if (!old_root || record->recovery_root != *old_root) {
+            entry.phase = DeviceOperationPhase::CONFLICT;
+            SaveJournal(entry);
+            return {.phase = entry.phase, .op_id = entry.op_id,
+                .error = "Finalized recovery root matches neither side of the journaled rotation"};
+        }
+        if (record->next_root_nonce > entry.nonce) {
+            const auto lookup = m_runtime.FindFinalizedOperation(entry.op_id);
+            if (lookup.status == FinalizedOperationLookupStatus::FOUND) {
+                entry.phase = DeviceOperationPhase::FINALIZED;
+                SaveJournal(entry);
+                return {.phase = entry.phase, .op_id = entry.op_id, .finalized_height = lookup.height};
+            }
+            entry.phase = DeviceOperationPhase::CONFLICT;
+            SaveJournal(entry);
+            return {.phase = entry.phase, .op_id = entry.op_id,
+                .error = "Finalized recovery nonce advanced without this rotation OperationID"};
+        }
+        if (record->next_root_nonce < entry.nonce) {
+            entry.phase = DeviceOperationPhase::CONFLICT;
+            SaveJournal(entry);
+            return {.phase = entry.phase, .op_id = entry.op_id,
+                .error = "Saved recovery rotation nonce is ahead of finalized state"};
+        }
+        if (status.kind == OperationStatusKind::REJECTED_KNOWN) {
+            entry.phase = DeviceOperationPhase::REJECTED;
+            SaveJournal(entry);
+            return {.phase = entry.phase, .op_id = entry.op_id,
+                .error = "Recovery-root rotation was rejected by the node"};
+        }
+        if (status.kind == OperationStatusKind::LOCAL_PENDING || status.kind == OperationStatusKind::ACCEPTED_REMOTE) {
+            entry.phase = DeviceOperationPhase::ACCEPTED;
+            SaveJournal(entry);
+            return {.phase = entry.phase, .op_id = entry.op_id};
+        }
+        entry.phase = DeviceOperationPhase::UNCERTAIN;
+        SaveJournal(entry);
+        return {.phase = entry.phase, .op_id = entry.op_id,
+            .error = "Recovery-root rotation status is unknown; its root nonce remains reserved"};
+    }
     if (IsRootAuthorizedOperation(entry.kind)) {
         if (!record) {
             entry.phase = DeviceOperationPhase::CONFLICT;
@@ -462,6 +532,11 @@ DeviceOperationResult DeviceOperationCoordinator::AuthorizeRecoveredDevice()
         const auto reconciliation = Reconcile(*m_entry);
         if (reconciliation.phase == DeviceOperationPhase::FINALIZED ||
             reconciliation.phase == DeviceOperationPhase::REJECTED) {
+            if (m_entry->kind == JournalOperationKind::RECOVERY_ROOT_ROTATE) {
+                return {.phase = reconciliation.phase, .op_id = reconciliation.op_id,
+                    .finalized_height = reconciliation.finalized_height,
+                    .error = "Recovery-root rotation must finish vault reconciliation before another root operation"};
+            }
             if (!ClearJournal()) return {.phase = DeviceOperationPhase::CONFLICT, .op_id = reconciliation.op_id,
                 .error = "Reconciled operation journal could not be cleared"};
         } else if (reconciliation.phase == DeviceOperationPhase::CONFLICT) {
@@ -547,6 +622,11 @@ DeviceOperationResult DeviceOperationCoordinator::RevokeDevice(const IdentityKey
         const auto reconciliation = Reconcile(*m_entry);
         if (reconciliation.phase == DeviceOperationPhase::FINALIZED ||
             reconciliation.phase == DeviceOperationPhase::REJECTED) {
+            if (m_entry->kind == JournalOperationKind::RECOVERY_ROOT_ROTATE) {
+                return {.phase = reconciliation.phase, .op_id = reconciliation.op_id,
+                    .finalized_height = reconciliation.finalized_height,
+                    .error = "Recovery-root rotation must finish vault reconciliation before another root operation"};
+            }
             if (!ClearJournal()) return {.phase = DeviceOperationPhase::CONFLICT, .op_id = reconciliation.op_id,
                 .error = "Reconciled operation journal could not be cleared"};
         } else if (reconciliation.phase == DeviceOperationPhase::CONFLICT) {
@@ -612,6 +692,120 @@ DeviceOperationResult DeviceOperationCoordinator::RevokeDevice(const IdentityKey
     return SubmitExact(*m_entry);
 }
 
+DeviceOperationResult DeviceOperationCoordinator::RotateRecoveryRoot(
+    std::span<const unsigned char, 32> new_root_entropy)
+{
+    std::lock_guard lock(m_mutex);
+    if (!LoadJournal()) return {.phase = DeviceOperationPhase::CONFLICT, .error = m_load_error};
+    const auto account = m_keystore.GetAccountId();
+    const auto old_root = m_keystore.GetRecoveryPublicKey();
+    const auto new_root = DeriveIdentityPublicKey(new_root_entropy, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto new_root_id = new_root ? ComputeRecoveryKeyId(*new_root) : std::nullopt;
+    if (!account || !old_root || !new_root_id) {
+        return {.phase = DeviceOperationPhase::REJECTED, .error = "Recovery rotation keys are unavailable or invalid"};
+    }
+    if (*old_root == *new_root) {
+        return {.phase = DeviceOperationPhase::REJECTED, .error = "New recovery root matches the active root"};
+    }
+
+    if (m_entry) {
+        const auto reconciliation = Reconcile(*m_entry);
+        const bool same_request = m_entry->kind == JournalOperationKind::RECOVERY_ROOT_ROTATE &&
+            m_entry->account_id == *account && m_entry->payload_commitment == *new_root_id;
+        if (m_entry->kind == JournalOperationKind::RECOVERY_ROOT_ROTATE &&
+            reconciliation.phase == DeviceOperationPhase::FINALIZED) {
+            if (same_request) return reconciliation;
+            return {.phase = DeviceOperationPhase::CONFLICT, .op_id = reconciliation.op_id,
+                .finalized_height = reconciliation.finalized_height,
+                .error = "A different recovery-root rotation is already finalized and awaits vault reconciliation"};
+        }
+        if (reconciliation.phase == DeviceOperationPhase::FINALIZED ||
+            reconciliation.phase == DeviceOperationPhase::REJECTED) {
+            if (!ClearJournal()) return {.phase = DeviceOperationPhase::CONFLICT, .op_id = reconciliation.op_id,
+                .error = "Reconciled operation journal could not be cleared"};
+            if (reconciliation.phase == DeviceOperationPhase::REJECTED) return reconciliation;
+        } else if (reconciliation.phase == DeviceOperationPhase::CONFLICT) {
+            return reconciliation;
+        } else {
+            if (m_entry->kind != JournalOperationKind::RECOVERY_ROOT_ROTATE || !same_request) {
+                if (reconciliation.phase == DeviceOperationPhase::UNCERTAIN) {
+                    const auto retry = SubmitExact(*m_entry);
+                    return {.phase = DeviceOperationPhase::CONFLICT, .op_id = retry.op_id,
+                        .error = "An earlier operation is unresolved; its exact bytes were retried"};
+                }
+                return {.phase = DeviceOperationPhase::CONFLICT, .op_id = m_entry->op_id,
+                    .error = "Another operation is still pending in the shared journal"};
+            }
+            if (reconciliation.phase == DeviceOperationPhase::UNCERTAIN) return SubmitExact(*m_entry);
+            return reconciliation;
+        }
+    }
+
+    const auto loaded = m_runtime.GetStore().LoadState();
+    const auto* record = loaded && loaded.state ? loaded.state->identities.Find(*account) : nullptr;
+    if (!record || record->recovery_root != *old_root) {
+        return {.phase = DeviceOperationPhase::REJECTED, .error = "Current recovery root is not authorized by finalized state"};
+    }
+    if (loaded.state->identities.FindByRecoveryKeyId(*new_root_id)) {
+        return {.phase = DeviceOperationPhase::REJECTED, .error = "New recovery root is already assigned to an account"};
+    }
+    if (record->next_root_nonce == std::numeric_limits<uint64_t>::max()) {
+        return {.phase = DeviceOperationPhase::REJECTED, .error = "Recovery nonce is exhausted"};
+    }
+
+    RecoveryRotate operation{.account_id = *account, .new_root = *new_root,
+        .root_nonce = record->next_root_nonce, .old_root_signature = {}, .new_root_pop = {}};
+    const auto digest = ComputeRecoveryRotateDigest(m_runtime.GetNetworkId(), operation);
+    const auto old_signature = digest ? m_keystore.SignRecovery(*digest) : std::nullopt;
+    const auto new_root_pop = digest ? SignIdentityMessage(new_root_entropy,
+        IdentityKeyPurpose::RECOVERY_ROOT, *digest) : std::nullopt;
+    if (!digest || !old_signature || !new_root_pop || !VerifyIdentityMessage(*new_root, *new_root_pop, *digest)) {
+        return {.phase = DeviceOperationPhase::REJECTED, .error = "Cannot verify and authorize new recovery root"};
+    }
+    operation.old_root_signature = *old_signature;
+    operation.new_root_pop = *new_root_pop;
+    const ProtocolOperation protocol_operation{operation};
+    const auto bytes = SerializeProtocolOperation(protocol_operation);
+    const auto op_id = ComputeOperationId(protocol_operation);
+    if (!bytes || bytes->empty() || bytes->size() > MAX_JOURNALED_OPERATION_BYTES || !op_id || op_id->IsNull()) {
+        return {.phase = DeviceOperationPhase::REJECTED, .error = "Cannot encode recovery-root rotation"};
+    }
+
+    auto entry = std::make_unique<JournalEntry>();
+    entry->network_id = m_runtime.GetNetworkId();
+    entry->account_id = *account;
+    entry->device_id = {};
+    entry->nonce = operation.root_nonce;
+    entry->activation_nonce = 0;
+    entry->kind = JournalOperationKind::RECOVERY_ROOT_ROTATE;
+    entry->payload_commitment = *new_root_id;
+    entry->phase = DeviceOperationPhase::PREPARED;
+    entry->op_id = *op_id;
+    entry->operation_bytes = *bytes;
+    if (!SaveJournal(*entry)) return {.phase = DeviceOperationPhase::REJECTED, .op_id = *op_id,
+        .error = "Could not durably save recovery rotation before submission"};
+    m_entry = std::move(entry);
+    return SubmitExact(*m_entry);
+}
+
+bool DeviceOperationCoordinator::CompleteRecoveryRootRotation(const IdentityHybridPublicKey& active_root)
+{
+    std::lock_guard lock(m_mutex);
+    if (!LoadJournal() || !m_entry || m_entry->kind != JournalOperationKind::RECOVERY_ROOT_ROTATE) return false;
+    const auto operation = DeserializeProtocolOperation(m_entry->operation_bytes);
+    const auto* rotate = operation ? std::get_if<RecoveryRotate>(&*operation) : nullptr;
+    if (!rotate || rotate->new_root != active_root) return false;
+    const auto result = Reconcile(*m_entry);
+    if (result.phase != DeviceOperationPhase::FINALIZED) return false;
+    return ClearJournal();
+}
+
+bool DeviceOperationCoordinator::HasPendingRecoveryRootRotation()
+{
+    std::lock_guard lock(m_mutex);
+    return LoadJournal() && m_entry && m_entry->kind == JournalOperationKind::RECOVERY_ROOT_ROTATE;
+}
+
 DeviceOperationResult DeviceOperationCoordinator::Execute(DeviceOperationKind kind,
     const IdentityKeyId& payload_commitment, const DeviceOperationBuilder& build)
 {
@@ -624,6 +818,11 @@ DeviceOperationResult DeviceOperationCoordinator::Execute(DeviceOperationKind ki
     if (m_entry) {
         const auto reconciliation = Reconcile(*m_entry);
         if (reconciliation.phase == DeviceOperationPhase::FINALIZED) {
+            if (m_entry->kind == JournalOperationKind::RECOVERY_ROOT_ROTATE) {
+                return {.phase = reconciliation.phase, .op_id = reconciliation.op_id,
+                    .finalized_height = reconciliation.finalized_height,
+                    .error = "Recovery-root rotation must finish vault reconciliation before another operation"};
+            }
             if (!ClearJournal()) return {.phase = DeviceOperationPhase::CONFLICT, .op_id = reconciliation.op_id,
                 .error = "Finalized operation journal could not be cleared"};
         } else if (reconciliation.phase == DeviceOperationPhase::REJECTED) {

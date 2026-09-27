@@ -112,6 +112,19 @@ bool CybouKeyStore::SaveToFile(const std::filesystem::path& path, std::string_vi
     return m_impl->material && SaveNewIdentityMaterial(path, password, *m_impl->material);
 }
 
+std::optional<IdentityMaterial> CybouKeyStore::CreateRecoveryRotationMaterial(
+    std::span<const unsigned char, 32> new_recovery_entropy) const
+{
+    if (!m_impl->material || !std::any_of(new_recovery_entropy.begin(), new_recovery_entropy.end(),
+            [](unsigned char byte) { return byte != 0; })) return std::nullopt;
+    IdentityMaterial material;
+    material.account_id = m_impl->material->account_id;
+    material.recovery_entropy = std::array<unsigned char, 32>{};
+    std::copy(new_recovery_entropy.begin(), new_recovery_entropy.end(), material.recovery_entropy.begin());
+    material.device_secret = m_impl->material->device_secret;
+    return material;
+}
+
 std::optional<RecoveryWords> CybouKeyStore::GetRecoveryWords() const
 {
     if (!m_impl->material) return std::nullopt;

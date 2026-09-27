@@ -76,11 +76,13 @@ reconciliation are integrated around that transition:
    history conflict, preserve both vaults and require explicit recovery.
 
 The current CYBV2 payload contains only one recovery entropy.
-`PromoteIdentityVault` now authenticates a same-directory candidate and
-provides durable, idempotent replacement bound to the expected plaintext, but
-the identity service and `DeviceOperationCoordinator` do not yet orchestrate
-candidate creation, `RecoveryRotate` reconciliation, and promotion. This
-sequence remains a required implementation gate, not a feature claim.
+`PromoteIdentityVault` authenticates a same-directory candidate and provides
+durable, idempotent replacement bound to the expected plaintext. The identity
+service and `DeviceOperationCoordinator` now implement candidate creation,
+exact `RecoveryRotate` journaling, reconciliation, finality-gated promotion,
+and resume from the encrypted candidate. The Identity page confirms the new
+phrase and offers resume after interruption. Automated UI acceptance across
+process crashes and remote finality remains outstanding.
 
 ## Portable `CYBV2` vault
 

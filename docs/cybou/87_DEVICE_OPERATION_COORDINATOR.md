@@ -1,10 +1,10 @@
 # 87 — Device operation coordinator
 
 Status: canonical cross-service authorization and retry contract. The
-coordinator is implemented for Name, Wallet, and recovery's root-authorized
-DeviceAdd and DeviceRevoke; this document also defines the migration target
-for Mail, Files, recovery-root rotation, and future device-authorized
-services. See `26_IMPLEMENTATION_STATUS.md` for the exact code boundary.
+coordinator is implemented for Name, Wallet, recovery's root-authorized
+DeviceAdd and DeviceRevoke, and RecoveryRotate; this document also defines the
+migration target for Mail, Files, and future device-authorized services. See
+`26_IMPLEMENTATION_STATUS.md` for the exact code boundary.
 
 ## Ownership rule
 
@@ -105,12 +105,13 @@ resuming its own request. A caller must not interpret `UNKNOWN` as rejection.
 
 ## Concurrency and nonce reservation
 
-The current coordinator supports one unresolved operation per runtime/device
-journal. While that operation is accepted, uncertain, or otherwise unresolved,
-a different operation is not signed. A repeated identical request retries or
-returns the saved result. After finality or known rejection is reconciled, a
-subsequent operation reads the next finalized nonce. This deliberately
-serializes Name and Wallet actions sharing the device.
+The current coordinator supports one unresolved operation in the runtime's
+shared journal. While that operation is accepted, uncertain, or otherwise
+unresolved, a different operation is not signed. A repeated identical request
+retries or returns the saved result. After finality or known rejection is
+reconciled, a subsequent operation reads the next finalized nonce. This
+deliberately serializes all coordinated operations in one runtime, including
+actions from multiple services.
 
 Future support for multiple outstanding operations requires a durable ordered
 nonce reservation journal and explicit cancellation/replacement rules. It must
@@ -128,7 +129,7 @@ not be approximated with independent per-service counters.
 | Device revoke | Integrated; root nonce and exact operation bytes are journaled |
 | Mail | Not integrated; sending remains fail-closed without recipient hybrid keys |
 | Files manifest operations | Not implemented |
-| Recovery-root rotation | Not integrated |
+| Recovery-root rotation | Integrated; candidate vault is saved before broadcast and promoted only after verified finality |
 
 No Mail/Files capability may claim this contract is operational until its
 mutations call the coordinator and the restart/uncertain path is tested.

@@ -8,6 +8,8 @@
 #include <qt/cybouui.h>
 #include <qt/recoveryphrasedialog.h>
 #include <cybou/identity_service.h>
+#include <cybou/crypto/cleanse.h>
+#include <cybou/recovery_phrase.h>
 
 #include <QClipboard>
 #include <QFile>
@@ -169,13 +171,28 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
         QMessageBox::information(this, tr("Planned"),
             tr("Device authorization (Ed25519 + ML-DSA-44) arrives with the portable vault sync. For now this device is the only authorized one."));
     });
-    m_security_button = new QPushButton{tr("Security settings"), hero};
+    m_security_button = new QPushButton{tr("Rotate recovery phrase"), hero};
     m_security_button->setObjectName(QStringLiteral("secondaryButton"));
     m_security_button->setIcon(QIcon{glyphPixmap(Glyph::ShieldCheck, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
     connect(m_security_button, &QPushButton::clicked, this, [this] {
-        QMessageBox::information(this, tr("Planned"),
-            tr("A dedicated security surface (vault password, key rotation, active sessions) is planned. Recovery and restore stay on this page."));
+        startRecoveryRotationFlow();
     });
+    connect(m_model, &CybouDesktopModel::recoveryRotationFinished, this,
+        [this](quint8 phase, const QString& error, quint64 height) {
+            if (phase == static_cast<quint8>(cybou::DeviceOperationPhase::FINALIZED)) {
+                const QString detail = height == 0
+                    ? tr("The recovery rotation is finalized and the encrypted vault is using the active 24-word phrase.")
+                    : tr("The new recovery root is finalized at block %1. Your encrypted vault now uses the new 24-word phrase.").arg(height);
+                QMessageBox::information(this, tr("Recovery root updated"), detail);
+            } else if (phase == static_cast<quint8>(cybou::DeviceOperationPhase::ACCEPTED) ||
+                phase == static_cast<quint8>(cybou::DeviceOperationPhase::UNCERTAIN)) {
+                QMessageBox::information(this, tr("Recovery rotation pending"),
+                    tr("The new phrase is saved in the encrypted pending vault. Keep your written copy. The active vault remains unchanged until finality. If the app closes or the network is uncertain, use this action again to resume this rotation."));
+            } else {
+                QMessageBox::warning(this, tr("Recovery rotation not completed"),
+                    error.isEmpty() ? tr("The recovery rotation could not be completed.") : error);
+            }
+        });
     actions->addWidget(m_share_button);
     actions->addWidget(m_claim_button);
     actions->addWidget(m_add_device_button);
@@ -600,6 +617,62 @@ void IdentityPage::startShowRecoveryFlow()
     }
     RecoveryPhraseDialog phrase_dialog{RecoveryPhraseDialog::Mode::View, word_list, this};
     phrase_dialog.exec();
+}
+
+void IdentityPage::startRecoveryRotationFlow()
+{
+    auto* service = m_model->identityService();
+    if (!service || m_model->status().identity_state != CybouIdentityState::Active) return;
+
+    bool accepted{false};
+    QString password = QInputDialog::getText(this, tr("Confirm identity vault"),
+        tr("Identity vault password"), QLineEdit::Password, {}, &accepted);
+    if (!accepted) return;
+    if (!m_model->requestUnlockIdentity(password)) {
+        password.fill(QChar{0});
+        QMessageBox::warning(this, tr("Cannot unlock identity"),
+            tr("The password is incorrect or the active vault is damaged."));
+        return;
+    }
+
+    if (service->HasPendingRecoveryRootRotation()) {
+        const auto choice = QMessageBox::question(this, tr("Resume recovery rotation"),
+            tr("An encrypted candidate vault and operation journal already exist. Resume that exact rotation? The active vault changes only after finalized confirmation."),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        if (choice == QMessageBox::Yes) {
+            if (!m_model->requestRecoveryRootRotation({}, password, true)) {
+                QMessageBox::warning(this, tr("Cannot resume recovery rotation"),
+                    tr("A recovery rotation is already running."));
+            }
+        }
+        password.fill(QChar{0});
+        return;
+    }
+
+    auto entropy = cybou::GenerateRecoveryEntropy();
+    if (!entropy) {
+        password.fill(QChar{0});
+        QMessageBox::warning(this, tr("Cannot create recovery phrase"),
+            tr("The secure random generator failed."));
+        return;
+    }
+    auto words = cybou::EncodeRecoveryWords(*entropy);
+    cybou::crypto::CleanseMemory(entropy->data(), entropy->size());
+    QStringList word_list;
+    for (const auto& word : words) word_list << QString::fromStdString(word);
+    RecoveryPhraseDialog phrase_dialog{RecoveryPhraseDialog::Mode::Create, word_list, this};
+    if (phrase_dialog.exec() != QDialog::Accepted) {
+        for (auto& word : words) cybou::crypto::CleanseMemory(word.data(), word.size());
+        for (auto& word : word_list) word.fill(QChar{0});
+        password.fill(QChar{0});
+        return;
+    }
+    const bool started = m_model->requestRecoveryRootRotation(word_list, password);
+    for (auto& word : words) cybou::crypto::CleanseMemory(word.data(), word.size());
+    for (auto& word : word_list) word.fill(QChar{0});
+    password.fill(QChar{0});
+    if (!started) QMessageBox::warning(this, tr("Cannot start recovery rotation"),
+        tr("A recovery rotation is already running or the phrase is invalid."));
 }
 
 void IdentityPage::startNameClaimFlow()

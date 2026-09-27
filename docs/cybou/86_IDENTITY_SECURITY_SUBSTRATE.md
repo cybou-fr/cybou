@@ -98,8 +98,9 @@ of the same Storage layer.
 
 The current runtime implements the shared coordinator for Wallet payments,
 System Balance locks, Name commit/reveal, recovery's root-authorized
-DeviceAdd, and DeviceRevoke. Recovery-root rotation, Mail, and Files are not yet
-integrated. The current identity record also lacks published KEM
+DeviceAdd and DeviceRevoke, and RecoveryRotate with finality-gated vault
+promotion. Mail and Files are not yet integrated. The current identity record
+also lacks published KEM
 capabilities. These gaps must remain visible in implementation status and UI
 capabilities; the architecture target is not a claim that Beta security is
 complete.

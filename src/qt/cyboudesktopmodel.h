@@ -8,6 +8,7 @@
 #include <QDateTime>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QLocale>
 #include <memory>
 #include <thread>
@@ -149,6 +150,8 @@ public:
     bool requestRestoreIdentity(const QString& recovery_phrase, const QString& vault_password);
     bool requestUnlockIdentity(const QString& vault_password);
     bool requestClaimName(const QString& label, const QString& vault_password);
+    bool requestRecoveryRootRotation(const QStringList& new_phrase, const QString& vault_password,
+        bool resume_pending = false);
 
 Q_SIGNALS:
     void statusChanged();
@@ -156,6 +159,7 @@ Q_SIGNALS:
     void createIdentityRequested();
     void identityCreationFailed(const QString& reason);
     void nameClaimFailed(const QString& reason);
+    void recoveryRotationFinished(quint8 phase, const QString& error, quint64 finalized_height);
 
 private:
     cybou::CybouIdentityService* m_identity_service{nullptr};
@@ -163,6 +167,8 @@ private:
     cybou::CybouWalletService* m_wallet_service{nullptr};
     std::unique_ptr<cybou::CybouNameService> m_name_service;
     std::jthread m_name_worker;
+    std::jthread m_recovery_rotation_worker;
+    bool m_recovery_rotation_pending{false};
     CybouDesktopStatus m_status;
     CybouCapabilities m_capabilities;
     QDateTime m_last_sync;

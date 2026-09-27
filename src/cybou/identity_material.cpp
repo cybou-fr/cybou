@@ -78,15 +78,22 @@ std::optional<IdentityMaterial> GenerateIdentityMaterial()
 bool SaveNewIdentityMaterial(const std::filesystem::path& path,
     std::string_view password, const IdentityMaterial& material)
 {
-    if (!Nonzero(material.account_id) || !Nonzero(material.device_secret)) return false;
-    std::array<unsigned char, PAYLOAD_SIZE> payload{};
+    auto payload = SerializeIdentityMaterial(material);
+    if (!payload) return false;
+    const bool saved = SaveNewIdentityVault(path, password, *payload);
+    crypto::CleanseMemory(payload->data(), payload->size());
+    return saved;
+}
+
+std::optional<std::vector<unsigned char>> SerializeIdentityMaterial(const IdentityMaterial& material)
+{
+    if (!Nonzero(material.account_id) || !Nonzero(material.device_secret)) return std::nullopt;
+    std::vector<unsigned char> payload(PAYLOAD_SIZE);
     std::copy(MAGIC.begin(), MAGIC.end(), payload.begin());
     std::copy(material.account_id.begin(), material.account_id.end(), payload.begin() + 5);
     std::copy(material.recovery_entropy.begin(), material.recovery_entropy.end(), payload.begin() + 37);
     std::copy(material.device_secret.begin(), material.device_secret.end(), payload.begin() + 69);
-    const bool saved = SaveNewIdentityVault(path, password, payload);
-    crypto::CleanseMemory(payload.data(), payload.size());
-    return saved;
+    return payload;
 }
 
 std::optional<IdentityMaterial> LoadIdentityMaterial(

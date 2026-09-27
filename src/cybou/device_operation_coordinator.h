@@ -61,6 +61,11 @@ public:
     DeviceOperationResult AuthorizeRecoveredDevice();
     /** Signs, journals, submits, and reconciles a root-authorized DeviceRevoke. */
     DeviceOperationResult RevokeDevice(const IdentityKeyId& target_device_id);
+    /** Signs, journals, submits, and reconciles a hybrid RecoveryRotate. */
+    DeviceOperationResult RotateRecoveryRoot(std::span<const unsigned char, 32> new_root_entropy);
+    /** Clears a finalized rotation journal only after its candidate vault is promoted. */
+    bool CompleteRecoveryRootRotation(const IdentityHybridPublicKey& active_root);
+    bool HasPendingRecoveryRootRotation();
     DeviceOperationResult GetStatus(const uint256& op_id);
 
 private:

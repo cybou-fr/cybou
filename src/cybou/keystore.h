@@ -37,6 +37,8 @@ public:
     bool LoadMaterial(IdentityMaterial material);
     bool LoadFromFile(const std::filesystem::path& path, std::string_view password);
     bool SaveToFile(const std::filesystem::path& path, std::string_view password) const;
+    std::optional<IdentityMaterial> CreateRecoveryRotationMaterial(
+        std::span<const unsigned char, 32> new_recovery_entropy) const;
     std::optional<RecoveryWords> GetRecoveryWords() const;
 
     /** Securely wipe the in-memory key */

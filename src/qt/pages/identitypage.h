@@ -48,6 +48,7 @@ private:
     void startIdentityFlow();
     void startRestoreFlow();
     void startShowRecoveryFlow();
+    void startRecoveryRotationFlow();
     void startNameClaimFlow();
 };
 

@@ -120,10 +120,11 @@ operations, choose crypto suites, wrap content keys, or submit Storage
 transfers directly. Controllers and services may prepare user intent and
 delegate it to the owning core service. The shared coordinator owns exact
 operation bytes, operation identity, nonce reservation, durable retry, and
-status reconciliation. Wallet, Name, and recovery's root-authorized DeviceAdd
-and DeviceRevoke use it. Recovery-root rotation is not integrated because its
-vault transition must be durably prepared and reconciled with operation
-finality. Mail and Files are not integrated.
+status reconciliation. Wallet, Name, recovery's root-authorized DeviceAdd
+and DeviceRevoke, and RecoveryRotate use it. Rotation persists a candidate
+vault first and promotes it only after verified finality; the Identity page
+runs phrase confirmation and resume off the Qt event loop. Mail and Files are
+not integrated.
 
 ## Mail / Files asynchronous state contract
 

@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 namespace cybou {
 
@@ -31,6 +32,7 @@ struct IdentityMaterial {
 };
 
 std::optional<IdentityMaterial> GenerateIdentityMaterial();
+std::optional<std::vector<unsigned char>> SerializeIdentityMaterial(const IdentityMaterial& material);
 bool SaveNewIdentityMaterial(const std::filesystem::path& path,
     std::string_view password, const IdentityMaterial& material);
 std::optional<IdentityMaterial> LoadIdentityMaterial(

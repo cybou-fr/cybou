@@ -20,6 +20,7 @@ CybouDesktopModel::~CybouDesktopModel()
 {
     if (m_name_service) m_name_service->Cancel();
     if (m_name_worker.joinable()) m_name_worker.join();
+    if (m_recovery_rotation_worker.joinable()) m_recovery_rotation_worker.join();
 }
 
 void CybouDesktopModel::setNodeStatus(bool running, int peer_count, bool network_active,
@@ -69,6 +70,8 @@ void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity
     if (m_identity_service == identity_service) return;
     if (m_name_service) m_name_service->Cancel();
     if (m_name_worker.joinable()) m_name_worker.join();
+    if (m_recovery_rotation_worker.joinable()) m_recovery_rotation_worker.join();
+    m_recovery_rotation_pending = false;
     m_name_service.reset();
     m_identity_service = identity_service;
     if (!m_identity_service && m_capabilities.account_creation) {
@@ -115,6 +118,37 @@ bool CybouDesktopModel::requestClaimName(const QString& label, const QString& va
             refreshFinalizedName();
             Q_EMIT statusChanged();
             if (!result.success) Q_EMIT nameClaimFailed(QString::fromStdString(result.message));
+        }, Qt::QueuedConnection);
+    });
+    return true;
+}
+
+bool CybouDesktopModel::requestRecoveryRootRotation(const QStringList& new_phrase,
+    const QString& vault_password, bool resume_pending)
+{
+    if (!m_identity_service || m_recovery_rotation_pending) return false;
+    cybou::RecoveryWords words{};
+    if (!resume_pending) {
+        if (new_phrase.size() != static_cast<int>(words.size())) return false;
+        for (size_t i = 0; i < words.size(); ++i) words[i] = new_phrase.at(static_cast<int>(i)).toStdString();
+    }
+    if (m_recovery_rotation_worker.joinable()) m_recovery_rotation_worker.join();
+    m_recovery_rotation_pending = true;
+    Q_EMIT statusChanged();
+    auto password = vault_password.toStdString();
+    m_recovery_rotation_worker = std::jthread([this, words = std::move(words), password = std::move(password), resume_pending]() mutable {
+        auto result = resume_pending
+            ? m_identity_service->ResumeRecoveryRootRotationSync(password)
+            : m_identity_service->RotateRecoveryRootSync(words, password);
+        memory_cleanse(password.data(), password.size());
+        for (auto& word : words) memory_cleanse(word.data(), word.size());
+        const auto phase = static_cast<quint8>(result.phase);
+        const auto error = QString::fromStdString(result.error);
+        const auto height = result.finalized_height;
+        QMetaObject::invokeMethod(this, [this, phase, error, height] {
+            m_recovery_rotation_pending = false;
+            Q_EMIT statusChanged();
+            Q_EMIT recoveryRotationFinished(phase, error, height);
         }, Qt::QueuedConnection);
     });
     return true;

@@ -1,10 +1,10 @@
 # 78 — Identity desktop UX contract
 
-Status: create and restore entry paths are connected to the PQ identity runtime.
-The desktop displays a finalized primary name when present and can submit a
-commit/work/reveal claim in the background. Device management, vault lock,
-password change, and the full
-security view remain open.
+Status: create, restore, and recovery-root rotation entry paths are connected
+to the PQ identity runtime. The desktop displays a finalized primary name when
+present and can submit a commit/work/reveal claim in the background. Device
+management, vault lock, password change, and the full security view remain
+open.
 
 The first screen gives equal prominence to **Create identity** and **Restore
 identity**. All finalized facts come from native core. Local phrase, vault,
@@ -31,8 +31,11 @@ as owned.
 Restore accepts 24 words on a clean machine, derives RecoveryKeyID, locates
 AccountID in verified state, authorizes a new device, and saves a new vault
 under a new password. Show waiting for sync when state is unavailable.
-Security exposes backup status, vault lock, password change, phrase viewing
-behind reauthentication, and encrypted export. Devices lists active and
+Recovery-root rotation asks for the current vault password, generates and
+confirms a new 24-word phrase, saves a candidate encrypted vault before
+`RecoveryRotate`, and keeps the current vault until verified finality. An
+interrupted rotation resumes from that encrypted candidate and exact journal.
+Phrase viewing remains behind reauthentication. Devices lists active and
 revoked keys with finality; Name shows claim state. Distinguish local errors,
 network rejection, and pending finality without leaking secrets.
 
