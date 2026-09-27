@@ -9,7 +9,8 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <algorithm>\n#include <array>
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <vector>
 
@@ -29,7 +30,8 @@ BOOST_AUTO_TEST_CASE(openssl_sha256_matches_standard_vectors_and_legacy_output)
     cybou::crypto::Sha256{}.Write(abc.data(), abc.size()).Finalize(abc_digest.data());
     BOOST_CHECK_EQUAL_COLLECTIONS(abc_digest.begin(), abc_digest.end(), abc_expected.begin(), abc_expected.end());
 
-    constexpr std::array<std::size_t, 8> sizes{1, 55, 56, 63, 64, 65, 1024, 8193};\n    for (const std::size_t size : sizes) {
+    constexpr std::array<std::size_t, 8> sizes{1, 55, 56, 63, 64, 65, 1024, 8193};
+    for (const std::size_t size : sizes) {
         std::vector<unsigned char> input(size);
         for (std::size_t i = 0; i < input.size(); ++i) {
             input[i] = static_cast<unsigned char>((i * 37 + 11) % 251);
