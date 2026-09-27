@@ -6,7 +6,7 @@
 #include <cybou/state.h>
 #include <cybou/validator.h>
 
-#include <crypto/sha256.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
 #include <fstream>
@@ -229,7 +229,7 @@ uint256 NetworkId(const CybouNetworkDefinition& definition)
     static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V2"};
     const auto bytes = SerializeNetworkDefinition(definition);
     uint256 result;
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(bytes.data(), bytes.size());
     hasher.Finalize(result.begin());
@@ -309,7 +309,7 @@ std::optional<CybouState> CreateDevGenesisState(std::span<const IdentityHybridPu
 uint256 ComputeGenesisBlockId(const uint256& state_root, const uint256& validator_set_commitment)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/GENESIS-BLOCK/V2"};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(state_root.begin(), state_root.size());
     hasher.Write(validator_set_commitment.begin(), validator_set_commitment.size());

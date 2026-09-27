@@ -8,7 +8,7 @@
 #include <crypto/chacha20poly1305.h>
 #include <crypto/common.h>
 #include <crypto/hkdf_sha256_32.h>
-#include <crypto/sha256.h>
+#include <cybou/crypto/sha256.h>
 #include <openssl/rand.h>
 
 #include <algorithm>
@@ -109,7 +109,7 @@ std::optional<ProtectedMail> ProtectedMail::Deserialize(std::span<const unsigned
 uint256 ComputeMailContentCommitment(const uint256& salt, std::span<const unsigned char> plaintext)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/MAIL_COMMIT/V2"};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(salt.begin(), salt.size());
     hasher.Write(plaintext.data(), plaintext.size());

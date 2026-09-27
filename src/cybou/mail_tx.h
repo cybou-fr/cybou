@@ -5,7 +5,7 @@
 #ifndef CYBOU_MAIL_TX_H
 #define CYBOU_MAIL_TX_H
 
-#include <crypto/sha256.h>
+#include <cybou/crypto/sha256.h>
 #include <cybou/account_id.h>
 #include <cybou/identity_registry.h>
 #include <cybou/protocol_params.h>
@@ -88,7 +88,7 @@ inline std::optional<IdentityKeyId> ComputeMailPayloadCommitment(const MailPaylo
     static constexpr std::string_view DOMAIN{"CYBOU/MAIL-PAYLOAD/V2"};
     const auto bytes = SerializeMailPayload(payload);
     if (!bytes) return std::nullopt;
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(bytes->data(), bytes->size());
     IdentityKeyId res{};

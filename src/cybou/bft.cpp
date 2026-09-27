@@ -4,7 +4,7 @@
 
 #include <cybou/bft.h>
 
-#include <crypto/sha256.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
 #include <set>
@@ -56,7 +56,7 @@ uint256 ComputeBftCommitDigest(
     const uint256& validator_set_commitment)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/BFT_COMMIT/V2"};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(network_id.begin(), network_id.size());
     hasher.Write(block_id.begin(), block_id.size());

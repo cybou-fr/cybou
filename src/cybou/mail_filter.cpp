@@ -5,7 +5,7 @@
 #include <cybou/mail_filter.h>
 #include <cybou/gcs_filter.h>
 
-#include <crypto/sha256.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
 #include <string_view>
@@ -35,7 +35,7 @@ inline uint32_t ReadUint32LE(const std::span<const unsigned char>& bytes, size_t
 uint256 ComputeRecipientDiscoveryTag(const uint256& recipient_key, const uint256& salt)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/DISCOVERY_TAG/V2"};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(recipient_key.begin(), recipient_key.size());
     hasher.Write(salt.begin(), salt.size());
@@ -78,7 +78,7 @@ bool CybouMailDiscoveryFilter::MatchAny(std::span<const uint256> discovery_tags)
 uint256 CybouMailDiscoveryFilter::ComputeFilterHash() const
 {
     static constexpr std::string_view DOMAIN{"CYBOU/MAIL_FILTER/V2"};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(block_id.begin(), block_id.size());
 
@@ -97,7 +97,7 @@ uint256 CybouMailDiscoveryFilter::ComputeFilterHash() const
 uint256 CybouMailDiscoveryFilter::ComputeFilterHeader(const uint256& prev_filter_header) const
 {
     static constexpr std::string_view DOMAIN{"CYBOU/MAIL_FILTER_HEADER/V2"};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(prev_filter_header.begin(), prev_filter_header.size());
     const uint256 filter_hash = ComputeFilterHash();

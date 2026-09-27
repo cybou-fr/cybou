@@ -5,7 +5,7 @@
 #include <cybou/bft_engine.h>
 #include <cybou/crypto/cleanse.h>
 
-#include <crypto/sha256.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -122,7 +122,7 @@ std::optional<SigningRecord> ReadSigningRecord(const std::filesystem::path& path
 
     if (file_size == SIGNING_RECORD_CBS1_SIZE && std::equal(bytes.begin(), bytes.begin() + 4, "CBS1")) {
         uint256 checksum;
-        CSHA256().Write(bytes.data(), SIGNING_RECORD_CBS1_SIZE - 32).Finalize(checksum.begin());
+        ::cybou::crypto::Sha256().Write(bytes.data(), SIGNING_RECORD_CBS1_SIZE - 32).Finalize(checksum.begin());
         if (!std::equal(checksum.begin(), checksum.end(), bytes.begin() + SIGNING_RECORD_CBS1_SIZE - 32)) {
             return std::nullopt;
         }
@@ -142,7 +142,7 @@ std::optional<SigningRecord> ReadSigningRecord(const std::filesystem::path& path
 
     if (file_size >= SIGNING_RECORD_CBS2_MIN_SIZE && std::equal(bytes.begin(), bytes.begin() + 4, "CBS2")) {
         uint256 checksum;
-        CSHA256().Write(bytes.data(), file_size - 32).Finalize(checksum.begin());
+        ::cybou::crypto::Sha256().Write(bytes.data(), file_size - 32).Finalize(checksum.begin());
         if (!std::equal(checksum.begin(), checksum.end(), bytes.begin() + file_size - 32)) {
             return std::nullopt;
         }
@@ -181,7 +181,7 @@ uint256 ComputeProposalDigest(
     const uint256& block_id)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/BFT_PROPOSAL/V1"};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(network_id.begin(), network_id.size());
 
@@ -209,7 +209,7 @@ uint256 ComputePrevoteDigest(
     const std::optional<uint256>& block_id)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/BFT_PREVOTE/V1"};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(network_id.begin(), network_id.size());
 
@@ -238,7 +238,7 @@ uint256 ComputePrecommitNilDigest(
     const uint256& validator_id)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/BFT_PRECOMMIT_NIL/V1"};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(network_id.begin(), network_id.size());
 
@@ -557,7 +557,7 @@ bool BftValidatorNode::RecordSigningIntent(const BftStep step, const uint256& di
         AppendUint32LE(bytes, static_cast<uint32_t>(block_bytes.size()));
         bytes.insert(bytes.end(), block_bytes.begin(), block_bytes.end());
         uint256 checksum;
-        CSHA256().Write(bytes.data(), bytes.size()).Finalize(checksum.begin());
+        ::cybou::crypto::Sha256().Write(bytes.data(), bytes.size()).Finalize(checksum.begin());
         bytes.insert(bytes.end(), checksum.begin(), checksum.end());
         if (!WriteSigningRecord(*m_signing_journal, bytes)) {
             m_journal_valid = false;
@@ -1167,7 +1167,7 @@ BftSimulator::BftSimulator(const uint256& network_id, size_t validator_count)
     for (size_t i = 0; i < validator_count; ++i) {
         std::string seed_str = "CYBOU_SIM_VALIDATOR_SEED_" + std::to_string(i);
         uint256 seed_hash;
-        CSHA256().Write(reinterpret_cast<const unsigned char*>(seed_str.data()), seed_str.size()).Finalize(seed_hash.begin());
+        ::cybou::crypto::Sha256().Write(reinterpret_cast<const unsigned char*>(seed_str.data()), seed_str.size()).Finalize(seed_hash.begin());
 
         std::array<unsigned char, 32> seed{};
         std::copy_n(seed_hash.begin(), 32, seed.begin());

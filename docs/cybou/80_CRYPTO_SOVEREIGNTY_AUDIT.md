@@ -6,12 +6,10 @@ consensus hash change or a new cryptographic protocol.
 
 ## Repository state
 
-At audit time, the repository does not contain a `cybou_base` target. `cybou_core`
-still links both `bitcoin_consensus` and `bitcoin_crypto` in `src/CMakeLists.txt`.
-CYBOU sources directly use inherited `uint256`, `CSHA256`, `CSipHasher`,
+CYBOU sources still depend on inherited `uint256`, `CSipHasher`,
 `CHKDF_HMAC_SHA256_L32`, `AEADChaCha20Poly1305`, and `memory_cleanse` APIs.
-Consequently, replacing SHA-256 alone cannot remove the Bitcoin dependency:
-the type and consensus-library dependency must be addressed first.
+The Bitcoin cryptography dependency therefore remains; migrating SHA-256 does
+not by itself remove it.
 
 ## Progress
 
@@ -25,6 +23,11 @@ the type and consensus-library dependency must be addressed first.
 - CYBOU secret-cleansing call sites now use
   `cybou/crypto/cleanse.h`, backed by OpenSSL `OPENSSL_cleanse`; direct
   `support/cleanse.h` use has been removed from `src/cybou`.
+- CYBOU SHA-256 call sites now use `cybou/crypto/sha256.h`, backed by OpenSSL
+  EVP. A new test checks the NIST empty and `abc` vectors and compares EVP
+  output byte-for-byte with the inherited implementation across SHA-256
+  padding boundaries and multi-chunk input. The inherited API remains in the
+  test as a compatibility oracle; other inherited crypto migrations remain.
 
 The root `CMakeLists.txt` requires OpenSSL 3.5. The active PQ baseline in
 `09_CRYPTO_PQ.md` names X25519 + ML-KEM-768 as the Mail target and explicitly

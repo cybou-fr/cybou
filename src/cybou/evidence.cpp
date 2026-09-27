@@ -4,7 +4,7 @@
 
 #include <cybou/evidence.h>
 
-#include <crypto/sha256.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
 
@@ -58,7 +58,7 @@ bool VerifyOperationInclusion(
     const auto serialized_op = SerializeProtocolOperation(operation);
     if (!serialized_op) return false;
     uint256 op_hash;
-    CSHA256().Write(serialized_op->data(), serialized_op->size()).Finalize(op_hash.begin());
+    ::cybou::crypto::Sha256().Write(serialized_op->data(), serialized_op->size()).Finalize(op_hash.begin());
 
     if (proof.operation_hashes[proof.operation_index] != op_hash) {
         return false;
@@ -156,7 +156,7 @@ std::optional<MailEvidenceBundle> CreateMailEvidenceBundle(
         const auto serialized = SerializeProtocolOperation(item);
         if (!serialized) return std::nullopt;
         uint256 h;
-        CSHA256().Write(serialized->data(), serialized->size()).Finalize(h.begin());
+        ::cybou::crypto::Sha256().Write(serialized->data(), serialized->size()).Finalize(h.begin());
         proof.operation_hashes.push_back(h);
     }
 

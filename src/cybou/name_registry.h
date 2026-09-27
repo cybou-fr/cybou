@@ -5,7 +5,7 @@
 #ifndef CYBOU_NAME_REGISTRY_H
 #define CYBOU_NAME_REGISTRY_H
 
-#include <crypto/sha256.h>
+#include <cybou/crypto/sha256.h>
 #include <cybou/account_id.h>
 #include <cybou/identity_registry.h>
 #include <cybou/protocol_params.h>
@@ -101,7 +101,7 @@ inline uint256 ComputeNameCommitment(
 {
     static constexpr std::string_view DOMAIN{"CYBOU/NAME-COMMIT/V2"};
     static constexpr uint8_t VERSION{NAME_REGISTRY_VERSION};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(&VERSION, 1);
     hasher.Write(network_id.begin(), 32);
@@ -147,7 +147,7 @@ inline std::optional<IdentityKeyId> ComputeNameCommitPayloadCommitment(const Nam
     static constexpr std::string_view DOMAIN{"CYBOU/NAME-COMMIT-PAYLOAD/V2"};
     const auto bytes = SerializeNameCommitPayload(payload);
     if (!bytes) return std::nullopt;
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(bytes->data(), bytes->size());
     IdentityKeyId res{};
@@ -214,7 +214,7 @@ inline uint256 ComputeNameClaimWorkHash(const NameClaimWork& work)
     static constexpr std::string_view DOMAIN{"CYBOU/NAME-WORK/V2"};
     const auto bytes = SerializeNameClaimWork(work);
     if (!bytes) return uint256{};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(bytes->data(), bytes->size());
     uint256 hash;
@@ -294,7 +294,7 @@ inline std::optional<IdentityKeyId> ComputeNameRevealPayloadCommitment(const Nam
     static constexpr std::string_view DOMAIN{"CYBOU/NAME-REVEAL-PAYLOAD/V2"};
     const auto bytes = SerializeNameRevealPayload(payload);
     if (!bytes) return std::nullopt;
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(bytes->data(), bytes->size());
     IdentityKeyId res{};

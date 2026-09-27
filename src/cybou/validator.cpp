@@ -4,7 +4,7 @@
 
 #include <cybou/validator.h>
 
-#include <crypto/sha256.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
 #include <set>
@@ -137,7 +137,7 @@ uint256 ComputeValidatorSetCommitment(const ValidatorSet& val_set)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/VALIDATOR_SET/V2"};
     const auto bytes{SerializeValidatorSet(val_set)};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(bytes.data(), bytes.size());
     uint256 commitment;

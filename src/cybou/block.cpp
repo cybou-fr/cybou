@@ -4,7 +4,7 @@
 
 #include <cybou/block.h>
 
-#include <crypto/sha256.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
 #include <string_view>
@@ -50,7 +50,7 @@ inline uint32_t ReadUint32LE(const std::span<const unsigned char>& bytes, size_t
 uint256 ComputeOperationsRootFromHashes(std::span<const uint256> hashes)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/OPS_ROOT/V2"};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
 
     unsigned char count_bytes[4];
@@ -76,7 +76,7 @@ uint256 ComputeOperationsRoot(const std::vector<ProtocolOperation>& operations)
         const auto serialized = SerializeProtocolOperation(op);
         if (!serialized) continue;
         uint256 op_hash;
-        CSHA256().Write(serialized->data(), serialized->size()).Finalize(op_hash.begin());
+        ::cybou::crypto::Sha256().Write(serialized->data(), serialized->size()).Finalize(op_hash.begin());
         hashes.push_back(op_hash);
     }
     return ComputeOperationsRootFromHashes(hashes);
@@ -85,7 +85,7 @@ uint256 ComputeOperationsRoot(const std::vector<ProtocolOperation>& operations)
 uint256 ComputeBlockHeaderId(const CybouBlockHeader& header)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/BLOCK/V2"};
-    CSHA256 hasher;
+    ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(&header.version, 1);
     hasher.Write(header.parent_block_id.begin(), header.parent_block_id.size());
