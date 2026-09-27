@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/p2p/session.h>
+#include <cybou/p2p/peer_manager.h>
 #include <cybou/bft_engine.h>
 #include <cybou/block.h>
 #include <cybou/validator.h>
@@ -168,31 +169,36 @@ BOOST_AUTO_TEST_CASE(loopback_storage_provider_put_commit_and_get_round_trip)
             .storage_enabled = true, .storage_capacity_bytes = 1 << 20};
         cybou::CybouNodeRuntime provider{std::move(provider_config)};
         if (!provider.InitializeGenesis(fixture.genesis)) return;
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < 7; ++i) {
             if (!server_session.ServeNext(provider)) return;
         }
         server_ok = true;
     }};
 
-    tcp::socket socket{io};
-    socket.connect(acceptor.local_endpoint());
-    cybou::p2p::PeerSession client{std::move(socket)};
-    BOOST_REQUIRE(client.Handshake({.network_id = network, .finalized_height = 0,
-        .finalized_tip = fixture.definition.genesis_block_id,
-        .capabilities = cybou::p2p::CAP_STORAGE, .nonce = 7002}));
-    const auto put_result = client.PutStorageChunk(metadata->object_id, *encrypted);
+    cybou::p2p::PeerManager client{*fixture.runtime};
+    const auto address = boost::asio::ip::address_v4::loopback().to_string();
+    const auto port = acceptor.local_endpoint().port();
+    BOOST_REQUIRE(client.Connect(address, port));
+    const auto storage_peers = client.StoragePeers();
+    BOOST_REQUIRE_EQUAL(storage_peers.size(), 1U);
+    const auto put_result = client.PutStorageChunk(address, port, metadata->object_id, *encrypted);
     BOOST_REQUIRE(put_result);
     BOOST_CHECK(put_result->status == cybou::StorageWriteStatus::STORED);
-    const auto commit_result = client.CommitStorageManifest(*manifest);
+    const auto commit_result = client.CommitStorageManifest(address, port, *manifest);
     BOOST_REQUIRE(commit_result);
     BOOST_CHECK(commit_result->status == cybou::StorageWriteStatus::STORED);
-    const auto fetched_manifest = client.GetStorageManifest(metadata->object_id);
+    const auto fetched_manifest = client.GetStorageManifest(address, port, metadata->object_id);
     BOOST_REQUIRE(fetched_manifest);
     BOOST_CHECK(fetched_manifest->commitment == manifest->commitment);
-    const auto fetched_chunk = client.GetStorageChunk(metadata->object_id, 0);
+    const auto fetched_chunk = client.GetStorageChunk(address, port, metadata->object_id, 0);
     BOOST_REQUIRE(fetched_chunk);
     BOOST_CHECK(fetched_chunk->ciphertext_and_tag == encrypted->ciphertext_and_tag);
     BOOST_CHECK(crypto->DecryptChunk(*fetched_chunk) == plaintext);
+    cybou::StorageObjectId missing_object{};
+    missing_object[0] = 1;
+    BOOST_CHECK(!client.GetStorageManifest(address, port, missing_object));
+    BOOST_CHECK_EQUAL(client.ConnectedCount(), 1U);
+    BOOST_CHECK_EQUAL(client.PingAll(), 1U);
     server.join();
     BOOST_CHECK(server_ok);
 }

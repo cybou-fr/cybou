@@ -80,6 +80,18 @@ public:
     size_t FanoutRecentBlocks(size_t max_per_peer = 16);
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
+    /** Connected peers that advertised the optional ciphertext storage service. */
+    std::vector<PeerInfo> StoragePeers() const;
+    /** Storage calls use an existing session and must run on this manager's owner thread. */
+    std::optional<StorageWriteResult> PutStorageChunk(
+        const std::string& address, uint16_t port, const StorageObjectId& object_id,
+        const StorageEncryptedChunk& chunk);
+    std::optional<StorageWriteResult> CommitStorageManifest(
+        const std::string& address, uint16_t port, const StoragePublicManifest& manifest);
+    std::optional<StoragePublicManifest> GetStorageManifest(
+        const std::string& address, uint16_t port, const StorageObjectId& object_id);
+    std::optional<StorageEncryptedChunk> GetStorageChunk(
+        const std::string& address, uint16_t port, const StorageObjectId& object_id, uint32_t index);
     void DisconnectAll();
 
     /** Dynamic peer auto-discovery */
@@ -98,6 +110,7 @@ public:
 
 private:
     using Endpoint = std::pair<std::string, uint16_t>;
+    PeerSession* FindStorageSession(const std::string& address, uint16_t port, Endpoint* endpoint = nullptr);
     CybouNodeRuntime& m_runtime;
     boost::asio::io_context m_io;
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;

@@ -175,7 +175,9 @@ consensus records. Their lease/accounting aggregation is defined in docs 11–13
 - ChunkID and public manifest commitment construction;
 - chunk AEAD, nonce storage, and network/object/epoch/position AAD;
 - encrypted AccountID-bound Storage Key Ring sidecar with durable key epochs;
-- durable local provider and bounded CYP2 PUT/commit/GET ciphertext transfer.
+- durable local provider and bounded CYP2 PUT/commit/GET ciphertext transfer;
+- outbound `PeerManager` enumeration of connected `CAP_STORAGE` sessions and
+  routing for those bounded storage calls;
 - local file upload, private metadata save, and verified no-overwrite download.
 
 These local encodings and key lifecycle remain provisional until reviewed

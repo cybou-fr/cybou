@@ -446,6 +446,84 @@ std::vector<PeerInfo> PeerManager::Peers() const
     return peers;
 }
 
+std::vector<PeerInfo> PeerManager::StoragePeers() const
+{
+    std::vector<PeerInfo> peers;
+    for (const auto& [endpoint, session] : m_peers) {
+        if (session->Peer() && (session->Peer()->capabilities & CAP_STORAGE)) {
+            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer()});
+        }
+    }
+    return peers;
+}
+
+PeerSession* PeerManager::FindStorageSession(
+    const std::string& address, const uint16_t port, Endpoint* endpoint)
+{
+    if (port == 0) return nullptr;
+    boost::system::error_code ec;
+    const auto parsed = boost::asio::ip::make_address(address, ec);
+    if (ec) return nullptr;
+    const Endpoint key{parsed.to_string(), port};
+    const auto it = m_peers.find(key);
+    if (it == m_peers.end() || !it->second->Peer() ||
+        !(it->second->Peer()->capabilities & CAP_STORAGE)) return nullptr;
+    if (endpoint) *endpoint = key;
+    return it->second.get();
+}
+
+std::optional<StorageWriteResult> PeerManager::PutStorageChunk(
+    const std::string& address, const uint16_t port, const StorageObjectId& object_id,
+    const StorageEncryptedChunk& chunk)
+{
+    Endpoint endpoint;
+    auto* session = FindStorageSession(address, port, &endpoint);
+    if (!session) return std::nullopt;
+    auto result = session->PutStorageChunk(object_id, chunk);
+    if (!result) {
+        m_peers.erase(endpoint);
+        m_announced_operations.erase(endpoint);
+        m_announced_blocks.erase(endpoint);
+    }
+    return result;
+}
+
+std::optional<StorageWriteResult> PeerManager::CommitStorageManifest(
+    const std::string& address, const uint16_t port, const StoragePublicManifest& manifest)
+{
+    Endpoint endpoint;
+    auto* session = FindStorageSession(address, port, &endpoint);
+    if (!session) return std::nullopt;
+    auto result = session->CommitStorageManifest(manifest);
+    if (!result) {
+        m_peers.erase(endpoint);
+        m_announced_operations.erase(endpoint);
+        m_announced_blocks.erase(endpoint);
+    }
+    return result;
+}
+
+std::optional<StoragePublicManifest> PeerManager::GetStorageManifest(
+    const std::string& address, const uint16_t port, const StorageObjectId& object_id)
+{
+    auto* session = FindStorageSession(address, port);
+    if (!session) return std::nullopt;
+    // A missing object is a normal provider response, so keep the session.
+    // A later health check will remove a peer whose transport actually died.
+    return session->GetStorageManifest(object_id);
+}
+
+std::optional<StorageEncryptedChunk> PeerManager::GetStorageChunk(
+    const std::string& address, const uint16_t port, const StorageObjectId& object_id,
+    const uint32_t index)
+{
+    auto* session = FindStorageSession(address, port);
+    if (!session) return std::nullopt;
+    // Missing objects/indices are normal read misses, not evidence that the
+    // peer connection has failed. PingSome/PingAll owns session health checks.
+    return session->GetStorageChunk(object_id, index);
+}
+
 void PeerManager::DisconnectAll()
 {
     m_peers.clear();
