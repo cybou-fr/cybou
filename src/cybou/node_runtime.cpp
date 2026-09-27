@@ -87,6 +87,18 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
       m_store{*m_db, m_config.network_definition},
       m_submit_endpoint{m_config.submit_endpoint}
 {
+    if (m_config.storage_enabled) {
+        if (m_config.storage_capacity_bytes == 0) {
+            throw std::invalid_argument("storage provider requires a positive capacity");
+        }
+        std::filesystem::path storage_path;
+        if (!m_config.memory_only) {
+            storage_path = std::filesystem::path{m_config.data_dir.string() + ".objects"};
+        }
+        m_storage_store = std::make_unique<StorageObjectStore>(storage_path,
+            std::span<const unsigned char, 32>{m_network_id.begin(), 32},
+            m_config.storage_capacity_bytes, m_config.memory_only, m_config.wipe_data);
+    }
     if (m_config.validator_private_key.has_value()) {
         m_authority_node = std::make_unique<CybouAuthorityNode>(
             m_store, *m_config.validator_private_key,
@@ -97,6 +109,32 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
 }
 
 CybouNodeRuntime::~CybouNodeRuntime() = default;
+
+StorageWriteResult CybouNodeRuntime::StoreEncryptedChunk(
+    const StorageObjectId& object_id, const StorageEncryptedChunk& chunk)
+{
+    if (!m_storage_store) return {StorageWriteStatus::DISABLED};
+    return m_storage_store->PutChunk(object_id, chunk);
+}
+
+StorageWriteResult CybouNodeRuntime::CommitStoredManifest(const StoragePublicManifest& manifest)
+{
+    if (!m_storage_store) return {StorageWriteStatus::DISABLED};
+    return m_storage_store->CommitManifest(manifest);
+}
+
+std::optional<StoragePublicManifest> CybouNodeRuntime::GetStoredManifest(const StorageObjectId& object_id) const
+{
+    if (!m_storage_store) return std::nullopt;
+    return m_storage_store->GetManifest(object_id);
+}
+
+std::optional<StorageEncryptedChunk> CybouNodeRuntime::GetStoredChunk(
+    const StorageObjectId& object_id, const uint32_t index) const
+{
+    if (!m_storage_store) return std::nullopt;
+    return m_storage_store->GetChunk(object_id, index);
+}
 
 bool CybouNodeRuntime::InitializeGenesis(const CybouState& genesis, const bool sync)
 {

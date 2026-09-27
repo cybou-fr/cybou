@@ -8,6 +8,7 @@
 #include <cybou/block_feed.h>
 #include <cybou/network_definition.h>
 #include <cybou/state_store.h>
+#include <cybou/storage_store.h>
 
 #include <array>
 #include <chrono>
@@ -19,6 +20,7 @@
 #include <mutex>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <vector>
 #include <variant>
@@ -39,6 +41,8 @@ struct NodeRuntimeConfig {
     size_t db_cache_bytes{8 << 20};
     bool memory_only{false};
     bool wipe_data{false};
+    bool storage_enabled{false};
+    uint64_t storage_capacity_bytes{0};
 };
 
 enum class NodeRuntimeState : uint8_t {
@@ -157,6 +161,11 @@ public:
     SyncPeerResult SyncFromConfiguredPeer(uint64_t max_blocks = 100);
     size_t ConnectedPeerCount() const;
     bool HasP2pEndpoint() const { return m_config.p2p_endpoint.has_value(); }
+    bool HasStorageProvider() const { return m_storage_store != nullptr; }
+    StorageWriteResult StoreEncryptedChunk(const StorageObjectId& object_id, const StorageEncryptedChunk& chunk);
+    StorageWriteResult CommitStoredManifest(const StoragePublicManifest& manifest);
+    std::optional<StoragePublicManifest> GetStoredManifest(const StorageObjectId& object_id) const;
+    std::optional<StorageEncryptedChunk> GetStoredChunk(const StorageObjectId& object_id, uint32_t index) const;
 
     /** Remote operation submit endpoint */
     void SetSubmitEndpoint(const std::string& host, uint16_t port);
@@ -203,6 +212,7 @@ private:
     NodeRuntimeConfig m_config;
     uint256 m_network_id;
     std::unique_ptr<KVStore> m_db;
+    std::unique_ptr<StorageObjectStore> m_storage_store;
     CybouStateStore m_store;
     std::unique_ptr<CybouAuthorityNode> m_authority_node;
     std::unique_ptr<DeviceOperationCoordinator> m_device_operation_coordinator;

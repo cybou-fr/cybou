@@ -46,7 +46,7 @@ uint32_t Read32(const unsigned char* data)
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
     if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
-        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 20)) return std::nullopt;
+        (static_cast<uint8_t>(frame.type) < 1 || static_cast<uint8_t>(frame.type) > 27)) return std::nullopt;
     std::vector<unsigned char> bytes{'C', 'Y', 'P', '2', WIRE_VERSION, static_cast<unsigned char>(frame.type)};
     const auto size = static_cast<uint32_t>(frame.payload.size());
     for (int i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(size >> (8 * i)));
@@ -57,7 +57,7 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < HEADER_SIZE || !std::equal(bytes.begin(), bytes.begin() + 4, "CYP2") ||
-        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 20) return std::nullopt;
+        bytes[4] != WIRE_VERSION || bytes[5] < 1 || bytes[5] > 27) return std::nullopt;
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[6 + i]} << (8 * i);
     if (size > MAX_FRAME_PAYLOAD || bytes.size() != HEADER_SIZE + size) return std::nullopt;
@@ -242,7 +242,7 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     std::array<unsigned char, HEADER_SIZE> header{};
     if (!ReadExact(header.data(), header.size(), deadline)) return std::nullopt;
     if (!std::equal(header.begin(), header.begin() + 4, "CYP2") ||
-        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 20) {
+        header[4] != WIRE_VERSION || header[5] < 1 || header[5] > 27) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
         return std::nullopt;
     }
@@ -569,12 +569,230 @@ bool PeerSession::SendPeers(const std::vector<std::pair<std::string, uint16_t>>&
     return Write(Frame{MessageType::PEERS, payload}, deadline);
 }
 
+std::optional<StorageWriteResult> PeerSession::PutStorageChunk(
+    const StorageObjectId& object_id, const StorageEncryptedChunk& chunk)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_STORAGE) || object_id == StorageObjectId{} ||
+        chunk.index >= STORAGE_OBJECT_MAX_CHUNKS || chunk.ciphertext_and_tag.size() < 16 ||
+        chunk.ciphertext_and_tag.size() > STORAGE_OBJECT_CHUNK_SIZE + 16) return std::nullopt;
+    StorageChunkId expected{};
+    if (!ComputeStorageChunkId(std::span<const unsigned char, 32>{m_peer->network_id.begin(), 32},
+            object_id, chunk.index, chunk.nonce, chunk.ciphertext_and_tag, expected) || expected != chunk.chunk_id) {
+        return std::nullopt;
+    }
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    std::vector<unsigned char> init;
+    init.insert(init.end(), object_id.begin(), object_id.end());
+    Put32(init, chunk.index);
+    init.insert(init.end(), chunk.nonce.begin(), chunk.nonce.end());
+    init.insert(init.end(), chunk.chunk_id.begin(), chunk.chunk_id.end());
+    Put32(init, static_cast<uint32_t>(chunk.ciphertext_and_tag.size()));
+    if (!Write(Frame{MessageType::STORAGE_PUT_CHUNK, init}, deadline)) return std::nullopt;
+    for (size_t offset = 0; offset < chunk.ciphertext_and_tag.size(); offset += MAX_FRAME_PAYLOAD) {
+        const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, chunk.ciphertext_and_tag.size() - offset);
+        if (!Write(Frame{MessageType::STORAGE_PUT_DATA,
+                std::vector<unsigned char>{chunk.ciphertext_and_tag.begin() + offset,
+                    chunk.ciphertext_and_tag.begin() + offset + count}}, deadline)) return std::nullopt;
+    }
+    const auto response = Read(deadline);
+    if (!response || response->type != MessageType::STORAGE_RESULT || response->payload.size() != 33 ||
+        response->payload[0] > static_cast<uint8_t>(StorageWriteStatus::DISABLED)) return std::nullopt;
+    StorageWriteResult result{static_cast<StorageWriteStatus>(response->payload[0])};
+    std::copy_n(response->payload.begin() + 1, result.commitment.size(), result.commitment.begin());
+    return result;
+}
+
+std::optional<StorageWriteResult> PeerSession::CommitStorageManifest(const StoragePublicManifest& manifest)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_STORAGE)) return std::nullopt;
+    const auto encoded = EncodeStoragePublicManifest(
+        std::span<const unsigned char, 32>{m_peer->network_id.begin(), 32}, manifest);
+    if (!encoded) return std::nullopt;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    std::vector<unsigned char> init;
+    Put32(init, static_cast<uint32_t>(encoded->size()));
+    if (!Write(Frame{MessageType::STORAGE_COMMIT, init}, deadline)) return std::nullopt;
+    for (size_t offset = 0; offset < encoded->size(); offset += MAX_FRAME_PAYLOAD) {
+        const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, encoded->size() - offset);
+        if (!Write(Frame{MessageType::STORAGE_PUT_DATA,
+                std::vector<unsigned char>{encoded->begin() + offset, encoded->begin() + offset + count}}, deadline)) {
+            return std::nullopt;
+        }
+    }
+    const auto response = Read(deadline);
+    if (!response || response->type != MessageType::STORAGE_RESULT || response->payload.size() != 33 ||
+        response->payload[0] > static_cast<uint8_t>(StorageWriteStatus::DISABLED)) return std::nullopt;
+    StorageWriteResult result{static_cast<StorageWriteStatus>(response->payload[0])};
+    std::copy_n(response->payload.begin() + 1, result.commitment.size(), result.commitment.begin());
+    return result;
+}
+
+std::optional<StoragePublicManifest> PeerSession::GetStorageManifest(const StorageObjectId& object_id)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_STORAGE) || object_id == StorageObjectId{}) return std::nullopt;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!Write(Frame{MessageType::STORAGE_GET_MANIFEST,
+            std::vector<unsigned char>{object_id.begin(), object_id.end()}}, deadline)) return std::nullopt;
+    const auto meta = Read(deadline);
+    if (!meta || meta->type != MessageType::STORAGE_RESULT || meta->payload.size() != 5) return std::nullopt;
+    const uint32_t size = Read32(meta->payload.data() + 1);
+    if (meta->payload[0] != static_cast<uint8_t>(StorageWriteStatus::STORED) ||
+        size < 72 || size > STORAGE_PUBLIC_MANIFEST_MAX_BYTES) return std::nullopt;
+    std::vector<unsigned char> bytes;
+    bytes.reserve(size);
+    while (bytes.size() < size) {
+        const auto data = Read(deadline);
+        if (!data || data->type != MessageType::STORAGE_DATA || data->payload.empty() ||
+            data->payload.size() > size - bytes.size()) return std::nullopt;
+        bytes.insert(bytes.end(), data->payload.begin(), data->payload.end());
+    }
+    auto manifest = DecodeStoragePublicManifest(
+        std::span<const unsigned char, 32>{m_peer->network_id.begin(), 32}, bytes);
+    if (!manifest || manifest->object_id != object_id) return std::nullopt;
+    return manifest;
+}
+
+std::optional<StorageEncryptedChunk> PeerSession::GetStorageChunk(
+    const StorageObjectId& object_id, const uint32_t index)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_STORAGE) || object_id == StorageObjectId{} ||
+        index >= STORAGE_OBJECT_MAX_CHUNKS) return std::nullopt;
+    const auto manifest = GetStorageManifest(object_id);
+    if (!manifest || index >= manifest->chunk_count) return std::nullopt;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    std::vector<unsigned char> request{object_id.begin(), object_id.end()};
+    Put32(request, index);
+    if (!Write(Frame{MessageType::STORAGE_GET_CHUNK, request}, deadline)) return std::nullopt;
+    const auto meta = Read(deadline);
+    constexpr size_t META_SIZE{1 + 4 + 4 + 12 + 32};
+    if (!meta || meta->type != MessageType::STORAGE_RESULT || meta->payload.size() != META_SIZE ||
+        meta->payload[0] != static_cast<uint8_t>(StorageWriteStatus::STORED)) return std::nullopt;
+    const uint32_t size = Read32(meta->payload.data() + 1);
+    StorageEncryptedChunk chunk;
+    chunk.index = Read32(meta->payload.data() + 5);
+    std::copy_n(meta->payload.begin() + 9, chunk.nonce.size(), chunk.nonce.begin());
+    std::copy_n(meta->payload.begin() + 21, chunk.chunk_id.size(), chunk.chunk_id.begin());
+    if (chunk.index != index || size < 16 || size > STORAGE_OBJECT_CHUNK_SIZE + 16) return std::nullopt;
+    chunk.ciphertext_and_tag.reserve(size);
+    while (chunk.ciphertext_and_tag.size() < size) {
+        const auto data = Read(deadline);
+        if (!data || data->type != MessageType::STORAGE_DATA || data->payload.empty() ||
+            data->payload.size() > size - chunk.ciphertext_and_tag.size()) return std::nullopt;
+        chunk.ciphertext_and_tag.insert(chunk.ciphertext_and_tag.end(), data->payload.begin(), data->payload.end());
+    }
+    StorageChunkId expected{};
+    if (!ComputeStorageChunkId(std::span<const unsigned char, 32>{m_peer->network_id.begin(), 32},
+            object_id, index, chunk.nonce, chunk.ciphertext_and_tag, expected) || expected != chunk.chunk_id) {
+        return std::nullopt;
+    }
+    const auto& descriptor = manifest->chunks[index];
+    if (descriptor.chunk_id != chunk.chunk_id || descriptor.ciphertext_size != chunk.ciphertext_and_tag.size()) {
+        return std::nullopt;
+    }
+    return chunk;
+}
+
 bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
 {
     if (!m_peer) return false;
     const auto request = Read();
     if (!request) {
         return m_socket.is_open();
+    }
+    if (request->type == MessageType::STORAGE_PUT_CHUNK || request->type == MessageType::STORAGE_COMMIT) {
+        if (!(m_local_capabilities & CAP_STORAGE)) return false;
+        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        auto receive_bytes = [&](const uint32_t size, const uint32_t maximum) ->
+            std::optional<std::vector<unsigned char>> {
+            if (size == 0 || size > maximum) return std::nullopt;
+            std::vector<unsigned char> bytes;
+            bytes.reserve(size);
+            while (bytes.size() < size) {
+                const auto data = Read(deadline);
+                if (!data || data->type != MessageType::STORAGE_PUT_DATA || data->payload.empty() ||
+                    data->payload.size() > size - bytes.size()) return std::nullopt;
+                bytes.insert(bytes.end(), data->payload.begin(), data->payload.end());
+            }
+            return bytes;
+        };
+        auto acknowledge = [&](const StorageWriteResult& result) {
+            std::vector<unsigned char> payload{static_cast<unsigned char>(result.status)};
+            payload.insert(payload.end(), result.commitment.begin(), result.commitment.end());
+            return Write(Frame{MessageType::STORAGE_RESULT, payload}, deadline);
+        };
+        if (request->type == MessageType::STORAGE_PUT_CHUNK) {
+            if (request->payload.size() != 84) return false;
+            StorageObjectId object_id{};
+            std::copy_n(request->payload.begin(), object_id.size(), object_id.begin());
+            StorageEncryptedChunk chunk;
+            chunk.index = Read32(request->payload.data() + 32);
+            std::copy_n(request->payload.begin() + 36, chunk.nonce.size(), chunk.nonce.begin());
+            std::copy_n(request->payload.begin() + 48, chunk.chunk_id.size(), chunk.chunk_id.begin());
+            const uint32_t size = Read32(request->payload.data() + 80);
+            if (object_id == StorageObjectId{} || chunk.index >= STORAGE_OBJECT_MAX_CHUNKS ||
+                size < 16 || size > STORAGE_OBJECT_CHUNK_SIZE + 16) return false;
+            auto ciphertext = receive_bytes(size, STORAGE_OBJECT_CHUNK_SIZE + 16);
+            if (!ciphertext) return false;
+            chunk.ciphertext_and_tag = std::move(*ciphertext);
+            return acknowledge(runtime.StoreEncryptedChunk(object_id, chunk));
+        }
+        if (request->payload.size() != 4) return false;
+        const uint32_t size = Read32(request->payload.data());
+        auto bytes = receive_bytes(size, STORAGE_PUBLIC_MANIFEST_MAX_BYTES);
+        if (!bytes) return false;
+        const auto manifest = DecodeStoragePublicManifest(
+            std::span<const unsigned char, 32>{m_peer->network_id.begin(), 32}, *bytes);
+        if (!manifest) return acknowledge({StorageWriteStatus::INVALID});
+        return acknowledge(runtime.CommitStoredManifest(*manifest));
+    }
+    if (request->type == MessageType::STORAGE_GET_MANIFEST) {
+        if (!(m_local_capabilities & CAP_STORAGE) || request->payload.size() != 32) return false;
+        StorageObjectId object_id{};
+        std::copy(request->payload.begin(), request->payload.end(), object_id.begin());
+        const auto manifest = runtime.GetStoredManifest(object_id);
+        const auto encoded = manifest ? EncodeStoragePublicManifest(
+            std::span<const unsigned char, 32>{m_peer->network_id.begin(), 32}, *manifest) : std::nullopt;
+        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        std::vector<unsigned char> meta{static_cast<unsigned char>(encoded
+            ? StorageWriteStatus::STORED : StorageWriteStatus::INVALID)};
+        Put32(meta, encoded ? static_cast<uint32_t>(encoded->size()) : 0);
+        if (!Write(Frame{MessageType::STORAGE_RESULT, meta}, deadline)) return false;
+        if (!encoded) return true;
+        for (size_t offset = 0; offset < encoded->size(); offset += MAX_FRAME_PAYLOAD) {
+            const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, encoded->size() - offset);
+            if (!Write(Frame{MessageType::STORAGE_DATA,
+                    std::vector<unsigned char>{encoded->begin() + offset, encoded->begin() + offset + count}}, deadline)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    if (request->type == MessageType::STORAGE_GET_CHUNK) {
+        if (!(m_local_capabilities & CAP_STORAGE) || request->payload.size() != 36) return false;
+        StorageObjectId object_id{};
+        std::copy_n(request->payload.begin(), object_id.size(), object_id.begin());
+        const uint32_t index = Read32(request->payload.data() + 32);
+        const auto chunk = runtime.GetStoredChunk(object_id, index);
+        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        std::vector<unsigned char> meta{static_cast<unsigned char>(chunk
+            ? StorageWriteStatus::STORED : StorageWriteStatus::INVALID)};
+        Put32(meta, chunk ? static_cast<uint32_t>(chunk->ciphertext_and_tag.size()) : 0);
+        Put32(meta, chunk ? chunk->index : index);
+        if (chunk) {
+            meta.insert(meta.end(), chunk->nonce.begin(), chunk->nonce.end());
+            meta.insert(meta.end(), chunk->chunk_id.begin(), chunk->chunk_id.end());
+        } else {
+            meta.resize(1 + 4 + 4 + 12 + 32, 0);
+        }
+        if (!Write(Frame{MessageType::STORAGE_RESULT, meta}, deadline)) return false;
+        if (!chunk) return true;
+        for (size_t offset = 0; offset < chunk->ciphertext_and_tag.size(); offset += MAX_FRAME_PAYLOAD) {
+            const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, chunk->ciphertext_and_tag.size() - offset);
+            if (!Write(Frame{MessageType::STORAGE_DATA,
+                    std::vector<unsigned char>{chunk->ciphertext_and_tag.begin() + offset,
+                        chunk->ciphertext_and_tag.begin() + offset + count}}, deadline)) return false;
+        }
+        return true;
     }
     if (request->type == MessageType::GET_PEERS) {
         if (!(m_local_capabilities & CAP_PEER_DISCOVERY)) return false;

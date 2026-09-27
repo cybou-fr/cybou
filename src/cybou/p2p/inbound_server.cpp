@@ -29,6 +29,7 @@ std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
     return Hello{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip,
         .capabilities = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY |
+            (runtime.HasStorageProvider() ? CAP_STORAGE : 0) |
             (status.is_authority ? (CAP_ACCEPT_OPERATIONS | CAP_OP_INVENTORY | CAP_CONSENSUS) : 0),
         .nonce = nonce};
 }

@@ -19,6 +19,8 @@ using StorageChunkId = std::array<unsigned char, 32>;
 inline constexpr size_t STORAGE_OBJECT_CHUNK_SIZE{1U << 20};
 inline constexpr uint32_t STORAGE_OBJECT_MAX_CHUNKS{1U << 16};
 inline constexpr uint64_t STORAGE_OBJECT_MAX_BYTES{uint64_t{STORAGE_OBJECT_CHUNK_SIZE} * STORAGE_OBJECT_MAX_CHUNKS};
+inline constexpr size_t STORAGE_PUBLIC_MANIFEST_MAX_BYTES{4 + 32 + 4 +
+    static_cast<size_t>(STORAGE_OBJECT_MAX_CHUNKS) * 36 + 32};
 
 /** Private per-object metadata. Persist inside the encrypted Files manifest. */
 struct StorageObjectPrivateMetadata {
@@ -62,6 +64,19 @@ std::optional<StoragePublicManifest> BuildStoragePublicManifest(
 bool VerifyStoragePublicManifest(
     std::span<const unsigned char, 32> network_id,
     const StoragePublicManifest& manifest);
+bool ComputeStorageChunkId(
+    std::span<const unsigned char, 32> network_id,
+    const StorageObjectId& object_id,
+    uint32_t index,
+    std::span<const unsigned char, 12> nonce,
+    std::span<const unsigned char> ciphertext_and_tag,
+    StorageChunkId& chunk_id);
+std::optional<std::vector<unsigned char>> EncodeStoragePublicManifest(
+    std::span<const unsigned char, 32> network_id,
+    const StoragePublicManifest& manifest);
+std::optional<StoragePublicManifest> DecodeStoragePublicManifest(
+    std::span<const unsigned char, 32> network_id,
+    std::span<const unsigned char> bytes);
 
 /**
  * Per-object streaming crypto context. The caller can process one bounded chunk

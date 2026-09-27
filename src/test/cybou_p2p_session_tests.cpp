@@ -5,6 +5,7 @@
 #include <cybou/bft_engine.h>
 #include <cybou/block.h>
 #include <cybou/validator.h>
+#include <cybou/storage_crypto.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/util/setup_common.h>
 
@@ -129,6 +130,71 @@ BOOST_AUTO_TEST_CASE(client_respects_advertised_block_capability)
     BOOST_CHECK(peer.Ping(43));
     server.join();
     BOOST_CHECK(answered);
+}
+
+BOOST_AUTO_TEST_CASE(loopback_storage_provider_put_commit_and_get_round_trip)
+{
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    tcp::acceptor acceptor{io, tcp::endpoint{boost::asio::ip::address_v4::loopback(), 0}};
+    CybouServiceTestFixture fixture;
+    const auto network = fixture.runtime->GetNetworkId();
+    std::array<unsigned char, 32> storage_key{};
+    storage_key[0] = 0x72;
+    const auto metadata = cybou::CreateStorageObjectMetadata(123, 1);
+    BOOST_REQUIRE(metadata);
+    auto crypto = cybou::StorageObjectCryptoContext::Create(
+        std::span<const unsigned char, 32>{network.begin(), 32}, storage_key, *metadata);
+    BOOST_REQUIRE(crypto);
+    std::vector<unsigned char> plaintext(123, 0x39);
+    const auto encrypted = crypto->EncryptChunk(0, plaintext);
+    BOOST_REQUIRE(encrypted);
+    const std::array<cybou::StorageEncryptedChunk, 1> chunks{*encrypted};
+    const auto manifest = cybou::BuildStoragePublicManifest(
+        std::span<const unsigned char, 32>{network.begin(), 32}, metadata->object_id, chunks);
+    BOOST_REQUIRE(manifest);
+
+    bool server_ok{false};
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession server_session{std::move(socket)};
+        const auto network_id = fixture.runtime->GetNetworkId();
+        if (!server_session.Handshake({.network_id = network_id, .finalized_height = 0,
+                .finalized_tip = fixture.definition.genesis_block_id,
+                .capabilities = cybou::p2p::CAP_STORAGE, .nonce = 7001})) return;
+        cybou::NodeRuntimeConfig provider_config{.network_definition = fixture.definition,
+            .data_dir = fixture.directory / "storage-wire-provider", .memory_only = true,
+            .storage_enabled = true, .storage_capacity_bytes = 1 << 20};
+        cybou::CybouNodeRuntime provider{std::move(provider_config)};
+        if (!provider.InitializeGenesis(fixture.genesis)) return;
+        for (int i = 0; i < 5; ++i) {
+            if (!server_session.ServeNext(provider)) return;
+        }
+        server_ok = true;
+    }};
+
+    tcp::socket socket{io};
+    socket.connect(acceptor.local_endpoint());
+    cybou::p2p::PeerSession client{std::move(socket)};
+    BOOST_REQUIRE(client.Handshake({.network_id = network, .finalized_height = 0,
+        .finalized_tip = fixture.definition.genesis_block_id,
+        .capabilities = cybou::p2p::CAP_STORAGE, .nonce = 7002}));
+    const auto put_result = client.PutStorageChunk(metadata->object_id, *encrypted);
+    BOOST_REQUIRE(put_result);
+    BOOST_CHECK(put_result->status == cybou::StorageWriteStatus::STORED);
+    const auto commit_result = client.CommitStorageManifest(*manifest);
+    BOOST_REQUIRE(commit_result);
+    BOOST_CHECK(commit_result->status == cybou::StorageWriteStatus::STORED);
+    const auto fetched_manifest = client.GetStorageManifest(metadata->object_id);
+    BOOST_REQUIRE(fetched_manifest);
+    BOOST_CHECK(fetched_manifest->commitment == manifest->commitment);
+    const auto fetched_chunk = client.GetStorageChunk(metadata->object_id, 0);
+    BOOST_REQUIRE(fetched_chunk);
+    BOOST_CHECK(fetched_chunk->ciphertext_and_tag == encrypted->ciphertext_and_tag);
+    BOOST_CHECK(crypto->DecryptChunk(*fetched_chunk) == plaintext);
+    server.join();
+    BOOST_CHECK(server_ok);
 }
 
 BOOST_AUTO_TEST_CASE(consensus_message_serialization_and_p2p_exchange)

@@ -3,9 +3,11 @@
 CYBOU is experimental. The canonical product target uses hybrid post-quantum authorization, explicit BFT finality, and one verified state shared by Identity, Email, Wallet, Storage, and Backup. The standalone DEV node and native Qt desktop use the canonical CYBOU runtime; the desktop remains an observer role and uses multi-peer CYP2 networking by default. A development reset will follow the integration of identity, names, operations, blocks, and persistence.
 
 Beta product scope requires Object Storage-backed encrypted Mail attachments;
-neither distributed Store nor the end-to-end attachment flow is implemented.
-The current text-only Mail profile is limited to DEV/Alpha integration. See
-`81_BETA_PRODUCT_SCOPE.md` for Beta readiness criteria.
+the first durable ciphertext provider and CYP2 PUT/commit/GET slice is
+implemented behind explicit opt-in, but peer placement and the end-to-end
+attachment flow are not implemented. The current text-only Mail profile is
+limited to DEV/Alpha integration. See `81_BETA_PRODUCT_SCOPE.md` for Beta
+readiness criteria.
 
 ## Implemented core components
 
@@ -32,6 +34,7 @@ The current text-only Mail profile is limited to DEV/Alpha integration. See
 - Canonical AuthorityNode, NodeRuntime, MailService, and WalletService smoke suites are back in the native test target. The local X25519 mail-encryption helper is an incomplete prototype, not the required hybrid profile, and finalized incoming mail is not decrypted through it. The identity registry does not publish recipient mail keys, so `SendMail` fails closed before submission. Do not claim production Mail confidentiality until the standardized PQ/T profile, key publication/discovery, encrypted mailbox storage, and historical authorization evidence are integrated.
 - `CybouNodeService` owns shared runtime initialization, desktop observer networking, and authority block-feed/CYP2 listeners, consensus scheduling, peer gossip, and historical catch-up. Desktop uses the published DEV CYP2 bootstrap (`51.255.46.58:29461`) by default, discovers peers, keeps up to eight outbound sessions, syncs verified blocks across peers, submits operations, and reconnects after failures; an inbound desktop listener is separately opt-in. CYB1 on port 29460 remains an explicit diagnostic fallback. The desktop remains observer-only in validator role; both native desktop and `cybou-node` use the same node service.
 - A separate native P2P session layer exchanges bounded HELLO/PING/PONG, finalized-block requests, and canonical operation submissions over persistent TCP sockets. HELLO advertises block-serving and operation-acceptance capabilities, which are checked before use. An outbound peer manager uses the runtime's NetworkID and finalized status, tracks up to eight peers, rejects duplicates and wrong-network peers, removes peers that fail health checks, bounds TCP connection attempts to five seconds, and commits retrieved blocks only after canonical verification. CYP2 peer discovery exchanges bounded numeric endpoint lists; configured peers are bootstrap seeds, while discovered endpoints remain in-memory routing hints. The DEV producer exposes a CYP2 listener with up to eight concurrent inbound sessions; `p2p-probe`, `p2p-sync`, and `p2p-submit` exercise it. `p2p-follow` keeps a headless observer syncing from one endpoint; `p2p-follow-peers` tries up to eight explicitly listed endpoints and fails over after transport loss. `p2p-submit-peers` tries multiple explicit operation admission endpoints, and `operation-status` locates an OperationID in complete local finalized history. `CybouNodeService` owns desktop peer discovery, retry, multi-peer catch-up, block fanout, and an optional inbound listener; desktop bootstraps through CYP2 by default. Operation acknowledgments are distinct from finality. Operation and block gossip remain bounded initial implementations.
+- Encrypted object chunks use the v1 storage crypto profile and durable local provider store. CYP2 `CAP_STORAGE` is advertised only when `serve` is given a positive storage capacity. Bounded PUT, manifest commit, and manifest/chunk GET verify network binding, ChunkIDs, manifest descriptors, and durable writes. No client-side replica placement, leases, durability proofs, repair, or accounting is present; storage remains opt-in and is not Beta-ready. See `11_STORAGE_OBJECTS.md` and `88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md`.
 
 ## Integration still required
 
@@ -41,7 +44,7 @@ The current text-only Mail profile is limited to DEV/Alpha integration. See
 - Route Mail and Files through the shared operation reconciliation model; expose full device management through the desktop identity workflow.
 - Run independent validators with durable crash recovery and verify finality under production topology.
 - Finish operator, release, and treasury signing integration under the PQ key policy.
-- Implement distributed Object Storage and encrypted Mail attachments plus the Files product surface before Beta; Backup is a post-Beta application. Beta onboarding economics still include integrated Email + Storage + Backup usage.
+- Add client-side three-peer placement, lease/audit/repair/accounting, encrypted Mail attachments, and the Files product surface before Beta; Backup is a post-Beta application. Beta onboarding economics still include integrated Email + Storage + Backup usage.
 - Remove obsolete runtime paths, names, files, and documentation before the DEV reset. No compatibility decoder or automatic state/vault import is planned.
 
 ## Current network boundary

@@ -78,6 +78,19 @@ the CYP2 listener port:
 cybou-node serve network.bin producer-db validator.key 127.0.0.1 29460 1000 29461 peers.txt
 ```
 
+Storage stays disabled unless a positive capacity is supplied after the optional
+peer file. The provider database is `producer-db.objects`; quota is in bytes.
+For a 1 GiB local ciphertext quota, append `1073741824`:
+
+```text
+cybou-node serve network.bin producer-db validator.key 127.0.0.1 29460 1000 29461 peers.txt 1073741824
+```
+
+The node then advertises CYP2 `CAP_STORAGE` and serves bounded encrypted chunk
+PUT, public-manifest commit, and manifest/chunk GET requests. This provides a
+single provider endpoint only; it does not assign three replicas or make a
+lease/durability promise. See `11_STORAGE_OBJECTS.md`.
+
 The fanout worker is separate from block production. It announces recently admitted
 OperationIDs and finalized `(height, BlockID)` entries to connected peers and
 sends full bytes only when requested. It keeps at most 32 recent block

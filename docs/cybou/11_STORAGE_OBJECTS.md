@@ -1,11 +1,18 @@
 # 11 — Distributed storage object model
 
-Implementation status: this is a Beta-required target protocol design, not an
-operational service. The Qt desktop has a capability-gated Files/Storage page,
-but distributed object placement, retrieval, durability proofs, repair, and
-accounting are not operational in the DEV runtime. Beta Mail cannot be declared
-ready until the required Store path is live. See `81_BETA_PRODUCT_SCOPE.md` and
-`88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md` for the separate object/key contract.
+Implementation status (2026-09-27): CYBOU now has a bounded encrypted-chunk
+profile, a durable network-bound provider store, and opt-in CYP2 upload, manifest
+commit, and retrieval. This is the first provider slice, not a complete Storage
+service: client-side three-peer placement, discovery/selection, leases,
+durability proofs, audits, repair, retention, and accounting are not operational.
+The provider stores ciphertext bytes, their opaque identifiers, and a public
+manifest; it receives no file metadata or key material. Storage is disabled by
+default and can be enabled for `cybou-node serve` by supplying a positive
+`STORAGE_CAPACITY_BYTES` after its optional peer file. The provider database is
+stored beside the node database with an `.objects` suffix. Beta Mail cannot be
+declared ready until the required Store path is complete. See
+`81_BETA_PRODUCT_SCOPE.md` and `88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md` for the
+separate object/key contract.
 
 CYBOU storage is a cooperative object network, not a host-price marketplace.
 
@@ -34,6 +41,19 @@ source data
     -> peer placement
     -> lease / audit / repair / retrieval
 ```
+
+The implemented v1 provider transfer is opt-in CYP2 capability `CAP_STORAGE`.
+Each CYP2 frame remains bounded to 4 KiB; a 1 MiB ciphertext chunk and the
+bounded public manifest travel as sequences of data frames after a length
+header. A provider accepts a chunk idempotently, rejects a conflicting value
+for the same ObjectID/index, and does not serve it until a valid public
+manifest commits to the ordered ChunkIDs and ciphertext lengths. PUT and
+manifest writes are durably synced. Provider quota counts the encoded chunk
+records and public manifest bytes. This quota is local capacity enforcement,
+not a lease or an economic contribution score. Retrieval validates the
+network-bound ChunkID and its manifest descriptor; the client still compares
+the manifest commitment with its locally held expectation before trusting it.
+This wire/store profile does not itself place replicas or promise durability.
 
 Compression precedes encryption. Storage providers receive ciphertext only.
 The initial implementation may use bounded replication while the network

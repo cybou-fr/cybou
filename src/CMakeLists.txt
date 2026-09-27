@@ -198,6 +198,7 @@ include(InstallBinaryComponent)
 # CYBOU node runtime and P2P library.
 add_library(cybou_node STATIC
   cybou/kv_store.cpp
+  cybou/storage_store.cpp
   cybou/state_store.cpp
   cybou/block_executor.cpp
   cybou/authority_node.cpp

@@ -186,7 +186,7 @@ int Main(const int argc, char* argv[])
         }
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT [PEERS_FILE]]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-follow-peers NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT [PEERS_FILE [STORAGE_CAPACITY_BYTES]]]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEER_IP P2P_PORT [UNTIL_HEIGHT] | p2p-follow-peers NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID");
     const auto network = cybou::LoadCybouNetworkFile(argv[2]);
     if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
@@ -409,7 +409,7 @@ int Main(const int argc, char* argv[])
         }
         return synced == count ? 0 : 1;
     }
-    if (std::string_view{argv[1]} == "serve" && (argc == 7 || argc == 8 || argc == 9 || argc == 10)) {
+    if (std::string_view{argv[1]} == "serve" && (argc == 7 || argc == 8 || argc == 9 || argc == 10 || argc == 11)) {
         auto key_bytes = ReadFile(argv[4], 32);
         if (key_bytes.size() != 32) throw std::runtime_error("validator key file must contain exactly 32 raw bytes");
         std::array<unsigned char, 32> key{};
@@ -429,6 +429,10 @@ int Main(const int argc, char* argv[])
             .validator_private_key = key,
             .db_cache_bytes = 8 << 20,
         };
+        if (argc == 11) {
+            config.storage_enabled = true;
+            config.storage_capacity_bytes = PositiveCount(argv[10]);
+        }
         if (p2p_port) {
             config.local_p2p_endpoint = std::make_pair(bind_address.to_string(), *p2p_port);
         }

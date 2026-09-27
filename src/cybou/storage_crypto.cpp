@@ -25,6 +25,7 @@ constexpr std::string_view CHUNK_AAD_DOMAIN{"CYBOU/STORAGE/OBJECT-CHUNK/V1"};
 constexpr std::string_view CHUNK_ID_DOMAIN{"CYBOU/STORAGE/CHUNK-ID/V1"};
 constexpr std::string_view MANIFEST_DOMAIN{"CYBOU/STORAGE/MANIFEST/V1"};
 constexpr size_t TAG_SIZE{crypto::CHACHA20_POLY1305_TAG_SIZE};
+constexpr std::array<unsigned char, 4> MANIFEST_MAGIC{'C', 'S', 'M', '1'};
 
 template <typename Range>
 bool IsZero(const Range& bytes)
@@ -44,6 +45,13 @@ void Put64(std::vector<unsigned char>& out, uint64_t value)
     for (unsigned shift = 0; shift < 64; shift += 8) {
         out.push_back(static_cast<unsigned char>(value >> shift));
     }
+}
+
+uint32_t Read32(const unsigned char* bytes)
+{
+    uint32_t value{0};
+    for (unsigned shift = 0; shift < 32; shift += 8) value |= uint32_t{bytes[shift / 8]} << shift;
+    return value;
 }
 
 std::optional<uint32_t> GetChunkCount(uint64_t plaintext_size)
@@ -125,6 +133,20 @@ bool ComputeManifestCommitment(
 
 } // namespace
 
+bool ComputeStorageChunkId(
+    const std::span<const unsigned char, 32> network_id,
+    const StorageObjectId& object_id,
+    const uint32_t index,
+    const std::span<const unsigned char, 12> nonce,
+    const std::span<const unsigned char> ciphertext_and_tag,
+    StorageChunkId& chunk_id)
+{
+    if (IsZero(network_id) || object_id == StorageObjectId{} ||
+        index >= STORAGE_OBJECT_MAX_CHUNKS || ciphertext_and_tag.size() < TAG_SIZE ||
+        ciphertext_and_tag.size() > STORAGE_OBJECT_CHUNK_SIZE + TAG_SIZE) return false;
+    return ComputeChunkId(network_id, object_id, index, nonce, ciphertext_and_tag, chunk_id);
+}
+
 std::optional<StorageObjectPrivateMetadata> CreateStorageObjectMetadata(
     const uint64_t plaintext_size, const uint32_t key_epoch)
 {
@@ -186,6 +208,54 @@ bool VerifyStoragePublicManifest(
     }
     StorageChunkId commitment{};
     return ComputeManifestCommitment(network_id, manifest, commitment) && commitment == manifest.commitment;
+}
+
+std::optional<std::vector<unsigned char>> EncodeStoragePublicManifest(
+    const std::span<const unsigned char, 32> network_id,
+    const StoragePublicManifest& manifest)
+{
+    if (!VerifyStoragePublicManifest(network_id, manifest)) return std::nullopt;
+    std::vector<unsigned char> bytes;
+    bytes.reserve(4 + 32 + 4 + manifest.chunks.size() * 36 + 32);
+    bytes.insert(bytes.end(), MANIFEST_MAGIC.begin(), MANIFEST_MAGIC.end());
+    bytes.insert(bytes.end(), manifest.object_id.begin(), manifest.object_id.end());
+    Put32(bytes, manifest.chunk_count);
+    for (const auto& chunk : manifest.chunks) {
+        bytes.insert(bytes.end(), chunk.chunk_id.begin(), chunk.chunk_id.end());
+        Put32(bytes, chunk.ciphertext_size);
+    }
+    bytes.insert(bytes.end(), manifest.commitment.begin(), manifest.commitment.end());
+    if (bytes.size() > STORAGE_PUBLIC_MANIFEST_MAX_BYTES) return std::nullopt;
+    return bytes;
+}
+
+std::optional<StoragePublicManifest> DecodeStoragePublicManifest(
+    const std::span<const unsigned char, 32> network_id,
+    const std::span<const unsigned char> bytes)
+{
+    constexpr size_t FIXED_SIZE{4 + 32 + 4 + 32};
+    if (bytes.size() < FIXED_SIZE || bytes.size() > STORAGE_PUBLIC_MANIFEST_MAX_BYTES ||
+        !std::equal(MANIFEST_MAGIC.begin(), MANIFEST_MAGIC.end(), bytes.begin())) return std::nullopt;
+    StoragePublicManifest manifest;
+    size_t offset = MANIFEST_MAGIC.size();
+    std::copy_n(bytes.begin() + offset, manifest.object_id.size(), manifest.object_id.begin());
+    offset += manifest.object_id.size();
+    manifest.chunk_count = Read32(bytes.data() + offset);
+    offset += 4;
+    if (manifest.chunk_count == 0 || manifest.chunk_count > STORAGE_OBJECT_MAX_CHUNKS ||
+        bytes.size() != FIXED_SIZE + static_cast<size_t>(manifest.chunk_count) * 36) return std::nullopt;
+    manifest.chunks.reserve(manifest.chunk_count);
+    for (uint32_t i = 0; i < manifest.chunk_count; ++i) {
+        StorageChunkDescriptor descriptor;
+        std::copy_n(bytes.begin() + offset, descriptor.chunk_id.size(), descriptor.chunk_id.begin());
+        offset += descriptor.chunk_id.size();
+        descriptor.ciphertext_size = Read32(bytes.data() + offset);
+        offset += 4;
+        manifest.chunks.push_back(descriptor);
+    }
+    std::copy_n(bytes.begin() + offset, manifest.commitment.size(), manifest.commitment.begin());
+    if (!VerifyStoragePublicManifest(network_id, manifest)) return std::nullopt;
+    return manifest;
 }
 
 StorageObjectCryptoContext::StorageObjectCryptoContext(

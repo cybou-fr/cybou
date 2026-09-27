@@ -88,6 +88,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         return false;
     }
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
+    if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE;
     if (status.is_authority) {
         caps |= (CAP_ACCEPT_OPERATIONS | CAP_OP_INVENTORY | CAP_CONSENSUS);
     }

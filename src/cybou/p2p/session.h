@@ -7,6 +7,7 @@
 #include <uint256.h>
 #include <cybou/authority_node.h>
 #include <cybou/bft_engine.h>
+#include <cybou/storage_store.h>
 
 #include <boost/asio/ip/tcp.hpp>
 
@@ -28,6 +29,7 @@ inline constexpr uint64_t CAP_BLOCK_INVENTORY{1ULL << 3};
 inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
 inline constexpr uint64_t CAP_CONSENSUS{1ULL << 5};
 inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
+inline constexpr uint64_t CAP_STORAGE{1ULL << 7};
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder
 // must enforce it so a malicious peer cannot stuff a PEERS frame with more
@@ -44,6 +46,13 @@ enum class MessageType : uint8_t {
     CONSENSUS_PRECOMMIT = 18,
     GET_PEERS = 19,
     PEERS = 20,
+    STORAGE_PUT_CHUNK = 21,
+    STORAGE_PUT_DATA = 22,
+    STORAGE_COMMIT = 23,
+    STORAGE_GET_MANIFEST = 24,
+    STORAGE_GET_CHUNK = 25,
+    STORAGE_RESULT = 26,
+    STORAGE_DATA = 27,
 };
 
 struct Frame {
@@ -129,6 +138,11 @@ public:
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     bool SendPeers(const std::vector<std::pair<std::string, uint16_t>>& peers,
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
+    std::optional<StorageWriteResult> PutStorageChunk(const StorageObjectId& object_id,
+        const StorageEncryptedChunk& chunk);
+    std::optional<StorageWriteResult> CommitStorageManifest(const StoragePublicManifest& manifest);
+    std::optional<StoragePublicManifest> GetStorageManifest(const StorageObjectId& object_id);
+    std::optional<StorageEncryptedChunk> GetStorageChunk(const StorageObjectId& object_id, uint32_t index);
     bool ServeNext(CybouNodeRuntime& runtime);
     const std::optional<Hello>& Peer() const { return m_peer; }
     boost::asio::ip::tcp::socket& Socket() { return m_socket; }

@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/storage_crypto.h>
+#include <cybou/storage_store.h>
 
 #include <test/util/setup_common.h>
 
@@ -11,6 +12,8 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <chrono>
+#include <filesystem>
 #include <vector>
 
 BOOST_AUTO_TEST_SUITE(cybou_storage_crypto_tests)
@@ -102,6 +105,89 @@ BOOST_AUTO_TEST_CASE(storage_empty_object_is_an_authenticated_empty_chunk)
     const auto manifest = cybou::BuildStoragePublicManifest(network_id, metadata->object_id, chunks);
     BOOST_REQUIRE(manifest);
     BOOST_CHECK(cybou::VerifyStoragePublicManifest(network_id, *manifest));
+}
+
+BOOST_AUTO_TEST_CASE(storage_provider_persists_only_manifest_committed_chunks)
+{
+    std::array<unsigned char, 32> network_id{};
+    std::array<unsigned char, 32> storage_master_key{};
+    network_id[0] = 0x51;
+    storage_master_key[0] = 0xa7;
+    const auto metadata = cybou::CreateStorageObjectMetadata(64, 3);
+    BOOST_REQUIRE(metadata);
+    auto context = cybou::StorageObjectCryptoContext::Create(network_id, storage_master_key, *metadata);
+    BOOST_REQUIRE(context);
+    std::vector<unsigned char> plaintext(64, 0x4c);
+    const auto chunk = context->EncryptChunk(0, plaintext);
+    const auto alternate_chunk = context->EncryptChunk(0, plaintext);
+    BOOST_REQUIRE(chunk);
+    BOOST_REQUIRE(alternate_chunk);
+    const std::array<cybou::StorageEncryptedChunk, 1> chunks{*chunk};
+    const auto manifest = cybou::BuildStoragePublicManifest(network_id, metadata->object_id, chunks);
+    BOOST_REQUIRE(manifest);
+
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path() /
+        ("cybou-storage-store-" + std::to_string(unique));
+    std::filesystem::remove_all(path);
+    {
+        cybou::StorageObjectStore store(path, network_id, 1 << 20);
+        BOOST_CHECK(store.PutChunk(metadata->object_id, *chunk));
+        BOOST_CHECK_EQUAL(static_cast<int>(store.PutChunk(metadata->object_id, *chunk).status),
+            static_cast<int>(cybou::StorageWriteStatus::ALREADY_STORED));
+        BOOST_CHECK_EQUAL(static_cast<int>(store.PutChunk(metadata->object_id, *alternate_chunk).status),
+            static_cast<int>(cybou::StorageWriteStatus::CONFLICT));
+        BOOST_CHECK(!store.GetChunk(metadata->object_id, 0));
+        BOOST_CHECK_EQUAL(static_cast<int>(store.CommitManifest(*manifest).status),
+            static_cast<int>(cybou::StorageWriteStatus::STORED));
+        BOOST_CHECK_EQUAL(static_cast<int>(store.CommitManifest(*manifest).status),
+            static_cast<int>(cybou::StorageWriteStatus::ALREADY_STORED));
+        const auto fetched = store.GetChunk(metadata->object_id, 0);
+        BOOST_REQUIRE(fetched);
+        BOOST_CHECK(fetched->ciphertext_and_tag == chunk->ciphertext_and_tag);
+    }
+    {
+        cybou::StorageObjectStore reopened(path, network_id, 1 << 20);
+        BOOST_CHECK_EQUAL(reopened.UsedBytes(),
+            chunk->ciphertext_and_tag.size() + 52 + cybou::EncodeStoragePublicManifest(network_id, *manifest)->size());
+        const auto fetched_manifest = reopened.GetManifest(metadata->object_id);
+        BOOST_REQUIRE(fetched_manifest);
+        BOOST_CHECK(fetched_manifest->commitment == manifest->commitment);
+        BOOST_CHECK(reopened.GetChunk(metadata->object_id, 0));
+    }
+    std::filesystem::remove_all(path);
+}
+
+BOOST_AUTO_TEST_CASE(storage_provider_enforces_capacity_and_network_binding)
+{
+    std::array<unsigned char, 32> network_id{};
+    std::array<unsigned char, 32> other_network{};
+    network_id[0] = 1;
+    other_network[0] = 2;
+    std::array<unsigned char, 32> storage_master_key{};
+    storage_master_key[0] = 3;
+    const auto metadata = cybou::CreateStorageObjectMetadata(1, 0);
+    BOOST_REQUIRE(metadata);
+    auto context = cybou::StorageObjectCryptoContext::Create(network_id, storage_master_key, *metadata);
+    BOOST_REQUIRE(context);
+    const auto chunk = context->EncryptChunk(0, std::array<unsigned char, 1>{0x42});
+    BOOST_REQUIRE(chunk);
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path() /
+        ("cybou-storage-capacity-" + std::to_string(unique));
+    std::filesystem::remove_all(path);
+    {
+        cybou::StorageObjectStore store(path, network_id, 1);
+        BOOST_CHECK_EQUAL(static_cast<int>(store.PutChunk(metadata->object_id, *chunk).status),
+            static_cast<int>(cybou::StorageWriteStatus::CAPACITY_EXCEEDED));
+        BOOST_CHECK_EQUAL(store.UsedBytes(), 0U);
+    }
+    {
+        cybou::StorageObjectStore store(path, other_network, 1 << 20);
+        BOOST_CHECK_EQUAL(static_cast<int>(store.PutChunk(metadata->object_id, *chunk).status),
+            static_cast<int>(cybou::StorageWriteStatus::INVALID));
+    }
+    std::filesystem::remove_all(path);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
