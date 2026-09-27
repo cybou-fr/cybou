@@ -6,6 +6,7 @@
 #define CYBOU_IDENTITY_MATERIAL_H
 
 #include <cybou/recovery_phrase.h>
+#include <cybou/identity_kem.h>
 
 #include <array>
 #include <filesystem>
@@ -15,12 +16,14 @@
 
 namespace cybou {
 
-// Local secret material for the initial device. AccountID is random and
-// independent of both secrets. This type is move-only and clears its arrays.
+// Local secret material for one device. AccountID is independent of recovery,
+// signing, and key-agreement secrets. This type is move-only and clears them.
 struct IdentityMaterial {
     std::array<unsigned char, 32> account_id{};
     RecoveryEntropy recovery_entropy{};
     std::array<unsigned char, 32> device_secret{};
+    DeviceX25519PrivateKey device_x25519_private_key{};
+    MlKem768Seed device_mlkem768_seed{};
 
     IdentityMaterial() = default;
     IdentityMaterial(const IdentityMaterial&) = delete;

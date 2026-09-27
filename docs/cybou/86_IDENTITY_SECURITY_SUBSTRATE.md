@@ -37,7 +37,7 @@ are not user-service keys.
 |---|---|---|---|
 | Recovery Root | Ed25519 + ML-DSA-65 | Recover account authority and authorize recovery/device lifecycle operations | Implemented in the current identity path; encoding/vector work remains tracked by Identity docs |
 | Device signing | Ed25519 + ML-DSA-44 | Authorize user-service operations and prove device possession | Implemented for current device authorization |
-| Device key agreement | X25519 + ML-KEM-768 | Establish or wrap content keys for an authorized device | Target only; not published in the current identity record |
+| Device key agreement | X25519 + ML-KEM-768 | Establish or wrap content keys for an authorized device | Independent private material is generated and stored locally; not published in the identity record or used by services |
 | Validator signing | Ed25519 + ML-DSA-65 | Validator consensus signatures | Separate target domain; production signature wiring remains incomplete |
 
 Private keys remain client-controlled. The identity record binds public
@@ -100,10 +100,10 @@ The current runtime implements the shared coordinator for Wallet payments,
 System Balance locks, Name commit/reveal, recovery's root-authorized
 DeviceAdd and DeviceRevoke, and RecoveryRotate with finality-gated vault
 promotion. Mail and Files are not yet integrated. The current identity record
-also lacks published KEM
-capabilities. These gaps must remain visible in implementation status and UI
-capabilities; the architecture target is not a claim that Beta security is
-complete.
+also lacks published KEM capabilities. Local key material does not imply an
+interoperable hybrid profile or service support. These gaps must remain visible
+in implementation status and UI capabilities; the architecture target is not
+a claim that Beta security is complete.
 
 ## Authority and related documents
 

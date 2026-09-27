@@ -14,10 +14,12 @@
 
 namespace cybou {
 namespace {
-constexpr std::array<unsigned char, 5> MAGIC{'C', 'V', 'I', 'D', '2'};
-constexpr size_t PAYLOAD_SIZE{MAGIC.size() + 32 + 32 + 32};
+constexpr std::array<unsigned char, 5> MAGIC{'C', 'V', 'I', 'D', '3'};
+constexpr size_t PAYLOAD_SIZE{MAGIC.size() + 32 + 32 + 32 +
+    X25519_PRIVATE_KEY_SIZE + ML_KEM_768_SEED_SIZE};
 
-bool Nonzero(const std::array<unsigned char, 32>& value)
+template <size_t N>
+bool Nonzero(const std::array<unsigned char, N>& value)
 {
     return std::any_of(value.begin(), value.end(), [](unsigned char byte) { return byte != 0; });
 }
@@ -30,14 +32,21 @@ std::optional<IdentityMaterial> Parse(std::span<const unsigned char> bytes)
     std::copy_n(first, 32, material.account_id.begin());
     std::copy_n(first + 32, 32, material.recovery_entropy.begin());
     std::copy_n(first + 64, 32, material.device_secret.begin());
-    if (!Nonzero(material.account_id) || !Nonzero(material.device_secret)) return std::nullopt;
+    std::copy_n(first + 96, X25519_PRIVATE_KEY_SIZE, material.device_x25519_private_key.begin());
+    std::copy_n(first + 96 + X25519_PRIVATE_KEY_SIZE, ML_KEM_768_SEED_SIZE,
+        material.device_mlkem768_seed.begin());
+    if (!Nonzero(material.account_id) || !Nonzero(material.device_secret) ||
+        !Nonzero(material.device_x25519_private_key) || !Nonzero(material.device_mlkem768_seed) ||
+        !DeriveDeviceX25519PublicKey(material.device_x25519_private_key) ||
+        !DeriveMlKem768PublicKey(material.device_mlkem768_seed)) return std::nullopt;
     return material;
 }
 } // namespace
 
 IdentityMaterial::IdentityMaterial(IdentityMaterial&& other) noexcept
     : account_id{other.account_id}, recovery_entropy{other.recovery_entropy},
-      device_secret{other.device_secret}
+      device_secret{other.device_secret}, device_x25519_private_key{other.device_x25519_private_key},
+      device_mlkem768_seed{other.device_mlkem768_seed}
 {
     other.Clear();
 }
@@ -49,6 +58,8 @@ IdentityMaterial& IdentityMaterial::operator=(IdentityMaterial&& other) noexcept
         account_id = other.account_id;
         recovery_entropy = other.recovery_entropy;
         device_secret = other.device_secret;
+        device_x25519_private_key = other.device_x25519_private_key;
+        device_mlkem768_seed = other.device_mlkem768_seed;
         other.Clear();
     }
     return *this;
@@ -61,17 +72,31 @@ void IdentityMaterial::Clear() noexcept
     crypto::CleanseMemory(account_id.data(), account_id.size());
     crypto::CleanseMemory(recovery_entropy.data(), recovery_entropy.size());
     crypto::CleanseMemory(device_secret.data(), device_secret.size());
+    crypto::CleanseMemory(device_x25519_private_key.data(), device_x25519_private_key.size());
+    crypto::CleanseMemory(device_mlkem768_seed.data(), device_mlkem768_seed.size());
 }
 
 std::optional<IdentityMaterial> GenerateIdentityMaterial()
 {
     IdentityMaterial material;
     auto entropy = GenerateRecoveryEntropy();
-    if (!entropy || RAND_bytes(material.account_id.data(), material.account_id.size()) != 1 ||
+    if (!entropy) return std::nullopt;
+    if (RAND_bytes(material.account_id.data(), material.account_id.size()) != 1 ||
         RAND_bytes(material.device_secret.data(), material.device_secret.size()) != 1 ||
-        !Nonzero(material.account_id) || !Nonzero(material.device_secret)) return std::nullopt;
+        !Nonzero(material.account_id) || !Nonzero(material.device_secret)) {
+        crypto::CleanseMemory(entropy->data(), entropy->size());
+        return std::nullopt;
+    }
     material.recovery_entropy = *entropy;
     crypto::CleanseMemory(entropy->data(), entropy->size());
+    auto x25519_private_key = GenerateDeviceX25519PrivateKey();
+    if (!x25519_private_key) return std::nullopt;
+    material.device_x25519_private_key = *x25519_private_key;
+    crypto::CleanseMemory(x25519_private_key->data(), x25519_private_key->size());
+    auto mlkem_seed = GenerateMlKem768Seed();
+    if (!mlkem_seed) return std::nullopt;
+    material.device_mlkem768_seed = *mlkem_seed;
+    crypto::CleanseMemory(mlkem_seed->data(), mlkem_seed->size());
     return material;
 }
 
@@ -87,12 +112,19 @@ bool SaveNewIdentityMaterial(const std::filesystem::path& path,
 
 std::optional<std::vector<unsigned char>> SerializeIdentityMaterial(const IdentityMaterial& material)
 {
-    if (!Nonzero(material.account_id) || !Nonzero(material.device_secret)) return std::nullopt;
+    if (!Nonzero(material.account_id) || !Nonzero(material.device_secret) ||
+        !Nonzero(material.device_x25519_private_key) || !Nonzero(material.device_mlkem768_seed) ||
+        !DeriveDeviceX25519PublicKey(material.device_x25519_private_key) ||
+        !DeriveMlKem768PublicKey(material.device_mlkem768_seed)) return std::nullopt;
     std::vector<unsigned char> payload(PAYLOAD_SIZE);
     std::copy(MAGIC.begin(), MAGIC.end(), payload.begin());
     std::copy(material.account_id.begin(), material.account_id.end(), payload.begin() + 5);
     std::copy(material.recovery_entropy.begin(), material.recovery_entropy.end(), payload.begin() + 37);
     std::copy(material.device_secret.begin(), material.device_secret.end(), payload.begin() + 69);
+    std::copy(material.device_x25519_private_key.begin(), material.device_x25519_private_key.end(),
+        payload.begin() + 101);
+    std::copy(material.device_mlkem768_seed.begin(), material.device_mlkem768_seed.end(),
+        payload.begin() + 101 + X25519_PRIVATE_KEY_SIZE);
     return payload;
 }
 

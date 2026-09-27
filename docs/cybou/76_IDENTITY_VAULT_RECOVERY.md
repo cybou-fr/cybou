@@ -12,11 +12,15 @@ BIP-39 PBKDF2 wallet seed/passphrase scheme is not used. The local
 `identity_vault` module seals and opens bounded in-memory CYBV2 envelopes.
 `SaveNewIdentityVault` now writes a new file through a synced temporary file,
 publishes it without overwriting an existing vault, and authenticates it by
-reopening before returning success. The initial `CVID2` payload contains a
-random AccountID, 256-bit recovery entropy, and an independent random initial
-device secret, each 32 bytes in that order after the five-byte payload magic.
-`IdentityMaterial` clears these fields when destroyed. Password change and
-broader device and vault management remain unimplemented.
+reopening before returning success. The current `CVID3` payload contains a
+random AccountID, 256-bit recovery entropy, independent device signing secret,
+independent X25519 private key, and the 64-byte FIPS 203 ML-KEM-768 `(d, z)`
+seed, in that order after the five-byte payload magic. The local implementation
+derives public KEM keys through OpenSSL 3.5 APIs. It does not publish them in
+the identity registry or combine them into a hybrid key exchange; Mail and
+Storage remain fail-closed pending the reviewed profile. `IdentityMaterial`
+clears all secret fields when destroyed. Password change and broader device
+and vault management remain unimplemented.
 
 An in-progress name claim is saved separately beside the identity vault as an
 encrypted CYBV2 envelope. It binds NetworkID, AccountID, label, and random

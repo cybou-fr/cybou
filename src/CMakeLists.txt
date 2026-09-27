@@ -168,6 +168,7 @@ add_library(cybou_core STATIC
   cybou/identity.cpp
   cybou/identity_authorization.cpp
   cybou/identity_crypto.cpp
+  cybou/identity_kem.cpp
   cybou/identity_material.cpp
   cybou/identity_registry.cpp
   cybou/identity_registry_codec.cpp

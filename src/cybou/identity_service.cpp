@@ -382,6 +382,18 @@ IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
                 m_phase.store(IdentityCreationPhase::FAILED);
                 return Failure(IdentityCreationPhase::FAILED, "Secure random generator failed", *account);
             }
+            auto x25519_private_key = GenerateDeviceX25519PrivateKey();
+            auto mlkem_seed = GenerateMlKem768Seed();
+            if (!x25519_private_key || !mlkem_seed) {
+                if (x25519_private_key) crypto::CleanseMemory(x25519_private_key->data(), x25519_private_key->size());
+                if (mlkem_seed) crypto::CleanseMemory(mlkem_seed->data(), mlkem_seed->size());
+                m_phase.store(IdentityCreationPhase::FAILED);
+                return Failure(IdentityCreationPhase::FAILED, "Device key-agreement generation failed", *account);
+            }
+            material.device_x25519_private_key = *x25519_private_key;
+            material.device_mlkem768_seed = *mlkem_seed;
+            crypto::CleanseMemory(x25519_private_key->data(), x25519_private_key->size());
+            crypto::CleanseMemory(mlkem_seed->data(), mlkem_seed->size());
             if (!m_keystore.LoadMaterial(std::move(material)) || !m_keystore.SaveToFile(vault_path, password)) {
                 m_phase.store(IdentityCreationPhase::FAILED);
                 return Failure(IdentityCreationPhase::FAILED, "Cannot save and verify recovery vault", *account);

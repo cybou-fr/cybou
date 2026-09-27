@@ -18,8 +18,10 @@ The Recovery Root requires **Ed25519 and ML-DSA-65** signatures. Each
 operational device requires **Ed25519 and ML-DSA-44** signatures. Both
 components are mandatory; missing, malformed, or failed components fail
 closed. Mail and Storage key agreement uses separate X25519 and ML-KEM-768
-keys as an architecture target; these KEM capabilities are not yet published
-in the identity record. Signing keys are never reused for encryption.
+keys as an architecture target. The local vault now generates and stores
+independent device X25519 and ML-KEM-768 private material, but these KEM
+capabilities are not published in the identity record or used by services.
+Signing keys are never reused for encryption.
 
 The current authorization descriptor has a fixed 3331-byte canonical form:
 version `02`, root suite `01`, 32-byte Ed25519 root public key, 1952-byte

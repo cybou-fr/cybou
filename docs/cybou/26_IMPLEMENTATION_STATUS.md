@@ -15,6 +15,7 @@ readiness criteria.
 - 24-word recovery phrase encoding and recovery-derived Ed25519 + ML-DSA-65 root keys.
 - Independent Ed25519 + ML-DSA-44 device keys and versioned RecoveryKeyID and DeviceKeyID commitments.
 - Portable encrypted CYBV2 vault with Argon2id and AES-256-GCM, durable create-only save and reopen verification, plus authenticated same-directory candidate promotion used by finality-gated recovery-root rotation.
+- CVID3 identity payload stores independent device X25519 private material and an ML-KEM-768 seed in the encrypted vault; OpenSSL derives their public keys and provides standalone ML-KEM encapsulation/decapsulation. The identity registry does not publish these keys, no hybrid combiner is implemented, and Mail/Storage do not use this local capability.
 - Canonical account creation with anti-Sybil work and hybrid root/device proofs of possession.
 - Bounded device registry with add, revoke, root rotation, independent device nonces, and activation numbers that prevent replay after a key is re-added.
 - Canonical identity-registry and monetary-state snapshots with a domain-separated state root.

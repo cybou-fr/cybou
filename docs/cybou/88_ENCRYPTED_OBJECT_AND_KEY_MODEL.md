@@ -2,7 +2,8 @@
 
 Status: canonical target for Files objects and Mail attachments. Local v1
 chunk encryption and the first durable provider/CYP2 ciphertext transfer slice
-are implemented. Device KEM publication and Storage Master Key wrapping,
+are implemented. Local device X25519 and ML-KEM-768 private material is
+generated and encrypted in the identity vault. Device KEM publication and Storage Master Key wrapping,
 client-side replication, leases, audits, repair, accounting, and attachment
 delivery are not implemented. `11_STORAGE_OBJECTS.md` owns provider placement,
 leases, audits, repair, and accounting.

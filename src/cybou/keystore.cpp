@@ -34,6 +34,8 @@ struct CybouKeyStore::Impl {
     std::optional<std::array<unsigned char, 32>> mail_seed;
     std::optional<uint256> mail_public_key;
     std::optional<uint256> x25519_public_key;
+    std::optional<DeviceX25519PublicKey> device_x25519_public_key;
+    std::optional<MlKem768PublicKey> device_mlkem768_public_key;
     std::optional<IdentityHybridPublicKey> device_key;
     std::optional<IdentityHybridPublicKey> recovery_root;
     std::optional<std::array<unsigned char, 32>> device_id;
@@ -49,6 +51,8 @@ struct CybouKeyStore::Impl {
         }
         mail_public_key.reset();
         x25519_public_key.reset();
+        device_x25519_public_key.reset();
+        device_mlkem768_public_key.reset();
         device_key.reset();
         recovery_root.reset();
         device_id.reset();
@@ -64,6 +68,10 @@ struct CybouKeyStore::Impl {
         const auto id = ComputeDeviceKeyId(*device);
         if (!id) return false;
 
+        auto device_x25519 = DeriveDeviceX25519PublicKey(value.device_x25519_private_key);
+        auto device_mlkem768 = DeriveMlKem768PublicKey(value.device_mlkem768_seed);
+        if (!device_x25519 || !device_mlkem768) return false;
+
         auto derived_mail_seed = DeriveMailSeed(value.device_secret);
         if (!derived_mail_seed) return false;
         const auto public_key = DeriveEd25519PublicKey(*derived_mail_seed);
@@ -78,6 +86,8 @@ struct CybouKeyStore::Impl {
         crypto::CleanseMemory(derived_mail_seed->data(), derived_mail_seed->size());
         mail_public_key = *public_key;
         x25519_public_key = *x25519;
+        device_x25519_public_key = *device_x25519;
+        device_mlkem768_public_key = *device_mlkem768;
         device_key = *device;
         recovery_root = *root;
         device_id = *id;
@@ -122,6 +132,8 @@ std::optional<IdentityMaterial> CybouKeyStore::CreateRecoveryRotationMaterial(
     material.recovery_entropy = std::array<unsigned char, 32>{};
     std::copy(new_recovery_entropy.begin(), new_recovery_entropy.end(), material.recovery_entropy.begin());
     material.device_secret = m_impl->material->device_secret;
+    material.device_x25519_private_key = m_impl->material->device_x25519_private_key;
+    material.device_mlkem768_seed = m_impl->material->device_mlkem768_seed;
     return material;
 }
 
@@ -135,6 +147,14 @@ void CybouKeyStore::Clear() { m_impl->Clear(); }
 bool CybouKeyStore::HasKey() const { return m_impl->material.has_value(); }
 std::optional<uint256> CybouKeyStore::GetPublicKey() const { return m_impl->mail_public_key; }
 std::optional<uint256> CybouKeyStore::GetX25519PublicKey() const { return m_impl->x25519_public_key; }
+std::optional<DeviceX25519PublicKey> CybouKeyStore::GetDeviceX25519PublicKey() const
+{
+    return m_impl->device_x25519_public_key;
+}
+std::optional<MlKem768PublicKey> CybouKeyStore::GetDeviceMlKem768PublicKey() const
+{
+    return m_impl->device_mlkem768_public_key;
+}
 
 std::optional<AccountId> CybouKeyStore::GetAccountId() const
 {
