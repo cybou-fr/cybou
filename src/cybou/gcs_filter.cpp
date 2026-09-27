@@ -3,9 +3,9 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/gcs_filter.h>
+#include <cybou/fast_range.h>
 
 #include <crypto/siphash.h>
-#include <util/fastrange.h>
 
 #include <algorithm>
 #include <ios>
@@ -153,7 +153,7 @@ uint64_t GolombRiceDecode(BitReader& reader, const uint8_t p)
 uint64_t HashToRange(const Params& params, const uint64_t range, const std::span<const unsigned char> element)
 {
     const uint64_t hash = CSipHasher{params.siphash_k0, params.siphash_k1}.Write(element).Finalize();
-    return FastRange64(hash, range);
+    return cybou::FastRange64(hash, range);
 }
 
 uint32_t ReadCount(const Params& params, ByteReader& stream)

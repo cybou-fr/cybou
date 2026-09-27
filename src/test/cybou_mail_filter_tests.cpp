@@ -9,6 +9,7 @@
 #include <cybou/block.h>
 #include <cybou/block_executor.h>
 #include <cybou/gcs_filter.h>
+#include <cybou/fast_range.h>
 #include <cybou/identity_crypto.h>
 #include <cybou/mail_service.h>
 #include <cybou/network_definition.h>
@@ -17,6 +18,7 @@
 #include <cybou/state_store.h>
 #include <cybou/validator.h>
 #include <blockfilter.h>
+#include <util/fastrange.h>
 #include <test/util/setup_common.h>
 #include <uint256.h>
 
@@ -188,6 +190,34 @@ cybou::AccountCreateOp MakeTestAccountCreate(
 } // namespace
 
 BOOST_FIXTURE_TEST_SUITE(cybou_mail_filter_tests, BasicTestingSetup)
+
+BOOST_AUTO_TEST_CASE(fast_range_matches_legacy_at_boundaries_and_deterministic_samples)
+{
+    const std::array<uint64_t, 12> values{
+        0, 1, 0xffffffffULL, 0x100000000ULL, 0x7fffffffffffffffULL,
+        0x8000000000000000ULL, 0xffffffff00000000ULL, 0xffffffffffffffffULL,
+        0x0123456789abcdefULL, 0xfedcba9876543210ULL, 0xaaaaaaaa55555555ULL,
+        0x55555555aaaaaaaaULL,
+    };
+    const std::array<uint64_t, 9> ranges{
+        0, 1, 2, 3, 0xffffffffULL, 0x100000000ULL,
+        0x7fffffffffffffffULL, 0x8000000000000000ULL, 0xffffffffffffffffULL,
+    };
+    for (const uint64_t value : values) {
+        for (const uint64_t range : ranges) {
+            BOOST_CHECK_EQUAL(cybou::FastRange64(value, range), ::FastRange64(value, range));
+        }
+    }
+
+    uint64_t sample{0x6a09e667f3bcc909ULL};
+    for (uint32_t i = 0; i < 1024; ++i) {
+        sample ^= sample << 13;
+        sample ^= sample >> 7;
+        sample ^= sample << 17;
+        const uint64_t range = (sample >> 1) | 1;
+        BOOST_CHECK_EQUAL(cybou::FastRange64(sample, range), ::FastRange64(sample, range));
+    }
+}
 
 BOOST_AUTO_TEST_CASE(mail_gcs_encoding_matches_legacy_blockfilter)
 {

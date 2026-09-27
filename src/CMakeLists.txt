@@ -62,6 +62,7 @@ endif()
 # The uint256 implementation is shared with Bitcoin targets, but CYBOU core
 # should not need the Bitcoin consensus library to use it.
 add_library(cybou_base STATIC
+  cybou/fast_range.h
   uint256.cpp
 )
 target_link_libraries(cybou_base

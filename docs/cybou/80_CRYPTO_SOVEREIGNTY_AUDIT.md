@@ -19,10 +19,10 @@ be dropped by changing one CMake link line:
   interface reaches `bitcoin_crypto` through `bitcoin_util`.
 - `cybou_node` uses inherited `DataStream`/`SpanReader` serialization for its
   local LevelDB records. Those bytes form the existing local database format.
-- The GCS filter uses inherited FastRange and `CSipHasher`; its CompactSize,
-  bitstream, and Golomb-Rice codec is CYBOU-owned and checked byte-for-byte
-  against the inherited block-filter implementation across element counts
-  including the CompactSize 252/253 boundary.
+- The GCS filter uses inherited `CSipHasher`; its FastRange64,
+  CompactSize, bitstream, and Golomb-Rice codec are CYBOU-owned and checked
+  against the inherited implementation across element counts including the
+  CompactSize 252/253 boundary.
 
 The actual MinGW link command confirms `bitcoin_util` and `bitcoin_crypto` are
 still in the final CYBOU test executable's link closure. A true removal needs
@@ -75,8 +75,10 @@ compatibility coverage; SipHash remains an additional crypto blocker.
   and Golomb-Rice codec instead of calling inherited stream/codec helpers.
   Compatibility tests compare complete filters against Bitcoin's GCS filter
   for empty and varied-length elements at counts 0, 1, 2, 17, 252, and 253;
-  malformed and oversized CompactSize counts are rejected. SipHash and
-  FastRange remain inherited and unchanged.
+  malformed and oversized CompactSize counts are rejected. SipHash remains
+  inherited and unchanged. FastRange64 now lives in `cybou/fast_range.h`;
+  deterministic boundary and sample tests compare its output against the
+  inherited helper, and GCS no longer includes Bitcoin's FastRange header.
 - SipHash remains on the inherited `CSipHasher` implementation in the GCS
   filter. A local MinGW benchmark on OpenSSL 3.5.2 compared 32-byte elements:
   `CSipHasher` measured 26.11 ns/hash and `EVP_MAC` SipHash measured
@@ -125,8 +127,9 @@ production path. See `16_MAIL_PROTOCOL.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
    are no direct inherited crypto or cleanse includes under `src/cybou` outside
    the approved wrappers.
 6. The direct `bitcoin_crypto` edge was moved from `cybou_core` to
-   `cybou_node`, where GCS SipHash uses it. The final link closure still gets
-   `bitcoin_crypto` transitively through `cybou_base -> bitcoin_util`. Remove
+   `cybou_node`, where GCS SipHash uses it. FastRange64 is now CYBOU-owned.
+   The final link closure still gets `bitcoin_crypto` transitively through
+   `cybou_base -> bitcoin_util`. Remove
    the remaining legacy link paths only after `uint256` and GCS no longer need
    inherited utility or crypto symbols. Verify the final link graph for
    `cybou_core`, `cybou_node`, and the desktop executable.
