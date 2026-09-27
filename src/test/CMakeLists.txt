@@ -200,6 +200,7 @@ add_executable(cybou-core-test
   cybou_signing_tests.cpp
   cybou_state_tests.cpp
   cybou_evidence_tests.cpp
+  cybou_storage_crypto_tests.cpp
   cybou_mail_filter_tests.cpp
   cybou_bft_tests.cpp
   cybou_crypto_tests.cpp

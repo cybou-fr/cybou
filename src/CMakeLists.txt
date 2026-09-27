@@ -177,6 +177,7 @@ add_library(cybou_core STATIC
   cybou/recovery_phrase.cpp
   cybou/signing.cpp
   cybou/signing_openssl.cpp
+  cybou/storage_crypto.cpp
   cybou/state.cpp
   cybou/validator.cpp
 )
