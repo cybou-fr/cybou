@@ -3,16 +3,15 @@
 Implementation status: the desktop has a capability-gated Backup page, but
 the decentralized backup, verification, and restore service below is planned.
 
-Backup is a later application of the general durable CYBOU Object Storage layer.
+Backup is explicitly post-Beta. It is a later application of the general
+durable CYBOU Object Storage layer and is not required to ship Beta Mail.
 
-CYBOU Email ships first.
+CYBOU Email with encrypted Store-backed attachments ships as the Beta product.
 
 Backup begins only after:
 
 ```text
-native Email works
-+
-Object Storage works
+Beta Email and Object Storage are operational
 +
 erasure/repair works
 +

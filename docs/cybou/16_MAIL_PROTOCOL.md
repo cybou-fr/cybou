@@ -59,6 +59,11 @@ no SMTP
 no realtime chat
 ```
 
-## Future Store
+This is the initial DEV/Alpha profile. It remains attachment-free by design;
+Beta Mail requires a separately integrated Object Storage path for encrypted
+attachments and is not complete at this profile. See `81_BETA_PRODUCT_SCOPE.md`.
 
-Later MailTx commits to encrypted Store objects instead of embedding large mail bodies.
+## Beta Store integration
+
+Beta MailTx commits to encrypted Store objects using opaque references; bulk
+attachment bytes never enter blocks or consensus state.

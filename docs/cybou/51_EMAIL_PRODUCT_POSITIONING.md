@@ -51,7 +51,7 @@ Use "cryptographic registration" or "notarial-like proof" carefully.
 
 Do not claim legal notarization without legal qualification.
 
-## First release
+## Initial DEV/Alpha profile
 
 ```text
 text-only
@@ -63,7 +63,19 @@ no attachments
 no SMTP
 ```
 
-Attachments and large mail arrive only with CYBOU Object Storage.
+This text-only profile supports early integration, not Beta completeness.
+
+## Beta product
+
+```text
+one-to-one native .cybou Mail
+E2E encrypted and consensus registered
+encrypted attachments stored by CYBOU Object Storage
+recipient can retrieve after being offline
+```
+
+Object Storage is part of Beta Mail readiness. Backup and Drive remain
+post-Beta.
 
 ## Long-term
 

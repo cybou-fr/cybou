@@ -126,9 +126,9 @@ assess AML/KYC consequences where applicable
 
 Since France's prior transitional crypto-services period ended on 1 July 2026, do not rely on legacy PSAN transitional assumptions.
 
-## 7. Storage later
+## 7. Beta Object Storage
 
-When general distributed Storage launches, obtain separate analysis for:
+Before Beta Storage launches, obtain separate analysis for:
 
 - hosting/intermediary-service roles;
 - unlawful-content notices;

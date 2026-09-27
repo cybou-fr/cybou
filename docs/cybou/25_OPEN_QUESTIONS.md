@@ -99,13 +99,16 @@ Define validator/block time drift rules if a network timestamp is exposed as evi
 ### O-017 Legal evidence positioning
 Obtain French/EU review before marketing the cryptographic record as notarization or registered-mail equivalent.
 
-## Storage later
+## Beta Storage and Mail attachments
 
 ### O-018 Store mail-object format
-Freeze encrypted body/attachment manifest.
+Freeze the encrypted message/attachment manifest and MailTx commitment/reference
+format without placing attachment bytes on-chain.
 
 ### O-019 Storage provider verification
-Required before storage rewards.
+Define leases, audit proofs, repair, and retrieval evidence. Required for Beta
+Storage readiness, not only before provider rewards.
 
 ### O-020 Fee Router v2
-Define provider share only when Store exists.
+Define provider share and service accounting before Beta. Do not change the
+current 4-fee split by implication; any change requires a separate decision.

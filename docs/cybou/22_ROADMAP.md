@@ -2,10 +2,14 @@
 
 This is a milestone sequence, not a list of completed releases. As of
 2026-09-24, parts of several milestones exist in core and the experimental
-single-validator DEV node, while the complete Email product, independent
+single-validator DEV node, while the complete Beta Email product, independent
 multi-validator network, pruning, and Object Storage remain open. See
 `26_IMPLEMENTATION_STATUS.md` for the current code boundary and
 `75_DEV_NODE_RUNBOOK.md` for the running DEV process.
+
+The first text-only Mail profile is transitional DEV/Alpha scope. Beta requires
+Storage Core followed by PQ Mail with encrypted attachments; Backup and Drive
+follow Beta. See `81_BETA_PRODUCT_SCOPE.md`.
 
 ## Identity V2 integration gate
 
@@ -22,32 +26,33 @@ device rejection, and adversarial name-claim ordering. See docs 10 and 76–78.
 Milestone numbers do not authorize a new product surface by themselves.
 Product expansion requires the following evidence.
 
-### Gate A - Identity + Email MVP
+### Gate A - Identity + Email Alpha
 
-Before broad Storage, Backup or Drive work begins, the complete path must
-work on a clean machine and survive restart:
+This gate validates the initial text-only Mail integration on a clean machine;
+it does not establish Beta readiness:
 
 - create and restore an identity;
 - choose and use a `.cybou` name;
 - add and revoke a device;
-- send encrypted mail to an offline recipient;
+- send encrypted text mail to an offline recipient;
 - later receive, verify and reply to that mail;
 - preserve canonical identity and mail state across client restarts;
 - pass four-validator restart and fault tests.
 
-### Gate B - Real pilot
+### Gate B - Storage + Beta Mail readiness
 
-Run a controlled pilot with 20-100 real users for 8-12 weeks. Measure repeated
-mail use, recovery by real users, multi-device use, retention, support burden
-and history growth. The pilot is successful only when users continue using the
-product beyond initial novelty.
+Before Beta, implement the minimal distributed Object Storage path and
+integrate encrypted Mail attachments. Demonstrate offline-recipient retrieval,
+integrity verification, provider audits, repair, recovery after interruption,
+and stable accounting. The complete gates are in
+`81_BETA_PRODUCT_SCOPE.md`.
 
-### Gate C - Scale services
+### Gate C - Controlled Beta pilot
 
-Only after Gate B may the project introduce the minimal Object Storage layer.
-Backup and Drive require separate evidence of operational need and stability.
-Pre-Store Mail is intentionally bounded pilot architecture, not mass-scale
-storage architecture.
+Run a controlled pilot with 20–100 real users for 8–12 weeks and four active
+validators where f=1 tolerance is claimed. Measure repeated Mail and attachment
+use, offline retrieval, recovery, multi-device use, Storage repair, support
+burden, and history growth. Backup and Drive remain post-Beta applications.
 
 ## v0.0.0 — Exact upstream baseline
 Pin exact local Bitcoin Core tag/commit. Build/tests only. No normal Bitcoin-network launch.
@@ -115,15 +120,15 @@ Do not encode Mail as OP_RETURN/application data inside Bitcoin semantics.
 - operator-approved admission/removal;
 - rounds/locking/finality/restart simulator.
 
-## v0.2.1 — CYBOU Email Beta
+## v0.2.1 — CYBOU Email Alpha
 - Inbox/Sent/Drafts/Archive;
 - threads;
 - Reply/Forward;
 - local read/unread;
 - recipient-discovery privacy review;
 - MailEvidenceBundle export;
-- PQ/T crypto review;
-- no attachments.
+- initial text-only Mail profile;
+- this milestone is not Beta readiness.
 
 ## v0.2.2 — Economics hardening
 ```text
@@ -140,11 +145,25 @@ DEV_ONBOARDING_BONUS = 6,000
 
 No priority fee.
 
-## v0.2.3 — French pilot readiness
+## v0.2.3 — Object Storage Core for Beta
+- opaque encrypted objects and manifests;
+- bounded chunking and verifiable object commitments;
+- placement, retrieval, leases, audits, repair and accounting;
+- reliability and interruption tests;
+- freeze operational/economic parameters before Beta.
+
+## v0.2.4 — CYBOU Email Beta + encrypted attachments
+- hybrid-PQ Mail confidentiality and authenticated recipient keys;
+- encrypted attachment manifest and Store-backed objects;
+- MailTx references/commits to content; attachment bytes stay off-chain;
+- offline recipient retrieval, verification and local decryption;
+- evidence and historical sender authorization integrated.
+
+## v0.2.5 — French Beta readiness
 Security/legal/CRA/crypto-export/privacy/update/runbook work.
 
-## v0.2.4 — French controlled pilot
-20–100 users, small controlled scale, 4 approved validators where claiming f=1 BFT tolerance.
+## v0.2.6 — Controlled Beta pilot
+20–100 users for 8–12 weeks; four approved validators where claiming f=1 BFT tolerance. Size onboarding budget from integrated Email + Storage + Backup economics.
 
 ## v0.3.0 — Operator continuity
 Design/test emergency Operator Authority succession without introducing normal DAO/community governance.
@@ -152,20 +171,8 @@ Design/test emergency Operator Authority succession without introducing normal D
 ## v0.3.1 — European controlled expansion
 Multiple EU validator operators/providers.
 
-## v0.4.0 — Object Storage (after Product Gates A and B)
-Encrypted object storage becomes the mail content layer.
-
-New MailTx carries content root/reference rather than large body ciphertext.
-
-## v0.4.1 — Attachments
-Only after Store.
-
-## v0.4.2 — Erasure + repair
-
-## v0.4.3 — Verified storage accounting + provider rewards
-
-## v0.5 — Backup
-## v0.6 — Drive
+## v0.4 — Backup (post-Beta)
+## v0.5 — Drive (post-Beta)
 ## v0.7 — Email expansion / optional gateway research
 ## v0.8 — Sovereignty exercise
 ## v0.9 — Global-readiness review
@@ -173,5 +180,5 @@ Only after Store.
 
 ## BetaNet and Mainnet Progression
 - **Separate Genesis**: BetaNet and Mainnet maintain separate genesis states; Beta balances do not carry forward to Mainnet.
-- **Service Progression**: Email Alpha/Beta -> Storage Beta -> Backup Beta -> multi-service observation window.
+- **Service Progression**: Email Alpha -> Storage Core -> PQ Mail + encrypted attachments -> Beta -> Backup -> Drive.
 - **Economic Calibration**: Beta onboarding budget is sized from integrated Email + Storage + Backup usage profiles; the Mainnet onboarding bonus is frozen only after analyzing aggregate Beta operational metrics.

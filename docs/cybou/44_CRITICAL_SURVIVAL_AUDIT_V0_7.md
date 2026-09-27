@@ -32,9 +32,10 @@ Enforce:
 - explicit block-weight/resource limits;
 - controlled-scale pre-Store deployments;
 - validator pre-Store archival retention;
-- no attachments.
+- no attachments in the initial DEV/Alpha profile; Beta requires attachments
+  backed by production-ready Object Storage.
 
-Mass-scale Email is gated on Object Storage.
+Beta Mail and mass-scale Email require Object Storage.
 
 Pre-Store Mail is an intentionally bounded pilot architecture, not the
 mass-scale storage architecture.
@@ -78,9 +79,11 @@ quarantine
 -> Email Alpha
 -> snapshot/bootstrap
 -> 4-validator f=1 BFT target
--> French pilot
--> Object Storage
--> attachments/Backup
+-> Storage Core
+-> Beta Mail + encrypted attachments
+-> Beta pilot
+-> Backup (post-Beta)
+-> Drive (post-Beta)
 ```
 
 ## Stop conditions

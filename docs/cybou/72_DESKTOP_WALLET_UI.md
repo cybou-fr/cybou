@@ -27,7 +27,7 @@ unit toggle, no satoshi-style subunit anywhere in the desktop UI.
 - `Balance` is user-controlled. The UI exposes no operation that debits it
   without the user's own authorization.
 - `System Balance` is frozen CYBOU that pays deterministic protocol fees
-  (Email today; Storage, Backup and future services later) and contributes
+  (Beta Email/Storage and later services) and contributes
   to Proof of Trust. It cannot be transferred, withdrawn or traded, and the
   UI offers no path that contradicts this.
 

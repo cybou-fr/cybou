@@ -40,9 +40,9 @@
 | DEC-036 | CYBOU Email is first user-facing product | Frozen roadmap |
 | DEC-037 | Email v1 uses bounded Message Store, not general Object Storage | Superseded by v0.0.1 |
 | DEC-038 | Message Store has TTL/quota/replication but no erasure coding or 3:1 | Superseded by v0.0.1 |
-| DEC-039 | General Object Storage follows Email v1 | Frozen roadmap |
-| DEC-040 | Backup follows general Storage durability/accounting | Frozen roadmap |
-| DEC-041 | Large Messenger attachments are deferred until Object Storage exists | Superseded by v0.0.1 |
+| DEC-039 | General Object Storage follows Email v1 | Superseded by DEC-173 |
+| DEC-040 | Backup follows general Storage durability/accounting | Updated by DEC-177; Backup is post-Beta |
+| DEC-041 | Large Messenger attachments are deferred until Object Storage exists | Superseded by DEC-173 |
 | DEC-042 | Advanced Messenger/group features come after core Messenger and Backup | Superseded by v0.0.1 |
 | DEC-043 | Project rename/copyright migration is an explicit audited pass | Planned |
 | DEC-044 | Existing Bitcoin/third-party copyright notices are preserved | Frozen |
@@ -133,8 +133,8 @@
 | DEC-129 | current state stores compact MailMarker data, not full email ciphertext | Superseded by v0.0.1 |
 | DEC-130 | v1 has no Email Relay, Mailbox Store or ServiceNodeRegistry | Frozen v0.13 |
 | DEC-131 | recipient availability is not required; receiving occurs through normal state/block synchronization | Frozen v0.13 |
-| DEC-132 | v1 Email is text-only; attachments are forbidden until Object Storage exists | Frozen v0.13 |
-| DEC-133 | after Object Storage, encrypted mail body/attachments move to Store and MailTx carries content commitments/references | Frozen direction |
+| DEC-132 | Initial Mail profile is text-only; attachments are disabled until Store exists | Frozen initial profile; Beta extension required by DEC-173 |
+| DEC-133 | after Object Storage, encrypted mail body/attachments move to Store and MailTx carries content commitments/references | Updated by DEC-175 |
 | DEC-134 | v1 recurrent fee split is 75% Validators / 25% Onboarding | Frozen v0.13 |
 | DEC-135 | v1 Fee Router uses exact 4-CYBOU batches: 3 Security / 1 Onboarding | Frozen v0.13 |
 | DEC-136 | no rewarded generic service-node role exists before Object Storage | Frozen v0.13 |
@@ -143,7 +143,7 @@
 | DEC-139 | Permanent per-MailTx consensus-state MailMarker is rejected | Frozen v0.0.1 |
 | DEC-140 | MailTx existence/authenticity is proven by typed operation + block inclusion + BFT finality, not permanent bounded mail-validation state | Frozen v0.0.1 |
 | DEC-141 | Before Store, active validators retain canonical historical MailTx bodies required for retrieval | Frozen v0.0.1 |
-| DEC-142 | Broad mass-scale Email is gated on Object Storage or equivalent durable content layer | Frozen v0.0.1 |
+| DEC-142 | Broad mass-scale Email is gated on Object Storage or equivalent durable content layer | Updated by DEC-173; Store is already required for Beta |
 | DEC-143 | MailTx is a first-class CYBOU protocol operation, not OP_RETURN/Bitcoin Script application data | Frozen v0.0.1 |
 | DEC-144 | MailTx fees are deterministic and size-aware; strict max serialized MailTx size required | Frozen v0.0.1 |
 | DEC-145 | Priority fee / fee bidding is disabled in v1 | Frozen v0.0.1 |
@@ -174,3 +174,9 @@
 | DEC-170 | Name claims require finalized commit, network-bound work, and reveal; first valid finalized reveal wins | Frozen V2 target; bounds pending |
 | DEC-171 | Save and verify encrypted recovery vault before AccountCreate broadcast; create and restore are equal desktop entry paths | Frozen V2 target |
 | DEC-172 | Integrate versioned Identity V2 authorization and names, then perform one intentional disposable CYBOU-DEV reset | Frozen migration direction |
+| DEC-173 | CYBOU Beta requires Object Storage-backed encrypted Mail attachments; text-only DEV/Alpha is transitional and does not satisfy Beta | Frozen product scope |
+| DEC-174 | Initial Mail profile remains one-recipient, text-only, and attachment-free for DEV/Alpha integration | Frozen initial profile |
+| DEC-175 | Beta attachment bytes stay off-chain/in consensus state; MailTx carries only required commitments/references and manifest/content remain E2E protected | Frozen product/security boundary; wire fields pending separate protocol review |
+| DEC-176 | Storage providers receive ciphertext only; attachment filename, MIME, path, subject, and content keys remain private | Frozen product/security boundary |
+| DEC-177 | Backup and Drive are post-Beta applications; Backup is included in integrated Email + Storage + Backup onboarding-budget economics | Frozen product scope; economics remain separately calibrated |
+| DEC-178 | Beta Storage readiness includes chunking, distributed placement, leases, audits, repair, retrieval, and accounting; operational parameters are not set by DEC-173 | Frozen capability gate; parameters pending |

@@ -388,9 +388,11 @@ Network-confirmed
 A `Security details` panel may show cryptographic/evidence information for a
 user who explicitly asks for it.
 
-Attachments, when Storage is available, should be presented as ordinary
-attachments. The user should not have to understand chunks, CIDs, redundancy,
-providers, or placement to attach and receive a file.
+Beta Mail attachments are a required product capability and should be
+presented as ordinary attachments when the Beta Storage path is live. The user
+should not have to understand chunks, CIDs, redundancy, providers, or placement
+to attach and receive a file. The initial DEV/Alpha profile may keep attachment
+controls disabled. Backup is post-Beta.
 
 ## 10. Wallet experience
 

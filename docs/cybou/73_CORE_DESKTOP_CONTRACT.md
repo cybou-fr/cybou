@@ -48,8 +48,9 @@ The current desktop opens native CYBOU state, polls the DEV bootstrap
 endpoint for finalized blocks, and reports verified height/validator count.
 The bootstrap address supplies transport location, not consensus trust.
 The identity service submits AccountCreate remotely and waits for the
-verified account state before reporting `Active`. Email, Storage, and Backup
-pages remain capability-gated UI until their network services are live.
+verified account state before reporting `Active`. Email and Storage pages
+remain capability-gated until their network services are live. Storage is a
+Beta readiness dependency for Mail attachments; Backup remains post-Beta.
 
 ## Adapter surface (what core calls)
 
@@ -82,8 +83,8 @@ on the node, not when it is planned:
 account_creation   node accepts AccountCreateOp + AccountCreationWorkV1
 payments           PaymentOpV1 processing wired
 email              MailOp/MailTx processing wired
-storage            Object Storage placement wired
-backup             Backup service wired
+    storage            Object Storage placement, retrieval and Beta durability path wired
+    backup             Backup service wired (post-Beta)
 ```
 
 The GUI gates every mutating action on the matching flag plus

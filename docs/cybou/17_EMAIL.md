@@ -5,11 +5,15 @@ compact discovery filters, and evidence verification exist in core. The
 complete encrypted send/receive lifecycle below and local Inbox/Sent indexes
 are not operational yet. The Qt Email page is capability-gated.
 
+Product scope: the initial DEV/Alpha profile below remains text-only. Beta Mail
+requires encrypted Store-backed attachments and is not complete until the
+Storage, manifest, retrieval, and durability path passes `81_BETA_PRODUCT_SCOPE.md`.
+
 CYBOU Email is native E2E encrypted, signed, consensus-registered email.
 
 It is not a realtime messenger and not an SMTP/IMAP mailbox service.
 
-## v1
+## Initial DEV/Alpha profile
 
 ```text
 text only
@@ -57,7 +61,7 @@ Recipient online presence is not required.
 
 Before Object Storage, validator archival retention preserves historical encrypted MailTx bodies during the controlled deployment phase.
 
-## v1 large-content boundary
+## Initial profile large-content boundary
 
 MailTx has:
 
@@ -68,17 +72,20 @@ size-aware deterministic integer fee
 
 Exact byte tiers are benchmarked before freeze.
 
-Attachments are disabled until Store.
+Attachments remain disabled in the initial profile until Store is operational.
+This does not make text-only mail sufficient for Beta.
 
-## Future Store
+## Beta Store boundary
 
 ```text
 Blockchain:
     MailTx registration / commitment / finality
 
 Store:
-    encrypted body
-    encrypted attachments
+    opaque encrypted message/attachment objects and manifest
+
+MailTx:
+    commitment and opaque object reference; never attachment bytes
 
 Client:
     decrypted local mailbox

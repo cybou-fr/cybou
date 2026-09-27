@@ -6,8 +6,9 @@ bootstrap authority, and submits AccountCreate operations. The Email,
 Storage, Backup, and full P2P paths in the diagram are not yet connected
 end to end. See `26_IMPLEMENTATION_STATUS.md` for the code boundary.
 
-Identity is the platform primitive. Email is the first product built on that
-identity; Storage, Backup and Drive remain gated later services.
+Identity is the platform primitive. Email is the first user-facing product;
+Beta Email requires Object Storage-backed encrypted attachments. Backup and
+Drive are post-Beta applications. See `81_BETA_PRODUCT_SCOPE.md`.
 
 ## UX invariant
 
@@ -31,9 +32,9 @@ cybou.exe
     ├── BFT Consensus
     ├── P2P
     ├── Crypto
-    ├── Object Storage later
-    ├── Backup later
-    ├── Drive later
+    ├── Object Storage (Beta Mail dependency)
+    ├── Backup (post-Beta)
+    ├── Drive (post-Beta)
     └── Persistence / Lifecycle
 ```
 
@@ -47,8 +48,12 @@ CYBOU Email UI
     -> ordinary CYBOU P2P propagation
     -> BFT finality
     -> bounded mail-validation state
+    -> encrypted manifest/object reference
+    -> CYBOU Object Storage for attachment bytes
 ```
 
+Attachment bytes stay out of chain/state. Store holds opaque encrypted objects;
+the recipient retrieves and decrypts locally, even if offline at send time.
 There is no Email-specific relay/mailbox layer.
 
 ## Commercial operator vs network runtime

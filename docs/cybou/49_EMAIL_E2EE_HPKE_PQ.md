@@ -150,22 +150,28 @@ Static HPKE receiver keys alone do not imply Signal-style post-compromise securi
 
 Do not claim forward secrecy or post-compromise security until the exact rotating/prekey design exists and is reviewed.
 
-## Future Object Storage
+## Beta Object Storage and attachments
 
-When CYBOU Store exists:
+The initial DEV/Alpha profile may carry bounded encrypted text in MailTx. Beta
+Mail requires CYBOU Store for encrypted attachments and uses this boundary:
 
 ```text
 ProtectedMail
--> encrypted object / manifest
--> content_root
+-> encrypted message and attachment manifest/object(s)
+-> content commitment and opaque reference
 
 MailTx
--> content_root
+-> content commitment and opaque Store reference
 -> key capsules / required crypto metadata
 -> sender authentication
 ```
 
-The same E2E rule remains: Store sees ciphertext only.
+Attachment bytes never enter the chain or consensus state. The encrypted
+manifest contains filenames, MIME types, and object details; Store sees
+ciphertext only. The recipient can retrieve after coming online and verifies
+the commitment before local decryption. Do not call the Beta Mail path complete
+until the Storage durability and retrieval gates in `81_BETA_PRODUCT_SCOPE.md`
+pass.
 
 
 ## Content commitment

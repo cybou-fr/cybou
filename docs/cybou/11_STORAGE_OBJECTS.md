@@ -1,8 +1,10 @@
 # 11 — Distributed storage object model
 
-Implementation status: this is a target protocol design. The Qt desktop has
-a capability-gated Storage page, but distributed object placement, retrieval,
-durability proofs, and accounting are not operational in the DEV runtime.
+Implementation status: this is a Beta-required target protocol design, not an
+operational service. The Qt desktop has a capability-gated Storage page, but
+distributed object placement, retrieval, durability proofs, repair, and
+accounting are not operational in the DEV runtime. Beta Mail cannot be declared
+ready until the required Store path is live. See `81_BETA_PRODUCT_SCOPE.md`.
 
 CYBOU storage is a cooperative object network, not a host-price marketplace.
 
@@ -25,15 +27,16 @@ Application semantics must be encrypted before storage.
 ```text
 source data
     -> optional compression
-    -> chunking
+    -> bounded chunking
     -> padding policy
-    -> encryption
+    -> client-side encryption
     -> erasure coding
     -> opaque shards
     -> peer placement
+    -> lease / audit / repair / retrieval
 ```
 
-Compression precedes encryption.
+Compression precedes encryption. Storage providers receive ciphertext only.
 
 ## Object identifiers
 
@@ -71,25 +74,31 @@ A storage peer must not receive clear:
 
 Minimum routing/lease metadata is defined separately and minimized.
 
+## Beta Mail integration
 
-## Email integration
-
-Attachments do not exist in CYBOU Email before Object Storage.
-
-When Store becomes production-ready, Email migrates from:
+The initial DEV/Alpha Mail profile may remain text-only. Beta Mail requires
+Storage-backed encrypted attachments and uses this boundary:
 
 ```text
-encrypted text ciphertext in MailTx
+Client:
+    encrypts the message, attachment manifest, and attachment bytes
+    uploads ciphertext objects and verifies retrieval
+
+Store:
+    retains opaque encrypted objects/shards
+    performs placement, leases, audits, repair, and retrieval
+
+MailTx / BFT / state:
+    registers the required content commitment and opaque reference
+    never contains attachment bytes
+
+Recipient client:
+    retrieves after sync, verifies, and decrypts locally
 ```
 
-to:
-
-```text
-encrypted mail object in Store
-+
-content root/object reference in MailTx
-```
-
-Attachments are encrypted Store objects referenced by an encrypted mail manifest.
-
-The blockchain/state remains the registration/finality layer, not the bulk byte-storage layer.
+The manifest containing filenames, MIME types, object keys and attachment
+metadata is E2E encrypted. Providers receive ciphertext only. Exact chunk
+sizes, erasure profile, replication, leases, audit cadence, repair deadlines,
+and accounting parameters remain open freeze points; product scope does not
+set their values. Backup and Drive are post-Beta applications of this same
+Storage layer.

@@ -22,14 +22,14 @@ BFT registration/finality
 full-node verification
 recipient can be offline
 hybrid PQ recovery and device authorization
-future encrypted Object Storage
+encrypted Object Storage-backed Mail attachments in Beta
 ```
 
 ## Distinction
 
 Traditional email systems center SMTP/IMAP servers and provider mailboxes.
 
-CYBOU v1 centers:
+The initial DEV/Alpha profile centers:
 
 ```text
 MailTx
@@ -37,6 +37,8 @@ MailTx
 consensus finality
 +
 compact bounded mail-validation state
++
+opaque encrypted attachment objects in CYBOU Store
 +
 local decrypted mailbox
 ```

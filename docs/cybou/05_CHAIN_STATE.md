@@ -48,7 +48,7 @@ ChainState
 ├── mail rate/account counters
 ├── fee/reward pools
 ├── protocol parameters
-└── storage-accounting state later
+└── bounded aggregate storage-accounting state for Beta Store
 ```
 
 The inherited Bitcoin UTXO/Script ledger remains transitional bootstrap code,
@@ -116,16 +116,18 @@ path. Recovery from database corruption or operational failure belongs to
 verified state sync, backup and disaster-recovery procedures, not consensus
 reorganization.
 
-## Future Store
+## Beta Store boundary
 
-After Object Storage:
+For Beta Mail:
 
 ```text
 MailTx
 -> content commitment / object reference
 
 Store
--> encrypted body + attachments
+-> opaque encrypted message/attachment objects and manifest
 ```
 
-State remains bounded and does not become the mailbox database.
+MailTx carries commitments/references, never attachment bytes. State remains
+bounded and does not become the mailbox database. Exact aggregate accounting
+state and provider proofs remain protocol freeze items.

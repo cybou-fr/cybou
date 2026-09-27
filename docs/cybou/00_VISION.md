@@ -2,9 +2,11 @@
 
 CYBOU is a commercially operated European sovereign identity and communication network, designed in France.
 
-Identity is the platform primitive. CYBOU Email is the first complete product.
-Object Storage, Backup and Drive are later sovereign services, gated on
-demonstrated product usage and operational maturity.
+Identity is the platform primitive. CYBOU Email is the first user-facing
+product. Beta Email includes Object Storage-backed encrypted attachments;
+Object Storage is therefore part of Beta readiness. Backup and Drive are later
+applications of that Storage layer, gated on demonstrated product usage and
+operational maturity. See `81_BETA_PRODUCT_SCOPE.md`.
 
 ## Product thesis
 
@@ -58,18 +60,17 @@ CYBOU foundation
     BFT finality
     native economic layer
 
-First product
-    CYBOU Email
+First user-facing product / Beta requirement
+    CYBOU Email + Object Storage-backed encrypted attachments
 
-Later sovereign services
-    Object Storage
+Post-Beta applications
     Backup
     Drive
 ```
 
-CYBOU does not attempt to launch all services at once. Identity and CYBOU
-Email form the first complete product. Storage, Backup and Drive are gated on
-demonstrated real-world usage and operational maturity.
+CYBOU does not attempt to launch all services at once. Identity and
+Storage-backed CYBOU Email form the Beta product. Backup and Drive follow Beta
+after demonstrated need and operational maturity.
 
 ## Technology trajectory
 
@@ -83,9 +84,9 @@ Bitcoin-derived C++ full-node base
     -> bounded-history state sync
     -> BFT explicit finality
     -> independent validators
-    -> cooperative encrypted Object Storage, after product gates
-    -> Backup
-    -> Drive
+    -> cooperative encrypted Object Storage for Beta Mail attachments
+    -> Backup (post-Beta)
+    -> Drive (post-Beta)
 ```
 
 ## Email-first

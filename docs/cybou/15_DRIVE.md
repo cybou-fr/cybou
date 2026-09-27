@@ -1,11 +1,11 @@
 # 15 — Drive service
 
-Implementation status: Drive is a future service. No operational Drive
+Implementation status: Drive is a post-Beta service. No operational Drive
 client or distributed object-storage backend exists in the DEV runtime.
 
 CYBOU Drive is a user-facing filesystem view over encrypted manifests and object storage.
 
-Drive comes after Backup.
+Drive comes after Beta and Backup.
 
 ## Logical model
 

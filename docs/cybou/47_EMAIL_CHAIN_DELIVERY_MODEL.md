@@ -34,16 +34,22 @@ Desktop full nodes may use bounded pruning.
 
 This is a temporary controlled-scale rule.
 
-## Scale transition
+## Beta Mail with Object Storage
 
-Broad mass-scale native Email is gated on CYBOU Object Storage.
+Object Storage is a Beta dependency, not only a later mass-scale gate. The
+initial DEV/Alpha text-only path can use pre-Store history retention; it does
+not satisfy Beta readiness.
 
 After Store:
 
 ```text
 recipient
 -> finds MailTx commitment
--> retrieves encrypted object from Store
+-> retrieves the encrypted manifest and attachment object(s) from Store
 -> verifies root/commitment
 -> decrypts locally
 ```
+
+Attachment bytes are not placed in blocks or consensus state. Storage
+availability, placement, leases, audits, and repair must meet the Beta gates in
+`81_BETA_PRODUCT_SCOPE.md`.

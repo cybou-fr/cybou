@@ -1,5 +1,9 @@
 # 64 — Pre-Store Mail retention contract
 
+Status: transitional DEV/Alpha retention only. It is not the Beta Mail
+architecture. Beta requires Object Storage-backed encrypted attachments and
+durable retrieval under `81_BETA_PRODUCT_SCOPE.md`.
+
 Before CYBOU Object Storage exists, encrypted MailTx ciphertext lives in block/history data.
 
 Therefore CYBOU needs an explicit temporary retention contract.
@@ -37,24 +41,21 @@ Validator archival retention avoids that failure during the controlled pre-Store
 
 ## Scale gate
 
-Pre-Store Email is suitable for:
+Pre-Store Email is suitable only for:
 
 ```text
-development
-controlled alpha/beta
-French organizational pilot
-small controlled production
+development and controlled Alpha integration
 ```
 
 It is NOT the architecture for unrestricted mass-scale Email.
 
-Before broad-scale growth:
+Before Beta:
 
 ```text
-CYBOU Object Storage must be production-ready
+CYBOU Object Storage must meet the Beta readiness gates
 ```
 
-or an equivalent durable encrypted content layer must exist.
+and support encrypted Mail attachments, offline retrieval, audit, and repair.
 
 ## Retention transition to Store
 

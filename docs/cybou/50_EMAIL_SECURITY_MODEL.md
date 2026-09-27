@@ -32,7 +32,10 @@ Avoid placing human-readable sender/recipient names and plaintext subject inform
 
 ### Malformed encrypted content
 
-Text-only v1 sharply reduces parser attack surface.
+The initial text-only DEV/Alpha profile sharply reduces parser attack surface.
+Beta attachments expand that surface and require bounded type/size handling,
+safe local rendering, and no active-content execution; attachment contents
+remain E2E encrypted and are never scanned in plaintext by Store providers.
 
 Do not support active HTML.
 

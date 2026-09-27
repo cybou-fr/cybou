@@ -39,7 +39,8 @@ The programme targets relatively mature strategic technology; current criteria d
 
 Implication:
 
-> architecture alone is not enough; reach a working CYBOU Email pilot first.
+> architecture alone is not enough; demonstrate a working Beta Mail flow with
+> Store-backed encrypted attachments and later retrieval by an offline recipient.
 
 ## ANSSI / NCC-FR
 
@@ -83,7 +84,7 @@ sovereign full-node consensus-registered mail architecture
 identity without external provider
 consensus registration with offline recipient synchronization
 crypto-agile PQ migration
-later cooperative storage
+cooperative Object Storage integrated with Beta Mail attachments
 ```
 
 ## Funding readiness gate
@@ -92,6 +93,7 @@ Do not spend major founder time on grants before all are true:
 
 ```text
 [ ] working CYBOU Email prototype
+[ ] Store-backed encrypted attachment upload, offline retrieval and repair evidence
 [ ] multi-node MailTx finality + offline recipient synchronization
 [ ] clear architecture/IP/innovation statement
 [ ] security roadmap

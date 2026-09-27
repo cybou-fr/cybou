@@ -2,6 +2,11 @@
 
 CYBOU is experimental. The canonical product target uses hybrid post-quantum authorization, explicit BFT finality, and one verified state shared by Identity, Email, Wallet, Storage, and Backup. The standalone DEV node and native Qt desktop use the canonical CYBOU runtime; the desktop remains an observer role, with opt-in multi-peer CYP2 networking. A development reset will follow the integration of identity, names, operations, blocks, and persistence.
 
+Beta product scope requires Object Storage-backed encrypted Mail attachments;
+neither distributed Store nor the end-to-end attachment flow is implemented.
+The current text-only Mail profile is limited to DEV/Alpha integration. See
+`81_BETA_PRODUCT_SCOPE.md` for Beta readiness criteria.
+
 ## Implemented core components
 
 - Random stable AccountID, independent of mnemonic and keys.
@@ -34,7 +39,7 @@ CYBOU is experimental. The canonical product target uses hybrid post-quantum aut
 - Finish Qt wallet and Mail flows against the canonical identity and encryption profiles.
 - Run independent validators with durable crash recovery and verify finality under production topology.
 - Finish operator, release, and treasury signing integration under the PQ key policy.
-- Implement distributed Object Storage and Backup before large attachments and mass-scale Mail.
+- Implement distributed Object Storage and encrypted Mail attachments before Beta; Backup is post-Beta.
 - Remove obsolete runtime paths, names, files, and documentation before the DEV reset. No compatibility decoder or automatic state/vault import is planned.
 
 ## Current network boundary

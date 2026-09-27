@@ -2,6 +2,10 @@
 
 CYBOU's first user product is native Email, but it must not be implemented as a messenger with an email-shaped UI.
 
+Email-first defines product priority, not a text-only Beta scope. The initial
+DEV/Alpha profile is text-only; complete Beta Email requires Object
+Storage-backed encrypted attachments under `81_BETA_PRODUCT_SCOPE.md`.
+
 ## Product kernel
 
 ```text

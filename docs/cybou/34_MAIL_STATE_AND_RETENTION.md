@@ -13,7 +13,7 @@ and must NOT contain one permanent MailMarker per email.
 
 The chain itself, together with block commitments and BFT finality, proves that a MailTx existed.
 
-## v1 before Object Storage
+## Initial DEV/Alpha profile before Object Storage
 
 ```text
 Block/history data:
@@ -90,9 +90,9 @@ If ciphertext bytes are unavailable, they cannot be reconstructed from a hash.
 
 That is why pre-Store retention is defined separately.
 
-## Future Object Storage
+## Beta Object Storage
 
-After Store:
+For Beta Mail:
 
 ```text
 Blockchain:
@@ -102,10 +102,11 @@ Current state:
     no permanent per-mail object requirement
 
 CYBOU Store:
-    encrypted body + attachments
+    opaque encrypted message/attachment objects and manifest
 
 Local client:
     mailbox index/cache
 ```
 
-This is the long-term scalable architecture.
+Attachment bytes never enter block/history data or current consensus state.
+This is the required Beta architecture; see `81_BETA_PRODUCT_SCOPE.md`.

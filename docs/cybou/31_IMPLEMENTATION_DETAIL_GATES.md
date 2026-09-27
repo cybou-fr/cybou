@@ -12,7 +12,7 @@ I — static/operator-approved BFT safety
 J — Proof of Trust + service limits  
 K — fixed-supply integer economics  
 L — validator rewards  
-M — Object Storage later
+M — Object Storage Core (Beta dependency)
 
 ## A — exact upstream baseline
 
@@ -98,4 +98,6 @@ Carry integer remainder forward.
 
 ## M — Object Storage
 
-Attachments remain disabled until Store passes its own encryption, proof, repair and accounting gates.
+Attachments remain disabled in DEV/Alpha until Store passes its encryption,
+commitment, durability, repair, retrieval, and accounting gates. Store-backed
+encrypted attachments are required for Beta; see `81_BETA_PRODUCT_SCOPE.md`.
