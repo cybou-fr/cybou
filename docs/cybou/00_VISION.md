@@ -10,6 +10,14 @@ operational maturity. See `81_BETA_PRODUCT_SCOPE.md`.
 
 ## Product thesis
 
+The product benchmark is familiar productivity UX: Mail should be immediately
+understandable to a Gmail user and Files to a Google Drive user, while CYBOU
+keeps identity user-owned, Mail end-to-end protected, network state independently
+verifiable, and file content encrypted across distributed storage. These are
+interaction references, not visual or branding templates. The concrete
+contracts live in `82_MAIL_UI_UX.md`, `83_STORAGE_UI_UX.md`, and
+`84_PRODUCT_DESIGN_SYSTEM.md`.
+
 A CYBOU user owns:
 
 ```text

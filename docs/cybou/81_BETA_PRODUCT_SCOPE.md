@@ -2,7 +2,7 @@
 
 Status: canonical product-scope decision. This document defines Beta readiness;
 it does not claim that the required services are implemented or authorize a
-consensus or wire-format change. See DEC-173 through DEC-178 in
+consensus or wire-format change. See DEC-173 through DEC-184 in
 `24_DECISIONS.md`.
 
 ## Product boundary
@@ -102,10 +102,25 @@ budget must be sized from integrated Email, Storage, and Backup economics even
 though Backup itself remains a post-Beta product application. Drive is not part
 of that required calibration unless a later decision adds it.
 
+## Product-experience gate
+
+Beta readiness includes the user-facing product, not only protocol capability.
+Mail and Files must satisfy the canonical interaction contracts in
+`82_MAIL_UI_UX.md`, `83_STORAGE_UI_UX.md`, and `84_PRODUCT_DESIGN_SYSTEM.md`.
+The end-to-end scenarios in `85_BETA_UI_ACCEPTANCE.md` are part of the Beta
+product gate. Gmail and Google Drive are ergonomic references, not visual
+templates or endorsements of centralized custody. CYBOU preserves familiar
+workflows while keeping identity user-owned, Mail end-to-end protected, and
+file content encrypted in distributed Storage.
+
 ## Document authority
 
 `81_BETA_PRODUCT_SCOPE.md` owns the Beta product boundary. `11_STORAGE_OBJECTS.md`
 owns Storage architecture; `49_EMAIL_E2EE_HPKE_PQ.md` owns Mail confidentiality;
 `22_ROADMAP.md` owns milestone order; `24_DECISIONS.md` records frozen product
-decisions. Older text-only or Storage-later plans remain valid only for the
-initial DEV/Alpha profile or as historical rationale, as marked in those files.
+decisions. `82_MAIL_UI_UX.md` owns normal Mail interaction and state
+presentation; `83_STORAGE_UI_UX.md` owns Files/Storage interaction;
+`84_PRODUCT_DESIGN_SYSTEM.md` owns shared visual and status vocabulary;
+`85_BETA_UI_ACCEPTANCE.md` owns end-to-end product acceptance. Older text-only
+or Storage-later plans remain valid only for the initial DEV/Alpha profile or
+as historical rationale, as marked in those files.

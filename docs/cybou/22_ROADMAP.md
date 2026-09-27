@@ -47,6 +47,13 @@ integrity verification, provider audits, repair, recovery after interruption,
 and stable accounting. The complete gates are in
 `81_BETA_PRODUCT_SCOPE.md`.
 
+Product readiness also includes the user-facing experience, not only backend
+PUT/GET and MailTx integration. The Beta client must satisfy the Mail, Files,
+shared design-system, and end-to-end acceptance contracts in docs 82–85:
+familiar navigation, asynchronous progress and error states, Storage-backed
+attachment flows, responsive desktop layouts, and progressive disclosure of
+protocol detail.
+
 ### Gate C - Controlled Beta pilot
 
 Run a controlled pilot with 20–100 real users for 8–12 weeks and four active
@@ -150,6 +157,9 @@ No priority fee.
 - bounded chunking and verifiable object commitments;
 - placement, retrieval, leases, audits, repair and accounting;
 - reliability and interruption tests;
+- Files Beta UI: My Files, Recent, Starred, Trash, upload/download, folders,
+  rename/move, progress, durability state, and advanced diagnostics;
+- asynchronous transfer model; no network or Storage work on the Qt event loop;
 - freeze operational/economic parameters before Beta.
 
 ## v0.2.4 — CYBOU Email Beta + encrypted attachments
@@ -157,6 +167,11 @@ No priority fee.
 - encrypted attachment manifest and Store-backed objects;
 - MailTx references/commits to content; attachment bytes stay off-chain;
 - offline recipient retrieval, verification and local decryption;
+- Gmail-familiar Inbox/Compose/reader/search under CYBOU visual identity;
+- attachment protection progress and a minimum-durability Send gate;
+- Download and Save to Files integration;
+- delivery uncertainty distinct from rejection;
+- pass the Mail and attachment scenarios in `85_BETA_UI_ACCEPTANCE.md`;
 - evidence and historical sender authorization integrated.
 
 ## v0.2.5 — French Beta readiness

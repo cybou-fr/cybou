@@ -367,10 +367,12 @@ Normal states:
 
 ```text
 Draft
+Preparing
 Sending
+Waiting for confirmation
+Checking delivery status
 Sent
-Confirmed
-Failed — Retry
+Needs attention
 ```
 
 A recipient is entered as `name.cybou`. Encryption, hybrid signatures,
@@ -387,6 +389,14 @@ Network-confirmed
 
 A `Security details` panel may show cryptographic/evidence information for a
 user who explicitly asks for it.
+
+`delivery_uncertain` is shown as `Checking delivery status`, never as rejection.
+Retry or replacement follows reconciliation of the original operation. The
+page-specific state contract is in `82_MAIL_UI_UX.md`.
+
+`82_MAIL_UI_UX.md` owns the concrete Beta Inbox/Compose/reader/search,
+attachment-progress, delivery-uncertain, responsive, and keyboard interaction
+contract.
 
 Beta Mail attachments are a required product capability and should be
 presented as ordinary attachments when the Beta Storage path is live. The user
@@ -458,6 +468,11 @@ Uploading
 Repairing protection
 Unavailable — retrying
 ```
+
+`83_STORAGE_UI_UX.md` owns the concrete Beta Files navigation, upload/download,
+folder, progress, durability, and Mail attachment integration contract. Google
+Drive is an ergonomic reference only; provider-visible metadata and centralized
+account semantics do not carry over.
 
 ## 12. Backup
 
@@ -758,6 +773,9 @@ progressive-disclosure rules**.
 `73_CORE_DESKTOP_CONTRACT.md` owns the truth boundary between verified core
 state and GUI state.
 `02_ARCHITECTURE.md` owns system architecture.
+`84_PRODUCT_DESIGN_SYSTEM.md` owns shared navigation, status vocabulary,
+responsive behavior, accessibility, and asynchronous interaction rules.
+`85_BETA_UI_ACCEPTANCE.md` owns end-to-end Beta UI acceptance.
 
 If a page-specific document exposes protocol detail that this document marks as
 Advanced-only, the protocol behavior remains unchanged but the default UI must

@@ -44,6 +44,9 @@ consensus registration/finality
 cryptographic proof of origin/integrity
 recipient can be offline
 client-controlled keys
+familiar Mail and Files workflows without a central provider
+hybrid-PQ end-to-end protection
+client-encrypted distributed attachment/file storage
 ```
 
 Do not lead with coin/staking/UTXO mechanics.
@@ -89,6 +92,11 @@ This journey is an architecture acceptance test, not only a marketing story.
 - device revocation success;
 - support burden;
 - user retention.
+- task-completion success for Compose, attachment send, offline receive,
+  Save to Files, file upload/download, and recovery without operator guidance;
+- UI responsiveness during network, cryptographic, and Storage work;
+- share of pilot users who complete the end-to-end Mail/Files flow without
+  protocol education.
 
 Pilot success is repeated exchange of mail, recovery, multi-device use and
 continued usage, not registration count alone.

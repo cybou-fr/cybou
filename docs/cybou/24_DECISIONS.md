@@ -180,3 +180,9 @@
 | DEC-176 | Storage providers receive ciphertext only; attachment filename, MIME, path, subject, and content keys remain private | Frozen product/security boundary |
 | DEC-177 | Backup and Drive are post-Beta applications; Backup is included in integrated Email + Storage + Backup onboarding-budget economics | Frozen product scope; economics remain separately calibrated |
 | DEC-178 | Beta Storage readiness includes chunking, distributed placement, leases, audits, repair, retrieval, and accounting; operational parameters are not set by DEC-173 | Frozen capability gate; parameters pending |
+| DEC-179 | Gmail and Google Drive are interaction references for Mail and Files; CYBOU does not copy their branding or centralized-provider model | Frozen product UX direction |
+| DEC-180 | Normal CYBOU UI presents human actions and outcomes; protocol, BFT, PQ, and Storage mechanics use progressive disclosure | Frozen product UX direction |
+| DEC-181 | Mail containing attachments is not submitted through the normal Send path until each required attachment reaches the protocol-defined minimum Storage durability state | Frozen Beta UX/security boundary |
+| DEC-182 | `delivery_uncertain` is distinct from rejection; retry or replacement requires reconciling the original operation and nonce reservation | Frozen cross-service correctness direction |
+| DEC-183 | Mail and Files share the protected Object Storage layer; Save to Files should reuse an existing protected object/reference when ownership, privacy, and retention rules allow | Frozen Beta integration direction |
+| DEC-184 | Network, cryptographic, and Storage work must not block the Qt event loop; pages issue asynchronous requests and render core/model state | Frozen desktop UX direction |

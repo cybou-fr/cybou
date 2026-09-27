@@ -112,3 +112,19 @@
   before voting at the next height.
 - A new account with the DEV 6,000 SystemBalance bonus retains the baseline
   25 MailTx limit per epoch.
+
+## Beta product UI acceptance
+
+Run the end-to-end scenarios in `85_BETA_UI_ACCEPTANCE.md` in addition to the
+protocol and service checks above. The UI gate includes:
+
+```text
+[ ] clean-machine create and restore without developer settings
+[ ] Mail and Files usable without protocol terminology
+[ ] attach -> Securing -> Protected -> Send, gated on required durability
+[ ] offline recipient later retrieves and decrypts the attachment
+[ ] Save to Files avoids unnecessary re-upload when safe to reuse
+[ ] delivery uncertainty is not shown as rejection
+[ ] Qt remains responsive during network/crypto/Storage work
+[ ] layouts pass 1040/1280/1600/1920 widths and 125/150% DPI
+```

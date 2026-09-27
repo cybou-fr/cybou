@@ -83,8 +83,8 @@ on the node, not when it is planned:
 account_creation   node accepts AccountCreateOp + AccountCreationWorkV1
 payments           PaymentOpV1 processing wired
 email              MailOp/MailTx processing wired
-    storage            Object Storage placement, retrieval and Beta durability path wired
-    backup             Backup service wired (post-Beta)
+storage            Object Storage placement, retrieval and Beta durability path wired
+backup             Backup service wired (post-Beta)
 ```
 
 The GUI gates every mutating action on the matching flag plus
@@ -103,6 +103,28 @@ when disabled.
   sees plaintext names or paths.
 - Backup sets report size, time and verification state; restore is bound
   to the local identity keys.
+
+## Mail / Files asynchronous state contract
+
+The following is the target Beta UI contract, not a claim that the corresponding
+Mail or Storage paths are live. Those capabilities remain disabled until core
+reports them as implemented. Mail and Files must not run long network,
+cryptographic, history, or Storage work on the Qt event loop. Controllers and
+service workers publish model state such as:
+
+```text
+Preparing
+Uploading / Downloading + progress
+Securing
+WaitingForConfirmation
+DeliveryUncertain / CheckingStatus
+Protected / Confirmed
+NeedsAttention
+```
+
+Product language is derived from verified core truth. `delivery_uncertain` is
+not rejection. `Protected`, `Sent`, and `Confirmed` are shown only after the
+owning service/core reports the corresponding durability or finality state.
 
 ## Absolute rules for both sides
 
