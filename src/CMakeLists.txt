@@ -58,6 +58,17 @@ if(ENABLE_IPC)
   add_subdirectory(ipc)
 endif()
 
+# CYBOU-owned dependency boundary for consensus-neutral hash-value types.
+# The uint256 implementation is shared with Bitcoin targets, but CYBOU core
+# should not need the Bitcoin consensus library to use it.
+add_library(cybou_base STATIC
+  uint256.cpp
+)
+target_link_libraries(cybou_base
+  PUBLIC
+    bitcoin_util
+)
+
 add_library(bitcoin_consensus STATIC EXCLUDE_FROM_ALL
   arith_uint256.cpp
   consensus/merkle.cpp
@@ -69,13 +80,13 @@ add_library(bitcoin_consensus STATIC EXCLUDE_FROM_ALL
   script/interpreter.cpp
   script/script.cpp
   script/script_error.cpp
-  uint256.cpp
 )
 target_link_libraries(bitcoin_consensus
   PRIVATE
     core_interface
     bitcoin_crypto
     secp256k1
+    cybou_base
 )
 
 # Home for common functionality shared by different executables and libraries.
@@ -172,7 +183,7 @@ add_library(cybou_core STATIC
 )
 target_link_libraries(cybou_core
   PUBLIC
-    bitcoin_consensus
+    cybou_base
     bitcoin_crypto
   PRIVATE
     Boost::headers

@@ -13,6 +13,16 @@ CYBOU sources directly use inherited `uint256`, `CSHA256`, `CSipHasher`,
 Consequently, replacing SHA-256 alone cannot remove the Bitcoin dependency:
 the type and consensus-library dependency must be addressed first.
 
+## Progress
+
+- A `cybou_base` target now owns the `uint256.cpp` object, and
+  `bitcoin_consensus` consumes that target instead of compiling a duplicate.
+- `cybou_core` now links `cybou_base` directly and no longer links
+  `bitcoin_consensus`.
+- This is an initial target-boundary extraction only. The `uint256` header and
+  implementation still use inherited Bitcoin utility APIs, and the target
+  links `bitcoin_util`; this does not yet remove the `bitcoin_crypto` dependency.
+
 The root `CMakeLists.txt` requires OpenSSL 3.5. The active PQ baseline in
 `09_CRYPTO_PQ.md` names X25519 + ML-KEM-768 as the Mail target and explicitly
 prohibits a custom hybrid KEM combiner. Do not change the target to ML-KEM-1024
