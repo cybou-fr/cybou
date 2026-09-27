@@ -19,9 +19,10 @@ be dropped by changing one CMake link line:
   interface reaches `bitcoin_crypto` through `bitcoin_util`.
 - `cybou_node` uses inherited `DataStream`/`SpanReader` serialization for its
   local LevelDB records. Those bytes form the existing local database format.
-- The GCS filter uses inherited stream, FastRange, and Golomb-Rice utilities,
-  plus `CSipHasher`; its encoded bytes are checked against the inherited
-  block-filter implementation.
+- The GCS filter uses inherited FastRange and `CSipHasher`; its CompactSize,
+  bitstream, and Golomb-Rice codec is CYBOU-owned and checked byte-for-byte
+  against the inherited block-filter implementation across element counts
+  including the CompactSize 252/253 boundary.
 
 The actual MinGW link command confirms `bitcoin_util` and `bitcoin_crypto` are
 still in the final CYBOU test executable's link closure. A true removal needs
@@ -66,6 +67,12 @@ compatibility coverage; SipHash remains an additional crypto blocker.
   tags, malformed lengths, and zero plaintext after authentication failure.
   The inherited AEAD API remains only as a test oracle; the prototype's X25519-
   only Mail profile remains disabled and is not the target PQ Mail suite.
+- The GCS implementation now owns its CompactSize count encoding, bitstream,
+  and Golomb-Rice codec instead of calling inherited stream/codec helpers.
+  Compatibility tests compare complete filters against Bitcoin's GCS filter
+  for empty and varied-length elements at counts 0, 1, 2, 17, 252, and 253;
+  malformed and oversized CompactSize counts are rejected. SipHash and
+  FastRange remain inherited and unchanged.
 - SipHash remains on the inherited `CSipHasher` implementation in the GCS
   filter. A local MinGW benchmark on OpenSSL 3.5.2 compared 32-byte elements:
   `CSipHasher` measured 26.11 ns/hash and `EVP_MAC` SipHash measured

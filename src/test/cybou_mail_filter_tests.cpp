@@ -8,6 +8,7 @@
 #include <cybou/bft.h>
 #include <cybou/block.h>
 #include <cybou/block_executor.h>
+#include <cybou/gcs_filter.h>
 #include <cybou/identity_crypto.h>
 #include <cybou/mail_service.h>
 #include <cybou/network_definition.h>
@@ -22,6 +23,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <array>
+#include <ios>
 #include <vector>
 
 namespace {
@@ -203,6 +205,45 @@ BOOST_AUTO_TEST_CASE(mail_gcs_encoding_matches_legacy_blockfilter)
         native_filter.encoded_filter.begin(), native_filter.encoded_filter.end(),
         legacy_filter.GetEncoded().begin(), legacy_filter.GetEncoded().end());
     BOOST_CHECK_EQUAL(native_filter.num_elements, legacy_filter.GetN());
+}
+
+BOOST_AUTO_TEST_CASE(mail_gcs_codec_matches_legacy_across_count_and_element_boundaries)
+{
+    constexpr uint64_t k0{0x0123456789abcdefULL};
+    constexpr uint64_t k1{0xfedcba9876543210ULL};
+    constexpr uint8_t p{19};
+    constexpr uint32_t m{784931};
+    for (const size_t count : {0U, 1U, 2U, 17U, 252U, 253U}) {
+        std::vector<cybou::gcs::Element> elements;
+        GCSFilter::ElementSet legacy_elements;
+        elements.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            cybou::gcs::Element element(i % 4 == 0 ? 0 : i % 4 == 1 ? 1 : i % 4 == 2 ? 8 : 32);
+            for (size_t j = 0; j < element.size(); ++j) {
+                element[j] = static_cast<unsigned char>((i * 37 + j * 19) & 0xff);
+            }
+            if (i != 0) element.push_back(static_cast<unsigned char>(i & 0xff));
+            elements.push_back(element);
+            legacy_elements.emplace(element.begin(), element.end());
+        }
+        const cybou::gcs::Params params{k0, k1, p, m};
+        const auto encoded = cybou::gcs::Build(params, elements);
+        const GCSFilter legacy{{k0, k1, p, m}, legacy_elements};
+        BOOST_CHECK_EQUAL_COLLECTIONS(encoded.begin(), encoded.end(),
+            legacy.GetEncoded().begin(), legacy.GetEncoded().end());
+        BOOST_CHECK_EQUAL(cybou::gcs::ElementCount(params, encoded), legacy.GetN());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(mail_gcs_codec_rejects_noncanonical_or_truncated_count)
+{
+    const cybou::gcs::Params params{0, 0, cybou::GCS_PARAM_P, cybou::GCS_PARAM_M};
+    const std::array<unsigned char, 3> noncanonical{253, 1, 0};
+    const std::array<unsigned char, 1> truncated{253};
+    const std::array<unsigned char, 5> over_limit{254, 1, 0, 0, 2};
+    BOOST_CHECK_THROW(cybou::gcs::ElementCount(params, noncanonical), std::ios_base::failure);
+    BOOST_CHECK_THROW(cybou::gcs::ElementCount(params, truncated), std::ios_base::failure);
+    BOOST_CHECK_THROW(cybou::gcs::ElementCount(params, over_limit), std::ios_base::failure);
 }
 
 BOOST_AUTO_TEST_CASE(recipient_discovery_tag_derivation)
