@@ -164,6 +164,7 @@ add_library(cybou_core STATIC
   cybou/bft.cpp
   cybou/bft_engine.cpp
   cybou/block.cpp
+  cybou/crypto/chacha20_poly1305.cpp
   cybou/crypto/hkdf_sha256.cpp
   cybou/crypto/sha256.cpp
   cybou/evidence.cpp

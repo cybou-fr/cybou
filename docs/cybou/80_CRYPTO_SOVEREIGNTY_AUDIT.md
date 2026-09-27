@@ -6,8 +6,8 @@ consensus hash change or a new cryptographic protocol.
 
 ## Repository state
 
-CYBOU sources still depend on inherited `uint256`, `CSipHasher`,
-`AEADChaCha20Poly1305`, and `memory_cleanse` APIs.
+CYBOU sources still depend on inherited `uint256`, `CSipHasher`, and some
+Bitcoin utility APIs.
 The Bitcoin cryptography dependency therefore remains; migrating SHA-256 does
 not by itself remove it.
 
@@ -34,7 +34,15 @@ not by itself remove it.
   their salt/info bytes. Tests include RFC 5869 test case 1, compare the Mail
   derivation byte-for-byte with the inherited HKDF implementation, and check
   the RFC output-length bound. The inherited HKDF implementation remains only
-  as a test oracle; AEAD migration remains.
+  as a test oracle.
+- The Mail prototype's ChaCha20-Poly1305 calls now use
+  `cybou/crypto/chacha20_poly1305.h`, backed by OpenSSL EVP. The helper preserves
+  RFC 8439 ciphertext-plus-tag layout and rejects malformed buffer sizes; failed
+  authentication clears the plaintext output. Tests check the RFC 8439 vector,
+  byte-for-byte ciphertext/tag parity with the inherited implementation, bad
+  tags, malformed lengths, and zero plaintext after authentication failure.
+  The inherited AEAD API remains only as a test oracle; the prototype's X25519-
+  only Mail profile remains disabled and is not the target PQ Mail suite.
 
 The root `CMakeLists.txt` requires OpenSSL 3.5. The active PQ baseline in
 `09_CRYPTO_PQ.md` names X25519 + ML-KEM-768 as the Mail target and explicitly
@@ -60,9 +68,9 @@ production path. See `16_MAIL_PROTOCOL.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
    operation IDs, block IDs, state roots, network IDs, validator commitments,
    name commitments, and Mail commitments. Keep SHA-256 as the consensus
    function; a provider change is not a hash-suite change.
-4. Migrate AEAD with fixed vectors covering key, nonce, AAD, ciphertext,
-   authentication failure, and malformed lengths. Benchmark SipHash before
-   choosing EVP_MAC for the filter hot path; preserve its exact output.
+4. Benchmark SipHash before choosing EVP_MAC for the filter hot path; preserve
+   its exact output. Review provider policy and failure behavior for the crypto
+   wrappers before widening their use.
 5. Replace inherited secret-cleansing calls through one CYBOU-owned interface,
    then verify there are no direct inherited crypto or cleanse includes under
    `src/cybou` outside the approved wrapper.

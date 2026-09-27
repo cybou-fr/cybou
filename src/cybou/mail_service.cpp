@@ -6,8 +6,8 @@
 #include <cybou/crypto/cleanse.h>
 #include <cybou/crypto/hkdf_sha256.h>
 
-#include <crypto/chacha20poly1305.h>
 #include <cybou/crypto/sha256.h>
+#include <cybou/crypto/chacha20_poly1305.h>
 #include <openssl/rand.h>
 
 #include <algorithm>
@@ -154,11 +154,6 @@ std::optional<std::vector<unsigned char>> EncryptMailPayload(
     }
     crypto::CleanseMemory(shared_secret->data(), shared_secret->size());
 
-    AEADChaCha20Poly1305::Nonce96 nonce96{
-        ReadUint32LE(nonce_buf.data()),
-        ReadUint64LE(nonce_buf.data() + 4)
-    };
-
     const auto plain_serialized = mail.Serialize();
     const uint256 commitment = ComputeMailContentCommitment(salt, plain_serialized);
 
@@ -182,9 +177,18 @@ std::optional<std::vector<unsigned char>> EncryptMailPayload(
     aad.insert(aad.end(), reinterpret_cast<const std::byte*>(commitment.begin()),
                reinterpret_cast<const std::byte*>(commitment.end()));
 
-    std::vector<std::byte> cipher_bytes(to_encrypt.size() + AEADChaCha20Poly1305::EXPANSION);
-    AEADChaCha20Poly1305 aead(std::span<const std::byte>{reinterpret_cast<const std::byte*>(cek.data()), 32});
-    aead.Encrypt(to_encrypt, aad, nonce96, cipher_bytes);
+    std::vector<std::byte> cipher_bytes(to_encrypt.size() + crypto::CHACHA20_POLY1305_TAG_SIZE);
+    const auto key_bytes = std::span<const unsigned char, crypto::CHACHA20_POLY1305_KEY_SIZE>{cek};
+    const auto nonce_bytes = std::span<const unsigned char, crypto::CHACHA20_POLY1305_NONCE_SIZE>{nonce_buf.data(), crypto::CHACHA20_POLY1305_NONCE_SIZE};
+    if (!crypto::ChaCha20Poly1305Encrypt(key_bytes, nonce_bytes,
+            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(aad.data()), aad.size()},
+            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(to_encrypt.data()), to_encrypt.size()},
+            std::span<unsigned char>{reinterpret_cast<unsigned char*>(cipher_bytes.data()), cipher_bytes.size()})) {
+        crypto::CleanseMemory(cek.data(), cek.size());
+        crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
+        crypto::CleanseMemory(to_encrypt.data(), to_encrypt.size());
+        return std::nullopt;
+    }
 
     crypto::CleanseMemory(cek.data(), cek.size());
     crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
@@ -206,7 +210,7 @@ std::optional<std::pair<uint256, ProtectedMail>> DecryptMailPayload(
     const uint256& content_commitment,
     std::span<const unsigned char> ciphertext)
 {
-    if (ciphertext.size() < 1 + 32 + 32 + 81 + AEADChaCha20Poly1305::EXPANSION) {
+    if (ciphertext.size() < 1 + 32 + 32 + 81 + crypto::CHACHA20_POLY1305_TAG_SIZE) {
         return std::nullopt;
     }
     if (ciphertext[0] != 0x01) {
@@ -236,11 +240,6 @@ std::optional<std::pair<uint256, ProtectedMail>> DecryptMailPayload(
     }
     crypto::CleanseMemory(shared_secret->data(), shared_secret->size());
 
-    AEADChaCha20Poly1305::Nonce96 nonce96{
-        ReadUint32LE(nonce_buf.data()),
-        ReadUint64LE(nonce_buf.data() + 4)
-    };
-
     static constexpr std::string_view AAD_PREFIX{"CYBOU-MAIL-AAD-V1"};
     std::vector<std::byte> aad;
     aad.reserve(AAD_PREFIX.size() + 32 + 32 + 32);
@@ -258,9 +257,13 @@ std::optional<std::pair<uint256, ProtectedMail>> DecryptMailPayload(
         ciphertext.size() - 33
     };
 
-    std::vector<std::byte> decrypted(cipher_payload.size() - AEADChaCha20Poly1305::EXPANSION);
-    AEADChaCha20Poly1305 aead(std::span<const std::byte>{reinterpret_cast<const std::byte*>(cek.data()), 32});
-    const bool dec_ok = aead.Decrypt(cipher_payload, aad, nonce96, decrypted);
+    std::vector<std::byte> decrypted(cipher_payload.size() - crypto::CHACHA20_POLY1305_TAG_SIZE);
+    const auto key_bytes = std::span<const unsigned char, crypto::CHACHA20_POLY1305_KEY_SIZE>{cek};
+    const auto nonce_bytes = std::span<const unsigned char, crypto::CHACHA20_POLY1305_NONCE_SIZE>{nonce_buf.data(), crypto::CHACHA20_POLY1305_NONCE_SIZE};
+    const bool dec_ok = crypto::ChaCha20Poly1305Decrypt(key_bytes, nonce_bytes,
+        std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(aad.data()), aad.size()},
+        std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(cipher_payload.data()), cipher_payload.size()},
+        std::span<unsigned char>{reinterpret_cast<unsigned char*>(decrypted.data()), decrypted.size()});
 
     crypto::CleanseMemory(cek.data(), cek.size());
     crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
