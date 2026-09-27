@@ -22,6 +22,9 @@ the type and consensus-library dependency must be addressed first.
 - This is an initial target-boundary extraction only. The `uint256` header and
   implementation still use inherited Bitcoin utility APIs, and the target
   links `bitcoin_util`; this does not yet remove the `bitcoin_crypto` dependency.
+- CYBOU secret-cleansing call sites now use
+  `cybou/crypto/cleanse.h`, backed by OpenSSL `OPENSSL_cleanse`; direct
+  `support/cleanse.h` use has been removed from `src/cybou`.
 
 The root `CMakeLists.txt` requires OpenSSL 3.5. The active PQ baseline in
 `09_CRYPTO_PQ.md` names X25519 + ML-KEM-768 as the Mail target and explicitly

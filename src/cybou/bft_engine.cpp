@@ -3,7 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/bft_engine.h>
-#include <support/cleanse.h>
+#include <cybou/crypto/cleanse.h>
 
 #include <crypto/sha256.h>
 
@@ -591,7 +591,7 @@ bool BftValidatorNode::RecordSigningIntent(const BftStep step, const uint256& di
 
 BftValidatorNode::~BftValidatorNode()
 {
-    memory_cleanse(m_private_key_seed.data(), m_private_key_seed.size());
+    crypto::CleanseMemory(m_private_key_seed.data(), m_private_key_seed.size());
 }
 
 void BftValidatorNode::SetHeight(uint64_t height, const uint256& last_block_id, ValidatorSet validator_set)

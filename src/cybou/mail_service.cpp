@@ -3,13 +3,13 @@
 
 #include <cybou/mail_service.h>
 #include <cybou/hex.h>
+#include <cybou/crypto/cleanse.h>
 
 #include <crypto/chacha20poly1305.h>
 #include <crypto/common.h>
 #include <crypto/hkdf_sha256_32.h>
 #include <crypto/sha256.h>
 #include <openssl/rand.h>
-#include <support/cleanse.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -135,7 +135,7 @@ std::optional<std::vector<unsigned char>> EncryptMailPayload(
     }
 
     const auto shared_secret = X25519DeriveSharedSecret(eph_sk, *recipient_x25519);
-    memory_cleanse(eph_sk.data(), eph_sk.size());
+    crypto::CleanseMemory(eph_sk.data(), eph_sk.size());
     if (!shared_secret) return std::nullopt;
 
     CHKDF_HMAC_SHA256_L32 hkdf(shared_secret->data(), shared_secret->size(), "CYBOU/MAIL_HKDF/V1");
@@ -176,9 +176,9 @@ std::optional<std::vector<unsigned char>> EncryptMailPayload(
     AEADChaCha20Poly1305 aead(std::span<const std::byte>{reinterpret_cast<const std::byte*>(cek.data()), 32});
     aead.Encrypt(to_encrypt, aad, nonce96, cipher_bytes);
 
-    memory_cleanse(cek.data(), cek.size());
-    memory_cleanse(nonce_buf.data(), nonce_buf.size());
-    memory_cleanse(to_encrypt.data(), to_encrypt.size());
+    crypto::CleanseMemory(cek.data(), cek.size());
+    crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
+    crypto::CleanseMemory(to_encrypt.data(), to_encrypt.size());
 
     std::vector<unsigned char> outer;
     outer.reserve(1 + 32 + cipher_bytes.size());
@@ -241,8 +241,8 @@ std::optional<std::pair<uint256, ProtectedMail>> DecryptMailPayload(
     AEADChaCha20Poly1305 aead(std::span<const std::byte>{reinterpret_cast<const std::byte*>(cek.data()), 32});
     const bool dec_ok = aead.Decrypt(cipher_payload, aad, nonce96, decrypted);
 
-    memory_cleanse(cek.data(), cek.size());
-    memory_cleanse(nonce_buf.data(), nonce_buf.size());
+    crypto::CleanseMemory(cek.data(), cek.size());
+    crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
 
     if (!dec_ok || decrypted.size() < 32 + 81) {
         return std::nullopt;

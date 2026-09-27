@@ -5,9 +5,9 @@
 #include <cybou/signing.h>
 
 #include <openssl/bn.h>
+#include <cybou/crypto/cleanse.h>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
-#include <support/cleanse.h>
 
 #include <algorithm>
 #include <memory>
@@ -162,7 +162,7 @@ std::optional<std::array<unsigned char, 32>> Ed25519SeedToX25519PrivateKey(const
     x25519_sk[31] &= 127;
     x25519_sk[31] |= 64;
 
-    memory_cleanse(hash, sizeof(hash));
+    crypto::CleanseMemory(hash, sizeof(hash));
     return x25519_sk;
 }
 
@@ -205,7 +205,7 @@ std::optional<std::array<unsigned char, 32>> X25519DeriveSharedSecret(
     size_t secret_len{32};
     std::array<unsigned char, 32> secret{};
     if (EVP_PKEY_derive(ctx.get(), secret.data(), &secret_len) <= 0 || secret_len != 32) {
-        memory_cleanse(secret.data(), secret.size());
+        crypto::CleanseMemory(secret.data(), secret.size());
         return std::nullopt;
     }
     return secret;

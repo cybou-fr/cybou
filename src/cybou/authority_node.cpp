@@ -3,9 +3,9 @@
 
 #include <cybou/authority_node.h>
 
+#include <cybou/crypto/cleanse.h>
 #include <cybou/bft_engine.h>
 #include <cybou/signing.h>
-#include <support/cleanse.h>
 
 #include <limits>
 #include <utility>
@@ -32,7 +32,7 @@ CybouAuthorityNode::CybouAuthorityNode(
 
 CybouAuthorityNode::~CybouAuthorityNode()
 {
-    memory_cleanse(m_validator_private_key.data(), m_validator_private_key.size());
+    crypto::CleanseMemory(m_validator_private_key.data(), m_validator_private_key.size());
 }
 
 OperationSubmitStatus CybouAuthorityNode::SubmitOperationWithStatus(

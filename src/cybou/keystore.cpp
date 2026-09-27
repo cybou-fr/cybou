@@ -3,8 +3,8 @@
 
 #include <cybou/keystore.h>
 
+#include <cybou/crypto/cleanse.h>
 #include <cybou/signing.h>
-#include <support/cleanse.h>
 
 #include <openssl/core_names.h>
 #include <openssl/evp.h>
@@ -58,7 +58,7 @@ struct CybouKeyStore::Impl {
     {
         material.reset();
         if (mail_seed) {
-            memory_cleanse(mail_seed->data(), mail_seed->size());
+            crypto::CleanseMemory(mail_seed->data(), mail_seed->size());
             mail_seed.reset();
         }
         mail_public_key.reset();
@@ -83,13 +83,13 @@ struct CybouKeyStore::Impl {
         const auto public_key = DeriveEd25519PublicKey(*derived_mail_seed);
         const auto x25519 = public_key ? Ed25519PublicKeyToX25519(*public_key) : std::nullopt;
         if (!public_key || !x25519) {
-            memory_cleanse(derived_mail_seed->data(), derived_mail_seed->size());
+            crypto::CleanseMemory(derived_mail_seed->data(), derived_mail_seed->size());
             return false;
         }
 
         material.emplace(std::move(value));
         mail_seed = *derived_mail_seed;
-        memory_cleanse(derived_mail_seed->data(), derived_mail_seed->size());
+        crypto::CleanseMemory(derived_mail_seed->data(), derived_mail_seed->size());
         mail_public_key = *public_key;
         x25519_public_key = *x25519;
         device_key = *device;

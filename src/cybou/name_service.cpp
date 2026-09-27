@@ -7,7 +7,7 @@
 #include <cybou/identity_material.h>
 #include <cybou/name_registry.h>
 #include <cybou/protocol_operation.h>
-#include <support/cleanse.h>
+#include <cybou/crypto/cleanse.h>
 
 #include <openssl/rand.h>
 
@@ -27,19 +27,19 @@ struct ClaimSecret {
     ClaimSecret& operator=(const ClaimSecret&) = delete;
     ClaimSecret(ClaimSecret&& other) noexcept : label{std::move(other.label)}, salt{other.salt}
     {
-        memory_cleanse(other.salt.data(), other.salt.size());
+        crypto::CleanseMemory(other.salt.data(), other.salt.size());
     }
     ClaimSecret& operator=(ClaimSecret&& other) noexcept
     {
         if (this != &other) {
-            memory_cleanse(salt.data(), salt.size());
+            crypto::CleanseMemory(salt.data(), salt.size());
             label = std::move(other.label);
             salt = other.salt;
-            memory_cleanse(other.salt.data(), other.salt.size());
+            crypto::CleanseMemory(other.salt.data(), other.salt.size());
         }
         return *this;
     }
-    ~ClaimSecret() { memory_cleanse(salt.data(), salt.size()); }
+    ~ClaimSecret() { crypto::CleanseMemory(salt.data(), salt.size()); }
 };
 
 NameClaimResult Fail(std::string message)
@@ -69,7 +69,7 @@ std::optional<ClaimSecret> LoadClaim(const std::filesystem::path& path, std::str
             claim.emplace(std::move(value));
         }
     }
-    memory_cleanse(bytes->data(), bytes->size());
+    crypto::CleanseMemory(bytes->data(), bytes->size());
     return claim;
 }
 
@@ -84,7 +84,7 @@ bool SaveClaim(const std::filesystem::path& path, std::string_view password,
     std::copy(claim.label.begin(), claim.label.end(), payload.begin() + 70);
     std::copy(claim.salt.begin(), claim.salt.end(), payload.begin() + 102);
     const bool saved = SaveNewIdentityVault(path, password, payload);
-    memory_cleanse(payload.data(), payload.size());
+    crypto::CleanseMemory(payload.data(), payload.size());
     if (!saved) return false;
     const auto reopened = LoadClaim(path, password, network, account);
     return reopened && reopened->label == claim.label && reopened->salt == claim.salt;
@@ -122,7 +122,7 @@ CybouNameService::CybouNameService(CybouNodeRuntime& runtime, CybouKeyStore& key
 NameClaimResult CybouNameService::ClaimSync(std::string label, std::string password,
     const NamePhaseCallback& on_phase, std::chrono::milliseconds timeout)
 {
-    struct PasswordWiper { std::string& value; ~PasswordWiper() { memory_cleanse(value.data(), value.size()); } } wipe{password};
+    struct PasswordWiper { std::string& value; ~PasswordWiper() { crypto::CleanseMemory(value.data(), value.size()); } } wipe{password};
     m_cancelled.store(false);
     if (ValidateNameLabel(label) != NameValidationError::NONE) return Fail("Invalid .cybou label");
     const auto account = m_keystore.GetAccountId();

@@ -10,7 +10,6 @@
 #include <cybou/node_runtime.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/signing.h>
-#include <support/cleanse.h>
 
 #include <array>
 #include <atomic>

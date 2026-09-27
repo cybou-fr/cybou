@@ -2,9 +2,8 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/identity_service.h>
+#include <cybou/crypto/cleanse.h>
 #include <openssl/rand.h>
-
-#include <support/cleanse.h>
 
 #include <algorithm>
 
@@ -100,7 +99,7 @@ namespace {
 
 struct PasswordWiper {
     std::string& value;
-    ~PasswordWiper() { if (!value.empty()) memory_cleanse(value.data(), value.size()); }
+    ~PasswordWiper() { if (!value.empty()) crypto::CleanseMemory(value.data(), value.size()); }
 };
 
 bool IsAuthorizedDevice(const CybouNodeRuntime& runtime, const AccountId& account_id, const CybouKeyStore& keystore)
@@ -332,7 +331,7 @@ IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
     }
     struct EntropyWiper {
         RecoveryEntropy& value;
-        ~EntropyWiper() { memory_cleanse(value.data(), value.size()); }
+        ~EntropyWiper() { crypto::CleanseMemory(value.data(), value.size()); }
     } wipe_entropy{*entropy};
     const auto root_key = DeriveIdentityPublicKey(*entropy, IdentityKeyPurpose::RECOVERY_ROOT);
     const auto root_id = root_key ? ComputeRecoveryKeyId(*root_key) : std::nullopt;
