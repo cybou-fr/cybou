@@ -37,6 +37,13 @@ BOOST_AUTO_TEST_CASE(openssl_sha256_matches_standard_vectors_and_legacy_output)
     std::array<unsigned char, cybou::crypto::Sha256::OUTPUT_SIZE> abc_digest{};
     cybou::crypto::Sha256{}.Write(abc.data(), abc.size()).Finalize(abc_digest.data());
     BOOST_CHECK_EQUAL_COLLECTIONS(abc_digest.begin(), abc_digest.end(), abc_expected.begin(), abc_expected.end());
+    std::array<unsigned char, cybou::crypto::Sha256::OUTPUT_SIZE> multipart_digest{};
+    BOOST_REQUIRE(cybou::crypto::ComputeSha256({
+        cybou::crypto::Sha256Bytes("a"), std::span<const unsigned char>{abc.data() + 1, 1},
+        std::span<const unsigned char>{abc.data() + 2, 1},
+    }, multipart_digest.data()));
+    BOOST_CHECK_EQUAL_COLLECTIONS(multipart_digest.begin(), multipart_digest.end(), abc_digest.begin(), abc_digest.end());
+    BOOST_CHECK(!cybou::crypto::ComputeSha256({}, nullptr));
 
     constexpr std::array<std::size_t, 8> sizes{1, 55, 56, 63, 64, 65, 1024, 8193};
     for (const std::size_t size : sizes) {

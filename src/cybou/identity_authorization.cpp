@@ -3,11 +3,9 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/identity_authorization.h>
-
-#include <openssl/evp.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
-#include <memory>
 #include <string_view>
 
 namespace cybou {
@@ -79,14 +77,8 @@ std::optional<std::array<unsigned char, 32>> ComputeIdentityAuthorizationCommitm
     const auto bytes = SerializeIdentityAuthorization(auth);
     if (!bytes) return std::nullopt;
     constexpr std::string_view domain{"CYBOU/IDENTITY-AUTH-COMMIT/V2"};
-    using Context = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
-    Context ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     std::array<unsigned char, 32> digest{};
-    unsigned int length{0};
-    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), bytes->data(), bytes->size()) != 1 ||
-        EVP_DigestFinal_ex(ctx.get(), digest.data(), &length) != 1 || length != digest.size()) return std::nullopt;
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), std::span<const unsigned char>{*bytes}}, digest.data())) return std::nullopt;
     return digest;
 }
 

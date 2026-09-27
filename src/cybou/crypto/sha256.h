@@ -5,7 +5,10 @@
 #define CYBOU_CRYPTO_SHA256_H
 
 #include <cstddef>
+#include <initializer_list>
 #include <memory>
+#include <span>
+#include <string_view>
 
 namespace cybou::crypto {
 
@@ -30,6 +33,12 @@ private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
 };
+
+/** Compute a digest over ordered byte spans. Returns false on provider failure. */
+bool ComputeSha256(std::initializer_list<std::span<const unsigned char>> parts, unsigned char* output) noexcept;
+
+/** View string bytes without changing their encoding. */
+std::span<const unsigned char> Sha256Bytes(std::string_view text) noexcept;
 
 } // namespace cybou::crypto
 

@@ -5,6 +5,7 @@
 #include <cybou/identity_crypto.h>
 #include <cybou/crypto/hkdf_sha256.h>
 #include <cybou/crypto/cleanse.h>
+#include <cybou/crypto/sha256.h>
 
 #include <openssl/core_names.h>
 #include <openssl/crypto.h>
@@ -165,15 +166,10 @@ std::optional<std::array<unsigned char, 32>> ComputeRecoveryKeyId(
 
     constexpr std::string_view domain{"CYBOU/RECOVERY-KEY-ID/V2"};
     constexpr std::array<unsigned char, 2> suite{2, 1}; // identifier version 2, hybrid root suite 1
-    MdCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     std::array<unsigned char, 32> id{};
-    unsigned int size{0};
-    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), suite.data(), suite.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), recovery_key.ed25519.data(), recovery_key.ed25519.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), recovery_key.ml_dsa.data(), recovery_key.ml_dsa.size()) != 1 ||
-        EVP_DigestFinal_ex(ctx.get(), id.data(), &size) != 1 || size != id.size()) return std::nullopt;
+    if (!crypto::ComputeSha256({
+        crypto::Sha256Bytes(domain), suite, recovery_key.ed25519, recovery_key.ml_dsa,
+    }, id.data())) return std::nullopt;
     return id;
 }
 
@@ -186,15 +182,10 @@ std::optional<std::array<unsigned char, 32>> ComputeDeviceKeyId(
         std::all_of(device_key.ml_dsa.begin(), device_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
     constexpr std::string_view domain{"CYBOU/DEVICE-KEY-ID/V2"};
     constexpr std::array<unsigned char, 2> suite{2, 1};
-    MdCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     std::array<unsigned char, 32> id{};
-    unsigned int size{0};
-    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), suite.data(), suite.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), device_key.ed25519.data(), device_key.ed25519.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), device_key.ml_dsa.data(), device_key.ml_dsa.size()) != 1 ||
-        EVP_DigestFinal_ex(ctx.get(), id.data(), &size) != 1 || size != id.size()) return std::nullopt;
+    if (!crypto::ComputeSha256({
+        crypto::Sha256Bytes(domain), suite, device_key.ed25519, device_key.ml_dsa,
+    }, id.data())) return std::nullopt;
     return id;
 }
 
@@ -207,15 +198,10 @@ std::optional<std::array<unsigned char, 32>> ComputeValidatorKeyId(
         std::all_of(validator_key.ml_dsa.begin(), validator_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
     constexpr std::string_view domain{"CYBOU/VALIDATOR-KEY-ID/V2"};
     constexpr std::array<unsigned char, 2> suite{3, 1};
-    MdCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     std::array<unsigned char, 32> id{};
-    unsigned int size{0};
-    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), suite.data(), suite.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), validator_key.ed25519.data(), validator_key.ed25519.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), validator_key.ml_dsa.data(), validator_key.ml_dsa.size()) != 1 ||
-        EVP_DigestFinal_ex(ctx.get(), id.data(), &size) != 1 || size != id.size()) return std::nullopt;
+    if (!crypto::ComputeSha256({
+        crypto::Sha256Bytes(domain), suite, validator_key.ed25519, validator_key.ml_dsa,
+    }, id.data())) return std::nullopt;
     return id;
 }
 

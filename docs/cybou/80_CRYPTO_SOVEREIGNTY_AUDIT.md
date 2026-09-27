@@ -51,7 +51,11 @@ compatibility coverage; SipHash remains an additional crypto blocker.
   output byte-for-byte with the inherited implementation across SHA-256
   padding boundaries and multi-chunk input. The inherited API remains in the
   test as a compatibility oracle. BIP-39 recovery phrase checksums also use
-  this wrapper and retain the canonical zero-entropy phrase vector.
+  this wrapper and retain the canonical zero-entropy phrase vector. All
+  domain-separated protocol/state/identity SHA-256 call sites now use the
+  same interface through a nonthrowing multipart helper; EVP digest calls are
+  confined to the wrapper, and multipart output is checked against the `abc`
+  vector.
 - CYBOU HKDF-SHA256 derivations now share `cybou/crypto/hkdf_sha256.h`, backed
   by OpenSSL EVP_KDF. Identity key derivation, the local mail-key derivation,
   and the existing prototype Mail payload use this wrapper without changing

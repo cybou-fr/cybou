@@ -3,12 +3,10 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/account_creation.h>
-
-#include <openssl/evp.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
 #include <bit>
-#include <memory>
 #include <string_view>
 
 namespace cybou {
@@ -16,7 +14,6 @@ namespace {
 constexpr unsigned char VERSION{2};
 constexpr size_t ROOT_SIG_SIZE{3309};
 constexpr size_t DEVICE_SIG_SIZE{2420};
-using MdContext = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
 
 void Write64(unsigned char* out, uint64_t value)
 {
@@ -33,13 +30,8 @@ uint64_t Read64(const unsigned char* in)
 std::optional<std::array<unsigned char, 32>> HashWithDomain(
     std::string_view domain, std::span<const unsigned char> bytes)
 {
-    MdContext ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     std::array<unsigned char, 32> digest{};
-    unsigned int length{0};
-    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), bytes.data(), bytes.size()) != 1 ||
-        EVP_DigestFinal_ex(ctx.get(), digest.data(), &length) != 1 || length != digest.size()) return std::nullopt;
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), bytes}, digest.data())) return std::nullopt;
     return digest;
 }
 

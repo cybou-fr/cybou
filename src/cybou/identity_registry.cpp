@@ -3,35 +3,29 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/identity_registry.h>
-
-#include <openssl/evp.h>
+#include <cybou/crypto/sha256.h>
 
 #include <array>
 #include <algorithm>
 #include <limits>
-#include <memory>
 #include <string_view>
 
 namespace cybou {
 namespace {
-using DigestCtx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
-
 std::optional<IdentityKeyId> Digest(std::string_view domain, const uint256& network_id,
     const AccountId& account_id, uint64_t nonce, const IdentityKeyId& key_id)
 {
     if (network_id.IsNull() || account_id.IsNull()) return std::nullopt;
     std::array<unsigned char, 8> nonce_le{};
     for (size_t i{0}; i < nonce_le.size(); ++i) nonce_le[i] = static_cast<unsigned char>(nonce >> (8 * i));
-    DigestCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     IdentityKeyId result{};
-    unsigned int size{0};
-    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), network_id.begin(), network_id.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), account_id.Value().begin(), AccountId::SIZE) != 1 ||
-        EVP_DigestUpdate(ctx.get(), nonce_le.data(), nonce_le.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), key_id.data(), key_id.size()) != 1 ||
-        EVP_DigestFinal_ex(ctx.get(), result.data(), &size) != 1 || size != result.size()) return std::nullopt;
+    if (!crypto::ComputeSha256({
+        crypto::Sha256Bytes(domain),
+        std::span<const unsigned char>{network_id.begin(), network_id.size()},
+        std::span<const unsigned char>{account_id.Value().begin(), AccountId::SIZE},
+        nonce_le,
+        key_id,
+    }, result.data())) return std::nullopt;
     return result;
 }
 } // namespace
@@ -66,19 +60,17 @@ std::optional<IdentityKeyId> ComputeDeviceOperationDigest(const uint256& network
     for (size_t i{0}; i < nonce_le.size(); ++i) nonce_le[i] = static_cast<unsigned char>(request.nonce >> (8 * i));
     for (size_t i{0}; i < activation_le.size(); ++i) activation_le[i] = static_cast<unsigned char>(request.activation_nonce >> (8 * i));
     constexpr std::string_view domain{"CYBOU/DEVICE-OP/V2"};
-    DigestCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     IdentityKeyId result{};
-    unsigned int size{0};
-    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), network_id.begin(), network_id.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), request.account_id.Value().begin(), AccountId::SIZE) != 1 ||
-        EVP_DigestUpdate(ctx.get(), request.device_id.data(), request.device_id.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), nonce_le.data(), nonce_le.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), activation_le.data(), activation_le.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), &kind, sizeof(kind)) != 1 ||
-        EVP_DigestUpdate(ctx.get(), request.payload_commitment.data(), request.payload_commitment.size()) != 1 ||
-        EVP_DigestFinal_ex(ctx.get(), result.data(), &size) != 1 || size != result.size()) return std::nullopt;
+    if (!crypto::ComputeSha256({
+        crypto::Sha256Bytes(domain),
+        std::span<const unsigned char>{network_id.begin(), network_id.size()},
+        std::span<const unsigned char>{request.account_id.Value().begin(), AccountId::SIZE},
+        request.device_id,
+        nonce_le,
+        activation_le,
+        std::span<const unsigned char>{&kind, sizeof(kind)},
+        request.payload_commitment,
+    }, result.data())) return std::nullopt;
     return result;
 }
 

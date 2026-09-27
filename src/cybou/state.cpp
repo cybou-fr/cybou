@@ -3,12 +3,10 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/state.h>
-
-#include <openssl/evp.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
 #include <limits>
-#include <memory>
 #include <set>
 #include <string_view>
 
@@ -404,14 +402,8 @@ std::optional<uint256> CybouStateHash(const CybouState& state)
     constexpr std::string_view domain{"CYBOU/STATE/V2"};
     const auto bytes = SerializeCybouState(state);
     if (!bytes) return std::nullopt;
-    using DigestCtx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
-    DigestCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     uint256 hash;
-    unsigned int size{0};
-    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), bytes->data(), bytes->size()) != 1 ||
-        EVP_DigestFinal_ex(ctx.get(), hash.begin(), &size) != 1 || size != hash.size()) return std::nullopt;
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), std::span<const unsigned char>{*bytes}}, hash.begin())) return std::nullopt;
     return hash;
 }
 

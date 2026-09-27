@@ -3,11 +3,9 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/protocol_operation.h>
-
-#include <openssl/evp.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
-#include <memory>
 #include <string_view>
 
 namespace cybou {
@@ -425,14 +423,8 @@ std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation)
     constexpr std::string_view domain{"CYBOU/OP-ID/V2"};
     const auto bytes = SerializeProtocolOperation(operation);
     if (!bytes) return std::nullopt;
-    using DigestCtx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
-    DigestCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     uint256 id;
-    unsigned int size{0};
-    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), bytes->data(), bytes->size()) != 1 ||
-        EVP_DigestFinal_ex(ctx.get(), id.begin(), &size) != 1 || size != id.size()) return std::nullopt;
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), std::span<const unsigned char>{*bytes}}, id.begin())) return std::nullopt;
     return id;
 }
 

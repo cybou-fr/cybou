@@ -3,12 +3,10 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/payment.h>
-
-#include <openssl/evp.h>
+#include <cybou/crypto/sha256.h>
 
 #include <algorithm>
 #include <limits>
-#include <memory>
 #include <string_view>
 
 namespace cybou {
@@ -39,14 +37,8 @@ std::optional<IdentityKeyId> ComputePaymentPayloadCommitment(const PaymentPayloa
     constexpr std::string_view domain{"CYBOU/PAYMENT-PAYLOAD/V2"};
     const auto bytes = SerializePaymentPayload(payment);
     if (!bytes) return std::nullopt;
-    using DigestCtx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
-    DigestCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     IdentityKeyId digest{};
-    unsigned int size{0};
-    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), bytes->data(), bytes->size()) != 1 ||
-        EVP_DigestFinal_ex(ctx.get(), digest.data(), &size) != 1 || size != digest.size()) return std::nullopt;
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), std::span<const unsigned char>{*bytes}}, digest.data())) return std::nullopt;
     return digest;
 }
 
@@ -101,14 +93,8 @@ std::optional<IdentityKeyId> ComputeSystemLockPayloadCommitment(const SystemLock
     constexpr std::string_view domain{"CYBOU/SYSTEM-LOCK-PAYLOAD/V2"};
     const auto bytes = SerializeSystemLockPayload(lock);
     if (!bytes) return std::nullopt;
-    using DigestCtx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
-    DigestCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     IdentityKeyId digest{};
-    unsigned int size{0};
-    if (!ctx || EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) != 1 ||
-        EVP_DigestUpdate(ctx.get(), domain.data(), domain.size()) != 1 ||
-        EVP_DigestUpdate(ctx.get(), bytes->data(), bytes->size()) != 1 ||
-        EVP_DigestFinal_ex(ctx.get(), digest.data(), &size) != 1 || size != digest.size()) return std::nullopt;
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), std::span<const unsigned char>{*bytes}}, digest.data())) return std::nullopt;
     return digest;
 }
 

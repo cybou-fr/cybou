@@ -3,6 +3,7 @@
 
 #include <cybou/crypto/sha256.h>
 
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 
 #include <stdexcept>
@@ -54,6 +55,25 @@ void Sha256::Finalize(unsigned char* output)
     if (EVP_DigestFinal_ex(m_impl->context.get(), output, &output_size) != 1 || output_size != OUTPUT_SIZE) {
         ThrowSha256Failure();
     }
+}
+
+bool ComputeSha256(const std::initializer_list<std::span<const unsigned char>> parts, unsigned char* output) noexcept
+{
+    if (output == nullptr) return false;
+    try {
+        Sha256 hasher;
+        for (const auto part : parts) hasher.Write(part.data(), part.size());
+        hasher.Finalize(output);
+        return true;
+    } catch (...) {
+        OPENSSL_cleanse(output, Sha256::OUTPUT_SIZE);
+        return false;
+    }
+}
+
+std::span<const unsigned char> Sha256Bytes(const std::string_view text) noexcept
+{
+    return {reinterpret_cast<const unsigned char*>(text.data()), text.size()};
 }
 
 } // namespace cybou::crypto
