@@ -40,7 +40,7 @@ readiness criteria.
 ## Integration still required
 
 - Complete password change, vault lock and reauthentication, device management, and recovery when the account already has eight active devices.
-- Publish recipient KEM capability packages from Identity and complete Mail confidentiality, encrypted local mailbox storage, and historical sender-key authorization evidence. No recipient KEM capability is currently published. See `86_IDENTITY_SECURITY_SUBSTRATE.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
+- Publish recipient KEM capability packages from Identity and complete Mail confidentiality, encrypted local mailbox storage, and historical sender-key authorization evidence. No recipient KEM capability is currently published. RFC 10024 defines the X25519 + ML-KEM-768 TLS 1.3 ephemeral group, while the general HPKE PQ profile remains an Internet-Draft as of 2026-09-27; neither is a finalized CYBOU recipient package. See `86_IDENTITY_SECURITY_SUBSTRATE.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
 - Finish Qt wallet and Mail flows against the canonical identity and encryption profiles.
 - Route Mail and Files through the shared operation reconciliation model; expose full device management through the desktop identity workflow.
 - Run independent validators with durable crash recovery and verify finality under production topology.

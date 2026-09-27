@@ -38,12 +38,17 @@ wire encodings remain protocol-review gates.
 
 Do not invent a custom hybrid KEM combiner.
 
-OpenSSL 3.5 provides FIPS 203 ML-KEM encapsulation, but its documented
-hybrid ECDHE + ML-KEM algorithms are intended primarily for TLS and do not
-define standard public/private key formats. Do not treat those TLS key types
-as a Mail HPKE suite or key-package format. Mail implementation remains
-blocked on a finalized PQ/T HPKE profile with interoperable key encoding.
-See [OpenSSL's KEM API notes](https://docs.openssl.org/3.5/man1/openssl-pkeyutl/).
+OpenSSL 3.5 provides FIPS 203 ML-KEM-768 key and encapsulation APIs. That is
+implementation support, not a CYBOU wire profile. [RFC 10024](https://www.rfc-editor.org/rfc/rfc10024.html)
+standardizes X25519MLKEM768 for the ephemeral TLS 1.3 handshake; its TLS
+key-share encoding does not define a persistent Identity recipient package or
+a Mail HPKE profile. The IETF [HPKE PQ draft](https://datatracker.ietf.org/doc/draft-ietf-hpke-pq/)
+specifies PQ and hybrid HPKE KEMs, including X25519 + ML-KEM-768, but remains
+an Internet-Draft as of 2026-09-27. Mail KEM publication and encapsulation
+remain blocked until that profile is finalized and its key package,
+transcript, and historical authorization bindings are reviewed for CYBOU.
+Do not substitute the TLS group or implement a local combiner. See
+[OpenSSL's KEM API notes](https://docs.openssl.org/3.5/man1/openssl-pkeyutl/).
 
 ## v1 MailTx encryption
 
