@@ -18,7 +18,6 @@ fn get_pathspecs_exclude_whitespace() -> Vec<String> {
             "doc/README_windows.txt",
             // Temporary excludes, or existing violations
             "contrib/init/bitcoind.openrc",
-            "contrib/macdeploy/macdeployqtplus",
             "src/crypto/sha256_sse4.cpp",
             "test/functional/test_framework/crypto/ellswift_decode_test_vectors.csv",
             "test/functional/test_framework/crypto/xswiftec_inv_test_vectors.csv",
