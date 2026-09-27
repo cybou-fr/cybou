@@ -357,8 +357,14 @@ BOOST_AUTO_TEST_CASE(bft_signing_journal_cbs2_lock_rejects_conflicting_proposal)
             .block = blockB, .signature = *sig_propB,
         };
 
-        // Restarted node 0 must reject block B because it is locked on block A -> emits nil prevote!
-        const auto prevote_for_B = restarted0.ReceiveProposal(proposalB);
+        // The signed future proposal alone does not move the restarted node.
+        BOOST_CHECK(!restarted0.ReceiveProposal(proposalB));
+        BOOST_CHECK_EQUAL(restarted0.GetRound(), 1U);
+        restarted0.OnRoundTimeout(); // enter round 2 locally
+        const auto buffered_B = restarted0.TakeBufferedProposalForCurrentRound();
+        BOOST_REQUIRE(buffered_B);
+        // Once processed in round 2, the conflicting block gets a nil prevote.
+        const auto prevote_for_B = restarted0.ReceiveProposal(*buffered_B);
         BOOST_REQUIRE(prevote_for_B);
         BOOST_CHECK(!prevote_for_B->block_id.has_value()); // NIL prevote
 
@@ -1104,7 +1110,7 @@ BOOST_AUTO_TEST_CASE(bft_round_bound_signatures_and_replay_rejection)
                 cybou::FinalityVerificationError::NONE);
 }
 
-BOOST_AUTO_TEST_CASE(bft_signed_future_proposal_synchronizes_round)
+BOOST_AUTO_TEST_CASE(bft_future_proposal_requires_evidence_or_local_timeout)
 {
     const uint256 network_id = uint256::FromUserHex("cafe").value();
     std::array<MockValidatorNode, 4> keys{
@@ -1139,34 +1145,69 @@ BOOST_AUTO_TEST_CASE(bft_signed_future_proposal_synchronizes_round)
     forged.signature.ml_dsa.clear();
     BOOST_CHECK(!receiver.ReceiveProposal(forged));
     BOOST_CHECK_EQUAL(receiver.GetRound(), 0U);
-    const auto vote = receiver.ReceiveProposal(*proposal);
-    BOOST_CHECK_EQUAL(receiver.GetRound(), 1U);
+    BOOST_CHECK(!receiver.ReceiveProposal(*proposal));
+    BOOST_CHECK_EQUAL(receiver.GetRound(), 0U);
+    BOOST_CHECK(!receiver.TakeBufferedProposalForCurrentRound());
+
+    // A local timeout is allowed to advance one round. The buffered proposal
+    // becomes processable only after that local progression.
+    BOOST_CHECK(!receiver.StartRound(1, {})); // this validator is not round-1 leader
+    const auto timed_out_proposal = receiver.TakeBufferedProposalForCurrentRound();
+    BOOST_REQUIRE(timed_out_proposal);
+    const auto vote = receiver.ReceiveProposal(*timed_out_proposal);
     BOOST_REQUIRE(vote);
+    BOOST_CHECK_EQUAL(receiver.GetRound(), 1U);
     BOOST_CHECK_EQUAL(vote->round, 1U);
-    BOOST_CHECK_EQUAL(receiver.GetRound(), 1U);
+}
 
-    // Verify MAX_FUTURE_ROUND_ADVANCE limit:
-    // Receiver is now at round 1.
-    // A proposal at round 1 + MAX_FUTURE_ROUND_ADVANCE + 1 must be rejected.
-    const size_t far_round = 1 + cybou::MAX_FUTURE_ROUND_ADVANCE + 1;
-    const size_t far_leader = cybou::BftLeaderIndex(1, far_round, set.validators.size());
-    cybou::BftValidatorNode far_proposer{far_leader, keys[far_leader].seed, network_id, set, execute};
-    far_proposer.SetHeight(1, uint256::ZERO, set);
-    const auto far_prop = far_proposer.StartRound(far_round, {});
-    BOOST_REQUIRE(far_prop);
-    BOOST_CHECK(!receiver.ReceiveProposal(*far_prop));
-    BOOST_CHECK_EQUAL(receiver.GetRound(), 1U);
+BOOST_AUTO_TEST_CASE(bft_future_proposal_staircase_waits_for_distinct_validator_evidence)
+{
+    const uint256 network_id = uint256::FromUserHex("caff").value();
+    std::vector<MockValidatorNode> mocks;
+    cybou::ValidatorSet val_set;
+    for (uint8_t i = 0; i < 4; ++i) {
+        mocks.push_back(MockValidatorNode::Create(i));
+        val_set.validators.push_back(cybou::Validator{.validator_id = mocks.back().validator_id,
+            .consensus_public_key = mocks.back().consensus_pubkey, .weight = 1});
+    }
+    const auto execute = [](const std::vector<cybou::ProtocolOperation>&, uint64_t) {
+        return uint256::FromUserHex("1212");
+    };
+    constexpr size_t receiver_index{0};
+    constexpr size_t proposer_index{1};
+    cybou::BftValidatorNode receiver{receiver_index, mocks[receiver_index].seed, network_id, val_set, execute};
+    cybou::BftValidatorNode proposer{proposer_index, mocks[proposer_index].seed, network_id, val_set, execute};
+    receiver.SetHeight(1, uint256::ZERO, val_set);
+    proposer.SetHeight(1, uint256::ZERO, val_set);
 
-    // A proposal at round 1 + MAX_FUTURE_ROUND_ADVANCE must be accepted.
-    const size_t max_valid_round = 1 + cybou::MAX_FUTURE_ROUND_ADVANCE;
-    const size_t max_valid_leader = cybou::BftLeaderIndex(1, max_valid_round, set.validators.size());
-    cybou::BftValidatorNode max_valid_proposer{max_valid_leader, keys[max_valid_leader].seed, network_id, set, execute};
-    max_valid_proposer.SetHeight(1, uint256::ZERO, set);
-    const auto max_valid_prop = max_valid_proposer.StartRound(max_valid_round, {});
-    BOOST_REQUIRE(max_valid_prop);
-    const auto max_valid_vote = receiver.ReceiveProposal(*max_valid_prop);
-    BOOST_REQUIRE(max_valid_vote);
-    BOOST_CHECK_EQUAL(receiver.GetRound(), max_valid_round);
+    for (const uint32_t round : {4U, 8U, 12U, 16U}) {
+        BOOST_REQUIRE_EQUAL(cybou::BftLeaderIndex(1, round, val_set.validators.size()), proposer_index);
+        const auto proposal = proposer.StartRound(round, {});
+        BOOST_REQUIRE(proposal);
+        BOOST_CHECK(!receiver.ReceiveProposal(*proposal));
+        BOOST_CHECK_EQUAL(receiver.GetRound(), 0U);
+    }
+
+    const auto make_nil_prevote = [&](const size_t index, const uint32_t round) {
+        const auto digest = cybou::ComputePrevoteDigest(
+            network_id, 1, round, mocks[index].validator_id, std::nullopt);
+        return cybou::BftPrevoteMsg{.network_id = network_id, .height = 1, .round = round,
+            .validator_id = mocks[index].validator_id, .block_id = std::nullopt,
+            .signature = *cybou::SignValidatorVote(mocks[index].seed, digest)};
+    };
+    BOOST_CHECK(!receiver.ReceivePrevote(make_nil_prevote(1, 8)));
+    BOOST_CHECK_EQUAL(receiver.GetRound(), 0U);
+    BOOST_CHECK(!receiver.ReceivePrevote(make_nil_prevote(2, 9)));
+    BOOST_CHECK_EQUAL(receiver.GetRound(), 8U);
+
+    const auto buffered = receiver.TakeBufferedProposalForCurrentRound();
+    BOOST_REQUIRE(buffered);
+    BOOST_CHECK_EQUAL(buffered->round, 8U);
+    const auto accepted = receiver.ReceiveProposal(*buffered);
+    BOOST_REQUIRE(accepted);
+    BOOST_CHECK(accepted->block_id == cybou::ComputeBlockId(buffered->block));
+    BOOST_CHECK_EQUAL(accepted->round, 8U);
+    BOOST_CHECK_EQUAL(receiver.GetRound(), 8U);
 }
 
 BOOST_AUTO_TEST_CASE(bft_adversarial_split_prevotes_round_recovery)
@@ -1522,7 +1563,7 @@ BOOST_AUTO_TEST_CASE(bft_byzantine_extreme_round_votes_cannot_drag_honest_quorum
         BOOST_REQUIRE(pv.has_value() && pv->block_id == block_id);
         prevotes.push_back(*pv);
         BOOST_CHECK(!node->ReceivePrecommit(extreme_pc));
-        BOOST_CHECK(node->GetRound() <= cybou::MAX_FUTURE_ROUND_ADVANCE);
+        BOOST_CHECK_EQUAL(node->GetRound(), 0U);
     }
 
     std::vector<cybou::BftPrecommitMsg> precommits;

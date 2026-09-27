@@ -31,12 +31,9 @@ enum class BftStep : uint8_t {
     FINALIZED,
 };
 
-/** Maximum number of future rounds a validator may advance when receiving a signed proposal from the elected leader.
- *  Rationale: Bounding future round advance prevents Byzantine or desynchronized leaders from forcing arbitrary
- *  round skips, while providing sufficient slack (2 rounds) for lagging nodes to resynchronize without waiting
- *  for multiple local round timeouts.
- */
-inline constexpr uint32_t MAX_FUTURE_ROUND_ADVANCE = 2;
+/** Bound proposal buffering without allowing a signed proposal to advance round state. */
+inline constexpr uint32_t MAX_BUFFERED_FUTURE_PROPOSAL_DISTANCE = 64;
+inline constexpr size_t MAX_BUFFERED_FUTURE_PROPOSALS = 64;
 
 /** Minimum distinct signed votes that prove honest participation in a future round.
  *  This advances round state only; proposal/precommit/finality still require
@@ -191,6 +188,9 @@ public:
     /** Handle an incoming prevote message. Returns precommit message if quorum reached. */
     std::optional<BftPrecommitMsg> ReceivePrevote(const BftPrevoteMsg& prevote);
 
+    /** Take the elected leader's proposal buffered for the current round, if any. */
+    std::optional<BftProposalMsg> TakeBufferedProposalForCurrentRound();
+
     /** Handle an incoming precommit message. Finalizes block if quorum reached. */
     bool ReceivePrecommit(const BftPrecommitMsg& precommit);
 
@@ -247,6 +247,7 @@ private:
     static constexpr size_t MAX_BUFFERED_FUTURE_ROUNDS_PER_VALIDATOR = 8;
     std::map<uint32_t, std::map<uint256, BftPrevoteMsg>> m_future_prevotes;
     std::map<uint32_t, std::map<uint256, BftPrecommitMsg>> m_future_precommits;
+    std::map<uint32_t, BftProposalMsg> m_future_proposals;
 
     // Round transition shared by proposal/vote paths: locks are preserved,
     // only the current round's ephemeral state is discarded.
@@ -256,6 +257,7 @@ private:
     bool CanBufferFutureRound(const uint256& validator_id, uint32_t round) const;
     bool BufferFuturePrevote(const BftPrevoteMsg& prevote);
     bool BufferFuturePrecommit(const BftPrecommitMsg& precommit);
+    bool BufferFutureProposal(const BftProposalMsg& proposal);
     std::optional<BftPrecommitMsg> EvaluatePrevoteQuorum();
     bool EvaluatePrecommitQuorum();
     // Highest round supported by RoundAdvanceThreshold validators, where each

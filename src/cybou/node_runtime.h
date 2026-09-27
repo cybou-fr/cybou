@@ -197,6 +197,7 @@ private:
     };
     bool CommitConsensusPrecommit(const BftPrecommitMsg& precommit);
     bool CommitConsensusFinalized(const FinalizedBlock& finalized);
+    BftProposalResult ProcessBufferedConsensusProposalLocked();
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
     void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
     /** Re-sync the orchestration round/phase with the engine after it jumped rounds. Caller holds m_mutex. */

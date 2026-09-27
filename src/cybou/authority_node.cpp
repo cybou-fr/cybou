@@ -204,6 +204,12 @@ std::optional<BftPrecommitMsg> CybouAuthorityNode::ReceivePrevote(const BftPrevo
     return m_validator->ReceivePrevote(prevote);
 }
 
+std::optional<BftProposalMsg> CybouAuthorityNode::TakeBufferedProposalForCurrentRound()
+{
+    if (!EnsureValidator()) return std::nullopt;
+    return m_validator->TakeBufferedProposalForCurrentRound();
+}
+
 std::optional<FinalizedBlock> CybouAuthorityNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
 {
     if (!EnsureValidator()) return std::nullopt;

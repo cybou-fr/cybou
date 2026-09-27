@@ -619,6 +619,7 @@ void BftValidatorNode::SetHeight(uint64_t height, const uint256& last_block_id, 
     m_finalized_block.reset();
     m_future_prevotes.clear();
     m_future_precommits.clear();
+    m_future_proposals.clear();
 
     if (m_restarted && m_has_signed && height == m_last_signed_height) {
         m_round = m_last_signed_round;
@@ -710,6 +711,7 @@ void BftValidatorNode::EnterRound(uint32_t round)
     m_future_prevotes.erase(m_future_prevotes.begin(), stale_prevotes);
     const auto stale_precommits = m_future_precommits.upper_bound(round);
     m_future_precommits.erase(m_future_precommits.begin(), stale_precommits);
+    m_future_proposals.erase(m_future_proposals.begin(), m_future_proposals.lower_bound(round));
     // The triggering quorum was moved out before entering the round and is
     // replayed by the caller after this cleanup.
 }
@@ -756,8 +758,8 @@ bool BftValidatorNode::BufferFuturePrevote(const BftPrevoteMsg& prevote)
 
     m_future_prevotes[prevote.round].emplace(prevote.validator_id, prevote);
     // Cap the number of buffered rounds; drop the highest (least useful)
-    // rounds first. Honest gradual round movement never relies on the
-    // buffer, only on the MAX_FUTURE_ROUND_ADVANCE window.
+    // rounds first. Round movement is authorized by the distinct-validator
+    // evidence threshold below, not by the largest buffered round.
     while (m_future_prevotes.size() > MAX_BUFFERED_FUTURE_ROUNDS) {
         m_future_prevotes.erase(std::prev(m_future_prevotes.end()));
     }
@@ -778,6 +780,26 @@ bool BftValidatorNode::BufferFuturePrecommit(const BftPrecommitMsg& precommit)
         m_future_precommits.erase(std::prev(m_future_precommits.end()));
     }
     return true;
+}
+
+bool BftValidatorNode::BufferFutureProposal(const BftProposalMsg& proposal)
+{
+    const auto existing = m_future_proposals.find(proposal.round);
+    if (existing != m_future_proposals.end()) return existing->second == proposal;
+    m_future_proposals.emplace(proposal.round, proposal);
+    while (m_future_proposals.size() > MAX_BUFFERED_FUTURE_PROPOSALS) {
+        m_future_proposals.erase(std::prev(m_future_proposals.end()));
+    }
+    return m_future_proposals.contains(proposal.round);
+}
+
+std::optional<BftProposalMsg> BftValidatorNode::TakeBufferedProposalForCurrentRound()
+{
+    const auto proposal = m_future_proposals.find(m_round);
+    if (proposal == m_future_proposals.end()) return std::nullopt;
+    auto result = std::move(proposal->second);
+    m_future_proposals.erase(proposal);
+    return result;
 }
 
 uint32_t BftValidatorNode::EvidenceBackedFutureRound() const
@@ -815,8 +837,8 @@ uint32_t BftValidatorNode::EvidenceBackedFutureRound() const
 
 BftProposalResult BftValidatorNode::ReceiveProposal(const BftProposalMsg& proposal)
 {
-    if (proposal.network_id != m_network_id || proposal.height != m_height ||
-        proposal.round < m_round || proposal.round - m_round > MAX_FUTURE_ROUND_ADVANCE) {
+    if (proposal.network_id != m_network_id || proposal.height != m_height || proposal.round < m_round ||
+        proposal.round - m_round > MAX_BUFFERED_FUTURE_PROPOSAL_DISTANCE) {
         return {};
     }
 
@@ -832,10 +854,9 @@ BftProposalResult BftValidatorNode::ReceiveProposal(const BftProposalMsg& propos
         return {};
     }
 
-    // A signed proposal from the elected leader is evidence of a later round.
-    // Preserve any block lock while discarding only the older round's votes.
     if (proposal.round > m_round) {
-        EnterRound(proposal.round);
+        BufferFutureProposal(proposal);
+        return {};
     }
     if (m_prevoted) return {};
 

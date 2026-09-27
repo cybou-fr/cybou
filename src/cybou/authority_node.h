@@ -96,6 +96,7 @@ public:
     std::optional<BftProposalMsg> StartConsensusRound(uint32_t round);
     BftProposalResult ReceiveProposal(const BftProposalMsg& proposal);
     std::optional<BftPrecommitMsg> ReceivePrevote(const BftPrevoteMsg& prevote);
+    std::optional<BftProposalMsg> TakeBufferedProposalForCurrentRound();
     std::optional<FinalizedBlock> ReceivePrecommit(const BftPrecommitMsg& precommit);
     std::optional<BftPrevoteMsg> OnProposalTimeout();
     std::optional<BftPrecommitMsg> OnPrevoteTimeout();

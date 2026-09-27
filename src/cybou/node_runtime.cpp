@@ -430,6 +430,7 @@ void CybouNodeRuntime::TickConsensus(const std::chrono::milliseconds round_timeo
     std::optional<BftProposalMsg> proposal;
     std::optional<BftPrevoteMsg> prevote;
     std::optional<BftPrecommitMsg> precommit;
+    BftProposalResult buffered_result;
     {
         std::lock_guard lock(m_mutex);
         if (!m_authority_node) return;
@@ -455,6 +456,7 @@ void CybouNodeRuntime::TickConsensus(const std::chrono::milliseconds round_timeo
             }
             m_round_started = now;
             proposal = m_authority_node->StartConsensusRound(m_consensus_round);
+            if (!proposal) buffered_result = ProcessBufferedConsensusProposalLocked();
         } else {
             if (now - m_round_started < round_timeout ||
                 m_consensus_round == std::numeric_limits<uint32_t>::max()) return;
@@ -474,11 +476,14 @@ void CybouNodeRuntime::TickConsensus(const std::chrono::milliseconds round_timeo
                 ++m_consensus_round;
                 m_consensus_phase = 0;
                 proposal = m_authority_node->StartConsensusRound(m_consensus_round);
+                if (!proposal) buffered_result = ProcessBufferedConsensusProposalLocked();
             }
         }
     }
     if (prevote) BroadcastConsensusPrevote(*prevote);
     if (precommit) BroadcastConsensusPrecommit(*precommit);
+    if (buffered_result.prevote) BroadcastConsensusPrevote(*buffered_result.prevote);
+    if (buffered_result.precommit) BroadcastConsensusPrecommit(*buffered_result.precommit);
     if (proposal) {
         BroadcastConsensusProposal(*proposal);
         ReceiveConsensusProposal(*proposal);
@@ -536,6 +541,7 @@ std::optional<BftPrevoteMsg> CybouNodeRuntime::ReceiveConsensusProposal(const Bf
 std::optional<BftPrecommitMsg> CybouNodeRuntime::ReceiveConsensusPrevote(const BftPrevoteMsg& prevote)
 {
     std::optional<BftPrecommitMsg> pc;
+    std::optional<BftPrevoteMsg> buffered_prevote;
     {
         std::lock_guard lock(m_mutex);
         if (!m_authority_node) return std::nullopt;
@@ -545,19 +551,54 @@ std::optional<BftPrecommitMsg> CybouNodeRuntime::ReceiveConsensusPrevote(const B
             m_round_started = std::chrono::steady_clock::now();
             CommitConsensusPrecommit(*pc);
         }
+        const auto buffered = ProcessBufferedConsensusProposalLocked();
+        buffered_prevote = buffered.prevote;
+        if (buffered.precommit) pc = buffered.precommit;
         SyncConsensusDriverWithEngine();
     }
+    if (buffered_prevote) BroadcastConsensusPrevote(*buffered_prevote);
     if (pc) BroadcastConsensusPrecommit(*pc);
     return pc;
 }
 
 bool CybouNodeRuntime::ReceiveConsensusPrecommit(const BftPrecommitMsg& precommit)
 {
-    std::lock_guard lock(m_mutex);
-    if (!m_authority_node) return false;
-    const bool committed = CommitConsensusPrecommit(precommit);
-    SyncConsensusDriverWithEngine();
+    bool committed{false};
+    BftProposalResult buffered;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_authority_node) return false;
+        committed = CommitConsensusPrecommit(precommit);
+        buffered = ProcessBufferedConsensusProposalLocked();
+        committed = committed || buffered.finalized;
+        SyncConsensusDriverWithEngine();
+    }
+    if (buffered.prevote) BroadcastConsensusPrevote(*buffered.prevote);
+    if (buffered.precommit) BroadcastConsensusPrecommit(*buffered.precommit);
     return committed;
+}
+
+BftProposalResult CybouNodeRuntime::ProcessBufferedConsensusProposalLocked()
+{
+    if (!m_authority_node) return {};
+    const auto proposal = m_authority_node->TakeBufferedProposalForCurrentRound();
+    if (!proposal) return {};
+    auto result = m_authority_node->ReceiveProposal(*proposal);
+    if (result.prevote && !result.precommit && !result.finalized) {
+        result.precommit = m_authority_node->ReceivePrevote(*result.prevote);
+    }
+    if (result.prevote) {
+        m_consensus_height = proposal->height;
+        m_consensus_phase = result.precommit ? 2 : 1;
+        m_round_started = std::chrono::steady_clock::now();
+    }
+    if (result.precommit) {
+        CommitConsensusPrecommit(*result.precommit);
+    } else if (result.finalized) {
+        const auto& finalized = m_authority_node->GetLatestFinalizedBlock();
+        if (finalized) CommitConsensusFinalized(*finalized);
+    }
+    return result;
 }
 
 void CybouNodeRuntime::SyncConsensusDriverWithEngine()
