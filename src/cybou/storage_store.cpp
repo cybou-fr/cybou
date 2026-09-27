@@ -209,6 +209,31 @@ StorageWriteResult StorageObjectStore::CommitManifest(const StoragePublicManifes
     return {StorageWriteStatus::STORED, manifest.commitment};
 }
 
+bool StorageObjectStore::AbortUncommittedObject(
+    const StorageObjectId& object_id, const uint32_t chunk_count)
+{
+    if (object_id == StorageObjectId{} || chunk_count > STORAGE_OBJECT_MAX_CHUNKS) return false;
+    std::lock_guard lock(m_mutex);
+    if (m_db->Exists(ManifestKey(object_id))) return false;
+
+    uint64_t used{0};
+    (void)m_db->Read(UsageKey(), used);
+    uint64_t released{0};
+    KVStore::Batch batch;
+    for (uint32_t index = 0; index < chunk_count; ++index) {
+        const auto key = ChunkKey(object_id, index);
+        std::string encoded;
+        if (!m_db->Read(key, encoded)) continue;
+        if (encoded.size() > std::numeric_limits<uint64_t>::max() - released) return false;
+        released += encoded.size();
+        batch.Erase(key);
+    }
+    if (released > used) return false;
+    batch.Write(UsageKey(), used - released);
+    m_db->WriteBatch(batch, true);
+    return true;
+}
+
 std::optional<StoragePublicManifest> StorageObjectStore::GetManifest(const StorageObjectId& object_id) const
 {
     std::lock_guard lock(m_mutex);

@@ -1,9 +1,10 @@
 # 11 — Distributed storage object model
 
-Implementation status (2026-09-27): CYBOU now has a bounded encrypted-chunk
-profile, a durable network-bound provider store, and opt-in CYP2 upload, manifest
-commit, and retrieval. This is the first provider slice, not a complete Storage
-service: client-side three-peer placement, discovery/selection, leases,
+Implementation status (2026-09-27): CYBOU has a bounded encrypted-chunk
+profile, a durable network-bound provider store, opt-in CYP2 upload, manifest
+commit and retrieval, and a local client file roundtrip through the encrypted
+Storage Key Ring. This is the first end-to-end local slice, not a complete
+distributed Storage service: client-side three-peer placement, discovery/selection, leases,
 durability proofs, audits, repair, retention, and accounting are not operational.
 The provider stores ciphertext bytes, their opaque identifiers, and a public
 manifest; it receives no file metadata or key material. Storage is disabled by
@@ -66,9 +67,10 @@ choice, not a prerequisite for the first end-to-end Store slice.
 
 Object identifiers must avoid leaking original filenames, paths or user IDs.
 
-Exact content-addressed versus randomized-ID behavior remains to be frozen
-after privacy and deduplication analysis. See `88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md`
-for the key hierarchy and private manifest boundary.
+The provisional v1 client generates random ObjectIDs and per-object salts.
+Deduplication and wider protocol privacy behavior remain unfrozen. See
+`88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md` for the key hierarchy and private
+manifest boundary.
 
 ## Erasure profiles
 

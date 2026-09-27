@@ -191,6 +191,20 @@ std::optional<StoragePublicManifest> BuildStoragePublicManifest(
     return manifest;
 }
 
+std::optional<StoragePublicManifest> BuildStoragePublicManifestFromDescriptors(
+    const std::span<const unsigned char, 32> network_id,
+    const StorageObjectId& object_id,
+    const std::span<const StorageChunkDescriptor> chunks)
+{
+    if (IsZero(network_id) || object_id == StorageObjectId{} || chunks.empty() ||
+        chunks.size() > STORAGE_OBJECT_MAX_CHUNKS) return std::nullopt;
+    StoragePublicManifest manifest{.object_id = object_id, .chunk_count = static_cast<uint32_t>(chunks.size())};
+    manifest.chunks.assign(chunks.begin(), chunks.end());
+    if (!ComputeManifestCommitment(network_id, manifest, manifest.commitment) ||
+        !VerifyStoragePublicManifest(network_id, manifest)) return std::nullopt;
+    return manifest;
+}
+
 bool VerifyStoragePublicManifest(
     const std::span<const unsigned char, 32> network_id,
     const StoragePublicManifest& manifest)

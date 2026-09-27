@@ -201,6 +201,7 @@ include(InstallBinaryComponent)
 add_library(cybou_node STATIC
   cybou/kv_store.cpp
   cybou/storage_store.cpp
+  cybou/storage_service.cpp
   cybou/state_store.cpp
   cybou/block_executor.cpp
   cybou/authority_node.cpp

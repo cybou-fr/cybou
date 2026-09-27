@@ -2,8 +2,9 @@
 
 Status: canonical target for Files objects and Mail attachments. Provisional
 local v1 chunk encryption, public manifest commitments, durable provider/CYP2
-ciphertext transfer, and an encrypted AccountID-bound Storage Key Ring with
-durable epochs are implemented. Local device X25519 and ML-KEM-768 private
+ciphertext transfer, an encrypted AccountID-bound Storage Key Ring with
+durable epochs, and a local file upload/download roundtrip are implemented.
+Local device X25519 and ML-KEM-768 private
 material is generated and encrypted in the identity vault. Device KEM
 publication/wrapping, Storage Master Key device wrapping, client-side
 replication, leases, audits, repair, accounting, and attachment delivery are
@@ -175,6 +176,7 @@ consensus records. Their lease/accounting aggregation is defined in docs 11–13
 - chunk AEAD, nonce storage, and network/object/epoch/position AAD;
 - encrypted AccountID-bound Storage Key Ring sidecar with durable key epochs;
 - durable local provider and bounded CYP2 PUT/commit/GET ciphertext transfer.
+- local file upload, private metadata save, and verified no-overwrite download.
 
 These local encodings and key lifecycle remain provisional until reviewed
 cross-implementation vectors and protocol freeze.

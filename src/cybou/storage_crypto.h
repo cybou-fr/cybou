@@ -61,6 +61,11 @@ std::optional<StoragePublicManifest> BuildStoragePublicManifest(
     std::span<const unsigned char, 32> network_id,
     const StorageObjectId& object_id,
     std::span<const StorageEncryptedChunk> chunks);
+/** Build a manifest from already-verified descriptors without retaining all ciphertext chunks. */
+std::optional<StoragePublicManifest> BuildStoragePublicManifestFromDescriptors(
+    std::span<const unsigned char, 32> network_id,
+    const StorageObjectId& object_id,
+    std::span<const StorageChunkDescriptor> chunks);
 bool VerifyStoragePublicManifest(
     std::span<const unsigned char, 32> network_id,
     const StoragePublicManifest& manifest);

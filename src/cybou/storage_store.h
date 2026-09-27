@@ -52,6 +52,8 @@ public:
 
     StorageWriteResult PutChunk(const StorageObjectId& object_id, const StorageEncryptedChunk& chunk);
     StorageWriteResult CommitManifest(const StoragePublicManifest& manifest);
+    /** Remove only an uncommitted sequential upload after its client aborts. */
+    bool AbortUncommittedObject(const StorageObjectId& object_id, uint32_t chunk_count);
     std::optional<StoragePublicManifest> GetManifest(const StorageObjectId& object_id) const;
     std::optional<StorageEncryptedChunk> GetChunk(const StorageObjectId& object_id, uint32_t index) const;
     uint64_t UsedBytes() const;
