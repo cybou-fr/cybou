@@ -15,11 +15,12 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <thread>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_device_operation_coordinator_tests, BasicTestingSetup)
 
-BOOST_AUTO_TEST_CASE(uncertain_submission_reuses_durable_exact_operation_after_restart)
+BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart_and_corruption)
 {
     namespace asio = boost::asio;
     using tcp = asio::ip::tcp;
@@ -59,7 +60,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_reuses_durable_exact_operation_after_r
     asio::io_context server_io;
     tcp::acceptor acceptor{server_io, tcp::endpoint{asio::ip::address_v4::loopback(), 0}};
     const uint16_t port = acceptor.local_endpoint().port();
-    std::array<std::vector<unsigned char>, 2> received_frames;
+    std::array<std::vector<unsigned char>, 3> received_frames;
     std::thread remote([&] {
         for (auto& frame : received_frames) {
             tcp::socket socket{server_io};
@@ -124,7 +125,17 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_reuses_durable_exact_operation_after_r
             });
         BOOST_CHECK(result.phase == cybou::DeviceOperationPhase::UNCERTAIN);
         BOOST_CHECK(result.op_id == operation_id);
+        const cybou::PaymentPayload payment{.recipient = *account, .amount = 1};
+        const auto payment_commitment = cybou::ComputePaymentPayloadCommitment(payment);
+        BOOST_REQUIRE(payment_commitment);
+        const auto wallet_attempt = coordinator.Execute(cybou::DeviceOperationKind::PAYMENT, *payment_commitment,
+            [&](const cybou::DeviceAuthorization& authorization) -> std::optional<cybou::ProtocolOperation> {
+                return cybou::ProtocolOperation{cybou::AuthorizedPayment{authorization, payment}};
+            });
+        BOOST_CHECK(wallet_attempt.phase == cybou::DeviceOperationPhase::CONFLICT);
+        BOOST_CHECK(wallet_attempt.op_id == operation_id);
         BOOST_CHECK(received_frames[0] == received_frames[1]);
+        BOOST_CHECK(received_frames[1] == received_frames[2]);
         const auto status = coordinator.GetStatus(operation_id);
         BOOST_CHECK(status.phase == cybou::DeviceOperationPhase::UNCERTAIN);
         const auto loaded = restarted.GetStore().LoadState();
@@ -137,6 +148,41 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_reuses_durable_exact_operation_after_r
     }
     remote.join();
     acceptor.close();
+
+    const auto journal_path = client_data / "device-operation.cydop";
+    std::ifstream journal_input{journal_path, std::ios::binary};
+    const std::vector<unsigned char> valid_journal{std::istreambuf_iterator<char>{journal_input},
+        std::istreambuf_iterator<char>{}};
+    journal_input.close();
+    BOOST_REQUIRE(!valid_journal.empty());
+    const auto verify_fail_closed = [&](const std::vector<unsigned char>& bytes) {
+        {
+            std::ofstream output{journal_path, std::ios::binary | std::ios::trunc};
+            output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        }
+        cybou::CybouNodeRuntime damaged_runtime{client_config};
+        BOOST_REQUIRE(damaged_runtime.InitializeGenesis(genesis));
+        auto& coordinator = damaged_runtime.GetDeviceOperationCoordinator(identity.GetKeyStore());
+        std::array<unsigned char, 32> salt{};
+        salt[0] = 0x52;
+        const auto name_commitment = cybou::ComputeNameCommitment(network_id, *account, "bobcy", salt);
+        const cybou::NameCommitPayload payload{.commitment = name_commitment};
+        const auto payload_commitment = cybou::ComputeNameCommitPayloadCommitment(payload);
+        BOOST_REQUIRE(payload_commitment);
+        bool builder_called{false};
+        const auto result = coordinator.Execute(cybou::DeviceOperationKind::NAME_COMMIT, *payload_commitment,
+            [&](const cybou::DeviceAuthorization&) -> std::optional<cybou::ProtocolOperation> {
+                builder_called = true;
+                return std::nullopt;
+            });
+        BOOST_CHECK(result.phase == cybou::DeviceOperationPhase::CONFLICT);
+        BOOST_CHECK(!builder_called);
+    };
+    auto corrupt_journal = valid_journal;
+    corrupt_journal.back() ^= 0x01;
+    verify_fail_closed(corrupt_journal);
+    verify_fail_closed(std::vector<unsigned char>(valid_journal.begin(), valid_journal.begin() + 12));
+
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     BOOST_CHECK(!ec);
