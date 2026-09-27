@@ -101,7 +101,10 @@ BOOST_AUTO_TEST_CASE(keystore_uses_random_account_and_portable_vault)
 
     cybou::CybouKeyStore unrelated;
     BOOST_REQUIRE(unrelated.GenerateNew());
-    BOOST_CHECK(!unrelated.LoadStorageKeyRing(storage_keys_path, "correct horse battery staple"));
+    const auto unrelated_ring_path = test_dir / "unrelated.storage-keys.cybou";
+    BOOST_REQUIRE(unrelated.CreateStorageKeyRing(unrelated_ring_path, "correct horse battery staple"));
+    BOOST_CHECK(!ks2.LoadStorageKeyRing(unrelated_ring_path, "correct horse battery staple"));
+    BOOST_CHECK(!ks2.GetCurrentStorageKeyEpoch());
     first_storage_key.fill(0);
 
     const auto raw_path = test_dir / "raw.key";

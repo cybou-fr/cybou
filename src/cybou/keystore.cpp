@@ -136,6 +136,7 @@ bool CybouKeyStore::CreateStorageKeyRing(const std::filesystem::path& path, std:
 
 bool CybouKeyStore::LoadStorageKeyRing(const std::filesystem::path& path, std::string_view password)
 {
+    m_impl->storage_key_ring.reset();
     if (!m_impl->material) return false;
     const auto account = AccountId::FromBytes(m_impl->material->account_id);
     auto ring = StorageKeyRing::LoadFromFile(path, password);
