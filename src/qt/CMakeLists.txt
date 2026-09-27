@@ -50,9 +50,6 @@ endfunction()
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOMOC_MOC_OPTIONS "-p${CMAKE_CURRENT_SOURCE_DIR}")
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTOUIC_SEARCH_PATHS forms)
-
 set(CMAKE_AUTORCC OFF)
 qt6_add_resources(CYBOU_QRC cybou.qrc)
 # CYBOU's native desktop target contains only its own UI and runtime.
@@ -127,20 +124,4 @@ endif()
 
 if(BUILD_GUI_TESTS)
   add_subdirectory(test)
-endif()
-
-find_program(XGETTEXT_EXECUTABLE xgettext)
-if(NOT XGETTEXT_EXECUTABLE)
-  add_custom_target(translate
-    COMMAND ${CMAKE_COMMAND} -E echo "Error: GNU gettext-tools not found"
-  )
-else()
-  add_custom_target(translate COMMAND ${CMAKE_COMMAND}
-    -D "PROJECT_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-    -D "COPYRIGHT_HOLDERS=${COPYRIGHT_HOLDERS}"
-    -D "LCONVERT_EXECUTABLE=$<TARGET_FILE:Qt6::lconvert>"
-    -D "LUPDATE_EXECUTABLE=$<TARGET_FILE:Qt6::lupdate>"
-    -D "XGETTEXT_EXECUTABLE=${XGETTEXT_EXECUTABLE}"
-    -P ${PROJECT_SOURCE_DIR}/share/qt/translate.cmake
-  )
 endif()

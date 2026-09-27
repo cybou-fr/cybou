@@ -159,7 +159,7 @@ endif()
 
 cmake_dependent_option(BUILD_GUI_TESTS "Build CYBOU native Qt smoke test." ON "BUILD_GUI;BUILD_TESTS" OFF)
 if(BUILD_GUI)
-  set(qt_components Core Gui Widgets Svg LinguistTools)
+  set(qt_components Core Gui Widgets Svg)
   if(WITH_DBUS)
     list(APPEND qt_components DBus)
     set(USE_DBUS TRUE)

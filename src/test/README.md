@@ -33,10 +33,8 @@ To add more unit tests, add `BOOST_AUTO_TEST_CASE` functions to the existing
 .cpp files in the `test/` directory or add new .cpp files that
 implement new `BOOST_AUTO_TEST_SUITE` sections.
 
-To run the GUI unit tests manually, launch `build/bin/test_bitcoin-qt`
-
-To add more GUI unit tests, add them to the `src/qt/test/` directory and
-the `src/qt/test/test_main.cpp` file.
+The CYBOU desktop has its own smoke-test target, `test_cybou-native-qt`,
+defined in `src/qt/test/CMakeLists.txt`.
 
 ### Running individual tests
 
