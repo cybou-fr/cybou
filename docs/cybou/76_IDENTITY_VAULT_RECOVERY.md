@@ -50,6 +50,36 @@ finality. Loss of
 all devices is recoverable if the phrase survives. Loss of devices and phrase
 is unrecoverable.
 
+### Recovery-root rotation transaction
+
+The consensus transition already verifies the old root signature and new-root
+proof of possession over the same network-bound digest. It atomically replaces
+the RecoveryKeyID mapping and advances the shared root nonce. Desktop recovery
+root rotation is not operational until local vault persistence and operation
+reconciliation are integrated around that transition:
+
+1. Generate a new 256-bit root entropy, derive its hybrid key and 24 words, and
+   require the user to confirm the new phrase before any submission.
+2. Build a password-protected candidate vault for the same AccountID and
+   existing device secret, replacing only the recovery entropy. Save it to a
+   distinct pending path and reopen it successfully. Keep the currently active
+   vault intact.
+3. Read the finalized root nonce, sign one `RecoveryRotate` with the old root,
+   prove possession with the new root, and durably journal the exact operation
+   bytes and OperationID before broadcast.
+4. While delivery or finality is uncertain, retain both vaults and retry only
+   the journaled bytes. Never select the old or new root based on an admission
+   acknowledgment.
+5. On verified finality, atomically promote the pending vault before clearing
+   the operation journal. On a known rejection, keep the old vault active and
+   discard the candidate only after rejection is durably reconciled. On a
+   history conflict, preserve both vaults and require explicit recovery.
+
+The pending-vault format and promotion must be crash-safe across each step.
+The current CYBV2 payload contains only one recovery entropy, and
+`DeviceOperationCoordinator` does not yet reconcile `RecoveryRotate`; therefore
+this sequence is a required implementation gate, not a feature claim.
+
 ## Portable `CYBV2` vault
 
 Use a versioned, length-bounded binary envelope. Its public header contains
