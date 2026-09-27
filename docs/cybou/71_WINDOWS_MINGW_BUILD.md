@@ -24,6 +24,25 @@ set PATH=C:\Qt\Tools\mingw1310_64\bin;%PATH%
 Без этого vcpkg не сможет собрать порты для triplet `x64-mingw-dynamic`
 (хост-триплет тоже MinGW — машина без Visual Studio, детект MSVC падает).
 
+Каталог MinGW `bin` должен оставаться в `PATH` и при каждом прямом запуске
+CMake build и тестов. `g++.exe` запускает `cc1plus.exe` как дочерний процесс;
+если DLL из MinGW `bin` не находятся в `PATH`, дочерний процесс может завершиться
+с кодом Windows `0xC0000135`, а Ninja покажет ошибку compile без диагностики.
+CMake Preset `cybou-consumer-qt-mingw` задаёт это окружение, если запускать через
+preset. Для прямых команд в PowerShell задайте его явно:
+
+```powershell
+$env:PATH = "C:\Qt\Tools\mingw1310_64\bin;C:\Qt\Tools\Ninja;$env:PATH"
+cmake --build build_cybou_qt_mingw --target cybou-core-test cybou-node --parallel 4
+```
+
+Для запуска приложения и тестов добавьте также каталоги runtime DLL Qt и vcpkg:
+
+```powershell
+$env:PATH = "C:\Qt\Tools\mingw1310_64\bin;C:\Qt\Tools\Ninja;C:\Qt\6.11.2\mingw_64\bin;$(Resolve-Path build_cybou_qt_mingw/vcpkg_installed/x64-mingw-dynamic/bin);$env:PATH"
+build_cybou_qt_mingw\bin\cybou-core-test.exe --log_level=error
+```
+
 ## Почему именно так
 
 Корневой `CMakeLists.txt` требует **OpenSSL 3.5** (`find_package(OpenSSL 3.5
@@ -111,6 +130,7 @@ build_cybou_qt_mingw\bin\cybou-core-test.exe --log_level=error
 | `Could NOT find OpenSSL (at least 3.5)` | не выполнен шаг 1 или поставлены не те фичи | повторить шаг 1 точно с `--x-feature=tests` |
 | `visualstudio.cpp(90): Value was null` (vcpkg) | хост-триплет x64-windows без Visual Studio | `--host-triplet x64-mingw-dynamic` + MinGW в PATH |
 | `No CMAKE_C_COMPILER could be found` (vcpkg) | MinGW не в PATH при шаге 1 | `set PATH=C:\Qt\Tools\mingw1310_64\bin;%PATH%` |
+| Ninja сообщает о падении compile без диагностики | MinGW `cc1plus.exe` не находит DLL из `bin` (`0xC0000135`) | добавить `C:\Qt\Tools\mingw1310_64\bin` в `PATH` и повторить сборку |
 | configure пересобирается и теряет OpenSSL | CMake re-run без toolchain | всегда указывать `-DCMAKE_TOOLCHAIN_FILE=...` (кеш хранит его, но регенерация без него его затирает) |
 | CI (ubuntu-24.04) красный на configure | `libssl-dev` = OpenSSL 3.0.13 < 3.5 | та же стратегия vcpkg: toolchain + triplet + установка openssl в workflow |
 
