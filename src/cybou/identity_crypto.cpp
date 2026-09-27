@@ -4,6 +4,7 @@
 
 #include <cybou/identity_crypto.h>
 #include <cybou/crypto/hkdf_sha256.h>
+#include <cybou/crypto/cleanse.h>
 
 #include <openssl/core_names.h>
 #include <openssl/crypto.h>
@@ -86,7 +87,7 @@ Key MakeKey(std::span<const unsigned char, 32> secret, IdentityKeyPurpose purpos
             if (EVP_PKEY_CTX_set_params(ctx.get(), params) == 1 && EVP_PKEY_keygen(ctx.get(), &raw) == 1) key.reset(raw);
         }
     }
-    OPENSSL_cleanse(seed->data(), seed->size());
+    crypto::CleanseMemory(seed->data(), seed->size());
     return key;
 }
 

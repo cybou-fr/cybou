@@ -3,9 +3,9 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/recovery_phrase.h>
+#include <cybou/crypto/sha256.h>
 
 #include <openssl/rand.h>
-#include <openssl/sha.h>
 
 #include <algorithm>
 #include <array>
@@ -39,8 +39,8 @@ std::optional<RecoveryEntropy> GenerateRecoveryEntropy()
 
 RecoveryWords EncodeRecoveryWords(const RecoveryEntropy& entropy)
 {
-    std::array<unsigned char, SHA256_DIGEST_LENGTH> hash{};
-    SHA256(entropy.data(), entropy.size(), hash.data());
+    std::array<unsigned char, crypto::Sha256::OUTPUT_SIZE> hash{};
+    crypto::Sha256{}.Write(entropy.data(), entropy.size()).Finalize(hash.data());
     RecoveryWords result{};
     for (size_t word{0}; word < result.size(); ++word) {
         unsigned index{0};
@@ -67,8 +67,8 @@ std::optional<RecoveryEntropy> DecodeRecoveryWords(const RecoveryWords& words)
     }
     RecoveryEntropy entropy{};
     std::copy_n(bits.begin(), entropy.size(), entropy.begin());
-    std::array<unsigned char, SHA256_DIGEST_LENGTH> hash{};
-    SHA256(entropy.data(), entropy.size(), hash.data());
+    std::array<unsigned char, crypto::Sha256::OUTPUT_SIZE> hash{};
+    crypto::Sha256{}.Write(entropy.data(), entropy.size()).Finalize(hash.data());
     if (bits[32] != hash[0]) return std::nullopt;
     return entropy;
 }

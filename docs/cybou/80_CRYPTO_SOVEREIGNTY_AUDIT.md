@@ -27,7 +27,8 @@ not by itself remove it.
   EVP. A new test checks the NIST empty and `abc` vectors and compares EVP
   output byte-for-byte with the inherited implementation across SHA-256
   padding boundaries and multi-chunk input. The inherited API remains in the
-  test as a compatibility oracle; other inherited crypto migrations remain.
+  test as a compatibility oracle. BIP-39 recovery phrase checksums also use
+  this wrapper and retain the canonical zero-entropy phrase vector.
 - CYBOU HKDF-SHA256 derivations now share `cybou/crypto/hkdf_sha256.h`, backed
   by OpenSSL EVP_KDF. Identity key derivation, the local mail-key derivation,
   and the existing prototype Mail payload use this wrapper without changing
@@ -53,6 +54,10 @@ not by itself remove it.
   slowdown is not acceptable for this hot path, so no SipHash migration was
   made. Revisit only with a faster provider/API path or a different approved
   performance constraint; do not replace it with a CYBOU-authored primitive.
+- CYBOU secret-cleansing call sites now route through
+  `cybou/crypto/cleanse.h`; direct `OPENSSL_cleanse` use is confined to the
+  approved crypto wrappers. `CRYPTO_memcmp` remains for constant-time vault
+  payload comparison.
 
 The root `CMakeLists.txt` requires OpenSSL 3.5. The active PQ baseline in
 `09_CRYPTO_PQ.md` names X25519 + ML-KEM-768 as the Mail target and explicitly
@@ -83,9 +88,9 @@ production path. See `16_MAIL_PROTOCOL.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
    with a faster provider/API path, preserving exact output. Review provider
    policy and failure behavior for the crypto wrappers before widening their
    use.
-5. Replace inherited secret-cleansing calls through one CYBOU-owned interface,
-   then verify there are no direct inherited crypto or cleanse includes under
-   `src/cybou` outside the approved wrapper.
+5. Secret cleansing now routes through one CYBOU-owned interface. Verify there
+   are no direct inherited crypto or cleanse includes under `src/cybou` outside
+   the approved wrappers.
 6. Remove `bitcoin_crypto` from CYBOU link interfaces only after the remaining
    CYBOU sources and targets no longer require any of its symbols. Verify the
    final link graph for `cybou_core`, `cybou_node`, and the desktop executable.

@@ -4,8 +4,8 @@
 
 #include <cybou/identity_material.h>
 #include <cybou/identity_vault.h>
+#include <cybou/crypto/cleanse.h>
 
-#include <openssl/crypto.h>
 #include <openssl/rand.h>
 
 #include <algorithm>
@@ -58,9 +58,9 @@ IdentityMaterial::~IdentityMaterial() { Clear(); }
 
 void IdentityMaterial::Clear() noexcept
 {
-    OPENSSL_cleanse(account_id.data(), account_id.size());
-    OPENSSL_cleanse(recovery_entropy.data(), recovery_entropy.size());
-    OPENSSL_cleanse(device_secret.data(), device_secret.size());
+    crypto::CleanseMemory(account_id.data(), account_id.size());
+    crypto::CleanseMemory(recovery_entropy.data(), recovery_entropy.size());
+    crypto::CleanseMemory(device_secret.data(), device_secret.size());
 }
 
 std::optional<IdentityMaterial> GenerateIdentityMaterial()
@@ -71,7 +71,7 @@ std::optional<IdentityMaterial> GenerateIdentityMaterial()
         RAND_bytes(material.device_secret.data(), material.device_secret.size()) != 1 ||
         !Nonzero(material.account_id) || !Nonzero(material.device_secret)) return std::nullopt;
     material.recovery_entropy = *entropy;
-    OPENSSL_cleanse(entropy->data(), entropy->size());
+    crypto::CleanseMemory(entropy->data(), entropy->size());
     return material;
 }
 
@@ -85,7 +85,7 @@ bool SaveNewIdentityMaterial(const std::filesystem::path& path,
     std::copy(material.recovery_entropy.begin(), material.recovery_entropy.end(), payload.begin() + 37);
     std::copy(material.device_secret.begin(), material.device_secret.end(), payload.begin() + 69);
     const bool saved = SaveNewIdentityVault(path, password, payload);
-    OPENSSL_cleanse(payload.data(), payload.size());
+    crypto::CleanseMemory(payload.data(), payload.size());
     return saved;
 }
 
@@ -95,7 +95,7 @@ std::optional<IdentityMaterial> LoadIdentityMaterial(
     auto payload = LoadIdentityVault(path, password);
     if (!payload) return std::nullopt;
     auto material = Parse(*payload);
-    OPENSSL_cleanse(payload->data(), payload->size());
+    crypto::CleanseMemory(payload->data(), payload->size());
     return material;
 }
 

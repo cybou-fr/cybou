@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/identity_vault.h>
+#include <cybou/crypto/cleanse.h>
 
 #include <openssl/core_names.h>
 #include <openssl/crypto.h>
@@ -228,7 +229,7 @@ std::optional<std::vector<unsigned char>> Decrypt(
             const_cast<unsigned char*>(ciphertext.data() + data_size)) != 1) return std::nullopt;
     int final_length{0};
     if (EVP_DecryptFinal_ex(ctx.get(), result.data() + length, &final_length) != 1 || final_length != 0) {
-        OPENSSL_cleanse(result.data(), result.size());
+        crypto::CleanseMemory(result.data(), result.size());
         return std::nullopt;
     }
     return result;
@@ -252,13 +253,13 @@ std::optional<std::vector<unsigned char>> SealIdentityVault(
     std::array<unsigned char, 32> dek{};
     if (!DeriveKek(password, result.data() + SALT_OFFSET, MEMCOST, ITERATIONS, LANES, kek) ||
         RAND_bytes(dek.data(), dek.size()) != 1) {
-        OPENSSL_cleanse(kek.data(), kek.size());
+        crypto::CleanseMemory(kek.data(), kek.size());
         return std::nullopt;
     }
     const auto wrapped = Encrypt(kek, result.data() + WRAP_NONCE_OFFSET, result, dek);
     const auto encrypted = Encrypt(dek, result.data() + PAYLOAD_NONCE_OFFSET, result, payload);
-    OPENSSL_cleanse(kek.data(), kek.size());
-    OPENSSL_cleanse(dek.data(), dek.size());
+    crypto::CleanseMemory(kek.data(), kek.size());
+    crypto::CleanseMemory(dek.data(), dek.size());
     if (!wrapped || !encrypted || wrapped->size() != WRAPPED_DEK_SIZE) return std::nullopt;
     result.insert(result.end(), wrapped->begin(), wrapped->end());
     result.insert(result.end(), encrypted->begin(), encrypted->end());
@@ -281,12 +282,12 @@ std::optional<std::vector<unsigned char>> OpenIdentityVault(
     const auto header = envelope.first(HEADER_SIZE);
     auto wrapped = Decrypt(kek, envelope.data() + WRAP_NONCE_OFFSET, header,
         envelope.subspan(HEADER_SIZE, WRAPPED_DEK_SIZE));
-    OPENSSL_cleanse(kek.data(), kek.size());
+    crypto::CleanseMemory(kek.data(), kek.size());
     if (!wrapped || wrapped->size() != 32) return std::nullopt;
     const auto plaintext = Decrypt(std::span<const unsigned char, 32>{wrapped->data(), 32},
         envelope.data() + PAYLOAD_NONCE_OFFSET, header,
         envelope.subspan(HEADER_SIZE + WRAPPED_DEK_SIZE));
-    OPENSSL_cleanse(wrapped->data(), wrapped->size());
+    crypto::CleanseMemory(wrapped->data(), wrapped->size());
     return plaintext;
 }
 
@@ -307,7 +308,7 @@ bool SaveNewIdentityVault(const std::filesystem::path& path,
     if (!reopened) return false;
     const bool match = reopened->size() == payload.size() &&
         CRYPTO_memcmp(reopened->data(), payload.data(), payload.size()) == 0;
-    OPENSSL_cleanse(reopened->data(), reopened->size());
+    crypto::CleanseMemory(reopened->data(), reopened->size());
     return match;
 }
 
