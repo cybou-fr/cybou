@@ -67,4 +67,31 @@ BOOST_AUTO_TEST_CASE(new_file_is_durable_authenticated_and_never_overwritten)
     std::filesystem::remove(path);
 }
 
+BOOST_AUTO_TEST_CASE(candidate_vault_promotion_is_authenticated_atomic_and_retryable)
+{
+    const auto dir = std::filesystem::temp_directory_path() / "cybou_identity_vault_promotion_test";
+    std::filesystem::create_directories(dir);
+    const auto active = dir / "identity.cybv2";
+    const auto candidate = dir / "identity.rotation-pending.cybv2";
+    std::filesystem::remove(active);
+    std::filesystem::remove(candidate);
+    const std::vector<unsigned char> old_payload{1, 2, 3, 4};
+    const std::vector<unsigned char> new_payload{5, 6, 7, 8};
+    BOOST_REQUIRE(cybou::SaveNewIdentityVault(active, "correct horse battery", old_payload));
+    BOOST_REQUIRE(cybou::SaveNewIdentityVault(candidate, "correct horse battery", new_payload));
+
+    BOOST_CHECK(!cybou::PromoteIdentityVault(candidate, active, "incorrect password", new_payload));
+    BOOST_CHECK(cybou::LoadIdentityVault(active, "correct horse battery") == old_payload);
+    BOOST_CHECK(cybou::LoadIdentityVault(candidate, "correct horse battery") == new_payload);
+    BOOST_CHECK(!cybou::PromoteIdentityVault(candidate, active, "correct horse battery", old_payload));
+    BOOST_CHECK(cybou::LoadIdentityVault(active, "correct horse battery") == old_payload);
+
+    BOOST_REQUIRE(cybou::PromoteIdentityVault(candidate, active, "correct horse battery", new_payload));
+    BOOST_CHECK(cybou::LoadIdentityVault(active, "correct horse battery") == new_payload);
+    BOOST_CHECK(!std::filesystem::exists(candidate));
+    BOOST_CHECK(cybou::PromoteIdentityVault(candidate, active, "correct horse battery", new_payload));
+    BOOST_CHECK(!cybou::PromoteIdentityVault(candidate, active, "correct horse battery", old_payload));
+    std::filesystem::remove_all(dir);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

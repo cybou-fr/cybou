@@ -312,6 +312,58 @@ bool SaveNewIdentityVault(const std::filesystem::path& path,
     return match;
 }
 
+bool PromoteIdentityVault(const std::filesystem::path& candidate_path,
+    const std::filesystem::path& active_path, std::string_view password,
+    std::span<const unsigned char> expected_payload)
+{
+    if (candidate_path.empty() || active_path.empty() || candidate_path == active_path ||
+        candidate_path.filename().empty() || active_path.filename().empty() || expected_payload.empty()) return false;
+    std::error_code ec;
+    const auto candidate_parent = std::filesystem::absolute(candidate_path.parent_path().empty()
+        ? std::filesystem::current_path() : candidate_path.parent_path(), ec).lexically_normal();
+    if (ec) return false;
+    const auto active_parent = std::filesystem::absolute(active_path.parent_path().empty()
+        ? std::filesystem::current_path() : active_path.parent_path(), ec).lexically_normal();
+    if (ec || candidate_parent != active_parent) return false;
+
+    auto candidate_plaintext = LoadIdentityVault(candidate_path, password);
+    if (!candidate_plaintext) {
+        // A prior call may have renamed the candidate successfully but failed
+        // while syncing the parent directory. Accept only the exact payload.
+        if (std::filesystem::exists(candidate_path, ec) || ec) return false;
+        auto active_plaintext = LoadIdentityVault(active_path, password);
+        if (!active_plaintext) return false;
+        const bool already_promoted = active_plaintext->size() == expected_payload.size() &&
+            CRYPTO_memcmp(active_plaintext->data(), expected_payload.data(), expected_payload.size()) == 0;
+        crypto::CleanseMemory(active_plaintext->data(), active_plaintext->size());
+        return already_promoted;
+    }
+    const bool candidate_matches = candidate_plaintext->size() == expected_payload.size() &&
+        CRYPTO_memcmp(candidate_plaintext->data(), expected_payload.data(), expected_payload.size()) == 0;
+    crypto::CleanseMemory(candidate_plaintext->data(), candidate_plaintext->size());
+    if (!candidate_matches) return false;
+
+#ifdef _WIN32
+    if (!MoveFileExW(candidate_path.c_str(), active_path.c_str(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) return false;
+#else
+    if (::rename(candidate_path.c_str(), active_path.c_str()) != 0) return false;
+    const auto parent = active_path.parent_path().empty() ? std::filesystem::path{"."} : active_path.parent_path();
+    const int dirfd = open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (dirfd < 0) return false;
+    const bool synced = fsync(dirfd) == 0;
+    close(dirfd);
+    if (!synced) return false;
+#endif
+
+    auto promoted_plaintext = LoadIdentityVault(active_path, password);
+    if (!promoted_plaintext) return false;
+    const bool promoted_matches = promoted_plaintext->size() == expected_payload.size() &&
+        CRYPTO_memcmp(promoted_plaintext->data(), expected_payload.data(), expected_payload.size()) == 0;
+    crypto::CleanseMemory(promoted_plaintext->data(), promoted_plaintext->size());
+    return promoted_matches;
+}
+
 std::optional<std::vector<unsigned char>> LoadIdentityVault(
     const std::filesystem::path& path, std::string_view password)
 {

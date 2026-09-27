@@ -12,7 +12,7 @@ The current text-only Mail profile is limited to DEV/Alpha integration. See
 - Random stable AccountID, independent of mnemonic and keys.
 - 24-word recovery phrase encoding and recovery-derived Ed25519 + ML-DSA-65 root keys.
 - Independent Ed25519 + ML-DSA-44 device keys and versioned RecoveryKeyID and DeviceKeyID commitments.
-- Portable encrypted CYBV2 vault with Argon2id and AES-256-GCM, durable create-only save, and reopen verification.
+- Portable encrypted CYBV2 vault with Argon2id and AES-256-GCM, durable create-only save and reopen verification, plus authenticated same-directory candidate promotion. Root-rotation orchestration does not yet use the promotion primitive.
 - Canonical account creation with anti-Sybil work and hybrid root/device proofs of possession.
 - Bounded device registry with add, revoke, root rotation, independent device nonces, and activation numbers that prevent replay after a key is re-added.
 - Canonical identity-registry and monetary-state snapshots with a domain-separated state root.

@@ -24,6 +24,11 @@ std::optional<std::vector<unsigned char>> OpenIdentityVault(
 // only after a synced write, atomic publication, and authenticated reopen.
 bool SaveNewIdentityVault(const std::filesystem::path& path,
     std::string_view password, std::span<const unsigned char> payload);
+// Atomically promotes an already durable candidate vault over the active vault.
+// The expected plaintext binds retries to the exact pending rotation payload.
+bool PromoteIdentityVault(const std::filesystem::path& candidate_path,
+    const std::filesystem::path& active_path, std::string_view password,
+    std::span<const unsigned char> expected_payload);
 std::optional<std::vector<unsigned char>> LoadIdentityVault(
     const std::filesystem::path& path, std::string_view password);
 

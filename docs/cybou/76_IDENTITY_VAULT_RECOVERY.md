@@ -75,10 +75,12 @@ reconciliation are integrated around that transition:
    discard the candidate only after rejection is durably reconciled. On a
    history conflict, preserve both vaults and require explicit recovery.
 
-The pending-vault format and promotion must be crash-safe across each step.
-The current CYBV2 payload contains only one recovery entropy, and
-`DeviceOperationCoordinator` does not yet reconcile `RecoveryRotate`; therefore
-this sequence is a required implementation gate, not a feature claim.
+The current CYBV2 payload contains only one recovery entropy.
+`PromoteIdentityVault` now authenticates a same-directory candidate and
+provides durable, idempotent replacement bound to the expected plaintext, but
+the identity service and `DeviceOperationCoordinator` do not yet orchestrate
+candidate creation, `RecoveryRotate` reconciliation, and promotion. This
+sequence remains a required implementation gate, not a feature claim.
 
 ## Portable `CYBV2` vault
 
