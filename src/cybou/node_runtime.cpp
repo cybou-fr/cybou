@@ -2,6 +2,8 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/node_runtime.h>
+#include <cybou/device_operation_coordinator.h>
+#include <cybou/keystore.h>
 #include <cybou/p2p/peer_manager.h>
 
 #include <boost/asio/ip/address.hpp>
@@ -200,6 +202,43 @@ std::optional<OperationSubmitStatus> CybouNodeRuntime::KnownOperationStatus(cons
     return std::nullopt;
 }
 
+OperationStatus CybouNodeRuntime::GetOperationStatus(const uint256& op_id) const
+{
+    if (op_id.IsNull()) return {};
+    std::lock_guard lock(m_mutex);
+    if (m_authority_node && m_authority_node->HasPendingOperation(op_id)) {
+        return {.kind = OperationStatusKind::LOCAL_PENDING};
+    }
+    if (const auto height = m_store.GetFinalizedOperationHeight(op_id)) {
+        return {.kind = OperationStatusKind::FINALIZED, .finalized_height = *height};
+    }
+    const auto known = m_recent_operation_status.find(op_id);
+    if (known != m_recent_operation_status.end()) return known->second;
+    return {};
+}
+
+DeviceOperationCoordinator& CybouNodeRuntime::GetDeviceOperationCoordinator(CybouKeyStore& keystore)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_device_operation_coordinator) {
+        m_device_operation_coordinator = std::make_unique<DeviceOperationCoordinator>(
+            *this, keystore, m_config.memory_only ? std::filesystem::path{} :
+                m_config.data_dir / "device-operation.cydop");
+    }
+    return *m_device_operation_coordinator;
+}
+
+void CybouNodeRuntime::RememberOperationStatus(const uint256& id, OperationStatus status)
+{
+    if (id.IsNull()) return;
+    if (!m_recent_operation_status.contains(id)) m_recent_operation_status_order.push_back(id);
+    m_recent_operation_status[id] = status;
+    while (m_recent_operation_status_order.size() > 256) {
+        m_recent_operation_status.erase(m_recent_operation_status_order.front());
+        m_recent_operation_status_order.pop_front();
+    }
+}
+
 std::vector<ProtocolOperation> CybouNodeRuntime::RecentOperationsForGossip() const
 {
     std::lock_guard lock(m_mutex);
@@ -261,6 +300,14 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         if (m_authority_node) {
             const auto status = m_authority_node->SubmitOperationWithStatus(op, std::move(source_peer));
             if (status == OperationSubmitStatus::ACCEPTED) RememberOperationForGossip(op, op_id);
+            if (status == OperationSubmitStatus::ACCEPTED || status == OperationSubmitStatus::ALREADY_PENDING) {
+                RememberOperationStatus(op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
+            } else if (status == OperationSubmitStatus::ALREADY_FINALIZED) {
+                const auto height = m_store.GetFinalizedOperationHeight(op_id).value_or(0);
+                RememberOperationStatus(op_id, {.kind = OperationStatusKind::FINALIZED, .finalized_height = height});
+            } else {
+                RememberOperationStatus(op_id, {.kind = OperationStatusKind::REJECTED_KNOWN});
+            }
             return OperationSubmitResult{.status = status, .op_id = op_id};
         }
         endpoint = m_submit_endpoint;
@@ -281,10 +328,33 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         auto result = submitted.acknowledgment.value_or(
             OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id});
         result.delivery_uncertain = submitted.delivery_uncertain;
+        {
+            std::lock_guard lock(m_mutex);
+            if (result.status == OperationSubmitStatus::ACCEPTED ||
+                result.status == OperationSubmitStatus::ALREADY_PENDING) {
+                RememberOperationStatus(op_id, {.kind = OperationStatusKind::ACCEPTED_REMOTE});
+            } else if (result.status == OperationSubmitStatus::ALREADY_FINALIZED) {
+                RememberOperationStatus(op_id, {.kind = OperationStatusKind::FINALIZED,
+                    .finalized_height = m_store.GetFinalizedOperationHeight(op_id).value_or(0)});
+            } else if (!result.delivery_uncertain) {
+                RememberOperationStatus(op_id, {.kind = OperationStatusKind::REJECTED_KNOWN});
+            }
+        }
         return result;
     }
     if (endpoint.has_value()) {
-        return SubmitOperationRemote(endpoint->first, endpoint->second, net_id, op);
+        auto result = SubmitOperationRemote(endpoint->first, endpoint->second, net_id, op);
+        std::lock_guard lock(m_mutex);
+        if (result.status == OperationSubmitStatus::ACCEPTED ||
+            result.status == OperationSubmitStatus::ALREADY_PENDING) {
+            RememberOperationStatus(op_id, {.kind = OperationStatusKind::ACCEPTED_REMOTE});
+        } else if (result.status == OperationSubmitStatus::ALREADY_FINALIZED) {
+            RememberOperationStatus(op_id, {.kind = OperationStatusKind::FINALIZED,
+                .finalized_height = m_store.GetFinalizedOperationHeight(op_id).value_or(0)});
+        } else if (!result.delivery_uncertain) {
+            RememberOperationStatus(op_id, {.kind = OperationStatusKind::REJECTED_KNOWN});
+        }
+        return result;
     }
     return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
 }

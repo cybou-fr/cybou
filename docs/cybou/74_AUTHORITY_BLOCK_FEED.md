@@ -43,6 +43,10 @@ local metadata, not an additional wire status. Callers must reconcile an
 uncertain operation by its OperationID instead of assuming that its nonce is
 free for reuse.
 
+The DEV authority publishes its CYP2 listener at `51.255.46.58:29461` alongside
+the legacy block-feed port `29460`. The Qt desktop uses CYP2 by default; the
+CYB1 block feed remains an explicit diagnostic fallback.
+
 The desktop identity service saves keystore material durably to disk *before*
 PoW and network broadcast using atomic replace and crash-safe `.bak` rotation,
 closing the window where an account could be created on-chain while the private
@@ -52,11 +56,10 @@ key is lost locally. The service waits for block finality before reporting activ
 
 The standalone DEV process using this library is documented in
 `75_DEV_NODE_RUNBOOK.md`. The Qt desktop follows verified blocks through
-`CybouNodeRuntime`; with an explicit CYP2 seed it can maintain multiple
-outbound sessions, exchange bounded peer-discovery hints, sync verified
-finalized blocks, and fan out recent blocks and admitted operations. The
-compiled desktop default still uses the available CYB1 endpoint because no
-remote CYP2 bootstrap endpoint has been published.
+`CybouNodeRuntime`; it uses the published CYP2 seed by default, maintains
+multiple outbound sessions, exchanges bounded peer-discovery hints, syncs
+verified finalized blocks, and fans out recent blocks and admitted operations.
+The bounded CYB1 endpoint remains available as an explicit diagnostic fallback.
 
 CYP2 discovery and gossip are initial bounded implementations, not
 authenticated transport: peer addresses remain untrusted routing hints, and

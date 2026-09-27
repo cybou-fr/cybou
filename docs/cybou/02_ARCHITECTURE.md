@@ -1,14 +1,17 @@
 # 02 — Architecture
 
-The diagrams below describe the target shared network. Today the Qt desktop
-opens a native `CybouNodeRuntime`, follows verified blocks from a DEV
-bootstrap authority, and submits AccountCreate operations. The Email,
-Storage, Backup, and full P2P paths in the diagram are not yet connected
-end to end. See `26_IMPLEMENTATION_STATUS.md` for the code boundary.
+The diagrams below describe the target shared network. The Qt desktop opens a
+native `CybouNodeRuntime`, bootstraps over CYP2 by default, verifies finalized
+blocks, and submits supported operations. Name and Wallet use the durable
+device operation coordinator; Mail encryption and Object Storage are not yet
+operational end to end. See `26_IMPLEMENTATION_STATUS.md` for implementation
+status and `86`–`88` for the identity and encrypted-object architecture.
 
-Identity is the platform primitive. Email is the first user-facing product;
-Beta Email requires Object Storage-backed encrypted attachments. Backup and
-Drive are post-Beta applications. See `81_BETA_PRODUCT_SCOPE.md`.
+Identity is the security root. Name, Wallet, Mail, and Files are identity
+capabilities and share device authorization and key lifecycle. Files and
+Storage-backed encrypted Mail attachments are Beta requirements. Backup is
+post-Beta; there is no separate CYBOU Drive product. See
+`81_BETA_PRODUCT_SCOPE.md`.
 
 ## UX invariant
 
@@ -24,32 +27,42 @@ or OperationID. Advanced and diagnostic views may expose protocol detail.
 cybou.exe
 ├── Qt UI
 └── NodeCore
-    ├── Identity / Wallet
-    ├── Balance / System Balance
-    ├── Proof of Trust
-    ├── Chain State
-    ├── Mail Protocol
-    ├── BFT Consensus
-    ├── P2P
-    ├── Crypto
-    ├── Object Storage (Beta Mail dependency)
-    ├── Backup (post-Beta)
-    ├── Drive (post-Beta)
-    └── Persistence / Lifecycle
+    ├── Identity Security Substrate
+    │   ├── Recovery authority
+    │   ├── Device signing
+    │   ├── Device key agreement (target)
+    │   └── DeviceOperationCoordinator
+    ├── Identity capabilities
+    │   ├── Name
+    │   ├── Wallet
+    │   ├── Mail
+    │   └── Files
+    ├── Encrypted Object Layer
+    ├── Object Storage (Beta requirement)
+    ├── BFT finality and verified state
+    ├── CYP2 networking
+    └── Persistence / lifecycle
 ```
+
+The identity holds the authorization and key lifecycle; private keys remain
+under client control. Signing keys and encryption/KEM keys are separate
+domains. Mail and Files do not create independent identities or parallel
+device-authorization systems. Backup is a post-Beta application of the shared
+Storage layer.
 
 ## Email architecture
 
 ```text
 CYBOU Email UI
     -> Mail Protocol
-    -> E2E encryption/signature
+    -> Identity-published recipient capability
+    -> E2E encryption + identity device authorization
     -> MailTx
     -> ordinary CYBOU P2P propagation
     -> BFT finality
     -> bounded mail-validation state
     -> encrypted manifest/object reference
-    -> CYBOU Object Storage for attachment bytes
+    -> CYBOU Object Storage for opaque attachment bytes
 ```
 
 Attachment bytes stay out of chain/state. Store holds opaque encrypted objects;
@@ -81,8 +94,8 @@ Email
 Payments
 Identity operations
 future Storage
+Files
 Backup
-Drive
 ```
 
 PoT is not validator voting power.

@@ -258,8 +258,10 @@ private:
     bool BufferFuturePrecommit(const BftPrecommitMsg& precommit);
     std::optional<BftPrecommitMsg> EvaluatePrevoteQuorum();
     bool EvaluatePrecommitQuorum();
-    // Lowest buffered future round (strictly above m_round) that has enough
-    // distinct-validator round-advance evidence, or 0 if there is none.
+    // Highest round supported by RoundAdvanceThreshold validators, where each
+    // validator contributes its highest verified prevote/precommit round.
+    // Evidence only advances the round; only votes for that exact round are
+    // transferred into normal consensus state.
     uint32_t EvidenceBackedFutureRound() const;
 
     bool RecordSigningIntent(BftStep step, const uint256& digest);

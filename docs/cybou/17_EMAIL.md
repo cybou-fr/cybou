@@ -9,6 +9,14 @@ Product scope: the initial DEV/Alpha profile below remains text-only. Beta Mail
 requires encrypted Store-backed attachments and is not complete until the
 Storage, manifest, retrieval, and durability path passes `81_BETA_PRODUCT_SCOPE.md`.
 
+Mail recipient encryption capability is published by Identity and bound to an
+authorized device. Mail does not define a parallel recipient-key registry.
+The target combines X25519 and ML-KEM-768; the current identity record does not
+yet publish KEM keys, so the send path must fail closed when the recipient's
+required hybrid capability cannot be verified. Mail signing and encryption
+keys remain separate. All device-authorized Mail operations will use the
+shared `DeviceOperationCoordinator` described in `87_DEVICE_OPERATION_COORDINATOR.md`.
+
 CYBOU Email is native E2E encrypted, signed, consensus-registered email.
 
 It is not a realtime messenger and not an SMTP/IMAP mailbox service.
@@ -90,6 +98,10 @@ MailTx:
 Client:
     decrypted local mailbox
 ```
+
+Mail attachment keys remain Mail-private. Object data may be stored by the
+shared Files/Storage layer, but a Files master key is not used as an attachment
+key. See `88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md`.
 
 ## Evidence
 

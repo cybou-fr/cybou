@@ -28,6 +28,7 @@ must satisfy both.
 [ ] text Mail can be composed, submitted and finalized
 [ ] delivery_uncertain appears as Checking delivery status, not Rejected
 [ ] recipient can be offline during send and receive after later sync
+[ ] persisted mailbox plaintext/metadata indexes are encrypted at rest
 [ ] Search finds locally indexed sender/subject/body data without remote plaintext query
 ```
 
@@ -40,7 +41,8 @@ must satisfy both.
 [ ] attachment bytes never enter normal MailTx/consensus content
 [ ] recipient offline during send can later retrieve/decrypt attachment
 [ ] corrupted ciphertext/integrity failure never opens plaintext
-[ ] Save to Files produces a normal Files item without unnecessary re-upload when reusable
+[ ] Save to Files produces an independent-retention Files item without unnecessary re-upload when reusable
+[ ] deleting/expiring the Mail message leaves the saved Files item available
 ```
 
 ## 4. Files
@@ -67,6 +69,9 @@ must satisfy both.
 [ ] pending/uncertain/finalized states remain distinct
 [ ] finalized ledger survives restart
 [ ] Service Balance language remains consistent with docs 52/72/79
+[ ] concurrent Name and Wallet requests serialize through the shared coordinator
+[ ] no second device operation is issued while that device has an unresolved operation
+[ ] uncertain operations survive restart and reconcile/retry with the same bytes and OperationID
 ```
 
 ## 6. Network interruption
@@ -114,10 +119,12 @@ Windows 150% DPI
 
 ## 9. Security disclosure
 
-Normal flow shows concise assurances:
+Normal flow shows concise, capability-specific assurances only after the
+corresponding capability and key package are verified:
 
 ```text
-Post-quantum protected
+Identity signatures: post-quantum protected
+Mail confidentiality: hybrid post-quantum encrypted (only for messages actually using the approved profile)
 End-to-end encrypted
 Verified identity
 Network-confirmed

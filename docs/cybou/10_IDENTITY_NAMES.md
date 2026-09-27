@@ -14,9 +14,20 @@ Status: canonical protocol target. Core cryptography, vault, registry, account c
 
 AccountID is independent of every mnemonic and public key. A versioned RecoveryKeyID maps to the stable AccountID. Rotating keys preserves balances, names, and finalized Mail history. A name is a pseudonymous alias, not a civil identity assertion.
 
-The Recovery Root requires **Ed25519 and ML-DSA-65** signatures. Each operational device requires **Ed25519 and ML-DSA-44** signatures. Both components are mandatory; missing, malformed, or failed components fail closed. Mail encryption uses separate X25519 and ML-KEM-768 keys.
+The Recovery Root requires **Ed25519 and ML-DSA-65** signatures. Each
+operational device requires **Ed25519 and ML-DSA-44** signatures. Both
+components are mandatory; missing, malformed, or failed components fail
+closed. Mail and Storage key agreement uses separate X25519 and ML-KEM-768
+keys as an architecture target; these KEM capabilities are not yet published
+in the identity record. Signing keys are never reused for encryption.
 
-The authorization descriptor has a fixed 3331-byte canonical form: version `02`, root suite `01`, 32-byte Ed25519 root public key, 1952-byte ML-DSA-65 root public key, device suite `01`, 32-byte Ed25519 device public key, and 1312-byte ML-DSA-44 device public key. The domain-separated commitment covers the exact encoding.
+The current authorization descriptor has a fixed 3331-byte canonical form:
+version `02`, root suite `01`, 32-byte Ed25519 root public key, 1952-byte
+ML-DSA-65 root public key, device suite `01`, 32-byte Ed25519 device public
+key, and 1312-byte ML-DSA-44 device public key. The domain-separated
+commitment covers this exact encoding. Any recipient KEM capability requires a
+separately reviewed identity/wire-format change; do not append unreviewed key
+fields to this descriptor.
 
 ## Devices and recovery
 

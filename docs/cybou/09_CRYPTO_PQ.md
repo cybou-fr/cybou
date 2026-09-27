@@ -13,7 +13,39 @@ Key purpose, suite identifier, NetworkID, operation kind, account or validator i
 
 ## Mail confidentiality
 
-Mail signing keys are separate from encryption keys. The target recipient profile combines X25519 and ML-KEM-768 with authenticated suite choice and a standard AEAD. A recipient that requires the hybrid suite cannot be downgraded to classical-only encryption. Plaintext and key material must never enter consensus state.
+Mail signing keys are separate from encryption keys. Identity publishes
+authorized recipient-device encryption capabilities; Mail does not maintain a
+parallel recipient-key registry. The target device key-agreement profile is
+X25519 + ML-KEM-768, subject to an interoperable standardized hybrid profile.
+A recipient that requires the hybrid suite cannot be downgraded to
+classical-only encryption. Plaintext and key material must never enter
+consensus state.
+
+## Identity capability key domains
+
+| Purpose | Target keys | Status |
+|---|---|---|
+| Recovery Root authorization | Ed25519 + ML-DSA-65 | Protocol/vault target; implemented in the current identity path |
+| Device authorization | Ed25519 + ML-DSA-44 | Implemented for current device authorization |
+| Device key agreement / wrapping | X25519 + ML-KEM-768 | Target; not published in the identity record yet |
+| Validator authorization | Ed25519 + ML-DSA-65 | Policy target; production consensus wiring remains incomplete |
+
+Hybrid signatures protect authorization. Hybrid KEM protects key establishment
+and wrapping. A standard symmetric AEAD protects bulk content. Device signing
+keys must never be converted into or reused as Mail or Storage encryption keys.
+
+Use distinct, authenticated contexts for these purposes:
+
+```text
+CYBOU/DEVICE/SIGN
+CYBOU/MAIL/KEM
+CYBOU/STORAGE/KEYWRAP
+CYBOU/STORAGE/OBJECT
+```
+
+These are design-domain labels, not a custom cryptographic construction. Exact
+transcript encoding, suite identifiers, hybrid combination, and AEAD parameters
+remain subject to the relevant protocol freeze and test vectors.
 
 ## Implementation gate
 

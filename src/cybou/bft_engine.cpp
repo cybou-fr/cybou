@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstdio>
+#include <functional>
 #include <fstream>
 #include <filesystem>
 #include <string>
@@ -783,20 +784,33 @@ uint32_t BftValidatorNode::EvidenceBackedFutureRound() const
 {
     const size_t advance_threshold = RoundAdvanceThreshold(
         m_validator_set.validators.size(), m_validator_set.QuorumThreshold());
-    uint32_t best{0};
+    if (advance_threshold == 0 || advance_threshold > m_validator_set.validators.size()) return 0;
+
+    std::map<uint256, uint32_t> highest_round_by_validator;
     for (const auto& [round, votes] : m_future_prevotes) {
-        if (round > m_round && votes.size() >= advance_threshold) {
-            best = round;
-            break;
+        if (round <= m_round) continue;
+        for (const auto& entry : votes) {
+            auto& highest = highest_round_by_validator[entry.first];
+            highest = std::max(highest, round);
         }
     }
     for (const auto& [round, votes] : m_future_precommits) {
-        if (round > m_round && round < (best ? best : UINT32_MAX) && votes.size() >= advance_threshold) {
-            best = round;
-            break;
+        if (round <= m_round) continue;
+        for (const auto& entry : votes) {
+            auto& highest = highest_round_by_validator[entry.first];
+            highest = std::max(highest, round);
         }
     }
-    return best;
+
+    if (highest_round_by_validator.size() < advance_threshold) return 0;
+    std::vector<uint32_t> supported_rounds;
+    supported_rounds.reserve(highest_round_by_validator.size());
+    for (const auto& [validator_id, round] : highest_round_by_validator) {
+        supported_rounds.push_back(round);
+    }
+    std::sort(supported_rounds.begin(), supported_rounds.end(), std::greater<>());
+    const uint32_t candidate = supported_rounds[advance_threshold - 1];
+    return candidate > m_round ? candidate : 0;
 }
 
 BftProposalResult BftValidatorNode::ReceiveProposal(const BftProposalMsg& proposal)
@@ -895,11 +909,19 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
         if (evidence_round <= m_round) {
             return std::nullopt;
         }
-        auto evidence_it = m_future_prevotes.find(evidence_round);
-        if (evidence_it == m_future_prevotes.end()) return std::nullopt;
-        auto evidence = std::move(evidence_it->second);
-        m_future_prevotes.erase(evidence_it);
-        EnterRoundWithPrevoteEvidence(evidence_round, std::move(evidence));
+        std::map<uint256, BftPrevoteMsg> round_votes;
+        if (auto evidence_it = m_future_prevotes.find(evidence_round); evidence_it != m_future_prevotes.end()) {
+            round_votes = std::move(evidence_it->second);
+            m_future_prevotes.erase(evidence_it);
+        }
+        std::map<uint256, BftPrecommitMsg> round_commits;
+        if (auto evidence_it = m_future_precommits.find(evidence_round); evidence_it != m_future_precommits.end()) {
+            round_commits = std::move(evidence_it->second);
+            m_future_precommits.erase(evidence_it);
+        }
+        EnterRound(evidence_round);
+        for (auto& entry : round_votes) m_prevotes.emplace(entry.first, std::move(entry.second));
+        for (auto& entry : round_commits) m_precommits.emplace(entry.first, std::move(entry.second));
         if (prevote.round != m_round) return std::nullopt;
     }
 
@@ -1030,11 +1052,19 @@ bool BftValidatorNode::ReceivePrecommit(const BftPrecommitMsg& precommit)
         if (evidence_round <= m_round) {
             return false;
         }
-        auto evidence_it = m_future_precommits.find(evidence_round);
-        if (evidence_it == m_future_precommits.end()) return false;
-        auto evidence = std::move(evidence_it->second);
-        m_future_precommits.erase(evidence_it);
-        EnterRoundWithPrecommitEvidence(evidence_round, std::move(evidence));
+        std::map<uint256, BftPrevoteMsg> round_votes;
+        if (auto evidence_it = m_future_prevotes.find(evidence_round); evidence_it != m_future_prevotes.end()) {
+            round_votes = std::move(evidence_it->second);
+            m_future_prevotes.erase(evidence_it);
+        }
+        std::map<uint256, BftPrecommitMsg> round_commits;
+        if (auto evidence_it = m_future_precommits.find(evidence_round); evidence_it != m_future_precommits.end()) {
+            round_commits = std::move(evidence_it->second);
+            m_future_precommits.erase(evidence_it);
+        }
+        EnterRound(evidence_round);
+        for (auto& entry : round_votes) m_prevotes.emplace(entry.first, std::move(entry.second));
+        for (auto& entry : round_commits) m_precommits.emplace(entry.first, std::move(entry.second));
         if (precommit.round != m_round) return false;
     }
 

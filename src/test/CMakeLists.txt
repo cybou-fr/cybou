@@ -191,6 +191,7 @@ add_executable(cybou-core-test
   cybou_authority_node_tests.cpp
   cybou_node_service_tests.cpp
   cybou_node_runtime_tests.cpp
+  cybou_device_operation_coordinator_tests.cpp
   cybou_mail_service_tests.cpp
   cybou_wallet_service_tests.cpp
   cybou_identity_vault_tests.cpp

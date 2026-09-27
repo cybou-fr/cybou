@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/identity_service.h>
+#include <cybou/device_operation_coordinator.h>
 #include <cybou/crypto/cleanse.h>
 #include <openssl/rand.h>
 
@@ -410,26 +411,15 @@ IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
         m_phase.store(IdentityCreationPhase::FAILED);
         return Failure(IdentityCreationPhase::FAILED, "Recovered device key is unavailable", *account);
     }
-    DeviceAdd request{.account_id = *account, .new_device = *device_key,
-        .root_nonce = record->next_root_nonce, .root_signature = {}, .device_pop = {}};
-    const auto digest = ComputeDeviceAddDigest(m_runtime.GetNetworkId(), request);
-    if (!digest) {
-        m_phase.store(IdentityCreationPhase::FAILED);
-        return Failure(IdentityCreationPhase::FAILED, "Cannot sign device recovery", *account);
-    }
-    const auto root_signature = m_keystore.SignRecovery(*digest);
-    const auto device_pop = m_keystore.SignDevice(*digest);
-    if (!root_signature || !device_pop) {
-        m_phase.store(IdentityCreationPhase::FAILED);
-        return Failure(IdentityCreationPhase::FAILED, "Cannot sign device recovery", *account);
-    }
-    request.root_signature = *root_signature;
-    request.device_pop = *device_pop;
     m_phase.store(IdentityCreationPhase::BROADCASTING);
-    if (on_phase) on_phase(IdentityCreationPhase::BROADCASTING, "Submitting root-authorized DeviceAdd...");
-    if (!m_runtime.SubmitOperation(ProtocolOperation{request})) {
+    if (on_phase) on_phase(IdentityCreationPhase::BROADCASTING, "Preparing root-authorized device recovery...");
+    auto& coordinator = m_runtime.GetDeviceOperationCoordinator(m_keystore);
+    const auto submission = coordinator.AuthorizeRecoveredDevice();
+    if (submission.phase == DeviceOperationPhase::REJECTED ||
+        submission.phase == DeviceOperationPhase::CONFLICT) {
         m_phase.store(IdentityCreationPhase::FAILED);
-        return Failure(IdentityCreationPhase::FAILED, "DeviceAdd submission was rejected", *account);
+        return Failure(IdentityCreationPhase::FAILED,
+            submission.error.empty() ? "Device recovery could not be submitted" : submission.error, *account);
     }
     m_phase.store(IdentityCreationPhase::WAITING_FOR_FINALITY);
     if (on_phase) on_phase(IdentityCreationPhase::WAITING_FOR_FINALITY, "Waiting for device authorization finality...");
@@ -447,7 +437,9 @@ IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
     }
     m_phase.store(IdentityCreationPhase::FAILED);
     return Failure(IdentityCreationPhase::FAILED,
-        m_cancelled.load() ? "Cancelled" : "Timed out waiting for device authorization finality", *account);
+        m_cancelled.load() ? "Cancelled; device recovery remains journaled for reconciliation" :
+            "Timed out waiting for device authorization finality; retry restore to reconcile the saved operation",
+        *account);
 }
 
 void CybouIdentityService::RestoreIdentityAsync(

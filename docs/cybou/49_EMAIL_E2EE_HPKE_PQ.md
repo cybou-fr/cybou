@@ -23,6 +23,19 @@ Identity V2 root/device hybrid *signatures* are separate from this mail
 recipient-device key authorization and historical sender-key proofs follow
 the versioned identity record in `10_IDENTITY_NAMES.md`.
 
+The target recipient key package is published by Identity and is bound to an
+authorized device. It contains the approved suite identifier, classical and PQ
+KEM public keys, key IDs, and validity/revocation context. Mail must not
+maintain a parallel authoritative recipient-key registry. The current
+identity record does not publish KEM capabilities, so sending remains
+fail-closed; X25519 helper code alone is not a usable hybrid profile.
+
+The finalized package and encapsulation transcript must bind NetworkID,
+sender/recipient AccountIDs, sender/recipient device/key IDs, suite ID, message
+context, and both classical and PQ encapsulations. A recipient that requires
+the hybrid profile must never be silently downgraded. Exact transcript and
+wire encodings remain protocol-review gates.
+
 Do not invent a custom hybrid KEM combiner.
 
 OpenSSL 3.5 provides FIPS 203 ML-KEM encapsulation, but its documented

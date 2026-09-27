@@ -1,25 +1,29 @@
 # 22 — Roadmap v0.0.1 — Architecture hardening
 
 This is a milestone sequence, not a list of completed releases. As of
-2026-09-24, parts of several milestones exist in core and the experimental
+2026-09-27, parts of several milestones exist in core and the experimental
 single-validator DEV node, while the complete Beta Email product, independent
 multi-validator network, pruning, and Object Storage remain open. See
 `26_IMPLEMENTATION_STATUS.md` for the current code boundary and
 `75_DEV_NODE_RUNBOOK.md` for the running DEV process.
 
 The first text-only Mail profile is transitional DEV/Alpha scope. Beta requires
-Storage Core followed by PQ Mail with encrypted attachments; Backup and Drive
-follow Beta. See `81_BETA_PRODUCT_SCOPE.md`.
+Storage Core followed by PQ Mail with encrypted attachments and the Files
+product surface. Backup remains a post-Beta application. There is no separate
+Drive product milestone; “Files” is CYBOU's familiar file-management surface.
+See `81_BETA_PRODUCT_SCOPE.md`.
 
 ## Identity V2 integration gate
 
-Before promoting Identity foundation: freeze phrase/vault vectors and network
-parameters; implement local crypto, recovery, and portable vault; then
-versioned consensus authorization, bounded devices, and name registry; then
-create/restore/security GUI. Perform one intentional DEV reset when the
-consensus changes are ready together. Acceptance includes clean-machine
-restore, vault tamper rejection, hybrid signature failure tests, revoked
-device rejection, and adversarial name-claim ordering. See docs 10 and 76–78.
+The current tree already implements the hybrid recovery/device keys, CYBV2
+vault, AccountCreate, bounded device registry, and name commit/work/reveal
+path. Promotion still requires freezing phrase/vault vectors and remaining
+network parameters, finishing recovery/device edge cases and security GUI,
+and verifying the versioned consensus authorization and persistence together.
+Perform one intentional DEV reset only after the PQ consensus format and names
+are integrated in the same cutover. Acceptance includes clean-machine restore,
+vault tamper rejection, hybrid-signature failure tests, revoked-device
+rejection, and adversarial name-claim ordering. See docs 10 and 76–78.
 
 ## Product gates
 
@@ -59,7 +63,8 @@ protocol detail.
 Run a controlled pilot with 20–100 real users for 8–12 weeks and four active
 validators where f=1 tolerance is claimed. Measure repeated Mail and attachment
 use, offline retrieval, recovery, multi-device use, Storage repair, support
-burden, and history growth. Backup and Drive remain post-Beta applications.
+burden, and history growth. Backup remains post-Beta. Files is in Beta scope;
+there is no separate Drive application milestone.
 
 ## v0.0.0 — Exact upstream baseline
 Pin exact local Bitcoin Core tag/commit. Build/tests only. No normal Bitcoin-network launch.
@@ -186,8 +191,7 @@ Design/test emergency Operator Authority succession without introducing normal D
 ## v0.3.1 — European controlled expansion
 Multiple EU validator operators/providers.
 
-## v0.4 — Backup (post-Beta)
-## v0.5 — Drive (post-Beta)
+## v0.4 — Backup (post-Beta application)
 ## v0.7 — Email expansion / optional gateway research
 ## v0.8 — Sovereignty exercise
 ## v0.9 — Global-readiness review
@@ -195,5 +199,5 @@ Multiple EU validator operators/providers.
 
 ## BetaNet and Mainnet Progression
 - **Separate Genesis**: BetaNet and Mainnet maintain separate genesis states; Beta balances do not carry forward to Mainnet.
-- **Service Progression**: Email Alpha -> Storage Core -> PQ Mail + encrypted attachments -> Beta -> Backup -> Drive.
+- **Service Progression**: Email Alpha -> Storage Core -> PQ Mail + encrypted attachments + Files -> Beta -> Backup (post-Beta).
 - **Economic Calibration**: Beta onboarding budget is sized from integrated Email + Storage + Backup usage profiles; the Mainnet onboarding bonus is frozen only after analyzing aggregate Beta operational metrics.

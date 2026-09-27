@@ -2,7 +2,7 @@
 
 Status: canonical product-scope decision. This document defines Beta readiness;
 it does not claim that the required services are implemented or authorize a
-consensus or wire-format change. See DEC-173 through DEC-184 in
+consensus or wire-format change. See DEC-173 through DEC-190 in
 `24_DECISIONS.md`.
 
 ## Product boundary
@@ -20,8 +20,10 @@ Object Storage
 Encrypted Mail attachments
 ```
 
-Backup and Drive are post-Beta applications of the same Storage layer. They
-are not prerequisites for Beta readiness.
+Files is the Beta file-management product surface, with the familiar
+Drive-like workflows described in `83_STORAGE_UI_UX.md`. There is no separate
+Drive product milestone. Backup is a post-Beta application of the same Storage
+layer and is not a prerequisite for Beta readiness.
 
 Email remains CYBOU's first user-facing product. For Beta, complete Email means
 one-recipient E2E Mail with text and encrypted attachments whose content is
@@ -97,10 +99,10 @@ Beta is not ready until all of the following work end to end:
 6. Beta network, economics, independent-validator, release, and operational
    gates are satisfied under their owning documents.
 
-Backup and Drive may follow after Beta operational evidence. The Beta onboarding
-budget must be sized from integrated Email, Storage, and Backup economics even
-though Backup itself remains a post-Beta product application. Drive is not part
-of that required calibration unless a later decision adds it.
+Backup may follow after Beta operational evidence. The Beta onboarding budget
+must be sized from integrated Email, Storage, and Backup economics even though
+Backup itself remains a post-Beta product application. Files is in Beta scope;
+there is no separate Drive service or additional Drive calibration category.
 
 ## Product-experience gate
 

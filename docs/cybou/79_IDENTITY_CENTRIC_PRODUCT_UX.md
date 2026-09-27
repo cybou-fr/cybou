@@ -93,7 +93,8 @@ The dominant identity card should contain:
 
 ```text
 stanislav.cybou
-Post-quantum protected
+Identity signing: post-quantum protected
+Mail confidentiality: unavailable until hybrid recipient keys are published
 Online
 
 [ Share identity ]   [ Copy name ]
@@ -127,7 +128,7 @@ Normal UI copy should describe intent and outcome rather than the mechanism.
 | nonce / activation nonce | Hidden |
 | Recovery Root | Recovery protection / recovery key in advanced security details |
 | DeviceKeyID | Device identifier in advanced security details |
-| ML-DSA / ML-KEM / X25519 | Post-quantum protection; exact algorithms in Security details |
+| ML-DSA / ML-KEM / X25519 | Name the specific protected capability in Security details |
 | peer count | Hidden; Advanced network details |
 | NetworkID | Hidden; Advanced network details |
 | state root | Hidden |
@@ -379,11 +380,12 @@ A recipient is entered as `name.cybou`. Encryption, hybrid signatures,
 MailTx construction, P2P propagation, fees, evidence bundles, discovery tags,
 and BFT finality are handled by core.
 
-The message view may expose a simple security indicator:
+The message view may expose a simple security indicator only when it is true
+for that message and its verified recipient-key package:
 
 ```text
 End-to-end encrypted
-Post-quantum protected
+Hybrid post-quantum encrypted
 Network-confirmed
 ```
 
@@ -398,7 +400,8 @@ page-specific state contract is in `82_MAIL_UI_UX.md`.
 attachment-progress, delivery-uncertain, responsive, and keyboard interaction
 contract.
 
-Beta Mail attachments are a required product capability and should be
+Files is the Beta product surface for Drive-like file management. There is no
+separate Drive application milestone. Beta Mail attachments are a required product capability and should be
 presented as ordinary attachments when the Beta Storage path is live. The user
 should not have to understand chunks, CIDs, redundancy, providers, or placement
 to attach and receive a file. The initial DEV/Alpha profile may keep attachment

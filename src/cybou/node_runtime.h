@@ -25,6 +25,8 @@
 
 namespace cybou {
 namespace p2p { class PeerManager; }
+class CybouKeyStore;
+class DeviceOperationCoordinator;
 
 struct NodeRuntimeConfig {
     CybouNetworkDefinition network_definition;
@@ -69,6 +71,20 @@ struct FinalizedOperationLookupResult {
     uint256 block_id;
 };
 
+enum class OperationStatusKind : uint8_t {
+    UNKNOWN,
+    LOCAL_PENDING,
+    ACCEPTED_REMOTE,
+    FINALIZED,
+    REJECTED_KNOWN,
+    HISTORY_UNAVAILABLE,
+};
+
+struct OperationStatus {
+    OperationStatusKind kind{OperationStatusKind::UNKNOWN};
+    uint64_t finalized_height{0};
+};
+
 /**
  * CybouNodeRuntime provides a unified, thread-safe runtime service
  * for both headless (cybou-node) and GUI (cybou desktop).
@@ -106,6 +122,8 @@ public:
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
     OperationSubmitResult SubmitPeerOperation(ProtocolOperation op, std::string source_peer);
     std::optional<OperationSubmitStatus> KnownOperationStatus(const uint256& op_id) const;
+    OperationStatus GetOperationStatus(const uint256& op_id) const;
+    DeviceOperationCoordinator& GetDeviceOperationCoordinator(CybouKeyStore& keystore);
     std::vector<ProtocolOperation> RecentOperationsForGossip() const;
     std::vector<FinalizedHead> RecentFinalizedBlocksForGossip() const;
 
@@ -175,6 +193,7 @@ private:
     /** Re-sync the orchestration round/phase with the engine after it jumped rounds. Caller holds m_mutex. */
     void SyncConsensusDriverWithEngine();
     void RememberOperationForGossip(const ProtocolOperation& op, const uint256& id);
+    void RememberOperationStatus(const uint256& id, OperationStatus status);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
     struct GossipOperation {
         ProtocolOperation operation;
@@ -186,6 +205,9 @@ private:
     std::unique_ptr<KVStore> m_db;
     CybouStateStore m_store;
     std::unique_ptr<CybouAuthorityNode> m_authority_node;
+    std::unique_ptr<DeviceOperationCoordinator> m_device_operation_coordinator;
+    std::map<uint256, OperationStatus> m_recent_operation_status;
+    std::deque<uint256> m_recent_operation_status_order;
     std::optional<std::pair<std::string, uint16_t>> m_submit_endpoint;
     std::unique_ptr<p2p::PeerManager> m_peer_manager;
     mutable std::mutex m_p2p_mutex;

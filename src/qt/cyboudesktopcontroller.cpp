@@ -63,10 +63,12 @@ void CybouDesktopController::start()
             throw std::runtime_error("invalid CYBOU_DEV_P2P_PORT");
         }
         const QString p2p_host = qEnvironmentVariable("CYBOU_DEV_P2P_HOST");
-        const auto configured_p2p = p2p_port_ok ?
-            std::optional<std::pair<std::string, uint16_t>>{std::make_pair(
-                p2p_host.isEmpty() ? std::string{endpoint.host} : p2p_host.toStdString(),
-                static_cast<uint16_t>(p2p_port))} : std::nullopt;
+        const auto selected_p2p_port = p2p_port_ok ? static_cast<uint16_t>(p2p_port) : endpoint.p2p_port;
+        const auto selected_p2p_host = p2p_host.isEmpty() ? std::string{endpoint.host} : p2p_host.toStdString();
+        const bool use_legacy_block_feed = qEnvironmentVariable("CYBOU_DEV_LEGACY_BLOCK_FEED") == "1";
+        const auto configured_p2p = use_legacy_block_feed ? std::nullopt :
+            std::optional<std::pair<std::string, uint16_t>>{
+                std::make_pair(selected_p2p_host, selected_p2p_port)};
         cybou::CybouNetworkServiceConfig network_config;
         bool listen_port_ok{false};
         const int listen_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_LISTEN_PORT", &listen_port_ok);
@@ -84,7 +86,7 @@ void CybouDesktopController::start()
             .network_definition = definition,
             .data_dir = data_dir,
             .validator_private_key = std::nullopt,
-            .submit_endpoint = configured_p2p ? std::nullopt :
+            .submit_endpoint = !use_legacy_block_feed ? std::nullopt :
                 std::optional<std::pair<std::string, uint16_t>>{std::make_pair(std::string{endpoint.host}, endpoint.port)},
             .p2p_endpoint = configured_p2p,
             .local_p2p_endpoint = network_config.listen_endpoint,

@@ -123,18 +123,17 @@ advertised height also excludes that peer. After a successful block batch, the
 observer starts the next pass without waiting on remaining endpoints in the
 current pass.
 
-For a local Qt desktop connected to a CYP2 producer, set
-`CYBOU_DEV_P2P_HOST=127.0.0.1` and `CYBOU_DEV_P2P_PORT=29461` before launching
-the desktop. With a configured CYP2 endpoint, its native runtime uses persistent
-sessions for verified block sync and operation submission. A peer that fails
+The Qt desktop uses the DEV CYP2 bootstrap `51.255.46.58:29461` by default; no
+environment variables are required. For a local producer, override it with
+`CYBOU_DEV_P2P_HOST=127.0.0.1` and `CYBOU_DEV_P2P_PORT=29461`. With a CYP2
+endpoint, its native runtime uses persistent sessions for verified block sync
+and operation submission. A peer that fails
 its handshake or block verification is dropped and retried later; the desktop
 keeps its network worker running for other peers. Local state or network-
-definition failure stops that worker. Without these
-settings the installed DEV bootstrap continues to use its published CYB1
-endpoint; the remote CYP2 port is not published yet.
-The existing DEV `sync` command still uses the bounded CYB1 block feed on port
-29460. CYP2 now propagates operations and finalized blocks among explicitly
-configured peers.
+definition failure stops that worker. The temporary CYB1 fallback remains
+available for diagnostics by setting `CYBOU_DEV_LEGACY_BLOCK_FEED=1`. The DEV
+authority serves CYB1 on port 29460 and CYP2 on port 29461. CYP2 propagates
+operations and finalized blocks among configured and discovered peers.
 
 ## Bootstrap endpoints
 

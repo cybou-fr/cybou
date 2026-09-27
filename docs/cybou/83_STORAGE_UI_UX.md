@@ -7,6 +7,10 @@ ordinary users. Google Drive is the interaction reference for familiar file
 management patterns; CYBOU does not copy Google branding, provider account
 semantics, or centralized trust assumptions.
 
+Files is the Beta file-management product surface for these familiar workflows;
+there is no separate post-Beta Drive product. Storage and Files are not yet
+implemented beyond a capability-gated desktop UI skeleton.
+
 The user manages files and folders. The user does not manage shards, provider
 nodes, repair queues, proofs, leases, or replication topology.
 
@@ -33,6 +37,10 @@ open Files
 ```
 
 For Mail integration:
+
+`Save to Files` creates an independent Files ownership and retention reference
+to the protected content. Removing or expiring its source Mail message must not
+remove that Files item.
 
 ```text
 receive encrypted attachment

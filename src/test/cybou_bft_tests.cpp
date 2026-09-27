@@ -1608,6 +1608,124 @@ BOOST_AUTO_TEST_CASE(bft_future_round_jump_uses_fault_threshold_not_finality_quo
 
 }
 
+BOOST_AUTO_TEST_CASE(bft_staggered_future_round_evidence_advances_to_supported_round)
+{
+    const uint256 network_id = uint256::FromUserHex("caff").value();
+    std::vector<MockValidatorNode> mocks;
+    cybou::ValidatorSet val_set;
+    for (uint8_t i = 0; i < 4; ++i) {
+        mocks.push_back(MockValidatorNode::Create(i));
+        val_set.validators.push_back(cybou::Validator{
+            .validator_id = mocks.back().validator_id,
+            .consensus_public_key = mocks.back().consensus_pubkey,
+            .weight = 1,
+        });
+    }
+    const auto execute = [](const std::vector<cybou::ProtocolOperation>&, uint64_t) {
+        return uint256::FromUserHex("1111");
+    };
+
+    const auto make_prevote = [&](size_t idx, uint32_t round) {
+        const uint256 digest = cybou::ComputePrevoteDigest(
+            network_id, 1, round, mocks[idx].validator_id, std::nullopt);
+        return cybou::BftPrevoteMsg{
+            .network_id = network_id, .height = 1, .round = round,
+            .validator_id = mocks[idx].validator_id, .block_id = std::nullopt,
+            .signature = *cybou::SignValidatorVote(mocks[idx].seed, digest),
+        };
+    };
+    const auto make_precommit = [&](size_t idx, uint32_t round) {
+        const uint256 digest = cybou::ComputePrecommitNilDigest(
+            network_id, 1, round, mocks[idx].validator_id);
+        return cybou::BftPrecommitMsg{
+            .network_id = network_id, .height = 1, .round = round,
+            .validator_id = mocks[idx].validator_id, .block_id = std::nullopt,
+            .signature = *cybou::SignValidatorVote(mocks[idx].seed, digest),
+        };
+    };
+    auto make_node = [&]() {
+        auto node = std::make_unique<cybou::BftValidatorNode>(0, mocks[0].seed, network_id, val_set, execute);
+        node->SetHeight(1, uint256::ZERO, val_set);
+        return node;
+    };
+
+    // One validator at round 8 plus another at round 9 supports round 8.
+    {
+        auto node = make_node();
+        BOOST_CHECK(!node->ReceivePrevote(make_prevote(1, 8)));
+        BOOST_CHECK(!node->ReceivePrevote(make_prevote(2, 9)));
+        BOOST_CHECK_EQUAL(node->GetRound(), 8U);
+        BOOST_CHECK(node->GetStep() == cybou::BftStep::PROPOSE);
+    }
+
+    // A Byzantine outlier cannot drag the receiver past the honest round-8 evidence.
+    {
+        auto node = make_node();
+        BOOST_CHECK(!node->ReceivePrevote(make_prevote(1, 1000)));
+        BOOST_CHECK(!node->ReceivePrecommit(make_precommit(2, 8)));
+        BOOST_CHECK_EQUAL(node->GetRound(), 8U);
+        BOOST_CHECK(node->GetStep() == cybou::BftStep::PROPOSE);
+    }
+
+    // A buffered round-8 precommit survives advancement triggered by a
+    // round-9 prevote and can later participate in normal round-8 finality.
+    {
+        constexpr uint32_t round = 8;
+        const size_t leader_index = cybou::BftLeaderIndex(1, round, val_set.validators.size());
+        cybou::BftValidatorNode leader{leader_index, mocks[leader_index].seed, network_id, val_set, execute};
+        leader.SetHeight(1, uint256::ZERO, val_set);
+        const auto proposal = leader.StartRound(round, {});
+        BOOST_REQUIRE(proposal);
+        const uint256 block_id = cybou::ComputeBlockId(proposal->block);
+        const uint256 set_commitment = cybou::ComputeValidatorSetCommitment(val_set);
+        auto make_block_precommit = [&](size_t idx) {
+            const uint256 digest = cybou::ComputeBftCommitDigest(
+                network_id, block_id, 1, round, set_commitment);
+            return cybou::BftPrecommitMsg{
+                .network_id = network_id, .height = 1, .round = round,
+                .validator_id = mocks[idx].validator_id, .block_id = block_id,
+                .signature = *cybou::SignValidatorVote(mocks[idx].seed, digest),
+            };
+        };
+
+        auto node = make_node();
+        BOOST_CHECK(!node->ReceivePrecommit(make_block_precommit(1)));
+        BOOST_CHECK(!node->ReceivePrevote(make_prevote(2, 9)));
+        BOOST_CHECK_EQUAL(node->GetRound(), round);
+        BOOST_CHECK(node->ReceiveProposal(*proposal).prevote.has_value());
+        BOOST_CHECK(!node->ReceivePrecommit(make_block_precommit(2)));
+        BOOST_CHECK(node->ReceivePrecommit(make_block_precommit(3)));
+        BOOST_REQUIRE(node->GetLatestFinalizedBlock());
+        BOOST_CHECK_EQUAL(node->GetLatestFinalizedBlock()->certificate.round, round);
+        BOOST_CHECK(cybou::VerifyFinalityCertificate(
+                        node->GetLatestFinalizedBlock()->certificate, val_set, network_id) ==
+                    cybou::FinalityVerificationError::NONE);
+    }
+
+    // Multiple rounds from one validator still count as one piece of evidence.
+    {
+        auto node = make_node();
+        BOOST_CHECK(!node->ReceivePrevote(make_prevote(1, 8)));
+        BOOST_CHECK(!node->ReceivePrevote(make_prevote(1, 9)));
+        BOOST_CHECK(!node->ReceivePrevote(make_prevote(1, 10)));
+        BOOST_CHECK_EQUAL(node->GetRound(), 0U);
+    }
+
+    // Staggered cross-round votes only cause a transition. Actual votes in
+    // the selected round remain buffered and can form the ordinary quorum.
+    {
+        auto node = make_node();
+        BOOST_CHECK(!node->ReceivePrevote(make_prevote(1, 8)));
+        BOOST_CHECK(!node->ReceivePrevote(make_prevote(2, 9)));
+        BOOST_CHECK_EQUAL(node->GetRound(), 8U);
+        BOOST_CHECK(!node->ReceivePrevote(make_prevote(3, 8)));
+        const auto precommit = node->ReceivePrevote(make_prevote(2, 8));
+        BOOST_REQUIRE(precommit);
+        BOOST_CHECK_EQUAL(precommit->round, 8U);
+        BOOST_CHECK(!precommit->block_id.has_value());
+    }
+}
+
 BOOST_AUTO_TEST_CASE(bft_future_block_prevote_quorum_replayed_after_proposal)
 {
     const uint256 network_id = uint256::FromUserHex("b10c").value();
@@ -1741,7 +1859,10 @@ BOOST_AUTO_TEST_CASE(bft_one_validator_cannot_fill_future_round_buffer)
     }
     BOOST_CHECK(!node.ReceivePrevote(make_prevote(1, 9)));
     BOOST_CHECK(!node.ReceivePrevote(make_prevote(2, 9)));
-    BOOST_CHECK_EQUAL(node.GetRound(), 0U);
+    // Validator 1's highest buffered round is 8 (its round-9 vote exceeded
+    // the per-validator buffer cap); validator 2 supports round 9, so the
+    // threshold-backed common round is 8.
+    BOOST_CHECK_EQUAL(node.GetRound(), 8U);
     BOOST_CHECK(!node.ReceivePrevote(make_prevote(3, 9)));
     BOOST_CHECK_EQUAL(node.GetRound(), 9U);
     BOOST_CHECK(node.GetStep() == cybou::BftStep::PROPOSE);

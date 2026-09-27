@@ -90,30 +90,13 @@ bool SaveClaim(const std::filesystem::path& path, std::string_view password,
     return reopened && reopened->label == claim.label && reopened->salt == claim.salt;
 }
 
-std::optional<DeviceAuthorization> SignOperation(CybouNodeRuntime& runtime, CybouKeyStore& keystore,
-    const AccountId& account, DeviceOperationKind kind, const IdentityKeyId& payload_commitment)
-{
-    const auto device_id = keystore.GetDeviceId();
-    const auto loaded = runtime.GetStore().LoadState();
-    if (!device_id || !loaded || !loaded.state) return std::nullopt;
-    const auto* record = loaded.state->identities.Find(account);
-    if (!record) return std::nullopt;
-    const auto it = record->devices.find(*device_id);
-    if (it == record->devices.end() || it->second.key != keystore.GetDevicePublicKey()) return std::nullopt;
-    DeviceAuthorization auth{.account_id = account, .device_id = *device_id,
-        .nonce = it->second.next_nonce, .activation_nonce = it->second.activation_nonce,
-        .kind = kind, .payload_commitment = payload_commitment, .signature = {}};
-    const auto digest = ComputeDeviceOperationDigest(runtime.GetNetworkId(), auth);
-    const auto signature = digest ? keystore.SignDevice(*digest) : std::nullopt;
-    if (!signature) return std::nullopt;
-    auth.signature = *signature;
-    return auth;
-}
 } // namespace
 
 CybouNameService::CybouNameService(CybouNodeRuntime& runtime, CybouKeyStore& keystore,
     std::filesystem::path identity_vault_path)
-    : m_runtime{runtime}, m_keystore{keystore}, m_identity_vault_path{std::move(identity_vault_path)},
+    : m_runtime{runtime}, m_keystore{keystore},
+      m_operation_coordinator{runtime.GetDeviceOperationCoordinator(keystore)},
+      m_identity_vault_path{std::move(identity_vault_path)},
       m_claim_path{m_identity_vault_path}
 {
     m_claim_path += ".nameclaim";
@@ -163,10 +146,13 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
         if (on_phase) on_phase(NameClaimPhase::COMMITTING, "Submitting NameCommit...");
         NameCommitPayload payload{.commitment = commitment};
         const auto digest = ComputeNameCommitPayloadCommitment(payload);
-        const auto auth = digest ? SignOperation(m_runtime, m_keystore, *account,
-            DeviceOperationKind::NAME_COMMIT, *digest) : std::nullopt;
-        if (!auth || !m_runtime.SubmitOperation(ProtocolOperation{AuthorizedNameCommit{*auth, payload}})) {
-            return Fail("NameCommit submission failed");
+        if (!digest) return Fail("NameCommit commitment failed");
+        const auto submitted = m_operation_coordinator.Execute(DeviceOperationKind::NAME_COMMIT, *digest,
+            [&](const DeviceAuthorization& authorization) -> std::optional<ProtocolOperation> {
+                return ProtocolOperation{AuthorizedNameCommit{authorization, payload}};
+            });
+        if (!submitted) {
+            return Fail(submitted.error.empty() ? "NameCommit submission failed" : submitted.error);
         }
         if (m_runtime.GetStatus().is_authority) m_runtime.ProduceBlock();
     }
@@ -197,12 +183,14 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
     if (m_cancelled.load()) return Fail("Name claim cancelled");
     NameRevealPayload reveal{.label = label, .salt = claim->salt, .work = work};
     const auto digest = ComputeNameRevealPayloadCommitment(reveal);
-    const auto auth = digest ? SignOperation(m_runtime, m_keystore, *account,
-        DeviceOperationKind::NAME_REVEAL, *digest) : std::nullopt;
-    if (!auth) return Fail("Cannot sign NameReveal");
+    if (!digest) return Fail("NameReveal commitment failed");
     if (on_phase) on_phase(NameClaimPhase::REVEALING, "Submitting NameReveal...");
-    if (!m_runtime.SubmitOperation(ProtocolOperation{AuthorizedNameReveal{*auth, reveal}})) {
-        return Fail("NameReveal submission failed");
+    const auto submitted = m_operation_coordinator.Execute(DeviceOperationKind::NAME_REVEAL, *digest,
+        [&](const DeviceAuthorization& authorization) -> std::optional<ProtocolOperation> {
+            return ProtocolOperation{AuthorizedNameReveal{authorization, reveal}};
+        });
+    if (!submitted) {
+        return Fail(submitted.error.empty() ? "NameReveal submission failed" : submitted.error);
     }
     if (m_runtime.GetStatus().is_authority) m_runtime.ProduceBlock();
     if (on_phase) on_phase(NameClaimPhase::WAITING_FOR_NAME, "Waiting for finalized name ownership...");

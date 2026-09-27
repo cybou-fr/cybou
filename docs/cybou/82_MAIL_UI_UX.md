@@ -128,6 +128,12 @@ Unread count appears only where meaningful, primarily Inbox.
 
 ## 5. Search
 
+Inbox, Sent, Drafts, read state, and search indexes are local client data. Any
+persisted mailbox content or index containing message plaintext or identifying
+metadata MUST be encrypted at rest under the local identity/vault security
+model. The current Mail page is capability-gated; this is a target contract,
+not an implemented storage guarantee.
+
 The top search field is a normal product feature, not a protocol query editor.
 Beta search should support local indexed search over data that the client can
 legitimately decrypt and index, including:
@@ -339,6 +345,11 @@ Save to Files
 when ownership, retention, and privacy rules permit. It should not download and
 re-upload identical ciphertext merely to move an attachment into the user's
 Files view.
+
+Save to Files creates an independent Files ownership/retention reference. Later
+deleting or expiring the Mail message must not make the saved Files item
+unavailable. If a safe shared-object reference cannot satisfy both services'
+privacy and retention rules, create a separate protected object.
 
 The implementation may create or update the user's private encrypted Files
 manifest while keeping provider-visible metadata opaque.

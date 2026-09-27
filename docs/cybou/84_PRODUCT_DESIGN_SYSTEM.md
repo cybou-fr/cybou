@@ -317,7 +317,7 @@ This rule applies to Wallet, Name, Mail, and future device operations.
 Normal summary:
 
 ```text
-Post-quantum protected
+Identity signatures: post-quantum protected (only when verified for the active identity)
 End-to-end encrypted
 Verified identity
 Network-confirmed
@@ -434,12 +434,13 @@ Devices/Security card
 Recent Activity                  right/secondary column
 ```
 
-Possible content:
+Possible content (security claims must be capability-specific and verified):
 
 ```text
 stan.cybou
 Online
-Post-quantum protected
+Identity signing: post-quantum protected
+Mail confidentiality: unavailable until verified hybrid recipient keys are published
 
 Mail       12 unread
 Files      12.4 GB used / Protected

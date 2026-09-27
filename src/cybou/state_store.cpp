@@ -342,18 +342,25 @@ std::optional<FinalizedBlock> CybouStateStore::GetBlockAtHeight(const uint64_t h
 
 bool CybouStateStore::HasIndexedFinalizedOperation(const uint256& op_id) const
 {
-    if (op_id.IsNull()) return false;
+    return GetFinalizedOperationHeight(op_id).has_value();
+}
+
+std::optional<uint64_t> CybouStateStore::GetFinalizedOperationHeight(const uint256& op_id) const
+{
+    if (op_id.IsNull()) return std::nullopt;
     uint256 block_id;
-    if (!m_db.Read(OperationKey(op_id), block_id)) return false;
+    if (!m_db.Read(OperationKey(op_id), block_id)) return std::nullopt;
     const auto head = GetFinalizedHead();
     const auto finalized = GetBlock(block_id);
     if (!head || !finalized || finalized->block.height == 0 ||
         finalized->block.height > head->height || ComputeBlockId(finalized->block) != block_id ||
         finalized->certificate.block_id != block_id ||
         finalized->certificate.height != finalized->block.height ||
-        finalized->certificate.network_id != m_network_id) return false;
-    return std::any_of(finalized->block.operations.begin(), finalized->block.operations.end(),
+        finalized->certificate.network_id != m_network_id) return std::nullopt;
+    const bool found = std::any_of(finalized->block.operations.begin(), finalized->block.operations.end(),
         [&](const ProtocolOperation& operation) { return ComputeOperationId(operation) == op_id; });
+    if (!found) return std::nullopt;
+    return finalized->block.height;
 }
 
 std::optional<CybouMailDiscoveryFilter> CybouStateStore::GetBlockMailFilter(const uint256& block_id) const

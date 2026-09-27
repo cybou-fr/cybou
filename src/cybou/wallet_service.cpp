@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/wallet_service.h>
+#include <cybou/device_operation_coordinator.h>
 
 #include <algorithm>
 #include <chrono>
@@ -11,6 +12,7 @@ namespace cybou {
 CybouWalletService::CybouWalletService(CybouNodeRuntime& runtime, CybouKeyStore& keystore)
     : m_runtime(runtime),
       m_keystore(keystore),
+      m_operation_coordinator(runtime.GetDeviceOperationCoordinator(keystore)),
       m_worker([this](std::stop_token) {
           for (;;) {
               std::function<void()> task;
@@ -99,69 +101,19 @@ WalletOperationResult CybouWalletService::SendPayment(const AccountId& recipient
         return {.error = WalletOperationError::INSUFFICIENT_SYSTEM_BALANCE, .error_message = "Insufficient system balance for fee"};
     }
 
-    const auto dev_id = m_keystore.GetDeviceId();
-    if (!dev_id) {
-        return {.error = WalletOperationError::NO_IDENTITY, .error_message = "No active device key in keystore"};
-    }
-
-    uint64_t nonce = 0;
-    uint64_t activation_nonce = 0;
-    const auto loaded = m_runtime.GetStore().LoadState();
-    if (loaded && loaded.state) {
-        const auto* rec = loaded.state->identities.Find(*my_account);
-        if (rec) {
-            auto it = rec->devices.find(*dev_id);
-            if (it != rec->devices.end()) {
-                nonce = it->second.next_nonce;
-                activation_nonce = it->second.activation_nonce;
-            }
-        }
-    }
-
-    PaymentPayload payment_payload{
-        .recipient = recipient,
-        .amount = amount,
-    };
-
+    PaymentPayload payment_payload{.recipient = recipient, .amount = amount};
     const auto commitment = ComputePaymentPayloadCommitment(payment_payload);
     if (!commitment) {
         return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to commit payment payload"};
     }
 
-    DeviceAuthorization auth{
-        .account_id = *my_account,
-        .device_id = *dev_id,
-        .nonce = nonce,
-        .activation_nonce = activation_nonce,
-        .kind = DeviceOperationKind::PAYMENT,
-        .payload_commitment = *commitment,
-    };
-
-    const auto digest = ComputeDeviceOperationDigest(m_runtime.GetNetworkId(), auth);
-    if (!digest) {
-        return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to compute payment digest"};
-    }
-
-    const auto sig = m_keystore.SignDevice(*digest);
-    if (!sig) {
-        return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to sign payment operation"};
-    }
-    auth.signature = *sig;
-
-    AuthorizedPayment auth_payment{
-        .authorization = auth,
-        .payment = payment_payload,
-    };
-
-    ProtocolOperation proto_op{auth_payment};
-
-    const auto op_id_opt = ComputeOperationId(proto_op);
-    const uint256 op_id = op_id_opt.value_or(uint256{});
-    const auto submit_res = m_runtime.SubmitOperation(proto_op);
-    if (!submit_res) {
-        return {.error = WalletOperationError::SUBMIT_FAILED, .error_message = "Network rejected payment operation"};
-    }
-
+    const auto submitted = m_operation_coordinator.Execute(DeviceOperationKind::PAYMENT, *commitment,
+        [&](const DeviceAuthorization& authorization) -> std::optional<ProtocolOperation> {
+            return ProtocolOperation{AuthorizedPayment{.authorization = authorization, .payment = payment_payload}};
+        });
+    if (!submitted) return {.error = WalletOperationError::SUBMIT_FAILED, .op_id = submitted.op_id,
+        .error_message = submitted.error, .operation_phase = submitted.phase};
+    const uint256 op_id = submitted.op_id;
     WalletLedgerEntry pending_entry{
         .entry_id = op_id,
         .kind = WalletEntryKind::PAYMENT,
@@ -181,7 +133,7 @@ WalletOperationResult CybouWalletService::SendPayment(const AccountId& recipient
         if (existing == m_entries.end()) m_entries.insert(m_entries.begin(), pending_entry);
     }
 
-    return {.error = WalletOperationError::NONE, .op_id = op_id};
+    return {.error = WalletOperationError::NONE, .op_id = op_id, .operation_phase = submitted.phase};
 }
 
 WalletOperationResult CybouWalletService::LockToSystemBalance(const uint64_t amount)
@@ -206,68 +158,19 @@ WalletOperationResult CybouWalletService::LockToSystemBalance(const uint64_t amo
         return {.error = WalletOperationError::INSUFFICIENT_BALANCE, .error_message = "Insufficient balance"};
     }
 
-    const auto dev_id = m_keystore.GetDeviceId();
-    if (!dev_id) {
-        return {.error = WalletOperationError::NO_IDENTITY, .error_message = "No active device key in keystore"};
-    }
-
-    uint64_t nonce = 0;
-    uint64_t activation_nonce = 0;
-    const auto loaded = m_runtime.GetStore().LoadState();
-    if (loaded && loaded.state) {
-        const auto* rec = loaded.state->identities.Find(*my_account);
-        if (rec) {
-            auto it = rec->devices.find(*dev_id);
-            if (it != rec->devices.end()) {
-                nonce = it->second.next_nonce;
-                activation_nonce = it->second.activation_nonce;
-            }
-        }
-    }
-
-    SystemLockPayload lock_payload{
-        .amount = amount,
-    };
-
+    SystemLockPayload lock_payload{.amount = amount};
     const auto commitment = ComputeSystemLockPayloadCommitment(lock_payload);
     if (!commitment) {
         return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to commit system lock payload"};
     }
 
-    DeviceAuthorization auth{
-        .account_id = *my_account,
-        .device_id = *dev_id,
-        .nonce = nonce,
-        .activation_nonce = activation_nonce,
-        .kind = DeviceOperationKind::SYSTEM_LOCK,
-        .payload_commitment = *commitment,
-    };
-
-    const auto digest = ComputeDeviceOperationDigest(m_runtime.GetNetworkId(), auth);
-    if (!digest) {
-        return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to compute system lock digest"};
-    }
-
-    const auto sig = m_keystore.SignDevice(*digest);
-    if (!sig) {
-        return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to sign system lock operation"};
-    }
-    auth.signature = *sig;
-
-    AuthorizedSystemLock auth_lock{
-        .authorization = auth,
-        .lock = lock_payload,
-    };
-
-    ProtocolOperation proto_op{auth_lock};
-
-    const auto op_id_opt = ComputeOperationId(proto_op);
-    const uint256 op_id = op_id_opt.value_or(uint256{});
-    const auto submit_res = m_runtime.SubmitOperation(proto_op);
-    if (!submit_res) {
-        return {.error = WalletOperationError::SUBMIT_FAILED, .error_message = "Network rejected system lock operation"};
-    }
-
+    const auto submitted = m_operation_coordinator.Execute(DeviceOperationKind::SYSTEM_LOCK, *commitment,
+        [&](const DeviceAuthorization& authorization) -> std::optional<ProtocolOperation> {
+            return ProtocolOperation{AuthorizedSystemLock{.authorization = authorization, .lock = lock_payload}};
+        });
+    if (!submitted) return {.error = WalletOperationError::SUBMIT_FAILED, .op_id = submitted.op_id,
+        .error_message = submitted.error, .operation_phase = submitted.phase};
+    const uint256 op_id = submitted.op_id;
     WalletLedgerEntry pending_entry{
         .entry_id = op_id,
         .kind = WalletEntryKind::LOCK_TO_SYSTEM,
@@ -287,7 +190,7 @@ WalletOperationResult CybouWalletService::LockToSystemBalance(const uint64_t amo
         if (existing == m_entries.end()) m_entries.insert(m_entries.begin(), pending_entry);
     }
 
-    return {.error = WalletOperationError::NONE, .op_id = op_id};
+    return {.error = WalletOperationError::NONE, .op_id = op_id, .operation_phase = submitted.phase};
 }
 
 void CybouWalletService::SendPaymentAsync(const AccountId& recipient, const uint64_t amount,

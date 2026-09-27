@@ -166,6 +166,8 @@ public:
 
     /** Check the local index of operations committed with finalized blocks. */
     bool HasIndexedFinalizedOperation(const uint256& op_id) const;
+    /** Return the indexed finalized height for an operation, if present and valid. */
+    std::optional<uint64_t> GetFinalizedOperationHeight(const uint256& op_id) const;
 
     /** Retrieve a persisted compact mail discovery filter by block ID. */
     std::optional<CybouMailDiscoveryFilter> GetBlockMailFilter(const uint256& block_id) const;

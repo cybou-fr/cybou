@@ -2,11 +2,12 @@
 
 CYBOU is a commercially operated European sovereign identity and communication network, designed in France.
 
-Identity is the platform primitive. CYBOU Email is the first user-facing
-product. Beta Email includes Object Storage-backed encrypted attachments;
-Object Storage is therefore part of Beta readiness. Backup and Drive are later
-applications of that Storage layer, gated on demonstrated product usage and
-operational maturity. See `81_BETA_PRODUCT_SCOPE.md`.
+Identity is the security root for user services. Name, Wallet, Mail, and Files
+are capabilities of one identity, not separate user accounts or authorization
+systems. CYBOU Email is the first user-facing product. Beta includes Files and
+Object Storage-backed encrypted Mail attachments. Backup is a later application
+of that Storage layer, gated on demonstrated product usage and operational
+maturity. See `81_BETA_PRODUCT_SCOPE.md` and `86_IDENTITY_SECURITY_SUBSTRATE.md`.
 
 ## Product thesis
 
@@ -69,16 +70,17 @@ CYBOU foundation
     native economic layer
 
 First user-facing product / Beta requirement
-    CYBOU Email + Object Storage-backed encrypted attachments
+    CYBOU Email + Files + Object Storage-backed encrypted attachments
 
 Post-Beta applications
     Backup
-    Drive
 ```
 
-CYBOU does not attempt to launch all services at once. Identity and
-Storage-backed CYBOU Email form the Beta product. Backup and Drive follow Beta
-after demonstrated need and operational maturity.
+CYBOU does not attempt to launch all services at once. One identity powers
+Mail, Files, and Wallet. Storage-backed CYBOU Email and the Files product form
+the Beta product. Backup follows Beta after demonstrated need and operational
+maturity. “Drive-like” describes a usability reference for Files, not a second
+CYBOU service or post-Beta milestone.
 
 ## Technology trajectory
 
@@ -93,8 +95,8 @@ Bitcoin-derived C++ full-node base
     -> BFT explicit finality
     -> independent validators
     -> cooperative encrypted Object Storage for Beta Mail attachments
+    -> Files (Beta product surface)
     -> Backup (post-Beta)
-    -> Drive (post-Beta)
 ```
 
 ## Email-first

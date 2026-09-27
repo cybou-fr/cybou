@@ -44,8 +44,9 @@ validator_count                    active validator set from native state
 `WaitingForFinality` is entered when the op is broadcast and left only when
 a BFT finality certificate commits the block.
 
-The current desktop opens native CYBOU state, polls the DEV bootstrap
-endpoint for finalized blocks, and reports verified height/validator count.
+The current desktop opens native CYBOU state, connects through the default DEV
+CYP2 bootstrap path for finalized blocks, and reports verified
+height/validator count.
 The bootstrap address supplies transport location, not consensus trust.
 The identity service submits AccountCreate remotely and waits for the
 verified account state before reporting `Active`. Email and Storage pages
@@ -104,6 +105,25 @@ when disabled.
 - Backup sets report size, time and verification state; restore is bound
   to the local identity keys.
 
+## Layering and operation ownership
+
+The intended request path is:
+
+```text
+Qt page -> desktop controller -> domain service ->
+DeviceOperationCoordinator / StorageService -> NodeRuntime
+```
+
+Pages may collect user input, show local validation, and render immutable
+status/progress snapshots. They MUST NOT allocate protocol nonces, sign
+operations, choose crypto suites, wrap content keys, or submit Storage
+transfers directly. Controllers and services may prepare user intent and
+delegate it to the owning core service. The shared coordinator owns exact
+operation bytes, operation identity, nonce reservation, durable retry, and
+status reconciliation. Wallet, Name, and recovery's root-authorized DeviceAdd
+use it; Mail, Files, and root-authorized revoke/recovery-rotation flows do not
+yet.
+
 ## Mail / Files asynchronous state contract
 
 The following is the target Beta UI contract, not a claim that the corresponding
@@ -122,7 +142,9 @@ Protected / Confirmed
 NeedsAttention
 ```
 
-Product language is derived from verified core truth. `delivery_uncertain` is
+Product language is derived from verified core truth. Operation and progress
+snapshots come from core/service state, not page-local guesses.
+`delivery_uncertain` is
 not rejection. `Protected`, `Sent`, and `Confirmed` are shown only after the
 owning service/core reports the corresponding durability or finality state.
 

@@ -3,7 +3,7 @@
 > **One identity. Private communication. Your data under your control.**<br>
 > *Une identité unique. Des communications privées. Vos données sous votre contrôle.*
 
-CYBOU is a protected communication platform built around personal digital identity. It brings together verified identity, private messaging, encrypted file storage, decentralized backup, and service funding into a single coherent system.
+CYBOU is an experimental protected communication platform built around personal digital identity. Its Beta target brings together verified identity, private messaging, encrypted Files, and service funding; Backup is a post-Beta application.
 
 > **Not a blockchain with features — a protected identity with services.**
 
@@ -28,9 +28,9 @@ CYBOU reorganizes digital services around **you**: one cryptographically protect
 - **Identity-centric, not speculation-centric:** The wallet exists to fund services and secure the network, not as a speculative trading instrument. Communication, privacy, and user sovereignty come first.
 - **Human-readable `.cybou` names:** Simple addresses such as `stanislav.cybou` or `alice.cybou` replace cumbersome cryptographic strings, resolved directly on a decentralized registry.
 - **Single security and recovery model:** A single 24-word recovery phrase protects your identity root. Devices are authorized cryptographically without handing master credentials to a central server.
-- **Post-quantum foundation by design:** Built to resist future quantum attacks ("Harvest Now, Decrypt Later") with hybrid post-quantum signatures (Ed25519 + ML-DSA) and hybrid encryption (X25519 + ML-KEM).
+- **Post-quantum security target:** Identity authorization uses hybrid signatures (Recovery Root Ed25519 + ML-DSA-65; device Ed25519 + ML-DSA-44). Hybrid recipient encryption (X25519 + ML-KEM-768) is a target profile; recipient KEM keys are not yet published and Mail sending fails closed.
 - **Service-native utility wallet:** Two deterministic balance tiers — `SystemBalance` for protocol services (mail, storage, name registration) and spendable `Balance`. Account onboarding automatically seeds service credits.
-- **Sovereign and local-first:** Your client manages keys locally, owns the mailbox index, and stores data in encrypted portable vaults. No cloud intermediary has access to unencrypted payloads.
+- **Sovereign and local-first target:** The client manages identity keys locally and is designed to own mailbox indexes and encrypted portable vaults. Distributed Object Storage, Beta Mail attachments, and Backup are not yet implemented.
 
 ---
 
@@ -41,11 +41,11 @@ Behind the user-facing services runs a deterministic, peer-to-peer C++20 engine:
 - **Identity & Key Separation:**
   - **Recovery Root:** Hybrid Ed25519 + ML-DSA-65 (NIST FIPS 204). Operates offline for recovery and device delegation.
   - **Device Keys:** Hybrid Ed25519 + ML-DSA-44. Unique per device, authorized by the root.
-  - **Mail Encryption Keys:** HPKE hybrid X25519 + ML-KEM-768 (NIST FIPS 203), isolated from identity signing keys.
+  - **Mail Encryption Keys (target):** Hybrid X25519 + ML-KEM-768, isolated from identity signing keys; the required recipient-key publication and interoperable profile remain unimplemented.
 - **BFT Finality:** Deterministic block finality certificates with equal validator weight (`weight = 1`). Development Authority Mode runs with a single validator (`f=0`); public networks target equal-weight consensus requiring $\ge 4$ independent validators for `f=1` tolerance.
 - **Deterministic Economics:**
   - Maximum supply capped at **100,000,000,000 CYBOU** (0 decimals).
-  - Fees are deterministic and size-aware: **75%** allocated to Network Security, **25%** recycled into the `OnboardingPool`.
+  - Fees are deterministic and size-aware: each 4-unit fee routes **3 to Security** and **1 to `OnboardingPool`**.
   - Atomic onboarding: permissionless anti-Sybil proof-of-work credits new accounts with an initial `SystemBalance`.
 - **Local Client Integrity:** The Qt desktop client embeds the native C++ runtime directly, verifying state roots and finality certificates locally rather than relying on trusted RPC gateways.
 
@@ -77,6 +77,9 @@ CYBOU is in active development and **not yet a public production service**.
 
 - [Identity-Centric Product UX Contract](docs/cybou/79_IDENTITY_CENTRIC_PRODUCT_UX.md)
 - [Identity & Name Registry Architecture](docs/cybou/10_IDENTITY_NAMES.md)
+- [Identity Security Substrate](docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md)
+- [Device Operation Coordinator](docs/cybou/87_DEVICE_OPERATION_COORDINATOR.md)
+- [Encrypted Object and Key Model](docs/cybou/88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md)
 - [Implementation Status & Architecture Audit](docs/cybou/26_IMPLEMENTATION_STATUS.md)
 - [Building CYBOU from Source](INSTALL.md)
 - [Contribution Guidelines](CONTRIBUTING.md)

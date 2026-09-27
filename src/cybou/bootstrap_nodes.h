@@ -18,18 +18,20 @@ namespace cybou {
  * Mainnet must derive their bootstrap sets from the operator-approved
  * validator admission flow, not from a compiled-in list (docs 04, 08).
  *
- * These endpoints accept the bounded block-feed protocol served by
- * `cybou-node serve` (doc 75). The list is transport metadata: it is never
- * part of the serialized network definition and carries no trust — the
- * genesis file remains the root of trust for every synced block.
+ * The block-feed port remains available for diagnostics and the temporary
+ * legacy fallback. Desktop clients use the CYP2 port by default. The list is
+ * transport metadata: it is never part of the serialized network definition
+ * and carries no trust — the genesis file remains the root of trust for every
+ * synced block.
  */
 struct BootstrapAuthorityEndpoint {
     std::string_view host;
-    uint16_t port;
+    uint16_t port; // CYB1 block-feed fallback
+    uint16_t p2p_port; // CYP2 peer session
 };
 
 inline constexpr std::array<BootstrapAuthorityEndpoint, 1> CYBOU_DEV_BOOTSTRAP_AUTHORITIES{{
-    {"51.255.46.58", 29460}, // OVH DEV authority node (vps-d0669a91)
+    {"51.255.46.58", 29460, 29461}, // OVH DEV authority node (vps-d0669a91)
 }};
 
 } // namespace cybou
