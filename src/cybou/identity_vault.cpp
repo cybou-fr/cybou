@@ -24,6 +24,7 @@
 #else
 #include <cerrno>
 #include <fcntl.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
@@ -45,6 +46,76 @@ constexpr size_t MAX_ENVELOPE{HEADER_SIZE + WRAPPED_DEK_SIZE + MAX_PAYLOAD + TAG
 using CipherCtx = std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)>;
 using Kdf = std::unique_ptr<EVP_KDF, decltype(&EVP_KDF_free)>;
 using KdfCtx = std::unique_ptr<EVP_KDF_CTX, decltype(&EVP_KDF_CTX_free)>;
+
+class VaultFileLock final {
+public:
+    explicit VaultFileLock(const std::filesystem::path& path)
+    {
+        auto lock_path = path;
+        lock_path += ".lock";
+#ifdef _WIN32
+        m_handle = CreateFileW(lock_path.c_str(), GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_ALWAYS,
+            FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        if (m_handle == INVALID_HANDLE_VALUE) return;
+        BY_HANDLE_FILE_INFORMATION info{};
+        if (!GetFileInformationByHandle(m_handle, &info) ||
+            (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) ||
+            GetFileType(m_handle) != FILE_TYPE_DISK) {
+            CloseHandle(m_handle);
+            m_handle = INVALID_HANDLE_VALUE;
+            return;
+        }
+        OVERLAPPED overlapped{};
+        if (!LockFileEx(m_handle, LOCKFILE_EXCLUSIVE_LOCK, 0, 1, 0, &overlapped)) {
+            CloseHandle(m_handle);
+            m_handle = INVALID_HANDLE_VALUE;
+            return;
+        }
+        m_overlapped = overlapped;
+#else
+        m_fd = open(lock_path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR);
+        if (m_fd < 0) return;
+        struct stat info{};
+        if (fstat(m_fd, &info) != 0 || !S_ISREG(info.st_mode) || flock(m_fd, LOCK_EX) != 0) {
+            close(m_fd);
+            m_fd = -1;
+        }
+#endif
+    }
+
+    ~VaultFileLock()
+    {
+#ifdef _WIN32
+        if (m_handle != INVALID_HANDLE_VALUE) {
+            UnlockFileEx(m_handle, 0, 1, 0, &m_overlapped);
+            CloseHandle(m_handle);
+        }
+#else
+        if (m_fd >= 0) {
+            flock(m_fd, LOCK_UN);
+            close(m_fd);
+        }
+#endif
+    }
+
+    explicit operator bool() const
+    {
+#ifdef _WIN32
+        return m_handle != INVALID_HANDLE_VALUE;
+#else
+        return m_fd >= 0;
+#endif
+    }
+
+private:
+#ifdef _WIN32
+    HANDLE m_handle{INVALID_HANDLE_VALUE};
+    OVERLAPPED m_overlapped{};
+#else
+    int m_fd{-1};
+#endif
+};
 
 void Store32(unsigned char* out, uint32_t value)
 {
@@ -362,6 +433,53 @@ bool PromoteIdentityVault(const std::filesystem::path& candidate_path,
         CRYPTO_memcmp(promoted_plaintext->data(), expected_payload.data(), expected_payload.size()) == 0;
     crypto::CleanseMemory(promoted_plaintext->data(), promoted_plaintext->size());
     return promoted_matches;
+}
+
+bool ReplaceIdentityVault(const std::filesystem::path& path,
+    std::string_view password, std::span<const unsigned char> expected_payload,
+    std::span<const unsigned char> replacement_payload)
+{
+    if (path.empty() || path.filename().empty() || expected_payload.empty() || replacement_payload.empty() ||
+        expected_payload.size() > MAX_PAYLOAD || replacement_payload.size() > MAX_PAYLOAD) return false;
+
+    const VaultFileLock lock{path};
+    if (!lock) return false;
+
+    auto current = LoadIdentityVault(path, password);
+    if (!current) return false;
+    const bool expected = current->size() == expected_payload.size() &&
+        CRYPTO_memcmp(current->data(), expected_payload.data(), expected_payload.size()) == 0;
+    crypto::CleanseMemory(current->data(), current->size());
+    if (!expected) return false;
+
+    const auto envelope = SealIdentityVault(password, replacement_payload);
+    const auto temp = TemporaryPath(path);
+    if (!envelope || !temp || !WriteNewFile(*temp, *envelope)) return false;
+#ifdef _WIN32
+    if (!MoveFileExW(temp->c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileW(temp->c_str());
+        return false;
+    }
+#else
+    if (::rename(temp->c_str(), path.c_str()) != 0) {
+        std::error_code ec;
+        std::filesystem::remove(*temp, ec);
+        return false;
+    }
+    const auto parent = path.parent_path().empty() ? std::filesystem::path{"."} : path.parent_path();
+    const int dirfd = open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (dirfd < 0) return false;
+    const bool synced = fsync(dirfd) == 0;
+    close(dirfd);
+    if (!synced) return false;
+#endif
+
+    auto reopened = LoadIdentityVault(path, password);
+    if (!reopened) return false;
+    const bool matches = reopened->size() == replacement_payload.size() &&
+        CRYPTO_memcmp(reopened->data(), replacement_payload.data(), replacement_payload.size()) == 0;
+    crypto::CleanseMemory(reopened->data(), reopened->size());
+    return matches;
 }
 
 std::optional<std::vector<unsigned char>> LoadIdentityVault(

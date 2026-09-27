@@ -183,7 +183,7 @@ No priority fee.
 Security/legal/CRA/crypto-export/privacy/update/runbook work.
 
 ## v0.2.6 — Controlled Beta pilot
-20–100 users for 8–12 weeks; four approved validators where claiming f=1 BFT tolerance. Size onboarding budget from integrated Email + Storage + Backup economics.
+20–100 users for 8–12 weeks; four approved validators where claiming f=1 BFT tolerance. Size the Beta onboarding budget from measured Email + Files/Storage usage; keep Backup in a separate post-Beta capacity scenario.
 
 ## v0.3.0 — Operator continuity
 Design/test emergency Operator Authority succession without introducing normal DAO/community governance.
@@ -200,4 +200,4 @@ Multiple EU validator operators/providers.
 ## BetaNet and Mainnet Progression
 - **Separate Genesis**: BetaNet and Mainnet maintain separate genesis states; Beta balances do not carry forward to Mainnet.
 - **Service Progression**: Email Alpha -> Storage Core -> PQ Mail + encrypted attachments + Files -> Beta -> Backup (post-Beta).
-- **Economic Calibration**: Beta onboarding budget is sized from integrated Email + Storage + Backup usage profiles; the Mainnet onboarding bonus is frozen only after analyzing aggregate Beta operational metrics.
+- **Economic Calibration**: Beta onboarding budget is sized from measured Email + Files/Storage usage; Backup is modeled separately as a post-Beta capacity scenario. The Mainnet onboarding bonus is frozen only after analyzing aggregate Beta operational metrics.

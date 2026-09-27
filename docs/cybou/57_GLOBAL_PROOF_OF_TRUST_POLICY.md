@@ -30,7 +30,7 @@ Payments
 Identity operations
 future Storage
 future Backup
-future Drive
+Files
 ```
 
 ## Mail limits

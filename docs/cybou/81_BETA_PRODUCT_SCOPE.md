@@ -100,9 +100,10 @@ Beta is not ready until all of the following work end to end:
    gates are satisfied under their owning documents.
 
 Backup may follow after Beta operational evidence. The Beta onboarding budget
-must be sized from integrated Email, Storage, and Backup economics even though
-Backup itself remains a post-Beta product application. Files is in Beta scope;
-there is no separate Drive service or additional Drive calibration category.
+must be calibrated from measured Email and Files/Storage usage. Backup is a
+separate post-Beta capacity scenario and is not an input to the Beta budget
+freeze. Files is in Beta scope; there is no separate Drive service or
+additional Drive calibration category.
 
 ## Product-experience gate
 

@@ -7,6 +7,7 @@
 #include <cybou/account_id.h>
 #include <cybou/identity_crypto.h>
 #include <cybou/identity_material.h>
+#include <cybou/storage_key_ring.h>
 #include <uint256.h>
 
 #include <array>
@@ -37,6 +38,11 @@ public:
     bool LoadMaterial(IdentityMaterial material);
     bool LoadFromFile(const std::filesystem::path& path, std::string_view password);
     bool SaveToFile(const std::filesystem::path& path, std::string_view password) const;
+    bool CreateStorageKeyRing(const std::filesystem::path& path, std::string_view password);
+    bool LoadStorageKeyRing(const std::filesystem::path& path, std::string_view password);
+    bool RotateStorageKeyRing(const std::filesystem::path& path, std::string_view password);
+    std::optional<uint32_t> GetCurrentStorageKeyEpoch() const;
+    bool CopyStorageMasterKey(uint32_t epoch, std::span<unsigned char, 32> out) const;
     std::optional<IdentityMaterial> CreateRecoveryRotationMaterial(
         std::span<const unsigned char, 32> new_recovery_entropy) const;
     std::optional<RecoveryWords> GetRecoveryWords() const;

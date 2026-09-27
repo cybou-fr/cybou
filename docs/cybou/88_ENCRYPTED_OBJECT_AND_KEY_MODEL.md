@@ -1,12 +1,14 @@
 # 88 — Encrypted object and key model
 
-Status: canonical target for Files objects and Mail attachments. Local v1
-chunk encryption and the first durable provider/CYP2 ciphertext transfer slice
-are implemented. Local device X25519 and ML-KEM-768 private material is
-generated and encrypted in the identity vault. Device KEM publication and Storage Master Key wrapping,
-client-side replication, leases, audits, repair, accounting, and attachment
-delivery are not implemented. `11_STORAGE_OBJECTS.md` owns provider placement,
-leases, audits, repair, and accounting.
+Status: canonical target for Files objects and Mail attachments. Provisional
+local v1 chunk encryption, public manifest commitments, durable provider/CYP2
+ciphertext transfer, and an encrypted AccountID-bound Storage Key Ring with
+durable epochs are implemented. Local device X25519 and ML-KEM-768 private
+material is generated and encrypted in the identity vault. Device KEM
+publication/wrapping, Storage Master Key device wrapping, client-side
+replication, leases, audits, repair, accounting, and attachment delivery are
+not implemented. `11_STORAGE_OBJECTS.md` owns provider placement, leases,
+audits, repair, and accounting.
 
 ## Security boundary
 
@@ -45,6 +47,16 @@ The target Files model uses a random Storage Master Key per key epoch. It is
 wrapped independently to each authorized device using the reviewed hybrid
 key-agreement profile. Revocation and recovery rotate future key access; they
 cannot erase content a previously authorized device already decrypted.
+
+The local key ring is implemented as a separate password-protected CYBV2
+sidecar bound to AccountID. Epochs are contiguous from zero; rotation durably
+adds a new random 256-bit key before making it current, while retaining prior
+keys for objects already encrypted under those epochs. Updates compare the
+authenticated saved payload before atomic replacement and fail closed on a
+stale or mismatched sidecar. The current limit is 1024 epochs. This is local
+key custody only: keys are not shared with another device, and the sidecar is
+not automatically restored on a clean machine. Device wrapping and recovery
+distribution wait for a reviewed recipient KEM package.
 
 ```text
 Identity
@@ -156,13 +168,24 @@ object.
 Retention claims are Storage-layer obligations, not permanent per-object
 consensus records. Their lease/accounting aggregation is defined in docs 11–13.
 
+## Implemented provisional local v1
+
+- Random ObjectID and per-object salt generation;
+- ChunkID and public manifest commitment construction;
+- chunk AEAD, nonce storage, and network/object/epoch/position AAD;
+- encrypted AccountID-bound Storage Key Ring sidecar with durable key epochs;
+- durable local provider and bounded CYP2 PUT/commit/GET ciphertext transfer.
+
+These local encodings and key lifecycle remain provisional until reviewed
+cross-implementation vectors and protocol freeze.
+
 ## Open protocol freeze points
 
 - Standardized hybrid KEM/key-package format and transcript binding;
-- Storage Master Key persistence, rotation, device addition, and revocation;
-- opaque ObjectID/ChunkID construction and privacy properties;
+- Storage Master Key device wrapping, distribution, revocation, and recovery;
 - manifest format, signature/authorization, and conflict behavior;
 - replication/coding profile, placement, lease, audit, repair, and retention;
+- padding and cross-implementation vectors;
 - safe reference reuse and release behavior for Mail-to-Files ownership.
 
 These open parameters do not weaken the frozen boundaries: separate signing

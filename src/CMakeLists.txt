@@ -179,6 +179,7 @@ add_library(cybou_core STATIC
   cybou/signing.cpp
   cybou/signing_openssl.cpp
   cybou/storage_crypto.cpp
+  cybou/storage_key_ring.cpp
   cybou/state.cpp
   cybou/validator.cpp
 )

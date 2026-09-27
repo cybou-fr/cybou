@@ -29,6 +29,11 @@ bool SaveNewIdentityVault(const std::filesystem::path& path,
 bool PromoteIdentityVault(const std::filesystem::path& candidate_path,
     const std::filesystem::path& active_path, std::string_view password,
     std::span<const unsigned char> expected_payload);
+// Replaces an existing vault only when its authenticated payload matches the
+// caller's expected current value. The replacement is synced and reopened.
+bool ReplaceIdentityVault(const std::filesystem::path& path,
+    std::string_view password, std::span<const unsigned char> expected_payload,
+    std::span<const unsigned char> replacement_payload);
 std::optional<std::vector<unsigned char>> LoadIdentityVault(
     const std::filesystem::path& path, std::string_view password);
 

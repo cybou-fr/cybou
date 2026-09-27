@@ -31,6 +31,7 @@ std::optional<std::array<unsigned char, 32>> DeriveMailSeed(std::span<const unsi
 
 struct CybouKeyStore::Impl {
     std::optional<IdentityMaterial> material;
+    std::optional<StorageKeyRing> storage_key_ring;
     std::optional<std::array<unsigned char, 32>> mail_seed;
     std::optional<uint256> mail_public_key;
     std::optional<uint256> x25519_public_key;
@@ -45,6 +46,7 @@ struct CybouKeyStore::Impl {
     void Clear()
     {
         material.reset();
+        storage_key_ring.reset();
         if (mail_seed) {
             crypto::CleanseMemory(mail_seed->data(), mail_seed->size());
             mail_seed.reset();
@@ -120,6 +122,45 @@ bool CybouKeyStore::LoadFromFile(const std::filesystem::path& path, std::string_
 bool CybouKeyStore::SaveToFile(const std::filesystem::path& path, std::string_view password) const
 {
     return m_impl->material && SaveNewIdentityMaterial(path, password, *m_impl->material);
+}
+
+bool CybouKeyStore::CreateStorageKeyRing(const std::filesystem::path& path, std::string_view password)
+{
+    if (!m_impl->material || m_impl->storage_key_ring) return false;
+    const auto account = AccountId::FromBytes(m_impl->material->account_id);
+    auto ring = account ? StorageKeyRing::Create(*account) : std::nullopt;
+    if (!ring || !ring->SaveNewToFile(path, password)) return false;
+    m_impl->storage_key_ring.emplace(std::move(*ring));
+    return true;
+}
+
+bool CybouKeyStore::LoadStorageKeyRing(const std::filesystem::path& path, std::string_view password)
+{
+    if (!m_impl->material) return false;
+    const auto account = AccountId::FromBytes(m_impl->material->account_id);
+    auto ring = StorageKeyRing::LoadFromFile(path, password);
+    if (!account || !ring || ring->BoundAccount() != *account) return false;
+    m_impl->storage_key_ring.emplace(std::move(*ring));
+    return true;
+}
+
+bool CybouKeyStore::RotateStorageKeyRing(const std::filesystem::path& path, std::string_view password)
+{
+    if (!m_impl->material || !m_impl->storage_key_ring) return false;
+    const auto account = AccountId::FromBytes(m_impl->material->account_id);
+    return account && m_impl->storage_key_ring->BoundAccount() == *account &&
+        m_impl->storage_key_ring->RotateAndSave(path, password);
+}
+
+std::optional<uint32_t> CybouKeyStore::GetCurrentStorageKeyEpoch() const
+{
+    if (!m_impl->storage_key_ring) return std::nullopt;
+    return m_impl->storage_key_ring->CurrentEpoch();
+}
+
+bool CybouKeyStore::CopyStorageMasterKey(const uint32_t epoch, const std::span<unsigned char, 32> out) const
+{
+    return m_impl->storage_key_ring && m_impl->storage_key_ring->CopyMasterKey(epoch, out);
 }
 
 std::optional<IdentityMaterial> CybouKeyStore::CreateRecoveryRotationMaterial(
