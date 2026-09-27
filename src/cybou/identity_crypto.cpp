@@ -3,12 +3,11 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/identity_crypto.h>
+#include <cybou/crypto/hkdf_sha256.h>
 
 #include <openssl/core_names.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
-#include <openssl/kdf.h>
-#include <openssl/params.h>
 
 #include <algorithm>
 #include <memory>
@@ -20,8 +19,6 @@ namespace {
 using Key = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
 using KeyCtx = std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)>;
 using MdCtx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
-using Kdf = std::unique_ptr<EVP_KDF, decltype(&EVP_KDF_free)>;
-using KdfCtx = std::unique_ptr<EVP_KDF_CTX, decltype(&EVP_KDF_CTX_free)>;
 
 const char* Algorithm(IdentityKeyPurpose purpose)
 {
@@ -63,20 +60,10 @@ std::optional<std::array<unsigned char, 32>> DeriveSeed(
     }
     const std::string info = std::string{"CYBOU/IDENTITY-V2/"} + std::string{purpose_label} + "/" +
         (component == "ED25519" ? "ED25519" : Algorithm(purpose));
-    Kdf kdf{EVP_KDF_fetch(nullptr, "HKDF", nullptr), EVP_KDF_free};
-    if (!kdf) return std::nullopt;
-    KdfCtx ctx{EVP_KDF_CTX_new(kdf.get()), EVP_KDF_CTX_free};
-    if (!ctx) return std::nullopt;
-    char digest[] = "SHA256";
-    OSSL_PARAM params[] = {
-        OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_DIGEST, digest, 0),
-        OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_KEY, const_cast<unsigned char*>(secret.data()), secret.size()),
-        OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, const_cast<char*>(salt.data()), salt.size()),
-        OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_INFO, const_cast<char*>(info.data()), info.size()),
-        OSSL_PARAM_construct_end(),
-    };
     std::array<unsigned char, 32> seed{};
-    if (EVP_KDF_derive(ctx.get(), seed.data(), seed.size(), params) != 1) return std::nullopt;
+    const auto salt_bytes = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(salt.data()), salt.size()};
+    const auto info_bytes = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(info.data()), info.size()};
+    if (!crypto::HkdfSha256(secret, salt_bytes, info_bytes, seed)) return std::nullopt;
     return seed;
 }
 

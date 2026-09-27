@@ -2,7 +2,9 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/crypto/sha256.h>
+#include <cybou/crypto/hkdf_sha256.h>
 
+#include <crypto/hkdf_sha256_32.h>
 #include <crypto/sha256.h>
 #include <test/util/setup_common.h>
 #include <util/strencodings.h>
@@ -12,6 +14,9 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 BOOST_AUTO_TEST_SUITE(cybou_crypto_tests)
@@ -52,6 +57,56 @@ BOOST_AUTO_TEST_CASE(openssl_sha256_matches_standard_vectors_and_legacy_output)
         evp.Finalize(evp_digest.data());
         BOOST_CHECK_EQUAL_COLLECTIONS(evp_digest.begin(), evp_digest.end(), legacy_digest.begin(), legacy_digest.end());
     }
+}
+
+BOOST_AUTO_TEST_CASE(hkdf_sha256_matches_rfc5869_and_legacy_mail_derivation)
+{
+    const auto ikm = ParseHex("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
+    const auto salt = ParseHex("000102030405060708090a0b0c");
+    const auto info = ParseHex("f0f1f2f3f4f5f6f7f8f9");
+    const auto expected = ParseHex(
+        "3cb25f25faacd57a90434f64d0362f2a"
+        "2d2d0a90cf1a5a4c5db02d56ecc4c5bf"
+        "34007208d5b887185865");
+    std::array<unsigned char, 42> output{};
+    BOOST_REQUIRE(cybou::crypto::HkdfSha256(ikm, salt, info, output));
+    BOOST_CHECK_EQUAL_COLLECTIONS(output.begin(), output.end(), expected.begin(), expected.end());
+
+    const auto empty = ParseHex("");
+    const auto empty_salt_expected = ParseHex(
+        "8da4e775a563c18f715f802a063c5a31"
+        "b8a11f5c5ee1879ec3454e5f3c738d2d"
+        "9d201395faa4b61a96c8");
+    BOOST_REQUIRE(cybou::crypto::HkdfSha256(ikm, empty, empty, output));
+    BOOST_CHECK_EQUAL_COLLECTIONS(output.begin(), output.end(), empty_salt_expected.begin(), empty_salt_expected.end());
+
+    constexpr std::string_view mail_salt{"CYBOU/MAIL_HKDF/V1"};
+    constexpr std::array<std::string_view, 2> mail_info{
+        "CYBOU/MAIL_CEK/V1", "CYBOU/MAIL_NONCE/V1"};
+    for (const std::size_t input_size : std::array<std::size_t, 4>{1, 22, 32, 64}) {
+        std::vector<unsigned char> key_material(input_size);
+        for (std::size_t i = 0; i < key_material.size(); ++i) {
+            key_material[i] = static_cast<unsigned char>((i * 29 + 7) % 251);
+        }
+
+        for (const std::string_view label : mail_info) {
+            std::array<unsigned char, 32> evp_output{};
+            const auto mail_salt_bytes = std::span<const unsigned char>{
+                reinterpret_cast<const unsigned char*>(mail_salt.data()), mail_salt.size()};
+            const auto info_bytes = std::span<const unsigned char>{
+                reinterpret_cast<const unsigned char*>(label.data()), label.size()};
+            BOOST_REQUIRE(cybou::crypto::HkdfSha256(key_material, mail_salt_bytes, info_bytes, evp_output));
+
+            CHKDF_HMAC_SHA256_L32 legacy{key_material.data(), key_material.size(), std::string{mail_salt}};
+            std::array<unsigned char, 32> legacy_output{};
+            legacy.Expand32(std::string{label}, legacy_output.data());
+            BOOST_CHECK_EQUAL_COLLECTIONS(
+                evp_output.begin(), evp_output.end(), legacy_output.begin(), legacy_output.end());
+        }
+    }
+
+    std::array<unsigned char, 255 * 32 + 1> oversized{};
+    BOOST_CHECK(!cybou::crypto::HkdfSha256(ikm, salt, info, oversized));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

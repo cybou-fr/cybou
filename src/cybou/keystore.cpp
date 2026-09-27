@@ -4,15 +4,12 @@
 #include <cybou/keystore.h>
 
 #include <cybou/crypto/cleanse.h>
+#include <cybou/crypto/hkdf_sha256.h>
 #include <cybou/signing.h>
 
-#include <openssl/core_names.h>
 #include <openssl/evp.h>
-#include <openssl/kdf.h>
-#include <openssl/params.h>
 
 #include <algorithm>
-#include <memory>
 #include <string_view>
 
 namespace cybou {
@@ -20,24 +17,13 @@ namespace {
 
 std::optional<std::array<unsigned char, 32>> DeriveMailSeed(std::span<const unsigned char, 32> device_secret)
 {
-    using Kdf = std::unique_ptr<EVP_KDF, decltype(&EVP_KDF_free)>;
-    using Context = std::unique_ptr<EVP_KDF_CTX, decltype(&EVP_KDF_CTX_free)>;
-    Kdf kdf{EVP_KDF_fetch(nullptr, "HKDF", nullptr), EVP_KDF_free};
-    if (!kdf) return std::nullopt;
-    Context context{EVP_KDF_CTX_new(kdf.get()), EVP_KDF_CTX_free};
-    if (!context) return std::nullopt;
-    char digest[] = "SHA256";
     char salt[] = "CYBOU/MAIL-KEY-HKDF/V2";
     char info[] = "X25519";
-    OSSL_PARAM parameters[] = {
-        OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_DIGEST, digest, 0),
-        OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_KEY, const_cast<unsigned char*>(device_secret.data()), device_secret.size()),
-        OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, salt, sizeof(salt) - 1),
-        OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_INFO, info, sizeof(info) - 1),
-        OSSL_PARAM_construct_end(),
-    };
     std::array<unsigned char, 32> seed{};
-    if (EVP_KDF_derive(context.get(), seed.data(), seed.size(), parameters) != 1) return std::nullopt;
+    if (!crypto::HkdfSha256(device_secret,
+            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(salt), sizeof(salt) - 1},
+            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(info), sizeof(info) - 1},
+            seed)) return std::nullopt;
     return seed;
 }
 

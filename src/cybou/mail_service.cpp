@@ -4,10 +4,9 @@
 #include <cybou/mail_service.h>
 #include <cybou/hex.h>
 #include <cybou/crypto/cleanse.h>
+#include <cybou/crypto/hkdf_sha256.h>
 
 #include <crypto/chacha20poly1305.h>
-#include <crypto/common.h>
-#include <crypto/hkdf_sha256_32.h>
 #include <cybou/crypto/sha256.h>
 #include <openssl/rand.h>
 
@@ -134,19 +133,30 @@ std::optional<std::vector<unsigned char>> EncryptMailPayload(
         return std::nullopt;
     }
 
-    const auto shared_secret = X25519DeriveSharedSecret(eph_sk, *recipient_x25519);
+    auto shared_secret = X25519DeriveSharedSecret(eph_sk, *recipient_x25519);
     crypto::CleanseMemory(eph_sk.data(), eph_sk.size());
     if (!shared_secret) return std::nullopt;
 
-    CHKDF_HMAC_SHA256_L32 hkdf(shared_secret->data(), shared_secret->size(), "CYBOU/MAIL_HKDF/V1");
     std::array<unsigned char, 32> cek{};
-    hkdf.Expand32("CYBOU/MAIL_CEK/V1", cek.data());
     std::array<unsigned char, 32> nonce_buf{};
-    hkdf.Expand32("CYBOU/MAIL_NONCE/V1", nonce_buf.data());
+    static constexpr std::string_view HKDF_SALT{"CYBOU/MAIL_HKDF/V1"};
+    static constexpr std::string_view CEK_INFO{"CYBOU/MAIL_CEK/V1"};
+    static constexpr std::string_view NONCE_INFO{"CYBOU/MAIL_NONCE/V1"};
+    const auto hkdf_salt = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(HKDF_SALT.data()), HKDF_SALT.size()};
+    if (!crypto::HkdfSha256(*shared_secret, hkdf_salt,
+            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(CEK_INFO.data()), CEK_INFO.size()}, cek) ||
+        !crypto::HkdfSha256(*shared_secret, hkdf_salt,
+            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(NONCE_INFO.data()), NONCE_INFO.size()}, nonce_buf)) {
+        crypto::CleanseMemory(shared_secret->data(), shared_secret->size());
+        crypto::CleanseMemory(cek.data(), cek.size());
+        crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
+        return std::nullopt;
+    }
+    crypto::CleanseMemory(shared_secret->data(), shared_secret->size());
 
     AEADChaCha20Poly1305::Nonce96 nonce96{
-        ReadLE32(nonce_buf.data()),
-        ReadLE64(nonce_buf.data() + 4)
+        ReadUint32LE(nonce_buf.data()),
+        ReadUint64LE(nonce_buf.data() + 4)
     };
 
     const auto plain_serialized = mail.Serialize();
@@ -206,18 +216,29 @@ std::optional<std::pair<uint256, ProtectedMail>> DecryptMailPayload(
     uint256 eph_pk;
     std::copy(ciphertext.begin() + 1, ciphertext.begin() + 33, eph_pk.begin());
 
-    const auto shared_secret = keystore.DeriveX25519SharedSecret(eph_pk);
+    auto shared_secret = keystore.DeriveX25519SharedSecret(eph_pk);
     if (!shared_secret) return std::nullopt;
 
-    CHKDF_HMAC_SHA256_L32 hkdf(shared_secret->data(), shared_secret->size(), "CYBOU/MAIL_HKDF/V1");
     std::array<unsigned char, 32> cek{};
-    hkdf.Expand32("CYBOU/MAIL_CEK/V1", cek.data());
     std::array<unsigned char, 32> nonce_buf{};
-    hkdf.Expand32("CYBOU/MAIL_NONCE/V1", nonce_buf.data());
+    static constexpr std::string_view HKDF_SALT{"CYBOU/MAIL_HKDF/V1"};
+    static constexpr std::string_view CEK_INFO{"CYBOU/MAIL_CEK/V1"};
+    static constexpr std::string_view NONCE_INFO{"CYBOU/MAIL_NONCE/V1"};
+    const auto hkdf_salt = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(HKDF_SALT.data()), HKDF_SALT.size()};
+    if (!crypto::HkdfSha256(*shared_secret, hkdf_salt,
+            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(CEK_INFO.data()), CEK_INFO.size()}, cek) ||
+        !crypto::HkdfSha256(*shared_secret, hkdf_salt,
+            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(NONCE_INFO.data()), NONCE_INFO.size()}, nonce_buf)) {
+        crypto::CleanseMemory(shared_secret->data(), shared_secret->size());
+        crypto::CleanseMemory(cek.data(), cek.size());
+        crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
+        return std::nullopt;
+    }
+    crypto::CleanseMemory(shared_secret->data(), shared_secret->size());
 
     AEADChaCha20Poly1305::Nonce96 nonce96{
-        ReadLE32(nonce_buf.data()),
-        ReadLE64(nonce_buf.data() + 4)
+        ReadUint32LE(nonce_buf.data()),
+        ReadUint64LE(nonce_buf.data() + 4)
     };
 
     static constexpr std::string_view AAD_PREFIX{"CYBOU-MAIL-AAD-V1"};

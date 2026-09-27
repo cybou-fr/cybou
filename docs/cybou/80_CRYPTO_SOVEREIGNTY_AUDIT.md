@@ -7,7 +7,7 @@ consensus hash change or a new cryptographic protocol.
 ## Repository state
 
 CYBOU sources still depend on inherited `uint256`, `CSipHasher`,
-`CHKDF_HMAC_SHA256_L32`, `AEADChaCha20Poly1305`, and `memory_cleanse` APIs.
+`AEADChaCha20Poly1305`, and `memory_cleanse` APIs.
 The Bitcoin cryptography dependency therefore remains; migrating SHA-256 does
 not by itself remove it.
 
@@ -28,6 +28,13 @@ not by itself remove it.
   output byte-for-byte with the inherited implementation across SHA-256
   padding boundaries and multi-chunk input. The inherited API remains in the
   test as a compatibility oracle; other inherited crypto migrations remain.
+- CYBOU HKDF-SHA256 derivations now share `cybou/crypto/hkdf_sha256.h`, backed
+  by OpenSSL EVP_KDF. Identity key derivation, the local mail-key derivation,
+  and the existing prototype Mail payload use this wrapper without changing
+  their salt/info bytes. Tests include RFC 5869 test case 1, compare the Mail
+  derivation byte-for-byte with the inherited HKDF implementation, and check
+  the RFC output-length bound. The inherited HKDF implementation remains only
+  as a test oracle; AEAD migration remains.
 
 The root `CMakeLists.txt` requires OpenSSL 3.5. The active PQ baseline in
 `09_CRYPTO_PQ.md` names X25519 + ML-KEM-768 as the Mail target and explicitly
@@ -53,7 +60,7 @@ production path. See `16_MAIL_PROTOCOL.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
    operation IDs, block IDs, state roots, network IDs, validator commitments,
    name commitments, and Mail commitments. Keep SHA-256 as the consensus
    function; a provider change is not a hash-suite change.
-4. Migrate HKDF and AEAD with fixed vectors covering key, nonce, AAD, ciphertext,
+4. Migrate AEAD with fixed vectors covering key, nonce, AAD, ciphertext,
    authentication failure, and malformed lengths. Benchmark SipHash before
    choosing EVP_MAC for the filter hot path; preserve its exact output.
 5. Replace inherited secret-cleansing calls through one CYBOU-owned interface,
