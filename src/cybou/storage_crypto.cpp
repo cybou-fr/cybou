@@ -26,6 +26,12 @@ constexpr std::string_view CHUNK_ID_DOMAIN{"CYBOU/STORAGE/CHUNK-ID/V1"};
 constexpr std::string_view MANIFEST_DOMAIN{"CYBOU/STORAGE/MANIFEST/V1"};
 constexpr size_t TAG_SIZE{crypto::CHACHA20_POLY1305_TAG_SIZE};
 
+template <typename Range>
+bool IsZero(const Range& bytes)
+{
+    return std::all_of(bytes.begin(), bytes.end(), [](unsigned char byte) { return byte == 0; });
+}
+
 void Put32(std::vector<unsigned char>& out, uint32_t value)
 {
     for (unsigned shift = 0; shift < 32; shift += 8) {
@@ -137,7 +143,7 @@ std::optional<StoragePublicManifest> BuildStoragePublicManifest(
     const StorageObjectId& object_id,
     const std::span<const StorageEncryptedChunk> chunks)
 {
-    if (chunks.empty() || chunks.size() > STORAGE_OBJECT_MAX_CHUNKS) return std::nullopt;
+    if (IsZero(network_id) || chunks.empty() || chunks.size() > STORAGE_OBJECT_MAX_CHUNKS) return std::nullopt;
     if (object_id == StorageObjectId{}) return std::nullopt;
     StoragePublicManifest manifest{.object_id = object_id, .chunk_count = static_cast<uint32_t>(chunks.size())};
     manifest.chunks.reserve(chunks.size());
@@ -167,7 +173,7 @@ bool VerifyStoragePublicManifest(
     const std::span<const unsigned char, 32> network_id,
     const StoragePublicManifest& manifest)
 {
-    if (manifest.object_id == StorageObjectId{} || manifest.chunk_count == 0 ||
+    if (IsZero(network_id) || manifest.object_id == StorageObjectId{} || manifest.chunk_count == 0 ||
         manifest.chunk_count > STORAGE_OBJECT_MAX_CHUNKS || manifest.chunks.size() != manifest.chunk_count) return false;
     uint64_t total = 0;
     for (size_t i = 0; i < manifest.chunks.size(); ++i) {
@@ -220,7 +226,8 @@ std::optional<StorageObjectCryptoContext> StorageObjectCryptoContext::Create(
     const std::span<const unsigned char, 32> storage_master_key,
     const StorageObjectPrivateMetadata& metadata)
 {
-    if (metadata.object_id == StorageObjectId{} || !GetChunkCount(metadata.plaintext_size)) return std::nullopt;
+    if (IsZero(network_id) || IsZero(storage_master_key) || metadata.object_id == StorageObjectId{} ||
+        metadata.salt == std::array<unsigned char, 32>{} || !GetChunkCount(metadata.plaintext_size)) return std::nullopt;
     auto object_key = DeriveObjectKey(storage_master_key, metadata);
     if (!object_key) return std::nullopt;
     StorageObjectCryptoContext context{network_id, metadata, *object_key};

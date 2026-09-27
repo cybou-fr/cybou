@@ -30,6 +30,9 @@ BOOST_AUTO_TEST_CASE(storage_chunk_crypto_is_chunked_randomized_and_network_boun
     BOOST_CHECK(metadata->object_id != second_metadata->object_id);
     BOOST_CHECK(metadata->salt != second_metadata->salt);
     BOOST_CHECK(!cybou::CreateStorageObjectMetadata(cybou::STORAGE_OBJECT_MAX_BYTES + 1, 0));
+    std::array<unsigned char, 32> zero_value{};
+    BOOST_CHECK(!cybou::StorageObjectCryptoContext::Create(zero_value, storage_master_key, *metadata));
+    BOOST_CHECK(!cybou::StorageObjectCryptoContext::Create(network_id, zero_value, *metadata));
 
     auto context = cybou::StorageObjectCryptoContext::Create(network_id, storage_master_key, *metadata);
     BOOST_REQUIRE(context);
@@ -62,6 +65,7 @@ BOOST_AUTO_TEST_CASE(storage_chunk_crypto_is_chunked_randomized_and_network_boun
     auto manifest = cybou::BuildStoragePublicManifest(network_id, metadata->object_id, chunks);
     BOOST_REQUIRE(manifest);
     BOOST_CHECK(cybou::VerifyStoragePublicManifest(network_id, *manifest));
+    BOOST_CHECK(!cybou::VerifyStoragePublicManifest(zero_value, *manifest));
     BOOST_CHECK(!cybou::VerifyStoragePublicManifest(wrong_network, *manifest));
     BOOST_CHECK_EQUAL(manifest->chunks.size(), 2U);
     BOOST_CHECK_EQUAL(manifest->chunks[0].ciphertext_size, first.size() + 16);
