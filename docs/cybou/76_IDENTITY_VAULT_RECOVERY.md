@@ -1,7 +1,8 @@
 # 76 — Identity vault and recovery
 
-Status: initial desktop creation and clean-machine device restore are integrated.
-Password change, vault lock, and recovery at the active-device limit remain open.
+Status: initial desktop creation, clean-machine device restore, and
+finality-gated recovery-root rotation are integrated. Password change, vault
+lock, and recovery at the active-device limit remain open.
 
 The local `identity_crypto` module has fixed HKDF labels and deterministic
 public-key test vectors. `recovery_phrase` now encodes and decodes 256-bit
@@ -15,7 +16,7 @@ reopening before returning success. The initial `CVID2` payload contains a
 random AccountID, 256-bit recovery entropy, and an independent random initial
 device secret, each 32 bytes in that order after the five-byte payload magic.
 `IdentityMaterial` clears these fields when destroyed. Password change and
-full recovery management remain unimplemented.
+broader device and vault management remain unimplemented.
 
 An in-progress name claim is saved separately beside the identity vault as an
 encrypted CYBV2 envelope. It binds NetworkID, AccountID, label, and random
@@ -54,9 +55,9 @@ is unrecoverable.
 
 The consensus transition already verifies the old root signature and new-root
 proof of possession over the same network-bound digest. It atomically replaces
-the RecoveryKeyID mapping and advances the shared root nonce. Desktop recovery
-root rotation is not operational until local vault persistence and operation
-reconciliation are integrated around that transition:
+the RecoveryKeyID mapping and advances the shared root nonce. The desktop
+implements recovery-root rotation around that transition using the following
+transaction contract:
 
 1. Generate a new 256-bit root entropy, derive its hybrid key and 24 words, and
    require the user to confirm the new phrase before any submission.
