@@ -187,7 +187,6 @@ add_library(cybou_core STATIC
 target_link_libraries(cybou_core
   PUBLIC
     cybou_base
-    bitcoin_crypto
   PRIVATE
     Boost::headers
     OpenSSL::Crypto
@@ -227,6 +226,7 @@ target_link_libraries(cybou_node
     cybou_core
     Boost::headers
   PRIVATE
+    bitcoin_crypto
     leveldb
     $<TARGET_NAME_IF_EXISTS:libevent::core>
     $<TARGET_NAME_IF_EXISTS:libevent::extra>
