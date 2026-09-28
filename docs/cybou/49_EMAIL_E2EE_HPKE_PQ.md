@@ -47,7 +47,9 @@ specifies PQ and hybrid HPKE KEMs, including X25519 + ML-KEM-768, but remains
 an Internet-Draft as of 2026-09-27. Mail KEM publication and encapsulation
 remain blocked until that profile is finalized and its key package,
 transcript, and historical authorization bindings are reviewed for CYBOU.
-Do not substitute the TLS group or implement a local combiner. See
+Identity package publication requirements and cutover gates are tracked in
+`89_IDENTITY_KEM_PUBLICATION.md`. Do not substitute the TLS group or implement
+a local combiner. See
 [OpenSSL's KEM API notes](https://docs.openssl.org/3.5/man1/openssl-pkeyutl/).
 
 ## v1 MailTx encryption

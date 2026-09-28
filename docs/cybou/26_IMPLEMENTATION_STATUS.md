@@ -16,6 +16,7 @@ readiness criteria.
 - Independent Ed25519 + ML-DSA-44 device keys and versioned RecoveryKeyID and DeviceKeyID commitments.
 - Portable encrypted CYBV2 vault with Argon2id and AES-256-GCM, durable create-only save and reopen verification, plus authenticated same-directory candidate promotion used by finality-gated recovery-root rotation.
 - CVID3 identity payload stores independent device X25519 private material and an ML-KEM-768 seed in the encrypted vault; OpenSSL derives their public keys and provides standalone ML-KEM encapsulation/decapsulation. The identity registry does not publish these keys, no hybrid combiner is implemented, and Mail/Storage do not use this local capability.
+- The pending Identity KEM publication design is recorded in `89_IDENTITY_KEM_PUBLICATION.md`. It scopes the future package commitment across initial AccountCreate, DeviceAdd, device activation, historical operation discovery, and lifecycle rules; it does not select a hybrid combiner or change the current wire/state format. Publication remains blocked on the standardized profile and integrated PQ consensus + names cutover gate.
 - Canonical account creation with anti-Sybil work and hybrid root/device proofs of possession.
 - Bounded device registry with add, revoke, root rotation, independent device nonces, and activation numbers that prevent replay after a key is re-added.
 - Canonical identity-registry and monetary-state snapshots with a domain-separated state root.
@@ -45,7 +46,7 @@ readiness criteria.
 ## Integration still required
 
 - Complete password change, vault lock and reauthentication, device management, and recovery when the account already has eight active devices.
-- Publish recipient KEM capability packages from Identity and complete Mail confidentiality, encrypted local mailbox storage, and historical sender-key authorization evidence. No recipient KEM capability is currently published. RFC 10024 defines the X25519 + ML-KEM-768 TLS 1.3 ephemeral group, while the general HPKE PQ profile remains an Internet-Draft as of 2026-09-27; neither is a finalized CYBOU recipient package. See `86_IDENTITY_SECURITY_SUBSTRATE.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
+- Publish recipient KEM capability packages from Identity and complete Mail confidentiality, encrypted local mailbox storage, and historical sender-key authorization evidence. No recipient KEM capability is currently published. RFC 10024 defines the X25519 + ML-KEM-768 TLS 1.3 ephemeral group, while the general HPKE PQ profile remains an Internet-Draft as of 2026-09-27; neither is a finalized CYBOU recipient package. See `86_IDENTITY_SECURITY_SUBSTRATE.md`, `89_IDENTITY_KEM_PUBLICATION.md`, and `49_EMAIL_E2EE_HPKE_PQ.md`.
 - Finish Qt wallet and Mail flows against the canonical identity and encryption profiles.
 - Route Mail and Files through the shared operation reconciliation model; expose full device management through the desktop identity workflow.
 - Run independent validators with durable crash recovery and verify finality under production topology.

@@ -18,7 +18,11 @@ independent X25519 private key, and the 64-byte FIPS 203 ML-KEM-768 `(d, z)`
 seed, in that order after the five-byte payload magic. The local implementation
 derives public KEM keys through OpenSSL 3.5 APIs. It does not publish them in
 the identity registry or combine them into a hybrid key exchange; Mail and
-Storage remain fail-closed pending the reviewed profile. `IdentityMaterial`
+Storage remain fail-closed pending the reviewed profile and publication
+design. Any future AccountCreate or DeviceAdd must durably save and reopen the
+vault before broadcast, with KEM publication following
+[`89_IDENTITY_KEM_PUBLICATION.md`](89_IDENTITY_KEM_PUBLICATION.md).
+`IdentityMaterial`
 clears all secret fields when destroyed. Password change and broader device
 and vault management remain unimplemented.
 

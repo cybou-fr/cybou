@@ -44,7 +44,9 @@ Private keys remain client-controlled. The identity record binds public
 capabilities to AccountID and device activation. KEM public keys, suite
 identifiers, validity, rotation, and historical proofs require an explicit
 identity/wire-format design before publication; do not append fields to the
-current authorization descriptor ad hoc.
+current authorization descriptor ad hoc. The publication design gate is
+specified in `89_IDENTITY_KEM_PUBLICATION.md`; it does not freeze a hybrid
+combiner or make KEM-dependent services available.
 
 Signing keys MUST NOT be converted into or reused as Mail, Files, or Storage
 encryption keys. Recovery keys are not routine service-signing keys. Key
@@ -111,5 +113,6 @@ a claim that Beta security is complete.
 - `76_IDENTITY_VAULT_RECOVERY.md` owns phrase and portable-vault behavior.
 - `87_DEVICE_OPERATION_COORDINATOR.md` owns operation/nonce lifecycle.
 - `88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md` owns content-key and object privacy.
+- `89_IDENTITY_KEM_PUBLICATION.md` owns the pending device KEM publication design and cutover gates.
 - `81_BETA_PRODUCT_SCOPE.md` owns Beta readiness.
 - `26_IMPLEMENTATION_STATUS.md` owns current implementation status.

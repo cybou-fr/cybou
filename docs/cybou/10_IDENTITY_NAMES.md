@@ -21,7 +21,8 @@ closed. Mail and Storage key agreement uses separate X25519 and ML-KEM-768
 keys as an architecture target. The local vault now generates and stores
 independent device X25519 and ML-KEM-768 private material, but these KEM
 capabilities are not published in the identity record or used by services.
-Signing keys are never reused for encryption.
+Signing keys are never reused for encryption. The publication contract and
+cutover gates are specified in [Identity KEM publication](89_IDENTITY_KEM_PUBLICATION.md).
 
 The current authorization descriptor has a fixed 3331-byte canonical form:
 version `02`, root suite `01`, 32-byte Ed25519 root public key, 1952-byte
@@ -30,6 +31,11 @@ key, and 1312-byte ML-DSA-44 device public key. The domain-separated
 commitment covers this exact encoding. Any recipient KEM capability requires a
 separately reviewed identity/wire-format change; do not append unreviewed key
 fields to this descriptor.
+
+The identity registry currently binds only device signing keys. Device KEM
+publication requires the package commitment, operation history, and activation
+rules in document `89`; until the integrated cutover gate passes, do not
+publish or consume local KEM keys.
 
 ## Devices and recovery
 

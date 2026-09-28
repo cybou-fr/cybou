@@ -10,7 +10,9 @@ ML-KEM-768 private material is generated and encrypted in the identity vault.
 Device KEM publication/wrapping, Storage Master Key device wrapping, leases,
 audits, repair, accounting, and attachment delivery are not implemented.
 `11_STORAGE_OBJECTS.md` owns provider placement, leases, audits, repair, and
-accounting.
+accounting. Identity package publication is specified as a design gate in
+`89_IDENTITY_KEM_PUBLICATION.md`; no service may use those local keys until
+the profile and cutover are reviewed and implemented.
 
 ## Security boundary
 
