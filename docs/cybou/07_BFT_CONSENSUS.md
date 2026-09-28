@@ -157,7 +157,14 @@ The canonical reference implementation is defined in `cybou::BftValidatorNode` a
 
 ## Safety invariant
 
-Two honest nodes must never finalize different blocks at the same height. Quorum intersection guaranteed by $N=4, Q=3, f=1$: any two quorums of 3 share at least 2 nodes ($3 + 3 - 4 = 2$), containing at least 1 honest node ($2 - 1 = 1$), which prevents conflicting locks.
+Two honest nodes must never finalize different blocks at the same height.
+For $N=4, Q=3, f=1$, any two quorums of 3 intersect in at least 2 validators
+($3 + 3 - 4 = 2$), including at least 1 honest validator under the fault
+assumption. This intersection is necessary, but does not prove safety by
+itself: the proposal, prevote, and lock-transition rules must ensure the honest
+intersection member cannot support conflicting finality certificates. That
+proof and the observed intermittent lock-recovery liveness failure remain open
+for the current implementation.
 
 ## Admission
 
