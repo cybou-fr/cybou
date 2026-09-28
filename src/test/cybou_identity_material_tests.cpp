@@ -18,6 +18,7 @@ BOOST_AUTO_TEST_CASE(random_account_id_and_recovery_entropy_survive_encrypted_sa
     auto first = cybou::GenerateIdentityMaterial();
     auto second = cybou::GenerateIdentityMaterial();
     BOOST_REQUIRE(first && second);
+    BOOST_CHECK(cybou::ValidateXWingKeyPair(first->device_xwing_seed));
     BOOST_CHECK(first->account_id != second->account_id);
     BOOST_CHECK(first->account_id != first->recovery_entropy);
     BOOST_CHECK(first->device_secret != first->recovery_entropy);
@@ -29,6 +30,7 @@ BOOST_AUTO_TEST_CASE(random_account_id_and_recovery_entropy_survive_encrypted_sa
     BOOST_REQUIRE(cybou::SaveNewIdentityMaterial(path, "correct horse battery", *first));
     auto loaded = cybou::LoadIdentityMaterial(path, "correct horse battery");
     BOOST_REQUIRE(loaded);
+    BOOST_CHECK(cybou::ValidateXWingKeyPair(loaded->device_xwing_seed));
     BOOST_CHECK(loaded->account_id == first->account_id);
     BOOST_CHECK(loaded->recovery_entropy == first->recovery_entropy);
     BOOST_CHECK(loaded->device_secret == first->device_secret);

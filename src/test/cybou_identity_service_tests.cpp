@@ -77,6 +77,18 @@ BOOST_AUTO_TEST_CASE(account_creation_requires_prepared_durable_vault)
     BOOST_CHECK(result.account_id == *account);
     BOOST_CHECK(result.account_id.Value() != *service.GetKeyStore().GetPublicKey());
 
+    // A valid but different local KEM seed must not make a signing-key match ACTIVE.
+    auto mismatched_material = cybou::LoadIdentityMaterial(path, "correct horse battery staple");
+    BOOST_REQUIRE(mismatched_material);
+    mismatched_material->device_xwing_seed[0] ^= 0x01;
+    const auto mismatched_path = dir / "mismatched-kem.cybou";
+    std::filesystem::remove(mismatched_path);
+    BOOST_REQUIRE(cybou::SaveNewIdentityMaterial(mismatched_path,
+        "another strong vault password", *mismatched_material));
+    cybou::CybouIdentityService mismatched{runtime, mismatched_path};
+    BOOST_REQUIRE(mismatched.LoadVault("another strong vault password"));
+    BOOST_CHECK(mismatched.GetPhase() == cybou::IdentityCreationPhase::IDLE);
+
     cybou::CybouIdentityService reopened{runtime, path};
     BOOST_CHECK(!reopened.LoadVault("wrong password"));
     BOOST_REQUIRE(reopened.LoadVault("correct horse battery staple"));
@@ -108,6 +120,7 @@ BOOST_AUTO_TEST_CASE(account_creation_requires_prepared_durable_vault)
 
     std::filesystem::remove(path);
     std::filesystem::remove(restored_path);
+    std::filesystem::remove(mismatched_path);
 }
 
 BOOST_AUTO_TEST_CASE(vault_save_failure_prevents_broadcast)

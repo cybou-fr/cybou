@@ -33,7 +33,7 @@ std::optional<IdentityMaterial> Parse(std::span<const unsigned char> bytes)
     std::copy_n(first + 64, 32, material.device_secret.begin());
     std::copy_n(first + 96, XWING_SEED_SIZE, material.device_xwing_seed.begin());
     if (!Nonzero(material.account_id) || !Nonzero(material.device_secret) ||
-        !Nonzero(material.device_xwing_seed) || !DeriveXWingPublicKey(material.device_xwing_seed)) return std::nullopt;
+        !Nonzero(material.device_xwing_seed) || !ValidateXWingKeyPair(material.device_xwing_seed)) return std::nullopt;
     return material;
 }
 } // namespace
@@ -85,6 +85,7 @@ std::optional<IdentityMaterial> GenerateIdentityMaterial()
     if (!xwing_seed) return std::nullopt;
     material.device_xwing_seed = *xwing_seed;
     crypto::CleanseMemory(xwing_seed->data(), xwing_seed->size());
+    if (!ValidateXWingKeyPair(material.device_xwing_seed)) return std::nullopt;
     return material;
 }
 
@@ -101,7 +102,7 @@ bool SaveNewIdentityMaterial(const std::filesystem::path& path,
 std::optional<std::vector<unsigned char>> SerializeIdentityMaterial(const IdentityMaterial& material)
 {
     if (!Nonzero(material.account_id) || !Nonzero(material.device_secret) ||
-        !Nonzero(material.device_xwing_seed) || !DeriveXWingPublicKey(material.device_xwing_seed)) return std::nullopt;
+        !Nonzero(material.device_xwing_seed) || !ValidateXWingKeyPair(material.device_xwing_seed)) return std::nullopt;
     std::vector<unsigned char> payload(PAYLOAD_SIZE);
     std::copy(MAGIC.begin(), MAGIC.end(), payload.begin());
     std::copy(material.account_id.begin(), material.account_id.end(), payload.begin() + 5);

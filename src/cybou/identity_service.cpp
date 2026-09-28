@@ -108,12 +108,21 @@ bool IsAuthorizedDevice(const CybouNodeRuntime& runtime, const AccountId& accoun
 {
     const auto id = keystore.GetDeviceId();
     const auto key = keystore.GetDevicePublicKey();
+    const auto kem_public = keystore.GetDeviceXWingPublicKey();
+    const auto package = kem_public ? EncodeIdentityKemPackage(*kem_public) : std::nullopt;
     const auto loaded = runtime.GetStore().LoadState();
-    if (!id || !key || !loaded || !loaded.state) return false;
+    if (!id || !key || !package || !keystore.ValidateDeviceXWingKeyPair() || !loaded || !loaded.state) return false;
     const auto* record = loaded.state->identities.Find(account_id);
     if (!record) return false;
     const auto found = record->devices.find(*id);
-    return found != record->devices.end() && found->second.key == *key;
+    if (found == record->devices.end() || found->second.key != *key) return false;
+    const auto network_id = runtime.GetNetworkId();
+    const auto account_bytes = account_id.Value();
+    const auto commitment = ComputeIdentityKemPackageCommitment(
+        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{account_bytes.begin(), 32},
+        *id, found->second.activation_nonce, *package);
+    return commitment && *commitment == found->second.kem_package_id;
 }
 
 IdentityCreationResult Failure(
@@ -159,7 +168,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
         const auto root_key = m_keystore.GetRecoveryPublicKey();
         const auto kem_public = m_keystore.GetDeviceXWingPublicKey();
         const auto package = kem_public ? EncodeIdentityKemPackage(*kem_public) : std::nullopt;
-        if (!acc_opt || !dev_key || !root_key || !package) {
+        if (!acc_opt || !dev_key || !root_key || !package || !m_keystore.ValidateDeviceXWingKeyPair()) {
             m_phase.store(IdentityCreationPhase::FAILED);
             return Failure(IdentityCreationPhase::FAILED, "Invalid identity key");
         }

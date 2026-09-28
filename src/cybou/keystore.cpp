@@ -72,6 +72,7 @@ struct CybouKeyStore::Impl {
         const auto id = ComputeDeviceKeyId(*device);
         if (!id) return false;
 
+        if (!ValidateXWingKeyPair(value.device_xwing_seed)) return false;
         auto device_xwing = DeriveXWingPublicKey(value.device_xwing_seed);
         if (!device_xwing) return false;
         DeviceX25519PublicKey device_x25519{};
@@ -205,6 +206,10 @@ std::optional<MlKem768PublicKey> CybouKeyStore::GetDeviceMlKem768PublicKey() con
 std::optional<XWingPublicKey> CybouKeyStore::GetDeviceXWingPublicKey() const
 {
     return m_impl->device_xwing_public_key;
+}
+bool CybouKeyStore::ValidateDeviceXWingKeyPair() const
+{
+    return m_impl->material && ValidateXWingKeyPair(m_impl->material->device_xwing_seed);
 }
 
 std::optional<AccountId> CybouKeyStore::GetAccountId() const

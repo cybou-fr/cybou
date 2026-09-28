@@ -156,10 +156,13 @@ the advertised package inseparable from the account and device activation it
 belongs to.
 
 The signing-key proof demonstrates control of the device authorization key;
-it does not prove possession of a KEM private key. The desktop must derive the
-public KEM key from the private material it is about to save and perform the
-selected standard's local keypair self-test before making a package eligible
-for publication. Do not invent a consensus KEM proof-of-possession scheme.
+it does not prove possession of a KEM private key. The desktop derives the
+public KEM key from private material and performs a real
+encapsulation/decapsulation self-test when generating, loading, and publishing
+a package. An identity is ACTIVE only when its local signing key matches the
+current device record and the package recomputed from its local X-Wing seed
+matches that activation's finalized commitment. Do not invent a consensus KEM
+proof-of-possession scheme.
 
 ## Lifecycle and historical verification
 
@@ -196,7 +199,8 @@ format.
 The implementation enables publication only when the network definition's
 frozen DEV profile flag is set. The new network format is deployed to DEV.
 Core tests cover the pinned X-Wing public-key vector, encapsulation/decapsulation
-agreement, authorization binding, state persistence, CVID4 vault behavior, and
+agreement and keypair self-test, authorization binding, state persistence,
+CVID4 vault behavior, mismatched local KEM material remaining inactive, and
 runtime package lookup for AccountCreate, DeviceAdd, and revoked activations.
 
 Mail and cross-device Files remain disabled until their remaining gates pass:

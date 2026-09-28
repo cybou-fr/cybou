@@ -58,6 +58,7 @@ public:
     std::optional<DeviceX25519PublicKey> GetDeviceX25519PublicKey() const;
     std::optional<MlKem768PublicKey> GetDeviceMlKem768PublicKey() const;
     std::optional<XWingPublicKey> GetDeviceXWingPublicKey() const;
+    bool ValidateDeviceXWingKeyPair() const;
 
     /** Derive a Diffie-Hellman shared secret with a peer X25519 public key using the internal key */
     std::optional<std::array<unsigned char, 32>> DeriveX25519SharedSecret(const uint256& peer_x25519_pubkey) const;

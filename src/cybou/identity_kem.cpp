@@ -8,6 +8,7 @@
 #include <cybou/crypto/sha256.h>
 
 #include <openssl/core_names.h>
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/params.h>
 #include <openssl/rand.h>
@@ -312,6 +313,20 @@ std::optional<XWingPublicKey> DeriveXWingPublicKey(
     std::copy(pq_public->begin(), pq_public->end(), result.begin());
     std::copy(classical_public->begin(), classical_public->end(), result.begin() + pq_public->size());
     return result;
+}
+
+bool ValidateXWingKeyPair(const std::span<const unsigned char, XWING_SEED_SIZE> seed)
+{
+    const auto public_key = DeriveXWingPublicKey(seed);
+    if (!public_key) return false;
+    const auto encapsulated = EncapsulateXWing(*public_key);
+    if (!encapsulated) return false;
+    auto decapsulated = DecapsulateXWing(seed, encapsulated->ciphertext);
+    if (!decapsulated) return false;
+    const bool matches = CRYPTO_memcmp(decapsulated->data(), encapsulated->shared_secret.data(),
+        encapsulated->shared_secret.size()) == 0;
+    crypto::CleanseMemory(decapsulated->data(), decapsulated->size());
+    return matches;
 }
 
 std::optional<XWingEncapsulation> EncapsulateXWing(

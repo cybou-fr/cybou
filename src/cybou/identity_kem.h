@@ -85,6 +85,8 @@ std::optional<MlKem768Decapsulation> DecapsulateMlKem768(
 std::optional<XWingSeed> GenerateXWingSeed();
 std::optional<XWingPublicKey> DeriveXWingPublicKey(
     std::span<const unsigned char, XWING_SEED_SIZE> seed);
+/** Verify the seed's X-Wing public key with an encapsulation/decapsulation round trip. */
+bool ValidateXWingKeyPair(std::span<const unsigned char, XWING_SEED_SIZE> seed);
 std::optional<XWingEncapsulation> EncapsulateXWing(
     std::span<const unsigned char, XWING_PUBLIC_KEY_SIZE> public_key);
 std::optional<XWingSharedSecret> DecapsulateXWing(

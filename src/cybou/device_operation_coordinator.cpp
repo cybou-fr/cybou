@@ -576,7 +576,7 @@ DeviceOperationResult DeviceOperationCoordinator::AuthorizeRecoveredDevice()
 
     const auto kem_public = m_keystore.GetDeviceXWingPublicKey();
     const auto kem_package = kem_public ? EncodeIdentityKemPackage(*kem_public) : std::nullopt;
-    if (!kem_package) {
+    if (!kem_package || !m_keystore.ValidateDeviceXWingKeyPair()) {
         return {.phase = DeviceOperationPhase::REJECTED, .error = "Recovered device KEM key is unavailable"};
     }
     DeviceAdd operation{.account_id = *account, .new_device = *device_key, .kem_package = *kem_package,

@@ -37,6 +37,7 @@ BOOST_AUTO_TEST_CASE(xwing_seed_derives_published_hybrid_key_and_round_trips)
 {
     const auto seed = cybou::GenerateXWingSeed();
     BOOST_REQUIRE(seed);
+    BOOST_CHECK(cybou::ValidateXWingKeyPair(*seed));
     const auto public_key = cybou::DeriveXWingPublicKey(*seed);
     BOOST_REQUIRE(public_key);
     BOOST_CHECK(cybou::DeriveXWingPublicKey(*seed) == public_key);

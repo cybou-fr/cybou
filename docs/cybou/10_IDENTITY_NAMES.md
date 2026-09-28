@@ -33,10 +33,11 @@ commitment covers this exact encoding. Any recipient KEM capability requires a
 separately reviewed identity/wire-format change; do not append unreviewed key
 fields to this descriptor.
 
-The identity registry currently binds only device signing keys. Device KEM
-publication requires the package commitment, operation history, and activation
-rules in document `89`; until the integrated cutover gate passes, do not
-publish or consume local KEM keys.
+The identity registry binds each active device signing key to its finalized
+KEM package commitment. The desktop treats a vault as ACTIVE only when both
+the signing key and the package recomputed from its local X-Wing seed match
+the current activation. Application use of this capability remains gated by
+the Mail and Files integration profiles.
 
 ## Devices and recovery
 
