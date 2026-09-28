@@ -319,7 +319,7 @@ void HomePage::refresh()
     auto* rows = qobject_cast<QVBoxLayout*>(m_device_rows->layout());
     rows->addWidget(ActivityRow(Glyph::Monitor, Tint::Indigo, QSysInfo::machineHostName(),
         tr("This device \u00b7 Active now"), {}, m_device_rows, true));
-    m_devices_metric->setText(tr("1 device"));
+    m_devices_metric->setText(tr("This installation"));
 
     // Recent activity: unread mail + finalized ledger entries + sync.
     clearLayout(m_activity_rows->layout());
@@ -370,7 +370,7 @@ void HomePage::refresh()
         }
     }
     if (m_model->lastSync().isValid()) {
-        activity->addWidget(ActivityRow(Glyph::Refresh, Tint::Neutral, tr("Devices synced"),
+        activity->addWidget(ActivityRow(Glyph::Refresh, Tint::Neutral, tr("Network synced"),
             status.last_finalized_height >= 0
                 ? tr("Finalized height %1").arg(status.last_finalized_height)
                 : tr("All data is up to date"),
