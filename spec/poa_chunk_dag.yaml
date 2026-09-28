@@ -35,8 +35,18 @@ chunks:
   object_id_and_chunk_index_on_network: false
   application_graph_metadata_encrypted: true
   b3_implementation: vetted_external_implementation
+  canonical_cbor:
+    deterministic_encoding: RFC8949_core_deterministic
+    allowed_types: [unsigned_integer, negative_integer, byte_string, utf8_text, array, map, boolean, null]
+    forbidden_types: [indefinite_length, tag, floating_point, undefined, unassigned_simple]
+    map_key_order: bytewise_lexicographic_of_encoded_key
+    max_encoded_bytes: 262144
+    max_string_bytes: 262144
+    max_container_items: 4096
+    max_total_items: 16384
+    max_nesting_depth: 32
+    text_encoding: strict_UTF8
   open_gates:
-    - CBOR_profile_and_limits
     - nonce_AAD_and_chunk_key_scope
     - padding_buckets_and_benchmarks
     - official_KAT_and_cross_implementation_vectors

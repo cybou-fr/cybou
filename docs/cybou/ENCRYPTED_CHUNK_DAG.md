@@ -1,12 +1,13 @@
 # Encrypted chunk DAG
 
-Status: frozen architecture target. The first implementation milestone adds a
-full 256-bit BLAKE3 `ChunkId` over stored encrypted bytes, pinned to the
-official BLAKE3 C implementation 1.8.1 with known-answer tests. Canonical node
-encoding, encryption envelopes, graph construction/fetch, publication, and
-storage admission remain pending. This is the shared encrypted payload format
-for Mail, Files, and later Backup. Product schemas are private application
-data, not consensus operation types.
+Status: frozen architecture target. The initial codec milestones add a full
+256-bit BLAKE3 `ChunkId` over stored encrypted bytes and a bounded RFC 8949
+core-deterministic CBOR value codec. BLAKE3 C 1.8.1 is pinned with known-answer
+tests. The CBOR limits and accepted types are recorded in
+`spec/poa_chunk_dag.yaml`. Encrypted envelopes, graph construction/fetch,
+publication, and storage admission remain pending. This is the shared
+encrypted payload format for Mail, Files, and later Backup. Product schemas
+are private application data, not consensus operation types.
 
 ## Addressing and privacy
 
@@ -29,11 +30,13 @@ The node can contain a private schema identifier, metadata, payload bytes, and
 child ChunkIDs. All graph structure and application interpretation remain
 inside authenticated encryption.
 
-The CYBOU CBOR profile rejects indefinite lengths, duplicate keys, non-minimal
-integer encodings, excess nesting, excess map/array elements, and values beyond
-configured byte limits. Exact limits, padding buckets, nonce/AAD encoding, and
-KAT/cross-implementation vectors are open pre-cutover gates; no limits are
-implied by this architecture document.
+The CYBOU CBOR profile rejects indefinite lengths, duplicate or unordered map
+keys, non-minimal arguments, invalid UTF-8, tags, floating-point values, excess
+nesting, excess map/array elements, and values beyond configured byte limits.
+It uses RFC 8949 core-deterministic bytewise lexicographic map-key ordering.
+Exact codec limits and accepted types are frozen in `spec/poa_chunk_dag.yaml`;
+padding buckets, nonce/AAD encoding, and cross-implementation vectors remain
+open pre-cutover gates.
 
 Use the reviewed ChaCha20-Poly1305, HKDF-SHA256, and account X-Wing KEM
 profiles already selected for DEV. Do not introduce a custom combiner or
