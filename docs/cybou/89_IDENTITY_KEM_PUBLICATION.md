@@ -1,23 +1,26 @@
 # 89 — Identity KEM capability publication
 
-Status: DEV protocol profile frozen for implementation; not enabled on Beta or
-Mainnet. Mail and Files encryption remain disabled until their separate gates
+Status: the DEV draft-05 profile and protocol implementation are frozen. A new
+DEV-format network definition can enable it explicitly; Beta and Mainnet stay
+disabled by default. Deployment still requires the integrated consensus/name
+cutover. Mail and Files remain disabled until their separate application gates
 pass. This is a coordinated consensus-format cutover, not a runtime migration.
 
 ## Current boundary
 
-The current fixed `IdentityAuthorization` descriptor binds the Recovery Root
-and initial device signing keys. `IdentityDevice` stores a device signing key,
-operation nonce, and activation nonce. `DeviceAdd` binds the new device
-signing-key ID; neither account creation nor device-add state publishes a
-KEM key. The current CVID3 vault stores unrelated X25519 and ML-KEM-768
-private material. That pair is not the deterministic key representation of
-the selected hybrid KEM and cannot be published as if it were one.
+The fixed `IdentityAuthorization` descriptor binds the Recovery Root and
+initial device signing keys. `IdentityDevice` stores a device signing key,
+KEM package commitment, operation nonce, and activation nonce. AccountCreate
+and DeviceAdd carry the canonical package and bind its commitment to signing
+authorization. CVID4 stores the 32-byte X-Wing seed. The old CVID3 split
+X25519/ML-KEM material is rejected and cannot be imported as this hybrid key.
 
-Do not append KEM material to `IdentityAuthorization` or silently change an
-existing operation or state decoder. The eventual change is part of the
-planned direct DEV cutover after the integrated PQ consensus and name gate.
-There is no legacy decoder, import, or dual-operation path.
+KEM capability is not appended to `IdentityAuthorization`; it is carried by
+the versioned canonical package fields. Operation, network-definition,
+registry-state, and global-state encodings move directly to the new format.
+The deployed DEV network remains untouched until the integrated PQ consensus
+and name gate is ready. There is no legacy decoder, import, or dual-operation
+path.
 
 ## Ownership and canonical records
 
@@ -175,8 +178,9 @@ transcript, recipient privacy mechanism, or Files key-wrapping protocol. Do
 not infer those application semantics from the HPKE vectors or a TLS key-share
 format.
 
-Before publication is enabled, the implementation and integrated cutover must
-still pass:
+The implementation enables publication only when the network definition's
+frozen DEV profile flag is set. Before deploying that new network format, the
+integrated cutover must still pass:
 
 1. correct implementation of the pinned standard and published vectors;
 2. AccountCreate and DeviceAdd signatures over the package commitment;
@@ -184,11 +188,14 @@ still pass:
 4. vault durability, restore, and keypair self-test;
 5. device revocation and historical package verification;
 6. adversarial validation and coordinated DEV cutover with PQ consensus and names.
+7. historical finalized-operation lookup and package verification for client
+   use after key rotation or device revocation.
 
-Until all gates pass, Mail and cross-device Files key wrapping remain
-unavailable. Local key generation or successful standalone KEM tests do not
-change that status. Draft-05 is DEV-only; its eventual RFC or replacement
-requires a separately reviewed network upgrade and never an automatic switch.
+Until the deployment gate passes, the running DEV network continues using its
+existing format and cannot accept these operations. Mail and cross-device Files
+key wrapping remain unavailable until their application gates pass. Draft-05
+is DEV-only; its eventual RFC or replacement requires a separately reviewed
+network upgrade and never an automatic switch.
 
 ## Related authority
 

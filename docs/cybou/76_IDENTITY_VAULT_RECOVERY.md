@@ -12,16 +12,17 @@ BIP-39 PBKDF2 wallet seed/passphrase scheme is not used. The local
 `identity_vault` module seals and opens bounded in-memory CYBV2 envelopes.
 `SaveNewIdentityVault` now writes a new file through a synced temporary file,
 publishes it without overwriting an existing vault, and authenticates it by
-reopening before returning success. The current `CVID3` payload contains a
+reopening before returning success. The DEV-cutover `CVID4` payload contains a
 random AccountID, 256-bit recovery entropy, independent device signing secret,
-independent X25519 private key, and the 64-byte FIPS 203 ML-KEM-768 `(d, z)`
-seed, in that order after the five-byte payload magic. The local implementation
-derives public KEM keys through OpenSSL 3.5 APIs. It does not publish them in
-the identity registry or combine them into a hybrid key exchange; Mail and
-Storage remain fail-closed pending the reviewed profile and publication
-design. Any future AccountCreate or DeviceAdd must durably save and reopen the
-vault before broadcast, with KEM publication following
-[`89_IDENTITY_KEM_PUBLICATION.md`](89_IDENTITY_KEM_PUBLICATION.md).
+and one 32-byte X-Wing seed, in that order after the five-byte payload magic.
+The public hybrid KEM package is derived from this seed and validated before
+the vault can be saved. AccountCreate and DeviceAdd publish the canonical
+package and bind its commitment to the signing authorization; state retains
+the commitment for each active device. The new runtime rejects CVID3 and does
+not import old split X25519/ML-KEM material. Mail and cross-device Files remain
+fail-closed pending their application-specific gates. See
+[`89_IDENTITY_KEM_PUBLICATION.md`](89_IDENTITY_KEM_PUBLICATION.md) for the
+frozen DEV profile and coordinated cutover requirements.
 `IdentityMaterial`
 clears all secret fields when destroyed. Password change and broader device
 and vault management remain unimplemented.

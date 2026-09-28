@@ -7,6 +7,7 @@
 
 #include <cybou/account_id.h>
 #include <cybou/identity_authorization.h>
+#include <cybou/identity_kem.h>
 #include <cybou/protocol_params.h>
 #include <uint256.h>
 
@@ -18,7 +19,7 @@
 namespace cybou {
 
 inline constexpr size_t ACCOUNT_CREATE_WORK_SIZE{113};
-inline constexpr size_t ACCOUNT_CREATE_SIZE{9334};
+inline constexpr size_t ACCOUNT_CREATE_SIZE{10553};
 
 struct AccountCreationWork {
     uint256 network_id;
@@ -33,6 +34,7 @@ struct AccountCreationWork {
 struct AccountCreateOp {
     AccountId account_id;
     IdentityAuthorization authorization;
+    IdentityKemPackage kem_package{};
     AccountCreationWork work;
     IdentityHybridSignature recovery_pop;
     IdentityHybridSignature device_pop;
@@ -62,7 +64,11 @@ std::optional<AccountCreateOp> DeserializeAccountCreateOp(std::span<const unsign
 std::optional<std::array<unsigned char, 32>> ComputeAccountCreateWorkHash(const AccountCreationWork& work);
 std::optional<std::array<unsigned char, 32>> ComputeAccountCreatePopDigest(
     const uint256& network_id, const AccountId& account_id,
-    const IdentityAuthorization& authorization);
+    const IdentityAuthorization& authorization,
+    std::span<const unsigned char, 32> kem_package_id);
+std::optional<std::array<unsigned char, 32>> ComputeAccountCreateAuthorizationCommitment(
+    const IdentityAuthorization& authorization,
+    std::span<const unsigned char, 32> kem_package_id);
 AccountCreateError ValidateAccountCreateOp(
     const AccountCreateOp& op, const uint256& network_id,
     uint64_t block_height, const CybouProtocolParameters& params);

@@ -17,9 +17,9 @@
 
 namespace cybou {
 
-inline constexpr uint8_t PROTOCOL_OPERATION_VERSION{2};
+inline constexpr uint8_t PROTOCOL_OPERATION_VERSION{3};
 inline constexpr size_t AUTHORIZED_PAYMENT_SIZE{2638};
-inline constexpr size_t DEVICE_ADD_SIZE{7241};
+inline constexpr size_t DEVICE_ADD_SIZE{8460};
 inline constexpr size_t DEVICE_REVOKE_SIZE{3445};
 inline constexpr size_t RECOVERY_ROTATE_SIZE{8770};
 inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_SIZE{2606};

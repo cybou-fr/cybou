@@ -22,8 +22,7 @@ struct IdentityMaterial {
     std::array<unsigned char, 32> account_id{};
     RecoveryEntropy recovery_entropy{};
     std::array<unsigned char, 32> device_secret{};
-    DeviceX25519PrivateKey device_x25519_private_key{};
-    MlKem768Seed device_mlkem768_seed{};
+    XWingSeed device_xwing_seed{};
 
     IdentityMaterial() = default;
     IdentityMaterial(const IdentityMaterial&) = delete;

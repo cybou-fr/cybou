@@ -37,6 +37,7 @@ struct CybouKeyStore::Impl {
     std::optional<uint256> x25519_public_key;
     std::optional<DeviceX25519PublicKey> device_x25519_public_key;
     std::optional<MlKem768PublicKey> device_mlkem768_public_key;
+    std::optional<XWingPublicKey> device_xwing_public_key;
     std::optional<IdentityHybridPublicKey> device_key;
     std::optional<IdentityHybridPublicKey> recovery_root;
     std::optional<std::array<unsigned char, 32>> device_id;
@@ -55,6 +56,7 @@ struct CybouKeyStore::Impl {
         x25519_public_key.reset();
         device_x25519_public_key.reset();
         device_mlkem768_public_key.reset();
+        device_xwing_public_key.reset();
         device_key.reset();
         recovery_root.reset();
         device_id.reset();
@@ -70,9 +72,12 @@ struct CybouKeyStore::Impl {
         const auto id = ComputeDeviceKeyId(*device);
         if (!id) return false;
 
-        auto device_x25519 = DeriveDeviceX25519PublicKey(value.device_x25519_private_key);
-        auto device_mlkem768 = DeriveMlKem768PublicKey(value.device_mlkem768_seed);
-        if (!device_x25519 || !device_mlkem768) return false;
+        auto device_xwing = DeriveXWingPublicKey(value.device_xwing_seed);
+        if (!device_xwing) return false;
+        DeviceX25519PublicKey device_x25519{};
+        MlKem768PublicKey device_mlkem768{};
+        std::copy_n(device_xwing->begin(), device_mlkem768.size(), device_mlkem768.begin());
+        std::copy_n(device_xwing->begin() + device_mlkem768.size(), device_x25519.size(), device_x25519.begin());
 
         auto derived_mail_seed = DeriveMailSeed(value.device_secret);
         if (!derived_mail_seed) return false;
@@ -88,8 +93,9 @@ struct CybouKeyStore::Impl {
         crypto::CleanseMemory(derived_mail_seed->data(), derived_mail_seed->size());
         mail_public_key = *public_key;
         x25519_public_key = *x25519;
-        device_x25519_public_key = *device_x25519;
-        device_mlkem768_public_key = *device_mlkem768;
+        device_x25519_public_key = device_x25519;
+        device_mlkem768_public_key = device_mlkem768;
+        device_xwing_public_key = *device_xwing;
         device_key = *device;
         recovery_root = *root;
         device_id = *id;
@@ -174,8 +180,7 @@ std::optional<IdentityMaterial> CybouKeyStore::CreateRecoveryRotationMaterial(
     material.recovery_entropy = std::array<unsigned char, 32>{};
     std::copy(new_recovery_entropy.begin(), new_recovery_entropy.end(), material.recovery_entropy.begin());
     material.device_secret = m_impl->material->device_secret;
-    material.device_x25519_private_key = m_impl->material->device_x25519_private_key;
-    material.device_mlkem768_seed = m_impl->material->device_mlkem768_seed;
+    material.device_xwing_seed = m_impl->material->device_xwing_seed;
     return material;
 }
 
@@ -196,6 +201,10 @@ std::optional<DeviceX25519PublicKey> CybouKeyStore::GetDeviceX25519PublicKey() c
 std::optional<MlKem768PublicKey> CybouKeyStore::GetDeviceMlKem768PublicKey() const
 {
     return m_impl->device_mlkem768_public_key;
+}
+std::optional<XWingPublicKey> CybouKeyStore::GetDeviceXWingPublicKey() const
+{
+    return m_impl->device_xwing_public_key;
 }
 
 std::optional<AccountId> CybouKeyStore::GetAccountId() const

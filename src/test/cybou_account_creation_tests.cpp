@@ -4,6 +4,7 @@
 
 #include <cybou/account_creation.h>
 #include <cybou/identity_crypto.h>
+#include "cybou_test_identity_helpers.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -29,16 +30,15 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
     const auto device = cybou::DeriveIdentityPublicKey(device_seed, cybou::IdentityKeyPurpose::DEVICE);
     BOOST_REQUIRE(root && device);
     cybou::IdentityAuthorization auth{*root, *device};
-    const auto commitment = cybou::ComputeIdentityAuthorizationCommitment(auth);
-    const auto digest = cybou::ComputeAccountCreatePopDigest(network_id, account_id, auth);
-    BOOST_REQUIRE(commitment && digest);
-    const auto root_pop = cybou::SignIdentityMessage(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, *digest);
-    const auto device_pop = cybou::SignIdentityMessage(device_seed, cybou::IdentityKeyPurpose::DEVICE, *digest);
+    const auto binding = cybou::test::MakeIdentityKemBinding(network_id, account_id, auth);
+    const auto root_pop = cybou::SignIdentityMessage(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+    const auto device_pop = cybou::SignIdentityMessage(device_seed, cybou::IdentityKeyPurpose::DEVICE, binding.pop_digest);
     BOOST_REQUIRE(root_pop && device_pop);
     cybou::AccountCreateOp op{
         .account_id = account_id,
         .authorization = auth,
-        .work = {.network_id = network_id, .account_id = account_id, .authorization_commitment = *commitment,
+        .kem_package = binding.package,
+        .work = {.network_id = network_id, .account_id = account_id, .authorization_commitment = binding.authorization_commitment,
                  .work_epoch = 0, .nonce = 0},
         .recovery_pop = *root_pop,
         .device_pop = *device_pop,

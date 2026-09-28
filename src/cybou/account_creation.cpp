@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/account_creation.h>
+#include <cybou/identity_crypto.h>
 #include <cybou/crypto/sha256.h>
 
 #include <algorithm>
@@ -11,7 +12,7 @@
 
 namespace cybou {
 namespace {
-constexpr unsigned char VERSION{2};
+constexpr unsigned char VERSION{3};
 constexpr size_t ROOT_SIG_SIZE{3309};
 constexpr size_t DEVICE_SIG_SIZE{2420};
 
@@ -72,21 +73,37 @@ std::optional<std::array<unsigned char, 32>> ComputeAccountCreateWorkHash(const 
 {
     const auto bytes = SerializeAccountCreationWork(work);
     if (!bytes) return std::nullopt;
-    return HashWithDomain("CYBOU/ACCOUNT-CREATE-WORK/V2", *bytes);
+    return HashWithDomain("CYBOU/ACCOUNT-CREATE-WORK/V3", *bytes);
 }
 
 std::optional<std::array<unsigned char, 32>> ComputeAccountCreatePopDigest(
     const uint256& network_id, const AccountId& account_id,
-    const IdentityAuthorization& authorization)
+    const IdentityAuthorization& authorization,
+    std::span<const unsigned char, 32> kem_package_id)
 {
     if (network_id.IsNull() || account_id.IsNull()) return std::nullopt;
-    const auto commitment = ComputeIdentityAuthorizationCommitment(authorization);
+    const auto commitment = ComputeAccountCreateAuthorizationCommitment(authorization, kem_package_id);
     if (!commitment) return std::nullopt;
     std::array<unsigned char, 96> body{};
     std::copy_n(network_id.begin(), 32, body.begin());
     std::copy_n(account_id.Value().begin(), 32, body.begin() + 32);
     std::copy(commitment->begin(), commitment->end(), body.begin() + 64);
-    return HashWithDomain("CYBOU/ACCOUNT-POP/V2", body);
+    return HashWithDomain("CYBOU/ACCOUNT-POP/V3", body);
+}
+
+std::optional<std::array<unsigned char, 32>> ComputeAccountCreateAuthorizationCommitment(
+    const IdentityAuthorization& authorization,
+    std::span<const unsigned char, 32> kem_package_id)
+{
+    const auto auth_commitment = ComputeIdentityAuthorizationCommitment(authorization);
+    if (!auth_commitment || std::all_of(kem_package_id.begin(), kem_package_id.end(),
+            [](unsigned char byte) { return byte == 0; })) return std::nullopt;
+    constexpr std::string_view domain{"CYBOU/ACCOUNT-AUTHORIZATION/V3"};
+    std::array<unsigned char, 32> digest{};
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), *auth_commitment, kem_package_id}, digest.data())) {
+        return std::nullopt;
+    }
+    return digest;
 }
 
 std::optional<std::array<unsigned char, ACCOUNT_CREATE_SIZE>> SerializeAccountCreateOp(
@@ -94,16 +111,18 @@ std::optional<std::array<unsigned char, ACCOUNT_CREATE_SIZE>> SerializeAccountCr
 {
     const auto auth = SerializeIdentityAuthorization(op.authorization);
     const auto work = SerializeAccountCreationWork(op.work);
-    if (op.account_id.IsNull() || !auth || !work || !ValidSignatures(op)) return std::nullopt;
+    if (op.account_id.IsNull() || !auth || !work || !DecodeIdentityKemPackage(op.kem_package) ||
+        !ValidSignatures(op)) return std::nullopt;
     std::array<unsigned char, ACCOUNT_CREATE_SIZE> bytes{};
     bytes[0] = VERSION;
     std::copy_n(op.account_id.Value().begin(), 32, bytes.begin() + 1);
     std::copy(auth->begin(), auth->end(), bytes.begin() + 33);
-    std::copy(work->begin(), work->end(), bytes.begin() + 3364);
-    std::copy(op.recovery_pop.ed25519.begin(), op.recovery_pop.ed25519.end(), bytes.begin() + 3477);
-    std::copy(op.recovery_pop.ml_dsa.begin(), op.recovery_pop.ml_dsa.end(), bytes.begin() + 3541);
-    std::copy(op.device_pop.ed25519.begin(), op.device_pop.ed25519.end(), bytes.begin() + 6850);
-    std::copy(op.device_pop.ml_dsa.begin(), op.device_pop.ml_dsa.end(), bytes.begin() + 6914);
+    std::copy(op.kem_package.begin(), op.kem_package.end(), bytes.begin() + 3364);
+    std::copy(work->begin(), work->end(), bytes.begin() + 4583);
+    std::copy(op.recovery_pop.ed25519.begin(), op.recovery_pop.ed25519.end(), bytes.begin() + 4696);
+    std::copy(op.recovery_pop.ml_dsa.begin(), op.recovery_pop.ml_dsa.end(), bytes.begin() + 4760);
+    std::copy(op.device_pop.ed25519.begin(), op.device_pop.ed25519.end(), bytes.begin() + 8069);
+    std::copy(op.device_pop.ml_dsa.begin(), op.device_pop.ml_dsa.end(), bytes.begin() + 8133);
     return bytes;
 }
 
@@ -114,22 +133,25 @@ std::optional<AccountCreateOp> DeserializeAccountCreateOp(std::span<const unsign
     std::copy_n(bytes.begin() + 1, 32, id_bytes.begin());
     const auto account_id = AccountId::FromBytes(id_bytes);
     const auto auth = DeserializeIdentityAuthorization(bytes.subspan(33, IDENTITY_AUTHORIZATION_SIZE));
-    if (!account_id || !auth || bytes[3364] != VERSION) return std::nullopt;
+    if (!account_id || !auth || bytes[4583] != VERSION) return std::nullopt;
+    IdentityKemPackage kem_package{};
+    std::copy_n(bytes.begin() + 3364, kem_package.size(), kem_package.begin());
+    if (!DecodeIdentityKemPackage(kem_package)) return std::nullopt;
     AccountCreateOp op{.account_id = *account_id, .authorization = *auth,
-        .work = {}, .recovery_pop = {}, .device_pop = {}};
-    std::copy_n(bytes.begin() + 3365, 32, op.work.network_id.begin());
+        .kem_package = kem_package, .work = {}, .recovery_pop = {}, .device_pop = {}};
+    std::copy_n(bytes.begin() + 4584, 32, op.work.network_id.begin());
     std::array<unsigned char, 32> work_account{};
-    std::copy_n(bytes.begin() + 3397, 32, work_account.begin());
+    std::copy_n(bytes.begin() + 4616, 32, work_account.begin());
     const auto work_id = AccountId::FromBytes(work_account);
     if (!work_id) return std::nullopt;
     op.work.account_id = *work_id;
-    std::copy_n(bytes.begin() + 3429, 32, op.work.authorization_commitment.begin());
-    op.work.work_epoch = Read64(bytes.data() + 3461);
-    op.work.nonce = Read64(bytes.data() + 3469);
-    std::copy_n(bytes.begin() + 3477, 64, op.recovery_pop.ed25519.begin());
-    op.recovery_pop.ml_dsa.assign(bytes.begin() + 3541, bytes.begin() + 6850);
-    std::copy_n(bytes.begin() + 6850, 64, op.device_pop.ed25519.begin());
-    op.device_pop.ml_dsa.assign(bytes.begin() + 6914, bytes.end());
+    std::copy_n(bytes.begin() + 4648, 32, op.work.authorization_commitment.begin());
+    op.work.work_epoch = Read64(bytes.data() + 4680);
+    op.work.nonce = Read64(bytes.data() + 4688);
+    std::copy_n(bytes.begin() + 4696, 64, op.recovery_pop.ed25519.begin());
+    op.recovery_pop.ml_dsa.assign(bytes.begin() + 4760, bytes.begin() + 8069);
+    std::copy_n(bytes.begin() + 8069, 64, op.device_pop.ed25519.begin());
+    op.device_pop.ml_dsa.assign(bytes.begin() + 8133, bytes.end());
     return op;
 }
 
@@ -138,17 +160,24 @@ AccountCreateError ValidateAccountCreateOp(
     uint64_t block_height, const CybouProtocolParameters& params)
 {
     if (!SerializeAccountCreateOp(op)) return AccountCreateError::INVALID_FORMAT;
+    if (!params.identity_kem_xwing_enabled) return AccountCreateError::INVALID_FORMAT;
     if (op.account_id.IsNull()) return AccountCreateError::NULL_ACCOUNT_ID;
     if (network_id.IsNull() || op.work.network_id != network_id) return AccountCreateError::NETWORK_MISMATCH;
     if (op.work.account_id != op.account_id) return AccountCreateError::ACCOUNT_ID_MISMATCH;
-    const auto commitment = ComputeIdentityAuthorizationCommitment(op.authorization);
+    const auto device_id = ComputeDeviceKeyId(op.authorization.initial_device);
+    const auto account_bytes = op.account_id.Value();
+    const auto package_id = device_id ? ComputeIdentityKemPackageCommitment(
+        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{account_bytes.begin(), 32}, *device_id, 0,
+        op.kem_package) : std::nullopt;
+    const auto commitment = package_id ? ComputeAccountCreateAuthorizationCommitment(op.authorization, *package_id) : std::nullopt;
     if (!commitment || op.work.authorization_commitment != *commitment) return AccountCreateError::COMMITMENT_MISMATCH;
     const uint64_t epoch = EpochForHeight(block_height, params);
     if (op.work.work_epoch > epoch) return AccountCreateError::FUTURE_WORK_EPOCH;
     if (epoch - op.work.work_epoch > params.account_creation_epoch_lag) return AccountCreateError::EXPIRED_WORK_EPOCH;
     const auto work_hash = ComputeAccountCreateWorkHash(op.work);
     if (!work_hash || !HasWork(*work_hash, params.account_creation_work_bits)) return AccountCreateError::INSUFFICIENT_WORK;
-    const auto pop_digest = ComputeAccountCreatePopDigest(network_id, op.account_id, op.authorization);
+    const auto pop_digest = ComputeAccountCreatePopDigest(network_id, op.account_id, op.authorization, *package_id);
     if (!pop_digest || !VerifyIdentityMessage(op.authorization.recovery_root, op.recovery_pop, *pop_digest)) {
         return AccountCreateError::INVALID_RECOVERY_POP;
     }

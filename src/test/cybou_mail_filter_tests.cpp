@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/mail_filter.h>
+#include "cybou_test_identity_helpers.h"
 
 #include <cybou/account_creation.h>
 #include <cybou/bft.h>
@@ -68,6 +69,7 @@ const cybou::CybouProtocolParameters PARAMS{
     .max_account_creates_per_block = 128,
     .onboarding_bonus = cybou::DEV_ONBOARDING_BONUS,
     .epoch_blocks = 10,
+    .identity_kem_xwing_enabled = true,
 };
 
 cybou::CybouState GenesisState()
@@ -160,17 +162,17 @@ cybou::AccountCreateOp MakeTestAccountCreate(
     const auto device_pub = *cybou::DeriveIdentityPublicKey(device_seed, cybou::IdentityKeyPurpose::DEVICE);
 
     cybou::IdentityAuthorization auth{root_pub, device_pub};
-    const auto auth_commitment = *cybou::ComputeIdentityAuthorizationCommitment(auth);
+    const auto binding = cybou::test::MakeIdentityKemBinding(net_id, acc, auth);
 
     cybou::AccountCreationWork work{
         .network_id = net_id,
         .account_id = acc,
-        .authorization_commitment = auth_commitment,
+        .authorization_commitment = binding.authorization_commitment,
         .work_epoch = 0,
         .nonce = 0,
     };
 
-    const auto pop_digest = *cybou::ComputeAccountCreatePopDigest(net_id, acc, auth);
+    const auto& pop_digest = binding.pop_digest;
     const auto root_pop = *cybou::SignIdentityMessage(
         root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT,
         std::span<const unsigned char>(pop_digest.begin(), pop_digest.size()));
@@ -181,6 +183,7 @@ cybou::AccountCreateOp MakeTestAccountCreate(
     return cybou::AccountCreateOp{
         .account_id = acc,
         .authorization = auth,
+        .kem_package = binding.package,
         .work = work,
         .recovery_pop = root_pop,
         .device_pop = device_pop,

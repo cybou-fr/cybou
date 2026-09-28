@@ -22,6 +22,7 @@ inline constexpr uint32_t MAX_IDENTITY_REGISTRY_ACCOUNTS{1'000'000};
 
 struct IdentityDevice {
     IdentityHybridPublicKey key;
+    std::array<unsigned char, 32> kem_package_id{};
     uint64_t next_nonce{0};
     uint64_t activation_nonce{0};
 
@@ -39,6 +40,7 @@ struct IdentityRecord {
 struct DeviceAdd {
     AccountId account_id;
     IdentityHybridPublicKey new_device;
+    IdentityKemPackage kem_package{};
     uint64_t root_nonce{0};
     IdentityHybridSignature root_signature;
     IdentityHybridSignature device_pop;

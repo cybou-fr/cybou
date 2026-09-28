@@ -33,8 +33,21 @@ std::optional<IdentityKeyId> Digest(std::string_view domain, const uint256& netw
 std::optional<IdentityKeyId> ComputeDeviceAddDigest(const uint256& network_id, const DeviceAdd& request)
 {
     const auto id = ComputeDeviceKeyId(request.new_device);
-    if (!id) return std::nullopt;
-    return Digest("CYBOU/DEVICE-ADD/V2", network_id, request.account_id, request.root_nonce, *id);
+    if (!id || request.root_nonce == std::numeric_limits<uint64_t>::max()) return std::nullopt;
+    const auto account_bytes = request.account_id.Value();
+    const auto package_id = ComputeIdentityKemPackageCommitment(
+        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{account_bytes.begin(), 32}, *id,
+        request.root_nonce + 1, request.kem_package);
+    if (!package_id || network_id.IsNull() || request.account_id.IsNull()) return std::nullopt;
+    std::array<unsigned char, 8> nonce_le{};
+    for (size_t i{0}; i < nonce_le.size(); ++i) nonce_le[i] = static_cast<unsigned char>(request.root_nonce >> (8 * i));
+    IdentityKeyId result{};
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes("CYBOU/DEVICE-ADD/V3"),
+            std::span<const unsigned char>{network_id.begin(), network_id.size()},
+            std::span<const unsigned char>{request.account_id.Value().begin(), AccountId::SIZE}, nonce_le,
+            *id, *package_id}, result.data())) return std::nullopt;
+    return result;
 }
 
 std::optional<IdentityKeyId> ComputeDeviceRevokeDigest(const uint256& network_id, const DeviceRevoke& request)
@@ -85,7 +98,13 @@ IdentityRegistryError IdentityRegistry::Register(const AccountCreateOp& create,
     if (m_recovery_index.contains(*root_id)) return IdentityRegistryError::RECOVERY_KEY_EXISTS;
     IdentityRecord record{};
     record.recovery_root = create.authorization.recovery_root;
-    record.devices.emplace(*device_id, IdentityDevice{create.authorization.initial_device, 0, 0});
+    const auto account_bytes = create.account_id.Value();
+    const auto device_kem_id = ComputeIdentityKemPackageCommitment(
+        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{account_bytes.begin(), 32}, *device_id,
+        0, create.kem_package);
+    if (!device_kem_id) return IdentityRegistryError::INVALID_CREATE;
+    record.devices.emplace(*device_id, IdentityDevice{create.authorization.initial_device, *device_kem_id, 0, 0});
     m_accounts.emplace(create.account_id, std::move(record));
     m_recovery_index.emplace(*root_id, create.account_id);
     return IdentityRegistryError::NONE;
@@ -105,7 +124,13 @@ IdentityRegistryError IdentityRegistry::AddDevice(const DeviceAdd& request, cons
     const auto digest = ComputeDeviceAddDigest(network_id, request);
     if (!digest || !VerifyIdentityMessage(record.recovery_root, request.root_signature, *digest) ||
         !VerifyIdentityMessage(request.new_device, request.device_pop, *digest)) return IdentityRegistryError::INVALID_SIGNATURE;
-    record.devices.emplace(*id, IdentityDevice{request.new_device, 0, record.next_root_nonce + 1});
+    const auto account_bytes = request.account_id.Value();
+    const auto package_id = ComputeIdentityKemPackageCommitment(
+        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{account_bytes.begin(), 32}, *id,
+        record.next_root_nonce + 1, request.kem_package);
+    if (!package_id) return IdentityRegistryError::INVALID_PAYLOAD;
+    record.devices.emplace(*id, IdentityDevice{request.new_device, *package_id, 0, record.next_root_nonce + 1});
     ++record.next_root_nonce;
     return IdentityRegistryError::NONE;
 }

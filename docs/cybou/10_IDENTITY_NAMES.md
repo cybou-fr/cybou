@@ -17,12 +17,13 @@ AccountID is independent of every mnemonic and public key. A versioned RecoveryK
 The Recovery Root requires **Ed25519 and ML-DSA-65** signatures. Each
 operational device requires **Ed25519 and ML-DSA-44** signatures. Both
 components are mandatory; missing, malformed, or failed components fail
-closed. Mail and Storage key agreement uses separate X25519 and ML-KEM-768
-keys as an architecture target. The local vault now generates and stores
-independent device X25519 and ML-KEM-768 private material, but these KEM
-capabilities are not published in the identity record or used by services.
-Signing keys are never reused for encryption. The publication contract and
-cutover gates are specified in [Identity KEM publication](89_IDENTITY_KEM_PUBLICATION.md).
+closed. Device encryption capability is separate from signing: the DEV
+draft-05 X-Wing KEM public key is published in a canonical package, and its
+context-bound commitment is stored for each active device. The CVID4 vault
+stores the matching 32-byte seed. Mail and Files do not consume this capability
+until their application gates pass. Beta and Mainnet keep it disabled by
+default. See [Identity KEM publication](89_IDENTITY_KEM_PUBLICATION.md) for
+the frozen profile and coordinated cutover.
 
 The current authorization descriptor has a fixed 3331-byte canonical form:
 version `02`, root suite `01`, 32-byte Ed25519 root public key, 1952-byte

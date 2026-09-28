@@ -147,6 +147,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
 
     AccountId account_id;
     IdentityAuthorization auth;
+    IdentityKemPackage kem_package{};
     {
         std::lock_guard lock(m_mutex);
         if (!m_keystore.HasKey() || !m_storage_path) {
@@ -156,11 +157,14 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
         const auto acc_opt = m_keystore.GetAccountId();
         const auto dev_key = m_keystore.GetDevicePublicKey();
         const auto root_key = m_keystore.GetRecoveryPublicKey();
-        if (!acc_opt || !dev_key || !root_key) {
+        const auto kem_public = m_keystore.GetDeviceXWingPublicKey();
+        const auto package = kem_public ? EncodeIdentityKemPackage(*kem_public) : std::nullopt;
+        if (!acc_opt || !dev_key || !root_key || !package) {
             m_phase.store(IdentityCreationPhase::FAILED);
             return Failure(IdentityCreationPhase::FAILED, "Invalid identity key");
         }
         account_id = *acc_opt;
+        kem_package = *package;
         auth = IdentityAuthorization{
             .recovery_root = *root_key,
             .initial_device = *dev_key,
@@ -209,7 +213,15 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
     const uint64_t current_epoch = EpochForHeight(height, params);
 
-    const auto auth_commitment = ComputeIdentityAuthorizationCommitment(auth);
+    const uint256 network_id = m_runtime.GetNetworkId();
+    const auto device_id = ComputeDeviceKeyId(auth.initial_device);
+    const auto account_bytes = account_id.Value();
+    const auto kem_package_id = device_id ? ComputeIdentityKemPackageCommitment(
+        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{account_bytes.begin(), 32},
+        *device_id, 0, kem_package) : std::nullopt;
+    const auto auth_commitment = kem_package_id ?
+        ComputeAccountCreateAuthorizationCommitment(auth, *kem_package_id) : std::nullopt;
     if (!auth_commitment) {
         m_phase.store(IdentityCreationPhase::FAILED);
         return Failure(IdentityCreationPhase::FAILED, "Failed to compute authorization commitment", account_id);
@@ -236,7 +248,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     m_phase.store(IdentityCreationPhase::BROADCASTING);
     if (on_phase) on_phase(IdentityCreationPhase::BROADCASTING, "Signing and submitting AccountCreateOp...");
 
-    const auto pop_digest = ComputeAccountCreatePopDigest(m_runtime.GetNetworkId(), account_id, auth);
+    const auto pop_digest = ComputeAccountCreatePopDigest(network_id, account_id, auth, *kem_package_id);
     if (!pop_digest) {
         m_phase.store(IdentityCreationPhase::FAILED);
         return Failure(IdentityCreationPhase::FAILED, "Failed to compute proof of possession digest", account_id);
@@ -257,6 +269,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     AccountCreateOp op{
         .account_id = account_id,
         .authorization = auth,
+        .kem_package = kem_package,
         .work = work,
         .recovery_pop = *rec_pop,
         .device_pop = *dev_pop,
@@ -382,18 +395,13 @@ IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
                 m_phase.store(IdentityCreationPhase::FAILED);
                 return Failure(IdentityCreationPhase::FAILED, "Secure random generator failed", *account);
             }
-            auto x25519_private_key = GenerateDeviceX25519PrivateKey();
-            auto mlkem_seed = GenerateMlKem768Seed();
-            if (!x25519_private_key || !mlkem_seed) {
-                if (x25519_private_key) crypto::CleanseMemory(x25519_private_key->data(), x25519_private_key->size());
-                if (mlkem_seed) crypto::CleanseMemory(mlkem_seed->data(), mlkem_seed->size());
+            auto xwing_seed = GenerateXWingSeed();
+            if (!xwing_seed) {
                 m_phase.store(IdentityCreationPhase::FAILED);
                 return Failure(IdentityCreationPhase::FAILED, "Device key-agreement generation failed", *account);
             }
-            material.device_x25519_private_key = *x25519_private_key;
-            material.device_mlkem768_seed = *mlkem_seed;
-            crypto::CleanseMemory(x25519_private_key->data(), x25519_private_key->size());
-            crypto::CleanseMemory(mlkem_seed->data(), mlkem_seed->size());
+            material.device_xwing_seed = *xwing_seed;
+            crypto::CleanseMemory(xwing_seed->data(), xwing_seed->size());
             if (!m_keystore.LoadMaterial(std::move(material)) || !m_keystore.SaveToFile(vault_path, password)) {
                 m_phase.store(IdentityCreationPhase::FAILED);
                 return Failure(IdentityCreationPhase::FAILED, "Cannot save and verify recovery vault", *account);

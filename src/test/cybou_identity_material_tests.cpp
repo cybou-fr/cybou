@@ -21,10 +21,10 @@ BOOST_AUTO_TEST_CASE(random_account_id_and_recovery_entropy_survive_encrypted_sa
     BOOST_CHECK(first->account_id != second->account_id);
     BOOST_CHECK(first->account_id != first->recovery_entropy);
     BOOST_CHECK(first->device_secret != first->recovery_entropy);
-    BOOST_CHECK(first->device_x25519_private_key != first->device_secret);
+    BOOST_CHECK(first->device_xwing_seed != first->device_secret);
     BOOST_CHECK(cybou::DecodeRecoveryWords(cybou::EncodeRecoveryWords(first->recovery_entropy)) == first->recovery_entropy);
 
-    const auto path = std::filesystem::temp_directory_path() / "cybou_identity_material_v3_test.cybv2";
+    const auto path = std::filesystem::temp_directory_path() / "cybou_identity_material_v4_test.cybv2";
     std::filesystem::remove(path);
     BOOST_REQUIRE(cybou::SaveNewIdentityMaterial(path, "correct horse battery", *first));
     auto loaded = cybou::LoadIdentityMaterial(path, "correct horse battery");
@@ -32,12 +32,9 @@ BOOST_AUTO_TEST_CASE(random_account_id_and_recovery_entropy_survive_encrypted_sa
     BOOST_CHECK(loaded->account_id == first->account_id);
     BOOST_CHECK(loaded->recovery_entropy == first->recovery_entropy);
     BOOST_CHECK(loaded->device_secret == first->device_secret);
-    BOOST_CHECK(loaded->device_x25519_private_key == first->device_x25519_private_key);
-    BOOST_CHECK(loaded->device_mlkem768_seed == first->device_mlkem768_seed);
-    BOOST_CHECK(cybou::DeriveDeviceX25519PublicKey(loaded->device_x25519_private_key) ==
-        cybou::DeriveDeviceX25519PublicKey(first->device_x25519_private_key));
-    BOOST_CHECK(cybou::DeriveMlKem768PublicKey(loaded->device_mlkem768_seed) ==
-        cybou::DeriveMlKem768PublicKey(first->device_mlkem768_seed));
+    BOOST_CHECK(loaded->device_xwing_seed == first->device_xwing_seed);
+    BOOST_CHECK(cybou::DeriveXWingPublicKey(loaded->device_xwing_seed) ==
+        cybou::DeriveXWingPublicKey(first->device_xwing_seed));
     const auto root_before = cybou::DeriveIdentityPublicKey(first->recovery_entropy, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
     const auto root_after = cybou::DeriveIdentityPublicKey(loaded->recovery_entropy, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
     BOOST_REQUIRE(root_before && root_after);

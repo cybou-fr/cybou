@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/protocol_operation.h>
+#include "cybou_test_identity_helpers.h"
 #include <uint256.h>
 
 #include <boost/test/unit_test.hpp>
@@ -54,19 +55,19 @@ uint256 TestNetworkId()
 cybou::AccountCreateOp MakeTestAccountCreate(const TestIdentity& id)
 {
     const auto net_id = TestNetworkId();
-    const auto commitment = cybou::ComputeIdentityAuthorizationCommitment(id.auth);
-    const auto pop_digest = cybou::ComputeAccountCreatePopDigest(net_id, id.account_id, id.auth);
+    const auto binding = cybou::test::MakeIdentityKemBinding(net_id, id.account_id, id.auth);
 
-    const auto root_pop = cybou::SignIdentityMessage(id.root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, *pop_digest);
-    const auto dev_pop = cybou::SignIdentityMessage(id.dev_seed, cybou::IdentityKeyPurpose::DEVICE, *pop_digest);
+    const auto root_pop = cybou::SignIdentityMessage(id.root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+    const auto dev_pop = cybou::SignIdentityMessage(id.dev_seed, cybou::IdentityKeyPurpose::DEVICE, binding.pop_digest);
 
     return cybou::AccountCreateOp{
         .account_id = id.account_id,
         .authorization = id.auth,
+        .kem_package = binding.package,
         .work = {
             .network_id = net_id,
             .account_id = id.account_id,
-            .authorization_commitment = *commitment,
+            .authorization_commitment = binding.authorization_commitment,
             .work_epoch = 0,
             .nonce = 42,
         },
@@ -237,6 +238,8 @@ BOOST_AUTO_TEST_CASE(device_add_canonical_typed_roundtrip)
     cybou::DeviceAdd add{
         .account_id = alice.account_id,
         .new_device = *dev2_pk,
+        .kem_package = cybou::test::MakeIdentityKemBinding(net_id, alice.account_id,
+            cybou::IdentityAuthorization{alice.recovery_root, *dev2_pk}, 1).package,
         .root_nonce = 0,
     };
     const auto add_digest = cybou::ComputeDeviceAddDigest(net_id, add);

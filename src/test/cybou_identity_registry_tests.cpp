@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/identity_registry.h>
+#include "cybou_test_identity_helpers.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -31,14 +32,12 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     const auto replacement = DeriveIdentityPublicKey(replacement_seed, IdentityKeyPurpose::RECOVERY_ROOT);
     BOOST_REQUIRE(root && device && second && replacement);
     const IdentityAuthorization auth{*root, *device};
-    const auto commitment = ComputeIdentityAuthorizationCommitment(auth);
-    const auto create_digest = ComputeAccountCreatePopDigest(network_id, account, auth);
-    BOOST_REQUIRE(commitment && create_digest);
-    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *create_digest);
-    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *create_digest);
+    const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
+    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, binding.pop_digest);
     BOOST_REQUIRE(root_pop && device_pop);
-    AccountCreateOp create{account, auth,
-        {.network_id = network_id, .account_id = account, .authorization_commitment = *commitment},
+    AccountCreateOp create{account, auth, binding.package,
+        {.network_id = network_id, .account_id = account, .authorization_commitment = binding.authorization_commitment},
         *root_pop, *device_pop};
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
@@ -56,6 +55,8 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     DeviceAdd add{};
     add.account_id = account;
     add.new_device = *second;
+    add.kem_package = test::MakeIdentityKemBinding(network_id, account,
+        IdentityAuthorization{*root, *second}, 1).package;
     const auto add_digest = ComputeDeviceAddDigest(network_id, add);
     BOOST_REQUIRE(add_digest);
     add.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *add_digest);
@@ -118,6 +119,7 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     readd.account_id = account;
     readd.new_device = *device;
     readd.root_nonce = 2;
+    readd.kem_package = test::MakeIdentityKemBinding(network_id, account, auth, 3).package;
     const auto readd_digest = ComputeDeviceAddDigest(network_id, readd);
     BOOST_REQUIRE(readd_digest);
     readd.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *readd_digest);
@@ -163,7 +165,7 @@ BOOST_AUTO_TEST_CASE(root_authorized_device_and_recovery_transitions)
     // The canonical wire order is DeviceKeyID order, not insertion order.
     damaged_snapshot = *snapshot;
     constexpr size_t first_device_offset{5 + 32 + 1984 + 8 + 1};
-    constexpr size_t device_size{1344 + 8 + 8};
+    constexpr size_t device_size{1344 + 32 + 8 + 8};
     for (size_t i{0}; i < device_size; ++i) {
         std::swap(damaged_snapshot[first_device_offset + i], damaged_snapshot[first_device_offset + device_size + i]);
     }

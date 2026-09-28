@@ -18,7 +18,7 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_STATE_VERSION{2};
+inline constexpr uint8_t CYBOU_STATE_VERSION{3};
 
 struct AccountState {
     uint64_t balance{0};

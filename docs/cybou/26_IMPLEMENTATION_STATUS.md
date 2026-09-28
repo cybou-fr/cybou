@@ -15,8 +15,8 @@ readiness criteria.
 - 24-word recovery phrase encoding and recovery-derived Ed25519 + ML-DSA-65 root keys.
 - Independent Ed25519 + ML-DSA-44 device keys and versioned RecoveryKeyID and DeviceKeyID commitments.
 - Portable encrypted CYBV2 vault with Argon2id and AES-256-GCM, durable create-only save and reopen verification, plus authenticated same-directory candidate promotion used by finality-gated recovery-root rotation.
-- Current Identity KEM publication code is not implemented. DEV profile, package, commitment, and direct-cutover wire rules are frozen in `89_IDENTITY_KEM_PUBLICATION.md`: draft-05 `MLKEM768-X25519` (X-Wing), with pinned dependencies. Mail and Files remain fail-closed; no draft-based capability is enabled on Beta or Mainnet.
-- Current CVID3 vault keys are independent components and are incompatible with the selected hybrid KEM. The coordinated cutover replaces this with CVID4 holding the 32-byte standard hybrid seed; no CVID3 compatibility decoder or import is planned.
+- DEV Identity KEM publication is implemented in the new protocol format: draft-05 `MLKEM768-X25519` (X-Wing), canonical package and context commitment, AccountCreate/DeviceAdd authorization binding, registry state commitment, and CVID4 vault seed. The runtime requires DEV's explicit profile flag; Beta and Mainnet default to disabled. The integrated DEV cutover and operation-history verification remain required before deploying the new format.
+- CVID4 stores a 32-byte standard hybrid seed and rejects CVID3. No CVID3 compatibility decoder or import is planned; obsolete DEV vaults are discarded at the coordinated cutover.
 - Canonical account creation with anti-Sybil work and hybrid root/device proofs of possession.
 - Bounded device registry with add, revoke, root rotation, independent device nonces, and activation numbers that prevent replay after a key is re-added.
 - Canonical identity-registry and monetary-state snapshots with a domain-separated state root.
@@ -48,7 +48,7 @@ readiness criteria.
 ## Integration still required
 
 - Complete password change, vault lock and reauthentication, device management, and recovery when the account already has eight active devices.
-- Implement and cut over DEV Identity KEM publication, then complete Mail confidentiality, encrypted local mailbox storage, and historical sender-key authorization evidence. RFC 10024's TLS group is not the persistent Identity format; the draft-05 capability profile is DEV-only. See `86_IDENTITY_SECURITY_SUBSTRATE.md`, `89_IDENTITY_KEM_PUBLICATION.md`, and `49_EMAIL_E2EE_HPKE_PQ.md`.
+- Complete the integrated DEV cutover for Identity KEM publication, then complete finalized-operation package lookup and historical authorization verification before enabling Mail confidentiality or cross-device Files. Encrypted local mailbox storage and historical sender-key evidence remain open. RFC 10024's TLS group is not the persistent Identity format; the draft-05 capability profile is DEV-only. See `86_IDENTITY_SECURITY_SUBSTRATE.md`, `89_IDENTITY_KEM_PUBLICATION.md`, and `49_EMAIL_E2EE_HPKE_PQ.md`.
 - Finish Qt wallet and Mail flows against the canonical identity and encryption profiles.
 - Route Mail and Files through the shared operation reconciliation model; expose full device management through the desktop identity workflow.
 - Run independent validators with durable crash recovery and verify finality under production topology.

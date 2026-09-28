@@ -14,6 +14,7 @@
 #include <cybou/protocol_operation.h>
 #include <cybou/signing.h>
 #include <cybou/state_store.h>
+#include "cybou_test_identity_helpers.h"
 #include <cybou/validator.h>
 
 #include <dbwrapper.h>
@@ -140,6 +141,7 @@ const cybou::CybouProtocolParameters PARAMS{
     .max_account_creates_per_block = 128,
     .onboarding_bonus = cybou::DEV_ONBOARDING_BONUS,
     .epoch_blocks = 10,
+    .identity_kem_xwing_enabled = true,
 };
 
 cybou::CybouState GenesisState()
@@ -194,14 +196,14 @@ struct AccountCredentials {
 
     cybou::AccountCreateOp MakeCreateOp(const uint256& network_id) const
     {
-        const auto commitment = *cybou::ComputeIdentityAuthorizationCommitment(auth);
-        const auto digest = *cybou::ComputeAccountCreatePopDigest(network_id, account_id, auth);
-        const auto root_pop = *cybou::SignIdentityMessage(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, digest);
-        const auto device_pop = *cybou::SignIdentityMessage(device_seed, cybou::IdentityKeyPurpose::DEVICE, digest);
+        const auto binding = cybou::test::MakeIdentityKemBinding(network_id, account_id, auth);
+        const auto root_pop = *cybou::SignIdentityMessage(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+        const auto device_pop = *cybou::SignIdentityMessage(device_seed, cybou::IdentityKeyPurpose::DEVICE, binding.pop_digest);
         return cybou::AccountCreateOp{
             account_id,
             auth,
-            {.network_id = network_id, .account_id = account_id, .authorization_commitment = commitment},
+            binding.package,
+            {.network_id = network_id, .account_id = account_id, .authorization_commitment = binding.authorization_commitment},
             root_pop,
             device_pop,
         };

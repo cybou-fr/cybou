@@ -5,6 +5,7 @@
 #include <cybou/bft.h>
 #include <cybou/block_executor.h>
 #include <cybou/network_definition.h>
+#include "cybou_test_identity_helpers.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -70,14 +71,12 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::DEVICE);
     BOOST_REQUIRE(root && device);
     const IdentityAuthorization auth{*root, *device};
-    const auto commitment = ComputeIdentityAuthorizationCommitment(auth);
-    const auto digest = ComputeAccountCreatePopDigest(network_id, account, auth);
-    BOOST_REQUIRE(commitment && digest);
-    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *digest);
-    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *digest);
+    const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
+    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, binding.pop_digest);
     BOOST_REQUIRE(root_pop && device_pop);
-    const AccountCreateOp create{account, auth,
-        {.network_id = network_id, .account_id = account, .authorization_commitment = *commitment},
+    const AccountCreateOp create{account, auth, binding.package,
+        {.network_id = network_id, .account_id = account, .authorization_commitment = binding.authorization_commitment},
         *root_pop, *device_pop};
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
@@ -126,14 +125,12 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     const auto other_device = DeriveIdentityPublicKey(other_device_seed, IdentityKeyPurpose::DEVICE);
     BOOST_REQUIRE(other_root && other_device);
     const IdentityAuthorization other_auth{*other_root, *other_device};
-    const auto other_commitment = ComputeIdentityAuthorizationCommitment(other_auth);
-    const auto other_digest = ComputeAccountCreatePopDigest(network_id, other_account, other_auth);
-    BOOST_REQUIRE(other_commitment && other_digest);
-    const auto other_root_pop = SignIdentityMessage(other_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *other_digest);
-    const auto other_device_pop = SignIdentityMessage(other_device_seed, IdentityKeyPurpose::DEVICE, *other_digest);
+    const auto other_binding = test::MakeIdentityKemBinding(network_id, other_account, other_auth);
+    const auto other_root_pop = SignIdentityMessage(other_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, other_binding.pop_digest);
+    const auto other_device_pop = SignIdentityMessage(other_device_seed, IdentityKeyPurpose::DEVICE, other_binding.pop_digest);
     BOOST_REQUIRE(other_root_pop && other_device_pop);
-    const AccountCreateOp other_create{other_account, other_auth,
-        {.network_id = network_id, .account_id = other_account, .authorization_commitment = *other_commitment},
+    const AccountCreateOp other_create{other_account, other_auth, other_binding.package,
+        {.network_id = network_id, .account_id = other_account, .authorization_commitment = other_binding.authorization_commitment},
         *other_root_pop, *other_device_pop};
     state.onboarding_pool = params.onboarding_bonus;
     BOOST_REQUIRE(ApplyAccountCreate(other_create, network_id, 1, params, state) == AccountCreateStateError::NONE);
@@ -247,14 +244,12 @@ BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
     BOOST_REQUIRE(root && device && second_dev && new_root);
 
     const IdentityAuthorization auth{*root, *device};
-    const auto commitment = ComputeIdentityAuthorizationCommitment(auth);
-    const auto pop_digest = ComputeAccountCreatePopDigest(network_id, account, auth);
-    BOOST_REQUIRE(commitment && pop_digest);
-    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *pop_digest);
-    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *pop_digest);
+    const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
+    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, binding.pop_digest);
     BOOST_REQUIRE(root_pop && device_pop);
-    const AccountCreateOp create{account, auth,
-        {.network_id = network_id, .account_id = account, .authorization_commitment = *commitment},
+    const AccountCreateOp create{account, auth, binding.package,
+        {.network_id = network_id, .account_id = account, .authorization_commitment = binding.authorization_commitment},
         *root_pop, *device_pop};
 
     auto params = DevProtocolParameters();
@@ -269,6 +264,8 @@ BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
     add.account_id = account;
     add.new_device = *second_dev;
     add.root_nonce = 0;
+    add.kem_package = test::MakeIdentityKemBinding(network_id, account,
+        IdentityAuthorization{*root, *second_dev}, 1).package;
     const auto add_digest = ComputeDeviceAddDigest(network_id, add);
     BOOST_REQUIRE(add_digest);
     add.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *add_digest);
@@ -312,6 +309,8 @@ BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
     stale_add.account_id = account;
     stale_add.new_device = *third_dev;
     stale_add.root_nonce = 0; // stale nonce (current is 1)
+    stale_add.kem_package = test::MakeIdentityKemBinding(network_id, account,
+        IdentityAuthorization{*root, *third_dev}, 1).package;
     const auto stale_digest = ComputeDeviceAddDigest(network_id, stale_add);
     BOOST_REQUIRE(stale_digest);
     stale_add.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *stale_digest);
@@ -405,14 +404,12 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     BOOST_REQUIRE(root && device);
 
     const IdentityAuthorization auth{*root, *device};
-    const auto commitment = ComputeIdentityAuthorizationCommitment(auth);
-    const auto pop_digest = ComputeAccountCreatePopDigest(network_id, account, auth);
-    BOOST_REQUIRE(commitment && pop_digest);
-    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *pop_digest);
-    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *pop_digest);
+    const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
+    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, binding.pop_digest);
     BOOST_REQUIRE(root_pop && device_pop);
-    const AccountCreateOp create{account, auth,
-        {.network_id = network_id, .account_id = account, .authorization_commitment = *commitment},
+    const AccountCreateOp create{account, auth, binding.package,
+        {.network_id = network_id, .account_id = account, .authorization_commitment = binding.authorization_commitment},
         *root_pop, *device_pop};
 
     auto params = DevProtocolParameters();
@@ -654,14 +651,12 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_REQUIRE(root && device);
 
     const IdentityAuthorization auth{*root, *device};
-    const auto commitment = ComputeIdentityAuthorizationCommitment(auth);
-    const auto pop_digest = ComputeAccountCreatePopDigest(network_id, account, auth);
-    BOOST_REQUIRE(commitment && pop_digest);
-    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *pop_digest);
-    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *pop_digest);
+    const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
+    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, binding.pop_digest);
     BOOST_REQUIRE(root_pop && device_pop);
-    const AccountCreateOp create{account, auth,
-        {.network_id = network_id, .account_id = account, .authorization_commitment = *commitment},
+    const AccountCreateOp create{account, auth, binding.package,
+        {.network_id = network_id, .account_id = account, .authorization_commitment = binding.authorization_commitment},
         *root_pop, *device_pop};
 
     auto params = DevProtocolParameters();
@@ -876,20 +871,18 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     BOOST_REQUIRE(alice_dev_id && bob_dev_id);
 
     const IdentityAuthorization alice_auth{*alice_root, *alice_dev};
-    const auto alice_commit = ComputeIdentityAuthorizationCommitment(alice_auth);
-    const auto alice_pop = ComputeAccountCreatePopDigest(network_id, alice, alice_auth);
-    const AccountCreateOp create_alice{alice, alice_auth,
-        {.network_id = network_id, .account_id = alice, .authorization_commitment = *alice_commit},
-        *SignIdentityMessage(alice_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *alice_pop),
-        *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *alice_pop)};
+    const auto alice_binding = test::MakeIdentityKemBinding(network_id, alice, alice_auth);
+    const AccountCreateOp create_alice{alice, alice_auth, alice_binding.package,
+        {.network_id = network_id, .account_id = alice, .authorization_commitment = alice_binding.authorization_commitment},
+        *SignIdentityMessage(alice_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, alice_binding.pop_digest),
+        *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, alice_binding.pop_digest)};
 
     const IdentityAuthorization bob_auth{*bob_root, *bob_dev};
-    const auto bob_commit = ComputeIdentityAuthorizationCommitment(bob_auth);
-    const auto bob_pop = ComputeAccountCreatePopDigest(network_id, bob, bob_auth);
-    const AccountCreateOp create_bob{bob, bob_auth,
-        {.network_id = network_id, .account_id = bob, .authorization_commitment = *bob_commit},
-        *SignIdentityMessage(bob_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *bob_pop),
-        *SignIdentityMessage(bob_dev_seed, IdentityKeyPurpose::DEVICE, *bob_pop)};
+    const auto bob_binding = test::MakeIdentityKemBinding(network_id, bob, bob_auth);
+    const AccountCreateOp create_bob{bob, bob_auth, bob_binding.package,
+        {.network_id = network_id, .account_id = bob, .authorization_commitment = bob_binding.authorization_commitment},
+        *SignIdentityMessage(bob_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, bob_binding.pop_digest),
+        *SignIdentityMessage(bob_dev_seed, IdentityKeyPurpose::DEVICE, bob_binding.pop_digest)};
 
     params.account_creation_work_bits = 0;
     CybouState state{};
@@ -1083,23 +1076,21 @@ BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
     BOOST_REQUIRE(root && device);
 
     const IdentityAuthorization auth{*root, *device};
-    const auto commitment = ComputeIdentityAuthorizationCommitment(auth);
-    BOOST_REQUIRE(commitment.has_value());
-    const auto pop_digest = ComputeAccountCreatePopDigest(network_id, account, auth);
-    BOOST_REQUIRE(pop_digest.has_value());
+    const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
 
     const AccountCreateOp create_op{
         .account_id = account,
         .authorization = auth,
+        .kem_package = binding.package,
         .work = {
             .network_id = network_id,
             .account_id = account,
-            .authorization_commitment = *commitment,
+            .authorization_commitment = binding.authorization_commitment,
             .work_epoch = 0,
             .nonce = 0,
         },
-        .recovery_pop = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *pop_digest),
-        .device_pop = *SignIdentityMessage(dev_seed, IdentityKeyPurpose::DEVICE, *pop_digest),
+        .recovery_pop = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest),
+        .device_pop = *SignIdentityMessage(dev_seed, IdentityKeyPurpose::DEVICE, binding.pop_digest),
     };
 
     // Apply unversioned AccountCreate

@@ -18,7 +18,7 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_NETWORK_DEFINITION_VERSION{2};
+inline constexpr uint8_t CYBOU_NETWORK_DEFINITION_VERSION{3};
 
 /** Immutable consensus identity for one DEV, Beta, or Mainnet network. */
 struct CybouNetworkDefinition {

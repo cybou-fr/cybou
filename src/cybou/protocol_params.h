@@ -49,6 +49,7 @@ struct CybouProtocolParameters {
     uint64_t name_commit_min_depth{DEFAULT_NAME_COMMIT_MIN_DEPTH};
     uint64_t name_commit_max_lifetime{DEFAULT_NAME_COMMIT_MAX_LIFETIME};
     uint32_t max_pending_name_commits{DEFAULT_MAX_PENDING_NAME_COMMITS};
+    bool identity_kem_xwing_enabled{false};
 
     constexpr uint64_t MailFeeForSize(size_t ciphertext_size) const
     {
@@ -69,7 +70,9 @@ constexpr uint64_t MailFeeForSize(const size_t ciphertext_size, const CybouProto
 
 constexpr CybouProtocolParameters DevProtocolParameters()
 {
-    return CybouProtocolParameters{};
+    CybouProtocolParameters params{};
+    params.identity_kem_xwing_enabled = true;
+    return params;
 }
 
 /**

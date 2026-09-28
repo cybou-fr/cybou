@@ -89,6 +89,7 @@ std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefiniti
     append_u64le(definition.protocol_parameters.name_commit_min_depth);
     append_u64le(definition.protocol_parameters.name_commit_max_lifetime);
     append_u32le(definition.protocol_parameters.max_pending_name_commits);
+    out.push_back(definition.protocol_parameters.identity_kem_xwing_enabled ? 1 : 0);
     append_hash(definition.initial_validator_set_commitment);
     out.push_back(definition.operator_authority.has_value() ? 1 : 0);
     if (definition.operator_authority) {
@@ -159,13 +160,15 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
     const auto name_min_depth = read_u64le();
     const auto name_max_lifetime = read_u64le();
     const auto max_pending_names = read_u32le();
+    const auto kem_enabled = read_u8();
     const auto validator_commitment = read_hash();
     const auto has_operator = read_u8();
 
     if (!genesis_block_id || !genesis_state_root || !work_bits || !epoch_lag || !max_creates ||
         !onboarding_bonus || !epoch_blocks || !payment_fee || !mail_base_fee || !mail_tier_bytes ||
         !mail_tier_fee || !max_mail_size || !mail_limit || !name_work_bits || !name_min_depth ||
-        !name_max_lifetime || !max_pending_names || !validator_commitment || !has_operator) {
+        !name_max_lifetime || !max_pending_names || !kem_enabled || *kem_enabled > 1 ||
+        !validator_commitment || !has_operator) {
         return std::nullopt;
     }
 
@@ -186,6 +189,7 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
     definition.protocol_parameters.name_commit_min_depth = *name_min_depth;
     definition.protocol_parameters.name_commit_max_lifetime = *name_max_lifetime;
     definition.protocol_parameters.max_pending_name_commits = *max_pending_names;
+    definition.protocol_parameters.identity_kem_xwing_enabled = *kem_enabled == 1;
     definition.initial_validator_set_commitment = *validator_commitment;
 
     if (*has_operator == 1) {

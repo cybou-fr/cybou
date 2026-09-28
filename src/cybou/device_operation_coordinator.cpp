@@ -574,7 +574,12 @@ DeviceOperationResult DeviceOperationCoordinator::AuthorizeRecoveredDevice()
         return {.phase = DeviceOperationPhase::REJECTED, .error = "Recovery nonce is exhausted"};
     }
 
-    DeviceAdd operation{.account_id = *account, .new_device = *device_key,
+    const auto kem_public = m_keystore.GetDeviceXWingPublicKey();
+    const auto kem_package = kem_public ? EncodeIdentityKemPackage(*kem_public) : std::nullopt;
+    if (!kem_package) {
+        return {.phase = DeviceOperationPhase::REJECTED, .error = "Recovered device KEM key is unavailable"};
+    }
+    DeviceAdd operation{.account_id = *account, .new_device = *device_key, .kem_package = *kem_package,
         .root_nonce = record->next_root_nonce, .root_signature = {}, .device_pop = {}};
     const auto digest = ComputeDeviceAddDigest(m_runtime.GetNetworkId(), operation);
     const auto root_signature = digest ? m_keystore.SignRecovery(*digest) : std::nullopt;

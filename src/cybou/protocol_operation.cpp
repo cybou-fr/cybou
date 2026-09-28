@@ -174,12 +174,14 @@ std::optional<std::vector<unsigned char>> SerializeDeviceAdd(const DeviceAdd& op
         op.new_device.ml_dsa.size() != 1312 || op.root_signature.ml_dsa.size() != 3309 || op.device_pop.ml_dsa.size() != 2420 ||
         IsAllZero(op.new_device.ed25519) || IsAllZero(op.new_device.ml_dsa) ||
         IsAllZero(op.root_signature.ed25519) || IsAllZero(op.root_signature.ml_dsa) ||
-        IsAllZero(op.device_pop.ed25519) || IsAllZero(op.device_pop.ml_dsa)) return std::nullopt;
+        IsAllZero(op.device_pop.ed25519) || IsAllZero(op.device_pop.ml_dsa) ||
+        !DecodeIdentityKemPackage(op.kem_package)) return std::nullopt;
     std::vector<unsigned char> out;
     out.reserve(DEVICE_ADD_SIZE);
     out.insert(out.end(), op.account_id.Value().begin(), op.account_id.Value().end());
     out.insert(out.end(), op.new_device.ed25519.begin(), op.new_device.ed25519.end());
     out.insert(out.end(), op.new_device.ml_dsa.begin(), op.new_device.ml_dsa.end());
+    out.insert(out.end(), op.kem_package.begin(), op.kem_package.end());
     Write64(out, op.root_nonce);
     out.insert(out.end(), op.root_signature.ed25519.begin(), op.root_signature.ed25519.end());
     out.insert(out.end(), op.root_signature.ml_dsa.begin(), op.root_signature.ml_dsa.end());
@@ -202,6 +204,9 @@ std::optional<DeviceAdd> DeserializeDeviceAdd(std::span<const unsigned char> byt
     offset += 32;
     op.new_device.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + 1312);
     offset += 1312;
+    std::copy_n(bytes.begin() + offset, op.kem_package.size(), op.kem_package.begin());
+    if (!DecodeIdentityKemPackage(op.kem_package)) return std::nullopt;
+    offset += op.kem_package.size();
     op.root_nonce = Read64(bytes.subspan(offset, 8));
     offset += 8;
     std::copy_n(bytes.begin() + offset, 64, op.root_signature.ed25519.begin());
@@ -420,7 +425,7 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
 
 std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation)
 {
-    constexpr std::string_view domain{"CYBOU/OP-ID/V2"};
+    constexpr std::string_view domain{"CYBOU/OP-ID/V3"};
     const auto bytes = SerializeProtocolOperation(operation);
     if (!bytes) return std::nullopt;
     uint256 id;

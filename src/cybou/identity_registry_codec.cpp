@@ -9,11 +9,11 @@
 
 namespace cybou {
 namespace {
-constexpr unsigned char VERSION{2};
+constexpr unsigned char VERSION{3};
 constexpr size_t ROOT_PUBLIC_SIZE{32 + 1952};
 constexpr size_t DEVICE_PUBLIC_SIZE{32 + 1312};
 constexpr size_t MIN_ACCOUNT_SIZE{32 + ROOT_PUBLIC_SIZE + 8 + 1};
-constexpr size_t DEVICE_SIZE{DEVICE_PUBLIC_SIZE + 8 + 8};
+constexpr size_t DEVICE_SIZE{DEVICE_PUBLIC_SIZE + 32 + 8 + 8};
 
 void Write64(std::vector<unsigned char>& out, uint64_t value)
 {
@@ -98,9 +98,12 @@ std::optional<std::vector<unsigned char>> SerializeIdentityRegistry(const Identi
         for (const auto& [id, device] : record.devices) {
             if (ComputeDeviceKeyId(device.key) != id ||
                 device.key.ed25519 == record.recovery_root.ed25519 ||
+                std::all_of(device.kem_package_id.begin(), device.kem_package_id.end(),
+                    [](unsigned char byte) { return byte == 0; }) ||
                 device.activation_nonce > record.next_root_nonce ||
                 !activations.emplace(device.activation_nonce).second) return std::nullopt;
             WritePublic(out, device.key);
+            out.insert(out.end(), device.kem_package_id.begin(), device.kem_package_id.end());
             Write64(out, device.next_nonce);
             Write64(out, device.activation_nonce);
         }
@@ -137,16 +140,19 @@ std::optional<IdentityRegistry> DeserializeIdentityRegistry(std::span<const unsi
         std::set<uint64_t> activations;
         for (uint8_t j{0}; j < *device_count; ++j) {
             auto key = ReadPublic(reader, IdentityKeyPurpose::DEVICE, DEVICE_PUBLIC_SIZE - 32);
+            std::array<unsigned char, 32> kem_package_id{};
+            const bool package_read = reader.Read(kem_package_id);
             const auto device_nonce = reader.U64();
             const auto activation_nonce = reader.U64();
-            if (!key || !device_nonce || !activation_nonce || *activation_nonce > record.next_root_nonce ||
+            if (!key || !package_read || !std::any_of(kem_package_id.begin(), kem_package_id.end(),
+                    [](unsigned char byte) { return byte != 0; }) || !device_nonce || !activation_nonce || *activation_nonce > record.next_root_nonce ||
                 !activations.emplace(*activation_nonce).second) return std::nullopt;
             const auto id = ComputeDeviceKeyId(*key);
             if (!id || (prior_device && !(*prior_device < *id)) ||
                 key->ed25519 == record.recovery_root.ed25519 ||
                 record.devices.contains(*id)) return std::nullopt;
             prior_device = *id;
-            record.devices.emplace(*id, IdentityDevice{std::move(*key), *device_nonce, *activation_nonce});
+            record.devices.emplace(*id, IdentityDevice{std::move(*key), kem_package_id, *device_nonce, *activation_nonce});
         }
         registry.m_recovery_index.emplace(*root_id, account_id);
         registry.m_accounts.emplace(account_id, std::move(record));
