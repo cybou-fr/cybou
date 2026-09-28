@@ -163,6 +163,17 @@ BOOST_AUTO_TEST_CASE(file_roundtrip_survives_restart_and_aborted_upload_is_clean
         BOOST_CHECK(first_chunk->ciphertext_and_tag.size() == cybou::STORAGE_OBJECT_CHUNK_SIZE + 16);
         BOOST_CHECK(!std::equal(original.begin(), original.begin() + cybou::STORAGE_OBJECT_CHUNK_SIZE,
             first_chunk->ciphertext_and_tag.begin()));
+        const auto local_files = service.ListFiles(PASSWORD);
+        BOOST_REQUIRE(local_files);
+        BOOST_REQUIRE_EQUAL(local_files->size(), 1U);
+        BOOST_CHECK_EQUAL(local_files->front().filename, "input.bin");
+        BOOST_CHECK_EQUAL(local_files->front().size, original.size());
+        BOOST_CHECK(local_files->front().object_id == object_id);
+        BOOST_CHECK(!local_files->front().pending_verification);
+        const auto public_manifest_bytes = cybou::EncodeStoragePublicManifest(network_id, *manifest);
+        BOOST_REQUIRE(public_manifest_bytes);
+        BOOST_CHECK(std::search(public_manifest_bytes->begin(), public_manifest_bytes->end(),
+            "input.bin", "input.bin" + 9) == public_manifest_bytes->end());
 
         cybou::StorageObjectStore uncertain_store(root / "uncertain-provider", network_id,
             4U * cybou::STORAGE_OBJECT_CHUNK_SIZE);
@@ -172,6 +183,10 @@ BOOST_AUTO_TEST_CASE(file_roundtrip_survives_restart_and_aborted_upload_is_clean
         const auto uncertain_upload = uncertain_service.UploadFile(input_path, PASSWORD);
         BOOST_REQUIRE(uncertain_upload.status == cybou::StorageTransferStatus::COMMIT_UNCERTAIN);
         BOOST_CHECK(uncertain_upload.object_id != cybou::StorageObjectId{});
+        const auto uncertain_files = uncertain_service.ListFiles(PASSWORD);
+        BOOST_REQUIRE(uncertain_files);
+        BOOST_REQUIRE_EQUAL(uncertain_files->size(), 1U);
+        BOOST_CHECK(uncertain_files->front().pending_verification);
         const auto uncertain_download = uncertain_service.DownloadFile(uncertain_upload.object_id,
             root / "uncertain-output.bin", PASSWORD);
         BOOST_REQUIRE(uncertain_download.status == cybou::StorageTransferStatus::RETRIEVED);
@@ -220,6 +235,11 @@ BOOST_AUTO_TEST_CASE(file_roundtrip_survives_restart_and_aborted_upload_is_clean
         BOOST_CHECK(restored_service.DownloadFile(empty_object_id, empty_output_path, PASSWORD).status ==
             cybou::StorageTransferStatus::RETRIEVED);
         BOOST_CHECK(ReadFile(empty_output_path).empty());
+        const auto restored_files = restored_service.ListFiles(PASSWORD);
+        BOOST_REQUIRE(restored_files);
+        BOOST_REQUIRE_EQUAL(restored_files->size(), 2U);
+        BOOST_CHECK_EQUAL(restored_files->at(0).filename, "empty.bin");
+        BOOST_CHECK_EQUAL(restored_files->at(1).filename, "input.bin");
     }
 
     {

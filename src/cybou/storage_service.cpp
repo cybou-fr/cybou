@@ -28,8 +28,10 @@
 
 namespace cybou {
 namespace {
-constexpr std::array<unsigned char, 5> PRIVATE_MANIFEST_MAGIC{'C', 'Y', 'F', 'M', '1'};
-constexpr size_t PRIVATE_MANIFEST_SIZE{PRIVATE_MANIFEST_MAGIC.size() + 32 + 32 + 32 + 32 + 4 + 8 + 32};
+constexpr std::array<unsigned char, 5> PRIVATE_MANIFEST_V1_MAGIC{'C', 'Y', 'F', 'M', '1'};
+constexpr std::array<unsigned char, 5> PRIVATE_MANIFEST_MAGIC{'C', 'Y', 'F', 'M', '2'};
+constexpr size_t PRIVATE_MANIFEST_V1_SIZE{PRIVATE_MANIFEST_V1_MAGIC.size() + 32 + 32 + 32 + 32 + 4 + 8 + 32};
+constexpr size_t MAX_PRIVATE_FILENAME_BYTES{1024};
 constexpr std::array<unsigned char, 5> UPLOAD_JOURNAL_MAGIC{'C', 'Y', 'U', 'J', '1'};
 constexpr size_t UPLOAD_JOURNAL_SIZE{UPLOAD_JOURNAL_MAGIC.size() + 1 + 32 + 32 + 32 + 32 + 4 + 8 + 4 + 1 + 32};
 
@@ -158,10 +160,11 @@ std::vector<unsigned char> EncodePrivateManifest(
     const AccountId& account_id,
     std::span<const unsigned char, 32> network_id,
     const StorageObjectPrivateMetadata& metadata,
+    std::string_view filename,
     const StorageChunkId& commitment)
 {
     std::vector<unsigned char> payload;
-    payload.reserve(PRIVATE_MANIFEST_SIZE);
+    payload.reserve(PRIVATE_MANIFEST_MAGIC.size() + 32 + 32 + 32 + 32 + 4 + 8 + 2 + filename.size() + 32);
     payload.insert(payload.end(), PRIVATE_MANIFEST_MAGIC.begin(), PRIVATE_MANIFEST_MAGIC.end());
     payload.insert(payload.end(), account_id.Value().begin(), account_id.Value().end());
     payload.insert(payload.end(), network_id.begin(), network_id.end());
@@ -169,6 +172,9 @@ std::vector<unsigned char> EncodePrivateManifest(
     payload.insert(payload.end(), metadata.salt.begin(), metadata.salt.end());
     Put32(payload, metadata.key_epoch);
     Put64(payload, metadata.plaintext_size);
+    payload.push_back(static_cast<unsigned char>(filename.size()));
+    payload.push_back(static_cast<unsigned char>(filename.size() >> 8));
+    payload.insert(payload.end(), filename.begin(), filename.end());
     payload.insert(payload.end(), commitment.begin(), commitment.end());
     return payload;
 }
@@ -177,6 +183,7 @@ struct DecodedPrivateManifest {
     AccountId account_id;
     std::array<unsigned char, 32> network_id{};
     StorageObjectPrivateMetadata metadata;
+    std::string filename;
     StorageChunkId commitment{};
 };
 
@@ -278,8 +285,11 @@ bool RemoveFileIfPresent(const std::filesystem::path& path)
 
 std::optional<DecodedPrivateManifest> DecodePrivateManifest(std::span<const unsigned char> bytes)
 {
-    if (bytes.size() != PRIVATE_MANIFEST_SIZE ||
-        !std::equal(PRIVATE_MANIFEST_MAGIC.begin(), PRIVATE_MANIFEST_MAGIC.end(), bytes.begin())) return std::nullopt;
+    const bool v1 = bytes.size() == PRIVATE_MANIFEST_V1_SIZE &&
+        std::equal(PRIVATE_MANIFEST_V1_MAGIC.begin(), PRIVATE_MANIFEST_V1_MAGIC.end(), bytes.begin());
+    const bool v2 = bytes.size() >= PRIVATE_MANIFEST_V1_SIZE + 2 &&
+        std::equal(PRIVATE_MANIFEST_MAGIC.begin(), PRIVATE_MANIFEST_MAGIC.end(), bytes.begin());
+    if (!v1 && !v2) return std::nullopt;
     size_t offset{PRIVATE_MANIFEST_MAGIC.size()};
     const auto account = AccountId::FromBytes(bytes.subspan(offset, 32));
     if (!account) return std::nullopt;
@@ -296,6 +306,22 @@ std::optional<DecodedPrivateManifest> DecodePrivateManifest(std::span<const unsi
     offset += 4;
     result.metadata.plaintext_size = Read64(bytes.data() + offset);
     offset += 8;
+    if (v2) {
+        const size_t filename_size = bytes[offset] | (size_t{bytes[offset + 1]} << 8);
+        offset += 2;
+        if (filename_size == 0 || filename_size > MAX_PRIVATE_FILENAME_BYTES ||
+            bytes.size() != offset + filename_size + result.commitment.size()) return std::nullopt;
+        result.filename.assign(reinterpret_cast<const char*>(bytes.data() + offset), filename_size);
+        if (result.filename.find('\0') != std::string::npos ||
+            result.filename.find('/') != std::string::npos ||
+            result.filename.find('\\') != std::string::npos ||
+            result.filename == "." || result.filename == "..") return std::nullopt;
+        offset += filename_size;
+    } else {
+        // Older local sidecars did not retain a filename. Keep those objects
+        // visible under a generic label without exposing an identifier.
+        result.filename = "Stored file";
+    }
     std::copy_n(bytes.begin() + offset, result.commitment.size(), result.commitment.begin());
     if (IsZero(result.network_id) || result.metadata.object_id == StorageObjectId{} ||
         result.metadata.salt == std::array<unsigned char, 32>{} || IsZero(result.commitment) ||
@@ -602,6 +628,12 @@ StorageTransferResult StorageService::UploadFile(
     std::error_code ec;
     const uint64_t plaintext_size = std::filesystem::file_size(source, ec);
     if (ec || plaintext_size > STORAGE_OBJECT_MAX_BYTES) return {.status = StorageTransferStatus::IO_ERROR};
+    const auto filename_u8 = source.filename().u8string();
+    const std::string filename{reinterpret_cast<const char*>(filename_u8.data()), filename_u8.size()};
+    if (filename.empty() || filename.size() > MAX_PRIVATE_FILENAME_BYTES ||
+        filename.find('\0') != std::string::npos || filename == "." || filename == "..") {
+        return {.status = StorageTransferStatus::INVALID};
+    }
     if (!EnsureDirectory(m_private_manifest_dir)) return {.status = StorageTransferStatus::IO_ERROR};
     if (const auto recovery_status = RecoverPendingUpload(vault_password)) {
         return {.status = *recovery_status};
@@ -695,7 +727,8 @@ StorageTransferResult StorageService::UploadFile(
         return {.status = abort() ? StorageTransferStatus::IO_ERROR : StorageTransferStatus::CLEANUP_FAILED,
             .object_id = metadata->object_id};
     }
-    auto private_payload = EncodePrivateManifest(m_account_id, m_network_id, *metadata, manifest->commitment);
+    auto private_payload = EncodePrivateManifest(
+        m_account_id, m_network_id, *metadata, filename, manifest->commitment);
     const bool saved = SaveNewIdentityVault(private_manifest_path, vault_password, private_payload);
     crypto::CleanseMemory(private_payload.data(), private_payload.size());
     if (!saved) {
@@ -736,6 +769,67 @@ StorageTransferResult StorageService::UploadFile(
     return {.status = StorageTransferStatus::STORED,
         .object_id = metadata->object_id, .manifest_commitment = manifest->commitment,
         .target_replicas = target, .committed_replicas = committed_count};
+}
+
+std::optional<std::vector<StorageFileInfo>> StorageService::ListFiles(
+    const std::string_view vault_password) const
+{
+    if (m_account_id.IsNull() || IsZero(m_network_id) || m_private_manifest_dir.empty()) return std::nullopt;
+    const auto active_account = m_keystore.GetAccountId();
+    if (!active_account || *active_account != m_account_id) return std::nullopt;
+    std::error_code ec;
+    if (!std::filesystem::exists(m_private_manifest_dir, ec)) {
+        if (ec) return std::nullopt;
+        return std::vector<StorageFileInfo>{};
+    }
+    if (!std::filesystem::is_directory(m_private_manifest_dir, ec) || ec) return std::nullopt;
+
+    std::optional<StorageUploadJournal> pending;
+    const auto journal_path = m_private_manifest_dir / "storage-upload-journal.cybv2";
+    if (std::filesystem::exists(journal_path, ec)) {
+        if (ec) return std::nullopt;
+        auto payload = LoadIdentityVault(journal_path, vault_password);
+        if (!payload) return std::nullopt;
+        pending = DecodeUploadJournal(*payload);
+        crypto::CleanseMemory(payload->data(), payload->size());
+        if (!pending || pending->account_id != m_account_id || pending->network_id != m_network_id) {
+            return std::nullopt;
+        }
+    } else if (ec) {
+        return std::nullopt;
+    }
+
+    std::vector<StorageFileInfo> files;
+    for (std::filesystem::directory_iterator it{m_private_manifest_dir, ec}, end; !ec && it != end; it.increment(ec)) {
+        if (!it->is_regular_file(ec)) {
+            if (ec) break;
+            continue;
+        }
+        const auto leaf = it->path().filename().string();
+        if (!leaf.ends_with(".cyfm.cybv2")) continue;
+        auto payload = LoadIdentityVault(it->path(), vault_password);
+        if (!payload) return std::nullopt;
+        const auto manifest = DecodePrivateManifest(*payload);
+        crypto::CleanseMemory(payload->data(), payload->size());
+        if (!manifest || manifest->account_id != m_account_id || manifest->network_id != m_network_id ||
+            it->path().filename() != PrivateManifestPath(manifest->metadata.object_id).filename()) {
+            return std::nullopt;
+        }
+        files.push_back({
+            .object_id = manifest->metadata.object_id,
+            .manifest_commitment = manifest->commitment,
+            .filename = manifest->filename,
+            .size = manifest->metadata.plaintext_size,
+            .key_epoch = manifest->metadata.key_epoch,
+            .pending_verification = pending && pending->metadata.object_id == manifest->metadata.object_id,
+        });
+    }
+    if (ec) return std::nullopt;
+    std::sort(files.begin(), files.end(), [](const StorageFileInfo& a, const StorageFileInfo& b) {
+        if (a.filename != b.filename) return a.filename < b.filename;
+        return a.object_id < b.object_id;
+    });
+    return files;
 }
 
 StorageTransferResult StorageService::DownloadFile(const StorageObjectId& object_id,

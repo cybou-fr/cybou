@@ -45,6 +45,16 @@ struct StorageTransferResult {
     }
 };
 
+/** Locally decrypted file metadata. The filename is never sent to providers. */
+struct StorageFileInfo {
+    StorageObjectId object_id{};
+    StorageChunkId manifest_commitment{};
+    std::string filename;
+    uint64_t size{0};
+    uint32_t key_epoch{0};
+    bool pending_verification{false};
+};
+
 /** One connected CYP2 storage provider, used by a caller-owned peer worker. */
 class PeerStorageProvider final : public StorageObjectProvider {
 public:
@@ -103,6 +113,9 @@ public:
 
     StorageTransferResult UploadFile(
         const std::filesystem::path& source, std::string_view vault_password);
+    /** List locally indexed uploads without contacting Storage providers. */
+    std::optional<std::vector<StorageFileInfo>> ListFiles(
+        std::string_view vault_password) const;
     StorageTransferResult DownloadFile(const StorageObjectId& object_id,
         const std::filesystem::path& destination, std::string_view vault_password) const;
 

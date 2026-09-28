@@ -3,8 +3,9 @@
 Status: canonical Beta Files/Storage product UX contract. The current Qt
 Files page remains a non-functional object-list skeleton with actions disabled;
 it is not the Files catalog described here. Core local/single-peer transfers
-and bounded client placement exist, but the encrypted Files manifest,
-finalized root updates, and desktop Files integration are not implemented.
+bounded client placement, and an encrypted local filename index exist, but the
+encrypted synchronized Files manifest, finalized root updates, and desktop
+Files integration are not implemented.
 
 This document defines how CYBOU exposes distributed encrypted Object Storage to
 ordinary users. Google Drive is the interaction reference for familiar file
