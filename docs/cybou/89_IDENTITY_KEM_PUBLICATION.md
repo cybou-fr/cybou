@@ -1,9 +1,8 @@
 # 89 — Identity KEM capability publication
 
-Status: protocol design gate; not implemented and not a frozen wire format.
-This document defines the shape and security requirements for publishing
-device encryption capabilities through the canonical Identity registry. It
-does not select a hybrid KEM combiner or authorize Mail/Files encryption.
+Status: DEV protocol profile frozen for implementation; not enabled on Beta or
+Mainnet. Mail and Files encryption remain disabled until their separate gates
+pass. This is a coordinated consensus-format cutover, not a runtime migration.
 
 ## Current boundary
 
@@ -11,9 +10,9 @@ The current fixed `IdentityAuthorization` descriptor binds the Recovery Root
 and initial device signing keys. `IdentityDevice` stores a device signing key,
 operation nonce, and activation nonce. `DeviceAdd` binds the new device
 signing-key ID; neither account creation nor device-add state publishes a
-KEM key. The CVID3 local vault already stores independent X25519 and ML-KEM-768
-private material, but that does not make either key discoverable or usable by
-another client.
+KEM key. The current CVID3 vault stores unrelated X25519 and ML-KEM-768
+private material. That pair is not the deterministic key representation of
+the selected hybrid KEM and cannot be published as if it were one.
 
 Do not append KEM material to `IdentityAuthorization` or silently change an
 existing operation or state decoder. The eventual change is part of the
@@ -60,7 +59,66 @@ allocation:
 The package contains no private keys, recovery entropy, Storage Master Key,
 or content key. Do not include fields that are not required by the selected
 standard profile. Exact identifiers, byte order, limits, and wire version
-remain a separate freeze review.
+are frozen below for the DEV cutover.
+
+## Frozen DEV KEM and package profile
+
+DEV pins the following draft set and does not follow newer draft revisions
+automatically:
+
+- IETF `draft-ietf-hpke-pq-05`;
+- its normative IRTF dependencies `draft-irtf-cfrg-concrete-hybrid-kems-03`
+  and `draft-irtf-cfrg-hybrid-kems-12`;
+- its normative HPKE base dependency `draft-ietf-hpke-hpke-03`;
+- NIST FIPS 203 and FIPS 202, plus RFC 7748.
+
+The DEV KEM is `MLKEM768-X25519`, HPKE KEM ID `0x647a`. It is the
+standardized-in-draft X-Wing construction: ML-KEM-768 public key (1184 bytes)
+followed by X25519 public key (32 bytes), total 1216 bytes. The KEM seed and
+decapsulation key are 32 bytes; ciphertext is 1120 bytes; shared secret is
+32 bytes. Implementations must follow the pinned drafts and their test
+vectors; no local combiner or independent component keys are allowed.
+
+The initial HPKE suite used for DEV interoperability vectors is base mode,
+KEM `0x647a`, HKDF-SHA256 KDF ID `0x0001`, and ChaCha20Poly1305 AEAD ID
+`0x0003` (draft-05 Appendix A.5). This freezes a test suite, not permission to
+enable Mail or Files. HPKE authenticated mode is unsupported by this KEM.
+
+Canonical public package v1 is exactly 1219 bytes:
+
+```text
+format_version     u8       0x01
+kem_id             u16 LE   0x647a
+encapsulation_key  1216 B   ML-KEM-768 key || X25519 key
+```
+
+There are no optional fields, validity timestamps, extra key IDs, or trailing
+bytes. Unknown versions and KEM IDs are rejected. Public-key validation and
+the selected implementation's keypair self-test must pass before publication.
+The active DEV network is the only network allowed to accept this profile;
+Beta and Mainnet parameters must not enable it by inheriting DEV defaults.
+
+The package commitment is SHA-256 over the following exact byte string:
+
+```text
+"CYBOU/IDENTITY-KEM-PACKAGE/V1" || 0x00
+|| NetworkID[32] || AccountID[32] || DeviceKeyID[32]
+|| ActivationNonce[u64 LE] || PackageLength[u16 LE] || PackageBytes[1219]
+```
+
+AccountCreate and DeviceAdd carry package v1 bytes. The account creation work
+commitment and both account-creation signatures bind a domain-separated
+authorization commitment containing the IdentityAuthorization commitment
+and this KEM package commitment. DeviceAdd's root signature and device proof
+of possession bind the same package commitment and the activation derived from
+its root nonce. Consensus state stores the package commitment beside each
+active device; finalized operations remain the source of package bytes.
+
+The portable vault moves directly to CVID4 in the same DEV cutover. Its device
+KEM secret is the 32-byte X-Wing seed; the public package is derived from that
+seed and validated before durable save. CVID3 is not imported or decoded by
+the new runtime. This follows the direct-cutover rule: obsolete DEV state and
+vaults are discarded when the integrated PQ consensus and name gate is ready.
 
 ## Commitment and authorization requirements
 
@@ -112,25 +170,25 @@ profile is unsupported. No silent downgrade is permitted.
 
 ## Cryptographic profile gate
 
-The architecture target remains separate X25519 and ML-KEM-768 device
-capabilities. This names algorithms, not a CYBOU hybrid KEM, combiner,
-encapsulation transcript, or Mail HPKE profile. Reuse a finalized standard
-profile and its exact encodings when available; do not define a local hybrid
-combiner or infer persistent package semantics from a TLS key-share format.
+The DEV KEM profile is pinned above. It does not freeze a Mail ciphertext
+transcript, recipient privacy mechanism, or Files key-wrapping protocol. Do
+not infer those application semantics from the HPKE vectors or a TLS key-share
+format.
 
-Before implementation, freeze and review together:
+Before publication is enabled, the implementation and integrated cutover must
+still pass:
 
-1. the standardized hybrid KEM / HPKE profile and implementation APIs;
-2. package and operation encodings, size bounds, IDs, and domain separation;
-3. initial AccountCreate and DeviceAdd signatures over the same commitment;
-4. state-root and snapshot serialization changes;
-5. KEM rotation, revocation, activation, and historical-proof rules;
-6. vault durability, restore, key-pair self-test, and service fail-closed UX;
-7. test vectors, adversarial validation, and the coordinated DEV cutover plan.
+1. correct implementation of the pinned standard and published vectors;
+2. AccountCreate and DeviceAdd signatures over the package commitment;
+3. state-root and snapshot serialization changes in the coordinated cutover;
+4. vault durability, restore, and keypair self-test;
+5. device revocation and historical package verification;
+6. adversarial validation and coordinated DEV cutover with PQ consensus and names.
 
 Until all gates pass, Mail and cross-device Files key wrapping remain
 unavailable. Local key generation or successful standalone KEM tests do not
-change that status.
+change that status. Draft-05 is DEV-only; its eventual RFC or replacement
+requires a separately reviewed network upgrade and never an automatic switch.
 
 ## Related authority
 

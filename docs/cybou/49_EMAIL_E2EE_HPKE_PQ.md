@@ -10,13 +10,20 @@ Target architecture uses:
 
 - HPKE architecture from RFC 9180;
 - ML-KEM from NIST FIPS 203;
-- standardized/finalized PQ/T HPKE construction when available.
+- DEV-only pinned PQ/T HPKE draft profile for Identity capability publication;
+- finalized standards before any Mainnet use.
 
-Preferred target remains:
+The DEV-only pinned KEM is:
 
 ```text
-X25519 + ML-KEM-768
+MLKEM768-X25519 (X-Wing)
 ```
+
+The DEV HPKE vector suite is base mode with KEM ID `0x647a`, HKDF-SHA256
+KDF ID `0x0001`, and ChaCha20Poly1305 AEAD ID `0x0003`, pinned to
+`draft-ietf-hpke-pq-05` Appendix A.5 and its exact dependencies in
+`89_IDENTITY_KEM_PUBLICATION.md`. This is a DEV implementation target only;
+it is not enabled for Mail or Mainnet.
 
 Identity V2 root/device hybrid *signatures* are separate from this mail
 *encryption* profile. Device signing keys must never be reused as KEM keys;
@@ -36,19 +43,21 @@ context, and both classical and PQ encapsulations. A recipient that requires
 the hybrid profile must never be silently downgraded. Exact transcript and
 wire encodings remain protocol-review gates.
 
-Do not invent a custom hybrid KEM combiner.
+Do not invent a custom hybrid KEM combiner or use independently generated
+X25519 and ML-KEM keys as though they were the hybrid profile's keypair.
 
 OpenSSL 3.5 provides FIPS 203 ML-KEM-768 key and encapsulation APIs. That is
 implementation support, not a CYBOU wire profile. [RFC 10024](https://www.rfc-editor.org/rfc/rfc10024.html)
 standardizes X25519MLKEM768 for the ephemeral TLS 1.3 handshake; its TLS
 key-share encoding does not define a persistent Identity recipient package or
 a Mail HPKE profile. The IETF [HPKE PQ draft, revision 05](https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-05)
-specifies PQ and hybrid HPKE KEMs, including X25519 + ML-KEM-768, but remains
-an active Internet-Draft as of 2026-09-28. The base [HPKE revision 05](https://datatracker.ietf.org/doc/html/draft-ietf-hpke-hpke-05)
-is also still an Internet-Draft and is in the IESG publication process. Neither
-document is a finalized standard yet. Mail KEM publication and encapsulation
-remain blocked until the profile is finalized and its key package, transcript,
-and historical authorization bindings are reviewed for CYBOU.
+specifies the DEV-target hybrid KEM but remains an active Internet-Draft as of
+2026-09-28. It normatively pins concrete hybrid KEM draft-03, generic hybrid
+KEM draft-12, and HPKE base draft-03. CYBOU pins those revisions for DEV;
+they do not update automatically. The DEV package format is frozen in
+`89_IDENTITY_KEM_PUBLICATION.md`; Mail remains disabled until its application
+transcript, recipient privacy, historical evidence, and integrated cutover
+gates pass. No draft-based profile is enabled on Mainnet.
 Identity package publication requirements and cutover gates are tracked in
 `89_IDENTITY_KEM_PUBLICATION.md`. Do not substitute the TLS group or implement
 a local combiner. See
