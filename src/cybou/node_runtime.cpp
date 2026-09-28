@@ -129,6 +129,11 @@ bool CybouNodeRuntime::AbortStoredObject(
     return m_storage_store && m_storage_store->AbortUncommittedObject(object_id, chunk_count);
 }
 
+uint64_t CybouNodeRuntime::GarbageCollectStorageStaging()
+{
+    return m_storage_store ? m_storage_store->GarbageCollectExpiredStaging() : 0;
+}
+
 std::optional<StoragePublicManifest> CybouNodeRuntime::GetStoredManifest(const StorageObjectId& object_id) const
 {
     if (!m_storage_store) return std::nullopt;
@@ -446,6 +451,10 @@ void CybouNodeRuntime::TickConsensus(const std::chrono::milliseconds round_timeo
             head->height == std::numeric_limits<uint64_t>::max()) return;
         const auto height = head->height + 1;
         const auto now = std::chrono::steady_clock::now();
+        const auto round_backoff = std::chrono::milliseconds{
+            static_cast<int64_t>(std::min(m_consensus_round, 60U)) * 75};
+        const auto effective_round_timeout = std::min(
+            round_timeout + round_backoff, std::chrono::milliseconds{5000});
         if (m_consensus_height != height) {
             m_consensus_height = height;
             m_consensus_round = 0;
@@ -464,8 +473,13 @@ void CybouNodeRuntime::TickConsensus(const std::chrono::milliseconds round_timeo
             proposal = m_authority_node->StartConsensusRound(m_consensus_round);
             if (!proposal) buffered_result = ProcessBufferedConsensusProposalLocked();
         } else {
-            if (now - m_round_started < round_timeout ||
+            if (now - m_round_started < effective_round_timeout ||
                 m_consensus_round == std::numeric_limits<uint32_t>::max()) return;
+            if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
+                std::fprintf(stderr, "[cybou-debug] ROUND_TIMEOUT height=%llu round=%u phase=%u timeout_ms=%lld\n",
+                    static_cast<unsigned long long>(height), m_consensus_round, m_consensus_phase,
+                    static_cast<long long>(effective_round_timeout.count()));
+            }
             m_round_started = now;
             if (m_consensus_phase == 0) {
                 m_consensus_phase = 1;
@@ -514,12 +528,20 @@ std::optional<BftPrevoteMsg> CybouNodeRuntime::ReceiveConsensusProposal(const Bf
 {
     std::optional<BftPrevoteMsg> pv;
     std::optional<BftPrecommitMsg> pc;
+    std::optional<BftProposalMsg> next_proposal;
     {
         std::lock_guard lock(m_mutex);
         if (!m_authority_node) return std::nullopt;
         const auto result = m_authority_node->ReceiveProposal(proposal);
         pv = result.prevote;
         pc = result.precommit;
+        if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
+            std::fprintf(stderr, "[cybou-debug] PROPOSAL height=%llu round=%u id=%s prevote=%s precommit=%s\n",
+                static_cast<unsigned long long>(proposal.height), proposal.round,
+                ComputeBlockId(proposal.block).GetHex().c_str(),
+                pv ? (pv->block_id ? pv->block_id->GetHex().c_str() : "nil") : "none",
+                pc ? (pc->block_id ? pc->block_id->GetHex().c_str() : "nil") : "none");
+        }
         if (pv && !pc && !result.finalized) {
             pc = m_authority_node->ReceivePrevote(*pv);
         }
@@ -537,10 +559,14 @@ std::optional<BftPrevoteMsg> CybouNodeRuntime::ReceiveConsensusProposal(const Bf
             }
         }
         // The engine may have jumped to a higher round while processing.
-        SyncConsensusDriverWithEngine();
+        next_proposal = SyncConsensusDriverWithEngine();
     }
     if (pv) BroadcastConsensusPrevote(*pv);
     if (pc) BroadcastConsensusPrecommit(*pc);
+    if (next_proposal) {
+        BroadcastConsensusProposal(*next_proposal);
+        ReceiveConsensusProposal(*next_proposal);
+    }
     return pv;
 }
 
@@ -548,10 +574,20 @@ std::optional<BftPrecommitMsg> CybouNodeRuntime::ReceiveConsensusPrevote(const B
 {
     std::optional<BftPrecommitMsg> pc;
     std::optional<BftPrevoteMsg> buffered_prevote;
+    std::optional<BftProposalMsg> next_proposal;
     {
         std::lock_guard lock(m_mutex);
         if (!m_authority_node) return std::nullopt;
         pc = m_authority_node->ReceivePrevote(prevote);
+        if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
+            const auto progress = m_authority_node->GetConsensusProgress();
+            std::fprintf(stderr, "[cybou-debug] PREVOTE height=%llu round=%u voter=%s block=%s local_round=%u locked=%d precommit=%s\n",
+                static_cast<unsigned long long>(prevote.height), prevote.round,
+                prevote.validator_id.GetHex().c_str(),
+                prevote.block_id ? prevote.block_id->GetHex().c_str() : "nil",
+                progress ? progress->round : 0, progress ? progress->locked_round : -1,
+                pc ? (pc->block_id ? pc->block_id->GetHex().c_str() : "nil") : "none");
+        }
         if (pc) {
             m_consensus_phase = 2;
             m_round_started = std::chrono::steady_clock::now();
@@ -560,10 +596,14 @@ std::optional<BftPrecommitMsg> CybouNodeRuntime::ReceiveConsensusPrevote(const B
         const auto buffered = ProcessBufferedConsensusProposalLocked();
         buffered_prevote = buffered.prevote;
         if (buffered.precommit) pc = buffered.precommit;
-        SyncConsensusDriverWithEngine();
+        next_proposal = SyncConsensusDriverWithEngine();
     }
     if (buffered_prevote) BroadcastConsensusPrevote(*buffered_prevote);
     if (pc) BroadcastConsensusPrecommit(*pc);
+    if (next_proposal) {
+        BroadcastConsensusProposal(*next_proposal);
+        ReceiveConsensusProposal(*next_proposal);
+    }
     return pc;
 }
 
@@ -571,16 +611,29 @@ bool CybouNodeRuntime::ReceiveConsensusPrecommit(const BftPrecommitMsg& precommi
 {
     bool committed{false};
     BftProposalResult buffered;
+    std::optional<BftProposalMsg> next_proposal;
     {
         std::lock_guard lock(m_mutex);
         if (!m_authority_node) return false;
         committed = CommitConsensusPrecommit(precommit);
+        if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
+            const auto progress = m_authority_node->GetConsensusProgress();
+            std::fprintf(stderr, "[cybou-debug] PRECOMMIT height=%llu round=%u voter=%s block=%s committed=%d local_round=%u locked=%d\n",
+                static_cast<unsigned long long>(precommit.height), precommit.round,
+                precommit.validator_id.GetHex().c_str(),
+                precommit.block_id ? precommit.block_id->GetHex().c_str() : "nil", committed,
+                progress ? progress->round : 0, progress ? progress->locked_round : -1);
+        }
         buffered = ProcessBufferedConsensusProposalLocked();
         committed = committed || buffered.finalized;
-        SyncConsensusDriverWithEngine();
+        next_proposal = SyncConsensusDriverWithEngine();
     }
     if (buffered.prevote) BroadcastConsensusPrevote(*buffered.prevote);
     if (buffered.precommit) BroadcastConsensusPrecommit(*buffered.precommit);
+    if (next_proposal) {
+        BroadcastConsensusProposal(*next_proposal);
+        ReceiveConsensusProposal(*next_proposal);
+    }
     return committed;
 }
 
@@ -607,21 +660,29 @@ BftProposalResult CybouNodeRuntime::ProcessBufferedConsensusProposalLocked()
     return result;
 }
 
-void CybouNodeRuntime::SyncConsensusDriverWithEngine()
+std::optional<BftProposalMsg> CybouNodeRuntime::SyncConsensusDriverWithEngine()
 {
     // Caller holds m_mutex. The engine may legitimately run ahead of the
     // orchestration driver: it jumps rounds on verified higher-round votes.
     // Follow it so the timeout machine drives the round the engine is in.
     const auto progress = m_authority_node->GetConsensusProgress();
-    if (!progress || progress->height != m_consensus_height) return;
-    if (progress->round == m_consensus_round && progress->step == BftStep::PROPOSE &&
-        m_consensus_phase == 0) {
-        return;
+    if (!progress || progress->height != m_consensus_height) return std::nullopt;
+    const auto phase = progress->step == BftStep::PROPOSE ? 0 :
+        (progress->step == BftStep::PREVOTE ? 1 : 2);
+    if (progress->round == m_consensus_round && phase == m_consensus_phase) return std::nullopt;
+    if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
+        std::fprintf(stderr, "[cybou-debug] ENGINE_PROGRESS height=%llu round=%u phase=%u -> round=%u phase=%u locked=%d\n",
+            static_cast<unsigned long long>(progress->height), m_consensus_round, m_consensus_phase,
+            progress->round, phase, progress->locked_round);
     }
     m_consensus_round = progress->round;
-    m_consensus_phase = progress->step == BftStep::PROPOSE ? 0 :
-        (progress->step == BftStep::PREVOTE ? 1 : 2);
+    m_consensus_phase = phase;
     m_round_started = std::chrono::steady_clock::now();
+    // A quorum of future-round votes can move the engine directly into a new
+    // PROPOSE step. If this validator is that round's leader, start the
+    // proposal now; waiting for the proposal timeout would make it prevote nil.
+    if (phase == 0) return m_authority_node->StartConsensusRound(progress->round);
+    return std::nullopt;
 }
 
 bool CybouNodeRuntime::CommitConsensusPrecommit(const BftPrecommitMsg& precommit)

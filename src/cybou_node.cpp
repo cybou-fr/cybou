@@ -224,7 +224,8 @@ int Main(const int argc, char* argv[])
         }
         const auto peer = peers.Peers().front();
         std::cout << "peer=" << peer.address << ':' << peer.port
-                  << " height=" << peer.hello.finalized_height << std::endl;
+                  << " height=" << peer.hello.finalized_height
+                  << " capabilities=" << peer.hello.capabilities << std::endl;
         return 0;
     }
     if (std::string_view{argv[1]} == "p2p-sync" && argc == 7) {
@@ -442,7 +443,7 @@ int Main(const int argc, char* argv[])
             .genesis = network->genesis,
         }};
         node_service.Start();
-        const auto gossip_endpoints = argc == 10 ? ReadPeerEndpoints(argv[9]) :
+        const auto gossip_endpoints = argc >= 10 ? ReadPeerEndpoints(argv[9]) :
             std::vector<std::pair<std::string, uint16_t>>{};
         return node_service.RunAuthority(cybou::CybouAuthorityServiceConfig{
             .bind_address = bind_address.to_string(),

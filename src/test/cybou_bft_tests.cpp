@@ -1420,6 +1420,22 @@ BOOST_AUTO_TEST_CASE(bft_prevote_liveness_handles_interleaved_nil_and_delivers_b
     BOOST_REQUIRE(res3.has_value());
     BOOST_CHECK(res3->block_id == block_id);
     BOOST_CHECK(node0.GetStep() == cybou::BftStep::PRECOMMIT);
+
+    // A nil precommit timeout can race with the delayed third block prevote.
+    // The validator cannot change its precommit, but it must still record the
+    // block lock established by the later polka for its next round proposal.
+    cybou::BftValidatorNode late_polka_node{0, mocks[0].seed, network_id, val_set, execute};
+    late_polka_node.SetHeight(1, uint256::ONE, val_set);
+    BOOST_REQUIRE(late_polka_node.ReceiveProposal(*proposal));
+    BOOST_CHECK(!late_polka_node.ReceivePrevote(pv1));
+    BOOST_CHECK(!late_polka_node.ReceivePrevote(pv2_nil));
+    const auto timed_out_precommit = late_polka_node.OnPrevoteTimeout();
+    BOOST_REQUIRE(timed_out_precommit);
+    BOOST_CHECK(!timed_out_precommit->block_id);
+    BOOST_CHECK(!late_polka_node.ReceivePrevote(pv3));
+    BOOST_CHECK_EQUAL(late_polka_node.GetLockedRound(), 0);
+    BOOST_REQUIRE(late_polka_node.GetLockedBlock());
+    BOOST_CHECK(cybou::ComputeBlockId(*late_polka_node.GetLockedBlock()) == block_id);
 }
 
 BOOST_AUTO_TEST_CASE(bft_prevote_all_voted_without_quorum_precommits_nil)

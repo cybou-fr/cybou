@@ -165,6 +165,7 @@ public:
     StorageWriteResult StoreEncryptedChunk(const StorageObjectId& object_id, const StorageEncryptedChunk& chunk);
     StorageWriteResult CommitStoredManifest(const StoragePublicManifest& manifest);
     bool AbortStoredObject(const StorageObjectId& object_id, uint32_t chunk_count);
+    uint64_t GarbageCollectStorageStaging();
     std::optional<StoragePublicManifest> GetStoredManifest(const StorageObjectId& object_id) const;
     std::optional<StorageEncryptedChunk> GetStoredChunk(const StorageObjectId& object_id, uint32_t index) const;
 
@@ -202,7 +203,7 @@ private:
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
     void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
     /** Re-sync the orchestration round/phase with the engine after it jumped rounds. Caller holds m_mutex. */
-    void SyncConsensusDriverWithEngine();
+    std::optional<BftProposalMsg> SyncConsensusDriverWithEngine();
     void RememberOperationForGossip(const ProtocolOperation& op, const uint256& id);
     void RememberOperationStatus(const uint256& id, OperationStatus status);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);

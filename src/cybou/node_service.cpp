@@ -261,7 +261,13 @@ int CybouNodeService::RunAuthority(const CybouAuthorityServiceConfig& config, st
         }
     });
 
+    auto last_storage_gc = std::chrono::steady_clock::now();
     while (!stopping) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last_storage_gc >= std::chrono::minutes{1}) {
+            m_runtime->GarbageCollectStorageStaging();
+            last_storage_gc = now;
+        }
         boost::asio::ip::tcp::socket socket(io);
         boost::system::error_code ec;
         acceptor.accept(socket, ec);

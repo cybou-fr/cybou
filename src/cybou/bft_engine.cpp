@@ -958,8 +958,6 @@ std::optional<BftPrecommitMsg> BftValidatorNode::ReceivePrevote(const BftPrevote
 
 std::optional<BftPrecommitMsg> BftValidatorNode::EvaluatePrevoteQuorum()
 {
-    if (m_precommitted) return std::nullopt;
-
     std::map<uint256, size_t> block_counts;
     size_t nil_counts{0};
     for (const auto& [vid, pv] : m_prevotes) {
@@ -999,6 +997,10 @@ std::optional<BftPrecommitMsg> BftValidatorNode::EvaluatePrevoteQuorum()
             ComputeBlockId(m_current_proposal->block) == blk_id) {
             m_locked_block = m_current_proposal->block;
             m_locked_round = static_cast<int32_t>(m_round);
+            // A timeout may already have produced a nil precommit before the
+            // delayed prevote quorum arrived. The late polka still establishes
+            // the lock for future rounds, but must never cause a second vote.
+            if (m_precommitted) return std::nullopt;
             m_step = BftStep::PRECOMMIT;
             m_precommitted = true;
 
@@ -1022,6 +1024,7 @@ std::optional<BftPrecommitMsg> BftValidatorNode::EvaluatePrevoteQuorum()
     }
 
     if (nil_counts >= quorum || m_prevotes.size() == m_validator_set.validators.size()) {
+        if (m_precommitted) return std::nullopt;
         m_step = BftStep::PRECOMMIT;
         m_precommitted = true;
         const uint256 nil_digest = ComputePrecommitNilDigest(m_network_id, m_height, m_round, m_validator_id);

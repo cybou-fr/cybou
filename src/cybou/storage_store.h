@@ -10,10 +10,13 @@
 #include <cybou/storage_crypto.h>
 
 #include <cstdint>
+#include <chrono>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <vector>
 
 namespace cybou {
 
@@ -36,6 +39,13 @@ struct StorageWriteResult {
     {
         return status == StorageWriteStatus::STORED || status == StorageWriteStatus::ALREADY_STORED;
     }
+};
+
+/** Local provider safeguards; these values are not part of CYP2 or consensus. */
+struct StorageStagingPolicy {
+    uint64_t max_bytes{0}; // zero selects a capacity-derived default
+    uint32_t max_objects{1024};
+    std::chrono::milliseconds ttl{std::chrono::hours{24}};
 };
 
 /** Client-facing operations shared by local and remote ciphertext providers. */
@@ -61,7 +71,8 @@ public:
         std::span<const unsigned char, 32> network_id,
         uint64_t capacity_bytes,
         bool memory_only = false,
-        bool wipe_data = false);
+        bool wipe_data = false,
+        StorageStagingPolicy staging_policy = {});
 
     StorageObjectStore(const StorageObjectStore&) = delete;
     StorageObjectStore& operator=(const StorageObjectStore&) = delete;
@@ -76,17 +87,39 @@ public:
     std::optional<StorageEncryptedChunk> GetChunk(
         const StorageObjectId& object_id, uint32_t index) const override;
     uint64_t UsedBytes() const;
+    uint64_t StagedBytes() const;
+    size_t StagedObjectCount() const;
+    /** Remove inactive uncommitted uploads. Called at startup and on writes. */
+    uint64_t GarbageCollectExpiredStaging();
     uint64_t CapacityBytes() const { return m_capacity_bytes; }
 
 private:
+    struct StagingRecord {
+        uint64_t received_bytes{0};
+        int64_t last_activity_ms{0};
+        uint32_t chunk_count{0};
+        uint32_t highest_index{0};
+    };
+
     static std::string ChunkKey(const StorageObjectId& object_id, uint32_t index);
     static std::string ManifestKey(const StorageObjectId& object_id);
     static std::string UsageKey();
+    static std::string StagingKey();
+    static std::vector<unsigned char> EncodeStagingRecords(
+        const std::map<StorageObjectId, StagingRecord>& records);
+    static std::optional<std::map<StorageObjectId, StagingRecord>> DecodeStagingRecords(
+        const std::vector<unsigned char>& encoded);
+    std::map<StorageObjectId, StagingRecord> ReadStagingRecords() const;
+    void RecoverLegacyUncommittedChunks();
+    uint64_t GarbageCollectExpiredStagingLocked(int64_t now_ms);
     std::optional<StorageEncryptedChunk> ReadChunk(const StorageObjectId& object_id, uint32_t index) const;
     std::optional<StoragePublicManifest> ReadManifest(const StorageObjectId& object_id) const;
 
     std::array<unsigned char, 32> m_network_id{};
     uint64_t m_capacity_bytes{0};
+    uint64_t m_max_staging_bytes{0};
+    uint32_t m_max_staging_objects{0};
+    std::chrono::milliseconds m_staging_ttl{0};
     mutable std::mutex m_mutex;
     std::unique_ptr<KVStore> m_db;
 };

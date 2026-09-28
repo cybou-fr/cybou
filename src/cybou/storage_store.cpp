@@ -17,6 +17,11 @@ namespace cybou {
 namespace {
 
 constexpr size_t CHUNK_HEADER_SIZE{4 + 12 + 32 + 4};
+constexpr std::string_view STAGING_MAGIC{"STG1"};
+constexpr uint32_t MAX_STAGING_OBJECTS{1024};
+constexpr uint64_t MAX_STAGING_BYTES{64ULL << 20};
+constexpr uint64_t MIN_STAGING_BYTES{2ULL * (STORAGE_OBJECT_CHUNK_SIZE + CHUNK_HEADER_SIZE + 16)};
+constexpr auto DEFAULT_STAGING_TTL = std::chrono::hours{24};
 
 void Put32(std::string& out, uint32_t value)
 {
@@ -28,6 +33,29 @@ uint32_t Read32(const unsigned char* bytes)
     uint32_t value{0};
     for (unsigned shift = 0; shift < 32; shift += 8) value |= uint32_t{bytes[shift / 8]} << shift;
     return value;
+}
+
+void Put64(std::vector<unsigned char>& out, uint64_t value)
+{
+    for (unsigned shift = 0; shift < 64; shift += 8) out.push_back(static_cast<unsigned char>(value >> shift));
+}
+
+uint64_t Read64(const unsigned char* bytes)
+{
+    uint64_t value{0};
+    for (unsigned shift = 0; shift < 64; shift += 8) value |= uint64_t{bytes[shift / 8]} << shift;
+    return value;
+}
+
+void Put32(std::vector<unsigned char>& out, uint32_t value)
+{
+    for (unsigned shift = 0; shift < 32; shift += 8) out.push_back(static_cast<unsigned char>(value >> shift));
+}
+
+int64_t UnixTimeMilliseconds()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
 std::string EncodeChunk(const StorageEncryptedChunk& chunk)
@@ -72,7 +100,8 @@ StorageObjectStore::StorageObjectStore(
     const std::span<const unsigned char, 32> network_id,
     const uint64_t capacity_bytes,
     const bool memory_only,
-    const bool wipe_data)
+    const bool wipe_data,
+    StorageStagingPolicy staging_policy)
     : m_capacity_bytes{capacity_bytes}
 {
     if (std::all_of(network_id.begin(), network_id.end(), [](unsigned char b) { return b == 0; }) ||
@@ -86,6 +115,19 @@ StorageObjectStore::StorageObjectStore(
         .memory_only = memory_only,
         .wipe_data = wipe_data,
     });
+    if (staging_policy.max_objects == 0 || staging_policy.ttl.count() <= 0) {
+        throw std::invalid_argument("invalid storage staging policy");
+    }
+    m_max_staging_objects = std::min(staging_policy.max_objects, MAX_STAGING_OBJECTS);
+    m_staging_ttl = staging_policy.ttl;
+    const uint64_t default_staging_bytes = std::min(capacity_bytes,
+        std::max(MIN_STAGING_BYTES, std::min(capacity_bytes / 4, MAX_STAGING_BYTES)));
+    m_max_staging_bytes = staging_policy.max_bytes == 0
+        ? default_staging_bytes : std::min(staging_policy.max_bytes, capacity_bytes);
+
+    if (!m_db->Exists(StagingKey())) RecoverLegacyUncommittedChunks();
+    else (void)ReadStagingRecords(); // fail closed on damaged persistent staging metadata
+    (void)GarbageCollectExpiredStaging();
 }
 
 std::string StorageObjectStore::ChunkKey(const StorageObjectId& object_id, const uint32_t index)
@@ -106,6 +148,107 @@ std::string StorageObjectStore::ManifestKey(const StorageObjectId& object_id)
 std::string StorageObjectStore::UsageKey()
 {
     return "storage:used-bytes";
+}
+
+std::string StorageObjectStore::StagingKey()
+{
+    return "storage:staging-v1";
+}
+
+std::vector<unsigned char> StorageObjectStore::EncodeStagingRecords(
+    const std::map<StorageObjectId, StagingRecord>& records)
+{
+    if (records.size() > MAX_STAGING_OBJECTS) throw std::runtime_error("too many storage staging records");
+    std::vector<unsigned char> encoded(STAGING_MAGIC.begin(), STAGING_MAGIC.end());
+    Put32(encoded, static_cast<uint32_t>(records.size()));
+    for (const auto& [object_id, record] : records) {
+        encoded.insert(encoded.end(), object_id.begin(), object_id.end());
+        Put64(encoded, record.received_bytes);
+        Put64(encoded, static_cast<uint64_t>(record.last_activity_ms));
+        Put32(encoded, record.chunk_count);
+        Put32(encoded, record.highest_index);
+    }
+    return encoded;
+}
+
+std::optional<std::map<StorageObjectId, StorageObjectStore::StagingRecord>>
+StorageObjectStore::DecodeStagingRecords(const std::vector<unsigned char>& encoded)
+{
+    constexpr size_t HEADER_SIZE{8};
+    constexpr size_t RECORD_SIZE{32 + 8 + 8 + 4 + 4};
+    if (encoded.size() < HEADER_SIZE ||
+        !std::equal(STAGING_MAGIC.begin(), STAGING_MAGIC.end(), encoded.begin())) return std::nullopt;
+    const uint32_t count = Read32(encoded.data() + 4);
+    if (count > MAX_STAGING_OBJECTS || encoded.size() != HEADER_SIZE + size_t{count} * RECORD_SIZE) {
+        return std::nullopt;
+    }
+    std::map<StorageObjectId, StagingRecord> records;
+    size_t offset{HEADER_SIZE};
+    for (uint32_t i = 0; i < count; ++i) {
+        StorageObjectId object_id{};
+        std::copy_n(encoded.data() + offset, object_id.size(), object_id.begin());
+        offset += object_id.size();
+        StagingRecord record{
+            .received_bytes = Read64(encoded.data() + offset),
+            .last_activity_ms = static_cast<int64_t>(Read64(encoded.data() + offset + 8)),
+            .chunk_count = Read32(encoded.data() + offset + 16),
+            .highest_index = Read32(encoded.data() + offset + 20),
+        };
+        offset += RECORD_SIZE - object_id.size();
+        if (object_id == StorageObjectId{} || record.received_bytes == 0 || record.last_activity_ms <= 0 ||
+            record.chunk_count == 0 || record.highest_index != record.chunk_count - 1 ||
+            record.chunk_count > STORAGE_OBJECT_MAX_CHUNKS || !records.emplace(object_id, record).second) {
+            return std::nullopt;
+        }
+    }
+    return records;
+}
+
+std::map<StorageObjectId, StorageObjectStore::StagingRecord> StorageObjectStore::ReadStagingRecords() const
+{
+    std::vector<unsigned char> encoded;
+    if (!m_db->Read(StagingKey(), encoded)) return {};
+    const auto records = DecodeStagingRecords(encoded);
+    if (!records) throw std::runtime_error("corrupt storage staging metadata");
+    return *records;
+}
+
+void StorageObjectStore::RecoverLegacyUncommittedChunks()
+{
+    std::map<StorageObjectId, uint64_t> legacy_orphans;
+    std::map<StorageObjectId, std::vector<uint32_t>> legacy_indices;
+    m_db->ForEachStringPrefix("chunk:", 42, [&](const std::string& key, const std::string& value) {
+        if (key.size() != 42) return;
+        StorageObjectId object_id{};
+        std::copy_n(reinterpret_cast<const unsigned char*>(key.data() + 6), object_id.size(), object_id.begin());
+        if (m_db->Exists(ManifestKey(object_id))) return;
+        uint32_t index{0};
+        const auto* index_bytes = reinterpret_cast<const unsigned char*>(key.data() + 38);
+        index = Read32(index_bytes);
+        legacy_orphans[object_id] += value.size();
+        legacy_indices[object_id].push_back(index);
+    });
+
+    uint64_t released{0};
+    uint64_t used{0};
+    (void)m_db->Read(UsageKey(), used);
+    if (legacy_orphans.empty()) {
+        const auto empty = EncodeStagingRecords({});
+        m_db->Write(StagingKey(), empty, true);
+        return;
+    }
+    KVStore::Batch batch;
+    for (const auto& [object_id, bytes] : legacy_orphans) {
+        if (bytes > std::numeric_limits<uint64_t>::max() - released) {
+            throw std::runtime_error("legacy storage usage overflow");
+        }
+        released += bytes;
+        for (const auto index : legacy_indices[object_id]) batch.Erase(ChunkKey(object_id, index));
+    }
+    if (released > used) throw std::runtime_error("legacy storage usage metadata is inconsistent");
+    batch.Write(UsageKey(), used - released);
+    batch.Write(StagingKey(), EncodeStagingRecords({}));
+    m_db->WriteBatch(batch, true);
 }
 
 std::optional<StorageEncryptedChunk> StorageObjectStore::ReadChunk(
@@ -142,6 +285,9 @@ StorageWriteResult StorageObjectStore::PutChunk(
     }
     const std::string encoded = EncodeChunk(chunk);
     std::lock_guard lock(m_mutex);
+    const int64_t now_ms = UnixTimeMilliseconds();
+    (void)GarbageCollectExpiredStagingLocked(now_ms);
+    auto staging = ReadStagingRecords();
     const std::string chunk_key = ChunkKey(object_id, chunk.index);
     if (const auto manifest = ReadManifest(object_id)) {
         if (chunk.index >= manifest->chunk_count) return {StorageWriteStatus::CONFLICT};
@@ -162,6 +308,33 @@ StorageWriteResult StorageObjectStore::PutChunk(
             ? StorageWriteResult{StorageWriteStatus::ALREADY_STORED, chunk.chunk_id}
             : StorageWriteResult{StorageWriteStatus::CONFLICT};
     }
+    auto staged = staging.find(object_id);
+    if (staged == staging.end()) {
+        if (chunk.index != 0) return {StorageWriteStatus::INCOMPLETE};
+        if (staging.size() >= m_max_staging_objects) return {StorageWriteStatus::CAPACITY_EXCEEDED};
+        staged = staging.emplace(object_id, StagingRecord{}).first;
+    } else if (chunk.index != staged->second.chunk_count) {
+        return {StorageWriteStatus::INCOMPLETE};
+    }
+    uint64_t staged_bytes{0};
+    for (const auto& [staged_object, record] : staging) {
+        if (record.received_bytes > std::numeric_limits<uint64_t>::max() - staged_bytes) {
+            return {StorageWriteStatus::CAPACITY_EXCEEDED};
+        }
+        staged_bytes += record.received_bytes;
+    }
+    if (encoded.size() > m_max_staging_bytes || staged_bytes > m_max_staging_bytes - encoded.size()) {
+        return {StorageWriteStatus::CAPACITY_EXCEEDED};
+    }
+    auto& record = staged->second;
+    if (encoded.size() > std::numeric_limits<uint64_t>::max() - record.received_bytes ||
+        record.chunk_count >= STORAGE_OBJECT_MAX_CHUNKS) {
+        return {StorageWriteStatus::CAPACITY_EXCEEDED};
+    }
+    record.received_bytes += encoded.size();
+    record.last_activity_ms = now_ms;
+    record.highest_index = chunk.index;
+    ++record.chunk_count;
     uint64_t used{0};
     (void)m_db->Read(UsageKey(), used);
     if (encoded.size() > m_capacity_bytes || used > m_capacity_bytes - encoded.size()) {
@@ -170,6 +343,7 @@ StorageWriteResult StorageObjectStore::PutChunk(
     KVStore::Batch batch;
     batch.Write(chunk_key, encoded);
     batch.Write(UsageKey(), used + encoded.size());
+    batch.Write(StagingKey(), EncodeStagingRecords(staging));
     m_db->WriteBatch(batch, true);
     return {StorageWriteStatus::STORED, chunk.chunk_id};
 }
@@ -180,6 +354,8 @@ StorageWriteResult StorageObjectStore::CommitManifest(const StoragePublicManifes
     const auto encoded = EncodeStoragePublicManifest(m_network_id, manifest);
     if (!encoded) return {StorageWriteStatus::INVALID};
     std::lock_guard lock(m_mutex);
+    (void)GarbageCollectExpiredStagingLocked(UnixTimeMilliseconds());
+    auto staging = ReadStagingRecords();
     const std::string manifest_key = ManifestKey(manifest.object_id);
     if (const auto existing = ReadManifest(manifest.object_id)) {
         const auto current = EncodeStoragePublicManifest(m_network_id, *existing);
@@ -189,6 +365,11 @@ StorageWriteResult StorageObjectStore::CommitManifest(const StoragePublicManifes
         return {StorageWriteStatus::CONFLICT};
     }
     if (m_db->Exists(manifest_key)) return {StorageWriteStatus::CONFLICT};
+    const auto staged = staging.find(manifest.object_id);
+    if (staged == staging.end() || staged->second.chunk_count != manifest.chunk_count ||
+        staged->second.highest_index + 1 != manifest.chunk_count) {
+        return {StorageWriteStatus::INCOMPLETE};
+    }
     for (uint32_t i = 0; i < manifest.chunk_count; ++i) {
         const auto chunk = ReadChunk(manifest.object_id, i);
         const auto& descriptor = manifest.chunks[i];
@@ -205,6 +386,8 @@ StorageWriteResult StorageObjectStore::CommitManifest(const StoragePublicManifes
     KVStore::Batch batch;
     batch.Write(manifest_key, *encoded);
     batch.Write(UsageKey(), used + encoded->size());
+    staging.erase(manifest.object_id);
+    batch.Write(StagingKey(), EncodeStagingRecords(staging));
     m_db->WriteBatch(batch, true);
     return {StorageWriteStatus::STORED, manifest.commitment};
 }
@@ -218,9 +401,13 @@ bool StorageObjectStore::AbortUncommittedObject(
 
     uint64_t used{0};
     (void)m_db->Read(UsageKey(), used);
+    auto staging = ReadStagingRecords();
+    const auto staged = staging.find(object_id);
+    const uint32_t remove_count = staged == staging.end()
+        ? chunk_count : staged->second.highest_index + 1;
     uint64_t released{0};
     KVStore::Batch batch;
-    for (uint32_t index = 0; index < chunk_count; ++index) {
+    for (uint32_t index = 0; index < remove_count; ++index) {
         const auto key = ChunkKey(object_id, index);
         std::string encoded;
         if (!m_db->Read(key, encoded)) continue;
@@ -230,6 +417,8 @@ bool StorageObjectStore::AbortUncommittedObject(
     }
     if (released > used) return false;
     batch.Write(UsageKey(), used - released);
+    if (staged != staging.end()) staging.erase(staged);
+    batch.Write(StagingKey(), EncodeStagingRecords(staging));
     m_db->WriteBatch(batch, true);
     return true;
 }
@@ -258,6 +447,65 @@ uint64_t StorageObjectStore::UsedBytes() const
     uint64_t used{0};
     if (!m_db->Read(UsageKey(), used)) return 0;
     return used;
+}
+
+uint64_t StorageObjectStore::StagedBytes() const
+{
+    std::lock_guard lock(m_mutex);
+    uint64_t staged{0};
+    for (const auto& [object_id, record] : ReadStagingRecords()) {
+        if (record.received_bytes > std::numeric_limits<uint64_t>::max() - staged) {
+            throw std::runtime_error("storage staging byte count overflow");
+        }
+        staged += record.received_bytes;
+    }
+    return staged;
+}
+
+size_t StorageObjectStore::StagedObjectCount() const
+{
+    std::lock_guard lock(m_mutex);
+    return ReadStagingRecords().size();
+}
+
+uint64_t StorageObjectStore::GarbageCollectExpiredStagingLocked(const int64_t now_ms)
+{
+    auto staging = ReadStagingRecords();
+    const auto ttl_ms = m_staging_ttl.count();
+    uint64_t used{0};
+    (void)m_db->Read(UsageKey(), used);
+    uint64_t released{0};
+    KVStore::Batch batch;
+    for (auto it = staging.begin(); it != staging.end();) {
+        if (now_ms < it->second.last_activity_ms ||
+            now_ms - it->second.last_activity_ms < ttl_ms) {
+            ++it;
+            continue;
+        }
+        for (uint32_t index = 0; index <= it->second.highest_index; ++index) {
+            const auto key = ChunkKey(it->first, index);
+            std::string encoded;
+            if (!m_db->Read(key, encoded)) continue;
+            if (encoded.size() > std::numeric_limits<uint64_t>::max() - released) {
+                throw std::runtime_error("storage staging byte count overflow");
+            }
+            released += encoded.size();
+            batch.Erase(key);
+        }
+        it = staging.erase(it);
+    }
+    if (released == 0 && staging.size() == ReadStagingRecords().size()) return 0;
+    if (released > used) throw std::runtime_error("storage staging usage metadata is inconsistent");
+    batch.Write(UsageKey(), used - released);
+    batch.Write(StagingKey(), EncodeStagingRecords(staging));
+    m_db->WriteBatch(batch, true);
+    return released;
+}
+
+uint64_t StorageObjectStore::GarbageCollectExpiredStaging()
+{
+    std::lock_guard lock(m_mutex);
+    return GarbageCollectExpiredStagingLocked(UnixTimeMilliseconds());
 }
 
 } // namespace cybou

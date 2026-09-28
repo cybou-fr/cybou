@@ -177,12 +177,16 @@ consensus records. Their lease/accounting aggregation is defined in docs 11–13
 - chunk AEAD, nonce storage, and network/object/epoch/position AAD;
 - encrypted AccountID-bound Storage Key Ring sidecar with durable key epochs;
 - durable local provider and bounded CYP2 PUT/commit/GET ciphertext transfer;
+- durable provider staging index with bounded aggregate bytes/object count,
+  inactivity expiry, startup and periodic reclamation, and legacy orphan cleanup;
 - outbound `PeerManager` enumeration of connected `CAP_STORAGE` sessions and
   routing for those bounded storage calls;
 - `CAP_STORAGE_ABORT` cleanup of uncommitted chunks, required before the client
   uploads to a peer;
 - local or single-peer file upload, private metadata save, and verified
   no-overwrite download.
+- encrypted phased upload journal with safe crash recovery by committed-manifest
+  reconciliation or idempotent abort of incomplete provider staging.
 
 These local encodings and key lifecycle remain provisional until reviewed
 cross-implementation vectors and protocol freeze.

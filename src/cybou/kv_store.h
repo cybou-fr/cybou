@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -107,6 +108,11 @@ public:
     }
 
     void WriteBatch(Batch& batch, bool sync = false);
+
+    /** Visit entries whose serialized std::string key starts with prefix.
+     *  key_size is the complete, un-serialized string key length. */
+    void ForEachStringPrefix(const std::string& prefix, size_t key_size,
+        const std::function<void(const std::string&, const std::string&)>& visitor) const;
 
     template <typename K>
     void Erase(const K& key, bool sync = false)

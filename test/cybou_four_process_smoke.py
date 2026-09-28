@@ -16,6 +16,7 @@ Includes:
 """
 
 import argparse
+import hashlib
 import os
 import re
 import signal
@@ -72,7 +73,15 @@ def read_signing_journal(journal_path):
             round_no = int.from_bytes(data[76:80], "little")
             step = data[80]  # 0=PROPOSE, 1=PREVOTE, 2=PRECOMMIT
             locked_round = int.from_bytes(data[113:117], "little", signed=True)
-            return {"height": height, "round": round_no, "step": step, "locked_round": locked_round}
+            locked_block_size = int.from_bytes(data[117:121], "little")
+            locked_block = data[121:121 + locked_block_size]
+            return {
+                "height": height,
+                "round": round_no,
+                "step": step,
+                "locked_round": locked_round,
+                "locked_block_sha256": hashlib.sha256(locked_block).hexdigest() if locked_block else None,
+            }
         return None
     except Exception:
         return None
@@ -129,7 +138,10 @@ def main():
         def start_validator(index, env_extra=None):
             env = os.environ.copy()
             # Exercise the production periodic reconnect path in every run.
-            env["CYBOU_RECONNECT_INTERVAL_MS"] = "2500"
+            # Reconnects must exercise replay without being synchronized with
+            # the consensus phase timeout (which grows to at most 5 seconds).
+            env["CYBOU_RECONNECT_INTERVAL_MS"] = "15000"
+            env["CYBOU_CONSENSUS_DEBUG"] = "1"
             if index >= 2:
                 env["CYBOU_CONSENSUS_DRAIN_DELAY_MS"] = "25"
             if env_extra:
@@ -138,8 +150,8 @@ def main():
             logs.append(log)
             return subprocess.Popen([
                 str(binary), "serve", str(network), str(root / f"db-{index}"),
-                str(keys[index]), "127.0.0.1", str(feed_ports[index]), "250",
-                str(p2p_ports[index]), str(peers[index]),
+                str(keys[index]), "127.0.0.1", str(feed_ports[index]), "500",
+                str(p2p_ports[index]), str(peers[index]), "900000",
             ], stdout=log, stderr=subprocess.STDOUT, env=env)
 
         def stop_validator(index, timeout=5):
@@ -197,6 +209,20 @@ def main():
                     time.sleep(skew)
                 processes[index] = start_validator(index)
 
+            # Supplying storage capacity together with PEERS_FILE used to skip
+            # explicit peers due to an argc equality check. Every node must now
+            # advertise storage while all four still establish consensus.
+            for index in range(4):
+                result = subprocess.run(
+                    [str(binary), "p2p-probe", str(network), str(root / f"cap-probe-{index}"),
+                     "127.0.0.1", str(p2p_ports[index])],
+                    capture_output=True, text=True, timeout=10, check=False,
+                )
+                if result.returncode:
+                    raise RuntimeError(f"storage capability probe failed for node {index}: {result.stdout} {result.stderr}")
+                match = re.search(r"\bcapabilities=(\d+)\b", result.stdout)
+                if not match or not int(match.group(1)) & (1 << 7):
+                    raise RuntimeError(f"node {index} did not advertise CAP_STORAGE: {result.stdout}")
             heights = wait_for_synced(2, range(4))
             print(f"Initial 4-process finality reached: {heights}")
 
@@ -275,7 +301,7 @@ def main():
                 try:
                     # Keep the two live validators stalled for long enough to
                     # advance well beyond the bounded proposal catch-up window.
-                    deadline = time.monotonic() + 6.0
+                    deadline = time.monotonic() + 15.0
                     while time.monotonic() < deadline:
                         for i in active_pair:
                             h = probe(binary, network, root / f"probe-{i}", p2p_ports[i])
@@ -311,7 +337,7 @@ def main():
             cur_h = max(h for h in recovered_mid if h is not None)
             frozen_done = None
             if freeze_supported:
-                for attempt in range(3):
+                for attempt in range(10):
                     frozen_done = freeze_quorum_attempt(cur_h)
                     if frozen_done is not None:
                         break
@@ -319,8 +345,10 @@ def main():
                     wait_for_synced(cur_h, range(4))
                     heights_now = [probe(binary, network, root / f"probe-{i}", p2p_ports[i]) for i in range(4)]
                     cur_h = max(h for h in heights_now if h is not None)
+                    synced = wait_for_synced(cur_h, range(4))
+                    cur_h = max(h for h in synced if h is not None)
                 if frozen_done is None:
-                    raise RuntimeError("freeze/quorum scenario lost the race 3 times")
+                    raise RuntimeError("freeze/quorum scenario lost the race 10 times")
                 recovered_q = wait_for_synced(frozen_done, range(4))
                 print(f"All 4 validators reached height {frozen_done}: {recovered_q}")
             else:
@@ -371,7 +399,9 @@ def main():
             for index in range(4):
                 log_file = root / f"node-{index}.log"
                 if log_file.is_file():
-                    print(f"node {index}:\n{log_file.read_text(encoding='utf-8')[-3000:]}")
+                    print(f"node {index}:\n{log_file.read_text(encoding='utf-8')[-10000:]}")
+                journal = read_signing_journal(root / f"db-{index}" / "validator-signing.journal")
+                print(f"node {index} signing journal: {journal}")
             raise
         finally:
             for index in range(4):

@@ -30,6 +30,15 @@ namespace cybou {
 namespace {
 constexpr std::array<unsigned char, 5> PRIVATE_MANIFEST_MAGIC{'C', 'Y', 'F', 'M', '1'};
 constexpr size_t PRIVATE_MANIFEST_SIZE{PRIVATE_MANIFEST_MAGIC.size() + 32 + 32 + 32 + 32 + 4 + 8 + 32};
+constexpr std::array<unsigned char, 5> UPLOAD_JOURNAL_MAGIC{'C', 'Y', 'U', 'J', '1'};
+constexpr size_t UPLOAD_JOURNAL_SIZE{UPLOAD_JOURNAL_MAGIC.size() + 1 + 32 + 32 + 32 + 32 + 4 + 8 + 4 + 1 + 32};
+
+enum class StorageUploadPhase : uint8_t {
+    PREPARED = 0,
+    CHUNKS_WRITTEN = 1,
+    PRIVATE_MANIFEST_SAVED = 2,
+    COMMITTED = 3,
+};
 
 class TempOutput final {
 public:
@@ -171,6 +180,102 @@ struct DecodedPrivateManifest {
     StorageChunkId commitment{};
 };
 
+struct StorageUploadJournal {
+    StorageUploadPhase phase{StorageUploadPhase::PREPARED};
+    AccountId account_id;
+    std::array<unsigned char, 32> network_id{};
+    StorageObjectPrivateMetadata metadata;
+    uint32_t chunk_count{0};
+    std::optional<StorageChunkId> manifest_commitment;
+};
+
+std::vector<unsigned char> EncodeUploadJournal(const StorageUploadJournal& journal)
+{
+    std::vector<unsigned char> payload;
+    payload.reserve(UPLOAD_JOURNAL_SIZE);
+    payload.insert(payload.end(), UPLOAD_JOURNAL_MAGIC.begin(), UPLOAD_JOURNAL_MAGIC.end());
+    payload.push_back(static_cast<unsigned char>(journal.phase));
+    payload.insert(payload.end(), journal.account_id.Value().begin(), journal.account_id.Value().end());
+    payload.insert(payload.end(), journal.network_id.begin(), journal.network_id.end());
+    payload.insert(payload.end(), journal.metadata.object_id.begin(), journal.metadata.object_id.end());
+    payload.insert(payload.end(), journal.metadata.salt.begin(), journal.metadata.salt.end());
+    Put32(payload, journal.metadata.key_epoch);
+    Put64(payload, journal.metadata.plaintext_size);
+    Put32(payload, journal.chunk_count);
+    payload.push_back(journal.manifest_commitment ? 1 : 0);
+    if (journal.manifest_commitment) {
+        payload.insert(payload.end(), journal.manifest_commitment->begin(), journal.manifest_commitment->end());
+    } else {
+        const StorageChunkId empty_commitment{};
+        payload.insert(payload.end(), empty_commitment.begin(), empty_commitment.end());
+    }
+    return payload;
+}
+
+std::optional<StorageUploadJournal> DecodeUploadJournal(std::span<const unsigned char> bytes)
+{
+    if (bytes.size() != UPLOAD_JOURNAL_SIZE ||
+        !std::equal(UPLOAD_JOURNAL_MAGIC.begin(), UPLOAD_JOURNAL_MAGIC.end(), bytes.begin())) return std::nullopt;
+    size_t offset{UPLOAD_JOURNAL_MAGIC.size()};
+    const uint8_t phase = bytes[offset++];
+    if (phase > static_cast<uint8_t>(StorageUploadPhase::COMMITTED)) return std::nullopt;
+    const auto account = AccountId::FromBytes(bytes.subspan(offset, 32));
+    if (!account) return std::nullopt;
+    StorageUploadJournal journal;
+    journal.phase = static_cast<StorageUploadPhase>(phase);
+    journal.account_id = *account;
+    offset += 32;
+    std::copy_n(bytes.begin() + offset, journal.network_id.size(), journal.network_id.begin());
+    offset += journal.network_id.size();
+    std::copy_n(bytes.begin() + offset, journal.metadata.object_id.size(), journal.metadata.object_id.begin());
+    offset += journal.metadata.object_id.size();
+    std::copy_n(bytes.begin() + offset, journal.metadata.salt.size(), journal.metadata.salt.begin());
+    offset += journal.metadata.salt.size();
+    journal.metadata.key_epoch = Read32(bytes.data() + offset);
+    offset += 4;
+    journal.metadata.plaintext_size = Read64(bytes.data() + offset);
+    offset += 8;
+    journal.chunk_count = Read32(bytes.data() + offset);
+    offset += 4;
+    const uint8_t has_commitment = bytes[offset++];
+    StorageChunkId commitment{};
+    std::copy_n(bytes.begin() + offset, commitment.size(), commitment.begin());
+    const uint64_t expected_chunks = std::max<uint64_t>(1,
+        (journal.metadata.plaintext_size + STORAGE_OBJECT_CHUNK_SIZE - 1) / STORAGE_OBJECT_CHUNK_SIZE);
+    if (has_commitment > 1 || IsZero(journal.network_id) ||
+        journal.metadata.object_id == StorageObjectId{} || journal.metadata.salt == std::array<unsigned char, 32>{} ||
+        journal.metadata.plaintext_size > STORAGE_OBJECT_MAX_BYTES || journal.chunk_count == 0 ||
+        journal.chunk_count > STORAGE_OBJECT_MAX_CHUNKS ||
+        journal.chunk_count != expected_chunks ||
+        ((journal.phase >= StorageUploadPhase::CHUNKS_WRITTEN) != (has_commitment == 1)) ||
+        (has_commitment == 1 && IsZero(commitment)) || (has_commitment == 0 && !IsZero(commitment))) {
+        return std::nullopt;
+    }
+    if (has_commitment) journal.manifest_commitment = commitment;
+    return journal;
+}
+
+bool PersistUploadJournal(const std::filesystem::path& path,
+    std::string_view password, std::span<const unsigned char> payload)
+{
+    std::error_code ec;
+    const bool exists = std::filesystem::exists(path, ec);
+    if (ec) return false;
+    if (!exists) return SaveNewIdentityVault(path, password, payload);
+    auto current = LoadIdentityVault(path, password);
+    if (!current) return false;
+    const bool saved = ReplaceIdentityVault(path, password, *current, payload);
+    crypto::CleanseMemory(current->data(), current->size());
+    return saved;
+}
+
+bool RemoveFileIfPresent(const std::filesystem::path& path)
+{
+    std::error_code ec;
+    const bool removed = std::filesystem::remove(path, ec);
+    return !ec && (removed || !std::filesystem::exists(path, ec)) && !ec;
+}
+
 std::optional<DecodedPrivateManifest> DecodePrivateManifest(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != PRIVATE_MANIFEST_SIZE ||
@@ -267,9 +372,62 @@ std::filesystem::path StorageService::PrivateManifestPath(const StorageObjectId&
     return m_private_manifest_dir / (ObjectIdHex(object_id) + ".cyfm.cybv2");
 }
 
+std::optional<StorageTransferStatus> StorageService::RecoverPendingUpload(
+    const std::string_view vault_password)
+{
+    const auto journal_path = m_private_manifest_dir / "storage-upload-journal.cybv2";
+    std::error_code ec;
+    const bool exists = std::filesystem::exists(journal_path, ec);
+    if (ec) return StorageTransferStatus::IO_ERROR;
+    if (!exists) return std::nullopt;
+
+    auto payload = LoadIdentityVault(journal_path, vault_password);
+    if (!payload) return StorageTransferStatus::INTEGRITY_ERROR;
+    const auto journal = DecodeUploadJournal(*payload);
+    crypto::CleanseMemory(payload->data(), payload->size());
+    if (!journal || journal->account_id != m_account_id || journal->network_id != m_network_id) {
+        return StorageTransferStatus::INTEGRITY_ERROR;
+    }
+
+    const auto private_manifest_path = PrivateManifestPath(journal->metadata.object_id);
+    if (const auto manifest = m_store.GetManifest(journal->metadata.object_id)) {
+        if (!VerifyStoragePublicManifest(m_network_id, *manifest) ||
+            (journal->manifest_commitment && manifest->commitment != *journal->manifest_commitment)) {
+            return StorageTransferStatus::INTEGRITY_ERROR;
+        }
+        auto private_payload = LoadIdentityVault(private_manifest_path, vault_password);
+        if (!private_payload) return StorageTransferStatus::INTEGRITY_ERROR;
+        const auto private_manifest = DecodePrivateManifest(*private_payload);
+        crypto::CleanseMemory(private_payload->data(), private_payload->size());
+        if (!private_manifest || private_manifest->account_id != m_account_id ||
+            private_manifest->network_id != m_network_id ||
+            private_manifest->metadata.object_id != journal->metadata.object_id ||
+            private_manifest->metadata.salt != journal->metadata.salt ||
+            private_manifest->metadata.key_epoch != journal->metadata.key_epoch ||
+            private_manifest->metadata.plaintext_size != journal->metadata.plaintext_size ||
+            private_manifest->commitment != manifest->commitment) {
+            return StorageTransferStatus::INTEGRITY_ERROR;
+        }
+        if (!RemoveFileIfPresent(journal_path)) return StorageTransferStatus::IO_ERROR;
+        return std::nullopt;
+    }
+
+    // No committed provider manifest exists. The upload cannot be resumed
+    // without its original source bytes, so remove all staged ciphertext and
+    // any private sidecar created just before the crash.
+    if (!m_store.AbortUncommittedObject(journal->metadata.object_id, journal->chunk_count)) {
+        return StorageTransferStatus::CLEANUP_FAILED;
+    }
+    if (!RemoveFileIfPresent(private_manifest_path) || !RemoveFileIfPresent(journal_path)) {
+        return StorageTransferStatus::CLEANUP_FAILED;
+    }
+    return std::nullopt;
+}
+
 StorageTransferResult StorageService::UploadFile(
     const std::filesystem::path& source, const std::string_view vault_password)
 {
+    std::lock_guard upload_lock(m_upload_mutex);
     if (m_account_id.IsNull() || IsZero(m_network_id) || source.empty() || m_private_manifest_dir.empty()) return {};
     if (!m_store.SupportsAbortUncommittedUpload()) {
         return {.status = StorageTransferStatus::PROVIDER_ERROR};
@@ -280,6 +438,9 @@ StorageTransferResult StorageService::UploadFile(
     const uint64_t plaintext_size = std::filesystem::file_size(source, ec);
     if (ec || plaintext_size > STORAGE_OBJECT_MAX_BYTES) return {.status = StorageTransferStatus::IO_ERROR};
     if (!EnsureDirectory(m_private_manifest_dir)) return {.status = StorageTransferStatus::IO_ERROR};
+    if (const auto recovery_status = RecoverPendingUpload(vault_password)) {
+        return {.status = *recovery_status};
+    }
 
     const auto epoch = m_keystore.GetCurrentStorageKeyEpoch();
     if (!epoch) return {.status = StorageTransferStatus::KEY_UNAVAILABLE};
@@ -296,12 +457,28 @@ StorageTransferResult StorageService::UploadFile(
 
     std::ifstream input(source, std::ios::binary);
     if (!input) return {.status = StorageTransferStatus::IO_ERROR};
+    const auto private_manifest_path = PrivateManifestPath(metadata->object_id);
+    const auto journal_path = m_private_manifest_dir / "storage-upload-journal.cybv2";
+    StorageUploadJournal journal{
+        .phase = StorageUploadPhase::PREPARED,
+        .account_id = m_account_id,
+        .network_id = m_network_id,
+        .metadata = *metadata,
+        .chunk_count = context->ChunkCount(),
+    };
+    auto journal_payload = EncodeUploadJournal(journal);
+    const bool journal_saved = PersistUploadJournal(journal_path, vault_password, journal_payload);
+    crypto::CleanseMemory(journal_payload.data(), journal_payload.size());
+    if (!journal_saved) return {.status = StorageTransferStatus::IO_ERROR};
+
     std::vector<StorageChunkDescriptor> descriptors;
     descriptors.reserve(context->ChunkCount());
     const auto abort = [&] {
         // A PUT may reach the provider even when its acknowledgment is lost.
-        // ObjectID is freshly generated, so clean the complete expected range.
-        return m_store.AbortUncommittedObject(metadata->object_id, context->ChunkCount());
+        // Keep the journal if cleanup cannot be confirmed so the next upload
+        // can retry the same safe abort.
+        if (!m_store.AbortUncommittedObject(metadata->object_id, context->ChunkCount())) return false;
+        return RemoveFileIfPresent(private_manifest_path) && RemoveFileIfPresent(journal_path);
     };
     for (uint32_t index = 0; index < context->ChunkCount(); ++index) {
         const auto expected_size = context->ExpectedPlaintextChunkSize(index);
@@ -342,13 +519,29 @@ StorageTransferResult StorageService::UploadFile(
     const auto manifest = BuildStoragePublicManifestFromDescriptors(m_network_id, metadata->object_id, descriptors);
     if (!manifest) {
         return {.status = abort() ? StorageTransferStatus::INVALID : StorageTransferStatus::CLEANUP_FAILED,
+                .object_id = metadata->object_id};
+    }
+    journal.phase = StorageUploadPhase::CHUNKS_WRITTEN;
+    journal.manifest_commitment = manifest->commitment;
+    journal_payload = EncodeUploadJournal(journal);
+    const bool chunks_journaled = PersistUploadJournal(journal_path, vault_password, journal_payload);
+    crypto::CleanseMemory(journal_payload.data(), journal_payload.size());
+    if (!chunks_journaled) {
+        return {.status = abort() ? StorageTransferStatus::IO_ERROR : StorageTransferStatus::CLEANUP_FAILED,
             .object_id = metadata->object_id};
     }
     auto private_payload = EncodePrivateManifest(m_account_id, m_network_id, *metadata, manifest->commitment);
-    const auto private_manifest_path = PrivateManifestPath(metadata->object_id);
     const bool saved = SaveNewIdentityVault(private_manifest_path, vault_password, private_payload);
     crypto::CleanseMemory(private_payload.data(), private_payload.size());
     if (!saved) {
+        return {.status = abort() ? StorageTransferStatus::IO_ERROR : StorageTransferStatus::CLEANUP_FAILED,
+                .object_id = metadata->object_id};
+    }
+    journal.phase = StorageUploadPhase::PRIVATE_MANIFEST_SAVED;
+    journal_payload = EncodeUploadJournal(journal);
+    const bool private_saved = PersistUploadJournal(journal_path, vault_password, journal_payload);
+    crypto::CleanseMemory(journal_payload.data(), journal_payload.size());
+    if (!private_saved) {
         return {.status = abort() ? StorageTransferStatus::IO_ERROR : StorageTransferStatus::CLEANUP_FAILED,
             .object_id = metadata->object_id};
     }
@@ -364,10 +557,14 @@ StorageTransferResult StorageService::UploadFile(
             return {.status = StorageTransferStatus::CLEANUP_FAILED,
                 .object_id = metadata->object_id, .manifest_commitment = manifest->commitment};
         }
-        std::filesystem::remove(private_manifest_path, ec);
         return {.status = StorageTransferStatus::PROVIDER_ERROR,
             .object_id = metadata->object_id, .manifest_commitment = manifest->commitment};
     }
+    journal.phase = StorageUploadPhase::COMMITTED;
+    journal_payload = EncodeUploadJournal(journal);
+    const bool committed_journaled = PersistUploadJournal(journal_path, vault_password, journal_payload);
+    crypto::CleanseMemory(journal_payload.data(), journal_payload.size());
+    if (committed_journaled) RemoveFileIfPresent(journal_path);
     return {.status = StorageTransferStatus::STORED,
         .object_id = metadata->object_id, .manifest_commitment = manifest->commitment};
 }

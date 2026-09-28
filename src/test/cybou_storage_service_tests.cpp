@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <stdexcept>
 #include <vector>
 
 namespace {
@@ -27,7 +28,10 @@ public:
     cybou::StorageWriteResult CommitManifest(const cybou::StoragePublicManifest& manifest) override
     {
         auto result = m_store.CommitManifest(manifest);
-        if (result) result.response_received = false;
+        if (result && m_drop_commit_response) {
+            result.response_received = false;
+            m_drop_commit_response = false;
+        }
         return result;
     }
     bool AbortUncommittedObject(const cybou::StorageObjectId& object_id, uint32_t chunk_count) override
@@ -47,6 +51,45 @@ public:
 
 private:
     cybou::StorageObjectStore& m_store;
+    bool m_drop_commit_response{true};
+};
+
+class CrashAfterFirstPutProvider final : public cybou::StorageObjectProvider {
+public:
+    explicit CrashAfterFirstPutProvider(cybou::StorageObjectStore& store) : m_store{store} {}
+    bool SupportsAbortUncommittedUpload() const override { return true; }
+    cybou::StorageWriteResult PutChunk(const cybou::StorageObjectId& object_id,
+        const cybou::StorageEncryptedChunk& chunk) override
+    {
+        const auto result = m_store.PutChunk(object_id, chunk);
+        if (m_throw_after_put) {
+            m_throw_after_put = false;
+            throw std::runtime_error("simulated process interruption after provider PUT");
+        }
+        return result;
+    }
+    cybou::StorageWriteResult CommitManifest(const cybou::StoragePublicManifest& manifest) override
+    {
+        return m_store.CommitManifest(manifest);
+    }
+    bool AbortUncommittedObject(const cybou::StorageObjectId& object_id, uint32_t chunk_count) override
+    {
+        return m_store.AbortUncommittedObject(object_id, chunk_count);
+    }
+    std::optional<cybou::StoragePublicManifest> GetManifest(
+        const cybou::StorageObjectId& object_id) const override
+    {
+        return m_store.GetManifest(object_id);
+    }
+    std::optional<cybou::StorageEncryptedChunk> GetChunk(
+        const cybou::StorageObjectId& object_id, uint32_t index) const override
+    {
+        return m_store.GetChunk(object_id, index);
+    }
+
+private:
+    cybou::StorageObjectStore& m_store;
+    bool m_throw_after_put{true};
 };
 
 std::vector<unsigned char> ReadFile(const std::filesystem::path& path)
@@ -122,7 +165,7 @@ BOOST_AUTO_TEST_CASE(file_roundtrip_survives_restart_and_aborted_upload_is_clean
             first_chunk->ciphertext_and_tag.begin()));
 
         cybou::StorageObjectStore uncertain_store(root / "uncertain-provider", network_id,
-            cybou::STORAGE_OBJECT_CHUNK_SIZE + (256U << 10));
+            4U * cybou::STORAGE_OBJECT_CHUNK_SIZE);
         CommitAckLostProvider uncertain_provider{uncertain_store};
         cybou::StorageService uncertain_service(network_id, *account, keys, uncertain_provider,
             root / "uncertain-manifests");
@@ -133,6 +176,24 @@ BOOST_AUTO_TEST_CASE(file_roundtrip_survives_restart_and_aborted_upload_is_clean
             root / "uncertain-output.bin", PASSWORD);
         BOOST_REQUIRE(uncertain_download.status == cybou::StorageTransferStatus::RETRIEVED);
         BOOST_CHECK(ReadFile(root / "uncertain-output.bin") == original);
+        const auto reconciled_upload = uncertain_service.UploadFile(input_path, PASSWORD);
+        BOOST_REQUIRE(reconciled_upload.status == cybou::StorageTransferStatus::STORED);
+        BOOST_CHECK(uncertain_service.DownloadFile(uncertain_upload.object_id,
+            root / "uncertain-output-after-reconcile.bin", PASSWORD).status ==
+            cybou::StorageTransferStatus::RETRIEVED);
+
+        cybou::StorageObjectStore crash_store(root / "crash-provider", network_id,
+            4U * cybou::STORAGE_OBJECT_CHUNK_SIZE);
+        CrashAfterFirstPutProvider crash_provider{crash_store};
+        const auto crash_manifest_dir = root / "crash-manifests";
+        cybou::StorageService interrupted_service(network_id, *account, keys, crash_provider, crash_manifest_dir);
+        BOOST_CHECK_THROW(interrupted_service.UploadFile(input_path, PASSWORD), std::runtime_error);
+        BOOST_CHECK_EQUAL(crash_store.StagedObjectCount(), 1U);
+        cybou::StorageService recovered_service(network_id, *account, keys, crash_store, crash_manifest_dir);
+        const auto recovered_upload = recovered_service.UploadFile(input_path, PASSWORD);
+        BOOST_REQUIRE(recovered_upload.status == cybou::StorageTransferStatus::STORED);
+        BOOST_CHECK_EQUAL(crash_store.StagedObjectCount(), 0U);
+        BOOST_CHECK(!std::filesystem::exists(crash_manifest_dir / "storage-upload-journal.cybv2"));
 
         const auto empty_upload = service.UploadFile(empty_path, PASSWORD);
         BOOST_REQUIRE(empty_upload.status == cybou::StorageTransferStatus::STORED);

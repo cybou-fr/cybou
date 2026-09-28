@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <chrono>
 #include <filesystem>
+#include <thread>
 #include <vector>
 
 BOOST_AUTO_TEST_SUITE(cybou_storage_crypto_tests)
@@ -133,15 +134,22 @@ BOOST_AUTO_TEST_CASE(storage_provider_persists_only_manifest_committed_chunks)
     {
         cybou::StorageObjectStore store(path, network_id, 1 << 20);
         BOOST_CHECK(store.PutChunk(metadata->object_id, *chunk));
+        BOOST_CHECK_EQUAL(store.StagedObjectCount(), 1U);
+        BOOST_CHECK_EQUAL(store.StagedBytes(), chunk->ciphertext_and_tag.size() + 52U);
         BOOST_CHECK_EQUAL(static_cast<int>(store.PutChunk(metadata->object_id, *chunk).status),
             static_cast<int>(cybou::StorageWriteStatus::ALREADY_STORED));
+        const auto bytes_before_conflict = store.UsedBytes();
         BOOST_CHECK_EQUAL(static_cast<int>(store.PutChunk(metadata->object_id, *alternate_chunk).status),
             static_cast<int>(cybou::StorageWriteStatus::CONFLICT));
+        BOOST_CHECK_EQUAL(store.UsedBytes(), bytes_before_conflict);
         BOOST_CHECK(!store.GetChunk(metadata->object_id, 0));
         BOOST_CHECK_EQUAL(static_cast<int>(store.CommitManifest(*manifest).status),
             static_cast<int>(cybou::StorageWriteStatus::STORED));
+        BOOST_CHECK_EQUAL(store.StagedObjectCount(), 0U);
+        BOOST_CHECK_EQUAL(store.StagedBytes(), 0U);
         BOOST_CHECK_EQUAL(static_cast<int>(store.CommitManifest(*manifest).status),
             static_cast<int>(cybou::StorageWriteStatus::ALREADY_STORED));
+        BOOST_CHECK_EQUAL(store.GarbageCollectExpiredStaging(), 0U);
         const auto fetched = store.GetChunk(metadata->object_id, 0);
         BOOST_REQUIRE(fetched);
         BOOST_CHECK(fetched->ciphertext_and_tag == chunk->ciphertext_and_tag);
@@ -154,6 +162,139 @@ BOOST_AUTO_TEST_CASE(storage_provider_persists_only_manifest_committed_chunks)
         BOOST_REQUIRE(fetched_manifest);
         BOOST_CHECK(fetched_manifest->commitment == manifest->commitment);
         BOOST_CHECK(reopened.GetChunk(metadata->object_id, 0));
+    }
+    std::filesystem::remove_all(path);
+}
+
+BOOST_AUTO_TEST_CASE(storage_staging_expires_after_restart_and_releases_quota)
+{
+    std::array<unsigned char, 32> network_id{};
+    std::array<unsigned char, 32> storage_master_key{};
+    network_id[0] = 0x61;
+    storage_master_key[0] = 0x33;
+    const auto metadata = cybou::CreateStorageObjectMetadata(64, 0);
+    BOOST_REQUIRE(metadata);
+    auto context = cybou::StorageObjectCryptoContext::Create(network_id, storage_master_key, *metadata);
+    BOOST_REQUIRE(context);
+    const std::array<unsigned char, 64> plaintext{};
+    const auto chunk = context->EncryptChunk(0, plaintext);
+    BOOST_REQUIRE(chunk);
+
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path() /
+        ("cybou-storage-staging-expiry-" + std::to_string(unique));
+    std::filesystem::remove_all(path);
+    cybou::StorageStagingPolicy policy;
+    policy.ttl = std::chrono::milliseconds{10};
+    uint64_t staged_bytes{0};
+    {
+        cybou::StorageObjectStore store(path, network_id, 1 << 20, false, false, policy);
+        BOOST_REQUIRE(store.PutChunk(metadata->object_id, *chunk));
+        staged_bytes = store.StagedBytes();
+        BOOST_REQUIRE(staged_bytes > 0);
+        BOOST_CHECK_EQUAL(store.StagedObjectCount(), 1U);
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds{20});
+    {
+        cybou::StorageObjectStore reopened(path, network_id, 1 << 20, false, false, policy);
+        BOOST_CHECK_EQUAL(reopened.StagedObjectCount(), 0U);
+        BOOST_CHECK_EQUAL(reopened.StagedBytes(), 0U);
+        BOOST_CHECK_EQUAL(reopened.UsedBytes(), 0U);
+        BOOST_CHECK(!reopened.GetChunk(metadata->object_id, 0));
+    }
+    std::filesystem::remove_all(path);
+}
+
+BOOST_AUTO_TEST_CASE(storage_startup_reclaims_legacy_uncommitted_chunks_once)
+{
+    std::array<unsigned char, 32> network_id{};
+    std::array<unsigned char, 32> storage_master_key{};
+    network_id[0] = 0x63;
+    storage_master_key[0] = 0x35;
+    const auto metadata = cybou::CreateStorageObjectMetadata(64, 0);
+    BOOST_REQUIRE(metadata);
+    auto context = cybou::StorageObjectCryptoContext::Create(network_id, storage_master_key, *metadata);
+    BOOST_REQUIRE(context);
+    const std::array<unsigned char, 64> plaintext{};
+    const auto chunk = context->EncryptChunk(0, plaintext);
+    BOOST_REQUIRE(chunk);
+
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path() /
+        ("cybou-storage-legacy-staging-" + std::to_string(unique));
+    std::filesystem::remove_all(path);
+    std::string chunk_record;
+    for (unsigned shift = 0; shift < 32; shift += 8) {
+        chunk_record.push_back(static_cast<char>(chunk->index >> shift));
+    }
+    chunk_record.append(reinterpret_cast<const char*>(chunk->nonce.data()), chunk->nonce.size());
+    chunk_record.append(reinterpret_cast<const char*>(chunk->chunk_id.data()), chunk->chunk_id.size());
+    const auto ciphertext_size = static_cast<uint32_t>(chunk->ciphertext_and_tag.size());
+    for (unsigned shift = 0; shift < 32; shift += 8) {
+        chunk_record.push_back(static_cast<char>(ciphertext_size >> shift));
+    }
+    chunk_record.append(reinterpret_cast<const char*>(chunk->ciphertext_and_tag.data()),
+        chunk->ciphertext_and_tag.size());
+    std::string chunk_key{"chunk:"};
+    chunk_key.append(reinterpret_cast<const char*>(metadata->object_id.data()), metadata->object_id.size());
+    chunk_key.append(4, '\0');
+    {
+        cybou::KVStore legacy_db({.path = path});
+        legacy_db.Write(chunk_key, chunk_record, true);
+        legacy_db.Write(std::string{"storage:used-bytes"}, static_cast<uint64_t>(chunk_record.size()), true);
+    }
+    {
+        cybou::StorageObjectStore migrated(path, network_id, 1 << 20);
+        BOOST_CHECK_EQUAL(migrated.UsedBytes(), 0U);
+        BOOST_CHECK_EQUAL(migrated.StagedBytes(), 0U);
+        BOOST_CHECK_EQUAL(migrated.StagedObjectCount(), 0U);
+        BOOST_CHECK(!migrated.GetChunk(metadata->object_id, 0));
+    }
+    std::filesystem::remove_all(path);
+}
+
+BOOST_AUTO_TEST_CASE(storage_staging_bounds_random_objects_and_conflicts_do_not_leak_quota)
+{
+    std::array<unsigned char, 32> network_id{};
+    std::array<unsigned char, 32> storage_master_key{};
+    network_id[0] = 0x62;
+    storage_master_key[0] = 0x34;
+    const std::array<unsigned char, 64> plaintext{};
+    std::array<cybou::StorageObjectPrivateMetadata, 3> metadata{};
+    std::array<cybou::StorageEncryptedChunk, 3> chunks{};
+    for (size_t i = 0; i < metadata.size(); ++i) {
+        const auto created = cybou::CreateStorageObjectMetadata(plaintext.size(), static_cast<uint32_t>(i));
+        BOOST_REQUIRE(created);
+        metadata[i] = *created;
+        auto context = cybou::StorageObjectCryptoContext::Create(network_id, storage_master_key, metadata[i]);
+        BOOST_REQUIRE(context);
+        const auto encrypted = context->EncryptChunk(0, plaintext);
+        BOOST_REQUIRE(encrypted);
+        chunks[i] = *encrypted;
+    }
+
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path() /
+        ("cybou-storage-staging-limits-" + std::to_string(unique));
+    std::filesystem::remove_all(path);
+    cybou::StorageStagingPolicy policy;
+    policy.max_bytes = 512;
+    policy.max_objects = 2;
+    {
+        cybou::StorageObjectStore store(path, network_id, 1 << 20, false, false, policy);
+        BOOST_REQUIRE(store.PutChunk(metadata[0].object_id, chunks[0]));
+        BOOST_REQUIRE(store.PutChunk(metadata[1].object_id, chunks[1]));
+        BOOST_CHECK_EQUAL(store.StagedObjectCount(), 2U);
+        const auto used_before_conflict = store.UsedBytes();
+        auto conflicting = chunks[0];
+        conflicting.nonce[0] ^= 1;
+        BOOST_CHECK_EQUAL(static_cast<int>(store.PutChunk(metadata[0].object_id, conflicting).status),
+            static_cast<int>(cybou::StorageWriteStatus::INVALID));
+        BOOST_CHECK_EQUAL(store.UsedBytes(), used_before_conflict);
+        BOOST_CHECK_EQUAL(static_cast<int>(store.PutChunk(metadata[2].object_id, chunks[2]).status),
+            static_cast<int>(cybou::StorageWriteStatus::CAPACITY_EXCEEDED));
+        BOOST_CHECK(store.UsedBytes() < store.CapacityBytes());
+        BOOST_CHECK_EQUAL(store.StagedObjectCount(), 2U);
     }
     std::filesystem::remove_all(path);
 }

@@ -9,11 +9,13 @@
 #include <leveldb/env.h>
 #include <leveldb/filter_policy.h>
 #include <leveldb/helpers/memenv/memenv.h>
+#include <leveldb/iterator.h>
 #include <leveldb/options.h>
 #include <leveldb/status.h>
 #include <leveldb/write_batch.h>
 
 #include <algorithm>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 
@@ -128,6 +130,37 @@ void KVStore::WriteBatch(Batch& batch, bool sync)
 {
     CheckLevelDB(m_impl->db->Write(sync ? m_impl->sync_options : m_impl->write_options,
         batch.m_batch.get()));
+}
+
+void KVStore::ForEachStringPrefix(const std::string& prefix, const size_t key_size,
+    const std::function<void(const std::string&, const std::string&)>& visitor) const
+{
+    if (prefix.size() > key_size || !visitor) throw std::invalid_argument("invalid CYBOU KV prefix scan");
+
+    DataStream encoded_key{};
+    encoded_key << std::string(key_size, '\0');
+    const size_t size_header = encoded_key.size() - key_size;
+    std::string serialized_prefix{
+        reinterpret_cast<const char*>(encoded_key.data()), size_header};
+    serialized_prefix.append(prefix);
+
+    std::unique_ptr<leveldb::Iterator> iterator{m_impl->db->NewIterator(m_impl->read_options)};
+    for (iterator->Seek(serialized_prefix); iterator->Valid(); iterator->Next()) {
+        const auto key_slice = iterator->key();
+        if (key_slice.size() < serialized_prefix.size() ||
+            std::memcmp(key_slice.data(), serialized_prefix.data(), serialized_prefix.size()) != 0) break;
+        const auto value_slice = iterator->value();
+        const auto* key_begin = reinterpret_cast<const std::byte*>(key_slice.data());
+        const auto* value_begin = reinterpret_cast<const std::byte*>(value_slice.data());
+        SpanReader key_reader{std::span<const std::byte>{key_begin, key_slice.size()}};
+        SpanReader value_reader{std::span<const std::byte>{value_begin, value_slice.size()}};
+        std::string decoded_key;
+        std::string decoded_value;
+        key_reader >> decoded_key;
+        value_reader >> decoded_value;
+        visitor(decoded_key, decoded_value);
+    }
+    CheckLevelDB(iterator->status());
 }
 
 } // namespace cybou

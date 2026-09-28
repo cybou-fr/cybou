@@ -1,6 +1,6 @@
 # 11 — Distributed storage object model
 
-Implementation status (2026-09-27): CYBOU has a bounded encrypted-chunk
+Implementation status (2026-09-28): CYBOU has a bounded encrypted-chunk
 profile, a durable network-bound provider store, opt-in CYP2 upload, manifest
 commit and retrieval, and a local client file roundtrip through the encrypted
 Storage Key Ring. StorageService can use the local provider or one explicitly
@@ -61,6 +61,28 @@ not a lease or an economic contribution score. Retrieval validates the
 network-bound ChunkID and its manifest descriptor; the client still compares
 the manifest commitment with its locally held expectation before trusting it.
 This wire/store profile does not itself place replicas or promise durability.
+
+Uncommitted provider writes are tracked in a durable local staging index written
+atomically with each new chunk. A provider admits at most 1,024 staged ObjectIDs
+and caps aggregate staged chunk bytes to a capacity-derived budget (one quarter
+of provider capacity, capped at 64 MiB, with a minimum allowance of two
+maximum encoded chunks when capacity permits). Staging expires after 24 hours
+without a new chunk. The node collects
+expired staging at startup, before storage writes/commits, and once per minute
+while serving. Expiry removes only chunks without a committed public manifest;
+manifest commit and staging-index removal are one durable batch. On first open
+of a store created by the earlier provider implementation, uncommitted chunks
+are reclaimed once and committed objects are retained. This is local provider
+policy and does not change CYP2 or consensus messages.
+
+The client also stores one encrypted upload journal before its first provider
+write and advances it through `PREPARED`, `CHUNKS_WRITTEN`,
+`PRIVATE_MANIFEST_SAVED`, and `COMMITTED` using authenticated atomic replacement.
+On the next upload, it checks whether the provider committed the manifest. A
+committed object keeps its private metadata; otherwise the client retries an
+idempotent abort and removes the incomplete private sidecar. Recovery uses safe
+abort because the source file is not retained in the journal. A lost commit
+acknowledgment therefore remains recoverable without resending file contents.
 
 Compression precedes encryption. Storage providers receive ciphertext only.
 The initial implementation may use bounded replication while the network

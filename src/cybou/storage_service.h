@@ -9,6 +9,7 @@
 #include <cybou/storage_store.h>
 
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <string_view>
 
@@ -72,12 +73,14 @@ public:
 
 private:
     std::filesystem::path PrivateManifestPath(const StorageObjectId& object_id) const;
+    std::optional<StorageTransferStatus> RecoverPendingUpload(std::string_view vault_password);
 
     std::array<unsigned char, 32> m_network_id{};
     AccountId m_account_id;
     const CybouKeyStore& m_keystore;
     StorageObjectProvider& m_store;
     std::filesystem::path m_private_manifest_dir;
+    std::mutex m_upload_mutex;
 };
 
 } // namespace cybou
