@@ -59,8 +59,10 @@ keys for objects already encrypted under those epochs. Updates compare the
 authenticated saved payload before atomic replacement and fail closed on a
 stale or mismatched sidecar. The current limit is 1024 epochs. This is local
 key custody only: keys are not shared with another device, and the sidecar is
-not automatically restored on a clean machine. Device wrapping and recovery
-distribution wait for a reviewed recipient KEM package.
+not automatically restored on a clean machine. Device wrapping depends on a
+reviewed recipient KEM package; clean-machine recovery additionally requires
+the account-level envelope and availability contract in
+`90_STORAGE_KEY_RECOVERY.md`.
 
 ```text
 Identity
@@ -197,6 +199,8 @@ cross-implementation vectors and protocol freeze.
 
 - Standardized hybrid KEM/key-package format and transcript binding;
 - Storage Master Key device wrapping, distribution, revocation, and recovery;
+- finalized envelope-root operation, recovery KDF/profile, and durable
+  cross-device envelope availability (`90_STORAGE_KEY_RECOVERY.md`);
 - manifest format, signature/authorization, and conflict behavior;
 - replication/coding profile, placement, lease, audit, repair, and retention;
 - padding and cross-implementation vectors;

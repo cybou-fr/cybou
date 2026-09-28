@@ -30,7 +30,11 @@ The local Storage Key Ring is a separate encrypted CYBV2 sidecar bound to the
 vault's AccountID. It stores contiguous random Storage Master Key epochs and
 retains old epochs so prior objects remain readable. It is not distributed to
 other devices or included in clean-machine restore; multi-device Files waits
-for the reviewed hybrid device-wrapping package and recovery flow.
+for the reviewed device package and recovery flow. The target account-level
+SMK envelope and clean-machine restoration contract is in
+[`90_STORAGE_KEY_RECOVERY.md`](90_STORAGE_KEY_RECOVERY.md); until its
+cryptographic, consensus, and Storage availability gates pass, Identity
+recovery does not imply Files recovery.
 
 An in-progress name claim is saved separately beside the identity vault as an
 encrypted CYBV2 envelope. It binds NetworkID, AccountID, label, and random

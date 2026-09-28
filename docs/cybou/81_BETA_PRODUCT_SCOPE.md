@@ -92,8 +92,9 @@ Beta is not ready until all of the following work end to end:
 3. Store providers and validators never receive plaintext content, keys,
    filenames, or MIME metadata.
 4. Commitment verification, placement audits, provider loss, interrupted
-   upload/download, repair, and restart recovery pass the defined Storage
-   reliability tests.
+   upload/download, repair, restart recovery, and restoration of Files keys
+   after clean-machine Identity recovery pass the defined Storage reliability
+   tests.
 5. Mail evidence, historical sender authorization, Storage accounting, and
    user-visible pending/failure states are integrated and reviewed.
 6. Beta network, economics, independent-validator, release, and operational
