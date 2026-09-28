@@ -1,10 +1,11 @@
 # 88 — Encrypted object and key model
 
-Status: canonical target for Files objects and Mail attachments. Provisional
-local v1 chunk encryption, public manifest commitments, durable provider/CYP2
-ciphertext transfer, an encrypted AccountID-bound Storage Key Ring with
-durable epochs, file upload/download, and a bounded client-side placement
-component for up to three already-connected providers are implemented. The
+Status: canonical shared encrypted-object architecture for Files, Beta Mail
+attachments, and later Backup. Provisional local v1 chunk encryption, public
+manifest commitments, durable provider/CYP2 ciphertext transfer, an encrypted
+AccountID-bound Storage Key Ring with durable epochs, file upload/download,
+and a bounded client-side placement component for up to three
+already-connected providers are implemented. The
 desktop Files surface does not yet use placement. Account KEM derivation and
 publication are implemented in source for the coordinated DEV cutover. SMK
 wrapping, leases, audits, repair, accounting, and attachment delivery are not
@@ -26,9 +27,10 @@ symmetric AEAD → encrypt bulk bytes
 hybrid signature → authorize operations and manifest/root changes
 ```
 
-Do not invent a KEM combiner, AEAD, or key-derivation primitive. The
-interoperable X25519 + ML-KEM-768 profile and exact AEAD parameters remain
-subject to `49_EMAIL_E2EE_HPKE_PQ.md`, implementation review, and test vectors.
+Do not invent a KEM combiner, AEAD, or key-derivation primitive. The DEV
+X-Wing profile is specified in `49_EMAIL_E2EE_HPKE_PQ.md`; standardized
+account-level object-key wrapping and exact AEAD parameters require review and
+cross-implementation vectors before Beta.
 
 ## Identity key hierarchy
 
@@ -49,8 +51,8 @@ revocation. Private KEM material remains local.
 
 The target Files model uses a random Storage Master Key per key epoch. It is
 wrapped to the current account KEM capability using the reviewed hybrid
-key-agreement profile. IdentityRotate changes future account key access; it
-cannot erase content or keys already copied.
+key-agreement profile. IdentityRotate changes future account key access; it cannot erase content or
+keys already copied.
 
 The local key ring is implemented as a separate password-protected CYBV2
 sidecar bound to AccountID. Epochs are contiguous from zero; rotation durably
@@ -63,6 +65,14 @@ installation. Account KEM wrapping depends on a reviewed package; clean-machine
 recovery additionally requires the account-level envelope and availability
 contract in
 `90_STORAGE_KEY_RECOVERY.md`.
+
+The object layer accepts an opaque per-object key and never needs plaintext
+filenames or product semantics. Files objects derive their ObjectKey from the
+current SMK epoch and a random per-object salt. Mail attachment objects use an
+independent random 256-bit ObjectKey, separate from both the Mail CEK and
+Files SMK. The Mail CEK protects the message; the encrypted message descriptor
+delivers each attachment ObjectKey to its recipient. The same object crypto,
+chunking, manifest validation, and Storage transfer path serve both products.
 
 ```text
 Identity
@@ -111,10 +121,10 @@ ChunkIDs and ciphertext lengths under the ASCII domain
 `CYBOU/STORAGE/MANIFEST/V1`. These encodings are version 1 and must have
 cross-implementation vectors before Beta.
 
-A private encrypted Files manifest contains
-filename, MIME type, logical size, folder, ObjectID, salt, key epoch, and
-private UI state. Manifest/root mutations are Identity-authorized through the
-coordinator. The canonical catalog and root-update lifecycle are specified in
+A private encrypted Files manifest contains filename, MIME type, logical size,
+folder, ObjectID, object-key envelope, version references, and private UI
+state. Manifest/root mutations are Identity-authorized through the coordinator.
+The canonical catalog and root-update lifecycle are specified in
 `91_FILES_MANIFEST_AND_ROOT.md`.
 
 Provider-visible data is limited to what placement and durability require:
@@ -127,22 +137,25 @@ traffic-analysis analysis.
 ## Mail content and attachment keys
 
 Mail content uses a fresh random content-encryption key (CEK), wrapped once
-to the verified recipient AccountID/key_epoch under the Mail KEM context. The sender's
-hybrid signature authorizes the Mail operation; it is not the encryption key.
+per recipient AccountID/key_epoch under the Mail KEM context. The
+sender's hybrid signature authorizes the Mail operation; it is not the
+encryption key.
 
-Each Mail attachment uses a fresh random 256-bit AttachmentKey, separate from
-the Files Storage Master Key:
+Each Mail attachment object uses a fresh random 256-bit ObjectKey, separate
+from the Mail CEK and the Files Storage Master Key:
 
 ```text
-file → standard AEAD with AttachmentKey → opaque Storage object
+file → standard AEAD with ObjectKey → opaque Storage object
 ```
 
-The encrypted Mail payload carries an attachment descriptor containing
-ObjectID, AttachmentKey, filename, MIME type, logical size, and required
-integrity metadata. Only after decrypting the Mail payload can the recipient
-obtain the AttachmentKey. Attachment bytes remain outside MailTx and consensus
-state. Mail signing, Mail KEM, Storage key wrapping, and object encryption use
-separate authenticated contexts, including the target domains:
+The E2E-protected Mail content carries one descriptor per attachment: ObjectID,
+manifest commitment, encrypted/logical size, display name, MIME type, and its
+ObjectKey. Only after decrypting the Mail content can the recipient obtain the
+name and key. These descriptors are ciphertext within the Mail envelope; the
+outer MailTx contains no attachment bytes, cleartext descriptor, key, or Storage
+topology. Attachment objects and manifests live in Storage, outside MailTx and
+consensus state. Mail signing, Mail KEM, Storage key wrapping, and object
+encryption use separate authenticated contexts, including the target domains:
 
 ```text
 CYBOU/IDENTITY/AUTH
@@ -163,9 +176,9 @@ Storage Object
 ```
 
 After the recipient has decrypted the Mail attachment descriptor, the client
-may reuse the protected ObjectID and ciphertext, then wrap/reference the
-AttachmentKey under the recipient's Files key domain and add a private Files
-manifest entry. This creates independent Files retention ownership. Deleting
+may reuse the protected ObjectID and ciphertext and add the existing ObjectKey
+inside a new encrypted Files catalog entry. This creates an independent Files
+retention reference without uploading or re-encrypting the same bytes. Deleting
 or expiring the Mail reference MUST NOT remove an object while a Files
 reference remains active. If authorization, retention, or key-domain rules
 make safe reuse impossible, the client may create a separately protected Files
@@ -173,6 +186,31 @@ object.
 
 Retention claims are Storage-layer obligations, not permanent per-object
 consensus records. Their lease/accounting aggregation is defined in docs 11–13.
+
+## Versions and Identity-based sharing
+
+Objects are immutable. Editing/replacing a file creates a new encrypted object;
+the Files catalog records the version chain and current version pointer.
+Consensus does not store per-file or per-version rows. Retention of old
+versions follows Storage policy and the account's encrypted catalog.
+
+The share principal is a CYBOU AccountID, never a machine installation. A
+share grant binds the object/file reference, recipient AccountID, READ or WRITE
+permission, current object/version commitment, and an object-key envelope to
+the recipient's current Identity KEM package/key_epoch. The grant and private
+file metadata are delivered as encrypted objects. The chain may commit only
+the minimum account-level root/authorization/availability data required by the
+frozen protocol. READ is the first sharing mode; WRITE collaboration requires
+a separate authorization, conflict, and revocation gate. Removing a grant
+blocks future key delivery but cannot erase a key or plaintext already copied.
+Anonymous links are optional future UX and are not the primary security model.
+
+Mail and Files hold independent ownership/retention references to one
+immutable object. Deleting or expiring a Mail reference leaves a saved Files
+reference intact. Sending an authorized Files object by Mail places its object
+key and descriptor inside the E2E-protected Mail content; it does not duplicate
+the ciphertext. Content-equality deduplication stays disabled until a privacy
+review approves its metadata leakage.
 
 ## Implemented provisional local v1
 
@@ -197,11 +235,12 @@ cross-implementation vectors and protocol freeze.
 
 ## Open protocol freeze points
 
-- Standardized hybrid KEM/key-package format and transcript binding;
+- Standardized object-key envelope and account KEM/key-package format;
 - Storage Master Key account wrapping, recovery, and rotation;
 - finalized envelope-root operation, recovery KDF/profile, and durable
   envelope availability (`90_STORAGE_KEY_RECOVERY.md`);
-- manifest format, signature/authorization, and conflict behavior;
+- encrypted Files catalog, version, share-grant, signature/authorization, and
+  conflict formats;
 - replication/coding profile, placement, lease, audit, repair, and retention;
 - padding and cross-implementation vectors;
 - safe reference reuse and release behavior for Mail-to-Files ownership.

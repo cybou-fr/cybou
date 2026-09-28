@@ -401,8 +401,8 @@ attachment-progress, delivery-uncertain, responsive, and keyboard interaction
 contract.
 
 Files is the Beta product surface for Drive-like file management. There is no
-separate Drive application milestone. Beta Mail attachments are a required product capability and should be
-presented as ordinary attachments when the Beta Storage path is live. The user
+separate Drive application milestone. Beta Mail attachments are required and
+should appear as ordinary attachments when the Beta Storage path is live. The user
 should not have to understand chunks, CIDs, redundancy, providers, or placement
 to attach and receive a file. The initial DEV/Alpha profile may keep attachment
 controls disabled. Backup is post-Beta.

@@ -2,8 +2,8 @@
 
 Status: canonical product-scope decision. This document defines Beta readiness;
 it does not claim that the required services are implemented or authorize a
-consensus or wire-format change. See DEC-173 through DEC-190 in
-`24_DECISIONS.md`.
+consensus or wire-format change. See DEC-173 through DEC-194 in
+`24_DECISIONS.md` for product scope and the Mail/Files architecture freeze.
 
 ## Product boundary
 
@@ -20,15 +20,24 @@ Object Storage
 Encrypted Mail attachments
 ```
 
+Mail and Files are not separate cryptographic or storage stacks. They use one
+CYBOU Identity, finalized state, and shared encrypted Object Layer. Mail targets
+Gmail's familiar core workflows; Files targets Google Drive's familiar file
+management workflows. These are interaction references only; CYBOU keeps its
+own design and user-owned trust model. DEC-194 and
+`spec/mail_files_architecture.yaml` freeze the product architecture.
+
 Files is the Beta file-management product surface, with the familiar
 Drive-like workflows described in `83_STORAGE_UI_UX.md`. There is no separate
 Drive product milestone. Backup is a post-Beta application of the same Storage
 layer and is not a prerequisite for Beta readiness.
 
 Email remains CYBOU's first user-facing product. For Beta, complete Email means
-one-recipient E2E Mail with text and encrypted attachments whose content is
-durably retrievable through CYBOU Object Storage, including when the recipient
-was offline at send time.
+E2E Mail with text and encrypted attachments for one or more `.cybou`
+recipients. The initial DEV/Alpha profile remains single-recipient; Beta group
+recipient limits and per-recipient KEM capsules are separate protocol gates.
+Attachment objects are durably retrievable through CYBOU Object Storage,
+including when recipients were offline at send time.
 
 ## DEV and Alpha transition
 
@@ -37,17 +46,19 @@ DEV and Alpha may use this profile to integrate and validate identity,
 consensus, discovery, and Mail flows before Store is available. This is a
 transitional engineering scope; it does not satisfy the Beta Mail requirement.
 
-Do not enable attachment sending in a release until the Store path and Mail
-manifest are interoperable and pass the Beta readiness gates below. Do not
-represent validator pre-Store retention as the Beta content architecture.
+Do not enable attachment sending in a release until the Store path and E2E
+attachment descriptors are interoperable and pass the Beta readiness gates
+below. Do not represent validator pre-Store retention as the Beta content
+architecture.
 
 ## Beta Mail and Storage boundary
 
 ```text
 Sender client
-  -> encrypts message content, attachment manifest, and attachments
-  -> uploads opaque encrypted object(s) to CYBOU Store
-  -> submits first-class MailTx with the required commitment/reference
+  -> encrypts the message and attachment descriptors end to end
+  -> encrypts, chunks, and uploads each attachment as an opaque Storage object
+  -> waits for the required durability threshold
+  -> submits first-class MailTx with the encrypted message and commitment
   -> BFT finality
 
 Recipient client, now or later
@@ -56,12 +67,17 @@ Recipient client, now or later
   -> verifies integrity and decrypts locally
 ```
 
-Attachment bytes never enter BFT blocks or consensus state. MailTx carries
-only protocol-required registration, discovery, commitment, and opaque
-reference data. Filenames, MIME types, paths, subjects, content keys, and the
-manifest remain inside E2E-protected content; Store providers receive
-ciphertext only. Exact wire fields and the interoperable PQ/T key-package
-profile remain governed by the protocol and cryptography freeze gates.
+Attachment bytes never enter MailTx, BFT blocks, or consensus state. Each
+attachment is an immutable Object Layer object with its own Storage manifest.
+The attachment descriptor (ObjectID, manifest commitment, sizes, MIME type,
+display name, and object key) lives inside E2E-protected Mail content. MailTx
+carries the encrypted envelope plus protocol fields needed for registration,
+discovery, and commitments; it carries no Storage topology. Filenames, MIME
+types, paths, subjects, content keys, and attachment descriptors stay inside
+E2E-protected content. Storage manifests contain only opaque chunk descriptors
+and commitments, and providers receive ciphertext only. Exact wire fields and
+the interoperable PQ/T key-package profile remain governed by the protocol and
+cryptography freeze gates.
 
 ## Minimum Storage capability for Beta
 
@@ -85,10 +101,10 @@ change that target here.
 
 Beta is not ready until all of the following work end to end:
 
-1. A sender creates a one-recipient E2E message with an encrypted attachment
-   and durable manifest.
-2. The message is finalized while the recipient is offline; after later sync,
-   the recipient verifies, retrieves, decrypts, and opens the attachment.
+1. A sender creates an E2E message for one or more `.cybou` identities, with
+   encrypted attachment objects and durable Storage manifests.
+2. The message is finalized while recipients may be offline; after later sync,
+   each recipient verifies, retrieves, decrypts, and opens the attachment.
 3. Store providers and validators never receive plaintext content, keys,
    filenames, or MIME metadata.
 4. Commitment verification, placement audits, provider loss, interrupted

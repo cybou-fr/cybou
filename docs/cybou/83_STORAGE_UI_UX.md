@@ -84,15 +84,19 @@ Trash
 Storage
 ```
 
-Optional/capability-gated:
+Capability-gated Beta navigation:
 
 ```text
 Shared with me
 Shared by me
 ```
 
-Do not expose sharing navigation before recipient-sharing semantics exist in
-core. A disabled decorative page is worse than an honest absent capability.
+The target share principal is a `.cybou` AccountID. A grant wraps the object key
+to that account's current Identity KEM capability and binds READ or WRITE
+permission. READ is the first share mode; WRITE requires the separate
+collaboration authorization gate in `91_FILES_MANIFEST_AND_ROOT.md`. No
+public-link bearer token is the default access mechanism. Do not show sharing
+controls until the relevant grant flow is implemented.
 
 ## 4. Main Files screen
 
@@ -133,10 +137,15 @@ Move to Trash
 Restore from Trash
 Delete according to retention rules
 Open details
+View version history
+Share with a `.cybou` identity (capability-gated)
+Send by CYBOU Mail
 ```
 
-General user-to-user sharing may be added only after its encrypted manifest and
-access-control semantics are specified.
+Sharing follows the AccountID-based grant model frozen in DEC-194. The target
+permission is visible in user language; a grantee receives the object key via
+their current Identity KEM capability. Anonymous links are a later optional
+feature and are not the security foundation.
 
 ## 6. Folder model
 
@@ -317,9 +326,13 @@ Download
 Save to Files
 ```
 
-`Save to Files` should create/update the recipient's private Files manifest and
-reuse an existing protected object when safe. The UI must not expose the
-underlying optimization.
+`Save to Files` creates an independent Files catalog reference to the existing
+object when authorized. It reuses the ObjectID, ciphertext, and object key; no
+second upload is required. The UI must not expose the underlying optimization.
+
+`Send by CYBOU Mail` attaches an existing Files object by placing its encrypted
+object descriptor and object key inside the E2E-protected message. It does not
+copy ciphertext when access and retention rules allow reuse.
 
 ## 14. Recent
 
@@ -334,12 +347,20 @@ renamed/moved
 
 Do not require global publication of access history.
 
-## 15. Starred
+## 15. Version history
+
+A file revision is a new immutable encrypted object. The encrypted Files
+catalog links revisions and identifies the current version; consensus does not
+store a row per revision. Restoring an earlier revision changes the catalog
+pointer and retains the immutable object under Storage policy. Version history
+controls stay hidden until the manifest and retention behavior are implemented.
+
+## 16. Starred
 
 Starred is local/private metadata in the current product scope. It is not
 consensus state.
 
-## 16. Trash and deletion
+## 17. Trash and deletion
 
 Trash should match familiar file-manager expectations while remaining honest
 about distributed retention:
@@ -474,8 +495,11 @@ A Beta candidate passes when a new user can, without Storage terminology:
 [ ] know when the file is Protected
 [ ] restart CYBOU and still see the file
 [ ] download, verify and decrypt the file
-[ ] rename and move it
+[ ] rename, move, and copy it
 [ ] star/unstar it
+[ ] preview a file and inspect version history when available
+[ ] share a file with a `.cybou` identity when sharing is enabled
+[ ] send a Files object by CYBOU Mail without re-uploading it
 [ ] move it to Trash and restore it
 [ ] save a received Mail attachment to Files
 [ ] understand Storage used/available

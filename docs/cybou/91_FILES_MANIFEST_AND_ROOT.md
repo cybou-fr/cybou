@@ -43,16 +43,35 @@ FilesManifest {
         trash_state
         object_id
         object_commitment
+        object_key_envelope
+        current_version_id
+        versions[] {
+            version_id
+            object_id
+            manifest_commitment
+            logical_size
+            created_at
+        }
+        share_grants[] {
+            recipient_account_id
+            permission           // READ or WRITE
+            object_key_envelope
+            key_epoch
+            expiry_or_none
+        }
         key_epoch
     }
 }
 ```
 
-The exact encoding, entry limits, name validation, timestamps, and conflict
-rules require freeze review. `file_id` is a random stable local/product
+This is the frozen product-level catalog shape; canonical encoding, entry and
+version bounds, timestamp representation, grant discovery, and conflict rules
+remain protocol freeze gates. `file_id` is a random stable local/product
 identifier independent from `ObjectID`; paths are derived from parent links,
 not stored as provider-visible names. Mail ownership and Files ownership are
-separate references even when they safely reuse one encrypted object.
+separate references even when they safely reuse one encrypted object. Versions are new immutable object references; the
+manifest selects the current version and retains prior versions according to
+Storage policy.
 
 Encrypt the complete canonical manifest locally under a dedicated Files
 manifest key derived with a standard, domain-separated HKDF from the current
@@ -86,7 +105,40 @@ current Identity key_epoch. The existing `IdentityOperationCoordinator`
 allocates the nonce, signs, journals exact operation bytes, and reconciles
 uncertain delivery. State updates atomically to the new sequence, root,
 manifest locator, and key epoch. The operation's authorization binds the full
-payload. Consensus never parses the encrypted entry list.
+payload. Consensus never parses the encrypted entry list. It stores no per-file,
+per-folder, per-version, or per-share plaintext state. The encrypted manifest
+root is the account-level commit boundary.
+
+## Versions and Identity-based sharing
+
+An edit creates a new immutable encrypted object and appends a version reference
+to the encrypted Files catalog. Restoring an earlier version changes the
+catalog's current-version pointer; it does not mutate or rewrite the old object.
+Retention and deletion follow the shared Storage contract.
+
+The share principal is AccountID. A share grant binds a file/object reference,
+recipient AccountID, READ or WRITE permission, version/commitment, expiry when
+used, and an object-key envelope encrypted to the recipient's current Identity
+KEM package and key_epoch. Private names, paths, and grant metadata stay in the
+encrypted catalog/grant object. Anonymous links are not the default access
+model. READ is the first mode; WRITE stays gated on a separately reviewed
+consensus authorization and conflict model. Removing a grant cannot revoke
+keys or plaintext already copied by the recipient.
+
+Share state may add a minimal account-level commitment or locator only when
+needed for authorization, discovery, or availability; it must not expose a
+public per-file directory. Exact operation/state encoding and grant discovery
+remain open protocol gates.
+
+## Mail/Files object reuse
+
+Mail attachments are immutable Storage objects, not Mail-owned byte payloads.
+The attachment descriptor and ObjectKey are inside E2E-protected Mail content.
+`Save to Files` adds a separate encrypted Files catalog reference to the same
+ObjectID/ciphertext when the recipient has the key grant; no re-upload is
+needed. `Send by CYBOU Mail` puts the descriptor and key in the recipient's
+protected Mail content. Mail deletion does not remove a Files reference; Files
+trash/deletion does not rewrite finalized Mail history.
 
 Only finalized roots become current. An admission acknowledgment does not
 publish a Files change. Historical root updates and encrypted manifest objects
@@ -127,10 +179,10 @@ root based on local time or silently drops edits.
 
 The Files page shows decrypted names, folders, logical size, modified time,
 star state, and honest protection status. It does not show object IDs in the
-normal list. Search is local over decrypted metadata. Recent may remain a
-local activity view; recent activity is local unless an explicitly designed encrypted account
-catalog later includes it. Trash and deletion wording must follow Storage retention
-semantics and must not promise immediate provider erasure.
+normal list. Search is local over decrypted metadata. Recent may remain a local activity
+view; recent activity is local unless an explicitly designed encrypted account
+catalog later includes it. Trash and deletion wording must follow Storage
+retention semantics and must not promise immediate provider erasure.
 
 Upload reaches `Protected` only after both the configured Storage durability
 threshold and the Files root update reach verified finality. Download verifies
@@ -161,6 +213,7 @@ finalized persistent Files catalog, account-level synchronization, or Beta durab
 - `83_STORAGE_UI_UX.md` — canonical Files interactions and presentation.
 - `88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md` — object and content-key privacy.
 - `89_IDENTITY_KEM_PUBLICATION.md` — account KEM capability binding.
+- `88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md` — common Mail/Files object and key lifecycle.
 - `90_STORAGE_KEY_RECOVERY.md` — key distribution, recovery, and epochs.
 - `87_IDENTITY_OPERATION_COORDINATOR.md` — shared Identity nonce and operation journal.
 - `81_BETA_PRODUCT_SCOPE.md` — Beta durability and user-experience gates.

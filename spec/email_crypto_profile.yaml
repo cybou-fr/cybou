@@ -86,6 +86,17 @@ wire_profile:
   fee_dev: base_4_plus_1_per_1024_ciphertext_bytes_rounded_up
   priority_fee: disabled
   enable_send_or_decrypt: false
+beta_product_architecture:
+  status: frozen_product_target_wire_extension_open
+  recipients_per_message: OPEN_BETA_LIMIT
+  one_hpke_capsule_per_recipient_account_and_key_epoch: true
+  recipient_list_and_attachment_descriptors_inside_e2e_protected_content: true
+  reply_all_requires_multi_recipient_profile: true
+  attachment_bytes_in_mail_tx: false
+  attachment_object_key_independent_from_mail_cek: true
+  attachment_object_key_delivered_inside_protected_content: true
+  attachment_object_manifest_and_chunks_in_shared_storage: true
+  changes_dev_envelope_v1: false
 implementation:
   native_envelope_v1_codec: implemented
   native_protected_text_v1_codec: implemented

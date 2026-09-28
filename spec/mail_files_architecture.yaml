@@ -1,0 +1,165 @@
+version: '0.0.1'
+status: frozen_product_architecture_protocol_parameters_open
+references:
+  decisions: DEC-193_and_DEC-194
+  implementation_status: docs/cybou/26_IMPLEMENTATION_STATUS.md
+principles:
+  identity_scope: account
+  mail_files_backup_identity: one_CYBOU_Identity
+  shared_object_layer: true
+  storage_provider_plaintext_access: false
+  objects_immutable: true
+  consensus_contains_per_file_entries: false
+  consensus_contains_per_mail_state: false
+  machine_installation_is_protocol_identity: false
+  shared_network_interfaces:
+    - CYP2_P2P
+    - NodeRuntime
+    - BFT_finalized_state
+    - StorageService
+    - IdentityOperationCoordinator
+  service_owned_client_data:
+    - encrypted_local_mailbox_indexes
+    - encrypted_local_drafts
+    - encrypted_Files_catalog_and_cache
+products:
+  mail:
+    ux_reference: Gmail_core_workflows_without_Google_brand_assets
+    initial_profile:
+      recipient_accounts_per_message: 1
+      content: UTF8_text_only
+      attachments: false
+    beta_target:
+      recipient_accounts_per_message: OPEN_BETA_LIMIT
+      multiple_recipients_required_for_reply_all: true
+      recipient_key_capsules: one_per_AccountID_and_key_epoch
+      attachments: true
+      attachment_transport: encrypted_object_layer_reference
+      inline_attachment_bytes_in_MailTx: false
+      message_text_transport: encrypted_MailTx_content
+      attachment_descriptors_inside_E2E_protected_message: true
+      protected_message_fields:
+        - mail_id
+        - conversation_id
+        - in_reply_to_mail_id_optional
+        - sender_account_id
+        - recipient_account_id
+        - sent_time
+        - subject
+        - body
+        - attachment_descriptors
+      conversation_id_visibility: E2E_protected_only
+      reply_all: enabled_for_multi_recipient_threads
+      max_attachment_count: OPEN_BENCHMARK_REQUIRED
+      workflows:
+        - Inbox
+        - Sent
+        - Drafts
+        - Starred
+        - Archive
+        - Trash
+        - Blocked_senders
+        - local_labels
+        - conversation_threads
+        - unread_read_state
+        - local_search
+        - reply_forward
+        - reply_all_when_multi_recipient_profile_is_enabled
+        - encrypted_attachments
+        - attachment_preview_download_save_to_Files
+        - cybou_name_autocomplete
+        - drag_and_drop_compose
+      local_mailbox_indexes_encrypted_at_rest: true
+      spam_classification: local_or_explicitly_reviewed_service
+      plaintext_search_queries_sent_to_network: false
+  files:
+    ux_reference: Google_Drive_core_workflows_without_Google_brand_assets
+    beta_target:
+      workflows:
+        - files_and_folders
+        - upload_download
+        - rename_move_copy
+        - trash_restore_delete
+        - starred_recent_search
+        - sorting_grid_and_list_views
+        - preview
+        - storage_usage
+        - asynchronous_progress_pause_retry
+        - immutable_version_history
+        - identity_based_sharing
+      catalog:
+        client_decrypted: true
+        encrypted_at_rest_and_in_storage: true
+        consensus_stores_only_latest_root_locator_commitment_sequence: true
+        plaintext_names_mime_paths_and_file_actions_public: false
+      versioning:
+        versions_are_immutable_object_references: true
+        current_pointer_and_history_in_encrypted_catalog: true
+        per_version_consensus_state: false
+      sharing:
+        principal: AccountID
+        recipient_key: current_Identity_KEM_package_and_key_epoch
+        grants_are_identity_based: true
+        default_permission: READ
+        permissions: [READ, WRITE]
+        write_collaboration_enablement: separate_protocol_gate
+        primary_access_mechanism: encrypted_key_grant
+        anonymous_links_enabled_initially: false
+        revocation_cannot_erase_copied_keys_or_plaintext: true
+  object_layer:
+    shared_by: [Mail, Files, Backup_post_Beta]
+    storage_payload: immutable_encrypted_object
+    client_encrypts_before_upload: true
+    storage_provider_sees: [opaque_object_id, ciphertext_chunks, ciphertext_sizes, commitments]
+    storage_provider_never_sees: [plaintext, object_key, filename, mime_type, folder_path]
+    object_keys:
+      ordinary_Files_object: HKDF_from_random_SMK_epoch_and_random_object_salt
+      Mail_attachment: independent_random_256_bit_object_key
+      key_material_in_MailTx_cleartext: false
+      Mail_attachment_key_delivered_inside_E2E_protected_message: true
+    object_manifest:
+      stored_outside_MailTx: true
+      contains_chunk_descriptors_and_storage_metadata: true
+      contains_plaintext_names_or_MIME: false
+      canonical_commitment_required: true
+    chunking: bounded
+    encryption: reviewed_standard_AEAD
+    resumable_transfer: target
+    redundancy_repair_integrity_and_accounting: Beta_readiness_gates
+    deduplication: disabled_until_privacy_review
+integration:
+  mail_attachment_is_object_layer_object: true
+  mailtx_contains_attachment_ciphertext_bytes: false
+  mailtx_contains_storage_topology: false
+  mailtx_attachment_descriptor_cleartext: false
+  send_waits_for_required_storage_durability: true
+  save_received_attachment_to_Files:
+    reuses_object_id_and_ciphertext_when_authorized: true
+    reuploads_identical_ciphertext: false
+    creates_independent_Files_catalog_reference: true
+    Mail_deletion_removes_Files_reference: false
+  send_Files_object_by_Mail:
+    reuses_object_id_and_ciphertext_when_authorized: true
+    delivers_object_key_inside_E2E_protected_message: true
+consensus_boundary:
+  may_contain:
+    - Identity_authorization
+    - account_level_encrypted_catalog_root_commitment_and_locator
+    - protocol_required_mail_ciphertext_commitments_and_discovery_fields
+    - explicit_availability_contracts_and_accounting
+  must_not_contain:
+    - attachment_or_file_plaintext_or_ciphertext_bytes
+    - plaintext_filename_or_MIME_or_path
+    - per_file_or_per_mail_permanent_state
+    - storage_provider_topology
+    - object_keys
+non_frozen_parameters:
+  - MailTx_and_attachment_size_limits
+  - Beta_recipient_count_and_capsule_size_limits
+  - attachment_count_limits
+  - storage_durability_thresholds_and_replication
+  - leases_audits_repair_and_accounting
+  - encrypted_manifest_encoding_and_limits
+  - Files_root_operation_wire_and_state_fields
+  - sharing_grant_discovery_and_revocation_wire
+  - WRITE_collaboration_authorization

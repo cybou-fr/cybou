@@ -9,13 +9,14 @@ Product scope: the initial DEV/Alpha profile below remains text-only. Beta Mail
 requires encrypted Store-backed attachments and is not complete until the
 Storage, manifest, retrieval, and durability path passes `81_BETA_PRODUCT_SCOPE.md`.
 
-Mail recipient encryption capability is published by Identity and bound to an
-current Identity key epoch. Mail does not define a parallel recipient-key registry.
-The target combines X25519 and ML-KEM-768; the current identity record does not
-yet publish KEM keys, so the send path must fail closed when the recipient's
-required hybrid capability cannot be verified. Mail signing and encryption
-keys remain separate. All Identity-authorized Mail operations will use the
-shared `IdentityOperationCoordinator` described in `87_IDENTITY_OPERATION_COORDINATOR.md`.
+Mail uses one account-level Identity KEM capability per recipient key_epoch; it
+does not define a parallel recipient-key registry. X-Wing draft-05 is the DEV
+source profile for the coordinated Identity cutover. The currently running DEV
+network has not been cut over, so the send path fails closed unless finalized
+state publishes and verifies the required recipient capability. Mail signing
+and encryption keys remain separate. All Identity-authorized Mail operations
+will use the shared `IdentityOperationCoordinator` described in
+`87_IDENTITY_OPERATION_COORDINATOR.md`.
 
 CYBOU Email is native E2E encrypted, signed, consensus-registered email.
 
@@ -86,17 +87,21 @@ This does not make text-only mail sufficient for Beta.
 ## Beta Store boundary
 
 ```text
-Blockchain:
-    MailTx registration / commitment / finality
+Consensus/history:
+    first-class MailTx with encrypted message envelope, commitment, and
+    protocol-required discovery/finality fields
 
-Store:
-    opaque encrypted message/attachment objects and manifest
+Shared Object Layer / Store:
+    immutable encrypted attachment objects, object manifests, and chunks
 
-MailTx:
-    commitment and opaque object reference; never attachment bytes
+Inside E2E-protected Mail content:
+    attachment descriptors, object keys, names, and MIME types
+
+MailTx never contains attachment bytes or Storage topology. Attachment
+references stay encrypted in its Mail envelope.
 
 Client:
-    decrypted local mailbox
+    encrypted local mailbox indexes and locally decrypted views
 ```
 
 Mail attachment keys remain Mail-private. Object data may be stored by the

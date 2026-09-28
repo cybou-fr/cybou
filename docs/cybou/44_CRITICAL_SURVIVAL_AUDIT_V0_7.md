@@ -1,11 +1,13 @@
 # 44 — Critical survival audit — v0.0.1 architecture
 
+Historical risk analysis. Product scope is updated by DEC-185/191/194: Files is a Beta product over shared Object Storage; Backup remains post-Beta, and Drive is an interaction reference rather than a separate service.
+
 The largest existential risks are cryptographic mistakes, unbounded history/state growth, unsafe BFT, metadata leakage, fork debt and premature product scope expansion.
 
 ## Critical risk: product scope expansion
 
 CYBOU contains enough architectural surface to become several products:
-Email, Wallet, Storage, Backup and Drive. Feature expansion before Identity
+Email, Wallet, Object Storage, Files and Backup. Feature expansion before Identity
 and Email pilot validation is a survival risk. Do not build a broad service
 suite to compensate for an unfinished core product.
 
@@ -83,7 +85,8 @@ quarantine
 -> Beta Mail + encrypted attachments
 -> Beta pilot
 -> Backup (post-Beta)
--> Drive (post-Beta)
+-> Files Beta (Drive-familiar UX)
+-> Backup (post-Beta)
 ```
 
 ## Stop conditions

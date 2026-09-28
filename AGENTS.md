@@ -32,6 +32,10 @@ Read active docs before coding.
 - strict maximum MailTx size required.
 - deterministic size-aware fee required.
 - priority fee disabled.
+- Product target: Mail, Files, and later Backup share one Identity, finalized state, and encrypted Object Layer. Gmail/Drive are workflow references, not brand or custody models.
+- Beta attachments are immutable encrypted Storage objects referenced only inside E2E-protected Mail content; attachment bytes and Storage topology never enter MailTx. Initial DEV/Alpha remains one-recipient text-only with no attachments.
+- Files metadata stays in an encrypted client catalog; consensus stores only the account root/locator/commitment and required authorization/availability/accounting data. Per-file and per-mail permanent state is prohibited.
+- Identity-based sharing wraps object keys to recipient AccountID KEM capabilities. Anonymous links are not the primary security model. Mail and Files own independent retention references to shared immutable objects.
 
 ### Pre-Store
 - desktop nodes may prune;

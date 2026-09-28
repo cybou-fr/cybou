@@ -22,6 +22,26 @@ evidence:
   historical_sender_key_state_proof: true
   salted_content_commitment: true
   bare_plaintext_hash: false
-future_store:
-  content_in_store: true
-  mail_tx_contains_content_root: true
+beta_attachments:
+  enabled_after_storage_and_mail_gates: true
+  beta_recipient_count: OPEN_BETA_LIMIT
+  recipient_capsule: one_per_recipient_AccountID_and_key_epoch
+  attachment_bytes_in_mail_tx: false
+  attachment_transport: encrypted_object_layer
+  descriptor_in_e2e_protected_message: true
+  descriptor_fields:
+    - object_id
+    - manifest_commitment
+    - encrypted_size
+    - logical_size
+    - display_name
+    - mime_type
+    - independent_object_key
+  object_manifest_and_chunk_topology_in_mail_tx: false
+  send_waits_for_storage_durability: true
+  maximum_attachment_count: OPEN_BENCHMARK_REQUIRED
+  status: target_architecture_not_current_DEV_profile
+message_content:
+  subject_and_text_ciphertext_in_mail_tx: true
+  encrypted_attachment_descriptors_inside_message: beta_only
+  per_mail_permanent_consensus_state: false

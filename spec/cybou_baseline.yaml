@@ -11,7 +11,11 @@ project:
     account_id: random_nonzero_256_bit_independent_of_keys
     recovery_words: 24
     recovery_signature: Ed25519_AND_ML-DSA-65
-    device_signature: Ed25519_AND_ML-DSA-44
+    authorization_signature: Ed25519_AND_ML-DSA-44
+    account_kem: X-Wing_MLKEM768-X25519_DRAFT05_DEV
+    roles_derived_from_recovery_entropy: true
+    rotation_operation: IdentityRotate_all_roles_atomic
+    shared_account_nonce: true
     vault: CYBV2_Argon2id_AES-256-GCM
     name_label_length_bytes: [5, 32]
     name_claim: finalized_commit_work_reveal
@@ -73,9 +77,9 @@ applications:
   - Economic/SystemBalance
   - Mail Protocol
   - CYBOU Email
-  - Object Storage
-  - Backup
-  - Drive
+  - Shared Encrypted Object Layer
+  - Files_Beta
+  - Backup_post_Beta
   first_product: CYBOU Email
   later_services_gated: true
   product_gates:
@@ -98,7 +102,9 @@ applications:
     mail_tx_in_block_history_v1: true
     permanent_per_mail_consensus_state: false
     active_validator_prestore_archival_required: true
-    future_body_storage: CYBOU_Object_Storage
+    message_body_transport: encrypted_MailTx_content
+    beta_attachment_transport: encrypted_Object_Layer_references_inside_protected_content
+    attachment_bytes_in_MailTx: false
 fees:
   priority_fee_v1: false
   fee_bidding_v1: false
@@ -161,7 +167,9 @@ security:
   mail_crypto_profile: standardized_or_heavily_reviewed
 email_crypto:
   content_encryption: random CEK + AEAD
-  key_wrap: HPKE per recipient device
+  key_wrap: HPKE once per recipient AccountID_and_key_epoch
+  mail_CEK_and_attachment_object_keys_separate: true
+  attachment_object_key_inside_E2E_protected_message: true
   hpke_basis: RFC 9180
   pq_kem_basis: ML-KEM / FIPS 203
   preferred_hybrid_target: X25519 + ML-KEM-768
@@ -248,7 +256,9 @@ mail:
   permanent_per_mail_consensus_state: false
   recipient_discovery_filter: PREFERRED_OPEN_DESIGN
   attachments_initial_profile: false
-  future_content_location: CYBOU_Object_Storage
+  beta_attachments_are_immutable_Storage_objects: true
+  beta_attachment_descriptors_inside_E2E_content: true
+  storage_topology_in_MailTx: false
 validator_policy:
   admission: operator_approved
   bft: true

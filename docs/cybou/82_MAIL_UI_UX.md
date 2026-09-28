@@ -13,6 +13,11 @@ The normal user operates mail, not a blockchain, key exchange, validator set,
 or storage protocol. Technical evidence remains inspectable through Security
 Details and Advanced diagnostics.
 
+The Beta interaction target includes conversation threads, unread/read state,
+local labels, reply/reply-all/forward, blocked senders, local search, and
+`.cybou` contact autocomplete. Keyboard shortcuts follow after the primary
+accessible mouse and keyboard flows are complete.
+
 See also:
 
 - `81_BETA_PRODUCT_SCOPE.md` — Beta product boundary;
@@ -119,10 +124,13 @@ Sent
 Drafts
 Archive
 Trash
+Blocked senders
+Labels
 ```
 
-Optional labels/categories may be added only when the corresponding local data
-model exists. Do not add decorative navigation that does not function.
+Labels, blocked senders, read/unread, stars, archive, and trash are local
+mailbox state, never consensus state. A future Spam classifier must be local
+or have a separately reviewed service/privacy contract.
 
 Unread count appears only where meaningful, primarily Inbox.
 
@@ -143,7 +151,7 @@ sender / recipient .cybou name
 subject
 body text
 attachment filename
-local labels/folders if implemented
+local labels
 ```
 
 Search must not send plaintext query terms to validators or storage providers.
@@ -193,7 +201,7 @@ recipient identity
 subject
 message content
 attachments
-reply / forward actions
+reply / reply-all / forward actions
 compact security status
 ```
 
@@ -245,8 +253,10 @@ Body
 Attachments
 ```
 
-The initial Beta protocol remains one-recipient. The UI must not present CC,
-BCC, or multiple recipients until the protocol supports them.
+DEV/Alpha remains one-recipient. Beta targets Gmail-style To/Cc/Bcc and
+Reply All with one current Identity KEM capsule per recipient AccountID/key
+epoch. The Beta recipient limit and discovery/privacy encoding remain protocol
+gates; do not show group-send controls until those gates are implemented.
 
 ### Recipient resolution
 
@@ -292,7 +302,8 @@ read local file
 -> chunk
 -> upload opaque ciphertext
 -> reach minimum Storage durability
--> build encrypted private attachment manifest
+-> prepare an immutable Object Layer object and encrypted attachment descriptor
+-> place descriptor inside the E2E-protected Mail content
 -> enable Mail submission
 ```
 
@@ -351,8 +362,10 @@ deleting or expiring the Mail message must not make the saved Files item
 unavailable. If a safe shared-object reference cannot satisfy both services'
 privacy and retention rules, create a separate protected object.
 
-The implementation may create or update the user's private encrypted Files
-manifest while keeping provider-visible metadata opaque.
+The implementation adds an independent entry to the recipient's encrypted
+Files catalog while keeping the ObjectID, filename, MIME type, and object key
+private from providers. Reuse is allowed only when the recipient has a valid
+Identity-based key grant and both retention references remain independent.
 
 ## 11. Sending state machine
 
@@ -435,7 +448,7 @@ Do not expose storage-node addresses or shard IDs in the normal message view.
 
 ## 14. Drafts
 
-Draft text and attachment metadata are local/private user data. Drafts remain local/private user data in this product scope. Do not place
+Draft text and attachment metadata are local/private user data. Do not place
 plaintext drafts in consensus or provider-visible storage.
 
 Autosave should not block the UI.

@@ -19,10 +19,10 @@ go_to_market:
   product_thesis: Identity is the platform primitive; Email is the first product.
   first_adoption_unit: organization/team
   isolated_consumer_launch: false
-  later_services:
-  - Object Storage
+  beta_services:
+  - Files over Object Storage
+  post_beta_services:
   - Backup
-  - Drive
   service_expansion_requires_product_gates: true
   initial_public_channels: false
   lead_message:

@@ -74,8 +74,8 @@ encrypted attachments stored by CYBOU Object Storage
 recipient can retrieve after being offline
 ```
 
-Object Storage is part of Beta Mail readiness. Backup and Drive remain
-post-Beta.
+Object Storage and Files are part of Beta readiness. Backup is post-Beta;
+there is no separate CYBOU Drive product.
 
 ## Long-term
 

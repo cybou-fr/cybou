@@ -198,3 +198,8 @@
 ## Superseding Identity decision
 
 | DEC-193 | Remove device as a protocol-level Identity entity. Derive Recovery (Ed25519 + ML-DSA-65), Authorization (Ed25519 + ML-DSA-44), and X-Wing KEM roles from mnemonic entropy under separate domains. Identity state contains one current key set, KEM commitment, shared nonce, and key_epoch. IdentityRotate atomically replaces every role; restore derives the current key set locally and does not submit DeviceAdd. Mail targets one AccountID/key_epoch capsule. | Current canonical direction; requires direct DEV cutover and discarding obsolete state/vaults |
+
+
+## Product architecture decision
+
+| DEC-194 | Mail, Files, and later Backup are product surfaces over one CYBOU Identity, finalized state, and shared encrypted immutable Object Layer. Mail UX targets Gmail's core workflows; Files targets Google Drive's core workflows without copying brand assets or centralized-provider assumptions. Beta attachments are Storage objects referenced from E2E-protected Mail content; bytes and Storage topology stay out of MailTx. Files uses a private encrypted catalog and account-root commitment, not per-file consensus state. Object keys are independent from message CEKs. Save to Files and Files-to-Mail reuse authorized object bytes with independent ownership/retention references. Sharing is AccountID/Identity-KEM based; anonymous links are not the default. Initial DEV/Alpha Mail remains one-recipient text-only with no attachments; Beta targets one or more recipients with one KEM capsule per AccountID/key_epoch so familiar reply-all flows are possible. | Frozen product architecture; recipient limits, sharing wire/state, durability, and Storage economics remain separate protocol gates |

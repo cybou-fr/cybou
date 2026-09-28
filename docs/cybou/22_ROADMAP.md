@@ -24,6 +24,23 @@ registered or revoked by consensus. Promotion still requires vectors,
 security review, and coordinated disposable DEV cutover after protocol and
 name integration. See docs 10 and 76–78.
 
+## Second architecture step: Mail + Files product freeze
+
+After the single-Identity cutover, freeze Mail and Files as product surfaces
+over one Identity, one finalized state, and one encrypted Object Layer. DEC-194
+and `spec/mail_files_architecture.yaml` own that target. The initial DEV/Alpha
+Mail wire profile remains one-recipient, text-only, and attachment-free. Beta can
+extend recipient count with one KEM capsule per AccountID/key epoch; the limit
+is an open protocol benchmark. Beta attachments are immutable encrypted Storage objects; Mail carries their
+descriptors only inside E2E-protected content. The encrypted Files catalog and
+account-root update are the only file namespace boundary in consensus.
+
+Implementation follows the product contract rather than inventing APIs first:
+end-to-end Mail/local mailbox; the common object and Storage layer; Mail/Files
+attachment and ownership integration; complete Mail UI; then complete Files UI.
+Durability, limits, share-grant discovery, and consensus encoding remain owned
+by their implementation gates.
+
 ## Product gates
 
 Milestone numbers do not authorize a new product surface by themselves.
@@ -169,9 +186,11 @@ No priority fee.
 ## v0.2.4 — CYBOU Email Beta + encrypted attachments
 - hybrid-PQ Mail confidentiality and authenticated recipient keys;
 - encrypted attachment manifest and Store-backed objects;
-- MailTx references/commits to content; attachment bytes stay off-chain;
+- MailTx carries encrypted message content/commitments; attachment bytes and
+  Storage topology stay out of MailTx; one recipient capsule per AccountID;
 - offline recipient retrieval, verification and local decryption;
-- Gmail-familiar Inbox/Compose/reader/search under CYBOU visual identity;
+- Gmail-familiar Inbox/Compose/reader/search and multi-recipient reply flows
+  under CYBOU visual identity;
 - attachment protection progress and a minimum-durability Send gate;
 - Download and Save to Files integration;
 - delivery uncertainty distinct from rejection;
