@@ -1,114 +1,39 @@
-# 25 — Open questions / blockers v0.0.1
+# Open questions and cutover gates
 
-## Identity parameters to freeze before activation
+This list tracks decisions that still block the active PoA and encrypted
+chunk-DAG target. Product details belong in the Mail and Files UX documents;
+wire and state authority belongs in the active protocol documents listed by
+`AGENTS.md`.
 
-- End-to-end phrase-to-root vectors across providers and platforms. The BIP-39
-  English list/checksum and identity HKDF labels are now frozen locally.
-- CYBV2 canonical encoding, Argon2id resource bounds, file permissions and
-  cross-platform atomic replace behavior.
-- Hybrid signature wire bounds and canonical signed bytes for each operation.
-- IdentityRotate replay/conflict behavior and key-epoch transition vectors.
-- Name reserved-list version, commit lifetime/depth, work target, salt length,
-  pending-commit cap, fees, and canonical ordering.
+## Finality and state
 
-## Mail / privacy
+- Deterministic handling of conflicting PoA signatures and divergent forks.
+- Durable anti-equivocation journal format, rollback detection, and recovery
+  procedure for an unavailable genesis-bound signer.
+- Canonical hybrid signature vectors and finality/state-root integration.
+- State synchronization and independently recomputed finalized state on a
+  clean full node.
 
-### O-001 Recipient discovery tag
-Design the recipient tag so clients can find relevant MailTx without publishing avoidable social-graph metadata.
+## Encrypted content and admission
 
-### O-002 Compact mail discovery filter
-Choose a deterministic block/range filter format.
+- Cross-implementation canonical-CBOR and encrypted chunk/graph vectors.
+- Reviewed vectors for X-Wing draft-05 recipient capsule wrapping and recovery.
+- Identity-authorized RootPublication execution, replay protection, and exact
+  fee/state accounting.
+- Provider admission proof format and verification against finalized
+  RootPublication data.
+- Durability threshold, independent per-chunk placement, retry, retention,
+  audits, repair, accounting, and provider-loss handling.
+- Publication scanning and recursive retrieval from a clean client without a
+  previous local database.
 
-### O-003 MailTx maximum size / fee tiers
-Benchmark actual PQ/T overhead before freezing byte thresholds.
+## Product and operations
 
-### O-004 Sender privacy
-Decide whether sender AccountID is public/pseudonymous in v1 or whether stronger unlinkability is required.
+- Gmail-familiar Mail and Google Drive-familiar Files UI acceptance on desktop.
+- Offline-recipient retrieval and recovery after interrupted transfers.
+- Beta operational cost measurements for Mail, Files/Storage, and onboarding.
+- Legal review of product claims and evidence exports before public service.
 
-### O-005 Recipient account encryption
-The single recipient AccountID/key_epoch capsule is frozen for DEV in `49_EMAIL_E2EE_HPKE_PQ.md`; backend integration and independent review remain open.
-
-### O-006 Forward secrecy / rotating prekeys
-Decide the stronger compromise model after the base HPKE/PQ profile works.
-
-## Pre-Store retention
-
-### O-007 Historical validator retention
-Define exact canonical data range and serving protocol required from active validators before Store.
-
-### O-008 Historical migration
-Decide whether pre-Store MailTx bodies are later migrated into Store or remain validator/archive history.
-
-## BFT / operator authority
-
-### O-009 Exact BFT protocol — resolved
-Frozen as Tendermint/IBFT style N-validator state machine (N >= 1) with deterministic round leader `(height + round) % N`, prevote/precommit locking, quorum `floor(2*N/3)+1` forming `BftFinalityCertificate`, and atomic `CommitFinalizedBlock` validation in `CybouStateStore`. Authority Mode (N=1) has 1/1 finality and f=0; f=1 requires at least four validators. Verified in `cybou::BftSimulator`.
-
-### O-010 Validator admission transaction format — open
-The canonical state carries a validator set with equal weight one and unique
-hybrid consensus keys. Typed operator-authorized admission and removal
-operations are not yet implemented in `ProtocolOperation`; their exact wire
-format and PQ authorization policy remain to be frozen before deployment.
-
-### O-011 Emergency operator succession
-Define operator-unavailable recovery without normal community governance.
-
-### O-012 Reward epoch
-Freeze validator reward epoch length.
-
-## PoT / invite
-
-### O-013 PoT epoch length
-Choose `EPOCH_BLOCKS` after real block cadence is known.
-
-### O-014 Exact PoT score
-Freeze capped System Balance, age, clean-history, activity and penalty contributions.
-
-### O-015 Account Creation anti-Sybil difficulty tuning
-Calibrate the initial PoW target bits and dynamic difficulty adjustment for `AccountCreationWork`.
-
-### O-021 Operator Authority signature suite
-Benchmark and review a domain-specific hybrid signature profile for rare
-Operator Authority operations. `Ed25519 + ML-DSA-65`, requiring both component
-signatures to verify, is a candidate rather than a frozen decision. Freeze the
-suite identifier, exact signed bytes, component-key binding, downgrade rules,
-and implementation backend together. Do not copy a changing Internet-Draft wire
-format into consensus.
-
-### O-022 AccountID and network identifiers — resolved
-AccountID is an opaque nonzero 32-byte identifier. AccountCreationWork network_id
-is the domain-separated hash of the canonical immutable network definition.
-Both use the internal byte order frozen by the canonical serializer; see
-DEC-156 and DEC-161.
-
-### O-023 Validator archival mode enforcement
-Define how a node declares and proves the active-validator role so the software
-can reject pruning configurations while pre-Store historical MailTx retention
-is mandatory.
-
-### O-024 Account authorization and proof of possession — resolved
-`AccountCreateOp` requires hybrid Recovery Root (Ed25519 and ML-DSA-65) and
-initial Authorization key (Ed25519 and ML-DSA-44) proofs of possession over the canonical
-network-bound authorization digest. Verified in `ValidateAccountCreateOp`.
-
-## Evidence / legal
-
-### O-016 Consensus timestamp semantics
-Define validator/block time drift rules if a network timestamp is exposed as evidence.
-
-### O-017 Legal evidence positioning
-Obtain French/EU review before marketing the cryptographic record as notarization or registered-mail equivalent.
-
-## Beta Storage and Mail attachments
-
-### O-018 Store mail-object format
-Freeze the encrypted message/attachment manifest and MailTx commitment/reference
-format without placing attachment bytes on-chain.
-
-### O-019 Storage provider verification
-Define leases, audit proofs, repair, and retrieval evidence. Required for Beta
-Storage readiness, not only before provider rewards.
-
-### O-020 Fee Router v2
-Define provider share and service accounting before Beta. Do not change the
-current 4-fee split by implication; any change requires a separate decision.
+No single item authorizes a partial DEV rollout. Cutover follows only after all
+format, key, finality, state, storage, Identity/name, and clean-machine recovery
+gates pass together.

@@ -1,98 +1,51 @@
 # Implementation status
 
-## Protocol reset target (DEC-195)
+## Active protocol target
 
-The current DEV executable and chain remain on the existing BFT,
-ValidatorSet, MailTx, and indexed object/manifest protocol. The next target is
-the genesis-bound hybrid-PQ PoA + generic RootPublication + encrypted Chunk DAG
-defined in `POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`,
-`STORAGE_ADMISSION.md`, and `IDENTITY_DISCOVERY_AND_RECOVERY.md`, with machine-
-readable parameters/gates in `spec/poa_chunk_dag.yaml`. None of that target is
-active on DEV. The first target-code milestones are implemented: `ChunkId` is
-the full BLAKE3-256 digest of stored encrypted bytes, using pinned BLAKE3 C
-1.8.1, with official known-answer vectors; the bounded RFC 8949 core-
-deterministic CBOR value codec has explicit profile limits; and a versioned
-ChaCha20-Poly1305/HKDF encrypted-chunk envelope uses per-node salts/nonces,
-network-bound AAD, and bounded random padding. A local encrypted byte-graph
-builder/fetcher applies fixed leaf, fan-out, depth, chunk-count, and total-size
-limits and rejects duplicate/cyclic references. RootPublication, PoA
-execution, and distributed storage admission remain unimplemented. Do not
-reset DEV until fork/equivocation, storage
-admission/durability, names integration, state execution, and clean-machine
-recovery gates pass together.
+`main` implements an experimental substrate for genesis-bound hybrid-PQ PoA,
+generic RootPublication, and encrypted chunk DAGs. It is not an active DEV
+protocol. The deployed DEV chain remains pre-cutover and must not be reset
+until all integration and clean-machine recovery gates pass together. See
+`AGENTS.md`, the authority documents in `docs/cybou/`, and
+`spec/poa_chunk_dag.yaml`.
 
-CYBOU is experimental. Current DEV uses hybrid post-quantum account authorization,
-BFT finality, and one verified state shared by Identity, Email, Wallet, and
-Storage. DEC-195 changes the next protocol target to genesis-bound hybrid-PQ
-single-operator PoA and generic encrypted RootPublication/Chunk DAG. The
-standalone DEV node and native Qt desktop use the canonical CYBOU runtime; the
-desktop remains an observer role and uses multi-peer CYP2 networking by
-default. A development reset follows only after the target integration gates
-pass together.
+## Implemented in source
 
-Beta product scope requires Object Storage-backed encrypted Mail attachments;
-the first durable ciphertext provider and CYP2 PUT/commit/GET slice is
-implemented behind explicit opt-in, but peer placement and the end-to-end
-attachment flow are not implemented. The current text-only Mail profile is
-limited to DEV/Alpha integration. See `81_BETA_PRODUCT_SCOPE.md` for Beta
-readiness criteria.
+- Full 256-bit ChunkID using pinned BLAKE3 C 1.8.1 and published known-answer
+  vectors.
+- Bounded RFC 8949 core-deterministic canonical CBOR codec.
+- Versioned encrypted chunk envelope using HKDF-SHA256 and
+  ChaCha20-Poly1305, random per-node salts/nonces/padding, and network-bound
+  associated data.
+- Local encrypted graph builder and reader with bounded depth, fan-out, chunk
+  count, and reconstructed bytes; duplicate and cyclic references are rejected.
+- Canonical RootPublication CBOR body, strict resource limits, identity-bound
+  recipient capsules, and size-aware deterministic integer fee calculation.
+- BLAKE3 chunk authorization commitments with sorted opaque ChunkID/size sets,
+  proof generation, and verification.
 
-DEC-194 and `spec/mail_files_architecture.yaml` freeze Mail and Files as
-product surfaces over one Identity, finalized state, and encrypted Object
-Layer. Beta attachment descriptors remain inside E2E-protected Mail content;
-attachment objects live in Storage. Gmail/Drive interaction contracts are in
-`82_MAIL_UI_UX.md` and `83_STORAGE_UI_UX.md`. This is a product target, not an
-implementation claim.
+These components are substrate code. Their integration with the canonical
+Identity operation path, state transition, block finality, and provider network
+is incomplete. Do not infer network readiness from the presence of local
+serialization or cryptography code.
 
-## Implemented core components
+## Cutover gates still open
 
-- Random stable AccountID, independent of mnemonic and keys.
-- 24-word recovery phrase encoding and recovery-derived Ed25519 + ML-DSA-65 root keys.
-- Mnemonic-derived Ed25519 + ML-DSA-44 Authorization keys and versioned RecoveryKeyID commitment; no DeviceKeyID exists.
-- Portable encrypted CYBV2 vault with Argon2id and AES-256-GCM, durable create-only save and reopen verification, plus authenticated same-directory candidate promotion used by finality-gated recovery-root rotation.
-- DEV Identity KEM publication is implemented in source for the next protocol cutover: draft-05 `MLKEM768-X25519` (X-Wing), canonical package and context commitment, AccountCreate/IdentityRotate authorization binding, registry state commitment, and mnemonic-derived KEM seed in the CVID5 vault. Runtime lookup resolves the package for AccountID/key_epoch against the current finalized commitment. Client-side BFT certificate and historical authorization verification remain required before Mail/Files consume capabilities.
-- CVID5 stores random AccountID plus recovery entropy; Recovery, Authorization, and X-Wing key roles derive independently from the entropy. Legacy vaults are rejected; obsolete DEV vaults are discarded at the coordinated cutover.
-- Canonical account creation with anti-Sybil work and hybrid Recovery/Authorization proofs of possession.
-- Identity registry with one current Recovery key, Authorization key, KEM commitment, account-wide nonce, and key_epoch; IdentityRotate replaces all roles atomically.
-- Canonical identity-registry and monetary-state snapshots with a domain-separated state root.
-- Account creation that moves the onboarding bonus from OnboardingPool to SystemBalance.
-- Identity-authorized payments with deterministic fees, overflow checks, and atomic shared-nonce/balance updates on candidate state.
-- Versioned AccountCreate and Payment wire encodings, operation IDs, and a candidate block executor that routes four fee units as three Security plus one Onboarding.
-- Validator-set validation, hybrid validator signatures, BFT finality certificates, and a core consensus engine with explicit finality.
-- Canonical operations, name registry, block execution, state store, and standalone authority/observer sync are connected to the native node runtime.
-- The DEV network definition commits to the active name rules. The CLI derives genesis validator keys from the same secret used by the producer; the desktop loads the verified network file.
-- Desktop identity creation uses a random AccountID, confirmed 24-word phrase, and durable CYBV2 vault before AccountCreate. Clean-machine restore derives all roles, verifies the current key_epoch commitment in finalized state, and durably saves a local vault without a consensus mutation.
-- The desktop runs as an observer. Setting `CYBOU_DEV_VALIDATOR` fails closed until the desktop shares the complete validator networking and consensus lifecycle with `cybou-node`.
-- The desktop build is CYBOU-native: inherited Bitcoin Qt UI sources, locale catalogs, translation tooling, and the BitcoinApplication test harness have been removed. Desktop smoke coverage uses only `cybou_qt`, `cybou_node`, and Qt Test.
-- Configured multi-peer desktop sync now checks every connected peer when one reports `UP_TO_DATE`, isolates remote protocol failures from the network worker, and backs off a dropped bad peer. Wallet payment and one-way lock submission run off the Qt thread; received-mail fee display uses the active network's canonical protocol parameters.
-- Native and desktop `.cybou` claiming durably save an encrypted local claim before NameCommit, then perform work and NameReveal; only finalized ownership is displayed as the primary name.
-- `IdentityOperationCoordinator` durably journals exact operation bytes, OperationID, nonce metadata, and reconciliation phase in one shared journal. Wallet payments/locks, Name commit/reveal, IdentityRotate uses the same one-unresolved-operation journal, persists a candidate vault before submission, and promotes it only after finality. Mail and Files are not integrated yet. See `87_IDENTITY_OPERATION_COORDINATOR.md`.
-- Four distinct PQ validator keys can be committed to a deterministic DEV genesis, and the node serves N>1 validator clusters over CYP2. The four-process smoke exercises leader loss, process restart, partition recovery, catch-up, and churn, but repeated local VPS execution found intermittent liveness failure: 7/8 initial runs passed, one stalled after resuming a validator at round 26 with a lock from round 15, and a following run passed. The requested 20/20 consecutive passes are not established; multi-validator liveness remains open. The CBS2 signing journal persists round and lock state; see `07_BFT_CONSENSUS.md` for the lock-recovery investigation.
-- Verified signed future proposals are bounded and buffered; they do not advance a validator round. Future-round entry continues to require distinct-validator vote evidence or local timeout progression, after which a matching buffered proposal is processed.
-- Canonical AuthorityNode, NodeRuntime, MailService, and WalletService smoke suites are back in the native test target. The obsolete classical X25519 Mail prototype has been removed. DEV now has a frozen draft-05 X-Wing MailEnvelopeV1 single-recipient profile; bounded canonical envelope and ProtectedTextV1 codecs are implemented, but HPKE encryption is not integrated because no compatible backend has been selected. Sending and decryption remain disabled. Do not claim production Mail confidentiality until the vetted backend, encryption/decryption flow, encrypted mailbox storage, and historical authorization evidence are integrated.
-- `CybouNodeService` owns shared runtime initialization, desktop observer networking, and authority block-feed/CYP2 listeners, consensus scheduling, peer gossip, and historical catch-up. Desktop uses the published DEV CYP2 bootstrap (`51.255.46.58:29461`) by default, discovers peers, keeps up to eight outbound sessions, syncs verified blocks across peers, submits operations, and reconnects after failures; an inbound desktop listener is separately opt-in. CYB1 on port 29460 remains an explicit diagnostic fallback. The desktop remains observer-only in validator role; both native desktop and `cybou-node` use the same node service.
-- A separate native P2P session layer exchanges bounded HELLO/PING/PONG, finalized-block requests, and canonical operation submissions over persistent TCP sockets. HELLO advertises block-serving and operation-acceptance capabilities, which are checked before use. An outbound peer manager uses the runtime's NetworkID and finalized status, tracks up to eight peers, rejects duplicates and wrong-network peers, removes peers that fail health checks, bounds TCP connection attempts to five seconds, and commits retrieved blocks only after canonical verification. CYP2 peer discovery exchanges bounded numeric endpoint lists; configured peers are bootstrap seeds, while discovered endpoints remain in-memory routing hints. The DEV producer exposes a CYP2 listener with up to eight concurrent inbound sessions; `p2p-probe`, `p2p-sync`, and `p2p-submit` exercise it. `p2p-follow` keeps a headless observer syncing from one endpoint; `p2p-follow-peers` tries up to eight explicitly listed endpoints and fails over after transport loss. `p2p-submit-peers` tries multiple explicit operation admission endpoints, and `operation-status` locates an OperationID in complete local finalized history. `CybouNodeService` owns desktop peer discovery, retry, multi-peer catch-up, block fanout, and an optional inbound listener; desktop bootstraps through CYP2 by default. Operation acknowledgments are distinct from finality. Operation and block gossip remain bounded initial implementations.
-- Encrypted object chunks use the v1 storage crypto profile and durable local provider store. CYP2 `CAP_STORAGE` and `CAP_STORAGE_ABORT` are advertised only when `serve` is given a positive storage capacity. Bounded PUT, manifest commit, manifest/chunk GET, and abort of uncommitted chunks verify network binding, ChunkIDs, manifest descriptors, and durable writes. `StorageService` can use a local store, one explicitly selected connected `PeerStorageProvider`, or `StoragePlacement`, which chooses and pins up to three distinct connected abort-capable providers for a file upload and reports manifest acknowledgment counts. Automated provider connection, leases, durability proofs, repair, and accounting are absent, so storage remains opt-in and is not Beta-ready. See `11_STORAGE_OBJECTS.md` and `88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md`.
-- Provider staging now has a durable per-ObjectID index updated atomically with each new chunk, a capacity-derived global byte cap, a 1,024-object cap, and a 24-hour inactivity TTL. Expired uncommitted chunks are reclaimed at startup, before storage writes/commits, and once per minute while serving. Manifest commit atomically removes the staging record; first open of an older store reclaims legacy orphan chunks while preserving manifest-committed data. This remains local provider policy and does not alter CYP2 or consensus.
-- `StorageService` now persists one encrypted CYBV2 upload journal before its first provider write and records the upload phase through commit. On the next upload, it reconciles a committed provider manifest and preserves the encrypted private metadata, or retries abort and removes incomplete local metadata. Recovery safely aborts incomplete uploads; it does not resume source bytes that are unavailable after process restart. Lost commit acknowledgments are reconciled by querying the provider manifest.
-- A local password-protected, AccountID-bound Storage Key Ring stores contiguous random SMK epochs, rotates by authenticated compare-and-replace of its encrypted sidecar, and retains old keys for existing objects. It is not restored on a clean machine yet; Files recovery remains incomplete. See `76_IDENTITY_VAULT_RECOVERY.md` and `88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md`.
-- The target clean-machine SMK restoration and key distribution model is specified in `90_STORAGE_KEY_RECOVERY.md`. It requires standard account-KEM wraps and phrase-derived domain-separated recovery wraps, a finalized account-level envelope-root commitment, and durable envelope retrieval. None of those distribution or recovery paths are implemented; Identity recovery alone does not restore Files access.
-- The target encrypted Files catalog and `FILES_ROOT_UPDATE` behavior are specified in `91_FILES_MANIFEST_AND_ROOT.md`. The catalog, encrypted Files catalog synchronization, crash reconciliation, and real Qt Files surface remain unimplemented; the current page is an object-list skeleton and does not display original filenames.
-- `StorageService` streams files into bounded encrypted chunks through a local store, one selected `PeerStorageProvider`, or the multi-peer `StoragePlacement`, saves private object metadata and the local filename in an encrypted AccountID/NetworkID-bound sidecar, and lists those local entries without contacting providers. Downloads verify the provider manifest and chunks before writing to a synced no-overwrite destination. Failed partial uploads request cleanup across the full expected chunk range; cleanup failure is explicit, and a lost or partial manifest acknowledgment remains marked pending in the local listing. This is a per-installation index, not the encrypted synchronized Files catalog. Desktop transfer actions, multi-peer wiring, leases, and repair remain absent.
+- Correct mandatory BLAKE3 integration in Depends and verify Windows/vcpkg,
+  Linux normal, and Linux Depends builds.
+- Cross-implementation vectors for canonical CBOR, encrypted chunks/graphs,
+  hybrid capsules, RootPublication authorization, and chunk admission.
+- RootPublication Identity authorization, replay protection, deterministic
+  state execution, and genesis/state-root integration.
+- Genesis-bound PoA signing, hybrid signature verification, anti-equivocation
+  journal durability, fork handling, and operator recovery.
+- Finalized-publication ChunkStore admission, independent chunk placement,
+  durability, retry, retention, repair, and provider-loss handling.
+- Publication scanning, recursive retrieval, and clean-machine Identity,
+  Mail, and Files recovery without an existing client database.
+- Gmail-familiar Mail and Google Drive-familiar Files UI/UX acceptance.
 
-## Integration still required
-
-- Complete password change, vault lock and reauthentication, and client recovery controls.
-- Complete client-side finalized-block certificate and historical authorization verification before enabling Mail confidentiality or Files recovery. Encrypted local mailbox storage and historical sender-key evidence remain open. RFC 10024's TLS group is not the persistent Identity format; the draft-05 capability profile is DEV-only. See `86_IDENTITY_SECURITY_SUBSTRATE.md`, `89_IDENTITY_KEM_PUBLICATION.md`, and `49_EMAIL_E2EE_HPKE_PQ.md`.
-- Finish Qt wallet and Mail flows against the canonical identity and encryption profiles.
-- Route Mail and Files through the shared Identity operation reconciliation model.
-- Run independent validators with durable crash recovery and verify finality under production topology.
-- Finish operator, release, and treasury signing integration under the PQ key policy.
-- Add client-side three-peer placement, lease/audit/repair/accounting, encrypted Mail attachments, and the Files product surface before Beta; Backup is a post-Beta application. Calibrate the Beta onboarding budget from measured Mail and Files/Storage usage; model Backup separately as a post-Beta capacity scenario.
-- Remove obsolete runtime paths, names, files, and documentation before the DEV reset. No compatibility decoder or automatic state/vault import is planned.
-
-## Current network boundary
-
-The development node runs one validator in Authority Mode (`f=0`) by default and already supports N>1 `serve` with an explicit peer list; a four-process validator cluster is exercised by a CI smoke gate. Four equal-weight validators are required to claim tolerance of one Byzantine fault. The bounded DEV transport and compiled bootstrap endpoint are integration tools, not a production peer-to-peer network. Discovered peers are untrusted routing hints only: explicit validator endpoints keep gossip priority, and generic discovery never defines consensus connectivity.
-
-The development network can be reset. Do not treat DEV identities, balances, validator keys, or network state as production assets.
+The protocol target is not active on DEV. A single coordinated cutover is
+permitted only after every format, finality, execution, storage, Identity/name,
+and recovery gate passes. Cutover discards obsolete DEV state and vaults; do not
+add runtime compatibility or automatic import.

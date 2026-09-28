@@ -1,74 +1,39 @@
 # Contributing to CYBOU
 
-Thank you for your interest in contributing to **CYBOU**, a sovereign European peer-to-peer network designed in France.
+Before changing code, read `AGENTS.md` and the active protocol documents it
+names. The single protocol authority in `main` is the PoA + encrypted chunk-DAG
+target described by `docs/cybou/POA_FINALITY.md`,
+`ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`,
+`IDENTITY_DISCOVERY_AND_RECOVERY.md`, and `spec/poa_chunk_dag.yaml`.
+`docs/cybou/26_IMPLEMENTATION_STATUS.md` distinguishes implemented substrate
+code from integration and deployment gates.
 
-All contributors—human developers and autonomous AI coding agents alike—must strictly follow the project's architectural invariants and governance principles.
+## Architecture rules
 
----
+- The finalizer uses a genesis-bound hybrid-PQ PoA key. This is a centralized
+  trust model and must not be described as BFT fault tolerance.
+- Generic `RootPublication` is the only application-content publication
+  operation. Mail, Files, Backup, filenames, recipients, graph edges, and
+  application schemas are private encrypted content.
+- Chunk IDs are full BLAKE3-256 digests of stored ciphertext. Use the pinned,
+  vetted implementation; do not implement cryptographic primitives locally.
+- Consensus and state-transition logic use deterministic integer arithmetic.
+- Parsers enforce the frozen size, count, and depth limits.
+- Keep Identity authorization, Identity recovery, Identity KEM, PoA, release,
+  and treasury key roles separate. Production signatures require the configured
+  hybrid classical and post-quantum components.
+- Preserve Gmail-familiar Mail and Google Drive-familiar Files UX requirements
+  under CYBOU branding. Keep service indexes client-local and encrypted.
+- Do not add legacy protocol documentation, runtime compatibility, or dual
+  operation decoders to `main`.
 
-## 1. Ground Rules & Authority
+## Development workflow
 
-Before proposing or implementing any changes, you **must read and adhere to**:
-
-1. **[`AGENTS.md`](./AGENTS.md)** — The absolute implementation authority for CYBOU. Hard rules defined there override any unvetted conventions.
-2. **[`docs/cybou/`](./docs/cybou/)** — The architectural design documents covering BFT consensus, MailTx protocol, deterministic fee routing, Proof of Trust (PoT), and permissionless onboarding.
-3. **[`MANIFEST.md`](./MANIFEST.md)** — The cryptographic inventory of authoritative documents.
-
-### Invariant Rules (Summary from `AGENTS.md`)
-
-- **CYBOU Email & MailTx**:
-  - `MailTx` is a first-class operation, not an `OP_RETURN` or script payload.
-  - The initial profile is text-only and single-recipient. No attachments in consensus state.
-  - No permanent per-mail consensus-state object (state stores validation-relevant counters/roots only).
-  - Local clients own mailbox indexing; active validators retain pre-Store history until Object Storage is deployed.
-- **Consensus & Time**:
-  - Permissioned BFT explicit finality with operator-approved admission.
-  - Equal validator weight = 1 (minimum 4 validators for $f=1$ tolerance).
-  - Proof of Trust (PoT) epochs are derived strictly from finalized block height (integer arithmetic only; wall clock never dictates consensus).
-- **Economics & Onboarding**:
-  - Fixed supply: $100,000,000,000$ CYBOU ($0$ decimals).
-  - Deterministic fee router: 4 CYBOU fees $\to$ 3 Security + 1 Onboarding. Priority fee bidding is disabled.
-  - Account creation is protocol-native and permissionless, protected by anti-Sybil work and hybrid root/device proofs. An automatic onboarding bonus is debited directly from `OnboardingPool` to `SystemBalance` without operator vouchers or invites.
-- **Operator Key Separation**:
-  - Separate keys for Operator Authority, Operator Validator, Release Signing, and Treasury. Operator Authority does NOT participate in ordinary account creation.
-
----
-
-## 2. Development Workflow
-
-### Branching and Commits
-
-- Work on dedicated feature branches branched off `main`.
-- Commit messages should be concise, descriptive, and reference the component being modified (e.g., `cybou/state: prevent double-claiming welcome grant`).
-- Keep commits atomic and logically separated.
-
-### Coding Standards
-
-- **Language Standard**: C++20.
-- **Deterministic Logic**: Consensus, state transition, and fee calculations must use integer arithmetic only. Floating point operations are strictly prohibited in consensus code.
-- **Defensive Error Handling**: Deserialization routines and network parsers must enforce strict bounds to prevent buffer overflows or memory exhaustion.
-- Refer to [`doc/developer-notes.md`](doc/developer-notes.md) for detailed C++ style and naming conventions.
-
----
-
-## 3. Testing and Verification
-
-Every code change must be accompanied by appropriate automated tests:
-
-- **Unit Tests**: Add test cases to `src/test/` for all new state machine logic, serialization routines, and cryptographic verifications.
-- **Running Tests**:
-  ```powershell
-  ctest --test-dir build --output-on-failure
-  ```
-- **Benchmarks & Fuzzers**: Changes to serialization and parsers should include or update fuzz targets in `src/test/fuzz/` to verify robustness.
-
----
-
-## 4. Pull Request & Review Process
-
-1. **Self-Review**: Run unit tests and ensure code formats cleanly before submitting.
-2. **Review Criteria**:
-   - Does the change conform to `AGENTS.md` and related `docs/cybou/` specifications?
-   - Are edge cases and bounds checks handled safely?
-   - Is deterministic consensus behavior preserved?
-3. **Approval**: Changes affecting consensus, fee routing, or cryptographic verification require review by core project maintainers.
+- Use C++20 and the repository's existing formatting conventions.
+- Keep changes focused and commit them with concise, descriptive messages.
+- Add focused tests for new serialization, cryptography integration, bounds,
+  and state-machine behavior. Run the relevant tests and build targets before
+  reporting completion.
+- For CYBOU core or `cybou-node` changes, follow the DEV deployment and safety
+  gates in `AGENTS.md`. Preserve rollback artifacts and do not reset DEV except
+  after the coordinated integration gate.

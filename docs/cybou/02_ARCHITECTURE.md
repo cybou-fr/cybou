@@ -1,111 +1,77 @@
-> Historical/current-DEV scope: this document describes the BFT, MailTx, validator-set, or indexed-object protocol currently running on DEV. It is superseded for the next-gen target by `POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, and `IDENTITY_DISCOVERY_AND_RECOVERY.md`. Product and UX requirements remain applicable only where they do not conflict with those target documents. No cutover is active yet.
-# 02 — Architecture
+# CYBOU architecture
 
-The diagrams below describe the target shared network. The Qt desktop opens a
-native `CybouNodeRuntime`, bootstraps over CYP2 by default, verifies finalized
-blocks, and submits supported operations. Name and Wallet use the durable
-Identity operation coordinator; Mail encryption and Object Storage are not yet
-operational end to end. See `26_IMPLEMENTATION_STATUS.md` for implementation
-status and `86`–`88` for the identity and encrypted-object architecture.
+CYBOU is an experimental identity-centered platform for private messaging and
+user-controlled files. The active target uses one protocol substrate for all
+application content; Mail and Files remain product experiences implemented by
+the desktop client.
 
-Identity is the security root. Name, Wallet, Mail, and Files are identity
-capabilities and share Identity authorization and key lifecycle. Files and
-Storage-backed encrypted Mail attachments are Beta requirements. Backup is
-post-Beta; there is no separate CYBOU Drive product. See
-`81_BETA_PRODUCT_SCOPE.md`.
-
-## UX invariant
-
-Protocol complexity must not leak into normal user workflows. The normal UI should expose names and outcomes such as `stanislav.cybou`,
-`Sending`, `Delivered / Finalized`, `Backup protected`, and `Identity keys
-rotated`, rather than AccountID, nonce, epoch, PoW difficulty, validator quorum, ML-DSA, block height
-or OperationID. Advanced and diagnostic views may expose protocol detail.
-
-## Desktop process
+## System layers
 
 ```text
-cybou.exe
-├── Qt UI
-└── NodeCore
-    ├── Identity Security Substrate
-    │   ├── Recovery authority
-    │   ├── Identity authorization signing
-    │   ├── Account key agreement (DEV profile)
-    │   └── IdentityOperationCoordinator
-    ├── Identity capabilities
-    │   ├── Name
-    │   ├── Wallet
-    │   ├── Mail
-    │   └── Files
-    ├── Encrypted Object Layer
-    ├── Object Storage (Beta requirement)
-    ├── BFT finality and verified state
-    ├── CYP2 networking
-    └── Persistence / lifecycle
+Qt desktop client
+  ├── account-level Identity and portable recovery
+  ├── local encrypted Mail and Files indexes
+  └── native CYBOU runtime
+       ├── canonical state execution and full-node validation
+       ├── genesis-bound hybrid-PQ PoA finality
+       ├── generic RootPublication
+       ├── encrypted canonical-CBOR chunk DAG
+       └── finalized-publication ChunkStore admission
 ```
 
-The identity holds the authorization and key lifecycle; private keys remain
-under client control. Signing keys and encryption/KEM keys are separate
-domains. Mail and Files do not create independent identities or parallel
-authorization systems. Backup is a post-Beta application of the shared Storage
-layer.
+The active protocol authority is `AGENTS.md`,
+`POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`,
+`STORAGE_ADMISSION.md`, `IDENTITY_DISCOVERY_AND_RECOVERY.md`, and
+`spec/poa_chunk_dag.yaml`.
 
-## Email architecture
+## Finality and validation
 
-```text
-CYBOU Email UI
-    -> Mail Protocol
-    -> Identity-published recipient capability
-    -> E2E encryption + Identity authorization
-    -> MailTx
-    -> ordinary CYBOU P2P propagation
-    -> BFT finality
-    -> bounded mail-validation state
-    -> encrypted manifest/object reference
-    -> CYBOU Object Storage for opaque attachment bytes
-```
+A genesis-bound single-operator hybrid-PQ PoA signer finalizes blocks. Each
+full node independently verifies the finality proof, executes every operation,
+and compares the resulting state root. This is centralized finalization and
+does not provide Byzantine fault tolerance. A durable anti-equivocation journal
+and deterministic conflict/fork behavior are required before activation.
 
-Attachment bytes stay out of chain/state. Store holds opaque encrypted objects;
-the recipient retrieves and decrypts locally, even if offline at send time.
-There is no Email-specific relay/mailbox layer.
+## Content and privacy
 
-## Commercial operator vs network runtime
+`RootPublication` is the only application-content publication operation.
+Application schemas, recipient identity, names, metadata, and graph edges stay
+inside encrypted chunks. ChunkID is the full BLAKE3-256 digest of stored
+ciphertext. Recipient capsules wrap one graph content key for a recipient KEM
+capability without publishing the AccountID.
 
-```text
-CYBOU Owner / Operator
-    owns product and business
-    approves validators in current PoA admission model
-    operates validator infrastructure
+Consensus enforces generic publication count/byte bounds and deterministic
+size-aware fees. Mail, Files, and Backup do not create application-specific
+consensus operation types or per-item state. Local clients scan finalized
+publications, recover authorized content keys, retrieve chunks, and rebuild
+service indexes.
 
-CYBOU Network
-    independently verifies protocol rules
-    replicates chain/state
-    can gain additional approved validators
-```
+Finality authorizes chunk storage but does not prove provider durability.
+Clients distinguish finalized, available, and retrievable content, retain
+ciphertext locally, and expose retry/recovery states.
 
-The operator has no master key to decrypt mail or arbitrarily debit user Balance.
+## Product surfaces
 
-## Proof of Trust
+- Mail uses familiar Gmail workflows under CYBOU branding. The initial profile
+  is one recipient and UTF-8 text; attachments and multi-recipient flows wait
+  for shared storage and recovery gates.
+- Files uses familiar Google Drive workflows, private encrypted catalogs,
+  immutable versions, and identity-based sharing.
+- Backup is post-Beta.
 
-One AccountID PoT feeds bounded policies for:
+## Key and economic boundaries
 
-```text
-Email
-Payments
-Identity operations
-future Storage
-Files
-Backup
-```
+Identity recovery, Identity authorization, Identity KEM, PoA, Release Signing,
+and Treasury key roles remain separate. Production signatures require both
+configured hybrid components; no classical-only fallback is allowed.
 
-PoT is not validator voting power.
+The supply cap is 100,000,000,000 CYBOU with zero decimals. Deterministic fees
+route each four-unit fee as three to Security and one to Onboarding. System
+Balance pays protocol services; it does not alter PoA trust or account scores.
 
-## Consensus
+## Cutover
 
-```text
-BFT explicit finality
-+
-operator-approved authority admission
-```
-
-This is effectively a PoA admission model over a BFT consensus core.
+The target is not active on DEV. One coordinated cutover follows only after
+format, key, finality, state, storage, Identity/name, and clean-machine recovery
+gates pass together. Cutover discards the old DEV state and vaults. Do not add
+runtime compatibility, automatic import, or dual decoders.

@@ -15,7 +15,7 @@ Read active docs before coding.
 - Portable CYBV2/CVID5 vault stores stable AccountID plus recovery entropy; all Identity roles are derived from entropy. Durably save and reopen before AccountCreate. Clean-machine restore verifies every current key role and KEM commitment against finalized key_epoch and does not create a protocol authorization operation.
 - `.cybou` labels follow the 5–32 ASCII rule and finalized commit/work/reveal. No transfer, expiry, or recycling in the initial registry.
 - Keep mail encryption keys separate from Identity signing keys; no custom cryptographic primitives. IdentityRecord has recovery key, authorization key, current KEM commitment, one shared nonce, and key_epoch. IdentityRotate atomically replaces all roles; no device registry, activation, per-device nonce, DeviceAdd, or DeviceRevoke.
-- Current deployed DEV remains on the existing BFT/MailTx/Object protocol until one complete PoA + RootPublication + encrypted chunk-DAG cutover passes its integration gate.
+- The deployed DEV predates the active `main` protocol target. Do not use its protocol formats as implementation authority or reset it before the coordinated cutover gate.
 - The target protocol is a genesis-bound single-operator PoA finalizer with independently validating full nodes. This is centralized PoA, not BFT and not Byzantine-fault-tolerant finality.
 - PoA signing is a separate mnemonic-derived role, held in memory only, and requires Ed25519 AND ML-DSA-65. Identity authorization/recovery, PoA, Release Signing, and Treasury keys remain separate; no classical-only production signature path.
 - Keep the PoA anti-equivocation journal durable and fail closed. Deterministic fork/conflicting-signature and journal-rollback handling are cutover gates.
@@ -35,9 +35,10 @@ Read active docs before coding.
 - Keep Mail and Files UX requirements. Initial DEV/Alpha product UX remains one-recipient text-only until the new protocol reaches its own integration gate; Beta attachments use the shared chunk DAG.
 - Consensus may enforce generic publication byte/count limits and deterministic fees, but cannot enforce hidden Mail-specific quotas.
 
-### Historical protocol
-- Existing DEV/BFT/MailTx/Object Storage documents describe the currently running protocol only unless explicitly marked as the post-cutover target.
-- Do not mix old BFT/MailTx or indexed-manifest formats into the new genesis or implement dual decoders.
+### Cutover
+- `main` contains one active protocol authority: genesis-bound PoA, generic RootPublication, and encrypted chunk DAG.
+- Do not add superseded BFT/MailTx/indexed-object protocol documents, runtime compatibility, automatic import, or dual decoders to `main`.
+- The existing DEV deployment is not a protocol specification. Discard its state and vaults only after the complete coordinated cutover gate.
 - Beta durability, pruning, retention, repair, and economics remain explicit readiness gates for the new ChunkStore.
 
 ### PoT

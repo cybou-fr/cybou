@@ -1,133 +1,51 @@
-# 05 — Chain and state model
+# Canonical chain state
 
-CYBOU uses consensus state only for data required to validate future state transitions.
+Full nodes execute finalized blocks deterministically and derive the same state
+root. State is account-level and application-neutral; Mail and Files do not
+create permanent per-message or per-file records.
 
-Historical protocol operations, including MailTx, belong to block/history data.
+## State domains
 
-## Immutable network definition
+- Monetary accounts: spendable balance and service `SystemBalance`.
+- Identity registry: stable AccountID, current hybrid recovery and
+  authorization capabilities, current KEM commitment, shared nonce, and
+  `key_epoch`.
+- `.cybou` name registry: finalized commit/work/reveal ownership records.
+- Economic pools and deterministic generic publication accounting.
+- Network parameters bound by the immutable network definition.
 
-Each DEV, Beta or Mainnet instance is identified by a domain-separated hash of
-one canonical `CybouNetworkDefinition`:
+The exact Identity, Name, and monetary encodings are owned by their active
+specifications. Application schemas and content metadata remain encrypted in
+the chunk DAG and are indexed locally by each client.
 
-```text
-protocol version
-+ genesis block ID
-+ genesis state root
-+ immutable protocol parameters
-+ initial validator-set commitment
--> NetworkID
-```
+## Block execution
 
-The state store owns this definition for its lifetime. Block callers cannot
-substitute a different NetworkID or parameter set for individual transitions.
-Genesis initialization persists the derived NetworkID beside the canonical
-state. Reopening that database with any definition that hashes to a different
-NetworkID fails before state transition processing.
+For each candidate block, a node validates canonical operation bytes,
+authorization, replay protection, resource bounds, and fees against a
+candidate state. It derives the state root and accepts the block only when the
+genesis-bound hybrid-PQ PoA finality proof is valid. Full nodes independently
+re-execute the block and compare the state root.
 
-Before initialization, the definition itself must pass structural validation:
-the version must be supported; genesis block, genesis state and validator-set
-commitments must be nonzero; account-creation work difficulty must fit the
-256-bit work hash; and epoch length and per-block AccountCreate capacity must be
-nonzero. Invalid definitions cannot initialize, load or advance canonical state.
+The PoA trust model is centralized. Durable anti-equivocation and deterministic
+fork handling are cutover requirements. See `POA_FINALITY.md`.
 
-## Target canonical consensus state
+## RootPublication
 
-Conceptually:
+RootPublication is the only operation that publishes application content. It
+commits to a generic sorted set of opaque ChunkIDs and stored sizes, a Merkle
+root, a root chunk, and recipient KEM capsules. State validation recomputes the
+Merkle root and aggregate count/bytes; it does not interpret Mail or Files
+schemas.
 
-```text
-ChainState
-├── AccountState
-│   ├── Balance
-│   ├── System Balance
-│   ├── authorization
-│   └── operation nonce / replay protection
-├── Proof-of-Trust state
-├── Validator-set state
-├── Operator-authority state
-├── Identity/name state
-├── mail rate/account counters
-├── fee/reward pools
-├── protocol parameters
-└── bounded aggregate storage-accounting state for Beta Store
-```
+Finalized blocks retain canonical operation history for proof and discovery.
+Clients rebuild Inbox, Sent, Files, and other indexes from finalized
+publications and locally decrypted content. These indexes are not consensus
+state.
 
-The inherited Bitcoin UTXO/Script ledger remains transitional bootstrap code,
-not the target CYBOU monetary model. Native Payment must use typed account
-operations and `AccountState`; UTXO/Script removal occurs only after equivalent
-Payment, authorization, fee and BFT block-production paths are implemented and
-tested.
+## Invariants
 
-## Not current state
-
-Do not create permanent per-email consensus objects.
-
-```text
-NO MailMarker[MailID] forever
-NO full email ciphertext in state
-NO Inbox/Sent UI state
-NO read/unread state
-```
-
-## Historical protocol operations
-
-```text
-Block
-├── Payment
-├── Identity
-├── SystemBalance
-├── MailTx
-├── ValidatorSet
-├── OperatorAuthority
-└── ProtocolParameter
-```
-
-MailTx is a first-class CYBOU protocol operation.
-
-## Mail discovery
-
-A compact block/range filter or equivalent discovery accelerator may be committed/stored outside the permanent per-account/per-mail state model.
-
-Its job is discovery efficiency, not mail authenticity.
-
-## Determinism
-
-```text
-CanonicalFinalizedState
-+ valid typed protocol operations
-+ finalized child block
--> CandidateState
--> atomic canonical commit
-```
-
-`CybouStateStore` is the sole owner of canonical CYBOU consensus state. Callers
-may load and verify that state, but they do not provide an independently mutable
-state copy to the production commit path.
-
-Block operations execute against a temporary candidate derived from the current
-canonical state. A validation failure leaves the stored state unchanged. After
-BFT finality, the candidate state, its state root, the finalized block ID and
-finalized height are persisted atomically. Each child height must equal the
-previous finalized height plus one, so a caller cannot advance protocol epochs
-with an arbitrary height jump.
-
-Explicit BFT finality means a committed finalized CYBOU block is not reorged.
-The CYBOU state engine therefore has no production rollback or per-block undo
-path. Recovery from database corruption or operational failure belongs to
-verified state sync, backup and disaster-recovery procedures, not consensus
-reorganization.
-
-## Beta Store boundary
-
-For Beta Mail:
-
-```text
-MailTx
--> content commitment / object reference
-
-Store
--> opaque encrypted message/attachment objects and manifest
-```
-
-MailTx carries commitments/references, never attachment bytes. State remains
-bounded and does not become the mailbox database. Exact aggregate accounting
-state and provider proofs remain protocol freeze items.
+- No per-Mail or per-file permanent state object.
+- No plaintext name, recipient, MIME type, path, or graph topology in consensus.
+- System Balance is a service budget and never changes PoA signing weight.
+- Consensus arithmetic and fee routing use bounded integer operations.
+- No local wall-clock input affects state transitions.

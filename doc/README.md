@@ -1,23 +1,30 @@
 # CYBOU documentation
 
-Start with the [implementation status](../docs/cybou/26_IMPLEMENTATION_STATUS.md) and the [architecture](../docs/cybou/02_ARCHITECTURE.md). CYBOU is experimental; the PQ identity, canonical state, transport, and desktop cutover are still being integrated.
+Start with the [implementation authority](../AGENTS.md),
+[active architecture](../docs/cybou/02_ARCHITECTURE.md), and
+[implementation status](../docs/cybou/26_IMPLEMENTATION_STATUS.md). CYBOU is
+experimental; the PoA, encrypted chunk-DAG, storage admission, and clean-machine
+recovery gates are not yet integrated into the deployed DEV network.
 
-## Protocol
+## Active protocol
 
+- [PoA finality](../docs/cybou/POA_FINALITY.md)
+- [Encrypted chunk DAG](../docs/cybou/ENCRYPTED_CHUNK_DAG.md)
+- [RootPublication](../docs/cybou/ROOT_PUBLICATION.md)
+- [Chunk storage admission](../docs/cybou/STORAGE_ADMISSION.md)
+- [Identity discovery and recovery](../docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md)
+- [Machine-readable protocol target](../spec/poa_chunk_dag.yaml)
 - [Identity and `.cybou` names](../docs/cybou/10_IDENTITY_NAMES.md)
-- [Vault and recovery](../docs/cybou/76_IDENTITY_VAULT_RECOVERY.md)
 - [Name registry](../docs/cybou/77_CYBOU_NAME_REGISTRY.md)
-- [Desktop identity flow](../docs/cybou/78_IDENTITY_DESKTOP_UX.md)
-- [BFT finality](../docs/cybou/07_BFT_CONSENSUS.md)
-- [MailTx](../docs/cybou/65_MAILTX_PROTOCOL_OPERATION.md)
-- [Mail evidence](../docs/cybou/69_MAIL_EVIDENCE_BUNDLE.md)
 - [Economics](../docs/cybou/18_ECONOMICS_FEES.md)
 - [Onboarding and anti-Sybil work](../docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md)
 
-## Build and development
+## Product and development
 
+- [Mail UX](../docs/cybou/82_MAIL_UI_UX.md)
+- [Files UX](../docs/cybou/83_STORAGE_UI_UX.md)
+- [Product workflows](../spec/mail_files_architecture.yaml)
 - [Build instructions](../INSTALL.md)
 - [DEV node runbook](../docs/cybou/75_DEV_NODE_RUNBOOK.md)
 - [Contribution guidelines](../CONTRIBUTING.md)
-- [Implementation rules](../AGENTS.md)
 - [License](../COPYING) and [notices](../NOTICE.md)

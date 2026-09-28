@@ -1,43 +1,38 @@
-# CYBOU — Identity-Centric Protected Communication
+# CYBOU
 
-CYBOU (https://cybou.fr/) is an open-source, sovereign platform built around personal digital identity, designed in France. Source repository: https://github.com/cybou-fr/cybou.
+CYBOU is an experimental identity-centered platform for private communication
+and user-controlled files. Mail and Files are required product surfaces with
+Gmail-familiar and Google Drive-familiar workflows under CYBOU branding.
 
-> **Not a blockchain with features — a protected identity with services.**
+## Active protocol target
 
-Instead of fragmenting digital life across third-party corporate platforms (email, cloud storage, backup, wallets), CYBOU organizes secure digital communications and data services around one cryptographic identity (`stanislav.cybou`).
+- Genesis-bound hybrid-PQ single-operator PoA finality; centralized trust, no
+  Byzantine fault tolerance claim.
+- Generic RootPublication is the only application-content operation.
+- Application payloads use a bounded canonical-CBOR encrypted chunk DAG.
+- ChunkID is full BLAKE3-256 of stored encrypted bytes.
+- Recipient identity, schemas, filenames, and graph structure stay encrypted.
+- Providers accept chunks only with finalized-publication admission proofs.
+- Clients scan publications, recover content keys, and rebuild local indexes.
+- No legacy protocol compatibility or dual operation decoder is part of the
+  target.
 
-## Core Product Services
+## Product requirements
 
-1. **Identity:** Human-readable `.cybou` names, 24-word recovery root, portable CYBV2 vault, device authorization without third-party cloud gatekeepers.
-2. **Mail:** First-class private messaging (`MailTx`), salted content commitments, recipient-owned mailbox indexes, deterministic fees, and post-quantum encryption targets.
-3. **Files:** Decentralized end-to-end encrypted object storage for attachments and documents.
-4. **Backup:** Sovereign clean-machine restoration of user state and vaults.
-5. **Wallet:** Service budget (`SystemBalance`) and native utility transfers. Built for service funding, not speculative trading.
-6. **Devices:** Multi-device cryptographic pairing and key rotation under one root identity.
+- One account-level Identity with portable clean-machine recovery.
+- Mail starts one-recipient and text-only. Attachments follow shared storage
+  durability and recovery gates.
+- Files uses private encrypted catalogs over the same chunk substrate.
+- Backup is post-Beta.
+- Finalized, available, and retrievable content are distinct user-facing states.
 
-## Implemented and tested in the repository
+## Authority and status
 
-- Protocol-native `AccountCreateOpV1` with anti-Sybil work and an atomic `OnboardingPool`-to-`SystemBalance` service credit.
-- Random stable `AccountId` and human-readable `.cybou` name registry commitments in state.
-- CYBOU state transitions, LevelDB persistence, finalized-block verification, and single-validator DEV block producer (f=0).
-- Standalone experimental DEV node with remote operation submission and verified block synchronization between processes.
-- Core `MailTx` operation validation, deterministic size-aware fees, compact discovery filters, and evidence bundles with inclusion proofs.
-- Qt desktop client structured around the user identity, Mail, Wallet, and services.
-- Hybrid Ed25519 + ML-DSA-65 operator-authority signature verification in core.
-
-## Design targets and remaining engineering work
-
-- Multi-validator BFT: admission and live operation of at least 4 equal-weight validators for f=1 fault tolerance.
-- End-to-end MailTx delivery, local mailbox indexes, and target hybrid HPKE ML-KEM-768 + X25519 post-quantum encryption profile.
-- Decentralized Object Storage, Backup, and Drive services.
-- Separate genesis for DEV, Beta, and Mainnet. Total supply capped at 100,000,000,000 CYBOU (0 decimals).
-
-## Primary repository references
-
-- https://github.com/cybou-fr/cybou/blob/main/README.md — product overview and architecture.
-- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/79_IDENTITY_CENTRIC_PRODUCT_UX.md — identity-centric product UX contract.
-- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/10_IDENTITY_NAMES.md — identity and `.cybou` name architecture.
-- https://github.com/cybou-fr/cybou/blob/main/docs/cybou/26_IMPLEMENTATION_STATUS.md — implementation status and subsystem matrix.
-- https://github.com/cybou-fr/cybou/blob/main/AGENTS.md — hard protocol rules.
-
-License: MIT. Creator: Stanislav Saveliev.
+- `AGENTS.md` is the implementation authority.
+- `docs/cybou/POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`,
+  `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, and
+  `IDENTITY_DISCOVERY_AND_RECOVERY.md` define the protocol target.
+- `spec/poa_chunk_dag.yaml` contains machine-readable parameters.
+- `docs/cybou/26_IMPLEMENTATION_STATUS.md` records implementation and open
+  integration gates. The target is not active on DEV; do not reset DEV before
+  all coordinated gates pass.

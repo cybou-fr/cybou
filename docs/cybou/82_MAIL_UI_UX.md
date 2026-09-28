@@ -6,8 +6,9 @@ This document defines the normal desktop experience for CYBOU Mail. The
 interaction benchmark is the familiarity and efficiency of mature webmail
 products such as Gmail; CYBOU does not copy Google branding, visual identity,
 or provider-centric account semantics. The goal is that a user who already
-understands mainstream email can use CYBOU Mail immediately while the protocol
-remains hybrid-PQ, E2E encrypted, consensus-registered, and decentralized.
+understands mainstream email can use CYBOU Mail immediately. Messages and
+attachments remain end-to-end encrypted, and the product explains finality and
+availability without exposing protocol machinery in ordinary workflows.
 
 The normal user operates mail, not a blockchain, key exchange, validator set,
 or storage protocol. Technical evidence remains inspectable through Security
@@ -21,7 +22,7 @@ accessible mouse and keyboard flows are complete.
 See also:
 
 - `81_BETA_PRODUCT_SCOPE.md` — Beta product boundary;
-- `49_EMAIL_E2EE_HPKE_PQ.md` — Mail confidentiality protocol;
+- `ROOT_PUBLICATION.md` and `ENCRYPTED_CHUNK_DAG.md` — private content substrate;
 - `83_STORAGE_UI_UX.md` — Files/Storage experience;
 - `84_PRODUCT_DESIGN_SYSTEM.md` — shared visual and interaction rules;
 - `73_CORE_DESKTOP_CONTRACT.md` — core/UI truth boundary.
@@ -52,13 +53,12 @@ Alice later opens CYBOU
 No step requires the user to understand:
 
 ```text
-AccountID
-OperationID
-BFT quorum
-block height
-nonce
-ML-KEM
-X25519
+account identifiers
+publication identifiers
+finality certificates
+block numbers
+protocol nonces
+KEM internals
 storage shard IDs
 replica placement
 provider endpoints
@@ -172,8 +172,8 @@ unread/star state
 time/date
 ```
 
-Do not show OperationID, block height, MailTx size, discovery tag, or fee in the
-normal list.
+Do not show protocol identifiers, block numbers, encrypted payload size,
+discovery metadata, or protocol fees in the normal list.
 
 Useful states:
 
@@ -283,7 +283,7 @@ Do not silently downgrade to classical-only encryption.
 
 ## 9. Attachment flow
 
-Attachments are normal Mail UI objects backed by CYBOU Object Storage.
+Attachments are normal Mail UI objects backed by CYBOU encrypted storage.
 
 User actions:
 
@@ -299,11 +299,10 @@ Internally:
 ```text
 read local file
 -> encrypt locally
--> chunk
--> upload opaque ciphertext
--> reach minimum Storage durability
--> prepare an immutable Object Layer object and encrypted attachment descriptor
--> place descriptor inside the E2E-protected Mail content
+-> prepare protected content
+-> store opaque encrypted chunks
+-> reach the configured availability threshold
+-> place the private attachment reference inside the encrypted message
 -> enable Mail submission
 ```
 
@@ -363,9 +362,9 @@ unavailable. If a safe shared-object reference cannot satisfy both services'
 privacy and retention rules, create a separate protected object.
 
 The implementation adds an independent entry to the recipient's encrypted
-Files catalog while keeping the ObjectID, filename, MIME type, and object key
-private from providers. Reuse is allowed only when the recipient has a valid
-Identity-based key grant and both retention references remain independent.
+Files catalog while keeping content references, filename, MIME type, and keys
+private from storage providers. Reuse is allowed only when the recipient has a
+valid Identity-based key grant and both retention references remain independent.
 
 ## 11. Sending state machine
 

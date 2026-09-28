@@ -108,7 +108,8 @@ a claim that Beta security is complete.
 - `10_IDENTITY_NAMES.md` owns identity, recovery, and name protocol rules.
 - `76_IDENTITY_VAULT_RECOVERY.md` owns phrase and portable-vault behavior.
 - `87_IDENTITY_OPERATION_COORDINATOR.md` owns operation/nonce lifecycle.
-- `88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md` owns content-key and object privacy.
+- `ENCRYPTED_CHUNK_DAG.md` and `ROOT_PUBLICATION.md` own encrypted content
+  keys, publication, and chunk privacy.
 - `89_IDENTITY_KEM_PUBLICATION.md` owns the account KEM publication design and cutover gates.
 - `81_BETA_PRODUCT_SCOPE.md` owns Beta readiness.
 - `26_IMPLEMENTATION_STATUS.md` owns current implementation status.

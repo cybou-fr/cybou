@@ -96,20 +96,13 @@ compatibility coverage; SipHash remains an additional crypto blocker.
   approved crypto wrappers. `CRYPTO_memcmp` remains for constant-time vault
   payload comparison.
 
-The root `CMakeLists.txt` requires OpenSSL 3.5. The active PQ baseline in
-`09_CRYPTO_PQ.md` names X25519 + ML-KEM-768 as the Mail target and explicitly
-prohibits a custom hybrid KEM combiner. Do not change the target to ML-KEM-1024
-or require OpenSSL 3.6 without a separate compatibility and provider review.
-
-Mail confidentiality is not production-ready. DEV Identity publishes a
-draft-05 X-Wing package for the current account, and DEV MailEnvelopeV1 plus
-the recipient-set semantics are frozen in `49_EMAIL_E2EE_HPKE_PQ.md`. The
-project's pinned OpenSSL 3.5 HPKE API does not expose the selected X-Wing suite,
-and no alternate vetted backend has been selected; `CybouMailService::SendMail`
-therefore remains fail-closed. Historical sender-key evidence verification
-and encrypted local mailbox storage also remain open. The former
-X25519-only Mail helper and Ed25519-to-X25519 conversion path have been
-removed. See `16_MAIL_PROTOCOL.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
+The root `CMakeLists.txt` requires OpenSSL 3.5. The active Identity KEM and
+encrypted-content profiles are specified by `10_IDENTITY_NAMES.md`,
+`ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`, and
+`spec/poa_chunk_dag.yaml`. Use only the frozen draft-05 X-Wing DEV profile for
+the target; do not create a custom hybrid KEM combiner or silently change the
+profile. Capsule interoperability and end-to-end Identity operation integration
+remain open gates; see `26_IMPLEMENTATION_STATUS.md`.
 
 ## Required order
 

@@ -32,4 +32,7 @@ The desktop confirms the new 24-word phrase, saves and reopens the candidate vau
 
 ## Storage keys
 
-The Storage Key Ring is a separate encrypted AccountID-bound sidecar with contiguous random Storage Master Key epochs. It is not derived from Identity signing keys. Distribution and clean-machine Files restoration remain governed by [90_STORAGE_KEY_RECOVERY.md]; Identity restore alone does not imply Files recovery.
+Mail and Files content-encryption keys remain separate from Identity signing
+keys. Clean-machine content recovery is governed by
+`IDENTITY_DISCOVERY_AND_RECOVERY.md`; Identity restore alone does not imply
+that encrypted content has been retrieved.

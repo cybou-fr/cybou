@@ -17,7 +17,7 @@ Balance
 System Balance
     irreversible protocol-use balance
     pays fees
-    contributes a capped component to PoT
+    does not increase PoT score
 ```
 
 ## Onboarding Bonus
@@ -33,21 +33,18 @@ No operator vouchers or invites exist.
 
 Identity creation alone does not mint new tokens; bonuses are debited strictly from the pre-allocated `OnboardingPool`.
 
-## Mail fee
+## Publication fee
 
-MailTx is a first-class protocol operation.
-
-v1 fee structure:
+Content uses generic RootPublication. The fee is deterministic and based on
+the full canonical operation size:
 
 ```text
-MailFee =
-    fixed base
-    + deterministic integer size tier
+RootPublicationFee = 4 * ceil(full_canonical_operation_bytes / 1024)
 ```
 
-Exact byte thresholds remain open until real PQ/T MailTx serialization is measured.
-
-There is a strict maximum MailTx size.
+The canonical wire profile has a strict maximum operation size. The same
+resource accounting applies to every encrypted application schema; consensus
+does not inspect Mail content or enforce Mail-specific quotas.
 
 ## No priority fee v1
 
@@ -61,15 +58,17 @@ v1 uses deterministic protocol fees.
 ## Fee Router
 
 ```text
-4 CYBOU fees
--> 3 Validators / Security
+4 CYBOU fee units
+-> 3 Security
 -> 1 Onboarding
 ```
 
 No burn.
 
-No generic service-node reward before Store.
+No generic service-node reward before provider obligations and operating costs
+can be measured.
 
 ## Future Store
 
-Storage provider economics are introduced only with Object Storage and only after storage work can be verified.
+Storage-provider economics remain open until chunk durability and provider
+work can be verified and measured.

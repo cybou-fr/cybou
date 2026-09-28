@@ -1,4 +1,4 @@
-# 83 — CYBOU Files / Object Storage UI/UX
+# 83 — CYBOU Files UI/UX
 
 Status: canonical Beta Files/Storage product UX contract. The Qt Files page
 now has a provisional single-installation path for upload, local encrypted
@@ -7,15 +7,15 @@ not implement the Beta catalog described here: encrypted manifest, finalized
 root updates, and the Beta durability contract remain unimplemented. The page must not describe local indexing or peer acknowledgments
 as a finalized Files catalog or as `Protected`.
 
-This document defines how CYBOU exposes distributed encrypted Object Storage to
-ordinary users. Google Drive is the interaction reference for familiar file
+This document defines how CYBOU exposes encrypted file storage to ordinary
+users. Google Drive is the interaction reference for familiar file
 management patterns; CYBOU does not copy Google branding, provider account
 semantics, or centralized trust assumptions.
 
 Files is the Beta file-management product surface for these familiar workflows;
-there is no separate post-Beta Drive product. The encrypted manifest and
-finalized root-update boundary are defined in
-[`91_FILES_MANIFEST_AND_ROOT.md`](91_FILES_MANIFEST_AND_ROOT.md).
+there is no separate post-Beta Drive product. Private catalogs and content
+publication use the shared encrypted chunk substrate described in
+`ROOT_PUBLICATION.md` and `ENCRYPTED_CHUNK_DAG.md`.
 
 The user manages files and folders. The user does not manage shards, provider
 nodes, repair queues, proofs, leases, or replication topology.
@@ -23,8 +23,8 @@ nodes, repair queues, proofs, leases, or replication topology.
 See also:
 
 - `81_BETA_PRODUCT_SCOPE.md` — Beta product boundary;
-- `11_STORAGE_OBJECTS.md` — Storage protocol/object model;
-- `13_STORAGE_PROOFS_REPAIR.md` — durability/audit/repair architecture;
+- `STORAGE_ADMISSION.md` — finalized-content availability gates;
+- `ENCRYPTED_CHUNK_DAG.md` — encrypted content substrate;
 - `82_MAIL_UI_UX.md` — Mail attachment integration;
 - `84_PRODUCT_DESIGN_SYSTEM.md` — shared visual and interaction rules.
 
@@ -93,8 +93,8 @@ Shared by me
 
 The target share principal is a `.cybou` AccountID. A grant wraps the object key
 to that account's current Identity KEM capability and binds READ or WRITE
-permission. READ is the first share mode; WRITE requires the separate
-collaboration authorization gate in `91_FILES_MANIFEST_AND_ROOT.md`. No
+permission. READ is the first share mode; WRITE requires a separately reviewed
+Identity authorization and encrypted grant flow. No
 public-link bearer token is the default access mechanism. Do not show sharing
 controls until the relevant grant flow is implemented.
 
@@ -326,9 +326,9 @@ Download
 Save to Files
 ```
 
-`Save to Files` creates an independent Files catalog reference to the existing
-object when authorized. It reuses the ObjectID, ciphertext, and object key; no
-second upload is required. The UI must not expose the underlying optimization.
+`Save to Files` creates an independent Files catalog reference to existing
+encrypted content when authorized. It reuses the content, ciphertext, and key;
+no second upload is required. The UI must not expose the underlying optimization.
 
 `Send by CYBOU Mail` attaches an existing Files object by placing its encrypted
 object descriptor and object key inside the E2E-protected message. It does not

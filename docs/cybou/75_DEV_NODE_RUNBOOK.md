@@ -87,9 +87,10 @@ cybou-node serve network.bin producer-db validator.key 127.0.0.1 29460 1000 2946
 ```
 
 The node then advertises CYP2 `CAP_STORAGE` and serves bounded encrypted chunk
-PUT, public-manifest commit, and manifest/chunk GET requests. This provides a
-single provider endpoint only; it does not assign three replicas or make a
-lease/durability promise. See `11_STORAGE_OBJECTS.md`.
+PUT, public-manifest commit, and manifest/chunk GET requests. This is a
+pre-cutover DEV implementation detail, not authority for the active
+ChunkStore target and not a lease or durability promise. See
+`STORAGE_ADMISSION.md` for the active target.
 
 The fanout worker is separate from block production. It announces recently admitted
 OperationIDs and finalized `(height, BlockID)` entries to connected peers and
