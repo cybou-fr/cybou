@@ -100,6 +100,27 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_active_and_revoked_identity_kem_packages_f
     BOOST_REQUIRE(add);
     BOOST_CHECK(add->kem_package == added.package);
 
+    const auto active_packages = fixture.runtime->FindActiveIdentityKemPackages(*account);
+    BOOST_REQUIRE(active_packages.status == cybou::IdentityKemPackageLookupStatus::FOUND);
+    BOOST_CHECK_EQUAL(active_packages.finalized_height, 2U);
+    BOOST_CHECK_EQUAL(active_packages.packages.size(), 2U);
+    bool found_original{false};
+    bool found_recovered{false};
+    for (const auto& entry : active_packages.packages) {
+        BOOST_CHECK(entry.lookup.status == cybou::IdentityKemPackageLookupStatus::FOUND);
+        if (entry.device_id == *device_id) {
+            found_original = true;
+            BOOST_CHECK_EQUAL(entry.lookup.activation_nonce, 0U);
+            BOOST_CHECK(entry.lookup.package == active.package);
+        } else if (entry.device_id == *recovered_device) {
+            found_recovered = true;
+            BOOST_CHECK_EQUAL(entry.lookup.activation_nonce, 1U);
+            BOOST_CHECK(entry.lookup.package == added.package);
+        }
+    }
+    BOOST_CHECK(found_original);
+    BOOST_CHECK(found_recovered);
+
     auto& coordinator = fixture.runtime->GetDeviceOperationCoordinator(recovered.GetKeyStore());
     const auto revoked = coordinator.RevokeDevice(*device_id);
     BOOST_REQUIRE_MESSAGE(revoked.phase == cybou::DeviceOperationPhase::ACCEPTED, revoked.error);

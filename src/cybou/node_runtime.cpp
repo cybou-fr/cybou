@@ -897,6 +897,105 @@ IdentityKemPackageLookupResult CybouNodeRuntime::FindActiveIdentityKemPackage(
     return result;
 }
 
+ActiveIdentityKemPackagesLookupResult CybouNodeRuntime::FindActiveIdentityKemPackages(
+    const AccountId& account_id) const
+{
+    std::lock_guard lock(m_mutex);
+    ActiveIdentityKemPackagesLookupResult result;
+    const auto loaded = m_store.LoadState();
+    const auto finalized_height = m_store.GetFinalizedHeight();
+    const auto state_root = m_store.GetStateRoot();
+    if (!loaded || !loaded.state || !finalized_height || !state_root || account_id.IsNull()) return result;
+
+    const auto* identity = loaded.state->identities.Find(account_id);
+    if (!identity) {
+        result.status = IdentityKemPackageLookupStatus::ACCOUNT_NOT_FOUND;
+        return result;
+    }
+    result.finalized_height = *finalized_height;
+    result.state_root = *state_root;
+
+    struct Target {
+        uint64_t activation_nonce{0};
+        std::array<unsigned char, 32> expected_package_id{};
+        uint32_t publication_count{0};
+        IdentityKemPackageLookupResult lookup;
+    };
+    std::map<IdentityKeyId, Target> targets;
+    for (const auto& [device_id, device] : identity->devices) {
+        Target target;
+        target.activation_nonce = device.activation_nonce;
+        target.expected_package_id = device.kem_package_id;
+        target.lookup.finalized_height = *finalized_height;
+        target.lookup.state_root = *state_root;
+        target.lookup.activation_nonce = device.activation_nonce;
+        targets.emplace(device_id, std::move(target));
+    }
+
+    uint256 previous_id = m_config.network_definition.genesis_block_id;
+    for (uint64_t height = 1; height <= *finalized_height; ++height) {
+        const auto finalized = m_store.GetBlockAtHeight(height);
+        if (!finalized) return result;
+        const auto block_id = ComputeBlockId(finalized->block);
+        if (finalized->block.parent_block_id != previous_id ||
+            finalized->certificate.network_id != m_network_id ||
+            finalized->certificate.height != height ||
+            finalized->certificate.block_id != block_id) return result;
+
+        for (size_t index = 0; index < finalized->block.operations.size(); ++index) {
+            const auto& operation = finalized->block.operations[index];
+            if (!ComputeOperationId(operation)) return result;
+
+            const IdentityKemPackage* package{nullptr};
+            uint64_t activation_nonce{0};
+            AccountId candidate_account;
+            IdentityKeyId candidate_device{};
+            if (const auto* create = std::get_if<AccountCreateOp>(&operation)) {
+                candidate_account = create->account_id;
+                const auto id = ComputeDeviceKeyId(create->authorization.initial_device);
+                if (id) candidate_device = *id;
+                package = &create->kem_package;
+            } else if (const auto* add = std::get_if<DeviceAdd>(&operation)) {
+                candidate_account = add->account_id;
+                const auto id = ComputeDeviceKeyId(add->new_device);
+                if (id) candidate_device = *id;
+                if (add->root_nonce == std::numeric_limits<uint64_t>::max()) continue;
+                activation_nonce = add->root_nonce + 1;
+                package = &add->kem_package;
+            }
+            if (!package || candidate_account != account_id) continue;
+            const auto target = targets.find(candidate_device);
+            if (target == targets.end() || target->second.activation_nonce != activation_nonce) continue;
+
+            const auto account_bytes = account_id.Value();
+            const auto commitment = ComputeIdentityKemPackageCommitment(
+                std::span<const unsigned char, 32>{m_network_id.begin(), 32},
+                std::span<const unsigned char, 32>{account_bytes.begin(), 32}, candidate_device,
+                activation_nonce, *package);
+            if (!commitment || *commitment != target->second.expected_package_id ||
+                ++target->second.publication_count != 1) return result;
+
+            auto& lookup = target->second.lookup;
+            lookup.status = IdentityKemPackageLookupStatus::FOUND;
+            lookup.package = *package;
+            lookup.package_id = *commitment;
+            lookup.activation_nonce = activation_nonce;
+            lookup.operation_height = height;
+            lookup.operation_index = static_cast<uint32_t>(index);
+            lookup.block_id = block_id;
+        }
+        previous_id = block_id;
+        if (height == *finalized_height) break;
+    }
+
+    for (auto& [device_id, target] : targets) {
+        if (target.publication_count != 1) return result;
+        result.packages.push_back({.device_id = device_id, .lookup = std::move(target.lookup)});
+    }
+    result.status = IdentityKemPackageLookupStatus::FOUND;
+    return result;
+}
+
 IdentityKemPackageLookupResult CybouNodeRuntime::FindHistoricalIdentityKemPackage(
     const AccountId& account_id, const IdentityKeyId& device_id, const uint64_t activation_nonce) const
 {

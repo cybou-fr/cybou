@@ -95,6 +95,18 @@ struct IdentityKemPackageLookupResult {
     uint256 state_root;
 };
 
+struct ActiveIdentityKemPackage {
+    IdentityKeyId device_id{};
+    IdentityKemPackageLookupResult lookup;
+};
+
+struct ActiveIdentityKemPackagesLookupResult {
+    IdentityKemPackageLookupStatus status{IdentityKemPackageLookupStatus::HISTORY_UNAVAILABLE};
+    uint64_t finalized_height{0};
+    uint256 state_root;
+    std::vector<ActiveIdentityKemPackage> packages;
+};
+
 enum class OperationStatusKind : uint8_t {
     UNKNOWN,
     LOCAL_PENDING,
@@ -177,6 +189,9 @@ public:
     /** Resolve finalized KEM package bytes for the currently active device activation. */
     IdentityKemPackageLookupResult FindActiveIdentityKemPackage(
         const AccountId& account_id, const IdentityKeyId& device_id) const;
+    /** Resolve every active device package in one finalized-history scan. */
+    ActiveIdentityKemPackagesLookupResult FindActiveIdentityKemPackages(
+        const AccountId& account_id) const;
     /** Resolve historical finalized package bytes, including revoked activations. */
     IdentityKemPackageLookupResult FindHistoricalIdentityKemPackage(
         const AccountId& account_id, const IdentityKeyId& device_id, uint64_t activation_nonce) const;
