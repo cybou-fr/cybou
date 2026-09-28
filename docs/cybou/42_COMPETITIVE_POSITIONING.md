@@ -21,7 +21,7 @@ signed mail commitments
 BFT registration/finality
 full-node verification
 recipient can be offline
-hybrid PQ recovery and device authorization
+hybrid PQ recovery and Identity authorization
 encrypted Object Storage-backed Mail attachments in Beta
 ```
 

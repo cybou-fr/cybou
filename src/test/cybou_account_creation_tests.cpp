@@ -27,13 +27,13 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
     network_id.begin()[0] = 0x99;
     const cybou::AccountId account_id{account_bytes};
     const auto root = cybou::DeriveIdentityPublicKey(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto device = cybou::DeriveIdentityPublicKey(device_seed, cybou::IdentityKeyPurpose::DEVICE);
+    const auto device = cybou::DeriveIdentityPublicKey(device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
     BOOST_REQUIRE(root && device);
     cybou::IdentityAuthorization auth{*root, *device};
     const auto binding = cybou::test::MakeIdentityKemBinding(network_id, account_id, auth);
     const auto root_pop = cybou::SignIdentityMessage(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
-    const auto device_pop = cybou::SignIdentityMessage(device_seed, cybou::IdentityKeyPurpose::DEVICE, binding.pop_digest);
-    BOOST_REQUIRE(root_pop && device_pop);
+    const auto authorization_pop = cybou::SignIdentityMessage(device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
+    BOOST_REQUIRE(root_pop && authorization_pop);
     cybou::AccountCreateOp op{
         .account_id = account_id,
         .authorization = auth,
@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
         .work = {.network_id = network_id, .account_id = account_id, .authorization_commitment = binding.authorization_commitment,
                  .work_epoch = 0, .nonce = 0},
         .recovery_pop = *root_pop,
-        .device_pop = *device_pop,
+        .authorization_pop = *authorization_pop,
     };
     auto params = cybou::DevProtocolParameters();
     params.account_creation_work_bits = 4;
@@ -66,8 +66,8 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
     damaged.recovery_pop.ed25519[0] ^= 1;
     BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_id, 0, params) == cybou::AccountCreateError::INVALID_RECOVERY_POP);
     damaged = *decoded;
-    damaged.device_pop.ml_dsa[0] ^= 1;
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_id, 0, params) == cybou::AccountCreateError::INVALID_DEVICE_POP);
+    damaged.authorization_pop.ml_dsa[0] ^= 1;
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_id, 0, params) == cybou::AccountCreateError::INVALID_AUTHORIZATION_POP);
     damaged = *decoded;
     damaged.work.authorization_commitment[0] ^= 1;
     BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_id, 0, params) == cybou::AccountCreateError::COMMITMENT_MISMATCH);

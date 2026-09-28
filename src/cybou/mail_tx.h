@@ -23,7 +23,7 @@ namespace cybou {
 
 inline constexpr uint8_t MAIL_TX_VERSION{2};
 inline constexpr size_t MAIL_PAYLOAD_HEADER_SIZE{1 + 32 + 32 + 32 + 4}; // 101 bytes
-inline constexpr size_t AUTHORIZED_MAIL_HEADER_SIZE{2597 + MAIL_PAYLOAD_HEADER_SIZE}; // 2698 bytes
+inline constexpr size_t AUTHORIZED_MAIL_HEADER_SIZE{2565 + MAIL_PAYLOAD_HEADER_SIZE}; // 2666 bytes
 inline constexpr uint32_t MAX_MAIL_WIRE_CIPHERTEXT_SIZE{1024 * 1024}; // 1 MiB absolute hard wire framing limit
 inline constexpr size_t MAX_MAIL_WIRE_BYTES{AUTHORIZED_MAIL_HEADER_SIZE + MAX_MAIL_WIRE_CIPHERTEXT_SIZE};
 
@@ -97,7 +97,7 @@ inline std::optional<IdentityKeyId> ComputeMailPayloadCommitment(const MailPaylo
 }
 
 struct AuthorizedMail {
-    DeviceAuthorization authorization;
+    IdentityOperationAuthorization authorization;
     MailPayload mail;
 
     friend bool operator==(const AuthorizedMail&, const AuthorizedMail&) = default;
@@ -110,20 +110,18 @@ inline std::optional<std::vector<unsigned char>> SerializeAuthorizedMail(const A
     const auto commitment = ComputeMailPayloadCommitment(op.mail);
     if (!commitment || *commitment != op.authorization.payload_commitment) return std::nullopt;
     std::vector<unsigned char> out;
-    out.reserve(2597 + body->size());
-    // SerializeDeviceAuthorization requires DeviceOperationKind::MAIL
-    if (op.authorization.kind != DeviceOperationKind::MAIL || op.authorization.account_id.IsNull() ||
+    out.reserve(IDENTITY_OPERATION_AUTH_SIZE + body->size());
+    // SerializeIdentityOperationAuthorization requires IdentityOperationKind::MAIL
+    if (op.authorization.kind != IdentityOperationKind::MAIL || op.authorization.account_id.IsNull() ||
         op.authorization.signature.ml_dsa.size() != 2420 ||
-        std::all_of(op.authorization.device_id.begin(), op.authorization.device_id.end(), [](unsigned char b) { return b == 0; }) ||
         std::all_of(op.authorization.payload_commitment.begin(), op.authorization.payload_commitment.end(), [](unsigned char b) { return b == 0; }) ||
         std::all_of(op.authorization.signature.ed25519.begin(), op.authorization.signature.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
         std::all_of(op.authorization.signature.ml_dsa.begin(), op.authorization.signature.ml_dsa.end(), [](unsigned char b) { return b == 0; })) {
         return std::nullopt;
     }
     out.insert(out.end(), op.authorization.account_id.Value().begin(), op.authorization.account_id.Value().end());
-    out.insert(out.end(), op.authorization.device_id.begin(), op.authorization.device_id.end());
     for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.authorization.nonce >> (8 * i)));
-    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.authorization.activation_nonce >> (8 * i)));
+    for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(op.authorization.key_epoch >> (8 * i)));
     out.push_back(static_cast<unsigned char>(op.authorization.kind));
     out.insert(out.end(), op.authorization.payload_commitment.begin(), op.authorization.payload_commitment.end());
     out.insert(out.end(), op.authorization.signature.ed25519.begin(), op.authorization.signature.ed25519.end());
@@ -134,24 +132,22 @@ inline std::optional<std::vector<unsigned char>> SerializeAuthorizedMail(const A
 
 inline std::optional<AuthorizedMail> DeserializeAuthorizedMail(std::span<const unsigned char> bytes)
 {
-    if (bytes.size() < 2597 + MAIL_PAYLOAD_HEADER_SIZE) return std::nullopt;
+    if (bytes.size() < IDENTITY_OPERATION_AUTH_SIZE + MAIL_PAYLOAD_HEADER_SIZE) return std::nullopt;
     const auto account = AccountId::FromBytes(bytes.first(32));
     if (!account) return std::nullopt;
-    DeviceAuthorization auth{};
+    IdentityOperationAuthorization auth{};
     auth.account_id = *account;
     size_t offset{32};
-    std::copy_n(bytes.begin() + offset, 32, auth.device_id.begin());
-    offset += 32;
     uint64_t nonce{0};
     for (int i = 0; i < 8; ++i) nonce |= uint64_t{bytes[offset + i]} << (8 * i);
     auth.nonce = nonce;
     offset += 8;
-    uint64_t activation_nonce{0};
-    for (int i = 0; i < 8; ++i) activation_nonce |= uint64_t{bytes[offset + i]} << (8 * i);
-    auth.activation_nonce = activation_nonce;
+    uint64_t key_epoch{0};
+    for (int i = 0; i < 8; ++i) key_epoch |= uint64_t{bytes[offset + i]} << (8 * i);
+    auth.key_epoch = key_epoch;
     offset += 8;
-    if (bytes[offset++] != static_cast<uint8_t>(DeviceOperationKind::MAIL)) return std::nullopt;
-    auth.kind = DeviceOperationKind::MAIL;
+    if (bytes[offset++] != static_cast<uint8_t>(IdentityOperationKind::MAIL)) return std::nullopt;
+    auth.kind = IdentityOperationKind::MAIL;
     std::copy_n(bytes.begin() + offset, 32, auth.payload_commitment.begin());
     offset += 32;
     std::copy_n(bytes.begin() + offset, 64, auth.signature.ed25519.begin());

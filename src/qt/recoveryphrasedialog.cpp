@@ -75,7 +75,7 @@ RecoveryPhraseDialog::RecoveryPhraseDialog(Mode mode, const QStringList& words, 
             : tr("Your 24 recovery words in order"), this));
     layout->addWidget(warningLabel(
         mode == Mode::Create
-            ? tr("These 24 words are the only way to restore your identity on a new device. "
+            ? tr("These 24 words are the only way to restore your identity on a new installation. "
                  "Anyone who sees them controls your identity. Write them down on paper and store them offline.")
             : tr("Anyone who sees these words can take over your identity. Keep them private."), this));
 

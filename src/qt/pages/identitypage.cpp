@@ -26,7 +26,6 @@
 #include <QRegularExpression>
 #include <QStringList>
 #include <QStyle>
-#include <QSysInfo>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -164,13 +163,6 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     m_claim_button->setObjectName(QStringLiteral("secondaryButton"));
     m_claim_button->setIcon(QIcon{glyphPixmap(Glyph::Compose, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
     connect(m_claim_button, &QPushButton::clicked, this, [this] { startNameClaimFlow(); });
-    m_add_device_button = new QPushButton{tr("Add device"), hero};
-    m_add_device_button->setObjectName(QStringLiteral("secondaryButton"));
-    m_add_device_button->setIcon(QIcon{glyphPixmap(Glyph::Plus, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
-    connect(m_add_device_button, &QPushButton::clicked, this, [this] {
-        QMessageBox::information(this, tr("Planned"),
-            tr("Device authorization (Ed25519 + ML-DSA-44) arrives with the portable vault sync. For now this device is the only authorized one."));
-    });
     m_security_button = new QPushButton{tr("Rotate recovery phrase"), hero};
     m_security_button->setObjectName(QStringLiteral("secondaryButton"));
     m_security_button->setIcon(QIcon{glyphPixmap(Glyph::ShieldCheck, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
@@ -179,13 +171,13 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     });
     connect(m_model, &CybouDesktopModel::recoveryRotationFinished, this,
         [this](quint8 phase, const QString& error, quint64 height) {
-            if (phase == static_cast<quint8>(cybou::DeviceOperationPhase::FINALIZED)) {
+            if (phase == static_cast<quint8>(cybou::IdentityOperationPhase::FINALIZED)) {
                 const QString detail = height == 0
                     ? tr("The recovery rotation is finalized and the encrypted vault is using the active 24-word phrase.")
                     : tr("The new recovery root is finalized at block %1. Your encrypted vault now uses the new 24-word phrase.").arg(height);
                 QMessageBox::information(this, tr("Recovery root updated"), detail);
-            } else if (phase == static_cast<quint8>(cybou::DeviceOperationPhase::ACCEPTED) ||
-                phase == static_cast<quint8>(cybou::DeviceOperationPhase::UNCERTAIN)) {
+            } else if (phase == static_cast<quint8>(cybou::IdentityOperationPhase::ACCEPTED) ||
+                phase == static_cast<quint8>(cybou::IdentityOperationPhase::UNCERTAIN)) {
                 QMessageBox::information(this, tr("Recovery rotation pending"),
                     tr("The new phrase is saved in the encrypted pending vault. Keep your written copy. The active vault remains unchanged until finality. If the app closes or the network is uncertain, use this action again to resume this rotation."));
             } else {
@@ -195,7 +187,6 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
         });
     actions->addWidget(m_share_button);
     actions->addWidget(m_claim_button);
-    actions->addWidget(m_add_device_button);
     actions->addWidget(m_security_button);
     actions->addStretch();
     hero_layout->addLayout(actions);
@@ -212,7 +203,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     steps_layout->setContentsMargins(0, 6, 0, 0);
     steps_layout->setSpacing(8);
     const QStringList steps{
-        tr("Keys are generated on this device and stay local."),
+        tr("Keys are derived from your recovery phrase and stay in your local vault."),
         tr("The node performs AccountCreationWork \u2014 protocol anti-Sybil computation."),
         tr("The signed AccountCreateOp is broadcast to the validator set."),
         tr("A BFT finality certificate commits the account."),
@@ -269,7 +260,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
 
     left->addWidget(hero);
 
-    // ---- Active identity: recovery / devices / trusted contacts -----------
+    // ---- Active identity: recovery / trusted contacts ---------------------
     m_cards = new QWidget{this};
     auto* cards_layout = new QHBoxLayout{m_cards};
     cards_layout->setContentsMargins(0, 0, 0, 0);
@@ -309,36 +300,6 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
         recovery_layout->addWidget(options, 0, Qt::AlignLeft);
     }
     cards_layout->addWidget(recovery, 1);
-
-    auto* devices = Card(m_cards);
-    auto* devices_layout = new QVBoxLayout{devices};
-    devices_layout->setContentsMargins(22, 18, 22, 18);
-    devices_layout->setSpacing(10);
-    {
-        auto* header = new QHBoxLayout;
-        header->addWidget(Chip(Glyph::Monitor, Tint::Blue, devices, 38, 19));
-        auto* heading = new QLabel{tr("Devices"), devices};
-        heading->setObjectName(QStringLiteral("serviceTitle"));
-        header->addWidget(heading, 0, Qt::AlignVCenter);
-        header->addStretch();
-        auto* chevron = new QLabel{devices};
-        chevron->setPixmap(glyphPixmap(Glyph::ChevronRight, {16, 16}, CybouTheme::color(CybouTheme::DIM)));
-        header->addWidget(chevron, 0, Qt::AlignVCenter);
-        devices_layout->addLayout(header);
-        devices_layout->addWidget(MutedText(tr("All devices using your identity are synced and protected."), devices));
-        auto* this_device = ActivityRow(Glyph::Monitor, Tint::Indigo, QSysInfo::machineHostName(),
-            tr("This device \u00b7 Active now"), {}, devices, true);
-        devices_layout->addWidget(this_device);
-        devices_layout->addStretch();
-        auto* manage = new QPushButton{tr("Manage devices"), devices};
-        manage->setObjectName(QStringLiteral("secondaryButton"));
-        connect(manage, &QPushButton::clicked, this, [this] {
-            QMessageBox::information(this, tr("Planned"),
-                tr("Device authorization arrives with the portable vault sync; this node is the only authorized device today."));
-        });
-        devices_layout->addWidget(manage, 0, Qt::AlignLeft);
-    }
-    cards_layout->addWidget(devices, 1);
 
     auto* contacts = SectionCard(Glyph::Users, Tint::Violet, tr("Trusted contacts"),
         tr("Share your identity with people you trust so they can find and message you on CYBOU."),
@@ -398,7 +359,6 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
         };
         add_status(Glyph::User, tr("Your identity is active"), tr("All services are available"));
         add_status(Glyph::Lock, tr("Encrypted and private"), tr("Only you control your identity"));
-        add_status(Glyph::Monitor, tr("Ready across your devices"), tr("Use your identity on all your devices"));
     }
     panel_layout->addWidget(status_card);
 
@@ -410,7 +370,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     {
         how_layout->addWidget(SectionTitle(tr("How identity works"), how_card));
         const QStringList facts{
-            tr("Your identity is controlled by keys that are generated and stored locally on this device."),
+            tr("Your identity is controlled by keys derived from your recovery phrase and stored in your local vault."),
             tr("Registration is a permissionless protocol operation (AccountCreateOp) \u2014 no operator approval, no central activation."),
             tr("Protocol anti-Sybil work (AccountCreationWork) keeps mass registrations out."),
             tr("A successful creation automatically funds your SystemBalance from the OnboardingPool."),
@@ -635,7 +595,7 @@ void IdentityPage::startRecoveryRotationFlow()
         return;
     }
 
-    if (service->HasPendingRecoveryRootRotation()) {
+    if (service->HasPendingIdentityRotation()) {
         const auto choice = QMessageBox::question(this, tr("Resume recovery rotation"),
             tr("An encrypted candidate vault and operation journal already exist. Resume that exact rotation? The active vault changes only after finalized confirmation."),
             QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
@@ -705,7 +665,6 @@ void IdentityPage::rebuildForState(CybouIdentityState state)
     m_claim_button->setText(m_model->status().primary_name.isEmpty()
         ? tr("Manage identity")
         : tr("Manage identity"));
-    m_add_device_button->setVisible(active);
     m_security_button->setVisible(active);
     m_active_panel->setVisible(active);
     m_cards->setVisible(active);
@@ -769,7 +728,7 @@ void IdentityPage::refresh()
             m_detail_label->setText(tr("The signed identity operation is being submitted to the network."));
             break;
         case CybouIdentityState::WaitingForFinality:
-            m_detail_label->setText(tr("Waiting for verified BFT finality before activating this device."));
+            m_detail_label->setText(tr("Waiting for verified BFT finality before activating this identity."));
             break;
         case CybouIdentityState::Active:
         case CybouIdentityState::None:

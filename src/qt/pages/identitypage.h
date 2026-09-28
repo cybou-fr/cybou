@@ -30,7 +30,6 @@ private:
     QLabel* m_chip_protected;
     QLabel* m_chip_ready;
     QPushButton* m_share_button;
-    QPushButton* m_add_device_button;
     QPushButton* m_security_button;
     QPushButton* m_create_button;
     QPushButton* m_restore_button;

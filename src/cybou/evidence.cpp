@@ -81,9 +81,8 @@ EvidenceVerificationError VerifyMailEvidenceBundle(
         return EvidenceVerificationError::NETWORK_MISMATCH;
     }
 
-    // Verify sender device public key matches the device ID in the mail authorization
-    const auto sender_key_id = ComputeDeviceKeyId(bundle.sender_device_key);
-    if (!sender_key_id || *sender_key_id != bundle.mail_operation.authorization.device_id) {
+    // The supplied key must be an Identity authorization key for the signed key epoch.
+    if (bundle.sender_authorization_key.purpose != IdentityKeyPurpose::AUTHORIZATION) {
         return EvidenceVerificationError::INVALID_OPERATION_SIGNATURE;
     }
 
@@ -93,9 +92,10 @@ EvidenceVerificationError VerifyMailEvidenceBundle(
         return EvidenceVerificationError::INVALID_OPERATION_SIGNATURE;
     }
 
-    // Verify device authorization signature
-    const auto op_digest = ComputeDeviceOperationDigest(bundle.network_id, bundle.mail_operation.authorization);
-    if (!op_digest || !VerifyIdentityMessage(bundle.sender_device_key, bundle.mail_operation.authorization.signature, *op_digest)) {
+    // Verify Identity authorization signature. Historical key authorization is
+    // an explicit evidence limitation until authenticated state-transition proofs are included.
+    const auto op_digest = ComputeIdentityOperationDigest(bundle.network_id, bundle.mail_operation.authorization);
+    if (!op_digest || !VerifyIdentityMessage(bundle.sender_authorization_key, bundle.mail_operation.authorization.signature, *op_digest)) {
         return EvidenceVerificationError::INVALID_OPERATION_SIGNATURE;
     }
 
@@ -135,7 +135,7 @@ std::optional<MailEvidenceBundle> CreateMailEvidenceBundle(
     const CybouBlock& block,
     size_t operation_index,
     BftFinalityCertificate finality_certificate,
-    IdentityHybridPublicKey sender_device_key,
+    IdentityHybridPublicKey sender_authorization_key,
     const uint256& network_id)
 {
     if (operation_index >= block.operations.size()) {
@@ -169,7 +169,7 @@ std::optional<MailEvidenceBundle> CreateMailEvidenceBundle(
         .block_header = std::move(header),
         .inclusion_proof = std::move(proof),
         .finality_certificate = std::move(finality_certificate),
-        .sender_device_key = std::move(sender_device_key),
+        .sender_authorization_key = std::move(sender_authorization_key),
     };
 }
 
@@ -206,10 +206,10 @@ std::optional<std::vector<unsigned char>> SerializeMailEvidenceBundle(const Mail
     AppendUint32LE(out, static_cast<uint32_t>(serialized_cert->size()));
     out.insert(out.end(), serialized_cert->begin(), serialized_cert->end());
 
-    // sender_device_key: ed25519 (32) + ml_dsa (1312)
-    if (bundle.sender_device_key.ml_dsa.size() != 1312) return std::nullopt;
-    out.insert(out.end(), bundle.sender_device_key.ed25519.begin(), bundle.sender_device_key.ed25519.end());
-    out.insert(out.end(), bundle.sender_device_key.ml_dsa.begin(), bundle.sender_device_key.ml_dsa.end());
+    // sender_authorization_key: ed25519 (32) + ml_dsa (1312)
+    if (bundle.sender_authorization_key.ml_dsa.size() != 1312) return std::nullopt;
+    out.insert(out.end(), bundle.sender_authorization_key.ed25519.begin(), bundle.sender_authorization_key.ed25519.end());
+    out.insert(out.end(), bundle.sender_authorization_key.ml_dsa.begin(), bundle.sender_authorization_key.ml_dsa.end());
 
     return out;
 }
@@ -281,12 +281,12 @@ std::optional<MailEvidenceBundle> DeserializeMailEvidenceBundle(std::span<const 
     if (!cert.has_value()) return std::nullopt;
     offset += cert_len;
 
-    // sender_device_key: ed25519 (32) + ml_dsa (1312) = 1344 bytes
+    // sender_authorization_key: ed25519 (32) + ml_dsa (1312) = 1344 bytes
     static constexpr size_t KEY_SIZE{32 + 1312};
     if (bytes.size() != offset + KEY_SIZE) return std::nullopt;
 
     IdentityHybridPublicKey sender_key;
-    sender_key.purpose = IdentityKeyPurpose::DEVICE;
+    sender_key.purpose = IdentityKeyPurpose::AUTHORIZATION;
     std::copy_n(bytes.begin() + offset, 32, sender_key.ed25519.begin());
     offset += 32;
     sender_key.ml_dsa.assign(bytes.begin() + offset, bytes.end());
@@ -298,7 +298,7 @@ std::optional<MailEvidenceBundle> DeserializeMailEvidenceBundle(std::span<const 
         .block_header = std::move(header),
         .inclusion_proof = std::move(proof),
         .finality_certificate = std::move(*cert),
-        .sender_device_key = std::move(sender_key),
+        .sender_authorization_key = std::move(sender_key),
     };
 }
 

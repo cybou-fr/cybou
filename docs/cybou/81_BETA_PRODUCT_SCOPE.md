@@ -13,7 +13,7 @@ attachments:
 
 ```text
 CYBOU network and BFT finality
-Identity, recovery, devices, and .cybou names
+Identity, recovery, Identity key rotation, and .cybou names
 Wallet and service balance
 Hybrid-PQ Mail
 Object Storage

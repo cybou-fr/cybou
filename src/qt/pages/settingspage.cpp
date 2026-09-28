@@ -135,7 +135,7 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
     hero_text->addWidget(CybouUi::HeroTitle(tr("Your identity, your control."), hero, true));
     auto* hero_sub = CybouUi::HeroSubtitle(
         tr("Configure your CYBOU experience. Manage your privacy, protection, notifications "
-           "and connected devices — all in one place."), hero);
+           "and security — all in one place."), hero);
     hero_sub->setMinimumWidth(420);
     hero_text->addWidget(hero_sub);
     hero_text->addStretch();
@@ -197,13 +197,8 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
 
     // Protection.
     auto* protection_body = PlannedBody(
-        tr("Recovery and device authorization use post-quantum signatures by design. "
+        tr("Recovery and Identity authorization use post-quantum signatures by design. "
            "Security actions for your identity live on the Identity page."), this);
-
-    // Trusted devices.
-    auto* devices_body = PlannedBody(
-        tr("Devices authorized for your identity are listed on the Identity page, "
-           "where you can authorize or remove them."), this);
 
     // Recovery.
     auto* recovery_body = PlannedBody(
@@ -303,9 +298,6 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
     grid->addWidget(CategoryCard(CybouUi::Glyph::Lock, CybouUi::Tint::Rose,
         tr("Protection"), tr("Security settings, encryption options and authentication methods."),
         protection_body, this), 2, 0);
-    grid->addWidget(CategoryCard(CybouUi::Glyph::Monitor, CybouUi::Tint::Mint,
-        tr("Trusted devices"), tr("View and manage devices connected to your identity."),
-        devices_body, this), 2, 1);
     grid->addWidget(CategoryCard(CybouUi::Glyph::CloudUp, CybouUi::Tint::Blue,
         tr("Recovery"), tr("Backup settings, recovery options and identity restoration."),
         recovery_body, this), 3, 0);

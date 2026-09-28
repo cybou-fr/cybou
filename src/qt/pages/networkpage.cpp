@@ -211,7 +211,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, std::function<void()> diagnos
         m_sync_state = new QLabel{sync_card};
         m_sync_state->setObjectName(QStringLiteral("cardTitle"));
         sync_layout->addWidget(m_sync_state);
-        sync_layout->addWidget(MutedText(tr("Your device syncs verified blocks from the network."), sync_card));
+        sync_layout->addWidget(MutedText(tr("CYBOU syncs verified blocks from the network."), sync_card));
         m_sync_meter = new QProgressBar{sync_card};
         m_sync_meter->setObjectName(QStringLiteral("usageMeter"));
         m_sync_meter->setRange(0, 100);
@@ -320,7 +320,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, std::function<void()> diagnos
         m_peers_metric = new QLabel{peers_card};
         m_peers_metric->setObjectName(QStringLiteral("metric"));
         peers_layout->addWidget(m_peers_metric);
-        peers_layout->addWidget(MutedText(tr("Your device connects to peers around the world, helping to route and synchronize network data."), peers_card));
+        peers_layout->addWidget(MutedText(tr("CYBOU connects to peers around the world, helping to route and synchronize network data."), peers_card));
         auto* map = new QLabel{peers_card};
         map->setPixmap(worldMapPixmap({200, 84}));
         peers_layout->addWidget(map);

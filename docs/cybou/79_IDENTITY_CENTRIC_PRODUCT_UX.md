@@ -37,7 +37,7 @@ The primary product object is the user's stable CYBOU identity.
                                |
                          Identity security
                                |
-                   Recovery / trusted devices
+                   Recovery / key rotation
 ```
 
 `AccountID` remains the permanent protocol identifier, but a finalized
@@ -47,7 +47,7 @@ separate accounts, addresses, keys, or security models.
 
 Identity-centric does **not** mean social-profile-centric. A `.cybou` name is a
 pseudonymous network identity, not a civil identity assertion. CYBOU should not
-publish profile data, contact graphs, device metadata, or personal information
+publish profile data, contact graphs, installation metadata, or personal information
 merely because an AccountID owns a name.
 
 ## 2. Information architecture
@@ -70,7 +70,7 @@ before every action. The identity chip in the application chrome should show
 the finalized `.cybou` name when available and open the Identity & Security
 area.
 
-The Identity & Security area contains recovery, password, devices, name,
+The Identity & Security area contains recovery, password, key rotation, name,
 security status, and advanced identity details. It is not the normal starting
 point for Mail, payments, files, or backup.
 
@@ -125,9 +125,9 @@ Normal UI copy should describe intent and outcome rather than the mechanism.
 | Validator quorum | Hidden; Network security details |
 | block height | Hidden; Advanced network details |
 | epoch | Hidden |
-| nonce / activation nonce | Hidden |
+| nonce / key epoch | Hidden |
 | Recovery Root | Recovery protection / recovery key in advanced security details |
-| DeviceKeyID | Device identifier in advanced security details |
+| Identity key commitment | Advanced security detail only |
 | ML-DSA / ML-KEM / X25519 | Name the specific protected capability in Security details |
 | peer count | Hidden; Advanced network details |
 | NetworkID | Hidden; Advanced network details |
@@ -147,8 +147,8 @@ Good: Your name is still being secured. CYBOU will continue when it is ready.
 Bad:  BFT certificate not available.
 Good: Waiting for network confirmation.
 
-Bad:  DEVICE_ADD root nonce mismatch.
-Good: Your identity changed on another device. Sync CYBOU and try again.
+Bad:  IDENTITY_ROTATE nonce mismatch.
+Good: Your identity changed. Refresh verified network state and try again.
 ```
 
 ## 5. Progressive disclosure
@@ -166,7 +166,7 @@ Protected / Attention needed
 Sending / Sent / Confirmed
 Protecting / Protected
 Registering name / Name ready
-This device / Other devices
+Current installation
 ```
 
 No protocol knowledge is required.
@@ -179,8 +179,8 @@ For a user who wants to understand and control security:
 Recovery phrase backup
 Vault password
 Lock / unlock
-Trusted devices
-Revoke device
+Identity keys
+Rotate Identity keys
 Recovery status
 Post-quantum protection
 Encrypted export
@@ -197,7 +197,7 @@ For developers, operators, support, and technically curious users:
 ```text
 AccountID
 NetworkID
-DeviceKeyID / RecoveryKeyID
+RecoveryKeyID / key epoch
 finalized height
 validator set
 peer count and endpoints
@@ -264,10 +264,10 @@ The recovery phrase screen must clearly distinguish the two secrets:
 
 ```text
 Password
-Protects this CYBOU installation on this device.
+Protects this local CYBOU vault.
 
 Recovery words
-Recover your CYBOU identity if this device is lost.
+Recover your CYBOU identity if local access is lost.
 ```
 
 The two must never be presented as interchangeable.
@@ -283,13 +283,13 @@ Choose a new local password
         ↓
 Finding your identity…
         ↓
-Authorizing this device…
+Restoring Identity…
         ↓
 stanislav.cybou restored
 ```
 
-Do not show `RecoveryKeyID lookup`, `DeviceAdd`, root nonce, or finality
-certificate in the normal flow.
+Do not show `RecoveryKeyID lookup`, operation nonce, or finality certificate
+in the normal flow.
 
 If the client is not sufficiently synchronized to locate the identity, say:
 
@@ -494,34 +494,23 @@ Restore begins from the user's identity and recovery process. The UI should not
 make the user reconstruct protocol topology or storage placement before a
 restore can start.
 
-## 13. Devices
+## 13. Identity key rotation
 
-The user sees devices, not public keys.
+A computer is only a local place where the user's Identity is unlocked. The
+protocol does not enroll, label, pair, list, or revoke installations. A clean
+installation restores the same Identity from its recovery phrase and saves a
+new local vault. If the phrase is rotated, one `IdentityRotate` operation
+replaces Recovery, Authorization, and KEM keys together after finality.
 
-```text
-This PC                This device
-Laptop                 Active
-Old laptop             Revoked
-```
-
-Device labels are local/user-facing metadata unless a future protocol explicitly
-requires otherwise.
-
-Primary actions:
+The user-facing action is:
 
 ```text
-Add device
-Revoke device
-Rename device locally
+Rotate recovery phrase
 ```
 
-A destructive revoke confirmation explains the consequence in human language:
-
-> This device will no longer be able to act as your CYBOU identity after the
-> change is confirmed.
-
-`DeviceKeyID`, activation nonce, hybrid signature suite, and authorization
-operation are Advanced details.
+Explain that new Identity keys take effect after network confirmation and
+that rotation cannot erase content or keys already copied. Do not present
+per-installation authorization or revocation controls.
 
 ## 14. Security center
 
@@ -533,7 +522,7 @@ Identity                    stanislav.cybou
 Recovery words              Backed up
 Vault                        Locked / Unlocked
 Password                     Set
-Devices                      2 active
+Identity keys               Current key epoch
 Post-quantum protection      On
 Network confirmation         Verified
 ```
@@ -544,8 +533,8 @@ Warnings must be actionable:
 Recovery words not confirmed
 [ Back up now ]
 
-New device waiting for confirmation
-[ View ]
+Identity key rotation pending
+[ View status ]
 ```
 
 Avoid generic red security banners whose only remedy is reading logs.
@@ -554,8 +543,8 @@ Exact algorithms belong under `Security details`, for example:
 
 ```text
 Recovery authorization      Ed25519 + ML-DSA-65
-Device authorization        Ed25519 + ML-DSA-44
-Identity device KEM        X-Wing (draft-05, DEV)
+Authorization               Ed25519 + ML-DSA-44
+Identity KEM                 X-Wing (draft-05, DEV)
 Mail confidentiality        unavailable until Mail profile freeze
 Vault                        Argon2id + AES-256-GCM
 ```
@@ -606,7 +595,7 @@ Final language is reserved for verified finality:
 ```text
 Confirmed
 Name ready
-Device revoked
+Identity keys rotated
 Backup verified
 ```
 
@@ -711,8 +700,8 @@ If the active identity is `stanislav.cybou`, Mail, Wallet, Files and Backup
 should all clearly operate as that identity without asking the user to select
 keys, accounts, addresses, networks, or cryptographic profiles again.
 
-Changing device, restoring from recovery words, rotating recovery authority,
-or revoking a device must preserve the visible identity:
+Restoring from recovery words or rotating Identity keys must preserve the
+visible identity:
 
 ```text
 stanislav.cybou
@@ -754,14 +743,14 @@ write down recovery words
 register a .cybou name
 send mail to another .cybou name
 send CYBOU to another .cybou name
-add or revoke a device
+rotate Identity keys
 restore identity on a clean machine
 understand whether the app is online, syncing, or offline
 understand whether an action is pending or confirmed
 ```
 
 During those flows, the user is never required to manually handle AccountID,
-NetworkID, DeviceKeyID, OperationID, nonce, epoch, validator quorum, block
+NetworkID, OperationID, nonce, epoch, validator quorum, block
 height, state root, commitment, ML-DSA, ML-KEM, X25519, or peer endpoints.
 
 A technical user must still be able to inspect those values through Advanced

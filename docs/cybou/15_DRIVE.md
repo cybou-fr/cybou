@@ -32,7 +32,7 @@ Expose a convenient mounted/virtual drive on supported platforms while retaining
 
 - atomic/transactional manifest update semantics;
 - crash-safe local cache;
-- conflict handling for multiple devices;
+- conflict handling for concurrent catalog updates;
 - partial/range retrieval where useful;
 - local cache is not the sole copy;
 - offline edits have deterministic reconciliation rules.

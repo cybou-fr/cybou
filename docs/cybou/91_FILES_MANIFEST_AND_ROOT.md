@@ -65,7 +65,7 @@ uploaded.
 
 ## Root update operation
 
-The device-authorized operation named `FILES_ROOT_UPDATE` is a target name,
+The Identity-authorized operation named `FILES_ROOT_UPDATE` is a target name,
 not a frozen API or wire value. Its reviewed semantic payload is:
 
 ```text
@@ -82,7 +82,7 @@ FilesRootUpdate {
 
 Require `new_sequence == previous_sequence + 1`, an exact match with finalized
 state's current root, a non-null object ID and commitment, and a currently
-authorized device activation. The existing `DeviceOperationCoordinator`
+current Identity key_epoch. The existing `IdentityOperationCoordinator`
 allocates the nonce, signs, journals exact operation bytes, and reconciles
 uncertain delivery. State updates atomically to the new sequence, root,
 manifest locator, and key epoch. The operation's authorization binds the full
@@ -90,7 +90,7 @@ payload. Consensus never parses the encrypted entry list.
 
 Only finalized roots become current. An admission acknowledgment does not
 publish a Files change. Historical root updates and encrypted manifest objects
-remain available for audit, evidence, and concurrent-device recovery subject
+remain available for audit, evidence, and concurrent-update recovery subject
 to Storage retention rules.
 
 ## Update lifecycle and crash handling
@@ -104,7 +104,7 @@ For an upload or catalog edit:
    once built. The journal is local and encrypted.
 4. Upload the encrypted catalog through `StorageService` and placement; verify
    the required durability threshold before submitting the root update.
-5. Submit through `DeviceOperationCoordinator` and wait for BFT finality.
+5. Submit through `IdentityOperationCoordinator` and wait for BFT finality.
 6. On finality, atomically promote the local current catalog/root and clear the
    journal. On known rejection, keep the previous catalog current and safely
    release the candidate object under Storage retention rules. On uncertain
@@ -117,19 +117,19 @@ not appear as a finalized Files item. If the root finalized but local
 promotion was interrupted, reconstruct the committed view from verified state
 and the committed encrypted catalog.
 
-When two devices edit the same root concurrently, at most one update can match
-the finalized previous root. The losing device fetches the winning finalized
-catalog, merges non-conflicting user changes locally, presents any conflicting
+When two clients edit the same root concurrently, at most one update can match
+the finalized previous root. The client whose update loses fetches the winning
+finalized catalog, merges non-conflicting changes locally, presents conflicting
 rename/move decisions, and submits a new sequence. It never replaces a newer
-root based on local time or silently drops the other device's edits.
+root based on local time or silently drops edits.
 
 ## Product behavior
 
 The Files page shows decrypted names, folders, logical size, modified time,
 star state, and honest protection status. It does not show object IDs in the
 normal list. Search is local over decrypted metadata. Recent may remain a
-local activity view; any cross-device recent history belongs inside the
-encrypted catalog. Trash and deletion wording must follow Storage retention
+local activity view; recent activity is local unless an explicitly designed encrypted account
+catalog later includes it. Trash and deletion wording must follow Storage retention
 semantics and must not promise immediate provider erasure.
 
 Upload reaches `Protected` only after both the configured Storage durability
@@ -147,21 +147,20 @@ Before code changes to consensus state, freeze and review:
 - operation serializer, validation, state snapshot, and state-root changes;
 - Storage durability threshold and unreferenced-object cleanup;
 - exact journal/reconciliation behavior across upload, submission, and crash;
-- multi-device race, restore, revocation, and historical-root behavior;
+- concurrent-update conflict, clean-machine restore, IdentityRotate, and historical-root behavior;
 - Qt Files list/actions, progress, protection, and key-unavailable states;
 - coordinated DEV cutover after PQ consensus and names integrate.
 
 There is no legacy decoder, automatic import, or dual operation path. The
 desktop currently supports a provisional single-installation encrypted local
 index and Storage transfers. Until these gates pass, this path must not imply a
-finalized persistent Files catalog, cross-device synchronization, or Beta
-durability.
+finalized persistent Files catalog, account-level synchronization, or Beta durability.
 
 ## Related authority
 
 - `83_STORAGE_UI_UX.md` — canonical Files interactions and presentation.
 - `88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md` — object and content-key privacy.
-- `89_IDENTITY_KEM_PUBLICATION.md` — device encryption capability binding.
+- `89_IDENTITY_KEM_PUBLICATION.md` — account KEM capability binding.
 - `90_STORAGE_KEY_RECOVERY.md` — key distribution, recovery, and epochs.
-- `87_DEVICE_OPERATION_COORDINATOR.md` — device nonce and operation journal.
+- `87_IDENTITY_OPERATION_COORDINATOR.md` — shared Identity nonce and operation journal.
 - `81_BETA_PRODUCT_SCOPE.md` — Beta durability and user-experience gates.

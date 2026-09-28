@@ -70,7 +70,7 @@ must satisfy both.
 [ ] finalized ledger survives restart
 [ ] Service Balance language remains consistent with docs 52/72/79
 [ ] concurrent Name and Wallet requests serialize through the shared coordinator
-[ ] no second device operation is issued while that device has an unresolved operation
+[ ] no second account operation is issued while Identity has an unresolved operation
 [ ] uncertain operations survive restart and reconcile/retry with the same bytes and OperationID
 ```
 

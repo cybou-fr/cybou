@@ -46,7 +46,7 @@ PaymentError ApplyPayment(const AuthorizedPayment& operation,
     const uint256& network_id, const CybouProtocolParameters& params,
     CybouState& state)
 {
-    if (operation.authorization.kind != DeviceOperationKind::PAYMENT) return PaymentError::INVALID_AUTHORIZATION;
+    if (operation.authorization.kind != IdentityOperationKind::PAYMENT) return PaymentError::INVALID_AUTHORIZATION;
     if (operation.payment.amount == 0) return PaymentError::ZERO_AMOUNT;
     if (operation.payment.recipient.IsNull()) return PaymentError::INVALID_PAYLOAD;
     const auto commitment = ComputePaymentPayloadCommitment(operation.payment);
@@ -62,7 +62,7 @@ PaymentError ApplyPayment(const AuthorizedPayment& operation,
     if (sender->second.system_balance < params.payment_fee) return PaymentError::INSUFFICIENT_SYSTEM_BALANCE;
     if (recipient->second.balance > std::numeric_limits<uint64_t>::max() - operation.payment.amount) return PaymentError::RECIPIENT_OVERFLOW;
     if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - params.payment_fee) return PaymentError::FEE_POOL_OVERFLOW;
-    if (state.identities.AuthorizeDeviceOperation(operation.authorization, network_id) != IdentityRegistryError::NONE) return PaymentError::INVALID_AUTHORIZATION;
+    if (state.identities.AuthorizeOperation(operation.authorization, network_id) != IdentityRegistryError::NONE) return PaymentError::INVALID_AUTHORIZATION;
     sender->second.balance -= operation.payment.amount;
     sender->second.system_balance -= params.payment_fee;
     recipient->second.balance += operation.payment.amount;
@@ -102,7 +102,7 @@ SystemLockError ApplySystemLock(const AuthorizedSystemLock& operation,
     const uint256& network_id,
     CybouState& state)
 {
-    if (operation.authorization.kind != DeviceOperationKind::SYSTEM_LOCK) return SystemLockError::INVALID_AUTHORIZATION;
+    if (operation.authorization.kind != IdentityOperationKind::SYSTEM_LOCK) return SystemLockError::INVALID_AUTHORIZATION;
     if (operation.lock.amount == 0) return SystemLockError::ZERO_AMOUNT;
     const auto commitment = ComputeSystemLockPayloadCommitment(operation.lock);
     if (!commitment || operation.authorization.payload_commitment != *commitment) return SystemLockError::INVALID_PAYLOAD;
@@ -112,7 +112,7 @@ SystemLockError ApplySystemLock(const AuthorizedSystemLock& operation,
     if (!state.identities.Find(account_id)) return SystemLockError::INCONSISTENT_STATE;
     if (account->second.balance < operation.lock.amount) return SystemLockError::INSUFFICIENT_BALANCE;
     if (account->second.system_balance > std::numeric_limits<uint64_t>::max() - operation.lock.amount) return SystemLockError::SYSTEM_BALANCE_OVERFLOW;
-    if (state.identities.AuthorizeDeviceOperation(operation.authorization, network_id) != IdentityRegistryError::NONE) return SystemLockError::INVALID_AUTHORIZATION;
+    if (state.identities.AuthorizeOperation(operation.authorization, network_id) != IdentityRegistryError::NONE) return SystemLockError::INVALID_AUTHORIZATION;
     account->second.balance -= operation.lock.amount;
     account->second.system_balance += operation.lock.amount;
     return SystemLockError::NONE;

@@ -6,7 +6,7 @@ Account creation is permissionless. No operator approval, voucher, or central ac
 
 ## Canonical operation
 
-`AccountCreateOp` contains AccountID, a hybrid Recovery Root and initial device authorization, `AccountCreationWork`, and two proofs of possession. The root proof requires Ed25519 and ML-DSA-65; the device proof requires Ed25519 and ML-DSA-44. Both proofs cover a domain-separated digest bound to NetworkID, AccountID, and the exact authorization commitment.
+`AccountCreateOp` contains AccountID, a hybrid Recovery Root and initial Identity authorization, `AccountCreationWork`, and two proofs of possession. The root proof requires Ed25519 and ML-DSA-65; the authorization proof requires Ed25519 and ML-DSA-44. Both proofs cover a domain-separated digest bound to NetworkID, AccountID, and the exact authorization commitment.
 
 The work serialization is 113 bytes and binds NetworkID, AccountID, authorization commitment, height-derived work epoch, and nonce. The complete account creation encoding is 9,334 bytes. Version bytes are part of these wire formats. Consensus rejects missing or invalid signature components.
 
@@ -18,6 +18,6 @@ A successful operation atomically registers the identity, debits the network onb
 
 ## Local creation gate
 
-The portable CYBV2 vault must contain the random AccountID, recovery entropy, and independent device secret. It must be durably saved and authenticated by reopening before broadcast. The current desktop identity service still uses the older seed-based keystore; it does not yet satisfy this gate. Do not reset DEV or claim completed desktop onboarding until the vault, phrase confirmation, clean-machine restore, and finalized identity flow are integrated.
+The portable CYBV2 vault must contain the random AccountID, recovery entropy, and independent mnemonic-derived Identity roles. It must be durably saved and authenticated by reopening before broadcast. The current desktop identity service still uses the older seed-based keystore; it does not yet satisfy this gate. Do not reset DEV or claim completed desktop onboarding until the vault, phrase confirmation, clean-machine restore, and finalized identity flow are integrated.
 
 DEV, Beta, and Mainnet use separate economic parameters and genesis states. Beta balances do not carry to Mainnet.

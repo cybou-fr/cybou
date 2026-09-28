@@ -42,7 +42,7 @@ It is protection against:
 
 - one stolen laptop;
 - one lost key;
-- one compromised device;
+- one compromised operator installation;
 - one accidental deletion.
 
 ## No master powers

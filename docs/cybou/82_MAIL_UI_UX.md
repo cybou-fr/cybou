@@ -435,10 +435,8 @@ Do not expose storage-node addresses or shard IDs in the normal message view.
 
 ## 14. Drafts
 
-Draft text and attachment metadata are local/private user data. If future
-cross-device draft synchronization is introduced, it must be explicitly
-encrypted and specified; do not accidentally place plaintext drafts in
-consensus or provider-visible storage.
+Draft text and attachment metadata are local/private user data. Drafts remain local/private user data in this product scope. Do not place
+plaintext drafts in consensus or provider-visible storage.
 
 Autosave should not block the UI.
 

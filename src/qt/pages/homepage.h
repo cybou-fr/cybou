@@ -33,8 +33,6 @@ private:
     QWidget* m_mail_avatars;
     QLabel* m_files_metric;
     QLabel* m_files_caption;
-    QLabel* m_devices_metric;
-    QWidget* m_device_rows;
     QWidget* m_activity_rows;
     QLabel* m_activity_empty;
     const std::function<void()> m_diagnostics_requested;
@@ -47,7 +45,6 @@ private:
     QWidget* buildIdentityHero();
     QWidget* buildMailCard();
     QWidget* buildFilesCard();
-    QWidget* buildDevicesCard();
     QWidget* buildActivityCard();
 };
 

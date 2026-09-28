@@ -7,7 +7,7 @@
 - CYBV2 canonical encoding, Argon2id resource bounds, file permissions and
   cross-platform atomic replace behavior.
 - Hybrid signature wire bounds and canonical signed bytes for each operation.
-- Bounded device count and recovery-rotation conflict rules.
+- IdentityRotate replay/conflict behavior and key-epoch transition vectors.
 - Name reserved-list version, commit lifetime/depth, work target, salt length,
   pending-commit cap, fees, and canonical ordering.
 
@@ -25,8 +25,8 @@ Benchmark actual PQ/T overhead before freezing byte thresholds.
 ### O-004 Sender privacy
 Decide whether sender AccountID is public/pseudonymous in v1 or whether stronger unlinkability is required.
 
-### O-005 Multi-device encryption
-Freeze recipient key-capsule semantics.
+### O-005 Recipient account encryption
+The single recipient AccountID/key_epoch capsule is frozen for DEV in `49_EMAIL_E2EE_HPKE_PQ.md`; backend integration and independent review remain open.
 
 ### O-006 Forward secrecy / rotating prekeys
 Decide the stronger compromise model after the base HPKE/PQ profile works.
@@ -88,7 +88,7 @@ is mandatory.
 
 ### O-024 Account authorization and proof of possession — resolved
 `AccountCreateOp` requires hybrid Recovery Root (Ed25519 and ML-DSA-65) and
-initial device (Ed25519 and ML-DSA-44) proofs of possession over the canonical
+initial Authorization key (Ed25519 and ML-DSA-44) proofs of possession over the canonical
 network-bound authorization digest. Verified in `ValidateAccountCreateOp`.
 
 ## Evidence / legal

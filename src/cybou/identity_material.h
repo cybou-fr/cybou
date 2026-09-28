@@ -16,13 +16,11 @@
 
 namespace cybou {
 
-// Local secret material for one device. AccountID is independent of recovery,
-// signing, and key-agreement secrets. This type is move-only and clears them.
+// Portable Identity material. Signing and KEM roles are domain-separated
+// derivations from recovery entropy; AccountID remains independently random.
 struct IdentityMaterial {
     std::array<unsigned char, 32> account_id{};
     RecoveryEntropy recovery_entropy{};
-    std::array<unsigned char, 32> device_secret{};
-    XWingSeed device_xwing_seed{};
 
     IdentityMaterial() = default;
     IdentityMaterial(const IdentityMaterial&) = delete;

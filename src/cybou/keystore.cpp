@@ -3,20 +3,19 @@
 
 #include <cybou/keystore.h>
 
-#include <cybou/signing.h>
+#include <cybou/crypto/cleanse.h>
 
 #include <algorithm>
-#include <string_view>
 
 namespace cybou {
 
 struct CybouKeyStore::Impl {
     std::optional<IdentityMaterial> material;
     std::optional<StorageKeyRing> storage_key_ring;
-    std::optional<XWingPublicKey> device_xwing_public_key;
-    std::optional<IdentityHybridPublicKey> device_key;
-    std::optional<IdentityHybridPublicKey> recovery_root;
-    std::optional<std::array<unsigned char, 32>> device_id;
+    std::optional<XWingSeed> identity_xwing_seed;
+    std::optional<XWingPublicKey> identity_xwing_public_key;
+    std::optional<IdentityHybridPublicKey> authorization_key;
+    std::optional<IdentityHybridPublicKey> recovery_key;
 
     ~Impl() { Clear(); }
 
@@ -24,31 +23,36 @@ struct CybouKeyStore::Impl {
     {
         material.reset();
         storage_key_ring.reset();
-        device_xwing_public_key.reset();
-        device_key.reset();
-        recovery_root.reset();
-        device_id.reset();
+        if (identity_xwing_seed) crypto::CleanseMemory(identity_xwing_seed->data(), identity_xwing_seed->size());
+        identity_xwing_seed.reset();
+        identity_xwing_public_key.reset();
+        authorization_key.reset();
+        recovery_key.reset();
     }
 
     bool SetMaterial(IdentityMaterial value)
     {
         Clear();
         if (!AccountId::FromBytes(value.account_id)) return false;
-        const auto device = DeriveIdentityPublicKey(value.device_secret, IdentityKeyPurpose::DEVICE);
-        const auto root = DeriveIdentityPublicKey(value.recovery_entropy, IdentityKeyPurpose::RECOVERY_ROOT);
-        if (!device || !root) return false;
-        const auto id = ComputeDeviceKeyId(*device);
-        if (!id) return false;
-
-        if (!ValidateXWingKeyPair(value.device_xwing_seed)) return false;
-        auto device_xwing = DeriveXWingPublicKey(value.device_xwing_seed);
-        if (!device_xwing) return false;
+        auto authorization = DeriveIdentityPublicKey(value.recovery_entropy, IdentityKeyPurpose::AUTHORIZATION);
+        auto recovery = DeriveIdentityPublicKey(value.recovery_entropy, IdentityKeyPurpose::RECOVERY_ROOT);
+        auto kem_seed = DeriveIdentityXWingSeed(value.recovery_entropy);
+        if (!authorization || !recovery || !kem_seed || !ValidateXWingKeyPair(*kem_seed)) {
+            if (kem_seed) crypto::CleanseMemory(kem_seed->data(), kem_seed->size());
+            return false;
+        }
+        auto kem_public = DeriveXWingPublicKey(*kem_seed);
+        if (!kem_public) {
+            crypto::CleanseMemory(kem_seed->data(), kem_seed->size());
+            return false;
+        }
 
         material.emplace(std::move(value));
-        device_xwing_public_key = *device_xwing;
-        device_key = *device;
-        recovery_root = *root;
-        device_id = *id;
+        identity_xwing_seed = *kem_seed;
+        crypto::CleanseMemory(kem_seed->data(), kem_seed->size());
+        identity_xwing_public_key = *kem_public;
+        authorization_key = std::move(*authorization);
+        recovery_key = std::move(*recovery);
         return true;
     }
 };
@@ -64,10 +68,7 @@ bool CybouKeyStore::GenerateNew()
     return material && m_impl->SetMaterial(std::move(*material));
 }
 
-bool CybouKeyStore::LoadMaterial(IdentityMaterial material)
-{
-    return m_impl->SetMaterial(std::move(material));
-}
+bool CybouKeyStore::LoadMaterial(IdentityMaterial material) { return m_impl->SetMaterial(std::move(material)); }
 
 bool CybouKeyStore::LoadFromFile(const std::filesystem::path& path, std::string_view password)
 {
@@ -120,17 +121,14 @@ bool CybouKeyStore::CopyStorageMasterKey(const uint32_t epoch, const std::span<u
     return m_impl->storage_key_ring && m_impl->storage_key_ring->CopyMasterKey(epoch, out);
 }
 
-std::optional<IdentityMaterial> CybouKeyStore::CreateRecoveryRotationMaterial(
+std::optional<IdentityMaterial> CybouKeyStore::CreateIdentityRotationMaterial(
     std::span<const unsigned char, 32> new_recovery_entropy) const
 {
-    if (!m_impl->material || !std::any_of(new_recovery_entropy.begin(), new_recovery_entropy.end(),
-            [](unsigned char byte) { return byte != 0; })) return std::nullopt;
+    if (!m_impl->material || std::all_of(new_recovery_entropy.begin(), new_recovery_entropy.end(),
+            [](unsigned char byte) { return byte == 0; })) return std::nullopt;
     IdentityMaterial material;
     material.account_id = m_impl->material->account_id;
-    material.recovery_entropy = std::array<unsigned char, 32>{};
     std::copy(new_recovery_entropy.begin(), new_recovery_entropy.end(), material.recovery_entropy.begin());
-    material.device_secret = m_impl->material->device_secret;
-    material.device_xwing_seed = m_impl->material->device_xwing_seed;
     return material;
 }
 
@@ -142,13 +140,10 @@ std::optional<RecoveryWords> CybouKeyStore::GetRecoveryWords() const
 
 void CybouKeyStore::Clear() { m_impl->Clear(); }
 bool CybouKeyStore::HasKey() const { return m_impl->material.has_value(); }
-std::optional<XWingPublicKey> CybouKeyStore::GetDeviceXWingPublicKey() const
+std::optional<XWingPublicKey> CybouKeyStore::GetIdentityXWingPublicKey() const { return m_impl->identity_xwing_public_key; }
+bool CybouKeyStore::ValidateIdentityXWingKeyPair() const
 {
-    return m_impl->device_xwing_public_key;
-}
-bool CybouKeyStore::ValidateDeviceXWingKeyPair() const
-{
-    return m_impl->material && ValidateXWingKeyPair(m_impl->material->device_xwing_seed);
+    return m_impl->identity_xwing_seed && ValidateXWingKeyPair(*m_impl->identity_xwing_seed);
 }
 
 std::optional<AccountId> CybouKeyStore::GetAccountId() const
@@ -157,14 +152,13 @@ std::optional<AccountId> CybouKeyStore::GetAccountId() const
     return AccountId::FromBytes(m_impl->material->account_id);
 }
 
-std::optional<IdentityHybridPublicKey> CybouKeyStore::GetDevicePublicKey() const { return m_impl->device_key; }
-std::optional<IdentityHybridPublicKey> CybouKeyStore::GetRecoveryPublicKey() const { return m_impl->recovery_root; }
-std::optional<std::array<unsigned char, 32>> CybouKeyStore::GetDeviceId() const { return m_impl->device_id; }
+std::optional<IdentityHybridPublicKey> CybouKeyStore::GetAuthorizationPublicKey() const { return m_impl->authorization_key; }
+std::optional<IdentityHybridPublicKey> CybouKeyStore::GetRecoveryPublicKey() const { return m_impl->recovery_key; }
 
-std::optional<IdentityHybridSignature> CybouKeyStore::SignDevice(std::span<const unsigned char> digest) const
+std::optional<IdentityHybridSignature> CybouKeyStore::SignAuthorization(std::span<const unsigned char> digest) const
 {
     if (!m_impl->material) return std::nullopt;
-    return SignIdentityMessage(m_impl->material->device_secret, IdentityKeyPurpose::DEVICE, digest);
+    return SignIdentityMessage(m_impl->material->recovery_entropy, IdentityKeyPurpose::AUTHORIZATION, digest);
 }
 
 std::optional<IdentityHybridSignature> CybouKeyStore::SignRecovery(std::span<const unsigned char> digest) const

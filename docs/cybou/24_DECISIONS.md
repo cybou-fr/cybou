@@ -73,7 +73,7 @@
 | DEC-069 | First user-facing product is CYBOU Email, not Messenger | Superseded by v0.0.1 |
 | DEC-070 | CYBOU Email v1 is CYBOU-native and does not require SMTP/IMAP/POP | Superseded by v0.13 |
 | DEC-071 | All CYBOU-native email is E2E encrypted; no plaintext fallback | Frozen |
-| DEC-072 | Email content is encrypted once with a random CEK; CEK is HPKE-wrapped per recipient device | Frozen direction |
+| DEC-072 | [SUPERSEDED BY DEC-193] Email content is encrypted once with a random CEK; CEK was HPKE-wrapped per recipient device | Historical direction |
 | DEC-073 | Preferred PQ/T HPKE target is X25519 + ML-KEM-768, subject to standards/final implementation review | Frozen target |
 | DEC-074 | No custom PQ KEM combiner | Frozen |
 | DEC-075 | Subject/body/thread-sensitive metadata remain inside E2E protected content where possible | Frozen |
@@ -168,7 +168,7 @@
 | DEC-164 | Beta MailTx quota is one network-bound limit per account and epoch; SystemBalance pays service fees but does not increase quota | Frozen Beta hardening |
 | DEC-165 | Identity V2 AccountID is random nonzero 256-bit, independent of mnemonic and keys; `stanislav.cybou` replaces the four-character example | Frozen V2 target |
 | DEC-166 | A 24-word recovery phrase deterministically yields replaceable hybrid Ed25519 AND ML-DSA-65 Recovery Root; consensus binds RecoveryKeyID to AccountID | Frozen V2 target; encoding/vectors pending |
-| DEC-167 | Bounded device registry uses hybrid Ed25519 AND ML-DSA-44 authorization, independent per-device nonces, and add/revoke operations | Frozen V2 target |
+| DEC-167 | [SUPERSEDED BY DEC-193] Bounded device registry used hybrid Ed25519 AND ML-DSA-44 authorization, independent per-device nonces, and add/revoke operations | Historical direction; superseded by DEC-193 |
 | DEC-168 | Portable CYBV2 vault uses random DEK with AES-256-GCM and password-derived Argon2id KEK; DPAPI is optional local unlock only | Frozen V2 target; parameters pending |
 | DEC-169 | `.cybou` V1 labels are 5–32 lowercase ASCII bytes with explicit reservations; one permanent primary name per AccountID, no transfer/expiry/recycling | Frozen V2 target |
 | DEC-170 | Name claims require finalized commit, network-bound work, and reveal; first valid finalized reveal wins | Frozen V2 target; bounds pending |
@@ -187,10 +187,14 @@
 | DEC-183 | Mail and Files share the protected Object Storage layer; Save to Files should reuse an existing protected object/reference when ownership, privacy, and retention rules allow | Frozen Beta integration direction |
 | DEC-184 | Network, cryptographic, and Storage work must not block the Qt event loop; pages issue asynchronous requests and render core/model state | Frozen desktop UX direction |
 | DEC-185 | Files is the Beta file-management product surface; there is no separate Drive product milestone, while Backup remains a post-Beta application | Frozen product scope; Beta calibration superseded by DEC-191 |
-| DEC-186 | Identity is the security root for device-authorized Name, Wallet, Mail, and Files actions; every such submission must use the shared device-operation coordinator | Frozen architecture direction; Mail, Files, and recovery/device flows are not all integrated yet |
-| DEC-187 | A device-authorized action must not allocate its own nonce, sign independently, or retry with replacement bytes; the coordinator journals exact bytes and operation identity until reconciliation | Frozen cross-service correctness direction; one unresolved operation per current device journal |
-| DEC-188 | Device authorization/signing keys and recipient content-encryption/KEM keys are separate domains; recipient KEM capabilities are published through Identity, not a parallel Mail key registry | Frozen; DEV publishes the draft-05 X-Wing package per active device, while Mail use remains disabled pending its wire/profile gate |
+| DEC-186 | [SUPERSEDED BY DEC-193] Identity is the security root for account-authorized Name, Wallet, Mail, and Files actions; every such submission uses the shared Identity operation coordinator | Superseded by DEC-193; Mail and Files integration remains pending |
+| DEC-187 | [SUPERSEDED BY DEC-193] An account-authorized action must not allocate its own nonce, sign independently, or retry with replacement bytes; the coordinator journals exact bytes and operation identity until reconciliation | Superseded by DEC-193; one unresolved operation per Identity journal |
+| DEC-188 | [SUPERSEDED BY DEC-193] Identity signing keys and recipient content-encryption/KEM keys are separate domains; recipient KEM capabilities are published through Identity, not a parallel Mail key registry | Superseded by DEC-193; DEV publishes one draft-05 X-Wing package per AccountID/key_epoch |
 | DEC-189 | Bulk object content is encrypted with an approved AEAD and recipient access is conveyed by a standardized hybrid classical + PQ KEM profile | Target security architecture; suite, wire format, and key package require protocol review |
 | DEC-190 | Saving a Mail attachment to Files creates an independent Files retention/ownership reference; Mail retention or deletion does not revoke that Files reference | Frozen product direction; implementation pending Object Storage and Mail integration |
 | DEC-191 | Calibrate the Beta onboarding budget from measured Mail and Files/Storage usage; model Backup separately as a post-Beta capacity scenario | Frozen calibration scope; Mainnet bonus remains gated on aggregate Beta operating data |
-| DEC-192 | Keep the local Storage Key Ring as an encrypted AccountID-bound CYBV2 sidecar until the recipient KEM package supports reviewed device wrapping and restore | Provisional local key-custody implementation; multi-device distribution and recovery remain open |
+| DEC-192 | Keep the local Storage Key Ring as an encrypted AccountID-bound CYBV2 sidecar until the account KEM package supports reviewed SMK wrapping and clean-machine restore | Provisional local key-custody implementation; account-level distribution and recovery remain open |
+
+## Superseding Identity decision
+
+| DEC-193 | Remove device as a protocol-level Identity entity. Derive Recovery (Ed25519 + ML-DSA-65), Authorization (Ed25519 + ML-DSA-44), and X-Wing KEM roles from mnemonic entropy under separate domains. Identity state contains one current key set, KEM commitment, shared nonce, and key_epoch. IdentityRotate atomically replaces every role; restore derives the current key set locally and does not submit DeviceAdd. Mail targets one AccountID/key_epoch capsule. | Current canonical direction; requires direct DEV cutover and discarding obsolete state/vaults |

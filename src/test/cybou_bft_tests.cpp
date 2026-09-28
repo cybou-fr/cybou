@@ -515,10 +515,8 @@ BOOST_AUTO_TEST_CASE(bft_executor_rejects_invalid_operations_before_proposal)
     const cybou::AuthorizedPayment invalid_payment{
         .authorization = {
             .account_id = cybou::AccountId{uint256::FromUserHex("02").value()},
-            .device_id = cybou::IdentityKeyId{1},
             .nonce = 0,
-            .activation_nonce = 0,
-            .kind = cybou::DeviceOperationKind::PAYMENT,
+            .kind = cybou::IdentityOperationKind::PAYMENT,
             .payload_commitment = cybou::IdentityKeyId{1},
             .signature = {},
         },

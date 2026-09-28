@@ -26,7 +26,7 @@ const char* Algorithm(IdentityKeyPurpose purpose)
 {
     switch (purpose) {
     case IdentityKeyPurpose::RECOVERY_ROOT: return "ML-DSA-65";
-    case IdentityKeyPurpose::DEVICE: return "ML-DSA-44";
+    case IdentityKeyPurpose::AUTHORIZATION: return "ML-DSA-44";
     case IdentityKeyPurpose::VALIDATOR:
     case IdentityKeyPurpose::OPERATOR_AUTHORITY:
     case IdentityKeyPurpose::RELEASE_SIGNING:
@@ -37,12 +37,12 @@ const char* Algorithm(IdentityKeyPurpose purpose)
 
 size_t PublicSize(IdentityKeyPurpose purpose)
 {
-    return purpose == IdentityKeyPurpose::DEVICE ? 1312 : 1952;
+    return purpose == IdentityKeyPurpose::AUTHORIZATION ? 1312 : 1952;
 }
 
 size_t SignatureSize(IdentityKeyPurpose purpose)
 {
-    return purpose == IdentityKeyPurpose::DEVICE ? 2420 : 3309;
+    return purpose == IdentityKeyPurpose::AUTHORIZATION ? 2420 : 3309;
 }
 
 std::optional<std::array<unsigned char, 32>> DeriveSeed(
@@ -54,7 +54,7 @@ std::optional<std::array<unsigned char, 32>> DeriveSeed(
     std::string_view purpose_label;
     switch (purpose) {
     case IdentityKeyPurpose::RECOVERY_ROOT: purpose_label = "ROOT"; break;
-    case IdentityKeyPurpose::DEVICE: purpose_label = "DEVICE"; break;
+    case IdentityKeyPurpose::AUTHORIZATION: purpose_label = "AUTH"; break;
     case IdentityKeyPurpose::VALIDATOR: purpose_label = "VALIDATOR"; break;
     case IdentityKeyPurpose::OPERATOR_AUTHORITY: purpose_label = "OPERATOR"; break;
     case IdentityKeyPurpose::RELEASE_SIGNING: purpose_label = "RELEASE"; break;
@@ -173,18 +173,18 @@ std::optional<std::array<unsigned char, 32>> ComputeRecoveryKeyId(
     return id;
 }
 
-std::optional<std::array<unsigned char, 32>> ComputeDeviceKeyId(
-    const IdentityHybridPublicKey& device_key)
+std::optional<std::array<unsigned char, 32>> ComputeAuthorizationKeyId(
+    const IdentityHybridPublicKey& authorization_key)
 {
-    if (device_key.purpose != IdentityKeyPurpose::DEVICE ||
-        device_key.ml_dsa.size() != PublicSize(IdentityKeyPurpose::DEVICE) ||
-        std::all_of(device_key.ed25519.begin(), device_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
-        std::all_of(device_key.ml_dsa.begin(), device_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
-    constexpr std::string_view domain{"CYBOU/DEVICE-KEY-ID/V2"};
+    if (authorization_key.purpose != IdentityKeyPurpose::AUTHORIZATION ||
+        authorization_key.ml_dsa.size() != PublicSize(IdentityKeyPurpose::AUTHORIZATION) ||
+        std::all_of(authorization_key.ed25519.begin(), authorization_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
+        std::all_of(authorization_key.ml_dsa.begin(), authorization_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
+    constexpr std::string_view domain{"CYBOU/IDENTITY-AUTH-KEY-ID/V1"};
     constexpr std::array<unsigned char, 2> suite{2, 1};
     std::array<unsigned char, 32> id{};
     if (!crypto::ComputeSha256({
-        crypto::Sha256Bytes(domain), suite, device_key.ed25519, device_key.ml_dsa,
+        crypto::Sha256Bytes(domain), suite, authorization_key.ed25519, authorization_key.ml_dsa,
     }, id.data())) return std::nullopt;
     return id;
 }

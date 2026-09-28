@@ -72,8 +72,7 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_creation_and_verification)
     std::array<unsigned char, 32> sender_device_seed{};
     sender_device_seed.fill(0x11);
     const auto sender_device_pubkey = *cybou::DeriveIdentityPublicKey(
-        sender_device_seed, cybou::IdentityKeyPurpose::DEVICE);
-    const auto sender_device_id = *cybou::ComputeDeviceKeyId(sender_device_pubkey);
+        sender_device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
     const cybou::AccountId sender_id{uint256::FromUserHex("5001").value()};
     const cybou::AccountId recipient_id{uint256::FromUserHex("5002").value()};
 
@@ -95,19 +94,17 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_creation_and_verification)
 
     const auto mail_commitment = *cybou::ComputeMailPayloadCommitment(mail_payload);
 
-    cybou::DeviceAuthorization auth{
+    cybou::IdentityOperationAuthorization auth{
         .account_id = sender_id,
-        .device_id = sender_device_id,
         .nonce = 0,
-        .activation_nonce = 0,
-        .kind = cybou::DeviceOperationKind::MAIL,
+        .kind = cybou::IdentityOperationKind::MAIL,
         .payload_commitment = mail_commitment,
         .signature = {},
     };
 
-    const auto op_digest = *cybou::ComputeDeviceOperationDigest(network_id, auth);
+    const auto op_digest = *cybou::ComputeIdentityOperationDigest(network_id, auth);
     auth.signature = *cybou::SignIdentityMessage(
-        sender_device_seed, cybou::IdentityKeyPurpose::DEVICE,
+        sender_device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION,
         std::span<const unsigned char>(op_digest.begin(), op_digest.size()));
 
     const cybou::AuthorizedMail mail_op{
@@ -168,7 +165,7 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_creation_and_verification)
 
     // Replaced sender device key
     auto wrong_key_bundle = bundle;
-    wrong_key_bundle.sender_device_key.ed25519[0] ^= 0xFF;
+    wrong_key_bundle.sender_authorization_key.ed25519[0] ^= 0xFF;
     BOOST_CHECK(cybou::VerifyMailEvidenceBundle(wrong_key_bundle, val_set, network_id) ==
                 cybou::EvidenceVerificationError::INVALID_OPERATION_SIGNATURE);
 
@@ -212,8 +209,7 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_serialization_roundtrip)
     std::array<unsigned char, 32> sender_device_seed{};
     sender_device_seed.fill(0x22);
     const auto sender_device_pubkey = *cybou::DeriveIdentityPublicKey(
-        sender_device_seed, cybou::IdentityKeyPurpose::DEVICE);
-    const auto sender_device_id = *cybou::ComputeDeviceKeyId(sender_device_pubkey);
+        sender_device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
     const cybou::AccountId sender_id{uint256::FromUserHex("6001").value()};
     const cybou::AccountId recipient_id{uint256::FromUserHex("6002").value()};
 
@@ -233,19 +229,17 @@ BOOST_AUTO_TEST_CASE(mail_evidence_bundle_serialization_roundtrip)
 
     const auto mail_commitment = *cybou::ComputeMailPayloadCommitment(mail_payload);
 
-    cybou::DeviceAuthorization auth{
+    cybou::IdentityOperationAuthorization auth{
         .account_id = sender_id,
-        .device_id = sender_device_id,
         .nonce = 1,
-        .activation_nonce = 0,
-        .kind = cybou::DeviceOperationKind::MAIL,
+        .kind = cybou::IdentityOperationKind::MAIL,
         .payload_commitment = mail_commitment,
         .signature = {},
     };
 
-    const auto op_digest = *cybou::ComputeDeviceOperationDigest(network_id, auth);
+    const auto op_digest = *cybou::ComputeIdentityOperationDigest(network_id, auth);
     auth.signature = *cybou::SignIdentityMessage(
-        sender_device_seed, cybou::IdentityKeyPurpose::DEVICE,
+        sender_device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION,
         std::span<const unsigned char>(op_digest.begin(), op_digest.size()));
 
     const cybou::AuthorizedMail mail_op{

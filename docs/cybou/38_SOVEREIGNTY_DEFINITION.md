@@ -6,7 +6,7 @@ CYBOU sovereignty means the product/network does not depend on a mandatory forei
 
 ```text
 user-controlled Balance
-device-controlled E2E mail decryption
+user-controlled E2E mail decryption
 independent full-node verification
 BFT-finalized chain/state
 operator-approved but independently runnable validators

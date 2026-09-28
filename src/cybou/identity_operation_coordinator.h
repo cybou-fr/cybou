@@ -1,0 +1,75 @@
+// Copyright (c) 2026 Stanislav Saveliev
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/license/mit/.
+
+#ifndef CYBOU_IDENTITY_OPERATION_COORDINATOR_H
+#define CYBOU_IDENTITY_OPERATION_COORDINATOR_H
+
+#include <cybou/identity_registry.h>
+#include <cybou/protocol_operation.h>
+
+#include <filesystem>
+#include <functional>
+#include <mutex>
+#include <optional>
+#include <string>
+
+namespace cybou {
+
+class CybouKeyStore;
+class CybouNodeRuntime;
+
+enum class IdentityOperationPhase : uint8_t {
+    PREPARED, SUBMITTING, UNCERTAIN, ACCEPTED, FINALIZED, REJECTED, CONFLICT,
+};
+
+struct IdentityOperationResult {
+    IdentityOperationPhase phase{IdentityOperationPhase::REJECTED};
+    uint256 op_id;
+    uint64_t finalized_height{0};
+    std::string error;
+    explicit operator bool() const
+    {
+        return phase == IdentityOperationPhase::ACCEPTED || phase == IdentityOperationPhase::UNCERTAIN ||
+            phase == IdentityOperationPhase::FINALIZED;
+    }
+};
+
+using IdentityOperationBuilder = std::function<std::optional<ProtocolOperation>(const IdentityOperationAuthorization&)>;
+
+/** Serializes one Identity nonce and durably retries exact operation bytes. */
+class IdentityOperationCoordinator {
+public:
+    IdentityOperationCoordinator(CybouNodeRuntime& runtime, CybouKeyStore& keystore,
+        std::filesystem::path journal_path);
+    ~IdentityOperationCoordinator();
+    IdentityOperationCoordinator(const IdentityOperationCoordinator&) = delete;
+    IdentityOperationCoordinator& operator=(const IdentityOperationCoordinator&) = delete;
+
+    IdentityOperationResult Execute(IdentityOperationKind kind, const IdentityKeyId& payload_commitment,
+        const IdentityOperationBuilder& build);
+    IdentityOperationResult RotateIdentity(std::span<const unsigned char, 32> new_identity_entropy);
+    bool CompleteIdentityRotation(const IdentityRecord& finalized_identity);
+    bool HasPendingIdentityRotation();
+    IdentityOperationResult GetStatus(const uint256& op_id);
+
+private:
+    struct JournalEntry;
+    CybouNodeRuntime& m_runtime;
+    CybouKeyStore& m_keystore;
+    std::filesystem::path m_journal_path;
+    mutable std::mutex m_mutex;
+    std::unique_ptr<JournalEntry> m_entry;
+    bool m_loaded{false};
+    std::string m_load_error;
+
+    bool LoadJournal();
+    bool SaveJournal(const JournalEntry& entry);
+    bool ClearJournal();
+    IdentityOperationResult SubmitExact(JournalEntry& entry);
+    IdentityOperationResult Reconcile(JournalEntry& entry);
+};
+
+} // namespace cybou
+
+#endif // CYBOU_IDENTITY_OPERATION_COORDINATOR_H

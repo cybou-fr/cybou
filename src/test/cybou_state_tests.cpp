@@ -68,23 +68,23 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     network_id.begin()[0] = 4;
     const AccountId account{raw_account};
     const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::DEVICE);
+    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::AUTHORIZATION);
     BOOST_REQUIRE(root && device);
     const IdentityAuthorization auth{*root, *device};
     const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
     const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
-    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, binding.pop_digest);
-    BOOST_REQUIRE(root_pop && device_pop);
+    const auto authorization_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
+    BOOST_REQUIRE(root_pop && authorization_pop);
     const AccountCreateOp create{account, auth, binding.package,
         {.network_id = network_id, .account_id = account, .authorization_commitment = binding.authorization_commitment},
-        *root_pop, *device_pop};
+        *root_pop, *authorization_pop};
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
     state.validator_set.validators.push_back(MakeTestValidator(5));
     auto damaged_create = create;
-    damaged_create.device_pop.ed25519[0] ^= 1;
+    damaged_create.authorization_pop.ed25519[0] ^= 1;
     BOOST_CHECK(ApplyAccountCreate(damaged_create, network_id, 0, params, state) == AccountCreateStateError::INVALID_CREATE);
     BOOST_CHECK(state.accounts.empty());
     BOOST_CHECK(state.identities.Accounts().empty());
@@ -122,16 +122,16 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     raw_other.begin()[0] = 9;
     const AccountId other_account{raw_other};
     const auto other_root = DeriveIdentityPublicKey(other_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto other_device = DeriveIdentityPublicKey(other_device_seed, IdentityKeyPurpose::DEVICE);
+    const auto other_device = DeriveIdentityPublicKey(other_device_seed, IdentityKeyPurpose::AUTHORIZATION);
     BOOST_REQUIRE(other_root && other_device);
     const IdentityAuthorization other_auth{*other_root, *other_device};
     const auto other_binding = test::MakeIdentityKemBinding(network_id, other_account, other_auth);
     const auto other_root_pop = SignIdentityMessage(other_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, other_binding.pop_digest);
-    const auto other_device_pop = SignIdentityMessage(other_device_seed, IdentityKeyPurpose::DEVICE, other_binding.pop_digest);
-    BOOST_REQUIRE(other_root_pop && other_device_pop);
+    const auto other_authorization_pop = SignIdentityMessage(other_device_seed, IdentityKeyPurpose::AUTHORIZATION, other_binding.pop_digest);
+    BOOST_REQUIRE(other_root_pop && other_authorization_pop);
     const AccountCreateOp other_create{other_account, other_auth, other_binding.package,
         {.network_id = network_id, .account_id = other_account, .authorization_commitment = other_binding.authorization_commitment},
-        *other_root_pop, *other_device_pop};
+        *other_root_pop, *other_authorization_pop};
     state.onboarding_pool = params.onboarding_bonus;
     BOOST_REQUIRE(ApplyAccountCreate(other_create, network_id, 1, params, state) == AccountCreateStateError::NONE);
     state.accounts.at(account).balance = 10; // funded fixture; no mint operation in this test
@@ -144,16 +144,13 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_CHECK(decoded_payment->recipient == other_account);
     BOOST_CHECK(decoded_payment->amount == 3);
     payment.authorization.account_id = account;
-    const auto device_id = ComputeDeviceKeyId(*device);
-    BOOST_REQUIRE(device_id);
-    payment.authorization.device_id = *device_id;
-    payment.authorization.kind = DeviceOperationKind::PAYMENT;
+    payment.authorization.kind = IdentityOperationKind::PAYMENT;
     const auto payment_commitment = ComputePaymentPayloadCommitment(payment.payment);
     BOOST_REQUIRE(payment_commitment);
     payment.authorization.payload_commitment = *payment_commitment;
-    const auto payment_digest = ComputeDeviceOperationDigest(network_id, payment.authorization);
+    const auto payment_digest = ComputeIdentityOperationDigest(network_id, payment.authorization);
     BOOST_REQUIRE(payment_digest);
-    const auto payment_signature = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *payment_digest);
+    const auto payment_signature = SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, *payment_digest);
     BOOST_REQUIRE(payment_signature);
     payment.authorization.signature = *payment_signature;
     auto tampered_payment = payment;
@@ -164,7 +161,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_CHECK(state.accounts.at(account).balance == 7);
     BOOST_CHECK(state.accounts.at(other_account).balance == 3);
     BOOST_CHECK(state.pending_fee_pool == params.payment_fee);
-    BOOST_CHECK(state.identities.Find(account)->devices.at(*device_id).next_nonce == 1);
+    BOOST_CHECK(state.identities.Find(account)->nonce == 1);
     BOOST_CHECK(ApplyPayment(payment, network_id, params, state) == PaymentError::INVALID_AUTHORIZATION);
     BOOST_CHECK(state.accounts.at(account).balance == 7);
     const ProtocolOperation payment_operation{payment};
@@ -193,9 +190,9 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     next_payment.payment.amount = 1;
     next_payment.authorization.nonce = 1;
     next_payment.authorization.payload_commitment = *ComputePaymentPayloadCommitment(next_payment.payment);
-    const auto next_digest = ComputeDeviceOperationDigest(network_id, next_payment.authorization);
+    const auto next_digest = ComputeIdentityOperationDigest(network_id, next_payment.authorization);
     BOOST_REQUIRE(next_digest);
-    const auto next_signature = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *next_digest);
+    const auto next_signature = SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, *next_digest);
     BOOST_REQUIRE(next_signature);
     next_payment.authorization.signature = *next_signature;
     const auto block_result = ExecuteBlockOperations(state, {ProtocolOperation{next_payment}}, network_id, 2, params);
@@ -225,32 +222,34 @@ BOOST_AUTO_TEST_CASE(insufficient_pool_does_not_register_identity)
     BOOST_CHECK(state.identities.Accounts().empty());
 }
 
-BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
+BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
 {
     using namespace cybou;
-    std::array<unsigned char, 32> root_seed{}, device_seed{}, second_seed{}, new_root_seed{};
+    std::array<unsigned char, 32> root_seed{}, authorization_seed{}, new_entropy{};
     root_seed[0] = 11;
-    device_seed[0] = 12;
-    second_seed[0] = 13;
-    new_root_seed[0] = 14;
+    authorization_seed[0] = 12;
+    new_entropy.fill(0x66);
     uint256 raw_account{}, network_id{};
     raw_account.begin()[0] = 15;
     network_id.begin()[0] = 16;
     const AccountId account{raw_account};
     const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::DEVICE);
-    const auto second_dev = DeriveIdentityPublicKey(second_seed, IdentityKeyPurpose::DEVICE);
-    const auto new_root = DeriveIdentityPublicKey(new_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    BOOST_REQUIRE(root && device && second_dev && new_root);
+    const auto authorization = DeriveIdentityPublicKey(authorization_seed, IdentityKeyPurpose::AUTHORIZATION);
+    const auto new_recovery = DeriveIdentityPublicKey(new_entropy, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto new_authorization = DeriveIdentityPublicKey(new_entropy, IdentityKeyPurpose::AUTHORIZATION);
+    const auto new_kem_seed = DeriveIdentityXWingSeed(new_entropy);
+    const auto new_kem_public = new_kem_seed ? DeriveXWingPublicKey(*new_kem_seed) : std::nullopt;
+    const auto new_package = new_kem_public ? EncodeIdentityKemPackage(*new_kem_public) : std::nullopt;
+    BOOST_REQUIRE(root && authorization && new_recovery && new_authorization && new_package);
 
-    const IdentityAuthorization auth{*root, *device};
+    const IdentityAuthorization auth{*root, *authorization};
     const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
     const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
-    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, binding.pop_digest);
-    BOOST_REQUIRE(root_pop && device_pop);
+    const auto authorization_pop = SignIdentityMessage(authorization_seed, IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
+    BOOST_REQUIRE(root_pop && authorization_pop);
     const AccountCreateOp create{account, auth, binding.package,
         {.network_id = network_id, .account_id = account, .authorization_commitment = binding.authorization_commitment},
-        *root_pop, *device_pop};
+        *root_pop, *authorization_pop};
 
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
@@ -259,134 +258,49 @@ BOOST_AUTO_TEST_CASE(identity_operations_wire_and_block_execution)
     state.validator_set.validators.push_back(MakeTestValidator(17));
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
-    // 1. DeviceAdd
-    DeviceAdd add{};
-    add.account_id = account;
-    add.new_device = *second_dev;
-    add.root_nonce = 0;
-    add.kem_package = test::MakeIdentityKemBinding(network_id, account,
-        IdentityAuthorization{*root, *second_dev}, 1).package;
-    const auto add_digest = ComputeDeviceAddDigest(network_id, add);
-    BOOST_REQUIRE(add_digest);
-    add.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *add_digest);
-    add.device_pop = *SignIdentityMessage(second_seed, IdentityKeyPurpose::DEVICE, *add_digest);
-
-    const ProtocolOperation add_op{add};
-    const auto add_wire = SerializeProtocolOperation(add_op);
-    BOOST_REQUIRE(add_wire);
-    BOOST_CHECK(add_wire->size() == 2 + DEVICE_ADD_SIZE);
-    const auto decoded_add = DeserializeProtocolOperation(*add_wire);
-    BOOST_REQUIRE(decoded_add && std::holds_alternative<DeviceAdd>(*decoded_add));
-    BOOST_CHECK(SerializeProtocolOperation(*decoded_add) == add_wire);
-    BOOST_CHECK(ComputeOperationId(*decoded_add) == ComputeOperationId(add_op));
-
-    // Damaged wires
-    auto bad_add_wire = *add_wire;
-    bad_add_wire[0] = 1;
-    BOOST_CHECK(!DeserializeProtocolOperation(bad_add_wire));
-    bad_add_wire = *add_wire;
-    bad_add_wire.push_back(0);
-    BOOST_CHECK(!DeserializeProtocolOperation(bad_add_wire));
-    BOOST_CHECK(!DeserializeProtocolOperation(std::span{*add_wire}.first(add_wire->size() - 1)));
-
-    // Execute DeviceAdd in block
-    const auto add_block = ExecuteBlockOperations(state, {add_op}, network_id, 1, params);
-    BOOST_REQUIRE(add_block);
-    BOOST_CHECK(add_block.state->identities.Find(account)->devices.size() == 2);
-    BOOST_CHECK(add_block.state->identities.Find(account)->next_root_nonce == 1);
-
-    // Replay of same device add fails with DEVICE_EXISTS
-    const auto replay_add = ExecuteBlockOperations(*add_block.state, {add_op}, network_id, 2, params);
-    BOOST_CHECK(replay_add.error == BlockExecutionError::INVALID_DEVICE_ADD);
-    BOOST_CHECK(replay_add.identity_error == IdentityRegistryError::DEVICE_EXISTS);
-
-    // Stale nonce with new device fails with BAD_NONCE
-    std::array<unsigned char, 32> third_seed{};
-    third_seed[0] = 99;
-    const auto third_dev = DeriveIdentityPublicKey(third_seed, IdentityKeyPurpose::DEVICE);
-    BOOST_REQUIRE(third_dev);
-    DeviceAdd stale_add{};
-    stale_add.account_id = account;
-    stale_add.new_device = *third_dev;
-    stale_add.root_nonce = 0; // stale nonce (current is 1)
-    stale_add.kem_package = test::MakeIdentityKemBinding(network_id, account,
-        IdentityAuthorization{*root, *third_dev}, 1).package;
-    const auto stale_digest = ComputeDeviceAddDigest(network_id, stale_add);
-    BOOST_REQUIRE(stale_digest);
-    stale_add.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *stale_digest);
-    stale_add.device_pop = *SignIdentityMessage(third_seed, IdentityKeyPurpose::DEVICE, *stale_digest);
-    const auto stale_add_block = ExecuteBlockOperations(*add_block.state, {ProtocolOperation{stale_add}}, network_id, 2, params);
-    BOOST_CHECK(stale_add_block.error == BlockExecutionError::INVALID_DEVICE_ADD);
-    BOOST_CHECK(stale_add_block.identity_error == IdentityRegistryError::BAD_NONCE);
-
-    // 2. DeviceRevoke
-    const auto first_device_id = ComputeDeviceKeyId(*device);
-    BOOST_REQUIRE(first_device_id);
-    DeviceRevoke revoke{};
-    revoke.account_id = account;
-    revoke.device_id = *first_device_id;
-    revoke.root_nonce = 1;
-    const auto revoke_digest = ComputeDeviceRevokeDigest(network_id, revoke);
-    BOOST_REQUIRE(revoke_digest);
-    revoke.root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *revoke_digest);
-
-    const ProtocolOperation revoke_op{revoke};
-    const auto revoke_wire = SerializeProtocolOperation(revoke_op);
-    BOOST_REQUIRE(revoke_wire);
-    BOOST_CHECK(revoke_wire->size() == 2 + DEVICE_REVOKE_SIZE);
-    const auto decoded_revoke = DeserializeProtocolOperation(*revoke_wire);
-    BOOST_REQUIRE(decoded_revoke && std::holds_alternative<DeviceRevoke>(*decoded_revoke));
-    BOOST_CHECK(SerializeProtocolOperation(*decoded_revoke) == revoke_wire);
-    BOOST_CHECK(ComputeOperationId(*decoded_revoke) == ComputeOperationId(revoke_op));
-
-    // Damaged wires
-    auto bad_revoke_wire = *revoke_wire;
-    bad_revoke_wire[0] = 9;
-    BOOST_CHECK(!DeserializeProtocolOperation(bad_revoke_wire));
-    bad_revoke_wire = *revoke_wire;
-    bad_revoke_wire.push_back(0);
-    BOOST_CHECK(!DeserializeProtocolOperation(bad_revoke_wire));
-
-    // Execute DeviceRevoke in block
-    const auto revoke_block = ExecuteBlockOperations(*add_block.state, {revoke_op}, network_id, 2, params);
-    BOOST_REQUIRE(revoke_block);
-    BOOST_CHECK(revoke_block.state->identities.Find(account)->devices.size() == 1);
-    BOOST_CHECK(revoke_block.state->identities.Find(account)->next_root_nonce == 2);
-    BOOST_CHECK(!revoke_block.state->identities.Find(account)->devices.contains(*first_device_id));
-
-    // 3. RecoveryRotate
-    RecoveryRotate rotate{};
-    rotate.account_id = account;
-    rotate.new_root = *new_root;
-    rotate.root_nonce = 2;
-    const auto rotate_digest = ComputeRecoveryRotateDigest(network_id, rotate);
+    const IdentityAuthorization next_auth{*new_recovery, *new_authorization};
+    const auto next_binding = test::MakeIdentityKemBinding(network_id, account, next_auth, 1);
+    IdentityRotate rotate{
+        .account_id = account,
+        .new_recovery_key = *new_recovery,
+        .new_authorization_key = *new_authorization,
+        .new_kem_package = *new_package,
+        .nonce = 0,
+        .key_epoch = 1,
+    };
+    const auto rotate_digest = ComputeIdentityRotateDigest(network_id, rotate);
     BOOST_REQUIRE(rotate_digest);
-    rotate.old_root_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
-    rotate.new_root_pop = *SignIdentityMessage(new_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
+    rotate.old_recovery_signature = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
+    rotate.new_recovery_pop = *SignIdentityMessage(new_entropy, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
+    rotate.new_authorization_pop = *SignIdentityMessage(new_entropy, IdentityKeyPurpose::AUTHORIZATION, *rotate_digest);
 
-    const ProtocolOperation rotate_op{rotate};
-    const auto rotate_wire = SerializeProtocolOperation(rotate_op);
-    BOOST_REQUIRE(rotate_wire);
-    BOOST_CHECK(rotate_wire->size() == 2 + RECOVERY_ROTATE_SIZE);
-    const auto decoded_rotate = DeserializeProtocolOperation(*rotate_wire);
-    BOOST_REQUIRE(decoded_rotate && std::holds_alternative<RecoveryRotate>(*decoded_rotate));
-    BOOST_CHECK(SerializeProtocolOperation(*decoded_rotate) == rotate_wire);
-    BOOST_CHECK(ComputeOperationId(*decoded_rotate) == ComputeOperationId(rotate_op));
+    const ProtocolOperation operation{rotate};
+    const auto wire = SerializeProtocolOperation(operation);
+    BOOST_REQUIRE(wire);
+    BOOST_CHECK_EQUAL(wire->size(), 2 + IDENTITY_ROTATE_SIZE);
+    const auto decoded = DeserializeProtocolOperation(*wire);
+    BOOST_REQUIRE(decoded && std::holds_alternative<IdentityRotate>(*decoded));
+    BOOST_CHECK(SerializeProtocolOperation(*decoded) == wire);
+    BOOST_CHECK(ComputeOperationId(*decoded) == ComputeOperationId(operation));
+    auto malformed = *wire;
+    malformed.push_back(0);
+    BOOST_CHECK(!DeserializeProtocolOperation(malformed));
+    BOOST_CHECK(!DeserializeProtocolOperation(std::span{*wire}.first(wire->size() - 1)));
 
-    // Damaged wires
-    auto bad_rotate_wire = *rotate_wire;
-    bad_rotate_wire.push_back(0);
-    BOOST_CHECK(!DeserializeProtocolOperation(bad_rotate_wire));
-    BOOST_CHECK(!DeserializeProtocolOperation(std::span{*rotate_wire}.first(rotate_wire->size() - 1)));
-
-    // Execute RecoveryRotate in block
-    const auto rotate_block = ExecuteBlockOperations(*revoke_block.state, {rotate_op}, network_id, 3, params);
-    BOOST_REQUIRE(rotate_block);
-    const auto new_root_id = ComputeRecoveryKeyId(*new_root);
-    BOOST_REQUIRE(new_root_id);
-    BOOST_CHECK(rotate_block.state->identities.FindByRecoveryKeyId(*new_root_id) == account);
-    BOOST_CHECK(rotate_block.state->identities.Find(account)->recovery_root.ed25519 == new_root->ed25519);
-    BOOST_CHECK(rotate_block.state->identities.Find(account)->next_root_nonce == 3);
+    const auto rotated = ExecuteBlockOperations(state, {operation}, network_id, 1, params);
+    BOOST_REQUIRE(rotated);
+    const auto* record = rotated.state->identities.Find(account);
+    BOOST_REQUIRE(record);
+    BOOST_CHECK(record->recovery_key == *new_recovery);
+    BOOST_CHECK(record->authorization_key == *new_authorization);
+    BOOST_CHECK(record->kem_package_id == next_binding.package_id);
+    BOOST_CHECK_EQUAL(record->key_epoch, 1U);
+    BOOST_CHECK_EQUAL(record->nonce, 0U);
+    const auto new_recovery_id = ComputeRecoveryKeyId(*new_recovery);
+    BOOST_REQUIRE(new_recovery_id);
+    BOOST_CHECK(rotated.state->identities.FindByRecoveryKeyId(*new_recovery_id) == account);
+    const auto replay = ExecuteBlockOperations(*rotated.state, {operation}, network_id, 2, params);
+    BOOST_CHECK(replay.error == BlockExecutionError::INVALID_IDENTITY_ROTATE);
 }
 
 BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
@@ -400,17 +314,17 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     network_id.begin()[0] = 24;
     const AccountId account{raw_account};
     const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::DEVICE);
+    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::AUTHORIZATION);
     BOOST_REQUIRE(root && device);
 
     const IdentityAuthorization auth{*root, *device};
     const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
     const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
-    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, binding.pop_digest);
-    BOOST_REQUIRE(root_pop && device_pop);
+    const auto authorization_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
+    BOOST_REQUIRE(root_pop && authorization_pop);
     const AccountCreateOp create{account, auth, binding.package,
         {.network_id = network_id, .account_id = account, .authorization_commitment = binding.authorization_commitment},
-        *root_pop, *device_pop};
+        *root_pop, *authorization_pop};
 
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
@@ -422,8 +336,6 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     // Fund account balance
     state.accounts.at(account).balance = 50;
 
-    const auto device_id = ComputeDeviceKeyId(*device);
-    BOOST_REQUIRE(device_id);
 
     AuthorizedSystemLock lock{};
     lock.lock.amount = 20;
@@ -436,14 +348,12 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     BOOST_REQUIRE(lock_commitment);
 
     lock.authorization.account_id = account;
-    lock.authorization.device_id = *device_id;
     lock.authorization.nonce = 0;
-    lock.authorization.activation_nonce = 0;
-    lock.authorization.kind = DeviceOperationKind::SYSTEM_LOCK;
+    lock.authorization.kind = IdentityOperationKind::SYSTEM_LOCK;
     lock.authorization.payload_commitment = *lock_commitment;
-    const auto lock_digest = ComputeDeviceOperationDigest(network_id, lock.authorization);
+    const auto lock_digest = ComputeIdentityOperationDigest(network_id, lock.authorization);
     BOOST_REQUIRE(lock_digest);
-    lock.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *lock_digest);
+    lock.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, *lock_digest);
 
     // Wire serialization
     const ProtocolOperation lock_op{lock};
@@ -470,7 +380,7 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     BOOST_CHECK(block_res.state->accounts.at(account).balance == 30);
     BOOST_CHECK(block_res.state->accounts.at(account).system_balance == params.onboarding_bonus + 20);
     BOOST_CHECK(block_res.state->pending_fee_pool == 0); // no fee for lock
-    BOOST_CHECK(block_res.state->identities.Find(account)->devices.at(*device_id).next_nonce == 1);
+    BOOST_CHECK(block_res.state->identities.Find(account)->nonce == 1);
 
     // Replay stale nonce fails
     const auto replay = ExecuteBlockOperations(*block_res.state, {lock_op}, network_id, 2, params);
@@ -647,17 +557,17 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     network_id.begin()[0] = 54;
     const AccountId account{raw_account};
     const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::DEVICE);
+    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::AUTHORIZATION);
     BOOST_REQUIRE(root && device);
 
     const IdentityAuthorization auth{*root, *device};
     const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
     const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
-    const auto device_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, binding.pop_digest);
-    BOOST_REQUIRE(root_pop && device_pop);
+    const auto authorization_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
+    BOOST_REQUIRE(root_pop && authorization_pop);
     const AccountCreateOp create{account, auth, binding.package,
         {.network_id = network_id, .account_id = account, .authorization_commitment = binding.authorization_commitment},
-        *root_pop, *device_pop};
+        *root_pop, *authorization_pop};
 
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
@@ -669,8 +579,6 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     state.validator_set.validators.push_back(MakeTestValidator(55));
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
-    const auto device_id = ComputeDeviceKeyId(*device);
-    BOOST_REQUIRE(device_id.has_value());
 
     // 3. NameCommit
     const std::string label = "stanislav";
@@ -686,14 +594,12 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_REQUIRE(commit_payload_commitment.has_value());
 
     commit_op.authorization.account_id = account;
-    commit_op.authorization.device_id = *device_id;
     commit_op.authorization.nonce = 0;
-    commit_op.authorization.activation_nonce = 0;
-    commit_op.authorization.kind = DeviceOperationKind::NAME_COMMIT;
+    commit_op.authorization.kind = IdentityOperationKind::NAME_COMMIT;
     commit_op.authorization.payload_commitment = *commit_payload_commitment;
-    const auto commit_digest = ComputeDeviceOperationDigest(network_id, commit_op.authorization);
+    const auto commit_digest = ComputeIdentityOperationDigest(network_id, commit_op.authorization);
     BOOST_REQUIRE(commit_digest.has_value());
-    commit_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *commit_digest);
+    commit_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, *commit_digest);
 
     // Wire serialization check
     const ProtocolOperation commit_proto_op{commit_op};
@@ -710,7 +616,7 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_REQUIRE(commit_block);
     BOOST_REQUIRE(commit_block.state->names.pending_commits.contains(name_commit_hash));
     BOOST_CHECK_EQUAL(commit_block.state->names.pending_commits.at(name_commit_hash).commit_height, 10ULL);
-    BOOST_CHECK_EQUAL(commit_block.state->identities.Find(account)->devices.at(*device_id).next_nonce, 1ULL);
+    BOOST_CHECK_EQUAL(commit_block.state->identities.Find(account)->nonce, 1ULL);
 
     // 4. NameReveal
     AuthorizedNameReveal reveal_op{};
@@ -728,14 +634,12 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_REQUIRE(reveal_payload_commitment.has_value());
 
     reveal_op.authorization.account_id = account;
-    reveal_op.authorization.device_id = *device_id;
     reveal_op.authorization.nonce = 1;
-    reveal_op.authorization.activation_nonce = 0;
-    reveal_op.authorization.kind = DeviceOperationKind::NAME_REVEAL;
+    reveal_op.authorization.kind = IdentityOperationKind::NAME_REVEAL;
     reveal_op.authorization.payload_commitment = *reveal_payload_commitment;
-    const auto reveal_digest = ComputeDeviceOperationDigest(network_id, reveal_op.authorization);
+    const auto reveal_digest = ComputeIdentityOperationDigest(network_id, reveal_op.authorization);
     BOOST_REQUIRE(reveal_digest.has_value());
-    reveal_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *reveal_digest);
+    reveal_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, *reveal_digest);
 
     // Wire serialization check
     const ProtocolOperation reveal_proto_op{reveal_op};
@@ -760,7 +664,7 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_CHECK(*reveal_block.state->names.Resolve(label) == account);
     BOOST_REQUIRE(reveal_block.state->names.PrimaryName(account) != nullptr);
     BOOST_CHECK(*reveal_block.state->names.PrimaryName(account) == label);
-    BOOST_CHECK_EQUAL(reveal_block.state->identities.Find(account)->devices.at(*device_id).next_nonce, 2ULL);
+    BOOST_CHECK_EQUAL(reveal_block.state->identities.Find(account)->nonce, 2ULL);
 
     // State serialization roundtrip with names
     const auto state_bytes = SerializeCybouState(*reveal_block.state);
@@ -775,18 +679,18 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     // A0. Account already has a pending commitment -> cannot commit another
     auto second_commit_op = commit_op;
     second_commit_op.authorization.nonce = 1;
-    const auto sec_digest0 = ComputeDeviceOperationDigest(network_id, second_commit_op.authorization);
+    const auto sec_digest0 = ComputeIdentityOperationDigest(network_id, second_commit_op.authorization);
     BOOST_REQUIRE(sec_digest0.has_value());
-    second_commit_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *sec_digest0);
+    second_commit_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, *sec_digest0);
     const auto pending_commit_res = ExecuteBlockOperations(*commit_block.state, {second_commit_op}, network_id, 11, params);
     BOOST_CHECK(pending_commit_res.error == BlockExecutionError::INVALID_NAME_COMMIT);
     BOOST_CHECK(pending_commit_res.name_commit_error == NameCommitError::ACCOUNT_HAS_PENDING_COMMIT);
 
     // A. Account already has a name -> cannot commit another name
     second_commit_op.authorization.nonce = 2;
-    const auto sec_digest = ComputeDeviceOperationDigest(network_id, second_commit_op.authorization);
+    const auto sec_digest = ComputeIdentityOperationDigest(network_id, second_commit_op.authorization);
     BOOST_REQUIRE(sec_digest.has_value());
-    second_commit_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::DEVICE, *sec_digest);
+    second_commit_op.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, *sec_digest);
     const auto double_commit_res = ExecuteBlockOperations(*reveal_block.state, {second_commit_op}, network_id, 13, params);
     BOOST_CHECK(double_commit_res.error == BlockExecutionError::INVALID_NAME_COMMIT);
     BOOST_CHECK(double_commit_res.name_commit_error == NameCommitError::ACCOUNT_ALREADY_HAS_NAME);
@@ -861,28 +765,25 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     bob_dev_seed[0] = 72;
 
     const auto alice_root = DeriveIdentityPublicKey(alice_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto alice_dev = DeriveIdentityPublicKey(alice_dev_seed, IdentityKeyPurpose::DEVICE);
+    const auto alice_dev = DeriveIdentityPublicKey(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION);
     const auto bob_root = DeriveIdentityPublicKey(bob_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto bob_dev = DeriveIdentityPublicKey(bob_dev_seed, IdentityKeyPurpose::DEVICE);
+    const auto bob_dev = DeriveIdentityPublicKey(bob_dev_seed, IdentityKeyPurpose::AUTHORIZATION);
     BOOST_REQUIRE(alice_root && alice_dev && bob_root && bob_dev);
 
-    const auto alice_dev_id = ComputeDeviceKeyId(*alice_dev);
-    const auto bob_dev_id = ComputeDeviceKeyId(*bob_dev);
-    BOOST_REQUIRE(alice_dev_id && bob_dev_id);
 
     const IdentityAuthorization alice_auth{*alice_root, *alice_dev};
     const auto alice_binding = test::MakeIdentityKemBinding(network_id, alice, alice_auth);
     const AccountCreateOp create_alice{alice, alice_auth, alice_binding.package,
         {.network_id = network_id, .account_id = alice, .authorization_commitment = alice_binding.authorization_commitment},
         *SignIdentityMessage(alice_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, alice_binding.pop_digest),
-        *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, alice_binding.pop_digest)};
+        *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, alice_binding.pop_digest)};
 
     const IdentityAuthorization bob_auth{*bob_root, *bob_dev};
     const auto bob_binding = test::MakeIdentityKemBinding(network_id, bob, bob_auth);
     const AccountCreateOp create_bob{bob, bob_auth, bob_binding.package,
         {.network_id = network_id, .account_id = bob, .authorization_commitment = bob_binding.authorization_commitment},
         *SignIdentityMessage(bob_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, bob_binding.pop_digest),
-        *SignIdentityMessage(bob_dev_seed, IdentityKeyPurpose::DEVICE, bob_binding.pop_digest)};
+        *SignIdentityMessage(bob_dev_seed, IdentityKeyPurpose::AUTHORIZATION, bob_binding.pop_digest)};
 
     params.account_creation_work_bits = 0;
     CybouState state{};
@@ -908,14 +809,12 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     AuthorizedMail mail_op{};
     mail_op.mail = payload;
     mail_op.authorization.account_id = alice;
-    mail_op.authorization.device_id = *alice_dev_id;
     mail_op.authorization.nonce = 0;
-    mail_op.authorization.activation_nonce = 0;
-    mail_op.authorization.kind = DeviceOperationKind::MAIL;
+    mail_op.authorization.kind = IdentityOperationKind::MAIL;
     mail_op.authorization.payload_commitment = *payload_commitment;
-    const auto op_digest = ComputeDeviceOperationDigest(network_id, mail_op.authorization);
+    const auto op_digest = ComputeIdentityOperationDigest(network_id, mail_op.authorization);
     BOOST_REQUIRE(op_digest.has_value());
-    mail_op.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *op_digest);
+    mail_op.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *op_digest);
 
     // Wire serialization roundtrip
     const ProtocolOperation proto_op{mail_op};
@@ -939,7 +838,7 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     BOOST_CHECK_EQUAL(post_state.accounts.at(alice).system_balance, params.onboarding_bonus - expected_fee);
     BOOST_CHECK_EQUAL(post_state.accounts.at(alice).last_mail_epoch, 0ULL);
     BOOST_CHECK_EQUAL(post_state.accounts.at(alice).mail_count_in_epoch, 1U);
-    BOOST_CHECK_EQUAL(post_state.identities.Find(alice)->devices.at(*alice_dev_id).next_nonce, 1ULL);
+    BOOST_CHECK_EQUAL(post_state.identities.Find(alice)->nonce, 1ULL);
 
     // Fee routing check (4 fees -> 3 security + 1 onboarding)
     // Fee = 5: chunks = 5/4 = 1. security += 3, onboarding += 1, pending %= 4 -> 1 remainder
@@ -962,9 +861,9 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     for (uint32_t i = 2; i <= 25; ++i) {
         AuthorizedMail next_mail = mail_op;
         next_mail.authorization.nonce = nonce++;
-        const auto dig = ComputeDeviceOperationDigest(network_id, next_mail.authorization);
+        const auto dig = ComputeIdentityOperationDigest(network_id, next_mail.authorization);
         BOOST_REQUIRE(dig.has_value());
-        next_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig);
+        next_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig);
         const auto res = ExecuteBlockOperations(current_state, {ProtocolOperation{next_mail}}, network_id, 10 + i, params);
         BOOST_REQUIRE(res);
         current_state = *res.state;
@@ -975,9 +874,9 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     // 26th mail in epoch 0: must fail with MAIL_QUOTA_EXCEEDED
     AuthorizedMail quota_exceed_mail = mail_op;
     quota_exceed_mail.authorization.nonce = nonce++;
-    const auto dig_exceed = ComputeDeviceOperationDigest(network_id, quota_exceed_mail.authorization);
+    const auto dig_exceed = ComputeIdentityOperationDigest(network_id, quota_exceed_mail.authorization);
     BOOST_REQUIRE(dig_exceed.has_value());
-    quota_exceed_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig_exceed);
+    quota_exceed_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig_exceed);
     const auto quota_fail_res = ExecuteBlockOperations(current_state, {ProtocolOperation{quota_exceed_mail}}, network_id, 50, params);
     BOOST_CHECK(quota_fail_res.error == BlockExecutionError::INVALID_MAIL);
     BOOST_CHECK(quota_fail_res.mail_error == MailError::MAIL_QUOTA_EXCEEDED);
@@ -987,9 +886,9 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     BOOST_CHECK_EQUAL(EpochForHeight(epoch1_height, params), 1ULL);
     // Reuse the same mail op with correct nonce
     quota_exceed_mail.authorization.nonce = nonce - 1; // nonce was not consumed by failed op
-    const auto dig_epoch1 = ComputeDeviceOperationDigest(network_id, quota_exceed_mail.authorization);
+    const auto dig_epoch1 = ComputeIdentityOperationDigest(network_id, quota_exceed_mail.authorization);
     BOOST_REQUIRE(dig_epoch1.has_value());
-    quota_exceed_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig_epoch1);
+    quota_exceed_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig_epoch1);
     const auto epoch1_res = ExecuteBlockOperations(current_state, {ProtocolOperation{quota_exceed_mail}}, network_id, epoch1_height, params);
     BOOST_REQUIRE(epoch1_res);
     BOOST_CHECK_EQUAL(epoch1_res.state->accounts.at(alice).last_mail_epoch, 1ULL);
@@ -1005,9 +904,9 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     BOOST_REQUIRE(bad_recip_commit.has_value());
     bad_recipient_mail.authorization.payload_commitment = *bad_recip_commit;
     bad_recipient_mail.authorization.nonce = nonce;
-    const auto dig_bad_recip = ComputeDeviceOperationDigest(network_id, bad_recipient_mail.authorization);
+    const auto dig_bad_recip = ComputeIdentityOperationDigest(network_id, bad_recipient_mail.authorization);
     BOOST_REQUIRE(dig_bad_recip.has_value());
-    bad_recipient_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig_bad_recip);
+    bad_recipient_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig_bad_recip);
     const auto bad_recip_res = ExecuteBlockOperations(*epoch1_res.state, {ProtocolOperation{bad_recipient_mail}}, network_id, epoch1_height + 1, params);
     BOOST_CHECK(bad_recip_res.error == BlockExecutionError::INVALID_MAIL);
     BOOST_CHECK(bad_recip_res.mail_error == MailError::RECIPIENT_NOT_FOUND);
@@ -1017,9 +916,9 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     poor_state.accounts.at(alice).system_balance = 0;
     AuthorizedMail poor_mail = mail_op;
     poor_mail.authorization.nonce = nonce;
-    const auto dig_poor = ComputeDeviceOperationDigest(network_id, poor_mail.authorization);
+    const auto dig_poor = ComputeIdentityOperationDigest(network_id, poor_mail.authorization);
     BOOST_REQUIRE(dig_poor.has_value());
-    poor_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig_poor);
+    poor_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig_poor);
     const auto poor_res = ExecuteBlockOperations(poor_state, {ProtocolOperation{poor_mail}}, network_id, epoch1_height + 1, params);
     BOOST_CHECK(poor_res.error == BlockExecutionError::INVALID_MAIL);
     BOOST_CHECK(poor_res.mail_error == MailError::INSUFFICIENT_SYSTEM_BALANCE);
@@ -1042,9 +941,9 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     param_oversized_mail.mail = param_oversized_payload;
     param_oversized_mail.authorization.payload_commitment = *param_commit;
     param_oversized_mail.authorization.nonce = nonce;
-    const auto dig_oversized = ComputeDeviceOperationDigest(network_id, param_oversized_mail.authorization);
+    const auto dig_oversized = ComputeIdentityOperationDigest(network_id, param_oversized_mail.authorization);
     BOOST_REQUIRE(dig_oversized.has_value());
-    param_oversized_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::DEVICE, *dig_oversized);
+    param_oversized_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig_oversized);
     const auto param_res = ExecuteBlockOperations(*epoch1_res.state, {ProtocolOperation{param_oversized_mail}}, network_id, epoch1_height + 1, params);
     BOOST_CHECK(param_res.error == BlockExecutionError::INVALID_MAIL);
     BOOST_CHECK(param_res.mail_error == MailError::INVALID_PAYLOAD);
@@ -1072,7 +971,7 @@ BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
     root_seed[0] = 1;
     dev_seed[0] = 2;
     const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto device = DeriveIdentityPublicKey(dev_seed, IdentityKeyPurpose::DEVICE);
+    const auto device = DeriveIdentityPublicKey(dev_seed, IdentityKeyPurpose::AUTHORIZATION);
     BOOST_REQUIRE(root && device);
 
     const IdentityAuthorization auth{*root, *device};
@@ -1090,7 +989,7 @@ BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
             .nonce = 0,
         },
         .recovery_pop = *SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest),
-        .device_pop = *SignIdentityMessage(dev_seed, IdentityKeyPurpose::DEVICE, binding.pop_digest),
+        .authorization_pop = *SignIdentityMessage(dev_seed, IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest),
     };
 
     // Apply unversioned AccountCreate

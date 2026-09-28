@@ -145,8 +145,8 @@ bool CybouDesktopModel::requestRecoveryRootRotation(const QStringList& new_phras
     auto password = vault_password.toStdString();
     m_recovery_rotation_worker = std::jthread([this, words = std::move(words), password = std::move(password), resume_pending]() mutable {
         auto result = resume_pending
-            ? m_identity_service->ResumeRecoveryRootRotationSync(password)
-            : m_identity_service->RotateRecoveryRootSync(words, password);
+            ? m_identity_service->ResumeIdentityRotationSync(password)
+            : m_identity_service->RotateIdentitySync(words, password);
         memory_cleanse(password.data(), password.size());
         for (auto& word : words) memory_cleanse(word.data(), word.size());
         const auto phase = static_cast<quint8>(result.phase);

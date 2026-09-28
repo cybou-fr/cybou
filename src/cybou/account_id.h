@@ -18,7 +18,7 @@ namespace cybou {
  * Opaque, stable 32-byte identifier for a CYBOU account.
  *
  * AccountID identifies an authorization record; it is not itself a public key
- * and therefore remains stable across device/key rotation. All-zero is the
+ * and therefore remains stable across Identity key rotation. All-zero is the
  * reserved invalid value. Canonical encoding is exactly the uint256 internal
  * byte order defined by the protocol.
  */

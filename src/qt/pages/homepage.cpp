@@ -17,7 +17,6 @@
 #include <QLabel>
 #include <QLocale>
 #include <QPushButton>
-#include <QSysInfo>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -77,7 +76,6 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
     stats->setSpacing(14);
     stats->addWidget(buildMailCard());
     stats->addWidget(buildFilesCard());
-    stats->addWidget(buildDevicesCard());
     left->addLayout(stats);
     left->addStretch();
 
@@ -205,40 +203,6 @@ QWidget* HomePage::buildFilesCard()
     return card;
 }
 
-QWidget* HomePage::buildDevicesCard()
-{
-    auto* card = Card(this);
-    card->setMinimumWidth(0);
-    card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    auto* layout = new QVBoxLayout{card};
-    layout->setContentsMargins(22, 18, 22, 18);
-    layout->setSpacing(10);
-
-    auto* header = new QHBoxLayout;
-    header->addWidget(Chip(Glyph::Monitor, Tint::Indigo, card, 38, 19));
-    auto* title = new QLabel{tr("Devices & Security"), card};
-    title->setObjectName(QStringLiteral("serviceTitle"));
-    header->addWidget(title, 0, Qt::AlignVCenter);
-    header->addStretch();
-    auto* open = IconButton(Glyph::ChevronRight, card);
-    connect(open, &QToolButton::clicked, this, [this] { m_identity_requested(); });
-    header->addWidget(open, 0, Qt::AlignVCenter);
-    layout->addLayout(header);
-
-    m_devices_metric = new QLabel{card};
-    m_devices_metric->setObjectName(QStringLiteral("metric"));
-    layout->addWidget(m_devices_metric);
-    layout->addWidget(MutedText(tr("This device is active. Device sync is not available yet."), card));
-
-    m_device_rows = new QWidget{card};
-    auto* rows = new QVBoxLayout{m_device_rows};
-    rows->setContentsMargins(0, 2, 0, 0);
-    rows->setSpacing(8);
-    layout->addWidget(m_device_rows);
-    layout->addStretch();
-    return card;
-}
-
 QWidget* HomePage::buildActivityCard()
 {
     auto* card = Card(this);
@@ -318,13 +282,6 @@ void HomePage::refresh()
             : tr("%1 files · %2 bytes").arg(m_model->storageFiles().size())
                 .arg(QLocale{}.toString(files_size)));
     m_files_caption->setText(tr("Local encrypted index · Files catalog sync is not available yet."));
-
-    // Devices: this node only (device authorization lands with the vault sync).
-    clearLayout(m_device_rows->layout());
-    auto* rows = qobject_cast<QVBoxLayout*>(m_device_rows->layout());
-    rows->addWidget(ActivityRow(Glyph::Monitor, Tint::Indigo, QSysInfo::machineHostName(),
-        tr("This device \u00b7 Active now"), {}, m_device_rows, true));
-    m_devices_metric->setText(tr("This installation"));
 
     // Recent activity: unread mail + finalized ledger entries + sync.
     clearLayout(m_activity_rows->layout());

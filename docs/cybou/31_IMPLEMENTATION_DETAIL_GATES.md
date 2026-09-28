@@ -1,17 +1,17 @@
 # 31 — Implementation detail gates
 
-A — exact upstream Bitcoin baseline  
-B — CYBOU network quarantine  
-C — product/binary rename  
-D — AccountID/device identity  
-E — native E2E MailTx crypto vertical slice  
-F — MailTx + bounded mail-validation state transition  
-G — deterministic state roots  
-H — checkpoint/snapshot bootstrap  
-I — static/operator-approved BFT safety  
-J — Proof of Trust + service limits  
-K — fixed-supply integer economics  
-L — validator rewards  
+A — exact upstream Bitcoin baseline
+B — CYBOU network quarantine
+C — product/binary rename
+D — AccountID Identity authorization
+E — native E2E MailTx crypto vertical slice
+F — MailTx + bounded mail-validation state transition
+G — deterministic state roots
+H — checkpoint/snapshot bootstrap
+I — static/operator-approved BFT safety
+J — Proof of Trust + service limits
+K — fixed-supply integer economics
+L — validator rewards
 M — Object Storage Core (Beta dependency)
 
 ## A — exact upstream baseline

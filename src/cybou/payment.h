@@ -22,7 +22,7 @@ struct PaymentPayload {
 };
 
 struct AuthorizedPayment {
-    DeviceAuthorization authorization;
+    IdentityOperationAuthorization authorization;
     PaymentPayload payment;
 
     friend bool operator==(const AuthorizedPayment&, const AuthorizedPayment&) = default;
@@ -37,7 +37,7 @@ struct SystemLockPayload {
 };
 
 struct AuthorizedSystemLock {
-    DeviceAuthorization authorization;
+    IdentityOperationAuthorization authorization;
     SystemLockPayload lock;
 
     friend bool operator==(const AuthorizedSystemLock&, const AuthorizedSystemLock&) = default;

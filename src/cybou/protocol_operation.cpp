@@ -10,7 +10,10 @@
 
 namespace cybou {
 namespace {
-constexpr size_t DEVICE_AUTH_WIRE_SIZE{32 + 32 + 8 + 8 + 1 + 32 + 64 + 2420};
+constexpr size_t RECOVERY_PUBLIC_SIZE{32 + 1952};
+constexpr size_t AUTHORIZATION_PUBLIC_SIZE{32 + 1312};
+constexpr size_t ROOT_SIGNATURE_SIZE{64 + 3309};
+constexpr size_t AUTHORIZATION_SIGNATURE_SIZE{64 + 2420};
 
 void Write64(std::vector<unsigned char>& out, uint64_t value)
 {
@@ -26,18 +29,17 @@ uint64_t Read64(std::span<const unsigned char> bytes)
 
 bool IsAllZero(std::span<const unsigned char> bytes)
 {
-    return std::any_of(bytes.begin(), bytes.end(), [](unsigned char b) { return b != 0; }) == false;
+    return std::all_of(bytes.begin(), bytes.end(), [](unsigned char b) { return b == 0; });
 }
 
-bool SerializeDeviceAuthorization(const DeviceAuthorization& auth, DeviceOperationKind expected_kind, std::vector<unsigned char>& out)
+bool SerializeIdentityOperationAuthorization(const IdentityOperationAuthorization& auth,
+    IdentityOperationKind expected_kind, std::vector<unsigned char>& out)
 {
     if (auth.kind != expected_kind || auth.account_id.IsNull() || auth.signature.ml_dsa.size() != 2420 ||
-        IsAllZero(auth.device_id) || IsAllZero(auth.payload_commitment) ||
-        IsAllZero(auth.signature.ed25519) || IsAllZero(auth.signature.ml_dsa)) return false;
+        IsAllZero(auth.payload_commitment) || IsAllZero(auth.signature.ed25519) || IsAllZero(auth.signature.ml_dsa)) return false;
     out.insert(out.end(), auth.account_id.Value().begin(), auth.account_id.Value().end());
-    out.insert(out.end(), auth.device_id.begin(), auth.device_id.end());
     Write64(out, auth.nonce);
-    Write64(out, auth.activation_nonce);
+    Write64(out, auth.key_epoch);
     out.push_back(static_cast<unsigned char>(auth.kind));
     out.insert(out.end(), auth.payload_commitment.begin(), auth.payload_commitment.end());
     out.insert(out.end(), auth.signature.ed25519.begin(), auth.signature.ed25519.end());
@@ -45,264 +47,168 @@ bool SerializeDeviceAuthorization(const DeviceAuthorization& auth, DeviceOperati
     return true;
 }
 
-std::optional<DeviceAuthorization> DeserializeDeviceAuthorization(std::span<const unsigned char> bytes, DeviceOperationKind expected_kind)
+std::optional<IdentityOperationAuthorization> DeserializeIdentityOperationAuthorization(
+    std::span<const unsigned char> bytes, IdentityOperationKind expected_kind)
 {
-    if (bytes.size() != DEVICE_AUTH_WIRE_SIZE) return std::nullopt;
+    if (bytes.size() != IDENTITY_OPERATION_AUTH_SIZE) return std::nullopt;
     const auto account = AccountId::FromBytes(bytes.first(32));
     if (!account) return std::nullopt;
-    DeviceAuthorization auth{};
+    IdentityOperationAuthorization auth{};
     auth.account_id = *account;
     size_t offset{32};
-    std::copy_n(bytes.begin() + offset, 32, auth.device_id.begin());
-    offset += 32;
-    auth.nonce = Read64(bytes.subspan(offset, 8));
-    offset += 8;
-    auth.activation_nonce = Read64(bytes.subspan(offset, 8));
-    offset += 8;
+    auth.nonce = Read64(bytes.subspan(offset, 8)); offset += 8;
+    auth.key_epoch = Read64(bytes.subspan(offset, 8)); offset += 8;
     if (bytes[offset++] != static_cast<uint8_t>(expected_kind)) return std::nullopt;
     auth.kind = expected_kind;
-    std::copy_n(bytes.begin() + offset, 32, auth.payload_commitment.begin());
-    offset += 32;
-    std::copy_n(bytes.begin() + offset, 64, auth.signature.ed25519.begin());
-    offset += 64;
-    auth.signature.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + 2420);
-    offset += 2420;
-    if (IsAllZero(auth.device_id) || IsAllZero(auth.payload_commitment) ||
-        IsAllZero(auth.signature.ed25519) || IsAllZero(auth.signature.ml_dsa)) return std::nullopt;
+    std::copy_n(bytes.begin() + offset, 32, auth.payload_commitment.begin()); offset += 32;
+    std::copy_n(bytes.begin() + offset, 64, auth.signature.ed25519.begin()); offset += 64;
+    auth.signature.ml_dsa.assign(bytes.begin() + offset, bytes.end());
+    if (IsAllZero(auth.payload_commitment) || IsAllZero(auth.signature.ed25519) || IsAllZero(auth.signature.ml_dsa)) return std::nullopt;
     return auth;
 }
 
-std::optional<std::vector<unsigned char>> SerializePayment(const AuthorizedPayment& operation)
+template <typename Payload, typename Commitment>
+std::optional<std::vector<unsigned char>> SerializeAuthorizedPayload(
+    const IdentityOperationAuthorization& auth, IdentityOperationKind kind,
+    const Payload& payload, Commitment commitment_fn,
+    auto serialize_fn)
 {
-    const auto payment = SerializePaymentPayload(operation.payment);
-    if (!payment) return std::nullopt;
-    const auto commitment = ComputePaymentPayloadCommitment(operation.payment);
-    if (!commitment || *commitment != operation.authorization.payload_commitment) return std::nullopt;
+    const auto payload_bytes = serialize_fn(payload);
+    const auto commitment = commitment_fn(payload);
+    if (!payload_bytes || !commitment || *commitment != auth.payload_commitment) return std::nullopt;
     std::vector<unsigned char> out;
-    out.reserve(AUTHORIZED_PAYMENT_SIZE);
-    if (!SerializeDeviceAuthorization(operation.authorization, DeviceOperationKind::PAYMENT, out)) return std::nullopt;
-    out.insert(out.end(), payment->begin(), payment->end());
-    if (out.size() != AUTHORIZED_PAYMENT_SIZE) return std::nullopt;
+    out.reserve(IDENTITY_OPERATION_AUTH_SIZE + payload_bytes->size());
+    if (!SerializeIdentityOperationAuthorization(auth, kind, out)) return std::nullopt;
+    out.insert(out.end(), payload_bytes->begin(), payload_bytes->end());
     return out;
+}
+
+std::optional<std::vector<unsigned char>> SerializePayment(const AuthorizedPayment& op)
+{
+    return SerializeAuthorizedPayload(op.authorization, IdentityOperationKind::PAYMENT, op.payment,
+        ComputePaymentPayloadCommitment, SerializePaymentPayload);
 }
 
 std::optional<AuthorizedPayment> DeserializePayment(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != AUTHORIZED_PAYMENT_SIZE) return std::nullopt;
-    const auto auth = DeserializeDeviceAuthorization(bytes.first(DEVICE_AUTH_WIRE_SIZE), DeviceOperationKind::PAYMENT);
-    if (!auth) return std::nullopt;
-    const auto payment = DeserializePaymentPayload(bytes.subspan(DEVICE_AUTH_WIRE_SIZE));
-    if (!payment || ComputePaymentPayloadCommitment(*payment) != auth->payload_commitment) return std::nullopt;
-    return AuthorizedPayment{.authorization = *auth, .payment = *payment};
+    const auto auth = DeserializeIdentityOperationAuthorization(bytes.first(IDENTITY_OPERATION_AUTH_SIZE), IdentityOperationKind::PAYMENT);
+    const auto payload = DeserializePaymentPayload(bytes.subspan(IDENTITY_OPERATION_AUTH_SIZE));
+    if (!auth || !payload || ComputePaymentPayloadCommitment(*payload) != auth->payload_commitment) return std::nullopt;
+    return AuthorizedPayment{.authorization = *auth, .payment = *payload};
 }
 
-std::optional<std::vector<unsigned char>> SerializeSystemLock(const AuthorizedSystemLock& operation)
+std::optional<std::vector<unsigned char>> SerializeSystemLock(const AuthorizedSystemLock& op)
 {
-    const auto lock = SerializeSystemLockPayload(operation.lock);
-    if (!lock) return std::nullopt;
-    const auto commitment = ComputeSystemLockPayloadCommitment(operation.lock);
-    if (!commitment || *commitment != operation.authorization.payload_commitment) return std::nullopt;
-    std::vector<unsigned char> out;
-    out.reserve(AUTHORIZED_SYSTEM_LOCK_SIZE);
-    if (!SerializeDeviceAuthorization(operation.authorization, DeviceOperationKind::SYSTEM_LOCK, out)) return std::nullopt;
-    out.insert(out.end(), lock->begin(), lock->end());
-    if (out.size() != AUTHORIZED_SYSTEM_LOCK_SIZE) return std::nullopt;
-    return out;
+    return SerializeAuthorizedPayload(op.authorization, IdentityOperationKind::SYSTEM_LOCK, op.lock,
+        ComputeSystemLockPayloadCommitment, SerializeSystemLockPayload);
 }
 
 std::optional<AuthorizedSystemLock> DeserializeSystemLock(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != AUTHORIZED_SYSTEM_LOCK_SIZE) return std::nullopt;
-    const auto auth = DeserializeDeviceAuthorization(bytes.first(DEVICE_AUTH_WIRE_SIZE), DeviceOperationKind::SYSTEM_LOCK);
-    if (!auth) return std::nullopt;
-    const auto lock = DeserializeSystemLockPayload(bytes.subspan(DEVICE_AUTH_WIRE_SIZE));
-    if (!lock || ComputeSystemLockPayloadCommitment(*lock) != auth->payload_commitment) return std::nullopt;
-    return AuthorizedSystemLock{.authorization = *auth, .lock = *lock};
+    const auto auth = DeserializeIdentityOperationAuthorization(bytes.first(IDENTITY_OPERATION_AUTH_SIZE), IdentityOperationKind::SYSTEM_LOCK);
+    const auto payload = DeserializeSystemLockPayload(bytes.subspan(IDENTITY_OPERATION_AUTH_SIZE));
+    if (!auth || !payload || ComputeSystemLockPayloadCommitment(*payload) != auth->payload_commitment) return std::nullopt;
+    return AuthorizedSystemLock{.authorization = *auth, .lock = *payload};
 }
 
 std::optional<std::vector<unsigned char>> SerializeNameCommit(const AuthorizedNameCommit& op)
 {
-    const auto commit = SerializeNameCommitPayload(op.commit);
-    if (!commit) return std::nullopt;
-    const auto commitment = ComputeNameCommitPayloadCommitment(op.commit);
-    if (!commitment || *commitment != op.authorization.payload_commitment) return std::nullopt;
-    std::vector<unsigned char> out;
-    out.reserve(AUTHORIZED_NAME_COMMIT_SIZE);
-    if (!SerializeDeviceAuthorization(op.authorization, DeviceOperationKind::NAME_COMMIT, out)) return std::nullopt;
-    out.insert(out.end(), commit->begin(), commit->end());
-    if (out.size() != AUTHORIZED_NAME_COMMIT_SIZE) return std::nullopt;
-    return out;
+    return SerializeAuthorizedPayload(op.authorization, IdentityOperationKind::NAME_COMMIT, op.commit,
+        ComputeNameCommitPayloadCommitment, SerializeNameCommitPayload);
 }
 
 std::optional<AuthorizedNameCommit> DeserializeNameCommit(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != AUTHORIZED_NAME_COMMIT_SIZE) return std::nullopt;
-    const auto auth = DeserializeDeviceAuthorization(bytes.first(DEVICE_AUTH_WIRE_SIZE), DeviceOperationKind::NAME_COMMIT);
-    if (!auth) return std::nullopt;
-    const auto commit = DeserializeNameCommitPayload(bytes.subspan(DEVICE_AUTH_WIRE_SIZE));
-    if (!commit || ComputeNameCommitPayloadCommitment(*commit) != auth->payload_commitment) return std::nullopt;
-    return AuthorizedNameCommit{.authorization = *auth, .commit = *commit};
+    const auto auth = DeserializeIdentityOperationAuthorization(bytes.first(IDENTITY_OPERATION_AUTH_SIZE), IdentityOperationKind::NAME_COMMIT);
+    const auto payload = DeserializeNameCommitPayload(bytes.subspan(IDENTITY_OPERATION_AUTH_SIZE));
+    if (!auth || !payload || ComputeNameCommitPayloadCommitment(*payload) != auth->payload_commitment) return std::nullopt;
+    return AuthorizedNameCommit{.authorization = *auth, .commit = *payload};
 }
 
 std::optional<std::vector<unsigned char>> SerializeNameReveal(const AuthorizedNameReveal& op)
 {
-    const auto reveal = SerializeNameRevealPayload(op.reveal);
-    if (!reveal) return std::nullopt;
-    const auto commitment = ComputeNameRevealPayloadCommitment(op.reveal);
-    if (!commitment || *commitment != op.authorization.payload_commitment) return std::nullopt;
-    std::vector<unsigned char> out;
-    out.reserve(AUTHORIZED_NAME_REVEAL_SIZE);
-    if (!SerializeDeviceAuthorization(op.authorization, DeviceOperationKind::NAME_REVEAL, out)) return std::nullopt;
-    out.insert(out.end(), reveal->begin(), reveal->end());
-    if (out.size() != AUTHORIZED_NAME_REVEAL_SIZE) return std::nullopt;
-    return out;
+    return SerializeAuthorizedPayload(op.authorization, IdentityOperationKind::NAME_REVEAL, op.reveal,
+        ComputeNameRevealPayloadCommitment, SerializeNameRevealPayload);
 }
 
 std::optional<AuthorizedNameReveal> DeserializeNameReveal(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != AUTHORIZED_NAME_REVEAL_SIZE) return std::nullopt;
-    const auto auth = DeserializeDeviceAuthorization(bytes.first(DEVICE_AUTH_WIRE_SIZE), DeviceOperationKind::NAME_REVEAL);
-    if (!auth) return std::nullopt;
-    const auto reveal = DeserializeNameRevealPayload(bytes.subspan(DEVICE_AUTH_WIRE_SIZE));
-    if (!reveal || ComputeNameRevealPayloadCommitment(*reveal) != auth->payload_commitment) return std::nullopt;
-    return AuthorizedNameReveal{.authorization = *auth, .reveal = *reveal};
+    const auto auth = DeserializeIdentityOperationAuthorization(bytes.first(IDENTITY_OPERATION_AUTH_SIZE), IdentityOperationKind::NAME_REVEAL);
+    const auto payload = DeserializeNameRevealPayload(bytes.subspan(IDENTITY_OPERATION_AUTH_SIZE));
+    if (!auth || !payload || ComputeNameRevealPayloadCommitment(*payload) != auth->payload_commitment) return std::nullopt;
+    return AuthorizedNameReveal{.authorization = *auth, .reveal = *payload};
 }
 
-std::optional<std::vector<unsigned char>> SerializeDeviceAdd(const DeviceAdd& op)
+void WritePublic(std::vector<unsigned char>& out, const IdentityHybridPublicKey& key)
 {
-    if (op.account_id.IsNull() || op.new_device.purpose != IdentityKeyPurpose::DEVICE ||
-        op.new_device.ml_dsa.size() != 1312 || op.root_signature.ml_dsa.size() != 3309 || op.device_pop.ml_dsa.size() != 2420 ||
-        IsAllZero(op.new_device.ed25519) || IsAllZero(op.new_device.ml_dsa) ||
-        IsAllZero(op.root_signature.ed25519) || IsAllZero(op.root_signature.ml_dsa) ||
-        IsAllZero(op.device_pop.ed25519) || IsAllZero(op.device_pop.ml_dsa) ||
-        !DecodeIdentityKemPackage(op.kem_package)) return std::nullopt;
+    out.insert(out.end(), key.ed25519.begin(), key.ed25519.end());
+    out.insert(out.end(), key.ml_dsa.begin(), key.ml_dsa.end());
+}
+
+void WriteSignature(std::vector<unsigned char>& out, const IdentityHybridSignature& signature)
+{
+    out.insert(out.end(), signature.ed25519.begin(), signature.ed25519.end());
+    out.insert(out.end(), signature.ml_dsa.begin(), signature.ml_dsa.end());
+}
+
+std::optional<std::vector<unsigned char>> SerializeIdentityRotate(const IdentityRotate& op)
+{
+    if (op.account_id.IsNull() || op.new_recovery_key.purpose != IdentityKeyPurpose::RECOVERY_ROOT ||
+        op.new_authorization_key.purpose != IdentityKeyPurpose::AUTHORIZATION ||
+        op.new_recovery_key.ml_dsa.size() != 1952 || op.new_authorization_key.ml_dsa.size() != 1312 ||
+        op.old_recovery_signature.ml_dsa.size() != 3309 || op.new_recovery_pop.ml_dsa.size() != 3309 ||
+        op.new_authorization_pop.ml_dsa.size() != 2420 || !DecodeIdentityKemPackage(op.new_kem_package) ||
+        IsAllZero(op.new_recovery_key.ed25519) || IsAllZero(op.new_recovery_key.ml_dsa) ||
+        IsAllZero(op.new_authorization_key.ed25519) || IsAllZero(op.new_authorization_key.ml_dsa) ||
+        IsAllZero(op.old_recovery_signature.ed25519) || IsAllZero(op.old_recovery_signature.ml_dsa) ||
+        IsAllZero(op.new_recovery_pop.ed25519) || IsAllZero(op.new_recovery_pop.ml_dsa) ||
+        IsAllZero(op.new_authorization_pop.ed25519) || IsAllZero(op.new_authorization_pop.ml_dsa)) return std::nullopt;
     std::vector<unsigned char> out;
-    out.reserve(DEVICE_ADD_SIZE);
+    out.reserve(IDENTITY_ROTATE_SIZE);
     out.insert(out.end(), op.account_id.Value().begin(), op.account_id.Value().end());
-    out.insert(out.end(), op.new_device.ed25519.begin(), op.new_device.ed25519.end());
-    out.insert(out.end(), op.new_device.ml_dsa.begin(), op.new_device.ml_dsa.end());
-    out.insert(out.end(), op.kem_package.begin(), op.kem_package.end());
-    Write64(out, op.root_nonce);
-    out.insert(out.end(), op.root_signature.ed25519.begin(), op.root_signature.ed25519.end());
-    out.insert(out.end(), op.root_signature.ml_dsa.begin(), op.root_signature.ml_dsa.end());
-    out.insert(out.end(), op.device_pop.ed25519.begin(), op.device_pop.ed25519.end());
-    out.insert(out.end(), op.device_pop.ml_dsa.begin(), op.device_pop.ml_dsa.end());
-    if (out.size() != DEVICE_ADD_SIZE) return std::nullopt;
+    WritePublic(out, op.new_recovery_key);
+    WritePublic(out, op.new_authorization_key);
+    out.insert(out.end(), op.new_kem_package.begin(), op.new_kem_package.end());
+    Write64(out, op.nonce);
+    Write64(out, op.key_epoch);
+    WriteSignature(out, op.old_recovery_signature);
+    WriteSignature(out, op.new_recovery_pop);
+    WriteSignature(out, op.new_authorization_pop);
+    if (out.size() != IDENTITY_ROTATE_SIZE) return std::nullopt;
     return out;
 }
 
-std::optional<DeviceAdd> DeserializeDeviceAdd(std::span<const unsigned char> bytes)
+std::optional<IdentityRotate> DeserializeIdentityRotate(std::span<const unsigned char> bytes)
 {
-    if (bytes.size() != DEVICE_ADD_SIZE) return std::nullopt;
+    if (bytes.size() != IDENTITY_ROTATE_SIZE) return std::nullopt;
     const auto account = AccountId::FromBytes(bytes.first(32));
     if (!account) return std::nullopt;
-    DeviceAdd op{};
+    IdentityRotate op{};
     op.account_id = *account;
-    op.new_device.purpose = IdentityKeyPurpose::DEVICE;
+    op.new_recovery_key.purpose = IdentityKeyPurpose::RECOVERY_ROOT;
+    op.new_authorization_key.purpose = IdentityKeyPurpose::AUTHORIZATION;
     size_t offset{32};
-    std::copy_n(bytes.begin() + offset, 32, op.new_device.ed25519.begin());
-    offset += 32;
-    op.new_device.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + 1312);
-    offset += 1312;
-    std::copy_n(bytes.begin() + offset, op.kem_package.size(), op.kem_package.begin());
-    if (!DecodeIdentityKemPackage(op.kem_package)) return std::nullopt;
-    offset += op.kem_package.size();
-    op.root_nonce = Read64(bytes.subspan(offset, 8));
-    offset += 8;
-    std::copy_n(bytes.begin() + offset, 64, op.root_signature.ed25519.begin());
-    offset += 64;
-    op.root_signature.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + 3309);
-    offset += 3309;
-    std::copy_n(bytes.begin() + offset, 64, op.device_pop.ed25519.begin());
-    offset += 64;
-    op.device_pop.ml_dsa.assign(bytes.begin() + offset, bytes.end());
-    if (IsAllZero(op.new_device.ed25519) || IsAllZero(op.new_device.ml_dsa) ||
-        IsAllZero(op.root_signature.ed25519) || IsAllZero(op.root_signature.ml_dsa) ||
-        IsAllZero(op.device_pop.ed25519) || IsAllZero(op.device_pop.ml_dsa)) return std::nullopt;
-    return op;
-}
-
-std::optional<std::vector<unsigned char>> SerializeDeviceRevoke(const DeviceRevoke& op)
-{
-    if (op.account_id.IsNull() || op.root_signature.ml_dsa.size() != 3309 ||
-        IsAllZero(op.device_id) || IsAllZero(op.root_signature.ed25519) || IsAllZero(op.root_signature.ml_dsa)) return std::nullopt;
-    std::vector<unsigned char> out;
-    out.reserve(DEVICE_REVOKE_SIZE);
-    out.insert(out.end(), op.account_id.Value().begin(), op.account_id.Value().end());
-    out.insert(out.end(), op.device_id.begin(), op.device_id.end());
-    Write64(out, op.root_nonce);
-    out.insert(out.end(), op.root_signature.ed25519.begin(), op.root_signature.ed25519.end());
-    out.insert(out.end(), op.root_signature.ml_dsa.begin(), op.root_signature.ml_dsa.end());
-    if (out.size() != DEVICE_REVOKE_SIZE) return std::nullopt;
-    return out;
-}
-
-std::optional<DeviceRevoke> DeserializeDeviceRevoke(std::span<const unsigned char> bytes)
-{
-    if (bytes.size() != DEVICE_REVOKE_SIZE) return std::nullopt;
-    const auto account = AccountId::FromBytes(bytes.first(32));
-    if (!account) return std::nullopt;
-    DeviceRevoke op{};
-    op.account_id = *account;
-    size_t offset{32};
-    std::copy_n(bytes.begin() + offset, 32, op.device_id.begin());
-    offset += 32;
-    op.root_nonce = Read64(bytes.subspan(offset, 8));
-    offset += 8;
-    std::copy_n(bytes.begin() + offset, 64, op.root_signature.ed25519.begin());
-    offset += 64;
-    op.root_signature.ml_dsa.assign(bytes.begin() + offset, bytes.end());
-    if (IsAllZero(op.device_id) || IsAllZero(op.root_signature.ed25519) || IsAllZero(op.root_signature.ml_dsa)) return std::nullopt;
-    return op;
-}
-
-std::optional<std::vector<unsigned char>> SerializeRecoveryRotate(const RecoveryRotate& op)
-{
-    if (op.account_id.IsNull() || op.new_root.purpose != IdentityKeyPurpose::RECOVERY_ROOT ||
-        op.new_root.ml_dsa.size() != 1952 || op.old_root_signature.ml_dsa.size() != 3309 || op.new_root_pop.ml_dsa.size() != 3309 ||
-        IsAllZero(op.new_root.ed25519) || IsAllZero(op.new_root.ml_dsa) ||
-        IsAllZero(op.old_root_signature.ed25519) || IsAllZero(op.old_root_signature.ml_dsa) ||
-        IsAllZero(op.new_root_pop.ed25519) || IsAllZero(op.new_root_pop.ml_dsa)) return std::nullopt;
-    std::vector<unsigned char> out;
-    out.reserve(RECOVERY_ROTATE_SIZE);
-    out.insert(out.end(), op.account_id.Value().begin(), op.account_id.Value().end());
-    out.insert(out.end(), op.new_root.ed25519.begin(), op.new_root.ed25519.end());
-    out.insert(out.end(), op.new_root.ml_dsa.begin(), op.new_root.ml_dsa.end());
-    Write64(out, op.root_nonce);
-    out.insert(out.end(), op.old_root_signature.ed25519.begin(), op.old_root_signature.ed25519.end());
-    out.insert(out.end(), op.old_root_signature.ml_dsa.begin(), op.old_root_signature.ml_dsa.end());
-    out.insert(out.end(), op.new_root_pop.ed25519.begin(), op.new_root_pop.ed25519.end());
-    out.insert(out.end(), op.new_root_pop.ml_dsa.begin(), op.new_root_pop.ml_dsa.end());
-    if (out.size() != RECOVERY_ROTATE_SIZE) return std::nullopt;
-    return out;
-}
-
-std::optional<RecoveryRotate> DeserializeRecoveryRotate(std::span<const unsigned char> bytes)
-{
-    if (bytes.size() != RECOVERY_ROTATE_SIZE) return std::nullopt;
-    const auto account = AccountId::FromBytes(bytes.first(32));
-    if (!account) return std::nullopt;
-    RecoveryRotate op{};
-    op.account_id = *account;
-    op.new_root.purpose = IdentityKeyPurpose::RECOVERY_ROOT;
-    size_t offset{32};
-    std::copy_n(bytes.begin() + offset, 32, op.new_root.ed25519.begin());
-    offset += 32;
-    op.new_root.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + 1952);
-    offset += 1952;
-    op.root_nonce = Read64(bytes.subspan(offset, 8));
-    offset += 8;
-    std::copy_n(bytes.begin() + offset, 64, op.old_root_signature.ed25519.begin());
-    offset += 64;
-    op.old_root_signature.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + 3309);
-    offset += 3309;
-    std::copy_n(bytes.begin() + offset, 64, op.new_root_pop.ed25519.begin());
-    offset += 64;
-    op.new_root_pop.ml_dsa.assign(bytes.begin() + offset, bytes.end());
-    if (IsAllZero(op.new_root.ed25519) || IsAllZero(op.new_root.ml_dsa) ||
-        IsAllZero(op.old_root_signature.ed25519) || IsAllZero(op.old_root_signature.ml_dsa) ||
-        IsAllZero(op.new_root_pop.ed25519) || IsAllZero(op.new_root_pop.ml_dsa)) return std::nullopt;
-    return op;
+    std::copy_n(bytes.begin() + offset, 32, op.new_recovery_key.ed25519.begin()); offset += 32;
+    op.new_recovery_key.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + 1952); offset += 1952;
+    std::copy_n(bytes.begin() + offset, 32, op.new_authorization_key.ed25519.begin()); offset += 32;
+    op.new_authorization_key.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + 1312); offset += 1312;
+    std::copy_n(bytes.begin() + offset, op.new_kem_package.size(), op.new_kem_package.begin()); offset += op.new_kem_package.size();
+    if (!DecodeIdentityKemPackage(op.new_kem_package)) return std::nullopt;
+    op.nonce = Read64(bytes.subspan(offset, 8)); offset += 8;
+    op.key_epoch = Read64(bytes.subspan(offset, 8)); offset += 8;
+    auto read_signature = [&](IdentityHybridSignature& sig, size_t pq_size) {
+        std::copy_n(bytes.begin() + offset, 64, sig.ed25519.begin()); offset += 64;
+        sig.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + pq_size); offset += pq_size;
+    };
+    read_signature(op.old_recovery_signature, 3309);
+    read_signature(op.new_recovery_pop, 3309);
+    read_signature(op.new_authorization_pop, 2420);
+    if (offset != bytes.size()) return std::nullopt;
+    return SerializeIdentityRotate(op) ? std::optional<IdentityRotate>{std::move(op)} : std::nullopt;
 }
 } // namespace
 
@@ -319,20 +225,10 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const Proto
         if (!body) return std::nullopt;
         out.push_back(static_cast<unsigned char>(ProtocolOperationKind::PAYMENT));
         out.insert(out.end(), body->begin(), body->end());
-    } else if (const auto* add = std::get_if<DeviceAdd>(&operation)) {
-        const auto body = SerializeDeviceAdd(*add);
+    } else if (const auto* rotate = std::get_if<IdentityRotate>(&operation)) {
+        const auto body = SerializeIdentityRotate(*rotate);
         if (!body) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::DEVICE_ADD));
-        out.insert(out.end(), body->begin(), body->end());
-    } else if (const auto* revoke = std::get_if<DeviceRevoke>(&operation)) {
-        const auto body = SerializeDeviceRevoke(*revoke);
-        if (!body) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::DEVICE_REVOKE));
-        out.insert(out.end(), body->begin(), body->end());
-    } else if (const auto* rotate = std::get_if<RecoveryRotate>(&operation)) {
-        const auto body = SerializeRecoveryRotate(*rotate);
-        if (!body) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::RECOVERY_ROTATE));
+        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::IDENTITY_ROTATE));
         out.insert(out.end(), body->begin(), body->end());
     } else if (const auto* lock = std::get_if<AuthorizedSystemLock>(&operation)) {
         const auto body = SerializeSystemLock(*lock);
@@ -367,65 +263,45 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
     switch (kind) {
     case ProtocolOperationKind::ACCOUNT_CREATE: {
         if (bytes.size() != 2 + ACCOUNT_CREATE_SIZE) return std::nullopt;
-        const auto create = DeserializeAccountCreateOp(bytes.subspan(2));
-        if (!create) return std::nullopt;
-        return ProtocolOperation{*create};
+        const auto op = DeserializeAccountCreateOp(bytes.subspan(2));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::PAYMENT: {
         if (bytes.size() != 2 + AUTHORIZED_PAYMENT_SIZE) return std::nullopt;
-        const auto payment = DeserializePayment(bytes.subspan(2));
-        if (!payment) return std::nullopt;
-        return ProtocolOperation{*payment};
+        const auto op = DeserializePayment(bytes.subspan(2));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
-    case ProtocolOperationKind::DEVICE_ADD: {
-        if (bytes.size() != 2 + DEVICE_ADD_SIZE) return std::nullopt;
-        const auto add = DeserializeDeviceAdd(bytes.subspan(2));
-        if (!add) return std::nullopt;
-        return ProtocolOperation{*add};
-    }
-    case ProtocolOperationKind::DEVICE_REVOKE: {
-        if (bytes.size() != 2 + DEVICE_REVOKE_SIZE) return std::nullopt;
-        const auto revoke = DeserializeDeviceRevoke(bytes.subspan(2));
-        if (!revoke) return std::nullopt;
-        return ProtocolOperation{*revoke};
-    }
-    case ProtocolOperationKind::RECOVERY_ROTATE: {
-        if (bytes.size() != 2 + RECOVERY_ROTATE_SIZE) return std::nullopt;
-        const auto rotate = DeserializeRecoveryRotate(bytes.subspan(2));
-        if (!rotate) return std::nullopt;
-        return ProtocolOperation{*rotate};
+    case ProtocolOperationKind::IDENTITY_ROTATE: {
+        if (bytes.size() != 2 + IDENTITY_ROTATE_SIZE) return std::nullopt;
+        const auto op = DeserializeIdentityRotate(bytes.subspan(2));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::SYSTEM_LOCK: {
         if (bytes.size() != 2 + AUTHORIZED_SYSTEM_LOCK_SIZE) return std::nullopt;
-        const auto lock = DeserializeSystemLock(bytes.subspan(2));
-        if (!lock) return std::nullopt;
-        return ProtocolOperation{*lock};
+        const auto op = DeserializeSystemLock(bytes.subspan(2));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::NAME_COMMIT: {
-        if (bytes.size() != 2 + AUTHORIZED_NAME_COMMIT_SIZE) return std::nullopt;
-        const auto commit = DeserializeNameCommit(bytes.subspan(2));
-        if (!commit) return std::nullopt;
-        return ProtocolOperation{*commit};
+        if (bytes.size() < 2 + AUTHORIZED_NAME_COMMIT_SIZE) return std::nullopt;
+        const auto op = DeserializeNameCommit(bytes.subspan(2));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::NAME_REVEAL: {
-        if (bytes.size() != 2 + AUTHORIZED_NAME_REVEAL_SIZE) return std::nullopt;
-        const auto reveal = DeserializeNameReveal(bytes.subspan(2));
-        if (!reveal) return std::nullopt;
-        return ProtocolOperation{*reveal};
+        if (bytes.size() < 2 + AUTHORIZED_NAME_REVEAL_SIZE) return std::nullopt;
+        const auto op = DeserializeNameReveal(bytes.subspan(2));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::MAIL: {
-        const auto mail = DeserializeAuthorizedMail(bytes.subspan(2));
-        if (!mail) return std::nullopt;
-        return ProtocolOperation{*mail};
+        const auto op = DeserializeAuthorizedMail(bytes.subspan(2));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
-    default:
-        return std::nullopt;
+    default: return std::nullopt;
     }
 }
 
 std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation)
 {
-    constexpr std::string_view domain{"CYBOU/OP-ID/V3"};
+    constexpr std::string_view domain{"CYBOU/OP-ID/V4"};
     const auto bytes = SerializeProtocolOperation(operation);
     if (!bytes) return std::nullopt;
     uint256 id;

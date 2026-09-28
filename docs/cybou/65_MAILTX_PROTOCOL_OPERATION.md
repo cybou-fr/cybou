@@ -51,7 +51,7 @@ The canonical outer MailTx serialization is implemented in `mail_tx.h`; the
 DEV ciphertext field carries the frozen `MailEnvelopeV1` format specified in
 `49_EMAIL_E2EE_HPKE_PQ.md`.
 
-The DEV cryptographic suite and one-account/all-active-device semantics are
+The DEV cryptographic suite and one-capsule-per-recipient-account semantics are
 frozen in `49_EMAIL_E2EE_HPKE_PQ.md` and `spec/email_crypto_profile.yaml`.
 The HPKE context encoding and discovery-tag derivation are now frozen for
 DEV. The historical evidence encoding remains an off-wire receive gate. Mail

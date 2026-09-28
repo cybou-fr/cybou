@@ -28,7 +28,7 @@ Protected text mail
 
 The DEV cryptographic choices and MailEnvelopeV1 byte layout are frozen in
 `49_EMAIL_E2EE_HPKE_PQ.md` and `spec/email_crypto_profile.yaml`: draft-05
-X-Wing HPKE for one CEK capsule per active recipient device, plus one
+X-Wing HPKE for one CEK capsule per recipient AccountID and key_epoch, plus one
 ChaCha20-Poly1305 content encryption. Mail submission remains disabled until
 an approved backend supports this suite and the envelope is integrated.
 Incoming decryption additionally requires historical sender-key evidence

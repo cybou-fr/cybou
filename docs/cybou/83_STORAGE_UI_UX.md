@@ -3,9 +3,8 @@
 Status: canonical Beta Files/Storage product UX contract. The Qt Files page
 now has a provisional single-installation path for upload, local encrypted
 filename indexing, search, details, and integrity-checked download. It does
-not implement the Beta catalog described here: encrypted cross-device
-manifest, finalized root updates, and the Beta durability contract remain
-unimplemented. The page must not describe local indexing or peer acknowledgments
+not implement the Beta catalog described here: encrypted manifest, finalized
+root updates, and the Beta durability contract remain unimplemented. The page must not describe local indexing or peer acknowledgments
 as a finalized Files catalog or as `Protected`.
 
 This document defines how CYBOU exposes distributed encrypted Object Storage to
@@ -337,8 +336,8 @@ Do not require global publication of access history.
 
 ## 15. Starred
 
-Starred is local/private metadata unless a future encrypted cross-device Files
-manifest synchronizes it. It is not consensus state.
+Starred is local/private metadata in the current product scope. It is not
+consensus state.
 
 ## 16. Trash and deletion
 

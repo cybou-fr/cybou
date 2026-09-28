@@ -21,7 +21,7 @@ Protect against:
 
 CYBOU does not yet claim:
 
-- recovery after loss of all user/device keys without any additional trust mechanism;
+- recovery after loss of all Identity keys without any additional trust mechanism;
 - resistance to a majority/2/3+ consensus compromise beyond the selected BFT model;
 - perfect traffic-analysis resistance;
 - guaranteed physical-geography independence of anonymous peers;
@@ -43,9 +43,9 @@ CYBOU does not yet claim:
 ## Key-loss reality
 
 Identity V2 targets user-held 24-word Recovery Root, portable encrypted vault,
-and replaceable devices. The current DEV runtime does not implement these.
-Compromise of a device must be contained by finalized revocation; compromise
-of a recovery phrase requires root rotation. Offline password guessing against
+and account-level key rotation. The current DEV runtime does not implement these.
+Compromise of an installation requires Identity key rotation; compromise
+of a recovery phrase requires the same all-role IdentityRotate transition. Offline password guessing against
 stolen vaults, tampered headers, key substitution, mnemonic transcription,
 and loss of the phrase remain explicit threats. See `76_IDENTITY_VAULT_RECOVERY.md`.
 

@@ -54,7 +54,7 @@ BOOST_AUTO_TEST_CASE(identity_authorization_serialization_and_commitment)
     std::array<unsigned char, 32> dev_seed{};
     dev_seed.fill(2);
     const auto root = cybou::DeriveIdentityPublicKey(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto dev = cybou::DeriveIdentityPublicKey(dev_seed, cybou::IdentityKeyPurpose::DEVICE);
+    const auto dev = cybou::DeriveIdentityPublicKey(dev_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
     BOOST_REQUIRE(root && dev);
     const cybou::IdentityAuthorization auth{*root, *dev};
     const auto commitment = cybou::ComputeIdentityAuthorizationCommitment(auth);
@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(keystore_uses_random_account_and_portable_vault)
     BOOST_REQUIRE(ks1.GenerateNew());
     const auto acc_id1 = ks1.GetAccountId();
     const auto words = ks1.GetRecoveryWords();
-    const auto device_key = ks1.GetDevicePublicKey();
+    const auto device_key = ks1.GetAuthorizationPublicKey();
     BOOST_REQUIRE(acc_id1 && words && device_key);
     BOOST_CHECK(!std::equal(acc_id1->Value().begin(), acc_id1->Value().end(), device_key->ed25519.begin()));
     BOOST_REQUIRE(cybou::DecodeRecoveryWords(*words));

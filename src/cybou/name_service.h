@@ -5,7 +5,7 @@
 #define CYBOU_NAME_SERVICE_H
 
 #include <cybou/keystore.h>
-#include <cybou/device_operation_coordinator.h>
+#include <cybou/identity_operation_coordinator.h>
 #include <cybou/node_runtime.h>
 
 #include <atomic>
@@ -35,7 +35,7 @@ public:
 private:
     CybouNodeRuntime& m_runtime;
     CybouKeyStore& m_keystore;
-    DeviceOperationCoordinator& m_operation_coordinator;
+    IdentityOperationCoordinator& m_operation_coordinator;
     std::filesystem::path m_identity_vault_path;
     std::filesystem::path m_claim_path;
     std::atomic<bool> m_cancelled{false};

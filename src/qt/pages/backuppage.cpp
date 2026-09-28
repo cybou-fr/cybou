@@ -115,7 +115,7 @@ BackupPage::BackupPage(CybouDesktopModel* model, QWidget* parent)
     hero_layout->addWidget(Eyebrow(tr("BACKUP"), hero));
     m_hero_title = HeroTitle(tr("Backup protection is coming."), hero);
     hero_layout->addWidget(m_hero_title);
-    m_hero_subtitle = HeroSubtitle(tr("Your identity, messages, files and device data will be safely backed up and ready to recover once the Backup service activates."), hero);
+    m_hero_subtitle = HeroSubtitle(tr("Your identity, messages, files and settings will be safely backed up and ready to recover once the Backup service activates."), hero);
     hero_layout->addWidget(m_hero_subtitle);
     auto* chips = new QHBoxLayout;
     chips->setSpacing(8);
@@ -208,9 +208,6 @@ BackupPage::BackupPage(CybouDesktopModel* model, QWidget* parent)
         tr("Local only"), Tint::Blue, this), 1);
     protected_row->addWidget(protectedCard(Glyph::File, Tint::Indigo, tr("Files"),
         tr("Your files and documents."),
-        tr("Planned"), Tint::Neutral, this), 1);
-    protected_row->addWidget(protectedCard(Glyph::Monitor, Tint::Violet, tr("Devices"),
-        tr("Your device settings and app data."),
         tr("Planned"), Tint::Neutral, this), 1);
     root->addLayout(protected_row);
 
@@ -316,10 +313,10 @@ void BackupPage::refresh()
     if (m_hero_title && m_hero_subtitle) {
         if (usable) {
             m_hero_title->setText(tr("Your data is protected."));
-            m_hero_subtitle->setText(tr("Your identity, messages, files and device data are safely backed up and ready to recover, whenever you need them."));
+            m_hero_subtitle->setText(tr("Your identity, messages, files and settings are safely backed up and ready to recover, whenever you need them."));
         } else {
             m_hero_title->setText(tr("Backup protection is coming."));
-            m_hero_subtitle->setText(tr("Your identity, messages, files and device data will be safely backed up and ready to recover once the Backup service activates."));
+            m_hero_subtitle->setText(tr("Your identity, messages, files and settings will be safely backed up and ready to recover once the Backup service activates."));
         }
     }
     if (m_hero_state_pill) {

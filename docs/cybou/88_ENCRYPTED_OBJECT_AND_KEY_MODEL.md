@@ -5,10 +5,10 @@ local v1 chunk encryption, public manifest commitments, durable provider/CYP2
 ciphertext transfer, an encrypted AccountID-bound Storage Key Ring with
 durable epochs, file upload/download, and a bounded client-side placement
 component for up to three already-connected providers are implemented. The
-desktop Files surface does not yet use placement. Local device X25519 and
-ML-KEM-768 private material is generated and encrypted in the identity vault.
-Device KEM publication/wrapping, Storage Master Key device wrapping, leases,
-audits, repair, accounting, and attachment delivery are not implemented.
+desktop Files surface does not yet use placement. Account KEM derivation and
+publication are implemented in source for the coordinated DEV cutover. SMK
+wrapping, leases, audits, repair, accounting, and attachment delivery are not
+implemented.
 `11_STORAGE_OBJECTS.md` owns provider placement, leases, audits, repair, and
 accounting. Identity package publication is specified as a design gate in
 `89_IDENTITY_KEM_PUBLICATION.md`; no service may use those local keys until
@@ -35,22 +35,22 @@ subject to `49_EMAIL_E2EE_HPKE_PQ.md`, implementation review, and test vectors.
 ```text
 CYBOU Identity
   ├── Recovery Root: Ed25519 + ML-DSA-65
-  ├── Device signing: Ed25519 + ML-DSA-44
-  └── Separate device key agreement: X25519 + ML-KEM-768 (target)
+  ├── Authorization: Ed25519 + ML-DSA-44
+  └── Separate account KEM: X-Wing (draft-05, DEV)
 ```
 
 Signing keys MUST NOT be converted or reused as Mail, Files, or Storage
-encryption keys. Authorized device KEM public keys need identity binding,
-activation, rotation, historical authorization evidence, and downgrade
-protection before the registry publishes them. Private KEM material remains on
-authorized clients.
+encryption keys. The account KEM package is bound to AccountID and key_epoch by Identity.
+Installations restoring the same phrase derive the same account capability;
+there is no protocol-level installation registration or per-installation
+revocation. Private KEM material remains local.
 
 ## Files key hierarchy
 
 The target Files model uses a random Storage Master Key per key epoch. It is
-wrapped independently to each authorized device using the reviewed hybrid
-key-agreement profile. Revocation and recovery rotate future key access; they
-cannot erase content a previously authorized device already decrypted.
+wrapped to the current account KEM capability using the reviewed hybrid
+key-agreement profile. IdentityRotate changes future account key access; it
+cannot erase content or keys already copied.
 
 The local key ring is implemented as a separate password-protected CYBV2
 sidecar bound to AccountID. Epochs are contiguous from zero; rotation durably
@@ -58,18 +58,17 @@ adds a new random 256-bit key before making it current, while retaining prior
 keys for objects already encrypted under those epochs. Updates compare the
 authenticated saved payload before atomic replacement and fail closed on a
 stale or mismatched sidecar. The current limit is 1024 epochs. This is local
-key custody only: keys are not shared with another device, and the sidecar is
-not automatically restored on a clean machine. Device wrapping depends on a
-reviewed recipient KEM package; clean-machine recovery additionally requires
-the account-level envelope and availability contract in
+key custody only: the sidecar is not automatically restored on a clean
+installation. Account KEM wrapping depends on a reviewed package; clean-machine
+recovery additionally requires the account-level envelope and availability
+contract in
 `90_STORAGE_KEY_RECOVERY.md`.
 
 ```text
 Identity
   └── Storage Master Key, epoch N
-        ├── hybrid-wrapped to authorized device A
-        ├── hybrid-wrapped to authorized device B
-        └── hybrid-wrapped to authorized device C
+        ├── account-KEM envelope
+        └── recovery envelope
 ```
 
 An object key is derived for one opaque object using a standard HKDF with a
@@ -114,7 +113,7 @@ cross-implementation vectors before Beta.
 
 A private encrypted Files manifest contains
 filename, MIME type, logical size, folder, ObjectID, salt, key epoch, and
-private UI state. Manifest/root mutations are device-authorized through the
+private UI state. Manifest/root mutations are Identity-authorized through the
 coordinator. The canonical catalog and root-update lifecycle are specified in
 `91_FILES_MANIFEST_AND_ROOT.md`.
 
@@ -127,8 +126,8 @@ traffic-analysis analysis.
 
 ## Mail content and attachment keys
 
-Mail content uses a fresh random content-encryption key (CEK), wrapped to each
-verified authorized recipient device under the Mail KEM context. The sender's
+Mail content uses a fresh random content-encryption key (CEK), wrapped once
+to the verified recipient AccountID/key_epoch under the Mail KEM context. The sender's
 hybrid signature authorizes the Mail operation; it is not the encryption key.
 
 Each Mail attachment uses a fresh random 256-bit AttachmentKey, separate from
@@ -146,7 +145,7 @@ state. Mail signing, Mail KEM, Storage key wrapping, and object encryption use
 separate authenticated contexts, including the target domains:
 
 ```text
-CYBOU/DEVICE/SIGN
+CYBOU/IDENTITY/AUTH
 CYBOU/MAIL/KEM
 CYBOU/STORAGE/KEYWRAP
 CYBOU/STORAGE/OBJECT
@@ -199,9 +198,9 @@ cross-implementation vectors and protocol freeze.
 ## Open protocol freeze points
 
 - Standardized hybrid KEM/key-package format and transcript binding;
-- Storage Master Key device wrapping, distribution, revocation, and recovery;
+- Storage Master Key account wrapping, recovery, and rotation;
 - finalized envelope-root operation, recovery KDF/profile, and durable
-  cross-device envelope availability (`90_STORAGE_KEY_RECOVERY.md`);
+  envelope availability (`90_STORAGE_KEY_RECOVERY.md`);
 - manifest format, signature/authorization, and conflict behavior;
 - replication/coding profile, placement, lease, audit, repair, and retention;
 - padding and cross-implementation vectors;

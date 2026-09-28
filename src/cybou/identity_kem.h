@@ -54,11 +54,11 @@ std::optional<XWingSharedSecret> DecapsulateXWing(
 std::optional<IdentityKemPackage> EncodeIdentityKemPackage(
     std::span<const unsigned char, XWING_PUBLIC_KEY_SIZE> public_key);
 std::optional<XWingPublicKey> DecodeIdentityKemPackage(std::span<const unsigned char> package);
+std::optional<XWingSeed> DeriveIdentityXWingSeed(std::span<const unsigned char, 32> identity_entropy);
 std::optional<std::array<unsigned char, 32>> ComputeIdentityKemPackageCommitment(
     std::span<const unsigned char, 32> network_id,
     std::span<const unsigned char, 32> account_id,
-    std::span<const unsigned char, 32> device_key_id,
-    uint64_t activation_nonce,
+    uint64_t key_epoch,
     std::span<const unsigned char> package);
 
 } // namespace cybou

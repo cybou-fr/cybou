@@ -28,7 +28,7 @@
 namespace cybou {
 namespace p2p { class PeerManager; }
 class CybouKeyStore;
-class DeviceOperationCoordinator;
+class IdentityOperationCoordinator;
 
 struct NodeRuntimeConfig {
     CybouNetworkDefinition network_definition;
@@ -79,7 +79,7 @@ enum class IdentityKemPackageLookupStatus : uint8_t {
     FOUND,
     NOT_FOUND,
     ACCOUNT_NOT_FOUND,
-    DEVICE_NOT_ACTIVE,
+    KEY_EPOCH_UNAVAILABLE,
     HISTORY_UNAVAILABLE,
 };
 
@@ -87,24 +87,12 @@ struct IdentityKemPackageLookupResult {
     IdentityKemPackageLookupStatus status{IdentityKemPackageLookupStatus::HISTORY_UNAVAILABLE};
     IdentityKemPackage package{};
     std::array<unsigned char, 32> package_id{};
-    uint64_t activation_nonce{0};
+    uint64_t key_epoch{0};
     uint64_t finalized_height{0};
     uint64_t operation_height{0};
     uint32_t operation_index{0};
     uint256 block_id;
     uint256 state_root;
-};
-
-struct ActiveIdentityKemPackage {
-    IdentityKeyId device_id{};
-    IdentityKemPackageLookupResult lookup;
-};
-
-struct ActiveIdentityKemPackagesLookupResult {
-    IdentityKemPackageLookupStatus status{IdentityKemPackageLookupStatus::HISTORY_UNAVAILABLE};
-    uint64_t finalized_height{0};
-    uint256 state_root;
-    std::vector<ActiveIdentityKemPackage> packages;
 };
 
 enum class OperationStatusKind : uint8_t {
@@ -159,7 +147,7 @@ public:
     OperationSubmitResult SubmitPeerOperation(ProtocolOperation op, std::string source_peer);
     std::optional<OperationSubmitStatus> KnownOperationStatus(const uint256& op_id) const;
     OperationStatus GetOperationStatus(const uint256& op_id) const;
-    DeviceOperationCoordinator& GetDeviceOperationCoordinator(CybouKeyStore& keystore);
+    IdentityOperationCoordinator& GetIdentityOperationCoordinator(CybouKeyStore& keystore);
     std::vector<ProtocolOperation> RecentOperationsForGossip() const;
     std::vector<FinalizedHead> RecentFinalizedBlocksForGossip() const;
 
@@ -186,15 +174,9 @@ public:
     /** Block lookup by height */
     std::optional<FinalizedBlock> GetBlockAtHeight(uint64_t height) const;
     FinalizedOperationLookupResult FindFinalizedOperation(const uint256& op_id) const;
-    /** Resolve finalized KEM package bytes for the currently active device activation. */
-    IdentityKemPackageLookupResult FindActiveIdentityKemPackage(
-        const AccountId& account_id, const IdentityKeyId& device_id) const;
-    /** Resolve every active device package in one finalized-history scan. */
-    ActiveIdentityKemPackagesLookupResult FindActiveIdentityKemPackages(
-        const AccountId& account_id) const;
-    /** Resolve historical finalized package bytes, including revoked activations. */
-    IdentityKemPackageLookupResult FindHistoricalIdentityKemPackage(
-        const AccountId& account_id, const IdentityKeyId& device_id, uint64_t activation_nonce) const;
+    /** Resolve the finalized KEM capability for an Identity key epoch. */
+    IdentityKemPackageLookupResult FindIdentityKemPackage(
+        const AccountId& account_id, uint64_t key_epoch) const;
 
     /** Sync up to max_blocks from a remote peer block feed */
     SyncPeerResult SyncFromPeer(const std::string& host, uint16_t port, uint64_t max_blocks = 100);
@@ -240,9 +222,6 @@ private:
     };
     bool CommitConsensusPrecommit(const BftPrecommitMsg& precommit);
     bool CommitConsensusFinalized(const FinalizedBlock& finalized);
-    IdentityKemPackageLookupResult FindIdentityKemPackage(
-        const AccountId& account_id, const IdentityKeyId& device_id,
-        uint64_t activation_nonce, bool require_active) const;
     BftProposalResult ProcessBufferedConsensusProposalLocked();
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
     void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
@@ -262,7 +241,7 @@ private:
     std::unique_ptr<StorageObjectStore> m_storage_store;
     CybouStateStore m_store;
     std::unique_ptr<CybouAuthorityNode> m_authority_node;
-    std::unique_ptr<DeviceOperationCoordinator> m_device_operation_coordinator;
+    std::unique_ptr<IdentityOperationCoordinator> m_identity_operation_coordinator;
     std::map<uint256, OperationStatus> m_recent_operation_status;
     std::deque<uint256> m_recent_operation_status_order;
     std::optional<std::pair<std::string, uint16_t>> m_submit_endpoint;

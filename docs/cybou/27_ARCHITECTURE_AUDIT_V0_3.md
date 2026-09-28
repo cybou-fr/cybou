@@ -98,7 +98,7 @@ Current goals cannot all be simultaneously true without an additional trust/reco
 
 - user stores no recovery secret;
 - provider holds no KMS/recovery authority;
-- all devices/keys may be lost;
+- all local copies of Identity keys may be lost;
 - encrypted data remains recoverable.
 
 This remains a production blocker, but does not block early devnet work.

@@ -95,7 +95,7 @@ bool SaveClaim(const std::filesystem::path& path, std::string_view password,
 CybouNameService::CybouNameService(CybouNodeRuntime& runtime, CybouKeyStore& keystore,
     std::filesystem::path identity_vault_path)
     : m_runtime{runtime}, m_keystore{keystore},
-      m_operation_coordinator{runtime.GetDeviceOperationCoordinator(keystore)},
+      m_operation_coordinator{runtime.GetIdentityOperationCoordinator(keystore)},
       m_identity_vault_path{std::move(identity_vault_path)},
       m_claim_path{m_identity_vault_path}
 {
@@ -147,8 +147,8 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
         NameCommitPayload payload{.commitment = commitment};
         const auto digest = ComputeNameCommitPayloadCommitment(payload);
         if (!digest) return Fail("NameCommit commitment failed");
-        const auto submitted = m_operation_coordinator.Execute(DeviceOperationKind::NAME_COMMIT, *digest,
-            [&](const DeviceAuthorization& authorization) -> std::optional<ProtocolOperation> {
+        const auto submitted = m_operation_coordinator.Execute(IdentityOperationKind::NAME_COMMIT, *digest,
+            [&](const IdentityOperationAuthorization& authorization) -> std::optional<ProtocolOperation> {
                 return ProtocolOperation{AuthorizedNameCommit{authorization, payload}};
             });
         if (!submitted) {
@@ -185,8 +185,8 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
     const auto digest = ComputeNameRevealPayloadCommitment(reveal);
     if (!digest) return Fail("NameReveal commitment failed");
     if (on_phase) on_phase(NameClaimPhase::REVEALING, "Submitting NameReveal...");
-    const auto submitted = m_operation_coordinator.Execute(DeviceOperationKind::NAME_REVEAL, *digest,
-        [&](const DeviceAuthorization& authorization) -> std::optional<ProtocolOperation> {
+    const auto submitted = m_operation_coordinator.Execute(IdentityOperationKind::NAME_REVEAL, *digest,
+        [&](const IdentityOperationAuthorization& authorization) -> std::optional<ProtocolOperation> {
             return ProtocolOperation{AuthorizedNameReveal{authorization, reveal}};
         });
     if (!submitted) {

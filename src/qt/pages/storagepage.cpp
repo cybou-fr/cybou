@@ -150,7 +150,7 @@ void StoragePage::refresh()
     } else if (m_model->status().identity_state != CybouIdentityState::Active) {
         m_gate_hint->setText(tr("Unlock your identity to open your encrypted local Files index."));
     } else {
-        m_gate_hint->setText(tr("Single-installation Files index. Cross-device catalog sync is not available yet."));
+        m_gate_hint->setText(tr("Files catalog synchronization is not available yet."));
     }
     quint64 total{0};
     for (const auto& file : m_objects) total += file.size;

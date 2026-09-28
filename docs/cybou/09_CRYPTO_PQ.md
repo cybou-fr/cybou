@@ -1,53 +1,16 @@
-# Cryptographic baseline
+# Post-quantum cryptography profile
 
-CYBOU uses a hybrid post-quantum profile across protocol authorization and confidentiality. There is no classical-only production fallback. Do not invent primitives, combiners, or unauthenticated suite negotiation.
+Identity key roles are derived from the 24-word recovery entropy with separate domain-separated derivation labels. Recovery uses Ed25519 + ML-DSA-65. Account authorization uses Ed25519 + ML-DSA-44. Recipient key agreement uses a separate X-Wing seed (ML-KEM-768 + X25519). Signing and KEM keys are never reused across roles.
 
-## Signing
+The DEV X-Wing publication profile pins draft-05 and is bound to AccountID and key_epoch by the finalized Identity state commitment. Beta and Mainnet remain disabled until separately approved. Mail must remain fail-closed until the vetted HPKE backend, exact envelope transcript, evidence verification, and desktop send/receive flow are integrated.
 
-- Recovery Root: Ed25519 **and** ML-DSA-65.
-- Device operations: Ed25519 **and** ML-DSA-44.
-- Validator votes, operator actions, release signing, and treasury actions: separate keys and domains under the PQ key policy. Their integration into the running node remains work in progress.
-- Both components must verify over the same canonical, domain-separated message. A missing or failed component rejects the operation.
+No protocol-level device identity exists. An Identity record has one current Recovery key, one current Authorization key, one current KEM package commitment, one account-wide nonce, and one key_epoch. IdentityRotate atomically replaces all public roles and the package commitment. It requires the old Recovery signature and new Recovery and Authorization proofs of possession.
 
-Key purpose, suite identifier, NetworkID, operation kind, account or validator identity, nonce, and canonical payload commitment must be bound wherever applicable. Reusing a key across domains is prohibited.
+| Role | Algorithm | Purpose |
+| --- | --- | --- |
+| Recovery | Ed25519 + ML-DSA-65 | Restore identity and authorize full key rotation |
+| Authorization | Ed25519 + ML-DSA-44 | Sign account-level service operations |
+| Recipient KEM | X-Wing (ML-KEM-768 + X25519) | Establish or wrap content keys; separate from signing |
+| Validator/operator/release/treasury | Hybrid PQ policy | Separate key custody and domain-specific authorization |
 
-## Mail confidentiality
-
-Mail signing keys are separate from encryption keys. Identity publishes
-authorized recipient-device encryption capabilities; Mail does not maintain a
-parallel recipient-key registry. The DEV Identity profile publishes a single
-X-Wing capability package (ML-KEM-768 + X25519) per active device, pinned to
-draft-ietf-hpke-pq-05. This capability is not yet consumed by Mail: its
-application transcript and ciphertext wire profile remain unfrozen. Mainnet
-use waits for final standards. Mail must not downgrade to classical-only
-encryption. Plaintext and key material must never enter consensus state.
-
-## Identity capability key domains
-
-| Purpose | Target keys | Status |
-|---|---|---|
-| Recovery Root authorization | Ed25519 + ML-DSA-65 | Protocol/vault target; implemented in the current identity path |
-| Device authorization | Ed25519 + ML-DSA-44 | Implemented for current device authorization |
-| Device key agreement / wrapping | X-Wing (ML-KEM-768 + X25519) | Published in the DEV Identity record; draft-05 profile, Mail use disabled |
-| Validator authorization | Ed25519 + ML-DSA-65 | Policy target; production consensus wiring remains incomplete |
-
-Hybrid signatures protect authorization. Hybrid KEM protects key establishment
-and wrapping. A standard symmetric AEAD protects bulk content. Device signing
-keys must never be converted into or reused as Mail or Storage encryption keys.
-
-Use distinct, authenticated contexts for these purposes:
-
-```text
-CYBOU/DEVICE/SIGN
-CYBOU/MAIL/KEM
-CYBOU/STORAGE/KEYWRAP
-CYBOU/STORAGE/OBJECT
-```
-
-These are design-domain labels, not a custom cryptographic construction. Exact
-transcript encoding, suite identifiers, hybrid combination, and AEAD parameters
-remain subject to the relevant protocol freeze and test vectors.
-
-## Implementation gate
-
-The running BFT and desktop paths must be moved to this baseline before the DEV reset. Benchmarks, provider validation, fixed test vectors, canonical serialization, and malformed-input tests are required before activation.
+Use standard cryptographic libraries and pinned vectors. No classical-only production fallback and no custom cryptographic primitives.

@@ -15,7 +15,7 @@ namespace cybou {
 
 enum class IdentityKeyPurpose : uint8_t {
     RECOVERY_ROOT = 1,
-    DEVICE = 2,
+    AUTHORIZATION = 2,
     VALIDATOR = 3,
     OPERATOR_AUTHORITY = 4,
     RELEASE_SIGNING = 5,
@@ -53,8 +53,8 @@ bool VerifyIdentityMessage(const IdentityHybridPublicKey& key,
 // The ID changes when either public key changes; AccountID does not.
 std::optional<std::array<unsigned char, 32>> ComputeRecoveryKeyId(
     const IdentityHybridPublicKey& recovery_key);
-std::optional<std::array<unsigned char, 32>> ComputeDeviceKeyId(
-    const IdentityHybridPublicKey& device_key);
+std::optional<std::array<unsigned char, 32>> ComputeAuthorizationKeyId(
+    const IdentityHybridPublicKey& authorization_key);
 std::optional<std::array<unsigned char, 32>> ComputeValidatorKeyId(
     const IdentityHybridPublicKey& validator_key);
 

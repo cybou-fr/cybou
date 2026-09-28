@@ -5,7 +5,7 @@ protocol behavior: every state it shows arrives through this contract.
 
 Identity V2 extends this contract only after core support exists: create and
 restore requests, vault/phrase confirmation (local state), verified recovery
-lookup, device add/revoke finality, and name commit/work/reveal finality. The
+lookup, IdentityRotate finality, and name commit/work/reveal finality. The
 current fields below remain V1 DEV behavior. See `78_IDENTITY_DESKTOP_UX.md`.
 `CybouNodeRuntime` implements the native producer/observer boundary; the GUI
 (`src/qt`) consumes its verified state.
@@ -121,7 +121,7 @@ The intended request path is:
 
 ```text
 Qt page -> desktop controller -> domain service ->
-DeviceOperationCoordinator / StorageService -> NodeRuntime
+IdentityOperationCoordinator / StorageService -> NodeRuntime
 ```
 
 Pages may collect user input, show local validation, and render immutable
@@ -130,9 +130,9 @@ operations, choose crypto suites, wrap content keys, or submit Storage
 transfers directly. Controllers and services may prepare user intent and
 delegate it to the owning core service. The shared coordinator owns exact
 operation bytes, operation identity, nonce reservation, durable retry, and
-status reconciliation. Wallet, Name, recovery's root-authorized DeviceAdd
-and DeviceRevoke, and RecoveryRotate use it. Rotation persists a candidate
-vault first and promotes it only after verified finality; the Identity page
+status reconciliation. Wallet, Name, and IdentityRotate use it. IdentityRotate replaces the complete
+mnemonic-derived key set atomically, persists a candidate vault first, and
+promotes it only after verified finality; the Identity page
 runs phrase confirmation and resume off the Qt event loop. Mail and Files are
 not integrated.
 

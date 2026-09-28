@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <test/cybou_service_test_fixture.h>
+#include <cybou/crypto/cleanse.h>
 #include <test/util/setup_common.h>
 
 #include <boost/test/unit_test.hpp>
@@ -48,96 +49,60 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     BOOST_CHECK_EQUAL(missing.scanned_height, 1U);
 }
 
-BOOST_AUTO_TEST_CASE(runtime_resolves_active_and_revoked_identity_kem_packages_from_finalized_history)
+BOOST_AUTO_TEST_CASE(runtime_resolves_current_identity_kem_package_by_key_epoch)
 {
     CybouServiceTestFixture fixture;
-    std::filesystem::remove(fixture.directory / "kem-package-lookup.cybou");
-    std::filesystem::remove(fixture.directory / "kem-package-recovered.cybou");
-    cybou::CybouIdentityService identity{*fixture.runtime, fixture.directory / "kem-package-lookup.cybou"};
+    const auto path = fixture.directory / "identity-kem-lookup.cybou";
+    std::filesystem::remove(path);
+    cybou::CybouIdentityService identity{*fixture.runtime, path};
     const auto words = identity.PrepareNewIdentity();
     BOOST_REQUIRE(words);
     const auto created = identity.CreateIdentitySync("correct horse battery staple");
     BOOST_REQUIRE_MESSAGE(created.success, created.error_message);
     const auto account = identity.GetAccountId();
-    const auto device_id = identity.GetKeyStore().GetDeviceId();
     BOOST_REQUIRE(account);
-    BOOST_REQUIRE(device_id);
 
-    const auto active = fixture.runtime->FindActiveIdentityKemPackage(*account, *device_id);
-    BOOST_REQUIRE(active.status == cybou::IdentityKemPackageLookupStatus::FOUND);
-    BOOST_CHECK_EQUAL(active.activation_nonce, 0U);
-    BOOST_CHECK_EQUAL(active.operation_height, 1U);
-    BOOST_CHECK_EQUAL(active.operation_index, 0U);
-    BOOST_CHECK(active.state_root == fixture.runtime->GetStateRoot().value());
-
-    const auto create_block = fixture.runtime->GetBlockAtHeight(active.operation_height);
+    const auto initial = fixture.runtime->FindIdentityKemPackage(*account, 0);
+    BOOST_REQUIRE(initial.status == cybou::IdentityKemPackageLookupStatus::FOUND);
+    BOOST_CHECK_EQUAL(initial.operation_height, 1U);
+    const auto create_block = fixture.runtime->GetBlockAtHeight(initial.operation_height);
     BOOST_REQUIRE(create_block);
-    BOOST_REQUIRE_EQUAL(create_block->block.operations.size(), 1U);
-    const auto* create = std::get_if<cybou::AccountCreateOp>(&create_block->block.operations[active.operation_index]);
+    const auto* create = std::get_if<cybou::AccountCreateOp>(&create_block->block.operations[initial.operation_index]);
     BOOST_REQUIRE(create);
-    BOOST_CHECK(create->kem_package == active.package);
+    BOOST_CHECK(create->kem_package == initial.package);
     const auto account_bytes = account->Value();
-    const auto expected_id = cybou::ComputeIdentityKemPackageCommitment(
+    const auto expected_initial = cybou::ComputeIdentityKemPackageCommitment(
         std::span<const unsigned char, 32>{fixture.runtime->GetNetworkId().begin(), 32},
-        std::span<const unsigned char, 32>{account_bytes.begin(), 32}, *device_id,
-        active.activation_nonce, active.package);
-    BOOST_REQUIRE(expected_id);
-    BOOST_CHECK(*expected_id == active.package_id);
+        std::span<const unsigned char, 32>{account_bytes.begin(), 32}, 0, initial.package);
+    BOOST_REQUIRE(expected_initial);
+    BOOST_CHECK(*expected_initial == initial.package_id);
 
-    cybou::CybouIdentityService recovered{*fixture.runtime, fixture.directory / "kem-package-recovered.cybou"};
+    const auto restore_path = fixture.directory / "identity-kem-restored.cybou";
+    std::filesystem::remove(restore_path);
+    cybou::CybouIdentityService recovered{*fixture.runtime, restore_path};
     const auto restored = recovered.RestoreIdentitySync(*words, "another correct horse battery staple");
     BOOST_REQUIRE_MESSAGE(restored.success, restored.error_message);
-    const auto recovered_device = recovered.GetKeyStore().GetDeviceId();
-    BOOST_REQUIRE(recovered_device);
-    const auto added = fixture.runtime->FindActiveIdentityKemPackage(*account, *recovered_device);
-    BOOST_REQUIRE(added.status == cybou::IdentityKemPackageLookupStatus::FOUND);
-    BOOST_CHECK_EQUAL(added.activation_nonce, 1U);
-    BOOST_CHECK_EQUAL(added.operation_height, 2U);
-    const auto add_block = fixture.runtime->GetBlockAtHeight(added.operation_height);
-    BOOST_REQUIRE(add_block);
-    BOOST_REQUIRE_EQUAL(add_block->block.operations.size(), 1U);
-    const auto* add = std::get_if<cybou::DeviceAdd>(&add_block->block.operations[added.operation_index]);
-    BOOST_REQUIRE(add);
-    BOOST_CHECK(add->kem_package == added.package);
+    BOOST_CHECK_EQUAL(fixture.runtime->GetFinalizedHeight().value_or(0), 1U);
 
-    const auto active_packages = fixture.runtime->FindActiveIdentityKemPackages(*account);
-    BOOST_REQUIRE(active_packages.status == cybou::IdentityKemPackageLookupStatus::FOUND);
-    BOOST_CHECK_EQUAL(active_packages.finalized_height, 2U);
-    BOOST_CHECK_EQUAL(active_packages.packages.size(), 2U);
-    bool found_original{false};
-    bool found_recovered{false};
-    for (const auto& entry : active_packages.packages) {
-        BOOST_CHECK(entry.lookup.status == cybou::IdentityKemPackageLookupStatus::FOUND);
-        if (entry.device_id == *device_id) {
-            found_original = true;
-            BOOST_CHECK_EQUAL(entry.lookup.activation_nonce, 0U);
-            BOOST_CHECK(entry.lookup.package == active.package);
-        } else if (entry.device_id == *recovered_device) {
-            found_recovered = true;
-            BOOST_CHECK_EQUAL(entry.lookup.activation_nonce, 1U);
-            BOOST_CHECK(entry.lookup.package == added.package);
-        }
-    }
-    BOOST_CHECK(found_original);
-    BOOST_CHECK(found_recovered);
-
-    auto& coordinator = fixture.runtime->GetDeviceOperationCoordinator(recovered.GetKeyStore());
-    const auto revoked = coordinator.RevokeDevice(*device_id);
-    BOOST_REQUIRE_MESSAGE(revoked.phase == cybou::DeviceOperationPhase::ACCEPTED, revoked.error);
+    auto next_entropy = cybou::GenerateRecoveryEntropy();
+    BOOST_REQUIRE(next_entropy);
+    const auto next_words = cybou::EncodeRecoveryWords(*next_entropy);
+    cybou::crypto::CleanseMemory(next_entropy->data(), next_entropy->size());
+    const auto pending = identity.RotateIdentitySync(next_words, "correct horse battery staple");
+    BOOST_REQUIRE(pending.phase == cybou::IdentityOperationPhase::ACCEPTED);
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
-    const auto revoke_status = coordinator.GetStatus(revoked.op_id);
-    BOOST_REQUIRE_MESSAGE(revoke_status.phase == cybou::DeviceOperationPhase::FINALIZED, revoke_status.error);
-    const auto inactive = fixture.runtime->FindActiveIdentityKemPackage(*account, *device_id);
-    BOOST_CHECK(inactive.status == cybou::IdentityKemPackageLookupStatus::DEVICE_NOT_ACTIVE);
+    const auto finalized = identity.ResumeIdentityRotationSync("correct horse battery staple");
+    BOOST_REQUIRE(finalized.phase == cybou::IdentityOperationPhase::FINALIZED);
 
-    const auto historical = fixture.runtime->FindHistoricalIdentityKemPackage(*account, *device_id, 0);
-    BOOST_REQUIRE(historical.status == cybou::IdentityKemPackageLookupStatus::FOUND);
-    BOOST_CHECK(historical.package == active.package);
-    BOOST_CHECK(historical.package_id == active.package_id);
-    BOOST_CHECK_EQUAL(historical.operation_height, 1U);
-    BOOST_CHECK_EQUAL(historical.finalized_height, 3U);
+    const auto rotated = fixture.runtime->FindIdentityKemPackage(*account, 1);
+    BOOST_REQUIRE(rotated.status == cybou::IdentityKemPackageLookupStatus::FOUND);
+    BOOST_CHECK_EQUAL(rotated.operation_height, 2U);
+    BOOST_CHECK(rotated.package != initial.package);
+    const auto future = fixture.runtime->FindIdentityKemPackage(*account, 2);
+    BOOST_CHECK(future.status == cybou::IdentityKemPackageLookupStatus::KEY_EPOCH_UNAVAILABLE);
+    std::filesystem::remove(path);
+    std::filesystem::remove(restore_path);
 }
-
 BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)
 {
     CybouServiceTestFixture fixture;

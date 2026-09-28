@@ -76,14 +76,14 @@ BOOST_AUTO_TEST_CASE(account_creation_requires_prepared_durable_vault)
     const auto account = cybou::AccountId::FromBytes(material->account_id);
     BOOST_REQUIRE(account);
     BOOST_CHECK(result.account_id == *account);
-    const auto device_key = service.GetKeyStore().GetDevicePublicKey();
+    const auto device_key = service.GetKeyStore().GetAuthorizationPublicKey();
     BOOST_REQUIRE(device_key);
     BOOST_CHECK(!std::equal(result.account_id.Value().begin(), result.account_id.Value().end(), device_key->ed25519.begin()));
 
     // A valid but different local KEM seed must not make a signing-key match ACTIVE.
     auto mismatched_material = cybou::LoadIdentityMaterial(path, "correct horse battery staple");
     BOOST_REQUIRE(mismatched_material);
-    mismatched_material->device_xwing_seed[0] ^= 0x01;
+    mismatched_material->recovery_entropy[0] ^= 0x01;
     const auto mismatched_path = dir / "mismatched-kem.cybou";
     std::filesystem::remove(mismatched_path);
     BOOST_REQUIRE(cybou::SaveNewIdentityMaterial(mismatched_path,
@@ -109,17 +109,17 @@ BOOST_AUTO_TEST_CASE(account_creation_requires_prepared_durable_vault)
     BOOST_REQUIRE_MESSAGE(restore_result.success, restore_result.error_message);
     BOOST_CHECK(restore_result.account_id == result.account_id);
     BOOST_CHECK_EQUAL(restore_result.system_balance, result.system_balance);
-    BOOST_CHECK_EQUAL(runtime.GetFinalizedHeight().value_or(0), 2);
+    BOOST_CHECK_EQUAL(runtime.GetFinalizedHeight().value_or(0), 1);
     const auto loaded_state = runtime.GetStore().LoadState();
     BOOST_REQUIRE(loaded_state && loaded_state.state);
     const auto* record = loaded_state.state->identities.Find(result.account_id);
     BOOST_REQUIRE(record);
-    BOOST_CHECK_EQUAL(record->devices.size(), 2);
+    BOOST_CHECK_EQUAL(record->key_epoch, 0U);
     cybou::CybouIdentityService reopened_restored{runtime, restored_path};
     BOOST_REQUIRE(reopened_restored.LoadVault("another strong vault password"));
     BOOST_CHECK(reopened_restored.GetPhase() == cybou::IdentityCreationPhase::ACTIVE);
     BOOST_CHECK(!reopened_restored.RestoreIdentitySync(*words, "wrong password").success);
-    BOOST_CHECK_EQUAL(runtime.GetFinalizedHeight().value_or(0), 2);
+    BOOST_CHECK_EQUAL(runtime.GetFinalizedHeight().value_or(0), 1);
 
     std::filesystem::remove(path);
     std::filesystem::remove(restored_path);
@@ -160,8 +160,8 @@ BOOST_AUTO_TEST_CASE(recovery_rotation_promotes_candidate_only_after_finality)
     const auto created = identity.CreateIdentitySync("correct horse battery staple");
     BOOST_REQUIRE_MESSAGE(created.success, created.error_message);
     const auto old_root = identity.GetKeyStore().GetRecoveryPublicKey();
-    const auto device = identity.GetKeyStore().GetDevicePublicKey();
-    BOOST_REQUIRE(old_root && device);
+    const auto old_authorization = identity.GetKeyStore().GetAuthorizationPublicKey();
+    BOOST_REQUIRE(old_root && old_authorization);
     const auto old_root_id = cybou::ComputeRecoveryKeyId(*old_root);
     BOOST_REQUIRE(old_root_id);
 
@@ -172,16 +172,16 @@ BOOST_AUTO_TEST_CASE(recovery_rotation_promotes_candidate_only_after_finality)
     BOOST_REQUIRE(new_root);
     cybou::crypto::CleanseMemory(new_entropy->data(), new_entropy->size());
 
-    const auto wrong_password = identity.RotateRecoveryRootSync(new_words, "wrong vault password");
-    BOOST_CHECK(wrong_password.phase == cybou::DeviceOperationPhase::REJECTED);
+    const auto wrong_password = identity.RotateIdentitySync(new_words, "wrong vault password");
+    BOOST_CHECK(wrong_password.phase == cybou::IdentityOperationPhase::REJECTED);
     BOOST_CHECK(!std::filesystem::exists(candidate_path));
 
-    const auto pending = identity.RotateRecoveryRootSync(new_words, "correct horse battery staple");
+    const auto pending = identity.RotateIdentitySync(new_words, "correct horse battery staple");
     BOOST_REQUIRE_EQUAL(static_cast<unsigned>(pending.phase),
-        static_cast<unsigned>(cybou::DeviceOperationPhase::ACCEPTED));
+        static_cast<unsigned>(cybou::IdentityOperationPhase::ACCEPTED));
     BOOST_CHECK(std::filesystem::exists(candidate_path));
-    const auto resumed = identity.ResumeRecoveryRootRotationSync("correct horse battery staple");
-    BOOST_CHECK(resumed.phase == cybou::DeviceOperationPhase::ACCEPTED);
+    const auto resumed = identity.ResumeIdentityRotationSync("correct horse battery staple");
+    BOOST_CHECK(resumed.phase == cybou::IdentityOperationPhase::ACCEPTED);
     BOOST_CHECK(resumed.op_id == pending.op_id);
     const auto still_active = cybou::LoadIdentityMaterial(path, "correct horse battery staple");
     BOOST_REQUIRE(still_active);
@@ -197,15 +197,15 @@ BOOST_AUTO_TEST_CASE(recovery_rotation_promotes_candidate_only_after_finality)
     BOOST_REQUIRE(candidate_root);
     BOOST_CHECK(*candidate_root == *new_root);
     BOOST_CHECK(candidate->account_id == still_active->account_id);
-    BOOST_CHECK(candidate->device_secret == still_active->device_secret);
+    BOOST_CHECK(candidate->recovery_entropy != still_active->recovery_entropy);
 
     BOOST_REQUIRE(runtime.ProduceBlock());
-    const auto finalized = identity.ResumeRecoveryRootRotationSync("correct horse battery staple");
+    const auto finalized = identity.ResumeIdentityRotationSync("correct horse battery staple");
     BOOST_REQUIRE_EQUAL(static_cast<unsigned>(finalized.phase),
-        static_cast<unsigned>(cybou::DeviceOperationPhase::FINALIZED));
+        static_cast<unsigned>(cybou::IdentityOperationPhase::FINALIZED));
     BOOST_CHECK(!std::filesystem::exists(candidate_path));
     BOOST_CHECK(identity.GetKeyStore().GetRecoveryPublicKey() == new_root);
-    BOOST_CHECK(identity.GetKeyStore().GetDevicePublicKey() == device);
+    BOOST_CHECK(identity.GetKeyStore().GetAuthorizationPublicKey() != old_authorization);
     BOOST_CHECK(identity.GetAccountId() == std::optional<cybou::AccountId>{created.account_id});
 
     const auto loaded = runtime.GetStore().LoadState();
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(recovery_rotation_promotes_candidate_only_after_finality)
     BOOST_CHECK(!loaded.state->identities.FindByRecoveryKeyId(*old_root_id));
     BOOST_CHECK(loaded.state->identities.FindByRecoveryKeyId(*cybou::ComputeRecoveryKeyId(*new_root)) ==
         std::optional<cybou::AccountId>{created.account_id});
-    BOOST_CHECK_EQUAL(loaded.state->identities.Find(created.account_id)->next_root_nonce, 1U);
+    BOOST_CHECK_EQUAL(loaded.state->identities.Find(created.account_id)->nonce, 1U);
     std::filesystem::remove(path);
 }
 

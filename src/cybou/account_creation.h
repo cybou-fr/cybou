@@ -37,7 +37,7 @@ struct AccountCreateOp {
     IdentityKemPackage kem_package{};
     AccountCreationWork work;
     IdentityHybridSignature recovery_pop;
-    IdentityHybridSignature device_pop;
+    IdentityHybridSignature authorization_pop;
 
     friend bool operator==(const AccountCreateOp&, const AccountCreateOp&) = default;
 };
@@ -53,7 +53,7 @@ enum class AccountCreateError : uint8_t {
     EXPIRED_WORK_EPOCH,
     INSUFFICIENT_WORK,
     INVALID_RECOVERY_POP,
-    INVALID_DEVICE_POP,
+    INVALID_AUTHORIZATION_POP,
 };
 
 std::optional<std::array<unsigned char, ACCOUNT_CREATE_WORK_SIZE>> SerializeAccountCreationWork(

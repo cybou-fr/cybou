@@ -3,22 +3,21 @@
 The diagrams below describe the target shared network. The Qt desktop opens a
 native `CybouNodeRuntime`, bootstraps over CYP2 by default, verifies finalized
 blocks, and submits supported operations. Name and Wallet use the durable
-device operation coordinator; Mail encryption and Object Storage are not yet
+Identity operation coordinator; Mail encryption and Object Storage are not yet
 operational end to end. See `26_IMPLEMENTATION_STATUS.md` for implementation
 status and `86`–`88` for the identity and encrypted-object architecture.
 
 Identity is the security root. Name, Wallet, Mail, and Files are identity
-capabilities and share device authorization and key lifecycle. Files and
+capabilities and share Identity authorization and key lifecycle. Files and
 Storage-backed encrypted Mail attachments are Beta requirements. Backup is
 post-Beta; there is no separate CYBOU Drive product. See
 `81_BETA_PRODUCT_SCOPE.md`.
 
 ## UX invariant
 
-Protocol complexity must not leak into normal user workflows. The normal UI
-should expose names and outcomes such as `stanislav.cybou`, `Sending`,
-`Delivered / Finalized`, `Backup protected` and `Device revoked`, rather than
-AccountID, nonce, epoch, PoW difficulty, validator quorum, ML-DSA, block height
+Protocol complexity must not leak into normal user workflows. The normal UI should expose names and outcomes such as `stanislav.cybou`,
+`Sending`, `Delivered / Finalized`, `Backup protected`, and `Identity keys
+rotated`, rather than AccountID, nonce, epoch, PoW difficulty, validator quorum, ML-DSA, block height
 or OperationID. Advanced and diagnostic views may expose protocol detail.
 
 ## Desktop process
@@ -29,9 +28,9 @@ cybou.exe
 └── NodeCore
     ├── Identity Security Substrate
     │   ├── Recovery authority
-    │   ├── Device signing
-    │   ├── Device key agreement (target)
-    │   └── DeviceOperationCoordinator
+    │   ├── Identity authorization signing
+    │   ├── Account key agreement (DEV profile)
+    │   └── IdentityOperationCoordinator
     ├── Identity capabilities
     │   ├── Name
     │   ├── Wallet
@@ -47,8 +46,8 @@ cybou.exe
 The identity holds the authorization and key lifecycle; private keys remain
 under client control. Signing keys and encryption/KEM keys are separate
 domains. Mail and Files do not create independent identities or parallel
-device-authorization systems. Backup is a post-Beta application of the shared
-Storage layer.
+authorization systems. Backup is a post-Beta application of the shared Storage
+layer.
 
 ## Email architecture
 
@@ -56,7 +55,7 @@ Storage layer.
 CYBOU Email UI
     -> Mail Protocol
     -> Identity-published recipient capability
-    -> E2E encryption + identity device authorization
+    -> E2E encryption + Identity authorization
     -> MailTx
     -> ordinary CYBOU P2P propagation
     -> BFT finality

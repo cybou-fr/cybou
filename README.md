@@ -78,7 +78,7 @@ CYBOU is in active development and **not yet a public production service**.
 - [Identity-Centric Product UX Contract](docs/cybou/79_IDENTITY_CENTRIC_PRODUCT_UX.md)
 - [Identity & Name Registry Architecture](docs/cybou/10_IDENTITY_NAMES.md)
 - [Identity Security Substrate](docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md)
-- [Device Operation Coordinator](docs/cybou/87_DEVICE_OPERATION_COORDINATOR.md)
+- [Identity Operation Coordinator](docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md)
 - [Encrypted Object and Key Model](docs/cybou/88_ENCRYPTED_OBJECT_AND_KEY_MODEL.md)
 - [Implementation Status & Architecture Audit](docs/cybou/26_IMPLEMENTATION_STATUS.md)
 - [Building CYBOU from Source](INSTALL.md)

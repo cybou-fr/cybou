@@ -34,7 +34,7 @@ write
 ```
 
 Identity is the platform primitive; Email is the first product. Users own the
-identity, keys, devices and verified state behind the mailbox. PQ authorization
+identity, keys and verified state behind the mailbox. PQ authorization
 is part of the security architecture, not the sole product category.
 
 ## User value

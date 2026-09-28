@@ -6,7 +6,7 @@
 
 #include <cybou/account_creation.h>
 #include <cybou/account_id.h>
-#include <cybou/device_operation_coordinator.h>
+#include <cybou/identity_operation_coordinator.h>
 #include <cybou/keystore.h>
 #include <cybou/node_runtime.h>
 #include <cybou/protocol_operation.h>
@@ -99,10 +99,10 @@ public:
         const PhaseCallback& on_phase = nullptr,
         std::chrono::milliseconds timeout = std::chrono::seconds(30));
     /** Persist a candidate vault before submitting a root rotation; promote it only after finality. */
-    DeviceOperationResult RotateRecoveryRootSync(const RecoveryWords& new_words, std::string password);
-    bool HasPendingRecoveryRootRotation();
+    IdentityOperationResult RotateIdentitySync(const RecoveryWords& new_words, std::string password);
+    bool HasPendingIdentityRotation();
     /** Resume from the encrypted candidate vault without asking the user to re-enter the phrase. */
-    DeviceOperationResult ResumeRecoveryRootRotationSync(std::string password);
+    IdentityOperationResult ResumeIdentityRotationSync(std::string password);
     void RestoreIdentityAsync(
         RecoveryWords words,
         std::string password,

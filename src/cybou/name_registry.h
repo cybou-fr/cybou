@@ -30,8 +30,8 @@ inline constexpr size_t NAME_MAX_LABEL_LENGTH{32};
 inline constexpr size_t NAME_COMMIT_PAYLOAD_SIZE{33};
 inline constexpr size_t NAME_CLAIM_WORK_SIZE{113};
 inline constexpr size_t NAME_REVEAL_PAYLOAD_SIZE{1 + 1 + 32 + 32 + NAME_CLAIM_WORK_SIZE}; // 179 bytes
-inline constexpr size_t AUTHORIZED_NAME_COMMIT_SIZE{2597 + NAME_COMMIT_PAYLOAD_SIZE};    // 2630 bytes
-inline constexpr size_t AUTHORIZED_NAME_REVEAL_SIZE{2597 + NAME_REVEAL_PAYLOAD_SIZE};    // 2776 bytes
+inline constexpr size_t AUTHORIZED_NAME_COMMIT_SIZE{2565 + NAME_COMMIT_PAYLOAD_SIZE};    // 2598 bytes
+inline constexpr size_t AUTHORIZED_NAME_REVEAL_SIZE{2565 + NAME_REVEAL_PAYLOAD_SIZE};    // 2744 bytes
 
 enum class NameValidationError : uint8_t {
     NONE,
@@ -156,7 +156,7 @@ inline std::optional<IdentityKeyId> ComputeNameCommitPayloadCommitment(const Nam
 }
 
 struct AuthorizedNameCommit {
-    DeviceAuthorization authorization;
+    IdentityOperationAuthorization authorization;
     NameCommitPayload commit;
 
     friend bool operator==(const AuthorizedNameCommit&, const AuthorizedNameCommit&) = default;
@@ -303,7 +303,7 @@ inline std::optional<IdentityKeyId> ComputeNameRevealPayloadCommitment(const Nam
 }
 
 struct AuthorizedNameReveal {
-    DeviceAuthorization authorization;
+    IdentityOperationAuthorization authorization;
     NameRevealPayload reveal;
 
     friend bool operator==(const AuthorizedNameReveal&, const AuthorizedNameReveal&) = default;

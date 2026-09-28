@@ -5,6 +5,7 @@
 #include <cybou/identity_kem.h>
 
 #include <cybou/crypto/cleanse.h>
+#include <cybou/crypto/hkdf_sha256.h>
 #include <cybou/crypto/sha256.h>
 
 #include <openssl/core_names.h>
@@ -29,14 +30,14 @@ inline constexpr size_t ML_KEM_768_SEED_SIZE{64};
 inline constexpr size_t ML_KEM_768_PUBLIC_KEY_SIZE{1184};
 inline constexpr size_t ML_KEM_768_CIPHERTEXT_SIZE{1088};
 inline constexpr size_t ML_KEM_768_SHARED_SECRET_SIZE{32};
-using DeviceX25519PrivateKey = std::array<unsigned char, X25519_PRIVATE_KEY_SIZE>;
-using DeviceX25519PublicKey = std::array<unsigned char, X25519_PUBLIC_KEY_SIZE>;
+using IdentityX25519PrivateKey = std::array<unsigned char, X25519_PRIVATE_KEY_SIZE>;
+using IdentityX25519PublicKey = std::array<unsigned char, X25519_PUBLIC_KEY_SIZE>;
 using MlKem768Seed = std::array<unsigned char, ML_KEM_768_SEED_SIZE>;
 using MlKem768PublicKey = std::array<unsigned char, ML_KEM_768_PUBLIC_KEY_SIZE>;
 using MlKem768Ciphertext = std::array<unsigned char, ML_KEM_768_CIPHERTEXT_SIZE>;
 using MlKem768SharedSecret = std::array<unsigned char, ML_KEM_768_SHARED_SECRET_SIZE>;
 
-std::optional<DeviceX25519PublicKey> DeriveDeviceX25519PublicKey(
+std::optional<IdentityX25519PublicKey> DeriveIdentityX25519PublicKey(
     std::span<const unsigned char, X25519_PRIVATE_KEY_SIZE> private_key);
 
 struct MlKem768Encapsulation {
@@ -115,7 +116,7 @@ PKey GenerateMlKem768Key(std::span<const unsigned char, ML_KEM_768_SEED_SIZE> se
 }
 
 bool XWingExpandSeed(std::span<const unsigned char, XWING_SEED_SIZE> seed,
-    MlKem768Seed& mlkem_seed, DeviceX25519PrivateKey& x25519_seed)
+    MlKem768Seed& mlkem_seed, IdentityX25519PrivateKey& x25519_seed)
 {
     std::array<unsigned char, ML_KEM_768_SEED_SIZE + X25519_PRIVATE_KEY_SIZE> expanded{};
     MdCtx context{EVP_MD_CTX_new(), EVP_MD_CTX_free};
@@ -130,10 +131,10 @@ bool XWingExpandSeed(std::span<const unsigned char, XWING_SEED_SIZE> seed,
     return ok;
 }
 
-std::optional<DeviceX25519PublicKey> X25519PublicFromSeed(
+std::optional<IdentityX25519PublicKey> X25519PublicFromSeed(
     std::span<const unsigned char, X25519_PRIVATE_KEY_SIZE> private_key)
 {
-    return DeriveDeviceX25519PublicKey(private_key);
+    return DeriveIdentityX25519PublicKey(private_key);
 }
 
 std::optional<MlKem768SharedSecret> X25519SharedSecret(
@@ -218,9 +219,9 @@ XWingEncapsulation::~XWingEncapsulation()
 }
 
 namespace {
-std::optional<DeviceX25519PrivateKey> GenerateDeviceX25519PrivateKey()
+std::optional<IdentityX25519PrivateKey> GenerateIdentityX25519PrivateKey()
 {
-    DeviceX25519PrivateKey key{};
+    IdentityX25519PrivateKey key{};
     if (RAND_priv_bytes(key.data(), static_cast<int>(key.size())) != 1 || IsZero(key)) {
         crypto::CleanseMemory(key.data(), key.size());
         return std::nullopt;
@@ -228,14 +229,14 @@ std::optional<DeviceX25519PrivateKey> GenerateDeviceX25519PrivateKey()
     return key;
 }
 
-std::optional<DeviceX25519PublicKey> DeriveDeviceX25519PublicKey(
+std::optional<IdentityX25519PublicKey> DeriveIdentityX25519PublicKey(
     const std::span<const unsigned char, X25519_PRIVATE_KEY_SIZE> private_key)
 {
     if (IsZero(private_key)) return std::nullopt;
     PKey key{EVP_PKEY_new_raw_private_key_ex(nullptr, "X25519", nullptr,
         private_key.data(), private_key.size()), EVP_PKEY_free};
     if (!key) return std::nullopt;
-    DeviceX25519PublicKey public_key{};
+    IdentityX25519PublicKey public_key{};
     size_t length = public_key.size();
     if (EVP_PKEY_get_raw_public_key(key.get(), public_key.data(), &length) != 1 ||
         length != public_key.size() || IsZero(public_key)) return std::nullopt;
@@ -324,7 +325,7 @@ std::optional<XWingPublicKey> DeriveXWingPublicKey(
     std::span<const unsigned char, XWING_SEED_SIZE> seed)
 {
     MlKem768Seed mlkem_seed{};
-    DeviceX25519PrivateKey x25519_seed{};
+    IdentityX25519PrivateKey x25519_seed{};
     if (!XWingExpandSeed(seed, mlkem_seed, x25519_seed)) return std::nullopt;
     const auto pq_public = DeriveMlKem768PublicKey(mlkem_seed);
     const auto classical_public = X25519PublicFromSeed(x25519_seed);
@@ -358,8 +359,8 @@ std::optional<XWingEncapsulation> EncapsulateXWing(
     const auto pq_public = public_key.first<ML_KEM_768_PUBLIC_KEY_SIZE>();
     const auto recipient_x25519 = public_key.last<X25519_PUBLIC_KEY_SIZE>();
     auto pq_encapsulation = EncapsulateMlKem768(pq_public);
-    auto ephemeral_seed = GenerateDeviceX25519PrivateKey();
-    const auto ephemeral_public = ephemeral_seed ? DeriveDeviceX25519PublicKey(*ephemeral_seed) : std::nullopt;
+    auto ephemeral_seed = GenerateIdentityX25519PrivateKey();
+    const auto ephemeral_public = ephemeral_seed ? DeriveIdentityX25519PublicKey(*ephemeral_seed) : std::nullopt;
     auto x25519_secret = ephemeral_seed && ephemeral_public ?
         X25519SharedSecret(*ephemeral_seed, recipient_x25519) : std::nullopt;
     if (!pq_encapsulation || !ephemeral_seed || !ephemeral_public || !x25519_secret) {
@@ -394,7 +395,7 @@ std::optional<XWingEncapsulation> EncapsulateXWingForTest(
     PKeyCtx context{key ? EVP_PKEY_CTX_new_from_pkey(nullptr, key.get(), nullptr) : nullptr,
         EVP_PKEY_CTX_free};
     std::array<unsigned char, 32> ikme{};
-    DeviceX25519PrivateKey ephemeral_seed{};
+    IdentityX25519PrivateKey ephemeral_seed{};
     std::copy_n(randomness.begin(), ikme.size(), ikme.begin());
     std::copy_n(randomness.begin() + ikme.size(), ephemeral_seed.size(), ephemeral_seed.begin());
     if (!context || EVP_PKEY_encapsulate_init(context.get(), nullptr) <= 0) {
@@ -416,7 +417,7 @@ std::optional<XWingEncapsulation> EncapsulateXWingForTest(
         pq_encapsulation.shared_secret.data(), &secret_length) > 0 &&
         ciphertext_length == pq_encapsulation.ciphertext.size() &&
         secret_length == pq_encapsulation.shared_secret.size();
-    const auto ephemeral_public = DeriveDeviceX25519PublicKey(ephemeral_seed);
+    const auto ephemeral_public = DeriveIdentityX25519PublicKey(ephemeral_seed);
     auto x25519_secret = ephemeral_public ?
         X25519SharedSecret(ephemeral_seed, recipient_x25519) : std::nullopt;
     crypto::CleanseMemory(ephemeral_seed.data(), ephemeral_seed.size());
@@ -444,7 +445,7 @@ std::optional<XWingSharedSecret> DecapsulateXWing(
     std::span<const unsigned char, XWING_CIPHERTEXT_SIZE> ciphertext)
 {
     MlKem768Seed mlkem_seed{};
-    DeviceX25519PrivateKey x25519_seed{};
+    IdentityX25519PrivateKey x25519_seed{};
     if (!XWingExpandSeed(seed, mlkem_seed, x25519_seed)) return std::nullopt;
     const auto public_key = DeriveXWingPublicKey(seed);
     const auto pq_ciphertext = ciphertext.first<ML_KEM_768_CIPHERTEXT_SIZE>();
@@ -494,7 +495,7 @@ std::optional<XWingPublicKey> DecodeIdentityKemPackage(std::span<const unsigned 
     PKey classical{EVP_PKEY_new_raw_public_key_ex(nullptr, "X25519", nullptr,
         classical_public.data(), classical_public.size()), EVP_PKEY_free};
     if (!pq || !classical) return std::nullopt;
-    DeviceX25519PrivateKey probe{};
+    IdentityX25519PrivateKey probe{};
     probe.fill(0x42);
     const auto ecdh_probe = X25519SharedSecret(probe, classical_public);
     crypto::CleanseMemory(probe.data(), probe.size());
@@ -507,25 +508,38 @@ std::optional<XWingPublicKey> DecodeIdentityKemPackage(std::span<const unsigned 
 std::optional<std::array<unsigned char, 32>> ComputeIdentityKemPackageCommitment(
     std::span<const unsigned char, 32> network_id,
     std::span<const unsigned char, 32> account_id,
-    std::span<const unsigned char, 32> device_key_id,
-    uint64_t activation_nonce,
+    uint64_t key_epoch,
     std::span<const unsigned char> package)
 {
-    if (IsZero(network_id) || IsZero(account_id) || IsZero(device_key_id) ||
+    if (IsZero(network_id) || IsZero(account_id) ||
         !DecodeIdentityKemPackage(package)) return std::nullopt;
-    std::array<unsigned char, 8> activation{};
-    for (size_t i{0}; i < activation.size(); ++i) {
-        activation[i] = static_cast<unsigned char>(activation_nonce >> (8 * i));
+    std::array<unsigned char, 8> epoch{};
+    for (size_t i{0}; i < epoch.size(); ++i) {
+        epoch[i] = static_cast<unsigned char>(key_epoch >> (8 * i));
     }
     const auto length = static_cast<uint16_t>(package.size());
     const std::array<unsigned char, 2> length_le{
         static_cast<unsigned char>(length), static_cast<unsigned char>(length >> 8)};
-    constexpr std::string_view domain{"CYBOU/IDENTITY-KEM-PACKAGE/V1"};
+    constexpr std::string_view domain{"CYBOU/IDENTITY-KEM-PACKAGE/V2"};
     constexpr std::array<unsigned char, 1> separator{0};
     std::array<unsigned char, 32> digest{};
     if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), separator, network_id, account_id,
-            device_key_id, activation, length_le, package}, digest.data())) return std::nullopt;
+            epoch, length_le, package}, digest.data())) return std::nullopt;
     return digest;
+}
+
+std::optional<XWingSeed> DeriveIdentityXWingSeed(std::span<const unsigned char, 32> identity_entropy)
+{
+    if (IsZero(identity_entropy)) return std::nullopt;
+    constexpr std::string_view salt_label{"CYBOU/IDENTITY/KEM/V1"};
+    constexpr std::string_view info_label{"X-Wing recipient key seed"};
+    const auto salt = std::span<const unsigned char>{
+        reinterpret_cast<const unsigned char*>(salt_label.data()), salt_label.size()};
+    const auto info = std::span<const unsigned char>{
+        reinterpret_cast<const unsigned char*>(info_label.data()), info_label.size()};
+    XWingSeed seed{};
+    if (!crypto::HkdfSha256(identity_entropy, salt, info, seed)) return std::nullopt;
+    return seed;
 }
 
 } // namespace cybou

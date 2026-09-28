@@ -3,7 +3,7 @@
 ## Protected assets
 
 - plaintext subject/body;
-- device private keys;
+- local Identity private keys;
 - CEKs;
 - account signing keys;
 - recipient relationship metadata where practical;
@@ -45,7 +45,7 @@ MailID and transaction/state rules must detect invalid duplicate/replay behavior
 
 ### Recipient-key substitution
 
-Device encryption key packages must be authenticated by AccountID/device authority.
+Identity KEM packages must be authenticated by AccountID Identity authority.
 
 ### Consensus rewrite / conflicting mail history
 
@@ -67,6 +67,6 @@ Offline reception comes from synchronizing chain/state.
 
 ## Local endpoint risk
 
-If a recipient device is compromised after decryption, blockchain encryption does not protect the local plaintext copy.
+If a recipient AccountID is compromised after decryption, blockchain encryption does not protect the local plaintext copy.
 
 Local mailbox protection remains a client security responsibility.

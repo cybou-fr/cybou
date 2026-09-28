@@ -17,31 +17,25 @@
 
 namespace cybou {
 
-inline constexpr uint8_t PROTOCOL_OPERATION_VERSION{3};
-inline constexpr size_t AUTHORIZED_PAYMENT_SIZE{2638};
-inline constexpr size_t DEVICE_ADD_SIZE{8460};
-inline constexpr size_t DEVICE_REVOKE_SIZE{3445};
-inline constexpr size_t RECOVERY_ROTATE_SIZE{8770};
-inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_SIZE{2606};
+inline constexpr uint8_t PROTOCOL_OPERATION_VERSION{4};
+inline constexpr size_t AUTHORIZED_PAYMENT_SIZE{IDENTITY_OPERATION_AUTH_SIZE + 41};
+inline constexpr size_t IDENTITY_ROTATE_SIZE{13825};
+inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_SIZE{IDENTITY_OPERATION_AUTH_SIZE + 9};
 
 enum class ProtocolOperationKind : uint8_t {
     ACCOUNT_CREATE = 1,
     PAYMENT = 2,
-    DEVICE_ADD = 3,
-    DEVICE_REVOKE = 4,
-    RECOVERY_ROTATE = 5,
-    SYSTEM_LOCK = 6,
-    NAME_COMMIT = 7,
-    NAME_REVEAL = 8,
-    MAIL = 9,
+    IDENTITY_ROTATE = 3,
+    SYSTEM_LOCK = 4,
+    NAME_COMMIT = 5,
+    NAME_REVEAL = 6,
+    MAIL = 7,
 };
 
 using ProtocolOperation = std::variant<
     AccountCreateOp,
     AuthorizedPayment,
-    DeviceAdd,
-    DeviceRevoke,
-    RecoveryRotate,
+    IdentityRotate,
     AuthorizedSystemLock,
     AuthorizedNameCommit,
     AuthorizedNameReveal,

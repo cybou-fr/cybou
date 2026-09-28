@@ -437,7 +437,7 @@ void EmailPage::loadScreenshotFixture()
     message.from = QStringLiteral("8a4c51f1d65c7e93b10d42e6a7295f8c");
     message.to = QStringLiteral("4d21b67a93c8520fbe16d4305a728c91");
     message.subject = tr("A protected update for the project team");
-    message.body = tr("Hello,\n\nThe latest review is complete. The protocol evidence below is attached to this message, and the content remains protected on this device.\n\nBest,\nAlex");
+    message.body = tr("Hello,\n\nThe latest review is complete. The protocol evidence below is attached to this message, and the content remains protected in your local mailbox.\n\nBest,\nAlex");
     message.received = QDateTime::currentDateTime();
     message.read = true;
     message.finality = Finality::Final;
@@ -713,7 +713,7 @@ void EmailPage::updateGates()
     m_banner->setVisible(!identity_active);
     m_banner_text->setText(identity_active
         ? QString{}
-        : tr("Email needs an active CYBOU identity. Identity creation is a permissionless protocol operation \u2014 your keys never leave this device."));
+        : tr("Email needs an active CYBOU identity. Identity creation is a permissionless protocol operation \u2014 your keys remain in your local vault."));
     m_banner_action->setVisible(!identity_active);
 
     // Send gate: the button is honest about every missing precondition.

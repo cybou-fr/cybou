@@ -5,7 +5,7 @@
 #define CYBOU_WALLET_SERVICE_H
 
 #include <cybou/account_id.h>
-#include <cybou/device_operation_coordinator.h>
+#include <cybou/identity_operation_coordinator.h>
 #include <cybou/keystore.h>
 #include <cybou/node_runtime.h>
 #include <cybou/protocol_operation.h>
@@ -65,7 +65,7 @@ struct WalletOperationResult {
     WalletOperationError error{WalletOperationError::NONE};
     uint256 op_id{};
     std::string error_message{};
-    DeviceOperationPhase operation_phase{DeviceOperationPhase::PREPARED};
+    IdentityOperationPhase operation_phase{IdentityOperationPhase::PREPARED};
 
     explicit operator bool() const { return error == WalletOperationError::NONE; }
 };
@@ -106,7 +106,7 @@ public:
 private:
     CybouNodeRuntime& m_runtime;
     CybouKeyStore& m_keystore;
-    DeviceOperationCoordinator& m_operation_coordinator;
+    IdentityOperationCoordinator& m_operation_coordinator;
     uint64_t m_last_scanned_height{0};
     std::vector<WalletLedgerEntry> m_entries;
     mutable std::mutex m_mutex;

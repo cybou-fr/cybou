@@ -11,10 +11,10 @@ Read active docs before coding.
 ### Identity target
 - Read `docs/cybou/10_IDENTITY_NAMES.md` and `76`–`78` before Identity work.
 - Random stable AccountID is independent of mnemonic and keys.
-- Recovery Root requires Ed25519 AND ML-DSA-65; device authorization requires Ed25519 AND ML-DSA-44.
-- Portable CYBV2 vault must be durably saved before AccountCreate broadcast. A 24-word recovery path and clean-machine restore are required.
+- Recovery signing requires Ed25519 AND ML-DSA-65; Identity authorization requires Ed25519 AND ML-DSA-44. All current Identity signing and KEM roles derive from mnemonic entropy under separate domains.
+- Portable CYBV2/CVID5 vault stores stable AccountID plus recovery entropy; all Identity roles are derived from entropy. Durably save and reopen before AccountCreate. Clean-machine restore verifies every current key role and KEM commitment against finalized key_epoch and does not create a protocol authorization operation.
 - `.cybou` labels follow the 5–32 ASCII rule and finalized commit/work/reveal. No transfer, expiry, or recycling in the initial registry.
-- Keep mail encryption keys separate from identity signing keys; no custom cryptographic primitives.
+- Keep mail encryption keys separate from Identity signing keys; no custom cryptographic primitives. IdentityRecord has recovery key, authorization key, current KEM commitment, one shared nonce, and key_epoch. IdentityRotate atomically replaces all roles; no device registry, activation, per-device nonce, DeviceAdd, or DeviceRevoke.
 - Do not reset DEV until the PQ consensus format and names integrate together.
 - Cut over DEV directly after the integration gate; discard obsolete DEV state and vaults. Do not build runtime compatibility, automatic import, or a dual operation decoder.
 - Keep one canonical implementation and unversioned source/API names for state, operations, and identity. Version bytes belong inside the wire and vault formats only.

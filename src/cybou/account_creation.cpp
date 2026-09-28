@@ -12,9 +12,9 @@
 
 namespace cybou {
 namespace {
-constexpr unsigned char VERSION{3};
+constexpr unsigned char VERSION{4};
 constexpr size_t ROOT_SIG_SIZE{3309};
-constexpr size_t DEVICE_SIG_SIZE{2420};
+constexpr size_t AUTHORIZATION_SIG_SIZE{2420};
 
 void Write64(unsigned char* out, uint64_t value)
 {
@@ -51,7 +51,7 @@ bool HasWork(std::span<const unsigned char, 32> digest, unsigned required_bits)
 bool ValidSignatures(const AccountCreateOp& op)
 {
     return op.recovery_pop.ml_dsa.size() == ROOT_SIG_SIZE &&
-        op.device_pop.ml_dsa.size() == DEVICE_SIG_SIZE;
+        op.authorization_pop.ml_dsa.size() == AUTHORIZATION_SIG_SIZE;
 }
 } // namespace
 
@@ -121,8 +121,8 @@ std::optional<std::array<unsigned char, ACCOUNT_CREATE_SIZE>> SerializeAccountCr
     std::copy(work->begin(), work->end(), bytes.begin() + 4583);
     std::copy(op.recovery_pop.ed25519.begin(), op.recovery_pop.ed25519.end(), bytes.begin() + 4696);
     std::copy(op.recovery_pop.ml_dsa.begin(), op.recovery_pop.ml_dsa.end(), bytes.begin() + 4760);
-    std::copy(op.device_pop.ed25519.begin(), op.device_pop.ed25519.end(), bytes.begin() + 8069);
-    std::copy(op.device_pop.ml_dsa.begin(), op.device_pop.ml_dsa.end(), bytes.begin() + 8133);
+    std::copy(op.authorization_pop.ed25519.begin(), op.authorization_pop.ed25519.end(), bytes.begin() + 8069);
+    std::copy(op.authorization_pop.ml_dsa.begin(), op.authorization_pop.ml_dsa.end(), bytes.begin() + 8133);
     return bytes;
 }
 
@@ -138,7 +138,7 @@ std::optional<AccountCreateOp> DeserializeAccountCreateOp(std::span<const unsign
     std::copy_n(bytes.begin() + 3364, kem_package.size(), kem_package.begin());
     if (!DecodeIdentityKemPackage(kem_package)) return std::nullopt;
     AccountCreateOp op{.account_id = *account_id, .authorization = *auth,
-        .kem_package = kem_package, .work = {}, .recovery_pop = {}, .device_pop = {}};
+        .kem_package = kem_package, .work = {}, .recovery_pop = {}, .authorization_pop = {}};
     std::copy_n(bytes.begin() + 4584, 32, op.work.network_id.begin());
     std::array<unsigned char, 32> work_account{};
     std::copy_n(bytes.begin() + 4616, 32, work_account.begin());
@@ -150,8 +150,8 @@ std::optional<AccountCreateOp> DeserializeAccountCreateOp(std::span<const unsign
     op.work.nonce = Read64(bytes.data() + 4688);
     std::copy_n(bytes.begin() + 4696, 64, op.recovery_pop.ed25519.begin());
     op.recovery_pop.ml_dsa.assign(bytes.begin() + 4760, bytes.begin() + 8069);
-    std::copy_n(bytes.begin() + 8069, 64, op.device_pop.ed25519.begin());
-    op.device_pop.ml_dsa.assign(bytes.begin() + 8133, bytes.end());
+    std::copy_n(bytes.begin() + 8069, 64, op.authorization_pop.ed25519.begin());
+    op.authorization_pop.ml_dsa.assign(bytes.begin() + 8133, bytes.end());
     return op;
 }
 
@@ -164,11 +164,11 @@ AccountCreateError ValidateAccountCreateOp(
     if (op.account_id.IsNull()) return AccountCreateError::NULL_ACCOUNT_ID;
     if (network_id.IsNull() || op.work.network_id != network_id) return AccountCreateError::NETWORK_MISMATCH;
     if (op.work.account_id != op.account_id) return AccountCreateError::ACCOUNT_ID_MISMATCH;
-    const auto device_id = ComputeDeviceKeyId(op.authorization.initial_device);
+    const auto authorization_id = ComputeAuthorizationKeyId(op.authorization.authorization_key);
     const auto account_bytes = op.account_id.Value();
-    const auto package_id = device_id ? ComputeIdentityKemPackageCommitment(
+    const auto package_id = authorization_id ? ComputeIdentityKemPackageCommitment(
         std::span<const unsigned char, 32>{network_id.begin(), 32},
-        std::span<const unsigned char, 32>{account_bytes.begin(), 32}, *device_id, 0,
+        std::span<const unsigned char, 32>{account_bytes.begin(), 32}, 0,
         op.kem_package) : std::nullopt;
     const auto commitment = package_id ? ComputeAccountCreateAuthorizationCommitment(op.authorization, *package_id) : std::nullopt;
     if (!commitment || op.work.authorization_commitment != *commitment) return AccountCreateError::COMMITMENT_MISMATCH;
@@ -181,8 +181,8 @@ AccountCreateError ValidateAccountCreateOp(
     if (!pop_digest || !VerifyIdentityMessage(op.authorization.recovery_root, op.recovery_pop, *pop_digest)) {
         return AccountCreateError::INVALID_RECOVERY_POP;
     }
-    if (!VerifyIdentityMessage(op.authorization.initial_device, op.device_pop, *pop_digest)) {
-        return AccountCreateError::INVALID_DEVICE_POP;
+    if (!VerifyIdentityMessage(op.authorization.authorization_key, op.authorization_pop, *pop_digest)) {
+        return AccountCreateError::INVALID_AUTHORIZATION_POP;
     }
     return AccountCreateError::NONE;
 }

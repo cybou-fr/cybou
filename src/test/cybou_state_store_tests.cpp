@@ -176,7 +176,6 @@ struct AccountCredentials {
     std::array<unsigned char, 32> device_seed{};
     cybou::IdentityHybridPublicKey root_pubkey;
     cybou::IdentityHybridPublicKey device_pubkey;
-    cybou::IdentityKeyId device_id{};
     cybou::IdentityAuthorization auth;
 
     static AccountCredentials Create(uint8_t id_byte, uint8_t root_byte, uint8_t dev_byte)
@@ -188,8 +187,7 @@ struct AccountCredentials {
         creds.root_seed[0] = root_byte;
         creds.device_seed[0] = dev_byte;
         creds.root_pubkey = *cybou::DeriveIdentityPublicKey(creds.root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
-        creds.device_pubkey = *cybou::DeriveIdentityPublicKey(creds.device_seed, cybou::IdentityKeyPurpose::DEVICE);
-        creds.device_id = *cybou::ComputeDeviceKeyId(creds.device_pubkey);
+        creds.device_pubkey = *cybou::DeriveIdentityPublicKey(creds.device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
         creds.auth = cybou::IdentityAuthorization{creds.root_pubkey, creds.device_pubkey};
         return creds;
     }
@@ -198,14 +196,14 @@ struct AccountCredentials {
     {
         const auto binding = cybou::test::MakeIdentityKemBinding(network_id, account_id, auth);
         const auto root_pop = *cybou::SignIdentityMessage(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
-        const auto device_pop = *cybou::SignIdentityMessage(device_seed, cybou::IdentityKeyPurpose::DEVICE, binding.pop_digest);
+        const auto authorization_pop = *cybou::SignIdentityMessage(device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
         return cybou::AccountCreateOp{
             account_id,
             auth,
             binding.package,
             {.network_id = network_id, .account_id = account_id, .authorization_commitment = binding.authorization_commitment},
             root_pop,
-            device_pop,
+            authorization_pop,
         };
     }
 };
@@ -691,14 +689,12 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_executes_authorized_payment)
     payment.payment.recipient = ACCOUNT_2.account_id;
     payment.payment.amount = 1500;
     payment.authorization.account_id = ACCOUNT_1.account_id;
-    payment.authorization.device_id = ACCOUNT_1.device_id;
     payment.authorization.nonce = 0;
-    payment.authorization.activation_nonce = 0;
-    payment.authorization.kind = cybou::DeviceOperationKind::PAYMENT;
+    payment.authorization.kind = cybou::IdentityOperationKind::PAYMENT;
     payment.authorization.payload_commitment = *cybou::ComputePaymentPayloadCommitment(payment.payment);
-    const auto payment_digest = *cybou::ComputeDeviceOperationDigest(net_id, payment.authorization);
+    const auto payment_digest = *cybou::ComputeIdentityOperationDigest(net_id, payment.authorization);
     payment.authorization.signature = *cybou::SignIdentityMessage(
-        ACCOUNT_1.device_seed, cybou::IdentityKeyPurpose::DEVICE, payment_digest);
+        ACCOUNT_1.device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION, payment_digest);
 
     auto fb2 = MakeFinalizedBlock(store, {payment});
     const uint256 block2_id = cybou::ComputeBlockId(fb2.block);
@@ -708,7 +704,7 @@ BOOST_AUTO_TEST_CASE(commit_finalized_block_executes_authorized_payment)
     BOOST_REQUIRE(final_state);
     BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_1.account_id).balance, 3500); // 5000 - 1500
     BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_1.account_id).system_balance, 5999);
-    BOOST_CHECK_EQUAL(final_state.state->identities.Find(ACCOUNT_1.account_id)->devices.at(ACCOUNT_1.device_id).next_nonce, 1);
+    BOOST_CHECK_EQUAL(final_state.state->identities.Find(ACCOUNT_1.account_id)->nonce, 1);
     BOOST_CHECK_EQUAL(final_state.state->accounts.at(ACCOUNT_2.account_id).balance, 1500);
     BOOST_CHECK_EQUAL(final_state.state->pending_fee_pool, 1);
     BOOST_CHECK_EQUAL(*store.GetFinalizedHeight(), 2);

@@ -172,9 +172,9 @@ Advanced details
 Destructive actions require clear wording and appropriate confirmation:
 
 ```text
-Revoke device
+Rotate Identity keys
 Delete permanently
-Remove identity from this device
+Remove local vault
 ```
 
 Do not style routine operations as destructive merely because they produce a
@@ -283,7 +283,7 @@ Sent
 Confirmed
 Protected
 Name ready
-Device revoked
+Identity keys rotated
 ```
 
 are reserved for states backed by the core's verified/finalized truth.
@@ -310,7 +310,7 @@ Failed to send
 until the core can prove rejection/non-acceptance under the operation
 coordination policy.
 
-This rule applies to Wallet, Name, Mail, and future device operations.
+This rule applies to Wallet, Name, Mail, and future Identity operations.
 
 ## 16. Security indicators
 
@@ -429,7 +429,7 @@ Identity / readiness
 
 Mail card
 Files card
-Devices/Security card
+Identity & Security card
 
 Recent Activity                  right/secondary column
 ```
@@ -444,7 +444,7 @@ Mail confidentiality: unavailable until verified hybrid recipient keys are publi
 
 Mail       12 unread
 Files      12.4 GB used / Protected
-Devices    2 active
+Recovery words  Backed up
 
 Recent activity
 Alice sent "Project files"

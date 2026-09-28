@@ -89,7 +89,7 @@ This journey is an architecture acceptance test, not only a marketing story.
 - validator disk growth;
 - state size growth;
 - client CPU/RAM/network use;
-- device revocation success;
+- Identity key rotation success;
 - support burden;
 - user retention.
 - task-completion success for Compose, attachment send, offline receive,
@@ -98,5 +98,5 @@ This journey is an architecture acceptance test, not only a marketing story.
 - share of pilot users who complete the end-to-end Mail/Files flow without
   protocol education.
 
-Pilot success is repeated exchange of mail, recovery, multi-device use and
+Pilot success is repeated exchange of mail, recovery, clean-machine recovery and
 continued usage, not registration count alone.

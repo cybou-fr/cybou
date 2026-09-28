@@ -12,7 +12,7 @@ participation. Commercial services may include:
 - managed organization deployment;
 - managed validators;
 - support and administration;
-- device provisioning;
+- local installation provisioning;
 - storage and backup capacity;
 - compliance tooling and SLA contracts.
 

@@ -70,9 +70,9 @@ BOOST_AUTO_TEST_CASE(service_fails_closed_until_mail_profile_is_enabled)
     cybou::CybouMailService service{*fixture.runtime, alice->GetKeyStore(), fixture.directory / "sender-mailbox.dat"};
     const auto bob_id = bob->GetAccountId();
     BOOST_REQUIRE(bob_id);
-    const auto device_id = bob->GetKeyStore().GetDeviceId();
-    BOOST_REQUIRE(device_id);
-    const auto published = fixture.runtime->FindActiveIdentityKemPackage(*bob_id, *device_id);
+
+
+    const auto published = fixture.runtime->FindIdentityKemPackage(*bob_id, 0);
     BOOST_REQUIRE(published.status == cybou::IdentityKemPackageLookupStatus::FOUND);
     BOOST_REQUIRE(cybou::DecodeIdentityKemPackage(published.package));
 

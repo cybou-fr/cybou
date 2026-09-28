@@ -8,8 +8,7 @@ mail_semantics:
   recipient_accounts_per_message: 1
   content_type: text_only
   attachments: false
-  recipient_device_coverage: every_active_authorized_device
-  recipient_device_order: ascending_device_key_id
+  recipient_identity_capability: one_current_account_key_epoch
   mainnet_enabled: false
 content:
   cek:
@@ -33,14 +32,14 @@ recipient_key_wrap:
     kdf_id: 0x0001
     aead: ChaCha20-Poly1305
     aead_id: 0x0003
-  encapsulation: independent_context_per_active_recipient_device
+  encapsulation: one_context_per_recipient_account_key_epoch
   plaintext: 32_byte_cek
   pq_basis: NIST FIPS 203 ML-KEM-768
   status: frozen_for_dev_only
   custom_hybrid_combiner: false
 authentication:
   sender_signature_separate_from_hpke: true
-  sender_authorization: device_ed25519_and_ml_dsa_44
+  sender_authorization: identity_ed25519_and_ml_dsa_44
   signed_value: canonical_mail_payload_commitment
 privacy:
   subject_inside_ciphertext: true
@@ -68,9 +67,9 @@ wire_profile:
   hpke_suite_id_encoding: three_u16_big_endian_kem_kdf_aead
   mail_id: random_32_bytes
   recipient_snapshot: finalized_height_and_state_root
-  capsule_count: 1_to_8_all_active_devices
-  capsule_order: ascending_device_key_id
-  capsule_encoding: device_key_id_32_activation_nonce_u64le_package_id_32_enc_1120_wrapped_cek_48
+  capsule_count: exactly_one
+  capsule_order: none
+  capsule_encoding: recipient_key_epoch_u64le_package_commitment_32_enc_1120_wrapped_cek_48
   hpke_info: CYBOU/MAIL/CEK-WRAP/V1_plus_bound_context
   hpke_aad: empty
   content_aad: CYBOU/MAIL/CONTENT/V1_plus_bound_context

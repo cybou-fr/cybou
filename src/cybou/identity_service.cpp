@@ -2,16 +2,15 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/identity_service.h>
-#include <cybou/device_operation_coordinator.h>
+#include <cybou/identity_operation_coordinator.h>
 #include <cybou/identity_vault.h>
 #include <cybou/crypto/cleanse.h>
-#include <openssl/rand.h>
 
 #include <algorithm>
 
 namespace cybou {
 namespace {
-bool IsAuthorizedDevice(const CybouNodeRuntime& runtime, const AccountId& account_id, const CybouKeyStore& keystore);
+bool IsAuthorizedIdentity(const CybouNodeRuntime& runtime, const AccountId& account_id, const CybouKeyStore& keystore);
 }
 
 CybouIdentityService::CybouIdentityService(
@@ -89,7 +88,7 @@ bool CybouIdentityService::LoadVault(std::string_view password)
     if (!acc_id) return false;
 
     const auto account_state = m_runtime.GetAccountState(*acc_id);
-    if (account_state && IsAuthorizedDevice(m_runtime, *acc_id, m_keystore)) {
+    if (account_state && IsAuthorizedIdentity(m_runtime, *acc_id, m_keystore)) {
         m_phase.store(IdentityCreationPhase::ACTIVE);
     } else {
         m_phase.store(IdentityCreationPhase::IDLE);
@@ -104,25 +103,23 @@ struct PasswordWiper {
     ~PasswordWiper() { if (!value.empty()) crypto::CleanseMemory(value.data(), value.size()); }
 };
 
-bool IsAuthorizedDevice(const CybouNodeRuntime& runtime, const AccountId& account_id, const CybouKeyStore& keystore)
+bool IsAuthorizedIdentity(const CybouNodeRuntime& runtime, const AccountId& account_id, const CybouKeyStore& keystore)
 {
-    const auto id = keystore.GetDeviceId();
-    const auto key = keystore.GetDevicePublicKey();
-    const auto kem_public = keystore.GetDeviceXWingPublicKey();
+    const auto authorization_key = keystore.GetAuthorizationPublicKey();
+    const auto recovery_key = keystore.GetRecoveryPublicKey();
+    const auto kem_public = keystore.GetIdentityXWingPublicKey();
     const auto package = kem_public ? EncodeIdentityKemPackage(*kem_public) : std::nullopt;
     const auto loaded = runtime.GetStore().LoadState();
-    if (!id || !key || !package || !keystore.ValidateDeviceXWingKeyPair() || !loaded || !loaded.state) return false;
+    if (!authorization_key || !recovery_key || !package || !keystore.ValidateIdentityXWingKeyPair() || !loaded || !loaded.state) return false;
     const auto* record = loaded.state->identities.Find(account_id);
-    if (!record) return false;
-    const auto found = record->devices.find(*id);
-    if (found == record->devices.end() || found->second.key != *key) return false;
+    if (!record || record->authorization_key != *authorization_key || record->recovery_key != *recovery_key) return false;
     const auto network_id = runtime.GetNetworkId();
     const auto account_bytes = account_id.Value();
     const auto commitment = ComputeIdentityKemPackageCommitment(
         std::span<const unsigned char, 32>{network_id.begin(), 32},
         std::span<const unsigned char, 32>{account_bytes.begin(), 32},
-        *id, found->second.activation_nonce, *package);
-    return commitment && *commitment == found->second.kem_package_id;
+        record->key_epoch, *package);
+    return commitment && *commitment == record->kem_package_id;
 }
 
 IdentityCreationResult Failure(
@@ -148,6 +145,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     const std::chrono::milliseconds timeout)
 {
     PasswordWiper wipe_password{password};
+    (void)timeout;
     m_cancelled.store(false);
 
     // Phase 1: CREATING_KEYS
@@ -164,11 +162,11 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
             return Failure(IdentityCreationPhase::FAILED, "Prepare identity and configure its vault before creation");
         }
         const auto acc_opt = m_keystore.GetAccountId();
-        const auto dev_key = m_keystore.GetDevicePublicKey();
+        const auto authorization_key = m_keystore.GetAuthorizationPublicKey();
         const auto root_key = m_keystore.GetRecoveryPublicKey();
-        const auto kem_public = m_keystore.GetDeviceXWingPublicKey();
+        const auto kem_public = m_keystore.GetIdentityXWingPublicKey();
         const auto package = kem_public ? EncodeIdentityKemPackage(*kem_public) : std::nullopt;
-        if (!acc_opt || !dev_key || !root_key || !package || !m_keystore.ValidateDeviceXWingKeyPair()) {
+        if (!acc_opt || !authorization_key || !root_key || !package || !m_keystore.ValidateIdentityXWingKeyPair()) {
             m_phase.store(IdentityCreationPhase::FAILED);
             return Failure(IdentityCreationPhase::FAILED, "Invalid identity key");
         }
@@ -176,7 +174,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
         kem_package = *package;
         auth = IdentityAuthorization{
             .recovery_root = *root_key,
-            .initial_device = *dev_key,
+            .authorization_key = *authorization_key,
         };
 
         // A new account cannot be broadcast until the portable vault has been
@@ -193,9 +191,9 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     // Check if account already exists in state
     const auto existing = m_runtime.GetAccountState(account_id);
     if (existing.has_value()) {
-        if (!IsAuthorizedDevice(m_runtime, account_id, m_keystore)) {
+        if (!IsAuthorizedIdentity(m_runtime, account_id, m_keystore)) {
             m_phase.store(IdentityCreationPhase::FAILED);
-            return Failure(IdentityCreationPhase::FAILED, "Local device is not authorized; resume identity restoration", account_id);
+            return Failure(IdentityCreationPhase::FAILED, "Unlocked Identity keys do not match finalized state", account_id);
         }
         m_phase.store(IdentityCreationPhase::ACTIVE);
         if (on_phase) on_phase(IdentityCreationPhase::ACTIVE, "Identity active.");
@@ -223,12 +221,11 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     const uint64_t current_epoch = EpochForHeight(height, params);
 
     const uint256 network_id = m_runtime.GetNetworkId();
-    const auto device_id = ComputeDeviceKeyId(auth.initial_device);
     const auto account_bytes = account_id.Value();
-    const auto kem_package_id = device_id ? ComputeIdentityKemPackageCommitment(
+    const auto kem_package_id = ComputeIdentityKemPackageCommitment(
         std::span<const unsigned char, 32>{network_id.begin(), 32},
         std::span<const unsigned char, 32>{account_bytes.begin(), 32},
-        *device_id, 0, kem_package) : std::nullopt;
+        0, kem_package);
     const auto auth_commitment = kem_package_id ?
         ComputeAccountCreateAuthorizationCommitment(auth, *kem_package_id) : std::nullopt;
     if (!auth_commitment) {
@@ -264,13 +261,13 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     }
 
     std::optional<IdentityHybridSignature> rec_pop;
-    std::optional<IdentityHybridSignature> dev_pop;
+    std::optional<IdentityHybridSignature> authorization_pop;
     {
         std::lock_guard lock(m_mutex);
         rec_pop = m_keystore.SignRecovery(*pop_digest);
-        dev_pop = m_keystore.SignDevice(*pop_digest);
+        authorization_pop = m_keystore.SignAuthorization(*pop_digest);
     }
-    if (!rec_pop || !dev_pop) {
+    if (!rec_pop || !authorization_pop) {
         m_phase.store(IdentityCreationPhase::FAILED);
         return Failure(IdentityCreationPhase::FAILED, "Failed to sign proof of possession", account_id);
     }
@@ -281,7 +278,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
         .kem_package = kem_package,
         .work = work,
         .recovery_pop = *rec_pop,
-        .device_pop = *dev_pop,
+        .authorization_pop = *authorization_pop,
     };
 
     if (!m_runtime.SubmitOperation(ProtocolOperation{op})) {
@@ -345,9 +342,10 @@ IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
     const std::chrono::milliseconds timeout)
 {
     PasswordWiper wipe_password{password};
+    (void)timeout;
     m_cancelled.store(false);
     m_phase.store(IdentityCreationPhase::CREATING_KEYS);
-    if (on_phase) on_phase(IdentityCreationPhase::CREATING_KEYS, "Finding recovery root in verified state...");
+    if (on_phase) on_phase(IdentityCreationPhase::CREATING_KEYS, "Resolving Identity from verified state...");
     auto entropy = DecodeRecoveryWords(words);
     if (!entropy) {
         m_phase.store(IdentityCreationPhase::FAILED);
@@ -357,134 +355,96 @@ IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
         RecoveryEntropy& value;
         ~EntropyWiper() { crypto::CleanseMemory(value.data(), value.size()); }
     } wipe_entropy{*entropy};
-    const auto root_key = DeriveIdentityPublicKey(*entropy, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto root_id = root_key ? ComputeRecoveryKeyId(*root_key) : std::nullopt;
-    if (!root_key || !root_id) {
+
+    const auto recovery_key = DeriveIdentityPublicKey(*entropy, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto authorization_key = DeriveIdentityPublicKey(*entropy, IdentityKeyPurpose::AUTHORIZATION);
+    auto xwing_seed = DeriveIdentityXWingSeed(*entropy);
+    const auto xwing_public = xwing_seed ? DeriveXWingPublicKey(*xwing_seed) : std::nullopt;
+    if (xwing_seed) crypto::CleanseMemory(xwing_seed->data(), xwing_seed->size());
+    const auto package = xwing_public ? EncodeIdentityKemPackage(*xwing_public) : std::nullopt;
+    const auto recovery_id = recovery_key ? ComputeRecoveryKeyId(*recovery_key) : std::nullopt;
+    if (!recovery_key || !authorization_key || !package || !recovery_id) {
         m_phase.store(IdentityCreationPhase::FAILED);
-        return Failure(IdentityCreationPhase::FAILED, "Cannot derive recovery root");
+        return Failure(IdentityCreationPhase::FAILED, "Cannot derive Identity key roles");
     }
     const auto loaded = m_runtime.GetStore().LoadState();
-    const auto account = loaded && loaded.state ? loaded.state->identities.FindByRecoveryKeyId(*root_id) : std::nullopt;
+    const auto account = loaded && loaded.state ? loaded.state->identities.FindByRecoveryKeyId(*recovery_id) : std::nullopt;
     if (!account || !loaded || !loaded.state) {
         m_phase.store(IdentityCreationPhase::FAILED);
-        return Failure(IdentityCreationPhase::FAILED, "Recovery root is not in verified state; finish synchronization first");
+        return Failure(IdentityCreationPhase::FAILED, "Recovery phrase is not in verified state; finish synchronization first");
     }
     const auto* record = loaded.state->identities.Find(*account);
-    if (!record || record->recovery_root != *root_key) {
+    const auto network_id = m_runtime.GetNetworkId();
+    const auto account_bytes = account->Value();
+    const auto package_id = record ? ComputeIdentityKemPackageCommitment(
+        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{account_bytes.begin(), 32}, record->key_epoch, *package) : std::nullopt;
+    if (!record || record->recovery_key != *recovery_key || record->authorization_key != *authorization_key ||
+        !package_id || *package_id != record->kem_package_id) {
         m_phase.store(IdentityCreationPhase::FAILED);
-        return Failure(IdentityCreationPhase::FAILED, "Recovery root is unavailable", *account);
+        return Failure(IdentityCreationPhase::FAILED, "Phrase does not derive the current finalized Identity key epoch", *account);
     }
-    std::filesystem::path vault_path;
+
     {
         std::lock_guard lock(m_mutex);
         if (!m_storage_path) {
             m_phase.store(IdentityCreationPhase::FAILED);
             return Failure(IdentityCreationPhase::FAILED, "Portable vault path is not configured", *account);
         }
-        vault_path = *m_storage_path;
+        if (password.size() < 12) {
+            m_phase.store(IdentityCreationPhase::FAILED);
+            return Failure(IdentityCreationPhase::FAILED, "Vault password must have at least 12 characters", *account);
+        }
+        const auto& vault_path = *m_storage_path;
         if (std::filesystem::exists(vault_path)) {
             if (!m_keystore.LoadFromFile(vault_path, password)) {
                 m_phase.store(IdentityCreationPhase::FAILED);
                 return Failure(IdentityCreationPhase::FAILED, "Cannot unlock existing recovery vault", *account);
             }
-            m_vault_saved = true;
         } else {
-            if (record->devices.size() >= MAX_ACTIVE_DEVICES) {
-                m_phase.store(IdentityCreationPhase::FAILED);
-                return Failure(IdentityCreationPhase::FAILED, "The account has reached its device limit", *account);
-            }
-            if (password.size() < 12) {
-                m_phase.store(IdentityCreationPhase::FAILED);
-                return Failure(IdentityCreationPhase::FAILED, "Vault password must have at least 12 characters", *account);
-            }
             IdentityMaterial material;
-            std::copy_n(account->Value().begin(), material.account_id.size(), material.account_id.begin());
+            std::copy(account_bytes.begin(), account_bytes.end(), material.account_id.begin());
             material.recovery_entropy = *entropy;
-            if (RAND_priv_bytes(material.device_secret.data(), static_cast<int>(material.device_secret.size())) != 1) {
-                m_phase.store(IdentityCreationPhase::FAILED);
-                return Failure(IdentityCreationPhase::FAILED, "Secure random generator failed", *account);
-            }
-            auto xwing_seed = GenerateXWingSeed();
-            if (!xwing_seed) {
-                m_phase.store(IdentityCreationPhase::FAILED);
-                return Failure(IdentityCreationPhase::FAILED, "Device key-agreement generation failed", *account);
-            }
-            material.device_xwing_seed = *xwing_seed;
-            crypto::CleanseMemory(xwing_seed->data(), xwing_seed->size());
             if (!m_keystore.LoadMaterial(std::move(material)) || !m_keystore.SaveToFile(vault_path, password)) {
                 m_phase.store(IdentityCreationPhase::FAILED);
-                return Failure(IdentityCreationPhase::FAILED, "Cannot save and verify recovery vault", *account);
+                return Failure(IdentityCreationPhase::FAILED, "Cannot durably save and verify portable recovery vault", *account);
             }
-            m_vault_saved = true;
         }
-        if (m_keystore.GetAccountId() != account || m_keystore.GetRecoveryPublicKey() != root_key) {
+        if (m_keystore.GetAccountId() != account || m_keystore.GetRecoveryPublicKey() != recovery_key ||
+            m_keystore.GetAuthorizationPublicKey() != authorization_key ||
+            m_keystore.GetIdentityXWingPublicKey() != xwing_public) {
             m_keystore.Clear();
             m_vault_saved = false;
             m_phase.store(IdentityCreationPhase::FAILED);
             return Failure(IdentityCreationPhase::FAILED, "Vault does not match recovery phrase or AccountID", *account);
         }
-    }
-    if (IsAuthorizedDevice(m_runtime, *account, m_keystore)) {
-        const auto account_state = m_runtime.GetAccountState(*account);
-        m_phase.store(IdentityCreationPhase::ACTIVE);
-        return IdentityCreationResult{true, IdentityCreationPhase::ACTIVE, *account,
-            account_state ? account_state->creation_height : 0,
-            account_state ? account_state->system_balance : 0, {}};
+        m_vault_saved = true;
     }
 
-    const auto device_key = m_keystore.GetDevicePublicKey();
-    if (record->devices.size() >= MAX_ACTIVE_DEVICES) {
+    if (!IsAuthorizedIdentity(m_runtime, *account, m_keystore)) {
         m_phase.store(IdentityCreationPhase::FAILED);
-        return Failure(IdentityCreationPhase::FAILED, "The account has reached its device limit", *account);
+        return Failure(IdentityCreationPhase::FAILED, "Restored keys do not match finalized Identity capabilities", *account);
     }
-    if (!device_key) {
-        m_phase.store(IdentityCreationPhase::FAILED);
-        return Failure(IdentityCreationPhase::FAILED, "Recovered device key is unavailable", *account);
-    }
-    m_phase.store(IdentityCreationPhase::BROADCASTING);
-    if (on_phase) on_phase(IdentityCreationPhase::BROADCASTING, "Preparing root-authorized device recovery...");
-    auto& coordinator = m_runtime.GetDeviceOperationCoordinator(m_keystore);
-    const auto submission = coordinator.AuthorizeRecoveredDevice();
-    if (submission.phase == DeviceOperationPhase::REJECTED ||
-        submission.phase == DeviceOperationPhase::CONFLICT) {
-        m_phase.store(IdentityCreationPhase::FAILED);
-        return Failure(IdentityCreationPhase::FAILED,
-            submission.error.empty() ? "Device recovery could not be submitted" : submission.error, *account);
-    }
-    m_phase.store(IdentityCreationPhase::WAITING_FOR_FINALITY);
-    if (on_phase) on_phase(IdentityCreationPhase::WAITING_FOR_FINALITY, "Waiting for device authorization finality...");
-    if (m_runtime.GetStatus().is_authority) m_runtime.ProduceBlock();
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
-    while (!m_cancelled.load() && std::chrono::steady_clock::now() < deadline) {
-        if (IsAuthorizedDevice(m_runtime, *account, m_keystore)) {
-            const auto account_state = m_runtime.GetAccountState(*account);
-            m_phase.store(IdentityCreationPhase::ACTIVE);
-            return IdentityCreationResult{true, IdentityCreationPhase::ACTIVE, *account,
-                account_state ? account_state->creation_height : 0,
-                account_state ? account_state->system_balance : 0, {}};
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    m_phase.store(IdentityCreationPhase::FAILED);
-    return Failure(IdentityCreationPhase::FAILED,
-        m_cancelled.load() ? "Cancelled; device recovery remains journaled for reconciliation" :
-            "Timed out waiting for device authorization finality; retry restore to reconcile the saved operation",
-        *account);
+    const auto account_state = m_runtime.GetAccountState(*account);
+    m_phase.store(IdentityCreationPhase::ACTIVE);
+    if (on_phase) on_phase(IdentityCreationPhase::ACTIVE, "Identity restored.");
+    return IdentityCreationResult{true, IdentityCreationPhase::ACTIVE, *account,
+        account_state ? account_state->creation_height : 0,
+        account_state ? account_state->system_balance : 0, {}};
 }
-
-DeviceOperationResult CybouIdentityService::RotateRecoveryRootSync(
+IdentityOperationResult CybouIdentityService::RotateIdentitySync(
     const RecoveryWords& new_words, std::string password)
 {
     PasswordWiper wipe_password{password};
     std::lock_guard lock(m_mutex);
     if (!m_storage_path || !m_vault_saved || !m_keystore.HasKey()) {
-        return {.phase = DeviceOperationPhase::REJECTED, .error = "Unlock the active identity vault before rotation"};
+        return {.phase = IdentityOperationPhase::REJECTED, .error = "Unlock the active identity vault before rotation"};
     }
     if (password.size() < 12) {
-        return {.phase = DeviceOperationPhase::REJECTED, .error = "Vault password must have at least 12 characters"};
+        return {.phase = IdentityOperationPhase::REJECTED, .error = "Vault password must have at least 12 characters"};
     }
     auto entropy = DecodeRecoveryWords(new_words);
-    if (!entropy) return {.phase = DeviceOperationPhase::REJECTED, .error = "New recovery phrase is invalid"};
+    if (!entropy) return {.phase = IdentityOperationPhase::REJECTED, .error = "New recovery phrase is invalid"};
     struct EntropyWiper {
         RecoveryEntropy& value;
         ~EntropyWiper() { crypto::CleanseMemory(value.data(), value.size()); }
@@ -493,13 +453,12 @@ DeviceOperationResult CybouIdentityService::RotateRecoveryRootSync(
     const auto new_root = DeriveIdentityPublicKey(*entropy, IdentityKeyPurpose::RECOVERY_ROOT);
     const auto active_root = m_keystore.GetRecoveryPublicKey();
     if (!new_root || !active_root) {
-        return {.phase = DeviceOperationPhase::REJECTED, .error = "Recovery root keys are unavailable"};
+        return {.phase = IdentityOperationPhase::REJECTED, .error = "Recovery root keys are unavailable"};
     }
-    auto& coordinator = m_runtime.GetDeviceOperationCoordinator(m_keystore);
+    auto& coordinator = m_runtime.GetIdentityOperationCoordinator(m_keystore);
     if (*new_root == *active_root) {
-        const auto completed = coordinator.CompleteRecoveryRootRotation(*active_root);
-        return {.phase = completed ? DeviceOperationPhase::FINALIZED : DeviceOperationPhase::REJECTED,
-            .error = completed ? std::string{} : "New recovery phrase matches the active root"};
+        return {.phase = IdentityOperationPhase::REJECTED,
+            .error = "New recovery phrase matches the active Identity"};
     }
 
     auto active_material = LoadIdentityMaterial(*m_storage_path, password);
@@ -509,14 +468,14 @@ DeviceOperationResult CybouIdentityService::RotateRecoveryRootSync(
         active_material->recovery_entropy, IdentityKeyPurpose::RECOVERY_ROOT) : std::nullopt;
     if (!active_material || !active_account || material_account != active_account ||
         !material_root || *material_root != *active_root) {
-        return {.phase = DeviceOperationPhase::REJECTED,
+        return {.phase = IdentityOperationPhase::REJECTED,
             .error = "Active vault password or recovery identity does not match"};
     }
 
-    auto candidate_material = m_keystore.CreateRecoveryRotationMaterial(*entropy);
+    auto candidate_material = m_keystore.CreateIdentityRotationMaterial(*entropy);
     auto expected_payload = candidate_material ? SerializeIdentityMaterial(*candidate_material) : std::nullopt;
     if (!candidate_material || !expected_payload) {
-        return {.phase = DeviceOperationPhase::REJECTED, .error = "Cannot prepare candidate recovery vault"};
+        return {.phase = IdentityOperationPhase::REJECTED, .error = "Cannot prepare candidate recovery vault"};
     }
     struct PayloadWiper {
         std::vector<unsigned char>& value;
@@ -528,49 +487,52 @@ DeviceOperationResult CybouIdentityService::RotateRecoveryRootSync(
     std::error_code ec;
     bool candidate_owned{false};
     if (std::filesystem::exists(candidate_path, ec)) {
-        if (ec) return {.phase = DeviceOperationPhase::CONFLICT, .error = "Cannot inspect pending recovery vault"};
+        if (ec) return {.phase = IdentityOperationPhase::CONFLICT, .error = "Cannot inspect pending recovery vault"};
         auto existing_payload = LoadIdentityVault(candidate_path, password);
-        if (!existing_payload) return {.phase = DeviceOperationPhase::CONFLICT,
+        if (!existing_payload) return {.phase = IdentityOperationPhase::CONFLICT,
             .error = "A pending recovery vault exists but cannot be authenticated"};
         const bool exact = *existing_payload == *expected_payload;
         crypto::CleanseMemory(existing_payload->data(), existing_payload->size());
-        if (!exact) return {.phase = DeviceOperationPhase::CONFLICT,
+        if (!exact) return {.phase = IdentityOperationPhase::CONFLICT,
             .error = "Pending recovery vault does not match the requested rotation"};
         candidate_owned = true;
     } else {
         if (ec || !SaveNewIdentityMaterial(candidate_path, password, *candidate_material)) {
-            return {.phase = DeviceOperationPhase::REJECTED,
+            return {.phase = IdentityOperationPhase::REJECTED,
                 .error = "Could not durably save and verify the candidate recovery vault"};
         }
         candidate_owned = true;
     }
 
-    auto result = coordinator.RotateRecoveryRoot(*entropy);
-    if (result.phase == DeviceOperationPhase::FINALIZED) {
+    auto result = coordinator.RotateIdentity(*entropy);
+    if (result.phase == IdentityOperationPhase::FINALIZED) {
         if (!PromoteIdentityVault(candidate_path, *m_storage_path, password, *expected_payload) ||
             !m_keystore.LoadFromFile(*m_storage_path, password)) {
-            return {.phase = DeviceOperationPhase::CONFLICT, .op_id = result.op_id,
+            return {.phase = IdentityOperationPhase::CONFLICT, .op_id = result.op_id,
                 .finalized_height = result.finalized_height,
                 .error = "Recovery rotation finalized but the candidate vault could not be promoted and loaded"};
         }
         const auto promoted_root = m_keystore.GetRecoveryPublicKey();
-        if (!promoted_root || *promoted_root != *new_root ||
-            !coordinator.CompleteRecoveryRootRotation(*promoted_root)) {
-            return {.phase = DeviceOperationPhase::CONFLICT, .op_id = result.op_id,
+        const auto finalized = m_runtime.GetStore().LoadState();
+        const auto* finalized_identity = finalized && finalized.state && active_account ?
+            finalized.state->identities.Find(*active_account) : nullptr;
+        if (!promoted_root || *promoted_root != *new_root || !finalized_identity ||
+            !coordinator.CompleteIdentityRotation(*finalized_identity)) {
+            return {.phase = IdentityOperationPhase::CONFLICT, .op_id = result.op_id,
                 .finalized_height = result.finalized_height,
                 .error = "Candidate vault was promoted but recovery rotation reconciliation remains pending"};
         }
         m_vault_saved = true;
         result.error.clear();
-    } else if (result.phase == DeviceOperationPhase::REJECTED && candidate_owned) {
+    } else if (result.phase == IdentityOperationPhase::REJECTED && candidate_owned) {
         std::filesystem::remove(candidate_path, ec);
-        if (ec) return {.phase = DeviceOperationPhase::CONFLICT, .op_id = result.op_id,
+        if (ec) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = result.op_id,
             .error = "Rotation was rejected but its candidate vault could not be removed"};
     }
     return result;
 }
 
-bool CybouIdentityService::HasPendingRecoveryRootRotation()
+bool CybouIdentityService::HasPendingIdentityRotation()
 {
     std::lock_guard lock(m_mutex);
     bool candidate_exists{false};
@@ -581,56 +543,58 @@ bool CybouIdentityService::HasPendingRecoveryRootRotation()
         candidate_exists = std::filesystem::exists(candidate_path, ec) && !ec;
     }
     if (!candidate_exists && !m_keystore.HasKey()) return false;
-    return candidate_exists || m_runtime.GetDeviceOperationCoordinator(
-        m_keystore).HasPendingRecoveryRootRotation();
+    return candidate_exists || m_runtime.GetIdentityOperationCoordinator(
+        m_keystore).HasPendingIdentityRotation();
 }
 
-DeviceOperationResult CybouIdentityService::ResumeRecoveryRootRotationSync(std::string password)
+IdentityOperationResult CybouIdentityService::ResumeIdentityRotationSync(std::string password)
 {
     PasswordWiper wipe_password{password};
     const auto path = GetStoragePath();
     if (!path || !m_keystore.HasKey()) {
-        return {.phase = DeviceOperationPhase::REJECTED, .error = "Unlock the identity vault before resuming rotation"};
+        return {.phase = IdentityOperationPhase::REJECTED, .error = "Unlock the identity vault before resuming rotation"};
     }
     auto candidate_path = *path;
     candidate_path += ".rotation-pending";
     std::error_code candidate_error;
     const bool candidate_exists = std::filesystem::exists(candidate_path, candidate_error);
-    if (candidate_error) return {.phase = DeviceOperationPhase::CONFLICT,
+    if (candidate_error) return {.phase = IdentityOperationPhase::CONFLICT,
         .error = "Cannot inspect the pending recovery vault"};
-    auto& coordinator = m_runtime.GetDeviceOperationCoordinator(m_keystore);
+    auto& coordinator = m_runtime.GetIdentityOperationCoordinator(m_keystore);
     const auto active_root = m_keystore.GetRecoveryPublicKey();
     const auto account = m_keystore.GetAccountId();
     const auto loaded = m_runtime.GetStore().LoadState();
     const auto* record = loaded && loaded.state && account ? loaded.state->identities.Find(*account) : nullptr;
-    if (!candidate_exists && active_root && record && record->recovery_root == *active_root) {
-        if (coordinator.CompleteRecoveryRootRotation(*active_root)) {
-            return {.phase = DeviceOperationPhase::FINALIZED,
+    if (!candidate_exists && active_root && record && record->recovery_key == *active_root) {
+        if (!coordinator.HasPendingIdentityRotation() || coordinator.CompleteIdentityRotation(*record)) {
+            return {.phase = IdentityOperationPhase::FINALIZED,
                 .finalized_height = m_runtime.GetFinalizedHeight().value_or(0)};
         }
-        if (coordinator.HasPendingRecoveryRootRotation()) {
-            return {.phase = DeviceOperationPhase::CONFLICT,
+        if (coordinator.HasPendingIdentityRotation()) {
+            return {.phase = IdentityOperationPhase::CONFLICT,
                 .error = "The promoted recovery vault matches finalized state but its operation journal cannot be reconciled"};
         }
     }
     auto candidate = LoadIdentityMaterial(candidate_path, password);
-    if (!candidate) return {.phase = DeviceOperationPhase::REJECTED,
+    if (!candidate) return {.phase = IdentityOperationPhase::REJECTED,
         .error = "Pending recovery vault is missing or cannot be unlocked"};
     const auto candidate_account = AccountId::FromBytes(candidate->account_id);
     const auto active_account = m_keystore.GetAccountId();
-    const auto candidate_device = DeriveIdentityPublicKey(candidate->device_secret, IdentityKeyPurpose::DEVICE);
-    const auto active_device = m_keystore.GetDevicePublicKey();
-    if (!candidate_account || !active_account || *candidate_account != *active_account || !candidate_device ||
-        !active_device || *candidate_device != *active_device) {
-        return {.phase = DeviceOperationPhase::CONFLICT,
-            .error = "Pending recovery vault belongs to a different account or device"};
+    const auto candidate_recovery = DeriveIdentityPublicKey(candidate->recovery_entropy, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto candidate_authorization = DeriveIdentityPublicKey(candidate->recovery_entropy, IdentityKeyPurpose::AUTHORIZATION);
+    const auto candidate_active_authorization = m_keystore.GetAuthorizationPublicKey();
+    if (!candidate_account || !active_account || *candidate_account != *active_account || !candidate_recovery ||
+        !candidate_authorization || !candidate_active_authorization || !active_root || *candidate_recovery == *active_root ||
+        *candidate_authorization == *candidate_active_authorization) {
+        return {.phase = IdentityOperationPhase::CONFLICT,
+            .error = "Pending Identity vault belongs to a different account or is not a new key epoch"};
     }
     auto words = EncodeRecoveryWords(candidate->recovery_entropy);
     for (const auto& word : words) {
-        if (word.empty()) return {.phase = DeviceOperationPhase::REJECTED,
+        if (word.empty()) return {.phase = IdentityOperationPhase::REJECTED,
             .error = "Cannot decode the pending recovery phrase"};
     }
-    auto result = RotateRecoveryRootSync(words, std::move(password));
+    auto result = RotateIdentitySync(words, std::move(password));
     for (auto& word : words) crypto::CleanseMemory(word.data(), word.size());
     return result;
 }

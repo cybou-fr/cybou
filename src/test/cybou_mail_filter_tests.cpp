@@ -159,7 +159,7 @@ cybou::AccountCreateOp MakeTestAccountCreate(
     const uint256& net_id)
 {
     const auto root_pub = *cybou::DeriveIdentityPublicKey(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto device_pub = *cybou::DeriveIdentityPublicKey(device_seed, cybou::IdentityKeyPurpose::DEVICE);
+    const auto device_pub = *cybou::DeriveIdentityPublicKey(device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
 
     cybou::IdentityAuthorization auth{root_pub, device_pub};
     const auto binding = cybou::test::MakeIdentityKemBinding(net_id, acc, auth);
@@ -176,8 +176,8 @@ cybou::AccountCreateOp MakeTestAccountCreate(
     const auto root_pop = *cybou::SignIdentityMessage(
         root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT,
         std::span<const unsigned char>(pop_digest.begin(), pop_digest.size()));
-    const auto device_pop = *cybou::SignIdentityMessage(
-        device_seed, cybou::IdentityKeyPurpose::DEVICE,
+    const auto authorization_pop = *cybou::SignIdentityMessage(
+        device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION,
         std::span<const unsigned char>(pop_digest.begin(), pop_digest.size()));
 
     return cybou::AccountCreateOp{
@@ -186,7 +186,7 @@ cybou::AccountCreateOp MakeTestAccountCreate(
         .kem_package = binding.package,
         .work = work,
         .recovery_pop = root_pop,
-        .device_pop = device_pop,
+        .authorization_pop = authorization_pop,
     };
 }
 
@@ -509,23 +509,20 @@ BOOST_AUTO_TEST_CASE(state_store_mail_filter_persistence_and_retrieval)
         .ciphertext = ciphertext,
     };
 
-    const auto sender_dev_pub = *cybou::DeriveIdentityPublicKey(sender_device_seed, cybou::IdentityKeyPurpose::DEVICE);
-    const auto sender_dev_id = *cybou::ComputeDeviceKeyId(sender_dev_pub);
+    const auto sender_dev_pub = *cybou::DeriveIdentityPublicKey(sender_device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
     const auto mail_comm = *cybou::ComputeMailPayloadCommitment(mail_payload);
 
-    cybou::DeviceAuthorization auth{
+    cybou::IdentityOperationAuthorization auth{
         .account_id = sender_acc,
-        .device_id = sender_dev_id,
         .nonce = 0,
-        .activation_nonce = 0,
-        .kind = cybou::DeviceOperationKind::MAIL,
+        .kind = cybou::IdentityOperationKind::MAIL,
         .payload_commitment = mail_comm,
         .signature = {},
     };
 
-    const auto op_digest = *cybou::ComputeDeviceOperationDigest(store.GetNetworkId(), auth);
+    const auto op_digest = *cybou::ComputeIdentityOperationDigest(store.GetNetworkId(), auth);
     auth.signature = *cybou::SignIdentityMessage(
-        sender_device_seed, cybou::IdentityKeyPurpose::DEVICE,
+        sender_device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION,
         std::span<const unsigned char>(op_digest.begin(), op_digest.size()));
 
     const cybou::AuthorizedMail auth_mail{

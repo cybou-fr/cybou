@@ -21,8 +21,7 @@ struct TestIdentity {
     std::array<unsigned char, 32> dev_seed{};
     cybou::AccountId account_id;
     cybou::IdentityHybridPublicKey recovery_root;
-    cybou::IdentityHybridPublicKey initial_device;
-    cybou::IdentityKeyId device_id;
+    cybou::IdentityHybridPublicKey authorization_key;
     cybou::IdentityAuthorization auth;
 };
 
@@ -30,18 +29,17 @@ TestIdentity MakeTestIdentity(unsigned char fill_byte)
 {
     TestIdentity id;
     id.root_seed.fill(fill_byte);
-    id.dev_seed.fill(static_cast<unsigned char>(fill_byte + 100));
+    id.dev_seed = id.root_seed;
 
     uint256 acc_bytes{};
     acc_bytes.begin()[0] = fill_byte;
     id.account_id = cybou::AccountId{acc_bytes};
 
     const auto root = cybou::DeriveIdentityPublicKey(id.root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto dev = cybou::DeriveIdentityPublicKey(id.dev_seed, cybou::IdentityKeyPurpose::DEVICE);
+    const auto dev = cybou::DeriveIdentityPublicKey(id.dev_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
     id.recovery_root = *root;
-    id.initial_device = *dev;
-    id.device_id = *cybou::ComputeDeviceKeyId(id.initial_device);
-    id.auth = cybou::IdentityAuthorization{id.recovery_root, id.initial_device};
+    id.authorization_key = *dev;
+    id.auth = cybou::IdentityAuthorization{id.recovery_root, id.authorization_key};
     return id;
 }
 
@@ -58,7 +56,7 @@ cybou::AccountCreateOp MakeTestAccountCreate(const TestIdentity& id)
     const auto binding = cybou::test::MakeIdentityKemBinding(net_id, id.account_id, id.auth);
 
     const auto root_pop = cybou::SignIdentityMessage(id.root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
-    const auto dev_pop = cybou::SignIdentityMessage(id.dev_seed, cybou::IdentityKeyPurpose::DEVICE, binding.pop_digest);
+    const auto dev_pop = cybou::SignIdentityMessage(id.dev_seed, cybou::IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
 
     return cybou::AccountCreateOp{
         .account_id = id.account_id,
@@ -72,7 +70,7 @@ cybou::AccountCreateOp MakeTestAccountCreate(const TestIdentity& id)
             .nonce = 42,
         },
         .recovery_pop = *root_pop,
-        .device_pop = *dev_pop,
+        .authorization_pop = *dev_pop,
     };
 }
 
@@ -82,16 +80,15 @@ cybou::AuthorizedPayment MakeTestPayment(const TestIdentity& sender, const cybou
     cybou::PaymentPayload payload{.recipient = recipient, .amount = amount};
     const auto commit = cybou::ComputePaymentPayloadCommitment(payload);
 
-    cybou::DeviceAuthorization auth{
+    cybou::IdentityOperationAuthorization auth{
         .account_id = sender.account_id,
-        .device_id = sender.device_id,
         .nonce = 0,
-        .activation_nonce = 0,
-        .kind = cybou::DeviceOperationKind::PAYMENT,
+        .key_epoch = 0,
+        .kind = cybou::IdentityOperationKind::PAYMENT,
         .payload_commitment = *commit,
     };
-    const auto digest = cybou::ComputeDeviceOperationDigest(net_id, auth);
-    auth.signature = *cybou::SignIdentityMessage(sender.dev_seed, cybou::IdentityKeyPurpose::DEVICE, *digest);
+    const auto digest = cybou::ComputeIdentityOperationDigest(net_id, auth);
+    auth.signature = *cybou::SignIdentityMessage(sender.dev_seed, cybou::IdentityKeyPurpose::AUTHORIZATION, *digest);
 
     return cybou::AuthorizedPayment{.authorization = auth, .payment = payload};
 }
@@ -102,16 +99,15 @@ cybou::AuthorizedSystemLock MakeTestSystemLock(const TestIdentity& sender, uint6
     cybou::SystemLockPayload payload{.amount = amount};
     const auto commit = cybou::ComputeSystemLockPayloadCommitment(payload);
 
-    cybou::DeviceAuthorization auth{
+    cybou::IdentityOperationAuthorization auth{
         .account_id = sender.account_id,
-        .device_id = sender.device_id,
         .nonce = 1,
-        .activation_nonce = 0,
-        .kind = cybou::DeviceOperationKind::SYSTEM_LOCK,
+        .key_epoch = 0,
+        .kind = cybou::IdentityOperationKind::SYSTEM_LOCK,
         .payload_commitment = *commit,
     };
-    const auto digest = cybou::ComputeDeviceOperationDigest(net_id, auth);
-    auth.signature = *cybou::SignIdentityMessage(sender.dev_seed, cybou::IdentityKeyPurpose::DEVICE, *digest);
+    const auto digest = cybou::ComputeIdentityOperationDigest(net_id, auth);
+    auth.signature = *cybou::SignIdentityMessage(sender.dev_seed, cybou::IdentityKeyPurpose::AUTHORIZATION, *digest);
 
     return cybou::AuthorizedSystemLock{.authorization = auth, .lock = payload};
 }
@@ -128,16 +124,15 @@ cybou::AuthorizedMail MakeTestMail(const TestIdentity& sender, const cybou::Acco
     payload.content_commitment.begin()[0] = 0x22;
 
     const auto commit = cybou::ComputeMailPayloadCommitment(payload);
-    cybou::DeviceAuthorization auth{
+    cybou::IdentityOperationAuthorization auth{
         .account_id = sender.account_id,
-        .device_id = sender.device_id,
         .nonce = 2,
-        .activation_nonce = 0,
-        .kind = cybou::DeviceOperationKind::MAIL,
+        .key_epoch = 0,
+        .kind = cybou::IdentityOperationKind::MAIL,
         .payload_commitment = *commit,
     };
-    const auto digest = cybou::ComputeDeviceOperationDigest(net_id, auth);
-    auth.signature = *cybou::SignIdentityMessage(sender.dev_seed, cybou::IdentityKeyPurpose::DEVICE, *digest);
+    const auto digest = cybou::ComputeIdentityOperationDigest(net_id, auth);
+    auth.signature = *cybou::SignIdentityMessage(sender.dev_seed, cybou::IdentityKeyPurpose::AUTHORIZATION, *digest);
 
     return cybou::AuthorizedMail{.authorization = auth, .mail = payload};
 }
@@ -226,66 +221,41 @@ BOOST_AUTO_TEST_CASE(mail_canonical_typed_roundtrip)
     BOOST_CHECK(*decoded == op);
 }
 
-BOOST_AUTO_TEST_CASE(device_add_canonical_typed_roundtrip)
+BOOST_AUTO_TEST_CASE(identity_rotate_canonical_typed_roundtrip)
 {
     const auto alice = MakeTestIdentity(1);
-    std::array<unsigned char, 32> dev2_seed{};
-    dev2_seed.fill(0x55);
-    const auto dev2_pk = cybou::DeriveIdentityPublicKey(dev2_seed, cybou::IdentityKeyPurpose::DEVICE);
-    BOOST_REQUIRE(dev2_pk.has_value());
-
-    const auto net_id = TestNetworkId();
-    cybou::DeviceAdd add{
+    std::array<unsigned char, 32> next_entropy{};
+    next_entropy.fill(0x55);
+    const auto recovery = cybou::DeriveIdentityPublicKey(next_entropy, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto authorization = cybou::DeriveIdentityPublicKey(next_entropy, cybou::IdentityKeyPurpose::AUTHORIZATION);
+    const auto kem_seed = cybou::DeriveIdentityXWingSeed(next_entropy);
+    const auto kem_public = kem_seed ? cybou::DeriveXWingPublicKey(*kem_seed) : std::nullopt;
+    const auto package = kem_public ? cybou::EncodeIdentityKemPackage(*kem_public) : std::nullopt;
+    BOOST_REQUIRE(recovery && authorization && package);
+    cybou::IdentityRotate rotate{
         .account_id = alice.account_id,
-        .new_device = *dev2_pk,
-        .kem_package = cybou::test::MakeIdentityKemBinding(net_id, alice.account_id,
-            cybou::IdentityAuthorization{alice.recovery_root, *dev2_pk}, 1).package,
-        .root_nonce = 0,
+        .new_recovery_key = *recovery,
+        .new_authorization_key = *authorization,
+        .new_kem_package = *package,
+        .nonce = 0,
+        .key_epoch = 1,
     };
-    const auto add_digest = cybou::ComputeDeviceAddDigest(net_id, add);
-    BOOST_REQUIRE(add_digest.has_value());
-    add.root_signature = *cybou::SignIdentityMessage(alice.root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, *add_digest);
-    add.device_pop = *cybou::SignIdentityMessage(dev2_seed, cybou::IdentityKeyPurpose::DEVICE, *add_digest);
-
-    const cybou::ProtocolOperation op{add};
-    const auto encoded = cybou::SerializeProtocolOperation(op);
-    BOOST_REQUIRE(encoded.has_value());
+    const auto digest = cybou::ComputeIdentityRotateDigest(TestNetworkId(), rotate);
+    BOOST_REQUIRE(digest);
+    rotate.old_recovery_signature = *cybou::SignIdentityMessage(alice.root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, *digest);
+    rotate.new_recovery_pop = *cybou::SignIdentityMessage(next_entropy, cybou::IdentityKeyPurpose::RECOVERY_ROOT, *digest);
+    rotate.new_authorization_pop = *cybou::SignIdentityMessage(next_entropy, cybou::IdentityKeyPurpose::AUTHORIZATION, *digest);
+    const cybou::ProtocolOperation operation{rotate};
+    const auto encoded = cybou::SerializeProtocolOperation(operation);
+    BOOST_REQUIRE(encoded);
     BOOST_CHECK_EQUAL((*encoded)[0], cybou::PROTOCOL_OPERATION_VERSION);
-    BOOST_CHECK_EQUAL((*encoded)[1], static_cast<uint8_t>(cybou::ProtocolOperationKind::DEVICE_ADD));
-    BOOST_CHECK_EQUAL(encoded->size(), 2 + cybou::DEVICE_ADD_SIZE);
-
+    BOOST_CHECK_EQUAL((*encoded)[1], static_cast<uint8_t>(cybou::ProtocolOperationKind::IDENTITY_ROTATE));
+    BOOST_CHECK_EQUAL(encoded->size(), 2 + cybou::IDENTITY_ROTATE_SIZE);
     const auto decoded = cybou::DeserializeProtocolOperation(*encoded);
-    BOOST_REQUIRE(decoded.has_value());
-    BOOST_CHECK(std::holds_alternative<cybou::DeviceAdd>(*decoded));
-    BOOST_CHECK(*decoded == op);
+    BOOST_REQUIRE(decoded);
+    BOOST_CHECK(std::holds_alternative<cybou::IdentityRotate>(*decoded));
+    BOOST_CHECK(*decoded == operation);
 }
-
-BOOST_AUTO_TEST_CASE(device_revoke_canonical_typed_roundtrip)
-{
-    const auto alice = MakeTestIdentity(1);
-    const auto net_id = TestNetworkId();
-    cybou::DeviceRevoke revoke{
-        .account_id = alice.account_id,
-        .device_id = alice.device_id,
-        .root_nonce = 1,
-    };
-    const auto revoke_digest = cybou::ComputeDeviceRevokeDigest(net_id, revoke);
-    BOOST_REQUIRE(revoke_digest.has_value());
-    revoke.root_signature = *cybou::SignIdentityMessage(alice.root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, *revoke_digest);
-
-    const cybou::ProtocolOperation op{revoke};
-    const auto encoded = cybou::SerializeProtocolOperation(op);
-    BOOST_REQUIRE(encoded.has_value());
-    BOOST_CHECK_EQUAL((*encoded)[0], cybou::PROTOCOL_OPERATION_VERSION);
-    BOOST_CHECK_EQUAL((*encoded)[1], static_cast<uint8_t>(cybou::ProtocolOperationKind::DEVICE_REVOKE));
-    BOOST_CHECK_EQUAL(encoded->size(), 2 + cybou::DEVICE_REVOKE_SIZE);
-
-    const auto decoded = cybou::DeserializeProtocolOperation(*encoded);
-    BOOST_REQUIRE(decoded.has_value());
-    BOOST_CHECK(std::holds_alternative<cybou::DeviceRevoke>(*decoded));
-    BOOST_CHECK(*decoded == op);
-}
-
 BOOST_AUTO_TEST_CASE(unknown_or_malformed_operation_is_rejected)
 {
     BOOST_CHECK(!cybou::DeserializeProtocolOperation(std::span<const unsigned char>{}).has_value());

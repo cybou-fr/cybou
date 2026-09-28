@@ -19,7 +19,7 @@ BOOST_AUTO_TEST_CASE(hybrid_root_and_device_are_deterministic_and_both_required)
     for (size_t i{0}; i < secret.size(); ++i) secret[i] = static_cast<unsigned char>(i);
     constexpr std::string_view text{"CYBOU/IDENTITY-V2/TEST"};
     const auto message = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(text.data()), text.size()};
-    for (const auto purpose : {cybou::IdentityKeyPurpose::RECOVERY_ROOT, cybou::IdentityKeyPurpose::DEVICE}) {
+    for (const auto purpose : {cybou::IdentityKeyPurpose::RECOVERY_ROOT, cybou::IdentityKeyPurpose::AUTHORIZATION}) {
         const auto key = cybou::DeriveIdentityPublicKey(secret, purpose);
         const auto again = cybou::DeriveIdentityPublicKey(secret, purpose);
         BOOST_REQUIRE(key && again);
@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(recovery_key_id_binds_both_public_keys_and_suite)
     altered_pq.ml_dsa[0] ^= 1;
     BOOST_CHECK(cybou::ComputeRecoveryKeyId(altered_pq) != id);
     auto wrong_suite = *root;
-    wrong_suite.purpose = cybou::IdentityKeyPurpose::DEVICE;
+    wrong_suite.purpose = cybou::IdentityKeyPurpose::AUTHORIZATION;
     BOOST_CHECK(!cybou::ComputeRecoveryKeyId(wrong_suite));
     auto missing_key = *root;
     missing_key.ml_dsa.clear();

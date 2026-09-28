@@ -512,10 +512,10 @@ SendMailResult CybouMailService::SendMail(
         return {.error = SendMailError::RUNTIME_ERROR, .error_message = "Failed to load state"};
     }
     const auto* rec_identity = loaded.state->identities.Find(recipient);
-    if (!rec_identity || rec_identity->devices.empty()) {
+    if (!rec_identity) {
         return {.error = SendMailError::RECIPIENT_NOT_FOUND, .error_message = "Recipient identity not found on-chain"};
     }
-    // Identity state publishes active-device X-Wing packages, but Mail has no
+    // Identity state publishes one account X-Wing package, but Mail has no
     // frozen ciphertext/recipient-set profile yet. Do not construct or submit
     // ciphertext until that wire profile is implemented.
     return {.error = SendMailError::CRYPTO_FAILURE,
@@ -578,16 +578,11 @@ size_t CybouMailService::SyncMailbox()
             const auto op_id_opt = ComputeOperationId(proto_op);
             const uint256 op_id = op_id_opt.value_or(uint256{});
 
-            IdentityHybridPublicKey sender_device_key{};
+            std::optional<IdentityHybridPublicKey> sender_authorization_key;
             const auto loaded = m_runtime.GetStore().LoadState();
             if (loaded && loaded.state) {
                 const auto* rec = loaded.state->identities.Find(auth_op.account_id);
-                if (rec) {
-                    auto it = rec->devices.find(auth_op.device_id);
-                    if (it != rec->devices.end()) {
-                        sender_device_key = it->second.key;
-                    }
-                }
+                if (rec && rec->key_epoch == auth_op.key_epoch) sender_authorization_key = rec->authorization_key;
             }
 
             if (auth_op.account_id == *my_account) {
@@ -603,9 +598,9 @@ size_t CybouMailService::SyncMailbox()
                                 .block_height = h,
                                 .block_id = block_id,
                                 .operation_index = op_idx,
-                                .evidence_bundle = CreateMailEvidenceBundle(
+                                .evidence_bundle = sender_authorization_key ? CreateMailEvidenceBundle(
                                     fin_block.block, op_idx, fin_block.certificate,
-                                    sender_device_key, m_runtime.GetNetworkId()),
+                                    *sender_authorization_key, m_runtime.GetNetworkId()) : std::nullopt,
                             });
                         }
                         break;

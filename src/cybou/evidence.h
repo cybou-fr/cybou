@@ -21,7 +21,7 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_MAIL_EVIDENCE_VERSION{2};
+inline constexpr uint8_t CYBOU_MAIL_EVIDENCE_VERSION{3};
 
 /**
  * Proof of operation inclusion in a CybouBlock operations list.
@@ -46,7 +46,7 @@ bool VerifyOperationInclusion(
  * Supports exporting and verifying:
  * - transaction inclusion in block
  * - BFT finality certificate
- * - signature against the supplied sender device key
+ * - signature against the supplied sender authorization key
  * - salted content commitment
  */
 struct MailEvidenceBundle {
@@ -56,7 +56,7 @@ struct MailEvidenceBundle {
     CybouBlockHeader block_header;
     OperationInclusionProof inclusion_proof;
     BftFinalityCertificate finality_certificate;
-    IdentityHybridPublicKey sender_device_key;
+    IdentityHybridPublicKey sender_authorization_key;
 
     friend bool operator==(const MailEvidenceBundle&, const MailEvidenceBundle&) = default;
 };
@@ -89,7 +89,7 @@ std::optional<MailEvidenceBundle> CreateMailEvidenceBundle(
     const CybouBlock& block,
     size_t operation_index,
     BftFinalityCertificate finality_certificate,
-    IdentityHybridPublicKey sender_device_key,
+    IdentityHybridPublicKey sender_authorization_key,
     const uint256& network_id);
 
 std::optional<std::vector<unsigned char>> SerializeMailEvidenceBundle(const MailEvidenceBundle& bundle);

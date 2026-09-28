@@ -102,7 +102,7 @@ NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
     if (op.commit.version != NAME_REGISTRY_VERSION) {
         return NameCommitError::INVALID_PAYLOAD;
     }
-    if (op.authorization.kind != DeviceOperationKind::NAME_COMMIT) {
+    if (op.authorization.kind != IdentityOperationKind::NAME_COMMIT) {
         return NameCommitError::INVALID_AUTHORIZATION;
     }
     const auto expected_payload_commitment = ComputeNameCommitPayloadCommitment(op.commit);
@@ -126,7 +126,7 @@ NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
     if (state.names.pending_commits.contains(op.commit.commitment)) {
         return NameCommitError::COMMITMENT_EXISTS;
     }
-    if (state.identities.AuthorizeDeviceOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
+    if (state.identities.AuthorizeOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
         return NameCommitError::INVALID_AUTHORIZATION;
     }
 
@@ -141,7 +141,7 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
     if (op.reveal.version != NAME_REGISTRY_VERSION) {
         return NameRevealError::INVALID_PAYLOAD;
     }
-    if (op.authorization.kind != DeviceOperationKind::NAME_REVEAL) {
+    if (op.authorization.kind != IdentityOperationKind::NAME_REVEAL) {
         return NameRevealError::INVALID_AUTHORIZATION;
     }
     const auto expected_payload_commitment = ComputeNameRevealPayloadCommitment(op.reveal);
@@ -190,7 +190,7 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
         return NameRevealError::INVALID_WORK_PROOF;
     }
 
-    if (state.identities.AuthorizeDeviceOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
+    if (state.identities.AuthorizeOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
         return NameRevealError::INVALID_AUTHORIZATION;
     }
 
@@ -212,7 +212,7 @@ MailError ApplyMail(const AuthorizedMail& op,
         op.mail.ciphertext.size() > params.max_mail_ciphertext_size) {
         return MailError::INVALID_PAYLOAD;
     }
-    if (op.authorization.kind != DeviceOperationKind::MAIL) {
+    if (op.authorization.kind != IdentityOperationKind::MAIL) {
         return MailError::INVALID_AUTHORIZATION;
     }
     const auto expected_payload_commitment = ComputeMailPayloadCommitment(op.mail);
@@ -240,7 +240,7 @@ MailError ApplyMail(const AuthorizedMail& op,
     if (current_count >= params.new_account_mail_limit_per_epoch) {
         return MailError::MAIL_QUOTA_EXCEEDED;
     }
-    if (state.identities.AuthorizeDeviceOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
+    if (state.identities.AuthorizeOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
         return MailError::INVALID_AUTHORIZATION;
     }
     sender_it->second.system_balance -= fee;
@@ -262,7 +262,7 @@ StateValidationError ValidateCybouState(const CybouState& state)
         if (id.IsNull() || !state.identities.Find(id)) return StateValidationError::MISSING_IDENTITY;
     }
     for (const auto& [id, record] : state.identities.Accounts()) {
-        const auto root_id = ComputeRecoveryKeyId(record.recovery_root);
+        const auto root_id = ComputeRecoveryKeyId(record.recovery_key);
         if (!root_id) return StateValidationError::DUPLICATE_RECOVERY_BINDING;
         const auto mapped_acc = state.identities.FindByRecoveryKeyId(*root_id);
         if (!mapped_acc || *mapped_acc != id) return StateValidationError::DUPLICATE_RECOVERY_BINDING;

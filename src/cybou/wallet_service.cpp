@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/wallet_service.h>
-#include <cybou/device_operation_coordinator.h>
+#include <cybou/identity_operation_coordinator.h>
 
 #include <algorithm>
 #include <chrono>
@@ -12,7 +12,7 @@ namespace cybou {
 CybouWalletService::CybouWalletService(CybouNodeRuntime& runtime, CybouKeyStore& keystore)
     : m_runtime(runtime),
       m_keystore(keystore),
-      m_operation_coordinator(runtime.GetDeviceOperationCoordinator(keystore)),
+      m_operation_coordinator(runtime.GetIdentityOperationCoordinator(keystore)),
       m_worker([this](std::stop_token) {
           for (;;) {
               std::function<void()> task;
@@ -107,8 +107,8 @@ WalletOperationResult CybouWalletService::SendPayment(const AccountId& recipient
         return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to commit payment payload"};
     }
 
-    const auto submitted = m_operation_coordinator.Execute(DeviceOperationKind::PAYMENT, *commitment,
-        [&](const DeviceAuthorization& authorization) -> std::optional<ProtocolOperation> {
+    const auto submitted = m_operation_coordinator.Execute(IdentityOperationKind::PAYMENT, *commitment,
+        [&](const IdentityOperationAuthorization& authorization) -> std::optional<ProtocolOperation> {
             return ProtocolOperation{AuthorizedPayment{.authorization = authorization, .payment = payment_payload}};
         });
     if (!submitted) return {.error = WalletOperationError::SUBMIT_FAILED, .op_id = submitted.op_id,
@@ -164,8 +164,8 @@ WalletOperationResult CybouWalletService::LockToSystemBalance(const uint64_t amo
         return {.error = WalletOperationError::CRYPTO_FAILURE, .error_message = "Failed to commit system lock payload"};
     }
 
-    const auto submitted = m_operation_coordinator.Execute(DeviceOperationKind::SYSTEM_LOCK, *commitment,
-        [&](const DeviceAuthorization& authorization) -> std::optional<ProtocolOperation> {
+    const auto submitted = m_operation_coordinator.Execute(IdentityOperationKind::SYSTEM_LOCK, *commitment,
+        [&](const IdentityOperationAuthorization& authorization) -> std::optional<ProtocolOperation> {
             return ProtocolOperation{AuthorizedSystemLock{.authorization = authorization, .lock = lock_payload}};
         });
     if (!submitted) return {.error = WalletOperationError::SUBMIT_FAILED, .op_id = submitted.op_id,

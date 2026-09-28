@@ -5,15 +5,13 @@
 #include <cybou/identity_registry.h>
 
 #include <algorithm>
-#include <set>
 
 namespace cybou {
 namespace {
-constexpr unsigned char VERSION{3};
-constexpr size_t ROOT_PUBLIC_SIZE{32 + 1952};
-constexpr size_t DEVICE_PUBLIC_SIZE{32 + 1312};
-constexpr size_t MIN_ACCOUNT_SIZE{32 + ROOT_PUBLIC_SIZE + 8 + 1};
-constexpr size_t DEVICE_SIZE{DEVICE_PUBLIC_SIZE + 32 + 8 + 8};
+constexpr unsigned char VERSION{4};
+constexpr size_t RECOVERY_PUBLIC_SIZE{32 + 1952};
+constexpr size_t AUTHORIZATION_PUBLIC_SIZE{32 + 1312};
+constexpr size_t ACCOUNT_SIZE{32 + RECOVERY_PUBLIC_SIZE + AUTHORIZATION_PUBLIC_SIZE + 32 + 8 + 8};
 
 void Write64(std::vector<unsigned char>& out, uint64_t value)
 {
@@ -24,7 +22,6 @@ class Reader
 {
 public:
     explicit Reader(std::span<const unsigned char> bytes) : m_bytes{bytes} {}
-
     bool Read(std::span<unsigned char> out)
     {
         if (out.size() > Remaining()) return false;
@@ -32,29 +29,25 @@ public:
         m_offset += out.size();
         return true;
     }
-
     std::optional<uint8_t> U8()
     {
         if (!Remaining()) return std::nullopt;
         return m_bytes[m_offset++];
     }
-
     std::optional<uint32_t> U32()
     {
         if (Remaining() < 4) return std::nullopt;
-        uint32_t result{0};
-        for (unsigned i{0}; i < 4; ++i) result |= uint32_t{m_bytes[m_offset++]} << (8 * i);
-        return result;
+        uint32_t value{0};
+        for (unsigned i{0}; i < 4; ++i) value |= uint32_t{m_bytes[m_offset++]} << (8 * i);
+        return value;
     }
-
     std::optional<uint64_t> U64()
     {
         if (Remaining() < 8) return std::nullopt;
-        uint64_t result{0};
-        for (unsigned i{0}; i < 8; ++i) result |= uint64_t{m_bytes[m_offset++]} << (8 * i);
-        return result;
+        uint64_t value{0};
+        for (unsigned i{0}; i < 8; ++i) value |= uint64_t{m_bytes[m_offset++]} << (8 * i);
+        return value;
     }
-
     size_t Remaining() const { return m_bytes.size() - m_offset; }
 
 private:
@@ -76,6 +69,11 @@ std::optional<IdentityHybridPublicKey> ReadPublic(Reader& reader, IdentityKeyPur
     if (!reader.Read(key.ed25519) || !reader.Read(key.ml_dsa)) return std::nullopt;
     return key;
 }
+
+bool Nonzero(std::span<const unsigned char> bytes)
+{
+    return std::any_of(bytes.begin(), bytes.end(), [](unsigned char b) { return b != 0; });
+}
 } // namespace
 
 std::optional<std::vector<unsigned char>> SerializeIdentityRegistry(const IdentityRegistry& registry)
@@ -87,26 +85,16 @@ std::optional<std::vector<unsigned char>> SerializeIdentityRegistry(const Identi
     const auto count = static_cast<uint32_t>(registry.m_accounts.size());
     for (unsigned i{0}; i < 4; ++i) out.push_back(static_cast<unsigned char>(count >> (8 * i)));
     for (const auto& [account_id, record] : registry.m_accounts) {
-        const auto root_id = ComputeRecoveryKeyId(record.recovery_root);
-        if (account_id.IsNull() || !root_id || record.devices.size() > MAX_ACTIVE_DEVICES ||
-            !registry.m_recovery_index.contains(*root_id) || registry.m_recovery_index.at(*root_id) != account_id) return std::nullopt;
+        const auto recovery_id = ComputeRecoveryKeyId(record.recovery_key);
+        const auto authorization_id = ComputeAuthorizationKeyId(record.authorization_key);
+        if (account_id.IsNull() || !recovery_id || !authorization_id || !Nonzero(record.kem_package_id) ||
+            !registry.m_recovery_index.contains(*recovery_id) || registry.m_recovery_index.at(*recovery_id) != account_id) return std::nullopt;
         out.insert(out.end(), account_id.Value().begin(), account_id.Value().end());
-        WritePublic(out, record.recovery_root);
-        Write64(out, record.next_root_nonce);
-        out.push_back(static_cast<unsigned char>(record.devices.size()));
-        std::set<uint64_t> activations;
-        for (const auto& [id, device] : record.devices) {
-            if (ComputeDeviceKeyId(device.key) != id ||
-                device.key.ed25519 == record.recovery_root.ed25519 ||
-                std::all_of(device.kem_package_id.begin(), device.kem_package_id.end(),
-                    [](unsigned char byte) { return byte == 0; }) ||
-                device.activation_nonce > record.next_root_nonce ||
-                !activations.emplace(device.activation_nonce).second) return std::nullopt;
-            WritePublic(out, device.key);
-            out.insert(out.end(), device.kem_package_id.begin(), device.kem_package_id.end());
-            Write64(out, device.next_nonce);
-            Write64(out, device.activation_nonce);
-        }
+        WritePublic(out, record.recovery_key);
+        WritePublic(out, record.authorization_key);
+        out.insert(out.end(), record.kem_package_id.begin(), record.kem_package_id.end());
+        Write64(out, record.nonce);
+        Write64(out, record.key_epoch);
     }
     return out;
 }
@@ -117,7 +105,7 @@ std::optional<IdentityRegistry> DeserializeIdentityRegistry(std::span<const unsi
     const auto version = reader.U8();
     const auto count = reader.U32();
     if (!version || *version != VERSION || !count || *count > MAX_IDENTITY_REGISTRY_ACCOUNTS ||
-        *count > reader.Remaining() / MIN_ACCOUNT_SIZE) return std::nullopt;
+        *count > reader.Remaining() / ACCOUNT_SIZE) return std::nullopt;
     IdentityRegistry registry;
     std::optional<AccountId> prior_account;
     for (uint32_t i{0}; i < *count; ++i) {
@@ -126,35 +114,23 @@ std::optional<IdentityRegistry> DeserializeIdentityRegistry(std::span<const unsi
         const AccountId account_id{raw_id};
         if (account_id.IsNull() || (prior_account && !(*prior_account < account_id))) return std::nullopt;
         prior_account = account_id;
-        auto root = ReadPublic(reader, IdentityKeyPurpose::RECOVERY_ROOT, ROOT_PUBLIC_SIZE - 32);
+        auto recovery = ReadPublic(reader, IdentityKeyPurpose::RECOVERY_ROOT, RECOVERY_PUBLIC_SIZE - 32);
+        auto authorization = ReadPublic(reader, IdentityKeyPurpose::AUTHORIZATION, AUTHORIZATION_PUBLIC_SIZE - 32);
+        IdentityKeyId package_id{};
+        const bool package_read = reader.Read(package_id);
         const auto nonce = reader.U64();
-        const auto device_count = reader.U8();
-        if (!root || !nonce || !device_count || *device_count > MAX_ACTIVE_DEVICES ||
-            *device_count > reader.Remaining() / DEVICE_SIZE) return std::nullopt;
-        const auto root_id = ComputeRecoveryKeyId(*root);
-        if (!root_id || registry.m_recovery_index.contains(*root_id)) return std::nullopt;
-        IdentityRecord record{};
-        record.recovery_root = std::move(*root);
-        record.next_root_nonce = *nonce;
-        std::optional<IdentityKeyId> prior_device;
-        std::set<uint64_t> activations;
-        for (uint8_t j{0}; j < *device_count; ++j) {
-            auto key = ReadPublic(reader, IdentityKeyPurpose::DEVICE, DEVICE_PUBLIC_SIZE - 32);
-            std::array<unsigned char, 32> kem_package_id{};
-            const bool package_read = reader.Read(kem_package_id);
-            const auto device_nonce = reader.U64();
-            const auto activation_nonce = reader.U64();
-            if (!key || !package_read || !std::any_of(kem_package_id.begin(), kem_package_id.end(),
-                    [](unsigned char byte) { return byte != 0; }) || !device_nonce || !activation_nonce || *activation_nonce > record.next_root_nonce ||
-                !activations.emplace(*activation_nonce).second) return std::nullopt;
-            const auto id = ComputeDeviceKeyId(*key);
-            if (!id || (prior_device && !(*prior_device < *id)) ||
-                key->ed25519 == record.recovery_root.ed25519 ||
-                record.devices.contains(*id)) return std::nullopt;
-            prior_device = *id;
-            record.devices.emplace(*id, IdentityDevice{std::move(*key), kem_package_id, *device_nonce, *activation_nonce});
-        }
-        registry.m_recovery_index.emplace(*root_id, account_id);
+        const auto epoch = reader.U64();
+        if (!recovery || !authorization || !package_read || !Nonzero(package_id) || !nonce || !epoch) return std::nullopt;
+        const auto recovery_id = ComputeRecoveryKeyId(*recovery);
+        if (!recovery_id || registry.m_recovery_index.contains(*recovery_id) || !ComputeAuthorizationKeyId(*authorization)) return std::nullopt;
+        IdentityRecord record{
+            .recovery_key = std::move(*recovery),
+            .authorization_key = std::move(*authorization),
+            .kem_package_id = package_id,
+            .nonce = *nonce,
+            .key_epoch = *epoch,
+        };
+        registry.m_recovery_index.emplace(*recovery_id, account_id);
         registry.m_accounts.emplace(account_id, std::move(record));
     }
     if (reader.Remaining()) return std::nullopt;

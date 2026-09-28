@@ -18,7 +18,7 @@ using IdentityAuthorizationBytes = std::array<unsigned char, IDENTITY_AUTHORIZAT
 
 struct IdentityAuthorization {
     IdentityHybridPublicKey recovery_root;
-    IdentityHybridPublicKey initial_device;
+    IdentityHybridPublicKey authorization_key;
 
     friend bool operator==(const IdentityAuthorization&, const IdentityAuthorization&) = default;
 };

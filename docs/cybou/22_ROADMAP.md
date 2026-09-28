@@ -13,17 +13,16 @@ product surface. Backup remains a post-Beta application. There is no separate
 Drive product milestone; “Files” is CYBOU's familiar file-management surface.
 See `81_BETA_PRODUCT_SCOPE.md`.
 
-## Identity V2 integration gate
+## Identity integration gate
 
-The current tree already implements the hybrid recovery/device keys, CYBV2
-vault, AccountCreate, bounded device registry, and name commit/work/reveal
-path. Promotion still requires freezing phrase/vault vectors and remaining
-network parameters, finishing recovery/device edge cases and security GUI,
-and verifying the versioned consensus authorization and persistence together.
-Perform one intentional DEV reset only after the PQ consensus format and names
-are integrated in the same cutover. Acceptance includes clean-machine restore,
-vault tamper rejection, hybrid-signature failure tests, revoked-device
-rejection, and adversarial name-claim ordering. See docs 10 and 76–78.
+The canonical Identity model uses one mnemonic-derived Recovery key,
+Authorization key, and account KEM capability. Identity state stores one
+current key set, KEM commitment, shared nonce, and key_epoch. `IdentityRotate`
+replaces all roles atomically. Restore on another installation derives and
+verifies the current key set locally; installations are not separately
+registered or revoked by consensus. Promotion still requires vectors,
+security review, and coordinated disposable DEV cutover after protocol and
+name integration. See docs 10 and 76–78.
 
 ## Product gates
 
@@ -37,7 +36,7 @@ it does not establish Beta readiness:
 
 - create and restore an identity;
 - choose and use a `.cybou` name;
-- add and revoke a device;
+- restore the same AccountID on a clean installation and verify the current key epoch;
 - send encrypted text mail to an offline recipient;
 - later receive, verify and reply to that mail;
 - preserve canonical identity and mail state across client restarts;
@@ -62,7 +61,7 @@ protocol detail.
 
 Run a controlled pilot with 20–100 real users for 8–12 weeks and four active
 validators where f=1 tolerance is claimed. Measure repeated Mail and attachment
-use, offline retrieval, recovery, multi-device use, Storage repair, support
+use, offline retrieval, recovery, clean-machine recovery, Storage repair, support
 burden, and history growth. Backup remains post-Beta. Files is in Beta scope;
 there is no separate Drive application milestone.
 
@@ -76,7 +75,7 @@ Pin exact local Bitcoin Core tag/commit. Build/tests only. No normal Bitcoin-net
 One Operator Validator, own genesis, 2-node P2P/block propagation.
 
 ## v0.0.3 — AccountID + operator authority
-- AccountID/device authorization;
+- AccountID authorization;
 - `.cybou` alias skeleton;
 - separate Operator Authority / Validator / Release / Treasury key domains;
 - permissionless AccountID creation with anti-Sybil proof-of-work skeleton.

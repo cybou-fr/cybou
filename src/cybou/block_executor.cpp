@@ -49,26 +49,10 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 failure.payment_error = result;
                 return failure;
             }
-        } else if (const auto* add = std::get_if<DeviceAdd>(&operations[i])) {
-            const auto result = candidate.identities.AddDevice(*add, network_id);
+        } else if (const auto* rotate = std::get_if<IdentityRotate>(&operations[i])) {
+            const auto result = candidate.identities.RotateIdentity(*rotate, network_id);
             if (result != IdentityRegistryError::NONE) {
-                auto failure = fail(BlockExecutionError::INVALID_DEVICE_ADD);
-                failure.failed_operation_index = i;
-                failure.identity_error = result;
-                return failure;
-            }
-        } else if (const auto* revoke = std::get_if<DeviceRevoke>(&operations[i])) {
-            const auto result = candidate.identities.RevokeDevice(*revoke, network_id);
-            if (result != IdentityRegistryError::NONE) {
-                auto failure = fail(BlockExecutionError::INVALID_DEVICE_REVOKE);
-                failure.failed_operation_index = i;
-                failure.identity_error = result;
-                return failure;
-            }
-        } else if (const auto* rotate = std::get_if<RecoveryRotate>(&operations[i])) {
-            const auto result = candidate.identities.RotateRecovery(*rotate, network_id);
-            if (result != IdentityRegistryError::NONE) {
-                auto failure = fail(BlockExecutionError::INVALID_RECOVERY_ROTATE);
+                auto failure = fail(BlockExecutionError::INVALID_IDENTITY_ROTATE);
                 failure.failed_operation_index = i;
                 failure.identity_error = result;
                 return failure;

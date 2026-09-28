@@ -21,7 +21,7 @@ namespace cybou {
 
 /**
  * Local identity secrets backed by a portable password-protected CYBV2 vault.
- * AccountID is random and independent of root, device, and mail keys.
+ * AccountID is random and independent of mnemonic-derived Identity keys.
  */
 class CybouKeyStore {
 public:
@@ -33,7 +33,7 @@ public:
     CybouKeyStore(CybouKeyStore&&) noexcept;
     CybouKeyStore& operator=(CybouKeyStore&&) noexcept;
 
-    /** Generate a random AccountID, recovery entropy, and device secret. */
+    /** Generate a random AccountID and recovery entropy; all key roles derive from entropy. */
     bool GenerateNew();
     bool LoadMaterial(IdentityMaterial material);
     bool LoadFromFile(const std::filesystem::path& path, std::string_view password);
@@ -43,7 +43,7 @@ public:
     bool RotateStorageKeyRing(const std::filesystem::path& path, std::string_view password);
     std::optional<uint32_t> GetCurrentStorageKeyEpoch() const;
     bool CopyStorageMasterKey(uint32_t epoch, std::span<unsigned char, 32> out) const;
-    std::optional<IdentityMaterial> CreateRecoveryRotationMaterial(
+    std::optional<IdentityMaterial> CreateIdentityRotationMaterial(
         std::span<const unsigned char, 32> new_recovery_entropy) const;
     std::optional<RecoveryWords> GetRecoveryWords() const;
 
@@ -53,14 +53,13 @@ public:
     /** Inspect identity */
     bool HasKey() const;
     std::optional<AccountId> GetAccountId() const;
-    std::optional<XWingPublicKey> GetDeviceXWingPublicKey() const;
-    bool ValidateDeviceXWingKeyPair() const;
+    std::optional<XWingPublicKey> GetIdentityXWingPublicKey() const;
+    bool ValidateIdentityXWingKeyPair() const;
 
-    /** Post-Quantum device and recovery root access */
-    std::optional<IdentityHybridPublicKey> GetDevicePublicKey() const;
+    /** Domain-separated post-quantum key roles derived from the Identity entropy. */
+    std::optional<IdentityHybridPublicKey> GetAuthorizationPublicKey() const;
     std::optional<IdentityHybridPublicKey> GetRecoveryPublicKey() const;
-    std::optional<std::array<unsigned char, 32>> GetDeviceId() const;
-    std::optional<IdentityHybridSignature> SignDevice(std::span<const unsigned char> digest) const;
+    std::optional<IdentityHybridSignature> SignAuthorization(std::span<const unsigned char> digest) const;
     std::optional<IdentityHybridSignature> SignRecovery(std::span<const unsigned char> digest) const;
 
 private:
