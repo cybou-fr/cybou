@@ -1,7 +1,8 @@
 # Finalized chunk storage admission
 
-Status: frozen architecture target; proof encoding, provider selection,
-retention, and economics remain implementation gates.
+Status: frozen architecture target; a durable local provider admission store
+and proof encoding are implemented. Canonical-history integration, wire
+serialization, provider selection, retention, and economics remain gates.
 
 ## Authorization commitment
 

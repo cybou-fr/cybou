@@ -151,7 +151,7 @@ storage:
   manifest_commit_staging_abort_protocol: absent_after_cutover
   chunk_placement: independent_per_chunk
   open_gates:
-    - provider_admission_wire_and_finality_proof_format
+    - provider_chunk_wire_serialization_and_canonical_finalized_history_lookup_adapter
     - durability_threshold_and_retry_semantics
     - retention_repair_accounting_and_provider_loss
 recovery:

@@ -33,7 +33,7 @@ editing an included file.
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 130 | f920aa7287022759 |
 | docs/cybou/24_DECISIONS.md | 210 | a7054788b961c338 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 39 | a9154a19525304c4 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 53 | 21b1a4b56a1976ea |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 58 | c898b878852200d3 |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 34c65e3a9e47145b |
 | docs/cybou/30_REPOSITORY_DOCUMENTATION_CLEANUP.md | 215 | 05597f40cb045934 |
 | docs/cybou/31_IMPLEMENTATION_DETAIL_GATES.md | 103 | 8af315a4660802e0 |
@@ -84,7 +84,7 @@ editing an included file.
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 27 | 8d7a331841060278 |
 | docs/cybou/POA_FINALITY.md | 63 | 2f5c1861a6481fb5 |
 | docs/cybou/ROOT_PUBLICATION.md | 114 | f7d341ed843abba2 |
-| docs/cybou/STORAGE_ADMISSION.md | 59 | 918c17ac2e40925d |
+| docs/cybou/STORAGE_ADMISSION.md | 60 | 0457b0e81fa8f0d7 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |
 | spec/circulation_scenarios.csv | 74 | db240cf0d3280644 |
 | spec/email_crypto_profile.yaml | 111 | 929d4d43782d2b07 |
@@ -94,7 +94,7 @@ editing an included file.
 | spec/market_strategy.yaml | 51 | 542c848877114c0f |
 | spec/monetary_model.yaml | 53 | b3f4881bb25221dd |
 | spec/onboarding.yaml | 30 | 4a12ead846d1a692 |
-| spec/poa_chunk_tree.yaml | 160 | f9ceb5ad56dd3118 |
+| spec/poa_chunk_tree.yaml | 160 | 39e3fb40852012d6 |
 | spec/proof_of_trust.yaml | 28 | 6f2e15b465174431 |
 | spec/reward_policy.yaml | 13 | 676e276df9a12277 |
 | spec/survival_gates.yaml | 51 | c3df8fd151bb7ecc |
