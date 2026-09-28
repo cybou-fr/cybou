@@ -1,11 +1,11 @@
 # Encrypted chunk DAG
 
-Status: frozen architecture target. The initial codec milestones add a full
-256-bit BLAKE3 `ChunkId` over stored encrypted bytes and a bounded RFC 8949
-core-deterministic CBOR value codec. BLAKE3 C 1.8.1 is pinned with known-answer
-tests. The CBOR limits and accepted types are recorded in
-`spec/poa_chunk_dag.yaml`. Encrypted envelopes, graph construction/fetch,
-publication, and storage admission remain pending. This is the shared
+Status: frozen architecture target. The initial implementation includes a full
+256-bit BLAKE3 `ChunkId`, bounded RFC 8949 core-deterministic CBOR, a versioned
+encrypted-chunk envelope, and a bounded local graph builder/fetcher. BLAKE3 C
+1.8.1 is pinned with known-answer tests. The CBOR, envelope, and graph limits
+are recorded in `spec/poa_chunk_dag.yaml`. Publication and distributed storage
+admission remain pending. This is the shared
 encrypted payload format for Mail, Files, and later Backup. Product schemas
 are private application data, not consensus operation types.
 
@@ -62,8 +62,12 @@ distributed storage.
 The fetcher starts from a decrypted root, verifies BLAKE3 before decryption,
 authenticates and parses each bounded node, and walks children with a visited
 set. Maximum graph depth, children per node, total chunks, and reconstructed
-bytes are protocol limits. Cycles, duplicate-work amplification, oversized
-values, bad hashes, and AEAD failures are rejected.
+bytes are frozen at 16 nodes, 128 children, 65,536 chunks, and 256 MiB. Leaves
+hold at most 180 KiB; internal nodes encode the declared reconstructed byte
+count and their ordered child ChunkIDs. Empty objects use one empty leaf.
+Cycles, repeated ChunkIDs, inconsistent byte counts, oversized values, bad
+hashes, and AEAD failures are rejected. This initial builder treats the input
+as opaque private application bytes; Mail and Files own their private schemas.
 
 Mail, Files catalog, file versions, shares, and later Backup use private
 schemas over this same graph. No service may add a parallel public manifest or

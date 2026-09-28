@@ -13,9 +13,11 @@ the full BLAKE3-256 digest of stored encrypted bytes, using pinned BLAKE3 C
 1.8.1, with official known-answer vectors; the bounded RFC 8949 core-
 deterministic CBOR value codec has explicit profile limits; and a versioned
 ChaCha20-Poly1305/HKDF encrypted-chunk envelope uses per-node salts/nonces,
-network-bound AAD, and bounded random padding. Encrypted graph
-builder/fetcher, RootPublication, PoA execution, and storage admission remain
-unimplemented. Do not reset DEV until fork/equivocation, storage
+network-bound AAD, and bounded random padding. A local encrypted byte-graph
+builder/fetcher applies fixed leaf, fan-out, depth, chunk-count, and total-size
+limits and rejects duplicate/cyclic references. RootPublication, PoA
+execution, and distributed storage admission remain unimplemented. Do not
+reset DEV until fork/equivocation, storage
 admission/durability, names integration, state execution, and clean-machine
 recovery gates pass together.
 

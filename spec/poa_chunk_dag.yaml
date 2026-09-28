@@ -66,8 +66,24 @@ chunks:
     aead_tag_bytes: 16
     max_stored_bytes: 524353
     chunk_id_covers: entire_stored_envelope
+  encrypted_graph:
+    private_node_schema_version: 1
+    node_map_keys: [schema_version, kind, declared_plaintext_bytes, payload_or_child_ids]
+    node_kind_values: {leaf: 0, branch: 1}
+    leaf_payload_type: byte_string
+    branch_child_id_type: 32_byte_ChunkID
+    leaf_bytes_max: 184320
+    branch_children_min: 2
+    branch_children_max: 128
+    graph_chunks_max: 65536
+    graph_depth_max_nodes: 16
+    graph_plaintext_bytes_max: 268435456
+    empty_payload_representation: empty_leaf
+    chunk_order: child_array_order
+    duplicate_chunk_references: rejected
   open_gates:
     - encrypted_chunk_cross_implementation_vectors
+    - encrypted_graph_cross_implementation_vectors_and_limits
     - padding_overhead_benchmarks
     - official_KAT_and_cross_implementation_vectors
 publication:
