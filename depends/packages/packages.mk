@@ -2,6 +2,8 @@ packages:=
 
 boost_packages = boost
 
+blake3_packages = blake3
+
 libevent_packages = libevent
 
 qrencode_linux_packages = qrencode

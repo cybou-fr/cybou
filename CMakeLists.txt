@@ -86,6 +86,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(OpenSSL 3.5 REQUIRED COMPONENTS Crypto)
+find_package(blake3 1.8.1 EXACT CONFIG REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/module)
 include(ProcessConfigurations)

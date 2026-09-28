@@ -6,6 +6,7 @@
     "boost-asio",
     "boost-multi-index",
     "boost-signals2",
+    "blake3",
     "libevent",
     "openssl"
   ],

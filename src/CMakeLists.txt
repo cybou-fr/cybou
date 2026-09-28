@@ -160,6 +160,7 @@ add_library(cybou_core STATIC
   cybou/bft.cpp
   cybou/bft_engine.cpp
   cybou/block.cpp
+  cybou/chunk_id.cpp
   cybou/crypto/chacha20_poly1305.cpp
   cybou/crypto/hkdf_sha256.cpp
   cybou/crypto/sha256.cpp
@@ -189,6 +190,7 @@ target_link_libraries(cybou_core
   PRIVATE
     Boost::headers
     OpenSSL::Crypto
+    BLAKE3::blake3
 )
 if(CYBOU_ENABLE_TEST_HOOKS)
   target_compile_definitions(cybou_core PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
