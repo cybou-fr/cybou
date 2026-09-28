@@ -16,8 +16,8 @@ user identities or parallel authorization systems.
                               │
             ┌─────────────────┴──────────────────┐
             │                                    │
-    Hybrid authorization                 Hybrid key agreement
-    Ed25519 + ML-DSA-44                X25519 + ML-KEM-768 (target)
+    Hybrid authorization                 DEV key agreement
+    Ed25519 + ML-DSA-44                X-Wing (draft-05)
             │                                    │
  DeviceOperationCoordinator              Key wrapping / CEKs
             │                                    │
@@ -37,16 +37,14 @@ are not user-service keys.
 |---|---|---|---|
 | Recovery Root | Ed25519 + ML-DSA-65 | Recover account authority and authorize recovery/device lifecycle operations | Implemented in the current identity path; encoding/vector work remains tracked by Identity docs |
 | Device signing | Ed25519 + ML-DSA-44 | Authorize user-service operations and prove device possession | Implemented for current device authorization |
-| Device key agreement | X25519 + ML-KEM-768 | Establish or wrap content keys for an authorized device | Independent private material is generated and stored locally; not published in the identity record or used by services |
+| Device key agreement | X-Wing (ML-KEM-768 + X25519) | Establish or wrap content keys for an authorized device | Draft-05 profile is published per active device in DEV; Mail/Files do not consume it yet |
 | Validator signing | Ed25519 + ML-DSA-65 | Validator consensus signatures | Separate target domain; production signature wiring remains incomplete |
 
-Private keys remain client-controlled. The identity record binds public
-capabilities to AccountID and device activation. KEM public keys, suite
-identifiers, validity, rotation, and historical proofs require an explicit
-identity/wire-format design before publication; do not append fields to the
-current authorization descriptor ad hoc. The publication design gate is
-specified in `89_IDENTITY_KEM_PUBLICATION.md`; it does not freeze a hybrid
-combiner or make KEM-dependent services available.
+Private keys remain client-controlled. DEV Identity binds each X-Wing public
+package to AccountID and device activation. Its draft-05 wire format and
+publication rules are frozen for DEV in `89_IDENTITY_KEM_PUBLICATION.md`; this
+does not freeze Mail application framing or make KEM-dependent services
+available.
 
 Signing keys MUST NOT be converted into or reused as Mail, Files, or Storage
 encryption keys. Recovery keys are not routine service-signing keys. Key
@@ -59,7 +57,7 @@ must be authenticated in their respective protocols.
 |---|---|---|---|
 | Name | Device hybrid signature through the coordinator | No content encryption capability | BFT finality for commit and reveal |
 | Wallet | Device hybrid signature through the coordinator | No content encryption capability | BFT finality for payment and lock operations |
-| Mail | Device-authorized Mail operation through the coordinator (target) | X25519 + ML-KEM-768 recipient key agreement and symmetric AEAD (target) | BFT registration; Mail content and attachments use Storage when required |
+| Mail | Device-authorized Mail operation through the coordinator (target) | DEV Identity X-Wing capability; Mail ciphertext/profile not frozen, service disabled | BFT registration; Mail content and attachments use Storage when required |
 | Files | Device-authorized manifest/root changes through the coordinator (target) | Symmetric object encryption; device key agreement wraps Files keys (target) | Storage durability contract, not chain inclusion alone |
 
 “Hybrid” does not mean every operation uses every key. Signatures authorize

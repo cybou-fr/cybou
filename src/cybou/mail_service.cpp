@@ -3,11 +3,8 @@
 
 #include <cybou/mail_service.h>
 #include <cybou/hex.h>
-#include <cybou/crypto/cleanse.h>
-#include <cybou/crypto/hkdf_sha256.h>
 
 #include <cybou/crypto/sha256.h>
-#include <cybou/crypto/chacha20_poly1305.h>
 #include <openssl/rand.h>
 
 #include <algorithm>
@@ -117,184 +114,6 @@ uint256 ComputeMailContentCommitment(const uint256& salt, std::span<const unsign
     return out;
 }
 
-std::optional<std::vector<unsigned char>> EncryptMailPayload(
-    const uint256& recipient_ed25519_pubkey,
-    const AccountId& sender,
-    const AccountId& recipient,
-    const uint256& salt,
-    const ProtectedMail& mail)
-{
-    const auto recipient_x25519 = Ed25519PublicKeyToX25519(recipient_ed25519_pubkey);
-    if (!recipient_x25519) return std::nullopt;
-
-    std::array<unsigned char, 32> eph_sk{};
-    uint256 eph_pk;
-    if (!GenerateX25519KeyPair(eph_sk, eph_pk)) {
-        return std::nullopt;
-    }
-
-    auto shared_secret = X25519DeriveSharedSecret(eph_sk, *recipient_x25519);
-    crypto::CleanseMemory(eph_sk.data(), eph_sk.size());
-    if (!shared_secret) return std::nullopt;
-
-    std::array<unsigned char, 32> cek{};
-    std::array<unsigned char, 32> nonce_buf{};
-    static constexpr std::string_view HKDF_SALT{"CYBOU/MAIL_HKDF/V1"};
-    static constexpr std::string_view CEK_INFO{"CYBOU/MAIL_CEK/V1"};
-    static constexpr std::string_view NONCE_INFO{"CYBOU/MAIL_NONCE/V1"};
-    const auto hkdf_salt = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(HKDF_SALT.data()), HKDF_SALT.size()};
-    if (!crypto::HkdfSha256(*shared_secret, hkdf_salt,
-            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(CEK_INFO.data()), CEK_INFO.size()}, cek) ||
-        !crypto::HkdfSha256(*shared_secret, hkdf_salt,
-            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(NONCE_INFO.data()), NONCE_INFO.size()}, nonce_buf)) {
-        crypto::CleanseMemory(shared_secret->data(), shared_secret->size());
-        crypto::CleanseMemory(cek.data(), cek.size());
-        crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
-        return std::nullopt;
-    }
-    crypto::CleanseMemory(shared_secret->data(), shared_secret->size());
-
-    const auto plain_serialized = mail.Serialize();
-    const uint256 commitment = ComputeMailContentCommitment(salt, plain_serialized);
-
-    std::vector<std::byte> to_encrypt(32 + plain_serialized.size());
-    std::copy(reinterpret_cast<const std::byte*>(salt.begin()),
-              reinterpret_cast<const std::byte*>(salt.end()),
-              to_encrypt.begin());
-    std::copy(reinterpret_cast<const std::byte*>(plain_serialized.data()),
-              reinterpret_cast<const std::byte*>(plain_serialized.data() + plain_serialized.size()),
-              to_encrypt.begin() + 32);
-
-    static constexpr std::string_view AAD_PREFIX{"CYBOU-MAIL-AAD-V1"};
-    std::vector<std::byte> aad;
-    aad.reserve(AAD_PREFIX.size() + 32 + 32 + 32);
-    aad.insert(aad.end(), reinterpret_cast<const std::byte*>(AAD_PREFIX.data()),
-               reinterpret_cast<const std::byte*>(AAD_PREFIX.data() + AAD_PREFIX.size()));
-    aad.insert(aad.end(), reinterpret_cast<const std::byte*>(sender.Value().begin()),
-               reinterpret_cast<const std::byte*>(sender.Value().end()));
-    aad.insert(aad.end(), reinterpret_cast<const std::byte*>(recipient.Value().begin()),
-               reinterpret_cast<const std::byte*>(recipient.Value().end()));
-    aad.insert(aad.end(), reinterpret_cast<const std::byte*>(commitment.begin()),
-               reinterpret_cast<const std::byte*>(commitment.end()));
-
-    std::vector<std::byte> cipher_bytes(to_encrypt.size() + crypto::CHACHA20_POLY1305_TAG_SIZE);
-    const auto key_bytes = std::span<const unsigned char, crypto::CHACHA20_POLY1305_KEY_SIZE>{cek};
-    const auto nonce_bytes = std::span<const unsigned char, crypto::CHACHA20_POLY1305_NONCE_SIZE>{nonce_buf.data(), crypto::CHACHA20_POLY1305_NONCE_SIZE};
-    if (!crypto::ChaCha20Poly1305Encrypt(key_bytes, nonce_bytes,
-            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(aad.data()), aad.size()},
-            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(to_encrypt.data()), to_encrypt.size()},
-            std::span<unsigned char>{reinterpret_cast<unsigned char*>(cipher_bytes.data()), cipher_bytes.size()})) {
-        crypto::CleanseMemory(cek.data(), cek.size());
-        crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
-        crypto::CleanseMemory(to_encrypt.data(), to_encrypt.size());
-        return std::nullopt;
-    }
-
-    crypto::CleanseMemory(cek.data(), cek.size());
-    crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
-    crypto::CleanseMemory(to_encrypt.data(), to_encrypt.size());
-
-    std::vector<unsigned char> outer;
-    outer.reserve(1 + 32 + cipher_bytes.size());
-    outer.push_back(0x01); // Suite ID: X25519_CHACHA20POLY1305
-    outer.insert(outer.end(), eph_pk.begin(), eph_pk.end());
-    outer.insert(outer.end(), reinterpret_cast<const unsigned char*>(cipher_bytes.data()),
-                 reinterpret_cast<const unsigned char*>(cipher_bytes.data() + cipher_bytes.size()));
-    return outer;
-}
-
-std::optional<std::pair<uint256, ProtectedMail>> DecryptMailPayload(
-    const CybouKeyStore& keystore,
-    const AccountId& sender,
-    const AccountId& recipient,
-    const uint256& content_commitment,
-    std::span<const unsigned char> ciphertext)
-{
-    if (ciphertext.size() < 1 + 32 + 32 + 81 + crypto::CHACHA20_POLY1305_TAG_SIZE) {
-        return std::nullopt;
-    }
-    if (ciphertext[0] != 0x01) {
-        return std::nullopt;
-    }
-
-    uint256 eph_pk;
-    std::copy(ciphertext.begin() + 1, ciphertext.begin() + 33, eph_pk.begin());
-
-    auto shared_secret = keystore.DeriveX25519SharedSecret(eph_pk);
-    if (!shared_secret) return std::nullopt;
-
-    std::array<unsigned char, 32> cek{};
-    std::array<unsigned char, 32> nonce_buf{};
-    static constexpr std::string_view HKDF_SALT{"CYBOU/MAIL_HKDF/V1"};
-    static constexpr std::string_view CEK_INFO{"CYBOU/MAIL_CEK/V1"};
-    static constexpr std::string_view NONCE_INFO{"CYBOU/MAIL_NONCE/V1"};
-    const auto hkdf_salt = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(HKDF_SALT.data()), HKDF_SALT.size()};
-    if (!crypto::HkdfSha256(*shared_secret, hkdf_salt,
-            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(CEK_INFO.data()), CEK_INFO.size()}, cek) ||
-        !crypto::HkdfSha256(*shared_secret, hkdf_salt,
-            std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(NONCE_INFO.data()), NONCE_INFO.size()}, nonce_buf)) {
-        crypto::CleanseMemory(shared_secret->data(), shared_secret->size());
-        crypto::CleanseMemory(cek.data(), cek.size());
-        crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
-        return std::nullopt;
-    }
-    crypto::CleanseMemory(shared_secret->data(), shared_secret->size());
-
-    static constexpr std::string_view AAD_PREFIX{"CYBOU-MAIL-AAD-V1"};
-    std::vector<std::byte> aad;
-    aad.reserve(AAD_PREFIX.size() + 32 + 32 + 32);
-    aad.insert(aad.end(), reinterpret_cast<const std::byte*>(AAD_PREFIX.data()),
-               reinterpret_cast<const std::byte*>(AAD_PREFIX.data() + AAD_PREFIX.size()));
-    aad.insert(aad.end(), reinterpret_cast<const std::byte*>(sender.Value().begin()),
-               reinterpret_cast<const std::byte*>(sender.Value().end()));
-    aad.insert(aad.end(), reinterpret_cast<const std::byte*>(recipient.Value().begin()),
-               reinterpret_cast<const std::byte*>(recipient.Value().end()));
-    aad.insert(aad.end(), reinterpret_cast<const std::byte*>(content_commitment.begin()),
-               reinterpret_cast<const std::byte*>(content_commitment.end()));
-
-    std::span<const std::byte> cipher_payload{
-        reinterpret_cast<const std::byte*>(ciphertext.data() + 33),
-        ciphertext.size() - 33
-    };
-
-    std::vector<std::byte> decrypted(cipher_payload.size() - crypto::CHACHA20_POLY1305_TAG_SIZE);
-    const auto key_bytes = std::span<const unsigned char, crypto::CHACHA20_POLY1305_KEY_SIZE>{cek};
-    const auto nonce_bytes = std::span<const unsigned char, crypto::CHACHA20_POLY1305_NONCE_SIZE>{nonce_buf.data(), crypto::CHACHA20_POLY1305_NONCE_SIZE};
-    const bool dec_ok = crypto::ChaCha20Poly1305Decrypt(key_bytes, nonce_bytes,
-        std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(aad.data()), aad.size()},
-        std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(cipher_payload.data()), cipher_payload.size()},
-        std::span<unsigned char>{reinterpret_cast<unsigned char*>(decrypted.data()), decrypted.size()});
-
-    crypto::CleanseMemory(cek.data(), cek.size());
-    crypto::CleanseMemory(nonce_buf.data(), nonce_buf.size());
-
-    if (!dec_ok || decrypted.size() < 32 + 81) {
-        return std::nullopt;
-    }
-
-    uint256 salt;
-    std::copy(reinterpret_cast<const unsigned char*>(decrypted.data()),
-              reinterpret_cast<const unsigned char*>(decrypted.data() + 32),
-              salt.begin());
-
-    std::span<const unsigned char> mail_bytes{
-        reinterpret_cast<const unsigned char*>(decrypted.data() + 32),
-        decrypted.size() - 32
-    };
-
-    const uint256 check_comm = ComputeMailContentCommitment(salt, mail_bytes);
-    if (check_comm != content_commitment) {
-        return std::nullopt;
-    }
-
-    const auto deserialized = ProtectedMail::Deserialize(mail_bytes);
-    if (!deserialized) return std::nullopt;
-    if (deserialized->sender != sender || deserialized->recipient != recipient) {
-        return std::nullopt;
-    }
-
-    return std::make_pair(salt, *deserialized);
-}
 
 CybouMailService::CybouMailService(
     CybouNodeRuntime& runtime,
@@ -638,12 +457,11 @@ SendMailResult CybouMailService::SendMail(
     if (!rec_identity || rec_identity->devices.empty()) {
         return {.error = SendMailError::RECIPIENT_NOT_FOUND, .error_message = "Recipient identity not found on-chain"};
     }
-    // The identity registry currently publishes device signing keys only.
-    // The local mail secret is derived independently, so encrypting to the
-    // device signing public key would finalize ciphertext the recipient
-    // cannot decrypt. Require a consensus-bound mail key before sending.
+    // Identity state publishes active-device X-Wing packages, but Mail has no
+    // frozen ciphertext/recipient-set profile yet. Do not construct or submit
+    // ciphertext until that wire profile is implemented.
     return {.error = SendMailError::CRYPTO_FAILURE,
-        .error_message = "Recipient mail encryption key is not published in verified identity state"};
+        .error_message = "Protected Mail profile is not enabled; no message was submitted"};
 }
 
 size_t CybouMailService::SyncMailbox()
@@ -737,9 +555,8 @@ size_t CybouMailService::SyncMailbox()
                 }
             }
 
-            // There is no production-supported ciphertext suite or published
-            // recipient hybrid key package yet. Never decrypt the experimental
-            // X25519-only prototype from consensus history.
+            // The Mail ciphertext profile and historical sender authorization
+            // are not integrated yet. Do not decrypt consensus payloads.
         }
         scanned_height = h;
     }

@@ -12,6 +12,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -75,7 +76,9 @@ BOOST_AUTO_TEST_CASE(account_creation_requires_prepared_durable_vault)
     const auto account = cybou::AccountId::FromBytes(material->account_id);
     BOOST_REQUIRE(account);
     BOOST_CHECK(result.account_id == *account);
-    BOOST_CHECK(result.account_id.Value() != *service.GetKeyStore().GetPublicKey());
+    const auto device_key = service.GetKeyStore().GetDevicePublicKey();
+    BOOST_REQUIRE(device_key);
+    BOOST_CHECK(!std::equal(result.account_id.Value().begin(), result.account_id.Value().end(), device_key->ed25519.begin()));
 
     // A valid but different local KEM seed must not make a signing-key match ACTIVE.
     auto mismatched_material = cybou::LoadIdentityMaterial(path, "correct horse battery staple");

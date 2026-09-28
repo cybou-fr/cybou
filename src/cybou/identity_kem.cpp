@@ -23,6 +23,73 @@ namespace {
 using PKey = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
 using PKeyCtx = std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)>;
 using MdCtx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
+inline constexpr size_t X25519_PRIVATE_KEY_SIZE{32};
+inline constexpr size_t X25519_PUBLIC_KEY_SIZE{32};
+inline constexpr size_t ML_KEM_768_SEED_SIZE{64};
+inline constexpr size_t ML_KEM_768_PUBLIC_KEY_SIZE{1184};
+inline constexpr size_t ML_KEM_768_CIPHERTEXT_SIZE{1088};
+inline constexpr size_t ML_KEM_768_SHARED_SECRET_SIZE{32};
+using DeviceX25519PrivateKey = std::array<unsigned char, X25519_PRIVATE_KEY_SIZE>;
+using DeviceX25519PublicKey = std::array<unsigned char, X25519_PUBLIC_KEY_SIZE>;
+using MlKem768Seed = std::array<unsigned char, ML_KEM_768_SEED_SIZE>;
+using MlKem768PublicKey = std::array<unsigned char, ML_KEM_768_PUBLIC_KEY_SIZE>;
+using MlKem768Ciphertext = std::array<unsigned char, ML_KEM_768_CIPHERTEXT_SIZE>;
+using MlKem768SharedSecret = std::array<unsigned char, ML_KEM_768_SHARED_SECRET_SIZE>;
+
+std::optional<DeviceX25519PublicKey> DeriveDeviceX25519PublicKey(
+    std::span<const unsigned char, X25519_PRIVATE_KEY_SIZE> private_key);
+
+struct MlKem768Encapsulation {
+    MlKem768Ciphertext ciphertext{};
+    MlKem768SharedSecret shared_secret{};
+    MlKem768Encapsulation() = default;
+    MlKem768Encapsulation(const MlKem768Encapsulation&) = delete;
+    MlKem768Encapsulation& operator=(const MlKem768Encapsulation&) = delete;
+    MlKem768Encapsulation(MlKem768Encapsulation&& other) noexcept
+        : ciphertext{other.ciphertext}, shared_secret{other.shared_secret}
+    {
+        crypto::CleanseMemory(other.ciphertext.data(), other.ciphertext.size());
+        crypto::CleanseMemory(other.shared_secret.data(), other.shared_secret.size());
+    }
+    MlKem768Encapsulation& operator=(MlKem768Encapsulation&& other) noexcept
+    {
+        if (this != &other) {
+            crypto::CleanseMemory(ciphertext.data(), ciphertext.size());
+            crypto::CleanseMemory(shared_secret.data(), shared_secret.size());
+            ciphertext = other.ciphertext;
+            shared_secret = other.shared_secret;
+            crypto::CleanseMemory(other.ciphertext.data(), other.ciphertext.size());
+            crypto::CleanseMemory(other.shared_secret.data(), other.shared_secret.size());
+        }
+        return *this;
+    }
+    ~MlKem768Encapsulation()
+    {
+        crypto::CleanseMemory(ciphertext.data(), ciphertext.size());
+        crypto::CleanseMemory(shared_secret.data(), shared_secret.size());
+    }
+};
+
+struct MlKem768Decapsulation {
+    MlKem768SharedSecret shared_secret{};
+    MlKem768Decapsulation() = default;
+    MlKem768Decapsulation(const MlKem768Decapsulation&) = delete;
+    MlKem768Decapsulation& operator=(const MlKem768Decapsulation&) = delete;
+    MlKem768Decapsulation(MlKem768Decapsulation&& other) noexcept : shared_secret{other.shared_secret}
+    {
+        crypto::CleanseMemory(other.shared_secret.data(), other.shared_secret.size());
+    }
+    MlKem768Decapsulation& operator=(MlKem768Decapsulation&& other) noexcept
+    {
+        if (this != &other) {
+            crypto::CleanseMemory(shared_secret.data(), shared_secret.size());
+            shared_secret = other.shared_secret;
+            crypto::CleanseMemory(other.shared_secret.data(), other.shared_secret.size());
+        }
+        return *this;
+    }
+    ~MlKem768Decapsulation() { crypto::CleanseMemory(shared_secret.data(), shared_secret.size()); }
+};
 
 bool IsZero(std::span<const unsigned char> bytes)
 {
@@ -150,53 +217,7 @@ XWingEncapsulation::~XWingEncapsulation()
     crypto::CleanseMemory(shared_secret.data(), shared_secret.size());
 }
 
-MlKem768Encapsulation::MlKem768Encapsulation(MlKem768Encapsulation&& other) noexcept
-    : ciphertext{other.ciphertext}, shared_secret{other.shared_secret}
-{
-    crypto::CleanseMemory(other.ciphertext.data(), other.ciphertext.size());
-    crypto::CleanseMemory(other.shared_secret.data(), other.shared_secret.size());
-}
-
-MlKem768Encapsulation& MlKem768Encapsulation::operator=(MlKem768Encapsulation&& other) noexcept
-{
-    if (this != &other) {
-        crypto::CleanseMemory(ciphertext.data(), ciphertext.size());
-        crypto::CleanseMemory(shared_secret.data(), shared_secret.size());
-        ciphertext = other.ciphertext;
-        shared_secret = other.shared_secret;
-        crypto::CleanseMemory(other.ciphertext.data(), other.ciphertext.size());
-        crypto::CleanseMemory(other.shared_secret.data(), other.shared_secret.size());
-    }
-    return *this;
-}
-
-MlKem768Encapsulation::~MlKem768Encapsulation()
-{
-    crypto::CleanseMemory(ciphertext.data(), ciphertext.size());
-    crypto::CleanseMemory(shared_secret.data(), shared_secret.size());
-}
-
-MlKem768Decapsulation::MlKem768Decapsulation(MlKem768Decapsulation&& other) noexcept
-    : shared_secret{other.shared_secret}
-{
-    crypto::CleanseMemory(other.shared_secret.data(), other.shared_secret.size());
-}
-
-MlKem768Decapsulation& MlKem768Decapsulation::operator=(MlKem768Decapsulation&& other) noexcept
-{
-    if (this != &other) {
-        crypto::CleanseMemory(shared_secret.data(), shared_secret.size());
-        shared_secret = other.shared_secret;
-        crypto::CleanseMemory(other.shared_secret.data(), other.shared_secret.size());
-    }
-    return *this;
-}
-
-MlKem768Decapsulation::~MlKem768Decapsulation()
-{
-    crypto::CleanseMemory(shared_secret.data(), shared_secret.size());
-}
-
+namespace {
 std::optional<DeviceX25519PrivateKey> GenerateDeviceX25519PrivateKey()
 {
     DeviceX25519PrivateKey key{};
@@ -287,6 +308,7 @@ std::optional<MlKem768Decapsulation> DecapsulateMlKem768(
     }
     return result;
 }
+} // namespace
 
 std::optional<XWingSeed> GenerateXWingSeed()
 {

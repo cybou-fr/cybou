@@ -101,11 +101,12 @@ The root `CMakeLists.txt` requires OpenSSL 3.5. The active PQ baseline in
 prohibits a custom hybrid KEM combiner. Do not change the target to ML-KEM-1024
 or require OpenSSL 3.6 without a separate compatibility and provider review.
 
-Mail confidentiality is not production-ready. `CybouMailService::SendMail`
-fails closed because recipient encryption keys are not published in verified
-identity state. The X25519-only helper in `mail_service.cpp` is marked as a
-prototype; it converts an Ed25519 public key and must not be promoted to the
-production path. See `16_MAIL_PROTOCOL.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
+Mail confidentiality is not production-ready. DEV Identity publishes a
+draft-05 X-Wing package for each active device, but `CybouMailService::SendMail`
+fails closed until Mail freezes its application ciphertext and recipient-set
+profile. The former X25519-only Mail helper and Ed25519-to-X25519 conversion
+path have been removed. See `16_MAIL_PROTOCOL.md` and
+`49_EMAIL_E2EE_HPKE_PQ.md`.
 
 ## Required order
 

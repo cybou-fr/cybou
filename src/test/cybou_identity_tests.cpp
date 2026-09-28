@@ -8,6 +8,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -76,8 +77,9 @@ BOOST_AUTO_TEST_CASE(keystore_uses_random_account_and_portable_vault)
     BOOST_REQUIRE(ks1.GenerateNew());
     const auto acc_id1 = ks1.GetAccountId();
     const auto words = ks1.GetRecoveryWords();
-    BOOST_REQUIRE(acc_id1 && words && ks1.GetPublicKey());
-    BOOST_CHECK(acc_id1->Value() != *ks1.GetPublicKey());
+    const auto device_key = ks1.GetDevicePublicKey();
+    BOOST_REQUIRE(acc_id1 && words && device_key);
+    BOOST_CHECK(!std::equal(acc_id1->Value().begin(), acc_id1->Value().end(), device_key->ed25519.begin()));
     BOOST_REQUIRE(cybou::DecodeRecoveryWords(*words));
     BOOST_REQUIRE(ks1.SaveToFile(key_path, "correct horse battery staple"));
     BOOST_CHECK(std::filesystem::exists(key_path));

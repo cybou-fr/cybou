@@ -94,7 +94,7 @@ The dominant identity card should contain:
 ```text
 stanislav.cybou
 Identity signing: post-quantum protected
-Mail confidentiality: unavailable until hybrid recipient keys are published
+Mail confidentiality: unavailable until the Mail ciphertext profile is frozen and integrated
 Online
 
 [ Share identity ]   [ Copy name ]
@@ -555,7 +555,8 @@ Exact algorithms belong under `Security details`, for example:
 ```text
 Recovery authorization      Ed25519 + ML-DSA-65
 Device authorization        Ed25519 + ML-DSA-44
-Mail confidentiality        X25519 + ML-KEM-768
+Identity device KEM        X-Wing (draft-05, DEV)
+Mail confidentiality        unavailable until Mail profile freeze
 Vault                        Argon2id + AES-256-GCM
 ```
 

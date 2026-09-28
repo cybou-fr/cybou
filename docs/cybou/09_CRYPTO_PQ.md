@@ -15,11 +15,12 @@ Key purpose, suite identifier, NetworkID, operation kind, account or validator i
 
 Mail signing keys are separate from encryption keys. Identity publishes
 authorized recipient-device encryption capabilities; Mail does not maintain a
-parallel recipient-key registry. The target device key-agreement profile is
-X25519 + ML-KEM-768, subject to an interoperable standardized hybrid profile.
-A recipient that requires the hybrid suite cannot be downgraded to
-classical-only encryption. Plaintext and key material must never enter
-consensus state.
+parallel recipient-key registry. The DEV Identity profile publishes a single
+X-Wing capability package (ML-KEM-768 + X25519) per active device, pinned to
+draft-ietf-hpke-pq-05. This capability is not yet consumed by Mail: its
+application transcript and ciphertext wire profile remain unfrozen. Mainnet
+use waits for final standards. Mail must not downgrade to classical-only
+encryption. Plaintext and key material must never enter consensus state.
 
 ## Identity capability key domains
 
@@ -27,7 +28,7 @@ consensus state.
 |---|---|---|
 | Recovery Root authorization | Ed25519 + ML-DSA-65 | Protocol/vault target; implemented in the current identity path |
 | Device authorization | Ed25519 + ML-DSA-44 | Implemented for current device authorization |
-| Device key agreement / wrapping | X25519 + ML-KEM-768 | Target; not published in the identity record yet |
+| Device key agreement / wrapping | X-Wing (ML-KEM-768 + X25519) | Published in the DEV Identity record; draft-05 profile, Mail use disabled |
 | Validator authorization | Ed25519 + ML-DSA-65 | Policy target; production consensus wiring remains incomplete |
 
 Hybrid signatures protect authorization. Hybrid KEM protects key establishment

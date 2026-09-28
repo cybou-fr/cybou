@@ -44,10 +44,6 @@ enum class MailFinalityStatus : uint8_t {
  * Protected text email payload (doc 49).
  * E2E encrypted inside the MailTx ciphertext. Plaintext never touches consensus state.
  */
-/**
- * Protected text email payload (doc 49).
- * E2E encrypted inside the MailTx ciphertext. Plaintext never touches consensus state.
- */
 struct ProtectedMail {
     uint8_t version{PROTECTED_MAIL_VERSION};
     AccountId sender;
@@ -112,25 +108,6 @@ struct SendMailResult {
     explicit operator bool() const { return error == SendMailError::NONE; }
 };
 
-/**
- * Experimental X25519-only Mail prototype helpers. These are not RFC 9180 HPKE,
- * do not implement the required hybrid profile, and must not be used by the
- * production send/receive path.
- */
-std::optional<std::vector<unsigned char>> EncryptMailPayload(
-    const uint256& recipient_ed25519_pubkey,
-    const AccountId& sender,
-    const AccountId& recipient,
-    const uint256& salt,
-    const ProtectedMail& mail);
-
-std::optional<std::pair<uint256, ProtectedMail>> DecryptMailPayload(
-    const CybouKeyStore& keystore,
-    const AccountId& sender,
-    const AccountId& recipient,
-    const uint256& content_commitment,
-    std::span<const unsigned char> ciphertext);
-
 uint256 ComputeMailContentCommitment(const uint256& salt, std::span<const unsigned char> plaintext);
 
 /**
@@ -173,8 +150,7 @@ public:
     /** Unread count in Inbox. */
     size_t GetUnreadCount() const;
 
-    /** Refuses submission until verified identity state publishes independent
-     * recipient mail encryption keys. Protocol MailTx validation remains in core. */
+    /** Refuses submission until the Mail ciphertext and recipient-set profile is frozen. */
     SendMailResult SendMail(
         const AccountId& recipient,
         const std::string& subject,
@@ -182,8 +158,8 @@ public:
 
     /**
      * Synchronize local Sent finality against newly finalized BFT blocks.
-     * Incoming decryption remains disabled until the standardized hybrid key
-     * package and ciphertext profile are integrated.
+     * Incoming decryption remains disabled until the Mail ciphertext profile
+     * and historical sender authorization are integrated.
      * Returns count of newly received messages (currently always zero).
      */
     size_t SyncMailbox();
