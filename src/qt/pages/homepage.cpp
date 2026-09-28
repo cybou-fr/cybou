@@ -113,8 +113,8 @@ QWidget* HomePage::buildIdentityHero()
 
     auto* chips = new QHBoxLayout;
     chips->setSpacing(8);
-    m_chip_protected = Pill(tr("Protected"), Tint::Mint, hero);
-    m_chip_ready = Pill(tr("Ready to use"), Tint::Blue, hero);
+    m_chip_protected = Pill(tr("PQ identity signing"), Tint::Mint, hero);
+    m_chip_ready = Pill(tr("Offline"), Tint::Blue, hero);
     chips->addWidget(m_chip_protected);
     chips->addWidget(m_chip_ready);
     chips->addStretch();
@@ -216,10 +216,13 @@ QWidget* HomePage::buildDevicesCard()
 
     auto* header = new QHBoxLayout;
     header->addWidget(Chip(Glyph::Monitor, Tint::Indigo, card, 38, 19));
-    auto* title = new QLabel{tr("Devices"), card};
+    auto* title = new QLabel{tr("Devices & Security"), card};
     title->setObjectName(QStringLiteral("serviceTitle"));
     header->addWidget(title, 0, Qt::AlignVCenter);
     header->addStretch();
+    auto* open = IconButton(Glyph::ChevronRight, card);
+    connect(open, &QToolButton::clicked, this, [this] { m_identity_requested(); });
+    header->addWidget(open, 0, Qt::AlignVCenter);
     layout->addLayout(header);
 
     m_devices_metric = new QLabel{card};
@@ -267,14 +270,16 @@ void HomePage::refresh()
     // Identity hero.
     if (active) {
         m_identity_name->setText(status.primary_name.isEmpty() ? tr("Identity active") : status.primary_name);
-        m_identity_subtitle->setText(tr("Your CYBOU identity for messages, payments and files."));
+        m_identity_subtitle->setText(tr("Your identity for CYBOU services. Mail sending and Files sync are not available yet."));
+        m_chip_protected->setText(tr("PQ identity signing"));
+        m_chip_ready->setText(status.network_active ? tr("Online") : tr("Offline"));
         m_chip_protected->setVisible(true);
         m_chip_ready->setVisible(true);
         m_share_button->setVisible(!status.account_id.isEmpty());
         m_manage_button->setText(tr("Manage identity"));
     } else {
         m_identity_name->setText(tr("Set up your CYBOU identity"));
-        m_identity_subtitle->setText(tr("One identity for encrypted mail, storage, payments and backup — registered by a permissionless protocol operation, controlled by keys that stay on this device."));
+        m_identity_subtitle->setText(tr("Create or restore an identity to use CYBOU. Mail sending and Backup are not available yet."));
         m_chip_protected->setVisible(false);
         m_chip_ready->setVisible(false);
         m_share_button->setVisible(false);

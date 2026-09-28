@@ -158,7 +158,8 @@ void CybouDesktopController::start()
         });
         m_node_service->Start();
         auto& runtime = m_node_service->Runtime();
-        m_model->setNodeStatus(true, 0, true, QString::fromStdString(m_data_directory.string()));
+        // Starting the local node is not proof of network connectivity.
+        m_model->setNodeStatus(true, 0, false, QString::fromStdString(m_data_directory.string()));
 
         const auto identity_path = m_data_directory / "identity.cybou";
         m_identity_service = std::make_unique<cybou::CybouIdentityService>(runtime, identity_path);
@@ -194,7 +195,7 @@ void CybouDesktopController::start()
                         : QStringLiteral("Local CYBOU state is corrupt or unavailable.");
                     qWarning() << message;
                     QMetaObject::invokeMethod(m_model, [model = m_model, message] {
-                        model->setPeerCount(0);
+                        model->setNodeStatus(true, 0, false);
                         model->setSyncError(message);
                     }, Qt::QueuedConnection);
                     return false;
@@ -223,7 +224,7 @@ void CybouDesktopController::start()
                     model->setSyncError(sync_error);
                     model->setFinalityStatus(static_cast<int>(runtime_status.finalized_height),
                         static_cast<int>(runtime_status.validator_count));
-                    model->setNodeStatus(true, static_cast<int>(connected_peer_count), true);
+                    model->setNodeStatus(true, static_cast<int>(connected_peer_count), bootstrap_reachable);
                     if (bootstrap_reachable) model->setLastSync(QDateTime::currentDateTime());
                 }, Qt::QueuedConnection);
                 return true;

@@ -743,8 +743,10 @@ void IdentityPage::refresh()
 
     if (status.identity_state == CybouIdentityState::Active) {
         m_state_label->setText(status.primary_name.isEmpty() ? tr("Identity active") : status.primary_name);
+        m_chip_protected->setText(tr("PQ identity signing"));
+        m_chip_ready->setText(status.network_active ? tr("Online") : tr("Offline"));
         m_detail_label->setText(status.name_claim_pending ? status.name_claim_status :
-            tr("Your CYBOU identity for messages, payments and files. A single, human-friendly identity that works across all CYBOU services \u2014 you stay in control of your data, devices and who can reach you."));
+            tr("Your identity for CYBOU services. Mail sending and Files sync are not available yet."));
         m_active_details->setText(
             tr("AccountID: %1\nCreation height: %2\nNetwork: %3\nSystemBalance was funded atomically from the OnboardingPool at creation.")
                 .arg(status.account_id)
