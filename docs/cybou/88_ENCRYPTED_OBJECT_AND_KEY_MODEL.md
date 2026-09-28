@@ -115,7 +115,8 @@ cross-implementation vectors before Beta.
 A private encrypted Files manifest contains
 filename, MIME type, logical size, folder, ObjectID, salt, key epoch, and
 private UI state. Manifest/root mutations are device-authorized through the
-coordinator.
+coordinator. The canonical catalog and root-update lifecycle are specified in
+`91_FILES_MANIFEST_AND_ROOT.md`.
 
 Provider-visible data is limited to what placement and durability require:
 opaque ObjectID and ChunkIDs, ciphertext lengths/commitments, and lease/audit

@@ -261,7 +261,7 @@ void CybouMainWindow::buildShell()
         {tr("Home"), CybouTheme::NavIcon::Home},
         {tr("Identity"), CybouTheme::NavIcon::Identity},
         {tr("Email"), CybouTheme::NavIcon::Email},
-        {tr("Storage"), CybouTheme::NavIcon::Storage},
+        {tr("Files"), CybouTheme::NavIcon::Storage},
         {tr("Backup"), CybouTheme::NavIcon::Backup},
         {tr("Wallet"), CybouTheme::NavIcon::Wallet},
     };

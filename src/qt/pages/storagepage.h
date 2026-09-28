@@ -17,16 +17,12 @@ class QListWidget;
 class QPushButton;
 
 /**
- * Storage UI shaped by the object-model rules (docs 11–13):
+ * Transitional Files shell. The encrypted catalog and desktop transfer
+ * controller are not connected yet (see docs 83 and 91):
  *
- *  - Objects are opaque and content-addressed: the list shows identifiers,
- *    never original filenames or paths (identifiers must not leak them).
- *  - Application semantics are encrypted before storage; the desktop UI
- *    renders sizes and retention, never plaintext content.
- *  - Desktop nodes may prune: retention is a first-class column and the
- *    UI says plainly that local copies can be dropped.
- *  - Protocol-level replication is not a single provider; until Object
- *    Storage is live the service stays gated and nothing pretends to upload.
+ *  - The user's client must display decrypted filenames and folders.
+ *  - Storage providers receive ciphertext and opaque identifiers only.
+ *  - Provider capability does not mean the client Files flow is available.
  */
 class StoragePage : public QWidget
 {

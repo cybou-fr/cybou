@@ -14,7 +14,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
-#include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QToolButton>
@@ -63,14 +62,14 @@ StoragePage::StoragePage(CybouDesktopModel* model, QWidget* parent)
     auto* hero_layout = new QVBoxLayout{hero};
     hero_layout->setContentsMargins(30, 26, 30, 26);
     hero_layout->setSpacing(10);
-    hero_layout->addWidget(Eyebrow(tr("STORAGE"), hero));
-    hero_layout->addWidget(HeroTitle(tr("Your encrypted files,\nalways under your control."), hero));
-    hero_layout->addWidget(HeroSubtitle(tr("Identity-centric storage for your documents, photos and more. Objects are opaque and content-addressed \u2014 names never leave this device."), hero));
+    hero_layout->addWidget(Eyebrow(tr("FILES"), hero));
+    hero_layout->addWidget(HeroTitle(tr("Your files, encrypted\nand under your control."), hero));
+    hero_layout->addWidget(HeroSubtitle(tr("The Files client will show your names and folders. Storage providers receive encrypted content and opaque identifiers only."), hero));
     auto* chips = new QHBoxLayout;
     chips->setSpacing(8);
-    chips->addWidget(Pill(tr("Encrypted storage"), Tint::Mint, hero));
-    chips->addWidget(Pill(tr("Content-addressed"), Tint::Blue, hero));
-    chips->addWidget(Pill(tr("Replication planned"), Tint::Neutral, hero));
+    chips->addWidget(Pill(tr("Encrypted objects"), Tint::Mint, hero));
+    chips->addWidget(Pill(tr("Private catalog"), Tint::Blue, hero));
+    chips->addWidget(Pill(tr("Client setup in progress"), Tint::Neutral, hero));
     chips->addStretch();
     hero_layout->addLayout(chips);
     hero_layout->addStretch();
@@ -86,7 +85,7 @@ StoragePage::StoragePage(CybouDesktopModel* model, QWidget* parent)
         auto* icon = new QLabel{usage};
         icon->setPixmap(glyphPixmap(Glyph::Database, {20, 20}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
         header->addWidget(icon, 0, Qt::AlignVCenter);
-        auto* title = new QLabel{tr("Local storage"), usage};
+        auto* title = new QLabel{tr("Storage"), usage};
         title->setObjectName(QStringLiteral("serviceTitle"));
         header->addWidget(title, 0, Qt::AlignVCenter);
         header->addStretch();
@@ -100,7 +99,7 @@ StoragePage::StoragePage(CybouDesktopModel* model, QWidget* parent)
         meter->setValue(0);
         meter->setTextVisible(false);
         usage_layout->addWidget(meter);
-        m_usage_caption = MutedText(tr("Object Storage is planned \u2014 usage appears here once the service is live."), usage);
+        m_usage_caption = MutedText(tr("Files is not connected to the desktop storage service in this build."), usage);
         usage_layout->addWidget(m_usage_caption);
     }
     hero_row->addWidget(usage, 2);
@@ -110,7 +109,7 @@ StoragePage::StoragePage(CybouDesktopModel* model, QWidget* parent)
     auto* panes = new QHBoxLayout;
     panes->setSpacing(14);
 
-    // Left rail: sources. Only "All objects" is real today.
+    // Left rail: Files navigation. Catalog-backed views are not wired yet.
     auto* rail = new QFrame{this};
     rail->setObjectName(QStringLiteral("card"));
     rail->setFixedWidth(224);
@@ -123,7 +122,7 @@ StoragePage::StoragePage(CybouDesktopModel* model, QWidget* parent)
         auto* all_icon = new QLabel{rail};
         all_icon->setPixmap(glyphPixmap(Glyph::Folder, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
         all_row->addWidget(all_icon, 0, Qt::AlignVCenter);
-        auto* all_label = new QLabel{tr("All objects"), rail};
+        auto* all_label = new QLabel{tr("My files"), rail};
         all_label->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;")
             .arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
         all_row->addWidget(all_label, 1);
@@ -147,16 +146,15 @@ StoragePage::StoragePage(CybouDesktopModel* model, QWidget* parent)
             row_widget->setToolTip(note);
             rail_layout->addWidget(row_widget);
         };
-        add_source(Glyph::Share, tr("Shared with me"), tr("Encrypted sharing arrives with Object Storage."));
-        add_source(Glyph::Clock, tr("Recent"), tr("Recent objects will be listed here."));
-        add_source(Glyph::Star, tr("Favorites"), tr("Pinning marks objects that must never be pruned."));
-        add_source(Glyph::Trash, tr("Trash"), tr("Pruned and deleted objects."));
+        add_source(Glyph::Clock, tr("Recent"), tr("Recent files will be listed here when the Files catalog is connected."));
+        add_source(Glyph::Star, tr("Starred"), tr("Starred files will be listed here when the Files catalog is connected."));
+        add_source(Glyph::Trash, tr("Trash"), tr("Trashed files will be listed here when the Files catalog is connected."));
 
         rail_layout->addSpacing(10);
         auto* folders_header = new QLabel{tr("MY FOLDERS"), rail};
         folders_header->setObjectName(QStringLiteral("eyebrow"));
         rail_layout->addWidget(folders_header);
-        rail_layout->addWidget(MutedText(tr("Encrypted folder names arrive with the storage index."), rail));
+        rail_layout->addWidget(MutedText(tr("Folders appear here when the encrypted Files catalog is connected."), rail));
         rail_layout->addStretch();
     }
     panes->addWidget(rail);
@@ -171,25 +169,21 @@ StoragePage::StoragePage(CybouDesktopModel* model, QWidget* parent)
         auto* toolbar = new QHBoxLayout;
         toolbar->setSpacing(8);
         m_search = new QLineEdit{middle};
-        m_search->setPlaceholderText(tr("Search objects\u2026"));
+        m_search->setPlaceholderText(tr("Search files\u2026"));
         m_search->setClearButtonEnabled(true);
         connect(m_search, &QLineEdit::textChanged, this, [this] { rebuildList(); });
         toolbar->addWidget(m_search, 1);
         toolbar->addWidget(IconButton(Glyph::Sliders, middle, tr("Filter (planned)")), 0, Qt::AlignVCenter);
         toolbar->addWidget(IconButton(Glyph::ListView, middle, tr("List view")), 0, Qt::AlignVCenter);
-        m_upload = new QPushButton{tr("Add object\u2026"), middle};
+        m_upload = new QPushButton{tr("Upload file\u2026"), middle};
         m_upload->setObjectName(QStringLiteral("primaryButton"));
         m_upload->setIcon(QIcon{glyphPixmap(Glyph::Upload, {16, 16}, QColor{0xffffff})});
-        connect(m_upload, &QPushButton::clicked, this, [this] {
-            QMessageBox::information(this, tr("Not available yet"),
-                tr("Object Storage is not wired to the node in this build. No object was created."));
-        });
-        m_pin = new QPushButton{tr("Pin / unpin"), middle};
+        m_upload->setEnabled(false);
+        m_upload->setToolTip(tr("The Files catalog and client transfer controller are not connected yet."));
+        m_pin = new QPushButton{tr("New folder"), middle};
         m_pin->setObjectName(QStringLiteral("secondaryButton"));
-        connect(m_pin, &QPushButton::clicked, this, [this] {
-            QMessageBox::information(this, tr("Not available yet"),
-                tr("Object Storage is not wired to the node in this build. Retention was not changed."));
-        });
+        m_pin->setEnabled(false);
+        m_pin->setToolTip(tr("Folder changes require the encrypted Files catalog."));
         toolbar->addWidget(m_upload, 0, Qt::AlignVCenter);
         toolbar->addWidget(m_pin, 0, Qt::AlignVCenter);
         middle_layout->addLayout(toolbar);
@@ -252,17 +246,16 @@ void StoragePage::refresh()
     m_all_files_count->setText(QString::number(m_objects.size()));
     m_usage_value->setText(m_objects.isEmpty() ? tr("0 bytes") : tr("%1 bytes").arg(QLocale{}.toString(total)));
     m_usage_caption->setText(m_objects.isEmpty()
-        ? tr("Object Storage is planned \u2014 usage appears here once the service is live.")
-        : tr("%1 prunable \u00b7 desktop nodes may drop unpinned local copies.").arg(QLocale{}.toString(prunable)));
+        ? tr("Files is not connected to the desktop storage service in this build.")
+        : tr("%1 stored locally \u00b7 desktop nodes may drop unpinned copies.").arg(QLocale{}.toString(prunable)));
 
-    const bool usable = status.identity_state == CybouIdentityState::Active &&
-                        m_model->capabilities().storage;
-    m_upload->setEnabled(usable);
-    m_pin->setEnabled(usable);
+    // Node-side CAP_STORAGE means this node can serve provider requests. It
+    // does not mean the desktop Files catalog or transfer controller exists.
+    m_upload->setEnabled(false);
+    m_pin->setEnabled(false);
     m_gate_hint->setText(status.account_id.isEmpty()
-        ? tr("No identity yet \u2014 storage accounting binds to your account.")
-        : usable ? tr("Account: %1").arg(status.account_id)
-                 : tr("Object Storage is planned \u2014 the node will report the storage capability once it is live."));
+        ? tr("Create an identity before using Files. The desktop Files client is not connected yet.")
+        : tr("Account: %1 \u00b7 desktop Files catalog is not connected yet.").arg(status.account_id));
     rebuildList();
 }
 
@@ -327,7 +320,7 @@ void StoragePage::rebuildList()
     if (!has_rows) {
         auto* item = new QListWidgetItem{m_list};
         item->setFlags(Qt::NoItemFlags);
-        item->setText(tr("No objects stored yet.\nEncrypted, content-addressed objects will appear here once Object Storage is live."));
+        item->setText(tr("Your Files catalog is not connected yet.\nFiles will appear here after the encrypted catalog is available in the desktop."));
         item->setTextAlignment(Qt::AlignCenter);
         item->setForeground(QBrush{CybouTheme::color(CybouTheme::TEXT_MUTED)});
         item->setSizeHint(QSize{0, 140});
@@ -363,7 +356,7 @@ void StoragePage::showDetails(int index)
         auto* row = ActivityRow(glyph, tint, name, value, {}, m_details);
         return row;
     };
-    layout->addWidget(add_fact(Glyph::Lock, Tint::Mint, tr("Encrypted"), tr("Only you and people you share with can access this object.")));
+    layout->addWidget(add_fact(Glyph::Lock, Tint::Mint, tr("Encrypted"), tr("Storage providers receive ciphertext only. Recipient sharing is not available yet.")));
     layout->addWidget(add_fact(Glyph::Download, Tint::Blue, tr("Available offline"), object.pinned
         ? tr("Pinned \u2014 this node keeps a local copy.")
         : tr("Prunable \u2014 the local copy may be dropped.")));
@@ -402,16 +395,12 @@ void StoragePage::showDetails(int index)
     auto* actions = new QHBoxLayout;
     auto* share = new QPushButton{tr("Share"), m_details};
     share->setObjectName(QStringLiteral("secondaryButton"));
-    connect(share, &QPushButton::clicked, this, [this] {
-        QMessageBox::information(this, tr("Not available yet"),
-            tr("Encrypted sharing is part of Object Storage and is not wired in this build."));
-    });
+    share->setEnabled(false);
+    share->setToolTip(tr("Recipient sharing is not implemented."));
     auto* download = new QPushButton{tr("Download"), m_details};
     download->setObjectName(QStringLiteral("secondaryButton"));
-    connect(download, &QPushButton::clicked, this, [this] {
-        QMessageBox::information(this, tr("Not available yet"),
-            tr("Object retrieval is not wired to the node in this build. Nothing was exported."));
-    });
+    download->setEnabled(false);
+    download->setToolTip(tr("The desktop Files transfer controller is not connected yet."));
     actions->addWidget(share);
     actions->addWidget(download);
     actions->addStretch();

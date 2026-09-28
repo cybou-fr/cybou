@@ -1,6 +1,10 @@
 # 83 — CYBOU Files / Object Storage UI/UX
 
-Status: canonical Beta Files/Storage product UX contract.
+Status: canonical Beta Files/Storage product UX contract. The current Qt
+Files page remains a non-functional object-list skeleton with actions disabled;
+it is not the Files catalog described here. Core local/single-peer transfers
+and bounded client placement exist, but the encrypted Files manifest,
+finalized root updates, and desktop Files integration are not implemented.
 
 This document defines how CYBOU exposes distributed encrypted Object Storage to
 ordinary users. Google Drive is the interaction reference for familiar file
@@ -8,8 +12,9 @@ management patterns; CYBOU does not copy Google branding, provider account
 semantics, or centralized trust assumptions.
 
 Files is the Beta file-management product surface for these familiar workflows;
-there is no separate post-Beta Drive product. Storage and Files are not yet
-implemented beyond a capability-gated desktop UI skeleton.
+there is no separate post-Beta Drive product. The encrypted manifest and
+finalized root-update boundary are defined in
+[`91_FILES_MANIFEST_AND_ROOT.md`](91_FILES_MANIFEST_AND_ROOT.md).
 
 The user manages files and folders. The user does not manage shards, provider
 nodes, repair queues, proofs, leases, or replication topology.
@@ -141,7 +146,9 @@ The preferred direction is a private/encrypted manifest structure that maps
 human names and hierarchy to opaque Storage objects.
 
 Provider-visible storage data must not reveal ordinary filenames or local
-folder paths.
+folder paths. The owner's client must decrypt and display those names and
+folders; privacy from providers does not mean hiding a user's own metadata
+from the Files page.
 
 ## 7. Upload flow
 
