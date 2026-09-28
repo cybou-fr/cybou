@@ -1,6 +1,6 @@
 # 07 — BFT consensus core
 
-Implementation status (2026-09-25): the core BFT engine and certificate
+Implementation status (2026-09-28): the core BFT engine and certificate
 verification are tested across validator-set sizes. The standalone
 `cybou-node` now drives rounds for N>1, routes proposal/vote messages through
 the outbound CYP2 worker, and has a socket integration test for 3/4 finality
@@ -32,8 +32,24 @@ signing at that height. Unit and socket tests cover journal recovery, restart,
 3/4 finality, catch-up, and duplicate/conflicting signed prevotes. The
 four-process smoke test adds OS-process restart and churn coverage, including
 resuming one validator after the live pair has stalled through at least five
-rounds. See
-`26_IMPLEMENTATION_STATUS.md` for the current deployment boundary.
+rounds. It is not yet a reliable liveness gate: in a repeated run against
+`015fd86`, 7 of the first 8 executions passed, while one timed out 90 seconds
+after resuming a validator. The active processes remained at the prior finalized
+height; a signing journal showed the next height at round 26 with
+`locked_round=15`. A following run passed, confirming this is intermittent and
+not cleared by a single green run. The requested 20 consecutive passes have not
+been established.
+
+The failure points at an unresolved lock-recovery question. `BftProposalMsg`
+currently carries no `valid_round` or prevote-quorum certificate. A validator
+rejects a proposal that conflicts with its lock and prevotes nil; the current
+polka-unlock path depends on that validator locally accumulating a quorum for
+the proposed block. Confirm or reject this failure mechanism from complete
+per-validator traces before changing consensus rules. A fix must have a
+deterministic regression test, preserve the no-conflicting-finality invariant,
+and pass the repeated four-process liveness run. Do not describe multi-validator
+liveness as verified until that gate passes. See `26_IMPLEMENTATION_STATUS.md`
+for the current deployment boundary.
 
 ## Frozen direction
 
