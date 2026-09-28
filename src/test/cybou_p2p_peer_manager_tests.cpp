@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/p2p/peer_manager.h>
+#include <cybou/storage_service.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/util/setup_common.h>
 
@@ -255,6 +256,94 @@ BOOST_AUTO_TEST_CASE(manager_reports_unavailable_endpoint)
     BOOST_CHECK(!manager.Connect(loopback.to_string(), port));
     BOOST_CHECK(manager.LastConnectStatus() == cybou::p2p::PeerConnectStatus::UNAVAILABLE);
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(storage_placement_replicates_across_three_distinct_connected_providers)
+{
+    CybouServiceTestFixture client;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    std::vector<std::unique_ptr<tcp::acceptor>> acceptors;
+    std::vector<std::unique_ptr<cybou::CybouNodeRuntime>> providers;
+    std::vector<std::jthread> servers;
+    std::vector<uint16_t> ports;
+    const auto validator_key = client.validator_seed;
+
+    for (size_t i = 0; i < cybou::StoragePlacement::MAX_REPLICAS; ++i) {
+        acceptors.push_back(std::make_unique<tcp::acceptor>(io, tcp::endpoint{loopback, 0}));
+        ports.push_back(acceptors.back()->local_endpoint().port());
+        cybou::NodeRuntimeConfig config{
+            .network_definition = client.definition,
+            .data_dir = client.directory / ("storage-provider-" + std::to_string(i)),
+            .validator_private_key = validator_key,
+            .memory_only = true,
+            .wipe_data = true,
+            .storage_enabled = true,
+            .storage_capacity_bytes = 4U << 20,
+        };
+        providers.push_back(std::make_unique<cybou::CybouNodeRuntime>(std::move(config)));
+        BOOST_REQUIRE(providers.back()->InitializeGenesis(client.genesis));
+        servers.emplace_back([&, i] {
+            tcp::socket socket{io};
+            acceptors[i]->accept(socket);
+            cybou::p2p::PeerSession session{std::move(socket)};
+            const auto status = providers[i]->GetStatus();
+            const auto hello = cybou::p2p::Hello{
+                .network_id = status.network_id,
+                .finalized_height = status.finalized_height,
+                .finalized_tip = status.finalized_tip,
+                .capabilities = cybou::p2p::CAP_SERVE_BLOCKS |
+                    cybou::p2p::CAP_STORAGE | cybou::p2p::CAP_STORAGE_ABORT,
+                .nonce = 4100 + i,
+            };
+            if (!session.Handshake(hello)) return;
+            while (session.ServeNext(*providers[i])) {}
+        });
+    }
+
+    cybou::p2p::PeerManager peers{*client.runtime};
+    const auto address = loopback.to_string();
+    for (const auto port : ports) BOOST_REQUIRE(peers.Connect(address, port));
+    BOOST_REQUIRE_EQUAL(peers.StoragePeers().size(), 3U);
+
+    std::array<unsigned char, 32> network_id{};
+    const auto network = client.runtime->GetNetworkId();
+    std::copy(network.begin(), network.end(), network_id.begin());
+    std::array<unsigned char, 32> master_key{};
+    master_key[0] = 0x58;
+    const auto metadata = cybou::CreateStorageObjectMetadata(1, 0);
+    BOOST_REQUIRE(metadata);
+    auto context = cybou::StorageObjectCryptoContext::Create(network_id, master_key, *metadata);
+    BOOST_REQUIRE(context);
+    const std::array<unsigned char, 1> plaintext{0x4d};
+    const auto chunk = context->EncryptChunk(0, plaintext);
+    BOOST_REQUIRE(chunk);
+    const std::array<cybou::StorageEncryptedChunk, 1> chunks{*chunk};
+    const auto manifest = cybou::BuildStoragePublicManifest(network_id, metadata->object_id, chunks);
+    BOOST_REQUIRE(manifest);
+
+    cybou::StoragePlacement placement{peers};
+    BOOST_REQUIRE(placement.SupportsAbortUncommittedUpload());
+    BOOST_CHECK(placement.PutChunk(metadata->object_id, *chunk));
+    BOOST_CHECK(placement.CommitManifest(*manifest));
+    const auto [target, committed] = placement.DurabilityState(metadata->object_id);
+    BOOST_CHECK_EQUAL(target, 3U);
+    BOOST_CHECK_EQUAL(committed, 3U);
+    const auto fetched_manifest = placement.GetManifest(metadata->object_id);
+    BOOST_REQUIRE(fetched_manifest);
+    BOOST_CHECK(fetched_manifest->commitment == manifest->commitment);
+    const auto fetched_chunk = placement.GetChunk(metadata->object_id, 0);
+    BOOST_REQUIRE(fetched_chunk);
+    BOOST_CHECK(fetched_chunk->chunk_id == chunk->chunk_id);
+    for (auto& provider : providers) {
+        const auto stored_manifest = provider->GetStoredManifest(metadata->object_id);
+        BOOST_REQUIRE(stored_manifest);
+        BOOST_CHECK(stored_manifest->commitment == manifest->commitment);
+    }
+
+    peers.DisconnectAll();
+    for (auto& server : servers) server.join();
 }
 
 BOOST_AUTO_TEST_CASE(manager_retries_peer_that_closes_without_hello)

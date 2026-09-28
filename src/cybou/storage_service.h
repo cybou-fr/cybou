@@ -9,9 +9,12 @@
 #include <cybou/storage_store.h>
 
 #include <filesystem>
+#include <map>
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace cybou::p2p { class PeerManager; }
 
@@ -34,6 +37,8 @@ struct StorageTransferResult {
     StorageTransferStatus status{StorageTransferStatus::INVALID};
     StorageObjectId object_id{};
     StorageChunkId manifest_commitment{};
+    size_t target_replicas{1};
+    size_t committed_replicas{0};
     explicit operator bool() const
     {
         return status == StorageTransferStatus::STORED || status == StorageTransferStatus::RETRIEVED;
@@ -57,6 +62,36 @@ private:
     p2p::PeerManager& m_peers;
     std::string m_address;
     uint16_t m_port{0};
+};
+
+/** Bounded client-side replica placement over already connected CAP_STORAGE peers. */
+class StoragePlacement final : public StorageObjectProvider {
+public:
+    static constexpr size_t MAX_REPLICAS{3};
+
+    explicit StoragePlacement(p2p::PeerManager& peers, size_t desired_replicas = MAX_REPLICAS);
+    bool SupportsAbortUncommittedUpload() const override;
+    StorageWriteResult PutChunk(const StorageObjectId& object_id,
+        const StorageEncryptedChunk& chunk) override;
+    StorageWriteResult CommitManifest(const StoragePublicManifest& manifest) override;
+    bool AbortUncommittedObject(const StorageObjectId& object_id, uint32_t chunk_count) override;
+    std::optional<StoragePublicManifest> GetManifest(const StorageObjectId& object_id) const override;
+    std::optional<StorageEncryptedChunk> GetChunk(
+        const StorageObjectId& object_id, uint32_t index) const override;
+
+    /** Current placement size and confirmed manifest acknowledgements. */
+    std::pair<size_t, size_t> DurabilityState(const StorageObjectId& object_id) const override;
+
+private:
+    using Endpoint = std::pair<std::string, uint16_t>;
+    std::vector<Endpoint> EndpointsForObject(const StorageObjectId& object_id, bool pin);
+    std::vector<Endpoint> ReadEndpoints(const StorageObjectId& object_id) const;
+
+    p2p::PeerManager& m_peers;
+    size_t m_desired_replicas{MAX_REPLICAS};
+    mutable std::mutex m_mutex;
+    std::map<StorageObjectId, std::vector<Endpoint>> m_placements;
+    std::map<StorageObjectId, size_t> m_committed_replicas;
 };
 
 /** Client-side file transfer through either a local or a connected peer provider. */

@@ -358,6 +358,171 @@ std::optional<StorageEncryptedChunk> PeerStorageProvider::GetChunk(
     return m_peers.GetStorageChunk(m_address, m_port, object_id, index);
 }
 
+StoragePlacement::StoragePlacement(p2p::PeerManager& peers, const size_t desired_replicas)
+    : m_peers{peers}, m_desired_replicas{std::clamp<size_t>(desired_replicas, 1, MAX_REPLICAS)}
+{
+}
+
+std::vector<StoragePlacement::Endpoint> StoragePlacement::EndpointsForObject(
+    const StorageObjectId& object_id, const bool pin)
+{
+    {
+        std::lock_guard lock{m_mutex};
+        const auto existing = m_placements.find(object_id);
+        if (existing != m_placements.end()) return existing->second;
+    }
+
+    const auto peers = m_peers.StoragePeers();
+    std::vector<Endpoint> available;
+    available.reserve(peers.size());
+    for (const auto& peer : peers) {
+        if (peer.hello.capabilities & p2p::CAP_STORAGE_ABORT) {
+            available.emplace_back(peer.address, peer.port);
+        }
+    }
+    std::sort(available.begin(), available.end());
+    available.erase(std::unique(available.begin(), available.end()), available.end());
+    if (available.empty()) return {};
+
+    // ObjectIDs are random, so rotating the sorted peer list by their first
+    // bytes spreads independent objects without introducing protocol state.
+    size_t rotation{0};
+    for (size_t i = 0; i < sizeof(uint64_t); ++i) rotation = (rotation << 8) | object_id[i];
+    rotation %= available.size();
+    std::rotate(available.begin(), available.begin() + rotation, available.end());
+    if (available.size() > m_desired_replicas) available.resize(m_desired_replicas);
+
+    if (pin) {
+        std::lock_guard lock{m_mutex};
+        if (m_placements.size() >= 256 && !m_placements.contains(object_id)) {
+            m_committed_replicas.erase(m_placements.begin()->first);
+            m_placements.erase(m_placements.begin());
+        }
+        const auto [it, inserted] = m_placements.emplace(object_id, available);
+        return inserted ? available : it->second;
+    }
+    return available;
+}
+
+std::vector<StoragePlacement::Endpoint> StoragePlacement::ReadEndpoints(
+    const StorageObjectId& object_id) const
+{
+    std::vector<Endpoint> endpoints;
+    {
+        std::lock_guard lock{m_mutex};
+        const auto existing = m_placements.find(object_id);
+        if (existing != m_placements.end()) endpoints = existing->second;
+    }
+    for (const auto& peer : m_peers.StoragePeers()) endpoints.emplace_back(peer.address, peer.port);
+    std::sort(endpoints.begin(), endpoints.end());
+    endpoints.erase(std::unique(endpoints.begin(), endpoints.end()), endpoints.end());
+    return endpoints;
+}
+
+bool StoragePlacement::SupportsAbortUncommittedUpload() const
+{
+    const auto peers = m_peers.StoragePeers();
+    return std::any_of(peers.begin(), peers.end(), [](const p2p::PeerInfo& peer) {
+        return (peer.hello.capabilities & p2p::CAP_STORAGE_ABORT) != 0;
+    });
+}
+
+StorageWriteResult StoragePlacement::PutChunk(
+    const StorageObjectId& object_id, const StorageEncryptedChunk& chunk)
+{
+    const auto endpoints = EndpointsForObject(object_id, true);
+    if (endpoints.empty()) return {StorageWriteStatus::DISABLED, {}, false};
+    StorageWriteResult result{StorageWriteStatus::STORED};
+    for (const auto& [address, port] : endpoints) {
+        const auto response = m_peers.PutStorageChunk(address, port, object_id, chunk);
+        if (!response) return {StorageWriteStatus::DISABLED, {}, false};
+        if (!*response) return *response;
+        if (!response->response_received) result.response_received = false;
+    }
+    return result;
+}
+
+StorageWriteResult StoragePlacement::CommitManifest(const StoragePublicManifest& manifest)
+{
+    const auto endpoints = EndpointsForObject(manifest.object_id, true);
+    if (endpoints.empty()) return {StorageWriteStatus::DISABLED, manifest.commitment, false};
+    size_t committed{0};
+    bool uncertain{false};
+    for (const auto& [address, port] : endpoints) {
+        const auto response = m_peers.CommitStorageManifest(address, port, manifest);
+        if (!response) { uncertain = true; continue; }
+        if (*response && response->commitment == manifest.commitment) {
+            ++committed;
+        } else if (*response) {
+            // A peer's acknowledgment must bind the manifest we asked it to
+            // commit. Treat a mismatched success as ambiguous and fail closed.
+            uncertain = true;
+        }
+        if (!response->response_received) uncertain = true;
+        if (!*response && committed == 0 && !uncertain) return *response;
+    }
+    {
+        std::lock_guard lock{m_mutex};
+        m_committed_replicas[manifest.object_id] = committed;
+    }
+    if (committed == endpoints.size()) return {StorageWriteStatus::STORED, manifest.commitment};
+    // A subset may already have committed. Keep the upload journal for
+    // reconciliation instead of reporting a clean rejection.
+    return {StorageWriteStatus::INVALID, manifest.commitment, uncertain || committed != 0};
+}
+
+bool StoragePlacement::AbortUncommittedObject(
+    const StorageObjectId& object_id, const uint32_t chunk_count)
+{
+    const auto endpoints = EndpointsForObject(object_id, true);
+    if (endpoints.empty()) return false;
+    bool aborted{true};
+    for (const auto& [address, port] : endpoints) {
+        const auto response = m_peers.AbortStorageObject(address, port, object_id, chunk_count);
+        aborted = aborted && response && static_cast<bool>(*response);
+    }
+    if (aborted) {
+        std::lock_guard lock{m_mutex};
+        m_committed_replicas.erase(object_id);
+        m_placements.erase(object_id);
+    }
+    return aborted;
+}
+
+std::optional<StoragePublicManifest> StoragePlacement::GetManifest(
+    const StorageObjectId& object_id) const
+{
+    const auto endpoints = ReadEndpoints(object_id);
+    std::optional<StoragePublicManifest> found;
+    for (const auto& [address, port] : endpoints) {
+        const auto manifest = m_peers.GetStorageManifest(address, port, object_id);
+        if (!manifest) continue;
+        if (manifest->object_id != object_id || (found && found->commitment != manifest->commitment)) {
+            return std::nullopt;
+        }
+        found = manifest;
+    }
+    return found;
+}
+
+std::optional<StorageEncryptedChunk> StoragePlacement::GetChunk(
+    const StorageObjectId& object_id, const uint32_t index) const
+{
+    for (const auto& [address, port] : ReadEndpoints(object_id)) {
+        if (auto chunk = m_peers.GetStorageChunk(address, port, object_id, index)) return chunk;
+    }
+    return std::nullopt;
+}
+
+std::pair<size_t, size_t> StoragePlacement::DurabilityState(const StorageObjectId& object_id) const
+{
+    std::lock_guard lock{m_mutex};
+    const auto placement = m_placements.find(object_id);
+    const size_t target = placement == m_placements.end() ? 0 : placement->second.size();
+    const auto committed = m_committed_replicas.find(object_id);
+    return {target, committed == m_committed_replicas.end() ? 0 : committed->second};
+}
+
 StorageService::StorageService(const std::span<const unsigned char, 32> network_id,
     const AccountId account_id, const CybouKeyStore& keystore,
     StorageObjectProvider& store, std::filesystem::path private_manifest_dir)
@@ -549,8 +714,10 @@ StorageTransferResult StorageService::UploadFile(
     if (!committed.response_received) {
         // The provider may already have committed. Keep private metadata so
         // the owner can retry retrieval instead of losing the ObjectID.
+        const auto [target, committed_count] = m_store.DurabilityState(metadata->object_id);
         return {.status = StorageTransferStatus::COMMIT_UNCERTAIN,
-            .object_id = metadata->object_id, .manifest_commitment = manifest->commitment};
+            .object_id = metadata->object_id, .manifest_commitment = manifest->commitment,
+            .target_replicas = target, .committed_replicas = committed_count};
     }
     if (!committed) {
         if (!abort()) {
@@ -565,8 +732,10 @@ StorageTransferResult StorageService::UploadFile(
     const bool committed_journaled = PersistUploadJournal(journal_path, vault_password, journal_payload);
     crypto::CleanseMemory(journal_payload.data(), journal_payload.size());
     if (committed_journaled) RemoveFileIfPresent(journal_path);
+    const auto [target, committed_count] = m_store.DurabilityState(metadata->object_id);
     return {.status = StorageTransferStatus::STORED,
-        .object_id = metadata->object_id, .manifest_commitment = manifest->commitment};
+        .object_id = metadata->object_id, .manifest_commitment = manifest->commitment,
+        .target_replicas = target, .committed_replicas = committed_count};
 }
 
 StorageTransferResult StorageService::DownloadFile(const StorageObjectId& object_id,

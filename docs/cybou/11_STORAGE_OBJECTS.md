@@ -3,15 +3,19 @@
 Implementation status (2026-09-28): CYBOU has a bounded encrypted-chunk
 profile, a durable network-bound provider store, opt-in CYP2 upload, manifest
 commit and retrieval, and a local client file roundtrip through the encrypted
-Storage Key Ring. StorageService can use the local provider or one explicitly
-selected, already-connected CYP2 provider. The peer-backed path uploads and
-retrieves a file and uses `CAP_STORAGE_ABORT` to release chunks after a failed
-uncommitted upload. Lost commit acknowledgments return an uncertain result and
-retain the encrypted private metadata; failed cleanup is reported separately.
-This is still not a complete distributed Storage service:
-automatic provider connection/selection, multi-peer placement, leases,
-durability proofs, audits, repair, retention, and accounting are not
-operational. A successful one-provider upload makes no durability promise.
+Storage Key Ring. StorageService can use the local provider, one explicitly
+selected connected CYP2 provider, or the client-side `StoragePlacement`
+provider. Placement picks up to three distinct already-connected peers that
+support storage and staged-upload abort, fixes that set for the object's
+upload, and requires every selected peer to acknowledge each chunk and the
+manifest before reporting success. Reads search selected and other connected
+storage peers. The client reports target and confirmed manifest replica counts;
+these are acknowledgments, not a lease or long-term durability proof. Lost or
+partial commit acknowledgments return an uncertain result and retain encrypted
+private metadata. Failed cleanup is reported separately. Automatic peer
+connection, leases, durability proofs, audits, repair, retention, and
+accounting are not operational. The maximum of three is a local development
+policy, not a wire-format or protocol constant.
 The provider stores ciphertext bytes, their opaque identifiers, and a public
 manifest; it receives no file metadata or key material. Storage is disabled by
 default and can be enabled for `cybou-node serve` by supplying a positive
@@ -60,7 +64,8 @@ records and public manifest bytes. This quota is local capacity enforcement,
 not a lease or an economic contribution score. Retrieval validates the
 network-bound ChunkID and its manifest descriptor; the client still compares
 the manifest commitment with its locally held expectation before trusting it.
-This wire/store profile does not itself place replicas or promise durability.
+The wire/store profile does not place replicas by itself; the client-side
+`StoragePlacement` component applies the current bounded placement policy.
 
 Uncommitted provider writes are tracked in a durable local staging index written
 atomically with each new chunk. A provider admits at most 1,024 staged ObjectIDs

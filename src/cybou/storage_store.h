@@ -16,6 +16,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace cybou {
@@ -60,6 +61,11 @@ public:
     virtual std::optional<StoragePublicManifest> GetManifest(const StorageObjectId& object_id) const = 0;
     virtual std::optional<StorageEncryptedChunk> GetChunk(
         const StorageObjectId& object_id, uint32_t index) const = 0;
+    /** Provider-level durability acknowledgement for a completed placement. */
+    virtual std::pair<size_t, size_t> DurabilityState(const StorageObjectId&) const
+    {
+        return {1, 1};
+    }
 };
 
 /** Durable, network-bound provider-side ciphertext storage. */
