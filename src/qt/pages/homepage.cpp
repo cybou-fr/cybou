@@ -15,7 +15,7 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QProgressBar>
+#include <QLocale>
 #include <QPushButton>
 #include <QSysInfo>
 #include <QTimer>
@@ -53,12 +53,15 @@ void clearLayout(QLayout* layout)
 } // namespace
 
 HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_requested,
-    std::function<void()> identity_requested, std::function<void()> wallet_requested, QWidget* parent)
+    std::function<void()> identity_requested, std::function<void()> wallet_requested,
+    std::function<void()> mail_requested, std::function<void()> files_requested, QWidget* parent)
     : QWidget{parent},
       m_model{model},
       m_diagnostics_requested{std::move(diagnostics_requested)},
       m_identity_requested{std::move(identity_requested)},
-      m_wallet_requested{std::move(wallet_requested)}
+      m_wallet_requested{std::move(wallet_requested)},
+      m_mail_requested{std::move(mail_requested)},
+      m_files_requested{std::move(files_requested)}
 {
     setMinimumWidth(0);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -154,14 +157,14 @@ QWidget* HomePage::buildMailCard()
     header->addWidget(title, 0, Qt::AlignVCenter);
     header->addStretch();
     auto* open = IconButton(Glyph::ChevronRight, card);
-    connect(open, &QToolButton::clicked, this, [] {});
+    connect(open, &QToolButton::clicked, this, [this] { m_mail_requested(); });
     header->addWidget(open, 0, Qt::AlignVCenter);
     layout->addLayout(header);
 
     m_mail_metric = new QLabel{card};
     m_mail_metric->setObjectName(QStringLiteral("metric"));
     layout->addWidget(m_mail_metric);
-    layout->addWidget(MutedText(tr("Private and encrypted communication."), card));
+    layout->addWidget(MutedText(tr("Read and organize mail. Protected sending is not available yet."), card));
 
     m_mail_avatars = new QWidget{card};
     auto* avatar_row = new QHBoxLayout{m_mail_avatars};
@@ -192,14 +195,12 @@ QWidget* HomePage::buildFilesCard()
     m_files_metric = new QLabel{card};
     m_files_metric->setObjectName(QStringLiteral("metric"));
     layout->addWidget(m_files_metric);
-    m_files_meter = new QProgressBar{card};
-    m_files_meter->setObjectName(QStringLiteral("usageMeter"));
-    m_files_meter->setRange(0, 100);
-    m_files_meter->setValue(0);
-    m_files_meter->setTextVisible(false);
-    layout->addWidget(m_files_meter);
     m_files_caption = MutedText({}, card);
     layout->addWidget(m_files_caption);
+    auto* open = new QPushButton{tr("Open Files"), card};
+    open->setObjectName(QStringLiteral("secondaryButton"));
+    connect(open, &QPushButton::clicked, this, [this] { m_files_requested(); });
+    layout->addWidget(open);
     layout->addStretch();
     return card;
 }
@@ -224,7 +225,7 @@ QWidget* HomePage::buildDevicesCard()
     m_devices_metric = new QLabel{card};
     m_devices_metric->setObjectName(QStringLiteral("metric"));
     layout->addWidget(m_devices_metric);
-    layout->addWidget(MutedText(tr("All your devices are synced and protected."), card));
+    layout->addWidget(MutedText(tr("This device is active. Device sync is not available yet."), card));
 
     m_device_rows = new QWidget{card};
     auto* rows = new QVBoxLayout{m_device_rows};
@@ -304,11 +305,14 @@ void HomePage::refresh()
     }
     avatar_row->addStretch();
 
-    // Files stat: Object Storage is not live yet — the meter stays at zero
-    // until the node reports real usage.
-    m_files_metric->setText(tr("No files yet"));
-    m_files_meter->setValue(0);
-    m_files_caption->setText(tr("Encrypted storage for your files and documents."));
+    quint64 files_size{0};
+    for (const auto& file : m_model->storageFiles()) files_size += file.size;
+    m_files_metric->setText(!m_model->storageIndexLoaded()
+        ? tr("Index not opened")
+        : m_model->storageFiles().isEmpty() ? tr("No files yet")
+            : tr("%1 files · %2 bytes").arg(m_model->storageFiles().size())
+                .arg(QLocale{}.toString(files_size)));
+    m_files_caption->setText(tr("Local encrypted index · Files catalog sync is not available yet."));
 
     // Devices: this node only (device authorization lands with the vault sync).
     clearLayout(m_device_rows->layout());

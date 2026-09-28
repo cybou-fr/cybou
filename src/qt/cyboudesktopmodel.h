@@ -12,6 +12,7 @@
 #include <QLocale>
 #include <memory>
 #include <thread>
+#include <QVector>
 
 
 namespace cybou {
@@ -20,6 +21,14 @@ class CybouMailService;
 class CybouWalletService;
 class CybouNameService;
 }
+
+struct CybouDesktopFile {
+    QString object_id;
+    QString name;
+    quint64 size{0};
+    quint32 key_epoch{0};
+    bool pending_verification{false};
+};
 
 struct CybouCapabilities {
     bool account_creation{false};
@@ -91,6 +100,8 @@ public:
 
     const CybouDesktopStatus& status() const { return m_status; }
     const CybouCapabilities& capabilities() const { return m_capabilities; }
+    bool filesTransferAvailable() const { return m_files_transfer_available; }
+    void setFilesTransferAvailable(bool available);
     /** True once the user requested identity creation and the node has not
         picked the request up yet (identity state still None). This is a
         UI-side request tracker only — protocol phases are driven by core. */
@@ -144,6 +155,17 @@ public:
     void setWalletService(cybou::CybouWalletService* wallet_service);
     cybou::CybouWalletService* walletService() const { return m_wallet_service; }
 
+    const QVector<CybouDesktopFile>& storageFiles() const { return m_storage_files; }
+    bool storageIndexLoaded() const { return m_storage_index_loaded; }
+    bool storageOperationPending() const { return m_storage_operation_pending; }
+    QString storageOperationStatus() const { return m_storage_operation_status; }
+    void requestStorageList(const QString& vault_password);
+    void requestStorageUpload(const QString& source, const QString& vault_password);
+    void requestStorageDownload(const QString& object_id, const QString& destination,
+        const QString& vault_password);
+    void setStorageFiles(QVector<CybouDesktopFile> files, const QString& error = {});
+    void setStorageOperationStatus(const QString& status, bool pending);
+
     /** Requests identity creation from the backend.
         The UI only emits the request; protocol behavior belongs to core. */
     void requestCreateIdentity(const QString& vault_password);
@@ -160,6 +182,10 @@ Q_SIGNALS:
     void identityCreationFailed(const QString& reason);
     void nameClaimFailed(const QString& reason);
     void recoveryRotationFinished(quint8 phase, const QString& error, quint64 finalized_height);
+    void storageListRequested(const QString& vault_password);
+    void storageUploadRequested(const QString& source, const QString& vault_password);
+    void storageDownloadRequested(const QString& object_id, const QString& destination,
+        const QString& vault_password);
 
 private:
     cybou::CybouIdentityService* m_identity_service{nullptr};
@@ -173,6 +199,11 @@ private:
     CybouCapabilities m_capabilities;
     QDateTime m_last_sync;
     bool m_identity_request_pending{false};
+    QVector<CybouDesktopFile> m_storage_files;
+    bool m_storage_index_loaded{false};
+    bool m_files_transfer_available{false};
+    bool m_storage_operation_pending{false};
+    QString m_storage_operation_status;
 
     void refreshFinalizedName();
 };

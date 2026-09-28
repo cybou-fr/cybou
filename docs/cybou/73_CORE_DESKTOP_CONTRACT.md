@@ -50,8 +50,12 @@ height/validator count.
 The bootstrap address supplies transport location, not consensus trust.
 The identity service submits AccountCreate remotely and waits for the
 verified account state before reporting `Active`. Email and Storage pages
-remain capability-gated until their network services are live. Storage is a
-Beta readiness dependency for Mail attachments; Backup remains post-Beta.
+remain capability-gated until their network services are live. The desktop
+Files preview also exposes a separate client-availability flag for its
+single-installation local index and Storage transfers; this flag does not set
+`CybouCapabilities::storage` and does not claim finalized catalog or Beta
+durability. Storage is a Beta readiness dependency for Mail attachments;
+Backup remains post-Beta.
 
 ## Adapter surface (what core calls)
 
@@ -87,6 +91,12 @@ email              MailOp/MailTx processing wired
 storage            Object Storage placement, retrieval and Beta durability path wired
 backup             Backup service wired (post-Beta)
 ```
+
+`filesTransferAvailable` is a desktop adapter flag, not a protocol capability.
+It only enables the provisional local-index and transfer UI after the native
+runtime is initialized. Mutating Files actions still require an active
+identity. Peer acknowledgments do not satisfy the Storage capability or permit
+the UI to display `Protected`.
 
 The GUI gates every mutating action on the matching flag plus
 `identity_state == Active` and renders the exact missing precondition

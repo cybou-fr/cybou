@@ -115,6 +115,7 @@ private:
     QToolButton* m_star_button{nullptr};
     QWidget* m_evidence{nullptr};
     QLabel* m_evidence_title{nullptr};
+    QPushButton* m_security_details{nullptr};
     QVector<QLabel*> m_evidence_states;
     QPushButton* m_compose_button{nullptr};
     QFrame* m_banner{nullptr};

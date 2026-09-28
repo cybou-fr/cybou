@@ -102,38 +102,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     });
     rail_layout->addWidget(m_folders, 1);
 
-    // Labels: local visual indexes (sketch). Messages carry no label data
-    // until the local label index lands, so rows render without counts.
-    auto* labels_header_row = new QHBoxLayout;
-    labels_header_row->setContentsMargins(8, 0, 4, 0);
-    auto* labels_header = new QLabel{tr("LABELS"), rail};
-    labels_header->setObjectName(QStringLiteral("eyebrow"));
-    labels_header_row->addWidget(labels_header, 0, Qt::AlignVCenter);
-    labels_header_row->addStretch();
-    auto* add_label = IconButton(Glyph::Plus, rail, tr("Create label (planned)"));
-    add_label->setFixedSize(22, 22);
-    add_label->setIconSize(QSize{14, 14});
-    labels_header_row->addWidget(add_label, 0, Qt::AlignVCenter);
-    rail_layout->addLayout(labels_header_row);
-    struct LabelDef { const char* name; Tint tint; };
-    const LabelDef labels[]{
-        {QT_TR_NOOP("Project"), Tint::Blue},
-        {QT_TR_NOOP("Personal"), Tint::Violet},
-        {QT_TR_NOOP("Finance"), Tint::Mint},
-        {QT_TR_NOOP("Team"), Tint::Amber},
-    };
-    for (const auto& label : labels) {
-        auto* row_widget = new QWidget{rail};
-        auto* row = new QHBoxLayout{row_widget};
-        row->setContentsMargins(8, 5, 8, 5);
-        row->setSpacing(10);
-        row->addWidget(Dot(label.tint, row_widget, 8), 0, Qt::AlignVCenter);
-        auto* name = new QLabel{tr(label.name), row_widget};
-        name->setObjectName(QStringLiteral("bodyText"));
-        row->addWidget(name, 1);
-        row_widget->setToolTip(tr("Label indexes are a local-client feature and arrive with the mailbox label work."));
-        rail_layout->addWidget(row_widget);
-    }
+    rail_layout->addSpacing(10);
     root->addWidget(rail);
 
     // ---- Middle: search + message list ------------------------------------
@@ -273,9 +242,9 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
 
     auto* chips_row = new QHBoxLayout;
     chips_row->setSpacing(6);
-    m_chip_encrypted = Pill(tr("Encrypted"), Tint::Mint, m_reader);
-    m_chip_verified = Pill(tr("Identity verified"), Tint::Blue, m_reader);
-    m_chip_protected = Pill(tr("Protected"), Tint::Mint, m_reader);
+    m_chip_encrypted = Pill(tr("End-to-end encrypted"), Tint::Mint, m_reader);
+    m_chip_verified = Pill(tr("Sender verified"), Tint::Blue, m_reader);
+    m_chip_protected = Pill(tr("Network confirmed"), Tint::Mint, m_reader);
     chips_row->addWidget(m_chip_encrypted);
     chips_row->addWidget(m_chip_verified);
     chips_row->addWidget(m_chip_protected);
@@ -295,11 +264,21 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     m_reader_body->setVisible(false);
     reader_layout->addWidget(m_reader_body, 1);
 
-    auto* evidence_title = new QLabel{tr("Protocol evidence"), m_reader};
+    auto* evidence_title = new QLabel{tr("Security details"), m_reader};
     evidence_title->setObjectName(QStringLiteral("sectionTitle"));
     evidence_title->setVisible(false);
     reader_layout->addWidget(evidence_title);
     m_evidence_title = evidence_title;
+    m_security_details = new QPushButton{tr("Security details"), m_reader};
+    m_security_details->setObjectName(QStringLiteral("secondaryButton"));
+    m_security_details->setVisible(false);
+    connect(m_security_details, &QPushButton::clicked, this, [this] {
+        const bool show = !m_evidence->isVisible();
+        m_evidence_title->setVisible(show);
+        m_evidence->setVisible(show);
+        m_security_details->setText(show ? tr("Hide security details") : tr("Security details"));
+    });
+    reader_layout->addWidget(m_security_details);
     m_evidence = new QFrame{m_reader};
     auto* evidence_layout = new QVBoxLayout{m_evidence};
     evidence_layout->setContentsMargins(0, 0, 0, 0);
@@ -324,19 +303,15 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     auto* reply = new QPushButton{tr("Reply"), m_reader};
     reply->setObjectName(QStringLiteral("secondaryButton"));
     reply->setIcon(QIcon{glyphPixmap(Glyph::Reply, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
-    auto* reply_all = new QPushButton{tr("Reply all"), m_reader};
-    reply_all->setObjectName(QStringLiteral("secondaryButton"));
-    reply_all->setIcon(QIcon{glyphPixmap(Glyph::Reply, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
     auto* forward = new QPushButton{tr("Forward"), m_reader};
     forward->setObjectName(QStringLiteral("secondaryButton"));
     forward->setIcon(QIcon{glyphPixmap(Glyph::Forward, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
     reader_actions->addWidget(reply);
-    reader_actions->addWidget(reply_all);
     reader_actions->addWidget(forward);
     reader_actions->addStretch();
     reader_layout->addLayout(reader_actions);
-    m_reply_buttons = {reply, reply_all, forward};
-    auto do_reply = [this](bool all) {
+    m_reply_buttons = {reply, forward};
+    auto do_reply = [this] {
         if (m_current_message < 0 || m_current_message >= m_messages.size()) return;
         const Message& message = m_messages.at(m_current_message);
         if (message.folder == FOLDER_SENT) return;
@@ -344,8 +319,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
             .arg(peerName(message.from), message.body);
         openComposerWith(message.from, tr("Re: %1").arg(message.subject), quoted);
     };
-    connect(reply, &QPushButton::clicked, this, [do_reply] { do_reply(false); });
-    connect(reply_all, &QPushButton::clicked, this, [do_reply] { do_reply(true); });
+    connect(reply, &QPushButton::clicked, this, do_reply);
     connect(forward, &QPushButton::clicked, this, [this] {
         if (m_current_message < 0 || m_current_message >= m_messages.size()) return;
         const Message& message = m_messages.at(m_current_message);
@@ -366,7 +340,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     auto* compose_title = new QLabel{tr("New message"), composer};
     compose_title->setObjectName(QStringLiteral("pageTitle"));
     compose_layout->addWidget(compose_title);
-    compose_layout->addWidget(noteLabel(tr("CYBOU mail is a first-class protocol operation (MailTx): exactly one recipient, text only, no attachments."), composer));
+    compose_layout->addWidget(noteLabel(tr("Protected Mail is not available yet. You can save a local draft."), composer));
 
     compose_layout->addWidget(fieldLabel(tr("To"), composer));
     m_to = new QLineEdit{composer};
@@ -382,7 +356,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     m_subject->setPlaceholderText(tr("Subject"));
     compose_layout->addWidget(m_subject);
 
-    compose_layout->addWidget(fieldLabel(tr("Message"), composer));
+    compose_layout->addWidget(fieldLabel(tr("Body"), composer));
     m_body = new QTextEdit{composer};
     m_body->setObjectName(QStringLiteral("composeBody"));
     m_body->setAcceptRichText(false);
@@ -399,9 +373,12 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     m_size_label = noteLabel(QString{}, composer);
     meter_row->addWidget(m_size_label);
     compose_layout->addLayout(meter_row);
-    compose_layout->addWidget(noteLabel(tr("Fee: deterministic and size-based \u2014 priority fees are not part of the protocol. Distribution: 3 Security, 1 Onboarding."), composer));
-
     auto* actions = new QHBoxLayout;
+    auto* attach = new QPushButton{tr("Attach"), composer};
+    attach->setObjectName(QStringLiteral("secondaryButton"));
+    attach->setEnabled(false);
+    attach->setToolTip(tr("Attachments will be available after the CYBOU Storage path is ready."));
+    actions->addWidget(attach);
     m_send = new QPushButton{tr("Send"), composer};
     m_send->setObjectName(QStringLiteral("sendButton"));
     m_send->setProperty("primary", true);
@@ -648,7 +625,7 @@ void EmailPage::rebuildMessageList()
         item->setFlags(Qt::NoItemFlags);
         const bool indexed = m_folder == FOLDER_INBOX || m_folder == FOLDER_SENT || m_folder == FOLDER_DRAFTS;
         item->setText(indexed
-            ? tr("No mail here yet.\nMessages appear once your identity is active and the Email service reaches BFT finality.")
+            ? tr("No mail here yet. Messages will appear when Mail is available on this network.")
             : tr("Nothing here.\nThis local folder fills up as the mailbox index grows."));
         item->setTextAlignment(Qt::AlignCenter);
         item->setForeground(QBrush{CybouTheme::color(CybouTheme::TEXT_MUTED)});
@@ -669,6 +646,7 @@ void EmailPage::clearReader()
     m_reader_body->clear();
     m_evidence_title->setVisible(false);
     m_evidence->setVisible(false);
+    m_security_details->setVisible(false);
     for (QPushButton* button : m_reply_buttons) button->setEnabled(false);
     m_star_button->setEnabled(false);
 }
@@ -692,15 +670,17 @@ void EmailPage::showMessage(const Message& message)
 
     // Chips mirror real message state; drafts carry no protocol guarantees.
     const bool final = message.finality == Finality::Final;
-    m_chip_encrypted->setVisible(final);
-    m_chip_verified->setVisible(final);
-    m_chip_protected->setVisible(message.finality != Finality::Draft);
+    m_chip_encrypted->setVisible(false); // Hybrid-PQ recipient encryption is not integrated yet.
+    m_chip_verified->setVisible(false); // Historical sender authorization is not yet verified here.
+    m_chip_protected->setVisible(final);
     m_star_button->setEnabled(final);
 
     // Evidence rows mirror the mail-evidence rules: a message is only
     // trustworthy once all four are verified; drafts carry none.
-    m_evidence_title->setVisible(true);
-    m_evidence->setVisible(true);
+    m_evidence_title->setVisible(false);
+    m_evidence->setVisible(false);
+    m_security_details->setText(tr("Security details"));
+    m_security_details->setVisible(true);
     const bool verified = final && message.has_evidence;
     if (m_evidence_states.size() >= 4) {
         // 0: Transaction inclusion proof
@@ -751,7 +731,7 @@ void EmailPage::updateGates()
     } else if (!identity_active) {
         gate_reason = tr("Create an identity to send mail.");
     } else if (!email_available) {
-        gate_reason = tr("Email service is planned \u2014 this draft stays local until MailTx is live.");
+        gate_reason = tr("Protected Mail is not available yet. This message stays a local draft.");
     }
     m_send->setEnabled(gate_reason.isEmpty());
     m_send_hint->setText(gate_reason);

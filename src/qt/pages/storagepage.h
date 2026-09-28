@@ -10,6 +10,8 @@
 #include <QVector>
 #include <QWidget>
 
+#include <qt/cyboudesktopmodel.h>
+
 class CybouDesktopModel;
 class QLabel;
 class QLineEdit;
@@ -17,12 +19,8 @@ class QListWidget;
 class QPushButton;
 
 /**
- * Transitional Files shell. The encrypted catalog and desktop transfer
- * controller are not connected yet (see docs 83 and 91):
- *
- *  - The user's client must display decrypted filenames and folders.
- *  - Storage providers receive ciphertext and opaque identifiers only.
- *  - Provider capability does not mean the client Files flow is available.
+ * Single-installation Files view over the encrypted local Storage index.
+ * This is not a synchronized/finalized Files catalog (docs 83 and 91).
  */
 class StoragePage : public QWidget
 {
@@ -32,37 +30,22 @@ public:
     StoragePage(CybouDesktopModel* model, QWidget* parent = nullptr);
 
 private:
-    enum class Replication {
-        Planned, /**< Service not live yet; nothing is placed on peers. */
-        Placed,
-    };
-
-    struct StoredObject {
-        QString cid;      /**< Content identifier; opaque, no filenames. */
-        qint64 size{0};
-        bool pinned{false}; /**< Pinned objects are exempt from pruning. */
-        QDateTime at;
-        Replication replication{Replication::Planned};
-    };
-
     CybouDesktopModel* m_model;
-    QVector<StoredObject> m_objects;
+    QVector<CybouDesktopFile> m_objects;
 
-    QLabel* m_all_files_count{nullptr};
     QLabel* m_usage_value{nullptr};
     QLabel* m_usage_caption{nullptr};
     QLabel* m_gate_hint{nullptr};
     QLineEdit* m_search{nullptr};
     QListWidget* m_list{nullptr};
     QPushButton* m_upload{nullptr};
-    QPushButton* m_pin{nullptr};
+    QPushButton* m_refresh{nullptr};
     QWidget* m_details{nullptr};
-    int m_selected{-1};
 
     void refresh();
     void rebuildList();
     void showDetails(int index);
-    static QString replicationText(Replication replication);
+    void promptForIndex();
 };
 
 #endif // BITCOIN_QT_PAGES_STORAGEPAGE_H

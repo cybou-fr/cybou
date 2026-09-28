@@ -151,9 +151,11 @@ Before code changes to consensus state, freeze and review:
 - Qt Files list/actions, progress, protection, and key-unavailable states;
 - coordinated DEV cutover after PQ consensus and names integrate.
 
-There is no legacy decoder, automatic import, or dual operation path. Until
-these gates pass, the existing desktop Storage page is only a UI skeleton and
-must not imply persistent Files catalog or cross-device synchronization.
+There is no legacy decoder, automatic import, or dual operation path. The
+desktop currently supports a provisional single-installation encrypted local
+index and Storage transfers. Until these gates pass, this path must not imply a
+finalized persistent Files catalog, cross-device synchronization, or Beta
+durability.
 
 ## Related authority
 

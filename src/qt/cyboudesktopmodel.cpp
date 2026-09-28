@@ -49,6 +49,13 @@ void CybouDesktopModel::setCapabilities(const CybouCapabilities& capabilities)
     Q_EMIT capabilitiesChanged();
 }
 
+void CybouDesktopModel::setFilesTransferAvailable(const bool available)
+{
+    if (m_files_transfer_available == available) return;
+    m_files_transfer_available = available;
+    Q_EMIT capabilitiesChanged();
+}
+
 void CybouDesktopModel::setNetworkInfo(const QString& network_name, const QString& network_id)
 {
     if (m_status.network_name == network_name && m_status.network_id == network_id) {
@@ -173,6 +180,44 @@ void CybouDesktopModel::setWalletService(cybou::CybouWalletService* wallet_servi
     }
 }
 
+void CybouDesktopModel::requestStorageList(const QString& vault_password)
+{
+    if (!m_files_transfer_available || m_status.identity_state != CybouIdentityState::Active || m_storage_operation_pending) return;
+    setStorageOperationStatus(tr("Loading Files…"), true);
+    Q_EMIT storageListRequested(vault_password);
+}
+
+void CybouDesktopModel::requestStorageUpload(const QString& source, const QString& vault_password)
+{
+    if (!m_files_transfer_available || m_status.identity_state != CybouIdentityState::Active || m_storage_operation_pending) return;
+    setStorageOperationStatus(tr("Preparing file…"), true);
+    Q_EMIT storageUploadRequested(source, vault_password);
+}
+
+void CybouDesktopModel::requestStorageDownload(const QString& object_id, const QString& destination,
+    const QString& vault_password)
+{
+    if (!m_files_transfer_available || m_status.identity_state != CybouIdentityState::Active || m_storage_operation_pending) return;
+    setStorageOperationStatus(tr("Preparing download…"), true);
+    Q_EMIT storageDownloadRequested(object_id, destination, vault_password);
+}
+
+void CybouDesktopModel::setStorageFiles(QVector<CybouDesktopFile> files, const QString& error)
+{
+    m_storage_files = std::move(files);
+    m_storage_index_loaded = error.isEmpty();
+    m_storage_operation_status = error;
+    m_storage_operation_pending = false;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setStorageOperationStatus(const QString& status, const bool pending)
+{
+    m_storage_operation_status = status;
+    m_storage_operation_pending = pending;
+    Q_EMIT statusChanged();
+}
+
 bool CybouDesktopModel::requestUnlockIdentity(const QString& vault_password)
 {
     if (!m_identity_service || !m_identity_service->LoadVault(vault_password.toStdString())) return false;
@@ -185,6 +230,8 @@ bool CybouDesktopModel::requestUnlockIdentity(const QString& vault_password)
         if (state) setBalances(state->balance, state->system_balance);
     }
     Q_EMIT statusChanged();
+    if (m_status.identity_state == CybouIdentityState::Active && m_files_transfer_available)
+        requestStorageList(vault_password);
     return true;
 }
 
@@ -226,12 +273,13 @@ void CybouDesktopModel::requestCreateIdentity(const QString& vault_password)
                 }
             }, Qt::QueuedConnection);
         },
-        [this](const cybou::IdentityCreationResult& result) {
-            QMetaObject::invokeMethod(this, [this, result] {
+        [this, password_for_files = vault_password](const cybou::IdentityCreationResult& result) {
+            QMetaObject::invokeMethod(this, [this, result, password_for_files] {
                 if (result.success) {
                     const QString acc_hex = QString::fromStdString(result.account_id.Value().GetHex());
                     setIdentityState(CybouIdentityState::Active, acc_hex, static_cast<int>(result.creation_height));
                     setBalances(0, result.system_balance);
+                    if (m_files_transfer_available) requestStorageList(password_for_files);
                 } else {
                     setIdentityState(CybouIdentityState::None);
                     Q_EMIT identityCreationFailed(QString::fromStdString(result.error_message));
@@ -262,13 +310,14 @@ bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, c
                 }
             }, Qt::QueuedConnection);
         },
-        [this](const cybou::IdentityCreationResult& result) {
-            QMetaObject::invokeMethod(this, [this, result] {
+        [this, password_for_files = vault_password](const cybou::IdentityCreationResult& result) {
+            QMetaObject::invokeMethod(this, [this, result, password_for_files] {
                 if (result.success) {
                     setIdentityState(CybouIdentityState::Active,
                         QString::fromStdString(result.account_id.Value().GetHex()),
                         static_cast<int>(result.creation_height));
                     setBalances(0, result.system_balance);
+                    if (m_files_transfer_available) requestStorageList(password_for_files);
                 } else {
                     setIdentityState(CybouIdentityState::None);
                     Q_EMIT identityCreationFailed(QString::fromStdString(result.error_message));

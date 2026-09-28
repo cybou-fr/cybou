@@ -257,21 +257,24 @@ void CybouMainWindow::buildShell()
     sidebar_layout->addLayout(brand_row);
     sidebar_layout->addSpacing(22);
 
-    const QList<QPair<QString, CybouTheme::NavIcon>> primary_navigation{
-        {tr("Home"), CybouTheme::NavIcon::Home},
-        {tr("Identity"), CybouTheme::NavIcon::Identity},
-        {tr("Email"), CybouTheme::NavIcon::Email},
-        {tr("Files"), CybouTheme::NavIcon::Storage},
-        {tr("Backup"), CybouTheme::NavIcon::Backup},
-        {tr("Wallet"), CybouTheme::NavIcon::Wallet},
+    const QList<QPair<int, QPair<QString, CybouTheme::NavIcon>>> primary_navigation{
+        {0, {tr("Home"), CybouTheme::NavIcon::Home}},
+        {2, {tr("Mail"), CybouTheme::NavIcon::Email}},
+        {3, {tr("Files"), CybouTheme::NavIcon::Storage}},
+        {5, {tr("Wallet"), CybouTheme::NavIcon::Wallet}},
     };
     for (int index = 0; index < primary_navigation.size(); ++index) {
-        const auto& item = primary_navigation.at(index);
-        auto* button = NavigationButton(item.first, item.second, sidebar);
-        button->setObjectName(QStringLiteral("navButton%1").arg(index));
-        m_navigation->addButton(button, index);
+        const auto& entry = primary_navigation.at(index);
+        auto* button = NavigationButton(entry.second.first, entry.second.second, sidebar);
+        button->setObjectName(QStringLiteral("navButton%1").arg(entry.first));
+        m_navigation->addButton(button, entry.first);
         sidebar_layout->addWidget(button);
     }
+    auto* backup_button = NavigationButton(tr("Backup · Later"), CybouTheme::NavIcon::Backup, sidebar);
+    backup_button->setObjectName(QStringLiteral("navBackupLater"));
+    backup_button->setEnabled(false);
+    backup_button->setToolTip(tr("Backup is planned for a later release."));
+    sidebar_layout->addWidget(backup_button);
     sidebar_layout->addSpacing(12);
     auto* separator = new QFrame{sidebar};
     separator->setFrameShape(QFrame::HLine);
@@ -279,12 +282,16 @@ void CybouMainWindow::buildShell()
     sidebar_layout->addWidget(separator);
     sidebar_layout->addSpacing(6);
 
-    auto* network_button = NavigationButton(tr("Network"), CybouTheme::NavIcon::Network, sidebar);
+    auto* identity_button = NavigationButton(tr("Identity & Security"), CybouTheme::NavIcon::Identity, sidebar);
+    auto* network_button = NavigationButton(tr("Diagnostics"), CybouTheme::NavIcon::Network, sidebar);
     auto* settings_button = NavigationButton(tr("Settings"), CybouTheme::NavIcon::Settings, sidebar);
+    identity_button->setObjectName(QStringLiteral("navButton1"));
     network_button->setObjectName(QStringLiteral("navButton6"));
     settings_button->setObjectName(QStringLiteral("navButton7"));
+    m_navigation->addButton(identity_button, 1);
     m_navigation->addButton(network_button, 6);
     m_navigation->addButton(settings_button, 7);
+    sidebar_layout->addWidget(identity_button);
     sidebar_layout->addWidget(network_button);
     sidebar_layout->addWidget(settings_button);
     sidebar_layout->addStretch();
@@ -297,6 +304,8 @@ void CybouMainWindow::buildShell()
         [this] { showDebugWindow(); },
         [this] { showPage(1); },
         [this] { showPage(5); },
+        [this] { showPage(2); },
+        [this] { showPage(3); },
         m_pages};
     auto* identity = new IdentityPage{m_desktop_model, m_pages};
     auto* email = new EmailPage{m_desktop_model, [this] { showPage(1); }, m_pages};

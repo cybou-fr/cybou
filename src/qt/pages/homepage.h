@@ -11,7 +11,6 @@
 
 class CybouDesktopModel;
 class QLabel;
-class QProgressBar;
 class QPushButton;
 
 class HomePage : public QWidget
@@ -19,6 +18,7 @@ class HomePage : public QWidget
 public:
     HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_requested,
         std::function<void()> identity_requested, std::function<void()> wallet_requested,
+        std::function<void()> mail_requested, std::function<void()> files_requested,
         QWidget* parent = nullptr);
 
 private:
@@ -33,7 +33,6 @@ private:
     QWidget* m_mail_avatars;
     QLabel* m_files_metric;
     QLabel* m_files_caption;
-    QProgressBar* m_files_meter;
     QLabel* m_devices_metric;
     QWidget* m_device_rows;
     QWidget* m_activity_rows;
@@ -41,6 +40,8 @@ private:
     const std::function<void()> m_diagnostics_requested;
     const std::function<void()> m_identity_requested;
     const std::function<void()> m_wallet_requested;
+    const std::function<void()> m_mail_requested;
+    const std::function<void()> m_files_requested;
 
     void refresh();
     QWidget* buildIdentityHero();

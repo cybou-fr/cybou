@@ -114,7 +114,14 @@ qtbase/qttools/sqlite3/zeromq и vcpkg начнёт собирать Qt (~час
 ## Шаг 3 — сборка
 
 ```bat
-"C:\Program Files\CMake\bin\cmake.exe" --build build_cybou_qt_mingw --target cybou-core-test cybou-node cybou -j 4
+"C:\Program Files\CMake\bin\cmake.exe" --build build_cybou_qt_mingw --target cybou-core-test cybou-node cybou cybou_qt -j 4
+```
+
+For a focused Qt GUI rebuild after editing `src/qt`, use:
+
+```powershell
+$env:PATH = "C:\Qt\Tools\mingw1310_64\bin;C:\Qt\Tools\Ninja;$env:PATH"
+cmake --build build_cybou_qt_mingw --target cybou_qt --parallel 4
 ```
 
 ## Шаг 4 — запуск CYBOU-протокольных тестов
