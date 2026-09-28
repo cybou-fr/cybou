@@ -49,6 +49,12 @@ MailTx {
 
 Exact byte layout is not frozen here.
 
+The DEV cryptographic suite and one-account/all-active-device semantics are
+frozen in `49_EMAIL_E2EE_HPKE_PQ.md` and `spec/email_crypto_profile.yaml`.
+This does not freeze the Mail envelope's byte layout, HPKE context encoding,
+discovery-tag derivation, or historical evidence format. Mail send and receive
+remain disabled until those application-wire gates are complete.
+
 ## Requirements
 
 MailTx must have:
@@ -65,7 +71,9 @@ MailTx must have:
 
 ## Size-aware fee
 
-v1 does not freeze exact byte thresholds yet.
+DEV currently fixes `max_mail_ciphertext_size` at 64 KiB and charges the
+deterministic integer fee `4 + ceil(ciphertext_bytes / 1024)`. Confirm that
+the finalized envelope remains within this bound before enabling SendMail.
 
 The fee structure is:
 

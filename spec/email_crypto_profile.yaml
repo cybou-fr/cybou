@@ -1,40 +1,73 @@
 version: '0.0.1'
-status: target_profile_not_yet_frozen_for_public_wire_compatibility
+status: dev_crypto_profile_frozen_application_wire_pending
 native_email:
   e2e_required: true
   plaintext_fallback: false
   smtp_required: false
+mail_semantics:
+  recipient_accounts_per_message: 1
+  content_type: text_only
+  attachments: false
+  recipient_device_coverage: every_active_authorized_device
+  recipient_device_order: ascending_device_key_id
+  mainnet_enabled: false
 content:
-  cek: random_per_message
+  cek:
+    algorithm: random
+    length_bytes: 32
   encrypt_once: true
-  aead_candidates:
-  - ChaCha20-Poly1305
-  - AES-256-GCM
+  aead: ChaCha20-Poly1305
+  nonce:
+    algorithm: random
+    length_bytes: 12
+  protected_plaintext: canonical_text_mail
 recipient_key_wrap:
   mechanism: HPKE
-  basis: RFC 9180
-  per_recipient_device: true
-  preferred_pq_t_hybrid_target: MLKEM768-X25519
-  pq_basis: NIST FIPS 203 ML-KEM
-  pq_hpke_status: IETF Internet-Draft as of 2026-09
+  mode: base
+  standard_basis: RFC 9180
+  dev_profile:
+    hpke_spec: draft-ietf-hpke-pq-05
+    kem: MLKEM768-X25519
+    kem_id: 0x647a
+    kdf: HKDF-SHA256
+    kdf_id: 0x0001
+    aead: ChaCha20-Poly1305
+    aead_id: 0x0003
+  encapsulation: independent_context_per_active_recipient_device
+  plaintext: 32_byte_cek
+  pq_basis: NIST FIPS 203 ML-KEM-768
+  status: frozen_for_dev_only
   custom_hybrid_combiner: false
 authentication:
   sender_signature_separate_from_hpke: true
-  pq_capable: true
-  exact_signature_profile: open
+  sender_authorization: device_ed25519_and_ml_dsa_44
+  signed_value: canonical_mail_payload_commitment
 privacy:
   subject_inside_ciphertext: true
   body_inside_ciphertext: true
   thread_metadata_inside_ciphertext_where_possible: true
-  opaque_recipient_discovery_locator_target: true
-agility:
-  suite_id: true
-  kem_id: true
-  kdf_id: true
-  aead_id: true
-  signature_algorithm_id: true
-  downgrade_protection: true
+  recipient_account_id_public_in_current_mailtx: true
+  opaque_recipient_discovery_locator: pending_wire_review
+  privacy_claim: none_until_review
 content_commitment:
+  algorithm: SHA-256
   salted: true
-  domain_separator: CYBOU-MAIL-CONTENT-V1
+  salt_length_bytes: 32
+  domain_separator_ascii: CYBOU/MAIL_COMMIT/V2
+  input: domain_separator || salt || canonical_protected_plaintext
+  salt_location: inside_encrypted_protected_plaintext
   bare_plaintext_hash: false
+wire_profile:
+  status: pending
+  hpke_info_and_aad_encoding: pending
+  capsule_framing: pending
+  canonical_protected_text_encoding: pending
+  discovery_tag_derivation: pending
+  historical_sender_key_evidence: pending
+  max_ciphertext_bytes_dev: 65536
+  fee_dev: base_4_plus_1_per_1024_ciphertext_bytes_rounded_up
+  priority_fee: disabled
+  enable_send_or_decrypt: false
+mainnet:
+  enabled: false
+  requires_final_standards: true

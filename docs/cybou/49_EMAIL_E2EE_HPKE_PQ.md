@@ -19,11 +19,11 @@ The DEV-only pinned KEM is:
 MLKEM768-X25519 (X-Wing)
 ```
 
-The DEV HPKE vector suite is base mode with KEM ID `0x647a`, HKDF-SHA256
-KDF ID `0x0001`, and ChaCha20Poly1305 AEAD ID `0x0003`, pinned to
+The DEV cryptographic profile is frozen to base mode with KEM ID `0x647a`,
+HKDF-SHA256 KDF ID `0x0001`, and ChaCha20Poly1305 AEAD ID `0x0003`, pinned to
 `draft-ietf-hpke-pq-05` Appendix A.5 and its exact dependencies in
-`89_IDENTITY_KEM_PUBLICATION.md`. This is a DEV implementation target only;
-it is not enabled for Mail or Mainnet.
+`89_IDENTITY_KEM_PUBLICATION.md`. This is an implementation target for DEV
+only; it is not enabled for Mail or Mainnet.
 
 Identity V2 root/device hybrid *signatures* are separate from this mail
 *encryption* profile. Device signing keys must never be reused as KEM keys;
@@ -37,11 +37,32 @@ Mail must not maintain a parallel authoritative recipient-key registry.
 recipient-set, and transcript profile is not frozen or integrated. The former
 classical X25519-only helper has been removed.
 
-The finalized package and encapsulation transcript must bind NetworkID,
-sender/recipient AccountIDs, sender/recipient device/key IDs, suite ID, message
-context, and both classical and PQ encapsulations. A recipient that requires
-the hybrid profile must never be silently downgraded. Exact transcript and
-wire encodings remain protocol-review gates.
+The DEV cryptographic parameters for Mail are fixed as follows:
+
+| Purpose | Frozen DEV choice |
+|---|---|
+| Recipient account count | One |
+| Recipient device coverage | One CEK capsule for every active authorized recipient device, ordered by DeviceKeyID |
+| CEK | Fresh random 32 bytes per message |
+| Content encryption | ChaCha20-Poly1305, fresh random 12-byte nonce, encrypt the protected text once |
+| CEK wrapping | HPKE base mode, one context per recipient device, wrapping only the 32-byte CEK |
+| HPKE suite | X-Wing KEM `0x647a` + HKDF-SHA256 `0x0001` + ChaCha20-Poly1305 `0x0003` |
+| Sender authorization | Existing device hybrid signature (Ed25519 + ML-DSA-44) over the canonical Mail payload commitment |
+| Content commitment | SHA-256 over ASCII `CYBOU/MAIL_COMMIT/V2` || 32-byte random salt || canonical protected plaintext; salt stays encrypted |
+| Mainnet | Disabled until final standards and a new Mainnet profile review |
+
+This freezes algorithms and message semantics, not the Mail wire encoding.
+The exact binary HPKE `info`/AAD context encoding, capsule framing, canonical
+protected-text encoding, opaque discovery-tag derivation, and historical
+sender-key proof are still gates. The current MailTx exposes the recipient
+AccountID, so no recipient-relationship privacy claim is made. `SendMail` and
+incoming decryption remain disabled until those wire and evidence gates pass.
+
+The eventual encapsulation transcript must bind NetworkID, sender/recipient
+AccountIDs, sender/recipient device/key IDs, suite ID, message context, and
+both classical and PQ encapsulations. A recipient that requires the hybrid
+profile must never be silently downgraded. The context's byte encoding remains
+a wire-format gate; see the frozen choices above.
 
 Do not invent a custom hybrid KEM combiner or use independently generated
 X25519 and ML-KEM keys as though they were the hybrid profile's keypair.
