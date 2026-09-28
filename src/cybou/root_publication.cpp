@@ -5,6 +5,7 @@
 #include <cybou/root_publication.h>
 
 #include <cybou/canonical_cbor.h>
+#include <cybou/chunk_authorization.h>
 
 #include <algorithm>
 #include <limits>
@@ -29,10 +30,14 @@ CborValue ToCbor(const RootRecipientCapsule& capsule)
     return CborValue::ArrayValue({
         CborValue::Unsigned(capsule.kem_profile),
         CborValue::Unsigned(capsule.key_epoch),
-        ByteString(capsule.package_commitment),
         ByteString(capsule.encapsulation),
         ByteString(capsule.wrapped_content_key),
     });
+}
+
+CborValue ToCbor(const AuthorizedChunk& chunk)
+{
+    return CborValue::ArrayValue({ByteString(chunk.id), CborValue::Unsigned(chunk.stored_bytes)});
 }
 
 CborValue ToCbor(const RootPublication& publication)
@@ -40,13 +45,17 @@ CborValue ToCbor(const RootPublication& publication)
     CborValue::Array capsules;
     capsules.reserve(publication.recipient_capsules.size());
     for (const auto& capsule : publication.recipient_capsules) capsules.push_back(ToCbor(capsule));
+    CborValue::Array authorized_chunks;
+    authorized_chunks.reserve(publication.authorized_chunks.size());
+    for (const auto& chunk : publication.authorized_chunks) authorized_chunks.push_back(ToCbor(chunk));
     return CborValue::MapValue({
         {CborValue::Unsigned(0), CborValue::Unsigned(ROOT_PUBLICATION_WIRE_VERSION)},
         {CborValue::Unsigned(1), ByteString(publication.root_chunk_id)},
         {CborValue::Unsigned(2), ByteString(publication.chunk_authorization_root)},
         {CborValue::Unsigned(3), CborValue::Unsigned(publication.chunk_count)},
         {CborValue::Unsigned(4), CborValue::Unsigned(publication.authorized_stored_bytes)},
-        {CborValue::Unsigned(5), CborValue::ArrayValue(std::move(capsules))},
+        {CborValue::Unsigned(5), CborValue::ArrayValue(std::move(authorized_chunks))},
+        {CborValue::Unsigned(6), CborValue::ArrayValue(std::move(capsules))},
     });
 }
 
@@ -71,13 +80,25 @@ bool IsValid(const RootPublication& publication)
         publication.authorized_stored_bytes <
             static_cast<std::uint64_t>(publication.chunk_count) * ROOT_PUBLICATION_MIN_CHUNK_STORED_BYTES ||
         publication.authorized_stored_bytes > ROOT_PUBLICATION_MAX_STORED_BYTES ||
+        publication.authorized_chunks.size() != publication.chunk_count ||
         publication.recipient_capsules.empty() ||
         publication.recipient_capsules.size() > ROOT_PUBLICATION_MAX_CAPSULES) return false;
 
+    for (std::size_t i = 0; i < publication.authorized_chunks.size(); ++i) {
+        const auto& chunk = publication.authorized_chunks[i];
+        if (IsZero(chunk.id) || (i != 0 && !(publication.authorized_chunks[i - 1].id < chunk.id))) return false;
+    }
+    const auto commitment = BuildChunkAuthorizationCommitment(publication.authorized_chunks);
+    if (!commitment || commitment->root != publication.chunk_authorization_root ||
+        commitment->chunk_count != publication.chunk_count ||
+        commitment->authorized_stored_bytes != publication.authorized_stored_bytes) return false;
+    const auto root = std::lower_bound(publication.authorized_chunks.begin(), publication.authorized_chunks.end(),
+        publication.root_chunk_id, [](const auto& chunk, const auto& id) { return chunk.id < id; });
+    if (root == publication.authorized_chunks.end() || root->id != publication.root_chunk_id) return false;
+
     return std::all_of(publication.recipient_capsules.begin(), publication.recipient_capsules.end(),
         [](const auto& capsule) {
-            return capsule.kem_profile == IDENTITY_KEM_PROFILE_XWING &&
-                !IsZero(capsule.package_commitment);
+            return capsule.kem_profile == IDENTITY_KEM_PROFILE_XWING;
         });
 }
 
@@ -101,7 +122,7 @@ std::optional<RootPublication> DeserializeRootPublication(const std::span<const 
     try {
         const auto decoded = DecodeCanonicalCbor(bytes);
         const auto* fields = std::get_if<CborValue::Map>(&decoded.value);
-        if (fields == nullptr || fields->size() != 6) return std::nullopt;
+        if (fields == nullptr || fields->size() != 7) return std::nullopt;
         for (std::size_t index = 0; index < fields->size(); ++index) {
             const auto key = GetUnsigned((*fields)[index].first);
             if (!key || *key != index) return std::nullopt;
@@ -109,9 +130,11 @@ std::optional<RootPublication> DeserializeRootPublication(const std::span<const 
         const auto version = GetUnsigned((*fields)[0].second);
         const auto chunk_count = GetUnsigned((*fields)[3].second);
         const auto stored_bytes = GetUnsigned((*fields)[4].second);
-        const auto* capsules = std::get_if<CborValue::Array>(&(*fields)[5].second.value);
+        const auto* authorized_chunks = std::get_if<CborValue::Array>(&(*fields)[5].second.value);
+        const auto* capsules = std::get_if<CborValue::Array>(&(*fields)[6].second.value);
         if (!version || *version != ROOT_PUBLICATION_WIRE_VERSION || !chunk_count ||
             *chunk_count > std::numeric_limits<std::uint32_t>::max() || !stored_bytes ||
+            authorized_chunks == nullptr || authorized_chunks->size() > ROOT_PUBLICATION_MAX_CHUNKS ||
             capsules == nullptr || capsules->size() > ROOT_PUBLICATION_MAX_CAPSULES) return std::nullopt;
 
         RootPublication publication;
@@ -119,19 +142,28 @@ std::optional<RootPublication> DeserializeRootPublication(const std::span<const 
             !ReadFixedBytes((*fields)[2].second, publication.chunk_authorization_root)) return std::nullopt;
         publication.chunk_count = static_cast<std::uint32_t>(*chunk_count);
         publication.authorized_stored_bytes = *stored_bytes;
+        publication.authorized_chunks.reserve(authorized_chunks->size());
+        for (const auto& chunk_value : *authorized_chunks) {
+            const auto* chunk_fields = std::get_if<CborValue::Array>(&chunk_value.value);
+            if (chunk_fields == nullptr || chunk_fields->size() != 2) return std::nullopt;
+            AuthorizedChunk chunk;
+            const auto stored_size = GetUnsigned((*chunk_fields)[1]);
+            if (!ReadFixedBytes((*chunk_fields)[0], chunk.id) || !stored_size) return std::nullopt;
+            chunk.stored_bytes = *stored_size;
+            publication.authorized_chunks.push_back(chunk);
+        }
         publication.recipient_capsules.reserve(capsules->size());
         for (const auto& capsule_value : *capsules) {
             const auto* capsule_fields = std::get_if<CborValue::Array>(&capsule_value.value);
-            if (capsule_fields == nullptr || capsule_fields->size() != 5) return std::nullopt;
+            if (capsule_fields == nullptr || capsule_fields->size() != 4) return std::nullopt;
             const auto profile = GetUnsigned((*capsule_fields)[0]);
             const auto key_epoch = GetUnsigned((*capsule_fields)[1]);
             if (!profile || *profile > std::numeric_limits<std::uint16_t>::max() || !key_epoch) return std::nullopt;
             RootRecipientCapsule capsule;
             capsule.kem_profile = static_cast<std::uint16_t>(*profile);
             capsule.key_epoch = *key_epoch;
-            if (!ReadFixedBytes((*capsule_fields)[2], capsule.package_commitment) ||
-                !ReadFixedBytes((*capsule_fields)[3], capsule.encapsulation) ||
-                !ReadFixedBytes((*capsule_fields)[4], capsule.wrapped_content_key)) return std::nullopt;
+            if (!ReadFixedBytes((*capsule_fields)[2], capsule.encapsulation) ||
+                !ReadFixedBytes((*capsule_fields)[3], capsule.wrapped_content_key)) return std::nullopt;
             publication.recipient_capsules.push_back(std::move(capsule));
         }
         if (!IsValid(publication)) return std::nullopt;

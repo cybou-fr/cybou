@@ -91,41 +91,47 @@ chunks:
     maximum_leaf_count: 2048
     inclusion_proof_sibling_order: leaf_to_root
     inclusion_proof_max_siblings: 11
+    test_vector_root_3_chunks: "2117d08ee55b42e9b8aa63af00a2ec57cd862bf9cb7b6b08ab6c7cceb6941e19"
   open_gates:
     - encrypted_chunk_cross_implementation_vectors
     - encrypted_graph_cross_implementation_vectors_and_limits
     - chunk_authorization_merkle_cross_implementation_vectors
     - padding_overhead_benchmarks
-    - official_KAT_and_cross_implementation_vectors
+    - canonical_cbor_cross_implementation_vectors
+    - root_capsule_wrap_unwrap_vectors_and_recipient_recovery
+    - root_publication_identity_authorization_state_integration
 publication:
   wire_profile: 1
   canonical_encoding: RFC8949_core_deterministic_CBOR_map_integer_keys_ascending
-  fields: [wire_version, root_chunk_id, chunk_authorization_root, chunk_count, authorized_stored_bytes, recipient_capsules]
+  fields: [wire_version, root_chunk_id, chunk_authorization_root, chunk_count, authorized_stored_bytes, authorized_chunks, recipient_capsules]
   body_max_bytes: 131072
   full_operation_max_bytes: 147456
+  authorized_chunks_encoding: sorted_array_of_[ChunkID_32,stored_size_unsigned]
+  authorized_chunk_set_public: true
+  authorized_chunk_order_leaks_graph_order: false
   chunk_count_min: 1
   chunk_count_max: 2048
   authorized_stored_bytes_min_per_chunk: 1089
   authorized_stored_bytes_max: 536870912
   recipient_capsule_count_min: 1
-  recipient_capsule_count_max: 64
+  recipient_capsule_count_max: 32
   recipient_count_padding: none
   recipient_count_leakage: accepted
-  capsule_fields: [kem_profile_u16, recipient_key_epoch_u64, package_commitment_32, xwing_draft05_enc_1120, wrapped_graph_key_60]
+  capsule_fields: [kem_profile_u16, recipient_key_epoch_u64, xwing_draft05_enc_1120, wrapped_graph_key_60]
   capsule_kem_profile: 0x647a
   capsule_wrapped_graph_key: nonce_12 || ciphertext_32 || tag_16
   capsule_kdf: HKDF-SHA256
   capsule_kdf_input: XWing_shared_secret
   capsule_kdf_salt: NetworkID_32
-  capsule_kdf_info: "CYBOU/ROOT-CAPSULE-KEY/v1 || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be || package_commitment"
+  capsule_kdf_info: "CYBOU/ROOT-CAPSULE-KEY/v1 || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
   capsule_aead: ChaCha20-Poly1305
-  capsule_aad: "CYBOU/ROOT-CAPSULE-AAD/v1 || NetworkID || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be || package_commitment"
+  capsule_aad: "CYBOU/ROOT-CAPSULE-AAD/v1 || NetworkID || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
   operation_fee: "4 * ceil(full_canonical_operation_bytes / 1024)"
   priority_fee: disabled
   fee_split: {security: 3, onboarding: 1}
   capsule_contains_public_recipient: false
   capsule_count_public: true
-  capsule_count_privacy_treatment: OPEN_PAD_OR_ACCEPT_LEAKAGE
+  capsule_count_privacy_treatment: ACCEPT_LEAKAGE
   mail_files_backup_consensus_types: absent
   finality_authorizes_storage: true
   finality_proves_durability: false
@@ -137,7 +143,7 @@ storage:
   manifest_commit_staging_abort_protocol: absent_after_cutover
   chunk_placement: independent_per_chunk
   open_gates:
-    - canonical_merkle_encoding_and_vectors
+    - provider_admission_wire_and_finality_proof_format
     - durability_threshold_and_retry_semantics
     - retention_repair_accounting_and_provider_loss
 recovery:

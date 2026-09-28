@@ -8,15 +8,20 @@
 
 namespace cybou {
 
-ChunkId ComputeChunkId(const std::span<const unsigned char> stored_encrypted_bytes)
+Blake3Digest ComputeBlake3Digest(const std::span<const unsigned char> bytes)
 {
     blake3_hasher hasher;
     blake3_hasher_init(&hasher);
-    blake3_hasher_update(&hasher, stored_encrypted_bytes.data(), stored_encrypted_bytes.size());
+    blake3_hasher_update(&hasher, bytes.data(), bytes.size());
 
-    ChunkId result{};
+    Blake3Digest result{};
     blake3_hasher_finalize(&hasher, result.data(), result.size());
     return result;
+}
+
+ChunkId ComputeChunkId(const std::span<const unsigned char> stored_encrypted_bytes)
+{
+    return ComputeBlake3Digest(stored_encrypted_bytes);
 }
 
 } // namespace cybou
