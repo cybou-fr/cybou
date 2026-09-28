@@ -48,6 +48,19 @@ not a second copy of the package. Clients discover the package from finalized
 operation history and verify it against the active state commitment. A cache
 or local index may accelerate lookup but is never authoritative.
 
+`CybouNodeRuntime::FindActiveIdentityKemPackage` resolves an active package by
+AccountID and DeviceKeyID. It reads the canonical active registry commitment,
+scans the node's verified finalized history for the matching activation, and
+returns the package, commitment, finalized state root/height, and source block
+height/index/ID. A client can fetch that source block with
+`GetBlockAtHeight` and verify its finality certificate independently before
+using the bytes. A missing/mismatching active publication or broken local
+history fails closed. `FindHistoricalIdentityKemPackage` resolves a specific
+activation even after revocation; it returns the same source location so the
+historical operation and its authorization can be checked against the
+finalized block. These lookups are local-history APIs; the existing finalized
+block feed remains the transport for remote clients.
+
 The package is scoped to NetworkID, AccountID, device signing-key ID, and
 device activation. Re-adding a signing key creates a new activation and
 requires a new package commitment. A prior activation's package cannot
@@ -183,21 +196,19 @@ format.
 The implementation enables publication only when the network definition's
 frozen DEV profile flag is set. The new network format is deployed to DEV.
 Core tests cover the pinned X-Wing public-key vector, encapsulation/decapsulation
-agreement, authorization binding, state persistence, and CVID4 vault behavior.
-The remaining gates before Mail or cross-device Files consume these capabilities
-are:
+agreement, authorization binding, state persistence, CVID4 vault behavior, and
+runtime package lookup for AccountCreate, DeviceAdd, and revoked activations.
 
-1. client lookup of finalized AccountCreate/DeviceAdd bytes and verification
-   against the active state commitment;
-2. historical package and authorization verification after device rotation or
-   revocation;
-3. Mail ciphertext transcript, recipient privacy, and Files key-wrapping
+Mail and cross-device Files remain disabled until their remaining gates pass:
+
+1. client-side verification of the source finalized block's BFT certificate
+   and historical authorization evidence when consuming a returned package;
+2. Mail ciphertext transcript, recipient privacy, and Files key-wrapping
    profiles, with independent interoperability and adversarial review.
 
-Until the deployment gate passes, the running DEV network continues using its
-existing format and cannot accept these operations. Mail and cross-device Files
-key wrapping remain unavailable until their application gates pass. Draft-05
-is DEV-only; its eventual RFC or replacement requires a separately reviewed
+Identity KEM publication is enabled on DEV. Mail and cross-device Files key
+wrapping remain unavailable until their application gates pass. Draft-05 is
+DEV-only; its eventual RFC or replacement requires a separately reviewed
 network upgrade and never an automatic switch.
 
 ## Related authority

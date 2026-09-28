@@ -864,6 +864,133 @@ FinalizedOperationLookupResult CybouNodeRuntime::FindFinalizedOperation(const ui
     return result;
 }
 
+IdentityKemPackageLookupResult CybouNodeRuntime::FindActiveIdentityKemPackage(
+    const AccountId& account_id, const IdentityKeyId& device_id) const
+{
+    std::lock_guard lock(m_mutex);
+    IdentityKemPackageLookupResult result;
+    const auto loaded = m_store.LoadState();
+    const auto height = m_store.GetFinalizedHeight();
+    const auto state_root = m_store.GetStateRoot();
+    if (!loaded || !height || !state_root || account_id.IsNull()) return result;
+
+    const auto* identity = loaded.state->identities.Find(account_id);
+    if (!identity) {
+        result.status = IdentityKemPackageLookupStatus::ACCOUNT_NOT_FOUND;
+        return result;
+    }
+    const auto device = identity->devices.find(device_id);
+    if (device == identity->devices.end()) {
+        result.status = IdentityKemPackageLookupStatus::DEVICE_NOT_ACTIVE;
+        return result;
+    }
+    const auto activation_nonce = device->second.activation_nonce;
+    const auto expected_package_id = device->second.kem_package_id;
+    result = FindIdentityKemPackage(account_id, device_id, activation_nonce, true);
+    if (result.status == IdentityKemPackageLookupStatus::FOUND && result.package_id != expected_package_id) {
+        result.status = IdentityKemPackageLookupStatus::HISTORY_UNAVAILABLE;
+    }
+    if (result.status == IdentityKemPackageLookupStatus::FOUND) {
+        result.finalized_height = *height;
+        result.state_root = *state_root;
+    }
+    return result;
+}
+
+IdentityKemPackageLookupResult CybouNodeRuntime::FindHistoricalIdentityKemPackage(
+    const AccountId& account_id, const IdentityKeyId& device_id, const uint64_t activation_nonce) const
+{
+    std::lock_guard lock(m_mutex);
+    return FindIdentityKemPackage(account_id, device_id, activation_nonce, false);
+}
+
+IdentityKemPackageLookupResult CybouNodeRuntime::FindIdentityKemPackage(
+    const AccountId& account_id, const IdentityKeyId& device_id,
+    const uint64_t activation_nonce, const bool require_active) const
+{
+    IdentityKemPackageLookupResult result;
+    if (account_id.IsNull()) return result;
+    const auto loaded = m_store.LoadState();
+    const auto finalized_height = m_store.GetFinalizedHeight();
+    const auto state_root = m_store.GetStateRoot();
+    if (!loaded || !finalized_height || !state_root) return result;
+    result.finalized_height = *finalized_height;
+    result.state_root = *state_root;
+
+    const auto* identity = loaded.state->identities.Find(account_id);
+    if (!identity) {
+        result.status = IdentityKemPackageLookupStatus::ACCOUNT_NOT_FOUND;
+        return result;
+    }
+    if (require_active) {
+        const auto active = identity->devices.find(device_id);
+        if (active == identity->devices.end() || active->second.activation_nonce != activation_nonce) {
+            result.status = IdentityKemPackageLookupStatus::DEVICE_NOT_ACTIVE;
+            return result;
+        }
+    }
+
+    uint256 previous_id = m_config.network_definition.genesis_block_id;
+    bool found{false};
+    for (uint64_t height = 1; height <= *finalized_height; ++height) {
+        const auto finalized = m_store.GetBlockAtHeight(height);
+        if (!finalized) return result;
+        const auto block_id = ComputeBlockId(finalized->block);
+        if (finalized->block.parent_block_id != previous_id ||
+            finalized->certificate.network_id != m_network_id ||
+            finalized->certificate.height != height ||
+            finalized->certificate.block_id != block_id) return result;
+
+        for (size_t index = 0; index < finalized->block.operations.size(); ++index) {
+            const auto& operation = finalized->block.operations[index];
+            if (!ComputeOperationId(operation)) return result;
+
+            const IdentityKemPackage* package{nullptr};
+            uint64_t candidate_activation{0};
+            AccountId candidate_account;
+            IdentityKeyId candidate_device{};
+            if (const auto* create = std::get_if<AccountCreateOp>(&operation)) {
+                candidate_account = create->account_id;
+                const auto id = ComputeDeviceKeyId(create->authorization.initial_device);
+                if (id) candidate_device = *id;
+                package = &create->kem_package;
+            } else if (const auto* add = std::get_if<DeviceAdd>(&operation)) {
+                candidate_account = add->account_id;
+                const auto id = ComputeDeviceKeyId(add->new_device);
+                if (id) candidate_device = *id;
+                if (add->root_nonce != std::numeric_limits<uint64_t>::max()) {
+                    candidate_activation = add->root_nonce + 1;
+                }
+                package = &add->kem_package;
+            }
+            if (!package || candidate_account != account_id || candidate_device != device_id ||
+                candidate_activation != activation_nonce) continue;
+
+            const auto account_bytes = account_id.Value();
+            const auto commitment = ComputeIdentityKemPackageCommitment(
+                std::span<const unsigned char, 32>{m_network_id.begin(), 32},
+                std::span<const unsigned char, 32>{account_bytes.begin(), 32}, device_id,
+                activation_nonce, *package);
+            if (!commitment) return result;
+            if (require_active && *commitment != identity->devices.at(device_id).kem_package_id) continue;
+            if (found) return result; // An activation must have exactly one canonical publication.
+            found = true;
+            result.package = *package;
+            result.package_id = *commitment;
+            result.activation_nonce = activation_nonce;
+            result.operation_height = height;
+            result.operation_index = static_cast<uint32_t>(index);
+            result.block_id = block_id;
+        }
+        previous_id = block_id;
+        if (height == *finalized_height) break;
+    }
+    if (found) result.status = IdentityKemPackageLookupStatus::FOUND;
+    else if (require_active) result.status = IdentityKemPackageLookupStatus::HISTORY_UNAVAILABLE;
+    else result.status = IdentityKemPackageLookupStatus::NOT_FOUND;
+    return result;
+}
+
 SyncPeerResult CybouNodeRuntime::SyncFromPeer(const std::string& host, const uint16_t port, const uint64_t max_blocks)
 {
     SyncPeerResult result;
