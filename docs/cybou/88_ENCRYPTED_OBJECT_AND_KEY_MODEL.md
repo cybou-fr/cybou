@@ -3,14 +3,14 @@
 Status: canonical target for Files objects and Mail attachments. Provisional
 local v1 chunk encryption, public manifest commitments, durable provider/CYP2
 ciphertext transfer, an encrypted AccountID-bound Storage Key Ring with
-durable epochs, and file upload/download through either the local store or one
-explicitly selected connected CYP2 provider are implemented.
-Local device X25519 and ML-KEM-768 private
-material is generated and encrypted in the identity vault. Device KEM
-publication/wrapping, Storage Master Key device wrapping, client-side
-replication, leases, audits, repair, accounting, and attachment delivery are
-not implemented. `11_STORAGE_OBJECTS.md` owns provider placement, leases,
-audits, repair, and accounting.
+durable epochs, file upload/download, and a bounded client-side placement
+component for up to three already-connected providers are implemented. The
+desktop Files surface does not yet use placement. Local device X25519 and
+ML-KEM-768 private material is generated and encrypted in the identity vault.
+Device KEM publication/wrapping, Storage Master Key device wrapping, leases,
+audits, repair, accounting, and attachment delivery are not implemented.
+`11_STORAGE_OBJECTS.md` owns provider placement, leases, audits, repair, and
+accounting.
 
 ## Security boundary
 
