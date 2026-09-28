@@ -11,6 +11,44 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_mail_service_tests, BasicTestingSetup)
 
+BOOST_AUTO_TEST_CASE(protected_mail_matches_frozen_text_wire_profile)
+{
+    CybouServiceTestFixture fixture;
+    auto alice = fixture.CreateIdentity("mail-text-sender.cybou");
+    auto bob = fixture.CreateIdentity("mail-text-recipient.cybou");
+    const auto alice_id = alice->GetAccountId();
+    const auto bob_id = bob->GetAccountId();
+    BOOST_REQUIRE(alice_id);
+    BOOST_REQUIRE(bob_id);
+
+    cybou::ProtectedMail mail;
+    mail.sender = *alice_id;
+    mail.recipient = *bob_id;
+    mail.timestamp = 0x0102030405060708ULL;
+    mail.subject = "Hi";
+    mail.body = "Hello \xF0\x9F\x8C\x90";
+    const auto bytes = mail.Serialize();
+    BOOST_REQUIRE(bytes);
+    BOOST_CHECK_EQUAL(bytes->size(), 1 + 32 + 32 + 8 + 2 + 2 + 4 + mail.body.size());
+    BOOST_CHECK_EQUAL((*bytes)[73], 2);
+    BOOST_CHECK_EQUAL((*bytes)[74], 0);
+    BOOST_CHECK(cybou::ProtectedMail::Deserialize(*bytes) == mail);
+
+    auto malformed = *bytes;
+    malformed.push_back(0);
+    BOOST_CHECK(!cybou::ProtectedMail::Deserialize(malformed));
+    malformed = *bytes;
+    malformed[75] = 0xc0; // overlong UTF-8 lead byte in subject
+    malformed[76] = 0xaf;
+    BOOST_CHECK(!cybou::ProtectedMail::Deserialize(malformed));
+
+    mail.subject.assign(cybou::MAX_PROTECTED_MAIL_SUBJECT_BYTES + 1, 's');
+    BOOST_CHECK(!mail.Serialize());
+    mail.subject.clear();
+    mail.body.assign(cybou::MAX_PROTECTED_MAIL_BODY_BYTES + 1, 'b');
+    BOOST_CHECK(!mail.Serialize());
+}
+
 BOOST_AUTO_TEST_CASE(service_rejects_unknown_recipient_before_submission)
 {
     CybouServiceTestFixture fixture;

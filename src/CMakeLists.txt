@@ -211,6 +211,7 @@ add_library(cybou_node STATIC
   cybou/protocol_operation.cpp
   cybou/gcs_filter.cpp
   cybou/mail_filter.cpp
+  cybou/mail_envelope.cpp
   cybou/mail_service.cpp
   cybou/device_operation_coordinator.cpp
   cybou/wallet_service.cpp

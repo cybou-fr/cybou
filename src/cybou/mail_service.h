@@ -27,6 +27,8 @@ namespace cybou {
 inline constexpr std::array<unsigned char, 5> MAILBOX_MAGIC{'C', 'Y', 'B', 'M', '1'};
 inline constexpr uint32_t MAILBOX_FILE_VERSION{1};
 inline constexpr uint8_t PROTECTED_MAIL_VERSION{1};
+inline constexpr size_t MAX_PROTECTED_MAIL_SUBJECT_BYTES{256};
+inline constexpr size_t MAX_PROTECTED_MAIL_BODY_BYTES{48000};
 
 enum class MailFolder : uint8_t {
     INBOX = 0,
@@ -52,7 +54,7 @@ struct ProtectedMail {
     std::string subject;
     std::string body;
 
-    std::vector<unsigned char> Serialize() const;
+    std::optional<std::vector<unsigned char>> Serialize() const;
     static std::optional<ProtectedMail> Deserialize(std::span<const unsigned char> bytes);
 
     friend bool operator==(const ProtectedMail&, const ProtectedMail&) = default;
@@ -150,7 +152,7 @@ public:
     /** Unread count in Inbox. */
     size_t GetUnreadCount() const;
 
-    /** Refuses submission until the Mail ciphertext and recipient-set profile is frozen. */
+    /** Refuses submission until the frozen DEV envelope is backed by an integrated HPKE suite. */
     SendMailResult SendMail(
         const AccountId& recipient,
         const std::string& subject,
@@ -158,8 +160,8 @@ public:
 
     /**
      * Synchronize local Sent finality against newly finalized BFT blocks.
-     * Incoming decryption remains disabled until the Mail ciphertext profile
-     * and historical sender authorization are integrated.
+     * Incoming decryption remains disabled until the envelope backend and
+     * historical sender authorization verification are integrated.
      * Returns count of newly received messages (currently always zero).
      */
     size_t SyncMailbox();

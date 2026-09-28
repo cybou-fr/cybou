@@ -88,6 +88,9 @@ wire_profile:
   priority_fee: disabled
   enable_send_or_decrypt: false
 implementation:
+  native_envelope_v1_codec: implemented
+  native_protected_text_v1_codec: implemented
+  hpke_encryption_backend_integrated: false
   repository_backend_dependency: OpenSSL_3_5
   openssl_3_5_hpke_api_supports_xwing_kem_id_0x647a: false
   alternate_vetted_backend_selected: false

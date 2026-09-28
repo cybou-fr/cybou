@@ -29,6 +29,12 @@ inline void AppendUint32LE(std::vector<unsigned char>& out, uint32_t val)
     for (int i = 0; i < 4; ++i) out.push_back(static_cast<unsigned char>(val >> (8 * i)));
 }
 
+inline void AppendUint16LE(std::vector<unsigned char>& out, uint16_t val)
+{
+    out.push_back(static_cast<unsigned char>(val));
+    out.push_back(static_cast<unsigned char>(val >> 8));
+}
+
 inline void AppendUint64LE(std::vector<unsigned char>& out, uint64_t val)
 {
     for (int i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(val >> (8 * i)));
@@ -41,6 +47,11 @@ inline uint32_t ReadUint32LE(const unsigned char* p)
     return v;
 }
 
+inline uint16_t ReadUint16LE(const unsigned char* p)
+{
+    return uint16_t{p[0]} | (uint16_t{p[1]} << 8);
+}
+
 inline uint64_t ReadUint64LE(const unsigned char* p)
 {
     uint64_t v = 0;
@@ -48,10 +59,55 @@ inline uint64_t ReadUint64LE(const unsigned char* p)
     return v;
 }
 
+bool IsValidUtf8(std::string_view text)
+{
+    const auto* bytes = reinterpret_cast<const unsigned char*>(text.data());
+    size_t offset{0};
+    while (offset < text.size()) {
+        const unsigned char lead = bytes[offset++];
+        if (lead <= 0x7f) continue;
+
+        uint32_t codepoint{0};
+        size_t continuation_count{0};
+        if (lead >= 0xc2 && lead <= 0xdf) {
+            codepoint = lead & 0x1f;
+            continuation_count = 1;
+        } else if (lead >= 0xe0 && lead <= 0xef) {
+            codepoint = lead & 0x0f;
+            continuation_count = 2;
+        } else if (lead >= 0xf0 && lead <= 0xf4) {
+            codepoint = lead & 0x07;
+            continuation_count = 3;
+        } else {
+            return false;
+        }
+
+        if (continuation_count > text.size() - offset) return false;
+        for (size_t i = 0; i < continuation_count; ++i) {
+            const unsigned char next = bytes[offset++];
+            if ((next & 0xc0) != 0x80) return false;
+            codepoint = (codepoint << 6) | (next & 0x3f);
+        }
+        if ((continuation_count == 1 && codepoint < 0x80) ||
+            (continuation_count == 2 && codepoint < 0x800) ||
+            (continuation_count == 3 && codepoint < 0x10000) ||
+            codepoint > 0x10ffff || (codepoint >= 0xd800 && codepoint <= 0xdfff)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
-std::vector<unsigned char> ProtectedMail::Serialize() const
+std::optional<std::vector<unsigned char>> ProtectedMail::Serialize() const
 {
+    if (version != PROTECTED_MAIL_VERSION || sender.IsNull() || recipient.IsNull() ||
+        subject.size() > MAX_PROTECTED_MAIL_SUBJECT_BYTES || body.size() > MAX_PROTECTED_MAIL_BODY_BYTES ||
+        !IsValidUtf8(subject) || !IsValidUtf8(body)) {
+        return std::nullopt;
+    }
+
     std::vector<unsigned char> out;
     out.push_back(version);
     const auto& s_val = sender.Value();
@@ -61,7 +117,7 @@ std::vector<unsigned char> ProtectedMail::Serialize() const
 
     AppendUint64LE(out, timestamp);
 
-    AppendUint32LE(out, static_cast<uint32_t>(subject.size()));
+    AppendUint16LE(out, static_cast<uint16_t>(subject.size()));
     out.insert(out.end(), subject.begin(), subject.end());
 
     AppendUint32LE(out, static_cast<uint32_t>(body.size()));
@@ -72,7 +128,8 @@ std::vector<unsigned char> ProtectedMail::Serialize() const
 
 std::optional<ProtectedMail> ProtectedMail::Deserialize(std::span<const unsigned char> bytes)
 {
-    if (bytes.size() < 81) return std::nullopt;
+    constexpr size_t MIN_SIZE{1 + 32 + 32 + 8 + 2 + 4};
+    if (bytes.size() < MIN_SIZE) return std::nullopt;
     if (bytes[0] != PROTECTED_MAIL_VERSION) return std::nullopt;
 
     ProtectedMail mail;
@@ -87,17 +144,18 @@ std::optional<ProtectedMail> ProtectedMail::Deserialize(std::span<const unsigned
     mail.timestamp = ReadUint64LE(bytes.data() + 65);
 
     size_t offset = 73;
-    const uint32_t subj_len = ReadUint32LE(bytes.data() + offset);
-    offset += 4;
-    if (offset + subj_len > bytes.size()) return std::nullopt;
+    const uint16_t subj_len = ReadUint16LE(bytes.data() + offset);
+    offset += 2;
+    if (subj_len > MAX_PROTECTED_MAIL_SUBJECT_BYTES || subj_len > bytes.size() - offset) return std::nullopt;
     mail.subject.assign(reinterpret_cast<const char*>(bytes.data() + offset), subj_len);
     offset += subj_len;
 
-    if (offset + 4 > bytes.size()) return std::nullopt;
+    if (bytes.size() - offset < 4) return std::nullopt;
     const uint32_t body_len = ReadUint32LE(bytes.data() + offset);
     offset += 4;
-    if (offset + body_len > bytes.size()) return std::nullopt;
+    if (body_len > MAX_PROTECTED_MAIL_BODY_BYTES || body_len != bytes.size() - offset) return std::nullopt;
     mail.body.assign(reinterpret_cast<const char*>(bytes.data() + offset), body_len);
+    if (!IsValidUtf8(mail.subject) || !IsValidUtf8(mail.body)) return std::nullopt;
 
     return mail;
 }
