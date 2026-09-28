@@ -1,4 +1,7 @@
 version: '0.0.1'
+scope: currently_running_DEV_protocol_only
+next_protocol_target: spec/poa_chunk_dag.yaml
+post_cutover_operation: RootPublication_private_Mail_schema
 operation_type: MailTx
 first_class_protocol_operation: true
 encoded_as_op_return: false

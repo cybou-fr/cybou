@@ -1,4 +1,6 @@
 version: '0.0.1'
+scope: currently_running_DEV_protocol_only
+next_cutover_target: spec/poa_chunk_dag.yaml
 consensus: BFT_explicit_finality
 validator_admission: operator_controlled_PoA
 validator_weight: 1

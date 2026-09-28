@@ -41,6 +41,30 @@ attachment and ownership integration; complete Mail UI; then complete Files UI.
 Durability, limits, share-grant discovery, and consensus encoding remain owned
 by their implementation gates.
 
+## Protocol reset: PoA + encrypted chunk DAG
+
+DEC-195 supersedes the prior consensus, MailTx, and public object-manifest
+targets for the next coordinated DEV genesis. Before implementation, the
+architecture authority is `POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`,
+`ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, and
+`IDENTITY_DISCOVERY_AND_RECOVERY.md`. The machine-readable target is
+`spec/poa_chunk_dag.yaml`.
+
+The sequence is intentionally gated: (1) freeze authority and open safety
+questions; (2) add vetted BLAKE3 ChunkID with published KAT; (3) bounded
+canonical CBOR; (4) local encrypted graph builder; (5) RootPublication and
+generic accounting; (6) genesis-bound hybrid-PQ PoA and deterministic fork
+handling; (7) state-store finality and genesis integration; (8) content-addressed
+ChunkStore and finalized admission proofs; (9) publication scan/fetch/clean
+restore; (10) Mail and Files private-schema adapters; and only then perform
+one DEV reset with obsolete state/vaults discarded. No BFT/PoA hybrid format,
+dual decoder, or partial DEV rollout.
+
+The one-PoA trust model is centralized and is not BFT fault tolerance. The
+reset gate also requires a deterministic response to equivocation/journal
+rollback and a tested UX/retry contract when a RootPublication is finalized
+before its chunks reach the Storage durability threshold.
+
 ## Product gates
 
 Milestone numbers do not authorize a new product surface by themselves.
@@ -57,18 +81,20 @@ it does not establish Beta readiness:
 - send encrypted text mail to an offline recipient;
 - later receive, verify and reply to that mail;
 - preserve canonical identity and mail state across client restarts;
-- pass four-validator restart and fault tests.
+- pass PoA signature verification, anti-equivocation journal, restart, and
+  independent full-node state-recomputation tests;
+- document that this single-operator model has no BFT fault tolerance.
 
 ### Gate B - Storage + Beta Mail readiness
 
-Before Beta, implement the minimal distributed Object Storage path and
-integrate encrypted Mail attachments. Demonstrate offline-recipient retrieval,
+Before Beta, implement the finalized ChunkStore path and integrate private Mail
+schemas over encrypted chunk graphs. Demonstrate offline-recipient retrieval,
 integrity verification, provider audits, repair, recovery after interruption,
 and stable accounting. The complete gates are in
 `81_BETA_PRODUCT_SCOPE.md`.
 
 Product readiness also includes the user-facing experience, not only backend
-PUT/GET and MailTx integration. The Beta client must satisfy the Mail, Files,
+PUT/GET and RootPublication integration. The Beta client must satisfy the Mail, Files,
 shared design-system, and end-to-end acceptance contracts in docs 82–85:
 familiar navigation, asynchronous progress and error states, Storage-backed
 attachment flows, responsive desktop layouts, and progressive disclosure of
@@ -76,11 +102,18 @@ protocol detail.
 
 ### Gate C - Controlled Beta pilot
 
-Run a controlled pilot with 20–100 real users for 8–12 weeks and four active
-validators where f=1 tolerance is claimed. Measure repeated Mail and attachment
+Run a controlled pilot with 20–100 real users for 8–12 weeks under the single
+operator trust model; do not claim BFT fault tolerance. Measure repeated Mail and attachment
 use, offline retrieval, recovery, clean-machine recovery, Storage repair, support
 burden, and history growth. Backup remains post-Beta. Files is in Beta scope;
 there is no separate Drive application milestone.
+
+## Historical pre-DEC-195 roadmap (not next-gen protocol authority)
+
+The milestones below record the earlier BFT/MailTx design and implementation
+history. They are retained for traceability; DEC-195 and the protocol-reset
+sequence above supersede their future-facing consensus and content-transport
+requirements.
 
 ## v0.0.0 — Exact upstream baseline
 Pin exact local Bitcoin Core tag/commit. Build/tests only. No normal Bitcoin-network launch.
@@ -201,13 +234,13 @@ No priority fee.
 Security/legal/CRA/crypto-export/privacy/update/runbook work.
 
 ## v0.2.6 — Controlled Beta pilot
-20–100 users for 8–12 weeks; four approved validators where claiming f=1 BFT tolerance. Size the Beta onboarding budget from measured Email + Files/Storage usage; keep Backup in a separate post-Beta capacity scenario.
+20–100 users for 8–12 weeks under the disclosed single-operator PoA trust model; do not claim BFT fault tolerance. Size the Beta onboarding budget from measured Email + Files/Storage usage; keep Backup in a separate post-Beta capacity scenario.
 
-## v0.3.0 — Operator continuity
-Design/test emergency Operator Authority succession without introducing normal DAO/community governance.
+## v0.3.0 — Finalizer continuity
+Design/test recovery and succession for the genesis-bound PoA signing role without silently changing the network's trust root or introducing normal DAO/community governance.
 
 ## v0.3.1 — European controlled expansion
-Multiple EU validator operators/providers.
+Distribute independent Storage providers across EU regions. This does not imply multiple PoA signers or BFT fault tolerance.
 
 ## v0.4 — Backup (post-Beta application)
 ## v0.7 — Email expansion / optional gateway research

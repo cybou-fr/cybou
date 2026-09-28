@@ -1,5 +1,8 @@
 version: '0.0.1'
 status: frozen_product_architecture_protocol_parameters_open
+protocol_scope: product_and_UX_target
+next_protocol_authority: spec/poa_chunk_dag.yaml
+network_operation_model: superseded_by_DEC-195_for_coordinated_cutover
 references:
   decisions: DEC-193_and_DEC-194
   implementation_status: docs/cybou/26_IMPLEMENTATION_STATUS.md
@@ -15,7 +18,7 @@ principles:
   shared_network_interfaces:
     - CYP2_P2P
     - NodeRuntime
-    - BFT_finalized_state
+    - finalized_state_current_DEV_BFT_next_target_PoA
     - StorageService
     - IdentityOperationCoordinator
   service_owned_client_data:
@@ -36,7 +39,7 @@ products:
       attachments: true
       attachment_transport: encrypted_object_layer_reference
       inline_attachment_bytes_in_MailTx: false
-      message_text_transport: encrypted_MailTx_content
+      message_text_transport: encrypted_chunk_DAG
       attachment_descriptors_inside_E2E_protected_message: true
       protected_message_fields:
         - mail_id
@@ -110,7 +113,7 @@ products:
     shared_by: [Mail, Files, Backup_post_Beta]
     storage_payload: immutable_encrypted_object
     client_encrypts_before_upload: true
-    storage_provider_sees: [opaque_object_id, ciphertext_chunks, ciphertext_sizes, commitments]
+    storage_provider_sees: [opaque_chunk_id, ciphertext_chunks, ciphertext_sizes, commitments]
     storage_provider_never_sees: [plaintext, object_key, filename, mime_type, folder_path]
     object_keys:
       ordinary_Files_object: HKDF_from_random_SMK_epoch_and_random_object_salt
@@ -145,7 +148,7 @@ consensus_boundary:
   may_contain:
     - Identity_authorization
     - account_level_encrypted_catalog_root_commitment_and_locator
-    - protocol_required_mail_ciphertext_commitments_and_discovery_fields
+    - generic_RootPublication_and_chunk_authorization_commitments
     - explicit_availability_contracts_and_accounting
   must_not_contain:
     - attachment_or_file_plaintext_or_ciphertext_bytes

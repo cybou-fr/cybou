@@ -1,0 +1,65 @@
+version: '0.0.1'
+status: frozen_architecture_target_protocol_parameters_open
+activation: coordinated_DEV_cutover_after_all_gates
+consensus:
+  mode: genesis_bound_single_operator_PoA
+  bft: removed_at_cutover
+  validator_set: absent
+  unfinalized_operations: local_origin_and_finalizer_only
+  full_nodes_recompute_state: true
+  finality_is_BFT: false
+  poa_signature:
+    roles_required: [Ed25519, ML-DSA-65]
+    classical_only_fallback: false
+    key_source: operator_mnemonic_dedicated_domain
+    private_key_persisted: false
+  anti_equivocation_journal:
+    durable_before_signing: true
+    stores_private_key: false
+  open_cutover_gates:
+    - deterministic_conflicting_signature_and_fork_handling
+    - journal_rollback_and_operator_recovery
+    - canonical_signature_and_genesis_vectors
+operations:
+  application_operation_types: absent
+  generic_publication: RootPublication
+  recipient_account_id_public: false
+  generic_byte_fees: required
+  mail_specific_consensus_quotas: absent
+chunks:
+  id: full_256_bit_BLAKE3_of_stored_encrypted_bytes
+  crypto: ChaCha20-Poly1305
+  key_derivation: HKDF-SHA256
+  identity_kem: X-Wing_draft_05_DEV
+  payload: bounded_canonical_CBOR_plus_random_padding
+  object_id_and_chunk_index_on_network: false
+  application_graph_metadata_encrypted: true
+  b3_implementation: vetted_external_implementation
+  open_gates:
+    - CBOR_profile_and_limits
+    - nonce_AAD_and_chunk_key_scope
+    - padding_buckets_and_benchmarks
+    - official_KAT_and_cross_implementation_vectors
+publication:
+  fields: [root_chunk_id, chunk_authorization_root, chunk_count, authorized_stored_bytes, recipient_capsules]
+  capsule_contains_public_recipient: false
+  capsule_count_public: true
+  capsule_count_privacy_treatment: OPEN_PAD_OR_ACCEPT_LEAKAGE
+  mail_files_backup_consensus_types: absent
+  finality_authorizes_storage: true
+  finality_proves_durability: false
+storage:
+  address: ChunkID
+  admission_requires_finalized_publication: true
+  proof: domain_separated_Merkle_inclusion
+  operations: [PUT_CHUNK, GET_CHUNK, optional_HAS_CHUNK]
+  manifest_commit_staging_abort_protocol: absent_after_cutover
+  chunk_placement: independent_per_chunk
+  open_gates:
+    - canonical_merkle_encoding_and_vectors
+    - durability_threshold_and_retry_semantics
+    - retention_repair_accounting_and_provider_loss
+recovery:
+  publication_scanner: local_rebuildable_index
+  clean_machine_requires_prior_client_database: false
+  restore_and_recursive_fetch_acceptance_required: true

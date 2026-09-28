@@ -1,4 +1,9 @@
 spec_version: '0.0.1'
+protocol_scope:
+  describes: currently_running_DEV_protocol
+  next_cutover_target: spec/poa_chunk_dag.yaml
+  current_chain_is_already_cut_over: false
+  reset_gate: all_target_integration_and_clean_machine_recovery_gates
 project:
   name: CYBOU
   website: cybou.fr

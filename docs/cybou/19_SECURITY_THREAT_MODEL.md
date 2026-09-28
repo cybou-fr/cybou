@@ -1,5 +1,17 @@
 # 19 — Security and threat model
 
+## Next DEV protocol trust boundary (DEC-195)
+
+The current DEV chain uses BFT and its present ValidatorSet. The next protocol
+target replaces that with a single genesis-bound hybrid-PQ PoA signer. This
+centralizes block ordering and censorship resistance in the operator; it is
+not Byzantine-fault-tolerant finality. Full nodes independently validate all
+operations and state roots, but cannot make progress if the PoA operator is
+offline or compromised. A conflicting valid PoA signature is a network safety
+incident; deterministic fork handling and journal rollback recovery are
+mandatory before DEV reset. RootPublication finality authorizes chunk storage
+but does not itself establish chunk availability.
+
 ## Security goals
 
 Protect against:

@@ -7,6 +7,12 @@ CYBOU is an experimental protected communication platform built around personal 
 
 > **Not a blockchain with features — a protected identity with services.**
 
+> **Protocol status:** the currently running DEV still uses BFT, MailTx, and
+> indexed object storage. The next coordinated reset targets single-operator
+> hybrid-PQ PoA and a generic encrypted chunk DAG. This is a centralized PoA
+> trust model, not BFT fault tolerance; see [DEC-195](docs/cybou/24_DECISIONS.md)
+> and [the cutover gates](docs/cybou/26_IMPLEMENTATION_STATUS.md).
+
 ---
 
 ## Why CYBOU exists
@@ -27,8 +33,8 @@ CYBOU reorganizes digital services around **you**: one cryptographically protect
 
 - **Identity-centric, not speculation-centric:** The wallet exists to fund services and secure the network, not as a speculative trading instrument. Communication, privacy, and user sovereignty come first.
 - **Human-readable `.cybou` names:** Simple addresses such as `stanislav.cybou` or `alice.cybou` replace cumbersome cryptographic strings, resolved directly on a decentralized registry.
-- **Single security and recovery model:** A single 24-word recovery phrase protects your identity root. Devices are authorized cryptographically without handing master credentials to a central server.
-- **Post-quantum security target:** Identity authorization uses hybrid signatures (Recovery Root Ed25519 + ML-DSA-65; device Ed25519 + ML-DSA-44). Hybrid recipient encryption (X25519 + ML-KEM-768) is a target profile; recipient KEM keys are not yet published and Mail sending fails closed.
+- **Single security and recovery model:** A 24-word recovery phrase restores one account-level Identity; there is no device registry in the target protocol.
+- **Post-quantum security target:** Identity authorization/recovery, Identity KEM, and PoA finality use separate key roles. Production signatures require the configured hybrid classical + PQ components; no classical-only fallback is permitted.
 - **Service-native utility wallet:** Two deterministic balance tiers — `SystemBalance` for protocol services (mail, storage, name registration) and spendable `Balance`. Account onboarding automatically seeds service credits.
 - **Sovereign and local-first target:** The client manages identity keys locally and is designed to own mailbox indexes and encrypted portable vaults. Distributed Object Storage, Beta Mail attachments, and Backup are not yet implemented.
 
@@ -39,15 +45,16 @@ CYBOU reorganizes digital services around **you**: one cryptographically protect
 Behind the user-facing services runs a deterministic, peer-to-peer C++20 engine:
 
 - **Identity & Key Separation:**
-  - **Recovery Root:** Hybrid Ed25519 + ML-DSA-65 (NIST FIPS 204). Operates offline for recovery and device delegation.
-  - **Device Keys:** Hybrid Ed25519 + ML-DSA-44. Unique per device, authorized by the root.
-  - **Mail Encryption Keys (target):** Hybrid X25519 + ML-KEM-768, isolated from identity signing keys; the required recipient-key publication and interoperable profile remain unimplemented.
-- **BFT Finality:** Deterministic block finality certificates with equal validator weight (`weight = 1`). Development Authority Mode runs with a single validator (`f=0`); public networks target equal-weight consensus requiring $\ge 4$ independent validators for `f=1` tolerance.
+  - **Recovery:** Hybrid Ed25519 + ML-DSA-65 (NIST FIPS 204).
+  - **Account authorization:** Hybrid Ed25519 + ML-DSA-44; it is account-scoped, not device-scoped.
+  - **Identity KEM:** X-Wing draft-05 is the selected DEV source profile; the current chain has not cut over to publish/use it.
+  - **PoA finality:** A separate genesis-bound Ed25519 + ML-DSA-65 signing role in the next DEV target.
+- **Current DEV finality:** BFT certificates remain active until protocol cutover. **Next DEV target:** one genesis-bound, hybrid-PQ PoA signer with independent full-node state validation. This is centralized finalization and makes no Byzantine-fault-tolerance claim.
 - **Deterministic Economics:**
   - Maximum supply capped at **100,000,000,000 CYBOU** (0 decimals).
   - Fees are deterministic and size-aware: each 4-unit fee routes **3 to Security** and **1 to `OnboardingPool`**.
   - Atomic onboarding: permissionless anti-Sybil proof-of-work credits new accounts with an initial `SystemBalance`.
-- **Local Client Integrity:** The Qt desktop client embeds the native C++ runtime directly, verifying state roots and finality certificates locally rather than relying on trusted RPC gateways.
+- **Local Client Integrity:** The Qt desktop client embeds the native C++ runtime directly and independently validates state roots and finalized history rather than relying on trusted RPC gateways.
 
 ---
 
@@ -75,6 +82,12 @@ CYBOU is in active development and **not yet a public production service**.
 
 ### Documentation & Guides
 
+- [PoA finality target](docs/cybou/POA_FINALITY.md)
+- [Encrypted chunk DAG target](docs/cybou/ENCRYPTED_CHUNK_DAG.md)
+- [Generic RootPublication target](docs/cybou/ROOT_PUBLICATION.md)
+- [Finalized chunk storage admission](docs/cybou/STORAGE_ADMISSION.md)
+- [Identity discovery and clean-machine recovery](docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md)
+- [PoA + chunk-DAG machine-readable target](spec/poa_chunk_dag.yaml)
 - [Identity-Centric Product UX Contract](docs/cybou/79_IDENTITY_CENTRIC_PRODUCT_UX.md)
 - [Identity & Name Registry Architecture](docs/cybou/10_IDENTITY_NAMES.md)
 - [Identity Security Substrate](docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md)

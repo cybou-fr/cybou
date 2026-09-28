@@ -1,4 +1,6 @@
 version: '0.0.1'
+scope: currently_running_DEV_Mail_profile_only
+next_protocol_target: spec/poa_chunk_dag.yaml
 status: dev_crypto_and_mail_envelope_frozen_backend_pending
 native_email:
   e2e_required: true

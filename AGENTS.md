@@ -15,45 +15,37 @@ Read active docs before coding.
 - Portable CYBV2/CVID5 vault stores stable AccountID plus recovery entropy; all Identity roles are derived from entropy. Durably save and reopen before AccountCreate. Clean-machine restore verifies every current key role and KEM commitment against finalized key_epoch and does not create a protocol authorization operation.
 - `.cybou` labels follow the 5–32 ASCII rule and finalized commit/work/reveal. No transfer, expiry, or recycling in the initial registry.
 - Keep mail encryption keys separate from Identity signing keys; no custom cryptographic primitives. IdentityRecord has recovery key, authorization key, current KEM commitment, one shared nonce, and key_epoch. IdentityRotate atomically replaces all roles; no device registry, activation, per-device nonce, DeviceAdd, or DeviceRevoke.
-- Do not reset DEV until the PQ consensus format and names integrate together.
-- Cut over DEV directly after the integration gate; discard obsolete DEV state and vaults. Do not build runtime compatibility, automatic import, or a dual operation decoder.
+- Current deployed DEV remains on the existing BFT/MailTx/Object protocol until one complete PoA + RootPublication + encrypted chunk-DAG cutover passes its integration gate.
+- The target protocol is a genesis-bound single-operator PoA finalizer with independently validating full nodes. This is centralized PoA, not BFT and not Byzantine-fault-tolerant finality.
+- PoA signing is a separate mnemonic-derived role, held in memory only, and requires Ed25519 AND ML-DSA-65. Identity authorization/recovery, PoA, Release Signing, and Treasury keys remain separate; no classical-only production signature path.
+- Keep the PoA anti-equivocation journal durable and fail closed. Deterministic fork/conflicting-signature and journal-rollback handling are cutover gates.
+- Cut over DEV directly after all format, names, finality, state-execution, chunk-admission, and clean-machine recovery gates pass; discard obsolete DEV state and vaults. Do not build runtime compatibility, automatic import, or a dual operation decoder.
 - Keep one canonical implementation and unversioned source/API names for state, operations, and identity. Version bytes belong inside the wire and vault formats only.
 - Every production signature path, including user, validator, operator, release, and treasury operations, must follow the PQ key policy; no classical-only fallback.
 
 ## Hard rules
 
-### Mail
-- MailTx is a first-class CYBOU operation.
-- Do not encode mail as an arbitrary script payload.
-- The initial Mail profile is one-recipient, text-only, no attachments.
-- no permanent per-mail consensus-state object.
-- current state contains validation-relevant counters/roots only.
-- local client owns Inbox/Sent/read-state indexes.
-- strict maximum MailTx size required.
-- deterministic size-aware fee required.
-- priority fee disabled.
-- Product target: Mail, Files, and later Backup share one Identity, finalized state, and encrypted Object Layer. Gmail/Drive are workflow references, not brand or custody models.
-- Beta attachments are immutable encrypted Storage objects referenced only inside E2E-protected Mail content; attachment bytes and Storage topology never enter MailTx. Initial DEV/Alpha remains one-recipient text-only with no attachments.
-- Files metadata stays in an encrypted client catalog; consensus stores only the account root/locator/commitment and required authorization/availability/accounting data. Per-file and per-mail permanent state is prohibited.
-- Identity-based sharing wraps object keys to recipient AccountID KEM capabilities. Anonymous links are not the primary security model. Mail and Files own independent retention references to shared immutable objects.
+### Protocol target: RootPublication + encrypted chunk DAG
+- Read `POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, and `IDENTITY_DISCOVERY_AND_RECOVERY.md` before protocol implementation.
+- After coordinated cutover, generic RootPublication is the only application-content publication operation. Mail, Files, Backup, filenames, recipients, graph structure, and application schemas are encrypted payload data, not consensus operation types.
+- ChunkID is the full 256-bit BLAKE3 of stored encrypted bytes. Use a vetted BLAKE3 implementation; do not implement primitives locally. Payload nodes use a bounded canonical-CBOR profile and reviewed AEAD/KDF/KEM.
+- Unfinalized operations and chunks remain local. A finalized RootPublication authorizes chunk admission; it does not prove durability. The client retains ciphertext and reports availability only after the frozen durability threshold.
+- Providers accept only content-addressed chunks with a valid finalized-publication Merkle admission proof. They store opaque ciphertext and required proof/lease metadata.
+- Recipient capsules do not expose AccountID. Local clients scan finalized publications and rebuild service indexes; clean-machine recovery must work from mnemonic plus public network data.
+- Keep Mail and Files UX requirements. Initial DEV/Alpha product UX remains one-recipient text-only until the new protocol reaches its own integration gate; Beta attachments use the shared chunk DAG.
+- Consensus may enforce generic publication byte/count limits and deterministic fees, but cannot enforce hidden Mail-specific quotas.
 
-### Pre-Store
-- desktop nodes may prune;
-- active validators retain required canonical pre-Store MailTx history;
-- mass-scale Email waits for Object Storage.
-
-### BFT
-- BFT explicit finality;
-- operator-approved admission;
-- equal validator weight = 1;
-- 4 validators minimum when claiming f=1 tolerance.
+### Historical protocol
+- Existing DEV/BFT/MailTx/Object Storage documents describe the currently running protocol only unless explicitly marked as the post-cutover target.
+- Do not mix old BFT/MailTx or indexed-manifest formats into the new genesis or implement dual decoders.
+- Beta durability, pruning, retention, repair, and economics remain explicit readiness gates for the new ChunkStore.
 
 ### PoT
 - block-height-derived deterministic epoch;
 - integer arithmetic only;
 - System Balance is service budget only (does not boost Beta PoT score);
 - PoT in Beta is account age and protocol history only;
-- deterministic fixed mail quota per epoch;
+- deterministic generic publication byte/count limits; no consensus Mail quota once application type is encrypted;
 - no local wall-clock consensus logic.
 
 ### Onboarding & Anti-Sybil
@@ -69,19 +61,15 @@ Read active docs before coding.
 - Beta onboarding budget is determined using integrated Email + Storage + Backup economics.
 - Mainnet onboarding bonus is frozen only after aggregate Beta operational data.
 
-### Operator keys
-Keep separate:
-- Operator Authority;
-- Operator Validator;
-- Release Signing;
-- Treasury.
+### Keys
+Keep Identity recovery, Identity authorization, Identity KEM, PoA, Release Signing, and Treasury roles separate.
 
 ### Evidence
-Mail evidence must support:
-- transaction inclusion proof;
-- BFT finality certificate;
-- historical sender-key authorization;
-- salted/domain-separated content commitment.
+Publication evidence must support:
+- RootPublication inclusion proof;
+- hybrid PoA finality proof;
+- historical sender Identity authorization;
+- domain-separated chunk commitment and admission proof.
 
 ### Economics
 ```text

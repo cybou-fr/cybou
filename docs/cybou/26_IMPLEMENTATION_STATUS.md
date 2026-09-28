@@ -1,6 +1,25 @@
 # Implementation status
 
-CYBOU is experimental. The canonical product target uses hybrid post-quantum authorization, explicit BFT finality, and one verified state shared by Identity, Email, Wallet, Storage, and Backup. The standalone DEV node and native Qt desktop use the canonical CYBOU runtime; the desktop remains an observer role and uses multi-peer CYP2 networking by default. A development reset will follow the integration of identity, names, operations, blocks, and persistence.
+## Protocol reset target (DEC-195)
+
+The current DEV executable and chain remain on the existing BFT,
+ValidatorSet, MailTx, and indexed object/manifest protocol. The next target is
+the genesis-bound hybrid-PQ PoA + generic RootPublication + encrypted Chunk DAG
+defined in `POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`,
+`STORAGE_ADMISSION.md`, and `IDENTITY_DISCOVERY_AND_RECOVERY.md`, with machine-
+readable parameters/gates in `spec/poa_chunk_dag.yaml`. None of that target is
+implemented or active yet. Do not reset DEV until its fork/equivocation,
+storage admission/durability, names integration, state execution, and clean-
+machine recovery gates pass together.
+
+CYBOU is experimental. Current DEV uses hybrid post-quantum account authorization,
+BFT finality, and one verified state shared by Identity, Email, Wallet, and
+Storage. DEC-195 changes the next protocol target to genesis-bound hybrid-PQ
+single-operator PoA and generic encrypted RootPublication/Chunk DAG. The
+standalone DEV node and native Qt desktop use the canonical CYBOU runtime; the
+desktop remains an observer role and uses multi-peer CYP2 networking by
+default. A development reset follows only after the target integration gates
+pass together.
 
 Beta product scope requires Object Storage-backed encrypted Mail attachments;
 the first durable ciphertext provider and CYP2 PUT/commit/GET slice is

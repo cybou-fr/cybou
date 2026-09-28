@@ -1,3 +1,4 @@
+> Historical/current-DEV scope: this document describes the BFT, MailTx, validator-set, or indexed-object protocol currently running on DEV. It is superseded for the next-gen target by `POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, and `IDENTITY_DISCOVERY_AND_RECOVERY.md`. Product and UX requirements remain applicable only where they do not conflict with those target documents. No cutover is active yet.
 # 49 — Mail E2E encryption profile
 
 Status: target profile for one-recipient, text-only DEV Mail. Mail remains disabled for confidential sending until a vetted HPKE backend and end-to-end client flow are integrated and reviewed. This specification defines account-level keys; there is no device set or activation semantics.
