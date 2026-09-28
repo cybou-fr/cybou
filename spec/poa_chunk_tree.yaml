@@ -107,7 +107,7 @@ chunks:
     - padding_overhead_benchmarks
     - canonical_cbor_cross_implementation_vectors
     - root_capsule_wrap_unwrap_vectors_and_recipient_recovery
-    - root_publication_identity_authorization_state_integration
+    - root_publication_client_construction_and_history_scanner
 publication:
   wire_profile: 2
   canonical_encoding: RFC8949_core_deterministic_CBOR_map_integer_keys_ascending
@@ -151,7 +151,7 @@ storage:
   manifest_commit_staging_abort_protocol: absent_after_cutover
   chunk_placement: independent_per_chunk
   open_gates:
-    - provider_chunk_wire_serialization_and_canonical_finalized_history_lookup_adapter
+    - provider_chunk_wire_serialization_and_admission_integration
     - durability_threshold_and_retry_semantics
     - retention_repair_accounting_and_provider_loss
 recovery:

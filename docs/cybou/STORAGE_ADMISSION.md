@@ -1,7 +1,8 @@
 # Finalized chunk storage admission
 
-Status: frozen architecture target; a durable local provider admission store
-and proof encoding are implemented. Canonical-history integration, wire
+Status: frozen architecture target; a durable local provider admission store,
+proof encoding, typed Identity-authorized RootPublication operation, and
+canonical finalized-history lookup are implemented. Provider wire
 serialization, provider selection, retention, and economics remain gates.
 
 ## Authorization commitment

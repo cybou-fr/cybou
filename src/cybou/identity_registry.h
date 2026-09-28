@@ -46,7 +46,10 @@ struct IdentityRotate {
     friend bool operator==(const IdentityRotate&, const IdentityRotate&) = default;
 };
 
-enum class IdentityOperationKind : uint8_t { PAYMENT = 1, MAIL = 2, SYSTEM_LOCK = 3, NAME_COMMIT = 4, NAME_REVEAL = 5 };
+enum class IdentityOperationKind : uint8_t {
+    PAYMENT = 1, MAIL = 2, SYSTEM_LOCK = 3, NAME_COMMIT = 4, NAME_REVEAL = 5,
+    ROOT_PUBLICATION = 6,
+};
 
 struct IdentityOperationAuthorization {
     AccountId account_id;

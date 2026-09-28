@@ -6,8 +6,13 @@ coordinated protocol cutover.
 
 ## Public operation boundary
 
-The operation is authorized through the existing Identity operation
-coordinator and contains only generic fields:
+`AuthorizedRootPublication` is a first-class typed `ProtocolOperation`. Its
+outer Identity authorization binds the canonical body, account nonce, key
+epoch, and operation kind; it is submitted through the existing Identity
+operation coordinator. Finalized blocks commit the operation bytes, but the
+publication itself creates no persistent per-root consensus-state object.
+
+The body contains only generic fields:
 
 ```text
 RootPublication {
@@ -87,6 +92,9 @@ Consensus has generic publication limits and deterministic byte-based fees;
 it cannot enforce a Mail/day quota while Mail type is hidden. The fee is four
 CYBOU per started KiB of full canonical operation bytes, with each four-unit
 fee split as three Security and one Onboarding. Priority fees are disabled.
+The fee is debited from the sender's System Balance and enters the ordinary
+pending fee pool. Authorization nonce advancement and fee accounting are part
+of the deterministic operation transition.
 
 ## Authorization and replay
 

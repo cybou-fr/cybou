@@ -28,6 +28,7 @@ enum class WalletEntryKind : uint8_t {
     MAIL_FEE = 1,
     PAYMENT = 2,
     LOCK_TO_SYSTEM = 3,
+    ROOT_PUBLICATION_FEE = 4,
 };
 
 enum class WalletEntryFinality : uint8_t {

@@ -5,8 +5,10 @@
 #include <cybou/root_publication.h>
 
 #include <cybou/canonical_cbor.h>
+#include <cybou/crypto/sha256.h>
 #include <algorithm>
 #include <limits>
+#include <string_view>
 
 namespace cybou {
 namespace {
@@ -145,6 +147,18 @@ std::optional<std::uint64_t> ComputeRootPublicationFee(const std::size_t canonic
     const auto kib = (canonical_operation_bytes + 1023) / 1024;
     if (kib > std::numeric_limits<std::uint64_t>::max() / ROOT_PUBLICATION_FEE_PER_STARTED_KIB) return std::nullopt;
     return static_cast<std::uint64_t>(kib) * ROOT_PUBLICATION_FEE_PER_STARTED_KIB;
+}
+
+std::optional<IdentityKeyId> ComputeRootPublicationPayloadCommitment(const RootPublication& publication)
+{
+    constexpr std::string_view domain{"CYBOU/ROOT-PUBLICATION/P2"};
+    const auto encoded = SerializeRootPublication(publication);
+    if (!encoded) return std::nullopt;
+    IdentityKeyId digest{};
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), std::span<const unsigned char>{*encoded}}, digest.data())) {
+        return std::nullopt;
+    }
+    return digest;
 }
 
 } // namespace cybou

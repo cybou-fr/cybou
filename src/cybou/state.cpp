@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/state.h>
+#include <cybou/protocol_operation.h>
 #include <cybou/crypto/sha256.h>
 
 #include <algorithm>
@@ -252,6 +253,36 @@ MailError ApplyMail(const AuthorizedMail& op,
         sender_it->second.mail_count_in_epoch = 1;
     }
     return MailError::NONE;
+}
+
+RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
+    const uint256& network_id, CybouState& state)
+{
+    if (op.authorization.kind != IdentityOperationKind::ROOT_PUBLICATION) {
+        return RootPublicationError::INVALID_AUTHORIZATION;
+    }
+    const auto commitment = ComputeRootPublicationPayloadCommitment(op.publication);
+    if (!commitment || op.authorization.payload_commitment != *commitment) {
+        return RootPublicationError::INVALID_PAYLOAD;
+    }
+    const auto operation_bytes = SerializeProtocolOperation(ProtocolOperation{op});
+    if (!operation_bytes) return RootPublicationError::INVALID_PAYLOAD;
+    const auto fee = ComputeRootPublicationFee(operation_bytes->size());
+    if (!fee) return RootPublicationError::INVALID_PAYLOAD;
+    auto sender = state.accounts.find(op.authorization.account_id);
+    if (sender == state.accounts.end() || !state.identities.Find(op.authorization.account_id)) {
+        return RootPublicationError::SENDER_NOT_FOUND;
+    }
+    if (sender->second.system_balance < *fee) return RootPublicationError::INSUFFICIENT_SYSTEM_BALANCE;
+    if (state.pending_fee_pool > std::numeric_limits<std::uint64_t>::max() - *fee) {
+        return RootPublicationError::FEE_POOL_OVERFLOW;
+    }
+    if (state.identities.AuthorizeOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
+        return RootPublicationError::INVALID_AUTHORIZATION;
+    }
+    sender->second.system_balance -= *fee;
+    state.pending_fee_pool += *fee;
+    return RootPublicationError::NONE;
 }
 
 StateValidationError ValidateCybouState(const CybouState& state)

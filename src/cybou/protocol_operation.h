@@ -9,6 +9,7 @@
 #include <cybou/mail_tx.h>
 #include <cybou/name_registry.h>
 #include <cybou/payment.h>
+#include <cybou/root_publication.h>
 
 #include <optional>
 #include <span>
@@ -30,6 +31,7 @@ enum class ProtocolOperationKind : uint8_t {
     NAME_COMMIT = 5,
     NAME_REVEAL = 6,
     MAIL = 7,
+    ROOT_PUBLICATION = 8,
 };
 
 using ProtocolOperation = std::variant<
@@ -39,7 +41,8 @@ using ProtocolOperation = std::variant<
     AuthorizedSystemLock,
     AuthorizedNameCommit,
     AuthorizedNameReveal,
-    AuthorizedMail>;
+    AuthorizedMail,
+    AuthorizedRootPublication>;
 
 std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const ProtocolOperation& operation);
 std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const unsigned char> bytes);

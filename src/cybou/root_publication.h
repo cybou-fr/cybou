@@ -8,6 +8,7 @@
 #include <cybou/chunk_id.h>
 #include <cybou/encrypted_chunk.h>
 #include <cybou/identity_kem.h>
+#include <cybou/identity_registry.h>
 
 #include <array>
 #include <cstdint>
@@ -47,10 +48,18 @@ struct RootPublication {
     friend bool operator==(const RootPublication&, const RootPublication&) = default;
 };
 
+struct AuthorizedRootPublication {
+    IdentityOperationAuthorization authorization;
+    RootPublication publication;
+
+    friend bool operator==(const AuthorizedRootPublication&, const AuthorizedRootPublication&) = default;
+};
+
 /** Canonical CBOR body; Identity authorization is carried by the outer operation. */
 std::optional<std::vector<unsigned char>> SerializeRootPublication(const RootPublication& publication);
 std::optional<RootPublication> DeserializeRootPublication(std::span<const unsigned char> bytes);
 std::optional<std::uint64_t> ComputeRootPublicationFee(std::size_t canonical_operation_bytes);
+std::optional<IdentityKeyId> ComputeRootPublicationPayloadCommitment(const RootPublication& publication);
 
 std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
     std::span<const unsigned char, 32> network_id,

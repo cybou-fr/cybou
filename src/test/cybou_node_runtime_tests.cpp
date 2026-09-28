@@ -49,6 +49,47 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     BOOST_CHECK_EQUAL(missing.scanned_height, 1U);
 }
 
+BOOST_AUTO_TEST_CASE(runtime_resolves_only_finalized_root_publications)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("publication-owner.cybou");
+    const auto account = identity->GetAccountId();
+    BOOST_REQUIRE(account);
+    cybou::RootPublication publication;
+    publication.root_chunk_id.fill(0x31);
+    publication.chunk_authorization_root.fill(0x42);
+    publication.chunk_count = 1;
+    publication.authorized_stored_bytes = cybou::ROOT_PUBLICATION_MIN_CHUNK_STORED_BYTES;
+    cybou::RootRecipientCapsule capsule;
+    capsule.encapsulation.fill(0x53);
+    capsule.wrapped_content_key.fill(0x64);
+    publication.recipient_capsules.push_back(capsule);
+    const auto commitment = cybou::ComputeRootPublicationPayloadCommitment(publication);
+    BOOST_REQUIRE(commitment);
+    const auto loaded = fixture.runtime->GetStore().LoadState();
+    const auto* record = loaded && loaded.state ? loaded.state->identities.Find(*account) : nullptr;
+    BOOST_REQUIRE(record);
+    cybou::IdentityOperationAuthorization auth{
+        .account_id = *account,
+        .nonce = record->nonce,
+        .key_epoch = record->key_epoch,
+        .kind = cybou::IdentityOperationKind::ROOT_PUBLICATION,
+        .payload_commitment = *commitment,
+    };
+    const auto digest = cybou::ComputeIdentityOperationDigest(fixture.runtime->GetNetworkId(), auth);
+    BOOST_REQUIRE(digest);
+    const auto signature = identity->GetKeyStore().SignAuthorization(*digest);
+    BOOST_REQUIRE(signature);
+    auth.signature = *signature;
+    const cybou::ProtocolOperation operation{cybou::AuthorizedRootPublication{auth, publication}};
+    const auto submitted = fixture.runtime->SubmitOperation(operation);
+    BOOST_REQUIRE(submitted);
+    BOOST_CHECK(!fixture.runtime->FindFinalizedRootPublication(submitted.op_id));
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    BOOST_CHECK(fixture.runtime->FindFinalizedRootPublication(submitted.op_id) == publication);
+    BOOST_CHECK(!fixture.runtime->FindFinalizedRootPublication(uint256::ONE));
+}
+
 BOOST_AUTO_TEST_CASE(runtime_resolves_current_identity_kem_package_by_key_epoch)
 {
     CybouServiceTestFixture fixture;

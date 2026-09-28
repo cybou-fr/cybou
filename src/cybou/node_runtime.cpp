@@ -864,6 +864,20 @@ FinalizedOperationLookupResult CybouNodeRuntime::FindFinalizedOperation(const ui
     return result;
 }
 
+std::optional<RootPublication> CybouNodeRuntime::FindFinalizedRootPublication(const uint256& op_id) const
+{
+    const auto location = FindFinalizedOperation(op_id);
+    if (location.status != FinalizedOperationLookupStatus::FOUND) return std::nullopt;
+    const auto finalized = GetBlockAtHeight(location.height);
+    if (!finalized || location.operation_index >= finalized->block.operations.size() ||
+        ComputeBlockId(finalized->block) != location.block_id) return std::nullopt;
+    const auto& operation = finalized->block.operations[location.operation_index];
+    const auto operation_id = ComputeOperationId(operation);
+    if (!operation_id || *operation_id != op_id) return std::nullopt;
+    const auto* publication = std::get_if<AuthorizedRootPublication>(&operation);
+    return publication ? std::optional<RootPublication>{publication->publication} : std::nullopt;
+}
+
 IdentityKemPackageLookupResult CybouNodeRuntime::FindIdentityKemPackage(
     const AccountId& account_id, const uint64_t key_epoch) const
 {

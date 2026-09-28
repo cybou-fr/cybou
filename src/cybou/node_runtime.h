@@ -174,6 +174,8 @@ public:
     /** Block lookup by height */
     std::optional<FinalizedBlock> GetBlockAtHeight(uint64_t height) const;
     FinalizedOperationLookupResult FindFinalizedOperation(const uint256& op_id) const;
+    /** Resolve a RootPublication only from verified canonical finalized history. */
+    std::optional<RootPublication> FindFinalizedRootPublication(const uint256& op_id) const;
     /** Resolve the finalized KEM capability for an Identity key epoch. */
     IdentityKemPackageLookupResult FindIdentityKemPackage(
         const AccountId& account_id, uint64_t key_epoch) const;

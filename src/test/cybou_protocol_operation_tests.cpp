@@ -221,6 +221,47 @@ BOOST_AUTO_TEST_CASE(mail_canonical_typed_roundtrip)
     BOOST_CHECK(*decoded == op);
 }
 
+BOOST_AUTO_TEST_CASE(root_publication_is_a_typed_identity_authorized_operation)
+{
+    const auto alice = MakeTestIdentity(1);
+    cybou::RootPublication publication;
+    publication.root_chunk_id.fill(0x31);
+    publication.chunk_authorization_root.fill(0x42);
+    publication.chunk_count = 1;
+    publication.authorized_stored_bytes = cybou::ROOT_PUBLICATION_MIN_CHUNK_STORED_BYTES;
+    cybou::RootRecipientCapsule capsule;
+    capsule.key_epoch = 0;
+    capsule.encapsulation.fill(0x53);
+    capsule.wrapped_content_key.fill(0x64);
+    publication.recipient_capsules.push_back(capsule);
+
+    cybou::IdentityOperationAuthorization auth{
+        .account_id = alice.account_id,
+        .nonce = 3,
+        .key_epoch = 0,
+        .kind = cybou::IdentityOperationKind::ROOT_PUBLICATION,
+        .payload_commitment = *cybou::ComputeRootPublicationPayloadCommitment(publication),
+    };
+    const auto digest = cybou::ComputeIdentityOperationDigest(TestNetworkId(), auth);
+    BOOST_REQUIRE(digest);
+    auth.signature = *cybou::SignIdentityMessage(alice.dev_seed,
+        cybou::IdentityKeyPurpose::AUTHORIZATION, *digest);
+    const cybou::ProtocolOperation operation{cybou::AuthorizedRootPublication{
+        .authorization = auth, .publication = publication}};
+
+    const auto encoded = cybou::SerializeProtocolOperation(operation);
+    BOOST_REQUIRE(encoded);
+    BOOST_CHECK_EQUAL((*encoded)[1], static_cast<uint8_t>(cybou::ProtocolOperationKind::ROOT_PUBLICATION));
+    BOOST_CHECK(encoded->size() <= cybou::ROOT_PUBLICATION_MAX_OPERATION_BYTES);
+    const auto decoded = cybou::DeserializeProtocolOperation(*encoded);
+    BOOST_REQUIRE(decoded);
+    BOOST_CHECK(*decoded == operation);
+
+    auto altered = *encoded;
+    altered.back() ^= 1;
+    BOOST_CHECK(!cybou::DeserializeProtocolOperation(altered));
+}
+
 BOOST_AUTO_TEST_CASE(identity_rotate_canonical_typed_roundtrip)
 {
     const auto alice = MakeTestIdentity(1);

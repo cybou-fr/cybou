@@ -8,6 +8,7 @@
 #include <cybou/identity_registry.h>
 #include <cybou/mail_tx.h>
 #include <cybou/name_registry.h>
+#include <cybou/root_publication.h>
 #include <cybou/validator.h>
 
 #include <cstdint>
@@ -68,6 +69,18 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
 MailError ApplyMail(const AuthorizedMail& op,
     const uint256& network_id, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state);
+
+enum class RootPublicationError : uint8_t {
+    NONE,
+    INVALID_PAYLOAD,
+    INVALID_AUTHORIZATION,
+    SENDER_NOT_FOUND,
+    INSUFFICIENT_SYSTEM_BALANCE,
+    FEE_POOL_OVERFLOW,
+};
+
+RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
+    const uint256& network_id, CybouState& state);
 
 enum class StateValidationError : uint8_t {
     NONE,

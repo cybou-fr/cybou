@@ -143,6 +143,26 @@ std::optional<AuthorizedNameReveal> DeserializeNameReveal(std::span<const unsign
     return AuthorizedNameReveal{.authorization = *auth, .reveal = *payload};
 }
 
+std::optional<std::vector<unsigned char>> SerializeRootPublicationOperation(const AuthorizedRootPublication& op)
+{
+    return SerializeAuthorizedPayload(op.authorization, IdentityOperationKind::ROOT_PUBLICATION, op.publication,
+        ComputeRootPublicationPayloadCommitment, SerializeRootPublication);
+}
+
+std::optional<AuthorizedRootPublication> DeserializeRootPublicationOperation(std::span<const unsigned char> bytes)
+{
+    if (bytes.size() < IDENTITY_OPERATION_AUTH_SIZE || bytes.size() > ROOT_PUBLICATION_MAX_OPERATION_BYTES) {
+        return std::nullopt;
+    }
+    const auto auth = DeserializeIdentityOperationAuthorization(bytes.first(IDENTITY_OPERATION_AUTH_SIZE),
+        IdentityOperationKind::ROOT_PUBLICATION);
+    const auto publication = DeserializeRootPublication(bytes.subspan(IDENTITY_OPERATION_AUTH_SIZE));
+    if (!auth || !publication || ComputeRootPublicationPayloadCommitment(*publication) != auth->payload_commitment) {
+        return std::nullopt;
+    }
+    return AuthorizedRootPublication{.authorization = *auth, .publication = *publication};
+}
+
 void WritePublic(std::vector<unsigned char>& out, const IdentityHybridPublicKey& key)
 {
     out.insert(out.end(), key.ed25519.begin(), key.ed25519.end());
@@ -250,6 +270,11 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const Proto
         if (!body) return std::nullopt;
         out.push_back(static_cast<unsigned char>(ProtocolOperationKind::MAIL));
         out.insert(out.end(), body->begin(), body->end());
+    } else if (const auto* publication = std::get_if<AuthorizedRootPublication>(&operation)) {
+        const auto body = SerializeRootPublicationOperation(*publication);
+        if (!body || body->size() + 2 > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
+        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::ROOT_PUBLICATION));
+        out.insert(out.end(), body->begin(), body->end());
     } else {
         return std::nullopt;
     }
@@ -293,6 +318,11 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
     }
     case ProtocolOperationKind::MAIL: {
         const auto op = DeserializeAuthorizedMail(bytes.subspan(2));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
+    }
+    case ProtocolOperationKind::ROOT_PUBLICATION: {
+        if (bytes.size() > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
+        const auto op = DeserializeRootPublicationOperation(bytes.subspan(2));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     default: return std::nullopt;

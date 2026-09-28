@@ -89,6 +89,14 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 failure.mail_error = result;
                 return failure;
             }
+        } else if (const auto* publication = std::get_if<AuthorizedRootPublication>(&operations[i])) {
+            const auto result = ApplyRootPublication(*publication, network_id, candidate);
+            if (result != RootPublicationError::NONE) {
+                auto failure = fail(BlockExecutionError::INVALID_ROOT_PUBLICATION);
+                failure.failed_operation_index = i;
+                failure.root_publication_error = result;
+                return failure;
+            }
         }
     }
     const uint64_t chunks = candidate.pending_fee_pool / 4;

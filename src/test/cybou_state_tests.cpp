@@ -210,6 +210,69 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_CHECK(replay_block.payment_error == PaymentError::INVALID_AUTHORIZATION);
 }
 
+BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_size_fee)
+{
+    using namespace cybou;
+    std::array<unsigned char, 32> root_seed{}, authorization_seed{};
+    root_seed[0] = 0x71;
+    authorization_seed[0] = 0x72;
+    uint256 raw_account{}, network_id{};
+    raw_account.begin()[0] = 0x73;
+    network_id.begin()[0] = 0x74;
+    const AccountId account{raw_account};
+    const auto root_key = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto authorization_key = DeriveIdentityPublicKey(authorization_seed, IdentityKeyPurpose::AUTHORIZATION);
+    BOOST_REQUIRE(root_key && authorization_key);
+    const IdentityAuthorization identity_authorization{*root_key, *authorization_key};
+    const auto binding = test::MakeIdentityKemBinding(network_id, account, identity_authorization);
+    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+    const auto authorization_pop = SignIdentityMessage(authorization_seed,
+        IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
+    BOOST_REQUIRE(root_pop && authorization_pop);
+    const AccountCreateOp create{account, identity_authorization, binding.package,
+        {.network_id = network_id, .account_id = account,
+            .authorization_commitment = binding.authorization_commitment},
+        *root_pop, *authorization_pop};
+    auto params = DevProtocolParameters();
+    params.account_creation_work_bits = 0;
+    CybouState state{};
+    state.onboarding_pool = params.onboarding_bonus;
+    state.validator_set.validators.push_back(MakeTestValidator(0x75));
+    BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
+
+    RootPublication publication;
+    publication.root_chunk_id.fill(0x31);
+    publication.chunk_authorization_root.fill(0x42);
+    publication.chunk_count = 1;
+    publication.authorized_stored_bytes = ROOT_PUBLICATION_MIN_CHUNK_STORED_BYTES;
+    RootRecipientCapsule capsule;
+    capsule.encapsulation.fill(0x53);
+    capsule.wrapped_content_key.fill(0x64);
+    publication.recipient_capsules.push_back(capsule);
+    IdentityOperationAuthorization operation_auth{
+        .account_id = account,
+        .nonce = 0,
+        .key_epoch = 0,
+        .kind = IdentityOperationKind::ROOT_PUBLICATION,
+        .payload_commitment = *ComputeRootPublicationPayloadCommitment(publication),
+    };
+    const auto digest = ComputeIdentityOperationDigest(network_id, operation_auth);
+    BOOST_REQUIRE(digest);
+    operation_auth.signature = *SignIdentityMessage(authorization_seed,
+        IdentityKeyPurpose::AUTHORIZATION, *digest);
+    const AuthorizedRootPublication operation{operation_auth, publication};
+    const auto encoded = SerializeProtocolOperation(ProtocolOperation{operation});
+    const auto fee = encoded ? ComputeRootPublicationFee(encoded->size()) : std::nullopt;
+    BOOST_REQUIRE(fee);
+    const auto starting_balance = state.accounts.at(account).system_balance;
+
+    BOOST_CHECK(ApplyRootPublication(operation, network_id, state) == RootPublicationError::NONE);
+    BOOST_CHECK(state.accounts.at(account).system_balance == starting_balance - *fee);
+    BOOST_CHECK(state.pending_fee_pool == *fee);
+    BOOST_CHECK(state.identities.Find(account)->nonce == 1);
+    BOOST_CHECK(ApplyRootPublication(operation, network_id, state) == RootPublicationError::INVALID_AUTHORIZATION);
+}
+
 BOOST_AUTO_TEST_CASE(insufficient_pool_does_not_register_identity)
 {
     using namespace cybou;

@@ -29,6 +29,9 @@ recovery gates pass together. See
   publication lookup, per-publication proof/byte accounting, provider capacity
   enforcement, and idempotent deduplication. The publication byte field is a
   declared provider ceiling, not a consensus-verified aggregate sum.
+- `AuthorizedRootPublication` as a typed Identity-authorized operation,
+  deterministic nonce/state execution, size-derived System Balance fee, and
+  lookup from verified canonical finalized block history.
 
 These components are substrate code. Their integration with the canonical
 Identity operation path, state transition, block finality, and provider network
@@ -41,13 +44,12 @@ serialization or cryptography code.
   Linux normal, and Linux Depends builds.
 - Cross-implementation vectors for canonical CBOR, encrypted chunks/trees,
   hybrid capsules, RootPublication authorization, and chunk admission.
-- RootPublication Identity authorization, replay protection, deterministic
-  state execution, and genesis/state-root integration.
+- RootPublication client construction/submission, publication scanning, and
+  clean-machine reconstruction of accessible roots.
 - Genesis-bound PoA signing, hybrid signature verification, anti-equivocation
   journal durability, fork handling, and operator recovery.
-- Connecting provider admission to canonical finalized-history lookup and the
-  PUT/GET peer wire; independent chunk placement, durability, retry, retention,
-  repair, and provider-loss handling.
+- Connecting provider admission to the PUT/GET peer wire; independent chunk
+  placement, durability, retry, retention, repair, and provider-loss handling.
 - Publication scanning, recursive retrieval, and clean-machine Identity,
   Mail, and Files recovery without an existing client database.
 - Gmail-familiar Mail and Google Drive-familiar Files UI/UX acceptance.
