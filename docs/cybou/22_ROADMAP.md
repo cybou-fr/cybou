@@ -51,9 +51,9 @@ architecture authority is `POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`,
 `spec/poa_chunk_dag.yaml`.
 
 The sequence is intentionally gated: (1) freeze authority and open safety
-questions; (2) add vetted BLAKE3 ChunkID with published KAT; (3) bounded
-canonical CBOR; (4) local encrypted graph builder; (5) RootPublication and
-generic accounting; (6) genesis-bound hybrid-PQ PoA and deterministic fork
+questions; (2) add vetted BLAKE3 ChunkID with published KAT [complete in
+`3c4f97c`]; (3) bounded canonical CBOR; (4) local encrypted graph builder;
+(5) RootPublication and generic accounting; (6) genesis-bound hybrid-PQ PoA and deterministic fork
 handling; (7) state-store finality and genesis integration; (8) content-addressed
 ChunkStore and finalized admission proofs; (9) publication scan/fetch/clean
 restore; (10) Mail and Files private-schema adapters; and only then perform

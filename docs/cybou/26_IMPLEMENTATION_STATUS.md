@@ -8,9 +8,13 @@ the genesis-bound hybrid-PQ PoA + generic RootPublication + encrypted Chunk DAG
 defined in `POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`,
 `STORAGE_ADMISSION.md`, and `IDENTITY_DISCOVERY_AND_RECOVERY.md`, with machine-
 readable parameters/gates in `spec/poa_chunk_dag.yaml`. None of that target is
-implemented or active yet. Do not reset DEV until its fork/equivocation,
-storage admission/durability, names integration, state execution, and clean-
-machine recovery gates pass together.
+active on DEV. The first target-code milestone is implemented: `ChunkId` is
+the full BLAKE3-256 digest of stored encrypted bytes, using pinned BLAKE3 C
+1.8.1, with official known-answer vectors. Canonical CBOR, encrypted graph
+builder/fetcher, RootPublication, PoA execution, and storage admission remain
+unimplemented. Do not reset DEV until fork/equivocation, storage
+admission/durability, names integration, state execution, and clean-machine
+recovery gates pass together.
 
 CYBOU is experimental. Current DEV uses hybrid post-quantum account authorization,
 BFT finality, and one verified state shared by Identity, Email, Wallet, and

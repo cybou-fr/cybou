@@ -1,9 +1,12 @@
 # Encrypted chunk DAG
 
-Status: frozen architecture target; implementation and interoperable wire
-profile are pending. This is the shared encrypted payload format for Mail,
-Files, and later Backup. Product schemas are private application data, not
-consensus operation types.
+Status: frozen architecture target. The first implementation milestone adds a
+full 256-bit BLAKE3 `ChunkId` over stored encrypted bytes, pinned to the
+official BLAKE3 C implementation 1.8.1 with known-answer tests. Canonical node
+encoding, encryption envelopes, graph construction/fetch, publication, and
+storage admission remain pending. This is the shared encrypted payload format
+for Mail, Files, and later Backup. Product schemas are private application
+data, not consensus operation types.
 
 ## Addressing and privacy
 
@@ -55,5 +58,3 @@ values, bad hashes, and AEAD failures are rejected.
 Mail, Files catalog, file versions, shares, and later Backup use private
 schemas over this same graph. No service may add a parallel public manifest or
 indexed-chunk protocol.
-
-\n
