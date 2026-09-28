@@ -164,6 +164,7 @@ add_library(cybou_core STATIC
   cybou/chunk_id.cpp
   cybou/encrypted_chunk.cpp
   cybou/encrypted_chunk_graph.cpp
+  cybou/root_publication.cpp
   cybou/crypto/chacha20_poly1305.cpp
   cybou/crypto/hkdf_sha256.cpp
   cybou/crypto/sha256.cpp

@@ -81,13 +81,48 @@ chunks:
     empty_payload_representation: empty_leaf
     chunk_order: child_array_order
     duplicate_chunk_references: rejected
+  chunk_authorization:
+    hash: BLAKE3-256
+    leaf_preimage: "CYBOU/CHUNK-AUTH/LEAF || ChunkID || stored_size_u64be"
+    leaf_order: ascending_ChunkID_bytes
+    node_preimage: "CYBOU/CHUNK-AUTH/NODE || left_hash || right_hash"
+    odd_node_rule: duplicate_last
+    empty_tree: rejected
+    maximum_leaf_count: 2048
+    inclusion_proof_sibling_order: leaf_to_root
+    inclusion_proof_max_siblings: 11
   open_gates:
     - encrypted_chunk_cross_implementation_vectors
     - encrypted_graph_cross_implementation_vectors_and_limits
+    - chunk_authorization_merkle_cross_implementation_vectors
     - padding_overhead_benchmarks
     - official_KAT_and_cross_implementation_vectors
 publication:
-  fields: [root_chunk_id, chunk_authorization_root, chunk_count, authorized_stored_bytes, recipient_capsules]
+  wire_profile: 1
+  canonical_encoding: RFC8949_core_deterministic_CBOR_map_integer_keys_ascending
+  fields: [wire_version, root_chunk_id, chunk_authorization_root, chunk_count, authorized_stored_bytes, recipient_capsules]
+  body_max_bytes: 131072
+  full_operation_max_bytes: 147456
+  chunk_count_min: 1
+  chunk_count_max: 2048
+  authorized_stored_bytes_min_per_chunk: 1089
+  authorized_stored_bytes_max: 536870912
+  recipient_capsule_count_min: 1
+  recipient_capsule_count_max: 64
+  recipient_count_padding: none
+  recipient_count_leakage: accepted
+  capsule_fields: [kem_profile_u16, recipient_key_epoch_u64, package_commitment_32, xwing_draft05_enc_1120, wrapped_graph_key_60]
+  capsule_kem_profile: 0x647a
+  capsule_wrapped_graph_key: nonce_12 || ciphertext_32 || tag_16
+  capsule_kdf: HKDF-SHA256
+  capsule_kdf_input: XWing_shared_secret
+  capsule_kdf_salt: NetworkID_32
+  capsule_kdf_info: "CYBOU/ROOT-CAPSULE-KEY/v1 || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be || package_commitment"
+  capsule_aead: ChaCha20-Poly1305
+  capsule_aad: "CYBOU/ROOT-CAPSULE-AAD/v1 || NetworkID || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be || package_commitment"
+  operation_fee: "4 * ceil(full_canonical_operation_bytes / 1024)"
+  priority_fee: disabled
+  fee_split: {security: 3, onboarding: 1}
   capsule_contains_public_recipient: false
   capsule_count_public: true
   capsule_count_privacy_treatment: OPEN_PAD_OR_ACCEPT_LEAKAGE
