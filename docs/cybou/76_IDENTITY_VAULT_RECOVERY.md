@@ -12,7 +12,7 @@ BIP-39 PBKDF2 wallet seed/passphrase scheme is not used. The local
 `identity_vault` module seals and opens bounded in-memory CYBV2 envelopes.
 `SaveNewIdentityVault` now writes a new file through a synced temporary file,
 publishes it without overwriting an existing vault, and authenticates it by
-reopening before returning success. The DEV-cutover `CVID4` payload contains a
+reopening before returning success. The deployed DEV `CVID4` payload contains a
 random AccountID, 256-bit recovery entropy, independent device signing secret,
 and one 32-byte X-Wing seed, in that order after the five-byte payload magic.
 The public hybrid KEM package is derived from this seed and validated before

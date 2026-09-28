@@ -1,10 +1,12 @@
 # 89 — Identity KEM capability publication
 
-Status: the DEV draft-05 profile and protocol implementation are frozen. A new
-DEV-format network definition can enable it explicitly; Beta and Mainnet stay
-disabled by default. Deployment still requires the integrated consensus/name
-cutover. Mail and Files remain disabled until their separate application gates
-pass. This is a coordinated consensus-format cutover, not a runtime migration.
+Status: the DEV draft-05 profile and protocol implementation are frozen and
+deployed. The active DEV NetworkID is
+`dfba1f18efba06839d3b4cc9e1fb8c90e9065583f1de0a03809ea7004d3c4e65`; its
+network definition explicitly enables X-Wing publication. Beta and Mainnet
+remain disabled by default. Mail and Files remain disabled until their separate
+application gates pass. The old DEV genesis/state is archived for rollback but
+is not accepted by the new network format.
 
 ## Current boundary
 
@@ -28,7 +30,7 @@ Identity remains the only authority for device encryption capabilities.
 Mail, Files, and Storage consume the capability published for an authorized
 device; they do not maintain a second authoritative key registry.
 
-The target state record adds one commitment reference to each active device:
+The state record adds one commitment reference to each active device:
 
 ```text
 IdentityDevice {
@@ -51,7 +53,7 @@ device activation. Re-adding a signing key creates a new activation and
 requires a new package commitment. A prior activation's package cannot
 authorize encryption to the new activation.
 
-The eventual canonical package must encode, with strict lengths and bounded
+The canonical package encodes, with strict lengths and bounded
 allocation:
 
 - package format identifier and format version;
@@ -125,8 +127,8 @@ vaults are discarded when the integrated PQ consensus and name gate is ready.
 
 ## Commitment and authorization requirements
 
-The eventual package commitment must hash an unambiguous canonical encoding
-and bind its context. Its reviewed preimage must include a dedicated domain
+The package commitment hashes an unambiguous canonical encoding and binds its
+context. Its frozen preimage includes a dedicated domain
 separator, NetworkID, AccountID, device signing-key ID, activation nonce,
 package length, and exact package bytes. It must reject null identities,
 unknown profile identifiers, malformed public keys, non-canonical encodings,
@@ -179,17 +181,18 @@ not infer those application semantics from the HPKE vectors or a TLS key-share
 format.
 
 The implementation enables publication only when the network definition's
-frozen DEV profile flag is set. Before deploying that new network format, the
-integrated cutover must still pass:
+frozen DEV profile flag is set. The new network format is deployed to DEV.
+Core tests cover the pinned X-Wing public-key vector, encapsulation/decapsulation
+agreement, authorization binding, state persistence, and CVID4 vault behavior.
+The remaining gates before Mail or cross-device Files consume these capabilities
+are:
 
-1. correct implementation of the pinned standard and published vectors;
-2. AccountCreate and DeviceAdd signatures over the package commitment;
-3. state-root and snapshot serialization changes in the coordinated cutover;
-4. vault durability, restore, and keypair self-test;
-5. device revocation and historical package verification;
-6. adversarial validation and coordinated DEV cutover with PQ consensus and names.
-7. historical finalized-operation lookup and package verification for client
-   use after key rotation or device revocation.
+1. client lookup of finalized AccountCreate/DeviceAdd bytes and verification
+   against the active state commitment;
+2. historical package and authorization verification after device rotation or
+   revocation;
+3. Mail ciphertext transcript, recipient privacy, and Files key-wrapping
+   profiles, with independent interoperability and adversarial review.
 
 Until the deployment gate passes, the running DEV network continues using its
 existing format and cannot accept these operations. Mail and cross-device Files
