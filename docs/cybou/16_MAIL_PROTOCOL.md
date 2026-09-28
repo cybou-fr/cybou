@@ -26,12 +26,14 @@ Protected text mail
 -> BFT finality
 ```
 
-The DEV cryptographic choices are frozen in `49_EMAIL_E2EE_HPKE_PQ.md` and
-`spec/email_crypto_profile.yaml`: draft-05 X-Wing HPKE for one CEK capsule per
-active recipient device, plus one ChaCha20-Poly1305 content encryption. The
-Mail envelope byte layout, recipient discovery privacy, and historical
-authorization evidence are still pending; clients must keep Mail submission
-and incoming decryption disabled until those gates are implemented.
+The DEV cryptographic choices and MailEnvelopeV1 byte layout are frozen in
+`49_EMAIL_E2EE_HPKE_PQ.md` and `spec/email_crypto_profile.yaml`: draft-05
+X-Wing HPKE for one CEK capsule per active recipient device, plus one
+ChaCha20-Poly1305 content encryption. Mail submission remains disabled until
+an approved backend supports this suite and the envelope is integrated.
+Incoming decryption additionally requires historical sender-key evidence
+verification. DEV exposes the recipient AccountID and makes no relationship
+privacy claim.
 
 ## Block/history vs state
 

@@ -32,10 +32,11 @@ the versioned identity record in `10_IDENTITY_NAMES.md`.
 
 The DEV Identity record publishes a draft-05 X-Wing package for each active
 authorized device. The package is bound to AccountID and device activation;
-Mail must not maintain a parallel authoritative recipient-key registry.
-`SendMail` remains fail-closed because Mail's application ciphertext,
-recipient-set, and transcript profile is not frozen or integrated. The former
-classical X25519-only helper has been removed.
+Mail must not maintain a parallel authoritative recipient-key registry. The
+application envelope and recipient-set profile are frozen below, but
+`SendMail` remains fail-closed until an approved backend supports the pinned
+X-Wing HPKE suite and the integration is complete. The former classical
+X25519-only helper has been removed.
 
 The DEV cryptographic parameters for Mail are fixed as follows:
 
@@ -51,18 +52,19 @@ The DEV cryptographic parameters for Mail are fixed as follows:
 | Content commitment | SHA-256 over ASCII `CYBOU/MAIL_COMMIT/V2` || 32-byte random salt || canonical protected plaintext; salt stays encrypted |
 | Mainnet | Disabled until final standards and a new Mainnet profile review |
 
-This freezes algorithms and message semantics, not the Mail wire encoding.
-The exact binary HPKE `info`/AAD context encoding, capsule framing, canonical
-protected-text encoding, opaque discovery-tag derivation, and historical
-sender-key proof are still gates. The current MailTx exposes the recipient
-AccountID, so no recipient-relationship privacy claim is made. `SendMail` and
-incoming decryption remain disabled until those wire and evidence gates pass.
+The DEV Mail envelope is frozen below. Its recipient AccountID is public in
+the current MailTx and the discovery tag is a deterministic filter key, so DEV
+does not claim recipient-relationship privacy. Mainnet requires a separate
+privacy review and profile. `SendMail` and incoming decryption remain disabled
+until the frozen envelope is implemented with a backend that supports the
+selected X-Wing HPKE suite; incoming decryption also requires historical
+sender-key evidence verification.
 
-The eventual encapsulation transcript must bind NetworkID, sender/recipient
-AccountIDs, sender/recipient device/key IDs, suite ID, message context, and
-both classical and PQ encapsulations. A recipient that requires the hybrid
-profile must never be silently downgraded. The context's byte encoding remains
-a wire-format gate; see the frozen choices above.
+The HPKE context binds NetworkID, sender/recipient AccountIDs, sender and
+recipient DeviceKeyIDs and activation nonces, recipient package commitment,
+recipient state height/root, MailID, content commitment, and suite tuple. A
+recipient that requires the hybrid profile must never be silently downgraded.
+Unknown suite or envelope versions are rejected.
 
 Do not invent a custom hybrid KEM combiner or use independently generated
 X25519 and ML-KEM keys as though they were the hybrid profile's keypair.
@@ -106,20 +108,103 @@ BFT consensus
 
 The chain contains ciphertext, never plaintext.
 
-## Protected mail
+## DEV Mail envelope v1
+
+The envelope is carried in the existing `MailPayload.ciphertext` field. All
+multi-byte integers in this envelope are unsigned little-endian unless stated
+otherwise. The 16-bit HPKE suite identifiers are serialized as three unsigned
+big-endian values in KEM, KDF, AEAD order.
+
+```text
+MailEnvelopeV1 {
+    envelope_version: u8 = 1
+    kem_id: u16be = 0x647a
+    kdf_id: u16be = 0x0001
+    aead_id: u16be = 0x0003
+    mail_id: 32 random bytes
+    recipient_state_height: u64le
+    recipient_state_root: 32 bytes
+    content_nonce: 12 random bytes
+    capsule_count: u8                 // 1..8
+    capsules[capsule_count]           // ascending DeviceKeyID
+    content_ciphertext_length: u32le  // includes 16-byte AEAD tag
+    content_ciphertext: bytes
+}
+
+RecipientCapsuleV1 {
+    recipient_device_key_id: 32 bytes
+    recipient_activation_nonce: u64le
+    recipient_package_commitment: 32 bytes
+    hpke_enc: 1120 bytes              // X-Wing draft-05
+    wrapped_cek: 48 bytes             // 32-byte CEK + 16-byte tag
+}
+```
+
+`capsule_count` must equal the active-device count in the sender's finalized
+recipient snapshot. Each capsule uses a fresh HPKE base-mode context and wraps
+only the same 32-byte message CEK. The receiver resolves the device package
+historically using the encoded activation nonce and verifies its commitment
+against the encoded finalized state snapshot. Duplicate or unsorted device
+IDs, an incorrect count, a mismatched package, trailing bytes, and unknown
+versions/suites are rejected. No downgrade or fallback is permitted.
+
+The HPKE `info` is the following concatenation, with no terminators or length
+prefixes: ASCII `CYBOU/MAIL/CEK-WRAP/V1`; `mail_id`; the three suite IDs as
+u16be; NetworkID; sender AccountID; sender DeviceKeyID; sender activation
+nonce u64le; recipient AccountID; recipient DeviceKeyID; recipient activation
+nonce u64le; recipient package commitment; recipient state height u64le;
+recipient state root; and content commitment. HPKE AAD is the empty byte
+string. Sender identity authentication remains the outer hybrid device
+authorization over the canonical MailPayload commitment.
+
+Content AEAD AAD is the concatenation, with no terminators or length prefixes:
+ASCII `CYBOU/MAIL/CONTENT/V1`; envelope version u8; the three suite IDs as
+u16be; NetworkID; MailID; sender AccountID; sender DeviceKeyID; sender
+activation nonce u64le; recipient AccountID; recipient state height u64le;
+recipient state root; and content commitment.
+
+The protected plaintext is `salt[32] || ProtectedTextV1`; the random salt is
+encrypted and is not sent in the clear. `ProtectedTextV1` is:
+
+```text
+version: u8 = 1
+sender_account_id: 32 bytes
+recipient_account_id: 32 bytes
+client_created_time: u64le       // informational only; never consensus input
+subject_length: u16le             // UTF-8 bytes, maximum 256
+subject: subject_length bytes
+body_length: u32le                // UTF-8 bytes, maximum 48000
+body: body_length bytes
+```
+
+The initial profile has no thread ID, HTML, compression, or attachments.
+Reject invalid UTF-8, lengths above the limits, and trailing bytes. The
+content commitment is SHA-256 over ASCII `CYBOU/MAIL_COMMIT/V2`, the 32-byte
+salt, and the exact `ProtectedTextV1` bytes.
+
+The public discovery tag is SHA-256 over ASCII
+`CYBOU/MAIL/DISCOVERY/V1 || NetworkID || recipient AccountID`; it is a filter
+key, not a privacy mechanism. The recipient AccountID remains visible in the
+outer MailPayload. DEV accepts this metadata leakage; Mainnet must not inherit
+that choice without a separate privacy review.
+
+The inner envelope is capped at 65,536 bytes. Including the fixed 2,698-byte
+authorized-mail header/payload prefix, `SerializeAuthorizedMail` is capped at
+68,234 bytes before the outer operation-type byte. The existing DEV fee is
+`4 + ceil(ciphertext_bytes / 1024)` with no priority fee.
+
+## Protected text
 
 Conceptually:
 
 ```text
-ProtectedMail {
-    protocol_version
-    mail_id
-    thread_id
+ProtectedTextV1 {
+    version
     sender_account_id
+    recipient_account_id
     client_created_time
     subject
     text_body
-    recipient_semantics
 }
 ```
 
@@ -132,31 +217,26 @@ Conceptually:
 ```text
 MailTx {
     version
-    mail_id
-    opaque_recipient_tag
-    crypto_suite
-    recipient_device_key_id_or_set
-    hpke_encapsulation_or_key_capsules
-    ciphertext
-    ciphertext_hash
-    sender_authentication
+    recipient_account_id
+    discovery_tag
+    recipient device set and HPKE capsules inside MailEnvelopeV1
+    content ciphertext inside MailEnvelopeV1
+    hybrid device authorization
     fee
 }
 ```
 
-Only fields necessary for consensus, recipient discovery and verification remain outside ciphertext.
-
-Minimize public metadata.
+The DEV outer payload format and inner MailEnvelopeV1 encoding are frozen
+above. Recipient AccountID and discovery tag are public; DEV makes no
+recipient-relationship privacy claim.
 
 ## Sender authentication
 
 HPKE confidentiality and sender identity authentication are separate.
 
-The sender signs the protected mail commitment with an AccountID/device-authorized signature profile.
-
-PQ-capable target may use an ML-DSA-family signature or reviewed hybrid transition profile.
-
-Exact signature profile remains a separate freeze point.
+The sender uses the existing AccountID/device authorization: Ed25519 and
+ML-DSA-44 sign the canonical MailPayload commitment. HPKE remains in base mode;
+sender authentication is not delegated to an HPKE authenticated mode.
 
 ## Multi-device
 
@@ -172,13 +252,15 @@ A public chain can accidentally expose a social graph.
 
 Therefore raw human-readable `.cybou` recipient names should not be placed in every MailTx.
 
-The protocol should use an opaque/derived recipient discovery tag or another reviewed mechanism so recipient clients can efficiently identify relevant mail while leaking as little relationship metadata as practical.
-
-Exact mechanism remains open.
+DEV derives the filter tag as SHA-256 over the fixed domain label, NetworkID,
+and recipient AccountID. This supports deterministic local filtering but does
+not hide the recipient, especially because the AccountID is already present in
+the outer payload. Mainnet needs a separate reviewed privacy profile.
 
 ## Associated data
 
-Bind protocol-critical context, such as:
+The exact DEV content AAD and HPKE `info` byte strings are frozen in the
+MailEnvelopeV1 definition above. They bind protocol-critical context including:
 
 ```text
 CYBOU Mail domain separator
@@ -235,11 +317,10 @@ Preferred pattern:
 ```text
 salt = cryptographically random
 
-ContentCommitment =
-H(
-  "CYBOU-MAIL-CONTENT-V1"
-  || salt
-  || canonical_plaintext_mail
+ContentCommitment = SHA-256(
+  "CYBOU/MAIL_COMMIT/V2"
+  || salt[32]
+  || ProtectedTextV1
 )
 ```
 

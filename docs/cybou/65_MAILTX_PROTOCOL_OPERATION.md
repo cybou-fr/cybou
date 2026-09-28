@@ -47,13 +47,16 @@ MailTx {
 }
 ```
 
-Exact byte layout is not frozen here.
+The canonical outer MailTx serialization is implemented in `mail_tx.h`; the
+DEV ciphertext field carries the frozen `MailEnvelopeV1` format specified in
+`49_EMAIL_E2EE_HPKE_PQ.md`.
 
 The DEV cryptographic suite and one-account/all-active-device semantics are
 frozen in `49_EMAIL_E2EE_HPKE_PQ.md` and `spec/email_crypto_profile.yaml`.
-This does not freeze the Mail envelope's byte layout, HPKE context encoding,
-discovery-tag derivation, or historical evidence format. Mail send and receive
-remain disabled until those application-wire gates are complete.
+The HPKE context encoding and discovery-tag derivation are now frozen for
+DEV. The historical evidence encoding remains an off-wire receive gate. Mail
+send remains disabled until the selected X-Wing HPKE backend is available and
+integrated; incoming decryption also requires evidence verification.
 
 ## Requirements
 
@@ -71,9 +74,10 @@ MailTx must have:
 
 ## Size-aware fee
 
-DEV currently fixes `max_mail_ciphertext_size` at 64 KiB and charges the
-deterministic integer fee `4 + ceil(ciphertext_bytes / 1024)`. Confirm that
-the finalized envelope remains within this bound before enabling SendMail.
+DEV fixes `max_mail_ciphertext_size` at 64 KiB and charges the deterministic
+integer fee `4 + ceil(ciphertext_bytes / 1024)`. `MailEnvelopeV1` caps its full
+serialized envelope at this limit; the enclosing AuthorizedMail adds a fixed
+2,698-byte payload/header prefix.
 
 The fee structure is:
 

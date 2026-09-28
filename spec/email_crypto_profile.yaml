@@ -1,5 +1,5 @@
 version: '0.0.1'
-status: dev_crypto_profile_frozen_application_wire_pending
+status: dev_crypto_and_mail_envelope_frozen_backend_pending
 native_email:
   e2e_required: true
   plaintext_fallback: false
@@ -47,8 +47,11 @@ privacy:
   body_inside_ciphertext: true
   thread_metadata_inside_ciphertext_where_possible: true
   recipient_account_id_public_in_current_mailtx: true
-  opaque_recipient_discovery_locator: pending_wire_review
-  privacy_claim: none_until_review
+  discovery_tag: sha256_domain_network_recipient_account
+  discovery_tag_is_privacy_mechanism: false
+  recipient_relationship_privacy_claim: false
+  dev_metadata_leakage_accepted: true
+  mainnet_requires_separate_privacy_review: true
 content_commitment:
   algorithm: SHA-256
   salted: true
@@ -58,16 +61,36 @@ content_commitment:
   salt_location: inside_encrypted_protected_plaintext
   bare_plaintext_hash: false
 wire_profile:
-  status: pending
-  hpke_info_and_aad_encoding: pending
-  capsule_framing: pending
-  canonical_protected_text_encoding: pending
-  discovery_tag_derivation: pending
-  historical_sender_key_evidence: pending
+  status: frozen_for_dev_only
+  envelope_version: 1
+  envelope_location: existing_mail_payload_ciphertext
+  integer_encoding: little_endian_except_hpke_suite_ids
+  hpke_suite_id_encoding: three_u16_big_endian_kem_kdf_aead
+  mail_id: random_32_bytes
+  recipient_snapshot: finalized_height_and_state_root
+  capsule_count: 1_to_8_all_active_devices
+  capsule_order: ascending_device_key_id
+  capsule_encoding: device_key_id_32_activation_nonce_u64le_package_id_32_enc_1120_wrapped_cek_48
+  hpke_info: CYBOU/MAIL/CEK-WRAP/V1_plus_bound_context
+  hpke_aad: empty
+  content_aad: CYBOU/MAIL/CONTENT/V1_plus_bound_context
+  protected_text_encoding: version_sender_account_recipient_account_created_time_subject_utf8_body_utf8
+  max_subject_bytes: 256
+  max_body_bytes: 48000
+  invalid_utf8: reject
+  compression: false
+  threads: false
+  discovery_tag_derivation: CYBOU/MAIL/DISCOVERY/V1_plus_network_id_plus_recipient_account_id_sha256
+  historical_sender_key_evidence: required_off_wire_for_receive
   max_ciphertext_bytes_dev: 65536
+  max_authorized_mail_bytes_before_operation_type_dev: 68234
   fee_dev: base_4_plus_1_per_1024_ciphertext_bytes_rounded_up
   priority_fee: disabled
   enable_send_or_decrypt: false
+implementation:
+  repository_backend_dependency: OpenSSL_3_5
+  openssl_3_5_hpke_api_supports_xwing_kem_id_0x647a: false
+  alternate_vetted_backend_selected: false
 mainnet:
   enabled: false
   requires_final_standards: true

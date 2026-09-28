@@ -102,11 +102,14 @@ prohibits a custom hybrid KEM combiner. Do not change the target to ML-KEM-1024
 or require OpenSSL 3.6 without a separate compatibility and provider review.
 
 Mail confidentiality is not production-ready. DEV Identity publishes a
-draft-05 X-Wing package for each active device, but `CybouMailService::SendMail`
-fails closed until Mail freezes its application ciphertext and recipient-set
-profile. The former X25519-only Mail helper and Ed25519-to-X25519 conversion
-path have been removed. See `16_MAIL_PROTOCOL.md` and
-`49_EMAIL_E2EE_HPKE_PQ.md`.
+draft-05 X-Wing package for each active device, and DEV MailEnvelopeV1 plus
+the recipient-set semantics are frozen in `49_EMAIL_E2EE_HPKE_PQ.md`. The
+project's pinned OpenSSL 3.5 HPKE API does not expose the selected X-Wing suite,
+and no alternate vetted backend has been selected; `CybouMailService::SendMail`
+therefore remains fail-closed. Historical sender-key evidence verification
+and encrypted local mailbox storage also remain open. The former
+X25519-only Mail helper and Ed25519-to-X25519 conversion path have been
+removed. See `16_MAIL_PROTOCOL.md` and `49_EMAIL_E2EE_HPKE_PQ.md`.
 
 ## Required order
 

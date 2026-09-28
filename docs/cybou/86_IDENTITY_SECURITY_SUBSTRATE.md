@@ -57,7 +57,7 @@ must be authenticated in their respective protocols.
 |---|---|---|---|
 | Name | Device hybrid signature through the coordinator | No content encryption capability | BFT finality for commit and reveal |
 | Wallet | Device hybrid signature through the coordinator | No content encryption capability | BFT finality for payment and lock operations |
-| Mail | Device-authorized Mail operation through the coordinator (target) | DEV Identity X-Wing capability; Mail ciphertext/profile not frozen, service disabled | BFT registration; Mail content and attachments use Storage when required |
+| Mail | Device-authorized Mail operation through the coordinator (target) | DEV X-Wing MailEnvelopeV1 profile frozen but not integrated; service disabled pending vetted HPKE backend | BFT registration; Mail content and attachments use Storage when required |
 | Files | Device-authorized manifest/root changes through the coordinator (target) | Symmetric object encryption; device key agreement wraps Files keys (target) | Storage durability contract, not chain inclusion alone |
 
 “Hybrid” does not mean every operation uses every key. Signatures authorize

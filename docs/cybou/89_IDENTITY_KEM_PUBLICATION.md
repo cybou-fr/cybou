@@ -211,8 +211,11 @@ Mail and cross-device Files remain disabled until their remaining gates pass:
 
 1. client-side verification of the source finalized block's BFT certificate
    and historical authorization evidence when consuming a returned package;
-2. Mail ciphertext transcript, recipient privacy, and Files key-wrapping
-   profiles, with independent interoperability and adversarial review.
+2. implement the frozen DEV MailEnvelopeV1 using a vetted backend that supports
+   the selected suite, with independent interoperability and adversarial
+   review; verify historical sender-key authorization before Mail decryption;
+3. freeze and review a recipient-privacy profile before any Mainnet use, and
+   complete the separate Files key-wrapping profile.
 
 Identity KEM publication is enabled on DEV. Mail and cross-device Files key
 wrapping remain unavailable until their application gates pass. Draft-05 is
