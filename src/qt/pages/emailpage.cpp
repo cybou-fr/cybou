@@ -377,7 +377,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     auto* attach = new QPushButton{tr("Attach"), composer};
     attach->setObjectName(QStringLiteral("secondaryButton"));
     attach->setEnabled(false);
-    attach->setToolTip(tr("Attachments will be available after the CYBOU Storage path is ready."));
+    attach->setToolTip(tr("Attachments are not part of the initial text-only Mail profile."));
     actions->addWidget(attach);
     m_send = new QPushButton{tr("Send"), composer};
     m_send->setObjectName(QStringLiteral("sendButton"));
@@ -607,10 +607,10 @@ void EmailPage::rebuildMessageList()
             time->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
             side->addWidget(time, 0, Qt::AlignRight);
             if (message.finality == Finality::Final) {
-                auto* encrypted = new QLabel{tr("Encrypted"), row};
-                encrypted->setObjectName(QStringLiteral("pill"));
-                encrypted->setProperty("tint", "mint");
-                side->addWidget(encrypted, 0, Qt::AlignRight);
+                auto* confirmed = new QLabel{tr("Network confirmed"), row};
+                confirmed->setObjectName(QStringLiteral("pill"));
+                confirmed->setProperty("tint", "mint");
+                side->addWidget(confirmed, 0, Qt::AlignRight);
             }
             row_layout->addLayout(side);
         }
@@ -625,7 +625,7 @@ void EmailPage::rebuildMessageList()
         item->setFlags(Qt::NoItemFlags);
         const bool indexed = m_folder == FOLDER_INBOX || m_folder == FOLDER_SENT || m_folder == FOLDER_DRAFTS;
         item->setText(indexed
-            ? tr("No mail here yet. Messages will appear when Mail is available on this network.")
+            ? tr("No mail here yet. Protected Mail sending is not available yet.")
             : tr("Nothing here.\nThis local folder fills up as the mailbox index grows."));
         item->setTextAlignment(Qt::AlignCenter);
         item->setForeground(QBrush{CybouTheme::color(CybouTheme::TEXT_MUTED)});
@@ -712,7 +712,7 @@ void EmailPage::updateGates()
 {
     const auto& status = m_model->status();
     const bool identity_active = status.identity_state == CybouIdentityState::Active;
-    const bool email_available = m_model->capabilities().email;
+    const bool email_available = m_model->capabilities().email && m_model->mailService();
 
     m_banner->setVisible(!identity_active);
     m_banner_text->setText(identity_active
@@ -780,16 +780,9 @@ void EmailPage::sendNow()
             return;
         }
     } else {
-        Message outgoing;
-        outgoing.id = QStringLiteral("local-%1").arg(m_next_id++);
-        outgoing.folder = FOLDER_SENT;
-        outgoing.to = to_str;
-        outgoing.subject = subject_str;
-        outgoing.body = body_str;
-        outgoing.received = QDateTime::currentDateTime();
-        outgoing.read = true;
-        outgoing.finality = Finality::PendingFinality;
-        m_messages.append(outgoing);
+        m_send_hint->setText(tr("Protected Mail service is unavailable. This message has not been sent."));
+        m_send_hint->setVisible(true);
+        return;
     }
 
     m_to->clear();
