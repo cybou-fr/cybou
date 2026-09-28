@@ -219,7 +219,6 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     peer_column->addWidget(m_reader_meta);
     peer_row->addLayout(peer_column);
     peer_row->addStretch();
-    m_star_button = IconButton(Glyph::Star, m_reader, tr("Star (planned)"));
     auto* more_button = IconButton(Glyph::DotsV, m_reader, tr("Message actions"));
     auto* more_menu = new QMenu{more_button};
     auto* mark_unread = more_menu->addAction(tr("Mark as unread"));
@@ -236,7 +235,6 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     });
     more_button->setMenu(more_menu);
     more_button->setPopupMode(QToolButton::InstantPopup);
-    peer_row->addWidget(m_star_button, 0, Qt::AlignVCenter);
     peer_row->addWidget(more_button, 0, Qt::AlignVCenter);
     reader_layout->addLayout(peer_row);
 
@@ -498,11 +496,8 @@ void EmailPage::rebuildFolderList()
     struct FolderDef { const char* name; Glyph glyph; Tint tint; };
     const FolderDef defs[]{
         {QT_TR_NOOP("Inbox"), Glyph::Inbox, Tint::Mint},
-        {QT_TR_NOOP("Starred"), Glyph::Star, Tint::Amber},
         {QT_TR_NOOP("Sent"), Glyph::Send, Tint::Blue},
         {QT_TR_NOOP("Drafts"), Glyph::FileText, Tint::Violet},
-        {QT_TR_NOOP("Archive"), Glyph::Archive, Tint::Indigo},
-        {QT_TR_NOOP("Trash"), Glyph::Trash, Tint::Rose},
     };
     static_assert(std::size(defs) == FOLDER_COUNT);
 
@@ -624,9 +619,12 @@ void EmailPage::rebuildMessageList()
         auto* item = new QListWidgetItem{m_list};
         item->setFlags(Qt::NoItemFlags);
         const bool indexed = m_folder == FOLDER_INBOX || m_folder == FOLDER_SENT || m_folder == FOLDER_DRAFTS;
-        item->setText(indexed
-            ? tr("No mail here yet. Protected Mail sending is not available yet.")
-            : tr("Nothing here.\nThis local folder fills up as the mailbox index grows."));
+        const QString empty_text = m_folder == FOLDER_INBOX
+            ? tr("Your inbox is empty. Protected Mail sending is not available yet.")
+            : m_folder == FOLDER_SENT
+                ? tr("No sent mail yet. Protected Mail sending is not available yet.")
+                : tr("No drafts yet. Save a message here to come back to it.");
+        item->setText(empty_text);
         item->setTextAlignment(Qt::AlignCenter);
         item->setForeground(QBrush{CybouTheme::color(CybouTheme::TEXT_MUTED)});
         item->setSizeHint(QSize{0, 120});
@@ -648,7 +646,6 @@ void EmailPage::clearReader()
     m_evidence->setVisible(false);
     m_security_details->setVisible(false);
     for (QPushButton* button : m_reply_buttons) button->setEnabled(false);
-    m_star_button->setEnabled(false);
 }
 
 void EmailPage::showMessage(const Message& message)
@@ -673,7 +670,6 @@ void EmailPage::showMessage(const Message& message)
     m_chip_encrypted->setVisible(false); // Hybrid-PQ recipient encryption is not integrated yet.
     m_chip_verified->setVisible(false); // Historical sender authorization is not yet verified here.
     m_chip_protected->setVisible(final);
-    m_star_button->setEnabled(final);
 
     // Evidence rows mirror the mail-evidence rules: a message is only
     // trustworthy once all four are verified; drafts carry none.

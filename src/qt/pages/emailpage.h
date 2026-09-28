@@ -61,11 +61,8 @@ private:
 
     enum Folder {
         FOLDER_INBOX = 0,
-        FOLDER_STARRED,
         FOLDER_SENT,
         FOLDER_DRAFTS,
-        FOLDER_ARCHIVE,
-        FOLDER_TRASH,
         FOLDER_COUNT,
     };
 
@@ -112,7 +109,6 @@ private:
     QLabel* m_chip_verified{nullptr};
     QLabel* m_chip_protected{nullptr};
     QVector<QPushButton*> m_reply_buttons;
-    QToolButton* m_star_button{nullptr};
     QWidget* m_evidence{nullptr};
     QLabel* m_evidence_title{nullptr};
     QPushButton* m_security_details{nullptr};
