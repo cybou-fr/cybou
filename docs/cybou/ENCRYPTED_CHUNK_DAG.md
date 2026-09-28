@@ -34,15 +34,22 @@ The CYBOU CBOR profile rejects indefinite lengths, duplicate or unordered map
 keys, non-minimal arguments, invalid UTF-8, tags, floating-point values, excess
 nesting, excess map/array elements, and values beyond configured byte limits.
 It uses RFC 8949 core-deterministic bytewise lexicographic map-key ordering.
-Exact codec limits and accepted types are frozen in `spec/poa_chunk_dag.yaml`;
-padding buckets, nonce/AAD encoding, and cross-implementation vectors remain
-open pre-cutover gates.
+Exact codec limits, accepted types, and the encrypted-node envelope are frozen
+in `spec/poa_chunk_dag.yaml`. The envelope contains `CYCH`, version 1, a
+per-node random 32-byte KDF salt, and a random 12-byte nonce. HKDF-SHA256
+derives a separate node key from the graph content key, salt, and NetworkID.
+ChaCha20-Poly1305 authenticates `CYBOU/CHUNK-AAD/v1 || header || NetworkID`.
+Its plaintext frame contains the four-byte big-endian CBOR length, encoded
+CBOR, and random padding to the smallest configured bucket. The full header,
+ciphertext, and tag are covered by ChunkID. Cross-implementation vectors and
+padding-overhead benchmarks remain open pre-cutover gates.
 
 Use the reviewed ChaCha20-Poly1305, HKDF-SHA256, and account X-Wing KEM
 profiles already selected for DEV. Do not introduce a custom combiner or
-primitive. Each graph has a random root content key; recipient capsules wrap
-that key. Key scope and rotation rules must be fixed in the root publication
-wire profile.
+primitive. Each immutable graph version has one random 32-byte content key;
+recipient capsules wrap that key. A changed graph version gets a fresh key.
+Re-sharing can add a capsule for the same graph key, but cannot revoke access
+to ciphertext and keys a recipient already obtained.
 
 ## Local graph builder and fetcher
 

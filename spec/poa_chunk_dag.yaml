@@ -46,9 +46,29 @@ chunks:
     max_total_items: 16384
     max_nesting_depth: 32
     text_encoding: strict_UTF8
+  encrypted_chunk:
+    envelope_magic: CYCH
+    envelope_version: 1
+    header_fields: [magic_4, version_1, node_key_salt_32, nonce_12]
+    header_bytes: 49
+    aead: ChaCha20-Poly1305
+    graph_content_key_bytes: 32
+    graph_content_key_scope: one_immutable_graph_version
+    graph_content_key_generation: OpenSSL_CSPRNG
+    node_key_kdf: HKDF-SHA256
+    node_key_kdf_salt: random_32_bytes_per_node
+    node_key_kdf_info: "CYBOU/CHUNK-KEY/v1 || NetworkID"
+    nonce: random_12_bytes_per_node
+    associated_data: "CYBOU/CHUNK-AAD/v1 || header || NetworkID"
+    plaintext_frame: uint32_be_cbor_length || canonical_cbor || random_padding
+    padding_bucket_bytes: [1024, 4096, 16384, 65536, 262144, 524288]
+    padding_bucket_selection: smallest_bucket_fitting_frame
+    aead_tag_bytes: 16
+    max_stored_bytes: 524353
+    chunk_id_covers: entire_stored_envelope
   open_gates:
-    - nonce_AAD_and_chunk_key_scope
-    - padding_buckets_and_benchmarks
+    - encrypted_chunk_cross_implementation_vectors
+    - padding_overhead_benchmarks
     - official_KAT_and_cross_implementation_vectors
 publication:
   fields: [root_chunk_id, chunk_authorization_root, chunk_count, authorized_stored_bytes, recipient_capsules]

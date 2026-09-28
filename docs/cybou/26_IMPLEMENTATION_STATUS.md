@@ -11,9 +11,11 @@ readable parameters/gates in `spec/poa_chunk_dag.yaml`. None of that target is
 active on DEV. The first target-code milestones are implemented: `ChunkId` is
 the full BLAKE3-256 digest of stored encrypted bytes, using pinned BLAKE3 C
 1.8.1, with official known-answer vectors; the bounded RFC 8949 core-
-deterministic CBOR value codec has explicit profile limits in
-`spec/poa_chunk_dag.yaml`. Encrypted graph builder/fetcher, RootPublication,
-PoA execution, and storage admission remain unimplemented. Do not reset DEV until fork/equivocation, storage
+deterministic CBOR value codec has explicit profile limits; and a versioned
+ChaCha20-Poly1305/HKDF encrypted-chunk envelope uses per-node salts/nonces,
+network-bound AAD, and bounded random padding. Encrypted graph
+builder/fetcher, RootPublication, PoA execution, and storage admission remain
+unimplemented. Do not reset DEV until fork/equivocation, storage
 admission/durability, names integration, state execution, and clean-machine
 recovery gates pass together.
 
