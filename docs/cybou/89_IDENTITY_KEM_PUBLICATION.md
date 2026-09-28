@@ -198,10 +198,14 @@ format.
 
 The implementation enables publication only when the network definition's
 frozen DEV profile flag is set. The new network format is deployed to DEV.
-Core tests cover the pinned X-Wing public-key vector, encapsulation/decapsulation
+Core tests cover the pinned X-Wing public-key vector, the deterministic
+MLKEM768-X25519 vector from Appendix B.2 of
+`draft-irtf-cfrg-concrete-hybrid-kems-04`, encapsulation/decapsulation
 agreement and keypair self-test, authorization binding, state persistence,
 CVID4 vault behavior, mismatched local KEM material remaining inactive, and
 runtime package lookup for AccountCreate, DeviceAdd, and revoked activations.
+The deterministic encapsulation entry point is compiled only when test hooks
+are enabled; normal builds expose only randomized encapsulation.
 
 Mail and cross-device Files remain disabled until their remaining gates pass:
 

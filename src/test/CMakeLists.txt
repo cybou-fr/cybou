@@ -209,6 +209,9 @@ add_executable(cybou-core-test
   cybou_crypto_tests.cpp
   cybou_state_store_tests.cpp
 )
+if(CYBOU_ENABLE_TEST_HOOKS)
+  target_compile_definitions(cybou-core-test PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
+endif()
 
 add_windows_application_manifest(cybou-core-test)
 

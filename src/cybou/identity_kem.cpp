@@ -359,6 +359,64 @@ std::optional<XWingEncapsulation> EncapsulateXWing(
     return result;
 }
 
+#if defined(CYBOU_ENABLE_TEST_HOOKS)
+std::optional<XWingEncapsulation> EncapsulateXWingForTest(
+    const std::span<const unsigned char, XWING_PUBLIC_KEY_SIZE> public_key,
+    const std::span<const unsigned char, 64> randomness)
+{
+    if (IsZero(public_key)) return std::nullopt;
+    const auto pq_public = public_key.first<ML_KEM_768_PUBLIC_KEY_SIZE>();
+    const auto recipient_x25519 = public_key.last<X25519_PUBLIC_KEY_SIZE>();
+    PKey key{EVP_PKEY_new_raw_public_key_ex(nullptr, "ML-KEM-768", nullptr,
+        pq_public.data(), pq_public.size()), EVP_PKEY_free};
+    PKeyCtx context{key ? EVP_PKEY_CTX_new_from_pkey(nullptr, key.get(), nullptr) : nullptr,
+        EVP_PKEY_CTX_free};
+    std::array<unsigned char, 32> ikme{};
+    DeviceX25519PrivateKey ephemeral_seed{};
+    std::copy_n(randomness.begin(), ikme.size(), ikme.begin());
+    std::copy_n(randomness.begin() + ikme.size(), ephemeral_seed.size(), ephemeral_seed.begin());
+    if (!context || EVP_PKEY_encapsulate_init(context.get(), nullptr) <= 0) {
+        crypto::CleanseMemory(ikme.data(), ikme.size());
+        crypto::CleanseMemory(ephemeral_seed.data(), ephemeral_seed.size());
+        return std::nullopt;
+    }
+    OSSL_PARAM parameters[] = {
+        OSSL_PARAM_construct_octet_string(OSSL_KEM_PARAM_IKME, ikme.data(), ikme.size()),
+        OSSL_PARAM_construct_end(),
+    };
+    const bool configured = EVP_PKEY_CTX_set_params(context.get(), parameters) > 0;
+    crypto::CleanseMemory(ikme.data(), ikme.size());
+    MlKem768Encapsulation pq_encapsulation;
+    size_t ciphertext_length = pq_encapsulation.ciphertext.size();
+    size_t secret_length = pq_encapsulation.shared_secret.size();
+    const bool encapsulated = configured && EVP_PKEY_encapsulate(context.get(),
+        pq_encapsulation.ciphertext.data(), &ciphertext_length,
+        pq_encapsulation.shared_secret.data(), &secret_length) > 0 &&
+        ciphertext_length == pq_encapsulation.ciphertext.size() &&
+        secret_length == pq_encapsulation.shared_secret.size();
+    const auto ephemeral_public = DeriveDeviceX25519PublicKey(ephemeral_seed);
+    auto x25519_secret = ephemeral_public ?
+        X25519SharedSecret(ephemeral_seed, recipient_x25519) : std::nullopt;
+    crypto::CleanseMemory(ephemeral_seed.data(), ephemeral_seed.size());
+    if (!encapsulated || !ephemeral_public || !x25519_secret) {
+        if (x25519_secret) crypto::CleanseMemory(x25519_secret->data(), x25519_secret->size());
+        return std::nullopt;
+    }
+    XWingEncapsulation result;
+    std::copy(pq_encapsulation.ciphertext.begin(), pq_encapsulation.ciphertext.end(), result.ciphertext.begin());
+    std::copy(ephemeral_public->begin(), ephemeral_public->end(),
+        result.ciphertext.begin() + ML_KEM_768_CIPHERTEXT_SIZE);
+    auto combined = CombineXWingSecrets(pq_encapsulation.shared_secret, *x25519_secret,
+        *ephemeral_public, recipient_x25519);
+    crypto::CleanseMemory(pq_encapsulation.shared_secret.data(), pq_encapsulation.shared_secret.size());
+    crypto::CleanseMemory(x25519_secret->data(), x25519_secret->size());
+    if (!combined) return std::nullopt;
+    result.shared_secret = *combined;
+    crypto::CleanseMemory(combined->data(), combined->size());
+    return result;
+}
+#endif
+
 std::optional<XWingSharedSecret> DecapsulateXWing(
     std::span<const unsigned char, XWING_SEED_SIZE> seed,
     std::span<const unsigned char, XWING_CIPHERTEXT_SIZE> ciphertext)

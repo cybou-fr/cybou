@@ -72,4 +72,45 @@ BOOST_AUTO_TEST_CASE(xwing_draft03_zero_seed_public_key_vector)
         public_key->end() - EXPECTED_X25519_PUBLIC.size()));
 }
 
+#if defined(CYBOU_ENABLE_TEST_HOOKS)
+BOOST_AUTO_TEST_CASE(xwing_draft04_zero_seed_deterministic_encapsulation_vector)
+{
+    // draft-irtf-cfrg-concrete-hybrid-kems-04, Appendix B.2.
+    const cybou::XWingSeed seed{};
+    cybou::XWingEncapsulationRandomness randomness{};
+    randomness.fill(0x64);
+    const auto public_key = cybou::DeriveXWingPublicKey(seed);
+    BOOST_REQUIRE(public_key);
+    const auto encapsulated = cybou::EncapsulateXWingForTest(*public_key, randomness);
+    BOOST_REQUIRE(encapsulated);
+
+    std::array<unsigned char, 32> public_key_digest{};
+    std::array<unsigned char, 32> ciphertext_digest{};
+    BOOST_REQUIRE(cybou::crypto::ComputeSha256({*public_key}, public_key_digest.data()));
+    BOOST_REQUIRE(cybou::crypto::ComputeSha256({encapsulated->ciphertext}, ciphertext_digest.data()));
+    static constexpr std::array<unsigned char, 32> EXPECTED_PUBLIC_KEY_DIGEST{
+        0x3b, 0xb0, 0xb0, 0x03, 0xf5, 0x53, 0xf4, 0x9f,
+        0x38, 0xba, 0xb3, 0x15, 0x46, 0xb7, 0xf4, 0xfd,
+        0xd3, 0x23, 0xc7, 0x4c, 0xbf, 0x4a, 0xaf, 0x97,
+        0xd9, 0x70, 0x3e, 0xde, 0x4e, 0x83, 0xef, 0xf7};
+    static constexpr std::array<unsigned char, 32> EXPECTED_CIPHERTEXT_DIGEST{
+        0x89, 0xef, 0x4c, 0xcf, 0x41, 0x48, 0x3c, 0x6f,
+        0xa6, 0x27, 0x44, 0xd2, 0x3a, 0x0f, 0xd6, 0x07,
+        0x2a, 0x2e, 0x63, 0x7f, 0x74, 0x56, 0x4d, 0xb7,
+        0xf6, 0x18, 0xd1, 0x51, 0x6e, 0xd8, 0xa6, 0xcd};
+    static constexpr cybou::XWingSharedSecret EXPECTED_SHARED_SECRET{
+        0xe5, 0xba, 0x94, 0x03, 0x1e, 0xa6, 0xef, 0xd6,
+        0x9c, 0x09, 0xc2, 0x54, 0xf6, 0xd9, 0x78, 0x31,
+        0x36, 0xba, 0x60, 0x37, 0xe2, 0xd4, 0xc4, 0x3b,
+        0xcc, 0xcf, 0x19, 0xd6, 0xf3, 0xf4, 0x34, 0x3a};
+    BOOST_CHECK(public_key_digest == EXPECTED_PUBLIC_KEY_DIGEST);
+    BOOST_CHECK(ciphertext_digest == EXPECTED_CIPHERTEXT_DIGEST);
+    BOOST_CHECK(encapsulated->shared_secret == EXPECTED_SHARED_SECRET);
+
+    const auto decapsulated = cybou::DecapsulateXWing(seed, encapsulated->ciphertext);
+    BOOST_REQUIRE(decapsulated);
+    BOOST_CHECK(*decapsulated == EXPECTED_SHARED_SECRET);
+}
+#endif
+
 BOOST_AUTO_TEST_SUITE_END()

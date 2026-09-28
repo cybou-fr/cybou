@@ -34,6 +34,7 @@ using XWingSeed = std::array<unsigned char, XWING_SEED_SIZE>;
 using XWingPublicKey = std::array<unsigned char, XWING_PUBLIC_KEY_SIZE>;
 using XWingCiphertext = std::array<unsigned char, XWING_CIPHERTEXT_SIZE>;
 using XWingSharedSecret = std::array<unsigned char, 32>;
+using XWingEncapsulationRandomness = std::array<unsigned char, 64>;
 using IdentityKemPackage = std::array<unsigned char, IDENTITY_KEM_PACKAGE_SIZE>;
 
 struct XWingEncapsulation {
@@ -89,6 +90,12 @@ std::optional<XWingPublicKey> DeriveXWingPublicKey(
 bool ValidateXWingKeyPair(std::span<const unsigned char, XWING_SEED_SIZE> seed);
 std::optional<XWingEncapsulation> EncapsulateXWing(
     std::span<const unsigned char, XWING_PUBLIC_KEY_SIZE> public_key);
+#if defined(CYBOU_ENABLE_TEST_HOOKS)
+/** Deterministic draft-vector entry point. Available only in test-hook builds. */
+std::optional<XWingEncapsulation> EncapsulateXWingForTest(
+    std::span<const unsigned char, XWING_PUBLIC_KEY_SIZE> public_key,
+    std::span<const unsigned char, 64> randomness);
+#endif
 std::optional<XWingSharedSecret> DecapsulateXWing(
     std::span<const unsigned char, XWING_SEED_SIZE> seed,
     std::span<const unsigned char, XWING_CIPHERTEXT_SIZE> ciphertext);
