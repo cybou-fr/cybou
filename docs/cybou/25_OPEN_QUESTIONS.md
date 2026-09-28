@@ -1,7 +1,7 @@
 # Open questions and cutover gates
 
-This list tracks decisions that still block the active PoA and encrypted
-chunk-DAG target. Product details belong in the Mail and Files UX documents;
+This list tracks decisions that still block the active PoA and streaming
+encrypted chunk-tree target. Product details belong in the Mail and Files UX documents;
 wire and state authority belongs in the active protocol documents listed by
 `AGENTS.md`.
 
@@ -16,7 +16,7 @@ wire and state authority belongs in the active protocol documents listed by
 
 ## Encrypted content and admission
 
-- Cross-implementation canonical-CBOR and encrypted chunk/graph vectors.
+- Cross-implementation canonical-CBOR and streaming ROOT/INDEX/DATA tree vectors.
 - Reviewed vectors for X-Wing draft-05 recipient capsule wrapping and recovery.
 - Identity-authorized RootPublication execution, replay protection, and exact
   fee/state accounting.

@@ -5,7 +5,6 @@
 #ifndef CYBOU_ENCRYPTED_CHUNK_H
 #define CYBOU_ENCRYPTED_CHUNK_H
 
-#include <cybou/canonical_cbor.h>
 #include <cybou/chunk_id.h>
 
 #include <array>
@@ -16,31 +15,33 @@
 
 namespace cybou {
 
-using GraphContentKey = std::array<unsigned char, 32>;
+using ContentKey = std::array<unsigned char, 32>;
 
 inline constexpr std::size_t ENCRYPTED_CHUNK_HEADER_SIZE{49};
 inline constexpr std::size_t ENCRYPTED_CHUNK_MIN_STORED_BYTES{49 + 1024 + 16};
+inline constexpr std::size_t ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES{512 * 1024 - 4};
 inline constexpr std::size_t ENCRYPTED_CHUNK_MAX_STORED_BYTES{
     ENCRYPTED_CHUNK_HEADER_SIZE + 512 * 1024 + 16};
+inline constexpr std::size_t ENCRYPTED_CHUNK_MAX_RANDOM_PADDING_BYTES{256 * 1024};
 
 struct EncryptedChunk {
     ChunkId id{};
     std::vector<unsigned char> stored_bytes;
 };
 
-/** Create one random content key for a single immutable encrypted graph. */
-std::optional<GraphContentKey> GenerateGraphContentKey();
+/** Create one random content key for a single immutable encrypted tree. */
+std::optional<ContentKey> GenerateContentKey();
 
-/** Encode, pad, and encrypt one private CBOR node. */
-std::optional<EncryptedChunk> EncryptGraphChunk(
+/** Pad and encrypt one bounded byte chunk. */
+std::optional<EncryptedChunk> EncryptChunk(
     std::span<const unsigned char, 32> network_id,
-    std::span<const unsigned char, 32> graph_key,
-    const CborValue& node);
+    std::span<const unsigned char, 32> content_key,
+    std::span<const unsigned char> plaintext);
 
-/** Verify the address before authenticating and decoding one node. */
-std::optional<CborValue> DecryptGraphChunk(
+/** Verify the address before authenticating and returning one bounded byte chunk. */
+std::optional<std::vector<unsigned char>> DecryptChunk(
     std::span<const unsigned char, 32> network_id,
-    std::span<const unsigned char, 32> graph_key,
+    std::span<const unsigned char, 32> content_key,
     const ChunkId& expected_id,
     std::span<const unsigned char> stored_bytes);
 

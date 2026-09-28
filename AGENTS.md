@@ -25,18 +25,18 @@ Read active docs before coding.
 
 ## Hard rules
 
-### Protocol target: RootPublication + encrypted chunk DAG
-- Read `POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, and `IDENTITY_DISCOVERY_AND_RECOVERY.md` before protocol implementation.
+### Protocol target: RootPublication + encrypted chunk tree
+- Read `POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, and `IDENTITY_DISCOVERY_AND_RECOVERY.md` before protocol implementation.
 - After coordinated cutover, generic RootPublication is the only application-content publication operation. Mail, Files, Backup, filenames, recipients, graph structure, and application schemas are encrypted payload data, not consensus operation types.
 - ChunkID is the full 256-bit BLAKE3 of stored encrypted bytes. Use a vetted BLAKE3 implementation; do not implement primitives locally. Payload nodes use a bounded canonical-CBOR profile and reviewed AEAD/KDF/KEM.
 - Unfinalized operations and chunks remain local. A finalized RootPublication authorizes chunk admission; it does not prove durability. The client retains ciphertext and reports availability only after the frozen durability threshold.
 - Providers accept only content-addressed chunks with a valid finalized-publication Merkle admission proof. They store opaque ciphertext and required proof/lease metadata.
 - Recipient capsules do not expose AccountID. Local clients scan finalized publications and rebuild service indexes; clean-machine recovery must work from mnemonic plus public network data.
-- Keep Mail and Files UX requirements. Initial DEV/Alpha product UX remains one-recipient text-only until the new protocol reaches its own integration gate; Beta attachments use the shared chunk DAG.
+- Keep Mail and Files UX requirements. Initial DEV/Alpha product UX remains one-recipient text-only until the new protocol reaches its own integration gate; Beta attachments use the shared streaming chunk tree.
 - Consensus may enforce generic publication byte/count limits and deterministic fees, but cannot enforce hidden Mail-specific quotas.
 
 ### Cutover
-- `main` contains one active protocol authority: genesis-bound PoA, generic RootPublication, and encrypted chunk DAG.
+- `main` contains one active protocol authority: genesis-bound PoA, generic RootPublication, and encrypted ROOT/INDEX/DATA tree.
 - Do not add superseded BFT/MailTx/indexed-object protocol documents, runtime compatibility, automatic import, or dual decoders to `main`.
 - The existing DEV deployment is not a protocol specification. Discard its state and vaults only after the complete coordinated cutover gate.
 - Beta durability, pruning, retention, repair, and economics remain explicit readiness gates for the new ChunkStore.

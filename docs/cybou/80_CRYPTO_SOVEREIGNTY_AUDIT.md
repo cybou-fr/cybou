@@ -98,8 +98,8 @@ compatibility coverage; SipHash remains an additional crypto blocker.
 
 The root `CMakeLists.txt` requires OpenSSL 3.5. The active Identity KEM and
 encrypted-content profiles are specified by `10_IDENTITY_NAMES.md`,
-`ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`, and
-`spec/poa_chunk_dag.yaml`. Use only the frozen draft-05 X-Wing DEV profile for
+`ENCRYPTED_CHUNK_TREE.md`, `ROOT_PUBLICATION.md`, and
+`spec/poa_chunk_tree.yaml`. Use only the frozen draft-05 X-Wing DEV profile for
 the target; do not create a custom hybrid KEM combiner or silently change the
 profile. Capsule interoperability and end-to-end Identity operation integration
 remain open gates; see `26_IMPLEMENTATION_STATUS.md`.

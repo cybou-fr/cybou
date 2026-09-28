@@ -31,7 +31,7 @@ chunks:
   crypto: ChaCha20-Poly1305
   key_derivation: HKDF-SHA256
   identity_kem: X-Wing_draft_05_DEV
-  payload: bounded_canonical_CBOR_plus_random_padding
+  payload: encrypted_ordered_ROOT_INDEX_DATA_tree
   object_id_and_chunk_index_on_network: false
   application_graph_metadata_encrypted: true
   b3_implementation: vetted_external_implementation
@@ -52,74 +52,82 @@ chunks:
     header_fields: [magic_4, version_1, node_key_salt_32, nonce_12]
     header_bytes: 49
     aead: ChaCha20-Poly1305
-    graph_content_key_bytes: 32
-    graph_content_key_scope: one_immutable_graph_version
-    graph_content_key_generation: OpenSSL_CSPRNG
+    content_key_bytes: 32
+    content_key_scope: one_immutable_tree_version
+    content_key_generation: OpenSSL_CSPRNG
     node_key_kdf: HKDF-SHA256
     node_key_kdf_salt: random_32_bytes_per_node
     node_key_kdf_info: "CYBOU/CHUNK-KEY/v1 || NetworkID"
     nonce: random_12_bytes_per_node
     associated_data: "CYBOU/CHUNK-AAD/v1 || header || NetworkID"
-    plaintext_frame: uint32_be_cbor_length || canonical_cbor || random_padding
+    plaintext_frame: uint32_be_plaintext_length || plaintext_bytes || random_padding
     padding_bucket_bytes: [1024, 4096, 16384, 65536, 262144, 524288]
-    padding_bucket_selection: smallest_bucket_fitting_frame
+    plaintext_max_bytes: 524284
+    random_extra_padding_max_bytes: 262144
+    padding_bucket_selection: random_smallest_or_next_if_extra_within_limit
     aead_tag_bytes: 16
     max_stored_bytes: 524353
     chunk_id_covers: entire_stored_envelope
-  encrypted_graph:
-    private_node_schema_version: 1
-    node_map_keys: [schema_version, kind, declared_plaintext_bytes, payload_or_child_ids]
-    node_kind_values: {leaf: 0, branch: 1}
-    leaf_payload_type: byte_string
-    branch_child_id_type: 32_byte_ChunkID
-    leaf_bytes_max: 184320
-    branch_children_min: 2
-    branch_children_max: 128
-    graph_chunks_max: 65536
-    graph_depth_max_nodes: 16
-    graph_plaintext_bytes_max: 268435456
-    empty_payload_representation: empty_leaf
-    chunk_order: child_array_order
-    duplicate_chunk_references: rejected
+  encrypted_tree:
+    metadata_encoding: canonical_CBOR_only_for_ROOT_and_INDEX
+    data_encoding: raw_application_bytes
+    structure: ROOT_to_DATA_or_zero_or_more_INDEX_levels_to_DATA
+    root_uses_index_only_when_child_list_exceeds_root_fanout: true
+    metadata_fields: [schema_version, kind, total_plaintext_bytes, ordered_children]
+    child_fields: [kind, ChunkID, declared_plaintext_bytes]
+    kind_values: {root: 0, index: 1, data: 2}
+    data_chunk_plaintext_bytes: {actual_min: 0, target_random_range: [163840, 327680], max: 524284}
+    index_children_max: 128
+    root_children_max: 128
+    root_private_metadata_max_bytes: 245760
+    tree_depth_max_nodes: 32
+    chunk_count_max: 4294967295
+    total_plaintext_bytes_counter: uint64
+    per_file_256MiB_cap: absent
+    chunk_boundaries: cryptographically_randomized
+    empty_payload_representation: one_empty_DATA_chunk
+    child_order: array_order
+    cycles: rejected
   chunk_authorization:
     hash: BLAKE3-256
     leaf_preimage: "CYBOU/CHUNK-AUTH/LEAF || ChunkID || stored_size_u64be"
-    leaf_order: ascending_ChunkID_bytes
+    leaf_order: exact_durable_builder_staging_order_data_source_order_interleaved_with_generated_indexes_root_last
     node_preimage: "CYBOU/CHUNK-AUTH/NODE || left_hash || right_hash"
     odd_node_rule: duplicate_last
     empty_tree: rejected
-    maximum_leaf_count: 2048
+    maximum_leaf_count: 4294967295
     inclusion_proof_sibling_order: leaf_to_root
-    inclusion_proof_max_siblings: 11
+    inclusion_proof_max_siblings: 32
+    authorized_stored_bytes_semantics: declared_per_publication_provider_ceiling_not_proven_leaf_sum
     test_vector_root_3_chunks: "2117d08ee55b42e9b8aa63af00a2ec57cd862bf9cb7b6b08ab6c7cceb6941e19"
   open_gates:
     - encrypted_chunk_cross_implementation_vectors
-    - encrypted_graph_cross_implementation_vectors_and_limits
+    - encrypted_tree_cross_implementation_vectors_and_limits
     - chunk_authorization_merkle_cross_implementation_vectors
     - padding_overhead_benchmarks
     - canonical_cbor_cross_implementation_vectors
     - root_capsule_wrap_unwrap_vectors_and_recipient_recovery
     - root_publication_identity_authorization_state_integration
 publication:
-  wire_profile: 1
+  wire_profile: 2
   canonical_encoding: RFC8949_core_deterministic_CBOR_map_integer_keys_ascending
-  fields: [wire_version, root_chunk_id, chunk_authorization_root, chunk_count, authorized_stored_bytes, authorized_chunks, recipient_capsules]
+  fields: [wire_version, root_chunk_id, chunk_authorization_root, chunk_count, authorized_stored_bytes, recipient_capsules]
   body_max_bytes: 131072
   full_operation_max_bytes: 147456
-  authorized_chunks_encoding: sorted_array_of_[ChunkID_32,stored_size_unsigned]
-  authorized_chunk_set_public: true
-  authorized_chunk_order_leaks_graph_order: false
+  authorized_chunk_set_public: false
+  authorized_chunk_set_encoding: absent
   chunk_count_min: 1
-  chunk_count_max: 2048
+  chunk_count_max: 4294967295
   authorized_stored_bytes_min_per_chunk: 1089
-  authorized_stored_bytes_max: 536870912
+  authorized_stored_bytes_max: 1125899906842624
+  authorized_stored_bytes_semantics: provider_enforced_declared_ceiling_not_exact_aggregate
   recipient_capsule_count_min: 1
   recipient_capsule_count_max: 32
   recipient_count_padding: none
   recipient_count_leakage: accepted
-  capsule_fields: [kem_profile_u16, recipient_key_epoch_u64, xwing_draft05_enc_1120, wrapped_graph_key_60]
+  capsule_fields: [kem_profile_u16, recipient_key_epoch_u64, xwing_draft05_enc_1120, wrapped_content_key_60]
   capsule_kem_profile: 0x647a
-  capsule_wrapped_graph_key: nonce_12 || ciphertext_32 || tag_16
+  capsule_wrapped_content_key: nonce_12 || ciphertext_32 || tag_16
   capsule_kdf: HKDF-SHA256
   capsule_kdf_input: XWing_shared_secret
   capsule_kdf_salt: NetworkID_32

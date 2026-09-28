@@ -11,6 +11,7 @@
 
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <span>
 #include <vector>
@@ -19,8 +20,8 @@ namespace cybou {
 
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_BYTES{128 * 1024};
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_OPERATION_BYTES{144 * 1024};
-inline constexpr std::size_t ROOT_PUBLICATION_MAX_CHUNKS{2048};
-inline constexpr std::uint64_t ROOT_PUBLICATION_MAX_STORED_BYTES{512ULL * 1024 * 1024};
+inline constexpr std::uint32_t ROOT_PUBLICATION_MAX_CHUNKS{std::numeric_limits<std::uint32_t>::max()};
+inline constexpr std::uint64_t ROOT_PUBLICATION_MAX_STORED_BYTES{1ULL << 50}; // 1 PiB declared per-publication ceiling
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_CAPSULES{32};
 inline constexpr std::size_t ROOT_CAPSULE_WRAPPED_KEY_BYTES{60};
 inline constexpr std::size_t ROOT_CAPSULE_NONCE_BYTES{12};
@@ -36,19 +37,11 @@ struct RootRecipientCapsule {
     friend bool operator==(const RootRecipientCapsule&, const RootRecipientCapsule&) = default;
 };
 
-struct AuthorizedChunk {
-    ChunkId id{};
-    std::uint64_t stored_bytes{0};
-
-    friend bool operator==(const AuthorizedChunk&, const AuthorizedChunk&) = default;
-};
-
 struct RootPublication {
     ChunkId root_chunk_id{};
     ChunkId chunk_authorization_root{};
     std::uint32_t chunk_count{0};
     std::uint64_t authorized_stored_bytes{0};
-    std::vector<AuthorizedChunk> authorized_chunks;
     std::vector<RootRecipientCapsule> recipient_capsules;
 
     friend bool operator==(const RootPublication&, const RootPublication&) = default;
@@ -67,9 +60,9 @@ std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
     const ChunkId& root_chunk_id,
     std::span<const unsigned char, XWING_PUBLIC_KEY_SIZE> recipient_public_key,
     std::uint64_t recipient_key_epoch,
-    std::span<const unsigned char, 32> graph_content_key);
+    std::span<const unsigned char, 32> content_key);
 
-std::optional<GraphContentKey> OpenRootRecipientCapsule(
+std::optional<ContentKey> OpenRootRecipientCapsule(
     std::span<const unsigned char, 32> network_id,
     std::span<const unsigned char, 32> sender_account_id,
     std::uint64_t sender_nonce,

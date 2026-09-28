@@ -1,22 +1,22 @@
 # CYBOU protocol and product roadmap
 
 This roadmap describes the single active target in `main`: generic encrypted
-content over RootPublication and a bounded chunk DAG, finalized by a
+content over RootPublication and a streaming ordered chunk tree, finalized by a
 genesis-bound single-operator PoA signer. The PoA trust model is centralized
 and does not provide Byzantine fault tolerance. The currently deployed DEV
 network remains untouched until all coordinated cutover gates pass.
 
 ## Protocol reset sequence
 
-The authority is `POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`,
+The authority is `POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`,
 `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`,
-`IDENTITY_DISCOVERY_AND_RECOVERY.md`, and `spec/poa_chunk_dag.yaml`.
+`IDENTITY_DISCOVERY_AND_RECOVERY.md`, and `spec/poa_chunk_tree.yaml`.
 
 1. Pin vetted BLAKE3 and freeze the full 256-bit encrypted ChunkID.
 2. Implement bounded canonical CBOR and the encrypted chunk envelope.
-3. Build and read bounded local encrypted chunk DAGs.
-4. Freeze RootPublication, hybrid recipient capsules, and exact chunk
-   admission accounting.
+3. Build and read the encrypted ROOT/INDEX/DATA tree with streaming local I/O.
+4. Freeze compact RootPublication, hybrid recipient capsules, and
+   chunk-inclusion admission proofs.
 5. Integrate Identity authorization, state execution, and genesis-bound PoA
    finality with a durable anti-equivocation journal.
 6. Implement finalized-publication admission into content-addressed ChunkStore.

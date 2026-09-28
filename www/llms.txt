@@ -9,7 +9,7 @@ Gmail-familiar and Google Drive-familiar workflows under CYBOU branding.
 - Genesis-bound hybrid-PQ single-operator PoA finality; centralized trust, no
   Byzantine fault tolerance claim.
 - Generic RootPublication is the only application-content operation.
-- Application payloads use a bounded canonical-CBOR encrypted chunk DAG.
+- Application payloads use a streaming encrypted ROOT/INDEX/DATA tree.
 - ChunkID is full BLAKE3-256 of stored encrypted bytes.
 - Recipient identity, schemas, filenames, and graph structure stay encrypted.
 - Providers accept chunks only with finalized-publication admission proofs.
@@ -29,10 +29,10 @@ Gmail-familiar and Google Drive-familiar workflows under CYBOU branding.
 ## Authority and status
 
 - `AGENTS.md` is the implementation authority.
-- `docs/cybou/POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`,
+- `docs/cybou/POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`,
   `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, and
   `IDENTITY_DISCOVERY_AND_RECOVERY.md` define the protocol target.
-- `spec/poa_chunk_dag.yaml` contains machine-readable parameters.
+- `spec/poa_chunk_tree.yaml` contains machine-readable parameters.
 - `docs/cybou/26_IMPLEMENTATION_STATUS.md` records implementation and open
   integration gates. The target is not active on DEV; do not reset DEV before
   all coordinated gates pass.

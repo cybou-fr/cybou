@@ -15,14 +15,14 @@ Qt desktop client
        ├── canonical state execution and full-node validation
        ├── genesis-bound hybrid-PQ PoA finality
        ├── generic RootPublication
-       ├── encrypted canonical-CBOR chunk DAG
+       ├── streaming encrypted ROOT/INDEX/DATA tree
        └── finalized-publication ChunkStore admission
 ```
 
 The active protocol authority is `AGENTS.md`,
-`POA_FINALITY.md`, `ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`,
+`POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`, `ROOT_PUBLICATION.md`,
 `STORAGE_ADMISSION.md`, `IDENTITY_DISCOVERY_AND_RECOVERY.md`, and
-`spec/poa_chunk_dag.yaml`.
+`spec/poa_chunk_tree.yaml`.
 
 ## Finality and validation
 
@@ -37,7 +37,7 @@ and deterministic conflict/fork behavior are required before activation.
 `RootPublication` is the only application-content publication operation.
 Application schemas, recipient identity, names, metadata, and graph edges stay
 inside encrypted chunks. ChunkID is the full BLAKE3-256 digest of stored
-ciphertext. Recipient capsules wrap one graph content key for a recipient KEM
+ciphertext. Recipient capsules wrap one content key for a recipient KEM
 capability without publishing the AccountID.
 
 Consensus enforces generic publication count/byte bounds and deterministic

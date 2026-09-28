@@ -1,10 +1,10 @@
 # Contributing to CYBOU
 
 Before changing code, read `AGENTS.md` and the active protocol documents it
-names. The single protocol authority in `main` is the PoA + encrypted chunk-DAG
+names. The single protocol authority in `main` is the PoA + encrypted chunk-tree
 target described by `docs/cybou/POA_FINALITY.md`,
-`ENCRYPTED_CHUNK_DAG.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`,
-`IDENTITY_DISCOVERY_AND_RECOVERY.md`, and `spec/poa_chunk_dag.yaml`.
+`ENCRYPTED_CHUNK_TREE.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`,
+`IDENTITY_DISCOVERY_AND_RECOVERY.md`, and `spec/poa_chunk_tree.yaml`.
 `docs/cybou/26_IMPLEMENTATION_STATUS.md` distinguishes implemented substrate
 code from integration and deployment gates.
 

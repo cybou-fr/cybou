@@ -22,7 +22,7 @@ accessible mouse and keyboard flows are complete.
 See also:
 
 - `81_BETA_PRODUCT_SCOPE.md` — Beta product boundary;
-- `ROOT_PUBLICATION.md` and `ENCRYPTED_CHUNK_DAG.md` — private content substrate;
+- `ROOT_PUBLICATION.md` and `ENCRYPTED_CHUNK_TREE.md` — private content substrate;
 - `83_STORAGE_UI_UX.md` — Files/Storage experience;
 - `84_PRODUCT_DESIGN_SYSTEM.md` — shared visual and interaction rules;
 - `73_CORE_DESKTOP_CONTRACT.md` — core/UI truth boundary.

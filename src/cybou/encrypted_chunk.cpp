@@ -55,6 +55,19 @@ std::optional<std::size_t> BucketFor(const std::size_t frame_bytes)
     return *bucket;
 }
 
+std::optional<std::size_t> RandomizedBucketFor(const std::size_t frame_bytes)
+{
+    const auto first = std::find_if(PAD_BUCKETS.begin(), PAD_BUCKETS.end(), [frame_bytes](const auto size) {
+        return frame_bytes <= size;
+    });
+    if (first == PAD_BUCKETS.end()) return std::nullopt;
+    const auto next = std::next(first);
+    if (next == PAD_BUCKETS.end() || *next - frame_bytes > ENCRYPTED_CHUNK_MAX_RANDOM_PADDING_BYTES) return *first;
+    unsigned char choose_larger{0};
+    if (RAND_bytes(&choose_larger, 1) != 1) return std::nullopt;
+    return (choose_larger & 1U) != 0 ? *next : *first;
+}
+
 bool IsPadBucket(const std::size_t size)
 {
     return std::find(PAD_BUCKETS.begin(), PAD_BUCKETS.end(), size) != PAD_BUCKETS.end();
@@ -79,13 +92,13 @@ std::vector<unsigned char> MakeAad(
 }
 
 bool DeriveChunkKey(
-    const std::span<const unsigned char, 32> graph_key,
+    const std::span<const unsigned char, 32> content_key,
     const std::span<const unsigned char, 32> salt,
     const std::span<const unsigned char, 32> network_id,
     std::span<unsigned char, 32> output)
 {
     const auto info = MakeKeyInfo(network_id);
-    return crypto::HkdfSha256(graph_key, salt, info, output);
+    return crypto::HkdfSha256(content_key, salt, info, output);
 }
 
 bool HasValidHeader(const std::span<const unsigned char> stored_bytes)
@@ -121,17 +134,18 @@ std::optional<std::size_t> ReadFrameLength(const std::span<const unsigned char> 
         (std::uint32_t{frame[1]} << 16) |
         (std::uint32_t{frame[2]} << 8) |
         std::uint32_t{frame[3]};
-    if (length > cbor_profile::MAX_ENCODED_BYTES || length > frame.size() - 4) return std::nullopt;
-    const auto expected_bucket = BucketFor(4 + static_cast<std::size_t>(length));
-    if (!expected_bucket || *expected_bucket != frame.size()) return std::nullopt;
+    if (length > ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES || length > frame.size() - 4) return std::nullopt;
+    const auto minimum_bucket = BucketFor(4 + static_cast<std::size_t>(length));
+    if (!minimum_bucket || frame.size() < *minimum_bucket || !IsPadBucket(frame.size()) ||
+        frame.size() - 4 - static_cast<std::size_t>(length) > ENCRYPTED_CHUNK_MAX_RANDOM_PADDING_BYTES) return std::nullopt;
     return static_cast<std::size_t>(length);
 }
 
 } // namespace
 
-std::optional<GraphContentKey> GenerateGraphContentKey()
+std::optional<ContentKey> GenerateContentKey()
 {
-    GraphContentKey key{};
+    ContentKey key{};
     if (RAND_bytes(key.data(), static_cast<int>(key.size())) != 1 || IsZero(key)) {
         OPENSSL_cleanse(key.data(), key.size());
         return std::nullopt;
@@ -139,20 +153,13 @@ std::optional<GraphContentKey> GenerateGraphContentKey()
     return key;
 }
 
-std::optional<EncryptedChunk> EncryptGraphChunk(
+std::optional<EncryptedChunk> EncryptChunk(
     const std::span<const unsigned char, 32> network_id,
-    const std::span<const unsigned char, 32> graph_key,
-    const CborValue& node)
+    const std::span<const unsigned char, 32> content_key,
+    const std::span<const unsigned char> plaintext)
 {
-    std::vector<std::uint8_t> encoded;
-    try {
-        encoded = EncodeCanonicalCbor(node);
-    } catch (...) {
-        return std::nullopt;
-    }
-    CleanseOnExit cleanse_encoded{std::span<unsigned char>{reinterpret_cast<unsigned char*>(encoded.data()), encoded.size()}};
-    if (encoded.size() > cbor_profile::MAX_ENCODED_BYTES || encoded.size() > std::numeric_limits<std::uint32_t>::max()) return std::nullopt;
-    const auto bucket = BucketFor(4 + encoded.size());
+    if (plaintext.size() > ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES || plaintext.size() > std::numeric_limits<std::uint32_t>::max()) return std::nullopt;
+    const auto bucket = RandomizedBucketFor(4 + plaintext.size());
     if (!bucket) return std::nullopt;
 
     std::array<unsigned char, 32> salt{};
@@ -161,7 +168,7 @@ std::optional<EncryptedChunk> EncryptGraphChunk(
     CleanseOnExit cleanse_key{chunk_key};
     if (RAND_bytes(salt.data(), static_cast<int>(salt.size())) != 1 ||
         RAND_bytes(nonce.data(), static_cast<int>(nonce.size())) != 1 ||
-        !DeriveChunkKey(graph_key, salt, network_id, chunk_key)) {
+        !DeriveChunkKey(content_key, salt, network_id, chunk_key)) {
         return std::nullopt;
     }
 
@@ -172,7 +179,7 @@ std::optional<EncryptedChunk> EncryptGraphChunk(
     std::copy(nonce.begin(), nonce.end(), header.begin() + NONCE_OFFSET);
     const auto aad = MakeAad(header, network_id);
 
-    auto frame = MakeFrame(encoded, *bucket);
+    auto frame = MakeFrame(plaintext, *bucket);
     if (frame.empty()) return std::nullopt;
     CleanseOnExit cleanse_frame{frame};
 
@@ -189,9 +196,9 @@ std::optional<EncryptedChunk> EncryptGraphChunk(
     return result;
 }
 
-std::optional<CborValue> DecryptGraphChunk(
+std::optional<std::vector<unsigned char>> DecryptChunk(
     const std::span<const unsigned char, 32> network_id,
-    const std::span<const unsigned char, 32> graph_key,
+    const std::span<const unsigned char, 32> content_key,
     const ChunkId& expected_id,
     const std::span<const unsigned char> stored_bytes)
 {
@@ -207,7 +214,7 @@ std::optional<CborValue> DecryptGraphChunk(
     const auto nonce = std::span<const unsigned char, crypto::CHACHA20_POLY1305_NONCE_SIZE>{stored_bytes.subspan(NONCE_OFFSET, crypto::CHACHA20_POLY1305_NONCE_SIZE)};
     std::array<unsigned char, crypto::CHACHA20_POLY1305_KEY_SIZE> chunk_key{};
     CleanseOnExit cleanse_key{chunk_key};
-    if (!DeriveChunkKey(graph_key, salt, network_id, chunk_key)) return std::nullopt;
+    if (!DeriveChunkKey(content_key, salt, network_id, chunk_key)) return std::nullopt;
 
     const auto header = stored_bytes.first(ENCRYPTED_CHUNK_HEADER_SIZE);
     const auto aad = MakeAad(header, network_id);
@@ -217,12 +224,8 @@ std::optional<CborValue> DecryptGraphChunk(
 
     const auto encoded_size = ReadFrameLength(frame);
     if (!encoded_size) return std::nullopt;
-    try {
-        const auto encoded = std::span<const unsigned char>{frame}.subspan(4, *encoded_size);
-        return DecodeCanonicalCbor(encoded);
-    } catch (...) {
-        return std::nullopt;
-    }
+    const auto payload = std::span<const unsigned char>{frame}.subspan(4, *encoded_size);
+    return std::vector<unsigned char>{payload.begin(), payload.end()};
 }
 
 } // namespace cybou

@@ -1,7 +1,7 @@
 version: '0.0.1'
 status: product_UX_contract
 scope: product_workflows_and_local_client_behavior
-protocol_authority: docs/cybou/POA_FINALITY.md_and_docs/cybou/ENCRYPTED_CHUNK_DAG.md
+protocol_authority: docs/cybou/POA_FINALITY.md_and_docs/cybou/ENCRYPTED_CHUNK_TREE.md
 brand:
   identity: CYBOU
   mail_reference: Gmail_core_workflows_without_Google_brand_assets

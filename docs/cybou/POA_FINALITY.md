@@ -42,11 +42,11 @@ parent, and block ID before signing. Recovery fails closed if journal and
 finalized history disagree; a journal conflict can never be cleared by normal
 startup. The journal contains no private key.
 
-Because one PoA signature cannot provide BFT fork resolution, deterministic
-behavior for conflicting valid signatures, journal rollback, and operator
-recovery is a hard cutover gate. Nodes must not choose a fork by arrival order.
-Until the gate is specified and tested, a conflicting finalized history is a
-fatal network safety incident.
+If a node verifies two valid PoA signatures for different blocks at the same
+height and parent, it enters a permanent safety halt. It does not select a fork,
+retry with a mini-BFT protocol, or recover automatically. The operator must
+investigate and perform an explicit network recovery procedure outside normal
+startup. A rolled-back or conflicting anti-equivocation journal also halts.
 
 ## Genesis and cutover
 

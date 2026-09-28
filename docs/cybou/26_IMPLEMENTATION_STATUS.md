@@ -3,26 +3,28 @@
 ## Active protocol target
 
 `main` implements an experimental substrate for genesis-bound hybrid-PQ PoA,
-generic RootPublication, and encrypted chunk DAGs. It is not an active DEV
+generic RootPublication, and a streaming encrypted chunk tree. It is not an active DEV
 protocol. The deployed DEV chain remains pre-cutover and must not be reset
 until all integration and clean-machine recovery gates pass together. See
 `AGENTS.md`, the authority documents in `docs/cybou/`, and
-`spec/poa_chunk_dag.yaml`.
+`spec/poa_chunk_tree.yaml`.
 
 ## Implemented in source
 
 - Full 256-bit ChunkID using pinned BLAKE3 C 1.8.1 and published known-answer
   vectors.
 - Bounded RFC 8949 core-deterministic canonical CBOR codec.
-- Versioned encrypted chunk envelope using HKDF-SHA256 and
-  ChaCha20-Poly1305, random per-node salts/nonces/padding, and network-bound
+- Versioned bytes-based encrypted chunk envelope using HKDF-SHA256 and
+  ChaCha20-Poly1305, random per-chunk salts/nonces/padding, and network-bound
   associated data.
-- Local encrypted graph builder and reader with bounded depth, fan-out, chunk
-  count, and reconstructed bytes; duplicate and cyclic references are rejected.
+- Local streaming ROOT/INDEX/DATA tree builder and sink-based reader with bounded
+  chunk buffers, fan-out, depth, and caller-supplied output limits.
 - Canonical RootPublication CBOR body, strict resource limits, identity-bound
   recipient capsules, and size-aware deterministic integer fee calculation.
 - BLAKE3 chunk authorization commitments with sorted opaque ChunkID/size sets,
-  proof generation, and verification.
+  proof generation, and verification. Compact publication bodies do not reveal
+  those sets; a proof confirms one chunk, while the byte field is a declared
+  provider ceiling rather than a consensus-verified aggregate sum.
 
 These components are substrate code. Their integration with the canonical
 Identity operation path, state transition, block finality, and provider network

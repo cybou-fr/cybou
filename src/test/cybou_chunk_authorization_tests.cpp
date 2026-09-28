@@ -16,12 +16,12 @@ namespace {
 std::array<cybou::AuthorizedChunk, 3> Chunks()
 {
     std::array<cybou::AuthorizedChunk, 3> chunks{};
-    chunks[0].id.fill(0x93);
-    chunks[0].stored_bytes = 1100;
-    chunks[1].id.fill(0x11);
-    chunks[1].stored_bytes = 4096;
-    chunks[2].id.fill(0x42);
-    chunks[2].stored_bytes = 16384;
+    chunks[0].id.fill(0x11);
+    chunks[0].stored_bytes = 4096;
+    chunks[1].id.fill(0x42);
+    chunks[1].stored_bytes = 16384;
+    chunks[2].id.fill(0x93);
+    chunks[2].stored_bytes = 1100;
     return chunks;
 }
 
@@ -29,7 +29,7 @@ std::array<cybou::AuthorizedChunk, 3> Chunks()
 
 BOOST_AUTO_TEST_SUITE(cybou_chunk_authorization_tests)
 
-BOOST_AUTO_TEST_CASE(chunk_authorization_builds_order_independent_proofs)
+BOOST_AUTO_TEST_CASE(chunk_authorization_builds_ordered_proofs)
 {
     auto chunks = Chunks();
     const auto first = cybou::BuildChunkAuthorizationCommitment(chunks);
@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(chunk_authorization_builds_order_independent_proofs)
     std::reverse(chunks.begin(), chunks.end());
     const auto reordered = cybou::BuildChunkAuthorizationCommitment(chunks);
     BOOST_REQUIRE(reordered.has_value());
-    BOOST_CHECK(first->root == reordered->root);
+    BOOST_CHECK(first->root != reordered->root);
     BOOST_CHECK(first->chunk_count == chunks.size());
     BOOST_CHECK(first->authorized_stored_bytes == 1100 + 4096 + 16384);
 
@@ -54,6 +54,26 @@ BOOST_AUTO_TEST_CASE(chunk_authorization_builds_order_independent_proofs)
     publication.chunk_count = first->chunk_count;
     publication.authorized_stored_bytes = first->authorized_stored_bytes;
     for (const auto& proof : first->proofs) BOOST_CHECK(cybou::VerifyChunkAuthorizationProof(publication, proof));
+}
+
+BOOST_AUTO_TEST_CASE(chunk_authorization_streaming_accumulator_matches_tree_for_odd_counts)
+{
+    for (std::size_t count = 1; count <= 33; ++count) {
+        std::vector<cybou::AuthorizedChunk> chunks(count);
+        cybou::ChunkAuthorizationAccumulator accumulator;
+        for (std::size_t i = 0; i < count; ++i) {
+            chunks[i].id.fill(static_cast<unsigned char>(i + 1));
+            chunks[i].stored_bytes = 1089 + i;
+            BOOST_REQUIRE(accumulator.Add(chunks[i]));
+        }
+        const auto streaming = accumulator.Finish();
+        const auto materialized = cybou::BuildChunkAuthorizationCommitment(chunks);
+        BOOST_REQUIRE(streaming.has_value());
+        BOOST_REQUIRE(materialized.has_value());
+        BOOST_CHECK(streaming->root == materialized->root);
+        BOOST_CHECK(streaming->chunk_count == count);
+        BOOST_CHECK(streaming->authorized_stored_bytes == materialized->authorized_stored_bytes);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(chunk_authorization_rejects_bad_path_count_size_and_duplicate_ids)

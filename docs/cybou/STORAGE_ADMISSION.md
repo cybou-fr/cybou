@@ -5,29 +5,35 @@ retention, and economics remain implementation gates.
 
 ## Authorization commitment
 
-The client builds a domain-separated Merkle tree over every stored chunk:
+The client builds a domain-separated Merkle tree over every stored chunk in
+exact durable staging order (DATA in source order, INDEX nodes at the point
+they are generated, ROOT last):
 
 ```text
 leaf = H(CYBOU/CHUNK-AUTH/LEAF || ChunkID || stored_size)
 ```
 
-The root, chunk count, and authorized byte total are committed by a finalized
-RootPublication. The hash function, canonical leaf encoding, odd-node rule,
-and proof size limits require published vectors before cutover.
+The root and chunk count are committed by a finalized RootPublication and
+verified by each inclusion proof. `authorized_stored_bytes` is an authenticated
+per-publication provider ceiling, not a proven aggregate sum of all Merkle
+leaves. The provider enforces the ceiling against data it accepts for that
+publication. The provider records each leaf index as it durably stages a chunk.
 
 ## Admission
 
 Providers expose content-addressed operations only:
 
 ```text
-PutChunk(ChunkID, stored_bytes, finalized_publication, admission_proof)
+PutChunk(publication_reference, ChunkID, stored_bytes, admission_proof)
 GetChunk(ChunkID)
 HasChunk(ChunkID)     # optional hint
 ```
 
-Before storing, a provider verifies the full BLAKE3 ChunkID, stored size,
-Merkle inclusion against the publication, and the publication's PoA-finalized
-chain proof. Invalid or not-yet-finalized chunks are rejected. Storage is
+Before storing, a provider verifies the full BLAKE3 ChunkID, individual stored
+size, and Merkle inclusion against the publication reference. Since a provider
+is a full node, it resolves that reference in its own canonical finalized
+history; PUT does not carry a separate finality proof. It enforces its
+per-publication accepted-byte ceiling. Invalid or not-yet-finalized chunks are rejected. Storage is
 immutable and idempotent by ChunkID. Providers retain the publication
 reference, inclusion proof, and lease/accounting metadata beside the bytes for
 repair and revalidation.

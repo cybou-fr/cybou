@@ -50,13 +50,13 @@ independent CYBOU full nodes
     -> account-level Identity and .cybou names
     -> genesis-bound hybrid-PQ PoA finality
     -> generic RootPublication
-    -> bounded encrypted content-addressed chunk DAG
+    -> streaming encrypted ordered chunk tree
     -> finalized chunk admission and retrieval
     -> private Mail and Files client indexes
 ```
 
 The target protocol and cutover gates are maintained in `AGENTS.md` and the
-active PoA, encrypted chunk-DAG, RootPublication, storage-admission, and
+active PoA, encrypted chunk-tree, RootPublication, storage-admission, and
 Identity-recovery documents.
 
 ## Security and economics

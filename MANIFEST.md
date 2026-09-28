@@ -1,4 +1,4 @@
-# CYBOU documentation manifest — 2026-09-28
+# CYBOU documentation manifest — 2026-09-29
 
 This inventory records the current implementation authority, product and
 protocol documents, and machine-readable specifications, excluding this
@@ -8,14 +8,17 @@ editing an included file.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 80 | 6cbe09a5601a6c4f |
-| CONTRIBUTING.md | 39 | b381ec930dce401c |
-| doc/README.md | 30 | 45d7fd33b2f09cf8 |
-| docs/cybou/00_VISION.md | 72 | b1b30a1176339fa9 |
-| docs/cybou/02_ARCHITECTURE.md | 77 | ded81a9052fcd201 |
-| docs/cybou/05_CHAIN_STATE.md | 51 | d34e71892b2c166a |
-| docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 59 | 6c1813c02d8d4467 |
-| docs/cybou/08_P2P.md | 49 | d52b3deba49d95cc |
+| AGENTS.md | 80 | afd963a31009896e |
+| CONTRIBUTING.md | 39 | 384fa73888e05f7a |
+| INSTALL.md | 37 | 454024375c64518e |
+| README.md | 109 | ea5e8c087ae2ba6e |
+| SECURITY.md | 41 | 2cdc342dbbbf8785 |
+| doc/README.md | 30 | 4328ad175ae9b0f3 |
+| docs/cybou/00_VISION.md | 72 | 673a59d538461bf8 |
+| docs/cybou/02_ARCHITECTURE.md | 77 | c972f0f84b459e45 |
+| docs/cybou/05_CHAIN_STATE.md | 52 | 90ef8c345330ff56 |
+| docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 59 | 57ed2669fde66a9d |
+| docs/cybou/08_P2P.md | 49 | d03c4b2c78259183 |
 | docs/cybou/09_CRYPTO_PQ.md | 16 | 721054f0708a8051 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | d01364244e5b4e5c |
 | docs/cybou/12_STORAGE_ACCOUNTING_3_TO_1.md | 100 | b20c60860eba40f3 |
@@ -26,11 +29,11 @@ editing an included file.
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 72 | bb2cbdf45e3f3a80 |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 90 | ed6d627b2f03ec16 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 76 | 1e1b29e5acf46bd6 |
+| docs/cybou/22_ROADMAP.md | 76 | 63099cc4ae612aba |
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 130 | f920aa7287022759 |
-| docs/cybou/24_DECISIONS.md | 209 | 388c014cbacab4b5 |
-| docs/cybou/25_OPEN_QUESTIONS.md | 39 | b4f7bb62a2a8e210 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 51 | 9f12021fb97883e3 |
+| docs/cybou/24_DECISIONS.md | 210 | a7054788b961c338 |
+| docs/cybou/25_OPEN_QUESTIONS.md | 39 | a9154a19525304c4 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 53 | 21b1a4b56a1976ea |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 34c65e3a9e47145b |
 | docs/cybou/30_REPOSITORY_DOCUMENTATION_CLEANUP.md | 215 | 05597f40cb045934 |
 | docs/cybou/31_IMPLEMENTATION_DETAIL_GATES.md | 103 | 8af315a4660802e0 |
@@ -68,35 +71,32 @@ editing an included file.
 | docs/cybou/77_CYBOU_NAME_REGISTRY.md | 38 | 5bb56fbfa0e4efc5 |
 | docs/cybou/78_IDENTITY_DESKTOP_UX.md | 23 | 0e985ee3d5e8f201 |
 | docs/cybou/79_IDENTITY_CENTRIC_PRODUCT_UX.md | 775 | 0c281912ccce22cb |
-| docs/cybou/80_CRYPTO_SOVEREIGNTY_AUDIT.md | 149 | 167cd903182acd06 |
+| docs/cybou/80_CRYPTO_SOVEREIGNTY_AUDIT.md | 149 | 626161a3cf25f016 |
 | docs/cybou/81_BETA_PRODUCT_SCOPE.md | 61 | a2052b0c4eefcb36 |
-| docs/cybou/82_MAIL_UI_UX.md | 573 | 3bf0a4102ea157f7 |
-| docs/cybou/83_STORAGE_UI_UX.md | 510 | e87a5c88d8a70556 |
+| docs/cybou/82_MAIL_UI_UX.md | 573 | ede333240d7624fa |
+| docs/cybou/83_STORAGE_UI_UX.md | 510 | 1483da6495033700 |
 | docs/cybou/84_PRODUCT_DESIGN_SYSTEM.md | 520 | f97554e178a2df21 |
 | docs/cybou/85_BETA_UI_ACCEPTANCE.md | 176 | 7efe1aa63aca9ca9 |
-| docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 115 | 683776dffebe5905 |
+| docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 115 | 20f23e7c6e4174ee |
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 35 | 99f404c956cac7a7 |
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 25 | f7d1dd6b57af4b61 |
-| docs/cybou/ENCRYPTED_CHUNK_DAG.md | 74 | 568c5c5fcd609480 |
-| docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 26 | e26fb1f5d2e5100b |
-| docs/cybou/POA_FINALITY.md | 63 | 69d2bbb09d103ceb |
-| docs/cybou/ROOT_PUBLICATION.md | 114 | a695bc7b606ef53c |
-| docs/cybou/STORAGE_ADMISSION.md | 53 | cec37374f052fd9f |
+| docs/cybou/ENCRYPTED_CHUNK_TREE.md | 81 | b526127df7561743 |
+| docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 27 | 8d7a331841060278 |
+| docs/cybou/POA_FINALITY.md | 63 | 2f5c1861a6481fb5 |
+| docs/cybou/ROOT_PUBLICATION.md | 114 | f7d341ed843abba2 |
+| docs/cybou/STORAGE_ADMISSION.md | 59 | 918c17ac2e40925d |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |
-| INSTALL.md | 37 | 454024375c64518e |
-| README.md | 109 | 7c6b9eb4d4870a71 |
-| SECURITY.md | 41 | 2cdc342dbbbf8785 |
 | spec/circulation_scenarios.csv | 74 | db240cf0d3280644 |
-| spec/email_crypto_profile.yaml | 111 | 221474bba3cd3808 |
-| spec/fee_router_test_vectors.csv | 9 | db9274d10b0a3dfa |
+| spec/email_crypto_profile.yaml | 111 | 929d4d43782d2b07 |
 | spec/fee_router.yaml | 18 | ccebf298d9eb9ec0 |
-| spec/mail_files_architecture.yaml | 62 | 64de867fca108544 |
+| spec/fee_router_test_vectors.csv | 9 | db9274d10b0a3dfa |
+| spec/mail_files_architecture.yaml | 62 | ba8a81412741006d |
 | spec/market_strategy.yaml | 51 | 542c848877114c0f |
 | spec/monetary_model.yaml | 53 | b3f4881bb25221dd |
 | spec/onboarding.yaml | 30 | 4a12ead846d1a692 |
-| spec/poa_chunk_dag.yaml | 152 | 4621630a93464dae |
+| spec/poa_chunk_tree.yaml | 160 | f9ceb5ad56dd3118 |
 | spec/proof_of_trust.yaml | 28 | 6f2e15b465174431 |
 | spec/reward_policy.yaml | 13 | 676e276df9a12277 |
 | spec/survival_gates.yaml | 51 | c3df8fd151bb7ecc |
 | spec/validator_reward_test_vectors.csv | 5 | 2f439357448d8aa1 |
-| www/llms.txt | 38 | 7338bed8de66b7aa |
+| www/llms.txt | 38 | 7071b2523f3b62de |

@@ -87,9 +87,9 @@ std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
     const ChunkId& root_chunk_id,
     const std::span<const unsigned char, XWING_PUBLIC_KEY_SIZE> recipient_public_key,
     const std::uint64_t recipient_key_epoch,
-    const std::span<const unsigned char, 32> graph_content_key)
+    const std::span<const unsigned char, 32> content_key)
 {
-    if (IsZero(root_chunk_id) || IsZero(recipient_public_key) || IsZero(graph_content_key)) return std::nullopt;
+    if (IsZero(root_chunk_id) || IsZero(recipient_public_key) || IsZero(content_key)) return std::nullopt;
     const auto encapsulated = EncapsulateXWing(recipient_public_key);
     if (!encapsulated) return std::nullopt;
 
@@ -107,13 +107,13 @@ std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
     std::array<unsigned char, ROOT_CAPSULE_NONCE_BYTES> nonce{};
     if (RAND_bytes(nonce.data(), static_cast<int>(nonce.size())) != 1) return std::nullopt;
     std::array<unsigned char, crypto::CHACHA20_POLY1305_TAG_SIZE + 32> ciphertext_and_tag{};
-    if (!crypto::ChaCha20Poly1305Encrypt(wrapping_key, nonce, aad, graph_content_key, ciphertext_and_tag)) return std::nullopt;
+    if (!crypto::ChaCha20Poly1305Encrypt(wrapping_key, nonce, aad, content_key, ciphertext_and_tag)) return std::nullopt;
     std::copy(nonce.begin(), nonce.end(), capsule.wrapped_content_key.begin());
     std::copy(ciphertext_and_tag.begin(), ciphertext_and_tag.end(), capsule.wrapped_content_key.begin() + nonce.size());
     return capsule;
 }
 
-std::optional<GraphContentKey> OpenRootRecipientCapsule(
+std::optional<ContentKey> OpenRootRecipientCapsule(
     const std::span<const unsigned char, 32> network_id,
     const std::span<const unsigned char, 32> sender_account_id,
     const std::uint64_t sender_nonce,
@@ -138,7 +138,7 @@ std::optional<GraphContentKey> OpenRootRecipientCapsule(
     const auto nonce = std::span<const unsigned char, ROOT_CAPSULE_NONCE_BYTES>{
         capsule.wrapped_content_key.data(), ROOT_CAPSULE_NONCE_BYTES};
     const auto ciphertext_and_tag = std::span<const unsigned char>{capsule.wrapped_content_key}.subspan(ROOT_CAPSULE_NONCE_BYTES);
-    GraphContentKey content_key{};
+    ContentKey content_key{};
     CleanseOnExit cleanse_content_key{content_key};
     if (!crypto::ChaCha20Poly1305Decrypt(wrapping_key, nonce, aad, ciphertext_and_tag, content_key) || IsZero(content_key)) {
         return std::nullopt;

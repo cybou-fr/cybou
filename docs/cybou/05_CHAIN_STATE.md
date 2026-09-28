@@ -16,7 +16,7 @@ create permanent per-message or per-file records.
 
 The exact Identity, Name, and monetary encodings are owned by their active
 specifications. Application schemas and content metadata remain encrypted in
-the chunk DAG and are indexed locally by each client.
+the ordered chunk tree and are indexed locally by each client.
 
 ## Block execution
 
@@ -32,10 +32,11 @@ fork handling are cutover requirements. See `POA_FINALITY.md`.
 ## RootPublication
 
 RootPublication is the only operation that publishes application content. It
-commits to a generic sorted set of opaque ChunkIDs and stored sizes, a Merkle
-root, a root chunk, and recipient KEM capsules. State validation recomputes the
-Merkle root and aggregate count/bytes; it does not interpret Mail or Files
-schemas.
+commits to a root ChunkID, a chunk-authorization Merkle root, a chunk count,
+a provider byte ceiling, and recipient KEM capsules. Each provider verifies
+individual chunk inclusion and enforces its accepted-byte ceiling; consensus
+does not receive the full chunk list or verify an aggregate leaf-size sum.
+State does not interpret Mail or Files schemas.
 
 Finalized blocks retain canonical operation history for proof and discovery.
 Clients rebuild Inbox, Sent, Files, and other indexes from finalized

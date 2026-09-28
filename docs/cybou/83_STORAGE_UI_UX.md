@@ -15,7 +15,7 @@ semantics, or centralized trust assumptions.
 Files is the Beta file-management product surface for these familiar workflows;
 there is no separate post-Beta Drive product. Private catalogs and content
 publication use the shared encrypted chunk substrate described in
-`ROOT_PUBLICATION.md` and `ENCRYPTED_CHUNK_DAG.md`.
+`ROOT_PUBLICATION.md` and `ENCRYPTED_CHUNK_TREE.md`.
 
 The user manages files and folders. The user does not manage shards, provider
 nodes, repair queues, proofs, leases, or replication topology.
@@ -24,7 +24,7 @@ See also:
 
 - `81_BETA_PRODUCT_SCOPE.md` — Beta product boundary;
 - `STORAGE_ADMISSION.md` — finalized-content availability gates;
-- `ENCRYPTED_CHUNK_DAG.md` — encrypted content substrate;
+- `ENCRYPTED_CHUNK_TREE.md` — encrypted content substrate;
 - `82_MAIL_UI_UX.md` — Mail attachment integration;
 - `84_PRODUCT_DESIGN_SYSTEM.md` — shared visual and interaction rules.
 
