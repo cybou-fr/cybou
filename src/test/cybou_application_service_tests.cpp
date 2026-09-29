@@ -303,7 +303,8 @@ BOOST_AUTO_TEST_CASE(files_catalog_and_content_survive_rebuild)
         return current->item;
     };
     BOOST_CHECK(owner.application->Scan().Complete());
-    check_catalog();
+    const auto modified_before = check_catalog().modified_ms;
+    BOOST_CHECK_GT(modified_before, 0U);
 
     const auto upload_operation = owner.publication->GetJob("files-create")->operation_id;
     const auto reuse_operation = owner.publication->GetJob("files-move")->operation_id;
@@ -333,6 +334,8 @@ BOOST_AUTO_TEST_CASE(files_catalog_and_content_survive_rebuild)
     BOOST_REQUIRE(rebuilt_reuse_durability);
     BOOST_CHECK(rebuilt_reuse_durability->state == cybou::DurabilityState::PROTECTED);
     const auto item = check_catalog();
+    // The private modification time comes back from history, not from local state.
+    BOOST_CHECK_EQUAL(item.modified_ms, modified_before);
     // The content root is fetched from providers when not cached locally.
     EvictLocal(fixture, {*item.root_chunk_id});
     const auto downloaded = Download(fixture, *owner.storage, *item.root_chunk_id, *item.content_key);

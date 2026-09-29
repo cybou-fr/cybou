@@ -14,6 +14,7 @@
 #include <openssl/rand.h>
 
 #include <algorithm>
+#include <chrono>
 #include <array>
 #include <limits>
 #include <set>
@@ -565,6 +566,12 @@ PublicationJobResult PublicationService::PublishFiles(const std::string_view loc
     if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked()) return Failure("Application DB is locked or job ID invalid");
     if (auto existing = Load(local_job_id)) return ResumeLocked(local_job_id, *existing);
     if (batch.mutations.empty()) return Failure("Empty Files change");
+    // Items without an explicit modification time get the publishing time.
+    const auto now_ms = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
+    for (auto& mutation : batch.mutations) {
+        if (mutation.item && mutation.item->modified_ms == 0) mutation.item->modified_ms = now_ms;
+    }
     std::set<std::size_t> targets;
     std::vector<NewContent> children;
     std::vector<std::size_t> order;

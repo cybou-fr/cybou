@@ -502,7 +502,7 @@ struct CybouCoreApplicationAdapter::Session {
             out.folder = item.kind == cybou::FileItemKind::FOLDER;
             out.logical_size = item.logical_size;
             out.trashed = in_trash(hex);
-            if (const auto modified = file_modified.find(hex); modified != file_modified.end()) out.modified = modified->second;
+            if (item.modified_ms != 0) out.modified = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(item.modified_ms));
             if (item.root_chunk_id) out.content_root_id = ChunkHex(*item.root_chunk_id);
             out.available_offline = offline_files.contains(hex);
             const auto job = item_jobs.find(hex);
@@ -1142,6 +1142,7 @@ void CybouCoreApplicationAdapter::copyFile(const QString& id, const QString& cop
         // A copy is a new catalog entry referencing the same protected content.
         item->item_id = new_id;
         item->parent_id = parent;
+        item->modified_ms = static_cast<std::uint64_t>(QDateTime::currentMSecsSinceEpoch());
         item->name = tr("Copy of %1").arg(QString::fromStdString(item->name)).toStdString();
         cybou::FilesMutationBatch batch;
         batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, new_id, *item});

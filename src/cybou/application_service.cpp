@@ -181,13 +181,6 @@ bool RemoveId(PrivateApplicationStore& db, std::string_view key, const Id& id)
 
 } // namespace
 
-PrivateItemId FilesTrashParent()
-{
-    PrivateItemId trash{};
-    trash.fill(0xff);
-    return trash;
-}
-
 struct ApplicationService::Accessible {
     AccessibleRootState state{AccessibleRootState::DISCOVERED};
     std::uint64_t height{0};

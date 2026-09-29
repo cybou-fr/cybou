@@ -51,6 +51,7 @@ cybou::FilesMutationBatch SampleFiles()
     item.logical_size = 4;
     item.root_chunk_id = Filled<cybou::ChunkId>(9);
     item.content_key = Filled<cybou::ContentKey>(10);
+    item.modified_ms = 1'790'000'000'123ULL;
     cybou::FilesMutationBatch batch;
     batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item.item_id, item});
     batch.mutations.push_back({cybou::FileMutationKind::DELETE_ITEM,
@@ -130,6 +131,42 @@ BOOST_AUTO_TEST_CASE(rejects_invalid_identifiers_keys_names_and_sizes)
     files = SampleFiles();
     files.mutations[0].item->kind = static_cast<cybou::FileItemKind>(9);
     BOOST_CHECK(!cybou::EncodePrivateApplicationDocument(cybou::PrivateApplicationDocument{files}));
+    // An empty FILE still needs its (empty) content tree.
+    files = SampleFiles();
+    files.mutations[0].item->logical_size = 0;
+    files.mutations[0].item->root_chunk_id.reset();
+    files.mutations[0].item->content_key.reset();
+    BOOST_CHECK(!cybou::EncodePrivateApplicationDocument(cybou::PrivateApplicationDocument{files}));
+    files = SampleFiles();
+    files.mutations[0].item->logical_size = 0;
+    BOOST_CHECK(cybou::EncodePrivateApplicationDocument(cybou::PrivateApplicationDocument{files}));
+    // The reserved Trash ID is a parent, never an item.
+    files = SampleFiles();
+    files.mutations[0].item->item_id = cybou::FilesTrashParent();
+    files.mutations[0].item_id = cybou::FilesTrashParent();
+    BOOST_CHECK(!cybou::EncodePrivateApplicationDocument(cybou::PrivateApplicationDocument{files}));
+    files = SampleFiles();
+    files.mutations[1].item_id = cybou::FilesTrashParent();
+    BOOST_CHECK(!cybou::EncodePrivateApplicationDocument(cybou::PrivateApplicationDocument{files}));
+    files = SampleFiles();
+    files.mutations[0].item->parent_id = cybou::FilesTrashParent();
+    BOOST_CHECK(cybou::EncodePrivateApplicationDocument(cybou::PrivateApplicationDocument{files}));
+    // The modification time is required and survives a round trip.
+    files = SampleFiles();
+    files.mutations[0].item->modified_ms = 0;
+    BOOST_CHECK(!cybou::EncodePrivateApplicationDocument(cybou::PrivateApplicationDocument{files}));
+    files = SampleFiles();
+    const auto encoded_files = cybou::EncodePrivateApplicationDocument(cybou::PrivateApplicationDocument{files});
+    BOOST_REQUIRE(encoded_files);
+    const auto decoded_files = cybou::DecodePrivateApplicationDocument(*encoded_files);
+    BOOST_REQUIRE(decoded_files);
+    BOOST_CHECK_EQUAL(std::get<cybou::FilesMutationBatch>(*decoded_files).mutations[0].item->modified_ms,
+        1'790'000'000'123ULL);
+    // v1 Files documents (without modified_ms) are rejected.
+    auto v1 = *encoded_files;
+    BOOST_REQUIRE(v1.size() > 2 && v1[2] == 0x02);
+    v1[2] = 0x01;
+    BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(v1));
 
     auto bridge = SampleBridge();
     std::swap(bridge.historical_seeds[0], bridge.historical_seeds[1]);

@@ -48,14 +48,25 @@ enum class FileItemKind : std::uint8_t { FILE = 1, FOLDER = 2 };
 
 struct FileItem {
     PrivateItemId item_id{};
-    std::optional<PrivateItemId> parent_id; // null is root; reserved all-FF parent is trash
+    std::optional<PrivateItemId> parent_id; // null is root; FilesTrashParent() is Trash
     FileItemKind kind{FileItemKind::FILE};
     std::string name;
     std::uint64_t logical_size{0};
+    /** A FILE always has content (an empty file too); a FOLDER never has. */
     std::optional<ChunkId> root_chunk_id;
     std::optional<ContentKey> content_key;
+    /** Private client time of the last content/creation change, Unix ms. */
+    std::uint64_t modified_ms{0};
     bool operator==(const FileItem&) const = default;
 };
+
+/** Reserved Files parent that denotes Trash; never valid as an item ID. */
+constexpr PrivateItemId FilesTrashParent()
+{
+    PrivateItemId trash{};
+    for (auto& byte : trash) byte = 0xff;
+    return trash;
+}
 
 struct FileMutation {
     FileMutationKind kind{FileMutationKind::UPSERT_ITEM};

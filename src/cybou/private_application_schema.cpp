@@ -16,6 +16,8 @@ namespace cybou {
 namespace {
 
 constexpr std::uint64_t SCHEMA_VERSION{1};
+/** v2 adds modified_ms and requires content for every FILE. */
+constexpr std::uint64_t FILES_SCHEMA_VERSION{2};
 constexpr std::uint64_t MAIL_TYPE{1};
 constexpr std::uint64_t FILES_TYPE{2};
 constexpr std::uint64_t BRIDGE_TYPE{3};
@@ -137,21 +139,23 @@ bool ValidMail(const MailMessage& mail)
 
 bool ValidFileItem(const FileItem& item)
 {
-    if (!Nonzero(item.item_id) || !ValidName(item.name) ||
+    if (!Nonzero(item.item_id) || item.item_id == FilesTrashParent() || !ValidName(item.name) ||
+        item.modified_ms == 0 ||
         (item.parent_id && (!Nonzero(*item.parent_id) || *item.parent_id == item.item_id)) ||
         item.root_chunk_id.has_value() != item.content_key.has_value() ||
         (item.root_chunk_id && (!Nonzero(*item.root_chunk_id) || !Nonzero(*item.content_key)))) return false;
     if (item.kind == FileItemKind::FOLDER) {
         return item.logical_size == 0 && !item.root_chunk_id;
     }
-    return item.kind == FileItemKind::FILE && (item.root_chunk_id || item.logical_size == 0);
+    // Every FILE, including an empty one, references an encrypted content tree.
+    return item.kind == FileItemKind::FILE && item.root_chunk_id.has_value();
 }
 
 bool ValidFiles(const FilesMutationBatch& batch)
 {
     if (batch.mutations.empty() || batch.mutations.size() > MAX_MUTATIONS) return false;
     for (const auto& mutation : batch.mutations) {
-        if (!Nonzero(mutation.item_id)) return false;
+        if (!Nonzero(mutation.item_id) || mutation.item_id == FilesTrashParent()) return false;
         if (mutation.kind == FileMutationKind::UPSERT_ITEM) {
             if (!mutation.item || mutation.item->item_id != mutation.item_id || !ValidFileItem(*mutation.item)) return false;
         } else if (mutation.kind != FileMutationKind::DELETE_ITEM || mutation.item) {
@@ -212,12 +216,12 @@ CborValue EncodeFiles(const FilesMutationBatch& batch)
                 CborValue::Unsigned(1), Bytes(item.item_id), OptionalBytes(item.parent_id),
                 CborValue::Unsigned(static_cast<std::uint8_t>(item.kind)), CborValue::Text(item.name),
                 CborValue::Unsigned(item.logical_size), OptionalBytes(item.root_chunk_id),
-                OptionalBytes(item.content_key),
+                OptionalBytes(item.content_key), CborValue::Unsigned(item.modified_ms),
             }));
         }
     }
     return CborValue::ArrayValue({
-        CborValue::Unsigned(FILES_TYPE), CborValue::Unsigned(SCHEMA_VERSION),
+        CborValue::Unsigned(FILES_TYPE), CborValue::Unsigned(FILES_SCHEMA_VERSION),
         CborValue::ArrayValue(std::move(mutations)),
     });
 }
@@ -284,7 +288,7 @@ FilesMutationBatch DecodeFiles(const CborValue& root)
             mutation.item_id = FixedBytes<PrivateItemId>(values[1]);
         } else {
             Require(kind == 1);
-            const auto& values = Array(encoded, 8);
+            const auto& values = Array(encoded, 9);
             mutation.item_id = FixedBytes<PrivateItemId>(values[1]);
             FileItem item;
             item.item_id = mutation.item_id;
@@ -294,6 +298,7 @@ FilesMutationBatch DecodeFiles(const CborValue& root)
             item.logical_size = Unsigned(values[5]);
             item.root_chunk_id = ParseOptionalBytes<ChunkId>(values[6]);
             item.content_key = ParseOptionalBytes<ContentKey>(values[7]);
+            item.modified_ms = Unsigned(values[8]);
             mutation.item = std::move(item);
         }
         batch.mutations.push_back(std::move(mutation));
@@ -345,8 +350,10 @@ std::optional<PrivateApplicationDocument> DecodePrivateApplicationDocument(
         auto value = DecodeCanonicalCbor(encoded);
         CborCleaner cleanse{value};
         const auto* fields = std::get_if<CborValue::Array>(&value.value);
-        Require(fields && fields->size() >= 2 && Unsigned((*fields)[1]) == SCHEMA_VERSION);
-        switch (Unsigned((*fields)[0])) {
+        Require(fields && fields->size() >= 2);
+        const auto type = Unsigned((*fields)[0]);
+        Require(Unsigned((*fields)[1]) == (type == FILES_TYPE ? FILES_SCHEMA_VERSION : SCHEMA_VERSION));
+        switch (type) {
         case MAIL_TYPE: return PrivateApplicationDocument{DecodeMail(value)};
         case FILES_TYPE: return PrivateApplicationDocument{DecodeFiles(value)};
         case BRIDGE_TYPE: return PrivateApplicationDocument{DecodeBridge(value)};

@@ -93,8 +93,6 @@ struct ApplicationScanProgress {
     bool Complete() const { return scanned_height >= finalized_height && unavailable_roots == 0; }
 };
 
-/** Trash is represented privately as this reserved Files parent. */
-PrivateItemId FilesTrashParent();
 
 /**
  * Inbound discovery and private indexing for one unlocked Identity.
