@@ -105,8 +105,11 @@ PoaSigningJournal::PoaSigningJournal(KVStore& db, const uint256& network_id,
         m_head = *head;
         std::vector<unsigned char> halt;
         if (m_db.Read(halt_key, halt)) {
+            const auto reason = halt.size() == 2 ? static_cast<PoaJournalStatus>(halt[1]) :
+                PoaJournalStatus::NONE;
             if (halt.size() != 2 || halt[0] != JOURNAL_FORMAT_VERSION ||
-                halt[1] == static_cast<unsigned char>(PoaJournalStatus::NONE)) {
+                (reason != PoaJournalStatus::HISTORY_MISMATCH &&
+                    reason != PoaJournalStatus::EQUIVOCATION)) {
                 throw std::runtime_error{"corrupt PoA signing journal halt record"};
             }
             m_halted = true;
@@ -197,10 +200,14 @@ bool PoaSigningJournal::SafetyHalted() const
 
 bool PoaSigningJournal::PersistHalt(const PoaJournalStatus reason) noexcept
 {
+    // Fail closed in this process even when the durable write itself fails.
+    // The caller receives STORAGE_ERROR and must stop the node; it must not
+    // retry signing against an unverified or conflicting history.
+    m_halted = true;
+    m_history_verified = false;
     try {
         m_db.Write(m_prefix + "halt", std::vector<unsigned char>{
             JOURNAL_FORMAT_VERSION, static_cast<unsigned char>(reason)}, true);
-        m_halted = true;
         return true;
     } catch (...) {
         return false;
