@@ -105,11 +105,10 @@ void CybouDesktopController::start()
         m_identity_service = std::make_unique<cybou::CybouIdentityService>(runtime, identity_path);
         m_model->setIdentityService(m_identity_service.get());
 
-        // Live Mail runs through the core application services; Files stays
-        // unavailable until the adapter connects it.
+        // Live Mail and Files run through the core application services.
         m_application = std::make_unique<CybouCoreApplicationAdapter>(runtime, *m_identity_service, m_data_directory);
         m_model->setApplicationBackend(m_application.get());
-        m_model->requestApplicationCapabilities(/*mail=*/true, /*files=*/false);
+        m_model->requestApplicationCapabilities(/*mail=*/true, /*files=*/true);
 
         m_wallet_service = std::make_unique<cybou::CybouWalletService>(
             runtime, m_identity_service->GetKeyStore());

@@ -1358,7 +1358,7 @@ void CybouShellTests::restoreFillsInProgressively()
     QTRY_COMPARE(model.status().identity_state, CybouIdentityState::Active);
 }
 
-void CybouShellTests::liveMailThroughCoreAdapter()
+void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
 {
     // Real core services on an authority runtime; no fixtures.
     CybouServiceTestFixture fixture;
@@ -1371,7 +1371,7 @@ void CybouShellTests::liveMailThroughCoreAdapter()
         auto adapter = std::make_unique<CybouCoreApplicationAdapter>(*fixture.runtime, identity, fixture.directory / dir);
         adapter->setRefreshInterval(20);
         model->setApplicationBackend(adapter.get());
-        model->requestApplicationCapabilities(true, false);
+        model->requestApplicationCapabilities(true, true);
         model->setIdentityState(CybouIdentityState::Active,
             QString::fromStdString(identity.GetAccountId()->Value().GetHex()), 1);
         return std::make_pair(std::move(model), std::move(adapter));
@@ -1379,7 +1379,7 @@ void CybouShellTests::liveMailThroughCoreAdapter()
     auto [alice_model, alice_adapter] = open(*alice, "desktop-alice");
     // Mail turns on only once the adapter session has opened the core services.
     QTRY_VERIFY(alice_model->capabilities().mail);
-    QVERIFY(!alice_model->capabilities().files); // not connected yet
+    QVERIFY(alice_model->capabilities().files);
 
     CybouMailItem message;
     message.to_name = bob_id;
@@ -1418,6 +1418,76 @@ void CybouShellTests::liveMailThroughCoreAdapter()
     const QString failed = alice_model->requestSendMail(nobody);
     QTRY_COMPARE(alice_model->mailItem(failed)->state, CybouContentState::NeedsAttention);
 
+    // Files: folder, upload into it, rename, download exact bytes, trash, delete.
+    const auto file_named = [&](const QString& name) -> const CybouFileItem* {
+        for (const auto& item : alice_model->fileItems()) {
+            if (item.name == name) return alice_model->fileItem(item.id);
+        }
+        return nullptr;
+    };
+    const auto state_of = [&](const QString& name) {
+        const auto* item = file_named(name);
+        return item ? std::optional{item->state} : std::nullopt;
+    };
+    // Each Files change is one publication; a change made while another is
+    // unconfirmed queues behind it, so keep producing blocks until it lands.
+    const auto finalize_until = [&](const QString& name, CybouContentState state) {
+        for (int i = 0; i < 20 && state_of(name) != std::optional{state}; ++i) {
+            fixture.runtime->ProduceBlock();
+            QTest::qWait(60);
+        }
+        return state_of(name) == std::optional{state};
+    };
+    const QString work_client = alice_model->requestCreateFolder(QStringLiteral("Work"));
+    QVERIFY(!work_client.isEmpty());
+    QTRY_VERIFY(file_named(QStringLiteral("Work")) != nullptr);
+    const QString work_id = file_named(QStringLiteral("Work"))->id;
+    QTemporaryDir files_dir;
+    QByteArray original(400 * 1024, '\0');
+    for (int i = 0; i < original.size(); ++i) original[i] = static_cast<char>(i * 13 + 1);
+    const QString source = files_dir.filePath(QStringLiteral("report.bin"));
+    {
+        QFile out{source};
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        out.write(original);
+    }
+    QVERIFY(!alice_model->requestFileUpload(source, work_client).isEmpty()); // client folder ID resolves
+    QTRY_VERIFY(file_named(QStringLiteral("report.bin")) != nullptr);
+    QCOMPARE(file_named(QStringLiteral("report.bin"))->parent_id, work_id);
+    QVERIFY(file_named(QStringLiteral("report.bin"))->available_offline);
+    QVERIFY(finalize_until(QStringLiteral("report.bin"), CybouContentState::Securing));
+    QTRY_VERIFY(file_named(QStringLiteral("report.bin")) && file_named(QStringLiteral("report.bin"))->finalized_height > 0);
+    QCOMPARE(file_named(QStringLiteral("report.bin"))->logical_size, quint64(original.size()));
+    const QString report_id = file_named(QStringLiteral("report.bin"))->id;
+
+    alice_model->requestRenameFile(report_id, QStringLiteral("report-final.bin"));
+    QTRY_VERIFY(file_named(QStringLiteral("report-final.bin")) != nullptr);
+    QVERIFY(finalize_until(QStringLiteral("report-final.bin"), CybouContentState::Securing));
+    QVERIFY(alice_model->fileItem(report_id));
+
+    const QString destination = files_dir.filePath(QStringLiteral("downloaded.bin"));
+    alice_model->requestFileDownload(report_id, destination);
+    QTRY_VERIFY(QFile::exists(destination));
+    {
+        QFile in{destination};
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        QCOMPARE(in.readAll(), original);
+    }
+    QTRY_VERIFY(alice_model->fileItem(report_id) &&
+        alice_model->fileItem(report_id)->retrieval == CybouRetrievalState::Idle);
+
+    alice_model->requestTrashFile(work_id); // contents follow the folder
+    QTRY_VERIFY(alice_model->fileItem(report_id) && alice_model->fileItem(report_id)->trashed);
+    QVERIFY(finalize_until(QStringLiteral("Work"), CybouContentState::Securing));
+    QVERIFY(alice_model->fileItem(report_id) && alice_model->fileItem(report_id)->trashed);
+    alice_model->requestDeleteFile(work_id);
+    QTRY_VERIFY(!alice_model->fileItem(report_id) && !alice_model->fileItem(work_id));
+    for (int i = 0; i < 5; ++i) {
+        fixture.runtime->ProduceBlock();
+        QTest::qWait(60);
+    }
+    QVERIFY(!alice_model->fileItem(work_id)); // gone from history too
+
     // Rotation never proceeds before the RecoveryBridge is durable: without
     // storage providers it waits, and the Identity keys stay unchanged.
     alice_model->setIdentityService(alice.get()); // a known vault starts Locked
@@ -1449,6 +1519,7 @@ void CybouShellTests::liveMailThroughCoreAdapter()
     QCOMPARE(key_epoch(), std::uint64_t{0});
     QVERIFY(alice_model->mailItems().isEmpty());
     QVERIFY(!alice_model->capabilities().mail);
+    QVERIFY(alice_model->fileItems().isEmpty());
     alice_model->setApplicationBackend(nullptr);
     bob_model->setApplicationBackend(nullptr);
 }

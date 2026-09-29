@@ -8,6 +8,7 @@
 #include <qt/cybouapplicationbackend.h>
 
 #include <QHash>
+#include <QSet>
 
 #include <filesystem>
 #include <memory>
@@ -26,8 +27,8 @@ class CybouIdentityService;
  * durability, and posts product snapshots back to the GUI thread. Pages never
  * see core types; core never sees Qt types.
  *
- * Current scope is live text-only Mail. Files and attachment transfer report
- * themselves unavailable until they are connected here.
+ * Current scope is live text-only Mail and Files (catalog, upload, download).
+ * Mail attachment transfer reports itself unavailable until connected here.
  */
 class CybouCoreApplicationAdapter final : public CybouApplicationBackend
 {
@@ -42,7 +43,7 @@ public:
     void setRefreshInterval(int ms);
 
     bool mailAvailable() const override { return m_mail_ready; }
-    bool filesAvailable() const override { return false; }
+    bool filesAvailable() const override { return m_mail_ready; }
 
     void openIdentity() override;
     void closeIdentity() override;
@@ -85,9 +86,20 @@ private:
     QHash<QString, CybouMailItem> m_drafts;
     /** Sends not yet taken over by the worker (or refused before publication). */
     QHash<QString, CybouMailItem> m_pending_sends;
+    /** Model client IDs of created items -> private item IDs. */
+    QHash<QString, QString> m_client_ids;
+    /** Starred is local-only Files state. */
+    QSet<QString> m_starred_files;
+    QVector<CybouFileItem> m_last_files;
+    /** Items shown before the worker's snapshot includes them. */
+    QHash<QString, CybouFileItem> m_pending_files;
+    void showPendingFile(const CybouFileItem& item);
+    QString resolveFileId(const QString& id) const { return m_client_ids.value(id, id); }
+    void emitFiles();
 
     /** GUI-thread handlers for worker results. */
-    void applySnapshot(QVector<CybouMailItem> items, bool ready, CybouRestoreStepState mail_restore);
+    void applySnapshot(QVector<CybouMailItem> items, QVector<CybouFileItem> files, bool ready,
+        CybouRestoreStepState restore);
     void setReady(bool ready);
     void notAvailable();
     /** Pending "secure data before rotation" request, answered exactly once. */

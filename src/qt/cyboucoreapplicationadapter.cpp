@@ -6,6 +6,7 @@
 
 #include <cybou/application_service.h>
 #include <cybou/crypto/cleanse.h>
+#include <cybou/encrypted_chunk_tree.h>
 #include <cybou/identity_kem.h>
 #include <cybou/identity_service.h>
 #include <cybou/kv_store.h>
@@ -15,6 +16,8 @@
 #include <cybou/recovery_phrase.h>
 #include <cybou/storage_service.h>
 
+#include <QFile>
+#include <QFileInfo>
 #include <QMetaObject>
 
 #include <condition_variable>
@@ -22,6 +25,7 @@
 #include <exception>
 #include <functional>
 #include <map>
+#include <set>
 #include <mutex>
 #include <stop_token>
 #include <thread>
@@ -47,6 +51,18 @@ std::optional<cybou::PrivateItemId> FromHex(const QString& text)
     cybou::PrivateItemId id{};
     std::copy(bytes.begin(), bytes.end(), id.begin());
     return id;
+}
+
+std::string RandomJobId(const char* prefix)
+{
+    const auto id = cybou::NewPrivateItemId();
+    std::string out{prefix};
+    if (!id) return {};
+    for (std::size_t i{0}; i < 16; ++i) {
+        out.push_back(HEX[(*id)[i] >> 4]);
+        out.push_back(HEX[(*id)[i] & 0x0f]);
+    }
+    return out;
 }
 
 QString ChunkHex(const cybou::ChunkId& id)
@@ -119,6 +135,20 @@ struct CybouCoreApplicationAdapter::Session {
     /** Messages sent from this device that the scanner has not indexed yet. */
     std::map<std::string, CybouMailItem> outbox;
     std::map<std::string, cybou::PublicationJobResult> jobs;
+    /** Files changes published from this device that the scanner has not reflected yet. */
+    struct PendingFile {
+        cybou::FileItem item;
+        std::string job_id;
+        bool deleted{false};
+        QDateTime modified;
+    };
+    std::map<std::string, PendingFile> file_overlay;
+    /** Last publication job that touched each Files item. */
+    std::map<std::string, std::string> item_jobs;
+    std::map<std::string, QDateTime> file_modified;
+    /** Items whose content is on this device (uploaded or downloaded here). */
+    std::set<std::string> offline_files;
+
     /** RecoveryBridge being secured before IdentityRotate. */
     struct RotationPrep {
         std::string job_id;
@@ -264,9 +294,125 @@ struct CybouCoreApplicationAdapter::Session {
             }
             items.append(item);
         }
-        ToGui([owner = owner, items = std::move(items), mail_restore]() mutable {
-            owner->applySnapshot(std::move(items), true, mail_restore);
+        auto files = FilesSnapshot();
+        ToGui([owner = owner, items = std::move(items), files = std::move(files), mail_restore]() mutable {
+            owner->applySnapshot(std::move(items), std::move(files), true, mail_restore);
         });
+    }
+
+    /** Current intended state of an item: pending local change, else indexed history. */
+    std::optional<cybou::FileItem> CurrentFile(const std::string& hex)
+    {
+        if (const auto pending = file_overlay.find(hex); pending != file_overlay.end()) {
+            if (pending->second.deleted) return std::nullopt;
+            return pending->second.item;
+        }
+        const auto id = FromHex(QString::fromStdString(hex));
+        if (!id) return std::nullopt;
+        const auto record = application->GetFile(*id);
+        return record ? std::optional{record->item} : std::nullopt;
+    }
+
+    /** Current catalog: indexed history overlaid with pending local changes. */
+    std::map<std::string, cybou::FileItem> Catalog()
+    {
+        std::map<std::string, cybou::FileItem> catalog;
+        for (const auto& record : application->ListFiles()) catalog[ToHex(record.item.item_id)] = record.item;
+        for (const auto& [hex, pending] : file_overlay) {
+            if (pending.deleted) catalog.erase(hex);
+            else catalog[hex] = pending.item;
+        }
+        return catalog;
+    }
+
+    /** One FILES_MUTATION_BATCH publication; the overlay shows it until indexed. */
+    bool PublishFileChange(cybou::FilesMutationBatch batch, std::optional<std::pair<std::size_t, cybou::NewContent>> content)
+    {
+        const auto job_id = RandomJobId("files-");
+        if (job_id.empty()) return false;
+        std::vector<std::pair<std::size_t, cybou::NewContent>> contents;
+        if (content) contents.push_back(std::move(*content));
+        const auto touched = batch.mutations;
+        const auto result = publication->PublishFiles(job_id, std::move(batch), std::move(contents));
+        jobs[job_id] = result;
+        if (result.phase == cybou::PublicationJobPhase::NEEDS_ATTENTION) return false;
+        const auto now = QDateTime::currentDateTime();
+        for (const auto& mutation : touched) {
+            const auto hex = ToHex(mutation.item_id);
+            PendingFile pending{.job_id = job_id, .deleted = mutation.kind == cybou::FileMutationKind::DELETE_ITEM,
+                .modified = now};
+            if (mutation.item) pending.item = *mutation.item;
+            file_overlay[hex] = pending;
+            item_jobs[hex] = job_id;
+            file_modified[hex] = now;
+        }
+        return true;
+    }
+
+    QVector<CybouFileItem> FilesSnapshot()
+    {
+        // A pending change is dropped only once history reflects that exact publication.
+        for (auto it = file_overlay.begin(); it != file_overlay.end();) {
+            const auto job = jobs.find(it->second.job_id);
+            const bool finalized = job != jobs.end() && !job->second.operation_id.IsNull() &&
+                (job->second.phase == cybou::PublicationJobPhase::SECURING ||
+                    job->second.phase == cybou::PublicationJobPhase::PROTECTED);
+            bool indexed{false};
+            if (finalized) {
+                const auto id = FromHex(QString::fromStdString(it->first));
+                const auto current = id ? application->GetFile(*id) : std::nullopt;
+                indexed = it->second.deleted ? !current
+                    : current && current->operation_id == job->second.operation_id;
+            }
+            it = indexed ? file_overlay.erase(it) : std::next(it);
+        }
+        std::map<std::string, uint256> operations;
+        for (const auto& record : application->ListFiles()) operations[ToHex(record.item.item_id)] = record.operation_id;
+        const auto catalog = Catalog();
+        const auto trash = ToHex(cybou::FilesTrashParent());
+        const auto parent_of = [&](const cybou::FileItem& item) {
+            return item.parent_id ? ToHex(*item.parent_id) : std::string{};
+        };
+        const auto in_trash = [&](std::string hex) {
+            for (int depth{0}; depth < 64 && !hex.empty(); ++depth) {
+                const auto it = catalog.find(hex);
+                if (it == catalog.end()) return false;
+                const auto parent = parent_of(it->second);
+                if (parent == trash) return true;
+                hex = parent;
+            }
+            return false;
+        };
+        QVector<CybouFileItem> files;
+        for (const auto& [hex, item] : catalog) {
+            CybouFileItem out;
+            out.id = QString::fromStdString(hex);
+            out.name = QString::fromStdString(item.name);
+            const auto parent = parent_of(item);
+            out.parent_id = parent == trash ? QString{} : QString::fromStdString(parent);
+            out.folder = item.kind == cybou::FileItemKind::FOLDER;
+            out.logical_size = item.logical_size;
+            out.trashed = in_trash(hex);
+            if (const auto modified = file_modified.find(hex); modified != file_modified.end()) out.modified = modified->second;
+            if (item.root_chunk_id) out.content_root_id = ChunkHex(*item.root_chunk_id);
+            out.available_offline = offline_files.contains(hex);
+            const auto job = item_jobs.find(hex);
+            const auto status = job != item_jobs.end() ? jobs.find(job->second) : jobs.end();
+            if (status != jobs.end()) {
+                out.state = StateOf(status->second);
+                out.progress_percent = status->second.phase == cybou::PublicationJobPhase::SECURING
+                    ? status->second.durability_percent : -1;
+                out.finalized_height = status->second.finalized_height;
+            } else if (const auto op = operations.find(hex); op != operations.end()) {
+                // Protected only when remote durability is known, never merely finalized.
+                const auto durability = storage->GetDurability(op->second);
+                out.state = durability && durability->state == cybou::DurabilityState::PROTECTED
+                    ? CybouContentState::Protected : CybouContentState::Securing;
+                out.finalized_height = runtime.FindFinalizedOperation(op->second).height;
+            }
+            files.append(out);
+        }
+        return files;
     }
 
     /** Answers the rotation request once the bridge is durable and verified. */
@@ -344,6 +490,9 @@ void CybouCoreApplicationAdapter::closeIdentity()
     finishRotation(false, tr("CYBOU was locked before your data was secured. The current recovery phrase stays active."));
     m_drafts.clear();
     m_pending_sends.clear();
+    m_client_ids.clear();
+    m_last_files.clear();
+    m_pending_files.clear();
     setReady(false);
 }
 
@@ -354,15 +503,32 @@ void CybouCoreApplicationAdapter::setReady(bool ready)
     Q_EMIT availabilityChanged();
 }
 
-void CybouCoreApplicationAdapter::applySnapshot(QVector<CybouMailItem> items, bool ready,
-    CybouRestoreStepState mail_restore)
+void CybouCoreApplicationAdapter::applySnapshot(QVector<CybouMailItem> items, QVector<CybouFileItem> files,
+    bool ready, CybouRestoreStepState restore)
 {
     if (!m_session) return;
     for (const auto& draft : std::as_const(m_drafts)) items.append(draft);
     for (const auto& pending : std::as_const(m_pending_sends)) items.append(pending);
     setReady(ready);
     Q_EMIT mailSnapshot(items);
-    Q_EMIT restoreProgressChanged(mail_restore, CybouRestoreStepState::Pending);
+    m_last_files = std::move(files);
+    emitFiles();
+    Q_EMIT restoreProgressChanged(restore, restore);
+}
+
+void CybouCoreApplicationAdapter::showPendingFile(const CybouFileItem& item)
+{
+    m_pending_files.insert(item.id, item);
+    emitFiles();
+}
+
+void CybouCoreApplicationAdapter::emitFiles()
+{
+    QVector<CybouFileItem> files = m_last_files;
+    for (const auto& file : std::as_const(m_last_files)) m_pending_files.remove(file.id);
+    for (const auto& pending : std::as_const(m_pending_files)) files.append(pending);
+    for (auto& file : files) file.starred = m_starred_files.contains(file.id);
+    Q_EMIT filesSnapshot(files);
 }
 
 void CybouCoreApplicationAdapter::finishRotation(bool ok, const QString& error)
@@ -547,19 +713,266 @@ void CybouCoreApplicationAdapter::saveAttachmentToFiles(const QString&, const QS
     notAvailable();
 }
 
-/* ---- Files: not connected yet (filesAvailable() is false) ---- */
+/* ---- Files ---- */
 
-void CybouCoreApplicationAdapter::uploadFile(const QString&, const QString&, const QString&) { notAvailable(); }
-void CybouCoreApplicationAdapter::downloadFile(const QString& id, const QString&)
+namespace {
+std::optional<cybou::PrivateItemId> ParentId(const QString& hex)
 {
-    Q_EMIT fileRetrievalChanged(id, CybouRetrievalState::Idle);
-    notAvailable();
+    if (hex.isEmpty()) return std::nullopt;
+    return FromHex(hex);
 }
-void CybouCoreApplicationAdapter::createFolder(const QString&, const QString&, const QString&) { notAvailable(); }
-void CybouCoreApplicationAdapter::renameFile(const QString&, const QString&) { notAvailable(); }
-void CybouCoreApplicationAdapter::moveFile(const QString&, const QString&) { notAvailable(); }
-void CybouCoreApplicationAdapter::copyFile(const QString&, const QString&, const QString&) { notAvailable(); }
-void CybouCoreApplicationAdapter::setFileStarred(const QString&, bool) { notAvailable(); }
-void CybouCoreApplicationAdapter::trashFile(const QString&) { notAvailable(); }
-void CybouCoreApplicationAdapter::restoreFile(const QString&) { notAvailable(); }
-void CybouCoreApplicationAdapter::deleteFile(const QString&) { notAvailable(); }
+} // namespace
+
+void CybouCoreApplicationAdapter::uploadFile(const QString& file_id, const QString& source_path, const QString& parent_id)
+{
+    const auto item_id = cybou::NewPrivateItemId();
+    if (!m_session || !item_id) return;
+    const QString hex = QString::fromStdString(ToHex(*item_id));
+    m_client_ids.insert(file_id, hex);
+    const QFileInfo info{source_path};
+    CybouFileItem shown;
+    shown.id = hex;
+    shown.name = info.fileName();
+    shown.parent_id = resolveFileId(parent_id);
+    shown.logical_size = static_cast<quint64>(std::max<qint64>(0, info.size()));
+    shown.modified = QDateTime::currentDateTime();
+    shown.state = CybouContentState::Preparing;
+    shown.available_offline = true;
+    showPendingFile(shown);
+    m_session->Post([item_id = *item_id, name = shown.name.toStdString(), parent = ParentId(shown.parent_id),
+                        path = source_path, hex = hex.toStdString()](Session& s) {
+        auto file = std::make_shared<QFile>(path);
+        if (!file->open(QIODevice::ReadOnly)) {
+            s.ToGui([owner = s.owner, id = QString::fromStdString(hex)] {
+                if (auto it = owner->m_pending_files.find(id); it != owner->m_pending_files.end()) {
+                    it->state = CybouContentState::NeedsAttention;
+                }
+                Q_EMIT owner->fileStateChanged(id, CybouContentState::NeedsAttention, -1);
+                Q_EMIT owner->commandFailed(tr("The file could not be read."));
+            });
+            return;
+        }
+        cybou::FileItem item{.item_id = item_id, .parent_id = parent, .kind = cybou::FileItemKind::FILE, .name = name};
+        cybou::FilesMutationBatch batch;
+        batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item_id, item});
+        // Content is streamed from disk into encrypted chunks; no plaintext copy is kept.
+        cybou::NewContent content{[file](std::span<unsigned char> out) -> std::optional<std::size_t> {
+            const auto n = file->read(reinterpret_cast<char*>(out.data()), static_cast<qint64>(out.size()));
+            if (n < 0) return std::nullopt;
+            return static_cast<std::size_t>(n);
+        }};
+        const bool ok = s.PublishFileChange(std::move(batch), std::pair{std::size_t{0}, std::move(content)});
+        if (ok) {
+            s.offline_files.insert(hex);
+            // The staged size is authoritative once indexed; show the source size meanwhile.
+            s.file_overlay[hex].item.logical_size = static_cast<std::uint64_t>(file->size());
+        } else {
+            s.ToGui([owner = s.owner, id = QString::fromStdString(hex)] {
+                if (auto it = owner->m_pending_files.find(id); it != owner->m_pending_files.end()) {
+                    it->state = CybouContentState::NeedsAttention;
+                }
+                Q_EMIT owner->fileStateChanged(id, CybouContentState::NeedsAttention, -1);
+                Q_EMIT owner->commandFailed(tr("The file could not be uploaded."));
+            });
+        }
+    });
+}
+
+void CybouCoreApplicationAdapter::downloadFile(const QString& file_id, const QString& destination)
+{
+    const QString hex = resolveFileId(file_id);
+    if (!m_session) return;
+    m_session->Post([hex = hex.toStdString(), destination](Session& s) {
+        const auto item = s.CurrentFile(hex);
+        const auto id = QString::fromStdString(hex);
+        const auto fail = [&s, id](const QString& text) {
+            s.ToGui([owner = s.owner, id, text] {
+                Q_EMIT owner->fileRetrievalChanged(id, CybouRetrievalState::Idle);
+                Q_EMIT owner->commandFailed(text);
+            });
+        };
+        if (!item || !item->root_chunk_id || !item->content_key) return fail(tr("This file has no content yet."));
+        const QString part = destination + QStringLiteral(".part");
+        QFile out{part};
+        if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) return fail(tr("The destination cannot be written."));
+        std::set<cybou::ChunkId> seen;
+        bool missing{false};
+        const auto written = cybou::FetchEncryptedChunkTree(
+            std::span<const unsigned char, 32>{s.runtime.GetNetworkId().begin(), 32}, *item->content_key,
+            *item->root_chunk_id,
+            [&](const cybou::ChunkId& chunk) {
+                auto bytes = s.storage->Fetch(chunk);
+                if (!bytes) missing = true;
+                return bytes;
+            },
+            [](std::span<const unsigned char>) { return true; },
+            [&](const cybou::ChunkId& chunk) { return seen.insert(chunk).second; },
+            [&](std::span<const unsigned char> data) {
+                return out.write(reinterpret_cast<const char*>(data.data()), static_cast<qint64>(data.size())) ==
+                    static_cast<qint64>(data.size());
+            },
+            std::max<std::uint64_t>(item->logical_size, 1));
+        out.close();
+        if (!written || *written != item->logical_size) {
+            QFile::remove(part);
+            return fail(missing ? tr("This file is temporarily unavailable. Try again later.")
+                                : tr("This file could not be verified."));
+        }
+        QFile::remove(destination);
+        if (!QFile::rename(part, destination)) {
+            QFile::remove(part);
+            return fail(tr("The destination cannot be written."));
+        }
+        s.offline_files.insert(hex);
+        s.ToGui([owner = s.owner, id] {
+            Q_EMIT owner->fileRetrievalChanged(id, CybouRetrievalState::Ready);
+            QMetaObject::invokeMethod(owner, [owner, id] {
+                Q_EMIT owner->fileRetrievalChanged(id, CybouRetrievalState::Idle);
+            }, Qt::QueuedConnection);
+        });
+    });
+}
+
+void CybouCoreApplicationAdapter::createFolder(const QString& folder_id, const QString& name, const QString& parent_id)
+{
+    const auto item_id = cybou::NewPrivateItemId();
+    if (!m_session || !item_id) return;
+    const QString hex = QString::fromStdString(ToHex(*item_id));
+    m_client_ids.insert(folder_id, hex);
+    CybouFileItem shown;
+    shown.id = hex;
+    shown.name = name;
+    shown.parent_id = resolveFileId(parent_id);
+    shown.folder = true;
+    shown.modified = QDateTime::currentDateTime();
+    shown.state = CybouContentState::Preparing;
+    showPendingFile(shown);
+    m_session->Post([item_id = *item_id, name = name.toStdString(), parent = ParentId(shown.parent_id)](Session& s) {
+        cybou::FilesMutationBatch batch;
+        batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item_id,
+            cybou::FileItem{.item_id = item_id, .parent_id = parent, .kind = cybou::FileItemKind::FOLDER, .name = name}});
+        if (!s.PublishFileChange(std::move(batch), std::nullopt)) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The folder could not be created.")); });
+        }
+    });
+}
+
+void CybouCoreApplicationAdapter::renameFile(const QString& id, const QString& name)
+{
+    if (!m_session) return;
+    m_session->Post([hex = resolveFileId(id).toStdString(), name = name.toStdString()](Session& s) {
+        auto item = s.CurrentFile(hex);
+        if (!item) return;
+        item->name = name;
+        cybou::FilesMutationBatch batch;
+        batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item->item_id, *item});
+        if (!s.PublishFileChange(std::move(batch), std::nullopt)) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The item could not be renamed.")); });
+        }
+    });
+}
+
+void CybouCoreApplicationAdapter::moveFile(const QString& id, const QString& parent_id)
+{
+    if (!m_session) return;
+    m_session->Post([hex = resolveFileId(id).toStdString(), parent = ParentId(resolveFileId(parent_id))](Session& s) {
+        auto item = s.CurrentFile(hex);
+        if (!item) return;
+        // Never move a folder into itself or its own subtree.
+        for (auto cursor = parent; cursor;) {
+            if (*cursor == item->item_id) return;
+            const auto above = s.CurrentFile(ToHex(*cursor));
+            cursor = above ? above->parent_id : std::nullopt;
+        }
+        item->parent_id = parent;
+        cybou::FilesMutationBatch batch;
+        batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item->item_id, *item});
+        if (!s.PublishFileChange(std::move(batch), std::nullopt)) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The item could not be moved.")); });
+        }
+    });
+}
+
+void CybouCoreApplicationAdapter::copyFile(const QString& id, const QString& copy_id, const QString& parent_id)
+{
+    const auto new_id = cybou::NewPrivateItemId();
+    if (!m_session || !new_id) return;
+    m_client_ids.insert(copy_id, QString::fromStdString(ToHex(*new_id)));
+    m_session->Post([hex = resolveFileId(id).toStdString(), new_id = *new_id,
+                        parent = ParentId(resolveFileId(parent_id))](Session& s) {
+        auto item = s.CurrentFile(hex);
+        if (!item || item->kind != cybou::FileItemKind::FILE) return;
+        // A copy is a new catalog entry referencing the same protected content.
+        item->item_id = new_id;
+        item->parent_id = parent;
+        item->name = tr("Copy of %1").arg(QString::fromStdString(item->name)).toStdString();
+        cybou::FilesMutationBatch batch;
+        batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, new_id, *item});
+        if (!s.PublishFileChange(std::move(batch), std::nullopt)) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The copy could not be created.")); });
+        }
+    });
+}
+
+void CybouCoreApplicationAdapter::setFileStarred(const QString& id, bool starred)
+{
+    const QString hex = resolveFileId(id);
+    if (starred) m_starred_files.insert(hex);
+    else m_starred_files.remove(hex);
+    emitFiles();
+}
+
+void CybouCoreApplicationAdapter::trashFile(const QString& id)
+{
+    if (!m_session) return;
+    m_session->Post([hex = resolveFileId(id).toStdString()](Session& s) {
+        auto item = s.CurrentFile(hex);
+        if (!item || item->parent_id == cybou::FilesTrashParent()) return;
+        // Contents follow their folder into Trash without separate changes.
+        item->parent_id = cybou::FilesTrashParent();
+        cybou::FilesMutationBatch batch;
+        batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item->item_id, *item});
+        if (!s.PublishFileChange(std::move(batch), std::nullopt)) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The item could not be moved to Trash.")); });
+        }
+    });
+}
+
+void CybouCoreApplicationAdapter::restoreFile(const QString& id)
+{
+    if (!m_session) return;
+    m_session->Post([hex = resolveFileId(id).toStdString()](Session& s) {
+        auto item = s.CurrentFile(hex);
+        if (!item) return;
+        // Trash does not remember the old location; restored items return to My files.
+        item->parent_id = std::nullopt;
+        cybou::FilesMutationBatch batch;
+        batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item->item_id, *item});
+        if (!s.PublishFileChange(std::move(batch), std::nullopt)) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The item could not be restored.")); });
+        }
+    });
+}
+
+void CybouCoreApplicationAdapter::deleteFile(const QString& id)
+{
+    if (!m_session) return;
+    m_session->Post([hex = resolveFileId(id).toStdString()](Session& s) {
+        const auto root = FromHex(QString::fromStdString(hex));
+        if (!root || !s.CurrentFile(hex)) return;
+        const auto catalog = s.Catalog();
+        std::vector<cybou::PrivateItemId> doomed{*root};
+        for (std::size_t i{0}; i < doomed.size(); ++i) {
+            for (const auto& [child_hex, item] : catalog) {
+                if (item.parent_id == doomed[i]) doomed.push_back(item.item_id);
+            }
+        }
+        cybou::FilesMutationBatch batch;
+        for (const auto& item_id : doomed) {
+            batch.mutations.push_back({cybou::FileMutationKind::DELETE_ITEM, item_id, std::nullopt});
+        }
+        if (!s.PublishFileChange(std::move(batch), std::nullopt)) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The item could not be deleted.")); });
+        }
+    });
+}

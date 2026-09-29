@@ -27,8 +27,17 @@ reach core.
 
   Sent mail rebuilt from history without a local job shows Protected only
   when StorageService reports the target met.
-- **Capabilities:** `mail` turns on only once the adapter session has opened
-  the core services. `files` stays off.
+- **Live Files:** create folder, upload (streamed from disk into encrypted
+  chunks), rename, move, copy (same protected content), trash, restore and
+  delete, each as one `FILES_MUTATION_BATCH` publication; download streams
+  verified content through StorageService into `<destination>.part`, renamed
+  only on success. A pending change shows immediately and stays visible until
+  history reflects that exact publication; a change made while another
+  Identity operation is unconfirmed queues behind it. Trash does not keep the
+  old location, so Restore returns items to My files. Starred and
+  "Available offline" are device-local.
+- **Capabilities:** `mail` and `files` turn on only once the adapter session
+  has opened the core services.
 - **Restore progress:** the Mail row follows the application scan.
 - **Recovery phrase rotation:** `CybouDesktopModel` asks the backend to
   `prepareIdentityRotation` first. The adapter publishes the RecoveryBridge,
@@ -38,8 +47,6 @@ reach core.
 
 ## Not connected yet
 
-- Files (catalog, upload, download) — core `PublishFiles`,
-  `ApplicationService::ListFiles` and `StorageService::Fetch` exist.
 - Mail attachments and Mail ↔ Files reuse — core supports both.
 - Drafts are device-local compose state held in memory by the adapter.
 - Re-securing Sent/Files rebuilt from history after the Application DB was
