@@ -16,6 +16,7 @@ class CybouDesktopModel;
 class OnboardingView;
 class QLabel;
 class QStackedWidget;
+class QFrame;
 class QVBoxLayout;
 
 /**
@@ -35,6 +36,13 @@ public:
 
     OnboardingView* onboarding() const { return m_onboarding; }
 
+    /** Quick actions, set by the shell. */
+    std::function<void()> onCompose;
+    std::function<void()> onUpload;
+    std::function<void()> onSendPayment;
+    /** Items in the first-steps checklist that are still open. */
+    QStringList openFirstSteps() const;
+
 private:
     CybouDesktopModel* const m_model;
     QStackedWidget* m_stack{nullptr};
@@ -51,6 +59,8 @@ private:
     QLabel* m_wallet_caption{nullptr};
     QVBoxLayout* m_activity_rows{nullptr};
     QLabel* m_activity_empty{nullptr};
+    QFrame* m_first_steps{nullptr};
+    QVBoxLayout* m_first_steps_rows{nullptr};
     const std::function<void()> m_identity_requested;
     const std::function<void()> m_wallet_requested;
     const std::function<void()> m_mail_requested;
@@ -58,7 +68,9 @@ private:
 
     QWidget* buildDashboard();
     QWidget* buildSummaryCard(const QString& title, CybouUi::Glyph glyph, CybouUi::Tint tint,
-        QLabel*& value, QLabel*& caption, const std::function<void()>& open);
+        QLabel*& value, QLabel*& caption, const std::function<void()>& open,
+        const QString& action_text = {}, const std::function<void()>& action = {});
+    void rebuildFirstSteps();
     void refresh();
 };
 

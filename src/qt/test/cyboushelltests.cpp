@@ -11,6 +11,7 @@
 #include <qt/cybounotifier.h>
 #include <qt/cybouuifixtures.h>
 #include <qt/pages/emailpage.h>
+#include <qt/pages/homepage.h>
 #include <qt/pages/mailcompose.h>
 #include <qt/pages/mailreader.h>
 #include <qt/pages/storagepage.h>
@@ -487,6 +488,12 @@ void CybouShellTests::filesNavigationAndViews()
     QCOMPARE(files->visibleIds(), QStringList{QStringLiteral("f-old")});
     files->setView(StoragePage::View::Recent);
     QCOMPARE(files->visibleIds().first(), QStringLiteral("f-report"));
+    // Sorting keeps folders first.
+    files->setView(StoragePage::View::MyFiles);
+    files->sortBy(1, true); // Size, largest first
+    QCOMPARE(files->visibleIds().mid(0, 3), (QStringList{QStringLiteral("f-docs"), QStringLiteral("f-photos"), QStringLiteral("f-archive")}));
+    files->sortBy(0, false);
+    files->setView(StoragePage::View::Recent);
     // Grid shows the same items.
     files->setGridMode(true);
     QVERIFY(files->gridMode());
@@ -796,6 +803,21 @@ void CybouShellTests::notificationsOfferUndo()
     QCOMPARE(model->mailItem(QStringLiteral("m-dinner"))->folder, CybouMailFolder::Inbox);
     QVERIFY(!notifier->isVisible());
     window->close();
+}
+
+void CybouShellTests::homeFirstStepsAndQuickActions()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    auto* home = dynamic_cast<HomePage*>(window->page(CybouPage::Home));
+    QVERIFY(home->openFirstSteps().isEmpty()); // name, sent mail and files exist
+    model->setNames({});
+    model->setFileItems({});
+    QCOMPARE(home->openFirstSteps(), (QStringList{QStringLiteral("name"), QStringLiteral("files")}));
+    QVERIFY(home->onCompose);
+    home->onCompose();
+    QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Mail));
 }
 
 void CybouShellTests::themeResolvesAllTokens()

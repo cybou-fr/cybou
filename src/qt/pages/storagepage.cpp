@@ -180,8 +180,15 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     toolbar->addWidget(m_up);
     m_title = new QLabel{main};
     m_title->setObjectName(QStringLiteral("sectionTitle"));
-    toolbar->addWidget(m_title);
-    toolbar->addStretch();
+    m_title->hide();
+    m_up->hide();
+    m_crumbs = new QWidget{main};
+    m_crumbs->setObjectName(QStringLiteral("filesBreadcrumb"));
+    m_crumbs->setAccessibleName(tr("Location"));
+    auto* crumbs_layout = new QHBoxLayout{m_crumbs};
+    crumbs_layout->setContentsMargins(0, 0, 0, 0);
+    crumbs_layout->setSpacing(2);
+    toolbar->addWidget(m_crumbs, 1);
     m_search = new QLineEdit{main};
     m_search->setObjectName(QStringLiteral("filesSearch"));
     m_search->setPlaceholderText(tr("Search files"));
@@ -191,8 +198,8 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
         QLineEdit::LeadingPosition);
     m_search->setMinimumHeight(36);
     m_search->setMaximumWidth(340);
-    m_search->setMinimumWidth(160);
-    toolbar->addWidget(m_search, 1);
+    m_search->setMinimumWidth(260);
+    toolbar->addWidget(m_search, 0);
     m_list_toggle = ToggleButton(Glyph::ListView, tr("List view"), main);
     m_grid_toggle = ToggleButton(Glyph::GridView, tr("Grid view"), main);
     m_list_toggle->setChecked(true);
@@ -207,6 +214,46 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_banner_text = MutedText({}, m_banner);
     banner_layout->addWidget(m_banner_text, 1);
     main_layout->addWidget(m_banner);
+
+    m_selection_bar = new QFrame{main};
+    m_selection_bar->setObjectName(QStringLiteral("selectionBar"));
+    m_selection_bar->setStyleSheet(QStringLiteral("QFrame#selectionBar { background: %1; border-radius: 10px; }")
+        .arg(CybouTheme::color(CybouTheme::MINT_GHOST).name()));
+    auto* selection_layout = new QHBoxLayout{m_selection_bar};
+    selection_layout->setContentsMargins(12, 6, 8, 6);
+    selection_layout->setSpacing(6);
+    m_selection_text = new QLabel{m_selection_bar};
+    m_selection_text->setObjectName(QStringLiteral("rowTitle"));
+    selection_layout->addWidget(m_selection_text);
+    selection_layout->addStretch();
+    const auto selection_action = [this, selection_layout](const QString& text, auto&& handler) {
+        auto* button = new QPushButton{text, m_selection_bar};
+        button->setObjectName(QStringLiteral("secondaryButton"));
+        connect(button, &QPushButton::clicked, this, std::forward<decltype(handler)>(handler));
+        selection_layout->addWidget(button);
+        return button;
+    };
+    selection_action(tr("Star"), [this] {
+        for (const auto& id : selectedIds()) m_model->setFileStarred(id, true);
+    });
+    selection_action(tr("Move to Trash"), [this] {
+        const auto ids = selectedIds();
+        for (const auto& id : ids) m_model->trashFile(id);
+        m_model->notify(tr("%1 items moved to Trash").arg(ids.size()), tr("Undo"),
+            [model = m_model, ids] { for (const auto& i : ids) model->restoreFile(i); });
+    });
+    auto* clear_selection = new QToolButton{m_selection_bar};
+    clear_selection->setObjectName(QStringLiteral("iconButton"));
+    clear_selection->setText(QStringLiteral("✕"));
+    clear_selection->setToolTip(tr("Clear selection"));
+    clear_selection->setAccessibleName(tr("Clear selection"));
+    connect(clear_selection, &QToolButton::clicked, this, [this] {
+        m_table->clearSelection();
+        m_tiles->clearSelection();
+    });
+    selection_layout->addWidget(clear_selection);
+    m_selection_bar->hide();
+    main_layout->addWidget(m_selection_bar);
 
     m_views = new QStackedWidget{main};
     m_table = new QTreeWidget{m_views};
@@ -229,6 +276,13 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_table->header()->resizeSection(ModifiedColumn, 120);
     m_table->header()->resizeSection(StatusColumn, 170);
     m_table->setStyleSheet(QStringLiteral("QTreeWidget::item { height: 40px; }"));
+    m_table->header()->setSectionsClickable(true);
+    m_table->header()->setSortIndicatorShown(true);
+    m_table->header()->setSortIndicator(NameColumn, Qt::AscendingOrder);
+    connect(m_table->header(), &QHeaderView::sectionClicked, this, [this](int column) {
+        if (column == StatusColumn) return;
+        sortBy(column, column == m_sort_column ? !m_sort_descending : column == ModifiedColumn);
+    });
     m_views->addWidget(m_table);
 
     m_tiles = new QListWidget{m_views};
@@ -247,10 +301,33 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_tiles->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_views->addWidget(m_tiles);
     main_layout->addWidget(m_views, 1);
-    m_empty = MutedText({}, main);
+    m_empty_box = new QWidget{main};
+    auto* empty_layout = new QVBoxLayout{m_empty_box};
+    empty_layout->setSpacing(10);
+    empty_layout->addStretch();
+    auto* empty_icon = new QLabel{m_empty_box};
+    empty_icon->setPixmap(glyphPixmap(Glyph::CloudUp, {64, 64}, CybouTheme::color(CybouTheme::BORDER_MEDIUM)));
+    empty_icon->setAlignment(Qt::AlignCenter);
+    empty_layout->addWidget(empty_icon);
+    m_empty = MutedText({}, m_empty_box);
+    m_empty->setObjectName(QStringLiteral("bodyText"));
     m_empty->setAlignment(Qt::AlignCenter);
-    m_empty->setMinimumHeight(120);
-    main_layout->addWidget(m_empty);
+    empty_layout->addWidget(m_empty);
+    m_empty_actions = new QWidget{m_empty_box};
+    auto* empty_buttons = new QHBoxLayout{m_empty_actions};
+    empty_buttons->addStretch();
+    auto* empty_upload = new QPushButton{tr("Upload files"), m_empty_actions};
+    empty_upload->setObjectName(QStringLiteral("primaryButton"));
+    connect(empty_upload, &QPushButton::clicked, this, [this] { uploadFiles(QFileDialog::getOpenFileNames(this, tr("Upload files"))); });
+    auto* empty_folder = new QPushButton{tr("New folder"), m_empty_actions};
+    empty_folder->setObjectName(QStringLiteral("secondaryButton"));
+    connect(empty_folder, &QPushButton::clicked, this, [this] { promptNewFolder(); });
+    empty_buttons->addWidget(empty_upload);
+    empty_buttons->addWidget(empty_folder);
+    empty_buttons->addStretch();
+    empty_layout->addWidget(m_empty_actions);
+    empty_layout->addStretch();
+    main_layout->addWidget(m_empty_box, 1);
     root->addWidget(main, 1);
 
     m_details = new QFrame{this};
@@ -267,7 +344,9 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
             showContextMenu(view->viewport()->mapToGlobal(pos));
         });
     }
+    connect(m_tiles, &QListWidget::itemSelectionChanged, this, [this] { refreshSelectionBar(); });
     connect(m_table, &QTreeWidget::itemSelectionChanged, this, [this] {
+        refreshSelectionBar();
         const auto ids = selectedIds();
         if (m_details->isVisible() && ids.size() == 1) showDetails(ids.first());
     });
@@ -397,10 +476,17 @@ QVector<CybouFileItem> StoragePage::collect() const
         std::sort(items.begin(), items.end(), [](const CybouFileItem& a, const CybouFileItem& b) { return a.modified > b.modified; });
         if (items.size() > 20) items.resize(20);
     } else {
-        // Folders first, then by name (familiar file-manager order).
-        std::sort(items.begin(), items.end(), [](const CybouFileItem& a, const CybouFileItem& b) {
+        // Folders first, then by the chosen column (familiar file-manager order).
+        const int column = m_sort_column;
+        const bool descending = m_sort_descending;
+        std::stable_sort(items.begin(), items.end(), [column, descending](const CybouFileItem& a, const CybouFileItem& b) {
             if (a.folder != b.folder) return a.folder;
-            return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
+            int order = 0;
+            if (column == SizeColumn) order = a.logical_size < b.logical_size ? -1 : a.logical_size > b.logical_size ? 1 : 0;
+            else if (column == ModifiedColumn) order = a.modified < b.modified ? -1 : a.modified > b.modified ? 1 : 0;
+            if (column == NameColumn) order = a.name.compare(b.name, Qt::CaseInsensitive);
+            if (order == 0) return a.name.compare(b.name, Qt::CaseInsensitive) < 0; // stable tie-break
+            return descending ? order > 0 : order < 0;
         });
     }
     return items;
@@ -427,7 +513,15 @@ void StoragePage::rebuild()
         row->setText(NameColumn, file.starred ? file.name + QStringLiteral("  ★") : file.name);
         row->setData(NameColumn, kIdRole, file.id);
         row->setToolTip(NameColumn, file.name);
-        row->setText(SizeColumn, file.folder ? QStringLiteral("—") : CybouProduct::sizeText(file.logical_size));
+        if (file.folder) {
+            int children = 0;
+            for (const auto& other : m_model->fileItems()) {
+                if (!other.trashed && other.parent_id == file.id) ++children;
+            }
+            row->setText(SizeColumn, children == 1 ? tr("1 item") : tr("%1 items").arg(children));
+        } else {
+            row->setText(SizeColumn, CybouProduct::sizeText(file.logical_size));
+        }
         row->setText(ModifiedColumn, ModifiedText(file.modified));
         // Protected is the norm; only other states draw attention.
         if (!status.isEmpty() && (file.state != CybouContentState::Protected || file.retrieval != CybouRetrievalState::Idle))
@@ -454,13 +548,80 @@ void StoragePage::rebuild()
         else empty = tr("No files yet. Drag files here or use New to upload.");
     }
     m_empty->setText(empty);
-    m_empty->setVisible(!empty.isEmpty());
+    m_empty_box->setVisible(!empty.isEmpty());
+    m_empty_actions->setVisible(m_view == View::MyFiles && m_search->text().trimmed().isEmpty() && m_new->isEnabled());
     m_views->setVisible(!items.isEmpty());
+    m_title->setText(!m_search->text().trimmed().isEmpty() ? tr("Search results") : ViewName(m_view));
+    rebuildCrumbs();
+    refreshSelectionBar();
+}
 
-    const bool in_folder = m_view == View::MyFiles && !m_folder.isEmpty() && m_search->text().trimmed().isEmpty();
-    m_up->setVisible(in_folder);
-    m_title->setText(!m_search->text().trimmed().isEmpty() ? tr("Search results")
-        : in_folder ? tr("My files  ›  %1").arg(folderName(m_folder)) : ViewName(m_view));
+void StoragePage::rebuildCrumbs()
+{
+    auto* layout = static_cast<QHBoxLayout*>(m_crumbs->layout());
+    while (QLayoutItem* item = layout->takeAt(0)) {
+        if (QWidget* widget = item->widget()) {
+            widget->hide();
+            widget->deleteLater();
+        }
+        delete item;
+    }
+    const auto add_label = [this, layout](const QString& text) {
+        auto* label = new QLabel{text, m_crumbs};
+        label->setObjectName(QStringLiteral("sectionTitle"));
+        layout->addWidget(label);
+    };
+    const bool searching = !m_search->text().trimmed().isEmpty();
+    if (searching || m_view != View::MyFiles || m_folder.isEmpty()) {
+        add_label(searching ? tr("Search results") : ViewName(m_view));
+        layout->addStretch();
+        return;
+    }
+    // My files › Parent › Current, each ancestor clickable.
+    QVector<QPair<QString, QString>> path;
+    for (QString id = m_folder; !id.isEmpty();) {
+        const auto* item = m_model->fileItem(id);
+        if (!item) break;
+        path.prepend({item->id, item->name});
+        id = item->parent_id;
+    }
+    path.prepend({QString{}, ViewName(View::MyFiles)});
+    for (int i = 0; i < path.size(); ++i) {
+        if (i > 0) {
+            auto* separator = new QLabel{QStringLiteral("›"), m_crumbs};
+            separator->setObjectName(QStringLiteral("mutedText"));
+            layout->addWidget(separator);
+        }
+        if (i == path.size() - 1) {
+            add_label(path.at(i).second);
+            break;
+        }
+        auto* crumb = new QPushButton{path.at(i).second, m_crumbs};
+        crumb->setFlat(true);
+        crumb->setCursor(Qt::PointingHandCursor);
+        crumb->setStyleSheet(QStringLiteral("QPushButton { border: none; background: transparent; color: %1; font-size: 17px;"
+                                            " font-weight: 600; padding: 2px 6px; min-height: 0; }"
+                                            "QPushButton:hover { color: %2; text-decoration: underline; }")
+            .arg(CybouTheme::color(CybouTheme::TEXT_SECONDARY).name(), CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
+        connect(crumb, &QPushButton::clicked, this, [this, id = path.at(i).first] { openFolder(id); });
+        layout->addWidget(crumb);
+    }
+    layout->addStretch();
+}
+
+void StoragePage::refreshSelectionBar()
+{
+    const int count = selectedIds().size();
+    m_selection_bar->setVisible(count > 1 && m_view != View::Trash);
+    m_selection_text->setText(tr("%1 selected").arg(count));
+}
+
+void StoragePage::sortBy(int column, bool descending)
+{
+    m_sort_column = column;
+    m_sort_descending = descending;
+    m_table->header()->setSortIndicator(column, descending ? Qt::DescendingOrder : Qt::AscendingOrder);
+    rebuild();
 }
 
 void StoragePage::refreshChrome()
@@ -475,7 +636,11 @@ void StoragePage::refreshChrome()
     const quint64 quota = status.storage_quota;
     m_usage_bar->setVisible(quota > 0);
     m_usage_bar->setValue(quota > 0 ? static_cast<int>(qMin<quint64>(1000, status.storage_used * 1000 / quota)) : 0);
-    m_usage_text->setText(quota > 0
+    const bool nearly_full = quota > 0 && status.storage_used * 10 >= quota * 8;
+    m_usage_text->setStyleSheet(nearly_full ? QStringLiteral("color: %1;").arg(CybouTheme::color(CybouTheme::AMBER).name()) : QString{});
+    m_usage_text->setText(nearly_full ? tr("Storage almost full · %1 used of %2")
+            .arg(CybouProduct::sizeText(status.storage_used), CybouProduct::sizeText(quota))
+        : quota > 0
         ? tr("%1 used of %2").arg(CybouProduct::sizeText(status.storage_used), CybouProduct::sizeText(quota))
         : tr("%1 used").arg(CybouProduct::sizeText(status.storage_used)));
     rebuild();

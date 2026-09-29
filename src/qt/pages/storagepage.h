@@ -55,6 +55,8 @@ public:
     /** Opens the details drawer for a file or folder. */
     void showDetails(const QString& id);
     QString detailsId() const { return m_details_id; }
+    /** Sort the list by Name (0), Size (1) or Modified (2); folders stay first. */
+    void sortBy(int column, bool descending);
     /** Uploads local files into the current folder. */
     void uploadFiles(const QStringList& paths);
     /** Set by the shell: opens Mail compose with this file attached. */
@@ -88,6 +90,13 @@ private:
     QTreeWidget* m_table{nullptr};
     QListWidget* m_tiles{nullptr};
     QLabel* m_empty{nullptr};
+    QWidget* m_empty_box{nullptr};
+    QWidget* m_empty_actions{nullptr};
+    QWidget* m_crumbs{nullptr};
+    QFrame* m_selection_bar{nullptr};
+    QLabel* m_selection_text{nullptr};
+    int m_sort_column{0};
+    bool m_sort_descending{false};
     QFrame* m_details{nullptr};
     QString m_details_id;
 
@@ -99,6 +108,8 @@ private:
     void promptMove(const QString& id);
     void download(const QString& id);
     void rebuildDetails();
+    void rebuildCrumbs();
+    void refreshSelectionBar();
 
     QVector<CybouFileItem> collect() const;
     QString folderName(const QString& id) const;

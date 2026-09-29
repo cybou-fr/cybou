@@ -9,6 +9,7 @@
 #include <qt/pages/onboardingview.h>
 
 #include <QFrame>
+#include <QSettings>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
@@ -18,6 +19,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <utility>
 
 using namespace CybouUi;
@@ -120,7 +122,7 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> /*diagnostics
 
     for (auto signal : {&CybouDesktopModel::statusChanged, &CybouDesktopModel::mailChanged,
              &CybouDesktopModel::filesChanged, &CybouDesktopModel::activityChanged,
-             &CybouDesktopModel::walletChanged}) {
+             &CybouDesktopModel::walletChanged, &CybouDesktopModel::namesChanged}) {
         connect(m_model, signal, this, [this] { refresh(); });
     }
     // Relative activity times age while the window stays open.
@@ -131,7 +133,7 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> /*diagnostics
 }
 
 QWidget* HomePage::buildSummaryCard(const QString& title, Glyph glyph, Tint tint, QLabel*& value,
-    QLabel*& caption, const std::function<void()>& open)
+    QLabel*& caption, const std::function<void()>& open, const QString& action_text, const std::function<void()>& action)
 {
     auto* card = new ClickableCard{open, m_dashboard};
     card->setAccessibleName(title);
@@ -156,14 +158,29 @@ QWidget* HomePage::buildSummaryCard(const QString& title, Glyph glyph, Tint tint
     caption->setObjectName(QStringLiteral("metricCaption"));
     layout->addWidget(value);
     layout->addWidget(caption);
+    if (!action_text.isEmpty()) {
+        layout->addSpacing(6);
+        auto* quick = new QPushButton{action_text, card};
+        quick->setObjectName(QStringLiteral("secondaryButton"));
+        quick->setCursor(Qt::PointingHandCursor);
+        connect(quick, &QPushButton::clicked, card, [action] { if (action) action(); });
+        layout->addWidget(quick, 0, Qt::AlignLeft);
+    }
     return card;
 }
 
 QWidget* HomePage::buildDashboard()
 {
     m_dashboard = new QWidget{m_stack};
-    auto* root = new QVBoxLayout{m_dashboard};
-    root->setContentsMargins(28, 24, 28, 28);
+    auto* outer = new QHBoxLayout{m_dashboard};
+    outer->setContentsMargins(28, 24, 28, 28);
+    auto* column = new QWidget{m_dashboard};
+    column->setMaximumWidth(1180);
+    outer->addStretch(0);
+    outer->addWidget(column, 1);
+    outer->addStretch(0);
+    auto* root = new QVBoxLayout{column};
+    root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(18);
 
     // Identity hero.
@@ -197,12 +214,37 @@ QWidget* HomePage::buildDashboard()
     auto* summary = new QHBoxLayout;
     summary->setSpacing(16);
     summary->addWidget(buildSummaryCard(tr("Mail"), Glyph::Envelope, Tint::Mint, m_mail_value, m_mail_caption,
-        [this] { m_mail_requested(); }), 1);
+        [this] { m_mail_requested(); }, tr("Compose"), [this] { if (onCompose) onCompose(); }), 1);
     summary->addWidget(buildSummaryCard(tr("Files"), Glyph::Folder, Tint::Blue, m_files_value, m_files_caption,
-        [this] { m_files_requested(); }), 1);
+        [this] { m_files_requested(); }, tr("Upload"), [this] { if (onUpload) onUpload(); }), 1);
     summary->addWidget(buildSummaryCard(tr("Wallet"), Glyph::WalletCard, Tint::Indigo, m_wallet_value,
-        m_wallet_caption, [this] { m_wallet_requested(); }), 1);
+        m_wallet_caption, [this] { m_wallet_requested(); }, tr("Send"), [this] { if (onSendPayment) onSendPayment(); }), 1);
     root->addLayout(summary);
+
+    // First steps for a new Identity (hidden once done or dismissed).
+    m_first_steps = Card(m_dashboard);
+    m_first_steps->setObjectName(QStringLiteral("card"));
+    auto* steps_layout = new QVBoxLayout{m_first_steps};
+    steps_layout->setContentsMargins(22, 16, 22, 16);
+    steps_layout->setSpacing(6);
+    auto* steps_head = new QHBoxLayout;
+    steps_head->addWidget(SectionTitle(tr("Get started"), m_first_steps), 1);
+    auto* hide_steps = new QPushButton{tr("Hide"), m_first_steps};
+    hide_steps->setFlat(true);
+    hide_steps->setStyleSheet(QStringLiteral("QPushButton { border: none; background: transparent; color: %1; min-height: 0; }")
+        .arg(CybouTheme::color(CybouTheme::TEXT_MUTED).name()));
+    connect(hide_steps, &QPushButton::clicked, this, [this] {
+        QSettings{}.setValue(QStringLiteral("home/first_steps_hidden"), true);
+        m_first_steps->hide();
+    });
+    steps_head->addWidget(hide_steps);
+    steps_layout->addLayout(steps_head);
+    auto* steps_host = new QWidget{m_first_steps};
+    m_first_steps_rows = new QVBoxLayout{steps_host};
+    m_first_steps_rows->setContentsMargins(0, 0, 0, 0);
+    m_first_steps_rows->setSpacing(4);
+    steps_layout->addWidget(steps_host);
+    root->addWidget(m_first_steps);
 
     // Recent activity.
     auto* activity = Card(m_dashboard);
@@ -265,13 +307,75 @@ void HomePage::refresh()
     m_wallet_caption->setText(tr("Available"));
 
     ClearLayout(m_activity_rows);
+    auto items = m_model->activity();
+    std::sort(items.begin(), items.end(), [](const CybouActivityItem& a, const CybouActivityItem& b) { return a.time > b.time; });
+    const QDate today = QDate::currentDate();
+    QString group;
     int shown = 0;
-    for (const auto& item : m_model->activity()) {
-        if (shown == 6) break;
-        auto* row = ActivityRow(ActivityGlyph(item.kind), ActivityTint(item.kind), item.title, item.subtitle,
-            relTime(item.time), m_activity_rows->parentWidget());
-        m_activity_rows->addWidget(row);
+    for (const auto& item : items) {
+        if (shown == 8) break;
+        const QDate day = item.time.date();
+        const QString heading = day == today ? tr("Today") : day == today.addDays(-1) ? tr("Yesterday") : tr("Earlier");
+        if (heading != group) {
+            group = heading;
+            auto* label = Eyebrow(heading, m_activity_rows->parentWidget());
+            label->setContentsMargins(0, shown == 0 ? 0 : 8, 0, 2);
+            m_activity_rows->addWidget(label);
+        }
+        m_activity_rows->addWidget(ActivityRow(ActivityGlyph(item.kind), ActivityTint(item.kind), item.title, item.subtitle,
+            shortTime(item.time), m_activity_rows->parentWidget()));
         ++shown;
     }
     m_activity_empty->setVisible(shown == 0);
+    rebuildFirstSteps();
+}
+
+QStringList HomePage::openFirstSteps() const
+{
+    QStringList open;
+    if (m_model->names().isEmpty()) open << QStringLiteral("name");
+    const bool sent = std::any_of(m_model->mailItems().begin(), m_model->mailItems().end(),
+        [](const CybouMailItem& item) { return item.folder == CybouMailFolder::Sent; });
+    if (!sent) open << QStringLiteral("mail");
+    const bool file = std::any_of(m_model->fileItems().begin(), m_model->fileItems().end(),
+        [](const CybouFileItem& item) { return !item.folder; });
+    if (!file) open << QStringLiteral("files");
+    return open;
+}
+
+void HomePage::rebuildFirstSteps()
+{
+    ClearLayout(m_first_steps_rows);
+    const auto open = openFirstSteps();
+    const bool hidden = QSettings{}.value(QStringLiteral("home/first_steps_hidden"), false).toBool();
+    m_first_steps->setVisible(!hidden && !open.isEmpty());
+    if (!m_first_steps->isVisible()) return;
+    const auto step = [this](const QString& title, const QString& subtitle, const QString& action, std::function<void()> fn) {
+        auto* row = new QWidget{m_first_steps_rows->parentWidget()};
+        auto* layout = new QHBoxLayout{row};
+        layout->setContentsMargins(0, 4, 0, 4);
+        auto* text = new QVBoxLayout;
+        text->setSpacing(0);
+        auto* t = new QLabel{title, row};
+        t->setObjectName(QStringLiteral("rowTitle"));
+        auto* s = new QLabel{subtitle, row};
+        s->setObjectName(QStringLiteral("rowSub"));
+        text->addWidget(t);
+        text->addWidget(s);
+        layout->addLayout(text, 1);
+        auto* button = new QPushButton{action, row};
+        button->setObjectName(QStringLiteral("secondaryButton"));
+        connect(button, &QPushButton::clicked, row, [fn = std::move(fn)] { if (fn) fn(); });
+        layout->addWidget(button);
+        m_first_steps_rows->addWidget(row);
+    };
+    if (open.contains(QStringLiteral("name")))
+        step(tr("Claim your .cybou name"), tr("People reach you as name.cybou instead of a long ID."), tr("Claim"),
+            [this] { m_identity_requested(); });
+    if (open.contains(QStringLiteral("mail")))
+        step(tr("Send your first message"), tr("Mail is end-to-end encrypted and post-quantum protected."), tr("Compose"),
+            [this] { if (onCompose) onCompose(); });
+    if (open.contains(QStringLiteral("files")))
+        step(tr("Upload your first file"), tr("Files are encrypted on this computer before they leave it."), tr("Upload"),
+            [this] { if (onUpload) onUpload(); });
 }

@@ -24,6 +24,7 @@
 #include <QButtonGroup>
 #include <QCloseEvent>
 #include <QDir>
+#include <QFileDialog>
 #include <QFile>
 #include <QTemporaryDir>
 #include <QDialog>
@@ -370,6 +371,18 @@ void CybouMainWindow::buildShell()
     auto* identity = new IdentityPage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
     auto* diagnostics = new DiagnosticsPage{m_desktop_model, [this] { showDebugWindow(); }, nullptr};
     auto* settings = new SettingsPage{m_desktop_model, [this] { showPage(CybouPage::Diagnostics); }, nullptr};
+    home->onCompose = [this, mail] {
+        showPage(CybouPage::Mail);
+        mail->openCompose();
+    };
+    home->onUpload = [this, files] {
+        showPage(CybouPage::Files);
+        files->uploadFiles(QFileDialog::getOpenFileNames(this, tr("Upload files")));
+    };
+    home->onSendPayment = [this, wallet] {
+        showPage(CybouPage::Wallet);
+        wallet->openSend();
+    };
     files->onSendByMail = [this, mail](const QString& file_id) {
         const auto attachment = m_desktop_model->attachmentFromFile(file_id);
         if (!attachment) return;
