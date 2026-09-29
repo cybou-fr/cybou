@@ -163,8 +163,9 @@ PoaJournalStatus PoaSigningJournal::PrepareToSign(const uint64_t height,
     if (height == 0 || parent_block_id.IsNull() || block_id.IsNull()) return PoaJournalStatus::INVALID_REQUEST;
 
     if (height == m_head.height) {
-        if (parent_block_id != m_head.parent_block_id) return PoaJournalStatus::PARENT_MISMATCH;
-        if (block_id == m_head.block_id) return PoaJournalStatus::ALREADY_PREPARED;
+        if (parent_block_id == m_head.parent_block_id && block_id == m_head.block_id) {
+            return PoaJournalStatus::ALREADY_PREPARED;
+        }
         return PersistHalt(PoaJournalStatus::EQUIVOCATION) ?
             PoaJournalStatus::EQUIVOCATION : PoaJournalStatus::STORAGE_ERROR;
     }
