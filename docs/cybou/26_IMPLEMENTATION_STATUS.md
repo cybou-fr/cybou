@@ -22,20 +22,33 @@ Current `main` implements the canonical low-level substrate:
   proof index and no pre-finality provider admission;
 - PublicationService: recipient plus mandatory self capsule, durable private
   job record and exact-operation resume through IdentityOperationCoordinator;
+  Mail (new or reused attachments), Files mutation batches with uploaded
+  content, queued publication while another Identity operation is unresolved,
+  and PROTECTED only after StorageService reports remote durability;
+- StorageService: post-finality placement on distinct CSPRNG-selected CYP2
+  storage peers to the development target of 2 remote replicas (local copy
+  excluded), GET/BLAKE3 audit, repair and verified remote retrieval;
+- ApplicationService: checkpointed, idempotent scan of finalized
+  RootPublications, capsule opening inside the key store, fetch through
+  StorageService, Mail Inbox/Sent and last-canonical-mutation-wins Files
+  projections in the Application DB, retry of temporarily unavailable roots;
+- Identity RecoveryBridge: verified before IdentityRotate, readable by the
+  next KEM key, and imported on restore only for seeds that reproduce the
+  canonical historical KEM package, followed by a rescan;
+- core acceptance tests for offline Mail delivery, Sent/Files rebuild after
+  Application DB loss, exact file download, Mail/Files content reuse and
+  pre-rotation content on a clean machine with the new mnemonic only;
 - CYP2 verified block sync and content-addressed PUT/GET;
 - removal of legacy BFT, ValidatorSet, MailTx and indexed StorageObject runtime
   paths.
 
 ## Designed next, not yet implemented as complete product paths
 
-- Mail/Files semantic records and indexing atop the encrypted Application DB;
-- ApplicationService publication scanning/indexing;
-- StorageService provider placement, replication, health, audit and repair;
-- real private Mail backend over RootPublication;
-- real private Files mutation backend;
-- clean-machine Mail/Files reconstruction;
-- Identity RecoveryBridge for historical KEM epochs;
-- development 2-remote-replica durability path;
+- running the three services from the desktop (Qt core adapter) and their
+  periodic scan/durability scheduling;
+- desktop rotation flow calling PublishRecoveryBridge/VerifyRecoveryBridge
+  before RotateIdentitySync;
+- durability soak with multiple provider daemons;
 - basic Identity Authority (Age, capped Activity, SystemContribution);
 - Authority-derived generic resource budgets.
 

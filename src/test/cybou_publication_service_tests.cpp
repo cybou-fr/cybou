@@ -53,6 +53,7 @@ BOOST_AUTO_TEST_CASE(self_publication_waits_for_finality_and_resumes_exact_opera
         const auto retried = publication.Resume("self-job");
         BOOST_CHECK(retried.phase == cybou::PublicationJobPhase::WAITING_FINALITY);
         BOOST_CHECK(retried.operation_id == operation_id);
+        BOOST_CHECK(!publication.MarkProtected("self-job")); // not finalized yet
     }
     {
         cybou::PrivateApplicationStore reopened{identity->GetKeyStore(), app_path};
@@ -93,6 +94,10 @@ BOOST_AUTO_TEST_CASE(one_recipient_has_recipient_and_owner_capsules)
     BOOST_CHECK(finalized->recipient_capsules[0].wrapped_content_key !=
         finalized->recipient_capsules[1].wrapped_content_key);
     BOOST_CHECK(publication.Resume("mail-job").phase == cybou::PublicationJobPhase::SECURING);
+    // Only StorageService's durability report moves a finalized job to PROTECTED.
+    BOOST_CHECK(publication.MarkProtected("mail-job"));
+    BOOST_CHECK(publication.GetJob("mail-job")->phase == cybou::PublicationJobPhase::PROTECTED);
+    BOOST_CHECK(publication.Resume("mail-job").phase == cybou::PublicationJobPhase::PROTECTED);
 }
 
 BOOST_AUTO_TEST_CASE(corrupt_private_job_is_not_overwritten)

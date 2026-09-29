@@ -77,6 +77,18 @@ repair
 
 No separate user-visible provider layer exists.
 
+The implemented `StorageService` places only finalized publications: the
+ordered chunk list must reproduce the publication's chunk-authorization root,
+and per-chunk proofs are rebuilt from it. Each chunk goes to distinct
+CSPRNG-selected CYP2 storage peers until the remote target is met (2 in
+development); STORED and ALREADY_STORED both count, the local copy never does.
+Placement records live in the Identity's encrypted Application DB as an
+operational cache. `Audit` re-reads every recorded replica, drops missing or
+BLAKE3-mismatching ones and repairs from any valid copy. `Fetch` returns the
+local blob or the first valid provider copy and caches it. No signed storage
+receipts exist yet; ACK plus periodic GET/hash verification is the first
+durability path.
+
 ## 2. Common ChunkStore
 
 The physical CYBOU ChunkStore is network infrastructure.
@@ -186,6 +198,19 @@ Do not create permanent `NOT_FOR_ME` records in the Identity Application DB.
 
 Accessible roots are fetched independently of scan progress. A temporarily
 unavailable root must not block scanning later finalized blocks.
+
+The implemented `ApplicationService` persists `last_scanned_height` after each
+block and records an accessible publication (publisher, sender nonce/epoch,
+root and content key) before indexing it, so a crash resumes as a retry.
+Processing is idempotent per OperationID. Capsules open inside
+`CybouKeyStore`; KEM seeds never leave it. A root that cannot be fetched is
+`TEMPORARILY_UNAVAILABLE` and retried on every scan; an opened root that is not
+a valid private document for this Identity is `INVALID` and never retried.
+Mail is Inbox when addressed to this Identity and Sent when published by it;
+Archive, Trash, read and star are local mailbox state. Files mutations are
+accepted only from the owner and applied per item by canonical order
+`(finalized height, operation index, mutation index)`, so an out-of-order
+retry never overrides a newer mutation.
 
 ## 6. Private application schemas
 
@@ -375,3 +400,19 @@ Files
 ```
 
 without the previous Application DB or previous provider-placement DB.
+
+Across IdentityRotate this holds through the RecoveryBridge:
+
+```text
+PublishRecoveryBridge(new entropy)
+  every known KEM seed, capsules for current key + next-epoch key
+-> PoA finality -> PROTECTED (remote durability)
+-> VerifyRecoveryBridge(new entropy) opens and decodes it
+-> only then RotateIdentitySync
+```
+
+On restore, ApplicationService opens the bridge with the current key, accepts
+each historical seed only if it reproduces that epoch's canonical KEM package,
+imports it into the key store (memory only) and rescans once, so pre-rotation
+publications open. `PublishRecoveryBridge` refuses to omit a published epoch
+whose seed this device has not recovered.

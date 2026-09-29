@@ -4,19 +4,40 @@
 
 #include <cybou/publication_service.h>
 
+#include <cybou/crypto/cleanse.h>
+#include <cybou/encrypted_chunk_tree.h>
+#include <cybou/identity_kem.h>
 #include <cybou/node_runtime.h>
 #include <cybou/root_publication.h>
+#include <cybou/storage_service.h>
+
+#include <openssl/rand.h>
 
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <set>
+#include <stdexcept>
 #include <string>
+#include <variant>
 
 namespace cybou {
 namespace {
 
 constexpr std::array<unsigned char, 5> MAGIC{'C', 'Y', 'P', 'J', 1};
 constexpr std::size_t FIXED_SIZE{5 + 32 + 32 + 1 + 8 + 8 + 32 + 4};
+constexpr std::string_view JOB_INDEX_KEY{"publication/jobs"};
+
+std::string LeavesKey(const std::string_view id)
+{
+    return "publication/leaves/" + std::string{id};
+}
+
+/** Publication intent including the content key; erased once finalized. */
+std::string IntentKey(const std::string_view id)
+{
+    return "publication/intent/" + std::string{id};
+}
 
 bool ValidJobId(const std::string_view value)
 {
@@ -79,6 +100,13 @@ PublicationService::PublicationService(CybouNodeRuntime& runtime, CybouKeyStore&
 {
 }
 
+PublicationService::PublicationService(CybouNodeRuntime& runtime, CybouKeyStore& identity,
+    PrivateApplicationStore& application_db, IdentityOperationCoordinator& coordinator, KVStore& staging_db)
+    : m_runtime{runtime}, m_identity{identity}, m_application_db{application_db},
+      m_coordinator{coordinator}, m_staging_db{&staging_db}
+{
+}
+
 std::optional<PublicationService::Job> PublicationService::Load(const std::string_view local_job_id) const
 {
     if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked()) return std::nullopt;
@@ -95,7 +123,7 @@ std::optional<PublicationService::Job> PublicationService::Load(const std::strin
     job.account_id = *account;
     const auto phase = (*encoded)[offset++];
     if (phase < static_cast<std::uint8_t>(PublicationJobPhase::WAITING_FINALITY) ||
-        phase > static_cast<std::uint8_t>(PublicationJobPhase::NEEDS_ATTENTION)) return std::nullopt;
+        phase > static_cast<std::uint8_t>(PublicationJobPhase::QUEUED)) return std::nullopt;
     job.phase = static_cast<PublicationJobPhase>(phase);
     job.nonce = Read64(std::span<const unsigned char>{*encoded}.subspan(offset, 8)); offset += 8;
     job.key_epoch = Read64(std::span<const unsigned char>{*encoded}.subspan(offset, 8)); offset += 8;
@@ -127,13 +155,35 @@ bool PublicationService::Save(const std::string_view local_job_id, const Job& jo
     encoded.insert(encoded.end(), job.operation_id.begin(), job.operation_id.end());
     Append32(encoded, static_cast<std::uint32_t>(publication->size()));
     encoded.insert(encoded.end(), publication->begin(), publication->end());
-    return m_application_db.Put(JobKey(local_job_id), encoded);
+    if (!m_application_db.Put(JobKey(local_job_id), encoded)) return false;
+    // Once finalized the exact publication is fixed; the intent (with its key) is no longer needed.
+    if (job.phase == PublicationJobPhase::SECURING || job.phase == PublicationJobPhase::PROTECTED) {
+        m_application_db.Erase(IntentKey(local_job_id));
+    }
+    // Job index for resumption and status listing; IDs are short ASCII.
+    auto index = m_application_db.Get(JOB_INDEX_KEY).value_or(std::vector<unsigned char>{});
+    std::string_view listed{reinterpret_cast<const char*>(index.data()), index.size()};
+    for (std::size_t start{0}; start < listed.size();) {
+        const auto end = std::min(listed.find('\n', start), listed.size());
+        if (listed.substr(start, end - start) == local_job_id) return true;
+        start = end + 1;
+    }
+    index.insert(index.end(), local_job_id.begin(), local_job_id.end());
+    index.push_back('\n');
+    return m_application_db.Put(JOB_INDEX_KEY, index);
 }
 
 PublicationJobResult PublicationService::SubmitPrepared(const std::string_view local_job_id,
     const PreparedPublicationBundle& bundle, const std::optional<AccountId> recipient)
 {
     std::lock_guard lock{m_mutex};
+    return SubmitPreparedLocked(local_job_id, bundle, recipient, std::nullopt);
+}
+
+PublicationJobResult PublicationService::SubmitPreparedLocked(const std::string_view local_job_id,
+    const PreparedPublicationBundle& bundle, const std::optional<AccountId> recipient,
+    const std::optional<std::pair<XWingPublicKey, std::uint64_t>> future_self)
+{
     if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked()) return Failure("Application DB is locked or job ID invalid");
     if (auto existing = Load(local_job_id)) return ResumeLocked(local_job_id, *existing);
     if (m_application_db.Has(JobKey(local_job_id))) return Failure("Existing publication job is corrupt");
@@ -144,6 +194,18 @@ PublicationJobResult PublicationService::SubmitPrepared(const std::string_view l
         !m_runtime.GetChunkBlobStore().Has(bundle.root_chunk_id)) {
         return Failure("Prepared publication or unlocked Identity is invalid");
     }
+    const Intent intent{.bundle = bundle, .recipient = recipient, .future_self = future_self};
+    if (!SaveIntent(local_job_id, intent)) return Failure("Cannot save private publication intent");
+    return BuildAndSubmit(local_job_id, intent);
+}
+
+PublicationJobResult PublicationService::BuildAndSubmit(const std::string_view local_job_id, const Intent& intent)
+{
+    const auto& bundle = intent.bundle;
+    const auto& recipient = intent.recipient;
+    const auto& future_self = intent.future_self;
+    const auto account = m_identity.GetAccountId();
+    if (!account) return Failure("Identity is locked");
     const auto loaded = m_runtime.GetStore().LoadState();
     const auto* sender = loaded && loaded.state ? loaded.state->identities.Find(*account) : nullptr;
     if (!sender || sender->nonce == std::numeric_limits<std::uint64_t>::max()) {
@@ -182,6 +244,15 @@ PublicationJobResult PublicationService::SubmitPrepared(const std::string_view l
         sender->key_epoch, bundle.content_key);
     if (!self_capsule) return Failure("Cannot create owner recovery capsule");
     publication.recipient_capsules.push_back(*self_capsule);
+    if (future_self) {
+        // RecoveryBridge: also readable by the next, not yet published, KEM key.
+        if (future_self->second != sender->key_epoch + 1) return Failure("Invalid future key epoch");
+        const auto future_capsule = CreateRootRecipientCapsule(network_bytes, account_bytes,
+            sender->nonce, sender->key_epoch, bundle.root_chunk_id, future_self->first,
+            future_self->second, bundle.content_key);
+        if (!future_capsule) return Failure("Cannot create future recovery capsule");
+        publication.recipient_capsules.push_back(*future_capsule);
+    }
     if (!ComputeRootPublicationPayloadCommitment(publication)) {
         return Failure("Cannot commit RootPublication payload");
     }
@@ -195,8 +266,15 @@ PublicationJobResult PublicationService::SubmitPrepared(const std::string_view l
 
 PublicationJobResult PublicationService::ResumeLocked(const std::string_view local_job_id, Job& job)
 {
-    if (job.phase == PublicationJobPhase::SECURING) {
-        return {.phase = job.phase, .operation_id = job.operation_id};
+    if (job.phase == PublicationJobPhase::QUEUED) {
+        // Never signed: rebuild capsules against the current nonce.
+        const auto intent = LoadIntent(local_job_id);
+        if (!intent) return Failure("Queued publication intent is missing");
+        return BuildAndSubmit(local_job_id, *intent);
+    }
+    if (job.phase == PublicationJobPhase::SECURING || job.phase == PublicationJobPhase::PROTECTED) {
+        return {.phase = job.phase, .operation_id = job.operation_id,
+            .finalized_height = m_runtime.FindFinalizedOperation(job.operation_id).height};
     }
     if (job.phase == PublicationJobPhase::NEEDS_ATTENTION) {
         return {.phase = job.phase, .operation_id = job.operation_id,
@@ -245,9 +323,69 @@ PublicationJobResult PublicationService::ResumeLocked(const std::string_view loc
         if (!Save(local_job_id, job)) return Failure("Cannot save pending publication state");
         return {.phase = PublicationJobPhase::WAITING_FINALITY, .operation_id = result.op_id};
     }
+    if (job.operation_id.IsNull() && (result.phase == IdentityOperationPhase::CONFLICT ||
+            result.phase == IdentityOperationPhase::REJECTED) && LoadIntent(local_job_id)) {
+        // Never signed (another operation holds the nonce, or the nonce moved):
+        // wait and rebuild later instead of failing the user's action.
+        job.phase = PublicationJobPhase::QUEUED;
+        if (!Save(local_job_id, job)) return Failure("Cannot save queued publication");
+        return {.phase = job.phase, .error = result.error};
+    }
     job.phase = PublicationJobPhase::NEEDS_ATTENTION;
     Save(local_job_id, job);
-    return {.phase = job.phase, .operation_id = result.op_id, .error = result.error};
+    return {.phase = job.phase, .operation_id = job.operation_id, .error = result.error};
+}
+
+std::optional<PublicationService::Intent> PublicationService::LoadIntent(const std::string_view local_job_id) const
+{
+    const auto encoded = m_application_db.Get(IntentKey(local_job_id));
+    constexpr std::size_t FIXED{32 + 32 + 32 + 4 + 1 + 1};
+    if (!encoded || encoded->size() < FIXED) return std::nullopt;
+    Intent intent;
+    const std::span<const unsigned char> bytes{*encoded};
+    std::size_t offset{0};
+    std::copy_n(bytes.begin() + offset, 32, intent.bundle.root_chunk_id.begin()); offset += 32;
+    std::copy_n(bytes.begin() + offset, 32, intent.bundle.content_key.begin()); offset += 32;
+    std::copy_n(bytes.begin() + offset, 32, intent.bundle.chunk_authorization_root.begin()); offset += 32;
+    intent.bundle.chunk_count = Read32(bytes.subspan(offset, 4)); offset += 4;
+    const bool has_recipient = bytes[offset++] != 0;
+    if (has_recipient) {
+        if (bytes.size() < offset + 32) return std::nullopt;
+        intent.recipient = AccountId::FromBytes(bytes.subspan(offset, 32));
+        if (!intent.recipient) return std::nullopt;
+        offset += 32;
+    }
+    if (bytes.size() < offset + 1) return std::nullopt;
+    const bool has_future = bytes[offset++] != 0;
+    if (has_future) {
+        if (bytes.size() < offset + XWING_PUBLIC_KEY_SIZE + 8) return std::nullopt;
+        XWingPublicKey key{};
+        std::copy_n(bytes.begin() + offset, key.size(), key.begin());
+        offset += key.size();
+        intent.future_self = std::pair{key, Read64(bytes.subspan(offset, 8))};
+        offset += 8;
+    }
+    if (offset != bytes.size()) return std::nullopt;
+    return intent;
+}
+
+bool PublicationService::SaveIntent(const std::string_view local_job_id, const Intent& intent)
+{
+    std::vector<unsigned char> out;
+    out.insert(out.end(), intent.bundle.root_chunk_id.begin(), intent.bundle.root_chunk_id.end());
+    out.insert(out.end(), intent.bundle.content_key.begin(), intent.bundle.content_key.end());
+    out.insert(out.end(), intent.bundle.chunk_authorization_root.begin(), intent.bundle.chunk_authorization_root.end());
+    Append32(out, intent.bundle.chunk_count);
+    out.push_back(intent.recipient ? 1 : 0);
+    if (intent.recipient) out.insert(out.end(), intent.recipient->Value().begin(), intent.recipient->Value().end());
+    out.push_back(intent.future_self ? 1 : 0);
+    if (intent.future_self) {
+        out.insert(out.end(), intent.future_self->first.begin(), intent.future_self->first.end());
+        Append64(out, intent.future_self->second);
+    }
+    const bool saved = m_application_db.Put(IntentKey(local_job_id), out);
+    crypto::CleanseMemory(out.data(), out.size());
+    return saved;
 }
 
 PublicationJobResult PublicationService::Resume(const std::string_view local_job_id)
@@ -270,9 +408,321 @@ std::optional<PublicationJobResult> PublicationService::GetJob(const std::string
             if (!Save(local_job_id, *job)) return std::nullopt;
         }
     }
+    const bool finalized = job->phase == PublicationJobPhase::SECURING ||
+        job->phase == PublicationJobPhase::PROTECTED;
     return PublicationJobResult{.phase = job->phase, .operation_id = job->operation_id,
-        .finalized_height = job->phase == PublicationJobPhase::SECURING ?
-            m_runtime.FindFinalizedOperation(job->operation_id).height : 0};
+        .finalized_height = finalized ? m_runtime.FindFinalizedOperation(job->operation_id).height : 0};
+}
+
+bool PublicationService::MarkProtected(const std::string_view local_job_id)
+{
+    std::lock_guard lock{m_mutex};
+    auto job = Load(local_job_id);
+    if (!job) return false;
+    if (job->phase == PublicationJobPhase::PROTECTED) return true;
+    if (job->phase != PublicationJobPhase::SECURING) return false;
+    job->phase = PublicationJobPhase::PROTECTED;
+    return Save(local_job_id, *job);
+}
+
+std::optional<PrivateItemId> NewPrivateItemId()
+{
+    PrivateItemId id{};
+    if (RAND_bytes(id.data(), static_cast<int>(id.size())) != 1) return std::nullopt;
+    if (std::all_of(id.begin(), id.end(), [](unsigned char b) { return b == 0; }) ||
+        std::all_of(id.begin(), id.end(), [](unsigned char b) { return b == 0xff; })) return std::nullopt;
+    return id;
+}
+
+std::optional<PublicationService::Staged> PublicationService::Stage(const std::string_view local_job_id,
+    std::vector<NewContent>& children, const BuildMetadata& build_metadata, std::string& error)
+{
+    if (!m_staging_db) {
+        error = "No local staging store";
+        return std::nullopt;
+    }
+    const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32};
+    // Job IDs already satisfy the proof-index namespace rules.
+    const std::string index_id{local_job_id};
+    try {
+        // An interrupted earlier attempt leaves a fail-closed index; start clean.
+        {
+            PublicationBundleStager stale{m_runtime.GetChunkBlobStore(), *m_staging_db, index_id, network};
+            if (!stale.Discard()) {
+                error = "Cannot reset local staging";
+                return std::nullopt;
+            }
+        }
+        PublicationBundleStager stager{m_runtime.GetChunkBlobStore(), *m_staging_db, index_id, network};
+        std::vector<EncryptedTreeSummary> summaries;
+        for (auto& child : children) {
+            const auto tree = stager.StageTree(child.source);
+            if (!tree) {
+                stager.Discard();
+                error = "Cannot encrypt content";
+                return std::nullopt;
+            }
+            summaries.push_back(tree->tree);
+        }
+        auto metadata = build_metadata(summaries);
+        for (auto& summary : summaries) crypto::CleanseMemory(summary.content_key.data(), summary.content_key.size());
+        if (!metadata) {
+            stager.Discard();
+            error = "Cannot encode private document";
+            return std::nullopt;
+        }
+        const auto main = stager.StageTree([](std::span<unsigned char>) -> std::optional<std::size_t> { return 0; },
+            *metadata);
+        crypto::CleanseMemory(metadata->data(), metadata->size());
+        const auto prepared = main ? stager.Finish(*main) : std::nullopt;
+        if (!prepared) {
+            stager.Discard();
+            error = "Cannot prepare publication";
+            return std::nullopt;
+        }
+        Staged staged{.bundle = *prepared};
+        std::vector<unsigned char> encoded;
+        for (std::uint32_t i{0}; i < prepared->chunk_count; ++i) {
+            const auto leaf = stager.GetLeafId(i);
+            if (!leaf) {
+                stager.Discard();
+                error = "Cannot read staged chunk order";
+                return std::nullopt;
+            }
+            staged.leaves.push_back(*leaf);
+            encoded.insert(encoded.end(), leaf->begin(), leaf->end());
+        }
+        // StorageService needs the exact ordered chunk set after finality.
+        if (!m_application_db.Put(LeavesKey(local_job_id), encoded)) {
+            stager.Discard();
+            error = "Cannot save staged chunk order";
+            return std::nullopt;
+        }
+        stager.Discard();
+        return staged;
+    } catch (const std::exception&) {
+        error = "Local staging failed";
+        return std::nullopt;
+    }
+}
+
+std::optional<std::vector<ChunkId>> PublicationService::LoadLeaves(const std::string_view local_job_id) const
+{
+    const auto encoded = m_application_db.Get(LeavesKey(local_job_id));
+    if (!encoded || encoded->empty() || encoded->size() % 32 != 0) return std::nullopt;
+    std::vector<ChunkId> leaves(encoded->size() / 32);
+    for (std::size_t i{0}; i < leaves.size(); ++i) std::copy_n(encoded->begin() + i * 32, 32, leaves[i].begin());
+    return leaves;
+}
+
+PublicationJobResult PublicationService::PublishMail(const std::string_view local_job_id, MailMessage message,
+    std::vector<std::pair<std::size_t, NewContent>> new_attachments)
+{
+    std::lock_guard lock{m_mutex};
+    if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked()) return Failure("Application DB is locked or job ID invalid");
+    if (auto existing = Load(local_job_id)) return ResumeLocked(local_job_id, *existing);
+    const auto me = m_identity.GetAccountId();
+    if (!me) return Failure("Identity is locked");
+    std::set<std::size_t> targets;
+    std::vector<NewContent> children;
+    std::vector<std::size_t> order;
+    for (auto& [index, content] : new_attachments) {
+        if (index >= message.attachments.size() || !targets.insert(index).second || !content.source) {
+            return Failure("Invalid attachment content");
+        }
+        order.push_back(index);
+        children.push_back(std::move(content));
+    }
+    for (std::size_t i{0}; i < message.attachments.size(); ++i) {
+        // Reused attachments must already reference protected content.
+        if (!targets.contains(i) && (message.attachments[i].root_chunk_id == ChunkId{} ||
+                message.attachments[i].content_key == ContentKey{})) return Failure("Attachment has no content");
+    }
+    std::string error;
+    const auto staged = Stage(local_job_id, children,
+        [&](std::span<const EncryptedTreeSummary> summaries) -> std::optional<std::vector<unsigned char>> {
+            for (std::size_t i{0}; i < summaries.size(); ++i) {
+                auto& attachment = message.attachments[order[i]];
+                attachment.root_chunk_id = summaries[i].root_chunk_id;
+                attachment.content_key = summaries[i].content_key;
+                attachment.logical_size = summaries[i].plaintext_bytes;
+            }
+            return EncodePrivateApplicationDocument(message);
+        }, error);
+    for (auto& attachment : message.attachments) {
+        crypto::CleanseMemory(attachment.content_key.data(), attachment.content_key.size());
+    }
+    if (!staged) return Failure(error);
+    const std::optional<AccountId> recipient = message.recipient_account_id != *me
+        ? std::optional<AccountId>{message.recipient_account_id} : std::nullopt;
+    return SubmitPreparedLocked(local_job_id, staged->bundle, recipient, std::nullopt);
+}
+
+PublicationJobResult PublicationService::PublishFiles(const std::string_view local_job_id, FilesMutationBatch batch,
+    std::vector<std::pair<std::size_t, NewContent>> new_content)
+{
+    std::lock_guard lock{m_mutex};
+    if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked()) return Failure("Application DB is locked or job ID invalid");
+    if (auto existing = Load(local_job_id)) return ResumeLocked(local_job_id, *existing);
+    if (batch.mutations.empty()) return Failure("Empty Files change");
+    std::set<std::size_t> targets;
+    std::vector<NewContent> children;
+    std::vector<std::size_t> order;
+    for (auto& [index, content] : new_content) {
+        if (index >= batch.mutations.size() || !targets.insert(index).second || !content.source ||
+            batch.mutations[index].kind != FileMutationKind::UPSERT_ITEM || !batch.mutations[index].item ||
+            batch.mutations[index].item->kind != FileItemKind::FILE) return Failure("Invalid file content");
+        order.push_back(index);
+        children.push_back(std::move(content));
+    }
+    std::string error;
+    const auto staged = Stage(local_job_id, children,
+        [&](std::span<const EncryptedTreeSummary> summaries) -> std::optional<std::vector<unsigned char>> {
+            for (std::size_t i{0}; i < summaries.size(); ++i) {
+                auto& item = *batch.mutations[order[i]].item;
+                item.root_chunk_id = summaries[i].root_chunk_id;
+                item.content_key = summaries[i].content_key;
+                item.logical_size = summaries[i].plaintext_bytes;
+            }
+            return EncodePrivateApplicationDocument(batch);
+        }, error);
+    for (auto& mutation : batch.mutations) {
+        if (mutation.item && mutation.item->content_key) {
+            crypto::CleanseMemory(mutation.item->content_key->data(), mutation.item->content_key->size());
+        }
+    }
+    if (!staged) return Failure(error);
+    // Files are private: only the owner's self capsule.
+    return SubmitPreparedLocked(local_job_id, staged->bundle, std::nullopt, std::nullopt);
+}
+
+PublicationJobResult PublicationService::PublishRecoveryBridge(const std::string_view local_job_id,
+    const std::span<const unsigned char, 32> new_recovery_entropy)
+{
+    std::lock_guard lock{m_mutex};
+    if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked()) return Failure("Application DB is locked or job ID invalid");
+    if (auto existing = Load(local_job_id)) return ResumeLocked(local_job_id, *existing);
+    const auto me = m_identity.GetAccountId();
+    const auto loaded = m_runtime.GetStore().LoadState();
+    const auto* record = me && loaded && loaded.state ? loaded.state->identities.Find(*me) : nullptr;
+    if (!record) return Failure("Identity is not finalized");
+    const std::uint64_t current_epoch = record->key_epoch;
+    // A bridge that silently omits an epoch would make that content unrecoverable.
+    for (std::uint64_t epoch{0}; epoch < current_epoch; ++epoch) {
+        if (m_runtime.FindIdentityKemPackage(*me, epoch).status == IdentityKemPackageLookupStatus::FOUND &&
+            !m_identity.HasKemSeedForEpoch(epoch, current_epoch)) {
+            return Failure("Earlier encryption keys are not recovered on this device yet");
+        }
+    }
+    auto future_seed = DeriveIdentityXWingSeed(new_recovery_entropy);
+    const auto future_public = future_seed ? DeriveXWingPublicKey(*future_seed) : std::nullopt;
+    if (future_seed) crypto::CleanseMemory(future_seed->data(), future_seed->size());
+    if (!future_public) return Failure("Invalid new recovery phrase");
+
+    IdentityRecoveryBridge bridge{.account_id = *me, .next_key_epoch = current_epoch + 1};
+    for (auto& [epoch, seed] : m_identity.KemSeedsForRecoveryBridge(current_epoch)) {
+        bridge.historical_seeds.push_back({epoch, seed});
+        crypto::CleanseMemory(seed.data(), seed.size());
+    }
+    std::vector<NewContent> none;
+    std::string error;
+    const auto staged = Stage(local_job_id, none,
+        [&](std::span<const EncryptedTreeSummary>) { return EncodePrivateApplicationDocument(bridge); }, error);
+    for (auto& entry : bridge.historical_seeds) crypto::CleanseMemory(entry.seed.data(), entry.seed.size());
+    if (!staged) return Failure(error);
+    return SubmitPreparedLocked(local_job_id, staged->bundle, std::nullopt,
+        std::pair<XWingPublicKey, std::uint64_t>{*future_public, current_epoch + 1});
+}
+
+bool PublicationService::VerifyRecoveryBridge(const std::string_view local_job_id,
+    const std::span<const unsigned char, 32> new_recovery_entropy, StorageService& storage)
+{
+    std::optional<Job> job;
+    {
+        std::lock_guard lock{m_mutex};
+        job = Load(local_job_id);
+    }
+    const auto me = m_identity.GetAccountId();
+    const auto current_public = m_identity.GetIdentityXWingPublicKey();
+    if (!job || job->phase != PublicationJobPhase::PROTECTED || !me || !current_public) return false;
+    const auto finalized = m_runtime.FindFinalizedRootPublication(job->operation_id);
+    if (!finalized || *finalized != job->publication) return false;
+    auto seed = DeriveIdentityXWingSeed(new_recovery_entropy);
+    if (!seed) return false;
+    const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32};
+    std::optional<ContentKey> key;
+    for (const auto& capsule : finalized->recipient_capsules) {
+        if (capsule.key_epoch != job->key_epoch + 1) continue;
+        key = OpenRootRecipientCapsule(network, std::span<const unsigned char, 32>{me->Value().begin(), 32},
+            job->nonce, job->key_epoch, finalized->root_chunk_id, capsule, *seed);
+        if (key) break;
+    }
+    crypto::CleanseMemory(seed->data(), seed->size());
+    if (!key) return false;
+    std::vector<unsigned char> metadata;
+    std::set<ChunkId> seen;
+    const auto fetched = FetchEncryptedChunkTree(network, *key, finalized->root_chunk_id,
+        [&](const ChunkId& id) { return storage.Fetch(id); },
+        [&](std::span<const unsigned char> cbor) { metadata.assign(cbor.begin(), cbor.end()); return true; },
+        [&](const ChunkId& id) { return seen.insert(id).second; },
+        [](std::span<const unsigned char> data) { return data.empty(); }, 0);
+    crypto::CleanseMemory(key->data(), key->size());
+    auto document = fetched ? DecodePrivateApplicationDocument(metadata) : std::nullopt;
+    crypto::CleanseMemory(metadata.data(), metadata.size());
+    if (!document || !std::holds_alternative<IdentityRecoveryBridge>(*document)) return false;
+    auto& bridge = std::get<IdentityRecoveryBridge>(*document);
+    bool ok = bridge.account_id == *me && bridge.next_key_epoch == job->key_epoch + 1;
+    // The bridge must carry the key that is being retired.
+    bool has_current{false};
+    for (auto& entry : bridge.historical_seeds) {
+        if (entry.key_epoch == job->key_epoch) {
+            const auto derived = DeriveXWingPublicKey(entry.seed);
+            has_current = derived && *derived == *current_public;
+        }
+        crypto::CleanseMemory(entry.seed.data(), entry.seed.size());
+    }
+    return ok && has_current;
+}
+
+std::vector<std::string> PublicationService::Jobs()
+{
+    std::vector<std::string> jobs;
+    const auto index = m_application_db.Get(JOB_INDEX_KEY);
+    if (!index) return jobs;
+    std::string_view listed{reinterpret_cast<const char*>(index->data()), index->size()};
+    for (std::size_t start{0}; start < listed.size();) {
+        const auto end = std::min(listed.find('\n', start), listed.size());
+        if (end > start) jobs.emplace_back(listed.substr(start, end - start));
+        start = end + 1;
+    }
+    return jobs;
+}
+
+std::vector<std::pair<std::string, PublicationJobResult>> PublicationService::ProcessDurability(StorageService& storage)
+{
+    std::vector<std::pair<std::string, PublicationJobResult>> results;
+    for (const auto& id : Jobs()) {
+        auto status = GetJob(id);
+        if (!status) continue;
+        if (status->phase == PublicationJobPhase::SECURING) {
+            if (const auto leaves = LoadLeaves(id)) {
+                const auto durability = storage.Secure(status->operation_id, *leaves);
+                status->durability_percent = durability.ProgressPercent(storage.RemoteReplicaTarget());
+                if (durability.state == DurabilityState::PROTECTED && MarkProtected(id)) {
+                    status->phase = PublicationJobPhase::PROTECTED;
+                } else if (!durability.error.empty()) {
+                    status->error = durability.error;
+                }
+            }
+        } else if (status->phase == PublicationJobPhase::QUEUED ||
+                   (status->phase == PublicationJobPhase::WAITING_FINALITY && !status->operation_id.IsNull() &&
+                       m_runtime.GetOperationStatus(status->operation_id).kind == OperationStatusKind::REJECTED_KNOWN)) {
+            status = Resume(id);
+        }
+        if (status->phase == PublicationJobPhase::PROTECTED) status->durability_percent = 100;
+        results.emplace_back(id, *status);
+    }
+    return results;
 }
 
 } // namespace cybou

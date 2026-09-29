@@ -5,8 +5,10 @@
 
 #include <cybou/crypto/cleanse.h>
 #include <cybou/crypto/hkdf_sha256.h>
+#include <cybou/root_publication.h>
 
 #include <algorithm>
+#include <map>
 
 namespace cybou {
 
@@ -16,6 +18,8 @@ struct CybouKeyStore::Impl {
     std::optional<XWingPublicKey> identity_xwing_public_key;
     std::optional<IdentityHybridPublicKey> authorization_key;
     std::optional<IdentityHybridPublicKey> recovery_key;
+    /** Pre-rotation KEM seeds recovered from a verified RecoveryBridge. */
+    std::map<std::uint64_t, XWingSeed> historical_xwing_seeds;
 
     ~Impl() { Clear(); }
 
@@ -24,6 +28,8 @@ struct CybouKeyStore::Impl {
         material.reset();
         if (identity_xwing_seed) crypto::CleanseMemory(identity_xwing_seed->data(), identity_xwing_seed->size());
         identity_xwing_seed.reset();
+        for (auto& [_, seed] : historical_xwing_seeds) crypto::CleanseMemory(seed.data(), seed.size());
+        historical_xwing_seeds.clear();
         identity_xwing_public_key.reset();
         authorization_key.reset();
         recovery_key.reset();
@@ -137,6 +143,48 @@ std::optional<std::array<unsigned char, 32>> CybouKeyStore::DeriveApplicationSto
     if (!crypto::HkdfSha256(m_impl->material->recovery_entropy, salt_bytes,
             m_impl->material->account_id, key)) return std::nullopt;
     return key;
+}
+
+std::optional<ContentKey> CybouKeyStore::OpenRootCapsule(const std::span<const unsigned char, 32> network_id,
+    const AccountId& sender, const std::uint64_t sender_nonce, const std::uint64_t sender_key_epoch,
+    const ChunkId& root_chunk_id, const RootRecipientCapsule& capsule, const std::uint64_t current_key_epoch) const
+{
+    const XWingSeed* seed{nullptr};
+    if (capsule.key_epoch == current_key_epoch && m_impl->identity_xwing_seed) {
+        seed = &*m_impl->identity_xwing_seed;
+    } else if (const auto it = m_impl->historical_xwing_seeds.find(capsule.key_epoch);
+               it != m_impl->historical_xwing_seeds.end()) {
+        seed = &it->second;
+    }
+    if (!seed) return std::nullopt;
+    return OpenRootRecipientCapsule(network_id,
+        std::span<const unsigned char, 32>{sender.Value().begin(), 32}, sender_nonce, sender_key_epoch,
+        root_chunk_id, capsule, *seed);
+}
+
+bool CybouKeyStore::ImportHistoricalKemSeed(const std::uint64_t key_epoch, const XWingSeed& seed)
+{
+    if (!m_impl->material || !ValidateXWingKeyPair(seed)) return false;
+    auto [it, inserted] = m_impl->historical_xwing_seeds.try_emplace(key_epoch, seed);
+    return inserted || it->second == seed;
+}
+
+bool CybouKeyStore::HasKemSeedForEpoch(const std::uint64_t key_epoch, const std::uint64_t current_key_epoch) const
+{
+    if (key_epoch == current_key_epoch) return m_impl->identity_xwing_seed.has_value();
+    return m_impl->historical_xwing_seeds.contains(key_epoch);
+}
+
+std::vector<std::pair<std::uint64_t, XWingSeed>> CybouKeyStore::KemSeedsForRecoveryBridge(
+    const std::uint64_t current_key_epoch) const
+{
+    std::vector<std::pair<std::uint64_t, XWingSeed>> seeds;
+    if (!m_impl->identity_xwing_seed) return seeds;
+    for (const auto& [epoch, seed] : m_impl->historical_xwing_seeds) {
+        if (epoch < current_key_epoch) seeds.emplace_back(epoch, seed);
+    }
+    seeds.emplace_back(current_key_epoch, *m_impl->identity_xwing_seed);
+    return seeds;
 }
 
 } // namespace cybou

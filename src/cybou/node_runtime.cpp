@@ -129,6 +129,32 @@ bool CybouNodeRuntime::HasFinalizedChunk(const ChunkId& chunk_id) const
     return m_finalized_chunk_store && m_finalized_chunk_store->HasChunk(chunk_id);
 }
 
+std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::StoragePeerEndpoints() const
+{
+    std::lock_guard p2p_lock(m_p2p_mutex);
+    std::vector<std::pair<std::string, uint16_t>> endpoints;
+    if (!m_peer_manager) return endpoints;
+    for (const auto& peer : m_peer_manager->StoragePeers()) endpoints.emplace_back(peer.address, peer.port);
+    return endpoints;
+}
+
+std::optional<ChunkAdmissionResult> CybouNodeRuntime::PutChunkToStoragePeer(const std::string& address,
+    const uint16_t port, const uint256& publication_operation_id, const ChunkId& chunk_id,
+    const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
+{
+    std::lock_guard p2p_lock(m_p2p_mutex);
+    if (!m_peer_manager) return std::nullopt;
+    return m_peer_manager->PutAuthorizedChunk(address, port, publication_operation_id, chunk_id, stored_bytes, proof);
+}
+
+std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetChunkFromStoragePeer(const std::string& address,
+    const uint16_t port, const ChunkId& chunk_id)
+{
+    std::lock_guard p2p_lock(m_p2p_mutex);
+    if (!m_peer_manager) return std::nullopt;
+    return m_peer_manager->GetChunkById(address, port, chunk_id);
+}
+
 bool CybouNodeRuntime::InitializeGenesis(const CybouState& genesis, const bool sync)
 {
     std::lock_guard lock(m_mutex);
