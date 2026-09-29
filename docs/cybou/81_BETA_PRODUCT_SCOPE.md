@@ -16,6 +16,10 @@ The products share one local-first encrypted content substrate and recovery
 model. CYBOU keeps its own branding and user-owned trust model. Backup is a
 post-Beta application and is not required for Beta readiness.
 
+Mail and Files share the same finality-first content lifecycle: encrypted
+content is prepared locally, RootPublication is finalized, and only
+finalized-authorized chunks are admitted to distributed storage.
+
 ## Mail
 
 The initial release profile supports one recipient and UTF-8 text without

@@ -3,9 +3,10 @@
 Status: canonical Beta Files/Storage product UX contract. The Qt Files page
 now has a provisional single-installation path for upload, local encrypted
 filename indexing, search, details, and integrity-checked download. It does
-not implement the Beta catalog described here: encrypted manifest, finalized
-root updates, and the Beta durability contract remain unimplemented. The page must not describe local indexing or peer acknowledgments
-as a finalized Files catalog or as `Protected`.
+not implement the Beta catalog described here: the encrypted Files catalog,
+finalized RootPublication of that catalog, and the Beta durability contract
+remain unimplemented. The page must not describe local indexing or peer
+acknowledgments as a finalized Files catalog or as `Protected`.
 
 This document defines how CYBOU exposes encrypted file storage to ordinary
 users. Google Drive is the interaction reference for familiar file
@@ -17,8 +18,38 @@ there is no separate post-Beta Drive product. Private catalogs and content
 publication use the shared encrypted chunk substrate described in
 `ROOT_PUBLICATION.md` and `ENCRYPTED_CHUNK_TREE.md`.
 
-The user manages files and folders. The user does not manage shards, provider
+The user manages files and folders. The user does not manage chunks, provider
 nodes, repair queues, proofs, leases, or replication topology.
+
+## 0. Content lifecycle (finality first)
+
+Files uses the same finality-first lifecycle as Mail (`82_MAIL_UI_UX.md` §0):
+
+```text
+file selected
+-> chunk/encrypt locally
+-> private Files catalog/root prepared locally
+-> RootPublication finalized by PoA
+-> finalized-authorized chunks uploaded to storage providers
+-> durability threshold reached
+-> Files item becomes Protected
+```
+
+There is no remote upload of unfinalized content. Until the RootPublication is
+finalized, ciphertext chunks remain local staging only; providers accept only
+chunks with a valid finalized-publication admission proof.
+
+Status terms are distinct and must never share one indicator:
+
+```text
+Finalized    = the RootPublication is part of canonical PoA history
+Authorized   = its ChunkIDs are admitted for storage by that finalized publication
+Available    = the chunks can actually be retrieved from the network
+Protected    = the product durability threshold has been reached
+Retrievable  = this client has fetched and verified the content
+```
+
+`Finalized` is not `Protected`; finality only authorizes storage admission.
 
 See also:
 
@@ -35,7 +66,7 @@ A Beta user should be able to:
 ```text
 open Files
 -> drag a file/folder into CYBOU
--> see upload/protection progress
+-> see Preparing / Waiting for confirmation / Securing / Protected
 -> close/restart CYBOU
 -> see the file still present
 -> download and open it
@@ -54,7 +85,8 @@ receive encrypted attachment
 -> attachment appears immediately as a Files item
 ```
 
-where the backend can safely reuse the already-protected Storage object.
+reusing existing protected content/chunks when authorization and retention
+semantics permit.
 
 ## 2. Interaction reference
 
@@ -91,7 +123,7 @@ Shared with me
 Shared by me
 ```
 
-The target share principal is a `.cybou` AccountID. A grant wraps the object key
+The target share principal is a `.cybou` AccountID. A grant wraps the content key
 to that account's current Identity KEM capability and binds READ or WRITE
 permission. READ is the first share mode; WRITE requires a separately reviewed
 Identity authorization and encrypted grant flow. No
@@ -143,7 +175,7 @@ Send by CYBOU Mail
 ```
 
 Sharing follows the AccountID-based grant model frozen in DEC-194. The target
-permission is visible in user language; a grantee receives the object key via
+permission is visible in user language; a grantee receives the content key via
 their current Identity KEM capability. Anonymous links are a later optional
 feature and are not the security foundation.
 
@@ -152,8 +184,9 @@ feature and are not the security foundation.
 Folders are a user-facing organization abstraction. They must not force a
 central plaintext directory into consensus or provider-visible metadata.
 
-The preferred direction is a private/encrypted manifest structure that maps
-human names and hierarchy to opaque Storage objects.
+Names and hierarchy live in the encrypted Files catalog, published as
+encrypted payload of a RootPublication, which maps human names to private
+content references.
 
 Provider-visible storage data must not reveal ordinary filenames or local
 folder paths. The owner's client must decrypt and display those names and
@@ -172,26 +205,33 @@ Internal work:
 
 ```text
 read locally
--> generate content/object key material
--> encrypt locally
--> chunk
--> upload opaque ciphertext
--> reach durability threshold
--> commit/update private Files manifest
+-> generate content key material
+-> encrypt/chunk locally (local staging only)
+-> prepare the updated private Files catalog/root locally
+-> submit one RootPublication and obtain PoA finality
+-> upload the finalized-authorized chunks
+-> reach the durability threshold
+-> Files item becomes Protected
 ```
 
-Normal UI states:
+Normal UI states (same model as Mail):
 
 ```text
-Preparing
-Uploading 34%
-Securing 2/3
-Protected
+Local                     = present only on this device
+Preparing                 = local encryption/chunking
+Waiting for confirmation  = RootPublication submitted, awaiting PoA finality
+Securing                  = finalized; authorized chunks spreading to storage (e.g. 2/3)
+Protected                 = durability threshold reached
+Temporarily unavailable   = Protected content currently cannot be retrieved; retrying
+Needs attention           = user action or explicit rejection
 ```
 
 `2/3` is an example presentation of a protocol-defined durability target, not
 a frozen replication parameter. If the protocol later uses erasure coding or a
 different durability model, the normal wording should remain outcome-oriented.
+
+The client retains local ciphertext until the item is Protected and resumes
+Waiting for confirmation or Securing after restart.
 
 ## 8. Durability semantics
 
@@ -204,7 +244,7 @@ Protected
 Advanced details may expose:
 
 ```text
-object identifier
+RootChunkID
 ciphertext size
 placement count / coding status
 last audit
@@ -213,8 +253,8 @@ lease/retention
 integrity commitment
 ```
 
-Do not call an object Protected until the Storage core reports the required
-minimum durability state.
+Do not call a file Protected until it is finalized and the Storage core reports
+the required minimum durability state.
 
 ## 9. Download flow
 
@@ -229,7 +269,7 @@ Ready
 
 Integrity verification precedes plaintext release to the destination path.
 
-If the object is temporarily unavailable:
+If the content is temporarily unavailable:
 
 ```text
 Temporarily unavailable — retrying
@@ -253,7 +293,7 @@ local/user-facing type icon
 ```
 
 Provider-visible data should be limited to what the Storage protocol requires
-for opaque object placement, integrity, lease, audit, and repair.
+for opaque chunk admission, placement, integrity, lease, audit, and repair.
 
 Do not intentionally expose:
 
@@ -270,9 +310,9 @@ plaintext hash usable for cross-user confirmation
 to Storage providers unless a future protocol explicitly requires and justifies
 it.
 
-## 11. Object identity
+## 11. Content identity
 
-The UI never asks users to work with object IDs.
+The UI never asks users to work with content or chunk identifiers.
 
 Normal:
 
@@ -283,13 +323,13 @@ report.pdf
 Advanced:
 
 ```text
-Object ID: ...
+RootChunkID: ...
 Integrity: verified
 ```
 
-Object identity should be based on the protected representation/commitment
-according to the Storage protocol so that predictable plaintext does not create
-an obvious provider-side confirmation oracle.
+ChunkIDs are BLAKE3 hashes of encrypted bytes, so predictable plaintext does not
+create an obvious provider-side confirmation oracle. The UI contract is built
+around files and protected content, not around RootChunkID.
 
 ## 12. Storage capacity
 
@@ -308,16 +348,12 @@ policy and is not the same thing as three physical replicas.
 
 ## 13. Mail integration
 
-Mail and Files are one product surface over the same protected object layer.
+Mail and Files are one product surface over the same finality-first encrypted
+content lifecycle.
 
-Compose:
-
-```text
-Attach file
--> Files/Storage upload/protection
--> attachment ready
--> Mail submission allowed
-```
+Compose attachments are prepared locally and published together with the
+message in one RootPublication (`82_MAIL_UI_UX.md` §9); there is no separate
+attachment upload before Mail finality.
 
 Reader:
 
@@ -326,13 +362,33 @@ Download
 Save to Files
 ```
 
-`Save to Files` creates an independent Files catalog reference to existing
-encrypted content when authorized. It reuses the content, ciphertext, and key;
-no second upload is required. The UI must not expose the underlying optimization.
+```text
+Mail attachment
+    ↓
+Save to Files
+    ↓
+new private Files catalog reference
+    ↓
+existing encrypted content may be reused
+```
 
-`Send by CYBOU Mail` attaches an existing Files object by placing its encrypted
-object descriptor and object key inside the E2E-protected message. It does not
-copy ciphertext when access and retention rules allow reuse.
+`Save to Files` creates an independent Files catalog reference to existing
+encrypted content when authorization and retention semantics permit. No
+download and re-upload of ciphertext is required, and removing the Mail message
+does not remove the Files item. The UI must not expose the underlying
+optimization.
+
+```text
+Files item
+    ↓
+Send by CYBOU Mail
+    ↓
+Mail private schema references existing protected content
+```
+
+`Send by CYBOU Mail` places a private content reference and content key inside
+the encrypted Mail root. It does not copy ciphertext when authorization and
+retention semantics permit reuse.
 
 ## 14. Recent
 
@@ -349,11 +405,11 @@ Do not require global publication of access history.
 
 ## 15. Version history
 
-A file revision is a new immutable encrypted object. The encrypted Files
+A file revision is new immutable encrypted content. The encrypted Files
 catalog links revisions and identifies the current version; consensus does not
 store a row per revision. Restoring an earlier revision changes the catalog
-pointer and retains the immutable object under Storage policy. Version history
-controls stay hidden until the manifest and retention behavior are implemented.
+pointer and retains the immutable content under Storage policy. Version history
+controls stay hidden until the catalog and retention behavior are implemented.
 
 ## 16. Starred
 
@@ -402,12 +458,12 @@ When offline, the Files page remains browsable from locally available metadata
 and cache.
 
 Actions that require network availability show an honest queued/offline state;
-they do not pretend the object has been protected remotely.
+they do not pretend the file has been protected remotely.
 
 Example:
 
 ```text
-Offline — upload will start when CYBOU reconnects
+Offline — will be secured when CYBOU reconnects
 ```
 
 Only introduce durable offline queues when the backend can persist and resume
@@ -418,9 +474,11 @@ them safely.
 Normal user vocabulary:
 
 ```text
-Protected
-Uploading
+Local
+Preparing
+Waiting for confirmation
 Securing
+Protected
 Repairing protection
 Temporarily unavailable
 Needs attention
@@ -434,7 +492,7 @@ placement set
 lease expirations
 audit results
 repair queue
-object/shard IDs
+ChunkIDs / RootChunkID
 transfer peers
 ```
 
@@ -499,12 +557,12 @@ A Beta candidate passes when a new user can, without Storage terminology:
 [ ] star/unstar it
 [ ] preview a file and inspect version history when available
 [ ] share a file with a `.cybou` identity when sharing is enabled
-[ ] send a Files object by CYBOU Mail without re-uploading it
+[ ] send a file by CYBOU Mail without re-uploading it
 [ ] move it to Trash and restore it
 [ ] save a received Mail attachment to Files
 [ ] understand Storage used/available
 [ ] find advanced durability details only when requested
 ```
 
-The user must never need to manually select providers, shards, replicas,
-leases, object IDs, proofs, or cryptographic algorithms.
+The user must never need to manually select providers, chunks, replicas,
+leases, chunk IDs, proofs, or cryptographic algorithms.

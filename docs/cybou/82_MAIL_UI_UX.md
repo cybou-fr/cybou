@@ -14,6 +14,45 @@ The normal user operates mail, not a blockchain, key exchange, validator set,
 or storage protocol. Technical evidence remains inspectable through Security
 Details and Advanced diagnostics.
 
+## 0. Content lifecycle (finality first)
+
+Every outgoing message, with or without attachments, follows one
+finality-first lifecycle shared with Files (`83_STORAGE_UI_UX.md`):
+
+```text
+local draft
+   ↓
+local encrypt/chunk
+   ↓
+RootPublication submission
+   ↓
+PoA finality
+   ↓
+finalized-authorized chunks → storage providers
+   ↓
+durability threshold
+   ↓
+Sent / Protected
+```
+
+Message text, recipients, attachment references, filenames, and the Mail schema
+are encrypted payload data inside one RootPublication. There is no Mail-specific
+consensus operation. No content is stored remotely before finality: until the
+RootPublication is finalized, all ciphertext chunks remain local staging only.
+
+Status terms are distinct and must never share one indicator:
+
+```text
+Finalized    = the RootPublication is part of canonical PoA history
+Authorized   = its ChunkIDs are admitted for storage by that finalized publication
+Available    = the chunks can actually be retrieved from the network
+Protected    = the product durability threshold has been reached
+Retrievable  = this client has fetched and verified the content
+```
+
+`Finalized` does not mean `Sent`. Finality only authorizes storage admission;
+the message is `Sent` when the required durability/availability is reached.
+
 The Beta interaction target includes conversation threads, unread/read state,
 local labels, reply/reply-all/forward, blocked senders, local search, and
 `.cybou` contact autocomplete. Keyboard shortcuts follow after the primary
@@ -37,9 +76,9 @@ open CYBOU
 -> compose to alice.cybou
 -> write text
 -> drag a PDF/photo into the message
--> wait until the attachment is protected
 -> press Send
--> close CYBOU
+-> see Preparing -> Waiting for confirmation -> Securing -> Sent
+-> close CYBOU after Sent
 
 Alice may be offline.
 
@@ -59,7 +98,7 @@ finality certificates
 block numbers
 protocol nonces
 KEM internals
-storage shard IDs
+storage chunk IDs
 replica placement
 provider endpoints
 ```
@@ -182,14 +221,16 @@ Unread
 Read
 Starred
 Draft
-Sending
+Preparing
 Waiting for confirmation
+Securing
 Sent
 Needs attention
 ```
 
-A pending outgoing message should remain visually distinct from a finalized
-Sent message.
+A pending outgoing message (Preparing, Waiting for confirmation, Securing)
+must remain visually distinct from a Sent message. A finalized message that is
+still Securing is not Sent.
 
 ## 7. Reader
 
@@ -213,16 +254,25 @@ Protected end to end  •  Post-quantum protected  •  Network-confirmed
 
 This line is secondary. It must not compete with the message itself.
 
-Clicking Security Details may reveal:
+Clicking Security Details shows product-level status:
+
+```text
+Identity authorization       Valid
+Network confirmation         Finalized
+Content authorization        Valid
+Content availability         Protected
+```
+
+Advanced details (not the ordinary UI) may additionally reveal:
 
 ```text
 resolved AccountID
-sender key/evidence status
-hybrid signature status
-Mail confidentiality suite
-finalized height
 OperationID
-historical authorization evidence
+finalized height
+sender authorization evidence (historical Identity key_epoch)
+PoA finality evidence
+RootChunkID
+Mail confidentiality suite
 ```
 
 ## 8. Compose
@@ -238,8 +288,8 @@ Subject: Project files
 Hello Alice,
 ...
 
-report.pdf      4.2 MB      Protected
-photo.jpg       8.1 MB      Securing 2/3
+report.pdf      4.2 MB      Encrypted locally
+photo.jpg       8.1 MB      Preparing 60%
 
                               [Send]
 ```
@@ -283,7 +333,8 @@ Do not silently downgrade to classical-only encryption.
 
 ## 9. Attachment flow
 
-Attachments are normal Mail UI objects backed by CYBOU encrypted storage.
+Attachments are ordinary Mail UI files backed by the shared encrypted chunk
+tree.
 
 User actions:
 
@@ -298,49 +349,48 @@ Internally:
 
 ```text
 read local file
--> encrypt locally
--> prepare protected content
--> store opaque encrypted chunks
--> reach the configured availability threshold
--> place the private attachment reference inside the encrypted message
--> enable Mail submission
+-> encrypt/chunk locally (local staging only)
+-> include the private attachment reference in the encrypted Mail root
+-> build one RootPublication for the message
+-> obtain PoA finality
+-> upload the finalized-authorized chunks to storage providers
+-> reach the durability threshold
 ```
 
-Normal UI should compress this into understandable phases:
+Before finality, attachment chunks exist only in local staging. The client
+never uploads ciphertext to providers ahead of a finalized RootPublication, and
+providers reject chunks without a finalized-publication admission proof.
+
+In Compose, attachment chips show only local preparation (`Preparing`,
+`Encrypted locally`). After Send, the whole message, including attachments,
+moves through one lifecycle (see §11). Replica/audit information belongs in
+details.
+
+### Send semantics
+
+Send is available once local preparation succeeds. The message and its
+attachments are one publication, so they are finalized together and cannot
+diverge:
 
 ```text
-Preparing...
-Uploading 34%
-Securing 2/3
-Protected
+Preparing
+-> Waiting for confirmation   (RootPublication submitted, awaiting PoA)
+-> Securing                   (finalized; authorized chunks spreading to storage)
+-> Sent                       (required durability reached)
 ```
-
-The exact replica/audit information belongs in details.
-
-### Send gate
-
-A message containing attachments must not enter the normal Send submission path
-until every required attachment has reached the protocol-defined minimum
-Storage durability state.
 
 Bad:
 
 ```text
-Mail finalized
-attachment upload failed afterwards
+Mail shown as Sent while attachment chunks are only finalized, not durable
 ```
 
-Required:
-
-```text
-attachment protected
--> Mail can be submitted
--> finality
-```
-
-If the user closes Compose during upload, the client must either preserve the
-draft and resumable attachment state or clearly cancel it. Never leave an
-orphaned UI state that says Sent.
+The sending client must retain the local ciphertext until durability is
+reached. If CYBOU is closed while Waiting for confirmation or Securing, the
+client resumes on restart from persisted local state; it never shows Sent
+before durability and never leaves an orphaned state that claims Sent.
+Closing Compose before Send preserves the draft and locally staged attachments
+or clearly discards them.
 
 ## 10. Mail/Files integration
 
@@ -351,20 +401,33 @@ Download
 Save to Files
 ```
 
-`Save to Files` should reuse the existing protected Storage object/reference
-when ownership, retention, and privacy rules permit. It should not download and
-re-upload identical ciphertext merely to move an attachment into the user's
-Files view.
+Target semantics:
 
-Save to Files creates an independent Files ownership/retention reference. Later
-deleting or expiring the Mail message must not make the saved Files item
-unavailable. If a safe shared-object reference cannot satisfy both services'
-privacy and retention rules, create a separate protected object.
+```text
+Mail attachment
+    ↓
+Save to Files
+    ↓
+new private Files catalog reference
+    ↓
+existing encrypted content may be reused
+```
 
-The implementation adds an independent entry to the recipient's encrypted
-Files catalog while keeping content references, filename, MIME type, and keys
-private from storage providers. Reuse is allowed only when the recipient has a
-valid Identity-based key grant and both retention references remain independent.
+`Save to Files` adds an independent entry to the recipient's encrypted Files
+catalog that references the existing protected content. It does not download and
+re-upload ciphertext. Reuse is allowed only when authorization and retention
+semantics permit: the recipient holds the content key from the Mail payload, and
+the Files retention reference is independent of the Mail message, so deleting
+or expiring the Mail message does not make the saved Files item unavailable.
+Where reuse is not permitted, the client prepares new protected content through
+the normal Files lifecycle.
+
+In the other direction, `Send by CYBOU Mail` from Files places a private
+reference to existing protected content inside the encrypted Mail root; no
+second upload of identical ciphertext is required.
+
+Content references, filenames, MIME types, and keys stay inside encrypted
+payloads and are never visible to storage providers.
 
 ## 11. Sending state machine
 
@@ -373,17 +436,25 @@ Normal product states:
 ```text
 Draft
 Preparing
-Securing attachments
-Sending
 Waiting for confirmation
+Securing
 Sent
 Needs attention
+```
+
+Meaning:
+
+```text
+Preparing                = local encryption/chunking; nothing published
+Waiting for confirmation = RootPublication submitted, awaiting PoA finality
+Securing                 = publication finalized; authorized chunks spreading to storage
+Sent                     = required durability/availability threshold reached
 ```
 
 Core/network distinctions must be mapped honestly:
 
 ```text
-operation accepted/pending
+operation submitted/pending
     -> Waiting for confirmation
 
 delivery uncertain
@@ -394,7 +465,13 @@ explicit protocol rejection
     -> Needs attention + actionable reason
 
 finalized
+    -> Securing (not Sent)
+
+durability threshold reached
     -> Sent
+
+durability not reached after retries
+    -> Needs attention (content is finalized; client keeps retrying from local ciphertext)
 ```
 
 A retry after `delivery uncertain` must reconcile the original OperationID and
@@ -443,7 +520,7 @@ If some providers are unavailable but repair/retry is in progress:
 Temporarily unavailable — retrying
 ```
 
-Do not expose storage-node addresses or shard IDs in the normal message view.
+Do not expose storage-node addresses or chunk IDs in the normal message view.
 
 ## 14. Drafts
 
@@ -503,7 +580,7 @@ Advanced details may name:
 Ed25519 + ML-DSA
 X25519 + ML-KEM
 AEAD profile
-finality evidence
+PoA finality evidence
 ```
 
 The UI must fail closed if the required hybrid profile is unavailable.
@@ -514,7 +591,8 @@ Map technical failures into actionable product categories:
 
 ```text
 Recipient unavailable for protected Mail
-Attachment could not be secured
+Attachment could not be prepared
+Message could not be secured — retrying
 CYBOU is offline
 Delivery status is uncertain — checking
 Waiting for network confirmation
@@ -559,9 +637,9 @@ A Beta candidate passes when a new user can, without technical guidance:
 [ ] resolve another user by name.cybou
 [ ] write and send a text message
 [ ] drag a PDF/photo into Compose
-[ ] understand attachment preparation/protection progress
-[ ] understand that Send is waiting when durability is not ready
-[ ] distinguish Sending / Checking / Sent / Needs attention
+[ ] understand attachment preparation progress
+[ ] understand that a finalized message is still Securing until durability
+[ ] distinguish Preparing / Waiting for confirmation / Securing / Sent / Needs attention
 [ ] go offline and later recover verified Inbox state
 [ ] download/decrypt an attachment after being offline during send
 [ ] save a received attachment to Files

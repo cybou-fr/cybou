@@ -56,7 +56,43 @@ products:
       revocation_cannot_erase_copied_keys_or_plaintext: true
   backup:
     release_stage: post_Beta
+content_lifecycle:
+  - local
+  - preparing
+  - waiting_for_confirmation
+  - securing
+  - protected
+content_exception_states:
+  - temporarily_unavailable
+  - needs_attention
+mail_send_states:
+  - draft
+  - preparing
+  - waiting_for_confirmation
+  - securing
+  - sent
+  - needs_attention
+download_states:
+  - downloading
+  - verifying
+  - decrypting
+  - ready
+publication_order:
+  - prepare_locally
+  - finalize_root_publication
+  - admit_chunks_to_storage
+  - reach_durability
+unfinalized_remote_storage: false
+finalized_implies_sent_or_protected: false
+mail_attachments_published_with_message_root: true
+mail_files_reuse_existing_protected_content: when_authorization_and_retention_permit
+status_terms:
+  finalized: root_publication_in_canonical_PoA_history
+  authorized: chunk_ids_admitted_by_finalized_publication
+  available: chunks_retrievable_from_network
+  protected: product_durability_threshold_reached
+  retrievable: current_client_fetched_and_verified_content
 ux_states:
-  distinguish_finalized_available_and_retrievable: true
+  distinguish_finalized_authorized_available_protected_and_retrievable: true
   preserve_drafts_and_local_work_when_offline: true
   explain_retryable_and_permanent_failures: true
