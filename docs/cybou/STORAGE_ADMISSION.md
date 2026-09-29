@@ -44,6 +44,12 @@ only after verifying:
 
 GET is content-addressed by ChunkID.
 
+For placement recovery, providers may return the stored authorization proof
+for a `(finalized OperationID, ChunkID)` pair only while the admitted blob is
+present and its proof verifies against canonical finalized history. Clients
+use verified leaf indices to reconstruct publication order; provider proof
+metadata remains operational and is not consensus state.
+
 Unfinalized chunks are rejected remotely.
 
 ## Durability targets

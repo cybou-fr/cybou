@@ -176,6 +176,8 @@ public:
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
         const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetFinalizedChunk(const ChunkId& chunk_id) const;
+    std::optional<ChunkAuthorizationProof> GetFinalizedChunkAuthorizationProof(
+        const uint256& publication_operation_id, const ChunkId& chunk_id) const;
     bool HasFinalizedChunk(const ChunkId& chunk_id) const;
     /** Connected CYP2 peers that advertise the ciphertext storage service. */
     std::vector<std::pair<std::string, uint16_t>> StoragePeerEndpoints() const;
@@ -184,6 +186,9 @@ public:
         std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetChunkFromStoragePeer(const std::string& address,
         uint16_t port, const ChunkId& chunk_id);
+    std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStoragePeer(
+        const std::string& address, uint16_t port, const uint256& publication_operation_id,
+        const ChunkId& chunk_id);
 
     /** Remote operation submit endpoint */
     void SetSubmitEndpoint(const std::string& host, uint16_t port);

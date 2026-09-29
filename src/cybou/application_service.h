@@ -141,6 +141,8 @@ private:
     bool ProcessBlock(std::uint64_t height, std::uint64_t my_key_epoch);
     bool ProcessPublication(std::uint64_t height, std::uint32_t index, const uint256& operation_id,
         const AuthorizedRootPublication& publication, std::uint64_t my_key_epoch);
+    void RecoverOwnPublications(std::uint32_t max_publications);
+    bool RecoverPlacement(const uint256& operation_id, Accessible& accessible);
     AccessibleRootState Index(const uint256& operation_id, Accessible& accessible);
     bool ApplyMail(const uint256& operation_id, const Accessible& accessible, const MailMessage& message);
     bool ApplyFiles(const uint256& operation_id, const Accessible& accessible, const FilesMutationBatch& batch);

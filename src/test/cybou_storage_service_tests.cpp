@@ -271,9 +271,18 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
         cybou::StorageService storage{*fixture.runtime, transport, application_db};
         const auto result = storage.Secure(content.operation_id, content.leaves);
         BOOST_CHECK(result.state == cybou::DurabilityState::PROTECTED);
+        const auto publication = fixture.runtime->FindFinalizedRootPublication(content.operation_id);
+        BOOST_REQUIRE(publication);
         for (const auto& leaf : content.leaves) {
             BOOST_CHECK(providers[0]->HasFinalizedChunk(leaf));
             BOOST_CHECK(providers[1]->HasFinalizedChunk(leaf));
+            std::optional<cybou::ChunkAuthorizationProof> proof;
+            for (const auto& endpoint : endpoints) {
+                proof = transport.GetProof({endpoint.first, endpoint.second}, content.operation_id, leaf);
+                if (proof) break;
+            }
+            BOOST_REQUIRE(proof);
+            BOOST_CHECK(cybou::VerifyChunkAuthorizationProof(*publication, leaf, *proof));
         }
         const auto original = fixture.runtime->GetChunkBlobStore().Get(content.leaves.back());
         BOOST_REQUIRE(original);

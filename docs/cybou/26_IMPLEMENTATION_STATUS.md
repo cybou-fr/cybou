@@ -28,6 +28,9 @@ Current `main` implements the canonical low-level substrate:
 - StorageService: post-finality placement on distinct CSPRNG-selected CYP2
   storage peers to the development target of 2 remote replicas (local copy
   excluded), GET/BLAKE3 audit, repair and verified remote retrieval;
+- placement recovery: rebuilds the ordered authorized-chunk set from
+  provider-held verified proofs after Application DB loss, including private
+  Mail attachments and Files content while excluding reused trees;
 - ApplicationService: checkpointed, idempotent scan of finalized
   RootPublications, capsule opening inside the key store, fetch through
   StorageService, Mail Inbox/Sent and last-canonical-mutation-wins Files
@@ -35,6 +38,12 @@ Current `main` implements the canonical low-level substrate:
 - Identity RecoveryBridge: verified before IdentityRotate, readable by the
   next KEM key, and imported on restore only for seeds that reproduce the
   canonical historical KEM package, followed by a rescan;
+- Qt desktop adapter: live Mail and Files actions, attachments and protected
+  Mail/Files content reuse; per-unlocked-Identity worker owns the three
+  application services, periodically scans and advances publication
+  durability without blocking the GUI thread;
+- desktop Identity rotation: RecoveryBridge is published and reaches remote
+  durability, then verified with the replacement phrase before IdentityRotate;
 - core acceptance tests for offline Mail delivery, Sent/Files rebuild after
   Application DB loss, exact file download, Mail/Files content reuse and
   pre-rotation content on a clean machine with the new mnemonic only;
@@ -42,13 +51,13 @@ Current `main` implements the canonical low-level substrate:
 - removal of legacy BFT, ValidatorSet, MailTx and indexed StorageObject runtime
   paths.
 
-## Designed next, not yet implemented as complete product paths
+## Remaining product and operational work
 
-- running the three services from the desktop (Qt core adapter) and their
-  periodic scan/durability scheduling;
-- desktop rotation flow calling PublishRecoveryBridge/VerifyRecoveryBridge
-  before RotateIdentitySync;
-- durability soak with multiple provider daemons;
+- durability soak with multiple provider daemons, including provider loss,
+  restart, audit and repair;
+- complete and verify the Beta desktop acceptance matrix on clean installations
+  and across supported Windows sizes, DPI settings and accessibility paths;
+- persist drafts across desktop restarts;
 - basic Identity Authority (Age, capped Activity, SystemContribution);
 - Authority-derived generic resource budgets.
 

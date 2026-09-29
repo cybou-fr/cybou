@@ -87,7 +87,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         return false;
     }
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
-    if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE;
+    if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
     if (status.is_authority) {
         caps |= CAP_ACCEPT_OPERATIONS;
     }
@@ -418,6 +418,15 @@ std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
     auto* session = FindStorageSession(address, port);
     if (!session) return std::nullopt;
     return session->GetChunkById(chunk_id);
+}
+
+std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
+    const std::string& address, const uint16_t port, const uint256& publication_operation_id,
+    const ChunkId& chunk_id)
+{
+    auto* session = FindStorageSession(address, port);
+    if (!session) return std::nullopt;
+    return session->GetChunkAuthorizationProof(publication_operation_id, chunk_id);
 }
 
 PeerSession* PeerManager::FindStorageSession(

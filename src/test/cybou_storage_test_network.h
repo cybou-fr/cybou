@@ -79,6 +79,13 @@ public:
         return bytes;
     }
 
+    std::optional<cybou::ChunkAuthorizationProof> GetProof(const cybou::StorageEndpoint& provider,
+        const uint256& operation_id, const cybou::ChunkId& chunk_id) override
+    {
+        if (offline.contains(provider)) return std::nullopt;
+        return m_providers.at(provider)->GetFinalizedChunkAuthorizationProof(operation_id, chunk_id);
+    }
+
     bool Holds(const cybou::StorageEndpoint& provider, const cybou::ChunkId& id) const
     {
         return m_providers.at(provider)->HasFinalizedChunk(id);

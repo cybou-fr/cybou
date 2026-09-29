@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <set>
 
 namespace cybou {
 namespace {
@@ -119,6 +120,13 @@ std::optional<std::vector<unsigned char>> RuntimeStorageTransport::Get(const Sto
     const ChunkId& chunk_id)
 {
     return m_runtime.GetChunkFromStoragePeer(provider.address, provider.port, chunk_id);
+}
+
+std::optional<ChunkAuthorizationProof> RuntimeStorageTransport::GetProof(const StorageEndpoint& provider,
+    const uint256& publication_operation_id, const ChunkId& chunk_id)
+{
+    return m_runtime.GetChunkAuthorizationProofFromStoragePeer(provider.address, provider.port,
+        publication_operation_id, chunk_id);
 }
 
 /* ---- StorageService ---- */
@@ -239,6 +247,78 @@ PublicationDurability StorageService::Secure(const uint256& operation_id, const 
         }
     }
     return Place(*placement);
+}
+
+std::optional<ChunkAuthorizationProof> StorageService::GetAuthorizationProof(
+    const uint256& operation_id, const ChunkId& chunk_id)
+{
+    const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
+    if (!publication) return std::nullopt;
+    for (const auto& provider : m_transport.Providers()) {
+        const auto proof = m_transport.GetProof(provider, operation_id, chunk_id);
+        if (proof && VerifyChunkAuthorizationProof(*publication, chunk_id, *proof)) return proof;
+    }
+    return std::nullopt;
+}
+
+PublicationDurability StorageService::Rebuild(const uint256& operation_id,
+    const std::span<const ChunkId> candidate_chunks)
+{
+    std::lock_guard lock{m_mutex};
+    if (!m_application_db.IsUnlocked()) {
+        return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Application DB is locked"};
+    }
+    const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
+    if (!publication) return {.state = DurabilityState::SECURING, .error = "Publication is not finalized yet"};
+    if (publication->chunk_count == 0 || publication->chunk_count > MAX_PLACEMENT_LEAVES ||
+        candidate_chunks.empty() || candidate_chunks.size() > MAX_PLACEMENT_LEAVES) {
+        return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Candidate chunk set is invalid"};
+    }
+
+    Placement placement{.operation_id = operation_id,
+        .leaves = std::vector<ChunkId>(publication->chunk_count),
+        .replicas = std::vector<std::vector<StorageEndpoint>>(publication->chunk_count)};
+    std::vector<bool> found(publication->chunk_count, false);
+    std::set<ChunkId> unique;
+    const auto providers = m_transport.Providers();
+    for (const auto& chunk_id : candidate_chunks) {
+        if (chunk_id == ChunkId{} || !unique.insert(chunk_id).second) continue;
+        for (const auto& provider : providers) {
+            const auto proof = m_transport.GetProof(provider, operation_id, chunk_id);
+            if (!proof || !VerifyChunkAuthorizationProof(*publication, chunk_id, *proof)) continue;
+            if (proof->leaf_index >= placement.leaves.size()) {
+                return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Provider returned an invalid leaf index"};
+            }
+            const auto index = proof->leaf_index;
+            if (found[index] && placement.leaves[index] != chunk_id) {
+                return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Providers disagree on publication leaves"};
+            }
+            placement.leaves[index] = chunk_id;
+            found[index] = true;
+            if (std::find(placement.replicas[index].begin(), placement.replicas[index].end(), provider) ==
+                placement.replicas[index].end()) {
+                placement.replicas[index].push_back(provider);
+            }
+        }
+    }
+    if (std::find(found.begin(), found.end(), false) != found.end()) {
+        return {.state = DurabilityState::SECURING, .chunk_count = publication->chunk_count,
+            .error = "Some finalized chunk proofs are not available from reachable providers"};
+    }
+    ChunkAuthorizationAccumulator accumulator;
+    for (const auto& leaf : placement.leaves) {
+        if (!accumulator.Add({leaf})) {
+            return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Rebuilt chunk order is invalid"};
+        }
+    }
+    const auto commitment = accumulator.Finish();
+    if (!commitment || commitment->root != publication->chunk_authorization_root) {
+        return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Rebuilt leaves do not match finalized authorization"};
+    }
+    if (!Save(placement)) {
+        return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save rebuilt placement state"};
+    }
+    return Place(placement);
 }
 
 PublicationDurability StorageService::Resume(const uint256& operation_id)

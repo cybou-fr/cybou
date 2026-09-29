@@ -43,6 +43,8 @@ public:
         std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof) = 0;
     virtual std::optional<std::vector<unsigned char>> Get(const StorageEndpoint& provider,
         const ChunkId& chunk_id) = 0;
+    virtual std::optional<ChunkAuthorizationProof> GetProof(const StorageEndpoint& provider,
+        const uint256& publication_operation_id, const ChunkId& chunk_id) = 0;
 };
 
 /** CYP2 PUT_AUTHORIZED_CHUNK / GET_CHUNK_BY_ID over the runtime's connected peers. */
@@ -55,6 +57,8 @@ public:
         std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof) override;
     std::optional<std::vector<unsigned char>> Get(const StorageEndpoint& provider,
         const ChunkId& chunk_id) override;
+    std::optional<ChunkAuthorizationProof> GetProof(const StorageEndpoint& provider,
+        const uint256& publication_operation_id, const ChunkId& chunk_id) override;
 
 private:
     CybouNodeRuntime& m_runtime;
@@ -98,6 +102,12 @@ public:
     /** Places every chunk of a finalized publication toward the remote target.
      * Idempotent: call again to retry. leaves are the ChunkIDs in authorization order. */
     PublicationDurability Secure(const uint256& publication_operation_id, std::span<const ChunkId> leaves);
+    /** Rebuilds the exact leaf order from provider-held proofs for candidate chunks. */
+    PublicationDurability Rebuild(const uint256& publication_operation_id,
+        std::span<const ChunkId> candidate_chunks);
+    /** Checks whether a candidate chunk is a leaf of this finalized publication. */
+    std::optional<ChunkAuthorizationProof> GetAuthorizationProof(
+        const uint256& publication_operation_id, const ChunkId& chunk_id);
     /** Resumes placement for a publication already known to this service. */
     PublicationDurability Resume(const uint256& publication_operation_id);
     /** Re-reads every recorded replica, drops missing/corrupt ones and repairs to target. */

@@ -292,6 +292,29 @@ bool ReadTreeNode(
     return true;
 }
 
+bool EnumerateTreeNode(const std::span<const unsigned char, 32> network,
+    const std::span<const unsigned char, 32> key, const ChildRef& node,
+    const EncryptedChunkLookup& lookup, const EncryptedTreeVisit& visit,
+    const std::size_t depth, std::unordered_set<ChunkId, ChunkIdHash>& seen)
+{
+    if (depth >= ENCRYPTED_TREE_MAX_DEPTH || !seen.insert(node.id).second || !visit(node.id)) return false;
+    if (node.kind == DATA_KIND) return true;
+    const auto stored = lookup(node.id);
+    if (!stored) return false;
+    auto plaintext = DecryptChunk(network, key, node.id, *stored);
+    if (!plaintext) return false;
+    std::uint64_t child_kind{0};
+    const auto children = ParseMetadata(*plaintext, INDEX_KIND, child_kind);
+    if (!plaintext->empty()) OPENSSL_cleanse(plaintext->data(), plaintext->size());
+    if (!children) return false;
+    for (const auto& child : *children) {
+        auto typed = child;
+        typed.kind = child_kind;
+        if (!EnumerateTreeNode(network, key, typed, lookup, visit, depth + 1, seen)) return false;
+    }
+    return true;
+}
+
 } // namespace
 
 std::optional<EncryptedTreeSummary> BuildEncryptedChunkTree(
@@ -384,6 +407,34 @@ std::optional<std::uint64_t> FetchEncryptedChunkTree(
         return written;
     } catch (...) {
         return std::nullopt;
+    }
+}
+
+bool EnumerateEncryptedTreeChunks(const std::span<const unsigned char, 32> network_id,
+    const std::span<const unsigned char, 32> content_key, const ChunkId& root_chunk_id,
+    const EncryptedChunkLookup& lookup, const EncryptedTreeVisit& visit)
+{
+    if (!lookup || !visit || root_chunk_id == ChunkId{} || !visit(root_chunk_id)) return false;
+    try {
+        const auto stored_root = lookup(root_chunk_id);
+        if (!stored_root) return false;
+        auto plaintext = DecryptChunk(network_id, content_key, root_chunk_id, *stored_root);
+        if (!plaintext) return false;
+        std::uint64_t child_kind{0};
+        std::vector<unsigned char> private_metadata;
+        const auto children = ParseMetadata(*plaintext, ROOT_KIND, child_kind, &private_metadata);
+        if (!plaintext->empty()) OPENSSL_cleanse(plaintext->data(), plaintext->size());
+        if (!private_metadata.empty()) OPENSSL_cleanse(private_metadata.data(), private_metadata.size());
+        if (!children) return false;
+        std::unordered_set<ChunkId, ChunkIdHash> seen{root_chunk_id};
+        for (const auto& child : *children) {
+            auto typed = child;
+            typed.kind = child_kind;
+            if (!EnumerateTreeNode(network_id, content_key, typed, lookup, visit, 1, seen)) return false;
+        }
+        return true;
+    } catch (...) {
+        return false;
     }
 }
 

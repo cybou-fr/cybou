@@ -62,6 +62,11 @@ std::optional<std::uint64_t> FetchEncryptedChunkTree(
     const EncryptedTreeSink& sink,
     std::uint64_t max_output_bytes);
 
+/** Enumerates a tree's root/index/data ChunkIDs without downloading DATA chunks. */
+bool EnumerateEncryptedTreeChunks(std::span<const unsigned char, 32> network_id,
+    std::span<const unsigned char, 32> content_key, const ChunkId& root_chunk_id,
+    const EncryptedChunkLookup& lookup, const EncryptedTreeVisit& visit);
+
 } // namespace cybou
 
 #endif // CYBOU_ENCRYPTED_CHUNK_TREE_H

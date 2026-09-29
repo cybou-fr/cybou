@@ -30,6 +30,9 @@ constexpr std::string_view MAIL_INDEX_KEY{"mail/index"};
 constexpr std::string_view FILES_INDEX_KEY{"files/index"};
 constexpr std::string_view BRIDGE_INDEX_KEY{"recovery/index"};
 constexpr std::string_view RECOVERED_EPOCHS_KEY{"recovery/recovered-epochs"};
+constexpr std::string_view OWN_PUBLICATIONS_KEY{"storage/owned-publications"};
+constexpr std::string_view STORAGE_RECOVERY_INDEX_VERSION_KEY{"storage/recovery-index-version"};
+constexpr std::uint8_t STORAGE_RECOVERY_INDEX_VERSION{1};
 constexpr std::string_view DRAFT_INDEX_KEY{"mail/drafts"};
 constexpr std::array<unsigned char, 5> DRAFT_MAGIC{'C', 'Y', 'D', 'R', 1};
 constexpr std::size_t MAX_DRAFT_TEXT{1U << 20};
@@ -364,6 +367,18 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
     if (!m_application_db.IsUnlocked()) return progress;
     progress.finalized_height = m_runtime.GetFinalizedHeight().value_or(0);
     std::uint64_t height = Checkpoint();
+    const auto index_version = m_application_db.Get(STORAGE_RECOVERY_INDEX_VERSION_KEY);
+    if (!index_version || *index_version != std::vector<unsigned char>{STORAGE_RECOVERY_INDEX_VERSION}) {
+        // Backfill the own-publication index for databases created before
+        // placement reconstruction was introduced. Processing is idempotent.
+        Writer version;
+        version.U8(STORAGE_RECOVERY_INDEX_VERSION);
+        Writer checkpoint;
+        checkpoint.U64(0);
+        if (!m_application_db.Put(SCAN_KEY, checkpoint.Out()) ||
+            !m_application_db.Put(STORAGE_RECOVERY_INDEX_VERSION_KEY, version.Out())) return progress;
+        height = 0;
+    }
     // Retry roots that were unavailable earlier; later blocks never wait for them.
     for (const auto& operation_id : ReadIds<uint256>(m_application_db, UNAVAILABLE_KEY)) {
         auto accessible = LoadAccessible(operation_id);
@@ -404,6 +419,7 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
         m_application_db.Put(SCAN_KEY, out.Out());
     }
     progress.scanned_height = Checkpoint();
+    RecoverOwnPublications(4);
     progress.unavailable_roots = static_cast<std::uint32_t>(ReadIds<uint256>(m_application_db, UNAVAILABLE_KEY).size());
     return progress;
 }
@@ -435,7 +451,13 @@ bool ApplicationService::ProcessPublication(const std::uint64_t height, const st
     const uint256& operation_id, const AuthorizedRootPublication& publication, const std::uint64_t my_key_epoch)
 {
     // Idempotent: an already recorded publication is never processed twice.
-    if (m_application_db.Has(AccessibleKey(operation_id))) return true;
+    // Also backfill the owner index for Application DBs from earlier versions.
+    if (m_application_db.Has(AccessibleKey(operation_id))) {
+        const auto accessible = LoadAccessible(operation_id);
+        const auto me = m_identity.GetAccountId();
+        return !accessible || !me || accessible->sender != *me ||
+            AddId(m_application_db, OWN_PUBLICATIONS_KEY, operation_id);
+    }
     const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32};
     const auto& authorization = publication.authorization;
     for (const auto& capsule : publication.publication.recipient_capsules) {
@@ -454,11 +476,95 @@ bool ApplicationService::ProcessPublication(const std::uint64_t height, const st
         crypto::CleanseMemory(key->data(), key->size());
         // Positive record first, so a crash before indexing resumes as a retry.
         if (!SaveAccessible(operation_id, accessible)) return false;
+        if (accessible.sender == *m_identity.GetAccountId() &&
+            !AddId(m_application_db, OWN_PUBLICATIONS_KEY, operation_id)) return false;
         Index(operation_id, accessible);
         return true;
     }
     // Not for this Identity: nothing is recorded.
     return true;
+}
+
+void ApplicationService::RecoverOwnPublications(const std::uint32_t max_publications)
+{
+    std::uint32_t attempted{0};
+    const auto me = m_identity.GetAccountId();
+    if (!me) return;
+    for (const auto& operation_id : ReadIds<uint256>(m_application_db, OWN_PUBLICATIONS_KEY)) {
+        const auto durability = m_storage.GetDurability(operation_id);
+        if (durability && durability->state == DurabilityState::PROTECTED) continue;
+        if (attempted >= max_publications) break;
+        auto accessible = LoadAccessible(operation_id);
+        if (!accessible || accessible->sender != *me) continue;
+        ++attempted;
+        RecoverPlacement(operation_id, *accessible);
+    }
+}
+
+bool ApplicationService::RecoverPlacement(const uint256& operation_id, Accessible& accessible)
+{
+    const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
+    if (!publication || publication->chunk_count == 0 || publication->chunk_count > (1U << 20)) return false;
+    const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32};
+    std::vector<unsigned char> metadata;
+    bool duplicate{false};
+    std::set<ChunkId> candidates;
+    const auto collect = [&](const ChunkId& id) {
+        if (!candidates.insert(id).second) duplicate = true;
+        return candidates.size() <= publication->chunk_count && !duplicate;
+    };
+    const auto main = FetchEncryptedChunkTree(network, accessible.content_key, accessible.root_chunk_id,
+        [&](const ChunkId& id) { return m_storage.Fetch(id); },
+        [&](std::span<const unsigned char> cbor) {
+            metadata.assign(cbor.begin(), cbor.end());
+            return true;
+        },
+        [](const ChunkId&) { return true; },
+        [](std::span<const unsigned char> data) { return data.empty(); }, 0);
+    if (!main) {
+        crypto::CleanseMemory(metadata.data(), metadata.size());
+        return false;
+    }
+    if (!EnumerateEncryptedTreeChunks(network, accessible.content_key, accessible.root_chunk_id,
+            [&](const ChunkId& id) { return m_storage.Fetch(id); }, collect)) {
+        crypto::CleanseMemory(metadata.data(), metadata.size());
+        return false;
+    }
+    auto document = DecodePrivateApplicationDocument(metadata);
+    crypto::CleanseMemory(metadata.data(), metadata.size());
+    if (!document) return false;
+
+    const auto process_child = [&](const ChunkId& root, ContentKey& key) {
+        bool ok{true};
+        // Reused protected content is not part of this publication. Its root
+        // has no admission proof under this operation ID.
+        if (m_storage.GetAuthorizationProof(operation_id, root)) {
+            ok = EnumerateEncryptedTreeChunks(network, key, root,
+                [&](const ChunkId& id) { return m_storage.Fetch(id); }, collect);
+        }
+        crypto::CleanseMemory(key.data(), key.size());
+        return ok;
+    };
+    bool children_ok{true};
+    if (std::holds_alternative<MailMessage>(*document)) {
+        for (auto& attachment : std::get<MailMessage>(*document).attachments) {
+            children_ok = process_child(attachment.root_chunk_id, attachment.content_key) && children_ok;
+        }
+    } else if (std::holds_alternative<FilesMutationBatch>(*document)) {
+        for (auto& mutation : std::get<FilesMutationBatch>(*document).mutations) {
+            if (mutation.kind == FileMutationKind::UPSERT_ITEM && mutation.item &&
+                mutation.item->root_chunk_id && mutation.item->content_key) {
+                children_ok = process_child(*mutation.item->root_chunk_id, *mutation.item->content_key) && children_ok;
+            }
+        }
+    } else {
+        auto& bridge = std::get<IdentityRecoveryBridge>(*document);
+        for (auto& seed : bridge.historical_seeds) crypto::CleanseMemory(seed.seed.data(), seed.seed.size());
+    }
+    if (!children_ok) return false;
+    std::vector<ChunkId> ordered_candidates(candidates.begin(), candidates.end());
+    const auto recovered = m_storage.Rebuild(operation_id, ordered_candidates);
+    return recovered.state == DurabilityState::PROTECTED;
 }
 
 AccessibleRootState ApplicationService::Index(const uint256& operation_id, Accessible& accessible)

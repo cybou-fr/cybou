@@ -58,6 +58,10 @@ public:
     ChunkAdmissionResult PutChunk(const uint256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
         const ChunkAuthorizationProof& proof, const FinalizedPublicationLookup& lookup);
+    /** Returns a verified stored proof only while the admitted blob is present. */
+    std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
+        const uint256& publication_operation_id, const ChunkId& chunk_id,
+        const FinalizedPublicationLookup& lookup) const;
     std::optional<std::vector<unsigned char>> GetChunk(const ChunkId& chunk_id) const;
     bool HasChunk(const ChunkId& chunk_id) const;
     std::uint64_t UsedBytes() const;

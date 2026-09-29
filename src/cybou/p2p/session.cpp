@@ -70,6 +70,8 @@ bool IsSupportedMessageType(const uint8_t type)
     case MessageType::CHUNK_ADMISSION_RESULT:
     case MessageType::GET_CHUNK_BY_ID:
     case MessageType::CHUNK_DATA:
+    case MessageType::GET_CHUNK_AUTHORIZATION_PROOF:
+    case MessageType::CHUNK_AUTHORIZATION_PROOF:
         return true;
     default:
         return false;
@@ -548,6 +550,34 @@ std::optional<std::vector<unsigned char>> PeerSession::GetChunkById(const ChunkI
     return ComputeChunkId(bytes) == chunk_id ? std::optional<std::vector<unsigned char>>{std::move(bytes)} : std::nullopt;
 }
 
+std::optional<ChunkAuthorizationProof> PeerSession::GetChunkAuthorizationProof(
+    const uint256& publication_operation_id, const ChunkId& chunk_id)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_STORAGE_PROOFS) || publication_operation_id.IsNull() ||
+        IsZeroChunkId(chunk_id)) return std::nullopt;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    std::vector<unsigned char> payload;
+    payload.insert(payload.end(), publication_operation_id.begin(), publication_operation_id.end());
+    payload.insert(payload.end(), chunk_id.begin(), chunk_id.end());
+    if (!Write(Frame{MessageType::GET_CHUNK_AUTHORIZATION_PROOF, payload}, deadline)) return std::nullopt;
+    const auto response = Read(deadline);
+    if (!response || response->type != MessageType::CHUNK_AUTHORIZATION_PROOF || response->payload.empty()) {
+        return std::nullopt;
+    }
+    if (response->payload[0] == 0) return response->payload.size() == 1
+        ? std::optional<ChunkAuthorizationProof>{} : std::nullopt;
+    if (response->payload[0] != 1 || response->payload.size() < 6) return std::nullopt;
+    const auto sibling_count = response->payload[5];
+    if (sibling_count > 32 || response->payload.size() != 6 + size_t{sibling_count} * 32) return std::nullopt;
+    ChunkAuthorizationProof proof;
+    proof.leaf_index = Read32(response->payload.data() + 1);
+    proof.siblings.resize(sibling_count);
+    for (size_t i = 0; i < sibling_count; ++i) {
+        std::copy_n(response->payload.begin() + 6 + i * 32, 32, proof.siblings[i].begin());
+    }
+    return proof;
+}
+
 bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
 {
     if (!m_peer) return false;
@@ -603,6 +633,21 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             }
         }
         return true;
+    }
+    if (request->type == MessageType::GET_CHUNK_AUTHORIZATION_PROOF) {
+        if (!(m_local_capabilities & CAP_STORAGE_PROOFS) || request->payload.size() != 64) return false;
+        uint256 publication_id;
+        std::copy_n(request->payload.begin(), 32, publication_id.begin());
+        ChunkId chunk_id{};
+        std::copy_n(request->payload.begin() + 32, 32, chunk_id.begin());
+        const auto proof = runtime.GetFinalizedChunkAuthorizationProof(publication_id, chunk_id);
+        std::vector<unsigned char> response{static_cast<unsigned char>(proof.has_value())};
+        if (proof) {
+            Put32(response, proof->leaf_index);
+            response.push_back(static_cast<unsigned char>(proof->siblings.size()));
+            for (const auto& sibling : proof->siblings) response.insert(response.end(), sibling.begin(), sibling.end());
+        }
+        return Write(Frame{MessageType::CHUNK_AUTHORIZATION_PROOF, response});
     }
     if (request->type == MessageType::GET_PEERS) {
         if (!(m_local_capabilities & CAP_PEER_DISCOVERY)) return false;

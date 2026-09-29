@@ -66,6 +66,22 @@ std::vector<unsigned char> EncodeProofMetadata(const ChunkAuthorizationProof& pr
     return encoded;
 }
 
+std::optional<ChunkAuthorizationProof> DecodeProofMetadata(const std::span<const unsigned char> encoded)
+{
+    if (encoded.size() < 8 || encoded.size() > 8 + 32 * 32) return std::nullopt;
+    const std::uint32_t sibling_count = (std::uint32_t{encoded[4]} << 24) |
+        (std::uint32_t{encoded[5]} << 16) | (std::uint32_t{encoded[6]} << 8) | encoded[7];
+    if (sibling_count > 32 || encoded.size() != 8 + sibling_count * 32) return std::nullopt;
+    ChunkAuthorizationProof proof;
+    proof.leaf_index = (std::uint32_t{encoded[0]} << 24) |
+        (std::uint32_t{encoded[1]} << 16) | (std::uint32_t{encoded[2]} << 8) | encoded[3];
+    proof.siblings.resize(sibling_count);
+    for (std::uint32_t i{0}; i < sibling_count; ++i) {
+        std::copy_n(encoded.begin() + 8 + i * 32, 32, proof.siblings[i].begin());
+    }
+    return proof;
+}
+
 } // namespace
 
 FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::filesystem::path& path,
@@ -198,6 +214,24 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const uint256& publication_op
         // could not be committed. It must never be removed as rollback.
         return {ChunkAdmissionStatus::STORAGE_ERROR};
     }
+}
+
+std::optional<ChunkAuthorizationProof> FinalizedChunkStore::GetChunkAuthorizationProof(
+    const uint256& publication_operation_id, const ChunkId& chunk_id,
+    const FinalizedPublicationLookup& lookup) const
+{
+    if (publication_operation_id.IsNull() || chunk_id == ChunkId{} || !lookup) return std::nullopt;
+    const auto publication = lookup(publication_operation_id);
+    if (!publication) return std::nullopt;
+    const auto bytes = GetChunk(chunk_id);
+    if (!bytes || ComputeChunkId(*bytes) != chunk_id) return std::nullopt;
+    std::vector<unsigned char> encoded;
+    if (!m_db->Read(PublicationChunkKey(m_namespace, publication_operation_id, chunk_id), encoded)) {
+        return std::nullopt;
+    }
+    const auto proof = DecodeProofMetadata(encoded);
+    if (!proof || !VerifyChunkAuthorizationProof(*publication, chunk_id, *proof)) return std::nullopt;
+    return proof;
 }
 
 std::optional<std::vector<unsigned char>> FinalizedChunkStore::GetChunk(const ChunkId& chunk_id) const

@@ -305,9 +305,33 @@ BOOST_AUTO_TEST_CASE(files_catalog_and_content_survive_rebuild)
     BOOST_CHECK(owner.application->Scan().Complete());
     check_catalog();
 
+    const auto upload_operation = owner.publication->GetJob("files-create")->operation_id;
+    const auto reuse_operation = owner.publication->GetJob("files-move")->operation_id;
+    BOOST_REQUIRE(owner.storage->GetDurability(upload_operation));
+    BOOST_CHECK(owner.storage->GetDurability(upload_operation)->state == cybou::DurabilityState::PROTECTED);
+
     // Restart with no local DB and no local chunks: rebuild, then download.
     owner.DestroyApplicationDb(fixture, network);
     BOOST_CHECK(owner.application->Scan().Complete());
+    const auto own_publications = owner.db->Get("storage/owned-publications");
+    BOOST_REQUIRE(own_publications);
+    BOOST_CHECK_GE(own_publications->size(), 32U);
+    const auto finalized_upload = fixture.runtime->FindFinalizedRootPublication(upload_operation);
+    BOOST_REQUIRE(finalized_upload);
+    const auto has_provider_proof = [&](const cybou::ChunkId& id) {
+        for (const auto& provider : network.Endpoints()) {
+            if (network.GetProof(provider, upload_operation, id)) return true;
+        }
+        return false;
+    };
+    BOOST_CHECK(has_provider_proof(finalized_upload->root_chunk_id));
+    BOOST_CHECK(has_provider_proof(*uploaded->item.root_chunk_id));
+    const auto rebuilt_durability = owner.storage->GetDurability(upload_operation);
+    BOOST_REQUIRE(rebuilt_durability);
+    BOOST_CHECK(rebuilt_durability->state == cybou::DurabilityState::PROTECTED);
+    const auto rebuilt_reuse_durability = owner.storage->GetDurability(reuse_operation);
+    BOOST_REQUIRE(rebuilt_reuse_durability);
+    BOOST_CHECK(rebuilt_reuse_durability->state == cybou::DurabilityState::PROTECTED);
     const auto item = check_catalog();
     // The content root is fetched from providers when not cached locally.
     EvictLocal(fixture, {*item.root_chunk_id});
