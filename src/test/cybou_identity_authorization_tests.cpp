@@ -3,9 +3,9 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/identity_authorization.h>
+#include <test/cybou_test_helpers.h>
 
 #include <boost/test/unit_test.hpp>
-#include <util/strencodings.h>
 
 #include <array>
 #include <vector>
@@ -38,7 +38,7 @@ BOOST_AUTO_TEST_CASE(canonical_hybrid_authorization_is_bounded_and_distinct)
     BOOST_CHECK(decoded->authorization_key.ml_dsa == device->ml_dsa);
     const auto commitment = cybou::ComputeIdentityAuthorizationCommitment(auth);
     BOOST_REQUIRE(commitment);
-    BOOST_CHECK_EQUAL(HexStr(*commitment), "ea14a9dce2dd3d5e7aa0051731a41335b7729759e19d05e5647c5421061cd9bb");
+    BOOST_CHECK_EQUAL(cybou::test::Hex(*commitment), "ea14a9dce2dd3d5e7aa0051731a41335b7729759e19d05e5647c5421061cd9bb");
     BOOST_CHECK(cybou::ComputeIdentityAuthorizationCommitment(*decoded) == commitment);
 
     auto altered = *bytes;

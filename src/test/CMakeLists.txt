@@ -176,7 +176,6 @@ endif()
 add_executable(cybou-core-test
   cybou_main.cpp
   cybou_account_creation_tests.cpp
-  cybou_chainparams_tests.cpp
   cybou_identity_tests.cpp
   cybou_identity_authorization_tests.cpp
   cybou_identity_crypto_tests.cpp

@@ -3,10 +3,10 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/identity_crypto.h>
+#include <test/cybou_test_helpers.h>
 
 #include <boost/test/unit_test.hpp>
 #include <openssl/sha.h>
-#include <util/strencodings.h>
 
 #include <array>
 #include <string_view>
@@ -30,7 +30,7 @@ BOOST_AUTO_TEST_CASE(hybrid_root_and_device_are_deterministic_and_both_required)
         const std::string_view expected = purpose == cybou::IdentityKeyPurpose::RECOVERY_ROOT
             ? "f06127c8c8fd51c9597f84d1a21751fa5fe616090d48af934b79f15a93bb7c60"
             : "6379ebbaf5a9bfe23d27a81c06821f76b93d8a8741b4b88fd42db415489a3ff2";
-        BOOST_CHECK_EQUAL(HexStr(digest), expected);
+        BOOST_CHECK_EQUAL(cybou::test::Hex(digest), expected);
         const auto signature = cybou::SignIdentityMessage(secret, purpose, message);
         BOOST_REQUIRE(signature);
         BOOST_CHECK(cybou::VerifyIdentityMessage(*key, *signature, message));
@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(recovery_key_id_binds_both_public_keys_and_suite)
     BOOST_REQUIRE(root);
     const auto id = cybou::ComputeRecoveryKeyId(*root);
     BOOST_REQUIRE(id);
-    BOOST_CHECK_EQUAL(HexStr(*id), "1ef6e05c9f58218d3bd21f3ae7aeb96ed028e92712d3b85af43d976fbf4a014c");
+    BOOST_CHECK_EQUAL(cybou::test::Hex(*id), "1ef6e05c9f58218d3bd21f3ae7aeb96ed028e92712d3b85af43d976fbf4a014c");
     BOOST_CHECK(cybou::ComputeRecoveryKeyId(*root) == id);
 
     auto altered_ed = *root;
