@@ -50,19 +50,28 @@ Current `main` implements the canonical low-level substrate:
 - core acceptance tests for offline Mail delivery, Sent/Files rebuild after
   Application DB loss, exact file download, Mail/Files content reuse and
   pre-rotation content on a clean machine with the new mnemonic only;
+- hardening: atomic Application DB batches (record + index, block +
+  checkpoint) with retry of unindexed publications; desktop session reopened
+  after a finalized IdentityRotate (drafts carried, projection rebuilt);
+  bounded periodic durability audit that returns Protected to Securing when
+  remote copies are lost; size-only provider startup with BLAKE3 on every
+  GET and self-healing re-PUT; private Files schema v2 (modified time, every
+  FILE has content, reserved Trash ID);
 - CYP2 verified block sync and content-addressed PUT/GET;
 - removal of legacy BFT, ValidatorSet, MailTx and indexed StorageObject runtime
   paths.
 
-## Remaining product and operational work
+## Current phase: soak, hardening and Beta preparation
 
-- durability soak with multiple provider daemons, including provider loss,
-  restart, audit and repair;
+- multi-process durability soak with real `cybou-node provide` daemons:
+  provider loss after ACK, restarts, audit, repair, lost placement and
+  Application DB, long-running operation;
+- reproducible build + core + Qt tests after every vertical batch (CI);
 - complete and verify the Beta desktop acceptance matrix on clean installations
   and across supported Windows sizes, DPI settings and accessibility paths;
-- verify Mail drafts persist across desktop restarts;
-- bind immutable Authority rules and policy constants to the current network;
-- Authority-derived generic resource budget enforcement.
+- 3 independent remote replicas for Beta;
+- only after the soak: bind immutable Authority rules to the network and
+  enforce Authority-derived generic resource budgets.
 
 ## Evidence-gated later work
 

@@ -15,19 +15,24 @@ RootPublication and one encrypted content-addressed chunk tree.
 - CYP2 finalized block sync and content-addressed PUT/GET;
 - removal of legacy BFT, MailTx and indexed StorageObject paths.
 
-## Immediate application integration
+## Application integration (delivered)
 
-Implement in this order:
+The encrypted per-Identity Application DB, ApplicationService,
+PublicationService, StorageService, private Mail and Files backends,
+clean-machine recovery with RecoveryBridge, development durability with 2
+remote replicas, audit/repair and placement recovery are implemented and
+connected to the desktop.
 
-1. encrypted per-Identity Application DB;
-2. `ApplicationService` publication scan/index;
-3. `PublicationService` outbound RootPublication flow and self capsules;
-4. `StorageService` retrieval and finality-first remote placement;
-5. real Mail private backend;
-6. real Files private mutation backend;
-7. clean-machine recovery including RecoveryBridge after Identity rotation;
-8. development durability with 2 independent remote replicas;
-9. provider health/audit/repair and interruption recovery.
+## Current phase: soak, hardening, Beta preparation
+
+No large new features. In order:
+
+1. multi-process soak with real `cybou-node provide` providers (loss, restart,
+   repair, lost local state, long runs);
+2. reproducible build + core + Qt tests after every vertical batch;
+3. Beta desktop acceptance on clean installations;
+4. 3 independent remote replicas;
+5. only then move Authority from preview towards enforcement.
 
 ## Identity Authority
 

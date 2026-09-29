@@ -56,8 +56,15 @@ reach core.
   lets `RotateIdentitySync` run. Locking or any failure keeps the current
   phrase active. Without remote storage providers the rotation waits.
 
+- **Rotation in a running session:** after a finalized IdentityRotate the
+  adapter reopens the session (drafts carried), and the Application DB is
+  rebuilt from history, the RecoveryBridge and provider-held placement
+  proofs. A rotation finalized while the desktop was closed rebuilds the
+  same way on next unlock, but drafts from before it cannot be decrypted.
+- **Durability audit:** the worker audits a few chunks of one Protected
+  publication every few ticks; lost copies return it to Securing and the next
+  pass repairs it.
+
 ## Not connected yet
 
-- Re-securing Sent/Files rebuilt from history after the Application DB was
-  lost (their placement leaves are not reconstructed yet).
 - Authority (read-only) once core implements it.
