@@ -1,109 +1,101 @@
 # CYBOU
 
-> **One identity. Private communication. Your data under your control.**<br>
-> *Une identité unique. Des communications privées. Vos données sous votre contrôle.*
+**One identity. Private communication. Your data under your control.**
 
-CYBOU is an experimental protected communication platform built around personal digital identity. Its Beta target brings together verified identity, private messaging, encrypted Files, and service funding; Backup is a post-Beta application.
+CYBOU is an open-source project building an identity-centered platform for
+private messaging and user-controlled files. It is experimental software, not
+a public mail or cloud-storage service. The desktop client and network are
+under active development.
 
-> **Not a blockchain with features — a protected identity with services.**
+## Current status
 
-> **Protocol status:** `main` targets genesis-bound hybrid-PQ PoA and generic
-> RootPublication over encrypted chunks. The current DEV chain is a pre-cutover
-> deployment and will be discarded only after the integration gates pass. PoA
-> is centralized finalization and does not provide Byzantine fault tolerance;
-> see [the protocol decision](docs/cybou/24_DECISIONS.md) and [cutover gates](docs/cybou/26_IMPLEMENTATION_STATUS.md).
+The active protocol is deployed on the experimental DEV network. DEV uses a
+genesis-bound, hybrid-signature Proof of Authority (PoA) finalizer operated by
+CYBOU. Full nodes independently verify blocks and state transitions. This is a
+single-operator trust model: it is **not BFT**, and the network does not claim
+Byzantine-fault-tolerant finality.
 
----
+The protocol and storage substrate are in place, but the user-facing Mail and
+Files product is not complete. In particular, CYBOU is not yet ready for public
+or production use. DEV state and tokens are experimental and have no production
+value.
 
-## Why CYBOU exists
+## Architecture
 
-Today, digital life is fractured across competing platform silos:
-- One proprietary account for email.
-- Another corporate cloud for documents and photos.
-- Third-party utilities for device backups and two-factor authentication.
-- Fragmented accounts and payment gateways with endless passwords and surveillance.
+- **One account-level Identity.** A portable encrypted vault stores a stable
+  AccountID and recovery entropy. The 24-word phrase restores Identity keys;
+  it does not by itself restore Mail or Files content.
+- **Separate key roles.** Identity recovery, Identity authorization, Identity
+  key agreement, PoA, Release Signing, and Treasury are distinct. Required
+  production signing paths use Ed25519 together with the designated ML-DSA
+  profile; there is no classical-only fallback.
+- **One content publication operation.** `RootPublication` is the only
+  application-content operation. Mail, Files, and future Backup schemas are
+  encrypted client data, not separate consensus object types.
+- **One encrypted chunk tree.** Ordered ROOT/INDEX/DATA chunks are encrypted
+  before storage and addressed by the full BLAKE3-256 hash of their stored
+  ciphertext. Recipient key capsules do not publish recipient AccountIDs.
+- **Proof-based provider admission.** A provider accepts a chunk only when a
+  valid inclusion proof ties it to a finalized publication. Finality authorizes
+  storage; it does not prove availability or durability.
+- **Client-owned views.** Clients are expected to scan finalized publications
+  and rebuild local Mail/Files indexes. Local databases are caches, not the
+  source of protocol identity.
 
-When platforms change terms, suffer data breaches, or terminate accounts, users lose their contacts, communication history, and digital continuity. 
+DEV pins the X-Wing / HPKE post-quantum draft-05 profile. It is DEV-only and is
+not an external audit or a production security claim. Beta and Mainnet need
+separately reviewed profiles and independent genesis parameters.
 
-CYBOU reorganizes digital services around **you**: one cryptographically protected identity that you own completely, from which all essential communication and data services operate.
+## Implementation and next work
 
----
+The current source includes hybrid Identity operations and recovery vaults,
+finalized `.cybou` name claims, genesis-bound PoA with a durable equivocation
+safety halt, `RootPublication`, the encrypted chunk tree, local provider
+admission, and CYP2 block/chunk transport.
 
-## What makes CYBOU different
+The main product work is to connect these pieces into complete flows:
 
-- **Identity-centric, not speculation-centric:** The wallet exists to fund services and secure the network, not as a speculative trading instrument. Communication, privacy, and user sovereignty come first.
-- **Human-readable `.cybou` names:** Simple addresses such as `stanislav.cybou` or `alice.cybou` replace cumbersome cryptographic strings, resolved directly on a decentralized registry.
-- **Single security and recovery model:** A 24-word recovery phrase restores one account-level Identity; there is no device registry in the target protocol.
-- **Post-quantum security target:** Identity authorization/recovery, Identity KEM, and PoA finality use separate key roles. Production signatures require the configured hybrid classical + PQ components; no classical-only fallback is permitted.
-- **Service-native utility wallet:** Two deterministic balance tiers — `SystemBalance` for protocol services (mail, storage, name registration) and spendable `Balance`. Account onboarding automatically seeds service credits.
-- **Sovereign and local-first target:** The client manages Identity keys locally and owns encrypted Mail indexes and portable recovery material. Mail, Files, and Backup use private schemas over one encrypted chunk substrate; distributed durability and product integration remain open.
+1. Build and submit encrypted Mail and Files publications from the desktop.
+2. Scan publications, open recipient capsules, retrieve chunks, and rebuild
+   Inbox, Sent, and Files views after restart or clean-machine recovery.
+3. Complete provider selection, retry, durability measurement, retention,
+   repair, and provider-loss handling.
+4. Finish Gmail-familiar Mail and Google Drive-familiar Files UX, then validate
+   the integrated experience on DEV.
+5. Establish Beta operating costs and security evidence. Backup is post-Beta.
 
----
+Read [the implementation status](docs/cybou/26_IMPLEMENTATION_STATUS.md) for
+the maintained list of implemented components and open gates.
 
-## Architecture & Security Foundation
+## Build
 
-Behind the user-facing services runs a deterministic, peer-to-peer C++20 engine:
+See [INSTALL.md](INSTALL.md) for prerequisites and build instructions, including
+the Windows MinGW/Ninja path. The project uses C++20, CMake, Qt 6 for the
+desktop client, and the repository's native dependencies.
 
-- **Identity & Key Separation:**
-  - **Recovery:** Hybrid Ed25519 + ML-DSA-65 (NIST FIPS 204).
-  - **Account authorization:** Hybrid Ed25519 + ML-DSA-44; it is account-scoped, not device-scoped.
-  - **Identity KEM:** X-Wing draft-05 is the selected DEV source profile; the current chain has not cut over to publish/use it.
-  - **PoA finality:** A separate genesis-bound Ed25519 + ML-DSA-65 signing role in the next DEV target.
-- **Finality target:** one genesis-bound, hybrid-PQ PoA signer with independent full-node state validation. This is centralized finalization and makes no Byzantine-fault-tolerance claim.
-- **Deterministic Economics:**
-  - Maximum supply capped at **100,000,000,000 CYBOU** (0 decimals).
-  - Fees are deterministic and size-aware: each 4-unit fee routes **3 to Security** and **1 to `OnboardingPool`**.
-  - Atomic onboarding: permissionless anti-Sybil proof-of-work credits new accounts with an initial `SystemBalance`.
-- **Local Client Integrity:** The Qt desktop client embeds the native C++ runtime directly and independently validates state roots and finalized history rather than relying on trusted RPC gateways.
+## Protocol and product documentation
 
----
-
-## Desktop Application
-
-The desktop application is built with **Qt 6** and **modern C++**:
-
-```text
-Qt Desktop Interface → Native CYBOU Runtime → Peer-to-Peer Network
-```
-
-- Familiar encrypted Mail and Files workflows ([Mail UX](docs/cybou/82_MAIL_UI_UX.md), [Files UX](docs/cybou/83_STORAGE_UI_UX.md)).
-- Local encrypted vault (`CYBV2`) created and verified prior to network broadcast.
-- Zero tracking, telemetry, or remote dependency injection.
-
----
-
-## Status and Transparency
-
-CYBOU is in active development and **not yet a public production service**. 
-
-- The current DEV deployment predates the target protocol and remains isolated until the coordinated cutover gate.
-- Identities, balances, and state on the DEV network are subject to reset as cryptographic integrations finalize.
-- Do not treat DEV tokens or test keys as production assets.
-
-### Documentation & Guides
-
-- [PoA finality target](docs/cybou/POA_FINALITY.md)
-- [Encrypted chunk tree target](docs/cybou/ENCRYPTED_CHUNK_TREE.md)
-- [Generic RootPublication target](docs/cybou/ROOT_PUBLICATION.md)
-- [Finalized chunk storage admission](docs/cybou/STORAGE_ADMISSION.md)
-- [Identity discovery and clean-machine recovery](docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md)
-- [PoA + chunk-tree machine-readable target](spec/poa_chunk_tree.yaml)
-- [Product design system](docs/cybou/84_PRODUCT_DESIGN_SYSTEM.md)
-- [Identity & Name Registry Architecture](docs/cybou/10_IDENTITY_NAMES.md)
-- [Identity Security Substrate](docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md)
-- [Identity Operation Coordinator](docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md)
+- [Vision](docs/cybou/00_VISION.md)
+- [Architecture](docs/cybou/02_ARCHITECTURE.md)
+- [Protocol and product roadmap](docs/cybou/22_ROADMAP.md)
+- [Implementation status](docs/cybou/26_IMPLEMENTATION_STATUS.md)
+- [PoA finality and trust model](docs/cybou/POA_FINALITY.md)
+- [Identity and `.cybou` names](docs/cybou/10_IDENTITY_NAMES.md)
+- [Identity vault and recovery](docs/cybou/76_IDENTITY_VAULT_RECOVERY.md)
+- [RootPublication](docs/cybou/ROOT_PUBLICATION.md)
 - [Encrypted chunk tree](docs/cybou/ENCRYPTED_CHUNK_TREE.md)
-- [Mail UI/UX Contract](docs/cybou/82_MAIL_UI_UX.md)
-- [Files UI/UX Contract](docs/cybou/83_STORAGE_UI_UX.md)
-- [Mail + Files Architecture Freeze](spec/mail_files_architecture.yaml)
-- [Implementation Status & Architecture Audit](docs/cybou/26_IMPLEMENTATION_STATUS.md)
-- [Building CYBOU from Source](INSTALL.md)
-- [Contribution Guidelines](CONTRIBUTING.md)
-- [Security Policy](SECURITY.md)
+- [Storage admission](docs/cybou/STORAGE_ADMISSION.md)
+- [Mail product and UX contract](docs/cybou/82_MAIL_UI_UX.md)
+- [Files product and UX contract](docs/cybou/83_STORAGE_UI_UX.md)
+- [Beta acceptance criteria](docs/cybou/85_BETA_UI_ACCEPTANCE.md)
 
----
+## Contributing and security
 
-## License
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [License](COPYING)
 
-CYBOU is open-source software licensed under the [MIT License](COPYING).
-Copyright © 2026 Stanislav Saveliev. Designed in France.
+Do not use DEV keys, balances, or data as production assets. Report security
+issues through the process in `SECURITY.md`.
+
+© 2026 Stanislav Saveliev. Designed in France.

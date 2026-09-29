@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CYBOU — Identité &amp; communications protégées</title>
-  <meta name="description" content="CYBOU est une plateforme souveraine de communication protégée articulée autour de l'identité numérique : messagerie chiffrée, stockage d'objets, sauvegarde et budget de service, sans dépendance au cloud.">
+  <title>CYBOU — Identité numérique, Mail et Files privés</title>
+  <meta name="description" content="CYBOU construit un protocole expérimental centré sur l'identité pour la messagerie privée et les fichiers chiffrés. Le protocole DEV fonctionne ; Mail et Files ne sont pas encore des services publics.">
   <meta name="keywords" content="CYBOU, identité numérique, communication sécurisée, messagerie chiffrée, souveraineté numérique, post-quantique, P2P, France, Europe">
   <meta name="author" content="Stanislav Saveliev">
   <meta name="copyright" content="Stanislav Saveliev">
@@ -20,8 +20,8 @@
 
   <!-- OpenGraph Metadata -->
   <meta property="og:site_name" content="CYBOU">
-  <meta property="og:title" content="CYBOU — Identité &amp; communications protégées">
-  <meta property="og:description" content="Une seule identité. Des communications privées. Vos données sous votre contrôle. Messagerie chiffrée, stockage et sauvegarde souveraine sans intermédiaire.">
+  <meta property="og:title" content="CYBOU — Identité numérique, Mail et Files privés">
+  <meta property="og:description" content="Un protocole expérimental centré sur l'identité pour la messagerie privée et les fichiers chiffrés. Mail et Files sont en développement, pas encore des services publics.">
   <meta property="og:image" content="https://cybou.fr/assets/cybou.png">
   <meta property="og:url" content="https://cybou.fr/">
   <meta property="og:type" content="website">
@@ -30,13 +30,13 @@
 
   <!-- Twitter Metadata -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="CYBOU — Identité &amp; communications protégées">
-  <meta name="twitter:description" content="Une seule identité. Des communications privées. Vos données sous votre contrôle. Messagerie chiffrée, stockage et sauvegarde souveraine.">
+  <meta name="twitter:title" content="CYBOU — Identité numérique, Mail et Files privés">
+  <meta name="twitter:description" content="Un protocole expérimental centré sur l'identité. Le protocole DEV fonctionne ; Mail et Files sont en développement.">
   <meta name="twitter:image" content="https://cybou.fr/assets/cybou.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/cybou.png">
-  <link rel="stylesheet" href="style.css?v=20260924-1">
+  <link rel="stylesheet" href="style.css?v=20260929-1">
 
   <!-- Schema.org JSON-LD Structured Data for Search Engines & AI Models -->
   <script type="application/ld+json">
@@ -49,7 +49,7 @@
         "name": "CYBOU",
         "operatingSystem": "Linux, Windows",
         "applicationCategory": "SecurityApplication, CommunicationApplication",
-        "description": "Open C++20 R&D project with an experimental single-validator DEV node, verified block sync and desktop client. Multi-validator BFT deployment and encrypted MailTx remain development work.",
+        "description": "Experimental open-source identity-centered protocol. DEV runs single-operator hybrid-PQ PoA with independently validating full nodes. Mail and Files are not yet public services.",
         "url": "https://cybou.fr",
         "codeRepository": "https://github.com/cybou-fr/cybou",
         "license": "https://github.com/cybou-fr/cybou/blob/main/COPYING",
@@ -70,8 +70,8 @@
       {
         "@type": "TechArticle",
         "@id": "https://cybou.fr/#architecture-spec",
-        "headline": "Spécifications fondamentales de l'architecture CYBOU",
-        "description": "Spécification formelle du protocole MailTx, du consensus BFT multi-validateurs et de la séparation stricte des clés d'opérateur.",
+        "headline": "Architecture du protocole CYBOU",
+        "description": "PoA à opérateur unique sur DEV, Identity, RootPublication et arbre de chunks chiffrés. Le protocole est actif ; les produits Mail et Files restent en développement.",
         "inLanguage": "fr",
         "author": {
           "@type": "Person",
@@ -87,7 +87,7 @@
             "name": "Qu'est-ce que CYBOU en termes simples ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "CYBOU est une plateforme souveraine de communication protégée articulée autour de votre identité personnelle. Avec une seule identité vérifiable, vous accédez à une messagerie privée, un stockage chiffré, une sauvegarde décentralisée et la gestion de vos appareils sans dépendre d'un cloud centralisé."
+              "text": "CYBOU est un projet logiciel expérimental centré sur une identité et un socle partagé pour la communication privée et les fichiers. Le protocole DEV existe ; Mail et Files ne sont pas encore des services publics utilisables."
             }
           },
           {
@@ -95,7 +95,7 @@
             "name": "En quoi CYBOU diffère-t-il des services comme Gmail, Proton ou iCloud ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Contrairement aux plateformes centralisées, CYBOU ne stocke pas vos clés sur ses serveurs. Vos clés cryptographiques sont gérées sur votre appareil, l'index de votre boîte de réception reste local et le réseau P2P vérifie les échanges sans intermédiaire commercial."
+              "text": "L'objectif produit est de proposer des parcours familiers de messagerie et de fichiers tout en chiffrant les contenus côté client et en laissant les vues Inbox/Files au client. Ces parcours ne sont pas encore intégrés de bout en bout ; CYBOU ne remplace pas aujourd'hui Gmail ni Google Drive."
             }
           },
           {
@@ -103,7 +103,7 @@
             "name": "Comment fonctionnent les noms .cybou et la récupération de compte ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Les adresses .cybou sont des identifiants lisibles enregistrés sur un registre décentralisé. Une phrase de récupération unique de 24 mots protège votre racine d'identité et permet de restaurer l'ensemble de vos accès sur machine neuve."
+              "text": "Les noms .cybou sont des alias lisibles enregistrés par des opérations finalisées. La phrase de 24 mots restaure l'Identity ; retrouver les contenus Mail et Files nécessite aussi de reconstruire les index et de récupérer les chunks, un parcours encore en développement."
             }
           },
           {
@@ -111,23 +111,23 @@
             "name": "Pourquoi y a-t-il un portefeuille (Wallet) et pourquoi n'est-ce pas de la spéculation ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Le portefeuille CYBOU est un budget de service utilitaire. Le solde SystemBalance finance automatiquement les opérations réseau (messages, enregistrement de noms, stockage) sans abonnement bancaire ni publicité."
+              "text": "Le protocole distingue le solde dépensable Balance du budget de services SystemBalance. Les frais et le bonus de création sont déterministes et propres au réseau. Les soldes DEV sont expérimentaux et n'ont pas de valeur de production."
             }
           },
           {
             "@type": "Question",
-            "name": "Que signifie « Post-Quantique dès la conception » (PQ by design) ?",
+            "name": "Que signifie le profil de cryptographie hybride de DEV ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "CYBOU adopte dès sa conception les algorithmes post-quantiques du NIST (ML-KEM pour le chiffrement et ML-DSA pour les signatures) afin de protéger les correspondances contre les attaques 'Harvest Now, Decrypt Later'."
+              "text": "Les signatures du protocole combinent Ed25519 avec le profil ML-DSA désigné. La capacité KEM X-Wing du DEV utilise le draft IETF -05. Il s'agit d'un profil de développement, pas d'une garantie de confidentialité à long terme ni d'un audit indépendant."
             }
           },
           {
             "@type": "Question",
-            "name": "Comment sont gérés les appareils et que faire en cas de perte ?",
+            "name": "La phrase de récupération restaure-t-elle mes messages et fichiers ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Chaque appareil possède ses propres clés autorisées par votre racine d'identité. En cas de perte, l'appareil peut être révoqué depuis un autre équipement ou via la phrase de 24 mots sans compromettre votre compte."
+              "text": "Elle restaure les clés et l'identité si les vérifications réseau réussissent. La reconstruction de Mail et Files doit également retrouver les publications finalisées, ouvrir les capsules et récupérer les chunks. Ce parcours complet n'est pas encore livré."
             }
           },
           {
@@ -135,7 +135,7 @@
             "name": "Quel est l'état réel d'avancement et puis-je utiliser CYBOU dès aujourd'hui ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "CYBOU est un projet open source en développement actif. Le code comprend un cœur C++20 testé, un nœud DEV autonome, la gestion d'identité et un client de bureau expérimental Qt 6. Le réseau BFT multi-validateur et la livraison d'emails complète sont en cours d'intégration."
+              "text": "CYBOU n'est pas encore un service public de messagerie ou de stockage. Le réseau DEV et le client de bureau sont expérimentaux. Le dépôt contient le protocole PoA, Identity, publications et chunks ; les applications Mail/Files et la disponibilité durable restent en développement."
             }
           }
         ]
@@ -168,7 +168,7 @@
           <li><a href="#services" data-i18n="navServices">Services</a></li>
           <li><a href="#statut" data-i18n="navStatus">État du projet</a></li>
           <li><a href="#architecture" data-i18n="navArch">Fondations</a></li>
-          <li><a href="#mailtx" data-i18n="navMailTx">Protocole MailTx</a></li>
+          <li><a href="#protocol" data-i18n="navProtocol">Architecture du protocole</a></li>
           <li><a href="#factsheet" data-i18n="navSpecs">Fiche technique</a></li>
           <li><a href="#faq" data-i18n="navFaq">FAQ</a></li>
         </ul>
@@ -188,7 +188,7 @@
       <a href="#services" data-i18n="navServices">Services</a>
       <a href="#statut" data-i18n="navStatus">État du projet</a>
       <a href="#architecture" data-i18n="navArch">Fondations</a>
-      <a href="#mailtx" data-i18n="navMailTx">Protocole MailTx</a>
+      <a href="#protocol" data-i18n="navProtocol">Architecture du protocole</a>
       <a href="#factsheet" data-i18n="navSpecs">Fiche technique</a>
       <a href="#faq" data-i18n="navFaq">FAQ</a>
     </nav>
@@ -214,7 +214,7 @@
     </h1>
 
     <p class="hero-subtitle" data-i18n="heroSubtitle">
-      CYBOU réunit identité numérique protégée, messagerie confidentielle, stockage chiffré, sauvegarde et budget de service — réunis en une plateforme souveraine, indépendante des monopoles du cloud.
+      CYBOU construit une identité numérique portable et un socle partagé pour des services de communication et de fichiers privés. Le protocole fonctionne sur le réseau expérimental DEV ; les produits Mail et Files complets restent en développement.
     </p>
 
     <div class="hero-slogan-pill">
@@ -229,7 +229,7 @@
       <div class="status-callout-text">
         <h4 data-i18n="statusCalloutTitle">Architecture centrée sur l'identité en développement actif</h4>
         <p data-i18n="statusCalloutBody">
-          CYBOU n'est pas un token de spéculation ni un service commercial public aujourd'hui. Le code comprend un nœud DEV autonome à validateur unique, la gestion d'identité par clés locales et une interface de bureau expérimentale. L'intégration de la messagerie chiffrée complète et d'un réseau BFT multi-validateur indépendant reste le travail actif en cours.
+          CYBOU n'est pas un service public ni un produit de production. DEV utilise une finalité PoA à un seul validateur exploité par CYBOU ; les nœuds complets vérifient indépendamment les blocs et l'état. Ce modèle est centralisé et n'offre pas de tolérance aux fautes byzantines. Le socle Identity et publication est en place, mais les flux Mail/Files et la durabilité du stockage ne sont pas encore prêts.
         </p>
       </div>
     </aside>
@@ -265,7 +265,7 @@
         </div>
         <div class="service-card-tag" data-i18n="srvIdentityTag">Fondation</div>
         <h3 data-i18n="srvIdentityTitle">Identité souveraine</h3>
-        <p data-i18n="srvIdentityDesc">Noms lisibles (stanislav.cybou), racine de récupération 24 mots et coffre-fort portable CYBV2. Zéro mot de passe centralisé, zéro tiers de confiance.</p>
+        <p data-i18n="srvIdentityDesc">Identité de compte, coffre portable CYBV2 et noms .cybou. La phrase de 24 mots restaure l'Identity ; la récupération des contenus Mail et Files dépendra des flux de synchronisation et de stockage encore à intégrer.</p>
         <div class="service-status-pill">
           <span class="dot ready"></span>
           <span data-i18n="srvIdentityStatus">Testé dans le cœur & bureau</span>
@@ -279,10 +279,10 @@
         </div>
         <div class="service-card-tag" data-i18n="srvMailTag">Communication</div>
         <h3 data-i18n="srvMailTitle">Messagerie privée (Mail)</h3>
-        <p data-i18n="srvMailDesc">Opération MailTx native avec chiffrement post-quantique, preuve d'inclusion et index de boîte aux lettres détenu par le destinataire sur son appareil.</p>
+        <p data-i18n="srvMailDesc">Mail sera une vue locale de publications chiffrées : un destinataire et texte seul pour le premier profil. La construction, l'envoi, la découverte et les vues Inbox/Sent restent à intégrer.</p>
         <div class="service-status-pill">
           <span class="dot wip"></span>
-          <span data-i18n="srvMailStatus">Format testé, livraison E2EE en cours</span>
+          <span data-i18n="srvMailStatus">Produit Mail non livré — intégration en cours</span>
         </div>
       </article>
 
@@ -293,10 +293,10 @@
         </div>
         <div class="service-card-tag" data-i18n="srvFilesTag">Données</div>
         <h3 data-i18n="srvFilesTitle">Stockage chiffré (Files)</h3>
-        <p data-i18n="srvFilesDesc">Stockage d'objets distribué et chiffré de bout en bout pour documents et pièces jointes. Vos fichiers restent confidentiels et inaccessibles aux hébergeurs.</p>
+        <p data-i18n="srvFilesDesc">Files utilisera le même arbre de contenu chiffré que Mail. Le socle de chunks existe ; le catalogue, les transferts depuis l'interface et la disponibilité durable restent à construire.</p>
         <div class="service-status-pill">
-          <span class="dot"></span>
-          <span data-i18n="srvFilesStatus">Planifié après le pilote Mail</span>
+          <span class="dot wip"></span>
+          <span data-i18n="srvFilesStatus">Interface et stockage durable à intégrer</span>
         </div>
       </article>
 
@@ -307,7 +307,7 @@
         </div>
         <div class="service-card-tag" data-i18n="srvBackupTag">Continuité</div>
         <h3 data-i18n="srvBackupTitle">Sauvegarde souveraine</h3>
-        <p data-i18n="srvBackupDesc">Restauration complète de votre environnement numérique sur machine neuve via votre phrase de récupération, sans dépendre d'un cloud propriétaire.</p>
+        <p data-i18n="srvBackupDesc">La sauvegarde complète est une application ultérieure du même socle de contenu. Elle ne fait pas partie de la version initiale.</p>
         <div class="service-status-pill">
           <span class="dot"></span>
           <span data-i18n="srvBackupStatus">Planifié</span>
@@ -328,19 +328,6 @@
         </div>
       </article>
 
-      <!-- 6. Devices -->
-      <article class="service-card">
-        <div class="card-icon" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="12" x="3" y="4" rx="2"/><line x1="2" x2="22" y1="20" y2="20"/></svg>
-        </div>
-        <div class="service-card-tag" data-i18n="srvDevicesTag">Sécurité</div>
-        <h3 data-i18n="srvDevicesTitle">Contrôle des appareils</h3>
-        <p data-i18n="srvDevicesDesc">Autorisez ordinateurs portables et téléphones par signature cryptographique liée à votre identité racine, sans jamais divulguer vos clés maîtresses.</p>
-        <div class="service-status-pill">
-          <span class="dot ready"></span>
-          <span data-i18n="srvDevicesStatus">Vérification active dans le cœur</span>
-        </div>
-      </article>
     </div>
   </section>
 
@@ -352,7 +339,7 @@
       <div class="section-label" data-i18n="matrixLabel">Transparence technique</div>
       <h2 class="section-title" data-i18n="matrixTitle">Matrice d'implémentation.</h2>
       <p class="section-description" data-i18n="matrixDesc">
-        Distinction stricte et vérifiable entre le code validé en tests unitaires, les modules en cours de refonte et les composants de la feuille de route.
+        Le protocole de base est actif sur DEV ; les parcours Mail/Files et la disponibilité du contenu restent à réaliser.
       </p>
     </div>
 
@@ -360,44 +347,44 @@
       <!-- Column 1: Implemented -->
       <article class="status-card">
         <div class="status-card-header">
-          <h3 data-i18n="col1Title">Validé &amp; testé</h3>
-          <span class="badge-done" data-i18n="badgeDone">FONCTIONNEL</span>
+          <h3 data-i18n="col1Title">Socle implémenté sur DEV</h3>
+          <span class="badge-done" data-i18n="badgeDone">IMPLÉMENTÉ</span>
         </div>
         <ul class="status-list">
-          <li data-i18n="col1Item1"><strong>Création de compte native &amp; sans intermédiaire (doc 70) :</strong> opération AccountCreateOpV1 avec preuve de travail anti-Sybil.</li>
-          <li data-i18n="col1Item2"><strong>Identifiant typé AccountId (32 octets) :</strong> gestion déterministe du solde système (<code>SystemBalance</code>).</li>
-          <li data-i18n="col1Item3"><strong>Bonus d'accueil atomique :</strong> transfert immédiat du bonus depuis <code>OnboardingPool</code> vers <code>SystemBalance</code>.</li>
-          <li data-i18n="col1Item4"><strong>État canonique LevelDB :</strong> blocs finalisés, racines d'état, filtres compacts Mail et index de hauteur persistés atomiquement.</li>
-          <li data-i18n="col1Item5"><strong>MailTx, preuve et découverte :</strong> opération native bornée, frais déterministes, preuve d'inclusion et filtre compact implémentés dans le cœur ; livraison Email complète encore absente.</li>
-          <li data-i18n="col1Item6"><strong>Nœud DEV expérimental :</strong> producteur à un validateur, soumission d'opérations et synchronisation vérifiée entre processus, avec tests automatisés.</li>
+          <li data-i18n="col1Item1"><strong>Identity et noms .cybou :</strong> AccountCreate avec travail anti-Sybil, rôles de clés hybrides, coffre portable et registre de noms finalisé.</li>
+          <li data-i18n="col1Item2"><strong>Finalité PoA :</strong> signataire DEV dédié, journal anti-équivocation durable, arrêt de sécurité en cas de conflit et validation indépendante par les nœuds complets.</li>
+          <li data-i18n="col1Item3"><strong>RootPublication :</strong> opération générique autorisée par Identity ; aucun objet Mail ou fichier permanent dans le consensus.</li>
+          <li data-i18n="col1Item4"><strong>Arbre de contenu chiffré :</strong> chunks ROOT/INDEX/DATA ordonnés, adressés par BLAKE3-256 et construits pour le traitement en flux.</li>
+          <li data-i18n="col1Item5"><strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et messages CYP2 PUT/GET.</li>
+          <li data-i18n="col1Item6"><strong>Économie déterministe :</strong> frais et transitions de solde validés par le state machine ; DEV, Beta et Mainnet ont des paramètres distincts.</li>
         </ul>
       </article>
 
       <!-- Column 2: In Progress -->
       <article class="status-card wip">
         <div class="status-card-header">
-          <h3 data-i18n="col2Title">En cours de consolidation</h3>
+          <h3 data-i18n="col2Title">Produit et validation en cours</h3>
           <span class="badge-wip" data-i18n="badgeWip">EN COURS</span>
         </div>
         <ul class="status-list">
-          <li data-i18n="col2Item1"><strong>BFT multi-validateur :</strong> moteur et certificats de finalité testés en code ; exploitation de plusieurs validateurs indépendants et tolérance f=1 non démontrées sur un réseau public.</li>
-          <li data-i18n="col2Item2"><strong>Client de bureau :</strong> pages Identity, Wallet, Email, Storage et Backup présentes ; certaines actions restent désactivées tant que le service correspondant n'est pas connecté.</li>
-          <li data-i18n="col2Item3"><strong>Clés et exploitation :</strong> domaines Autorité, Validateur, Release et Trésorerie définis ; garde opérationnelle et déploiement sécurisé encore à consolider.</li>
-          <li data-i18n="col2Item4"><strong>Transition du réseau DEV :</strong> le nouveau nœud BFT à un validateur coexiste avec la chaîne de bootstrap Bitcoin héritée ; l'intégration complète reste à faire.</li>
+          <li data-i18n="col2Item1"><strong>Mail :</strong> création de publications, capsules destinataire, scan des publications finalisées et reconstruction locale Inbox/Sent.</li>
+          <li data-i18n="col2Item2"><strong>Files :</strong> catalogue chiffré, navigation, transfert depuis l’interface et récupération récursive des fichiers.</li>
+          <li data-i18n="col2Item3"><strong>Disponibilité :</strong> sélection de fournisseurs, reprises, seuils de durabilité mesurés, rétention, réparation et perte de fournisseur.</li>
+          <li data-i18n="col2Item4"><strong>Preuves de bout en bout :</strong> vecteurs interopérables, synchronisation d’un nœud propre et restauration du contenu sans base locale antérieure.</li>
         </ul>
       </article>
 
       <!-- Column 3: Planned -->
       <article class="status-card planned">
         <div class="status-card-header">
-          <h3 data-i18n="col3Title">Feuille de route planifiée</h3>
+          <h3 data-i18n="col3Title">Étapes ultérieures</h3>
           <span class="badge-planned" data-i18n="badgePlanned">PLANIFIÉ</span>
         </div>
         <ul class="status-list">
-          <li data-i18n="col3Item1"><strong>Architecture cible Post-Quantique HPKE :</strong> profil hybride ML-KEM-768 + X25519 (spécifié doc 49, tests crypto OpenSSL &gt;= 3.5).</li>
-          <li data-i18n="col3Item2"><strong>Stockage d'objets décentralisé :</strong> couche de pré-stockage pour validateurs et stockage d'objets pour pièces jointes à grande échelle.</li>
-          <li data-i18n="col3Item3"><strong>Service Email de bout en bout :</strong> chiffrement MailTx, livraison, Inbox/Sent et index de lecture locaux reliés au réseau réel.</li>
-          <li data-i18n="col3Item4"><strong>Réseau opérationnel :</strong> admission et exploitation de 4 validateurs indépendants, stockage d'objets et déploiement public après validation de sécurité.</li>
+          <li data-i18n="col3Item1"><strong>Résilience multi-opérateur :</strong> BFT seulement après une étape dédiée de gouvernance et d’exploitation ; le DEV actuel reste un PoA à opérateur unique.</li>
+          <li data-i18n="col3Item2"><strong>Pièces jointes et montée en charge :</strong> à valider après les transferts Files et la durabilité du stockage partagé.</li>
+          <li data-i18n="col3Item3"><strong>Sauvegarde :</strong> application post-Beta du même graphe chiffré, avec restauration vérifiable.</li>
+          <li data-i18n="col3Item4"><strong>Beta puis service public :</strong> coûts opérationnels mesurés, revue de sécurité, critères UX et exploitation documentée avant ouverture.</li>
         </ul>
       </article>
     </div>
@@ -411,66 +398,66 @@
       <div class="section-label" data-i18n="archLabel">Fondations de conception</div>
       <h2 class="section-title" data-i18n="archTitle">Rupture avec les architectures centralisées.</h2>
       <p class="section-description" data-i18n="archDesc">
-        Les quatre piliers qui guident la conception de la souveraineté et de l'intégrité des échanges numériques.
+        Le protocole sépare les rôles de clés, le contenu privé, la finalité centralisée actuelle et les objectifs de résilience à venir.
       </p>
     </div>
 
     <div class="bento-grid">
-      <!-- Bento 1: Cloud Independence -->
+      <!-- Bento 1: Current DEV trust model -->
       <div class="bento-card bento-span-8">
         <div class="card-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         </div>
         <div class="card-content">
-          <h3 data-i18n="bento1Title">Architecture sans cloud tiers obligatoire</h3>
+          <h3 data-i18n="bento1Title">PoA DEV à opérateur unique</h3>
           <p data-i18n="bento1Desc">
-            Le modèle cible évite les comptes et boîtes aux lettres hébergés par un fournisseur unique. Le réseau DEV actuel utilise un validateur bootstrap connu ; la résilience de plusieurs opérateurs indépendants reste à démontrer.
+            CYBOU exploite l'unique signataire de finalité du réseau DEV. Chaque nœud complet vérifie indépendamment les blocs et l'état ; cette vérification ne transforme pas le modèle de confiance en BFT.
           </p>
           <div class="card-metric">DEV</div>
-          <div class="card-metric-label" data-i18n="bento1Metric">Réseau expérimental, non déployé pour le public</div>
+          <div class="card-metric-label" data-i18n="bento1Metric">Centralisé — pas de tolérance BFT</div>
         </div>
       </div>
 
-      <!-- Bento 2: Post-Quantum Cryptography -->
+      <!-- Bento 2: DEV key agreement profile -->
       <div class="bento-card bento-span-4">
         <div class="card-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         </div>
         <div class="card-content">
-          <span class="faq-badge-pq" style="margin-bottom: 10px;">PQ by Design</span>
-          <h3 data-i18n="bento2Title">Profil cible HPKE post-quantique</h3>
+          <span class="faq-badge-pq" style="margin-bottom: 10px;">DEV PROFILE</span>
+          <h3 data-i18n="bento2Title">Profil hybride X-Wing pour DEV</h3>
           <p data-i18n="bento2Desc">
-            Profil hybride cible ML-KEM-768 et X25519 conçu contre les attaques par interception et déchiffrement ultérieur ; l'intégration MailTx complète et l'audit externe restent à réaliser.
+            Le protocole DEV publie une capacité Identity X-Wing basée sur le draft IETF -05. Le profil n'est pas automatiquement transféré à Beta/Mainnet, et son existence ne signifie pas que le service Mail/Files est livré ou audité.
           </p>
-          <div class="card-metric">ML-KEM</div>
-          <div class="card-metric-label" data-i18n="bento2Metric">Standard NIST post-quantique</div>
+          <div class="card-metric">X-Wing</div>
+          <div class="card-metric-label" data-i18n="bento2Metric">Profil de développement, revue indépendante requise</div>
         </div>
       </div>
 
-      <!-- Bento 3: Exclusive Device Authority -->
+      <!-- Bento 3: Identity key separation -->
       <div class="bento-card bento-span-4">
         <div class="card-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
         </div>
         <div class="card-content">
-          <h3 data-i18n="bento3Title">Clés d'identité gérées sur l'appareil</h3>
+          <h3 data-i18n="bento3Title">Une Identity, rôles cryptographiques séparés</h3>
           <p data-i18n="bento3Desc">
-            Le client gère les clés d'identité localement et les opérations sont autorisées par signature. Le modèle de garde des clés d'opérateur et la sécurité complète des messages restent à valider en exploitation.
+            La récupération, l'autorisation, l'accord de clés, la finalité PoA, la signature des versions et la trésorerie utilisent des rôles séparés.
           </p>
           <div class="card-metric">LOCAL</div>
-          <div class="card-metric-label" data-i18n="bento3Metric">Gestion des clés d'identité sur l'appareil</div>
+          <div class="card-metric-label" data-i18n="bento3Metric">Clés locales et rôles distincts</div>
         </div>
       </div>
 
-      <!-- Bento 4: BFT & Tokenomics -->
+      <!-- Bento 4: PoA and deterministic economics -->
       <div class="bento-card bento-span-8">
         <div class="card-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
         </div>
         <div class="card-content">
-          <h3 data-i18n="bento4Title">Finalité BFT explicite &amp; Économie déterministe</h3>
+          <h3 data-i18n="bento4Title">Finalité PoA et économie déterministe</h3>
           <p data-i18n="bento4Desc">
-            Le cœur CYBOU calcule la finalité et les frais avec des règles déterministes. L'offre maximale spécifiée est de 100 milliards de CYBOU (0 décimale), avec 3/4 des frais pour la Sécurité et 1/4 pour l'Accueil ; la chaîne héritée n'applique pas encore cette politique.
+            DEV utilise un opérateur de finalité unique et ne revendique pas le BFT. Le plafond de l'actif est de 100 milliards d'unités sans décimales ; les frais suivent les paramètres du réseau et la règle 3 Sécurité / 1 Accueil.
           </p>
           <div class="card-metric" data-i18n="bento4Value">100 Mrd</div>
           <div class="card-metric-label" data-i18n="bento4Metric">Plafond absolu d'unités CYBOU (0 décimale)</div>
@@ -480,47 +467,47 @@
   </section>
 
   <!-- ==========================================================================
-       Section: MailTx Protocol Stepper
+       Section: Generic encrypted publication flow
        ========================================================================== -->
-  <section class="section" id="mailtx">
+  <section class="section" id="protocol">
     <div class="section-header">
-      <div class="section-label" data-i18n="flowLabel">Ingénierie du message</div>
-      <h2 class="section-title" data-i18n="flowTitle">Le cycle de vie d'une transaction MailTx.</h2>
+      <div class="section-label" data-i18n="flowLabel">Cycle de publication privée</div>
+      <h2 class="section-title" data-i18n="flowTitle">Du contenu chiffré à sa disponibilité.</h2>
       <p class="section-description" data-i18n="flowDesc">
-        Chemin protocolaire implémenté dans le cœur et étapes restant à relier au service Email complet.
+        Le protocole fournit l'autorisation, la finalité et l'admission des chunks. Le client doit encore connecter ces étapes aux parcours Mail et Files.
       </p>
     </div>
 
     <div class="flow-container">
       <article class="flow-step">
-        <div class="step-num">01 / ENGAGEMENT</div>
-        <h4 class="step-title" data-i18n="step1Title">Engagement salé de contenu</h4>
+        <div class="step-num">01 / CONTENU</div>
+        <h4 class="step-title" data-i18n="step1Title">Préparer le contenu privé</h4>
         <p class="step-desc" data-i18n="step1Desc">
-          Le cœur vérifie un engagement de contenu salé et séparé par domaine (doc 69). Le client de chiffrement et d'envoi reste en développement.
+          Le client transforme le contenu en arbre ROOT/INDEX/DATA chiffré et conserve localement les éléments nécessaires. Les schémas Mail/Files restent à l'intérieur du chiffrement.
         </p>
       </article>
 
       <article class="flow-step">
-        <div class="step-num">02 / ENCAPSULATION</div>
-        <h4 class="step-title" data-i18n="step2Title">Profil cible Hybride HPKE</h4>
+        <div class="step-num">02 / CAPSULE</div>
+        <h4 class="step-title" data-i18n="step2Title">Protéger la clé de contenu</h4>
         <p class="step-desc" data-i18n="step2Desc">
-          Profil cible de chiffrement de bout en bout pour la clé publique du destinataire. L'intégration MailTx complète et son audit restent à réaliser avant toute revendication de sécurité en production.
+          RootPublication transporte des capsules de clé pour les capacités KEM des destinataires sans publier leur AccountID. Le profil X-Wing draft-05 est réservé au réseau DEV.
         </p>
       </article>
 
       <article class="flow-step">
-        <div class="step-num">03 / TRANSACTION</div>
-        <h4 class="step-title" data-i18n="step3Title">Opération MailTx native</h4>
+        <div class="step-num">03 / PUBLICATION</div>
+        <h4 class="step-title" data-i18n="step3Title">Autoriser une RootPublication</h4>
         <p class="step-desc" data-i18n="step3Desc">
-          Le cœur traite MailTx comme une opération native, avec limite de taille et frais déterministes. La soumission réseau existe en DEV ; l'expérience Email complète n'est pas encore disponible.
+          Identity signe une opération générique qui engage la racine, l'arbre d'inclusion et les capsules. Mail ne possède pas de type d'opération de consensus dédié.
         </p>
       </article>
 
       <article class="flow-step">
-        <div class="step-num">04 / FINALITÉ</div>
-        <h4 class="step-title" data-i18n="step4Title">Consensus BFT &amp; Index Local</h4>
+        <div class="step-num">04 / FINALITÉ ET STOCKAGE</div>
+        <h4 class="step-title" data-i18n="step4Title">Finaliser, admettre, retrouver</h4>
         <p class="step-desc" data-i18n="step4Desc">
-          Le cœur vérifie certificats de finalité, preuves d'inclusion et filtres compacts de découverte Mail. L'index Inbox/Sent et l'état de lecture relèvent du client local encore à intégrer.
+          PoA finalise l'opération ; les fournisseurs vérifient ensuite les preuves d'admission des chunks. Finalité ne signifie pas durabilité : le client doit mesurer la disponibilité, réessayer et reconstruire ses index locaux.
         </p>
       </article>
     </div>
@@ -546,8 +533,8 @@
 
       <dl class="tech-spec-grid">
         <div class="spec-item">
-          <dt data-i18n="dtConsensus">Modèle de consensus</dt>
-          <dd data-i18n="ddConsensus">DEV : finalité à un validateur (<code>f=0</code>). Cible : BFT à poids égal, 4 validateurs minimum pour revendiquer <code>f=1</code>.</dd>
+          <dt data-i18n="dtConsensus">Finalité actuelle sur DEV</dt>
+          <dd data-i18n="ddConsensus">PoA hybride à un signataire exploité par CYBOU. Les nœuds complets vérifient indépendamment ; pas de revendication BFT.</dd>
         </div>
 
         <div class="spec-item">
@@ -556,8 +543,8 @@
         </div>
 
         <div class="spec-item">
-          <dt data-i18n="dtSupply">Offre maximale (MAX_SUPPLY)</dt>
-          <dd data-i18n="ddSupply"><code>100 000 000 000</code> CYBOU (0 décimale) dans la spécification ; chaîne de bootstrap héritée non conforme à cette politique.</dd>
+          <dt data-i18n="dtSupply">Offre maximale</dt>
+          <dd data-i18n="ddSupply"><code>100 000 000 000</code> CYBOU, 0 décimale ; paramètres liés à la définition de chaque réseau.</dd>
         </div>
 
         <div class="spec-item">
@@ -566,13 +553,13 @@
         </div>
 
         <div class="spec-item">
-          <dt data-i18n="dtFees">Régime des frais de transaction</dt>
-          <dd data-i18n="ddFees">Frais Mail déterministes selon la taille, sans priorité ; 3/4 Sécurité et 1/4 Accueil dans le cœur CYBOU.</dd>
+          <dt data-i18n="dtFees">Frais et répartition</dt>
+          <dd data-i18n="ddFees">Frais déterministes de publication selon la taille et le nombre de chunks ; priorité désactivée ; 3 unités Sécurité et 1 Accueil par tranche de 4.</dd>
         </div>
 
         <div class="spec-item">
-          <dt data-i18n="dtMailTx">Format MailTx (v1)</dt>
-          <dd data-i18n="ddMailTx">Opération native de premier rang, 1 destinataire, texte seul, taille bornée, sans pièces jointes ; service Email non achevé.</dd>
+          <dt data-i18n="dtPublication">Publication de contenu</dt>
+          <dd data-i18n="ddPublication"><code>RootPublication</code> générique. Mail, Files et Backup sont des schémas privés chiffrés, pas des opérations de consensus distinctes.</dd>
         </div>
 
         <div class="spec-item">
@@ -594,14 +581,14 @@
   </section>
 
   <!-- ==========================================================================
-       Section: Frequently Asked Questions (FAQ) — PQ by Design Focus
+       Section: Frequently Asked Questions
        ========================================================================== -->
   <section class="section" id="faq">
     <div class="section-header">
       <div class="section-label" data-i18n="faqLabel">Questions fréquentes</div>
       <h2 class="section-title" data-i18n="faqTitle">Comprendre CYBOU.</h2>
       <p class="section-description" data-i18n="faqDesc">
-        Des réponses claires et concrètes sur le fonctionnement de l'identité, la protection de vos données, l'utilité du portefeuille et la sécurité post-quantique.
+        Ce qui fonctionne sur DEV, ce qui reste à construire et les limites du modèle de confiance actuel.
       </p>
     </div>
 
@@ -616,7 +603,7 @@
         </button>
         <div class="faq-answer" id="faq-answer-1" aria-hidden="false">
           <p data-i18n="faqA1">
-            CYBOU n'est ni un simple portefeuille crypto, ni un nouveau réseau social dépendant d'un géant du cloud. C'est une plateforme souveraine de communication protégée articulée autour de votre identité personnelle. Vous disposez d'un nom unique (comme <code>stanislav.cybou</code>), et à partir de cette identité, vous envoyez des messages privés chiffrés de bout en bout, stockez vos documents, sauvegardez vos états et contrôlez vos appareils, sans qu'aucune entreprise ne puisse lire vos correspondances ni fermer votre compte.
+            CYBOU est un projet logiciel expérimental centré sur une identité et un socle partagé pour la communication privée et les fichiers. Le protocole DEV existe ; Mail et Files ne sont pas encore des services publics utilisables.
           </p>
         </div>
       </article>
@@ -629,7 +616,7 @@
         </button>
         <div class="faq-answer" id="faq-answer-2" aria-hidden="true">
           <p data-i18n="faqA2">
-            Les services centralisés imposent la dépendance à leurs serveurs : ils hébergent vos boîtes aux lettres, gèrent vos accès et collectent des métadonnées (adresses IP, graphes de contacts, horodatages). Chez CYBOU, il n'y a pas de serveur central ni d'hébergeur obligatoire. Vos clés cryptographiques sont créées et stockées exclusivement sur votre appareil. L'index de votre boîte de réception vous appartient localement, et vos messages sont vérifiés par un réseau pair-à-pair sans intermédiaire commercial.
+            L'objectif produit est de proposer des parcours familiers de messagerie et de fichiers tout en chiffrant les contenus côté client et en laissant les vues Inbox/Files au client. Ces parcours ne sont pas encore intégrés de bout en bout ; CYBOU ne remplace pas aujourd'hui Gmail ni Google Drive.
           </p>
         </div>
       </article>
@@ -642,7 +629,7 @@
         </button>
         <div class="faq-answer" id="faq-answer-3" aria-hidden="true">
           <p data-i18n="faqA3">
-            Au lieu d'adresses cryptographiques complexes, vous choisissez un nom simple (de 5 à 32 caractères, ex: <code>alice.cybou</code>) enregistré sur un registre décentralisé sans autorité commerciale. Votre identité racine est protégée par une phrase de récupération unique de 24 mots. Si vous changez d'ordinateur ou réinstallez votre système, ces 24 mots suffisent pour restaurer votre identité et vos accès sur une machine neuve, de manière autonome et sans formulaire d'assistance.
+            Un nom .cybou est un alias de compte enregistré par des opérations finalisées ; les libellés suivent une règle ASCII de 5 à 32 caractères. La phrase de 24 mots restaure l'Identity. La récupération des contenus nécessite aussi l'historique public et le stockage des chunks, un parcours encore en développement.
           </p>
         </div>
       </article>
@@ -655,36 +642,36 @@
         </button>
         <div class="faq-answer" id="faq-answer-4" aria-hidden="true">
           <p data-i18n="faqA4">
-            Dans CYBOU, le portefeuille n'est pas conçu pour le trading ou la spéculation, mais comme un moteur utilitaire de services. Il sépare deux soldes : <code>SystemBalance</code> (un budget dédié alloué dès la création du compte pour payer automatiquement les frais anti-spam de messages, l'enregistrement de noms et le stockage) et le solde disponible (<code>Balance</code>). Cela permet au réseau de fonctionner de façon pérenne et autonome, sans nécessiter d'abonnement par carte bancaire ni publicité.
+            Le protocole distingue le solde dépensable <code>Balance</code> du budget de services <code>SystemBalance</code>. Les frais et le bonus de création sont déterministes et propres au réseau. Les soldes DEV sont expérimentaux et n'ont pas de valeur de production.
           </p>
         </div>
       </article>
 
-      <!-- FAQ 5: PQ Security -->
+      <!-- FAQ 5: Hybrid cryptography -->
       <article class="faq-card pq-focus">
         <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-5">
           <span class="faq-heading">
-            <span class="faq-badge-pq" data-i18n="faqPqBadge">Sécurité Post-Quantique • PQ by Design</span>
-            <span class="faq-question" data-i18n="faqQ5">Que signifie « Post-Quantique dès la conception » (PQ by design) et pourquoi est-ce crucial aujourd'hui ?</span>
+          <span class="faq-badge-pq" data-i18n="faqPqBadge">Cryptographie hybride sur DEV</span>
+            <span class="faq-question" data-i18n="faqQ5">Que signifie le profil de cryptographie hybride de DEV ?</span>
           </span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-5" aria-hidden="true">
           <p data-i18n="faqA5">
-            Les chiffrements actuels (RSA, courbes elliptiques classiques) deviendront vulnérables avec l'arrivée des calculateurs quantiques. Les agences d'interception pratiquent déjà l'attaque <strong>« Harvest Now, Decrypt Later »</strong> : intercepter et stocker des données chiffrées aujourd'hui pour les décrypter demain. CYBOU intègre nativement les standards post-quantiques du NIST (ML-KEM pour le chiffrement et ML-DSA pour les signatures), garantissant que vos échanges privés d'aujourd'hui resteront protégés pour les décennies à venir.
+            Les signatures du protocole combinent Ed25519 avec le profil ML-DSA désigné. La capacité KEM X-Wing du DEV utilise le draft IETF -05. Il s'agit d'un profil de développement, pas d'une garantie de confidentialité à long terme ni d'un audit indépendant ; Beta/Mainnet nécessitent une décision séparée.
           </p>
         </div>
       </article>
 
-      <!-- FAQ 6: Device Authority & Loss -->
+      <!-- FAQ 6: Content recovery -->
       <article class="faq-card">
         <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-6">
-          <span class="faq-question" data-i18n="faqQ6">Comment sont gérés les appareils et que faire en cas de perte ?</span>
+          <span class="faq-question" data-i18n="faqQ6">La phrase de récupération restaure-t-elle mes messages et fichiers ?</span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-6" aria-hidden="true">
           <p data-i18n="faqA6">
-            Votre phrase racine de 24 mots reste confidentielle et hors ligne. Chaque appareil (ordinateur, téléphone) génère sa propre paire de clés cryptographiques, autorisée par votre racine. Si un appareil est égaré ou volé, vous pouvez révoquer son accès depuis un autre appareil approuvé ou via votre phrase racine, sans compromettre vos clés maîtresses ni devoir réinitialiser tout votre compte.
+            Elle restaure les clés et l'Identity si les vérifications réseau réussissent. La reconstruction de Mail et Files doit également retrouver les publications finalisées, ouvrir les capsules et récupérer les chunks. Ce parcours complet n'est pas encore livré.
           </p>
         </div>
       </article>
@@ -697,7 +684,7 @@
         </button>
         <div class="faq-answer" id="faq-answer-7" aria-hidden="true">
           <p data-i18n="faqA7">
-            CYBOU est en développement actif (phase R&amp;D ouverte). Le code source comprend un cœur C++20 testé, un nœud DEV autonome avec synchronisation vérifiée, la gestion d'identité locale et un client de bureau expérimental (Qt 6). La livraison finale des emails chiffrés de bout en bout et le réseau BFT multi-validateur indépendant sont en cours d'intégration. Le projet est entièrement open source (licence MIT) avec des spécifications publiques.
+            CYBOU n'est pas encore un service public de messagerie ou de stockage. Le réseau DEV et le client de bureau sont expérimentaux. Le dépôt contient le protocole PoA, Identity, publications et chunks ; les applications Mail/Files et la disponibilité durable restent en développement.
           </p>
         </div>
       </article>
@@ -728,7 +715,7 @@
           <ul class="footer-links">
             <li><a href="#statut" data-i18n="navStatus">État du projet</a></li>
             <li><a href="#architecture" data-i18n="navArch">Piliers d'architecture</a></li>
-            <li><a href="#mailtx" data-i18n="navMailTx">Protocole MailTx</a></li>
+            <li><a href="#protocol" data-i18n="navProtocol">Architecture du protocole</a></li>
             <li><a href="#factsheet" data-i18n="navSpecs">Fiche technique</a></li>
             <li><a href="#faq" data-i18n="navFaq">FAQ</a></li>
           </ul>
@@ -741,7 +728,7 @@
             <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/POA_FINALITY.md">POA_FINALITY.md</a></li>
             <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/ROOT_PUBLICATION.md">ROOT_PUBLICATION.md</a></li>
             <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/26_IMPLEMENTATION_STATUS.md">26_STATUS.md</a></li>
-            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/75_DEV_NODE_RUNBOOK.md">75_DEV_NODE.md</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/06_BOOTSTRAP_STATE_SYNC.md">06_BOOTSTRAP_STATE_SYNC.md</a></li>
           </ul>
         </div>
 
@@ -775,6 +762,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=20260924-1"></script>
+  <script src="app.js?v=20260929-1"></script>
 </body>
 </html>

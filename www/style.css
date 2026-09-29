@@ -690,7 +690,7 @@ a {
 }
 
 /* ==========================================================================
-   Protocol Flow (MailTx Technical Pipeline)
+   Generic Encrypted Publication Flow
    ========================================================================== */
 
 .flow-container {
@@ -800,7 +800,7 @@ a {
 }
 
 /* ==========================================================================
-   FAQ Section (Apple Style Cards & PQ by Design Callout)
+   FAQ Section (Apple Style Cards & Hybrid Cryptography Note)
    ========================================================================== */
 
 .faq-grid {

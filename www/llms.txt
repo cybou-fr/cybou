@@ -1,38 +1,57 @@
 # CYBOU
 
-CYBOU is an experimental identity-centered platform for private communication
-and user-controlled files. Mail and Files are required product surfaces with
-Gmail-familiar and Google Drive-familiar workflows under CYBOU branding.
+CYBOU is an open-source project building an identity-centered protocol and
+desktop software for private messaging and user-controlled files. It is
+experimental software, not a public mail or cloud-storage service.
 
-## Active protocol target
+## Current status
 
-- Genesis-bound hybrid-PQ single-operator PoA finality; centralized trust, no
-  Byzantine fault tolerance claim.
-- Generic RootPublication is the only application-content operation.
-- Application payloads use a streaming encrypted ROOT/INDEX/DATA tree.
-- ChunkID is full BLAKE3-256 of stored encrypted bytes.
-- Recipient identity, schemas, filenames, and graph structure stay encrypted.
-- Providers accept chunks only with finalized-publication admission proofs.
-- Clients scan publications, recover content keys, and rebuild local indexes.
-- No legacy protocol compatibility or dual operation decoder is part of the
-  target.
+- The active protocol is deployed on the experimental DEV network.
+- DEV uses a genesis-bound, hybrid-signature PoA finalizer operated by CYBOU.
+  Full nodes independently validate blocks and state. This is a centralized
+  trust model, not Byzantine fault tolerance.
+- The protocol substrate includes account Identity, `.cybou` names,
+  `RootPublication`, an encrypted ROOT/INDEX/DATA chunk tree, finalized chunk
+  admission proofs, and CYP2 block/chunk transport.
+- Mail and Files are not complete public services. Publication construction,
+  client discovery/indexing, content retrieval, clean-machine content recovery,
+  provider selection, and measured storage durability remain integration work.
+- DEV pins the X-Wing / HPKE IETF draft-05 profile. This is DEV-only and is not
+  an external security audit or production guarantee.
 
-## Product requirements
+## Architecture rules
 
-- One account-level Identity with portable clean-machine recovery.
-- Mail starts one-recipient and text-only. Attachments follow shared storage
-  durability and recovery gates.
-- Files uses private encrypted catalogs over the same chunk substrate.
+- `RootPublication` is the only application-content publication operation.
+- Mail, Files, Backup, names, recipients, and application schemas are encrypted
+  client payloads; no permanent per-message or per-file consensus objects.
+- Chunk IDs use the full BLAKE3-256 hash of stored encrypted bytes.
+- Providers require valid inclusion proofs against finalized publications.
+- Finality authorizes admission; it does not prove availability or durability.
+- Clients own rebuildable Inbox, Sent, and Files indexes.
+- No runtime compatibility layer or dual operation decoder for the superseded
+  protocol is part of the active architecture.
+
+## Product direction
+
+- Mail aims for familiar Gmail workflows; the first profile is one recipient
+  and text only.
+- Files aims for familiar Google Drive workflows on the same encrypted content
+  substrate.
+- Attachments depend on measured storage durability and recovery.
 - Backup is post-Beta.
-- Finalized, available, and retrievable content are distinct user-facing states.
+- Multi-operator BFT is future resilience work; DEV currently has one operator.
 
-## Authority and status
+## Documentation
 
+- `README.md` is the project overview and build entry point.
 - `AGENTS.md` is the implementation authority.
-- `docs/cybou/POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`,
-  `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, and
-  `IDENTITY_DISCOVERY_AND_RECOVERY.md` define the protocol target.
-- `spec/poa_chunk_tree.yaml` contains machine-readable parameters.
-- `docs/cybou/26_IMPLEMENTATION_STATUS.md` records implementation and open
-  integration gates. The target is not active on DEV; do not reset DEV before
-  all coordinated gates pass.
+- `docs/cybou/26_IMPLEMENTATION_STATUS.md` records code status and remaining
+  integration gates.
+- `docs/cybou/POA_FINALITY.md`, `ROOT_PUBLICATION.md`,
+  `ENCRYPTED_CHUNK_TREE.md`, `STORAGE_ADMISSION.md`, and
+  `IDENTITY_DISCOVERY_AND_RECOVERY.md` define active protocol behavior.
+- `docs/cybou/82_MAIL_UI_UX.md` and `83_STORAGE_UI_UX.md` define product UX.
+- `docs/cybou/85_BETA_UI_ACCEPTANCE.md` defines Beta acceptance scenarios.
+
+Do not describe CYBOU as a public production service, BFT network, or completed
+Gmail/Google Drive replacement.
