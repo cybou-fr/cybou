@@ -32,8 +32,15 @@ the finalizer session ends.
 PoA block signatures follow the repository's hybrid-PQ policy: Ed25519 **and**
 ML-DSA-65 are both required and verified. No classical-only fallback is
 allowed. The signature digest is domain-separated and binds NetworkID, block
-ID, height, and parent block ID. Exact encoding and key derivation require
-cross-implementation vectors before cutover.
+ID, height, and parent block ID. Version 1 hashes
+`CYBOU/POA_FINALITY/V1 || NetworkID || BlockID || height_u64le || parent_block_id`
+with SHA-256, then signs the 32-byte digest with both components. The fixed
+certificate encoding is `version_u8 || NetworkID || BlockID || height_u64le ||
+parent_block_id || Ed25519_signature || ML-DSA-65_signature`; signatures are
+64 and 3,309 bytes, respectively. Verification also compares every certificate
+field with the independently reconstructed canonical block. Cross-implementation
+key-derivation, digest, signature, and encoding vectors remain required before
+cutover.
 Use the existing consensus hash primitive for block/finality IDs; BLAKE3 is
 introduced only for content-addressed encrypted chunks and their proofs.
 
