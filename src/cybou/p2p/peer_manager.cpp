@@ -87,7 +87,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         return false;
     }
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
-    if (m_runtime.HasStorageProvider()) caps |= (CAP_STORAGE | CAP_STORAGE_ABORT);
+    if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE;
     if (status.is_authority) {
         caps |= CAP_ACCEPT_OPERATIONS;
     }
@@ -394,6 +394,30 @@ std::vector<PeerInfo> PeerManager::StoragePeers() const
         }
     }
     return peers;
+}
+
+std::optional<ChunkAdmissionResult> PeerManager::PutAuthorizedChunk(
+    const std::string& address, const uint16_t port, const uint256& publication_operation_id,
+    const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes,
+    const ChunkAuthorizationProof& proof)
+{
+    Endpoint endpoint;
+    auto* session = FindStorageSession(address, port, &endpoint);
+    if (!session) return std::nullopt;
+    auto result = session->PutAuthorizedChunk(publication_operation_id, chunk_id, stored_bytes, proof);
+    if (!result) {
+        m_peers.erase(endpoint);
+        m_announced_blocks.erase(endpoint);
+    }
+    return result;
+}
+
+std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
+    const std::string& address, const uint16_t port, const ChunkId& chunk_id)
+{
+    auto* session = FindStorageSession(address, port);
+    if (!session) return std::nullopt;
+    return session->GetChunkById(chunk_id);
 }
 
 PeerSession* PeerManager::FindStorageSession(

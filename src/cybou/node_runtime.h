@@ -9,6 +9,7 @@
 #include <cybou/network_definition.h>
 #include <cybou/state_store.h>
 #include <cybou/storage_store.h>
+#include <cybou/finalized_chunk_store.h>
 
 #include <array>
 #include <chrono>
@@ -165,7 +166,12 @@ public:
     SyncPeerResult SyncFromConfiguredPeer(uint64_t max_blocks = 100);
     size_t ConnectedPeerCount() const;
     bool HasP2pEndpoint() const { return m_config.p2p_endpoint.has_value(); }
-    bool HasStorageProvider() const { return m_storage_store != nullptr; }
+    bool HasStorageProvider() const { return m_finalized_chunk_store != nullptr; }
+    ChunkAdmissionResult PutFinalizedChunk(const uint256& publication_operation_id,
+        const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
+        const ChunkAuthorizationProof& proof);
+    std::optional<std::vector<unsigned char>> GetFinalizedChunk(const ChunkId& chunk_id) const;
+    bool HasFinalizedChunk(const ChunkId& chunk_id) const;
     StorageWriteResult StoreEncryptedChunk(const StorageObjectId& object_id, const StorageEncryptedChunk& chunk);
     StorageWriteResult CommitStoredManifest(const StoragePublicManifest& manifest);
     bool AbortStoredObject(const StorageObjectId& object_id, uint32_t chunk_count);
@@ -209,6 +215,7 @@ private:
     uint256 m_network_id;
     std::unique_ptr<KVStore> m_db;
     std::unique_ptr<StorageObjectStore> m_storage_store;
+    std::unique_ptr<FinalizedChunkStore> m_finalized_chunk_store;
     CybouStateStore m_store;
     std::unique_ptr<CybouAuthorityNode> m_authority_node;
     std::unique_ptr<IdentityOperationCoordinator> m_identity_operation_coordinator;

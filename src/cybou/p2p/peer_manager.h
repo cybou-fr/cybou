@@ -80,6 +80,12 @@ public:
     std::vector<PeerInfo> Peers() const;
     /** Connected peers that advertised the optional ciphertext storage service. */
     std::vector<PeerInfo> StoragePeers() const;
+    std::optional<ChunkAdmissionResult> PutAuthorizedChunk(
+        const std::string& address, uint16_t port, const uint256& publication_operation_id,
+        const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
+        const ChunkAuthorizationProof& proof);
+    std::optional<std::vector<unsigned char>> GetChunkById(
+        const std::string& address, uint16_t port, const ChunkId& chunk_id);
     /** Storage calls use an existing session and must run on this manager's owner thread. */
     std::optional<StorageWriteResult> PutStorageChunk(
         const std::string& address, uint16_t port, const StorageObjectId& object_id,

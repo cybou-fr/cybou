@@ -3,6 +3,7 @@
 
 #include <cybou/p2p/session.h>
 #include <cybou/block_feed.h>
+#include <cybou/encrypted_chunk.h>
 #include <cybou/node_runtime.h>
 
 #include <boost/asio/ip/address.hpp>
@@ -40,6 +41,11 @@ uint32_t Read32(const unsigned char* data)
     uint32_t value{0};
     for (int i = 0; i < 4; ++i) value |= uint32_t{data[i]} << (8 * i);
     return value;
+}
+
+bool IsZeroChunkId(const ChunkId& id)
+{
+    return std::all_of(id.begin(), id.end(), [](const auto byte) { return byte == 0; });
 }
 } // namespace
 
@@ -462,6 +468,58 @@ bool PeerSession::SendPeers(const std::vector<std::pair<std::string, uint16_t>>&
     return Write(Frame{MessageType::PEERS, payload}, deadline);
 }
 
+std::optional<ChunkAdmissionResult> PeerSession::PutAuthorizedChunk(
+    const uint256& publication_operation_id, const ChunkId& chunk_id,
+    const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_STORAGE) || publication_operation_id.IsNull() ||
+        IsZeroChunkId(chunk_id) || stored_bytes.size() < ENCRYPTED_CHUNK_MIN_STORED_BYTES ||
+        stored_bytes.size() > ENCRYPTED_CHUNK_MAX_STORED_BYTES || proof.siblings.size() > 32) return std::nullopt;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    std::vector<unsigned char> init;
+    init.insert(init.end(), publication_operation_id.begin(), publication_operation_id.end());
+    init.insert(init.end(), chunk_id.begin(), chunk_id.end());
+    Put32(init, proof.leaf_index);
+    init.push_back(static_cast<unsigned char>(proof.siblings.size()));
+    for (const auto& sibling : proof.siblings) init.insert(init.end(), sibling.begin(), sibling.end());
+    Put32(init, static_cast<uint32_t>(stored_bytes.size()));
+    if (!Write(Frame{MessageType::PUT_AUTHORIZED_CHUNK, init}, deadline)) return std::nullopt;
+    for (size_t offset = 0; offset < stored_bytes.size(); offset += MAX_FRAME_PAYLOAD) {
+        const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, stored_bytes.size() - offset);
+        if (!Write(Frame{MessageType::AUTHORIZED_CHUNK_DATA,
+                std::vector<unsigned char>{stored_bytes.begin() + offset, stored_bytes.begin() + offset + count}}, deadline)) {
+            return std::nullopt;
+        }
+    }
+    const auto response = Read(deadline);
+    if (!response || response->type != MessageType::CHUNK_ADMISSION_RESULT || response->payload.size() != 1 ||
+        response->payload[0] > static_cast<uint8_t>(ChunkAdmissionStatus::STORAGE_ERROR)) return std::nullopt;
+    return ChunkAdmissionResult{static_cast<ChunkAdmissionStatus>(response->payload[0])};
+}
+
+std::optional<std::vector<unsigned char>> PeerSession::GetChunkById(const ChunkId& chunk_id)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_STORAGE) || IsZeroChunkId(chunk_id)) return std::nullopt;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!Write(Frame{MessageType::GET_CHUNK_BY_ID,
+            std::vector<unsigned char>{chunk_id.begin(), chunk_id.end()}}, deadline)) return std::nullopt;
+    const auto meta = Read(deadline);
+    if (!meta || meta->type != MessageType::CHUNK_ADMISSION_RESULT || meta->payload.size() != 5 ||
+        meta->payload[0] > 1) return std::nullopt;
+    const uint32_t size = Read32(meta->payload.data() + 1);
+    if (meta->payload[0] == 0) return size == 0 ? std::optional<std::vector<unsigned char>>{} : std::nullopt;
+    if (size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES) return std::nullopt;
+    std::vector<unsigned char> bytes;
+    bytes.reserve(size);
+    while (bytes.size() < size) {
+        const auto data = Read(deadline);
+        if (!data || data->type != MessageType::CHUNK_DATA || data->payload.empty() ||
+            data->payload.size() > size - bytes.size()) return std::nullopt;
+        bytes.insert(bytes.end(), data->payload.begin(), data->payload.end());
+    }
+    return ComputeChunkId(bytes) == chunk_id ? std::optional<std::vector<unsigned char>>{std::move(bytes)} : std::nullopt;
+}
+
 std::optional<StorageWriteResult> PeerSession::PutStorageChunk(
     const StorageObjectId& object_id, const StorageEncryptedChunk& chunk)
 {
@@ -610,110 +668,52 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     if (!request) {
         return m_socket.is_open();
     }
-    if (request->type == MessageType::STORAGE_ABORT) {
-        if (!(m_local_capabilities & CAP_STORAGE_ABORT) || request->payload.size() != 36) return false;
-        StorageObjectId object_id{};
-        std::copy_n(request->payload.begin(), object_id.size(), object_id.begin());
-        const uint32_t chunk_count = Read32(request->payload.data() + 32);
-        if (object_id == StorageObjectId{} || chunk_count > STORAGE_OBJECT_MAX_CHUNKS) return false;
-        const bool aborted = runtime.AbortStoredObject(object_id, chunk_count);
-        const StorageWriteResult result{aborted ? StorageWriteStatus::STORED : StorageWriteStatus::INVALID};
-        std::vector<unsigned char> payload{static_cast<unsigned char>(result.status)};
-        payload.insert(payload.end(), result.commitment.begin(), result.commitment.end());
-        return Write(Frame{MessageType::STORAGE_RESULT, payload});
-    }
-    if (request->type == MessageType::STORAGE_PUT_CHUNK || request->type == MessageType::STORAGE_COMMIT) {
-        if (!(m_local_capabilities & CAP_STORAGE)) return false;
-        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-        auto receive_bytes = [&](const uint32_t size, const uint32_t maximum) ->
-            std::optional<std::vector<unsigned char>> {
-            if (size == 0 || size > maximum) return std::nullopt;
-            std::vector<unsigned char> bytes;
-            bytes.reserve(size);
-            while (bytes.size() < size) {
-                const auto data = Read(deadline);
-                if (!data || data->type != MessageType::STORAGE_PUT_DATA || data->payload.empty() ||
-                    data->payload.size() > size - bytes.size()) return std::nullopt;
-                bytes.insert(bytes.end(), data->payload.begin(), data->payload.end());
-            }
-            return bytes;
-        };
-        auto acknowledge = [&](const StorageWriteResult& result) {
-            std::vector<unsigned char> payload{static_cast<unsigned char>(result.status)};
-            payload.insert(payload.end(), result.commitment.begin(), result.commitment.end());
-            return Write(Frame{MessageType::STORAGE_RESULT, payload}, deadline);
-        };
-        if (request->type == MessageType::STORAGE_PUT_CHUNK) {
-            if (request->payload.size() != 84) return false;
-            StorageObjectId object_id{};
-            std::copy_n(request->payload.begin(), object_id.size(), object_id.begin());
-            StorageEncryptedChunk chunk;
-            chunk.index = Read32(request->payload.data() + 32);
-            std::copy_n(request->payload.begin() + 36, chunk.nonce.size(), chunk.nonce.begin());
-            std::copy_n(request->payload.begin() + 48, chunk.chunk_id.size(), chunk.chunk_id.begin());
-            const uint32_t size = Read32(request->payload.data() + 80);
-            if (object_id == StorageObjectId{} || chunk.index >= STORAGE_OBJECT_MAX_CHUNKS ||
-                size < 16 || size > STORAGE_OBJECT_CHUNK_SIZE + 16) return false;
-            auto ciphertext = receive_bytes(size, STORAGE_OBJECT_CHUNK_SIZE + 16);
-            if (!ciphertext) return false;
-            chunk.ciphertext_and_tag = std::move(*ciphertext);
-            return acknowledge(runtime.StoreEncryptedChunk(object_id, chunk));
+    if (request->type == MessageType::PUT_AUTHORIZED_CHUNK) {
+        if (!(m_local_capabilities & CAP_STORAGE) || request->payload.size() < 73) return false;
+        uint256 publication_id;
+        std::copy_n(request->payload.begin(), 32, publication_id.begin());
+        ChunkId chunk_id{};
+        std::copy_n(request->payload.begin() + 32, 32, chunk_id.begin());
+        ChunkAuthorizationProof proof;
+        proof.leaf_index = Read32(request->payload.data() + 64);
+        const auto sibling_count = request->payload[68];
+        const size_t size_offset = 69 + size_t{sibling_count} * ChunkId{}.size();
+        if (sibling_count > 32 || request->payload.size() != size_offset + 4) return false;
+        proof.siblings.resize(sibling_count);
+        for (size_t i = 0; i < sibling_count; ++i) {
+            std::copy_n(request->payload.begin() + 69 + i * 32, 32, proof.siblings[i].begin());
         }
-        if (request->payload.size() != 4) return false;
-        const uint32_t size = Read32(request->payload.data());
-        auto bytes = receive_bytes(size, STORAGE_PUBLIC_MANIFEST_MAX_BYTES);
-        if (!bytes) return false;
-        const auto manifest = DecodeStoragePublicManifest(
-            std::span<const unsigned char, 32>{m_peer->network_id.begin(), 32}, *bytes);
-        if (!manifest) return acknowledge({StorageWriteStatus::INVALID});
-        return acknowledge(runtime.CommitStoredManifest(*manifest));
-    }
-    if (request->type == MessageType::STORAGE_GET_MANIFEST) {
-        if (!(m_local_capabilities & CAP_STORAGE) || request->payload.size() != 32) return false;
-        StorageObjectId object_id{};
-        std::copy(request->payload.begin(), request->payload.end(), object_id.begin());
-        const auto manifest = runtime.GetStoredManifest(object_id);
-        const auto encoded = manifest ? EncodeStoragePublicManifest(
-            std::span<const unsigned char, 32>{m_peer->network_id.begin(), 32}, *manifest) : std::nullopt;
+        const uint32_t size = Read32(request->payload.data() + size_offset);
+        if (size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES) return false;
         const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-        std::vector<unsigned char> meta{static_cast<unsigned char>(encoded
-            ? StorageWriteStatus::STORED : StorageWriteStatus::INVALID)};
-        Put32(meta, encoded ? static_cast<uint32_t>(encoded->size()) : 0);
-        if (!Write(Frame{MessageType::STORAGE_RESULT, meta}, deadline)) return false;
-        if (!encoded) return true;
-        for (size_t offset = 0; offset < encoded->size(); offset += MAX_FRAME_PAYLOAD) {
-            const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, encoded->size() - offset);
-            if (!Write(Frame{MessageType::STORAGE_DATA,
-                    std::vector<unsigned char>{encoded->begin() + offset, encoded->begin() + offset + count}}, deadline)) {
+        std::vector<unsigned char> bytes;
+        bytes.reserve(size);
+        while (bytes.size() < size) {
+            const auto data = Read(deadline);
+            if (!data || data->type != MessageType::AUTHORIZED_CHUNK_DATA || data->payload.empty() ||
+                data->payload.size() > size - bytes.size()) return false;
+            bytes.insert(bytes.end(), data->payload.begin(), data->payload.end());
+        }
+        const auto result = runtime.PutFinalizedChunk(publication_id, chunk_id, bytes, proof);
+        return Write(Frame{MessageType::CHUNK_ADMISSION_RESULT,
+            {static_cast<unsigned char>(result.status)}} , deadline);
+    }
+    if (request->type == MessageType::GET_CHUNK_BY_ID) {
+        if (!(m_local_capabilities & CAP_STORAGE) || request->payload.size() != 32) return false;
+        ChunkId chunk_id{};
+        std::copy_n(request->payload.begin(), 32, chunk_id.begin());
+        const auto bytes = runtime.GetFinalizedChunk(chunk_id);
+        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        std::vector<unsigned char> meta{static_cast<unsigned char>(bytes.has_value())};
+        Put32(meta, bytes ? static_cast<uint32_t>(bytes->size()) : 0);
+        if (!Write(Frame{MessageType::CHUNK_ADMISSION_RESULT, meta}, deadline)) return false;
+        if (!bytes) return true;
+        for (size_t offset = 0; offset < bytes->size(); offset += MAX_FRAME_PAYLOAD) {
+            const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, bytes->size() - offset);
+            if (!Write(Frame{MessageType::CHUNK_DATA,
+                    std::vector<unsigned char>{bytes->begin() + offset, bytes->begin() + offset + count}}, deadline)) {
                 return false;
             }
-        }
-        return true;
-    }
-    if (request->type == MessageType::STORAGE_GET_CHUNK) {
-        if (!(m_local_capabilities & CAP_STORAGE) || request->payload.size() != 36) return false;
-        StorageObjectId object_id{};
-        std::copy_n(request->payload.begin(), object_id.size(), object_id.begin());
-        const uint32_t index = Read32(request->payload.data() + 32);
-        const auto chunk = runtime.GetStoredChunk(object_id, index);
-        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-        std::vector<unsigned char> meta{static_cast<unsigned char>(chunk
-            ? StorageWriteStatus::STORED : StorageWriteStatus::INVALID)};
-        Put32(meta, chunk ? static_cast<uint32_t>(chunk->ciphertext_and_tag.size()) : 0);
-        Put32(meta, chunk ? chunk->index : index);
-        if (chunk) {
-            meta.insert(meta.end(), chunk->nonce.begin(), chunk->nonce.end());
-            meta.insert(meta.end(), chunk->chunk_id.begin(), chunk->chunk_id.end());
-        } else {
-            meta.resize(1 + 4 + 4 + 12 + 32, 0);
-        }
-        if (!Write(Frame{MessageType::STORAGE_RESULT, meta}, deadline)) return false;
-        if (!chunk) return true;
-        for (size_t offset = 0; offset < chunk->ciphertext_and_tag.size(); offset += MAX_FRAME_PAYLOAD) {
-            const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, chunk->ciphertext_and_tag.size() - offset);
-            if (!Write(Frame{MessageType::STORAGE_DATA,
-                    std::vector<unsigned char>{chunk->ciphertext_and_tag.begin() + offset,
-                        chunk->ciphertext_and_tag.begin() + offset + count}}, deadline)) return false;
         }
         return true;
     }

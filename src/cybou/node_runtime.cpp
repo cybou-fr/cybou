@@ -92,9 +92,9 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
         }
         std::filesystem::path storage_path;
         if (!m_config.memory_only) {
-            storage_path = std::filesystem::path{m_config.data_dir.string() + ".objects"};
+            storage_path = std::filesystem::path{m_config.data_dir.string() + ".chunks"};
         }
-        m_storage_store = std::make_unique<StorageObjectStore>(storage_path,
+        m_finalized_chunk_store = std::make_unique<FinalizedChunkStore>(storage_path,
             std::span<const unsigned char, 32>{m_network_id.begin(), 32},
             m_config.storage_capacity_bytes, m_config.memory_only, m_config.wipe_data);
     }
@@ -142,6 +142,25 @@ std::optional<StorageEncryptedChunk> CybouNodeRuntime::GetStoredChunk(
 {
     if (!m_storage_store) return std::nullopt;
     return m_storage_store->GetChunk(object_id, index);
+}
+
+ChunkAdmissionResult CybouNodeRuntime::PutFinalizedChunk(
+    const uint256& publication_operation_id, const ChunkId& chunk_id,
+    const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
+{
+    if (!m_finalized_chunk_store) return {ChunkAdmissionStatus::STORAGE_ERROR};
+    return m_finalized_chunk_store->PutChunk(publication_operation_id, chunk_id, stored_bytes, proof,
+        [this](const uint256& operation_id) { return FindFinalizedRootPublication(operation_id); });
+}
+
+std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetFinalizedChunk(const ChunkId& chunk_id) const
+{
+    return m_finalized_chunk_store ? m_finalized_chunk_store->GetChunk(chunk_id) : std::nullopt;
+}
+
+bool CybouNodeRuntime::HasFinalizedChunk(const ChunkId& chunk_id) const
+{
+    return m_finalized_chunk_store && m_finalized_chunk_store->HasChunk(chunk_id);
 }
 
 bool CybouNodeRuntime::InitializeGenesis(const CybouState& genesis, const bool sync)

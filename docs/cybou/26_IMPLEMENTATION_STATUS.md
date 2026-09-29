@@ -26,9 +26,9 @@ is the record of the superseded implementation; it is not part of the runtime.
 - Encrypted content-addressed chunks, a streaming ROOT/INDEX/DATA tree,
   inclusion proofs, durable local provider admission, and local reconstruction
   primitives.
-- CYP2 peer sessions for verified block sync and the existing storage transfer
-  path. The storage transfer path still needs to be aligned with the chunk-tree
-  admission model before it can be considered the canonical provider network.
+- CYP2 peer sessions for verified block sync and content-addressed chunk PUT/GET
+  with inclusion proofs. The old indexed-manifest client path has no server
+  handler; desktop provider selection and transfer calls still need migration.
 
 These components do not yet establish a usable Mail or Drive product. The
 client still needs publication construction and scanning, recursive retrieval,
@@ -41,9 +41,9 @@ capabilities and published content.
   canonical wire formats and hybrid cryptographic paths.
 - Finish the single PoA runtime path: startup key validation, signing,
   certificate verification, journal recovery, conflict halt, and state sync.
-- Replace the legacy indexed-manifest provider protocol with chunk-ID admission
-  and publication inclusion proofs, then implement placement, retrieval,
-  retry, retention, repair, and provider-loss handling.
+- Migrate desktop storage calls to chunk-ID admission and publication inclusion
+  proofs, then implement provider placement, durability thresholds, retry,
+  retention, repair, and provider-loss handling.
 - Integrate publication creation, Mail and Files scanning, recipient capsule
   opening, recursive chunk retrieval, local indexes, and clean-machine restore.
 - Finish Gmail-familiar Mail and Google Drive-familiar Files UI/UX acceptance.

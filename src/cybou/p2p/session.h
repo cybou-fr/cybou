@@ -6,6 +6,7 @@
 
 #include <uint256.h>
 #include <cybou/authority_node.h>
+#include <cybou/finalized_chunk_store.h>
 #include <cybou/storage_store.h>
 
 #include <boost/asio/ip/tcp.hpp>
@@ -20,15 +21,14 @@ namespace cybou { class CybouNodeRuntime; }
 namespace cybou::p2p {
 
 inline constexpr uint32_t MAX_FRAME_PAYLOAD{4096};
-inline constexpr uint8_t WIRE_VERSION{1};
+inline constexpr uint8_t WIRE_VERSION{2};
 inline constexpr uint64_t CAP_SERVE_BLOCKS{1ULL << 0};
 inline constexpr uint64_t CAP_ACCEPT_OPERATIONS{1ULL << 1};
 inline constexpr uint64_t CAP_BLOCK_INVENTORY{1ULL << 3};
 inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
 inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
 inline constexpr uint64_t CAP_STORAGE{1ULL << 7};
-/** Provider supports explicit cleanup of uncommitted sequential uploads. */
-inline constexpr uint64_t CAP_STORAGE_ABORT{1ULL << 8};
+inline constexpr uint64_t CAP_STORAGE_ABORT{1ULL << 8}; // Used only by the retiring desktop adapter.
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder
 // must enforce it so a malicious peer cannot stuff a PEERS frame with more
@@ -54,8 +54,13 @@ enum class MessageType : uint8_t {
     STORAGE_RESULT = 26,
     STORAGE_DATA = 27,
     STORAGE_ABORT = 28,
+    PUT_AUTHORIZED_CHUNK = 29,
+    AUTHORIZED_CHUNK_DATA = 30,
+    CHUNK_ADMISSION_RESULT = 31,
+    GET_CHUNK_BY_ID = 32,
+    CHUNK_DATA = 33,
 };
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::STORAGE_ABORT)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::CHUNK_DATA)};
 
 struct Frame {
     MessageType type;
@@ -130,6 +135,10 @@ public:
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     bool SendPeers(const std::vector<std::pair<std::string, uint16_t>>& peers,
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
+    std::optional<ChunkAdmissionResult> PutAuthorizedChunk(const uint256& publication_operation_id,
+        const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
+        const ChunkAuthorizationProof& proof);
+    std::optional<std::vector<unsigned char>> GetChunkById(const ChunkId& chunk_id);
     std::optional<StorageWriteResult> PutStorageChunk(const StorageObjectId& object_id,
         const StorageEncryptedChunk& chunk);
     std::optional<StorageWriteResult> CommitStorageManifest(const StoragePublicManifest& manifest);
