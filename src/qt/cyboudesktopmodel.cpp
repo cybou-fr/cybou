@@ -12,7 +12,7 @@
 #include <cybou/node_runtime.h>
 #include <cybou/wallet_service.h>
 
-#include <support/cleanse.h>
+#include <cybou/crypto/cleanse.h>
 
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -560,7 +560,7 @@ bool CybouDesktopModel::requestClaimName(const QString& label, const QString& va
                     Q_EMIT statusChanged();
                 }, Qt::QueuedConnection);
             });
-        memory_cleanse(password.data(), password.size());
+        cybou::crypto::CleanseMemory(password.data(), password.size());
         QMetaObject::invokeMethod(this, [this, result] {
             m_status.name_claim_pending = false;
             m_status.name_claim_status.clear();
@@ -600,8 +600,8 @@ bool CybouDesktopModel::requestRecoveryRootRotation(const QStringList& new_phras
         auto result = resume_pending
             ? m_identity_service->ResumeIdentityRotationSync(password)
             : m_identity_service->RotateIdentitySync(words, password);
-        memory_cleanse(password.data(), password.size());
-        for (auto& word : words) memory_cleanse(word.data(), word.size());
+        cybou::crypto::CleanseMemory(password.data(), password.size());
+        for (auto& word : words) cybou::crypto::CleanseMemory(word.data(), word.size());
         const auto outcome = result.phase == cybou::IdentityOperationPhase::FINALIZED ? CybouOperationOutcome::Finalized
             : result.phase == cybou::IdentityOperationPhase::ACCEPTED ||
                 result.phase == cybou::IdentityOperationPhase::UNCERTAIN ? CybouOperationOutcome::Pending
@@ -647,7 +647,7 @@ void CybouDesktopModel::requestUnlockIdentityAsync(const QString& vault_password
     if (m_vault_worker.joinable()) m_vault_worker.join();
     m_vault_worker = std::jthread([this, password = vault_password.toStdString(), done = std::move(done)]() mutable {
         const bool ok = m_identity_service->LoadVault(password);
-        memory_cleanse(password.data(), password.size());
+        cybou::crypto::CleanseMemory(password.data(), password.size());
         QMetaObject::invokeMethod(this, [this, ok, done = std::move(done)] {
             if (ok) finishUnlock();
             if (done) done(ok);
@@ -750,8 +750,8 @@ bool CybouDesktopModel::recoveryPhraseValid(const QString& phrase) const
     for (int i{0}; i < parts.size(); ++i) words[i] = parts[i].toLower().toStdString();
     auto entropy = cybou::DecodeRecoveryWords(words);
     const bool valid = entropy.has_value();
-    if (entropy) memory_cleanse(entropy->data(), entropy->size());
-    for (auto& word : words) memory_cleanse(word.data(), word.size());
+    if (entropy) cybou::crypto::CleanseMemory(entropy->data(), entropy->size());
+    for (auto& word : words) cybou::crypto::CleanseMemory(word.data(), word.size());
     return valid;
 }
 
@@ -761,9 +761,9 @@ std::optional<QStringList> CybouDesktopModel::generateRotationWords()
     auto entropy = cybou::GenerateRecoveryEntropy();
     if (!entropy) return std::nullopt;
     auto words = cybou::EncodeRecoveryWords(*entropy);
-    memory_cleanse(entropy->data(), entropy->size());
+    cybou::crypto::CleanseMemory(entropy->data(), entropy->size());
     QStringList list = ToQStringList(words);
-    for (auto& word : words) memory_cleanse(word.data(), word.size());
+    for (auto& word : words) cybou::crypto::CleanseMemory(word.data(), word.size());
     return list;
 }
 
