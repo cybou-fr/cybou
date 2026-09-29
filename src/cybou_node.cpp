@@ -112,6 +112,18 @@ uint64_t PositiveCount(const char* value)
     return count;
 }
 
+/** Storage capacity in bytes: at least 1 MiB, at most 1 TiB. */
+uint64_t CapacityBytes(const char* value)
+{
+    const std::string_view text{value};
+    if (text.empty() || !std::all_of(text.begin(), text.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+        throw std::runtime_error("invalid storage capacity");
+    }
+    const auto bytes = std::stoull(std::string{text});
+    if (bytes < (1ULL << 20) || bytes > (1ULL << 40)) throw std::runtime_error("invalid storage capacity");
+    return bytes;
+}
+
 uint64_t TargetHeight(const char* value)
 {
     uint64_t height{0};
@@ -418,7 +430,7 @@ int Main(const int argc, char* argv[])
         };
         if (argc == 11) {
             config.storage_enabled = true;
-            config.storage_capacity_bytes = PositiveCount(argv[10]);
+            config.storage_capacity_bytes = CapacityBytes(argv[10]);
         }
         if (p2p_port) {
             config.local_p2p_endpoint = std::make_pair(bind_address.to_string(), *p2p_port);
@@ -446,7 +458,7 @@ int Main(const int argc, char* argv[])
         const auto peer_port = Port(argv[5]);
         const auto bind_address = boost::asio::ip::make_address(argv[6]);
         const auto listen_port = Port(argv[7]);
-        const auto capacity = PositiveCount(argv[8]);
+        const auto capacity = CapacityBytes(argv[8]);
         const auto listen = std::make_pair(bind_address.to_string(), listen_port);
         cybou::NodeRuntimeConfig config{
             .network_definition = network->definition,
