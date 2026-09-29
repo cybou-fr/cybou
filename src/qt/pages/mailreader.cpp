@@ -110,11 +110,21 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     connect(m_archive, &QToolButton::clicked, this, [this] {
         const auto* item = m_model->mailItem(m_id);
         if (!item) return;
-        m_model->moveMail(m_id, item->folder == CybouMailFolder::Archive ? CybouMailFolder::Inbox : CybouMailFolder::Archive);
+        const QString id = m_id;
+        const auto from = item->folder;
+        const auto to = from == CybouMailFolder::Archive ? CybouMailFolder::Inbox : CybouMailFolder::Archive;
+        m_model->moveMail(id, to);
+        m_model->notify(to == CybouMailFolder::Archive ? tr("Conversation archived") : tr("Moved to Inbox"),
+            tr("Undo"), [model = m_model, id, from] { model->moveMail(id, from); });
         if (onBack) onBack();
     });
     connect(trash, &QToolButton::clicked, this, [this] {
-        m_model->moveMail(m_id, CybouMailFolder::Trash);
+        const auto* item = m_model->mailItem(m_id);
+        if (!item) return;
+        const QString id = m_id;
+        const auto from = item->folder;
+        m_model->moveMail(id, CybouMailFolder::Trash);
+        m_model->notify(tr("Moved to Trash"), tr("Undo"), [model = m_model, id, from] { model->moveMail(id, from); });
         if (onBack) onBack();
     });
     connect(m_star, &QToolButton::clicked, this, [this](bool on) { m_model->setMailStarred(m_id, on); });
@@ -359,7 +369,7 @@ void MailReader::refresh()
                 onSaveAttachment(m_id, attachment_id);
                 return;
             }
-            m_model->saveAttachmentToFiles(m_id, attachment_id);
+            if (!m_model->saveAttachmentToFiles(m_id, attachment_id).isEmpty()) m_model->notify(tr("Saved to Files"));
         });
         m_attachment_rows->addWidget(chip);
     }

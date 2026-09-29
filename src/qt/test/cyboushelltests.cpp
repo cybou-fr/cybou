@@ -8,6 +8,7 @@
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboumainwindow.h>
 #include <qt/cyboutheme.h>
+#include <qt/cybounotifier.h>
 #include <qt/cybouuifixtures.h>
 #include <qt/pages/emailpage.h>
 #include <qt/pages/mailcompose.h>
@@ -769,6 +770,31 @@ void CybouShellTests::keyboardAndAsyncUnlock()
     for (int i = 0; i < 50 && !done; ++i) QTest::qWait(10);
     QVERIFY(done);
     QCOMPARE(model->status().identity_state, CybouIdentityState::Active);
+    window->close();
+}
+
+void CybouShellTests::notificationsOfferUndo()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("mail")));
+    window->show();
+    auto* mail = dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
+    mail->openMessage(QStringLiteral("m-dinner"));
+    QToolButton* trash{nullptr};
+    for (auto* button : mail->reader()->findChildren<QToolButton*>()) {
+        if (button->toolTip() == QLatin1String{"Move to Trash"}) trash = button;
+    }
+    QVERIFY(trash);
+    trash->click();
+    QCOMPARE(model->mailItem(QStringLiteral("m-dinner"))->folder, CybouMailFolder::Trash);
+    auto* notifier = window->notifier();
+    QVERIFY(notifier->isVisible());
+    QCOMPARE(notifier->text(), QStringLiteral("Moved to Trash"));
+    QVERIFY(notifier->hasAction());
+    notifier->trigger();
+    QCOMPARE(model->mailItem(QStringLiteral("m-dinner"))->folder, CybouMailFolder::Inbox);
+    QVERIFY(!notifier->isVisible());
     window->close();
 }
 

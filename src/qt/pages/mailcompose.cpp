@@ -372,6 +372,7 @@ void MailCompose::saveDraftAndClose()
 {
     if (hasContent() && m_model->status().identity_state == CybouIdentityState::Active) {
         m_draft_id = m_model->saveMailDraft(currentMessage());
+        m_model->notify(tr("Draft saved"));
     }
     m_draft_id.clear();
     m_to->clear();
@@ -385,6 +386,7 @@ void MailCompose::saveDraftAndClose()
 void MailCompose::discard()
 {
     if (!m_draft_id.isEmpty()) m_model->deleteMail(m_draft_id);
+    if (hasContent()) m_model->notify(tr("Draft discarded"));
     m_draft_id.clear();
     m_to->clear();
     m_subject->clear();

@@ -60,6 +60,7 @@ add_library(cybou_qt STATIC
   cyboudesktopmodel.h
   cyboumainwindow.cpp
   cyboumainwindow.h
+  cybounotifier.h
   cyboutheme.cpp
   cyboutheme.h
   cybouproduct.h

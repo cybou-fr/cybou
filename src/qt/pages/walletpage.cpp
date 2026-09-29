@@ -194,6 +194,7 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     connect(m_model, &CybouDesktopModel::walletChanged, this, [this] { rebuildActivity(); });
     connect(m_model, &CybouDesktopModel::paymentFinished, this, [this](bool ok, const QString& error) {
         if (ok) {
+            m_model->notify(tr("Payment sent"));
             m_send_status->setText(tr("Sent. It appears in your activity."));
             m_to->clear();
             m_amount->clear();

@@ -66,6 +66,11 @@ CybouDesktopModel::~CybouDesktopModel()
     if (m_vault_worker.joinable()) m_vault_worker.join();
 }
 
+void CybouDesktopModel::notify(const QString& text, const QString& action_label, std::function<void()> action)
+{
+    Q_EMIT notificationRequested(text, action_label, std::move(action));
+}
+
 void CybouDesktopModel::setNodeStatus(bool running, int peer_count, bool online,
     const QString& data_directory)
 {

@@ -5,7 +5,12 @@
 #ifndef BITCOIN_QT_CYBOUUI_H
 #define BITCOIN_QT_CYBOUUI_H
 
+#include <qt/cybouproduct.h>
 #include <qt/cyboutheme.h>
+
+#include <QApplication>
+#include <QFocusEvent>
+#include <QStyle>
 
 #include <QDateTime>
 #include <QFrame>
@@ -464,6 +469,82 @@ inline QVBoxLayout* StatColumn(const QString& caption, const QString& value, QWi
     column->addWidget(value_label);
     return column;
 }
+
+/** Colour of the shared content lifecycle states (docs 82/83 §0). */
+inline QRgb stateColor(CybouContentState state)
+{
+    switch (state) {
+    case CybouContentState::Protected: return CybouTheme::MINT;
+    case CybouContentState::Preparing:
+    case CybouContentState::WaitingForConfirmation:
+    case CybouContentState::Securing: return CybouTheme::AMBER;
+    case CybouContentState::TemporarilyUnavailable:
+    case CybouContentState::NeedsAttention: return CybouTheme::ROSE;
+    case CybouContentState::Local: return CybouTheme::DIM;
+    }
+    return CybouTheme::DIM;
+}
+
+/** Rich text "● text" in the state's colour; used by every state chip. */
+inline QString stateChipHtml(CybouContentState state, const QString& text)
+{
+    return QStringLiteral("<span style=\"color:%1;\">&#9679;</span>&nbsp;<span style=\"color:%2;\">%3</span>")
+        .arg(CybouTheme::color(stateColor(state)).name(),
+            CybouTheme::color(state == CybouContentState::NeedsAttention ? CybouTheme::ROSE : CybouTheme::TEXT_SECONDARY).name(),
+            text.toHtmlEscaped());
+}
+
+/** Compact state chip label ("● Securing 42%"). */
+inline QLabel* StateChip(CybouContentState state, const QString& text, QWidget* parent)
+{
+    auto* label = new QLabel{parent};
+    label->setObjectName(QStringLiteral("stateChip"));
+    label->setTextFormat(Qt::RichText);
+    label->setText(stateChipHtml(state, text));
+    label->setAccessibleName(text);
+    label->setStyleSheet(QStringLiteral("background: transparent; border: none; font-size: 12px;"));
+    return label;
+}
+
+/**
+ * Shows the focus ring only for keyboard focus (Tab/Backtab/shortcut), so a
+ * mouse click or startup focus does not leave a ring on the control.
+ */
+class KeyboardFocusRing final : public QObject
+{
+public:
+    using QObject::QObject;
+
+    static void install(QWidget* widget)
+    {
+        static KeyboardFocusRing* ring = new KeyboardFocusRing{qApp};
+        widget->installEventFilter(ring);
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        auto* widget = qobject_cast<QWidget*>(watched);
+        if (!widget) return false;
+        if (event->type() == QEvent::FocusIn) {
+            const auto reason = static_cast<QFocusEvent*>(event)->reason();
+            setRing(widget, reason == Qt::TabFocusReason || reason == Qt::BacktabFocusReason ||
+                reason == Qt::ShortcutFocusReason);
+        } else if (event->type() == QEvent::FocusOut) {
+            setRing(widget, false);
+        }
+        return false;
+    }
+
+private:
+    static void setRing(QWidget* widget, bool on)
+    {
+        if (widget->property("kbdFocus").toBool() == on) return;
+        widget->setProperty("kbdFocus", on);
+        widget->style()->unpolish(widget);
+        widget->style()->polish(widget);
+    }
+};
 
 /** Single-line label that elides with "…" instead of widening its parent. */
 class ElidedLabel : public QLabel

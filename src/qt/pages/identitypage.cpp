@@ -341,6 +341,7 @@ void IdentityPage::refresh()
 void IdentityPage::copyAccountId()
 {
     QGuiApplication::clipboard()->setText(m_model->status().account_id);
+    m_model->notify(tr("Account ID copied"));
 }
 
 void IdentityPage::revealRecoveryPhrase()

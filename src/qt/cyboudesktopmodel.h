@@ -193,6 +193,12 @@ public:
     void setWalletService(cybou::CybouWalletService* wallet_service);
     cybou::CybouWalletService* walletService() const { return m_wallet_service; }
 
+    /**
+     * Short confirmation for the user ("Moved to Trash"), optionally with
+     * one action such as Undo. Rendered by the shell's notifier.
+     */
+    void notify(const QString& text, const QString& action_label = {}, std::function<void()> action = {});
+
     /* ---- Identity vault helpers (hide backend types from pages). ---- */
     /** True when a local vault already exists (unlock instead of create). */
     bool hasLocalVault() const;
@@ -261,6 +267,7 @@ public:
 
 Q_SIGNALS:
     void statusChanged();
+    void notificationRequested(const QString& text, const QString& action_label, std::function<void()> action);
     void capabilitiesChanged();
     void namesChanged();
     void mailChanged();

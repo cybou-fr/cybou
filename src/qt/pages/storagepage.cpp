@@ -78,20 +78,6 @@ Glyph FileGlyph(const CybouFileItem& item)
     return Glyph::FileText;
 }
 
-QRgb StateColor(CybouContentState state)
-{
-    switch (state) {
-    case CybouContentState::Protected: return CybouTheme::BRAND_TEAL_DARK;
-    case CybouContentState::Preparing:
-    case CybouContentState::WaitingForConfirmation:
-    case CybouContentState::Securing: return CybouTheme::AMBER;
-    case CybouContentState::TemporarilyUnavailable:
-    case CybouContentState::NeedsAttention: return CybouTheme::ROSE;
-    case CybouContentState::Local: return CybouTheme::TEXT_MUTED;
-    }
-    return CybouTheme::TEXT_MUTED;
-}
-
 QString ModifiedText(const QDateTime& when)
 {
     const QDateTime now = QDateTime::currentDateTime();
@@ -288,10 +274,11 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     auto* trash_key = new QShortcut{QKeySequence::Delete, this};
     trash_key->setContext(Qt::WidgetWithChildrenShortcut);
     connect(trash_key, &QShortcut::activated, this, [this] {
-        for (const auto& id : selectedIds()) {
-            if (m_view == View::Trash) continue;
-            m_model->trashFile(id);
-        }
+        const auto ids = selectedIds();
+        if (m_view == View::Trash || ids.isEmpty()) return;
+        for (const auto& id : ids) m_model->trashFile(id);
+        m_model->notify(ids.size() == 1 ? tr("Moved to Trash") : tr("%1 items moved to Trash").arg(ids.size()),
+            tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->restoreFile(i); });
     });
     auto* rename_key = new QShortcut{QKeySequence{Qt::Key_F2}, this};
     rename_key->setContext(Qt::WidgetWithChildrenShortcut);
@@ -442,8 +429,10 @@ void StoragePage::rebuild()
         row->setToolTip(NameColumn, file.name);
         row->setText(SizeColumn, file.folder ? QStringLiteral("—") : CybouProduct::sizeText(file.logical_size));
         row->setText(ModifiedColumn, ModifiedText(file.modified));
-        row->setText(StatusColumn, status);
-        row->setForeground(StatusColumn, CybouTheme::color(StateColor(file.state)));
+        // Protected is the norm; only other states draw attention.
+        if (!status.isEmpty() && (file.state != CybouContentState::Protected || file.retrieval != CybouRetrievalState::Idle))
+            m_table->setItemWidget(row, StatusColumn, StateChip(file.state, status, m_table));
+        row->setData(StatusColumn, Qt::AccessibleTextRole, status);
         row->setForeground(SizeColumn, CybouTheme::color(CybouTheme::TEXT_SECONDARY));
         row->setForeground(ModifiedColumn, CybouTheme::color(CybouTheme::TEXT_SECONDARY));
 
@@ -541,7 +530,8 @@ void StoragePage::promptNewFolder()
     bool ok{false};
     const QString name = QInputDialog::getText(this, tr("New folder"), tr("Folder name"), QLineEdit::Normal,
         tr("Untitled folder"), &ok).trimmed();
-    if (ok && !name.isEmpty()) m_model->createFolder(name, m_view == View::MyFiles ? m_folder : QString{});
+    if (ok && !name.isEmpty() && !m_model->createFolder(name, m_view == View::MyFiles ? m_folder : QString{}).isEmpty())
+        m_model->notify(tr("Folder “%1” created").arg(name));
 }
 
 void StoragePage::promptUploadFolder()
@@ -596,7 +586,10 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
     const QString id = item->id;
     QMenu menu{this};
     if (m_view == View::Trash) {
-        menu.addAction(tr("Restore"), this, [this, ids] { for (const auto& i : ids) m_model->restoreFile(i); });
+        menu.addAction(tr("Restore"), this, [this, ids] {
+            for (const auto& i : ids) m_model->restoreFile(i);
+            m_model->notify(ids.size() == 1 ? tr("Restored") : tr("%1 items restored").arg(ids.size()));
+        });
         menu.addAction(tr("Delete forever"), this, [this, ids] {
             if (QMessageBox::question(this, tr("Delete forever"),
                     tr("Remove from your Files? CYBOU releases retained storage according to the Storage retention policy."))
@@ -622,7 +615,11 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
         send->setEnabled(item->state == CybouContentState::Protected && onSendByMail && m_model->capabilities().mail);
     }
     menu.addSeparator();
-    menu.addAction(tr("Move to Trash"), this, [this, ids] { for (const auto& i : ids) m_model->trashFile(i); })
+    menu.addAction(tr("Move to Trash"), this, [this, ids] {
+        for (const auto& i : ids) m_model->trashFile(i);
+        m_model->notify(ids.size() == 1 ? tr("Moved to Trash") : tr("%1 items moved to Trash").arg(ids.size()),
+            tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->restoreFile(i); });
+    })
         ->setShortcut(QKeySequence::Delete);
     menu.addAction(tr("Details"), this, [this, id] { showDetails(id); });
     menu.exec(global_pos);

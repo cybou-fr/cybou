@@ -7,6 +7,7 @@
 #include <qt/cyboudesktopcontroller.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
+#include <qt/cybounotifier.h>
 #include <qt/cybouuifixtures.h>
 #include <qt/cybouui.h>
 #include <qt/pages/diagnosticspage.h>
@@ -67,6 +68,7 @@ QToolButton* NavigationButton(const QString& text, CybouTheme::NavIcon icon, QWi
     button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     button->setMinimumHeight(44);
     button->setFocusPolicy(Qt::TabFocus);
+    CybouUi::KeyboardFocusRing::install(button);
     return button;
 }
 
@@ -394,6 +396,12 @@ void CybouMainWindow::buildShell()
 
     connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, [this] { refreshHeader(); });
     refreshHeader();
+
+    m_notifier = new CybouUi::Notifier{main_column};
+    connect(m_desktop_model, &CybouDesktopModel::notificationRequested, this,
+        [this](const QString& text, const QString& action_label, std::function<void()> action) {
+            m_notifier->show(text, action_label, std::move(action));
+        });
 }
 
 void CybouMainWindow::refreshHeader()

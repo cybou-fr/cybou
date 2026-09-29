@@ -24,6 +24,10 @@ class QStackedWidget;
 class QSystemTrayIcon;
 class QToolButton;
 
+namespace CybouUi {
+class Notifier;
+}
+
 /** Stable page order of the Identity-centric shell. */
 enum class CybouPage {
     Home = 0,
@@ -53,6 +57,7 @@ public:
     QWidget* page(CybouPage page) const { return pageAt(static_cast<int>(page)); }
     int currentPageIndex() const;
     int pageCount() const;
+    CybouUi::Notifier* notifier() const { return m_notifier; }
     bool sidebarCompact() const { return m_sidebar_compact; }
 
 Q_SIGNALS:
@@ -80,6 +85,7 @@ private:
     QMenu* m_tray_menu{nullptr};
     QDialog* m_diagnostics{nullptr};
     bool m_sidebar_compact{false};
+    CybouUi::Notifier* m_notifier{nullptr};
 
     void buildShell();
     QFrame* buildSidebar(QWidget* parent);

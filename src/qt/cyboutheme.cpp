@@ -75,7 +75,7 @@ QString CybouTheme::applicationStyleSheet()
         QToolButton { border: 1px solid transparent; border-radius: 10px; padding: 9px 12px; text-align: left; color: @text_secondary@; font-size: 14px; }
         QToolButton:hover { background: @surface@; color: @teal_dark@; }
         QToolButton:checked { background: @mint_soft@; color: @teal_dark@; font-weight: 700; }
-        QToolButton:focus { border-color: @teal@; color: @teal_dark@; }
+        QToolButton[kbdFocus="true"] { border-color: @teal@; }
         QFrame#separator { color: @border@; }
 
         QFrame#card { background: @canvas@; border: 1px solid @border@; border-radius: 14px; }
@@ -97,21 +97,21 @@ QString CybouTheme::applicationStyleSheet()
         QLabel#dot[tint="blue"] { background: @blue@; }
         QLabel#dot[tint="amber"] { background: @amber@; }
         QLabel#dot[tint="muted"] { background: @dim@; }
-        QLabel#eyebrow { color: @text_muted@; font-size: 11px; font-weight: 800; letter-spacing: 3px; }
-        QLabel#heroTitle { color: @text_primary@; font-size: 30px; font-weight: 800; }
-        QLabel#heroTitleBig { color: @text_primary@; font-size: 34px; font-weight: 800; }
+        QLabel#eyebrow { color: @text_muted@; font-size: 11px; font-weight: 800; letter-spacing: 0.6px; }
+        QLabel#heroTitle { color: @text_primary@; font-size: 24px; font-weight: 800; }
+        QLabel#heroTitleBig { color: @text_primary@; font-size: 28px; font-weight: 800; }
         QLabel#heroSubtitle { color: @text_secondary@; font-size: 14px; }
         QFrame#heroHeader { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f4fdf8, stop:1 #e5f9ef); border: 1px solid #cdeede; border-radius: 16px; }
         QFrame#heroPanel { background: @canvas@; border: 1px solid @border@; border-radius: 16px; }
-        QLabel#pageTitle { color: @text_primary@; font-size: 28px; font-weight: 800; }
+        QLabel#pageTitle { color: @text_primary@; font-size: 22px; font-weight: 800; }
         QLabel#pageSubtitle { color: @text_muted@; font-size: 14px; }
-        QLabel#sectionTitle { color: @text_primary@; font-size: 19px; font-weight: 750; }
+        QLabel#sectionTitle { color: @text_primary@; font-size: 17px; font-weight: 750; }
         QLabel#cardLabel { color: @text_muted@; font-size: 12px; font-weight: 700; }
         QLabel#cardTitle { color: @text_primary@; font-size: 21px; font-weight: 800; }
         QLabel#serviceTitle { color: @text_primary@; font-size: 16px; font-weight: 750; }
         QLabel#bodyText { color: @text_secondary@; font-size: 14px; }
         QLabel#mutedText { color: @text_muted@; font-size: 13px; }
-        QLabel#metric { color: @text_primary@; font-size: 26px; font-weight: 800; }
+        QLabel#metric { color: @text_primary@; font-size: 24px; font-weight: 800; }
         QLabel#metricCaption { color: @text_muted@; font-size: 12px; }
         QLabel#statusBadge { background: @mint_soft@; color: @teal_dark@; border-radius: 13px; padding: 6px 12px; font-weight: 700; }
         QLabel#neutralBadge { background: @surface@; color: @text_muted@; border-radius: 11px; padding: 4px 9px; }

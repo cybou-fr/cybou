@@ -111,11 +111,12 @@ QWidget* MailRow(const CybouMailItem& item, bool online, QWidget* parent)
         top->addWidget(star);
     }
     const bool pending = CybouProduct::contentPending(item.state) || item.state == CybouContentState::NeedsAttention;
-    auto* when = new QLabel{pending && !item.draft ? CybouProduct::contentStateText(item.state, online) : shortTime(item.time), row};
-    when->setObjectName(QStringLiteral("rowMeta"));
+    QLabel* when{nullptr};
     if (pending && !item.draft) {
-        when->setStyleSheet(QStringLiteral("color: %1;").arg(CybouTheme::color(
-            item.state == CybouContentState::NeedsAttention ? CybouTheme::ROSE : CybouTheme::AMBER).name()));
+        when = StateChip(item.state, CybouProduct::contentStateText(item.state, online), row);
+    } else {
+        when = new QLabel{shortTime(item.time), row};
+        when->setObjectName(QStringLiteral("rowMeta"));
     }
     top->addWidget(when);
     text->addLayout(top);
@@ -238,6 +239,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     m_compose->onSent = [this](const QString& id) {
         setView(View::Sent);
         openMessage(id);
+        m_model->notify(tr("Sending… It shows as Sent once it is stored securely."));
     };
 
     connect(m_folders, &QListWidget::currentRowChanged, this, [this](int row) {

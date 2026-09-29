@@ -46,6 +46,7 @@ private Q_SLOTS:
     void normalUiAvoidsProtocolVocabulary();
     void layoutsFitWithoutHorizontalScroll();
     void keyboardAndAsyncUnlock();
+    void notificationsOfferUndo();
     void themeResolvesAllTokens();
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();
