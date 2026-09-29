@@ -435,18 +435,22 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
     }
     if (p2p_endpoint && m_peer_manager) {
         std::lock_guard p2p_lock(m_p2p_mutex);
-        auto connected = m_peer_manager->Peers();
-        if (connected.empty() && !m_peer_manager->Connect(p2p_endpoint->first, p2p_endpoint->second)) {
-            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
+        // The configured finalizer always gets the operation, reconnecting if
+        // its session dropped (for example after a finalizer restart) while
+        // other peers, such as storage providers, stayed connected.
+        std::vector<std::pair<std::string, uint16_t>> accepting_candidates{*p2p_endpoint};
+        for (const auto& peer : m_peer_manager->Peers()) {
+            const std::pair<std::string, uint16_t> candidate{peer.address, peer.port};
+            if ((peer.hello.capabilities & p2p::CAP_ACCEPT_OPERATIONS) && candidate != *p2p_endpoint) {
+                accepting_candidates.push_back(candidate);
+            }
         }
-        connected = m_peer_manager->Peers();
-        std::vector<std::pair<std::string, uint16_t>> accepting_candidates;
-        accepting_candidates.reserve(connected.size());
-        for (const auto& peer : connected) accepting_candidates.emplace_back(peer.address, peer.port);
         const auto submitted = m_peer_manager->SubmitOperationToAny(accepting_candidates, op);
+        // No acknowledgment from anyone is not a rejection: nothing proved the
+        // operation invalid, so the exact bytes are retained for retry.
         auto result = submitted.acknowledgment.value_or(
             OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id});
-        result.delivery_uncertain = submitted.delivery_uncertain;
+        result.delivery_uncertain = submitted.delivery_uncertain || !submitted.acknowledgment;
         {
             std::lock_guard lock(m_mutex);
             if (result.status == OperationSubmitStatus::ACCEPTED ||
