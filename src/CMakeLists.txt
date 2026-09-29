@@ -61,7 +61,6 @@ endif()
 # CYBOU-owned dependency boundary for consensus-neutral hash-value types.
 # The shared uint256 implementation uses only standard-library code here.
 add_library(cybou_base STATIC
-  cybou/fast_range.h
   uint256.cpp
 )
 
@@ -215,7 +214,6 @@ add_library(cybou_node STATIC
   cybou/block_feed.cpp
   cybou/network_definition.cpp
   cybou/protocol_operation.cpp
-  cybou/gcs_filter.cpp
   cybou/identity_operation_coordinator.cpp
   cybou/wallet_service.cpp
   cybou/node_runtime.cpp
@@ -232,7 +230,6 @@ target_link_libraries(cybou_node
     cybou_core
     Boost::headers
   PRIVATE
-    bitcoin_crypto
     leveldb
     $<TARGET_NAME_IF_EXISTS:libevent::core>
     $<TARGET_NAME_IF_EXISTS:libevent::extra>
