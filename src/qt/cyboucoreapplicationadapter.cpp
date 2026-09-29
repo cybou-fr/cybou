@@ -121,6 +121,8 @@ QString DisplayName(const cybou::CybouState* state, const cybou::AccountId& acco
 
 struct CybouCoreApplicationAdapter::Session {
     CybouCoreApplicationAdapter* owner;
+    /** Snapshots of a replaced session (lock, rotation reopen) never reach the GUI. */
+    std::uint64_t generation;
     cybou::CybouNodeRuntime& runtime;
     cybou::CybouKeyStore& keystore;
     std::filesystem::path root;
@@ -169,7 +171,7 @@ struct CybouCoreApplicationAdapter::Session {
 
     Session(CybouCoreApplicationAdapter* adapter, cybou::CybouNodeRuntime& rt, cybou::CybouKeyStore& ks,
         std::filesystem::path identity_root, int interval, cybou::StorageTransport* override_transport)
-        : owner{adapter}, runtime{rt}, keystore{ks}, root{std::move(identity_root)}, refresh_ms{interval},
+        : owner{adapter}, generation{adapter->m_session_generation}, runtime{rt}, keystore{ks}, root{std::move(identity_root)}, refresh_ms{interval},
           transport_override{override_transport}
     {
         worker = std::jthread{[this](std::stop_token stop) { Run(stop); }};
@@ -195,6 +197,15 @@ struct CybouCoreApplicationAdapter::Session {
     void ToGui(F&& f)
     {
         QMetaObject::invokeMethod(owner, std::forward<F>(f), Qt::QueuedConnection);
+    }
+
+    /** State from this session only: a late snapshot of a replaced one is stale. */
+    template <typename F>
+    void StateToGui(F&& f)
+    {
+        QMetaObject::invokeMethod(owner, [owner = owner, generation = generation, f = std::forward<F>(f)]() mutable {
+            if (owner->m_session && owner->m_session_generation == generation) f();
+        }, Qt::QueuedConnection);
     }
 
     bool Open()
@@ -225,7 +236,7 @@ struct CybouCoreApplicationAdapter::Session {
     void Run(std::stop_token stop)
     {
         const bool ready = Open();
-        ToGui([owner = owner, ready] { owner->setReady(ready); });
+        StateToGui([owner = owner, ready] { owner->setReady(ready); });
         if (!ready) return;
         while (!stop.stop_requested()) {
             std::deque<std::function<void(Session&)>> pending;
@@ -258,7 +269,7 @@ struct CybouCoreApplicationAdapter::Session {
     {
         // Same Identity, new key material (IdentityRotate finalized elsewhere): reopen.
         if (!db->IsUnlocked() && keystore.HasKey() && keystore.GetAccountId() == std::optional{db->Account()}) {
-            ToGui([owner = owner] { owner->identityKeysChanged(); });
+            StateToGui([owner = owner] { owner->identityKeysChanged(); });
             return;
         }
         const auto progress = application->Scan();
@@ -357,7 +368,7 @@ struct CybouCoreApplicationAdapter::Session {
             items.append(item);
         }
         auto files = FilesSnapshot();
-        ToGui([owner = owner, items = std::move(items), files = std::move(files), mail_restore]() mutable {
+        StateToGui([owner = owner, items = std::move(items), files = std::move(files), mail_restore]() mutable {
             owner->applySnapshot(std::move(items), std::move(files), true, mail_restore);
         });
     }
@@ -590,6 +601,7 @@ void CybouCoreApplicationAdapter::openIdentity()
     if (!account) return;
     // One encrypted, rebuildable Application DB per Identity.
     const auto root = m_data_directory / "identities" / account->Value().GetHex();
+    ++m_session_generation;
     m_session = std::make_unique<Session>(this, m_runtime, m_identity.GetKeyStore(), root, m_refresh_ms,
         m_transport_override);
 }
@@ -599,13 +611,8 @@ void CybouCoreApplicationAdapter::identityKeysChanged()
     if (!m_session || m_reopening) return;
     m_reopening = true;
     // Drafts exist only on this device: keep the latest ones across the reopen.
-    QVector<CybouMailItem> drafts = m_last_drafts;
-    for (const auto& pending : std::as_const(m_pending_drafts)) {
-        const auto same = std::find_if(drafts.begin(), drafts.end(),
-            [&](const CybouMailItem& d) { return d.id == pending.id; });
-        if (same != drafts.end()) *same = pending;
-        else drafts.append(pending);
-    }
+    auto drafts = m_known_drafts;
+    for (const auto& pending : std::as_const(m_pending_drafts)) drafts.insert(pending.id, pending);
     m_session.reset();
     setReady(false);
     openIdentity();
@@ -620,6 +627,7 @@ void CybouCoreApplicationAdapter::closeIdentity()
     m_session.reset();
     finishRotation(false, tr("CYBOU was locked before your data was secured. The current recovery phrase stays active."));
     m_pending_drafts.clear();
+    m_known_drafts.clear();
     m_deleted_drafts.clear();
     m_pending_sends.clear();
     m_client_ids.clear();
@@ -665,12 +673,22 @@ void CybouCoreApplicationAdapter::applySnapshot(QVector<CybouMailItem> items, QV
         if (!present.contains(pending.id)) items.append(pending);
     }
     for (const auto& pending : std::as_const(m_pending_sends)) items.append(pending);
-    setReady(ready);
-    m_last_drafts.clear();
-    for (const auto& item : std::as_const(items)) {
-        if (item.draft) m_last_drafts.append(item);
+    // Drafts live only on this device. One the store no longer returns (a
+    // projection rebuilt under rotated keys) is written back, never dropped;
+    // only an explicit delete forgets it.
+    QVector<CybouMailItem> lost;
+    for (const auto& known : std::as_const(m_known_drafts)) {
+        if (!present.contains(known.id) && !m_pending_drafts.contains(known.id) && !m_deleted_drafts.contains(known.id)) {
+            lost.append(known);
+        }
     }
+    for (const auto& item : std::as_const(items)) {
+        if (item.draft) m_known_drafts.insert(item.id, item);
+    }
+    setReady(ready);
+    for (const auto& draft : std::as_const(lost)) items.append(draft);
     Q_EMIT mailSnapshot(items);
+    for (const auto& draft : std::as_const(lost)) saveMailDraft(draft);
     m_last_files = std::move(files);
     emitFiles();
     Q_EMIT restoreProgressChanged(restore, restore);
@@ -916,6 +934,7 @@ void CybouCoreApplicationAdapter::deleteMail(const QString& id)
     }
     if (id.startsWith(QStringLiteral("draft-"))) {
         m_pending_drafts.remove(id);
+        m_known_drafts.remove(id);
         m_deleted_drafts.insert(id);
         Q_EMIT mailItemRemoved(id);
         m_session->Post([draft_id = id.toStdString()](Session& s) { s.application->DeleteDraft(draft_id); });

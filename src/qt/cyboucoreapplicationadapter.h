@@ -88,8 +88,10 @@ private:
     bool m_mail_ready{false};
     cybou::StorageTransport* m_transport_override{nullptr};
     bool m_reopening{false};
+    std::uint64_t m_session_generation{0};
     /** Drafts from the latest snapshot, carried across a key change. */
-    QVector<CybouMailItem> m_last_drafts;
+    /** Every draft of this session by id; forgotten only by an explicit delete. */
+    QHash<QString, CybouMailItem> m_known_drafts;
     int m_refresh_ms{3000};
     /** Draft edits and deletes not yet reflected by a worker snapshot. Drafts
         persist in the encrypted Application DB and are never published. */
