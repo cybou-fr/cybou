@@ -1,10 +1,11 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
-#include <test/cybou_service_test_fixture.h>
 #include <cybou/crypto/cleanse.h>
+#include <cybou/hex.h>
 #include <cybou/kv_store.h>
 #include <cybou/poa_finalizer.h>
+#include <test/cybou_service_test_fixture.h>
 #include <test/cybou_test_setup.h>
 
 #include <boost/test/unit_test.hpp>
@@ -44,7 +45,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     BOOST_CHECK_EQUAL(found.height, 1U);
     BOOST_CHECK_EQUAL(found.operation_index, 0U);
     BOOST_CHECK(found.block_id == cybou::ComputeBlockId(block->block));
-    const auto missing_id = *op_id == uint256::ONE ? *uint256::FromUserHex("02") : uint256::ONE;
+    const auto missing_id = *op_id == uint256::ONE ? *cybou::ParseUint256UserHex("02") : uint256::ONE;
     const auto missing = observer.FindFinalizedOperation(missing_id);
     BOOST_CHECK(missing.status == cybou::FinalizedOperationLookupStatus::NOT_FOUND);
     BOOST_CHECK_EQUAL(missing.scanned_height, 1U);

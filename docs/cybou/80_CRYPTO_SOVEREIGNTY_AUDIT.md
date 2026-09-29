@@ -19,6 +19,12 @@ recreating inherited Bitcoin facilities that the active protocol does not use.
   uses the CYBOU OpenSSL wrapper.
 - `cybou_node` no longer contains the unused CYBOU GCS/compact-filter clone;
   block filtering is not part of the active CYP2 protocol.
+- `cybou-core-test` uses a CYBOU-owned temporary-directory fixture and does not
+  link the inherited Bitcoin node, CLI, consensus, or test harness targets.
+- CYBOU crypto tests use published vectors and CYBOU-local test hex helpers;
+  they do not compare against inherited Bitcoin crypto implementations.
+- Legacy `CChainParams` and 100-block Bitcoin fixture tests are removed from the
+  CYBOU test suite; current network-definition behavior is tested directly.
 
 ## Remaining inherited boundary
 

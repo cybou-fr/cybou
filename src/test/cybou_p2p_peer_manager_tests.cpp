@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+#include <cybou/hex.h>
 #include <cybou/p2p/peer_manager.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_test_setup.h>
@@ -116,7 +117,7 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_network_peer)
     using boost::asio::ip::tcp;
     const auto loopback = boost::asio::ip::address_v4::loopback();
     tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
-    const auto wrong_network = uint256::FromUserHex("02");
+    const auto wrong_network = cybou::ParseUint256UserHex("02");
     BOOST_REQUIRE(wrong_network);
     std::jthread server{[&] {
         tcp::socket socket{io};
@@ -234,7 +235,7 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_genesis_tip)
     const auto loopback = boost::asio::ip::address_v4::loopback();
     tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
     const auto wrong_tip = fixture.definition.genesis_block_id == uint256::ONE ?
-        *uint256::FromUserHex("02") : uint256::ONE;
+        *cybou::ParseUint256UserHex("02") : uint256::ONE;
     bool handshake_ok{false};
     std::jthread server{[&] {
         tcp::socket socket{io};
