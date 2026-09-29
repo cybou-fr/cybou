@@ -77,7 +77,7 @@ editing an included file.
 | spec/market_strategy.yaml | 51 | 542c848877114c0f |
 | spec/monetary_model.yaml | 62 | 6dbc549d969223bd |
 | spec/onboarding.yaml | 30 | 4a12ead846d1a692 |
-| spec/poa_chunk_tree.yaml | 157 | af2e9065632d3d45 |
+| spec/poa_chunk_tree.yaml | 157 | 4e5798b7f663db4b |
 | spec/proof_of_trust.yaml | 87 | c2e669120297d686 |
 | spec/reward_policy.yaml | 25 | 028068b4589002b5 |
 | spec/validator_reward_test_vectors.csv | 5 | 2f439357448d8aa1 |

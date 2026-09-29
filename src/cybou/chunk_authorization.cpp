@@ -36,7 +36,7 @@ ChunkId HashNode(const ChunkId& left, const ChunkId& right)
 
 bool ValidChunkSet(const std::span<const AuthorizedChunk> chunks)
 {
-    if (chunks.empty() || chunks.size() > ROOT_PUBLICATION_MAX_CHUNKS) return false;
+    if (chunks.empty() || chunks.size() > MAX_PUBLICATION_CHUNKS) return false;
     for (const auto& chunk : chunks) {
         if (IsZero(chunk.id)) return false;
     }
@@ -57,7 +57,7 @@ ChunkId ChunkAuthorizationNodeHash(const ChunkId& left, const ChunkId& right)
 
 bool ChunkAuthorizationAccumulator::Add(const AuthorizedChunk& chunk)
 {
-    if (m_failed || m_chunk_count >= ROOT_PUBLICATION_MAX_CHUNKS || IsZero(chunk.id)) {
+    if (m_failed || m_chunk_count >= MAX_PUBLICATION_CHUNKS || IsZero(chunk.id)) {
         m_failed = true;
         return false;
     }

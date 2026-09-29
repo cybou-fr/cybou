@@ -216,7 +216,7 @@ public:
 private:
     bool Store(const EncryptedChunk& chunk)
     {
-        if (m_summary.chunk_count >= ENCRYPTED_TREE_MAX_CHUNKS ||
+        if (m_summary.chunk_count >= MAX_PUBLICATION_CHUNKS ||
             !m_stage(static_cast<std::uint32_t>(m_summary.chunk_count), chunk) ||
             !m_authorization.Add(AuthorizedChunk{chunk.id}) ||
             !CheckedAdd(m_summary.chunk_count, 1)) return false;

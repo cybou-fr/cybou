@@ -46,11 +46,11 @@ NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& d
     const auto per_kib = definition.protocol_parameters.root_publication_fee_per_started_kib;
     const auto per_chunk = definition.protocol_parameters.root_publication_fee_per_chunk;
     if ((per_kib != 0 && max_fee_kib > std::numeric_limits<uint64_t>::max() / per_kib) ||
-        (per_chunk != 0 && ROOT_PUBLICATION_MAX_CHUNKS > std::numeric_limits<uint64_t>::max() / per_chunk)) {
+        (per_chunk != 0 && MAX_PUBLICATION_CHUNKS > std::numeric_limits<uint64_t>::max() / per_chunk)) {
         return NetworkDefinitionError::INVALID_ROOT_PUBLICATION_FEES;
     }
     const auto max_byte_fee = static_cast<uint64_t>(max_fee_kib) * per_kib;
-    const auto max_chunk_fee = static_cast<uint64_t>(ROOT_PUBLICATION_MAX_CHUNKS) * per_chunk;
+    const auto max_chunk_fee = static_cast<uint64_t>(MAX_PUBLICATION_CHUNKS) * per_chunk;
     if (max_chunk_fee > std::numeric_limits<uint64_t>::max() - max_byte_fee) {
         return NetworkDefinitionError::INVALID_ROOT_PUBLICATION_FEES;
     }

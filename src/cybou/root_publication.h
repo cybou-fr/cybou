@@ -5,6 +5,7 @@
 #ifndef CYBOU_ROOT_PUBLICATION_H
 #define CYBOU_ROOT_PUBLICATION_H
 
+#include <cybou/protocol_limits.h>
 #include <cybou/chunk_id.h>
 #include <cybou/encrypted_chunk.h>
 #include <cybou/identity_kem.h>
@@ -22,7 +23,6 @@ namespace cybou {
 
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_BYTES{128 * 1024};
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_OPERATION_BYTES{144 * 1024};
-inline constexpr std::uint32_t ROOT_PUBLICATION_MAX_CHUNKS{std::numeric_limits<std::uint32_t>::max()};
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_CAPSULES{32};
 inline constexpr std::size_t ROOT_CAPSULE_WRAPPED_KEY_BYTES{60};
 inline constexpr std::size_t ROOT_CAPSULE_NONCE_BYTES{12};

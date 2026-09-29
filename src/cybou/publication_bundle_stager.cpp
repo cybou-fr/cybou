@@ -50,7 +50,7 @@ std::optional<StagedApplicationTree> PublicationBundleStager::StageTree(
     }
     const auto staged = BuildEncryptedChunkTree(m_network_id, source,
         [&](const std::uint32_t, const EncryptedChunk& chunk) {
-            if (m_next_leaf == ROOT_PUBLICATION_MAX_CHUNKS) return false;
+            if (m_next_leaf == MAX_PUBLICATION_CHUNKS) return false;
             const auto status = m_blobs.Put(chunk.id, chunk.stored_bytes);
             if (status != ChunkBlobPutStatus::STORED && status != ChunkBlobPutStatus::ALREADY_STORED) return false;
             if (!m_index.Add(m_next_leaf, AuthorizedChunk{chunk.id})) return false;

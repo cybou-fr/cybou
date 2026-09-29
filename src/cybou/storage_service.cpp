@@ -26,7 +26,6 @@ bool HasProvider(std::span<const StorageEndpoint> replicas, const StorageEndpoin
         [&](const StorageEndpoint& r) { return SameProvider(r, provider); });
 }
 /** Bound on a single placement record: the largest publication chunk count. */
-constexpr std::uint32_t MAX_PLACEMENT_LEAVES{1U << 20};
 constexpr std::size_t MAX_REPLICAS_PER_CHUNK{16};
 
 constexpr std::string_view PLACEMENT_INDEX_KEY{"storage/placements"};
@@ -167,7 +166,7 @@ std::optional<StorageService::Placement> StorageService::Load(const uint256& ope
     if (!in.Take(magic) || magic != MAGIC || !in.Take(std::span{placement.operation_id.begin(), 32}) ||
         placement.operation_id != operation_id) return std::nullopt;
     const auto count = in.U32();
-    if (!count || *count == 0 || *count > MAX_PLACEMENT_LEAVES) return std::nullopt;
+    if (!count || *count == 0 || *count > MAX_PUBLICATION_CHUNKS) return std::nullopt;
     placement.leaves.resize(*count);
     placement.replicas.resize(*count);
     for (std::uint32_t i{0}; i < *count; ++i) {
@@ -275,7 +274,7 @@ PublicationDurability StorageService::Secure(const uint256& operation_id, const 
     // Only finalized publications may be placed, and only with their exact chunk set.
     const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
     if (!publication) return {.state = DurabilityState::SECURING, .error = "Publication is not finalized yet"};
-    if (leaves.empty() || leaves.size() > MAX_PLACEMENT_LEAVES || leaves.size() != publication->chunk_count) {
+    if (leaves.empty() || leaves.size() > MAX_PUBLICATION_CHUNKS || leaves.size() != publication->chunk_count) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Chunk list does not match the publication"};
     }
     ChunkAuthorizationAccumulator accumulator;
@@ -322,8 +321,8 @@ PublicationDurability StorageService::Rebuild(const uint256& operation_id,
     }
     const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
     if (!publication) return {.state = DurabilityState::SECURING, .error = "Publication is not finalized yet"};
-    if (publication->chunk_count == 0 || publication->chunk_count > MAX_PLACEMENT_LEAVES ||
-        candidate_chunks.empty() || candidate_chunks.size() > MAX_PLACEMENT_LEAVES) {
+    if (publication->chunk_count == 0 || publication->chunk_count > MAX_PUBLICATION_CHUNKS ||
+        candidate_chunks.empty() || candidate_chunks.size() > MAX_PUBLICATION_CHUNKS) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Candidate chunk set is invalid"};
     }
 

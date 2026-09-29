@@ -81,7 +81,7 @@ chunks:
     root_children_max: 128
     root_private_metadata_max_bytes: 245760
     tree_depth_max_nodes: 32
-    chunk_count_max: 4294967295
+    chunk_count_max: 1048576  # MAX_PUBLICATION_CHUNKS, shared by consensus and storage
     per_file_256MiB_cap: absent
     chunk_boundaries: cryptographically_randomized
     empty_payload_representation: ROOT_with_zero_children
@@ -94,7 +94,7 @@ chunks:
     node_preimage: "CYBOU/CHUNK-AUTH/NODE || left_hash || right_hash"
     odd_node_rule: duplicate_last
     empty_tree: rejected
-    maximum_leaf_count: 4294967295
+    maximum_leaf_count: 1048576  # MAX_PUBLICATION_CHUNKS
     inclusion_proof_fields: [leaf_index_u32, sibling_hashes]
     inclusion_proof_sibling_order: leaf_to_root
     inclusion_proof_max_siblings: 32
@@ -117,7 +117,7 @@ publication:
   authorized_chunk_set_public: false
   authorized_chunk_set_encoding: absent
   chunk_count_min: 1
-  chunk_count_max: 4294967295
+  chunk_count_max: 1048576  # MAX_PUBLICATION_CHUNKS, shared by consensus and storage
   recipient_capsule_count_min: 1
   recipient_capsule_count_max: 32
   recipient_count_padding: none

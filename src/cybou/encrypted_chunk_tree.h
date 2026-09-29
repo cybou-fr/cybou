@@ -5,6 +5,7 @@
 #ifndef CYBOU_ENCRYPTED_CHUNK_TREE_H
 #define CYBOU_ENCRYPTED_CHUNK_TREE_H
 
+#include <cybou/protocol_limits.h>
 #include <cybou/encrypted_chunk.h>
 #include <cybou/chunk_authorization.h>
 
@@ -17,7 +18,6 @@ namespace cybou {
 
 inline constexpr std::size_t ENCRYPTED_TREE_MAX_CHILDREN{128};
 inline constexpr std::size_t ENCRYPTED_TREE_MAX_DEPTH{32};
-inline constexpr std::uint64_t ENCRYPTED_TREE_MAX_CHUNKS{std::numeric_limits<std::uint32_t>::max()};
 inline constexpr std::size_t ENCRYPTED_TREE_DATA_MIN_BYTES{160 * 1024};
 inline constexpr std::size_t ENCRYPTED_TREE_DATA_MAX_BYTES{320 * 1024};
 inline constexpr std::size_t ENCRYPTED_TREE_ROOT_PRIVATE_METADATA_MAX_BYTES{240 * 1024};

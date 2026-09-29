@@ -140,7 +140,7 @@ std::optional<std::uint64_t> ComputeRootPublicationFee(
     const std::size_t canonical_operation_bytes, const std::uint32_t chunk_count)
 {
     if (canonical_operation_bytes == 0 || canonical_operation_bytes > ROOT_PUBLICATION_MAX_OPERATION_BYTES ||
-        chunk_count == 0 || chunk_count > ROOT_PUBLICATION_MAX_CHUNKS) return std::nullopt;
+        chunk_count == 0 || chunk_count > MAX_PUBLICATION_CHUNKS) return std::nullopt;
     const auto kib = (canonical_operation_bytes + 1023) / 1024;
     if (params.root_publication_fee_per_started_kib != 0 &&
         kib > std::numeric_limits<std::uint64_t>::max() / params.root_publication_fee_per_started_kib) {

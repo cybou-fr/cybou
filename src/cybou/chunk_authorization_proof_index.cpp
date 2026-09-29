@@ -102,7 +102,7 @@ bool ChunkAuthorizationProofIndex::Add(const std::uint32_t leaf_index, const Aut
 {
     std::lock_guard lock{m_mutex};
     if (m_failed || m_discarded || m_finished || leaf_index != m_chunk_count ||
-        m_chunk_count >= ROOT_PUBLICATION_MAX_CHUNKS || IsZero(chunk.id)) return false;
+        m_chunk_count >= MAX_PUBLICATION_CHUNKS || IsZero(chunk.id)) return false;
     try {
         if (m_db.Exists(SeenKey(chunk.id))) return false;
         KVStore::Batch batch;

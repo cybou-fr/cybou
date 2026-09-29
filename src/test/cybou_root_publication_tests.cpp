@@ -87,7 +87,7 @@ BOOST_AUTO_TEST_CASE(root_publication_maximum_profile_fits_the_frozen_body_limit
     cybou::RootPublication publication;
     publication.root_chunk_id.fill(0x31);
     publication.chunk_authorization_root.fill(0x42);
-    publication.chunk_count = cybou::ROOT_PUBLICATION_MAX_CHUNKS;
+    publication.chunk_count = cybou::MAX_PUBLICATION_CHUNKS;
     publication.recipient_capsules.resize(cybou::ROOT_PUBLICATION_MAX_CAPSULES);
 
     const auto encoded = cybou::SerializeRootPublication(publication);
@@ -96,6 +96,18 @@ BOOST_AUTO_TEST_CASE(root_publication_maximum_profile_fits_the_frozen_body_limit
 
     publication.recipient_capsules.emplace_back();
     BOOST_CHECK(!cybou::SerializeRootPublication(publication));
+}
+
+BOOST_AUTO_TEST_CASE(root_publication_chunk_count_is_the_shared_storage_invariant)
+{
+    BOOST_CHECK_EQUAL(cybou::MAX_PUBLICATION_CHUNKS, 1U << 20);
+    cybou::RootPublication publication;
+    publication.root_chunk_id.fill(0x31);
+    publication.chunk_authorization_root.fill(0x42);
+    publication.chunk_count = cybou::MAX_PUBLICATION_CHUNKS + 1;
+    // A publication storage could not serve is never valid on the network.
+    const auto encoded = cybou::SerializeRootPublication(publication);
+    BOOST_CHECK(!encoded || !cybou::DeserializeRootPublication(*encoded));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
