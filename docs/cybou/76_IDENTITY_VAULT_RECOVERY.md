@@ -1,40 +1,62 @@
 # 76 — Identity vault and recovery
 
-Status: the current Identity path uses one mnemonic-derived key set, the CVID5
-payload, and finalized key-epoch restore. Password change, vault lock, and
-remaining desktop security controls are separate product work.
+## Recovery phrase
 
-## Recovery phrase and key derivation
+The current 24-word mnemonic encodes the recovery entropy from which current
+Recovery, Authorization and X-Wing KEM roles are derived under separate domains.
 
-Generate 256 bits from a cryptographic RNG and encode a checksummed 24-word phrase using the pinned BIP-39 English word list. Input is exactly 24 lowercase ASCII words in canonical order; reject unknown words and checksum mismatch. This is BIP-39 mnemonic encoding, not BIP-39 PBKDF2 wallet-seed derivation. The recovered 32-byte entropy feeds role-separated, domain-separated derivations for Recovery Ed25519 + ML-DSA-65, Authorization Ed25519 + ML-DSA-44, and the X-Wing KEM seed. Never reuse a signing key as a KEM key or introduce custom cryptographic primitives.
+AccountID remains stable across Identity rotation.
 
-RecoveryKeyID commits to the current recovery suite and public key. Consensus maps it to the stable random AccountID. The Identity record contains the recovery key, authorization key, current KEM package commitment, one nonce, and key_epoch.
+## Portable vault
 
-## Portable `CYBV2` vault
+CYBV2/CVID5 stores stable AccountID plus recovery entropy inside the protected
+portable vault format.
 
-The encrypted vault payload is CVID5: five-byte payload magic, random AccountID (32 bytes), and recovery entropy (32 bytes). All current key roles are rederived from the entropy; no separate device secret is stored. The outer portable CYBV2 envelope uses bounded parameters, password-based key wrapping, authenticated encryption, and atomic durable file publication. Reject unsupported envelope/payload versions, malformed lengths, wrong passwords, truncation, and tampering without partial output. Do not log plaintext secrets.
+The vault must be durably saved and reopened before AccountCreate broadcast.
 
-Before AccountCreate broadcast, the complete vault must be durably saved and authenticated by reopening. Rotation writes a candidate CVID5 vault for the same AccountID before submission. Keep the old vault active while delivery/finality is uncertain. Promote the candidate only after verified finality. On known rejection retain the old vault. Preserve recoverable files and the exact operation journal through conflicts.
+## Basic clean restore
 
-## Clean-machine restore
+From the current mnemonic:
 
-1. Decode and validate the 24 words.
-2. Derive all three key roles and the current X-Wing public package.
-3. Resolve RecoveryKeyID using verified finalized Identity state.
-4. Require the derived Recovery key, Authorization key, and package commitment for that key_epoch to match finalized state.
-5. Save and reopen a local CVID5 vault for the same AccountID.
+1. validate mnemonic;
+2. derive current Identity roles;
+3. resolve AccountID from verified finalized state;
+4. verify current Recovery/Authorization/KEM commitment against current
+   `key_epoch`;
+5. create/reopen the local vault;
+6. rebuild canonical Wallet/Names/Authority from chain state;
+7. rebuild private Mail/Files through publication discovery.
 
-Restore is local and does not change consensus state. If the phrase is from an earlier key_epoch, report that it cannot restore the current identity; do not silently rotate or import keys. If verified state is unavailable, wait for synchronization.
+Restore itself does not authorize a new protocol operation.
 
-## Atomic Identity rotation
+## Historical content after rotation
 
-IdentityRotate replaces Recovery, Authorization, and KEM roles in one transition. The old recovery key authorizes the transition; the new recovery and authorization keys prove possession. The operation consumes the shared nonce and advances key_epoch. AccountID, balances, names, and account history remain stable.
+Old RootPublications may have recipient/self capsules addressed to old KEM
+epochs. A new mnemonic does not automatically derive those old KEM seeds.
 
-The desktop confirms the new 24-word phrase, saves and reopens the candidate vault, and durably journals exact operation bytes before submission. Retry only the same bytes while outcome is uncertain. Promote the vault after verified finality and reconcile the finalized Identity record before clearing the journal. The identity coordinator contract is in [87](87_IDENTITY_OPERATION_COORDINATOR.md).
+Therefore rotation that must preserve historical content recovery uses a
+private `IDENTITY_RECOVERY_BRIDGE`.
 
-## Storage keys
+Before submitting IdentityRotate:
 
-Mail and Files content-encryption keys remain separate from Identity signing
-keys. Clean-machine content recovery is governed by
-`IDENTITY_DISCOVERY_AND_RECOVERY.md`; Identity restore alone does not imply
-that encrypted content has been retrieved.
+```text
+generate/confirm new mnemonic
+-> derive new KEM
+-> build encrypted RecoveryBridge containing required old KEM recovery material
+-> capsule bridge to the new KEM
+-> publish with current old Identity authorization
+-> obtain PoA finality
+-> reach remote durability
+-> verify bridge can be opened using the new mnemonic
+-> only then submit IdentityRotate
+```
+
+Recovered historical KEM seeds are accepted only after deriving their public
+packages and matching the canonical historical KEM commitments.
+
+Do not combine an unprotected bridge and irreversible rotation into one step.
+
+## Local application state
+
+The per-Identity Application DB and previous provider placement database are
+rebuildable caches and are not required inputs for clean recovery.

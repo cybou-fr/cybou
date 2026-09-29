@@ -1,4 +1,4 @@
-# 52 — Balance and System Balance
+# 52 — Balance, System Balance and Authority
 
 CYBOU has one indivisible native asset:
 
@@ -8,31 +8,53 @@ decimals = 0
 MAX_SUPPLY = 100,000,000,000
 ```
 
-Each account has two balances.
-
 ## Balance
 
-Balance is user-controlled CYBOU. It can be received, transferred, or
-voluntarily locked into System Balance. A debit requires the account's valid
-Identity authorization. No operator or service can seize or arbitrarily debit
-Balance.
+User-controlled spendable CYBOU.
+
+It may be received, transferred or voluntarily locked into System Balance.
 
 ## System Balance
 
-System Balance is an account-funded service budget. It is not transferable,
-tradeable, or convertible back to Balance. Generic RootPublication byte and
-chunk fees are charged from it. It does not increase Proof of Trust score or
-grant consensus authority. There are no separate free-credit pools for
-individual services.
-
-## Fee routing
-
-Every four CYBOU of protocol fee value route as:
+Irreversible protocol-service budget.
 
 ```text
-4 -> 3 Security + 1 Onboarding
+Balance -> System Balance
 ```
 
-Fees use deterministic integer arithmetic. Priority fees are disabled. DEV,
-Beta, and Mainnet parameters are independent; detailed rules are in
-`18_ECONOMICS_FEES.md` and the active network definition.
+is allowed under the protocol.
+
+```text
+System Balance -> Balance
+```
+
+is not.
+
+System Balance pays deterministic protocol service fees.
+
+## Identity Authority
+
+Authority is not CYBOU and not a third monetary balance.
+
+The current System Balance amount does not continuously create Authority.
+
+A voluntary finalized user-authorized lock:
+
+```text
+Balance -> System Balance
+```
+
+may grant a one-time SystemContributionAuthority equal to the locked whole
+CYBOU amount.
+
+Automatic onboarding credit:
+
+```text
+OnboardingPool -> System Balance
+```
+
+grants no SystemContributionAuthority.
+
+Spending System Balance on fees does not grant the contribution again.
+
+Authority is non-transferable and never grants PoA finalization power.

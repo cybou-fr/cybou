@@ -1,13 +1,25 @@
-version: '0.13'
-validator_rewards:
-  participation_threshold_percent: 90
-  require_no_confirmed_equivocation: true
-  require_active_operator_approved_validator_set_membership: true
-  distribution: equal_split
+version: '0.1'
+status: current_architecture
+
+poa:
+  validator_set_rewards: false
   stake_weighting: false
-  integer_remainder: carry_forward_in_security_pool
-reward_epoch:
-  duration: null
-  candidate: 1_protocol_day
-service_node_rewards_v1: false
-future_storage_provider_rewards: separate_future_protocol_version
+  current_finality_model: single_genesis_bound_operator
+
+identity_authority:
+  monetary_reward: false
+  contribution_signal: true
+  active_sources_initial:
+    - age
+    - capped_finalized_activity
+    - voluntary_system_balance_contribution
+  evidence_gated_sources:
+    - node_liveness
+    - verified_storage
+  future_sources:
+    - provisional_validation_if_ever_adopted
+
+storage_provider:
+  cybou_monetary_reward_protocol_live: false
+  authority_credit_live_before_canonical_evidence: false
+  future_economics_require_measured_beta_costs: true

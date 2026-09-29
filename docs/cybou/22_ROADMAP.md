@@ -1,71 +1,63 @@
 # CYBOU protocol and product roadmap
 
-This roadmap describes the single active target in `main`: generic encrypted
-content over RootPublication and a streaming ordered chunk tree, finalized by a
-genesis-bound single-operator PoA signer. The PoA trust model is centralized
-and does not provide Byzantine fault tolerance. DEV has completed the
-coordinated reset to this protocol; routine work continues on that network.
-Any later incompatible format requires a separate explicit cutover decision.
+The active protocol substrate is genesis-bound hybrid-PQ PoA, generic
+RootPublication and one encrypted content-addressed chunk tree.
 
-## Protocol substrate delivered
+## Delivered substrate
 
-The authority is `POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`,
-`ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`,
-`IDENTITY_DISCOVERY_AND_RECOVERY.md`, and `spec/poa_chunk_tree.yaml`.
+- stable AccountID / Identity authorization and recovery;
+- `.cybou` names and balances;
+- PoA finality with durable signing journal and conflict halt;
+- generic RootPublication and recipient capsules;
+- streaming encrypted ROOT/INDEX/DATA trees;
+- BLAKE3 ChunkID;
+- finalized-publication Merkle chunk admission;
+- CYP2 finalized block sync and content-addressed PUT/GET;
+- removal of legacy BFT, MailTx and indexed StorageObject paths.
 
-Canonical formats, Identity authorization, generic RootPublication, the
-streaming encrypted chunk tree, content-addressed provider admission, CYP2
-transport, and genesis-bound PoA finality are implemented on active DEV.
-Legacy `StorageObject`, the dedicated Mail envelope/service placeholder, and
-the separate storage key-ring modules are physically removed. Do not add
-runtime compatibility or a dual operation decoder.
+## Immediate application integration
 
-Remaining integration and Beta readiness work is tracked in
-`26_IMPLEMENTATION_STATUS.md`. PoA trust remains centralized. A finalized
-publication authorizes storage; it does not prove that providers retain chunks.
+Implement in this order:
 
-## Product direction
+1. encrypted per-Identity Application DB;
+2. `ApplicationService` publication scan/index;
+3. `PublicationService` outbound RootPublication flow and self capsules;
+4. `StorageService` retrieval and finality-first remote placement;
+5. real Mail private backend;
+6. real Files private mutation backend;
+7. clean-machine recovery including RecoveryBridge after Identity rotation;
+8. development durability with 2 independent remote replicas;
+9. provider health/audit/repair and interruption recovery.
 
-Mail and Files are required product surfaces with familiar Gmail and Google
-Drive workflows under CYBOU branding. They share one Identity and one private
-encrypted content substrate. Mail starts with one recipient and text-only
-messages. Files, attachments, sharing, and Backup remain gated on the common
-chunk storage and recovery path. Backup is post-Beta.
+## Identity Authority
 
-### Alpha product gate
+After the basic Mail/Files/storage path is operational:
 
-- Create and restore an Identity on a clean installation.
-- Claim and use a `.cybou` name.
-- Send encrypted text to an offline recipient and retrieve it after the
-  recipient reconnects.
-- Rebuild local Mail indexes across restarts and verify sender authorization.
-- Independently verify finality and state on a full node.
-- Explain the single-operator PoA trust model clearly in product UX.
-- Build Mail publication/inbox scanning and Files catalog flows over the
-  shared encrypted chunk tree; reconstruct content without a prior local DB.
+1. implement Age + capped Activity + SystemContribution Authority;
+2. add generic Authority tiers and Protocol/Storage/Bandwidth budgets;
+3. design canonical NodeID binding/evidence;
+4. enable Liveness Authority only after canonical uptime evidence exists;
+5. enable Storage Authority only after canonical storage contribution evidence
+   exists;
+6. validate penalty evidence and anti-farming behavior.
 
-### Beta product gate
+## Beta
 
-- Store and retrieve finalized encrypted chunks with a measured durability
-  threshold, retry, repair, and interruption recovery.
-- Support Mail attachments and Files catalogs over the shared private chunk
-  graph.
-- Provide Gmail-familiar Mail workflows and Google Drive-familiar Files
-  workflows, including progress, failure, retry, preview, search, and recovery.
-- Complete the applicable product and UX acceptance criteria in docs 79–85.
-- Validate clean-machine recovery without relying on a prior client database.
+Beta requires:
 
-### Controlled pilot
+- Gmail-familiar Mail and Google-Drive-familiar Files UX;
+- clean-machine recovery without old Application DB;
+- 3 independent remote full replicas per required chunk;
+- measured provider loss/repair behavior;
+- honest `Protected`/`Sent` states;
+- operational cost and anti-abuse measurements;
+- no Reed-Solomon/erasure coding requirement.
 
-Run a controlled pilot with 20–100 users for 8–12 weeks after the Beta gates
-pass. Measure Mail and Files usage, offline retrieval, recovery, storage repair,
-support burden, and history growth. Keep Backup post-Beta and disclose the
-single-operator trust model.
+## Future research
 
-## Economic and release gates
+- signed provisional validation that remains strictly non-final;
+- validation contribution to Authority only if later justified;
+- erasure coding only after measured replication cost warrants it;
+- more scalable provider discovery if simple peer fan-out stops being adequate.
 
-- Keep DEV, Beta, and Mainnet parameters and genesis states separate.
-- Size Beta onboarding from measured integrated Mail and Files/Storage costs.
-- Freeze the Mainnet onboarding bonus only after aggregate Beta operations.
-- Keep the release, treasury, Identity, and PoA key roles separate.
-- No production signature path may fall back to classical-only signatures.
+Do not block Mail/Files Beta on future provisional validation.

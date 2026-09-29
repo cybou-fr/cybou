@@ -1,67 +1,135 @@
-# Finalized chunk storage admission
+# Finalized chunk storage admission and durability
 
-Status: active DEV protocol substrate; a durable local provider admission store,
-proof encoding, typed Identity-authorized RootPublication operation, canonical
-finalized-history lookup, and CYP2 content-addressed PUT/GET messages are
-implemented. Client provider selection, retry, durability, retention, repair,
-and economics remain Beta readiness gates.
+Status: active admission substrate plus frozen durability architecture target.
 
-## Authorization commitment
+## Physical store
 
-The client builds a domain-separated Merkle tree over every stored chunk in
-exact durable staging order (DATA in source order, INDEX nodes at the point
-they are generated, ROOT last):
+Providers use one content-addressed encrypted ChunkStore:
 
 ```text
-leaf = H(CYBOU/CHUNK-AUTH/LEAF || ChunkID)
+chunks/<2hex>/<2hex>/<full ChunkID>
 ```
 
-The root and chunk count are committed by a finalized RootPublication and
-verified by each inclusion proof. ChunkID already commits to the exact stored
-bytes, so the proof carries no redundant size, ChunkID, or chunk count: PUT_CHUNK provides
-the ChunkID and the finalized RootPublication provides the count. Providers enforce local physical
-capacity independently of publication. The provider records each leaf index as
-it durably stages a chunk.
+ChunkID is full lower-case BLAKE3-256 of exact stored encrypted bytes.
+
+The physical store does not classify content as:
+
+```text
+mine
+foreign
+Mail
+File
+```
+
+Provider metadata is separate from blob bytes.
 
 ## Admission
 
-Providers expose content-addressed operations only:
+Provider accepts:
 
 ```text
-PutChunk(publication_reference, ChunkID, stored_bytes, admission_proof)
-GetChunk(ChunkID)
-HasChunk(ChunkID)     # optional hint
+PutChunk(publication_reference, ChunkID, bytes, admission_proof)
 ```
 
-Before storing, a provider verifies the full BLAKE3 ChunkID and Merkle inclusion
-against the publication reference. Since a provider is a full node, it resolves
-that reference in its own canonical finalized history; PUT does not carry a
-separate finality proof. Providers enforce local capacity and reject invalid or
-not-yet-finalized chunks. Storage is immutable and idempotent by ChunkID. They
-retain the publication reference, inclusion proof, and lease/accounting metadata
-beside the bytes for repair and revalidation.
+only after verifying:
 
-Persistent providers keep opaque bytes in hash-named files, sharded as
-`chunks/<first-two-hex>/<next-two-hex>/<full-64-character-lowercase-ChunkID>`.
-The files have no extension. A separate local metadata database records each
-chunk's exact stored size and per-publication proof association. Capacity is
-rebuilt from metadata, so a missing blob remains reserved and can be repaired
-without allowing over-admission; uncommitted orphan blobs and temporary files
-are removed during startup reconciliation. Reads verify both the recorded size
-and full ChunkID. The sharding directories have no protocol meaning. No public
-manifest commit, indexed chunk address, or remote abort operation is required
-by this target.
+1. publication exists in canonical finalized history;
+2. Merkle proof authorizes ChunkID under that publication;
+3. BLAKE3(bytes) equals ChunkID;
+4. local capacity/policy allows storage.
 
-## Durability and privacy
+GET is content-addressed by ChunkID.
 
-Chunk placement operates independently per ChunkID. A RootPublication may
-authorize a graph before every chunk reaches its required durability target;
-the client must retain retryable ciphertext until acknowledgments meet the
-frozen threshold. Storage metadata reveals opaque chunk IDs, actual stored sizes, provider
-placement, and publication proofs only. Padding and traffic-analysis
-risks remain explicit privacy limitations.
+Unfinalized chunks are rejected remotely.
 
-Exact capacity accounting, expiry/retention, provider loss, repair, retrieval
-fallback, denial-of-service bounds, and Beta durability thresholds are not
-defined by the hash-addressing decision and must pass the Storage readiness
-gates before Beta.
+## Durability targets
+
+Development target:
+
+```text
+2 independent remote full replicas per required chunk
+```
+
+Beta target:
+
+```text
+3 independent remote full replicas per required chunk
+```
+
+The local encrypted copy does not count as a remote replica.
+
+`Protected` in Beta means all required chunks satisfy the three-remote-replica
+target.
+
+## Erasure coding
+
+Reed-Solomon/erasure coding is disabled for Beta.
+
+Full replication preserves simple:
+
+```text
+ChunkID -> exact encrypted bytes
+GET -> exact encrypted bytes
+BLAKE3 verification
+repair by copying a verified chunk
+```
+
+Erasure coding may be researched only after measured Beta replication cost
+justifies the extra protocol complexity.
+
+## Placement
+
+Placement is per ChunkID, not necessarily one provider set per file.
+
+StorageService selects independent eligible remote providers using secure
+random selection and diversity/health/capacity rules.
+
+Do not freeze a deterministic provider-ranking algorithm that can be cheaply
+gamed by ProviderID generation before a mature provider anti-Sybil model exists.
+
+Providers may reject admission; StorageService tries other eligible peers until
+the replica target is reached or reports a retryable failure.
+
+Placement metadata is operational cache, not canonical recovery state.
+
+## Retrieval after clean recovery
+
+If old provider placement is unknown, query multiple discovered
+storage-capable peers for the requested ChunkID until a valid response is found.
+
+A DHT/global provider index is not required for the first Beta-scale network.
+
+## Audit and repair
+
+Initial durability may rely on successful PUT acknowledgments plus periodic
+health/retrieval verification.
+
+Signed receipts become necessary when canonical provider contribution/Authority
+accounting is introduced, but are not a prerequisite for the first working
+replication path.
+
+When healthy remote copies drop below target:
+
+```text
+retrieve any valid copy
+-> choose replacement provider
+-> PUT authorized chunk
+-> restore replica target
+```
+
+Temporary provider timeout is not automatically fraud.
+
+## Local cache
+
+The local encrypted copy is useful for:
+
+```text
+offline access
+fast open
+repair
+re-upload
+```
+
+It may later be evicted after remote durability is healthy. Semantic Mail/Files
+items remain in the Identity Application DB and content is re-fetched on
+demand.

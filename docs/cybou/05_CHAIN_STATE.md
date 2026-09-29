@@ -1,53 +1,84 @@
 # Canonical chain state
 
 Full nodes execute finalized blocks deterministically and derive the same state
-root. State is account-level and application-neutral; Mail and Files do not
-create permanent per-message or per-file records.
+root. Mail and Files do not create permanent per-message/per-file consensus
+objects.
 
-## State domains
+## Current state domains
 
-- Monetary accounts: spendable balance and service `SystemBalance`.
-- Identity registry: stable AccountID, current hybrid recovery and
-  authorization capabilities, current KEM commitment, shared nonce, and
-  `key_epoch`.
-- `.cybou` name registry: finalized commit/work/reveal ownership records.
-- Economic pools and deterministic generic publication accounting.
-- Network parameters bound by the immutable network definition.
+- monetary accounts: Balance and System Balance;
+- Identity registry: stable AccountID, Recovery/Authorization capabilities,
+  current KEM commitment, nonce and key epoch;
+- `.cybou` name registry;
+- economic pools and deterministic fee accounting;
+- immutable network parameters bound to the active network definition.
 
-The exact Identity, Name, and monetary encodings are owned by their active
-specifications. Application schemas and content metadata remain encrypted in
-the ordered chunk tree and are indexed locally by each client.
-
-## Block execution
-
-For each candidate block, a node validates canonical operation bytes,
-authorization, replay protection, resource bounds, and fees against a
-candidate state. It derives the state root and accepts the block only when the
-genesis-bound hybrid-PQ PoA finality proof is valid. Full nodes independently
-re-execute the block and compare the state root.
-
-The PoA trust model is centralized. Runtime block production and acceptance
-use a durable anti-equivocation journal and a fail-closed conflict detector.
-Cross-platform vectors and operational recovery remain validation work. See
-`POA_FINALITY.md`.
-
-## RootPublication
-
-RootPublication is the only operation that publishes application content. It
-commits to a root ChunkID, a chunk-authorization Merkle root, a chunk count,
-and recipient KEM capsules. Each provider verifies individual ChunkID inclusion
-and enforces its own capacity; consensus does not receive the full chunk list.
-State does not interpret Mail or Files schemas.
-
-Finalized blocks retain canonical operation history for proof and discovery.
-Clients rebuild Inbox, Sent, Files, and other indexes from finalized
-publications and locally decrypted content. These indexes are not consensus
+Application schemas and private metadata remain encrypted outside canonical
 state.
+
+## RootPublication history
+
+RootPublication commits generic encrypted content roots, authorization Merkle
+root, chunk count and recipient capsules.
+
+Finalized block history is the discovery/proof source. It does not maintain a
+consensus row for each Mail message or file.
+
+Clients rebuild private application projections from finalized publications.
+
+## Identity Authority target
+
+Identity Authority supersedes the earlier PoT design. Its exact state encoding
+is not yet implemented.
+
+Target accounting separates earnings from penalties.
+
+Conceptually:
+
+```text
+AuthorityState
+    activity_points
+    system_contribution_points
+    storage_points              # enabled only with canonical evidence
+    penalty_points
+
+    activity_epoch
+    activity_points_this_epoch
+    storage_remainder
+```
+
+Age is derived:
+
+```text
+AgeAuthority = current_epoch - creation_epoch
+```
+
+Liveness may be derived/credited only from canonical evidence for bound NodeIDs.
+
+Effective Authority:
+
+```text
+max(0, earned_points - penalty_points)
+```
+
+Penalty debt is retained even while effective Authority is zero.
+
+No operation allows an Identity or PoA operator to arbitrarily set an
+individual score.
+
+## Node binding target
+
+A bounded future registry may associate dedicated service NodeIDs with AccountID
+for liveness/storage contribution accounting.
+
+A NodeID binding is not a device authorization mechanism and never changes
+Identity key authority.
 
 ## Invariants
 
-- No per-Mail or per-file permanent state object.
-- No plaintext name, recipient, MIME type, path, or graph topology in consensus.
-- System Balance is a service budget and never changes PoA signing weight.
-- Consensus arithmetic and fee routing use bounded integer operations.
-- No local wall-clock input affects state transitions.
+- no plaintext Mail/File metadata in consensus;
+- no per-Mail/per-file canonical state object;
+- no wall-clock consensus arithmetic;
+- Authority never grants PoA finalization weight;
+- Balance, System Balance and Authority are distinct resources;
+- all state arithmetic is bounded integer arithmetic.

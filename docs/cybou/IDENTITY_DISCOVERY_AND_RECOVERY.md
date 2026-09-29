@@ -1,27 +1,91 @@
 # Identity publication discovery and recovery
 
-Status: active protocol design; local index format, sync bounds, and recovery
-availability policy remain open Beta integration work. This is the common
-discovery path for all private services.
+Every client scans canonical finalized RootPublications and builds only the
+private application state accessible to its Identity.
 
-Every client scans finalized RootPublications from its saved height. For each
-recipient capsule it tries the account's current or explicitly recoverable
-Identity KEM epochs. A failed capsule is discarded without creating a
-`NOT_FOR_ME` record; a successful unwrap yields the root key and accessible
-RootChunkID. No recipient ID or Mail/Files type is required in chain state.
+## Scanner
 
-The local encrypted database stores the last scanned height, accessible root
-IDs/key envelopes, and application indexes. It is a rebuildable cache, not
-protocol identity or the only recovery source. Clean recovery can rescan from
-genesis or another authenticated history point and rediscover accessible roots.
-Re-scan policy after Identity rotation, old-epoch availability, bounds on
-per-block capsules, and denial-of-service controls are Beta readiness gates.
+Persist a last-scanned finalized height.
 
-Clean-machine recovery acceptance starts from only the mnemonic and public
-network definition: restore Identity roles, sync and independently validate
-finalized history, scan publications, fetch authorized chunks, verify IDs,
-decrypt bounded CBOR, and rebuild Mail/Files catalogs. No prior client DB,
-Storage sidecar, or special recovery server may be required. Recovery
-availability and key-epoch policy must be specified before Beta.
+For each new finalized block:
 
-\n
+```text
+for each AuthorizedRootPublication:
+    use outer authorization as publisher truth
+    inspect recipient capsules
+    try only locally recoverable KEM epochs
+```
+
+Failure to open a capsule:
+
+```text
+discard
+```
+
+Do not create permanent `NOT_FOR_ME` records.
+
+Successful unwrap yields:
+
+```text
+RootChunkID
+main ContentKey
+publisher AccountID/nonce/key_epoch
+OperationID / finalized height
+```
+
+Persist the positive accessible-publication record.
+
+Checkpoint advancement and discovered records must be crash-safe/idempotent.
+
+## Retrieval decoupling
+
+An accessible publication whose root is temporarily unavailable must not block
+scanning later blocks.
+
+ApplicationService may maintain transient states:
+
+```text
+DISCOVERED
+FETCHING
+DECRYPTED
+INDEXED
+TEMPORARILY_UNAVAILABLE
+```
+
+## Application routing
+
+After authenticated decryption, inspect the private application schema:
+
+```text
+MAIL_MESSAGE
+FILES_MUTATION_BATCH
+IDENTITY_RECOVERY_BRIDGE
+```
+
+and update the encrypted per-Identity Application DB.
+
+Generic child file/attachment content needs no separate application type.
+
+## Self publications
+
+Recoverable owner content uses a self capsule, so the same scanner can rebuild
+Sent Mail and Files.
+
+## Clean-machine recovery
+
+From the current mnemonic and verified network history:
+
+1. restore and verify the current Identity;
+2. rebuild Wallet/Names/canonical state;
+3. first scan own accessible publications to find Files/Sent content and a
+   RecoveryBridge if needed;
+4. recover/verify historical KEM epochs;
+5. scan all finalized RootPublications using all recoverable epochs;
+6. rebuild Inbox/shared private content;
+7. retrieve large child content on demand.
+
+The old Application DB, old chunk cache and old provider-placement metadata are
+not recovery requirements.
+
+Provider placement need not be recovered. A client may query discovered storage
+peers by ChunkID and re-establish current durability after recovery.

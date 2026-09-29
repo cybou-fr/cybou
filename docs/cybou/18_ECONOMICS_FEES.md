@@ -1,4 +1,4 @@
-# 18 — CYBOU economics and fees
+# CYBOU economics and fees
 
 ## Native asset
 
@@ -8,68 +8,83 @@ decimals = 0
 MAX_SUPPLY = 100,000,000,000
 ```
 
-## Balances
+There is no perpetual base emission.
+
+## Balance
+
+Spendable, transferable CYBOU controlled by the Identity.
+
+## System Balance
+
+Irreversible service budget.
+
+A user may voluntarily lock:
 
 ```text
-Balance
-    user-controlled
-
-System Balance
-    irreversible protocol-use balance
-    pays fees
-    does not increase PoT score
+Balance -> System Balance
 ```
 
-## Onboarding Bonus
+System Balance cannot be transferred back to Balance.
+
+Protocol service fees are paid from System Balance.
+
+## Onboarding
+
+A valid AccountCreate receives the network-configured onboarding amount:
 
 ```text
-Dev Onboarding Bonus: 6,000 CYBOU (Beta/Mainnet: TBD)
 OnboardingPool -> System Balance
 ```
 
-Granted automatically upon valid protocol-native `AccountCreateOp` with anti-Sybil work (`ACCOUNT_CREATION_WORK_V1`).
+This does not mint new CYBOU.
 
-No operator vouchers or invites exist.
+Automatic onboarding credit does not generate SystemContributionAuthority.
 
-Identity creation alone does not mint new tokens; bonuses are debited strictly from the pre-allocated `OnboardingPool`.
+## Identity Authority interaction
 
-## Publication fee
+Authority is not money and is not a third balance.
 
-Content uses generic RootPublication. The fee includes operation size and
-authorized chunk count:
-
-```text
-RootPublicationFee = 4 * ceil(full_canonical_operation_bytes / 1024) + 4 * chunk_count
-```
-
-Each four-unit increment is split 3 to Security and 1 to Onboarding. The
-canonical wire profile has a strict maximum operation size. The same
-resource accounting applies to every encrypted application schema; consensus
-does not inspect Mail content or enforce Mail-specific quotas.
-
-## No priority fee v1
+A voluntary finalized user-authorized lock of `X` whole CYBOU:
 
 ```text
-priority fee = disabled
-fee bidding = disabled
+Balance -> System Balance
 ```
 
-v1 uses deterministic protocol fees.
-
-## Fee Router
+may give a one-time:
 
 ```text
-4 CYBOU fee units
--> 3 Security
--> 1 Onboarding
+SystemContributionAuthority += X
 ```
 
-No burn.
+under the immutable Authority rules.
 
-No generic service-node reward before provider obligations and operating costs
-can be measured.
+Holding System Balance does not continuously generate Authority. Spending fees
+does not generate another Authority credit.
 
-## Future Store
+## RootPublication fee
 
-Storage-provider economics remain open until chunk durability and provider
-work can be verified and measured.
+Generic encrypted content uses deterministic RootPublication fees based on
+canonical operation size and authorized chunk count.
+
+The current DEV formula remains:
+
+```text
+4 * ceil(full operation bytes / 1024)
++
+4 * chunk_count
+```
+
+## Fee routing
+
+Every complete four fee units route:
+
+```text
+3 -> Security
+1 -> Onboarding
+```
+
+No burn and no priority bidding.
+
+Storage-provider economic rewards remain separate from Identity Authority.
+Authority may credit verified contribution without making Authority itself
+transferable or redeemable as CYBOU.

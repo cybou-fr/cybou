@@ -1,78 +1,109 @@
 # CYBOU architecture
 
-CYBOU is an experimental identity-centered platform for private messaging and
-user-controlled files. The active target uses one protocol substrate for all
-application content; Mail and Files remain product experiences implemented by
-the desktop client.
+CYBOU is an Identity-centered private Mail and Files platform over one
+content-addressed encrypted P2P substrate.
 
-## System layers
+## Layers
 
 ```text
-Qt desktop client
-  ├── account-level Identity and portable recovery
-  ├── local encrypted Mail and Files indexes
-  └── native CYBOU runtime
-       ├── canonical state execution and full-node validation
-       ├── genesis-bound hybrid-PQ PoA finality
-       ├── generic RootPublication
-       ├── streaming encrypted ROOT/INDEX/DATA tree
-       └── finalized-publication ChunkStore admission
+Qt GUI
+  |
+  v
+Identity Application DB / product model
+  |
+  v
+ApplicationService / PublicationService / StorageService
+  |
+  v
+native CYBOU NodeRuntime
+  + canonical state execution
+  + genesis-bound hybrid-PQ PoA finality
+  + P2P synchronization
+  + RootPublication
+  + common encrypted ChunkStore
 ```
 
-The active protocol authority is `AGENTS.md`,
-`POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`, `ROOT_PUBLICATION.md`,
-`STORAGE_ADMISSION.md`, `IDENTITY_DISCOVERY_AND_RECOVERY.md`, and
-`spec/poa_chunk_tree.yaml`.
+`APPLICATION_DATA_PLANE.md` defines the local/network data boundary.
 
-## Finality and validation
+## Identity
 
-A genesis-bound single-operator hybrid-PQ PoA signer finalizes blocks. Each
-full node independently verifies the finality proof, executes every operation,
-and compares the resulting state root. This is centralized finalization and
-does not provide Byzantine fault tolerance. The active runtime durably journals
-signing intent and halts on conflicting valid certificates or journal rollback.
+One AccountID is the stable Identity. Mnemonic-derived Recovery, Authorization
+and KEM roles are separate. Device is not a protocol entity.
 
-## Content and privacy
+A future service node may bind a dedicated NodeID to an AccountID for
+contribution accounting. NodeID is not an Identity credential and does not
+gain access to the mnemonic, private Mail or Files.
 
-`RootPublication` is the only application-content publication operation.
-Application schemas, recipient identity, names, metadata, and graph edges stay
-inside encrypted chunks. ChunkID is the full BLAKE3-256 digest of stored
-ciphertext. Recipient capsules wrap one content key for a recipient KEM
-capability without publishing the AccountID.
+## Finality
 
-Consensus enforces generic publication count/byte bounds and deterministic
-size-aware fees. Mail, Files, and Backup do not create application-specific
-consensus operation types or per-item state. Local clients scan finalized
-publications, recover authorized content keys, retrieve chunks, and rebuild
-service indexes.
+A genesis-bound single-operator hybrid-PQ PoA signer finalizes blocks. Every
+full node independently verifies the certificate, executes operations and
+checks the resulting state root.
 
-Finality authorizes chunk storage but does not prove provider durability.
-Clients distinguish finalized, available, and retrievable content, retain
-ciphertext locally, and expose retry/recovery states.
+CYBOU is not BFT. Durable anti-equivocation signing and a fail-closed conflict
+halt protect against conflicting valid PoA certificates.
 
-## Product surfaces
+## Application content
 
-- Mail uses familiar Gmail workflows under CYBOU branding. The initial profile
-  is one recipient and UTF-8 text; attachments and multi-recipient flows wait
-  for shared storage and recovery gates.
-- Files uses familiar Google Drive workflows, private encrypted catalogs,
-  immutable versions, and identity-based sharing.
-- Backup is post-Beta.
+`RootPublication` is the only application-content protocol operation.
 
-## Key and economic boundaries
+Mail/Files type, filenames, folders, recipient identity and graph topology are
+encrypted application data. Recipient capsules wrap the main root ContentKey
+without exposing recipient AccountID.
 
-Identity recovery, Identity authorization, Identity KEM, PoA, Release Signing,
-and Treasury key roles remain separate. Production signatures require both
-configured hybrid components; no classical-only fallback is allowed.
+One RootPublication may authorize chunks from multiple private content trees
+under one authorization Merkle root. This is an application-layer bundle, not
+a new protocol operation or wire entity.
 
-The supply cap is 100,000,000,000 CYBOU with zero decimals. Deterministic fees
-route each four-unit fee as three to Security and one to Onboarding. System
-Balance pays protocol services; it does not alter PoA trust or account scores.
+## Storage
 
-## Deployment status
+ChunkID is full BLAKE3-256 of exact stored encrypted bytes. The common
+ChunkStore has no semantic own/foreign distinction and is invisible to the GUI.
 
-DEV has completed the coordinated reset and runs the active protocol formats.
-Routine deployments preserve its chain state and validator key. Product
-integration, cross-platform vectors, storage durability, and recovery remain
-readiness work; they do not imply another protocol cutover. Do not add runtime
-compatibility, automatic import, or dual decoders.
+Remote admission is finality-first:
+
+```text
+prepare encrypted chunks locally
+-> finalize RootPublication by PoA
+-> providers admit authorized chunks
+-> reach durability target
+```
+
+Development targets two independent remote full replicas; Beta targets three.
+The local encrypted copy is cache/staging and does not count toward remote
+durability. Beta does not use erasure coding.
+
+## Application projection
+
+Each unlocked Identity has a separate encrypted rebuildable Application DB for
+Mail/Files semantic state. It contains only content the Identity can
+cryptographically open.
+
+The GUI renders this private projection and canonical Wallet/Names/Authority;
+it never browses the provider ChunkStore.
+
+## Identity Authority
+
+Identity Authority supersedes the earlier Proof-of-Trust concept.
+
+Authority is non-transferable, deterministic and separate from CYBOU and System
+Balance. It never grants PoA finalization power.
+
+The target sources are:
+
+```text
+Age
+bounded finalized Activity
+voluntary System Balance contribution
+verified bound-node Liveness when canonical evidence exists
+verified Storage contribution when canonical evidence exists
+minus durable penalties
+```
+
+Authority derives generic Protocol, Storage and Bandwidth budgets using
+immutable network parameters and bounded integer arithmetic.
+
+## Future provisional validation
+
+Signed provisional validation may be researched later, but it is non-canonical.
+Only PoA finality advances canonical state and authorizes remote storage.

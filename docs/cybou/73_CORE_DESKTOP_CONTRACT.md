@@ -1,167 +1,118 @@
-# 73 — Core → Desktop Contract
+# 73 — Core → Desktop contract
 
-Boundary between CYBOU core and the desktop GUI. The desktop never invents
-protocol behavior: every state it shows arrives through this contract.
+The desktop renders verified core/application state. It does not invent
+protocol truth.
 
-This contract describes the desktop boundary for the current Identity and
-genesis-bound PoA target. See `78_IDENTITY_DESKTOP_UX.md` for create, restore,
-and rotation flows.
-`CybouNodeRuntime` implements the native producer/observer boundary; the GUI
-(`src/qt`) consumes its verified state.
-
-## Direction of truth
+## Direction
 
 ```text
-core -> CybouDesktopModel -> pages
+core/application services
+-> CybouDesktopModel
+-> Qt pages
 ```
 
-The desktop owns no protocol state of its own. UI-side request flags
-(identity creation pending) are bookkeeping only, never protocol state.
+## Data sources
 
-## Status fields (`CybouDesktopStatus`)
-
-Core populates, in order of expected arrival:
+Canonical core provides:
 
 ```text
-height, peer_count, node_running   from the running node (already live)
-data_directory                     after node startup (already live)
-identity_state                     AccountCreateOp accepted -> CreatingKeys
-                                   work verified            -> PerformingWork
-                                   op broadcast             -> Broadcasting
-                                   verified PoA certificate attached -> Active
-                                   (transitions only; the GUI never sets them)
-account_id, creation_height        from the finalized AccountCreateOp
-balance, system_balance            from AccountState after every
-                                   finalized transition that moves them
-network_id                         canonical DEV NetworkID (already exposed)
-last_finalized_height              from native runtime verified state
-                                   (already exposed; GUI never derives it)
+node/finality status
+AccountID / Identity state
+Balance
+System Balance
+Names
+Authority when implemented
 ```
 
-`WaitingForFinality` is entered when the op is broadcast and left only when
-a genesis-authorized hybrid-PQ PoA certificate commits the block.
-
-The current desktop opens native CYBOU state, connects through the default DEV
-CYP2 bootstrap path for finalized blocks, and reports verified
-height and verified finality.
-The bootstrap address supplies transport location, not consensus trust.
-The identity service submits AccountCreate remotely and waits for the
-verified account state before reporting `Active`. Email and Storage pages
-remain capability-gated until their network services are live. The desktop
-Files preview also exposes a separate client-availability flag for its
-single-installation local index and Storage transfers; this flag does not set
-`CybouCapabilities::storage` and does not claim finalized catalog or Beta
-durability. Storage is a Beta readiness dependency for Mail attachments;
-Backup remains post-Beta.
-
-## Adapter surface (what core calls)
-
-The GUI consumes exclusively through these `CybouDesktopModel` setters;
-each is a no-op when the value is unchanged and emits `statusChanged()`
-(resp. `capabilitiesChanged()`) only on real changes:
+Private application layer provides:
 
 ```text
-setFinalityStatus(last_finalized_height)
-    verified finality feed; -1 means "not exposed".
-setIdentityState(state, account_id, creation_height)
-    Core drives identity transitions only (see the phase table above);
-    reaching Active also clears the UI-side request-pending flag.
-setBalances(balance, system_balance)
-    From AccountState after every finalized transition that moves them.
-setCapabilities(CybouCapabilities)
-    One flag per protocol path, true only when live on the node.
+Mail projection
+Files projection
+publication/storage progress
+local search/index state
 ```
 
-UI-to-core direction is request-only: `requestCreateIdentity()`
-(the `createIdentityRequested` signal) and page actions that core gates.
-Nothing else crosses the boundary.
+## Local data boundary
 
-## Capabilities (`CybouCapabilities`)
-
-Each flag flips to true only when the corresponding protocol path is live
-on the node, not when it is planned:
+Qt pages and `CybouDesktopModel` never browse:
 
 ```text
-account_creation   node accepts AccountCreateOp + AccountCreationWorkV1
-payments           PaymentOpV1 processing wired
-email              encrypted RootPublication delivery and local mailbox scanning wired
-storage            chunk-tree placement, retrieval and Beta durability path wired
-backup             Backup service wired (post-Beta)
+common ChunkStore
+provider DB
+foreign hosted chunks
 ```
 
-`filesTransferAvailable` is a desktop adapter flag, not a protocol capability.
-It only enables the provisional local-index and transfer UI after the native
-runtime is initialized. Mutating Files actions still require an active
-identity. Peer acknowledgments do not satisfy the Storage capability or permit
-the UI to display `Protected`.
+They consume the encrypted per-Identity Application DB through domain services.
 
-The GUI gates every mutating action on the matching flag plus
-`identity_state == Active` and renders the exact missing precondition
-when disabled.
-
-## Service data
-
-- Wallet ledger entries come from finalized protocol operations
-  (onboarding bonus, payments, LOCK_TO_SYSTEM).
-- Email payloads are encrypted application data in RootPublication trees;
-  only local client indexes own Inbox/Sent/read state. Mail is not a
-  consensus operation and has no per-message consensus state.
-- Storage providers receive opaque encrypted chunks by ChunkID with
-  publication inclusion proofs; the GUI never sends plaintext names or paths.
-- Backup sets report size, time and verification state; restore is bound
-  to the local identity keys.
-
-## Layering and operation ownership
-
-The intended request path is:
+Target request path:
 
 ```text
-Qt page -> desktop controller -> domain service ->
-IdentityOperationCoordinator / RootPublication and chunk services -> NodeRuntime
+Qt page
+-> desktop controller
+-> MailService / FilesService
+-> ApplicationService / PublicationService / StorageService
+-> NodeRuntime
 ```
 
-Pages may collect user input, show local validation, and render immutable
-status/progress snapshots. They MUST NOT allocate protocol nonces, sign
-operations, choose crypto suites, wrap content keys, or submit Storage
-transfers directly. Controllers and services may prepare user intent and
-delegate it to the owning core service. The shared coordinator owns exact
-operation bytes, operation identity, nonce reservation, durable retry, and
-status reconciliation. Wallet, Name, and IdentityRotate use it. IdentityRotate replaces the complete
-mnemonic-derived key set atomically, persists a candidate vault first, and
-promotes it only after verified finality; the Identity page
-runs phrase confirmation and resume off the Qt event loop. Mail and Files are
-not integrated.
+Pages never allocate protocol nonces, sign operations, choose KEM suites, build
+Merkle proofs or select providers.
 
-## Mail / Files asynchronous state contract
+## Content states
 
-The following is the target Beta UI contract, not a claim that the corresponding
-Mail or Storage paths are live. Those capabilities remain disabled until core
-reports them as implemented. Mail and Files must not run long network,
-cryptographic, history, or Storage work on the Qt event loop. Controllers and
-service workers publish model state such as:
+The desktop model may expose:
 
 ```text
+Local
 Preparing
-Uploading / Downloading + progress
-Securing
 WaitingForConfirmation
-DeliveryUncertain / CheckingStatus
-Protected / Confirmed
+Securing
+Protected
+TemporarilyUnavailable
 NeedsAttention
 ```
 
-Product language is derived from verified core truth. Operation and progress
-snapshots come from core/service state, not page-local guesses.
-`delivery_uncertain` is
-not rejection. `Protected`, `Sent`, and `Confirmed` are shown only after the
-owning service/core reports the corresponding durability or finality state.
+Mail maps `Protected` durability to user-facing `Sent`.
 
-## Absolute rules for both sides
+`WaitingForConfirmation` means RootPublication is not yet PoA-finalized.
 
-- Disabled-state honesty: no control ever pretends to have performed an
-  operation.
-- Amounts are whole CYBOU everywhere (decimals = 0).
-- The GUI offers no operation that violates docs 52 invariants
-  (no admin debit, no System Balance withdrawal, no reverse lock).
-- System Balance is debited only by deterministic protocol rules; the GUI
-  renders this and adds no manual shortcut.
+`Securing` means finalized content is being placed/repaired toward the remote
+durability target.
+
+## Durability
+
+Development target: 2 remote replicas.
+Beta target: 3 remote replicas.
+
+The local encrypted copy is separate `Available offline`/cache state and does
+not count toward `Protected`.
+
+## Capabilities
+
+A UI capability becomes true only when the corresponding real backend path is
+live, not because a fixture demonstrates the intended UX.
+
+Mail capability requires publication, scan, retrieval and mailbox projection.
+
+Files capability requires private catalog/mutation publication, retrieval and
+durability.
+
+## Authority UI
+
+When Authority is implemented, the GUI may show read-only:
+
+```text
+Authority
+Authority tier
+current generic service allowances
+network contribution status
+```
+
+Qt never computes or edits Authority.
+
+Do not present Authority as a social score or PoA voting power.
+
+## Performance
+
+Network, crypto, block scanning, chunk transfer, recovery and storage health
+work must stay off the Qt event loop.

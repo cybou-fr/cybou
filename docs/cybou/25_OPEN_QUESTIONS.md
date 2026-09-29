@@ -1,38 +1,73 @@
 # Open engineering and product gates
 
-The active PoA and streaming encrypted chunk-tree protocol is deployed on DEV.
-This list tracks remaining validation and product readiness, not a pending
-protocol reset. Product details belong in the Mail and Files UX documents;
-wire and state authority belongs in the active protocol documents listed by
-`AGENTS.md`.
+These are implementation/readiness questions inside the active architecture,
+not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 
-## Finality and state
+## Application data plane
 
-- Expand canonical hybrid signature/finality vectors across supported
-  implementations and verify independently recomputed finalized state on a
-  clean full node.
-- Document and exercise operator recovery after a PoA safety halt; conflicts
-  already fail closed and never trigger automatic fork selection.
+- exact encrypted Application DB implementation and crash-recovery strategy;
+- canonical private CBOR profiles for Mail, Files mutations and RecoveryBridge;
+- ApplicationService scan bounds and rebuild performance;
+- interruption-safe PublicationService staging/journal behavior.
 
-## Encrypted content and admission
+## Recovery
 
-- Cross-implementation canonical-CBOR and streaming ROOT/INDEX/DATA tree vectors.
-- Reviewed vectors for X-Wing draft-05 recipient capsule wrapping and recovery.
-- Cross-implementation RootPublication execution, replay protection, and exact
-  fee/state accounting.
-- Cross-implementation provider proof validation against finalized
-  RootPublication data.
-- Durability threshold, independent per-chunk placement, retry, retention,
-  audits, repair, accounting, and provider-loss handling.
-- Publication scanning and recursive retrieval from a clean client without a
-  previous local database.
+- cross-platform RecoveryBridge vectors;
+- exact historical-KEM retention bounds;
+- clean-machine recovery performance from large finalized history;
+- provider discovery/fan-out behavior when old placement metadata is gone.
 
-## Product and operations
+## Storage
 
-- Gmail-familiar Mail and Google Drive-familiar Files UI acceptance on desktop.
-- Offline-recipient retrieval and recovery after interrupted transfers.
-- Beta operational cost measurements for Mail, Files/Storage, and onboarding.
-- Legal review of product claims and evidence exports before public service.
+Decided:
 
-These are integration and Beta gates on the active DEV protocol. They do not
-require another reset unless a future incompatible protocol format is adopted.
+```text
+development = 2 remote full replicas
+Beta        = 3 remote full replicas
+local copy  = not counted
+erasure coding Beta = disabled
+```
+
+Still open:
+
+- provider eligibility/diversity rules;
+- exact health/audit challenge profile;
+- retention/lease/GC semantics;
+- repair cadence and retry/backoff;
+- scalable discovery after small-network fan-out;
+- canonical storage contribution evidence for Authority;
+- physical/canonical accounting for active replicated-byte budgets.
+
+Do not freeze a grindable deterministic provider-placement algorithm before a
+mature anti-Sybil provider registry/evidence model exists.
+
+## Identity Authority
+
+Decided:
+
+- immutable per-network rules;
+- +1 Age per completed protocol epoch;
+- capped finalized Activity;
+- one-time voluntary Balance->SystemBalance contribution;
+- penalty debt preserved separately;
+- generic Protocol/Storage/Bandwidth budgets;
+- no PoA power.
+
+Still open:
+
+- exact Authority numeric caps/constants;
+- exact Authority tier hard maximum;
+- exact Protocol/Storage/Bandwidth base/per-tier/hard-ceiling values;
+- NodeID binding format and bounded registry;
+- canonical liveness evidence and slot profile;
+- canonical storage byte×epoch evidence;
+- exact false-claim penalty constants beyond the architecture principle.
+
+Until canonical liveness/storage evidence exists, those Authority components
+remain zero.
+
+## Future research
+
+- signed provisional validation profile;
+- whether it delivers enough value to justify added pre-finality complexity;
+- erasure coding after Beta measurements.

@@ -1,55 +1,58 @@
 # 24 — Current product and protocol decisions
 
-This register contains active decisions only. Superseded decisions and
-intermediate architecture history are available in Git.
+This register contains active decisions only. Superseded architecture remains in
+Git history.
 
 ## Product
 
 | ID | Decision | Status |
 |---|---|---|
-| DEC-173 | Beta Mail attachments use the shared encrypted Object Storage layer; text-only Mail is the initial integration profile. | Frozen |
-| DEC-179 | Mail and Files use familiar Gmail and Google Drive workflows without copying their branding or centralized-provider assumptions. | Frozen |
-| DEC-180 | Normal UI presents user actions and outcomes; protocol and cryptographic details use progressive disclosure. | Frozen |
-| DEC-181 | A publication is not reported as protected until the required storage durability condition is met. | Frozen |
-| DEC-183 | Mail and Files share encrypted objects; ownership and retention references remain application-private. | Frozen |
+| DEC-173 | Mail attachments use the shared encrypted content substrate; Mail is not a separate network transport. | Frozen |
+| DEC-179 | Mail and Files use familiar Gmail/Google Drive interaction patterns without copying their branding or centralized trust assumptions. | Frozen |
+| DEC-180 | Normal UI presents user actions/outcomes; protocol details use progressive disclosure. | Frozen |
+| DEC-181 | Finality alone is not `Sent`/`Protected`; remote durability is required. | Frozen |
 | DEC-185 | Files is the Beta file-management surface; Backup is post-Beta. | Frozen |
-| DEC-191 | Beta onboarding economics are calibrated from measured Mail and Files/Storage use; Mainnet parameters wait for Beta data. | Frozen |
-| DEC-194 | Mail, Files, and later Backup are product surfaces over one Identity, finalized state, and shared encrypted content layer. | Frozen |
+| DEC-194 | Mail and Files are product surfaces over one Identity, finalized state and one encrypted content substrate. | Frozen |
 
 ## Identity and onboarding
 
 | ID | Decision | Status |
 |---|---|---|
 | DEC-150 | Account creation is permissionless and uses protocol-native anti-Sybil work. | Frozen |
-| DEC-151 | Account creation transfers the onboarding bonus from OnboardingPool to System Balance atomically; identity creation does not mint supply. | Frozen |
-| DEC-152 | Identity recovery, Identity authorization, PoA finality, Release Signing, and Treasury use separate key roles. | Frozen |
-| DEC-165 | AccountID is a random, nonzero, stable 256-bit identifier independent of mnemonic and keys. | Frozen |
-| DEC-166 | Recovery requires Ed25519 and ML-DSA-65; key roles derive from the recovery phrase under separate domains. | Frozen |
-| DEC-169 | `.cybou` names are 5–32 lowercase ASCII bytes, permanent, and nontransferable in the initial registry. | Frozen |
-| DEC-170 | Name claims finalize through commit, work, and reveal. | Frozen |
-| DEC-171 | The portable recovery vault is durably saved and reopened before AccountCreate broadcast. | Frozen |
-| DEC-193 | Device is not a protocol entity; one account has one current authorization and KEM key set, rotated atomically. | Frozen |
+| DEC-151 | Account creation funds System Balance from OnboardingPool and does not mint supply. | Frozen |
+| DEC-152 | Identity Recovery, Authorization, KEM, PoA, Release Signing and Treasury use separate key roles. | Frozen |
+| DEC-165 | AccountID is a random stable nonzero 256-bit identifier independent of mnemonic and keys. | Frozen |
+| DEC-169 | `.cybou` names are protocol names finalized through commit/work/reveal. | Frozen |
+| DEC-193 | Device is not a protocol Identity entity; one account has one current authorization/KEM key set. | Frozen |
 
-## Protocol reset
+## Core protocol
 
 | ID | Decision | Status |
 |---|---|---|
-| DEC-195 | The canonical protocol uses a genesis-bound single-operator hybrid-PQ PoA finalizer, generic RootPublication, and one encrypted content-addressed chunk tree. Full nodes independently validate every block and state transition. No BFT, ValidatorSet, MailTx, compatibility decoder, automatic import, or dual operation path remains in the target. | Frozen target |
-| DEC-197 | Encrypted ROOT/INDEX metadata contains ordered ChunkIDs; DATA stores application bytes. ChunkID is full BLAKE3 of stored ciphertext. Providers admit chunks only with finalized-publication Merkle inclusion proofs and enforce their own capacity. | Frozen |
-| DEC-198 | Mail has no consensus operation, per-message state object, Mail fee, or Mail quota. Encrypted Mail data and client-owned Inbox/Sent/read indexes are discovered through generic RootPublication. | Frozen |
+| DEC-195 | Canonical finality is genesis-bound single-operator hybrid-PQ PoA with independently validating full nodes; no BFT/ValidatorSet runtime. | Frozen |
+| DEC-197 | ROOT/INDEX metadata contains private ordered ChunkIDs; DATA contains application bytes; ChunkID is full BLAKE3 of stored ciphertext. | Frozen |
+| DEC-198 | Mail has no consensus operation or per-message canonical state; private Mail is discovered through generic RootPublication. | Frozen |
+| DEC-199 | The physical ChunkStore is one encrypted content-addressed network store and has no user-facing own/foreign semantic classification. | Frozen |
+| DEC-200 | Each unlocked Identity uses a separate encrypted rebuildable Application DB; GUI never browses provider ChunkStore contents. | Frozen |
+| DEC-201 | One RootPublication may authorize chunks from multiple private encrypted trees; only the main root is capsule-addressed. This does not create a new wire entity. | Frozen |
+| DEC-202 | Recoverable publisher content uses an application-layer self capsule. | Frozen |
+| DEC-203 | Files persistent private history uses a minimal ordered mutation model (`UPSERT_ITEM`, `DELETE_ITEM`) over canonical PoA order. | Frozen |
+| DEC-204 | Identity rotation must protect required historical KEM recovery material before rotation when clean recovery needs old epochs. | Frozen |
+| DEC-205 | Development targets 2 independent remote full replicas; Beta targets 3. Local encrypted cache does not count; Beta erasure coding is disabled. | Frozen |
+| DEC-206 | Placement, provider health, audit and repair are StorageService policy, not consensus state. | Frozen |
+| DEC-207 | Identity Authority supersedes the earlier Proof-of-Trust design and never grants PoA finalization power. | Frozen target |
+| DEC-208 | Authority uses immutable rules; initial canonical sources are Age, capped finalized Activity and voluntary System Balance contribution. Liveness/Storage activate only with canonical evidence. | Frozen target |
+| DEC-209 | A future service NodeID may bind to AccountID for contribution accounting but is not an Identity device credential. | Frozen target |
+| DEC-210 | Anti-abuse policy uses generic Authority-derived Protocol, Storage and Bandwidth budgets rather than Mail/File-specific consensus quotas. | Frozen target |
+| DEC-211 | Future provisional validation, if introduced, is reversible/non-canonical and never substitutes for PoA finality. | Future |
 
 ## Fixed economics
 
 ```text
-MAX_SUPPLY = 100,000,000,000
+MAX_SUPPLY = 100,000,000,000 CYBOU
 decimals = 0
-4-unit fees -> 3 Security + 1 Onboarding
+4 fee units -> 3 Security + 1 Onboarding
 ```
 
-DEV, Beta, and Mainnet parameters are separate. Priority fees are disabled.
-PoT uses deterministic block-height epochs and integer arithmetic; System
-Balance is a service budget and does not increase PoT score. No local wall-clock
-value affects consensus.
-
-Detailed wire and cryptographic requirements live in the active protocol
-documents referenced by `AGENTS.md`.
+Runtime policy governance is not part of the current target. Network parameters
+remain immutable.

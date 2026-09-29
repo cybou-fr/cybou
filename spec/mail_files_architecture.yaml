@@ -1,98 +1,103 @@
-version: '0.0.1'
-status: product_UX_contract
-scope: product_workflows_and_local_client_behavior
-protocol_authority: docs/cybou/POA_FINALITY.md_and_docs/cybou/ENCRYPTED_CHUNK_TREE.md
-brand:
-  identity: CYBOU
-  mail_reference: Gmail_core_workflows_without_Google_brand_assets
-  files_reference: Google_Drive_core_workflows_without_Google_brand_assets
-shared_product_model:
-  identity_scope: account
-  mail_files_backup_identity: one_CYBOU_Identity
-  service_indexes: client_local_and_encrypted_at_rest
-  plaintext_search_queries_sent_to_network: false
-products:
-  mail:
-    initial_profile:
-      recipients_per_message: 1
-      content: UTF8_text_only
-      attachments: false
-    workflows:
-      - inbox
-      - sent
-      - drafts
-      - starred
-      - archive
-      - trash
-      - blocked_senders
-      - local_labels
-      - conversation_threads
-      - unread_read_state
-      - local_search
-      - reply_forward
-      - contact_name_autocomplete
-    later_gates:
-      - encrypted_attachments
-      - multiple_recipients
-      - reply_all
-      - attachment_preview_download_and_save_to_files
-  files:
-    workflows:
-      - files_and_folders
-      - upload_download
-      - rename_move_copy
-      - trash_restore_delete
-      - starred_recent_search
-      - sorting_grid_and_list_views
-      - preview
-      - storage_usage
-      - asynchronous_progress_pause_retry
-      - immutable_version_history
-      - identity_based_sharing
-    sharing:
-      default_permission: READ
-      permissions: [READ, WRITE]
-      anonymous_links_initially: false
-      revocation_cannot_erase_copied_keys_or_plaintext: true
-  backup:
-    release_stage: post_Beta
+version: '0.1'
+status: architecture_target
+scope: mail_files_private_application_layer
+
+identity:
+  scope: account
+  device_is_protocol_entity: false
+
+local_data_plane:
+  common_chunk_store:
+    encrypted_bytes_only: true
+    semantic_ownership: false
+    own_foreign_classification: false
+    gui_enumeration: false
+
+  identity_application_db:
+    per_identity: true
+    encrypted_at_rest: true
+    rebuildable: true
+    gui_semantic_source: true
+    foreign_provider_chunks_visible: false
+
+services:
+  application_service:
+    responsibilities:
+      - scan_finalized_root_publications
+      - open_identity_capsules
+      - decrypt_private_roots
+      - rebuild_mail_files_projection
+  publication_service:
+    responsibilities:
+      - local_encryption_and_staging
+      - root_publication_construction
+      - self_and_recipient_capsules
+      - finality_reconciliation
+  storage_service:
+    responsibilities:
+      - get_put_chunks
+      - provider_selection
+      - remote_replication
+      - health_audit_repair
+
+publication:
+  generic_bundle_is_wire_entity: false
+  multiple_private_trees_per_root_publication: true
+  one_global_chunk_authorization_root: true
+  root_publication_root_is_main_private_root: true
+  child_root_ids_and_keys_private_inside_main_root: true
+  self_capsule_required_for_recoverable_owner_content: true
+  unfinalized_remote_storage: false
+
+mail:
+  recipients_initial: 1
+  sender_truth: outer_identity_authorization
+  private_schema:
+    - message_id
+    - optional_reply_to_message_id
+    - recipient_account_id
+    - timestamp
+    - subject
+    - body
+    - attachments
+  attachments_reuse_existing_protected_content: true
+  sent_requires_remote_durability: true
+
+files:
+  catalog_model: ordered_private_mutation_journal
+  consensus_catalog_state: false
+  mutations:
+    - upsert_item
+    - delete_item
+  local_only_views:
+    - starred
+    - recent
+    - view_mode
+    - access_history
+  file_content_requires_separate_application_schema: false
+
 content_lifecycle:
   - local
   - preparing
   - waiting_for_confirmation
   - securing
   - protected
-content_exception_states:
-  - temporarily_unavailable
-  - needs_attention
-mail_send_states:
-  - draft
-  - preparing
-  - waiting_for_confirmation
-  - securing
-  - sent
-  - needs_attention
-download_states:
-  - downloading
-  - verifying
-  - decrypting
-  - ready
-publication_order:
-  - prepare_locally
-  - finalize_root_publication
-  - admit_chunks_to_storage
-  - reach_durability
-unfinalized_remote_storage: false
-finalized_implies_sent_or_protected: false
-mail_attachments_published_with_message_root: true
-mail_files_reuse_existing_protected_content: when_authorization_and_retention_permit
-status_terms:
-  finalized: root_publication_in_canonical_PoA_history
-  authorized: chunk_ids_admitted_by_finalized_publication
-  available: chunks_retrievable_from_network
-  protected: product_durability_threshold_reached
-  retrievable: current_client_fetched_and_verified_content
-ux_states:
-  distinguish_finalized_authorized_available_protected_and_retrievable: true
-  preserve_drafts_and_local_work_when_offline: true
-  explain_retryable_and_permanent_failures: true
+
+storage:
+  local_copy:
+    encrypted: true
+    counts_as_remote_replica: false
+  development_remote_full_replicas: 2
+  beta_remote_full_replicas: 3
+  erasure_coding_beta: false
+  placement_granularity: chunk_id
+  deterministic_provider_ranking_frozen: false
+  provider_discovery_initial: peer_fanout_by_chunk_id
+  repair_required: true
+
+recovery:
+  application_db_required: false
+  old_provider_placement_db_required: false
+  current_mnemonic_plus_public_history: true
+  historical_kem_recovery_after_rotation: recovery_bridge
+  self_capsule_for_owner_recovery: true

@@ -1,28 +1,87 @@
-version: '0.0.1'
+version: '0.1'
+system: identity_authority
+note: file_path_retained_to_avoid_link_churn
+supersedes: proof_of_trust
+
 scope: AccountID
+
 consensus_time:
   source: finalized_block_height_epoch
   wall_clock_for_consensus: false
-  epoch_blocks: null
-arithmetic: integer_only
-inputs:
-  system_balance:
-    capped: true
-  account_age:
-    source: creation_height_or_epoch
-    saturating: true
-  clean_history:
-    saturating: true
-  valid_activity:
-    saturating: true
-  violations:
-    negative: true
-mail_policy:
-  new_account_limit_per_epoch: 25
-  hard_ceiling_required: true
-payments:
-  outgoing_tx_rate_limit: true
-  outgoing_value_rate_limit: true
-  new_recipient_rate_limit: true
-  confiscates_balance: false
-validator_authority: false
+  integer_arithmetic_only: true
+
+effective_authority:
+  formula: max_0_earned_minus_penalties
+  penalty_debt_preserved: true
+
+earned_components:
+  age:
+    points_per_completed_epoch: 1
+    source: current_epoch_minus_creation_epoch
+
+  activity:
+    points_per_qualifying_finalized_operation: 1
+    capped_per_epoch: true
+    private_mail_file_actions_count_individually: false
+    root_publication_is_generic_activity: true
+
+  system_contribution:
+    source: voluntary_balance_to_system_balance_lock
+    points_per_whole_cybou_locked: 1
+    onboarding_bonus_points: 0
+    recurring_points_for_holding_system_balance: false
+    fee_spending_recredits_points: false
+
+  liveness:
+    status: evidence_gated
+    minimum_union_uptime_percent: 50
+    max_points_per_identity_per_epoch: 1
+    multiple_nodes_multiply_points: false
+    canonical_node_binding_required: true
+    canonical_liveness_evidence_required: true
+    credit_before_evidence_protocol: 0
+
+  storage:
+    status: evidence_gated
+    metric: verified_encrypted_byte_epochs
+    per_chunk_reward: false
+    canonical_evidence_required: true
+    conversion_unit: immutable_network_parameter
+    credit_before_evidence_protocol: 0
+
+penalties:
+  ordinary_network_timeout_is_fraud: false
+  global_penalty_requires_canonical_attributable_evidence: true
+  false_signed_storage_claim:
+    positive_credit: 0
+    target_penalty_multiplier_vs_expected_reward: 2
+
+tier:
+  formula: min_max_tier_floor_log2_effective_authority_plus_1
+  floating_point_consensus_math: false
+
+resource_domains:
+  protocol_budget: true
+  storage_budget: true
+  bandwidth_budget:
+    put: true
+    get: true
+  nonzero_new_identity_base_allowance: true
+  immutable_hard_ceiling_required: true
+  mail_specific_consensus_quota: false
+  file_specific_consensus_quota: false
+
+finality:
+  authority_grants_poa_power: false
+  poa_remains_genesis_bound: true
+
+governance:
+  runtime_policy_updates: false
+  operator_manual_score_edit: false
+  parameters_immutable_per_network: true
+
+future:
+  provisional_validation:
+    status: research_only
+    canonical: false
+    authorizes_remote_storage: false

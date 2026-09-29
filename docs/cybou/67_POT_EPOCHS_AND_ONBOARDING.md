@@ -1,32 +1,57 @@
-# 67 — Deterministic epochs and permissionless onboarding
+# 67 — Authority epochs and permissionless onboarding
 
-## Consensus time
+Status: the file path is retained for compatibility; Identity Authority
+supersedes the earlier PoT terminology.
 
-Consensus behavior never depends on client wall clock, local timezone, local
-midnight, or arbitrary user timestamps. Protocol epochs derive from finalized
-block height using immutable network parameters:
+## Canonical epoch
 
 ```text
-epoch = floor(block_height / EPOCH_BLOCKS)
+epoch = floor(finalized_block_height / EPOCH_BLOCKS)
 ```
 
-Account age and Proof of Trust use creation height/epoch and valid protocol
-history. Calculations use deterministic integer arithmetic. System Balance is a
-service budget and does not increase Beta PoT score. Generic RootPublication
-limits are based on public encoded bytes and chunk count; hidden Mail-specific
-quota rules do not exist.
+All canonical age/activity/liveness windows use this epoch.
+
+No client wall clock, timezone or local midnight affects consensus accounting.
 
 ## Account creation
 
-Account creation is permissionless and protocol-native. It uses
-AccountCreationWork bound to NetworkID and AccountID. There are no vouchers,
-ordinary-user operator approvals, or central activation step.
+Account creation remains permissionless and protocol-native.
 
-A valid AccountCreate atomically registers the Identity, creates the monetary
-account, and transfers the network-configured onboarding bonus from
-OnboardingPool to System Balance. It does not mint supply and does not create a
-service-specific free-credit system.
+`AccountCreateOp` uses anti-Sybil work bound to NetworkID and AccountID.
 
-DEV, Beta, and Mainnet use separate genesis and economic parameters. Beta's
-onboarding budget is calibrated from integrated Mail, Files/Storage, and
-post-Beta Backup capacity; Mainnet parameters wait for measured Beta data.
+There is no:
+
+```text
+voucher
+operator approval
+central activation
+```
+
+A successful AccountCreate:
+
+- registers the Identity;
+- creates the monetary account;
+- transfers configured onboarding value from OnboardingPool to System Balance.
+
+It does not mint supply.
+
+## Authority at onboarding
+
+Account creation establishes `creation_epoch`.
+
+Age Authority begins from protocol lifetime.
+
+The automatic onboarding System Balance amount gives:
+
+```text
+0 SystemContributionAuthority
+```
+
+A later voluntary user-authorized Balance->SystemBalance lock may earn the
+one-time contribution defined by the Authority policy.
+
+## Network separation
+
+DEV, Beta and Mainnet may use different immutable genesis/network parameters.
+
+Beta balances do not carry to Mainnet.

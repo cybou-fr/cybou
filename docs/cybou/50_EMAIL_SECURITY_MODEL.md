@@ -1,52 +1,92 @@
 # 50 — Mail and Files content security
 
-Mail and Files content is application data inside the shared encrypted payload
-tree. Generic RootPublication exposes only the fields required to authorize
-publication and provider admission. Recipient capsules do not reveal recipient
-AccountID. Filenames, folder structure, Mail schema, subject, body, and
-application indexes remain encrypted.
+Mail and Files are private application data over generic RootPublication and
+the shared encrypted chunk tree.
 
 ## Protected assets
 
-- plaintext Mail and Files content;
-- Identity recovery and authorization secrets;
-- recipient KEM private material and content-encryption keys;
-- private recipient, filename, path, and sharing metadata;
-- integrity and origin of finalized publications;
-- local indexes, drafts, and decrypted caches.
+- Mail subject/body/attachments;
+- filenames/folder structure;
+- content keys;
+- recipient relationships;
+- private application indexes;
+- drafts and decrypted cache state;
+- Identity secrets.
 
-## Trust boundaries
+## Network-visible boundary
 
-The PoA operator controls ordering and can censor or stop finality. It cannot
-forge Identity authorization or decrypt payload content. Full nodes validate
-the same canonical operations and state transitions. Storage providers receive
-opaque ciphertext, content addresses, finalized-publication references, and
-Merkle proofs; they do not receive plaintext schemas or keys.
+RootPublication exposes only generic publication fields required for consensus,
+recipient key wrapping and provider admission.
 
-Finality authorizes chunk admission but does not prove availability or
-durability. Clients verify each content address and AEAD tag, retain local
-staging until the full tree verifies, and expose data only after successful
-decryption. Product states must distinguish finalized, available, retrievable,
-and protected.
+Providers receive opaque encrypted chunks, ChunkIDs, finalized-publication
+references and admission/accounting metadata.
 
-## Threats and controls
+They do not need plaintext application type, filename, folder or Mail subject.
 
-- **Key substitution:** accept recipient KEM capabilities only from verified
-  finalized Identity state and bind capsules to network, publication, sender
-  authorization context, and recipient key epoch.
-- **Replay or nonce reuse:** serialize account operations through the durable
-  Identity coordinator; reconcile uncertain delivery before retrying.
-- **Malformed content:** bound canonical-CBOR parsing, ciphertext sizes, chunk
-  depth/count, and output; do not execute active content.
-- **Provider loss or corruption:** verify BLAKE3 content addresses and Merkle
-  admission proofs; treat replication and repair as measured storage
-  guarantees, not as consensus finality.
-- **Metadata analysis:** keep Mail and Files schemas, names, paths, and recipient
-  identities inside authenticated encryption. Public capsule count and key
-  epochs remain acknowledged metadata leaks.
-- **Long-term ciphertext exposure:** use the reviewed hybrid-PQ KEM profile and
-  keep mail/content keys separate from Identity signing keys.
+## Sender attribution
 
-Local plaintext protection remains the desktop client's responsibility after
-decryption. Clean-machine recovery and key-loss behavior are specified in
-`IDENTITY_DISCOVERY_AND_RECOVERY.md` and `76_IDENTITY_VAULT_RECOVERY.md`.
+For Mail, authoritative sender AccountID comes from the outer
+`AuthorizedRootPublication` authorization.
+
+Do not trust a decrypted application field to redefine the sender.
+
+## Self recovery
+
+Recoverable publisher content uses a self capsule.
+
+For one-recipient Mail:
+
+```text
+recipient capsule
+self capsule
+```
+
+This allows clean reconstruction of Sent Mail after loss of the previous
+Application DB.
+
+## Attachments
+
+New attachment trees and the Mail main root may be staged under one
+RootPublication authorization Merkle tree.
+
+The encrypted Mail root privately contains attachment RootChunkID/ContentKey
+references.
+
+Existing protected Files content may be referenced without ciphertext
+re-upload when authorization/retention permits.
+
+## Local security
+
+The common ChunkStore contains encrypted bytes only.
+
+The per-Identity Application DB is encrypted at rest and becomes readable only
+after Identity unlock.
+
+The GUI consumes the semantic Application DB/model and never enumerates foreign
+provider chunks.
+
+## Finality and durability
+
+```text
+PoA-finalized
+!=
+Sent / Protected
+```
+
+Beta `Sent` requires the publication's required chunks to reach three
+independent remote replicas. The local encrypted copy does not count.
+
+## Recovery
+
+Clean-machine recovery starts from the current mnemonic and verified public
+history. Historical KEM material required after rotation is recovered through
+the private RecoveryBridge flow, then old accessible publications are scanned.
+
+## Threat controls
+
+- key substitution -> finalized Identity KEM lookup and bound capsules;
+- malformed content -> bounded canonical parsing/tree limits;
+- chunk corruption -> BLAKE3 + AEAD verification;
+- provider loss -> remote replication + audit/repair;
+- metadata leakage -> encrypted application roots;
+- local disk exposure -> ciphertext ChunkStore + encrypted Application DB.
