@@ -59,8 +59,11 @@ intent requires the previous journaled block to be finalized, the next height,
 and its exact block ID as parent. Recovery fails closed if journal and finalized
 history disagree; a journal conflict can never be cleared by normal startup.
 The journal contains no private key. The current implementation provides the
-pre-sign intent and canonical-tip check; finalizer runtime integration and
-independent-node detection of conflicting valid certificates remain open.
+pre-sign intent and canonical-tip check. `PoaFinalizer` verifies the supplied
+operator recovery entropy against the genesis key, retains it only in RAM,
+checks canonical block serialization, persists the intent, and only then signs.
+Wiring this signer into the node runtime and independent-node detection of
+conflicting valid certificates remain open.
 
 If a node verifies two valid PoA signatures for different blocks at the same
 height and parent, it enters a permanent safety halt. It does not select a fork,
