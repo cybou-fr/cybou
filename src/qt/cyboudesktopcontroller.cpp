@@ -4,6 +4,7 @@
 
 #include <qt/cyboudesktopcontroller.h>
 
+#include <qt/cyboucoreapplicationadapter.h>
 #include <qt/cyboudesktopmodel.h>
 
 #include <cybou/bootstrap_nodes.h>
@@ -104,8 +105,12 @@ void CybouDesktopController::start()
         m_identity_service = std::make_unique<cybou::CybouIdentityService>(runtime, identity_path);
         m_model->setIdentityService(m_identity_service.get());
 
-        // Mail and Files wait for the finality-first content client; the old
-        // legacy mail and object-storage services are intentionally not wired.
+        // Live Mail runs through the core application services; Files stays
+        // unavailable until the adapter connects it.
+        m_application = std::make_unique<CybouCoreApplicationAdapter>(runtime, *m_identity_service, m_data_directory);
+        m_model->setApplicationBackend(m_application.get());
+        m_model->requestApplicationCapabilities(/*mail=*/true, /*files=*/false);
+
         m_wallet_service = std::make_unique<cybou::CybouWalletService>(
             runtime, m_identity_service->GetKeyStore());
         m_model->setWalletService(m_wallet_service.get());
@@ -193,6 +198,8 @@ void CybouDesktopController::start()
         const QString reason = QString::fromLocal8Bit(e.what());
         qWarning() << "CYBOU desktop startup error:" << reason;
         if (m_node_service) m_node_service->StopNetwork();
+        m_model->setApplicationBackend(nullptr);
+        m_application.reset();
         m_model->setIdentityService(nullptr);
         m_model->setWalletService(nullptr);
         m_wallet_service.reset();
@@ -207,6 +214,9 @@ void CybouDesktopController::start()
 void CybouDesktopController::stop()
 {
     if (m_node_service) m_node_service->StopNetwork();
+    // Joins the application worker before the runtime goes away.
+    if (m_model) m_model->setApplicationBackend(nullptr);
+    m_application.reset();
     if (m_model) {
         m_model->setIdentityService(nullptr);
         m_model->setWalletService(nullptr);

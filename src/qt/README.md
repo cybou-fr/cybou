@@ -13,7 +13,7 @@ workflow is defined.
 ```text
 Pages -> CybouDesktopModel -> CybouApplicationBackend
                                 ├── CybouFixtureApplicationBackend  (CYBOU_UI_FIXTURE)
-                                └── CybouCoreApplicationAdapter     (blocked: see CORE_INTEGRATION.md)
+                                └── CybouCoreApplicationAdapter     (live Mail; see CORE_INTEGRATION.md)
 ```
 
 - Pages call `CybouDesktopModel::request*` for every persistent Mail/Files
@@ -22,8 +22,8 @@ Pages -> CybouDesktopModel -> CybouApplicationBackend
   uploading show an optimistic `Preparing` item; the backend owns every later
   state, and Sent is shown only for `Protected` messages.
 - Without a backend, `capabilities().mail/files` stay false whatever is
-  requested. Live mode has no backend until core exposes the application
-  services.
+  requested. In live mode `CybouCoreApplicationAdapter` serves Mail; Files
+  stays off until it is connected.
 - The model opens the backend's Identity session while the Identity is
   unlocked and clears the private projection (and so global search) when it
   locks.

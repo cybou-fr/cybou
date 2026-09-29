@@ -128,6 +128,8 @@ public:
      */
     void setApplicationBackend(CybouApplicationBackend* backend);
     CybouApplicationBackend* applicationBackend() const { return m_backend; }
+    /** Requests Mail/Files; they turn on only while the backend can serve them. */
+    void requestApplicationCapabilities(bool mail, bool files);
 
     /* ---- Product collections (fed by adapters or fixtures). ---- */
     const QVector<CybouNameItem>& names() const { return m_names; }

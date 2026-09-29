@@ -170,6 +170,7 @@ void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString
     }
     if (state == CybouIdentityState::Active && m_wallet_service && !m_capabilities.payments) {
         m_capabilities.payments = true;
+        m_requested_capabilities.payments = true;
         Q_EMIT capabilitiesChanged();
     }
     syncIdentitySession();
@@ -196,6 +197,14 @@ void CybouDesktopModel::syncIdentitySession()
     if (!m_backend) return;
     if (open) m_backend->openIdentity();
     else m_backend->closeIdentity();
+}
+
+void CybouDesktopModel::requestApplicationCapabilities(bool mail, bool files)
+{
+    CybouCapabilities requested = m_requested_capabilities;
+    requested.mail = mail;
+    requested.files = files;
+    setCapabilities(requested);
 }
 
 void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
@@ -590,6 +599,7 @@ void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity
     m_identity_service = identity_service;
     if (!m_identity_service && m_capabilities.account_creation) {
         m_capabilities.account_creation = false;
+        m_requested_capabilities.account_creation = false;
         Q_EMIT capabilitiesChanged();
     }
     if (m_identity_service) {
@@ -598,6 +608,7 @@ void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity
                 m_identity_service->GetNodeRuntime(), m_identity_service->GetKeyStore(), *path);
         }
         m_capabilities.account_creation = true;
+        m_requested_capabilities.account_creation = true;
         Q_EMIT capabilitiesChanged();
 
         if (m_identity_service->GetPhase() == cybou::IdentityCreationPhase::ACTIVE &&
@@ -616,6 +627,7 @@ void CybouDesktopModel::setWalletService(cybou::CybouWalletService* wallet_servi
     const bool payments = m_wallet_service && m_status.identity_state == CybouIdentityState::Active;
     if (m_capabilities.payments != payments) {
         m_capabilities.payments = payments;
+        m_requested_capabilities.payments = payments;
         Q_EMIT capabilitiesChanged();
     }
 }

@@ -11,6 +11,7 @@
 #include <QObject>
 #include <QString>
 
+class CybouCoreApplicationAdapter;
 class CybouDesktopModel;
 
 namespace cybou {
@@ -39,6 +40,7 @@ private:
     std::unique_ptr<cybou::CybouNodeService> m_node_service;
     std::unique_ptr<cybou::CybouIdentityService> m_identity_service;
     std::unique_ptr<cybou::CybouWalletService> m_wallet_service;
+    std::unique_ptr<CybouCoreApplicationAdapter> m_application;
     void stop();
 };
 

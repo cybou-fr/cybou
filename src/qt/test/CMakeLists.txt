@@ -15,6 +15,9 @@ add_windows_application_manifest(test_cybou-native-qt)
 
 target_link_libraries(test_cybou-native-qt
   cybou_qt
+  # The live adapter test drives real core services on an authority runtime.
+  cybou_node
+  Boost::headers
   Qt6::Test
 )
 

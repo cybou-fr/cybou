@@ -5,6 +5,7 @@
 #include <qt/test/cyboushelltests.h>
 
 #include <qt/cybouapplicationbackend.h>
+#include <qt/cyboucoreapplicationadapter.h>
 #include <qt/cyboudesktopcontroller.h>
 #include <qt/cyboufixturebackend.h>
 #include <qt/cyboudesktopmodel.h>
@@ -21,6 +22,7 @@
 
 #include <cybou/network_definition.h>
 #include <test/cybou_test_helpers.h>
+#include <test/cybou_service_test_fixture.h>
 
 #include <QApplication>
 #include <QAbstractButton>
@@ -1353,3 +1355,72 @@ void CybouShellTests::restoreFillsInProgressively()
     QTRY_VERIFY(!model.mailItems().isEmpty());
     QTRY_COMPARE(model.status().identity_state, CybouIdentityState::Active);
 }
+
+void CybouShellTests::liveMailThroughCoreAdapter()
+{
+    // Real core services on an authority runtime; no fixtures.
+    CybouServiceTestFixture fixture;
+    auto alice = fixture.CreateIdentity("adapter-alice.vault");
+    auto bob = fixture.CreateIdentity("adapter-bob.vault");
+    const QString bob_id = QString::fromStdString(bob->GetAccountId()->Value().GetHex());
+
+    const auto open = [&](cybou::CybouIdentityService& identity, const char* dir) {
+        auto model = std::make_unique<CybouDesktopModel>(QStringLiteral("CYBOU DEV"));
+        auto adapter = std::make_unique<CybouCoreApplicationAdapter>(*fixture.runtime, identity, fixture.directory / dir);
+        adapter->setRefreshInterval(20);
+        model->setApplicationBackend(adapter.get());
+        model->requestApplicationCapabilities(true, false);
+        model->setIdentityState(CybouIdentityState::Active,
+            QString::fromStdString(identity.GetAccountId()->Value().GetHex()), 1);
+        return std::make_pair(std::move(model), std::move(adapter));
+    };
+    auto [alice_model, alice_adapter] = open(*alice, "desktop-alice");
+    // Mail turns on only once the adapter session has opened the core services.
+    QTRY_VERIFY(alice_model->capabilities().mail);
+    QVERIFY(!alice_model->capabilities().files); // not connected yet
+
+    CybouMailItem message;
+    message.to_name = bob_id;
+    message.subject = QStringLiteral("Hello");
+    message.body = QStringLiteral("Hello Bob, from the live desktop.");
+    const QString client_id = alice_model->requestSendMail(message);
+    QVERIFY(!client_id.isEmpty());
+    // The optimistic item is replaced by the backend's message, keyed by its private ID.
+    QTRY_VERIFY(!alice_model->mailItem(client_id) && !alice_model->mailItems().isEmpty());
+    const QString sent_id = alice_model->mailItems().first().id;
+    QCOMPARE(sent_id.size(), 64);
+    QTRY_COMPARE(alice_model->mailItem(sent_id)->state, CybouContentState::WaitingForConfirmation);
+
+    QVERIFY(fixture.runtime->ProduceBlock());
+    // Finalized is not Sent: with no storage providers the message keeps Securing.
+    QTRY_COMPARE(alice_model->mailItem(sent_id)->state, CybouContentState::Securing);
+    QCOMPARE(alice_model->mailItem(sent_id)->folder, CybouMailFolder::Sent);
+    QVERIFY(CybouProduct::mailStateText(*alice_model->mailItem(sent_id)) != QStringLiteral("Sent"));
+    QTRY_VERIFY(alice_model->mailItem(sent_id)->finalized_height > 0);
+
+    // Bob's desktop discovers it from finalized history.
+    auto [bob_model, bob_adapter] = open(*bob, "desktop-bob");
+    QTRY_VERIFY(bob_model->mailItem(sent_id) != nullptr);
+    const auto* received = bob_model->mailItem(sent_id);
+    QCOMPARE(received->subject, QStringLiteral("Hello"));
+    QCOMPARE(received->folder, CybouMailFolder::Inbox);
+    QVERIFY(received->unread);
+    QCOMPARE(bob_model->unreadMailCount(), 1);
+    bob_model->requestMailRead(sent_id, true);
+    QTRY_COMPARE(bob_model->unreadMailCount(), 0);
+
+    // An unknown recipient needs attention instead of pretending to send.
+    CybouMailItem nobody;
+    nobody.to_name = QStringLiteral("nobody-here.cybou");
+    nobody.body = QStringLiteral("?");
+    const QString failed = alice_model->requestSendMail(nobody);
+    QTRY_COMPARE(alice_model->mailItem(failed)->state, CybouContentState::NeedsAttention);
+
+    // Locking drops private Mail and the session.
+    alice_model->requestLockVault();
+    QVERIFY(alice_model->mailItems().isEmpty());
+    QVERIFY(!alice_model->capabilities().mail);
+    alice_model->setApplicationBackend(nullptr);
+    bob_model->setApplicationBackend(nullptr);
+}
+

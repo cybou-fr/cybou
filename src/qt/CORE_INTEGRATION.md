@@ -1,75 +1,44 @@
-# Desktop → core integration request
+# Desktop → core integration
 
 The desktop reaches Mail and Files only through `CybouApplicationBackend`
-(`src/qt/cybouapplicationbackend.h`). The live implementation,
-`CybouCoreApplicationAdapter`, is blocked until core exposes the services
-below. This file lists what the adapter needs; it does not prescribe core
-internals, wire formats or storage design. Core types never reach pages, and
-Qt types never reach core.
+(`src/qt/cybouapplicationbackend.h`). The live implementation is
+`CybouCoreApplicationAdapter`, created by `CybouDesktopController` and bound
+to the unlocked Identity. Core types never reach pages, and Qt types never
+reach core.
 
-Status: **blocked**, core has no `ApplicationService`, `PublicationService`,
-`StorageService` or restore scan yet.
+## Connected
 
-## Threading and lifetime
+- **Session:** while the Identity is unlocked the adapter owns one worker
+  thread with the Identity's encrypted Application DB
+  (`<datadir>/identities/<AccountID>/app`), a staging store, and the core
+  `StorageService`, `PublicationService` and `ApplicationService`. Every core
+  call runs on that worker; results reach the GUI as product snapshots.
+  Locking joins the worker and drops the private projection.
+- **Live text-only Mail:** send to a `.cybou` name (or a full AccountID),
+  Inbox/Sent discovery from finalized history, read/star/archive/trash as
+  local mailbox state, retry. State mapping:
 
-- Calls may block; the adapter runs them off the GUI thread.
-- Progress arrives through callbacks or a pollable snapshot. Either works;
-  the adapter marshals onto the GUI thread.
-- One service session per unlocked Identity: open with the unlocked vault,
-  close on lock. Closing must drop plaintext Mail/Files state and indexes.
+  | Core job phase | Desktop state |
+  | --- | --- |
+  | QUEUED, WAITING_FINALITY | Waiting for confirmation |
+  | SECURING (finalized, below remote target) | Securing |
+  | PROTECTED (remote replica target met) | Protected → "Sent" |
+  | NEEDS_ATTENTION | Needs attention |
 
-## ApplicationService (semantic Mail/Files state, per Identity)
+  Sent mail rebuilt from history without a local job shows Protected only
+  when StorageService reports the target met.
+- **Capabilities:** `mail` turns on only once the adapter session has opened
+  the core services. `files` stays off.
+- **Restore progress:** the Mail row follows the application scan.
 
-Snapshots of the Identity's encrypted Application DB, as plain data:
+## Not connected yet
 
-| Need | Fields the desktop renders |
-| --- | --- |
-| Mail list | stable id, folder, from/to `.cybou` names, subject, preview, body, time, unread, starred, draft, attachments |
-| Attachment | stable id, name, logical size, saved Files reference |
-| Files list | stable id, name, parent id, folder flag, logical size, modified, starred, trashed |
-| Change feed | "item changed / removed" events, or a revision number to re-snapshot |
-
-Commands (client-supplied ids for created items are accepted or mapped):
-save/delete draft, mark read, star, move folder, create folder, rename, move,
-copy, trash, restore, delete forever.
-
-Mail/Files search reads this data only, never the ChunkStore.
-
-## PublicationService (outgoing content)
-
-- `send(message, attachments)` and `upload(local path, parent)`, where an
-  attachment is a local path or an existing protected Files reference (reuse,
-  with no re-upload).
-- Per-item lifecycle events matching the desktop states: Preparing,
-  WaitingForConfirmation (submitted, not finalized), Securing (finalized,
-  below the remote replica target, with optional percent), Protected (target
-  met), NeedsAttention (with a user-facing reason), TemporarilyUnavailable.
-- `retry(id)` for NeedsAttention.
-- Advanced details only: operation id, finalized height, root id.
-
-"Protected" means the durability target is met, not just finality.
-
-## StorageService (retrieval and local availability)
-
-- `download(id, destination)` with Downloading, Verifying, Decrypting, Ready
-  or failed-temporarily events.
-- Per item: whether decrypted content is available on this device
-  (`available_offline`).
-- Aggregate storage used and quota for the Identity.
-
-## Restore
-
-After a mnemonic restore: Mail and Files rebuild state (Pending, Running,
-Done), and items stream in as they are indexed, so the desktop is usable
-before the rebuild finishes. Content bytes are not fetched by a restore.
-
-## Availability
-
-A flag per service saying whether it can do work now. The desktop turns
-`capabilities.mail` and `capabilities.files` on only when it is true.
-
-## Later: Authority (read-only)
-
-Authority, tier and the three budget allowances (Protocol, Storage,
-Bandwidth) for the Identity, computed by core. The desktop shows no
-placeholder numbers until this exists.
+- Files (catalog, upload, download) — core `PublishFiles`,
+  `ApplicationService::ListFiles` and `StorageService::Fetch` exist.
+- Mail attachments and Mail ↔ Files reuse — core supports both.
+- Drafts are device-local compose state held in memory by the adapter.
+- Rotation: the Identity page must call `PublishRecoveryBridge`, wait for
+  PROTECTED and `VerifyRecoveryBridge` before `RotateIdentitySync`.
+- Re-securing Sent/Files rebuilt from history after the Application DB was
+  lost (their placement leaves are not reconstructed yet).
+- Authority (read-only) once core implements it.
