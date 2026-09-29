@@ -7,7 +7,6 @@
 #include <uint256.h>
 #include <cybou/authority_node.h>
 #include <cybou/finalized_chunk_store.h>
-#include <cybou/storage_store.h>
 
 #include <boost/asio/ip/tcp.hpp>
 
@@ -28,7 +27,6 @@ inline constexpr uint64_t CAP_BLOCK_INVENTORY{1ULL << 3};
 inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
 inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
 inline constexpr uint64_t CAP_STORAGE{1ULL << 7};
-inline constexpr uint64_t CAP_STORAGE_ABORT{1ULL << 8}; // Used only by the retiring desktop adapter.
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder
 // must enforce it so a malicious peer cannot stuff a PEERS frame with more
@@ -46,14 +44,14 @@ enum class MessageType : uint8_t {
     RESERVED_18 = 18,
     GET_PEERS = 19,
     PEERS = 20,
-    STORAGE_PUT_CHUNK = 21,
-    STORAGE_PUT_DATA = 22,
-    STORAGE_COMMIT = 23,
-    STORAGE_GET_MANIFEST = 24,
-    STORAGE_GET_CHUNK = 25,
-    STORAGE_RESULT = 26,
-    STORAGE_DATA = 27,
-    STORAGE_ABORT = 28,
+    RESERVED_21 = 21,
+    RESERVED_22 = 22,
+    RESERVED_23 = 23,
+    RESERVED_24 = 24,
+    RESERVED_25 = 25,
+    RESERVED_26 = 26,
+    RESERVED_27 = 27,
+    RESERVED_28 = 28,
     PUT_AUTHORIZED_CHUNK = 29,
     AUTHORIZED_CHUNK_DATA = 30,
     CHUNK_ADMISSION_RESULT = 31,
@@ -139,13 +137,6 @@ public:
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
         const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetChunkById(const ChunkId& chunk_id);
-    std::optional<StorageWriteResult> PutStorageChunk(const StorageObjectId& object_id,
-        const StorageEncryptedChunk& chunk);
-    std::optional<StorageWriteResult> CommitStorageManifest(const StoragePublicManifest& manifest);
-    std::optional<StorageWriteResult> AbortStorageObject(
-        const StorageObjectId& object_id, uint32_t chunk_count);
-    std::optional<StoragePublicManifest> GetStorageManifest(const StorageObjectId& object_id);
-    std::optional<StorageEncryptedChunk> GetStorageChunk(const StorageObjectId& object_id, uint32_t index);
     bool ServeNext(CybouNodeRuntime& runtime);
     const std::optional<Hello>& Peer() const { return m_peer; }
     boost::asio::ip::tcp::socket& Socket() { return m_socket; }

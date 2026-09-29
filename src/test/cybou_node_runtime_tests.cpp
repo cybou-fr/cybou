@@ -3,6 +3,8 @@
 
 #include <test/cybou_service_test_fixture.h>
 #include <cybou/crypto/cleanse.h>
+#include <cybou/kv_store.h>
+#include <cybou/poa_finalizer.h>
 #include <test/util/setup_common.h>
 
 #include <boost/test/unit_test.hpp>
@@ -46,6 +48,38 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     const auto missing = observer.FindFinalizedOperation(missing_id);
     BOOST_CHECK(missing.status == cybou::FinalizedOperationLookupStatus::NOT_FOUND);
     BOOST_CHECK_EQUAL(missing.scanned_height, 1U);
+}
+
+BOOST_AUTO_TEST_CASE(runtime_halts_on_valid_poa_equivocation)
+{
+    CybouServiceTestFixture fixture;
+    const auto canonical = fixture.runtime->ProduceBlock();
+    BOOST_REQUIRE(canonical);
+
+    auto conflicting_block = canonical->block;
+    conflicting_block.resulting_state_root.begin()[0] ^= 0x80;
+    cybou::KVStore alternate_signer_db{cybou::KVStoreOptions{.memory_only = true}};
+    cybou::RecoveryEntropy operator_entropy{};
+    operator_entropy[0] = fixture.validator_seed[0];
+    cybou::PoaFinalizer alternate_signer{alternate_signer_db, fixture.runtime->GetNetworkId(),
+        fixture.definition.genesis_block_id, operator_entropy,
+        fixture.definition.poa_finalizer_public_key};
+    const auto alternate_signature = alternate_signer.SignFinality(0,
+        fixture.definition.genesis_block_id, conflicting_block);
+    BOOST_REQUIRE(alternate_signature.certificate);
+
+    cybou::FinalizedBlock conflicting{.block = conflicting_block,
+        .certificate = *alternate_signature.certificate};
+    const auto result = fixture.runtime->CommitBlock(conflicting);
+    BOOST_CHECK(result.error == cybou::BlockTransitionError::POA_EQUIVOCATION_DETECTED);
+    const auto status = fixture.runtime->GetStatus();
+    BOOST_CHECK(status.poa_safety_halted);
+    BOOST_CHECK(status.runtime_state == cybou::NodeRuntimeState::SAFETY_HALTED);
+    BOOST_CHECK(!fixture.runtime->ProduceBlock());
+    const auto evidence = fixture.runtime->ReadPoaSafetyEvidence();
+    BOOST_CHECK(evidence.status == cybou::PoaEvidenceReadStatus::EQUIVOCATION);
+    BOOST_REQUIRE(evidence.equivocation);
+    BOOST_CHECK(evidence.equivocation->first.block_id != evidence.equivocation->second.block_id);
 }
 
 BOOST_AUTO_TEST_CASE(runtime_resolves_only_finalized_root_publications)

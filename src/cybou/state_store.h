@@ -9,6 +9,7 @@
 #include <cybou/block_executor.h>
 #include <cybou/kv_store.h>
 #include <cybou/network_definition.h>
+#include <cybou/poa_conflict_detector.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/state.h>
 #include <serialize.h>
@@ -77,6 +78,8 @@ enum class BlockTransitionError : uint8_t {
     INVALID_CERTIFICATE,
     STATE_ROOT_MISMATCH,
     FEE_ROUTING_FAILED,
+    POA_EQUIVOCATION_DETECTED,
+    POA_SAFETY_HALTED,
 };
 
 struct BlockTransitionResult {
@@ -129,6 +132,8 @@ public:
     const uint256& GetNetworkId() const { return m_network_id; }
     const CybouNetworkDefinition& GetNetworkDefinition() const { return m_network_definition; }
     KVStore& GetDatabase() const { return m_db; }
+    bool PoaSafetyHalted() const;
+    PoaEvidenceReadResult ReadPoaSafetyEvidence() const;
 
     /** Network identity persisted with genesis, if initialized. */
     std::optional<uint256> GetStoredNetworkId() const;
@@ -164,6 +169,7 @@ private:
     const NetworkDefinitionError m_network_definition_error;
     const uint256 m_network_id;
     std::shared_ptr<OperatorAuthoritySignatureVerifier> m_operator_verifier;
+    std::unique_ptr<PoaConflictDetector> m_poa_conflict_detector;
 };
 
 } // namespace cybou

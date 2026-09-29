@@ -49,6 +49,7 @@ bool CybouAuthorityNode::SubmitOperation(const ProtocolOperation& operation)
 
 AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)
 {
+    if (SafetyHalted()) return Failure(AuthorityProductionError::POA_SAFETY_HALTED);
     const auto head = m_store.GetFinalizedHead();
     if (!head || head->height == std::numeric_limits<uint64_t>::max()) {
         return Failure(AuthorityProductionError::STATE_UNAVAILABLE);
@@ -85,6 +86,11 @@ AuthorityProductionResult CybouAuthorityNode::ProduceNextBlock(const bool sync)
     }
     m_pool.Revalidate();
     return AuthorityProductionResult{.finalized_block = std::move(finalized)};
+}
+
+bool CybouAuthorityNode::SafetyHalted() const
+{
+    return m_store.PoaSafetyHalted() || m_finalizer->SafetyHalted();
 }
 
 } // namespace cybou

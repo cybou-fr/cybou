@@ -38,6 +38,7 @@ public:
     PoaFinalizer& operator=(PoaFinalizer&&) = delete;
 
     PoaJournalStatus CheckCanonicalTip(uint64_t finalized_height, const uint256& finalized_tip);
+    bool SafetyHalted() const { return m_journal.SafetyHalted(); }
     PoaSigningResult SignFinality(uint64_t finalized_height, const uint256& finalized_tip,
         const CybouBlock& block);
 

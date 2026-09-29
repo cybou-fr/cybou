@@ -183,7 +183,6 @@ add_library(cybou_core STATIC
   cybou/recovery_phrase.cpp
   cybou/signing.cpp
   cybou/signing_openssl.cpp
-  cybou/storage_crypto.cpp
   cybou/storage_key_ring.cpp
   cybou/state.cpp
 )
@@ -210,8 +209,6 @@ add_library(cybou_node STATIC
   cybou/poa_conflict_detector.cpp
   cybou/poa_finalizer.cpp
   cybou/poa_signing_journal.cpp
-  cybou/storage_store.cpp
-  cybou/storage_service.cpp
   cybou/state_store.cpp
   cybou/block_executor.cpp
   cybou/authority_node.cpp

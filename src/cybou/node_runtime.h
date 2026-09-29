@@ -8,7 +8,6 @@
 #include <cybou/block_feed.h>
 #include <cybou/network_definition.h>
 #include <cybou/state_store.h>
-#include <cybou/storage_store.h>
 #include <cybou/finalized_chunk_store.h>
 
 #include <array>
@@ -50,6 +49,7 @@ enum class NodeRuntimeState : uint8_t {
     READY = 1,
     NETWORK_MISMATCH = 2,
     CORRUPT = 3,
+    SAFETY_HALTED = 4,
 };
 
 struct NodeRuntimeStatus {
@@ -59,6 +59,7 @@ struct NodeRuntimeStatus {
     uint256 state_root;
     bool is_authority{false};
     bool is_initialized{false};
+    bool poa_safety_halted{false};
     NodeRuntimeState runtime_state{NodeRuntimeState::UNINITIALIZED};
 };
 
@@ -125,6 +126,7 @@ public:
 
     /** Current runtime status */
     NodeRuntimeStatus GetStatus() const;
+    PoaEvidenceReadResult ReadPoaSafetyEvidence() const;
 
     /** Network definition and identifier */
     const CybouNetworkDefinition& GetNetworkDefinition() const { return m_config.network_definition; }
@@ -172,12 +174,6 @@ public:
         const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetFinalizedChunk(const ChunkId& chunk_id) const;
     bool HasFinalizedChunk(const ChunkId& chunk_id) const;
-    StorageWriteResult StoreEncryptedChunk(const StorageObjectId& object_id, const StorageEncryptedChunk& chunk);
-    StorageWriteResult CommitStoredManifest(const StoragePublicManifest& manifest);
-    bool AbortStoredObject(const StorageObjectId& object_id, uint32_t chunk_count);
-    uint64_t GarbageCollectStorageStaging();
-    std::optional<StoragePublicManifest> GetStoredManifest(const StorageObjectId& object_id) const;
-    std::optional<StorageEncryptedChunk> GetStoredChunk(const StorageObjectId& object_id, uint32_t index) const;
 
     /** Remote operation submit endpoint */
     void SetSubmitEndpoint(const std::string& host, uint16_t port);
@@ -214,7 +210,6 @@ private:
     NodeRuntimeConfig m_config;
     uint256 m_network_id;
     std::unique_ptr<KVStore> m_db;
-    std::unique_ptr<StorageObjectStore> m_storage_store;
     std::unique_ptr<FinalizedChunkStore> m_finalized_chunk_store;
     CybouStateStore m_store;
     std::unique_ptr<CybouAuthorityNode> m_authority_node;

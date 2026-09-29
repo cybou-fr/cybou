@@ -107,43 +107,6 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
 
 CybouNodeRuntime::~CybouNodeRuntime() = default;
 
-StorageWriteResult CybouNodeRuntime::StoreEncryptedChunk(
-    const StorageObjectId& object_id, const StorageEncryptedChunk& chunk)
-{
-    if (!m_storage_store) return {StorageWriteStatus::DISABLED};
-    return m_storage_store->PutChunk(object_id, chunk);
-}
-
-StorageWriteResult CybouNodeRuntime::CommitStoredManifest(const StoragePublicManifest& manifest)
-{
-    if (!m_storage_store) return {StorageWriteStatus::DISABLED};
-    return m_storage_store->CommitManifest(manifest);
-}
-
-bool CybouNodeRuntime::AbortStoredObject(
-    const StorageObjectId& object_id, const uint32_t chunk_count)
-{
-    return m_storage_store && m_storage_store->AbortUncommittedObject(object_id, chunk_count);
-}
-
-uint64_t CybouNodeRuntime::GarbageCollectStorageStaging()
-{
-    return m_storage_store ? m_storage_store->GarbageCollectExpiredStaging() : 0;
-}
-
-std::optional<StoragePublicManifest> CybouNodeRuntime::GetStoredManifest(const StorageObjectId& object_id) const
-{
-    if (!m_storage_store) return std::nullopt;
-    return m_storage_store->GetManifest(object_id);
-}
-
-std::optional<StorageEncryptedChunk> CybouNodeRuntime::GetStoredChunk(
-    const StorageObjectId& object_id, const uint32_t index) const
-{
-    if (!m_storage_store) return std::nullopt;
-    return m_storage_store->GetChunk(object_id, index);
-}
-
 ChunkAdmissionResult CybouNodeRuntime::PutFinalizedChunk(
     const uint256& publication_operation_id, const ChunkId& chunk_id,
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
@@ -205,7 +168,16 @@ NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
     if (root) {
         status.state_root = *root;
     }
+    status.poa_safety_halted = m_store.PoaSafetyHalted() ||
+        (m_authority_node && m_authority_node->SafetyHalted());
+    if (status.poa_safety_halted) status.runtime_state = NodeRuntimeState::SAFETY_HALTED;
     return status;
+}
+
+PoaEvidenceReadResult CybouNodeRuntime::ReadPoaSafetyEvidence() const
+{
+    std::lock_guard lock(m_mutex);
+    return m_store.ReadPoaSafetyEvidence();
 }
 
 std::optional<uint64_t> CybouNodeRuntime::GetFinalizedHeight() const
@@ -315,6 +287,9 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) {
             return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
         }
+        if (m_store.PoaSafetyHalted() || (m_authority_node && m_authority_node->SafetyHalted())) {
+            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
+        }
         if (m_authority_node) {
             const auto status = m_authority_node->SubmitOperationWithStatus(op, std::move(source_peer));
             if (status == OperationSubmitStatus::ACCEPTED || status == OperationSubmitStatus::ALREADY_PENDING) {
@@ -380,6 +355,7 @@ std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
 {
     std::lock_guard lock(m_mutex);
     if (!m_authority_node) return std::nullopt;
+    if (m_store.PoaSafetyHalted() || m_authority_node->SafetyHalted()) return std::nullopt;
     const auto loaded = m_store.LoadState();
     if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
     const auto result = m_authority_node->ProduceNextBlock(sync);

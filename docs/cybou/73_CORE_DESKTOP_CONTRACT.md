@@ -117,7 +117,7 @@ The intended request path is:
 
 ```text
 Qt page -> desktop controller -> domain service ->
-IdentityOperationCoordinator / StorageService -> NodeRuntime
+IdentityOperationCoordinator / RootPublication and chunk services -> NodeRuntime
 ```
 
 Pages may collect user input, show local validation, and render immutable

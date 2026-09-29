@@ -27,8 +27,9 @@ is the record of the superseded implementation; it is not part of the runtime.
   inclusion proofs, durable local provider admission, and local reconstruction
   primitives.
 - CYP2 peer sessions for verified block sync and content-addressed chunk PUT/GET
-  with inclusion proofs. The old indexed-manifest client path has no server
-  handler; desktop provider selection and transfer calls still need migration.
+  with inclusion proofs. Legacy `StorageObject` runtime APIs, implementation,
+  and wire messages are removed; desktop provider selection and transfer calls
+  still need migration to the chunk API.
 
 These components do not yet establish a usable Mail or Drive product. The
 client still needs publication construction and scanning, recursive retrieval,
@@ -40,7 +41,8 @@ capabilities and published content.
 - Complete cross-platform builds and cross-implementation vectors for the
   canonical wire formats and hybrid cryptographic paths.
 - Finish the single PoA runtime path: startup key validation, signing,
-  certificate verification, journal recovery, conflict halt, and state sync.
+  certificate verification, journal recovery, and state sync. Runtime block
+  acceptance and production now enforce the durable equivocation safety halt.
 - Migrate desktop storage calls to chunk-ID admission and publication inclusion
   proofs, then implement provider placement, durability thresholds, retry,
   retention, repair, and provider-loss handling.

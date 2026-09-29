@@ -24,6 +24,7 @@ enum class AuthorityProductionError : uint8_t {
     INVALID_PENDING_OPERATIONS,
     BLOCK_TOO_LARGE,
     POA_SIGNING_FAILED,
+    POA_SAFETY_HALTED,
     COMMIT_FAILED,
 };
 
@@ -76,6 +77,7 @@ public:
 
     /** Finalize the pending batch, including an empty block when the queue is empty. */
     AuthorityProductionResult ProduceNextBlock(bool sync = true);
+    bool SafetyHalted() const;
 
 private:
     CybouStateStore& m_store;

@@ -50,6 +50,21 @@ CybouStateStore::CybouStateStore(
     if (!m_operator_verifier) {
         m_operator_verifier = std::make_shared<OpenSslOperatorAuthoritySignatureVerifier>();
     }
+    if (m_network_definition_error == NetworkDefinitionError::NONE) {
+        m_poa_conflict_detector = std::make_unique<PoaConflictDetector>(m_db, m_network_id,
+            m_network_definition.poa_finalizer_public_key);
+    }
+}
+
+bool CybouStateStore::PoaSafetyHalted() const
+{
+    return m_poa_conflict_detector && m_poa_conflict_detector->SafetyHalted();
+}
+
+PoaEvidenceReadResult CybouStateStore::ReadPoaSafetyEvidence() const
+{
+    if (!m_poa_conflict_detector) return {PoaEvidenceReadStatus::UNAVAILABLE, std::nullopt};
+    return m_poa_conflict_detector->ReadSafetyEvidence();
 }
 
 std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
@@ -197,6 +212,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         }
         return {BlockTransitionError::STATE_NOT_INITIALIZED};
     }
+    if (PoaSafetyHalted()) return {BlockTransitionError::POA_SAFETY_HALTED};
 
     const auto& block = finalized_block.block;
     const auto& cert = finalized_block.certificate;
@@ -208,13 +224,6 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     const auto head{GetFinalizedHead()};
     if (!head) return {BlockTransitionError::CORRUPT_HEAD};
     if (head->block_id == block_id) return {BlockTransitionError::BLOCK_ALREADY_APPLIED};
-    if (head->block_id != block.parent_block_id) {
-        return {BlockTransitionError::PARENT_MISMATCH};
-    }
-    if (head->height == std::numeric_limits<uint64_t>::max() || block.height != head->height + 1) {
-        return {BlockTransitionError::INVALID_HEIGHT};
-    }
-
     if (cert.network_id != m_network_id || cert.block_id != block_id || cert.height != block.height ||
         cert.parent_block_id != block.parent_block_id) {
         return {.error = BlockTransitionError::INVALID_CERTIFICATE};
@@ -223,6 +232,26 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     if (!VerifyPoaCertificateForBlock(cert, m_network_definition.poa_finalizer_public_key,
         m_network_id, block)) {
         return {.error = BlockTransitionError::INVALID_CERTIFICATE};
+    }
+
+    const auto observation = m_poa_conflict_detector->Observe(cert, block);
+    if (observation == PoaConflictStatus::SAFETY_CONFLICT) {
+        return {BlockTransitionError::POA_EQUIVOCATION_DETECTED};
+    }
+    if (observation == PoaConflictStatus::ALREADY_HALTED ||
+        observation == PoaConflictStatus::CORRUPT_STORAGE ||
+        observation == PoaConflictStatus::STORAGE_ERROR) {
+        return {BlockTransitionError::POA_SAFETY_HALTED};
+    }
+    if (observation == PoaConflictStatus::INVALID_CERTIFICATE) {
+        return {BlockTransitionError::INVALID_CERTIFICATE};
+    }
+
+    if (head->block_id != block.parent_block_id) {
+        return {BlockTransitionError::PARENT_MISMATCH};
+    }
+    if (head->height == std::numeric_limits<uint64_t>::max() || block.height != head->height + 1) {
+        return {BlockTransitionError::INVALID_HEIGHT};
     }
 
     const auto& params = m_network_definition.protocol_parameters;

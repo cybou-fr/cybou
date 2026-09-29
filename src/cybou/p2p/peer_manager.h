@@ -86,18 +86,6 @@ public:
         const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetChunkById(
         const std::string& address, uint16_t port, const ChunkId& chunk_id);
-    /** Storage calls use an existing session and must run on this manager's owner thread. */
-    std::optional<StorageWriteResult> PutStorageChunk(
-        const std::string& address, uint16_t port, const StorageObjectId& object_id,
-        const StorageEncryptedChunk& chunk);
-    std::optional<StorageWriteResult> CommitStorageManifest(
-        const std::string& address, uint16_t port, const StoragePublicManifest& manifest);
-    std::optional<StorageWriteResult> AbortStorageObject(
-        const std::string& address, uint16_t port, const StorageObjectId& object_id, uint32_t chunk_count);
-    std::optional<StoragePublicManifest> GetStorageManifest(
-        const std::string& address, uint16_t port, const StorageObjectId& object_id);
-    std::optional<StorageEncryptedChunk> GetStorageChunk(
-        const std::string& address, uint16_t port, const StorageObjectId& object_id, uint32_t index);
     void DisconnectAll();
 
     /** Dynamic peer auto-discovery */
