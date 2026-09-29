@@ -47,7 +47,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     cybou::NodeRuntimeConfig producer_config{
         .network_definition = definition,
         .data_dir = root / "producer",
-        .validator_private_key = validator_seed,
+        .poa_finalizer_recovery_entropy = validator_seed,
         .memory_only = true,
         .wipe_data = true,
     };

@@ -31,7 +31,7 @@ struct BootstrapAuthorityEndpoint {
 };
 
 inline constexpr std::array<BootstrapAuthorityEndpoint, 1> CYBOU_DEV_BOOTSTRAP_AUTHORITIES{{
-    {"51.255.46.58", 29460, 29461}, // OVH DEV authority node (vps-d0669a91)
+    {"51.255.46.58", 29460, 29461}, // OVH DEV PoA finalizer node (vps-d0669a91)
 }};
 
 } // namespace cybou

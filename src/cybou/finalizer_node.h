@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
-#ifndef CYBOU_AUTHORITY_NODE_H
-#define CYBOU_AUTHORITY_NODE_H
+#ifndef CYBOU_FINALIZER_NODE_H
+#define CYBOU_FINALIZER_NODE_H
 
 #include <cybou/block.h>
 #include <cybou/operation_pool.h>
@@ -18,7 +18,7 @@
 
 namespace cybou {
 
-enum class AuthorityProductionError : uint8_t {
+enum class BlockProductionError : uint8_t {
     NONE,
     STATE_UNAVAILABLE,
     INVALID_PENDING_OPERATIONS,
@@ -28,12 +28,12 @@ enum class AuthorityProductionError : uint8_t {
     COMMIT_FAILED,
 };
 
-struct AuthorityProductionResult {
-    AuthorityProductionError error{AuthorityProductionError::NONE};
+struct BlockProductionResult {
+    BlockProductionError error{BlockProductionError::NONE};
     std::optional<FinalizedBlock> finalized_block;
     BlockTransitionResult commit_result{};
 
-    explicit operator bool() const { return error == AuthorityProductionError::NONE; }
+    explicit operator bool() const { return error == BlockProductionError::NONE; }
 };
 
 enum class OperationSubmitStatus : uint8_t {
@@ -49,7 +49,7 @@ struct OperationSubmitResult {
     OperationSubmitStatus status{OperationSubmitStatus::REJECTED};
     uint256 op_id;
     // Local transport metadata: no acknowledgment after sending does not prove
-    // that the remote authority rejected the operation.
+    // that the remote finalizer rejected the operation.
     bool delivery_uncertain{false};
 
     explicit operator bool() const {
@@ -60,11 +60,11 @@ struct OperationSubmitResult {
 };
 
 /** Single genesis-bound PoA producer for canonical CYBOU blocks. */
-class CybouAuthorityNode
+class CybouFinalizerNode
 {
 public:
-    CybouAuthorityNode(CybouStateStore& store, const RecoveryEntropy& poa_recovery_entropy);
-    ~CybouAuthorityNode();
+    CybouFinalizerNode(CybouStateStore& store, const RecoveryEntropy& poa_recovery_entropy);
+    ~CybouFinalizerNode();
 
     /** Add an operation only if the complete pending batch executes on the current head. */
     bool SubmitOperation(const ProtocolOperation& operation);
@@ -76,7 +76,7 @@ public:
     void RevalidatePending() { m_pool.Revalidate(); }
 
     /** Finalize the pending batch, including an empty block when the queue is empty. */
-    AuthorityProductionResult ProduceNextBlock(bool sync = true);
+    BlockProductionResult ProduceNextBlock(bool sync = true);
     bool SafetyHalted() const;
 
 private:
@@ -87,4 +87,4 @@ private:
 
 } // namespace cybou
 
-#endif // CYBOU_AUTHORITY_NODE_H
+#endif // CYBOU_FINALIZER_NODE_H

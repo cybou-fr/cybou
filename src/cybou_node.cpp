@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
-#include <cybou/authority_node.h>
+#include <cybou/finalizer_node.h>
 #include <cybou/block_feed.h>
 #include <cybou/bootstrap_nodes.h>
 #include <cybou/crypto/cleanse.h>
@@ -425,7 +425,7 @@ int Main(const int argc, char* argv[])
         cybou::NodeRuntimeConfig config{
             .network_definition = network->definition,
             .data_dir = argv[3],
-            .validator_private_key = key,
+            .poa_finalizer_recovery_entropy = key,
             .db_cache_bytes = 8 << 20,
         };
         if (argc == 11) {
@@ -443,7 +443,7 @@ int Main(const int argc, char* argv[])
         node_service.Start();
         const auto gossip_endpoints = argc >= 10 ? ReadPeerEndpoints(argv[9]) :
             std::vector<std::pair<std::string, uint16_t>>{};
-        return node_service.RunAuthority(cybou::CybouAuthorityServiceConfig{
+        return node_service.RunFinalizer(cybou::CybouFinalizerServiceConfig{
             .bind_address = bind_address.to_string(),
             .block_feed_port = port,
             .p2p_port = p2p_port,
@@ -452,7 +452,7 @@ int Main(const int argc, char* argv[])
         }, stopping);
     }
     if (std::string_view{argv[1]} == "provide" && argc == 9) {
-        // Non-authority full node that verifies every finalized block from its
+        // Non-finalizer full node that verifies every finalized block from its
         // peer and retains authorized encrypted chunks for other Identities.
         const std::string peer_host{argv[4]};
         const auto peer_port = Port(argv[5]);

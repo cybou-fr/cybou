@@ -218,7 +218,7 @@ add_library(cybou_node STATIC
   cybou/poa_signing_journal.cpp
   cybou/state_store.cpp
   cybou/block_executor.cpp
-  cybou/authority_node.cpp
+  cybou/finalizer_node.cpp
   cybou/operation_pool.cpp
   cybou/block_feed.cpp
   cybou/network_definition.cpp

@@ -4,7 +4,7 @@
 #ifndef CYBOU_BLOCK_FEED_H
 #define CYBOU_BLOCK_FEED_H
 
-#include <cybou/authority_node.h>
+#include <cybou/finalizer_node.h>
 #include <cybou/state_store.h>
 
 #include <boost/asio/ip/tcp.hpp>

@@ -18,7 +18,7 @@
 
 /**
  * Real provider runtimes behind an in-process transport. Providers learn
- * finality the way full nodes do, by committing the authority's blocks, so
+ * finality the way full nodes do, by committing the finalizer's blocks, so
  * admission, proof checks and ALREADY_STORED behave as on the network.
  */
 class ProviderNetwork final : public cybou::StorageTransport {

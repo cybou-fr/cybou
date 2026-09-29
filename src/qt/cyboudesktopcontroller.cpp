@@ -85,7 +85,7 @@ void CybouDesktopController::start()
         cybou::NodeRuntimeConfig config{
             .network_definition = definition,
             .data_dir = data_dir,
-            .validator_private_key = std::nullopt,
+            .poa_finalizer_recovery_entropy = std::nullopt,
             .submit_endpoint = !use_legacy_block_feed ? std::nullopt :
                 std::optional<std::pair<std::string, uint16_t>>{std::make_pair(std::string{endpoint.host}, endpoint.port)},
             .p2p_endpoint = configured_p2p,

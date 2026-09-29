@@ -65,7 +65,7 @@ void CybouNodeService::StartNetwork(
     NetworkUpdate update)
 {
     if (!m_started) throw std::logic_error("CYBOU node service must be started before network service");
-    if (m_runtime->GetStatus().is_authority) throw std::logic_error("authority runtime cannot start observer network service");
+    if (m_runtime->GetStatus().is_finalizer) throw std::logic_error("finalizer runtime cannot start observer network service");
     if (m_sync_thread.joinable() || m_listener_thread.joinable()) throw std::logic_error("observer network service is already running");
     if (config.sync_interval <= std::chrono::milliseconds::zero()) throw std::invalid_argument("network sync interval must be positive");
     if (config.sync_batch_size == 0 || config.sync_batch_size > 128) throw std::invalid_argument("invalid network sync batch size");
@@ -127,12 +127,12 @@ void CybouNodeService::StopNetwork()
     m_observer_listener.reset();
 }
 
-int CybouNodeService::RunAuthority(const CybouAuthorityServiceConfig& config, std::atomic_bool& stopping)
+int CybouNodeService::RunFinalizer(const CybouFinalizerServiceConfig& config, std::atomic_bool& stopping)
 {
-    if (!m_started) throw std::logic_error("CYBOU node service must be started before authority service");
-    if (!m_runtime->GetStatus().is_authority) throw std::logic_error("authority service requires a PoA finalizer runtime");
+    if (!m_started) throw std::logic_error("CYBOU node service must be started before finalizer service");
+    if (!m_runtime->GetStatus().is_finalizer) throw std::logic_error("finalizer service requires a PoA finalizer runtime");
     if (config.block_feed_port == 0 || config.block_interval_ms == 0 || config.block_interval_ms > 60000) {
-        throw std::invalid_argument("invalid authority listener or block interval");
+        throw std::invalid_argument("invalid finalizer listener or block interval");
     }
 
     const auto bind_address = boost::asio::ip::make_address(config.bind_address);

@@ -4,7 +4,7 @@
 #ifndef CYBOU_NODE_RUNTIME_H
 #define CYBOU_NODE_RUNTIME_H
 
-#include <cybou/authority_node.h>
+#include <cybou/finalizer_node.h>
 #include <cybou/block_feed.h>
 #include <cybou/network_definition.h>
 #include <cybou/state_store.h>
@@ -33,7 +33,7 @@ class IdentityOperationCoordinator;
 struct NodeRuntimeConfig {
     CybouNetworkDefinition network_definition;
     std::filesystem::path data_dir;
-    std::optional<std::array<unsigned char, 32>> validator_private_key{std::nullopt};
+    std::optional<std::array<unsigned char, 32>> poa_finalizer_recovery_entropy{std::nullopt};
     std::optional<std::pair<std::string, uint16_t>> submit_endpoint{std::nullopt};
     std::optional<std::pair<std::string, uint16_t>> p2p_endpoint{std::nullopt};
     /** This node's own CYP2 listener; used to filter self-addresses out of discovery. */
@@ -58,7 +58,7 @@ struct NodeRuntimeStatus {
     uint64_t finalized_height{0};
     uint256 finalized_tip;
     uint256 state_root;
-    bool is_authority{false};
+    bool is_finalizer{false};
     bool is_initialized{false};
     bool poa_safety_halted{false};
     NodeRuntimeState runtime_state{NodeRuntimeState::UNINITIALIZED};
@@ -148,7 +148,7 @@ public:
     IdentityOperationCoordinator& GetIdentityOperationCoordinator(CybouKeyStore& keystore);
     std::vector<FinalizedHead> RecentFinalizedBlocksForGossip() const;
 
-    /** Produce a block if running in authority mode */
+    /** Produce a block if running as the PoA finalizer */
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);
 
     /** Commit a finalized block */
@@ -251,7 +251,7 @@ private:
     std::optional<std::array<unsigned char, 32>> m_provider_secret;
     std::optional<std::array<unsigned char, 32>> m_provider_id;
     CybouStateStore m_store;
-    std::unique_ptr<CybouAuthorityNode> m_authority_node;
+    std::unique_ptr<CybouFinalizerNode> m_finalizer_node;
     std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;
     std::map<uint256, OperationStatus> m_recent_operation_status;
     std::deque<uint256> m_recent_operation_status_order;

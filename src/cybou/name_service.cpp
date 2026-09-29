@@ -154,7 +154,7 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
         if (!submitted) {
             return Fail(submitted.error.empty() ? "NameCommit submission failed" : submitted.error);
         }
-        if (m_runtime.GetStatus().is_authority) m_runtime.ProduceBlock();
+        if (m_runtime.GetStatus().is_finalizer) m_runtime.ProduceBlock();
     }
     if (on_phase) on_phase(NameClaimPhase::WAITING_FOR_COMMIT, "Waiting for finalized NameCommit...");
     while (!m_cancelled.load() && std::chrono::steady_clock::now() < deadline) {
@@ -172,7 +172,7 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
     const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
     while (!m_cancelled.load() && std::chrono::steady_clock::now() < deadline &&
         m_runtime.GetFinalizedHeight().value_or(0) + 1 < commit_height + params.name_commit_min_depth) {
-        if (m_runtime.GetStatus().is_authority) m_runtime.ProduceBlock();
+        if (m_runtime.GetStatus().is_finalizer) m_runtime.ProduceBlock();
         else std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     if (m_cancelled.load() || std::chrono::steady_clock::now() >= deadline) return Fail("Waiting for commit depth timed out");
@@ -192,7 +192,7 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
     if (!submitted) {
         return Fail(submitted.error.empty() ? "NameReveal submission failed" : submitted.error);
     }
-    if (m_runtime.GetStatus().is_authority) m_runtime.ProduceBlock();
+    if (m_runtime.GetStatus().is_finalizer) m_runtime.ProduceBlock();
     if (on_phase) on_phase(NameClaimPhase::WAITING_FOR_NAME, "Waiting for finalized name ownership...");
     while (!m_cancelled.load() && std::chrono::steady_clock::now() < deadline) {
         state = m_runtime.GetStore().LoadState();

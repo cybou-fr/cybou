@@ -37,7 +37,7 @@ struct CybouServiceTestFixture {
         cybou::NodeRuntimeConfig config{
             .network_definition = definition,
             .data_dir = directory / "runtime",
-            .validator_private_key = validator_seed,
+            .poa_finalizer_recovery_entropy = validator_seed,
             .memory_only = true,
             .wipe_data = true,
         };

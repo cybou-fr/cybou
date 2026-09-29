@@ -17,7 +17,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     CybouServiceTestFixture fixture;
     const auto status = fixture.runtime->GetStatus();
     BOOST_CHECK(status.is_initialized);
-    BOOST_CHECK(status.is_authority);
+    BOOST_CHECK(status.is_finalizer);
     const auto alice = fixture.CreateIdentity("alice.cybou");
     const auto account = alice->GetAccountId();
     BOOST_REQUIRE(account);
@@ -33,7 +33,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     };
     cybou::CybouNodeRuntime observer{std::move(observer_config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
-    BOOST_CHECK(!observer.GetStatus().is_authority);
+    BOOST_CHECK(!observer.GetStatus().is_finalizer);
     BOOST_REQUIRE(observer.CommitBlock(*block));
     BOOST_CHECK(observer.GetAccountState(*account) == fixture.runtime->GetAccountState(*account));
     BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(0), 1);
@@ -197,7 +197,7 @@ BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)
     cybou::NodeRuntimeConfig foreign_config{
         .network_definition = foreign_definition,
         .data_dir = fixture.directory / "foreign-producer",
-        .validator_private_key = foreign_seed,
+        .poa_finalizer_recovery_entropy = foreign_seed,
         .memory_only = true,
         .wipe_data = true,
     };

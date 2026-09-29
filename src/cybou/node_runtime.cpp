@@ -143,9 +143,9 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
                               : std::nullopt;
         if (!m_provider_id) throw std::runtime_error("storage provider key is invalid");
     }
-    if (m_config.validator_private_key.has_value()) {
-        m_authority_node = std::make_unique<CybouAuthorityNode>(
-            m_store, *m_config.validator_private_key);
+    if (m_config.poa_finalizer_recovery_entropy.has_value()) {
+        m_finalizer_node = std::make_unique<CybouFinalizerNode>(
+            m_store, *m_config.poa_finalizer_recovery_entropy);
     }
     if (m_config.p2p_endpoint) m_peer_manager = std::make_unique<p2p::PeerManager>(*this);
 }
@@ -267,7 +267,7 @@ NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
     std::lock_guard lock(m_mutex);
     NodeRuntimeStatus status;
     status.network_id = m_network_id;
-    status.is_authority = (m_authority_node != nullptr);
+    status.is_finalizer = (m_finalizer_node != nullptr);
 
     const auto loaded = m_store.LoadState();
     if (loaded.error == StateLoadError::NETWORK_MISMATCH) {
@@ -291,7 +291,7 @@ NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
         status.state_root = *root;
     }
     status.poa_safety_halted = m_store.PoaSafetyHalted() ||
-        (m_authority_node && m_authority_node->SafetyHalted());
+        (m_finalizer_node && m_finalizer_node->SafetyHalted());
     if (status.poa_safety_halted) status.runtime_state = NodeRuntimeState::SAFETY_HALTED;
     return status;
 }
@@ -347,7 +347,7 @@ OperationStatus CybouNodeRuntime::GetOperationStatus(const uint256& op_id) const
     if (const auto height = m_store.GetFinalizedOperationHeight(op_id)) {
         return {.kind = OperationStatusKind::FINALIZED, .finalized_height = *height};
     }
-    if (m_authority_node && m_authority_node->HasPendingOperation(op_id)) {
+    if (m_finalizer_node && m_finalizer_node->HasPendingOperation(op_id)) {
         return {.kind = OperationStatusKind::LOCAL_PENDING};
     }
     const auto known = m_recent_operation_status.find(op_id);
@@ -414,11 +414,11 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) {
             return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
         }
-        if (m_store.PoaSafetyHalted() || (m_authority_node && m_authority_node->SafetyHalted())) {
+        if (m_store.PoaSafetyHalted() || (m_finalizer_node && m_finalizer_node->SafetyHalted())) {
             return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
         }
-        if (m_authority_node) {
-            const auto status = m_authority_node->SubmitOperationWithStatus(op, std::move(source_peer));
+        if (m_finalizer_node) {
+            const auto status = m_finalizer_node->SubmitOperationWithStatus(op, std::move(source_peer));
             if (status == OperationSubmitStatus::ACCEPTED || status == OperationSubmitStatus::ALREADY_PENDING) {
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
             } else if (status == OperationSubmitStatus::ALREADY_FINALIZED) {
@@ -481,11 +481,11 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
 std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
 {
     std::lock_guard lock(m_mutex);
-    if (!m_authority_node) return std::nullopt;
-    if (m_store.PoaSafetyHalted() || m_authority_node->SafetyHalted()) return std::nullopt;
+    if (!m_finalizer_node) return std::nullopt;
+    if (m_store.PoaSafetyHalted() || m_finalizer_node->SafetyHalted()) return std::nullopt;
     const auto loaded = m_store.LoadState();
     if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
-    const auto result = m_authority_node->ProduceNextBlock(sync);
+    const auto result = m_finalizer_node->ProduceNextBlock(sync);
     if (!result) return std::nullopt;
     if (result.finalized_block) RememberFinalizedBlockForGossip(*result.finalized_block);
     return result.finalized_block;
@@ -504,7 +504,7 @@ BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block,
     const auto result = m_store.CommitFinalizedBlock(block, sync);
     if (result) {
         RememberFinalizedBlockForGossip(block);
-        if (m_authority_node) m_authority_node->RevalidatePending();
+        if (m_finalizer_node) m_finalizer_node->RevalidatePending();
     }
     return result;
 }
@@ -699,7 +699,7 @@ SyncPeerResult CybouNodeRuntime::SyncFromPeer(const std::string& host, const uin
                 break;
             }
             RememberFinalizedBlockForGossip(*fetch_res.block);
-            if (m_authority_node) m_authority_node->RevalidatePending();
+            if (m_finalizer_node) m_finalizer_node->RevalidatePending();
         }
         ++result.blocks_applied;
         result.status = SyncPeerStatus::BLOCKS_APPLIED;
@@ -852,7 +852,7 @@ void CybouNodeRuntime::SetSubmitEndpoint(const std::string& host, const uint16_t
 bool CybouNodeRuntime::HasSubmitEndpoint() const
 {
     std::lock_guard lock(m_mutex);
-    return m_authority_node != nullptr || m_submit_endpoint.has_value() || m_config.p2p_endpoint.has_value();
+    return m_finalizer_node != nullptr || m_submit_endpoint.has_value() || m_config.p2p_endpoint.has_value();
 }
 
 std::optional<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetSubmitEndpoint() const

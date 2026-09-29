@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
-#include <cybou/authority_node.h>
+#include <cybou/finalizer_node.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/identity_service.h>
 #include <cybou/identity_material.h>
@@ -50,7 +50,7 @@ struct RuntimeFixture {
         return {
             .network_definition = definition,
             .data_dir = data_dir,
-            .validator_private_key = validator_seed,
+            .poa_finalizer_recovery_entropy = validator_seed,
             .memory_only = true,
             .wipe_data = true,
         };
@@ -248,7 +248,7 @@ BOOST_AUTO_TEST_CASE(name_claim_saves_secret_before_commit_and_finalizes_owner)
     BOOST_CHECK(!std::filesystem::exists(claim_path));
     const auto claimed = names.ClaimSync("stanislav", "correct horse battery staple");
     BOOST_REQUIRE_MESSAGE(claimed.success, claimed.message);
-    cybou::CybouAuthorityNode producer{runtime.GetStore(), fixture.validator_seed};
+    cybou::CybouFinalizerNode producer{runtime.GetStore(), fixture.validator_seed};
     bool checked_name_operation = false;
     for (uint64_t height = 2; height <= runtime.GetFinalizedHeight().value_or(0); ++height) {
         const auto finalized = runtime.GetBlockAtHeight(height);

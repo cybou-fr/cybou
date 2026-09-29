@@ -587,7 +587,7 @@ BOOST_AUTO_TEST_CASE(manager_submits_canonical_operation_with_separate_acknowled
     BOOST_REQUIRE(op_id);
 
     cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
-        .data_dir = fixture.directory / "other-producer", .validator_private_key = fixture.validator_seed,
+        .data_dir = fixture.directory / "other-producer", .poa_finalizer_recovery_entropy = fixture.validator_seed,
         .memory_only = true, .wipe_data = true};
     cybou::CybouNodeRuntime receiver{std::move(config)};
     BOOST_REQUIRE(receiver.InitializeGenesis(fixture.genesis));
@@ -636,7 +636,7 @@ BOOST_AUTO_TEST_CASE(manager_submits_to_next_peer_when_first_cannot_accept_opera
     BOOST_REQUIRE(op_id);
     cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "failover-producer",
-        .validator_private_key = fixture.validator_seed, .memory_only = true, .wipe_data = true};
+        .poa_finalizer_recovery_entropy = fixture.validator_seed, .memory_only = true, .wipe_data = true};
     cybou::CybouNodeRuntime receiver{std::move(config)};
     BOOST_REQUIRE(receiver.InitializeGenesis(fixture.genesis));
 
@@ -753,7 +753,7 @@ BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured
     const auto operation = source->block.operations.front();
 
     cybou::NodeRuntimeConfig producer_config{.network_definition = fixture.definition,
-        .data_dir = fixture.directory / "route-producer", .validator_private_key = fixture.validator_seed,
+        .data_dir = fixture.directory / "route-producer", .poa_finalizer_recovery_entropy = fixture.validator_seed,
         .memory_only = true, .wipe_data = true};
     cybou::CybouNodeRuntime producer{std::move(producer_config)};
     BOOST_REQUIRE(producer.InitializeGenesis(fixture.genesis));

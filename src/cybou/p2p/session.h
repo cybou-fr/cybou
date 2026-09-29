@@ -5,7 +5,7 @@
 #define CYBOU_P2P_SESSION_H
 
 #include <uint256.h>
-#include <cybou/authority_node.h>
+#include <cybou/finalizer_node.h>
 #include <cybou/finalized_chunk_store.h>
 
 #include <boost/asio/ip/tcp.hpp>

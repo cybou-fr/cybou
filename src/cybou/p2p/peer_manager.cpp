@@ -88,7 +88,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     }
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
     if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
-    if (status.is_authority) {
+    if (status.is_finalizer) {
         caps |= CAP_ACCEPT_OPERATIONS;
     }
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,

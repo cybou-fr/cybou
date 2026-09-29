@@ -17,7 +17,7 @@
 namespace cybou {
 
 inline constexpr uint8_t CYBOU_BLOCK_VERSION{3};
-inline constexpr size_t MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES{32U * 1024U * 1024U};
+inline constexpr size_t MAX_FINALIZER_SERIALIZED_BLOCK_BYTES{32U * 1024U * 1024U};
 
 /**
  * Canonical CYBOU block format.

@@ -39,7 +39,7 @@ struct ShortEpochNetwork {
         definition.protocol_parameters.epoch_blocks = 2;
         runtime = std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
             .network_definition = definition, .data_dir = directory / "runtime",
-            .validator_private_key = seed, .memory_only = true, .wipe_data = true});
+            .poa_finalizer_recovery_entropy = seed, .memory_only = true, .wipe_data = true});
         if (!runtime->InitializeGenesis(genesis)) throw std::runtime_error{"genesis failed"};
     }
 

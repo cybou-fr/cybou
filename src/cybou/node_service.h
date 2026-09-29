@@ -25,7 +25,7 @@ struct CybouNodeServiceConfig {
     CybouState genesis;
 };
 
-struct CybouAuthorityServiceConfig {
+struct CybouFinalizerServiceConfig {
     std::string bind_address;
     uint16_t block_feed_port{0};
     std::optional<uint16_t> p2p_port;
@@ -58,8 +58,8 @@ public:
         CybouNetworkServiceConfig config,
         NetworkUpdate update);
     void StopNetwork();
-    /** Run the authority block-feed, consensus, inbound CYP2, and gossip loops. */
-    int RunAuthority(const CybouAuthorityServiceConfig& config, std::atomic_bool& stopping);
+    /** Run the finalizer block-feed, consensus, inbound CYP2, and gossip loops. */
+    int RunFinalizer(const CybouFinalizerServiceConfig& config, std::atomic_bool& stopping);
 
     CybouNodeRuntime& Runtime() { return *m_runtime; }
     const CybouNodeRuntime& Runtime() const { return *m_runtime; }
