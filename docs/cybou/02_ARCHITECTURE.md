@@ -105,5 +105,11 @@ immutable network parameters and bounded integer arithmetic.
 
 ## Future provisional validation
 
-Signed provisional validation may be researched later, but it is non-canonical.
+The signed provisional validation research target is described in
+[`PROVISIONAL_VALIDATION.md`](PROVISIONAL_VALIDATION.md). It is a future,
+non-canonical sidecar for claims about operations against a finalized base;
+it does not add a consensus phase or gate PoA finality. Any validator
+eligibility derived from NodeID and Authority still depends on future binding
+and immutable network parameters.
+
 Only PoA finality advances canonical state and authorizes remote storage.

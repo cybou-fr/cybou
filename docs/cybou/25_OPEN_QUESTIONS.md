@@ -68,6 +68,11 @@ remain zero.
 
 ## Future research
 
-- signed provisional validation profile;
-- whether it delivers enough value to justify added pre-finality complexity;
+- [`PROVISIONAL_VALIDATION.md`](PROVISIONAL_VALIDATION.md) defines the current
+  research scope; unresolved items include NodeID binding/eligibility, the
+  attestation profile and transport limits, evidence thresholds for display,
+  local overlay conflict/rebase behavior, and any canonical basis for future
+  Authority effects;
+- whether signed provisional validation delivers enough value to justify the
+  added pre-finality complexity;
 - erasure coding after Beta measurements.

@@ -1,4 +1,4 @@
-# CYBOU documentation manifest — 2026-09-29
+# CYBOU documentation manifest — 2026-09-30
 
 This inventory records the current implementation authority, product and
 protocol documents, and machine-readable specifications, excluding this
@@ -15,19 +15,19 @@ editing an included file.
 | SECURITY.md | 41 | 2cdc342dbbbf8785 |
 | doc/README.md | 30 | 685b7bdceb86bad3 |
 | docs/cybou/00_VISION.md | 72 | 2cba76b0edaf59a4 |
-| docs/cybou/02_ARCHITECTURE.md | 109 | e02e5d928d4ec2f5 |
+| docs/cybou/02_ARCHITECTURE.md | 115 | 49e778c2d64c69ce |
 | docs/cybou/05_CHAIN_STATE.md | 84 | 2b2be7bf69689f96 |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 43 | fbe559efaba33637 |
-| docs/cybou/08_P2P.md | 135 | 2a684923767ab905 |
+| docs/cybou/08_P2P.md | 140 | ca6486e66babfed2 |
 | docs/cybou/09_CRYPTO_PQ.md | 16 | 721054f0708a8051 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | a76de60933486847 |
 | docs/cybou/18_ECONOMICS_FEES.md | 90 | c73eb172b272966c |
-| docs/cybou/19_SECURITY_THREAT_MODEL.md | 99 | e35169e309db6208 |
+| docs/cybou/19_SECURITY_THREAT_MODEL.md | 104 | 7fdb455871bbab28 |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 36 | 43cdf31bb132eda8 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 68 | 5283090bbb3dfdb8 |
-| docs/cybou/24_DECISIONS.md | 59 | 5e2a0816c8402899 |
-| docs/cybou/25_OPEN_QUESTIONS.md | 73 | 5d0993926643a598 |
+| docs/cybou/22_ROADMAP.md | 69 | 7e45af531685ed8b |
+| docs/cybou/24_DECISIONS.md | 59 | ccd0bf57ff90abac |
+| docs/cybou/25_OPEN_QUESTIONS.md | 78 | bb945b66a957a428 |
 | docs/cybou/26_IMPLEMENTATION_STATUS.md | 108 | 5b188be3279b71bf |
 | docs/cybou/37_FRANCE_EU_GLOBAL_STRATEGY.md | 96 | 99058ca64593188d |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 28 | ee4d307774069584 |
@@ -66,6 +66,7 @@ editing an included file.
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/POA_FINALITY_VECTORS.md | 106 | 6bcebb272715c313 |
 | docs/cybou/POA_FINALITY.md | 97 | d528a50cbe250771 |
+| docs/cybou/PROVISIONAL_VALIDATION.md | 188 | 7a3ed11d192f77eb |
 | docs/cybou/ROOT_PUBLICATION.md | 113 | c737c5ee18676159 |
 | docs/cybou/STORAGE_ADMISSION.md | 146 | a71b101cb9137696 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |

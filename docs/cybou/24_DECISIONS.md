@@ -45,7 +45,7 @@ Git history.
 | DEC-208 | Authority uses immutable rules; initial canonical sources are Age, capped finalized Activity and voluntary System Balance contribution. Liveness/Storage activate only with canonical evidence. | Frozen target |
 | DEC-209 | A future service NodeID may bind to AccountID for contribution accounting but is not an Identity device credential. | Frozen target |
 | DEC-210 | Anti-abuse policy uses generic Authority-derived Protocol, Storage and Bandwidth budgets rather than Mail/File-specific consensus quotas. | Frozen target |
-| DEC-211 | Future provisional validation, if introduced, is reversible/non-canonical and never substitutes for PoA finality. | Future |
+| DEC-211 | Provisional validation remains future research: signed claims about operations against a finalized base may be distributed as non-canonical evidence, but never substitute for PoA finality or authorize remote storage. | Future |
 
 ## Fixed economics
 
