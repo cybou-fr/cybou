@@ -16,6 +16,7 @@ class CybouDesktopModel;
 class QFrame;
 class QLabel;
 class QLineEdit;
+class QMenu;
 class QListWidget;
 class QPushButton;
 class QStackedWidget;
@@ -50,6 +51,10 @@ public:
     QStringList visibleMessageIds() const;
     void openMessage(const QString& id);
     void setSearchText(const QString& text);
+    /** Moves messages the way a drop on a folder does (Undo offered). */
+    void moveMessagesTo(const QStringList& ids, View target);
+    /** Builds the context menu for the given messages (exposed for tests). */
+    QMenu* buildContextMenu(const QStringList& ids, QWidget* parent);
     /** Opens the composer; draft may prefill it (reply, forward, draft). */
     void openCompose(const CybouMailItem& draft = {});
     MailReader* reader() const { return m_reader; }
@@ -57,6 +62,7 @@ public:
     bool threePane() const { return m_three_pane; }
 
 protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void showEvent(QShowEvent* event) override;
 
@@ -83,6 +89,11 @@ private:
     QLabel* m_empty_hint{nullptr};
     MailReader* m_reader{nullptr};
     MailCompose* m_compose{nullptr};
+    QPoint m_press_pos;
+    QString m_press_id;
+
+    QStringList selectedMessageIds() const;
+    int folderRowAt(const QPoint& viewport_pos) const;
 
     CybouMailItem replyTo(const QString& id) const;
     CybouMailItem forwardOf(const QString& id) const;

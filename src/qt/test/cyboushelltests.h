@@ -50,6 +50,8 @@ private Q_SLOTS:
     void homeFirstStepsAndQuickActions();
     void globalSearchFindsMailAndFiles();
     void darkAppearanceResolvesTokens();
+    void mailContextMenuAndMoves();
+    void filesDropIntoFolders();
     void themeResolvesAllTokens();
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();

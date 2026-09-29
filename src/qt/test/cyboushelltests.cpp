@@ -8,6 +8,7 @@
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboumainwindow.h>
 #include <qt/cyboutheme.h>
+#include <qt/cybouui.h>
 #include <qt/cybounotifier.h>
 #include <qt/cybouuifixtures.h>
 #include <qt/pages/emailpage.h>
@@ -21,6 +22,8 @@
 
 #include <QApplication>
 #include <QAbstractButton>
+#include <QMenu>
+#include <QMimeData>
 #include <QPalette>
 #include <QCompleter>
 #include <QMenuBar>
@@ -877,6 +880,52 @@ void CybouShellTests::darkAppearanceResolvesTokens()
     CybouTheme::setAppearance(CybouTheme::Appearance::Light);
     CybouTheme::applyTo(*qApp);
     QVERIFY(!CybouTheme::isDark());
+}
+
+void CybouShellTests::mailContextMenuAndMoves()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("mail")));
+    window->show();
+    auto* mail = dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
+    const QStringList ids{QStringLiteral("m-dinner"), QStringLiteral("m-alina")};
+    std::unique_ptr<QMenu> menu{mail->buildContextMenu(ids, nullptr)};
+    QStringList names;
+    for (const auto* action : menu->actions()) if (!action->objectName().isEmpty()) names << action->objectName();
+    QVERIFY(!names.contains(QStringLiteral("mailReply"))); // multi-select has no Reply
+    QVERIFY(names.contains(QStringLiteral("mailArchive")));
+    // Mark as read, then drop both on Archive (as a drag onto the folder does).
+    menu->findChild<QAction*>(QStringLiteral("mailMarkRead"))->trigger();
+    QVERIFY(!model->mailItem(QStringLiteral("m-dinner"))->unread);
+    mail->moveMessagesTo(ids, EmailPage::View::Archive);
+    QCOMPARE(model->mailItem(QStringLiteral("m-alina"))->folder, CybouMailFolder::Archive);
+    window->notifier()->trigger(); // Undo
+    QCOMPARE(model->mailItem(QStringLiteral("m-alina"))->folder, CybouMailFolder::Inbox);
+    // Sent mail never lands in Inbox.
+    mail->moveMessagesTo({QStringLiteral("m-sent-1")}, EmailPage::View::Inbox);
+    QCOMPARE(model->mailItem(QStringLiteral("m-sent-1"))->folder, CybouMailFolder::Sent);
+}
+
+void CybouShellTests::filesDropIntoFolders()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("files")));
+    window->show();
+    auto* files = dynamic_cast<StoragePage*>(window->page(CybouPage::Files));
+    QVERIFY(files->moveFilesTo({QStringLiteral("f-photo"), QStringLiteral("f-report")}, QStringLiteral("f-photos")));
+    QCOMPARE(model->fileItem(QStringLiteral("f-report"))->parent_id, QStringLiteral("f-photos"));
+    window->notifier()->trigger(); // Undo
+    QVERIFY(model->fileItem(QStringLiteral("f-report"))->parent_id.isEmpty());
+    // No folder cycles: Documents cannot move into itself or its child.
+    const QString child = model->createFolder(QStringLiteral("Taxes"), QStringLiteral("f-docs"));
+    QVERIFY(!files->moveFilesTo({QStringLiteral("f-docs")}, QStringLiteral("f-docs")));
+    QVERIFY(!files->moveFilesTo({QStringLiteral("f-docs")}, child));
+    // Drag mime round-trip.
+    QMimeData data;
+    data.setData(CybouUi::fileIdsMime(), QByteArrayLiteral("a\nb"));
+    QCOMPARE(CybouUi::dragIds(&data, CybouUi::fileIdsMime()), (QStringList{QStringLiteral("a"), QStringLiteral("b")}));
 }
 
 void CybouShellTests::themeResolvesAllTokens()

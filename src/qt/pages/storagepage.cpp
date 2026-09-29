@@ -15,6 +15,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFrame>
+#include <QMouseEvent>
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QMimeData>
@@ -146,6 +147,8 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
             CybouTheme::color(CybouTheme::TEXT_SECONDARY))}, ViewName(view), m_nav};
         item->setSizeHint(QSize{0, 40});
     }
+    m_nav->viewport()->setAcceptDrops(true);
+    m_nav->viewport()->installEventFilter(this);
     rail_layout->addWidget(m_nav);
     rail_layout->addSpacing(8);
     auto* storage_title = new QLabel{tr("Storage"), rail};
@@ -339,6 +342,8 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     root->addWidget(m_details);
 
     for (QAbstractItemView* view : {static_cast<QAbstractItemView*>(m_table), static_cast<QAbstractItemView*>(m_tiles)}) {
+        view->viewport()->setAcceptDrops(true);
+        view->viewport()->installEventFilter(this);
         view->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(view, &QWidget::customContextMenuRequested, this, [this, view](const QPoint& pos) {
             showContextMenu(view->viewport()->mapToGlobal(pos));
@@ -409,6 +414,147 @@ void StoragePage::setView(View view)
     m_folder.clear();
     if (m_nav->currentRow() != static_cast<int>(view)) m_nav->setCurrentRow(static_cast<int>(view));
     rebuild();
+}
+
+bool StoragePage::moveFilesTo(const QStringList& ids, const QString& folder_id)
+{
+    // A folder cannot move into itself or one of its descendants.
+    for (QString cursor = folder_id; !cursor.isEmpty();) {
+        if (ids.contains(cursor)) return false;
+        const auto* folder = m_model->fileItem(cursor);
+        if (!folder) break;
+        cursor = folder->parent_id;
+    }
+    QVector<QPair<QString, QString>> before;
+    for (const auto& id : ids) {
+        const auto* item = m_model->fileItem(id);
+        if (!item || item->parent_id == folder_id) continue;
+        before.append({id, item->parent_id});
+    }
+    if (before.isEmpty()) return false;
+    for (const auto& [id, _] : before) m_model->moveFile(id, folder_id);
+    const QString target = folder_id.isEmpty() ? ViewName(View::MyFiles) : folderName(folder_id);
+    m_model->notify(before.size() == 1 ? tr("Moved to “%1”").arg(target) : tr("%1 items moved to “%2”").arg(before.size()).arg(target),
+        tr("Undo"), [model = m_model, before] { for (const auto& [id, parent] : before) model->moveFile(id, parent); });
+    return true;
+}
+
+QString StoragePage::itemIdAt(QWidget* viewport, const QPoint& pos) const
+{
+    if (viewport == m_table->viewport()) {
+        const auto* row = m_table->itemAt(pos);
+        return row ? row->data(NameColumn, kIdRole).toString() : QString{};
+    }
+    const auto* tile = m_tiles->itemAt(pos);
+    return tile ? tile->data(kIdRole).toString() : QString{};
+}
+
+bool StoragePage::handleItemDrag(QWidget* viewport, QEvent* event)
+{
+    switch (event->type()) {
+    case QEvent::MouseButtonPress: {
+        auto* mouse = static_cast<QMouseEvent*>(event);
+        m_press_pos = mouse->position().toPoint();
+        m_press_id = mouse->button() == Qt::LeftButton && m_view != View::Trash ? itemIdAt(viewport, m_press_pos) : QString{};
+        return false;
+    }
+    case QEvent::MouseMove: {
+        auto* mouse = static_cast<QMouseEvent*>(event);
+        if (m_press_id.isEmpty() || !(mouse->buttons() & Qt::LeftButton) ||
+            (mouse->position().toPoint() - m_press_pos).manhattanLength() < QApplication::startDragDistance()) return false;
+        QStringList ids = selectedIds();
+        const QString pressed = std::exchange(m_press_id, {});
+        if (!ids.contains(pressed)) ids = QStringList{pressed};
+        startIdDrag(viewport, fileIdsMime(), ids, ids.size() == 1 ? folderName(ids.first()) : tr("%1 items").arg(ids.size()));
+        return true;
+    }
+    case QEvent::DragEnter:
+    case QEvent::DragMove: {
+        auto* drag = static_cast<QDragMoveEvent*>(event);
+        const QString target = itemIdAt(viewport, drag->position().toPoint());
+        const auto* folder = m_model->fileItem(target);
+        const QStringList ids = dragIds(drag->mimeData(), fileIdsMime());
+        const bool internal_ok = folder && folder->folder && !ids.isEmpty() && !ids.contains(target);
+        const bool upload_ok = folder && folder->folder && drag->mimeData()->hasUrls() && m_new->isEnabled();
+        // Internal items need a folder target; external files may also go
+        // into the current folder.
+        const bool external_ok = drag->mimeData()->hasUrls() && m_new->isEnabled();
+        if (internal_ok || upload_ok || external_ok) {
+            drag->acceptProposedAction();
+        } else {
+            drag->ignore();
+        }
+        return true;
+    }
+    case QEvent::Drop: {
+        auto* drop = static_cast<QDropEvent*>(event);
+        const QString target = itemIdAt(viewport, drop->position().toPoint());
+        const auto* folder = m_model->fileItem(target);
+        const QStringList ids = dragIds(drop->mimeData(), fileIdsMime());
+        if (!ids.isEmpty()) {
+            if (folder && folder->folder && !ids.contains(target)) moveFilesTo(ids, target);
+        } else if (drop->mimeData()->hasUrls()) {
+            QStringList paths;
+            for (const auto& url : drop->mimeData()->urls()) {
+                if (url.isLocalFile()) paths << url.toLocalFile();
+            }
+            // Files dropped on a folder go into it; elsewhere into the current folder.
+            const QString parent = folder && folder->folder ? target : (m_view == View::MyFiles ? m_folder : QString{});
+            for (const auto& path : paths) {
+                if (QFileInfo{path}.isFile()) m_model->requestFileUpload(path, parent);
+            }
+        }
+        drop->acceptProposedAction();
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+
+bool StoragePage::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == m_table->viewport() || watched == m_tiles->viewport()) {
+        if (handleItemDrag(static_cast<QWidget*>(watched), event)) return true;
+        return QWidget::eventFilter(watched, event);
+    }
+    const bool nav = watched == m_nav->viewport();
+    const bool crumb = !nav && watched->property("folderId").isValid();
+    if ((nav || crumb) && (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove || event->type() == QEvent::Drop)) {
+        auto* drag = static_cast<QDropEvent*>(event);
+        const QStringList ids = dragIds(drag->mimeData(), fileIdsMime());
+        int row = -1;
+        if (nav) {
+            const auto* item = m_nav->itemAt(drag->position().toPoint());
+            row = item ? m_nav->row(item) : -1;
+        }
+        const bool target_ok = !ids.isEmpty() &&
+            (crumb || row == static_cast<int>(View::MyFiles) || row == static_cast<int>(View::Starred) ||
+                row == static_cast<int>(View::Trash));
+        if (!target_ok) {
+            drag->ignore();
+            return true;
+        }
+        if (event->type() != QEvent::Drop) {
+            drag->acceptProposedAction();
+            return true;
+        }
+        if (crumb) {
+            moveFilesTo(ids, watched->property("folderId").toString());
+        } else if (row == static_cast<int>(View::MyFiles)) {
+            moveFilesTo(ids, {});
+        } else if (row == static_cast<int>(View::Starred)) {
+            for (const auto& id : ids) m_model->setFileStarred(id, true);
+            m_model->notify(ids.size() == 1 ? tr("Starred") : tr("%1 items starred").arg(ids.size()));
+        } else {
+            for (const auto& id : ids) m_model->trashFile(id);
+            m_model->notify(ids.size() == 1 ? tr("Moved to Trash") : tr("%1 items moved to Trash").arg(ids.size()),
+                tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->restoreFile(i); });
+        }
+        drag->acceptProposedAction();
+        return true;
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void StoragePage::setSearchText(const QString& text)
@@ -606,6 +752,10 @@ void StoragePage::rebuildCrumbs()
                                             "QPushButton:hover { color: %2; text-decoration: underline; }")
             .arg(CybouTheme::color(CybouTheme::TEXT_SECONDARY).name(), CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
         connect(crumb, &QPushButton::clicked, this, [this, id = path.at(i).first] { openFolder(id); });
+        // Dropping items on a path segment moves them to that folder.
+        crumb->setProperty("folderId", path.at(i).first);
+        crumb->setAcceptDrops(true);
+        crumb->installEventFilter(this);
         layout->addWidget(crumb);
     }
     layout->addStretch();

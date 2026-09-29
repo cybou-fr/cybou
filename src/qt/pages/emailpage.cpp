@@ -11,7 +11,11 @@
 #include <qt/pages/mailreader.h>
 
 #include <QApplication>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QFrame>
+#include <QMenu>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -249,6 +253,9 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     m_list->setUniformItemSizes(true);
+    m_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_list->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_list->viewport()->installEventFilter(this);
     list_layout->addWidget(m_list, 1);
     m_list_empty = MutedText({}, m_list_pane);
     m_list_empty->setAlignment(Qt::AlignCenter);
@@ -299,6 +306,19 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
         if (row >= 0) setView(static_cast<View>(row));
     });
     connect(m_search, &QLineEdit::textChanged, this, [this] { rebuildList(); });
+    connect(m_list, &QListWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        auto* item = m_list->itemAt(pos);
+        if (!item) return;
+        if (!item->isSelected()) {
+            m_list->clearSelection();
+            item->setSelected(true);
+        }
+        auto* menu = buildContextMenu(selectedMessageIds(), this);
+        menu->setAttribute(Qt::WA_DeleteOnClose);
+        menu->popup(m_list->viewport()->mapToGlobal(pos));
+    });
+    m_folders->viewport()->setAcceptDrops(true);
+    m_folders->viewport()->installEventFilter(this);
     connect(m_list, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
         openMessage(item->data(Qt::UserRole).toString());
     });
@@ -353,6 +373,180 @@ void EmailPage::refreshEmptyHint()
     const int unread = m_model->unreadMailCount();
     m_empty_hint->setText(unread == 0 ? tr("You're all caught up.")
         : unread == 1 ? tr("1 unread message in your Inbox.") : tr("%1 unread messages in your Inbox.").arg(unread));
+}
+
+QStringList EmailPage::selectedMessageIds() const
+{
+    QStringList ids;
+    for (const auto* item : m_list->selectedItems()) ids << item->data(Qt::UserRole).toString();
+    return ids;
+}
+
+int EmailPage::folderRowAt(const QPoint& viewport_pos) const
+{
+    const auto* item = m_folders->itemAt(viewport_pos);
+    return item ? m_folders->row(item) : -1;
+}
+
+void EmailPage::moveMessagesTo(const QStringList& ids, View target)
+{
+    struct Before { QString id; CybouMailFolder folder; bool starred; };
+    QVector<Before> before;
+    for (const auto& id : ids) {
+        const auto* item = m_model->mailItem(id);
+        if (!item || item->draft) continue;
+        before.append({id, item->folder, item->starred});
+    }
+    if (before.isEmpty()) return;
+    QString text;
+    for (const auto& entry : before) {
+        switch (target) {
+        case View::Starred: m_model->setMailStarred(entry.id, true); break;
+        case View::Archive: m_model->moveMail(entry.id, CybouMailFolder::Archive); break;
+        case View::Trash: m_model->moveMail(entry.id, CybouMailFolder::Trash); break;
+        case View::Inbox:
+            // Only received mail belongs in Inbox; sent mail stays in Sent.
+            if (entry.folder != CybouMailFolder::Sent) m_model->moveMail(entry.id, CybouMailFolder::Inbox);
+            break;
+        case View::Sent:
+        case View::Drafts:
+            return;
+        }
+    }
+    const int count = static_cast<int>(before.size());
+    switch (target) {
+    case View::Starred: text = count == 1 ? tr("Starred") : tr("%1 conversations starred").arg(count); break;
+    case View::Archive: text = count == 1 ? tr("Conversation archived") : tr("%1 conversations archived").arg(count); break;
+    case View::Trash: text = count == 1 ? tr("Moved to Trash") : tr("%1 conversations moved to Trash").arg(count); break;
+    default: text = count == 1 ? tr("Moved to Inbox") : tr("%1 conversations moved to Inbox").arg(count); break;
+    }
+    if (before.size() == 1 && before.first().id == m_current_id && target != View::Starred) closeDetail();
+    m_model->notify(text, tr("Undo"), [model = m_model, before] {
+        for (const auto& entry : before) {
+            model->moveMail(entry.id, entry.folder);
+            model->setMailStarred(entry.id, entry.starred);
+        }
+    });
+}
+
+QMenu* EmailPage::buildContextMenu(const QStringList& ids, QWidget* parent)
+{
+    auto* menu = new QMenu{parent};
+    menu->setObjectName(QStringLiteral("mailContextMenu"));
+    if (ids.isEmpty()) return menu;
+    const auto* first = m_model->mailItem(ids.first());
+    if (!first) return menu;
+    const bool single = ids.size() == 1;
+    const auto add = [menu](const QString& text, const char* id, auto&& fn) {
+        auto* action = menu->addAction(text);
+        action->setObjectName(QLatin1String{id});
+        QObject::connect(action, &QAction::triggered, menu, std::forward<decltype(fn)>(fn));
+        return action;
+    };
+    if (single) {
+        add(first->draft ? tr("Edit draft") : tr("Open"), "mailOpen", [this, id = first->id] { openMessage(id); });
+        if (!first->draft) {
+            add(tr("Reply"), "mailReply", [this, id = first->id] { openCompose(replyTo(id)); });
+            add(tr("Forward"), "mailForward", [this, id = first->id] { openCompose(forwardOf(id)); });
+        }
+        menu->addSeparator();
+    }
+    const bool any_unread = std::any_of(ids.begin(), ids.end(), [this](const QString& id) {
+        const auto* item = m_model->mailItem(id);
+        return item && item->unread;
+    });
+    add(any_unread ? tr("Mark as read") : tr("Mark as unread"), "mailMarkRead", [this, ids, any_unread] {
+        for (const auto& id : ids) m_model->setMailRead(id, any_unread);
+    });
+    const bool all_starred = std::all_of(ids.begin(), ids.end(), [this](const QString& id) {
+        const auto* item = m_model->mailItem(id);
+        return item && item->starred;
+    });
+    add(all_starred ? tr("Remove star") : tr("Star"), "mailStar", [this, ids, all_starred] {
+        for (const auto& id : ids) m_model->setMailStarred(id, !all_starred);
+    });
+    if (!first->draft) {
+        menu->addSeparator();
+        if (first->folder == CybouMailFolder::Archive || first->folder == CybouMailFolder::Trash) {
+            add(tr("Move to Inbox"), "mailToInbox", [this, ids] { moveMessagesTo(ids, View::Inbox); });
+        }
+        if (first->folder != CybouMailFolder::Archive) {
+            add(tr("Archive"), "mailArchive", [this, ids] { moveMessagesTo(ids, View::Archive); });
+        }
+        if (first->folder != CybouMailFolder::Trash) {
+            add(tr("Move to Trash"), "mailTrash", [this, ids] { moveMessagesTo(ids, View::Trash); });
+        }
+    } else {
+        menu->addSeparator();
+        add(tr("Discard draft"), "mailDiscard", [this, ids] {
+            for (const auto& id : ids) m_model->deleteMail(id);
+            m_model->notify(tr("Draft discarded"));
+        });
+    }
+    return menu;
+}
+
+bool EmailPage::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == m_list->viewport()) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            auto* mouse = static_cast<QMouseEvent*>(event);
+            const auto* item = m_list->itemAt(mouse->position().toPoint());
+            m_press_pos = mouse->position().toPoint();
+            m_press_id = mouse->button() == Qt::LeftButton && item ? item->data(Qt::UserRole).toString() : QString{};
+        } else if (event->type() == QEvent::MouseMove && !m_press_id.isEmpty()) {
+            auto* mouse = static_cast<QMouseEvent*>(event);
+            if ((mouse->buttons() & Qt::LeftButton) &&
+                (mouse->position().toPoint() - m_press_pos).manhattanLength() >= QApplication::startDragDistance()) {
+                QStringList ids = selectedMessageIds();
+                if (!ids.contains(m_press_id)) ids = QStringList{m_press_id};
+                const QString id = std::exchange(m_press_id, {});
+                const auto* item = m_model->mailItem(id);
+                startIdDrag(m_list, mailIdsMime(), ids, ids.size() == 1 && item
+                    ? (item->subject.isEmpty() ? tr("(no subject)") : item->subject).left(40)
+                    : tr("%1 conversations").arg(ids.size()));
+                return true;
+            }
+        }
+        return false;
+    }
+    if (watched == m_folders->viewport()) {
+        const auto droppable = [this](const QPoint& pos) {
+            const int row = folderRowAt(pos);
+            return row == static_cast<int>(View::Inbox) || row == static_cast<int>(View::Starred) ||
+                row == static_cast<int>(View::Archive) || row == static_cast<int>(View::Trash);
+        };
+        if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove) {
+            auto* drag = static_cast<QDragMoveEvent*>(event);
+            const bool ok = drag->mimeData()->hasFormat(mailIdsMime()) && droppable(drag->position().toPoint());
+            if (ok) {
+                drag->acceptProposedAction();
+                const QSignalBlocker blocker{m_folders};
+                m_folders->setCurrentRow(folderRowAt(drag->position().toPoint()));
+            } else {
+                drag->ignore();
+            }
+            return true;
+        }
+        if (event->type() == QEvent::DragLeave) {
+            const QSignalBlocker blocker{m_folders};
+            m_folders->setCurrentRow(static_cast<int>(m_view));
+            return true;
+        }
+        if (event->type() == QEvent::Drop) {
+            auto* drop = static_cast<QDropEvent*>(event);
+            const int row = folderRowAt(drop->position().toPoint());
+            {
+                const QSignalBlocker blocker{m_folders};
+                m_folders->setCurrentRow(static_cast<int>(m_view));
+            }
+            if (!droppable(drop->position().toPoint())) return true;
+            moveMessagesTo(dragIds(drop->mimeData(), mailIdsMime()), static_cast<View>(row));
+            drop->acceptProposedAction();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void EmailPage::setSearchText(const QString& text)

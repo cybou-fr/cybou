@@ -48,6 +48,8 @@ public:
     void setView(View view);
     void openFolder(const QString& folder_id);
     void setSearchText(const QString& text);
+    /** Moves items into a folder ("" = My files), refusing folder cycles. */
+    bool moveFilesTo(const QStringList& ids, const QString& folder_id);
     QString currentFolder() const { return m_folder; }
     bool gridMode() const { return m_grid; }
     void setGridMode(bool grid);
@@ -64,6 +66,7 @@ public:
     std::function<void(const QString& file_id)> onSendByMail;
 
 protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
@@ -97,6 +100,12 @@ private:
     QFrame* m_selection_bar{nullptr};
     QLabel* m_selection_text{nullptr};
     int m_sort_column{0};
+    QPoint m_press_pos;
+    QString m_press_id;
+    QWidget* m_drop_highlight{nullptr};
+
+    QString itemIdAt(QWidget* viewport, const QPoint& pos) const;
+    bool handleItemDrag(QWidget* viewport, QEvent* event);
     bool m_sort_descending{false};
     QFrame* m_details{nullptr};
     QString m_details_id;

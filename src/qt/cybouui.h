@@ -9,6 +9,8 @@
 #include <qt/cyboutheme.h>
 
 #include <QApplication>
+#include <QDrag>
+#include <QMimeData>
 #include <QFocusEvent>
 #include <QStyle>
 
@@ -545,6 +547,38 @@ private:
         widget->style()->polish(widget);
     }
 };
+
+/* ------------------------------------------------------------------ *
+ * Internal drag and drop of product items (never leaves the app).
+ * ------------------------------------------------------------------ */
+inline QString mailIdsMime() { return QStringLiteral("application/x-cybou-mail-ids"); }
+inline QString fileIdsMime() { return QStringLiteral("application/x-cybou-file-ids"); }
+
+inline QStringList dragIds(const QMimeData* data, const QString& mime)
+{
+    if (!data || !data->hasFormat(mime)) return {};
+    return QString::fromUtf8(data->data(mime)).split(QLatin1Char{'\n'}, Qt::SkipEmptyParts);
+}
+
+/** Starts a move drag of item ids with a small "N items" badge. */
+inline void startIdDrag(QWidget* source, const QString& mime, const QStringList& ids, const QString& label)
+{
+    auto* data = new QMimeData;
+    data->setData(mime, ids.join(QLatin1Char{'\n'}).toUtf8());
+    auto* drag = new QDrag{source};
+    drag->setMimeData(data);
+    QLabel badge{label};
+    badge.setStyleSheet(QStringLiteral("QLabel { background: %1; color: white; border-radius: 8px; padding: 6px 12px;"
+                                       " font-weight: 700; }").arg(CybouTheme::color(CybouTheme::BRAND_TEAL).name()));
+    badge.adjustSize();
+    QPixmap pixmap{badge.size() * 2};
+    pixmap.setDevicePixelRatio(2);
+    pixmap.fill(Qt::transparent);
+    badge.render(&pixmap, QPoint{}, QRegion{}, QWidget::DrawChildren);
+    drag->setPixmap(pixmap);
+    drag->setHotSpot(QPoint{-12, -12});
+    drag->exec(Qt::MoveAction);
+}
 
 /** Single-line label that elides with "…" instead of widening its parent. */
 class ElidedLabel : public QLabel
