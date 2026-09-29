@@ -62,8 +62,9 @@ The journal contains no private key. The current implementation provides the
 pre-sign intent and canonical-tip check. `PoaFinalizer` verifies the supplied
 operator recovery entropy against the genesis key, retains it only in RAM,
 checks canonical block serialization, persists the intent, and only then signs.
-Wiring this signer into the node runtime and independent-node detection of
-conflicting valid certificates remain open.
+`PoaConflictDetector` durably records observations and permanently halts with
+both certificates when it sees conflicting valid signatures. Wiring the signer
+and detector into the node runtime remains open.
 
 If a node verifies two valid PoA signatures for different blocks at the same
 height and parent, it enters a permanent safety halt. It does not select a fork,

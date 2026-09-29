@@ -39,9 +39,11 @@ recovery gates pass together. See
   PoA finality certificate signing and verification primitives. A durable
   pre-sign journal enforces one next-height intent and checks recovered tip
   consistency. `PoaFinalizer` verifies the recovery entropy, serializes the
-  candidate block, journals, then signs. Genesis commitment and wiring the
-  signer into node runtime, finalized-block acceptance, independent-node
-  conflict halt, and operator recovery remain cutover gates.
+  candidate block, journals, then signs. `VerifyPoaCertificateForBlock`
+  binds verification to canonical block bytes. `PoaConflictDetector` stores
+  observations and halt evidence. Genesis commitment, runtime wiring,
+  finalized-block execution/acceptance, evidence inspection, and operator
+  recovery remain cutover gates.
 
 These components are substrate code. Their integration with the canonical
 Identity operation path, state transition, block finality, and provider network
