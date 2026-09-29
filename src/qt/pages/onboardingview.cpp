@@ -8,7 +8,10 @@
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 
+#include <QClipboard>
+#include <QCompleter>
 #include <QGridLayout>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -192,12 +195,12 @@ QWidget* OnboardingView::buildWelcome()
 
     connect(create, &QPushButton::clicked, this, [this] { startCreate(); });
     connect(restore, &QPushButton::clicked, this, [this] {
-        m_phrase->clear();
+        clearPhrase();
         m_restore_password->clear();
         m_restore_confirm->clear();
         updateRestoreState();
         showScreen(Screen::Restore);
-        m_phrase->setFocus();
+        m_word_fields.first()->setFocus();
     });
     // Buttons follow the account-creation capability from the model.
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, create, [this, create, restore] {
@@ -226,6 +229,9 @@ QWidget* OnboardingView::buildPassword()
     m_password_confirm = PasswordField(tr("Repeat the password"), page);
     m_password_confirm->setObjectName(QStringLiteral("vaultPasswordConfirm"));
     layout->addWidget(m_password_confirm);
+    m_strength = new QLabel{page};
+    m_strength->setObjectName(QStringLiteral("passwordStrength"));
+    layout->addWidget(m_strength);
     m_password_hint = MutedText({}, page);
     layout->addWidget(m_password_hint);
     auto* buttons = new QHBoxLayout;
@@ -362,12 +368,47 @@ QWidget* OnboardingView::buildRestore()
     auto* page = CenteredCard(this, layout, 640);
     layout->addWidget(HeroTitle(tr("Restore your Identity"), page));
     layout->addWidget(MutedText(tr("Enter your 24-word recovery phrase"), page));
-    m_phrase = new QPlainTextEdit{page};
-    m_phrase->setObjectName(QStringLiteral("recoveryPhrase"));
-    m_phrase->setPlaceholderText(tr("word1 word2 word3 …"));
-    m_phrase->setTabChangesFocus(true);
-    m_phrase->setFixedHeight(110);
-    layout->addWidget(m_phrase);
+    // One field per word: autocomplete from the word list, per-word checks,
+    // and pasting a whole phrase into any field fills the rest.
+    auto* grid_host = new QWidget{page};
+    grid_host->setObjectName(QStringLiteral("recoveryPhrase"));
+    auto* grid = new QGridLayout{grid_host};
+    grid->setContentsMargins(0, 4, 0, 4);
+    grid->setHorizontalSpacing(8);
+    grid->setVerticalSpacing(6);
+    auto* completer = new QCompleter{CybouDesktopModel::recoveryWordList(), grid_host};
+    completer->setCaseSensitivity(Qt::CaseInsensitive);
+    completer->setCompletionMode(QCompleter::InlineCompletion);
+    constexpr int kColumns = 4;
+    for (int i = 0; i < kPhraseWords; ++i) {
+        auto* field = new QLineEdit{grid_host};
+        field->setObjectName(QStringLiteral("recoveryWord%1").arg(i));
+        field->setPlaceholderText(QString::number(i + 1));
+        field->setAccessibleName(tr("Word %1").arg(i + 1));
+        field->setCompleter(completer);
+        field->setMinimumHeight(34);
+        m_word_fields.append(field);
+        grid->addWidget(field, i % (kPhraseWords / kColumns), i / (kPhraseWords / kColumns));
+        connect(field, &QLineEdit::textEdited, this, [this, i](const QString& text) {
+            const QStringList parts = SplitWords(text);
+            if (parts.size() > 1) distributeWords(i, parts);
+            updateRestoreState();
+        });
+        connect(field, &QLineEdit::textChanged, this, [this] { updateRestoreState(); });
+        connect(field, &QLineEdit::returnPressed, this, [this, i] {
+            if (i + 1 < m_word_fields.size()) m_word_fields.at(i + 1)->setFocus();
+        });
+    }
+    layout->addWidget(grid_host);
+    auto* paste = Button(tr("Paste phrase"), false, page);
+    paste->setProperty("cybouId", QStringLiteral("pastePhrase"));
+    connect(paste, &QPushButton::clicked, this, [this] {
+        QString text = QGuiApplication::clipboard()->text();
+        distributeWords(0, SplitWords(text));
+        text.fill(QChar{0});
+        updateRestoreState();
+    });
+    layout->addWidget(paste, 0, Qt::AlignLeft);
     m_phrase_count = MutedText({}, page);
     layout->addWidget(m_phrase_count);
     layout->addWidget(FieldLabel(tr("Local vault password"), page));
@@ -389,12 +430,11 @@ QWidget* OnboardingView::buildRestore()
     buttons->addWidget(m_restore_button);
     layout->addLayout(buttons);
 
-    connect(m_phrase, &QPlainTextEdit::textChanged, this, [this] { updateRestoreState(); });
     connect(m_restore_password, &QLineEdit::textChanged, this, [this] { updateRestoreState(); });
     connect(m_restore_confirm, &QLineEdit::textChanged, this, [this] { updateRestoreState(); });
     connect(m_restore_button, &QPushButton::clicked, this, [this] { submitRestore(); });
     connect(back, &QPushButton::clicked, this, [this] {
-        m_phrase->clear();
+        clearPhrase();
         m_restore_password->clear();
         m_restore_confirm->clear();
         showScreen(Screen::Welcome);
@@ -417,6 +457,16 @@ QWidget* OnboardingView::buildRestoring()
         m_restore_steps.append(row);
         layout->addWidget(row);
     }
+    layout->addSpacing(6);
+    m_continue_restoring = Button(tr("Open CYBOU"), true, page);
+    m_continue_restoring->setObjectName(QStringLiteral("primaryButton"));
+    m_continue_restoring->setProperty("cybouId", QStringLiteral("continueWhileRestoring"));
+    m_continue_restoring->setToolTip(tr("Mail and Files keep restoring in the background."));
+    connect(m_continue_restoring, &QPushButton::clicked, this, [this] {
+        const auto& status = m_model->status();
+        m_model->setIdentityState(CybouIdentityState::Syncing, status.account_id, status.creation_height);
+    });
+    layout->addWidget(m_continue_restoring, 0, Qt::AlignLeft);
     return page;
 }
 
@@ -476,9 +526,41 @@ void OnboardingView::startCreate()
     m_password->setFocus();
 }
 
+namespace {
+/** 0 empty, 1 weak, 2 fair, 3 strong — length and character variety. */
+int PasswordStrength(const QString& password)
+{
+    if (password.isEmpty()) return 0;
+    int classes = 0;
+    bool lower = false, upper = false, digit = false, other = false;
+    for (const QChar ch : password) {
+        if (ch.isLower()) lower = true;
+        else if (ch.isUpper()) upper = true;
+        else if (ch.isDigit()) digit = true;
+        else other = true;
+    }
+    classes = int{lower} + int{upper} + int{digit} + int{other};
+    if (password.size() < 12) return 1;
+    if (password.size() >= 16 && classes >= 3) return 3;
+    return password.size() >= 20 || classes >= 3 ? 3 : 2;
+}
+} // namespace
+
 void OnboardingView::updatePasswordState()
 {
     const QString password = m_password->text();
+    const int strength = PasswordStrength(password);
+    const QString labels[] = {QString{}, tr("Weak"), tr("Fair"), tr("Strong")};
+    const QRgb colors[] = {CybouTheme::DIM, CybouTheme::ROSE, CybouTheme::AMBER, CybouTheme::BRAND_TEAL_DARK};
+    QString bars;
+    for (int i = 1; i <= 3; ++i) {
+        bars += QStringLiteral("<span style=\"color:%1;\">&#9644;&#9644;&#9644;</span> ")
+                    .arg(CybouTheme::color(i <= strength ? colors[strength] : CybouTheme::BORDER).name());
+    }
+    m_strength->setText(strength == 0 ? QString{}
+        : bars + QStringLiteral("<span style=\"color:%1; font-weight:700;\">%2</span>")
+                     .arg(CybouTheme::color(colors[strength]).name(), labels[strength]));
+    m_strength->setAccessibleName(labels[strength]);
     const QString confirmation = m_password_confirm->text();
     QString hint;
     if (!password.isEmpty() && password.size() < kMinPasswordLength) {
@@ -565,28 +647,61 @@ void OnboardingView::acceptConfirmation()
     refresh();
 }
 
+QString OnboardingView::enteredPhrase() const
+{
+    QStringList words;
+    for (const auto* field : m_word_fields) words << field->text().trimmed().toLower();
+    return words.join(QLatin1Char{' '});
+}
+
+void OnboardingView::clearPhrase()
+{
+    for (auto* field : m_word_fields) field->clear();
+}
+
+void OnboardingView::distributeWords(int start, const QStringList& words)
+{
+    for (int k = 0; k < words.size() && start + k < m_word_fields.size(); ++k) {
+        m_word_fields.at(start + k)->setText(words.at(k).toLower());
+    }
+    const int next = qMin(start + static_cast<int>(words.size()), static_cast<int>(m_word_fields.size()) - 1);
+    m_word_fields.at(next)->setFocus();
+}
+
 void OnboardingView::updateRestoreState()
 {
-    const int count = SplitWords(m_phrase->toPlainText()).size();
-    m_phrase_count->setText(tr("%1 / %2 words").arg(count).arg(kPhraseWords));
+    int filled = 0;
+    int unknown = 0;
+    for (auto* field : m_word_fields) {
+        const QString word = field->text().trimmed();
+        if (word.isEmpty()) {
+            field->setStyleSheet({});
+            continue;
+        }
+        ++filled;
+        const bool known = CybouDesktopModel::isRecoveryWord(word);
+        if (!known) ++unknown;
+        field->setStyleSheet(known ? QString{} : QStringLiteral("border-color: %1;").arg(CybouTheme::color(CybouTheme::ROSE).name()));
+    }
+    m_phrase_count->setText(unknown > 0
+        ? tr("%1 / %2 words · %3 not recognised").arg(filled).arg(kPhraseWords).arg(unknown)
+        : tr("%1 / %2 words").arg(filled).arg(kPhraseWords));
     const QString password = m_restore_password->text();
     const QString confirmation = m_restore_confirm->text();
     QString hint;
-    if (count > kPhraseWords) {
-        hint = tr("The phrase has more than %1 words.").arg(kPhraseWords);
-    } else if (!password.isEmpty() && password.size() < kMinPasswordLength) {
+    if (!password.isEmpty() && password.size() < kMinPasswordLength) {
         hint = tr("Use at least %1 characters.").arg(kMinPasswordLength);
     } else if (!confirmation.isEmpty() && password != confirmation) {
         hint = tr("The passwords do not match.");
     }
     m_restore_hint->setText(hint);
-    m_restore_button->setEnabled(count == kPhraseWords && password.size() >= kMinPasswordLength &&
+    m_restore_button->setEnabled(filled == kPhraseWords && unknown == 0 && password.size() >= kMinPasswordLength &&
         password == confirmation && m_model->capabilities().account_creation);
 }
 
 void OnboardingView::submitRestore()
 {
-    QString phrase = m_phrase->toPlainText();
+    QString phrase = enteredPhrase();
     QString password = m_restore_password->text();
     if (!m_model->recoveryPhraseValid(phrase)) {
         phrase.fill(QChar{0});
@@ -601,7 +716,7 @@ void OnboardingView::submitRestore()
         m_restore_hint->setText(tr("Restore could not start. Check the phrase and try again."));
         return;
     }
-    m_phrase->clear();
+    clearPhrase();
     m_restore_password->clear();
     m_restore_confirm->clear();
     showScreen(Screen::Restoring);
@@ -666,6 +781,10 @@ void OnboardingView::refresh()
         const CybouRestoreStepState states[] = {progress.identity, progress.wallet, progress.names,
             progress.mail, progress.files};
         for (int i = 0; i < m_restore_steps.size(); ++i) SetStep(m_restore_steps.at(i), RestoreStepState(states[i]));
+        // Usable once the Identity, wallet and names are back.
+        m_continue_restoring->setVisible(progress.identity == CybouRestoreStepState::Done &&
+            progress.wallet == CybouRestoreStepState::Done && progress.names == CybouRestoreStepState::Done &&
+            !status.account_id.isEmpty());
         break;
     }
     case CybouIdentityState::Locked:

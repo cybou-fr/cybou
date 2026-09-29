@@ -721,6 +721,26 @@ std::optional<QStringList> CybouDesktopModel::revealRecoveryWords(const QString&
     return ToQStringList(*words);
 }
 
+const QStringList& CybouDesktopModel::recoveryWordList()
+{
+    static const QStringList words = [] {
+        static constexpr const char* kWords[] = {
+#include <cybou/bip39_english.inc>
+        };
+        QStringList list;
+        list.reserve(static_cast<qsizetype>(std::size(kWords)));
+        for (const char* word : kWords) list << QString::fromLatin1(word);
+        return list;
+    }();
+    return words;
+}
+
+bool CybouDesktopModel::isRecoveryWord(const QString& word)
+{
+    const auto& words = recoveryWordList();
+    return std::binary_search(words.begin(), words.end(), word.trimmed().toLower());
+}
+
 bool CybouDesktopModel::recoveryPhraseValid(const QString& phrase) const
 {
     const auto parts = phrase.trimmed().split(QRegularExpression{QStringLiteral("\\s+")}, Qt::SkipEmptyParts);

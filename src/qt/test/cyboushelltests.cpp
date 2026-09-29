@@ -236,21 +236,25 @@ void CybouShellTests::restoreFlowValidatesPhrase()
     }
     QVERIFY(restore && submit);
     restore->click();
-    auto* phrase = home->findChild<QPlainTextEdit*>(QStringLiteral("recoveryPhrase"));
     auto* password = home->findChild<QLineEdit*>(QStringLiteral("restorePassword"));
     auto* confirm = home->findChild<QLineEdit*>(QStringLiteral("restorePasswordConfirm"));
-    QVERIFY(phrase && password && confirm);
-    phrase->setPlainText(QStringLiteral("one two three"));
+    auto* first = home->findChild<QLineEdit*>(QStringLiteral("recoveryWord0"));
+    QVERIFY(password && confirm && first);
     password->setText(QStringLiteral("correct horse battery"));
     confirm->setText(QStringLiteral("correct horse battery"));
-    QVERIFY(!submit->isEnabled());
+    // Pasting the whole phrase into the first field fills all 24.
     QStringList words;
-    for (int i = 0; i < 24; ++i) words << QStringLiteral("word%1").arg(i);
-    phrase->setPlainText(words.join(QLatin1Char{' '}));
+    for (int i = 0; i < 23; ++i) words << CybouDesktopModel::recoveryWordList().at(i * 7);
+    words << QStringLiteral("notaword");
+    first->setText(words.join(QLatin1Char{' '}));
+    Q_EMIT first->textEdited(first->text());
+    QCOMPARE(home->findChild<QLineEdit*>(QStringLiteral("recoveryWord23"))->text(), QStringLiteral("notaword"));
+    QVERIFY(!submit->isEnabled()); // unknown word blocks restore
+    home->findChild<QLineEdit*>(QStringLiteral("recoveryWord23"))->setText(QStringLiteral("zoo"));
     QVERIFY(submit->isEnabled());
     submit->click();
     QCOMPARE(model->status().identity_state, CybouIdentityState::Restoring);
-    QVERIFY(phrase->toPlainText().isEmpty());
+    QVERIFY(first->text().isEmpty());
 }
 
 void CybouShellTests::identityPageHidesSecrets()
@@ -447,7 +451,10 @@ void CybouShellTests::walletPageShowsBalances()
     amount->setText(QStringLiteral("100"));
     QVERIFY(confirm->isEnabled());
     QSignalSpy requested{model, &CybouDesktopModel::paymentRequested};
-    confirm->click();
+    confirm->click(); // review
+    QCOMPARE(requested.count(), 0);
+    QVERIFY(!wallet->findChild<QLabel*>(QStringLiteral("walletReview"))->isHidden());
+    confirm->click(); // confirm and send
     QCOMPARE(requested.count(), 1);
     QVERIFY(model->paymentPending());
     model->setPaymentFinished(true);

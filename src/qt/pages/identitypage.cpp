@@ -231,6 +231,7 @@ QWidget* IdentityPage::buildContent()
     copy->setProperty("cybouId", QStringLiteral("copyAccountId"));
     connect(copy, &QPushButton::clicked, this, [this] { copyAccountId(); });
     m_account_id = DetailRow(account, tr("Account ID"), page, copy);
+    account->addWidget(MutedText(tr("Share your Account ID only if someone cannot find your .cybou name."), page));
 
     // Names.
     auto* names = Section(root, tr("CYBOU names"), page);
@@ -250,20 +251,36 @@ QWidget* IdentityPage::buildContent()
     auto* recovery = Section(root, tr("Recovery"), page);
     m_recovery_state = DetailRow(recovery, tr("Recovery phrase"), page);
     m_vault_state = DetailRow(recovery, tr("Local vault"), page);
-    auto* options = new QToolButton{page};
-    options->setObjectName(QStringLiteral("secondaryButton"));
-    options->setText(tr("Show recovery options"));
-    options->setProperty("cybouId", QStringLiteral("recoveryOptions"));
-    options->setPopupMode(QToolButton::InstantPopup);
-    auto* menu = new QMenu{options};
-    menu->addAction(tr("Show recovery phrase…"), this, [this] { revealRecoveryPhrase(); });
-    menu->addAction(tr("Replace recovery phrase…"), this, [this] { replaceRecoveryPhrase(); });
-    options->setMenu(menu);
-    recovery->addWidget(options, 0, Qt::AlignLeft);
+    auto* reveal = new QPushButton{tr("Show recovery phrase…"), page};
+    reveal->setObjectName(QStringLiteral("secondaryButton"));
+    reveal->setProperty("cybouId", QStringLiteral("recoveryOptions"));
+    connect(reveal, &QPushButton::clicked, this, [this] { revealRecoveryPhrase(); });
+    recovery->addWidget(reveal, 0, Qt::AlignLeft);
 
     // Security.
     auto* security = Section(root, tr("Security"), page);
     m_pq_state = DetailRow(security, tr("Post-quantum protection"), page);
+
+    // Danger zone: actions that replace keys are visually separated.
+    auto* danger = Card(page);
+    danger->setObjectName(QStringLiteral("dangerZone"));
+    danger->setStyleSheet(QStringLiteral("QFrame#dangerZone { background: %1; border: 1px solid %2; border-radius: 14px; }")
+        .arg(CybouTheme::color(CybouTheme::CANVAS).name(), CybouTheme::color(CybouTheme::ROSE_SOFT).name()));
+    auto* danger_layout = new QVBoxLayout{danger};
+    danger_layout->setContentsMargins(22, 18, 22, 18);
+    danger_layout->setSpacing(8);
+    auto* danger_title = SectionTitle(tr("Danger zone"), danger);
+    danger_title->setStyleSheet(QStringLiteral("color: %1;").arg(CybouTheme::color(CybouTheme::ROSE).name()));
+    danger_layout->addWidget(danger_title);
+    danger_layout->addWidget(MutedText(tr("Replacing your recovery phrase replaces all Identity keys. "
+                                          "The old phrase stops working after network confirmation."), danger));
+    auto* replace = new QPushButton{tr("Replace recovery phrase…"), danger};
+    replace->setObjectName(QStringLiteral("secondaryButton"));
+    replace->setStyleSheet(QStringLiteral("QPushButton { color: %1; border-color: %2; }")
+        .arg(CybouTheme::color(CybouTheme::ROSE).name(), CybouTheme::color(CybouTheme::ROSE_SOFT).name()));
+    connect(replace, &QPushButton::clicked, this, [this] { replaceRecoveryPhrase(); });
+    danger_layout->addWidget(replace, 0, Qt::AlignLeft);
+    root->addWidget(danger);
 
     // Advanced security details (collapsed).
     m_advanced_toggle = new QToolButton{page};

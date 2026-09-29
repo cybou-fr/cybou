@@ -148,6 +148,13 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     send->addWidget(m_amount);
     m_fee = MutedText({}, m_send_panel);
     send->addWidget(m_fee);
+    m_review = new QLabel{m_send_panel};
+    m_review->setObjectName(QStringLiteral("walletReview"));
+    m_review->setWordWrap(true);
+    m_review->setStyleSheet(QStringLiteral("QLabel#walletReview { background: %1; border-radius: 10px; padding: 12px; color: %2; }")
+        .arg(CybouTheme::color(CybouTheme::MINT_GHOST).name(), CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
+    m_review->hide();
+    send->addWidget(m_review);
     m_send_status = MutedText({}, m_send_panel);
     send->addWidget(m_send_status);
     auto* send_buttons = new QHBoxLayout;
@@ -182,6 +189,10 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     connect(m_send_button, &QPushButton::clicked, this, [this] { openSend(); });
     connect(m_receive_button, &QPushButton::clicked, this, [this] { showReceive(); });
     connect(cancel, &QPushButton::clicked, this, [this] {
+        if (m_reviewing) {
+            setReviewing(false);
+            return;
+        }
         m_send_panel->setVisible(false);
         m_to->clear();
         m_amount->clear();
@@ -263,13 +274,36 @@ void WalletPage::updateSendState()
     if (amount > 0 && !enough) m_send_status->setText(tr("Not enough CYBOU available."));
     m_confirm->setEnabled(!m_model->paymentPending() && !to.isEmpty() && to_problem.isEmpty() && amount > 0 &&
         enough && m_model->capabilities().payments);
-    m_confirm->setText(m_model->paymentPending() ? tr("Sending…") : tr("Send"));
+    m_confirm->setText(m_model->paymentPending() ? tr("Sending…") : m_reviewing ? tr("Confirm and send") : tr("Review"));
+}
+
+void WalletPage::setReviewing(bool reviewing)
+{
+    m_reviewing = reviewing;
+    m_to->setEnabled(!reviewing);
+    m_amount->setEnabled(!reviewing);
+    m_review->setVisible(reviewing);
+    if (reviewing) {
+        const QString to = m_to->text().trimmed().toLower();
+        const quint64 amount = m_amount->text().toULongLong();
+        const auto fee = m_model->paymentFee();
+        m_review->setText(tr("<b>Send %1 to %2</b><br>Network service fee: %3 from System Balance<br>"
+                             "Payments cannot be reversed.")
+            .arg(cybouAmountText(amount), to.toHtmlEscaped(), fee ? cybouAmountText(*fee) : tr("calculated when sending")));
+    }
+    updateSendState();
 }
 
 void WalletPage::submit()
 {
+    // First click reviews; second click sends.
+    if (!m_reviewing) {
+        setReviewing(true);
+        return;
+    }
     const QString to = m_to->text().trimmed().toLower();
     const quint64 amount = m_amount->text().toULongLong();
+    setReviewing(false);
     if (m_model->requestPayment(to, amount)) {
         m_send_status->setText(tr("Sending %1 to %2…").arg(cybouAmountText(amount), to));
     } else {
@@ -319,9 +353,14 @@ void WalletPage::rebuildActivity()
         const QString amount = sign + cybouAmountText(static_cast<quint64>(std::llabs(entry.amount)));
         const QString subtitle = entry.pending ? tr("Waiting for confirmation")
             : entry.system_side ? tr("System Balance") : tr("Available");
-        m_activity_rows->addWidget(ActivityRow(EntryGlyph(entry),
+        auto* row = ActivityRow(EntryGlyph(entry),
             entry.amount >= 0 ? Tint::Mint : Tint::Indigo, EntryTitle(entry), subtitle,
-            amount + QStringLiteral("  ·  ") + relTime(entry.time), m_activity_rows->parentWidget()));
+            amount + QStringLiteral("  ·  ") + relTime(entry.time), m_activity_rows->parentWidget());
+        if (auto* meta = row->findChild<QLabel*>(QStringLiteral("rowMeta")); meta && entry.amount > 0) {
+            meta->setStyleSheet(QStringLiteral("background: transparent; border: none; color: %1; font-weight: 700;")
+                .arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
+        }
+        m_activity_rows->addWidget(row);
         ++shown;
     }
     m_activity_empty->setVisible(shown == 0);

@@ -47,12 +47,15 @@ private:
     QLabel* m_send_status{nullptr};
     QPushButton* m_confirm{nullptr};
     QVBoxLayout* m_activity_rows{nullptr};
+    bool m_reviewing{false};
+    QLabel* m_review{nullptr};
     QLabel* m_activity_empty{nullptr};
 
     void refresh();
     void rebuildActivity();
     void updateSendState();
     void submit();
+    void setReviewing(bool reviewing);
     void showReceive();
 };
 

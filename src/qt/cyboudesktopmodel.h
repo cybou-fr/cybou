@@ -207,6 +207,9 @@ public:
     void discardPreparedIdentity();
     /** Re-authenticates with the vault password and returns the words. */
     std::optional<QStringList> revealRecoveryWords(const QString& vault_password);
+    /** The recovery word list (for autocomplete and per-word checks). */
+    static const QStringList& recoveryWordList();
+    static bool isRecoveryWord(const QString& word);
     /** True when the phrase has 24 words that decode to valid entropy. */
     bool recoveryPhraseValid(const QString& phrase) const;
     /** Fresh 24 words for replacing the recovery phrase (IdentityRotate). */

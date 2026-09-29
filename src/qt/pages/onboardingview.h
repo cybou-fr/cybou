@@ -56,6 +56,8 @@ private:
     QLineEdit* m_password_confirm{nullptr};
     QLabel* m_password_hint{nullptr};
     QPushButton* m_password_next{nullptr};
+    QLabel* m_strength{nullptr};
+    QPushButton* m_continue_restoring{nullptr};
     QWidget* m_words_grid{nullptr};
     QVector<int> m_confirm_positions;
     QVector<QLineEdit*> m_confirm_inputs;
@@ -69,7 +71,7 @@ private:
     QPushButton* m_create_retry{nullptr};
 
     // Restore flow.
-    QPlainTextEdit* m_phrase{nullptr};
+    QVector<QLineEdit*> m_word_fields;
     QLabel* m_phrase_count{nullptr};
     QLineEdit* m_restore_password{nullptr};
     QLineEdit* m_restore_confirm{nullptr};
@@ -102,6 +104,9 @@ private:
     void submitUnlock();
     void cancelCreate();
     void clearSecrets();
+    QString enteredPhrase() const;
+    void clearPhrase();
+    void distributeWords(int start, const QStringList& words);
     void refresh();
 };
 
