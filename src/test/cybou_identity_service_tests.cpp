@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -25,20 +26,30 @@ struct RuntimeFixture {
     std::array<unsigned char, 32> validator_seed{};
     cybou::CybouState genesis;
     cybou::CybouNetworkDefinition definition;
+    std::filesystem::path data_dir;
 
     RuntimeFixture()
     {
+        data_dir = std::filesystem::temp_directory_path() / ("cybou-identity-service-runtime-" +
+            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        std::filesystem::remove_all(data_dir);
         validator_seed[0] = 0x73;
         genesis = cybou::CreateDevGenesisState();
-        definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey());
+        definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(validator_seed[0]));
         definition.protocol_parameters.account_creation_work_bits = 0;
+    }
+
+    ~RuntimeFixture()
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(data_dir, ec);
     }
 
     cybou::NodeRuntimeConfig Config() const
     {
         return {
             .network_definition = definition,
-            .data_dir = "cybou-identity-service-test",
+            .data_dir = data_dir,
             .validator_private_key = validator_seed,
             .memory_only = true,
             .wipe_data = true,

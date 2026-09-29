@@ -36,14 +36,14 @@ BOOST_AUTO_TEST_CASE(network_definition_binds_poa_key_and_rejects_invalid_keys)
     BOOST_CHECK(cybou::ValidateNetworkDefinition(invalid) == cybou::NetworkDefinitionError::GENESIS_BLOCK_ID_MISMATCH);
 }
 
-BOOST_AUTO_TEST_CASE(network_definition_v5_commits_poa_key_and_root_publication_fee_parameters)
+BOOST_AUTO_TEST_CASE(network_definition_v6_commits_poa_key_and_root_publication_fee_parameters)
 {
     std::array<unsigned char, 32> seed{};
     seed[0] = 7;
     const auto genesis = cybou::CreateDevGenesisState();
     auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey());
     const auto default_network_id = cybou::NetworkId(definition);
-    BOOST_CHECK_EQUAL(definition.protocol_version, 5);
+    BOOST_CHECK_EQUAL(definition.protocol_version, 6);
     BOOST_CHECK(cybou::ValidateNetworkDefinition(definition) == cybou::NetworkDefinitionError::NONE);
 
     definition.protocol_parameters.root_publication_fee_per_started_kib = 9;

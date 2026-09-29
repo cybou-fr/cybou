@@ -28,6 +28,7 @@ struct CybouServiceTestFixture {
         static std::atomic<unsigned> sequence{0};
         directory = std::filesystem::temp_directory_path() /
             ("cybou-service-integration-" + std::to_string(sequence.fetch_add(1)));
+        std::filesystem::remove_all(directory);
         std::filesystem::create_directories(directory);
         validator_seed[0] = seed_byte;
         genesis = cybou::CreateDevGenesisState();

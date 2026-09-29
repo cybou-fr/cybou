@@ -157,7 +157,7 @@ BOOST_AUTO_TEST_CASE(finality_digest_key_and_encoding_golden_vectors)
     BOOST_REQUIRE(cybou::crypto::ComputeSha256({*deterministic_ml_signature},
         deterministic_ml_signature_hash.data()));
     BOOST_CHECK_EQUAL(BytesHex(deterministic_ml_signature_hash),
-        "898c9460754801d9af68ba5050b792f061533858cd4259ef3fa2cb5063332a4b");
+        "ff40068f6ccf4087833963c52d389a58afabfa4a19af07712bdca1aaaa8af85d");
     cybou::IdentityHybridSignature deterministic_hybrid_signature{
         .ed25519 = signature->ed25519,
         .ml_dsa = *deterministic_ml_signature,
@@ -165,11 +165,11 @@ BOOST_AUTO_TEST_CASE(finality_digest_key_and_encoding_golden_vectors)
     BOOST_CHECK(cybou::VerifyIdentityMessage(*key, deterministic_hybrid_signature, digest));
     BOOST_CHECK_EQUAL(BytesHex(key->ed25519), "8254c6e332edef49152acb98e85b9d566e094aeaa5aeac2bb3670c9929a633d6");
     BOOST_CHECK_EQUAL(BytesHex(signature->ed25519),
-        "1a78228567fe880a16481319d354f8a0b1291ee157022b22ceee278495fd15cb183db9dc21d86e2e3fed1f05264454e65fbe333f617c58536fc16f425f8a7409");
+        "2ee8516d022069eb865bc67bf2ac80f4cbfae7b6199ef72959d295dbb562e4fb3ce06b74c66afa26d36057961ced1f5e8ed465baafba2910531c77b339efa200");
     BOOST_CHECK_EQUAL(BytesHex(std::span<const unsigned char>{block_id.begin(), block_id.size()}),
-        "64e819bc0ef92a3bc827de365094f94a45f7f085454a8a56f4b581ea9366cde3");
+        "ebdf9d1410926301a06fe20057420d402cf2a33863b45bc8eb8e565745a3e25b");
     BOOST_CHECK_EQUAL(BytesHex(std::span<const unsigned char>{digest.begin(), digest.size()}),
-        "8e91e9859bf416facf9331b6ed6906a10007244e286e4568b3bc7d744337d6a2");
+        "ac7dd648a12379b00b6d7f37aa388e5b0688ef61dca0deb72c4be20c31ec48aa");
     const auto key_id = cybou::ComputePoaFinalizerKeyId(*key);
     BOOST_REQUIRE(key_id);
     BOOST_CHECK_EQUAL(BytesHex(*key_id), "4b5cd4996b3b8c560c8a6e2071070795d5cf7f3d26b503c9002e2f214ea5c60c");
@@ -197,7 +197,7 @@ BOOST_AUTO_TEST_CASE(finality_digest_key_and_encoding_golden_vectors)
     BOOST_CHECK(cybou::DeserializePoaFinalityCertificate(*encoded) == certificate);
     std::array<unsigned char, 32> certificate_hash{};
     BOOST_REQUIRE(cybou::crypto::ComputeSha256({*encoded}, certificate_hash.data()));
-    BOOST_CHECK_EQUAL(BytesHex(certificate_hash), "d189e4967722c7fcd16de274fadbc31d66373b911389cd00b9e19e0d7b81e115");
+    BOOST_CHECK_EQUAL(BytesHex(certificate_hash), "c64df328987be3d02b97718e908cc469a8f18730f93b38c79e29ecf1e59c18cd");
 }
 
 BOOST_AUTO_TEST_CASE(finalizer_retries_same_intent_and_recovers_after_restart)

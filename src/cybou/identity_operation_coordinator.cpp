@@ -257,28 +257,31 @@ IdentityOperationResult IdentityOperationCoordinator::SubmitExact(JournalEntry& 
             return {.phase = IdentityOperationPhase::UNCERTAIN, .op_id = entry.op_id,
                 .error = "Operation delivery is uncertain; exact bytes are retained"};
         }
+        const auto op_id = entry.op_id;
         ClearJournal();
-        return {.phase = IdentityOperationPhase::REJECTED, .op_id = entry.op_id,
+        return {.phase = IdentityOperationPhase::REJECTED, .op_id = op_id,
             .error = "Identity operation was rejected"};
     }
     entry.phase = result.status == OperationSubmitStatus::ALREADY_FINALIZED ?
         IdentityOperationPhase::FINALIZED : IdentityOperationPhase::ACCEPTED;
     if (!SaveJournal(entry)) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = entry.op_id,
         .error = "Operation was admitted but its journal could not be updated"};
-    if (entry.phase == IdentityOperationPhase::FINALIZED && entry.kind != 0) ClearJournal();
-    return {.phase = entry.phase, .op_id = entry.op_id};
+    const auto phase = entry.phase;
+    const auto op_id = entry.op_id;
+    if (phase == IdentityOperationPhase::FINALIZED && entry.kind != 0) ClearJournal();
+    return {.phase = phase, .op_id = op_id};
 }
 
 IdentityOperationResult IdentityOperationCoordinator::Reconcile(JournalEntry& entry)
 {
     const auto status = m_runtime.GetOperationStatus(entry.op_id);
     if (status.kind == OperationStatusKind::FINALIZED) {
+        const auto op_id = entry.op_id;
         if (entry.kind != 0) {
             if (!ClearJournal()) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = entry.op_id,
                 .finalized_height = status.finalized_height, .error = "Finalized journal could not be cleared"};
         }
-        entry.phase = IdentityOperationPhase::FINALIZED;
-        return {.phase = IdentityOperationPhase::FINALIZED, .op_id = entry.op_id, .finalized_height = status.finalized_height};
+        return {.phase = IdentityOperationPhase::FINALIZED, .op_id = op_id, .finalized_height = status.finalized_height};
     }
     if (status.kind == OperationStatusKind::REJECTED_KNOWN) {
         const auto id = entry.op_id;
@@ -330,10 +333,24 @@ IdentityOperationResult IdentityOperationCoordinator::Execute(IdentityOperationK
     const auto account = m_keystore.GetAccountId();
     if (!account) return {.phase = IdentityOperationPhase::REJECTED, .error = "No Identity is unlocked"};
     if (m_entry) {
-        if (m_entry->account_id == *account && m_entry->kind == static_cast<uint8_t>(kind) &&
-            m_entry->payload_commitment == payload_commitment) return Reconcile(*m_entry);
-        return {.phase = IdentityOperationPhase::CONFLICT, .op_id = m_entry->op_id,
-            .error = "Another Identity operation is unresolved"};
+        const bool same_request = m_entry->account_id == *account &&
+            m_entry->kind == static_cast<uint8_t>(kind) && m_entry->payload_commitment == payload_commitment;
+        if (!same_request) {
+            const auto status = m_runtime.GetOperationStatus(m_entry->op_id);
+            if (status.kind != OperationStatusKind::FINALIZED &&
+                status.kind != OperationStatusKind::REJECTED_KNOWN) {
+                return {.phase = IdentityOperationPhase::CONFLICT, .op_id = m_entry->op_id,
+                    .error = "Another Identity operation is unresolved"};
+            }
+        }
+        const auto previous = Reconcile(*m_entry);
+        // A finalized NameCommit may have expired and been pruned from state.
+        // NameService retries the same saved claim in that case, with the next
+        // Identity nonce, so a resolved journal must not make that retry idempotent.
+        if (same_request && (previous.phase != IdentityOperationPhase::FINALIZED ||
+            kind != IdentityOperationKind::NAME_COMMIT)) return previous;
+        if (m_entry) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = previous.op_id,
+            .error = previous.error.empty() ? "Another Identity operation is unresolved" : previous.error};
     }
     const auto loaded = m_runtime.GetStore().LoadState();
     const auto* record = loaded && loaded.state ? loaded.state->identities.Find(*account) : nullptr;
@@ -463,7 +480,6 @@ IdentityOperationResult IdentityOperationCoordinator::GetStatus(const uint256& o
 {
     std::lock_guard lock(m_mutex);
     if (!LoadJournal()) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = op_id, .error = m_load_error};
-    if (m_entry && m_entry->op_id == op_id) return Reconcile(*m_entry);
     const auto status = m_runtime.GetOperationStatus(op_id);
     if (status.kind == OperationStatusKind::FINALIZED) return {.phase = IdentityOperationPhase::FINALIZED,
         .op_id = op_id, .finalized_height = status.finalized_height};
@@ -471,7 +487,8 @@ IdentityOperationResult IdentityOperationCoordinator::GetStatus(const uint256& o
         .op_id = op_id, .error = "Operation was rejected"};
     if (status.kind == OperationStatusKind::LOCAL_PENDING || status.kind == OperationStatusKind::ACCEPTED_REMOTE)
         return {.phase = IdentityOperationPhase::ACCEPTED, .op_id = op_id};
-    return {.phase = IdentityOperationPhase::UNCERTAIN, .op_id = op_id, .error = "Operation status is unknown"};
+    return {.phase = IdentityOperationPhase::UNCERTAIN, .op_id = op_id,
+        .error = "Operation status is unknown; exact bytes remain journaled"};
 }
 
 } // namespace cybou

@@ -35,7 +35,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     std::filesystem::create_directories(root);
 
     std::array<unsigned char, 32> validator_seed{};
-    validator_seed[0] = 0x67;
+    validator_seed[0] = 0xA7;
     const auto genesis = cybou::CreateDevGenesisState();
     auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey());
     definition.protocol_parameters.account_creation_work_bits = 0;
@@ -62,7 +62,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     asio::io_context server_io;
     tcp::acceptor acceptor{server_io, tcp::endpoint{asio::ip::address_v4::loopback(), 0}};
     const uint16_t port = acceptor.local_endpoint().port();
-    std::array<std::vector<unsigned char>, 3> received_frames;
+    std::array<std::vector<unsigned char>, 2> received_frames;
     std::thread remote([&] {
         for (auto& frame : received_frames) {
             tcp::socket socket{server_io};
@@ -76,7 +76,10 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             const size_t offset = frame.size();
             frame.resize(offset + payload_size);
             asio::read(socket, asio::buffer(frame.data() + offset, payload_size));
-            // Closing without the response models a lost acknowledgment after delivery.
+            // Reset after consuming the full request to model a lost acknowledgment
+            // after delivery, without leaving the synchronous client read hanging.
+            socket.set_option(tcp::socket::linger{true, 0});
+            socket.close();
         }
     });
 
@@ -137,7 +140,6 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
         BOOST_CHECK(wallet_attempt.phase == cybou::IdentityOperationPhase::CONFLICT);
         BOOST_CHECK(wallet_attempt.op_id == operation_id);
         BOOST_CHECK(received_frames[0] == received_frames[1]);
-        BOOST_CHECK(received_frames[1] == received_frames[2]);
         const auto status = coordinator.GetStatus(operation_id);
         BOOST_CHECK(status.phase == cybou::IdentityOperationPhase::UNCERTAIN);
         const auto loaded = restarted.GetStore().LoadState();
@@ -274,11 +276,11 @@ BOOST_AUTO_TEST_CASE(restore_is_local_and_rotation_uses_the_identity_journal)
     cybou::crypto::CleanseMemory(entropy->data(), entropy->size());
     const auto pending = identity->RotateIdentitySync(new_phrase, "correct horse battery staple");
     BOOST_REQUIRE(pending.phase == cybou::IdentityOperationPhase::ACCEPTED);
-    BOOST_REQUIRE(std::filesystem::exists(fixture.directory / "identity-operation.cyiop"));
+    BOOST_REQUIRE(std::filesystem::exists(fixture.directory / "runtime" / "identity-operation.cyiop"));
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
     const auto finalized = identity->ResumeIdentityRotationSync("correct horse battery staple");
     BOOST_REQUIRE(finalized.phase == cybou::IdentityOperationPhase::FINALIZED);
-    BOOST_CHECK(!std::filesystem::exists(fixture.directory / "identity-operation.cyiop"));
+    BOOST_CHECK(!std::filesystem::exists(fixture.directory / "runtime" / "identity-operation.cyiop"));
     const auto state_after = fixture.runtime->GetStore().LoadState();
     BOOST_REQUIRE(state_after && state_after.state);
     const auto* record_after = state_after.state->identities.Find(*account);

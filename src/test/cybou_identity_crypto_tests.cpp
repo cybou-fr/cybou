@@ -29,7 +29,7 @@ BOOST_AUTO_TEST_CASE(hybrid_root_and_device_are_deterministic_and_both_required)
         SHA256(key->ml_dsa.data(), key->ml_dsa.size(), digest.data());
         const std::string_view expected = purpose == cybou::IdentityKeyPurpose::RECOVERY_ROOT
             ? "f06127c8c8fd51c9597f84d1a21751fa5fe616090d48af934b79f15a93bb7c60"
-            : "6379ebbaf5a9bfe23d27a81c06821f76b93d8a8741b4b88fd42db415489a3ff2";
+            : "9823e088677e2c1a44d61a5aa6c456aa6ad4318f2cfef2f8602388275f82f9b2";
         BOOST_CHECK_EQUAL(cybou::test::Hex(digest), expected);
         const auto signature = cybou::SignIdentityMessage(secret, purpose, message);
         BOOST_REQUIRE(signature);

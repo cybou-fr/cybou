@@ -305,7 +305,11 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
     const IdentityAuthorization next_auth{*new_recovery, *new_authorization};
-    const auto next_binding = test::MakeIdentityKemBinding(network_id, account, next_auth, 1);
+    const auto account_bytes = account.Value();
+    const auto next_package_id = ComputeIdentityKemPackageCommitment(
+        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{account_bytes.begin(), 32}, 1, *new_package);
+    BOOST_REQUIRE(next_package_id);
     IdentityRotate rotate{
         .account_id = account,
         .new_recovery_key = *new_recovery,
@@ -339,9 +343,9 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     BOOST_REQUIRE(record);
     BOOST_CHECK(record->recovery_key == *new_recovery);
     BOOST_CHECK(record->authorization_key == *new_authorization);
-    BOOST_CHECK(record->kem_package_id == next_binding.package_id);
+    BOOST_CHECK(record->kem_package_id == *next_package_id);
     BOOST_CHECK_EQUAL(record->key_epoch, 1U);
-    BOOST_CHECK_EQUAL(record->nonce, 0U);
+    BOOST_CHECK_EQUAL(record->nonce, 1U);
     const auto new_recovery_id = ComputeRecoveryKeyId(*new_recovery);
     BOOST_REQUIRE(new_recovery_id);
     BOOST_CHECK(rotated.state->identities.FindByRecoveryKeyId(*new_recovery_id) == account);

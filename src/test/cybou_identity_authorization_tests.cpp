@@ -27,7 +27,7 @@ BOOST_AUTO_TEST_CASE(canonical_hybrid_authorization_is_bounded_and_distinct)
     const auto bytes = cybou::SerializeIdentityAuthorization(auth);
     BOOST_REQUIRE(bytes);
     BOOST_CHECK_EQUAL(bytes->size(), cybou::IDENTITY_AUTHORIZATION_SIZE);
-    BOOST_CHECK_EQUAL((*bytes)[0], 2);
+    BOOST_CHECK_EQUAL((*bytes)[0], 3);
     BOOST_CHECK_EQUAL((*bytes)[1], 1);
     BOOST_CHECK_EQUAL((*bytes)[1986], 1);
     const auto decoded = cybou::DeserializeIdentityAuthorization(*bytes);
@@ -38,7 +38,7 @@ BOOST_AUTO_TEST_CASE(canonical_hybrid_authorization_is_bounded_and_distinct)
     BOOST_CHECK(decoded->authorization_key.ml_dsa == device->ml_dsa);
     const auto commitment = cybou::ComputeIdentityAuthorizationCommitment(auth);
     BOOST_REQUIRE(commitment);
-    BOOST_CHECK_EQUAL(cybou::test::Hex(*commitment), "ea14a9dce2dd3d5e7aa0051731a41335b7729759e19d05e5647c5421061cd9bb");
+    BOOST_CHECK_EQUAL(cybou::test::Hex(*commitment), "ce6cf18398b0df26a294d81e787b3d5bd6e3eb8af2b7d0bc2d61b25958334a19");
     BOOST_CHECK(cybou::ComputeIdentityAuthorizationCommitment(*decoded) == commitment);
 
     auto altered = *bytes;

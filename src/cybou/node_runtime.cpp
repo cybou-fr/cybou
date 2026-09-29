@@ -222,11 +222,11 @@ OperationStatus CybouNodeRuntime::GetOperationStatus(const uint256& op_id) const
 {
     if (op_id.IsNull()) return {};
     std::lock_guard lock(m_mutex);
-    if (m_authority_node && m_authority_node->HasPendingOperation(op_id)) {
-        return {.kind = OperationStatusKind::LOCAL_PENDING};
-    }
     if (const auto height = m_store.GetFinalizedOperationHeight(op_id)) {
         return {.kind = OperationStatusKind::FINALIZED, .finalized_height = *height};
+    }
+    if (m_authority_node && m_authority_node->HasPendingOperation(op_id)) {
+        return {.kind = OperationStatusKind::LOCAL_PENDING};
     }
     const auto known = m_recent_operation_status.find(op_id);
     if (known != m_recent_operation_status.end()) return known->second;
@@ -238,8 +238,7 @@ IdentityOperationCoordinator& CybouNodeRuntime::GetIdentityOperationCoordinator(
     std::lock_guard lock(m_mutex);
     if (!m_identity_operation_coordinator) {
         m_identity_operation_coordinator = std::make_unique<IdentityOperationCoordinator>(
-            *this, keystore, m_config.memory_only ? std::filesystem::path{} :
-                m_config.data_dir / "identity-operation.cyiop");
+            *this, keystore, m_config.data_dir / "identity-operation.cyiop");
     }
     return *m_identity_operation_coordinator;
 }
