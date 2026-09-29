@@ -672,4 +672,32 @@ BOOST_AUTO_TEST_CASE(staged_content_stays_pinned_until_protected_then_is_evictab
     for (const auto& leaf : placement->leaves) BOOST_CHECK(blobs.Has(leaf));
 }
 
+BOOST_AUTO_TEST_CASE(recovery_bridge_after_application_db_loss)
+{
+    CybouServiceTestFixture fixture;
+    ProviderNetwork network{fixture, 3};
+    Party owner{fixture, network, "owner"};
+    network.Sync();
+    const auto message = Message(owner.Account(), "Before", "db loss");
+    BOOST_REQUIRE(owner.publication->PublishMail("mail-before", message).phase ==
+        cybou::PublicationJobPhase::WAITING_FINALITY);
+    Finalize(fixture, network);
+    BOOST_REQUIRE(owner.publication->ProcessDurability(*owner.storage).front().second.phase ==
+        cybou::PublicationJobPhase::PROTECTED);
+    owner.DestroyApplicationDb(fixture, network);
+    BOOST_REQUIRE(owner.application->Scan().Complete());
+
+    auto next_entropy = cybou::GenerateRecoveryEntropy();
+    BOOST_REQUIRE(next_entropy);
+    const std::span<const unsigned char, 32> next{next_entropy->data(), 32};
+    const auto bridge = owner.publication->PublishRecoveryBridge("bridge-after-loss", next);
+    BOOST_REQUIRE_MESSAGE(bridge.phase == cybou::PublicationJobPhase::WAITING_FINALITY,
+        "phase " << static_cast<int>(bridge.phase) << " " << bridge.error);
+    Finalize(fixture, network);
+    for (const auto& [id, status] : owner.publication->ProcessDurability(*owner.storage)) {
+        BOOST_CHECK_MESSAGE(status.phase == cybou::PublicationJobPhase::PROTECTED, id);
+    }
+    BOOST_CHECK(owner.publication->VerifyRecoveryBridge("bridge-after-loss", next, *owner.storage));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

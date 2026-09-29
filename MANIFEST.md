@@ -18,7 +18,7 @@ editing an included file.
 | docs/cybou/02_ARCHITECTURE.md | 115 | 49e778c2d64c69ce |
 | docs/cybou/05_CHAIN_STATE.md | 84 | 2b2be7bf69689f96 |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 43 | fbe559efaba33637 |
-| docs/cybou/08_P2P.md | 140 | ca6486e66babfed2 |
+| docs/cybou/08_P2P.md | 146 | 795ce7420f3221dd |
 | docs/cybou/09_CRYPTO_PQ.md | 16 | 721054f0708a8051 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | a76de60933486847 |
 | docs/cybou/18_ECONOMICS_FEES.md | 90 | c73eb172b272966c |
@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 69 | 7e45af531685ed8b |
 | docs/cybou/24_DECISIONS.md | 60 | c01c9836db804131 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 78 | bb945b66a957a428 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 111 | 4f5c4d39c4b07efd |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 135 | 55dde467c7b1769f |
 | docs/cybou/37_FRANCE_EU_GLOBAL_STRATEGY.md | 96 | 99058ca64593188d |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 28 | ee4d307774069584 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
@@ -61,7 +61,7 @@ editing an included file.
 | docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 116 | 524004c58d7d8732 |
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 35 | 870d2d08b963af58 |
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 34 | feaf7a136cba1025 |
-| docs/cybou/APPLICATION_DATA_PLANE.md | 448 | c769fcd1948d5489 |
+| docs/cybou/APPLICATION_DATA_PLANE.md | 455 | d0cdbe56ba39bb43 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 85 | f32d4f33bab42f19 |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/POA_FINALITY_VECTORS.md | 106 | 6bcebb272715c313 |

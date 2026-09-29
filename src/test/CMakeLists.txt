@@ -237,6 +237,13 @@ target_link_libraries(cybou-storage-smoke
   Boost::headers
 )
 
+add_executable(cybou-storage-soak cybou_storage_soak.cpp)
+target_link_libraries(cybou-storage-soak
+  cybou_node
+  core_interface
+  Boost::headers
+)
+
 if(ENABLE_IPC)
   add_subdirectory(${PROJECT_SOURCE_DIR}/src/ipc/test ipc)
 endif()

@@ -77,6 +77,30 @@ Current `main` implements the canonical low-level substrate:
 - only after the soak: bind immutable Authority rules to the network and
   enforce Authority-derived generic resource budgets.
 
+### Multi-process failure soak (CI, 2026-09-30)
+
+`test/cybou_storage_soak.py` runs a real PoA finalizer, three real
+`cybou-node provide` processes and a light client under the Beta target
+(2 remote replicas), all over CYP2. Every run passes this sequence:
+
+1. A replica holder is killed; audit detects the loss and repairs elsewhere.
+2. The provider restarts and returns under the same ProviderID.
+3. A provider blob is corrupted on disk; audit drops it and repairs until
+   every recorded replica serves valid bytes.
+4. The finalizer restarts; the client reconnects for sync and submission.
+5. `app.db` is deleted; the projection and placements are rebuilt from
+   history and provider proofs.
+6. The recovery phrase is rotated (RecoveryBridge PROTECTED and verified
+   first) and `app.db` is rebuilt under the new keys.
+7. A clean restore runs on a fresh node with only the new phrase; both the
+   pre-rotation and post-rotation files return with exact bytes from
+   providers.
+
+It found a client bug: after a finalizer restart a light node connected only
+to storage peers reported submissions as rejected. The configured finalizer is
+now always tried, and no acknowledgment is treated as uncertain delivery with
+the exact bytes retained. The soak takes about 45 seconds.
+
 ### Bounded DEV canary evidence (2026-09-29 to 2026-09-30)
 
 - A finalized private Files RootPublication reached the development target of

@@ -70,7 +70,7 @@ jobs:
             -DWITH_ZMQ=OFF
 
       - name: Build CYBOU core test, node and smoke binaries
-        run: cmake --build build-ci --target cybou-core-test cybou-node cybou-storage-smoke --parallel 2
+        run: cmake --build build-ci --target cybou-core-test cybou-node cybou-storage-smoke cybou-storage-soak --parallel 2
 
       - name: Run CYBOU protocol tests
         run: |
@@ -89,3 +89,7 @@ jobs:
       - name: PoA finalizer + storage provider multi-process smoke
         run: |
           python3 test/cybou_storage_smoke.py build-ci/bin/cybou-node build-ci/bin/cybou-storage-smoke
+
+      - name: Multi-process storage failure soak (Beta target, 3 providers)
+        run: |
+          python3 test/cybou_storage_soak.py build-ci/bin/cybou-node build-ci/bin/cybou-storage-soak
