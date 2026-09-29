@@ -15,6 +15,11 @@ compatibility.
   rollback, restart with systemd, then verify service health, listening port and
   advancing finalized height.
 - Do not reset DEV state or replace the PoA key during a routine deployment.
+- DEV also runs two storage providers, `cybou-provider-1.service` and
+  `cybou-provider-2.service` (`cybou-node provide`, P2P ports 29471/29481,
+  state in `/var/lib/cybou/provider-N-db`). The authority advertises them via
+  `/var/lib/cybou/peers.txt`. Restart them with `cybou-node.service` after a
+  rebuild and verify they follow the finalized height.
 
 ## Identity
 
