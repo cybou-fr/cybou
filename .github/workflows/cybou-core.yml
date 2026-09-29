@@ -69,8 +69,8 @@ jobs:
             -DWITH_CCACHE=OFF \
             -DWITH_ZMQ=OFF
 
-      - name: Build CYBOU core test and node binaries
-        run: cmake --build build-ci --target cybou-core-test cybou-node --parallel 2
+      - name: Build CYBOU core test, node and smoke binaries
+        run: cmake --build build-ci --target cybou-core-test cybou-node cybou-storage-smoke --parallel 2
 
       - name: Run CYBOU protocol tests
         run: |
@@ -86,6 +86,6 @@ jobs:
           trap 'kill "$producer_pid" 2>/dev/null || true' EXIT
           build-ci/bin/cybou-node sync /tmp/net.def /tmp/cybou-observer 127.0.0.1 29460 1
 
-      - name: Four-process BFT smoke test
+      - name: PoA finalizer + storage provider multi-process smoke
         run: |
-          python3 test/cybou_four_process_smoke.py build-ci/bin/cybou-node
+          python3 test/cybou_storage_smoke.py build-ci/bin/cybou-node build-ci/bin/cybou-storage-smoke

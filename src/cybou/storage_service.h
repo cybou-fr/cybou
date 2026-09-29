@@ -124,6 +124,12 @@ public:
      */
     PublicationDurability AuditSome(const uint256& publication_operation_id, std::size_t max_chunks);
     std::optional<PublicationDurability> GetDurability(const uint256& publication_operation_id);
+    /** Read-only placement view for diagnostics and smoke tests. */
+    struct PlacementView {
+        std::vector<ChunkId> leaves;
+        std::vector<std::vector<StorageEndpoint>> replicas;
+    };
+    std::optional<PlacementView> DescribePlacement(const uint256& publication_operation_id);
 
     /** Local encrypted blob, else the first BLAKE3-valid provider copy (cached locally). */
     std::optional<std::vector<unsigned char>> Fetch(const ChunkId& chunk_id);

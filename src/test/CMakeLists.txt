@@ -228,6 +228,14 @@ target_link_libraries(cybou-core-test
   Boost::headers
 )
 
+# Multi-process PoA + storage provider smoke client (test/cybou_storage_smoke.py).
+add_executable(cybou-storage-smoke cybou_storage_smoke.cpp)
+target_link_libraries(cybou-storage-smoke
+  cybou_node
+  core_interface
+  Boost::headers
+)
+
 if(ENABLE_IPC)
   add_subdirectory(${PROJECT_SOURCE_DIR}/src/ipc/test ipc)
 endif()

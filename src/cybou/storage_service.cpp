@@ -438,6 +438,14 @@ std::optional<PublicationDurability> StorageService::GetDurability(const uint256
     return Summarize(*placement);
 }
 
+std::optional<StorageService::PlacementView> StorageService::DescribePlacement(const uint256& operation_id)
+{
+    std::lock_guard lock{m_mutex};
+    auto placement = Load(operation_id);
+    if (!placement) return std::nullopt;
+    return PlacementView{std::move(placement->leaves), std::move(placement->replicas)};
+}
+
 std::optional<std::vector<unsigned char>> StorageService::Fetch(const ChunkId& chunk_id)
 {
     std::lock_guard lock{m_mutex};
