@@ -201,6 +201,18 @@ std::optional<std::vector<unsigned char>> PrivateApplicationStore::Get(const std
     }
 }
 
+bool PrivateApplicationStore::Has(const std::string_view name) const
+{
+    std::lock_guard lock{m_mutex};
+    auto key = AccessKey();
+    KeyCleaner cleanse{key};
+    if (!key) return false;
+    const auto record_key = RecordKey(*key, name);
+    if (!record_key) return false;
+    try { return m_db->Exists(*record_key); }
+    catch (...) { return false; }
+}
+
 bool PrivateApplicationStore::Erase(const std::string_view name)
 {
     std::lock_guard lock{m_mutex};

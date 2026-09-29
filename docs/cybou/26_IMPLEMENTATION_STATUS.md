@@ -20,6 +20,8 @@ Current `main` implements the canonical low-level substrate:
 - strict canonical-CBOR private Mail, Files and RecoveryBridge schema codecs;
 - local multi-tree publication staging with one durable chunk-authorization
   proof index and no pre-finality provider admission;
+- PublicationService: recipient plus mandatory self capsule, durable private
+  job record and exact-operation resume through IdentityOperationCoordinator;
 - CYP2 verified block sync and content-addressed PUT/GET;
 - removal of legacy BFT, ValidatorSet, MailTx and indexed StorageObject runtime
   paths.
@@ -28,8 +30,6 @@ Current `main` implements the canonical low-level substrate:
 
 - Mail/Files semantic records and indexing atop the encrypted Application DB;
 - ApplicationService publication scanning/indexing;
-- PublicationService capsule creation, durable job lifecycle and coordinated
-  RootPublication submission/finality flow;
 - StorageService provider placement, replication, health, audit and repair;
 - real private Mail backend over RootPublication;
 - real private Files mutation backend;

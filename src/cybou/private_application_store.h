@@ -37,6 +37,7 @@ public:
     /** False when locked, switched to another key, or storage fails. */
     bool Put(std::string_view name, std::span<const unsigned char> plaintext);
     std::optional<std::vector<unsigned char>> Get(std::string_view name) const;
+    bool Has(std::string_view name) const;
     bool Erase(std::string_view name);
     bool IsUnlocked() const;
 

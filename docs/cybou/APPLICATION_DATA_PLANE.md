@@ -53,6 +53,14 @@ private Mail/Files intent
 It may use local helpers for bundle staging and proof construction, but those
 helpers are not protocol entities.
 
+The implemented `PublicationService` turns a prepared bundle into a
+RootPublication with an optional recipient capsule and a mandatory self
+capsule, persists the exact publication intent in the Application DB before
+signing, and submits through `IdentityOperationCoordinator`. Resume never
+builds a replacement operation while the recorded one is unresolved. Job
+phases are WAITING_FINALITY, SECURING (finalized, awaiting remote durability)
+and NEEDS_ATTENTION.
+
 ### StorageService
 
 Owns content transport and durability:
