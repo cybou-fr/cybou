@@ -16,7 +16,9 @@ recreating inherited Bitcoin facilities that the active protocol does not use.
 - `cybou_base` owns the shared `uint256.cpp` object and has no direct
   `bitcoin_util` link.
 - `cybou_node` no longer contains the unused CYBOU GCS/compact-filter clone;
-  block filtering is not part of the active CYP2 protocol.
+  block filtering is not part of the active CYP2 protocol. Its direct
+  `bitcoin_crypto` link remains required by inherited secure serialization and
+  secret-cleansing symbols used by the node and local database adapter.
 
 ## Remaining inherited boundary
 
