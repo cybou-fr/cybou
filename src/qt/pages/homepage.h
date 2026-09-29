@@ -5,18 +5,28 @@
 #ifndef BITCOIN_QT_PAGES_HOMEPAGE_H
 #define BITCOIN_QT_PAGES_HOMEPAGE_H
 
+#include <qt/cybouui.h>
+
+#include <QCoreApplication>
 #include <QWidget>
 
 #include <functional>
 
 class CybouDesktopModel;
-class QLabel;
-class QPushButton;
-class QStackedWidget;
 class OnboardingView;
+class QLabel;
+class QStackedWidget;
+class QVBoxLayout;
 
+/**
+ * Home: onboarding until an Identity is active, then an Identity-centred
+ * overview (Mail, Files, Wallet, recent activity). Home is not a node
+ * dashboard; technical status lives in Diagnostics.
+ */
 class HomePage : public QWidget
 {
+    Q_DECLARE_TR_FUNCTIONS(HomePage)
+
 public:
     HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_requested,
         std::function<void()> identity_requested, std::function<void()> wallet_requested,
@@ -28,29 +38,26 @@ private:
     QStackedWidget* m_stack{nullptr};
     OnboardingView* m_onboarding{nullptr};
     QWidget* m_dashboard{nullptr};
-    QLabel* m_identity_name;
-    QLabel* m_identity_subtitle;
-    QLabel* m_chip_protected;
-    QLabel* m_chip_ready;
-    QPushButton* m_share_button;
-    QPushButton* m_manage_button;
-    QLabel* m_mail_metric;
-    QWidget* m_mail_avatars;
-    QLabel* m_files_metric;
-    QLabel* m_files_caption;
-    QWidget* m_activity_rows;
-    QLabel* m_activity_empty;
-    const std::function<void()> m_diagnostics_requested;
+    QLabel* m_identity_name{nullptr};
+    QLabel* m_identity_state{nullptr};
+    QLabel* m_restore_banner{nullptr};
+    QLabel* m_mail_value{nullptr};
+    QLabel* m_mail_caption{nullptr};
+    QLabel* m_files_value{nullptr};
+    QLabel* m_files_caption{nullptr};
+    QLabel* m_wallet_value{nullptr};
+    QLabel* m_wallet_caption{nullptr};
+    QVBoxLayout* m_activity_rows{nullptr};
+    QLabel* m_activity_empty{nullptr};
     const std::function<void()> m_identity_requested;
     const std::function<void()> m_wallet_requested;
     const std::function<void()> m_mail_requested;
     const std::function<void()> m_files_requested;
 
+    QWidget* buildDashboard();
+    QWidget* buildSummaryCard(const QString& title, CybouUi::Glyph glyph, CybouUi::Tint tint,
+        QLabel*& value, QLabel*& caption, const std::function<void()>& open);
     void refresh();
-    QWidget* buildIdentityHero();
-    QWidget* buildMailCard();
-    QWidget* buildFilesCard();
-    QWidget* buildActivityCard();
 };
 
 #endif // BITCOIN_QT_PAGES_HOMEPAGE_H
