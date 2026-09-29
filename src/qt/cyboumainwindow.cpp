@@ -127,9 +127,10 @@ CybouMainWindow::CybouMainWindow(std::filesystem::path data_directory, QWidget* 
     const int screenshot_height = qEnvironmentVariableIntValue("CYBOU_SCREENSHOT_HEIGHT");
     resize(screenshot_width > 0 ? screenshot_width : 1280,
         screenshot_height > 0 ? screenshot_height : 860);
+    CybouTheme::setAppearance(CybouTheme::savedAppearance());
+    applyStyle();
     buildShell();
     buildMenus();
-    applyStyle();
     buildTrayMenu();
 
     if (m_desktop_model->fixtureMode()) {
@@ -413,6 +414,7 @@ void CybouMainWindow::buildShell()
     auto* identity = new IdentityPage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
     auto* diagnostics = new DiagnosticsPage{m_desktop_model, [this] { showDebugWindow(); }, nullptr};
     auto* settings = new SettingsPage{m_desktop_model, [this] { showPage(CybouPage::Diagnostics); }, nullptr};
+    settings->onAppearanceChanged = [this] { reloadAppearance(); };
     home->onCompose = [this, mail] {
         showPage(CybouPage::Mail);
         mail->openCompose();
@@ -714,6 +716,23 @@ void CybouMainWindow::closeEvent(QCloseEvent* event)
     }
     Q_EMIT quitRequested();
     event->accept();
+}
+
+void CybouMainWindow::reloadAppearance()
+{
+    const auto current = static_cast<CybouPage>(currentPageIndex());
+    CybouTheme::setAppearance(CybouTheme::savedAppearance());
+    applyStyle();
+    // Pages bake colors into pixmaps and inline styles: rebuild them. All
+    // product state lives in the model, so nothing is lost.
+    if (QWidget* old = takeCentralWidget()) old->deleteLater();
+    for (auto* button : m_navigation->buttons()) m_navigation->removeButton(button);
+    m_page_widgets.clear();
+    m_pages = new QStackedWidget{this};
+    m_sidebar_compact = false;
+    buildShell();
+    setSidebarCompact(width() < 1180);
+    showPage(current);
 }
 
 void CybouMainWindow::applyStyle()

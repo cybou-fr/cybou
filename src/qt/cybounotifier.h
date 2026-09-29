@@ -37,7 +37,8 @@ public:
             "QFrame#notifier QPushButton { background: transparent; border: none; color: %2; font-weight: 700;"
             " padding: 4px 8px; min-height: 0px; }"
             "QFrame#notifier QPushButton:hover { color: white; }")
-            .arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name(), CybouTheme::color(CybouTheme::LOGO_MINT).name()));
+            .arg(CybouTheme::isDark() ? QStringLiteral("#3a3f49") : CybouTheme::color(CybouTheme::TEXT_PRIMARY).name(),
+                CybouTheme::color(CybouTheme::LOGO_MINT).name()));
         auto* layout = new QHBoxLayout{this};
         layout->setContentsMargins(18, 10, 10, 10);
         layout->setSpacing(14);

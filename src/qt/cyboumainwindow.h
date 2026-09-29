@@ -52,6 +52,8 @@ public:
     void startRuntime();
     void showDebugWindow();
     void showPage(CybouPage page);
+    /** Rebuilds the shell so every page picks up a new appearance. */
+    void reloadAppearance();
 
     /** Page access used by desktop shell smoke tests. */
     CybouDesktopModel* desktopModel() const { return m_desktop_model; }

@@ -21,6 +21,7 @@
 
 #include <QApplication>
 #include <QAbstractButton>
+#include <QPalette>
 #include <QCompleter>
 #include <QMenuBar>
 #include <QLabel>
@@ -114,6 +115,8 @@ CybouShellTests::~CybouShellTests() = default;
 
 std::unique_ptr<CybouMainWindow> CybouShellTests::makeWindow()
 {
+    // Tests render the light appearance unless a test forces another.
+    if (!qEnvironmentVariableIsSet("CYBOU_APPEARANCE")) qputenv("CYBOU_APPEARANCE", "light");
     return std::make_unique<CybouMainWindow>(std::filesystem::path{});
 }
 
@@ -850,6 +853,30 @@ void CybouShellTests::globalSearchFindsMailAndFiles()
     auto* mail = dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
     QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-dinner")});
     QVERIFY(window->menuBar()->isHidden());
+}
+
+void CybouShellTests::darkAppearanceResolvesTokens()
+{
+    ScopedEnvironment appearance{"CYBOU_APPEARANCE", "dark"};
+    auto window = makeWindow();
+    QVERIFY(CybouTheme::isDark());
+    // Tokens resolve to dark values; the sheet has no unresolved tokens.
+    QVERIFY(CybouTheme::color(CybouTheme::CANVAS).lightness() < 60);
+    QVERIFY(CybouTheme::color(CybouTheme::TEXT_PRIMARY).lightness() > 200);
+    const QString sheet = CybouTheme::applicationStyleSheet();
+    QVERIFY(!sheet.contains(QStringLiteral("@")));
+    QVERIFY(qApp->palette().color(QPalette::Base).lightness() < 60);
+    // Live reload keeps state and page.
+    QVERIFY(CybouUiFixtures::apply(*window->desktopModel(), QStringLiteral("active")));
+    window->showPage(CybouPage::Files);
+    window->reloadAppearance();
+    QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Files));
+    QCOMPARE(window->pageCount(), 7);
+    window.reset();
+    qunsetenv("CYBOU_APPEARANCE");
+    CybouTheme::setAppearance(CybouTheme::Appearance::Light);
+    CybouTheme::applyTo(*qApp);
+    QVERIFY(!CybouTheme::isDark());
 }
 
 void CybouShellTests::themeResolvesAllTokens()

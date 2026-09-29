@@ -12,6 +12,7 @@
 
 class CybouDesktopModel;
 class QCheckBox;
+class QComboBox;
 class QLabel;
 
 /** Settings: General, Privacy, Files, Storage contribution, Advanced. */
@@ -23,6 +24,9 @@ public:
     SettingsPage(CybouDesktopModel* model, std::function<void()> diagnostics_requested,
         QWidget* parent = nullptr);
 
+    /** Set by the shell: re-renders the app after an appearance change. */
+    std::function<void()> onAppearanceChanged;
+
     /** QSettings keys shared with the shell. */
     static QString runInBackgroundKey() { return QStringLiteral("desktop/run_in_background"); }
     static QString mailPreviewsKey() { return QStringLiteral("privacy/mail_previews"); }
@@ -30,6 +34,7 @@ public:
 
 private:
     CybouDesktopModel* const m_model;
+    QComboBox* m_appearance{nullptr};
     QCheckBox* m_start_with_windows{nullptr};
     QCheckBox* m_run_in_background{nullptr};
     QCheckBox* m_mail_previews{nullptr};

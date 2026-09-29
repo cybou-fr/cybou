@@ -59,7 +59,26 @@ inline constexpr QRgb BADGE_RED = 0xef4444;
 inline constexpr QRgb LOGO_TILE_BG     = 0x0a0b0e; // near-black tile background
 inline constexpr QRgb LOGO_TILE_BORDER = 0x26272b; // ~rgba(255,255,255,0.12) on the tile
 
-inline QColor color(QRgb rgb) { return QColor{rgb}; }
+/**
+ * Appearance of the desktop. The palette constants above are tokens (their
+ * light values); color() resolves a token for the active appearance, so the
+ * same code renders light or dark.
+ */
+enum class Appearance {
+    System,
+    Light,
+    Dark,
+};
+
+/** Saved preference (Settings → Appearance), CYBOU_APPEARANCE overrides. */
+Appearance savedAppearance();
+void saveAppearance(Appearance appearance);
+/** Resolves System against the OS color scheme and activates it. */
+void setAppearance(Appearance appearance);
+bool isDark();
+
+/** Token -> color for the active appearance. */
+QColor color(QRgb token);
 
 /** Application stylesheet built from the canonical palette. */
 QString applicationStyleSheet();

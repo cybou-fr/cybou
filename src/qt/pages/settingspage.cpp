@@ -9,6 +9,8 @@
 #include <qt/cybouui.h>
 
 #include <QCheckBox>
+#include <QComboBox>
+#include <QTimer>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileDialog>
@@ -99,6 +101,27 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
         [](bool on) { QSettings{}.setValue(runInBackgroundKey(), on); });
     general->addWidget(m_run_in_background);
 
+    auto* appearance = Section(root, tr("Appearance"), {}, this);
+    auto* appearance_row = new QHBoxLayout;
+    auto* appearance_caption = new QLabel{tr("Theme"), this};
+    appearance_caption->setObjectName(QStringLiteral("rowSub"));
+    appearance_row->addWidget(appearance_caption);
+    m_appearance = new QComboBox{this};
+    m_appearance->setObjectName(QStringLiteral("appearanceMode"));
+    m_appearance->setAccessibleName(tr("Theme"));
+    m_appearance->addItem(tr("Same as Windows"), static_cast<int>(CybouTheme::Appearance::System));
+    m_appearance->addItem(tr("Light"), static_cast<int>(CybouTheme::Appearance::Light));
+    m_appearance->addItem(tr("Dark"), static_cast<int>(CybouTheme::Appearance::Dark));
+    m_appearance->setMinimumWidth(200);
+    appearance_row->addWidget(m_appearance);
+    appearance_row->addStretch();
+    appearance->addLayout(appearance_row);
+    connect(m_appearance, &QComboBox::activated, this, [this](int index) {
+        CybouTheme::saveAppearance(static_cast<CybouTheme::Appearance>(m_appearance->itemData(index).toInt()));
+        // Rebuild after this slot returns; the combo box itself is replaced.
+        QTimer::singleShot(0, this, [fn = onAppearanceChanged] { if (fn) fn(); });
+    });
+
     auto* privacy = Section(root, tr("Privacy"), {}, this);
     m_mail_previews = new QCheckBox{tr("Show Mail previews in notifications"), this};
     m_mail_previews->setObjectName(QStringLiteral("mailPreviews"));
@@ -160,6 +183,8 @@ void SettingsPage::refresh()
     const QSignalBlocker b1{m_start_with_windows};
     const QSignalBlocker b2{m_run_in_background};
     const QSignalBlocker b3{m_mail_previews};
+    const QSignalBlocker b4{m_appearance};
+    m_appearance->setCurrentIndex(m_appearance->findData(static_cast<int>(CybouTheme::savedAppearance())));
     m_start_with_windows->setChecked(StartsWithWindows());
     m_run_in_background->setChecked(QSettings{}.value(runInBackgroundKey(), false).toBool());
     m_mail_previews->setChecked(QSettings{}.value(mailPreviewsKey(), false).toBool());

@@ -4,6 +4,8 @@
 
 #include <qt/recoveryphrasedialog.h>
 
+#include <qt/cyboutheme.h>
+
 #include <QApplication>
 #include <QClipboard>
 #include <QDesktopServices>
@@ -38,7 +40,7 @@ QLabel* warningLabel(const QString& text, QWidget* parent)
 {
     auto* label = new QLabel{text, parent};
     label->setWordWrap(true);
-    label->setStyleSheet(QStringLiteral("color: #b45309;"));
+    label->setStyleSheet(QStringLiteral("color: %1;").arg(CybouTheme::color(CybouTheme::AMBER).name()));
     return label;
 }
 
@@ -196,10 +198,10 @@ void RecoveryPhraseDialog::setFeedback(const QString& text, FeedbackTone tone)
 {
     switch (tone) {
     case FeedbackTone::Success:
-        m_feedback->setStyleSheet(QStringLiteral("color: #15803d;"));
+        m_feedback->setStyleSheet(QStringLiteral("color: %1;").arg(CybouTheme::color(CybouTheme::SUCCESS).name()));
         break;
     case FeedbackTone::Warning:
-        m_feedback->setStyleSheet(QStringLiteral("color: #b45309;"));
+        m_feedback->setStyleSheet(QStringLiteral("color: %1;").arg(CybouTheme::color(CybouTheme::AMBER).name()));
         break;
     case FeedbackTone::Neutral:
         m_feedback->setStyleSheet(QString());

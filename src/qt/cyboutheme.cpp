@@ -6,6 +6,10 @@
 
 #include <QApplication>
 #include <QFile>
+#include <QHash>
+#include <QPalette>
+#include <QSettings>
+#include <QStyleHints>
 #include <QPainter>
 #include <QPen>
 #include <QPixmap>
@@ -30,10 +34,94 @@ QString iconResource(CybouTheme::NavIcon icon)
     return {};
 }
 
+bool g_dark = false;
+
+/** Dark values for the light palette tokens (same hue family, WCAG-minded contrast). */
+const QHash<QRgb, QRgb>& DarkPalette()
+{
+    using namespace CybouTheme;
+    static const QHash<QRgb, QRgb> map{
+        {CANVAS, 0x1b1d22},
+        {SUBTLE, 0x131418},
+        {SURFACE, 0x24272e},
+        {BORDER, 0x2e323a},
+        {BORDER_MEDIUM, 0x3d424c},
+        {TEXT_PRIMARY, 0xf3f4f6},
+        {TEXT_SECONDARY, 0xc4c9d2},
+        {TEXT_MUTED, 0x9aa1ad},
+        {DIM, 0x6b7280},
+        {BRAND_TEAL, 0x10b981},
+        {BRAND_TEAL_DARK, 0x34d399},
+        {MINT_SOFT, 0x0f3d2e},
+        {MINT_GHOST, 0x11251e},
+        {BLUE_SOFT, 0x1e2a44},
+        {INDIGO_SOFT, 0x262a4a},
+        {VIOLET_SOFT, 0x2e2340},
+        {AMBER_SOFT, 0x3a2e12},
+        {ROSE_SOFT, 0x3d1d24},
+        {BLUE, 0x60a5fa},
+        {INDIGO, 0x818cf8},
+        {VIOLET, 0xa78bfa},
+        {AMBER, 0xfbbf24},
+        {ROSE, 0xfb7185},
+        {SUCCESS, 0x4ade80},
+    };
+    return map;
+}
+
 /** Placeholder stroke color used inside the SVG assets. */
 constexpr auto SVG_STROKE_PLACEHOLDER = "#6b7280";
 
 } // namespace
+
+CybouTheme::Appearance CybouTheme::savedAppearance()
+{
+    const QString forced = qEnvironmentVariable("CYBOU_APPEARANCE").toLower();
+    if (forced == QLatin1String{"dark"}) return Appearance::Dark;
+    if (forced == QLatin1String{"light"}) return Appearance::Light;
+    const QString saved = QSettings{}.value(QStringLiteral("appearance/mode"), QStringLiteral("system")).toString();
+    if (saved == QLatin1String{"dark"}) return Appearance::Dark;
+    if (saved == QLatin1String{"light"}) return Appearance::Light;
+    return Appearance::System;
+}
+
+void CybouTheme::saveAppearance(Appearance appearance)
+{
+    QSettings{}.setValue(QStringLiteral("appearance/mode"),
+        appearance == Appearance::Dark ? QStringLiteral("dark")
+        : appearance == Appearance::Light ? QStringLiteral("light") : QStringLiteral("system"));
+}
+
+void CybouTheme::setAppearance(Appearance appearance)
+{
+    bool dark = appearance == Appearance::Dark;
+    if (qApp) {
+        auto* hints = QGuiApplication::styleHints();
+        if (appearance == Appearance::System) {
+            // Follow the OS: drop any earlier override, then read the scheme.
+            hints->setColorScheme(Qt::ColorScheme::Unknown);
+            dark = hints->colorScheme() == Qt::ColorScheme::Dark;
+        } else {
+            // Window chrome (title bar on Windows) follows the chosen scheme.
+            hints->setColorScheme(dark ? Qt::ColorScheme::Dark : Qt::ColorScheme::Light);
+        }
+    }
+    g_dark = dark;
+}
+
+bool CybouTheme::isDark()
+{
+    return g_dark;
+}
+
+QColor CybouTheme::color(QRgb token)
+{
+    if (g_dark) {
+        const auto& map = DarkPalette();
+        if (const auto it = map.constFind(token); it != map.constEnd()) return QColor{*it};
+    }
+    return QColor{token};
+}
 
 QString CybouTheme::applicationStyleSheet()
 {
@@ -101,7 +189,7 @@ QString CybouTheme::applicationStyleSheet()
         QLabel#heroTitle { color: @text_primary@; font-size: 24px; font-weight: 800; }
         QLabel#heroTitleBig { color: @text_primary@; font-size: 28px; font-weight: 800; }
         QLabel#heroSubtitle { color: @text_secondary@; font-size: 14px; }
-        QFrame#heroHeader { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f4fdf8, stop:1 #e5f9ef); border: 1px solid #cdeede; border-radius: 16px; }
+        QFrame#heroHeader { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 @hero_a@, stop:1 @hero_b@); border: 1px solid @hero_border@; border-radius: 16px; }
         QFrame#heroPanel { background: @canvas@; border: 1px solid @border@; border-radius: 16px; }
         QLabel#pageTitle { color: @text_primary@; font-size: 22px; font-weight: 800; }
         QLabel#pageSubtitle { color: @text_muted@; font-size: 14px; }
@@ -115,7 +203,7 @@ QString CybouTheme::applicationStyleSheet()
         QLabel#metricCaption { color: @text_muted@; font-size: 12px; }
         QLabel#statusBadge { background: @mint_soft@; color: @teal_dark@; border-radius: 13px; padding: 6px 12px; font-weight: 700; }
         QLabel#neutralBadge { background: @surface@; color: @text_muted@; border-radius: 11px; padding: 4px 9px; }
-        QLabel#warningBadge { background: #fef3c7; color: #92400e; border-radius: 11px; padding: 6px 12px; font-weight: 700; }
+        QLabel#warningBadge { background: @amber_soft@; color: @warning_text@; border-radius: 11px; padding: 6px 12px; font-weight: 700; }
         QLabel#phaseLabel { color: @dim@; font-size: 12px; font-weight: 600; }
         QLabel#phaseLabelActive { color: @teal_dark@; font-size: 12px; font-weight: 800; }
         QLabel#phaseLabelDone { color: @text_secondary@; font-size: 12px; font-weight: 600; }
@@ -186,7 +274,7 @@ QString CybouTheme::applicationStyleSheet()
         QListWidget::item:selected { background: @mint_soft@; }
         QProgressBar#sizeMeter { border: 1px solid @border@; border-radius: 5px; background: @surface@; }
         QProgressBar#sizeMeter::chunk { border-radius: 4px; background: @teal@; }
-        QProgressBar#sizeMeter[overLimit="true"]::chunk { background: #dc2626; }
+        QProgressBar#sizeMeter[overLimit="true"]::chunk { background: @rose@; }
         QComboBox { background: @canvas@; border: 1px solid @border_medium@; border-radius: 8px;
                     padding: 5px 10px; color: @text_primary@; min-height: 20px; }
         QComboBox:focus { border-color: @teal@; }
@@ -246,6 +334,10 @@ QString CybouTheme::applicationStyleSheet()
     // Dark squircle tile behind the white CYBOU logomark, mirroring the
     // website's .logo-tile (white-on-transparent art needs a dark base even
     // on the light desktop shell).
+    set(QStringLiteral("hero_a"), g_dark ? QStringLiteral("#13261f") : QStringLiteral("#f4fdf8"));
+    set(QStringLiteral("hero_b"), g_dark ? QStringLiteral("#0f1c17") : QStringLiteral("#e5f9ef"));
+    set(QStringLiteral("hero_border"), g_dark ? QStringLiteral("#1f4034") : QStringLiteral("#cdeede"));
+    set(QStringLiteral("warning_text"), g_dark ? QStringLiteral("#fcd34d") : QStringLiteral("#92400e"));
     set(QStringLiteral("logo_tile_bg"), color(LOGO_TILE_BG).name());
     set(QStringLiteral("logo_tile_border"), color(LOGO_TILE_BORDER).name());
     return sheet;
@@ -311,5 +403,28 @@ QPixmap CybouTheme::logoTile(const QSize& tile_size, int radius, const QSize& lo
 
 void CybouTheme::applyTo(QApplication& app)
 {
+    // Native dialogs (message boxes, file pickers, input dialogs) follow the
+    // same tokens through the palette.
+    QPalette palette = app.palette();
+    const auto set = [&palette](QPalette::ColorRole role, QRgb token) {
+        palette.setColor(QPalette::All, role, color(token));
+    };
+    set(QPalette::Window, SUBTLE);
+    set(QPalette::WindowText, TEXT_PRIMARY);
+    set(QPalette::Base, CANVAS);
+    set(QPalette::AlternateBase, SURFACE);
+    set(QPalette::Text, TEXT_PRIMARY);
+    set(QPalette::Button, CANVAS);
+    set(QPalette::ButtonText, TEXT_PRIMARY);
+    set(QPalette::ToolTipBase, CANVAS);
+    set(QPalette::ToolTipText, TEXT_PRIMARY);
+    set(QPalette::PlaceholderText, DIM);
+    set(QPalette::Highlight, MINT_SOFT);
+    set(QPalette::HighlightedText, TEXT_PRIMARY);
+    set(QPalette::Link, BRAND_TEAL_DARK);
+    palette.setColor(QPalette::Disabled, QPalette::Text, color(DIM));
+    palette.setColor(QPalette::Disabled, QPalette::ButtonText, color(DIM));
+    palette.setColor(QPalette::Disabled, QPalette::WindowText, color(DIM));
+    app.setPalette(palette);
     app.setStyleSheet(applicationStyleSheet());
 }

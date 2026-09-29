@@ -49,6 +49,7 @@ private Q_SLOTS:
     void notificationsOfferUndo();
     void homeFirstStepsAndQuickActions();
     void globalSearchFindsMailAndFiles();
+    void darkAppearanceResolvesTokens();
     void themeResolvesAllTokens();
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();
