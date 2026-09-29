@@ -4,8 +4,6 @@
 
 #include <qt/pages/emailpage.h>
 
-#include <cybou/mail_service.h>
-#include <cybou/hex.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
@@ -160,10 +158,6 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
         Message& message = m_messages[index];
         if (m_folder == FOLDER_INBOX && !message.read) {
             message.read = true;
-            if (auto* service = m_model->mailService()) {
-                const auto id_opt = cybou::ParseUint256UserHex(message.id.toStdString());
-                if (id_opt) service->MarkAsRead(*id_opt, true);
-            }
             rebuildFolderList();
             rebuildMessageList();
         }
@@ -226,10 +220,6 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
         if (m_current_message < 0 || m_current_message >= m_messages.size()) return;
         Message& message = m_messages[m_current_message];
         message.read = false;
-        if (auto* service = m_model->mailService()) {
-            const auto id_opt = cybou::ParseUint256UserHex(message.id.toStdString());
-            if (id_opt) service->MarkAsRead(*id_opt, false);
-        }
         rebuildFolderList();
         rebuildMessageList();
     });
@@ -708,7 +698,7 @@ void EmailPage::updateGates()
 {
     const auto& status = m_model->status();
     const bool identity_active = status.identity_state == CybouIdentityState::Active;
-    const bool email_available = m_model->capabilities().email && m_model->mailService();
+    const bool email_available = m_model->capabilities().mail;
 
     m_banner->setVisible(!identity_active);
     m_banner_text->setText(identity_active
@@ -761,25 +751,12 @@ void EmailPage::sendNow()
     const QString subject_str = m_subject->text();
     const QString body_str = m_body->toPlainText();
 
-    if (auto* service = m_model->mailService()) {
-        const auto rec_u256 = cybou::ParseUint256UserHex(to_str.toStdString());
-        if (!rec_u256 || rec_u256->IsNull()) {
-            m_send_hint->setText(tr("Invalid recipient account ID."));
-            m_send_hint->setVisible(true);
-            return;
-        }
-        const cybou::AccountId recipient{*rec_u256};
-        auto res = service->SendMail(recipient, subject_str.toStdString(), body_str.toStdString());
-        if (!res) {
-            m_send_hint->setText(tr("Send failed: %1").arg(QString::fromStdString(res.error_message)));
-            m_send_hint->setVisible(true);
-            return;
-        }
-    } else {
-        m_send_hint->setText(tr("Protected Mail service is unavailable. This message has not been sent."));
-        m_send_hint->setVisible(true);
-        return;
-    }
+    Q_UNUSED(to_str);
+    Q_UNUSED(subject_str);
+    Q_UNUSED(body_str);
+    m_send_hint->setText(tr("This feature is not connected yet. This message has not been sent."));
+    m_send_hint->setVisible(true);
+    return;
 
     m_to->clear();
     m_subject->clear();
@@ -799,9 +776,7 @@ void EmailPage::saveDraft()
         return;
     }
 
-    if (auto* service = m_model->mailService()) {
-        service->SaveDraft(to_str.toStdString(), subject_str.toStdString(), body_str.toStdString());
-    } else {
+    {
         Message draft;
         draft.id = QStringLiteral("local-%1").arg(m_next_id++);
         draft.folder = FOLDER_DRAFTS;
@@ -823,74 +798,6 @@ void EmailPage::saveDraft()
 
 void EmailPage::refreshMailboxView()
 {
-    auto* service = m_model->mailService();
-    if (!service) {
-        rebuildFolderList();
-        rebuildMessageList();
-        return;
-    }
-
-    QList<Message> loaded_messages;
-    const std::vector<cybou::MailFolder> folders = {
-        cybou::MailFolder::INBOX,
-        cybou::MailFolder::SENT,
-        cybou::MailFolder::DRAFTS
-    };
-
-    for (const auto f : folders) {
-        const auto items = service->GetMessages(f);
-        for (const auto& item : items) {
-            Message msg;
-            msg.id = QString::fromStdString(item.mail_id.GetHex());
-            msg.from = QString::fromStdString(item.sender.Value().GetHex());
-            msg.to = QString::fromStdString(item.recipient.Value().GetHex());
-            msg.subject = QString::fromStdString(item.subject);
-            msg.body = QString::fromStdString(item.body);
-            msg.received = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(item.timestamp));
-            msg.read = item.read;
-            msg.has_evidence = item.evidence_bundle.has_value();
-
-            if (item.folder == cybou::MailFolder::INBOX) {
-                msg.folder = FOLDER_INBOX;
-            } else if (item.folder == cybou::MailFolder::SENT) {
-                msg.folder = FOLDER_SENT;
-            } else {
-                msg.folder = FOLDER_DRAFTS;
-            }
-
-            if (item.finality == cybou::MailFinalityStatus::FINAL) {
-                msg.finality = Finality::Final;
-            } else if (item.finality == cybou::MailFinalityStatus::PENDING_FINALITY) {
-                msg.finality = Finality::PendingFinality;
-            } else {
-                msg.finality = Finality::Draft;
-            }
-
-            loaded_messages.append(msg);
-        }
-    }
-
-    bool changed = (m_messages.size() != loaded_messages.size());
-    if (!changed) {
-        for (int i = 0; i < m_messages.size(); ++i) {
-            if (m_messages[i].id != loaded_messages[i].id ||
-                m_messages[i].finality != loaded_messages[i].finality ||
-                m_messages[i].read != loaded_messages[i].read ||
-                m_messages[i].folder != loaded_messages[i].folder ||
-                m_messages[i].has_evidence != loaded_messages[i].has_evidence) {
-                changed = true;
-                break;
-            }
-        }
-    }
-
-    if (changed) {
-        const int current_row = m_list->currentRow();
-        m_messages = std::move(loaded_messages);
-        rebuildFolderList();
-        rebuildMessageList();
-        if (current_row >= 0 && current_row < m_list->count()) {
-            m_list->setCurrentRow(current_row);
-        }
-    }
+    rebuildFolderList();
+    rebuildMessageList();
 }

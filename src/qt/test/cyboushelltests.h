@@ -36,6 +36,7 @@ private Q_SLOTS:
     void storageAndBackupGateActions();
     void networkPageReflectsModel();
     void adapterSettersDrivePages();
+    void productCollectionsDriveModel();
     void themeResolvesAllTokens();
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();

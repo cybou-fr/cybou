@@ -4,11 +4,26 @@
 
 #include <qt/cyboudesktopmodel.h>
 
+#include <cybou/identity_service.h>
 #include <cybou/name_service.h>
+#include <cybou/wallet_service.h>
+
+#include <support/cleanse.h>
 
 #include <QRegularExpression>
 
+#include <algorithm>
+#include <filesystem>
 #include <utility>
+
+QString cybouConnectionText(const CybouDesktopStatus& status)
+{
+    if (!status.sync_error.isEmpty()) return CybouDesktopModel::tr("Needs attention");
+    if (!status.node_running) return CybouDesktopModel::tr("Offline");
+    if (!status.online) return CybouDesktopModel::tr("Connecting");
+    if (status.syncing) return CybouDesktopModel::tr("Syncing");
+    return CybouDesktopModel::tr("Synced");
+}
 
 CybouDesktopModel::CybouDesktopModel(QString network_name, QObject* parent)
     : QObject{parent}
@@ -23,15 +38,15 @@ CybouDesktopModel::~CybouDesktopModel()
     if (m_recovery_rotation_worker.joinable()) m_recovery_rotation_worker.join();
 }
 
-void CybouDesktopModel::setNodeStatus(bool running, int peer_count, bool network_active,
+void CybouDesktopModel::setNodeStatus(bool running, int peer_count, bool online,
     const QString& data_directory)
 {
     if (m_status.node_running == running && m_status.peer_count == peer_count &&
-        m_status.network_active == network_active &&
+        m_status.online == online &&
         (data_directory.isEmpty() || m_status.data_directory == data_directory)) return;
     m_status.node_running = running;
     m_status.peer_count = peer_count;
-    m_status.network_active = network_active;
+    m_status.online = online;
     if (!data_directory.isEmpty()) m_status.data_directory = data_directory;
     Q_EMIT statusChanged();
 }
@@ -40,37 +55,183 @@ void CybouDesktopModel::setCapabilities(const CybouCapabilities& capabilities)
 {
     if (m_capabilities.account_creation == capabilities.account_creation &&
         m_capabilities.payments == capabilities.payments &&
-        m_capabilities.email == capabilities.email &&
-        m_capabilities.storage == capabilities.storage &&
-        m_capabilities.backup == capabilities.backup) {
+        m_capabilities.mail == capabilities.mail &&
+        m_capabilities.files == capabilities.files &&
+        m_capabilities.sharing == capabilities.sharing &&
+        m_capabilities.version_history == capabilities.version_history) {
         return;
     }
     m_capabilities = capabilities;
     Q_EMIT capabilitiesChanged();
 }
 
-void CybouDesktopModel::setFilesTransferAvailable(const bool available)
-{
-    if (m_files_transfer_available == available) return;
-    m_files_transfer_available = available;
-    Q_EMIT capabilitiesChanged();
-}
-
 void CybouDesktopModel::setNetworkInfo(const QString& network_name, const QString& network_id)
 {
-    if (m_status.network_name == network_name && m_status.network_id == network_id) {
-        return;
-    }
+    if (m_status.network_name == network_name && m_status.network_id == network_id) return;
     m_status.network_name = network_name;
     m_status.network_id = network_id;
     Q_EMIT statusChanged();
 }
 
-#include <cybou/identity_service.h>
-#include <cybou/mail_service.h>
-#include <cybou/wallet_service.h>
+void CybouDesktopModel::setFinalizedHeight(quint64 finalized_height)
+{
+    refreshFinalizedName();
+    if (m_status.finality_known && m_status.finalized_height == finalized_height) return;
+    m_status.finalized_height = finalized_height;
+    m_status.finality_known = true;
+    Q_EMIT statusChanged();
+}
 
-#include <support/cleanse.h>
+void CybouDesktopModel::setPeerCount(int peer_count)
+{
+    if (m_status.peer_count == peer_count) return;
+    m_status.peer_count = peer_count;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setSyncing(bool syncing)
+{
+    if (m_status.syncing == syncing) return;
+    m_status.syncing = syncing;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setSyncError(const QString& error)
+{
+    if (m_status.sync_error == error) return;
+    m_status.sync_error = error;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setLastSync(const QDateTime& when)
+{
+    m_last_sync = when;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString& account_id,
+    quint64 creation_height)
+{
+    if (m_status.identity_state == state && m_status.account_id == account_id &&
+        m_status.creation_height == creation_height) {
+        return;
+    }
+    m_status.identity_state = state;
+    m_status.account_id = account_id;
+    if (state == CybouIdentityState::None) m_status.primary_name.clear();
+    m_status.creation_height = creation_height;
+    if (state != CybouIdentityState::Creating && state != CybouIdentityState::Restoring) {
+        m_identity_request_pending = false;
+    }
+    if (state == CybouIdentityState::Active && m_wallet_service && !m_capabilities.payments) {
+        m_capabilities.payments = true;
+        Q_EMIT capabilitiesChanged();
+    }
+    Q_EMIT statusChanged();
+    if (state == CybouIdentityState::Active) refreshFinalizedName();
+}
+
+void CybouDesktopModel::setIdentityStep(CybouIdentityStep step)
+{
+    if (m_status.identity_step == step) return;
+    m_status.identity_step = step;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setPrimaryName(const QString& name)
+{
+    if (m_status.primary_name == name) return;
+    m_status.primary_name = name;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setBalances(quint64 balance, quint64 system_balance)
+{
+    if (m_status.balance == balance && m_status.system_balance == system_balance) return;
+    m_status.balance = balance;
+    m_status.system_balance = system_balance;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setStorageUsage(quint64 used, quint64 quota)
+{
+    if (m_status.storage_used == used && m_status.storage_quota == quota) return;
+    m_status.storage_used = used;
+    m_status.storage_quota = quota;
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setNames(QVector<CybouNameItem> names)
+{
+    m_names = std::move(names);
+    Q_EMIT namesChanged();
+}
+
+void CybouDesktopModel::setMailItems(QVector<CybouMailItem> items)
+{
+    m_mail = std::move(items);
+    Q_EMIT mailChanged();
+}
+
+void CybouDesktopModel::upsertMailItem(const CybouMailItem& item)
+{
+    const auto it = std::find_if(m_mail.begin(), m_mail.end(),
+        [&](const CybouMailItem& existing) { return existing.id == item.id; });
+    if (it != m_mail.end()) *it = item;
+    else m_mail.prepend(item);
+    Q_EMIT mailChanged();
+}
+
+int CybouDesktopModel::unreadMailCount() const
+{
+    return static_cast<int>(std::count_if(m_mail.begin(), m_mail.end(), [](const CybouMailItem& item) {
+        return item.folder == CybouMailFolder::Inbox && item.unread;
+    }));
+}
+
+void CybouDesktopModel::setFileItems(QVector<CybouFileItem> items)
+{
+    m_files = std::move(items);
+    Q_EMIT filesChanged();
+}
+
+void CybouDesktopModel::upsertFileItem(const CybouFileItem& item)
+{
+    const auto it = std::find_if(m_files.begin(), m_files.end(),
+        [&](const CybouFileItem& existing) { return existing.id == item.id; });
+    if (it != m_files.end()) *it = item;
+    else m_files.append(item);
+    Q_EMIT filesChanged();
+}
+
+void CybouDesktopModel::setActivity(QVector<CybouActivityItem> items)
+{
+    m_activity = std::move(items);
+    Q_EMIT activityChanged();
+}
+
+void CybouDesktopModel::addActivity(const CybouActivityItem& item)
+{
+    m_activity.prepend(item);
+    Q_EMIT activityChanged();
+}
+
+void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
+{
+    m_wallet_entries = std::move(entries);
+    Q_EMIT walletChanged();
+}
+
+void CybouDesktopModel::setContacts(QVector<CybouContact> contacts)
+{
+    m_contacts = std::move(contacts);
+}
+
+void CybouDesktopModel::setRestoreProgress(const CybouRestoreProgress& progress)
+{
+    m_restore_progress = progress;
+    Q_EMIT statusChanged();
+}
 
 void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity_service)
 {
@@ -95,10 +256,21 @@ void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity
 
         if (m_identity_service->GetPhase() == cybou::IdentityCreationPhase::ACTIVE &&
             m_identity_service->GetAccountId().has_value()) {
-            const QString acc_hex = QString::fromStdString(m_identity_service->GetAccountId()->Value().GetHex());
-            setIdentityState(CybouIdentityState::Active, acc_hex);
+            // A vault exists but is not opened in this session yet.
+            setIdentityState(CybouIdentityState::Locked,
+                QString::fromStdString(m_identity_service->GetAccountId()->Value().GetHex()));
         }
         refreshFinalizedName();
+    }
+}
+
+void CybouDesktopModel::setWalletService(cybou::CybouWalletService* wallet_service)
+{
+    m_wallet_service = wallet_service;
+    const bool payments = m_wallet_service && m_status.identity_state == CybouIdentityState::Active;
+    if (m_capabilities.payments != payments) {
+        m_capabilities.payments = payments;
+        Q_EMIT capabilitiesChanged();
     }
 }
 
@@ -108,7 +280,7 @@ bool CybouDesktopModel::requestClaimName(const QString& label, const QString& va
         m_status.name_claim_pending || !m_status.primary_name.isEmpty()) return false;
     if (m_name_worker.joinable()) m_name_worker.join();
     m_status.name_claim_pending = true;
-    m_status.name_claim_status = tr("Saving encrypted name claim...");
+    m_status.name_claim_status = tr("Saving encrypted name claim…");
     Q_EMIT statusChanged();
     m_name_worker = std::jthread([this, name = label.toStdString(), password = vault_password.toStdString()]() mutable {
         const auto result = m_name_service->ClaimSync(std::move(name), password,
@@ -161,63 +333,6 @@ bool CybouDesktopModel::requestRecoveryRootRotation(const QStringList& new_phras
     return true;
 }
 
-void CybouDesktopModel::setMailService(cybou::CybouMailService* mail_service)
-{
-    m_mail_service = mail_service;
-}
-
-void CybouDesktopModel::setWalletService(cybou::CybouWalletService* wallet_service)
-{
-    m_wallet_service = wallet_service;
-    if (m_wallet_service && m_status.identity_state == CybouIdentityState::Active) {
-        if (!m_capabilities.payments) {
-            m_capabilities.payments = true;
-            Q_EMIT capabilitiesChanged();
-        }
-    } else if (!m_wallet_service && m_capabilities.payments) {
-        m_capabilities.payments = false;
-        Q_EMIT capabilitiesChanged();
-    }
-}
-
-void CybouDesktopModel::requestStorageList(const QString& vault_password)
-{
-    if (!m_files_transfer_available || m_status.identity_state != CybouIdentityState::Active || m_storage_operation_pending) return;
-    setStorageOperationStatus(tr("Loading Files…"), true);
-    Q_EMIT storageListRequested(vault_password);
-}
-
-void CybouDesktopModel::requestStorageUpload(const QString& source, const QString& vault_password)
-{
-    if (!m_files_transfer_available || m_status.identity_state != CybouIdentityState::Active || m_storage_operation_pending) return;
-    setStorageOperationStatus(tr("Preparing file…"), true);
-    Q_EMIT storageUploadRequested(source, vault_password);
-}
-
-void CybouDesktopModel::requestStorageDownload(const QString& object_id, const QString& destination,
-    const QString& vault_password)
-{
-    if (!m_files_transfer_available || m_status.identity_state != CybouIdentityState::Active || m_storage_operation_pending) return;
-    setStorageOperationStatus(tr("Preparing download…"), true);
-    Q_EMIT storageDownloadRequested(object_id, destination, vault_password);
-}
-
-void CybouDesktopModel::setStorageFiles(QVector<CybouDesktopFile> files, const QString& error)
-{
-    m_storage_files = std::move(files);
-    m_storage_index_loaded = error.isEmpty();
-    m_storage_operation_status = error;
-    m_storage_operation_pending = false;
-    Q_EMIT statusChanged();
-}
-
-void CybouDesktopModel::setStorageOperationStatus(const QString& status, const bool pending)
-{
-    m_storage_operation_status = status;
-    m_storage_operation_pending = pending;
-    Q_EMIT statusChanged();
-}
-
 bool CybouDesktopModel::requestUnlockIdentity(const QString& vault_password)
 {
     if (!m_identity_service || !m_identity_service->LoadVault(vault_password.toStdString())) return false;
@@ -226,60 +341,127 @@ bool CybouDesktopModel::requestUnlockIdentity(const QString& vault_password)
         const auto state = m_identity_service->GetFinalizedAccountState();
         setIdentityState(CybouIdentityState::Active,
             QString::fromStdString(account_id->Value().GetHex()),
-            state ? static_cast<int>(state->creation_height) : 0);
+            state ? state->creation_height : 0);
         if (state) setBalances(state->balance, state->system_balance);
     }
     Q_EMIT statusChanged();
-    if (m_status.identity_state == CybouIdentityState::Active && m_files_transfer_available)
-        requestStorageList(vault_password);
     return true;
 }
 
+bool CybouDesktopModel::hasLocalVault() const
+{
+    if (!m_identity_service) return false;
+    const auto path = m_identity_service->GetStoragePath();
+    return path && std::filesystem::exists(*path);
+}
+
+namespace {
+QStringList ToQStringList(const cybou::RecoveryWords& words)
+{
+    QStringList list;
+    for (const auto& word : words) list << QString::fromStdString(word);
+    return list;
+}
+
+/** Deterministic, clearly fake words used only by UI fixtures. */
+QStringList FixtureWords()
+{
+    return QStringList{QStringLiteral("ocean"), QStringLiteral("lamp"), QStringLiteral("river"),
+        QStringLiteral("stone"), QStringLiteral("cloud"), QStringLiteral("maple"), QStringLiteral("orbit"),
+        QStringLiteral("violet"), QStringLiteral("anchor"), QStringLiteral("harbor"), QStringLiteral("pilot"),
+        QStringLiteral("garden"), QStringLiteral("silver"), QStringLiteral("canyon"), QStringLiteral("ember"),
+        QStringLiteral("meadow"), QStringLiteral("quartz"), QStringLiteral("lantern"), QStringLiteral("summit"),
+        QStringLiteral("willow"), QStringLiteral("falcon"), QStringLiteral("copper"), QStringLiteral("island"),
+        QStringLiteral("breeze")};
+}
+} // namespace
+
+std::optional<QStringList> CybouDesktopModel::prepareNewIdentityWords()
+{
+    if (m_fixture_mode) return FixtureWords();
+    if (!m_identity_service) return std::nullopt;
+    const auto words = m_identity_service->PrepareNewIdentity();
+    if (!words) return std::nullopt;
+    return ToQStringList(*words);
+}
+
+void CybouDesktopModel::discardPreparedIdentity()
+{
+    if (m_identity_service) m_identity_service->DiscardPreparedIdentity();
+}
+
+std::optional<QStringList> CybouDesktopModel::revealRecoveryWords(const QString& vault_password)
+{
+    if (m_fixture_mode) {
+        if (vault_password.isEmpty()) return std::nullopt;
+        return FixtureWords();
+    }
+    if (!requestUnlockIdentity(vault_password)) return std::nullopt;
+    const auto words = m_identity_service->GetKeyStore().GetRecoveryWords();
+    if (!words) return std::nullopt;
+    return ToQStringList(*words);
+}
+
+bool CybouDesktopModel::recoveryPhraseValid(const QString& phrase) const
+{
+    const auto parts = phrase.trimmed().split(QRegularExpression{QStringLiteral("\\s+")}, Qt::SkipEmptyParts);
+    if (parts.size() != 24) return false;
+    if (m_fixture_mode) return true;
+    cybou::RecoveryWords words;
+    for (int i{0}; i < parts.size(); ++i) words[i] = parts[i].toLower().toStdString();
+    auto entropy = cybou::DecodeRecoveryWords(words);
+    const bool valid = entropy.has_value();
+    if (entropy) memory_cleanse(entropy->data(), entropy->size());
+    for (auto& word : words) memory_cleanse(word.data(), word.size());
+    return valid;
+}
+
+void CybouDesktopModel::requestLockVault()
+{
+    if (m_status.identity_state != CybouIdentityState::Active) return;
+    setIdentityState(CybouIdentityState::Locked, m_status.account_id, m_status.creation_height);
+    Q_EMIT lockVaultRequested();
+}
+
+namespace {
+CybouIdentityStep StepForPhase(cybou::IdentityCreationPhase phase)
+{
+    switch (phase) {
+    case cybou::IdentityCreationPhase::CREATING_KEYS: return CybouIdentityStep::PreparingKeys;
+    case cybou::IdentityCreationPhase::PERFORMING_WORK:
+    case cybou::IdentityCreationPhase::BROADCASTING: return CybouIdentityStep::CreatingIdentity;
+    default: return CybouIdentityStep::WaitingForConfirmation;
+    }
+}
+} // namespace
+
 void CybouDesktopModel::requestCreateIdentity(const QString& vault_password)
 {
-    // The UI boundary ends here: protocol anti-Sybil work, operation
-    // construction and finality handling belong to core. The flag below is
-    // request bookkeeping only — the UI shows that the request was handed
-    // over and never advances protocol phases on its own.
+    // The UI boundary ends here: anti-Sybil work, operation construction and
+    // finality handling belong to core. The flag is request bookkeeping only.
     m_identity_request_pending = true;
     Q_EMIT createIdentityRequested();
     Q_EMIT statusChanged();
-
-    if (!m_identity_service) {
-        return;
-    }
+    if (!m_identity_service) return;
 
     m_identity_service->CreateIdentityAsync(vault_password.toStdString(),
-        [this](cybou::IdentityCreationPhase phase, const std::string& /*detail*/) {
+        [this](cybou::IdentityCreationPhase phase, const std::string&) {
             QMetaObject::invokeMethod(this, [this, phase] {
-                switch (phase) {
-                case cybou::IdentityCreationPhase::CREATING_KEYS:
-                    setIdentityState(CybouIdentityState::CreatingKeys);
-                    break;
-                case cybou::IdentityCreationPhase::PERFORMING_WORK:
-                    setIdentityState(CybouIdentityState::PerformingWork);
-                    break;
-                case cybou::IdentityCreationPhase::BROADCASTING:
-                    setIdentityState(CybouIdentityState::Broadcasting);
-                    break;
-                case cybou::IdentityCreationPhase::WAITING_FOR_FINALITY:
-                    setIdentityState(CybouIdentityState::WaitingForFinality);
-                    break;
-                case cybou::IdentityCreationPhase::FAILED:
+                if (phase == cybou::IdentityCreationPhase::FAILED) {
                     setIdentityState(CybouIdentityState::None);
-                    break;
-                default:
-                    break;
+                    return;
                 }
+                if (phase == cybou::IdentityCreationPhase::ACTIVE) return;
+                setIdentityStep(StepForPhase(phase));
+                setIdentityState(CybouIdentityState::Creating);
             }, Qt::QueuedConnection);
         },
-        [this, password_for_files = vault_password](const cybou::IdentityCreationResult& result) {
-            QMetaObject::invokeMethod(this, [this, result, password_for_files] {
+        [this](const cybou::IdentityCreationResult& result) {
+            QMetaObject::invokeMethod(this, [this, result] {
                 if (result.success) {
-                    const QString acc_hex = QString::fromStdString(result.account_id.Value().GetHex());
-                    setIdentityState(CybouIdentityState::Active, acc_hex, static_cast<int>(result.creation_height));
+                    setIdentityState(CybouIdentityState::Active,
+                        QString::fromStdString(result.account_id.Value().GetHex()), result.creation_height);
                     setBalances(0, result.system_balance);
-                    if (m_files_transfer_available) requestStorageList(password_for_files);
                 } else {
                     setIdentityState(CybouIdentityState::None);
                     Q_EMIT identityCreationFailed(QString::fromStdString(result.error_message));
@@ -290,34 +472,47 @@ void CybouDesktopModel::requestCreateIdentity(const QString& vault_password)
 
 bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, const QString& vault_password)
 {
-    if (!m_identity_service) return false;
+    if (!recoveryPhraseValid(recovery_phrase)) return false;
+    if (!m_identity_service) {
+        // Fixture mode: hand the request to the fixture driver.
+        m_identity_request_pending = true;
+        CybouRestoreProgress progress;
+        progress.identity = CybouRestoreStepState::Running;
+        setRestoreProgress(progress);
+        setIdentityState(CybouIdentityState::Restoring);
+        Q_EMIT restoreIdentityRequested();
+        return true;
+    }
     const auto parts = recovery_phrase.trimmed().split(QRegularExpression{QStringLiteral("\\s+")}, Qt::SkipEmptyParts);
     if (parts.size() != 24) return false;
     cybou::RecoveryWords words;
     for (int i{0}; i < parts.size(); ++i) words[i] = parts[i].toStdString();
     if (!cybou::DecodeRecoveryWords(words)) return false;
     m_identity_request_pending = true;
-    Q_EMIT statusChanged();
+    CybouRestoreProgress progress;
+    progress.identity = CybouRestoreStepState::Running;
+    setRestoreProgress(progress);
+    setIdentityState(CybouIdentityState::Restoring);
     m_identity_service->RestoreIdentityAsync(std::move(words), vault_password.toStdString(),
         [this](cybou::IdentityCreationPhase phase, const std::string&) {
             QMetaObject::invokeMethod(this, [this, phase] {
-                switch (phase) {
-                case cybou::IdentityCreationPhase::CREATING_KEYS: setIdentityState(CybouIdentityState::CreatingKeys); break;
-                case cybou::IdentityCreationPhase::BROADCASTING: setIdentityState(CybouIdentityState::Broadcasting); break;
-                case cybou::IdentityCreationPhase::WAITING_FOR_FINALITY: setIdentityState(CybouIdentityState::WaitingForFinality); break;
-                case cybou::IdentityCreationPhase::FAILED: setIdentityState(CybouIdentityState::None); break;
-                default: break;
-                }
+                if (phase == cybou::IdentityCreationPhase::FAILED) setIdentityState(CybouIdentityState::None);
             }, Qt::QueuedConnection);
         },
-        [this, password_for_files = vault_password](const cybou::IdentityCreationResult& result) {
-            QMetaObject::invokeMethod(this, [this, result, password_for_files] {
+        [this](const cybou::IdentityCreationResult& result) {
+            QMetaObject::invokeMethod(this, [this, result] {
                 if (result.success) {
+                    // Identity, wallet and names come from finalized state.
+                    // Mail and Files history reconstruction is not connected
+                    // yet, so those rows stay honest instead of claiming Done.
+                    CybouRestoreProgress done;
+                    done.identity = CybouRestoreStepState::Done;
+                    done.wallet = CybouRestoreStepState::Done;
+                    done.names = CybouRestoreStepState::Done;
+                    setRestoreProgress(done);
                     setIdentityState(CybouIdentityState::Active,
-                        QString::fromStdString(result.account_id.Value().GetHex()),
-                        static_cast<int>(result.creation_height));
+                        QString::fromStdString(result.account_id.Value().GetHex()), result.creation_height);
                     setBalances(0, result.system_balance);
-                    if (m_files_transfer_available) requestStorageList(password_for_files);
                 } else {
                     setIdentityState(CybouIdentityState::None);
                     Q_EMIT identityCreationFailed(QString::fromStdString(result.error_message));
@@ -327,84 +522,29 @@ bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, c
     return true;
 }
 
-void CybouDesktopModel::setFinalityStatus(int last_finalized_height, int validator_count)
+void CybouDesktopModel::requestFileUpload(const QString& source_path)
 {
-    refreshFinalizedName();
-    if (m_status.last_finalized_height == last_finalized_height &&
-        m_status.validator_count == validator_count) {
-        return;
-    }
-    m_status.last_finalized_height = last_finalized_height;
-    m_status.validator_count = validator_count;
-    Q_EMIT statusChanged();
+    if (m_status.identity_state != CybouIdentityState::Active) return;
+    Q_EMIT fileUploadRequested(source_path);
+}
+
+void CybouDesktopModel::requestFileDownload(const QString& file_id, const QString& destination)
+{
+    if (m_status.identity_state != CybouIdentityState::Active) return;
+    Q_EMIT fileDownloadRequested(file_id, destination);
 }
 
 void CybouDesktopModel::refreshFinalizedName()
 {
+    if (m_fixture_mode) return;
     const auto name = m_identity_service && m_status.identity_state == CybouIdentityState::Active
         ? m_identity_service->GetFinalizedPrimaryName() : std::nullopt;
     const QString finalized = name ? QString::fromStdString(*name) + QStringLiteral(".cybou") : QString{};
     if (m_status.primary_name == finalized) return;
     m_status.primary_name = finalized;
-    Q_EMIT statusChanged();
-}
-
-void CybouDesktopModel::setPeerCount(int peer_count)
-{
-    if (m_status.peer_count == peer_count) {
-        return;
-    }
-    m_status.peer_count = peer_count;
-    Q_EMIT statusChanged();
-}
-
-void CybouDesktopModel::setSyncError(const QString& error)
-{
-    if (m_status.sync_error == error) return;
-    m_status.sync_error = error;
-    Q_EMIT statusChanged();
-}
-
-void CybouDesktopModel::setLastSync(const QDateTime& when)
-{
-    m_last_sync = when;
-    Q_EMIT statusChanged();
-}
-
-void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString& account_id,
-    int creation_height)
-{
-    if (m_status.identity_state == state && m_status.account_id == account_id &&
-        m_status.creation_height == creation_height) {
-        return;
-    }
-    m_status.identity_state = state;
-    m_status.account_id = account_id;
-    if (state != CybouIdentityState::Active) m_status.primary_name.clear();
-    m_status.creation_height = creation_height;
-    if (state == CybouIdentityState::Active || state == CybouIdentityState::None) {
-        m_identity_request_pending = false;
-    }
-    if (state == CybouIdentityState::Active) {
-        bool caps_changed = false;
-        if (m_wallet_service && !m_capabilities.payments) {
-            m_capabilities.payments = true;
-            caps_changed = true;
-        }
-        if (caps_changed) {
-            Q_EMIT capabilitiesChanged();
-        }
-    }
-    Q_EMIT statusChanged();
-    if (state == CybouIdentityState::Active) refreshFinalizedName();
-}
-
-void CybouDesktopModel::setBalances(quint64 balance, quint64 system_balance)
-{
-    if (m_status.balance == balance && m_status.system_balance == system_balance) {
-        return;
-    }
-    m_status.balance = balance;
-    m_status.system_balance = system_balance;
+    QVector<CybouNameItem> names;
+    if (!finalized.isEmpty()) names.append({finalized, true});
+    m_names = names;
+    Q_EMIT namesChanged();
     Q_EMIT statusChanged();
 }

@@ -17,8 +17,6 @@
 #include <qt/pages/storagepage.h>
 #include <qt/pages/walletpage.h>
 
-#include <cybou/mail_service.h>
-
 #include <QAction>
 #include <QApplication>
 #include <QButtonGroup>
@@ -160,12 +158,11 @@ void CybouMainWindow::showDebugWindow()
         const auto update_details = [this, details] {
             const auto& status = m_desktop_model->status();
             details->setPlainText(tr("Network: %1\nNetwork ID: %2\nNode running: %3\nPeers: %4\n"
-                                     "Finalized height: %5\nValidators: %6\nData directory: %7")
+                                     "Finalized height: %5\nData directory: %6")
                 .arg(status.network_name, status.network_id,
                     status.node_running ? tr("yes") : tr("no"))
                 .arg(status.peer_count)
-                .arg(status.last_finalized_height)
-                .arg(status.validator_count)
+                .arg(status.finality_known ? QString::number(status.finalized_height) : tr("unknown"))
                 .arg(status.data_directory));
         };
         connect(m_desktop_model, &CybouDesktopModel::statusChanged, m_diagnostics, update_details);
@@ -210,16 +207,7 @@ void CybouMainWindow::buildShell()
     shell_layout->setSpacing(0);
 
     // Top status strip: connection, sync, unread, balances (sketch header).
-    const auto unread_counter = [this] {
-        if (auto* service = m_desktop_model->mailService()) {
-            int unread = 0;
-            for (const auto& item : service->GetMessages(cybou::MailFolder::INBOX)) {
-                if (!item.read) ++unread;
-            }
-            return unread;
-        }
-        return 0;
-    };
+    const auto unread_counter = [this] { return m_desktop_model->unreadMailCount(); };
     m_status_strip = std::make_unique<CybouUi::StatusStrip>(m_desktop_model, unread_counter, shell);
     shell_layout->addWidget(m_status_strip->frame());
 

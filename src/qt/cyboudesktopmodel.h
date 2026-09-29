@@ -5,78 +5,66 @@
 #ifndef BITCOIN_QT_CYBOUDESKTOPMODEL_H
 #define BITCOIN_QT_CYBOUDESKTOPMODEL_H
 
+#include <qt/cybouproduct.h>
+
 #include <QDateTime>
+#include <QLocale>
 #include <QObject>
 #include <QString>
 #include <QStringList>
-#include <QLocale>
-#include <memory>
-#include <thread>
 #include <QVector>
 
+#include <memory>
+#include <optional>
+#include <thread>
 
 namespace cybou {
 class CybouIdentityService;
-class CybouMailService;
 class CybouWalletService;
 class CybouNameService;
 }
 
-struct CybouDesktopFile {
-    QString object_id;
-    QString name;
-    quint64 size{0};
-    quint32 key_epoch{0};
-    bool pending_verification{false};
-};
-
 struct CybouCapabilities {
     bool account_creation{false};
     bool payments{false};
-    bool email{false};
-    bool storage{false};
-    bool backup{false};
+    bool mail{false};
+    bool files{false};
+    bool sharing{false};
+    bool version_history{false};
 };
 
 /**
- * Identity lifecycle as surfaced to the UI.
- *
- * The desktop never invents transitions: core wiring drives state changes
- * through this model. Until account creation is connected, the state
- * remains None.
+ * Identity-centric desktop status. Pages render product state only;
+ * finalized_height is shown in Diagnostics and Security Details.
  */
-enum class CybouIdentityState {
-    None,
-    CreatingKeys,
-    PerformingWork,
-    Broadcasting,
-    WaitingForFinality,
-    Active,
-};
-
 struct CybouDesktopStatus {
-    QString network_name{"CYBOU-DEV"};
+    QString network_name{"CYBOU DEV"};
     /** Canonical network identifier once core exposes it; empty until then. */
     QString network_id{};
-    int peer_count{0};
+
     bool node_running{false};
-    bool network_active{false};
+    bool online{false};
+    bool syncing{false};
+    int peer_count{0};
+    quint64 finalized_height{0};
+    bool finality_known{false};
     QString sync_error;
+    QString data_directory;
+
     CybouIdentityState identity_state{CybouIdentityState::None};
+    CybouIdentityStep identity_step{CybouIdentityStep::PreparingKeys};
     QString account_id;
     QString primary_name;
     QString name_claim_status;
     bool name_claim_pending{false};
-    int creation_height{0};
-    QString data_directory;
+    quint64 creation_height{0};
+    quint32 key_epoch{0};
+
     quint64 balance{0};
     quint64 system_balance{0};
-    /** Last height committed by a BFT finality certificate; -1 until core
-        exposes the finality feed. The GUI never derives finality locally. */
-    int last_finalized_height{-1};
-    /** Validators in the current epoch, equal weight 1 each; 0 until core
-        exposes the validator set. */
-    int validator_count{0};
+
+    quint64 storage_used{0};
+    quint64 storage_quota{0};
 };
 
 /**
@@ -90,6 +78,9 @@ inline QString cybouAmountText(quint64 amount)
     return QLocale{}.toString(amount) + QStringLiteral(" CYBOU");
 }
 
+/** Global connection wording: Offline, Connecting, Syncing, Synced or Needs attention. */
+QString cybouConnectionText(const CybouDesktopStatus& status);
+
 class CybouDesktopModel : public QObject
 {
     Q_OBJECT
@@ -100,110 +91,124 @@ public:
 
     const CybouDesktopStatus& status() const { return m_status; }
     const CybouCapabilities& capabilities() const { return m_capabilities; }
-    bool filesTransferAvailable() const { return m_files_transfer_available; }
-    void setFilesTransferAvailable(bool available);
-    /** True once the user requested identity creation and the node has not
-        picked the request up yet (identity state still None). This is a
-        UI-side request tracker only — protocol phases are driven by core. */
+
+    /** True when the desktop is fed by a deterministic UI fixture, not core. */
+    bool fixtureMode() const { return m_fixture_mode; }
+    void setFixtureMode(bool fixture) { m_fixture_mode = fixture; }
+
+    /** True once the user requested identity creation and core has not
+        picked the request up yet. UI-side request tracking only. */
     bool identityCreationRequestPending() const { return m_identity_request_pending; }
-    void setNodeStatus(bool running, int peer_count, bool network_active,
-        const QString& data_directory = {});
 
-    /** Drives capability flags; called by the core-facing adapter when a
-        backend capability becomes available. */
+    /* ---- Core adapter entries (doc 73). Unchanged values are a no-op. ---- */
+    void setNodeStatus(bool running, int peer_count, bool online, const QString& data_directory = {});
     void setCapabilities(const CybouCapabilities& capabilities);
-
-    /** Core-facing adapter entry: canonical network name and NetworkID once exposed. */
     void setNetworkInfo(const QString& network_name, const QString& network_id);
-
-    /** Core-facing adapter entry (doc 73): the BFT finality feed reports the
-        last certificate-committed height and the current validator set.
-        -1 / 0 mean "not exposed" and render as such. No-op when unchanged. */
-    void setFinalityStatus(int last_finalized_height, int validator_count);
-
-    /** Core-facing adapter entry: connectivity of the CYBOU runtime.
-        peer_count reflects the configured bootstrap authorities currently
-        reachable (DEV: 0 or 1). No-op when unchanged. */
+    void setFinalizedHeight(quint64 finalized_height);
     void setPeerCount(int peer_count);
-    /** Core adapter entry: last fatal network synchronization error, if any. */
+    void setSyncing(bool syncing);
     void setSyncError(const QString& error);
-
-    /** Core-facing adapter entry: last successful sync round. Drives the
-        "Synced x ago" indicator in the status strip; invalid until the
-        first round completes. */
     void setLastSync(const QDateTime& when);
     QDateTime lastSync() const { return m_last_sync; }
-
-    /** Core-facing adapter entry (doc 73): core drives identity lifecycle
-        transitions only. The GUI never sets these states on its own. */
     void setIdentityState(CybouIdentityState state, const QString& account_id = {},
-        int creation_height = 0);
-
-    /** Core-facing adapter entry (doc 73): balances from AccountState after
-        every finalized transition that moves them. */
+        quint64 creation_height = 0);
+    void setIdentityStep(CybouIdentityStep step);
+    void setPrimaryName(const QString& name);
     void setBalances(quint64 balance, quint64 system_balance);
+    void setStorageUsage(quint64 used, quint64 quota);
+
+    /* ---- Product collections (fed by adapters or fixtures). ---- */
+    const QVector<CybouNameItem>& names() const { return m_names; }
+    void setNames(QVector<CybouNameItem> names);
+
+    const QVector<CybouMailItem>& mailItems() const { return m_mail; }
+    void setMailItems(QVector<CybouMailItem> items);
+    void upsertMailItem(const CybouMailItem& item);
+    int unreadMailCount() const;
+
+    const QVector<CybouFileItem>& fileItems() const { return m_files; }
+    void setFileItems(QVector<CybouFileItem> items);
+    void upsertFileItem(const CybouFileItem& item);
+
+    const QVector<CybouActivityItem>& activity() const { return m_activity; }
+    void setActivity(QVector<CybouActivityItem> items);
+    void addActivity(const CybouActivityItem& item);
+
+    const QVector<CybouWalletEntry>& walletEntries() const { return m_wallet_entries; }
+    void setWalletEntries(QVector<CybouWalletEntry> entries);
+
+    const QVector<CybouContact>& contacts() const { return m_contacts; }
+    void setContacts(QVector<CybouContact> contacts);
+
+    const CybouRestoreProgress& restoreProgress() const { return m_restore_progress; }
+    void setRestoreProgress(const CybouRestoreProgress& progress);
 
     /** Sets identity service provider and enables account_creation capability. */
     void setIdentityService(cybou::CybouIdentityService* identity_service);
     cybou::CybouIdentityService* identityService() const { return m_identity_service; }
 
-    /** Sets mail service provider and updates email capability. */
-    void setMailService(cybou::CybouMailService* mail_service);
-    cybou::CybouMailService* mailService() const { return m_mail_service; }
-
     /** Sets wallet service provider and updates payments capability. */
     void setWalletService(cybou::CybouWalletService* wallet_service);
     cybou::CybouWalletService* walletService() const { return m_wallet_service; }
 
-    const QVector<CybouDesktopFile>& storageFiles() const { return m_storage_files; }
-    bool storageIndexLoaded() const { return m_storage_index_loaded; }
-    bool storageOperationPending() const { return m_storage_operation_pending; }
-    QString storageOperationStatus() const { return m_storage_operation_status; }
-    void requestStorageList(const QString& vault_password);
-    void requestStorageUpload(const QString& source, const QString& vault_password);
-    void requestStorageDownload(const QString& object_id, const QString& destination,
-        const QString& vault_password);
-    void setStorageFiles(QVector<CybouDesktopFile> files, const QString& error = {});
-    void setStorageOperationStatus(const QString& status, bool pending);
+    /* ---- Identity vault helpers (hide backend types from pages). ---- */
+    /** True when a local vault already exists (unlock instead of create). */
+    bool hasLocalVault() const;
+    /** Generates the 24 recovery words for a new Identity, locally. */
+    std::optional<QStringList> prepareNewIdentityWords();
+    void discardPreparedIdentity();
+    /** Re-authenticates with the vault password and returns the words. */
+    std::optional<QStringList> revealRecoveryWords(const QString& vault_password);
+    /** True when the phrase has 24 words that decode to valid entropy. */
+    bool recoveryPhraseValid(const QString& phrase) const;
 
-    /** Requests identity creation from the backend.
-        The UI only emits the request; protocol behavior belongs to core. */
+    /* ---- UI -> core requests. The UI emits; adapters do the work. ---- */
     void requestCreateIdentity(const QString& vault_password);
     bool requestRestoreIdentity(const QString& recovery_phrase, const QString& vault_password);
     bool requestUnlockIdentity(const QString& vault_password);
+    void requestLockVault();
     bool requestClaimName(const QString& label, const QString& vault_password);
     bool requestRecoveryRootRotation(const QStringList& new_phrase, const QString& vault_password,
         bool resume_pending = false);
+    void requestFileUpload(const QString& source_path);
+    void requestFileDownload(const QString& file_id, const QString& destination);
 
 Q_SIGNALS:
     void statusChanged();
     void capabilitiesChanged();
+    void namesChanged();
+    void mailChanged();
+    void filesChanged();
+    void activityChanged();
+    void walletChanged();
     void createIdentityRequested();
     void identityCreationFailed(const QString& reason);
     void nameClaimFailed(const QString& reason);
     void recoveryRotationFinished(quint8 phase, const QString& error, quint64 finalized_height);
-    void storageListRequested(const QString& vault_password);
-    void storageUploadRequested(const QString& source, const QString& vault_password);
-    void storageDownloadRequested(const QString& object_id, const QString& destination,
-        const QString& vault_password);
+    void lockVaultRequested();
+    void restoreIdentityRequested();
+    void fileUploadRequested(const QString& source_path);
+    void fileDownloadRequested(const QString& file_id, const QString& destination);
 
 private:
     cybou::CybouIdentityService* m_identity_service{nullptr};
-    cybou::CybouMailService* m_mail_service{nullptr};
     cybou::CybouWalletService* m_wallet_service{nullptr};
     std::unique_ptr<cybou::CybouNameService> m_name_service;
     std::jthread m_name_worker;
     std::jthread m_recovery_rotation_worker;
     bool m_recovery_rotation_pending{false};
+    bool m_fixture_mode{false};
     CybouDesktopStatus m_status;
     CybouCapabilities m_capabilities;
     QDateTime m_last_sync;
     bool m_identity_request_pending{false};
-    QVector<CybouDesktopFile> m_storage_files;
-    bool m_storage_index_loaded{false};
-    bool m_files_transfer_available{false};
-    bool m_storage_operation_pending{false};
-    QString m_storage_operation_status;
+    QVector<CybouNameItem> m_names;
+    QVector<CybouMailItem> m_mail;
+    QVector<CybouFileItem> m_files;
+    QVector<CybouActivityItem> m_activity;
+    QVector<CybouWalletEntry> m_wallet_entries;
+    QVector<CybouContact> m_contacts;
+    CybouRestoreProgress m_restore_progress;
 
     void refreshFinalizedName();
 };

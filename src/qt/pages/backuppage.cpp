@@ -289,7 +289,8 @@ void BackupPage::refresh()
 {
     const auto& status = m_model->status();
     const bool identity_active = status.identity_state == CybouIdentityState::Active;
-    const bool usable = identity_active && m_model->capabilities().backup;
+    const bool usable = false;
+    Q_UNUSED(identity_active);
 
     m_backup_now->setEnabled(usable);
     m_restore->setEnabled(usable);

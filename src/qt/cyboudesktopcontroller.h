@@ -7,7 +7,6 @@
 
 #include <filesystem>
 #include <memory>
-#include <thread>
 
 #include <QObject>
 #include <QString>
@@ -17,7 +16,6 @@ class CybouDesktopModel;
 namespace cybou {
 class CybouNodeService;
 class CybouIdentityService;
-class CybouMailService;
 class CybouWalletService;
 }
 
@@ -40,13 +38,7 @@ private:
     std::filesystem::path m_data_directory;
     std::unique_ptr<cybou::CybouNodeService> m_node_service;
     std::unique_ptr<cybou::CybouIdentityService> m_identity_service;
-    std::unique_ptr<cybou::CybouMailService> m_mail_service;
     std::unique_ptr<cybou::CybouWalletService> m_wallet_service;
-    std::jthread m_storage_worker;
-    void uploadStorageFile(const QString& source, const QString& vault_password);
-    void listStorageFiles(const QString& vault_password);
-    void downloadStorageFile(const QString& object_id, const QString& destination,
-        const QString& vault_password);
     void stop();
 };
 

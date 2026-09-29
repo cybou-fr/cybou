@@ -63,6 +63,7 @@ add_library(cybou_qt STATIC
   cyboustrip.h
   cyboutheme.cpp
   cyboutheme.h
+  cybouproduct.h
   cybouui.h
   pages/backuppage.cpp
   pages/backuppage.h

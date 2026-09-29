@@ -270,7 +270,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, std::function<void()> diagnos
     {
         auto* header = new QHBoxLayout;
         header->addWidget(Chip(Glyph::ShieldCheck, Tint::Mint, validators_card, 38, 19));
-        auto* heading = new QLabel{tr("Network trust & validators"), validators_card};
+        auto* heading = new QLabel{tr("Network finality"), validators_card};
         heading->setObjectName(QStringLiteral("serviceTitle"));
         header->addWidget(heading, 0, Qt::AlignVCenter);
         header->addStretch();
@@ -376,7 +376,7 @@ void NetworkPage::refresh()
 {
     const auto& status = m_model->status();
     const bool connected = status.node_running && status.peer_count > 0;
-    const bool finality_known = status.last_finalized_height >= 0;
+    const bool finality_known = status.finality_known;
 
     // Hero chips.
     m_chip_healthy->setText(!status.sync_error.isEmpty()
@@ -402,7 +402,7 @@ void NetworkPage::refresh()
     // Synchronization.
     m_sync_state->setText(finality_known ? tr("Finalized height known") : tr("Waiting for finality"));
     m_height_metric->setText(finality_known
-        ? QLocale{}.toString(status.last_finalized_height)
+        ? QLocale{}.toString(status.finalized_height)
         : tr("\u2014"));
     m_last_sync->setText(m_model->lastSync().isValid() ? relTime(m_model->lastSync()) : tr("\u2014"));
 
@@ -411,9 +411,8 @@ void NetworkPage::refresh()
     struct ServiceDef { const char* name; bool online; };
     const ServiceDef services[]{
         {QT_TR_NOOP("Identity services"), caps.account_creation},
-        {QT_TR_NOOP("Email services"), caps.email},
-        {QT_TR_NOOP("Storage services"), caps.storage},
-        {QT_TR_NOOP("Backup services"), caps.backup},
+        {QT_TR_NOOP("Mail"), caps.mail},
+        {QT_TR_NOOP("Files"), caps.files},
         {QT_TR_NOOP("Wallet services"), caps.payments},
     };
     bool all_online = true;
@@ -442,12 +441,8 @@ void NetworkPage::refresh()
     }
 
     // Validators.
-    m_validators_metric->setText(status.validator_count > 0
-        ? QLocale{}.toString(status.validator_count)
-        : tr("\u2014"));
-    m_validators_caption->setText(status.validator_count >= 4
-        ? tr("Active validators \u00b7 f = 1 fault tolerance")
-        : tr("Active validators \u00b7 at least 4 validators are required for f = 1"));
+    m_validators_metric->setText(finality_known ? tr("PoA verified") : QStringLiteral("—"));
+    m_validators_caption->setText(tr("Finality"));
 
     // Peers.
     m_peers_metric->setText(connected ? tr("%1 connected").arg(status.peer_count) : tr("Connecting"));
@@ -475,7 +470,7 @@ void NetworkPage::refresh()
     add_diag(tr("Network"), status.network_name);
     add_diag(tr("Network ID"), status.network_id.isEmpty() ? tr("Not available yet") : status.network_id);
     add_diag(tr("Connections"), QString::number(status.peer_count));
-    add_diag(tr("Finalized height"), finality_known ? QLocale{}.toString(status.last_finalized_height) : tr("Not exposed yet"));
+    add_diag(tr("Finalized height"), finality_known ? QLocale{}.toString(status.finalized_height) : tr("Not exposed yet"));
     add_diag(tr("Sync status"), !status.sync_error.isEmpty()
         ? status.sync_error
         : (m_model->lastSync().isValid() ? tr("Peer contacted") : tr("Pending")));
@@ -483,5 +478,5 @@ void NetworkPage::refresh()
 
     m_finality_hint->setText(finality_known
         ? QString{}
-        : tr("Finality data is not exposed by the node yet \u2014 these metrics populate once core wires the BFT status feed."));
+        : tr("Finality data is not exposed by the node yet \u2014 these metrics populate once core wires the finality feed."));
 }

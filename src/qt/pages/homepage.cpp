@@ -4,8 +4,6 @@
 
 #include <qt/pages/homepage.h>
 
-#include <cybou/mail_service.h>
-#include <cybou/wallet_service.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
@@ -236,7 +234,7 @@ void HomePage::refresh()
         m_identity_name->setText(status.primary_name.isEmpty() ? tr("Identity active") : status.primary_name);
         m_identity_subtitle->setText(tr("Your identity for CYBOU services. Mail sending and Files sync are not available yet."));
         m_chip_protected->setText(tr("PQ identity signing"));
-        m_chip_ready->setText(status.network_active ? tr("Online") : tr("Offline"));
+        m_chip_ready->setText(status.online ? tr("Online") : tr("Offline"));
         m_chip_protected->setVisible(true);
         m_chip_ready->setVisible(true);
         m_share_button->setVisible(!status.account_id.isEmpty());
@@ -250,17 +248,13 @@ void HomePage::refresh()
         m_manage_button->setText(tr("Create identity"));
     }
 
-    // Mail stat: unread from the local mailbox.
+    // Mail stat: unread count and senders from the product model.
     QStringList senders;
-    if (auto* mail = m_model->mailService()) {
-        for (const auto& item : mail->GetMessages(cybou::MailFolder::INBOX)) {
-            if (!item.read) {
-                const QString from = QString::fromStdString(item.sender.Value().GetHex());
-                if (!senders.contains(from)) senders.append(from);
-            }
-        }
+    for (const auto& item : m_model->mailItems()) {
+        if (item.folder == CybouMailFolder::Inbox && item.unread && !senders.contains(item.from_name))
+            senders.append(item.from_name);
     }
-    const int unread = senders.isEmpty() ? 0 : static_cast<int>(m_model->mailService()->GetUnreadCount());
+    const int unread = m_model->unreadMailCount();
     m_mail_metric->setText(unread > 0 ? tr("%1 unread").arg(unread) : tr("No unread mail"));
     clearLayout(m_mail_avatars->layout());
     auto* avatar_row = qobject_cast<QHBoxLayout*>(m_mail_avatars->layout());
@@ -274,69 +268,20 @@ void HomePage::refresh()
     }
     avatar_row->addStretch();
 
-    quint64 files_size{0};
-    for (const auto& file : m_model->storageFiles()) files_size += file.size;
-    m_files_metric->setText(!m_model->storageIndexLoaded()
-        ? tr("Index not opened")
-        : m_model->storageFiles().isEmpty() ? tr("No files yet")
-            : tr("%1 files · %2 bytes").arg(m_model->storageFiles().size())
-                .arg(QLocale{}.toString(files_size)));
-    m_files_caption->setText(tr("Local encrypted index · Files catalog sync is not available yet."));
+    int file_count{0};
+    for (const auto& file : m_model->fileItems()) {
+        if (!file.folder && !file.trashed) ++file_count;
+    }
+    m_files_metric->setText(file_count == 0 ? tr("No files yet") : tr("%1 files").arg(file_count));
+    m_files_caption->setText(CybouProduct::sizeText(status.storage_used));
 
-    // Recent activity: unread mail + finalized ledger entries + sync.
     clearLayout(m_activity_rows->layout());
     auto* activity = qobject_cast<QVBoxLayout*>(m_activity_rows->layout());
     int rows_shown = 0;
-    if (auto* mail = m_model->mailService()) {
-        const auto inbox = mail->GetMessages(cybou::MailFolder::INBOX);
-        for (int i = inbox.size() - 1; i >= 0 && rows_shown < 4; --i) {
-            const auto& item = inbox.at(i);
-            const QString from = QString::fromStdString(item.sender.Value().GetHex());
-            activity->addWidget(ActivityRow(Glyph::Envelope, Tint::Mint,
-                tr("Message from %1").arg(from.left(12) + QStringLiteral("…")),
-                item.subject.empty() ? tr("(no subject)") : QString::fromStdString(item.subject),
-                relTime(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(item.timestamp))),
-                m_activity_rows, !item.read));
-            ++rows_shown;
-        }
-    }
-    if (auto* wallet = m_model->walletService()) {
-        const auto entries = wallet->GetLedgerEntries();
-        for (int i = entries.size() - 1; i >= 0 && rows_shown < 7; --i) {
-            const auto& entry = entries.at(i);
-            const QString when = relTime(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(entry.timestamp)));
-            switch (entry.kind) {
-            case cybou::WalletEntryKind::PAYMENT: {
-                const QString party = entry.counterparty.IsNull() ? QString{}
-                    : QString::fromStdString(entry.counterparty.Value().GetHex()).left(12) + QStringLiteral("…");
-                activity->addWidget(ActivityRow(entry.amount >= 0 ? Glyph::ArrowDownLeft : Glyph::ArrowUpRight,
-                    entry.amount >= 0 ? Tint::Mint : Tint::Indigo,
-                    entry.amount >= 0 ? tr("Received CYBOU from %1").arg(party) : tr("Sent CYBOU to %1").arg(party),
-                    cybouAmountText(static_cast<quint64>(std::abs(entry.amount))), when, m_activity_rows));
-                break;
-            }
-            case cybou::WalletEntryKind::ONBOARDING_BONUS:
-                activity->addWidget(ActivityRow(Glyph::Sparkles, Tint::Amber, tr("Onboarding bonus"),
-                    cybouAmountText(static_cast<quint64>(entry.amount)), when, m_activity_rows));
-                break;
-            case cybou::WalletEntryKind::MAIL_FEE:
-                activity->addWidget(ActivityRow(Glyph::Envelope, Tint::Blue, tr("Mail service fee"),
-                    cybouAmountText(static_cast<quint64>(std::abs(entry.amount))), when, m_activity_rows));
-                break;
-            case cybou::WalletEntryKind::LOCK_TO_SYSTEM:
-                activity->addWidget(ActivityRow(Glyph::Lock, Tint::Violet, tr("Locked to System Balance"),
-                    cybouAmountText(static_cast<quint64>(entry.amount)), when, m_activity_rows));
-                break;
-            }
-            ++rows_shown;
-        }
-    }
-    if (m_model->lastSync().isValid()) {
-        activity->addWidget(ActivityRow(Glyph::Refresh, Tint::Neutral, tr("Network synced"),
-            status.last_finalized_height >= 0
-                ? tr("Finalized height %1").arg(status.last_finalized_height)
-                : tr("All data is up to date"),
-            relTime(m_model->lastSync()), m_activity_rows));
+    for (const auto& item : m_model->activity()) {
+        if (rows_shown >= 6) break;
+        activity->addWidget(ActivityRow(Glyph::Sparkles, Tint::Mint, item.title, item.subtitle,
+            relTime(item.time), m_activity_rows));
         ++rows_shown;
     }
     m_activity_empty->setVisible(rows_shown == 0);

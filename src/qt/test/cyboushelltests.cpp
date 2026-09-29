@@ -281,22 +281,23 @@ void CybouShellTests::adapterSettersDrivePages()
 
     // Doc 73 adapter surface: setters mutate status and pages follow.
     QSignalSpy status_spy{model, &CybouDesktopModel::statusChanged};
-    model->setFinalityStatus(42, 4);
-    QCOMPARE(model->status().last_finalized_height, 42);
-    QCOMPARE(model->status().validator_count, 4);
+    model->setFinalizedHeight(42);
+    QCOMPARE(model->status().finalized_height, quint64{42});
+    QVERIFY(model->status().finality_known);
     QVERIFY(status_spy.count() >= 1);
 
     auto* network = window->pageAt(6);
     QVERIFY(network);
     const auto labels = network->findChildren<QLabel*>();
     bool found_height = false;
-    bool found_fault = false;
+    bool found_poa = false;
     for (const auto* label : labels) {
         if (label->text() == QLatin1String{"42"}) found_height = true;
-        if (label->text().contains(QLatin1String{"f = 1"})) found_fault = true;
+        if (label->text().contains(QLatin1String{"PoA verified"})) found_poa = true;
+        QVERIFY2(!label->text().contains(QLatin1String{"alidator"}), qPrintable(label->text()));
     }
     QVERIFY(found_height);
-    QVERIFY(found_fault);
+    QVERIFY(found_poa);
 
     const QString sync_error = QStringLiteral("Configured peer belongs to another CYBOU network.");
     model->setSyncError(sync_error);
@@ -310,6 +311,8 @@ void CybouShellTests::adapterSettersDrivePages()
     QVERIFY(model->status().sync_error.isEmpty());
 
     // Identity lifecycle and balances flow through the same boundary.
+    model->setIdentityState(CybouIdentityState::Creating);
+    QCOMPARE(model->status().identity_state, CybouIdentityState::Creating);
     model->setIdentityState(CybouIdentityState::Active, QStringLiteral("acct-1"), 42);
     QCOMPARE(model->status().identity_state, CybouIdentityState::Active);
     QVERIFY(!model->identityCreationRequestPending());
@@ -320,9 +323,59 @@ void CybouShellTests::adapterSettersDrivePages()
 
     // Unchanged values are a no-op (no extra signal).
     const int before = status_spy.count();
-    model->setFinalityStatus(42, 4);
+    model->setFinalizedHeight(42);
     model->setBalances(1000, 250);
     QCOMPARE(status_spy.count(), before);
+}
+
+void CybouShellTests::productCollectionsDriveModel()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    QSignalSpy mail_spy{&model, &CybouDesktopModel::mailChanged};
+    QSignalSpy files_spy{&model, &CybouDesktopModel::filesChanged};
+
+    CybouMailItem mail;
+    mail.id = QStringLiteral("m1");
+    mail.from_name = QStringLiteral("alice.cybou");
+    mail.unread = true;
+    model.upsertMailItem(mail);
+    QCOMPARE(model.unreadMailCount(), 1);
+    mail.unread = false;
+    model.upsertMailItem(mail);
+    QCOMPARE(model.mailItems().size(), 1);
+    QCOMPARE(model.unreadMailCount(), 0);
+    QCOMPARE(mail_spy.count(), 2);
+
+    CybouFileItem file;
+    file.id = QStringLiteral("opaque-1");
+    file.name = QStringLiteral("report.pdf");
+    file.state = CybouContentState::Securing;
+    model.upsertFileItem(file);
+    file.state = CybouContentState::Protected;
+    model.upsertFileItem(file);
+    QCOMPARE(model.fileItems().size(), 1);
+    QCOMPARE(model.fileItems().first().state, CybouContentState::Protected);
+    QCOMPARE(files_spy.count(), 2);
+
+    // Finalized content is still Securing; only Protected reads as Sent.
+    CybouMailItem sent;
+    sent.folder = CybouMailFolder::Sent;
+    sent.state = CybouContentState::Securing;
+    QVERIFY(CybouProduct::mailStateText(sent) != QStringLiteral("Sent"));
+    sent.state = CybouContentState::Protected;
+    QCOMPARE(CybouProduct::mailStateText(sent), QStringLiteral("Sent"));
+
+    // Header connection wording.
+    CybouDesktopStatus status;
+    QCOMPARE(cybouConnectionText(status), QStringLiteral("Offline"));
+    status.node_running = true;
+    QCOMPARE(cybouConnectionText(status), QStringLiteral("Connecting"));
+    status.online = true;
+    QCOMPARE(cybouConnectionText(status), QStringLiteral("Synced"));
+    status.syncing = true;
+    QCOMPARE(cybouConnectionText(status), QStringLiteral("Syncing"));
+    status.sync_error = QStringLiteral("x");
+    QCOMPARE(cybouConnectionText(status), QStringLiteral("Needs attention"));
 }
 
 void CybouShellTests::themeResolvesAllTokens()

@@ -94,19 +94,15 @@ StoragePage::StoragePage(CybouDesktopModel* model, QWidget* parent)
     root->addWidget(m_usage_value);
     root->addWidget(m_usage_caption);
 
-    connect(m_refresh, &QPushButton::clicked, this, [this] { promptForIndex(); });
+    m_refresh->hide();
+    m_refresh->setEnabled(false);
     connect(m_upload, &QPushButton::clicked, this, [this] {
         if (m_model->status().identity_state != CybouIdentityState::Active) {
-            QMessageBox::information(this, tr("Identity required"), tr("Unlock your identity before using Files."));
+            QMessageBox::information(this, tr("Identity required"), tr("Unlock your Identity before using Files."));
             return;
         }
         const auto source = QFileDialog::getOpenFileName(this, tr("Upload file"));
-        if (source.isEmpty()) return;
-        bool accepted{false};
-        const auto password = QInputDialog::getText(this, tr("Unlock Files"),
-            tr("Enter your identity vault password to encrypt and save this file."),
-            QLineEdit::Password, {}, &accepted);
-        if (accepted && !password.isEmpty()) m_model->requestStorageUpload(source, password);
+        if (!source.isEmpty()) m_model->requestFileUpload(source);
     });
     connect(m_search, &QLineEdit::textChanged, this, [this] { rebuildList(); });
     connect(m_list, &QListWidget::itemSelectionChanged, this, [this] {
@@ -117,46 +113,23 @@ StoragePage::StoragePage(CybouDesktopModel* model, QWidget* parent)
         showDetails(index);
     });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::filesChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
     refresh();
 }
 
-void StoragePage::promptForIndex()
-{
-    if (m_model->status().identity_state != CybouIdentityState::Active) {
-        QMessageBox::information(this, tr("Identity required"), tr("Unlock your identity before opening Files."));
-        return;
-    }
-    bool accepted{false};
-    const auto password = QInputDialog::getText(this, tr("Open Files"),
-        tr("Enter your identity vault password to unlock the encrypted local Files index."),
-        QLineEdit::Password, {}, &accepted);
-    if (accepted && !password.isEmpty()) m_model->requestStorageList(password);
-}
-
 void StoragePage::refresh()
 {
-    m_objects = m_model->storageFiles();
-    m_upload->setEnabled(m_model->filesTransferAvailable() &&
-        m_model->status().identity_state == CybouIdentityState::Active &&
-        !m_model->storageOperationPending());
-    m_refresh->setEnabled(m_model->filesTransferAvailable() &&
-        m_model->status().identity_state == CybouIdentityState::Active &&
-        !m_model->storageOperationPending());
-    if (m_model->storageOperationPending()) {
-        m_gate_hint->setText(m_model->storageOperationStatus());
-    } else if (!m_model->storageOperationStatus().isEmpty()) {
-        m_gate_hint->setText(m_model->storageOperationStatus());
-    } else if (m_model->status().identity_state != CybouIdentityState::Active) {
-        m_gate_hint->setText(tr("Unlock your identity to open your encrypted local Files index."));
-    } else {
-        m_gate_hint->setText(tr("Files catalog synchronization is not available yet."));
+    m_objects.clear();
+    for (const auto& file : m_model->fileItems()) {
+        if (!file.trashed) m_objects.append(file);
     }
-    quint64 total{0};
-    for (const auto& file : m_objects) total += file.size;
-    m_usage_value->setText(tr("%1 files · %2 bytes indexed locally")
-        .arg(m_objects.size()).arg(QLocale{}.toString(total)));
-    m_usage_caption->setText(tr("Provider acknowledgements are not a finalized Files catalog or a durability guarantee."));
+    const bool active = m_model->status().identity_state == CybouIdentityState::Active;
+    m_upload->setEnabled(active && m_model->capabilities().files);
+    m_gate_hint->setText(!active ? tr("Unlock your Identity to open Files.")
+        : m_model->capabilities().files ? QString{} : tr("This feature is not connected yet."));
+    m_usage_value->setText(tr("%1 used").arg(CybouProduct::sizeText(m_model->status().storage_used)));
+    m_usage_caption->clear();
     rebuildList();
 }
 
@@ -168,16 +141,16 @@ void StoragePage::rebuildList()
     for (int i = 0; i < m_objects.size(); ++i) {
         const auto& file = m_objects.at(i);
         if (!needle.isEmpty() && !file.name.toCaseFolded().contains(needle)) continue;
-        auto* item = new QListWidgetItem{QStringLiteral("%1\n%2 bytes  ·  %3")
-            .arg(file.name, QLocale{}.toString(file.size),
-                file.pending_verification ? tr("Checking storage") : tr("Local index")), m_list};
+        auto* item = new QListWidgetItem{QStringLiteral("%1\n%2  ·  %3")
+            .arg(file.name, file.folder ? QStringLiteral("—") : CybouProduct::sizeText(file.logical_size),
+                CybouProduct::contentStateText(file.state)), m_list};
         item->setData(Qt::UserRole, i);
         item->setSizeHint(QSize{0, 62});
         visible = true;
     }
     if (!visible) {
         auto* item = new QListWidgetItem{m_objects.isEmpty()
-            ? tr("No files in this local index. Upload a file to get started.")
+            ? tr("No files yet.")
             : tr("No files match your search."), m_list};
         item->setFlags(Qt::NoItemFlags);
         item->setTextAlignment(Qt::AlignCenter);
@@ -197,28 +170,15 @@ void StoragePage::showDetails(const int index)
     title->setObjectName(QStringLiteral("serviceTitle"));
     title->setWordWrap(true);
     layout->addWidget(title);
-    layout->addWidget(MutedText(tr("%1 bytes").arg(QLocale{}.toString(file.size)), m_details));
-    layout->addWidget(MutedText(file.pending_verification
-        ? tr("Storage status is being checked.") : tr("Indexed on this installation."), m_details));
-    auto* object = new QLabel{tr("Object ID: %1").arg(file.object_id), m_details};
-    object->setObjectName(QStringLiteral("rowMeta"));
-    object->setWordWrap(true);
-    object->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    layout->addWidget(object);
+    layout->addWidget(MutedText(CybouProduct::sizeText(file.logical_size), m_details));
+    layout->addWidget(MutedText(CybouProduct::contentStateText(file.state), m_details));
     layout->addStretch();
     auto* download = new QPushButton{tr("Download"), m_details};
     download->setObjectName(QStringLiteral("primaryButton"));
-    download->setEnabled(!m_model->storageOperationPending());
+    download->setEnabled(file.state == CybouContentState::Protected);
     connect(download, &QPushButton::clicked, this, [this, file] {
         const auto destination = QFileDialog::getSaveFileName(this, tr("Download file"), file.name);
-        if (destination.isEmpty()) return;
-        bool accepted{false};
-        const auto password = QInputDialog::getText(this, tr("Unlock Files"),
-            tr("Enter your identity vault password to verify and decrypt this file."),
-            QLineEdit::Password, {}, &accepted);
-        if (accepted && !password.isEmpty())
-            m_model->requestStorageDownload(file.object_id, destination, password);
+        if (!destination.isEmpty()) m_model->requestFileDownload(file.id, destination);
     });
     layout->addWidget(download);
-    m_gate_hint->setText(m_model->storageOperationStatus());
 }

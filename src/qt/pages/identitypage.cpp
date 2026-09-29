@@ -40,11 +40,12 @@ namespace {
 QString phaseName(CybouIdentityState state)
 {
     switch (state) {
-    case CybouIdentityState::CreatingKeys: return IdentityPage::tr("Creating keys");
-    case CybouIdentityState::PerformingWork: return IdentityPage::tr("Performing work");
-    case CybouIdentityState::Broadcasting: return IdentityPage::tr("Broadcasting");
-    case CybouIdentityState::WaitingForFinality: return IdentityPage::tr("Waiting for finality");
+    case CybouIdentityState::Creating: return IdentityPage::tr("Creating Identity");
+    case CybouIdentityState::Restoring: return IdentityPage::tr("Restoring");
+    case CybouIdentityState::Syncing: return IdentityPage::tr("Syncing");
     case CybouIdentityState::Active: return IdentityPage::tr("Active");
+    case CybouIdentityState::Locked: return IdentityPage::tr("Locked");
+    case CybouIdentityState::NeedsAttention: return IdentityPage::tr("Needs attention");
     case CybouIdentityState::None: break;
     }
     return {};
@@ -110,10 +111,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
     auto* phases_row = new QHBoxLayout;
     phases_row->setSpacing(10);
     const QVector<CybouIdentityState> flow{
-        CybouIdentityState::CreatingKeys,
-        CybouIdentityState::PerformingWork,
-        CybouIdentityState::Broadcasting,
-        CybouIdentityState::WaitingForFinality,
+        CybouIdentityState::Creating,
         CybouIdentityState::Active,
     };
     for (const auto state : flow) {
@@ -674,10 +672,7 @@ void IdentityPage::rebuildForState(CybouIdentityState state)
     m_dev_warning->setVisible(active);
 
     const QVector<CybouIdentityState> flow{
-        CybouIdentityState::CreatingKeys,
-        CybouIdentityState::PerformingWork,
-        CybouIdentityState::Broadcasting,
-        CybouIdentityState::WaitingForFinality,
+        CybouIdentityState::Creating,
         CybouIdentityState::Active,
     };
     for (int index = 0; index < m_phases.size() && index < flow.size(); ++index) {
@@ -703,7 +698,7 @@ void IdentityPage::refresh()
     if (status.identity_state == CybouIdentityState::Active) {
         m_state_label->setText(status.primary_name.isEmpty() ? tr("Identity active") : status.primary_name);
         m_chip_protected->setText(tr("PQ identity signing"));
-        m_chip_ready->setText(status.network_active ? tr("Online") : tr("Offline"));
+        m_chip_ready->setText(status.online ? tr("Online") : tr("Offline"));
         m_detail_label->setText(status.name_claim_pending ? status.name_claim_status :
             tr("Your identity for CYBOU services. Mail sending and Files sync are not available yet."));
         m_active_details->setText(
@@ -717,21 +712,15 @@ void IdentityPage::refresh()
 
     if (status.identity_state != CybouIdentityState::None) {
         m_state_label->setText(tr("Processing identity"));
-        switch (status.identity_state) {
-        case CybouIdentityState::CreatingKeys:
-            m_detail_label->setText(tr("Preparing local identity keys and checking verified state."));
+        switch (status.identity_step) {
+        case CybouIdentityStep::PreparingKeys:
+            m_detail_label->setText(tr("Preparing keys."));
             break;
-        case CybouIdentityState::PerformingWork:
-            m_detail_label->setText(tr("The node is performing AccountCreationWork \u2014 protocol anti-Sybil computation. One identity costs real work, so mass registrations stay out."));
+        case CybouIdentityStep::CreatingIdentity:
+            m_detail_label->setText(tr("Creating Identity."));
             break;
-        case CybouIdentityState::Broadcasting:
-            m_detail_label->setText(tr("The signed identity operation is being submitted to the network."));
-            break;
-        case CybouIdentityState::WaitingForFinality:
-            m_detail_label->setText(tr("Waiting for verified BFT finality before activating this identity."));
-            break;
-        case CybouIdentityState::Active:
-        case CybouIdentityState::None:
+        case CybouIdentityStep::WaitingForConfirmation:
+            m_detail_label->setText(tr("Waiting for network confirmation."));
             break;
         }
         return;

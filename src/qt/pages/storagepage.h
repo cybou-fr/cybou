@@ -18,10 +18,7 @@ class QLineEdit;
 class QListWidget;
 class QPushButton;
 
-/**
- * Single-installation Files view over the encrypted local Storage index.
- * This is not a synchronized/finalized Files catalog (docs 83 and 91).
- */
+/** Files view over the product model (docs/cybou/83_STORAGE_UI_UX.md). */
 class StoragePage : public QWidget
 {
     Q_DECLARE_TR_FUNCTIONS(StoragePage)
@@ -31,7 +28,7 @@ public:
 
 private:
     CybouDesktopModel* m_model;
-    QVector<CybouDesktopFile> m_objects;
+    QVector<CybouFileItem> m_objects;
 
     QLabel* m_usage_value{nullptr};
     QLabel* m_usage_caption{nullptr};
@@ -45,7 +42,6 @@ private:
     void refresh();
     void rebuildList();
     void showDetails(int index);
-    void promptForIndex();
 };
 
 #endif // BITCOIN_QT_PAGES_STORAGEPAGE_H
