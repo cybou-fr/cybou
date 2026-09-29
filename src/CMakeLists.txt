@@ -210,6 +210,7 @@ include(InstallBinaryComponent)
 add_library(cybou_node STATIC
   cybou/kv_store.cpp
   cybou/finalized_chunk_store.cpp
+  cybou/poa_signing_journal.cpp
   cybou/storage_store.cpp
   cybou/storage_service.cpp
   cybou/state_store.cpp

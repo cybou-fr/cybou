@@ -51,9 +51,16 @@ introduced only for content-addressed encrypted chunks and their proofs.
 ## Anti-equivocation and chain acceptance
 
 The finalizer durably journals the network, PoA public-key identity, height,
-parent, and block ID before signing. Recovery fails closed if journal and
-finalized history disagree; a journal conflict can never be cleared by normal
-startup. The journal contains no private key.
+parent, and block ID before signing. The journal stores its identity binding and
+one current intent, so storage does not grow with chain height. Startup accepts
+the finalized tip only when it equals the journaled block or its direct parent;
+the latter permits retrying the same prepared-but-unfinalized block. A new
+intent requires the previous journaled block to be finalized, the next height,
+and its exact block ID as parent. Recovery fails closed if journal and finalized
+history disagree; a journal conflict can never be cleared by normal startup.
+The journal contains no private key. The current implementation provides the
+pre-sign intent and canonical-tip check; finalizer runtime integration and
+independent-node detection of conflicting valid certificates remain open.
 
 If a node verifies two valid PoA signatures for different blocks at the same
 height and parent, it enters a permanent safety halt. It does not select a fork,

@@ -36,9 +36,11 @@ recovery gates pass together. See
   lookup from verified canonical finalized block history.
 - A separate `POA_FINALIZER` Ed25519 + ML-DSA-65 key derivation purpose for the
   dedicated operator recovery phrase, public-key identity hash, and fixed-format
-  PoA finality certificate signing and verification primitives. Genesis
-  commitment, runtime finality acceptance, durable anti-equivocation, and
-  operator recovery remain cutover gates.
+  PoA finality certificate signing and verification primitives. A durable
+  pre-sign journal enforces one next-height intent and checks recovered tip
+  consistency. Genesis commitment and wiring signing into the finalizer runtime,
+  finalized-block acceptance, independent-node conflict halt, and operator
+  recovery remain cutover gates.
 
 These components are substrate code. Their integration with the canonical
 Identity operation path, state transition, block finality, and provider network
