@@ -81,6 +81,13 @@ public:
         done(false, tr("Your data cannot be secured for a new recovery phrase right now."));
     }
 
+    /**
+     * The Identity key material was replaced (a finalized IdentityRotate).
+     * Session state keyed to the old material must be reopened; nothing the
+     * user can see should be lost.
+     */
+    virtual void identityKeysChanged() {}
+
     /* ---- Files commands. ---- */
     virtual void uploadFile(const QString& file_id, const QString& source_path, const QString& parent_id) = 0;
     virtual void downloadFile(const QString& file_id, const QString& destination) = 0;

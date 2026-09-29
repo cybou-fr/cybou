@@ -3,6 +3,9 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/identity_operation_coordinator.h>
+#include <cybou/private_application_store.h>
+#include <cybou/recovery_phrase.h>
+#include <cybou/publication_service.h>
 #include <cybou/identity_service.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/name_registry.h>
@@ -352,6 +355,31 @@ BOOST_AUTO_TEST_CASE(each_key_store_gets_its_own_coordinator)
     BOOST_CHECK(&a != &b);
     BOOST_CHECK(&a == &fixture.runtime->GetIdentityOperationCoordinator(first->GetKeyStore()));
     BOOST_CHECK(&b == &fixture.runtime->GetIdentityOperationCoordinator(second->GetKeyStore()));
+}
+
+BOOST_AUTO_TEST_CASE(finalized_earlier_operation_does_not_block_rotation)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("rotate-after-operation.cybou");
+    auto& coordinator = fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore());
+    // Leave a finalized RootPublication (for example a RecoveryBridge) in the journal.
+    cybou::KVStore staging{cybou::KVStoreOptions{.memory_only = true}};
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), fixture.directory / "app"};
+    cybou::PublicationService publication{*fixture.runtime, identity->GetKeyStore(), db, coordinator, staging};
+    cybou::FilesMutationBatch batch;
+    const auto item = *cybou::NewPrivateItemId();
+    batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item,
+        cybou::FileItem{.item_id = item, .kind = cybou::FileItemKind::FOLDER, .name = "before-rotation"}});
+    BOOST_REQUIRE(publication.PublishFiles("before-rotation", batch).phase ==
+        cybou::PublicationJobPhase::WAITING_FINALITY);
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+
+    auto next = cybou::GenerateRecoveryEntropy();
+    BOOST_REQUIRE(next);
+    const auto words = cybou::EncodeRecoveryWords(*next);
+    cybou::crypto::CleanseMemory(next->data(), next->size());
+    const auto rotated = identity->RotateIdentitySync(words, "correct horse battery staple");
+    BOOST_REQUIRE_MESSAGE(rotated.phase == cybou::IdentityOperationPhase::ACCEPTED, rotated.error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

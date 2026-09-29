@@ -15,6 +15,7 @@
 
 namespace cybou {
 class CybouNodeRuntime;
+class StorageTransport;
 class CybouIdentityService;
 }
 
@@ -60,6 +61,10 @@ public:
     void saveAttachmentToFiles(const QString& message_id, const QString& attachment_id,
         const QString& file_id) override;
 
+    void identityKeysChanged() override;
+    /** Test hook: remote chunk transport used by new sessions (default: CYP2 peers). */
+    void setStorageTransport(cybou::StorageTransport* transport) { m_transport_override = transport; }
+
     void prepareIdentityRotation(const QStringList& new_words,
         std::function<void(bool ok, const QString& error)> done) override;
 
@@ -81,6 +86,10 @@ private:
     const std::filesystem::path m_data_directory;
     std::unique_ptr<Session> m_session;
     bool m_mail_ready{false};
+    cybou::StorageTransport* m_transport_override{nullptr};
+    bool m_reopening{false};
+    /** Drafts from the latest snapshot, carried across a key change. */
+    QVector<CybouMailItem> m_last_drafts;
     int m_refresh_ms{3000};
     /** Draft edits and deletes not yet reflected by a worker snapshot. Drafts
         persist in the encrypted Application DB and are never published. */

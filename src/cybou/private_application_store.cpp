@@ -87,7 +87,7 @@ PrivateApplicationStore::PrivateApplicationStore(CybouKeyStore& identity, const 
     if (m_db->Read(std::string{"app/v1/check"}, check)) {
         auto decoded = Decrypt(*key, CHECK_NAME, check);
         if (!decoded || !std::equal(decoded->begin(), decoded->end(), CHECK_VALUE.begin(), CHECK_VALUE.end())) {
-            throw std::runtime_error{"private application store belongs to another key or is corrupt"};
+            throw PrivateApplicationStoreKeyMismatch{"private application store belongs to other Identity keys"};
         }
         crypto::CleanseMemory(decoded->data(), decoded->size());
     } else {

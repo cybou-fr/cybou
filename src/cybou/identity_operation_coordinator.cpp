@@ -396,7 +396,10 @@ IdentityOperationResult IdentityOperationCoordinator::RotateIdentity(
     if (!account) return {.phase = IdentityOperationPhase::REJECTED, .error = "No Identity is unlocked"};
     if (m_entry) {
         if (m_entry->account_id == *account && m_entry->kind == 0) return Reconcile(*m_entry);
-        return {.phase = IdentityOperationPhase::CONFLICT, .op_id = m_entry->op_id,
+        // A finalized or rejected earlier operation (for example the
+        // RecoveryBridge publication) is cleared and must not block rotation.
+        if (m_entry->account_id == *account) (void)Reconcile(*m_entry);
+        if (m_entry) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = m_entry->op_id,
             .error = "Another Identity operation is unresolved"};
     }
     const auto loaded = m_runtime.GetStore().LoadState();

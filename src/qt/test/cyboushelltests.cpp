@@ -23,6 +23,7 @@
 #include <cybou/network_definition.h>
 #include <test/cybou_test_helpers.h>
 #include <test/cybou_service_test_fixture.h>
+#include <test/cybou_storage_test_network.h>
 
 #include <cybou/recovery_phrase.h>
 
@@ -1645,5 +1646,116 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QVERIFY(alice_model->fileItems().isEmpty());
     alice_model->setApplicationBackend(nullptr);
     bob_model->setApplicationBackend(nullptr);
+}
+
+void CybouShellTests::rotationKeepsLiveSessionWorking()
+{
+    // Real core services with two storage providers, so the RecoveryBridge
+    // can become durable and the rotation can complete in this session.
+    CybouServiceTestFixture fixture;
+    ProviderNetwork network{fixture};
+    auto alice = fixture.CreateIdentity("rotation-alice.vault");
+    const QString account = QString::fromStdString(alice->GetAccountId()->Value().GetHex());
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    CybouCoreApplicationAdapter adapter{*fixture.runtime, *alice, fixture.directory / "desktop"};
+    adapter.setRefreshInterval(20);
+    adapter.setStorageTransport(&network);
+    model.setApplicationBackend(&adapter);
+    model.requestApplicationCapabilities(true, true);
+    model.setIdentityService(alice.get()); // a known vault starts Locked
+    model.setIdentityState(CybouIdentityState::Active, account, 1);
+    QTRY_VERIFY(model.capabilities().files);
+
+    const auto produce_until = [&](const std::function<bool()>& done) {
+        for (int i = 0; i < 40 && !done(); ++i) {
+            fixture.runtime->ProduceBlock();
+            network.Sync();
+            QTest::qWait(60);
+        }
+        return done();
+    };
+    const auto file_named = [&](const QString& name) -> const CybouFileItem* {
+        for (const auto& item : model.fileItems()) {
+            if (item.name == name) return model.fileItem(item.id);
+        }
+        return nullptr;
+    };
+    QTemporaryDir dir;
+    const auto write = [&](const QString& name, const QByteArray& bytes) {
+        const QString path = dir.filePath(name);
+        QFile out{path};
+        if (out.open(QIODevice::WriteOnly)) out.write(bytes);
+        return path;
+    };
+
+    // Content published under the original keys.
+    const QByteArray before(200 * 1024, 'b');
+    QVERIFY(!model.requestFileUpload(write(QStringLiteral("before.bin"), before)).isEmpty());
+    QVERIFY(produce_until([&] {
+        const auto* file = file_named(QStringLiteral("before.bin"));
+        return file && file->state == CybouContentState::Protected;
+    }));
+    CybouMailItem draft;
+    draft.subject = QStringLiteral("Keep me");
+    draft.body = QStringLiteral("A draft across rotation");
+    const QString draft_id = model.requestSaveMailDraft(draft);
+    QVERIFY(!draft_id.isEmpty());
+
+    // Replace the recovery phrase: bridge -> durable -> verified -> IdentityRotate.
+    QSignalSpy rotated{&model, &CybouDesktopModel::recoveryRotationFinished};
+    const auto entropy = cybou::GenerateRecoveryEntropy();
+    QVERIFY(entropy.has_value());
+    QStringList words;
+    for (const auto& word : cybou::EncodeRecoveryWords(*entropy)) words << QString::fromStdString(word);
+    const QString password = QStringLiteral("correct horse battery staple");
+    QVERIFY(model.requestRecoveryRootRotation(words, password));
+    QVERIFY(produce_until([&] { return rotated.count() > 0; }));
+    // Submitted: finality completes the rotation on resume.
+    for (int i = 0; i < 5 && rotated.last().at(0).value<CybouOperationOutcome>() == CybouOperationOutcome::Pending; ++i) {
+        fixture.runtime->ProduceBlock();
+        network.Sync();
+        const int seen = rotated.count();
+        QVERIFY(model.requestRecoveryRootRotation({}, password, true));
+        QTRY_VERIFY(rotated.count() > seen);
+    }
+    QVERIFY2(rotated.last().at(0).value<CybouOperationOutcome>() == CybouOperationOutcome::Finalized,
+        qPrintable(rotated.last().at(1).toString()));
+    {
+        const auto loaded = fixture.runtime->GetStore().LoadState();
+        QCOMPARE(loaded.state->identities.Find(*alice->GetAccountId())->key_epoch, std::uint64_t{1});
+    }
+
+    // Same session, new keys: Mail and Files keep working, nothing visible is lost.
+    QTRY_VERIFY(model.capabilities().files && model.capabilities().mail);
+    QTRY_VERIFY(file_named(QStringLiteral("before.bin")) != nullptr);
+    QTRY_VERIFY(model.mailItem(draft_id) != nullptr);
+    QCOMPARE(model.mailItem(draft_id)->body, QStringLiteral("A draft across rotation"));
+    const QString downloaded = dir.filePath(QStringLiteral("before-downloaded.bin"));
+    model.requestFileDownload(file_named(QStringLiteral("before.bin"))->id, downloaded);
+    QTRY_VERIFY(QFile::exists(downloaded));
+    {
+        QFile in{downloaded};
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        QCOMPARE(in.readAll(), before);
+    }
+    const QByteArray after(150 * 1024, 'a');
+    QVERIFY(!model.requestFileUpload(write(QStringLiteral("after.bin"), after)).isEmpty());
+    QVERIFY(produce_until([&] {
+        const auto* file = file_named(QStringLiteral("after.bin"));
+        return file && file->state == CybouContentState::Protected;
+    }));
+    CybouMailItem note;
+    note.to_name = account;
+    note.subject = QStringLiteral("After rotation");
+    note.body = QStringLiteral("Still sending");
+    QVERIFY(!model.requestSendMail(note).isEmpty());
+    const auto note_item = [&]() -> const CybouMailItem* {
+        for (const auto& item : model.mailItems()) {
+            if (item.subject == QStringLiteral("After rotation") && !item.draft) return model.mailItem(item.id);
+        }
+        return nullptr;
+    };
+    QVERIFY(produce_until([&] { return note_item() && note_item()->state == CybouContentState::Protected; }));
+    model.setApplicationBackend(nullptr);
 }
 

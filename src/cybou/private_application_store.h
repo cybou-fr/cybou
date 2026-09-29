@@ -10,6 +10,7 @@
 #include <cybou/kv_store.h>
 
 #include <array>
+#include <stdexcept>
 #include <map>
 #include <string>
 #include <utility>
@@ -29,6 +30,17 @@ namespace cybou {
  * retains no decryption key; access requires the original unlocked key store.
  * Canonical balances, names, and authorization state do not belong here.
  */
+/**
+ * The Application DB was encrypted under different Identity key material,
+ * typically before a completed IdentityRotate. The projection is rebuildable:
+ * callers may discard it and open a fresh one; device-local-only records
+ * (drafts) cannot be decrypted any more.
+ */
+class PrivateApplicationStoreKeyMismatch final : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 class PrivateApplicationStore final {
 public:
     PrivateApplicationStore(CybouKeyStore& identity, const std::filesystem::path& data_dir);

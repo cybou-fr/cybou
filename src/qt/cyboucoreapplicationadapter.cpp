@@ -20,6 +20,7 @@
 #include <QFileInfo>
 #include <QMetaObject>
 
+#include <algorithm>
 #include <condition_variable>
 #include <deque>
 #include <exception>
@@ -128,6 +129,7 @@ struct CybouCoreApplicationAdapter::Session {
     std::unique_ptr<cybou::PrivateApplicationStore> db;
     std::unique_ptr<cybou::KVStore> staging;
     std::unique_ptr<cybou::RuntimeStorageTransport> transport;
+    cybou::StorageTransport* transport_override{nullptr};
     std::unique_ptr<cybou::StorageService> storage;
     std::unique_ptr<cybou::PublicationService> publication;
     std::unique_ptr<cybou::ApplicationService> application;
@@ -163,8 +165,9 @@ struct CybouCoreApplicationAdapter::Session {
     std::jthread worker;
 
     Session(CybouCoreApplicationAdapter* adapter, cybou::CybouNodeRuntime& rt, cybou::CybouKeyStore& ks,
-        std::filesystem::path identity_root, int interval)
-        : owner{adapter}, runtime{rt}, keystore{ks}, root{std::move(identity_root)}, refresh_ms{interval}
+        std::filesystem::path identity_root, int interval, cybou::StorageTransport* override_transport)
+        : owner{adapter}, runtime{rt}, keystore{ks}, root{std::move(identity_root)}, refresh_ms{interval},
+          transport_override{override_transport}
     {
         worker = std::jthread{[this](std::stop_token stop) { Run(stop); }};
     }
@@ -195,10 +198,18 @@ struct CybouCoreApplicationAdapter::Session {
     {
         try {
             std::filesystem::create_directories(root);
-            db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root / "app");
+            try {
+                db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root / "app");
+            } catch (const cybou::PrivateApplicationStoreKeyMismatch&) {
+                // Encrypted under keys replaced by IdentityRotate: the projection
+                // is rebuilt from finalized history (RecoveryBridge included).
+                std::filesystem::remove_all(root / "app");
+                db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root / "app");
+            }
             staging = std::make_unique<cybou::KVStore>(cybou::KVStoreOptions{.path = root / "staging"});
             transport = std::make_unique<cybou::RuntimeStorageTransport>(runtime);
-            storage = std::make_unique<cybou::StorageService>(runtime, *transport, *db);
+            storage = std::make_unique<cybou::StorageService>(runtime,
+                transport_override ? *transport_override : static_cast<cybou::StorageTransport&>(*transport), *db);
             publication = std::make_unique<cybou::PublicationService>(runtime, keystore, *db,
                 runtime.GetIdentityOperationCoordinator(keystore), *staging);
             application = std::make_unique<cybou::ApplicationService>(runtime, keystore, *db, *storage);
@@ -242,6 +253,11 @@ struct CybouCoreApplicationAdapter::Session {
     /** Scan, advance durability and publish one Mail snapshot. */
     void Refresh()
     {
+        // Same Identity, new key material (IdentityRotate finalized elsewhere): reopen.
+        if (!db->IsUnlocked() && keystore.HasKey() && keystore.GetAccountId() == std::optional{db->Account()}) {
+            ToGui([owner = owner] { owner->identityKeysChanged(); });
+            return;
+        }
         const auto progress = application->Scan();
         for (const auto& [id, status] : publication->ProcessDurability(*storage)) jobs[id] = status;
         AdvanceRotation();
@@ -569,7 +585,29 @@ void CybouCoreApplicationAdapter::openIdentity()
     if (!account) return;
     // One encrypted, rebuildable Application DB per Identity.
     const auto root = m_data_directory / "identities" / account->Value().GetHex();
-    m_session = std::make_unique<Session>(this, m_runtime, m_identity.GetKeyStore(), root, m_refresh_ms);
+    m_session = std::make_unique<Session>(this, m_runtime, m_identity.GetKeyStore(), root, m_refresh_ms,
+        m_transport_override);
+}
+
+void CybouCoreApplicationAdapter::identityKeysChanged()
+{
+    if (!m_session || m_reopening) return;
+    m_reopening = true;
+    // Drafts exist only on this device: keep the latest ones across the reopen.
+    QVector<CybouMailItem> drafts = m_last_drafts;
+    for (const auto& pending : std::as_const(m_pending_drafts)) {
+        const auto same = std::find_if(drafts.begin(), drafts.end(),
+            [&](const CybouMailItem& d) { return d.id == pending.id; });
+        if (same != drafts.end()) *same = pending;
+        else drafts.append(pending);
+    }
+    m_session.reset();
+    setReady(false);
+    openIdentity();
+    for (const auto& draft : std::as_const(drafts)) {
+        if (!m_deleted_drafts.contains(draft.id)) saveMailDraft(draft);
+    }
+    m_reopening = false;
 }
 
 void CybouCoreApplicationAdapter::closeIdentity()
@@ -623,6 +661,10 @@ void CybouCoreApplicationAdapter::applySnapshot(QVector<CybouMailItem> items, QV
     }
     for (const auto& pending : std::as_const(m_pending_sends)) items.append(pending);
     setReady(ready);
+    m_last_drafts.clear();
+    for (const auto& item : std::as_const(items)) {
+        if (item.draft) m_last_drafts.append(item);
+    }
     Q_EMIT mailSnapshot(items);
     m_last_files = std::move(files);
     emitFiles();

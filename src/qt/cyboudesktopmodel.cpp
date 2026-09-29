@@ -747,6 +747,8 @@ void CybouDesktopModel::startRecoveryRotation(cybou::RecoveryWords words, const 
         const auto error = QString::fromStdString(result.error);
         QMetaObject::invokeMethod(this, [this, outcome, error] {
             m_recovery_rotation_pending = false;
+            // New key material: reopen everything encrypted under the old keys.
+            if (outcome == CybouOperationOutcome::Finalized && m_backend) m_backend->identityKeysChanged();
             Q_EMIT statusChanged();
             Q_EMIT recoveryRotationFinished(outcome, error);
         }, Qt::QueuedConnection);

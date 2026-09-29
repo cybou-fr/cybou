@@ -64,6 +64,7 @@ private Q_SLOTS:
     void lockHidesPrivateContent();
     void restoreFillsInProgressively();
     void liveMailAndFilesThroughCoreAdapter();
+    void rotationKeepsLiveSessionWorking();
 
 private:
     std::unique_ptr<CybouMainWindow> makeWindow();
