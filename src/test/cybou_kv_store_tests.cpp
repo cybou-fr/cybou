@@ -2,12 +2,11 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#include <cybou/kv_store.h>
+#include <cybou/state_store.h>
 
 #include <boost/test/unit_test.hpp>
 
 #include <array>
-#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -33,12 +32,41 @@ BOOST_AUTO_TEST_CASE(local_record_encoding_preserves_existing_database_bytes)
     BOOST_CHECK_EQUAL_COLLECTIONS(encoded_vector.begin(), encoded_vector.end(),
         expected_vector.begin(), expected_vector.end());
 
+    const std::vector<unsigned char> compact_253(253, 0xaa);
+    const auto encoded_253 = cybou::detail::SerializeLocalRecord(compact_253);
+    BOOST_CHECK_EQUAL(encoded_253[0], 253);
+    BOOST_CHECK_EQUAL(encoded_253[1], 253);
+    BOOST_CHECK_EQUAL(encoded_253[2], 0);
+
+    const std::vector<unsigned char> compact_65536(65536, 0xbb);
+    const auto encoded_65536 = cybou::detail::SerializeLocalRecord(compact_65536);
+    BOOST_CHECK_EQUAL(encoded_65536[0], 254);
+    BOOST_CHECK_EQUAL(encoded_65536[1], 0);
+    BOOST_CHECK_EQUAL(encoded_65536[2], 0);
+    BOOST_CHECK_EQUAL(encoded_65536[3], 1);
+    BOOST_CHECK_EQUAL(encoded_65536[4], 0);
+
     std::string decoded;
-    const auto bytes = std::as_bytes(std::span{encoded_string});
-    cybou::detail::LocalRecordReader reader{bytes};
-    reader >> decoded;
+    BOOST_CHECK(cybou::detail::DeserializeLocalRecord(std::span{encoded_string}, decoded));
     BOOST_CHECK_EQUAL(decoded, "key");
-    BOOST_CHECK(reader.empty());
+    const std::array<unsigned char, 3> noncanonical_string_size{253, 1, 0};
+    BOOST_CHECK(!cybou::detail::DeserializeLocalRecord(std::span{noncanonical_string_size}, decoded));
+
+    cybou::FinalizedHead head{};
+    for (size_t i{0}; i < uint256::size(); ++i) head.block_id.begin()[i] = static_cast<unsigned char>(i);
+    head.height = 0x0102030405060708;
+    const auto encoded_head = cybou::detail::SerializeLocalRecord(head);
+    BOOST_REQUIRE_EQUAL(encoded_head.size(), 40);
+    BOOST_CHECK_EQUAL_COLLECTIONS(encoded_head.begin(), encoded_head.begin() + 32,
+        head.block_id.begin(), head.block_id.end());
+    const std::array<unsigned char, 8> expected_height{8, 7, 6, 5, 4, 3, 2, 1};
+    BOOST_CHECK_EQUAL_COLLECTIONS(encoded_head.begin() + 32, encoded_head.end(),
+        expected_height.begin(), expected_height.end());
+
+    cybou::FinalizedHead decoded_head{};
+    BOOST_CHECK(cybou::detail::DeserializeLocalRecord(std::span{encoded_head}, decoded_head));
+    BOOST_CHECK(decoded_head.block_id == head.block_id);
+    BOOST_CHECK_EQUAL(decoded_head.height, head.height);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

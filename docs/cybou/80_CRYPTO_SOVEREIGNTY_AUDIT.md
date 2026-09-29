@@ -22,11 +22,11 @@ recreating inherited Bitcoin facilities that the active protocol does not use.
 
 ## Remaining inherited boundary
 
-The node's local LevelDB implementation uses a small CYBOU byte reader/writer
-with the inherited `Serialize`/`Unserialize` formatters. The record bytes stay
-compatible with the existing database; they are local persistence, not CYP2
-wire messages or consensus serialization. The focused adapter avoids pulling
-in inherited stream classes and their secret-cleansing allocator.
+The node's local LevelDB implementation now has a CYBOU-owned record codec.
+It preserves the existing CompactSize, little-endian integer, and fixed-byte
+encodings while removing inherited `DataStream`, `SpanReader`, and generic
+`Serialize`/`Unserialize` use from CYBOU storage. These bytes are local
+persistence, not CYP2 wire messages or consensus serialization.
 
 The shared `uint256` interface also retains inherited compile-time endian,
 span, and hex helpers. Do not change its byte order or the hash interpretation

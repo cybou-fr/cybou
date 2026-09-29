@@ -169,9 +169,10 @@ std::optional<std::uint64_t> ReconcileBlobStore(
             const auto id = ParseChunkId(key.substr(chunk_prefix.size()));
             if (!id) throw std::runtime_error{"corrupt finalized chunk metadata key"};
             std::uint64_t size{0};
-            const auto* value_begin = reinterpret_cast<const std::byte*>(raw_size.data());
-            detail::LocalRecordReader value_reader{std::span<const std::byte>{value_begin, raw_size.size()}};
-            value_reader >> size;
+            const auto value_bytes = std::span{reinterpret_cast<const unsigned char*>(raw_size.data()), raw_size.size()};
+            if (!detail::DeserializeLocalRecord(value_bytes, size)) {
+                throw std::runtime_error{"corrupt finalized chunk size metadata"};
+            }
             if (size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES ||
                 size > std::numeric_limits<std::uint64_t>::max() - total) {
                 throw std::runtime_error{"invalid finalized chunk size metadata"};

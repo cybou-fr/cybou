@@ -12,7 +12,6 @@
 #include <cybou/poa_conflict_detector.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/state.h>
-#include <serialize.h>
 
 #include <cstdint>
 #include <memory>
@@ -26,13 +25,30 @@ struct FinalizedHead {
     uint256 block_id;
     uint64_t height{0};
 
-    SERIALIZE_METHODS(FinalizedHead, obj)
-    {
-        READWRITE(obj.block_id, obj.height);
-    }
-
     friend bool operator==(const FinalizedHead&, const FinalizedHead&) = default;
 };
+
+namespace detail {
+template <>
+struct LocalRecordCodec<FinalizedHead> {
+    static std::vector<unsigned char> Encode(const FinalizedHead& value)
+    {
+        auto out = LocalRecordCodec<uint256>::Encode(value.block_id);
+        const auto height = LocalRecordCodec<uint64_t>::Encode(value.height);
+        out.insert(out.end(), height.begin(), height.end());
+        return out;
+    }
+    static bool Decode(const std::span<const unsigned char> bytes, FinalizedHead& value)
+    {
+        if (bytes.size() < uint256::size() + sizeof(uint64_t)) return false;
+        FinalizedHead decoded;
+        if (!LocalRecordCodec<uint256>::Decode(bytes.first(uint256::size()), decoded.block_id) ||
+            !LocalRecordCodec<uint64_t>::Decode(bytes.subspan(uint256::size()), decoded.height)) return false;
+        value = decoded;
+        return true;
+    }
+};
+} // namespace detail
 
 enum class StateLoadError : uint8_t {
     NONE,

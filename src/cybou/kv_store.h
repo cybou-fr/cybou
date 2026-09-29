@@ -5,18 +5,19 @@
 #ifndef CYBOU_KV_STORE_H
 #define CYBOU_KV_STORE_H
 
-#include <serialize.h>
+#include <uint256.h>
 
+#include <algorithm>
 #include <cstddef>
-#include <cstring>
+#include <cstdint>
 #include <filesystem>
 #include <functional>
-#include <ios>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -26,72 +27,120 @@ namespace cybou {
 
 namespace detail {
 
-/** Byte writer for local LevelDB records using the existing Bitcoin serializer. */
-class LocalRecordWriter final
+inline void AppendCompactSize(std::vector<unsigned char>& out, const uint64_t value)
 {
-public:
-    void write(const std::span<const std::byte> bytes)
-    {
-        if (bytes.empty()) return;
-        const auto* begin = reinterpret_cast<const unsigned char*>(bytes.data());
-        m_bytes.insert(m_bytes.end(), begin, begin + bytes.size());
+    if (value < 253) {
+        out.push_back(static_cast<unsigned char>(value));
+    } else if (value <= std::numeric_limits<uint16_t>::max()) {
+        out.push_back(253);
+        for (unsigned i{0}; i < 2; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
+    } else if (value <= std::numeric_limits<uint32_t>::max()) {
+        out.push_back(254);
+        for (unsigned i{0}; i < 4; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
+    } else {
+        out.push_back(255);
+        for (unsigned i{0}; i < 8; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
     }
+}
 
-    template <typename T>
-    LocalRecordWriter& operator<<(const T& value)
-    {
-        ::Serialize(*this, value);
-        return *this;
+inline bool ReadCompactSize(const std::span<const unsigned char> bytes, size_t& offset, uint64_t& value)
+{
+    if (offset >= bytes.size()) return false;
+    const auto marker = bytes[offset++];
+    if (marker < 253) {
+        value = marker;
+        return true;
     }
+    const size_t width = marker == 253 ? 2 : marker == 254 ? 4 : 8;
+    if (width > bytes.size() - offset) return false;
+    value = 0;
+    for (size_t i{0}; i < width; ++i) value |= uint64_t{bytes[offset++]} << (8 * i);
+    return (width != 2 || value >= 253) && (width != 4 || value >= 0x10000) &&
+        (width != 8 || value >= 0x100000000ULL) && value <= 0x02000000;
+}
 
-    const std::vector<unsigned char>& Bytes() const { return m_bytes; }
+template <typename T, typename Enable = void>
+struct LocalRecordCodec;
 
-private:
-    std::vector<unsigned char> m_bytes;
+template <>
+struct LocalRecordCodec<std::string> {
+    static std::vector<unsigned char> Encode(const std::string& value)
+    {
+        std::vector<unsigned char> out;
+        AppendCompactSize(out, value.size());
+        out.insert(out.end(), value.begin(), value.end());
+        return out;
+    }
+    static bool Decode(const std::span<const unsigned char> bytes, std::string& value)
+    {
+        size_t offset{0};
+        uint64_t size{0};
+        if (!ReadCompactSize(bytes, offset, size) || size > bytes.size() - offset) return false;
+        value.assign(reinterpret_cast<const char*>(bytes.data() + offset), static_cast<size_t>(size));
+        return true;
+    }
 };
 
-/** Bounded reader for local LevelDB records using the existing deserializer. */
-class LocalRecordReader final
-{
-public:
-    explicit LocalRecordReader(const std::span<const std::byte> bytes) : m_bytes{bytes} {}
-
-    template <typename T>
-    LocalRecordReader& operator>>(T&& value)
+template <>
+struct LocalRecordCodec<std::vector<unsigned char>> {
+    static std::vector<unsigned char> Encode(const std::vector<unsigned char>& value)
     {
-        ::Unserialize(*this, std::forward<T>(value));
-        return *this;
+        std::vector<unsigned char> out;
+        AppendCompactSize(out, value.size());
+        out.insert(out.end(), value.begin(), value.end());
+        return out;
     }
-
-    size_t size() const { return m_bytes.size() - m_offset; }
-    bool empty() const { return size() == 0; }
-
-    void read(const std::span<std::byte> destination)
+    static bool Decode(const std::span<const unsigned char> bytes, std::vector<unsigned char>& value)
     {
-        if (destination.size() > size()) throw std::ios_base::failure{"truncated local CYBOU record"};
-        if (!destination.empty()) {
-            std::memcpy(destination.data(), m_bytes.data() + m_offset, destination.size());
-            m_offset += destination.size();
-        }
+        size_t offset{0};
+        uint64_t size{0};
+        if (!ReadCompactSize(bytes, offset, size) || size > bytes.size() - offset) return false;
+        value.assign(bytes.begin() + offset, bytes.begin() + offset + static_cast<size_t>(size));
+        return true;
     }
+};
 
-    void ignore(const size_t count)
+template <typename T>
+struct LocalRecordCodec<T, std::enable_if_t<std::is_unsigned_v<T>>> {
+    static std::vector<unsigned char> Encode(const T value)
     {
-        if (count > size()) throw std::ios_base::failure{"truncated local CYBOU record"};
-        m_offset += count;
+        std::vector<unsigned char> out(sizeof(T));
+        for (size_t i{0}; i < sizeof(T); ++i) out[i] = static_cast<unsigned char>(value >> (8 * i));
+        return out;
     }
+    static bool Decode(const std::span<const unsigned char> bytes, T& value)
+    {
+        if (bytes.size() < sizeof(T)) return false;
+        value = 0;
+        for (size_t i{0}; i < sizeof(T); ++i) value |= static_cast<T>(bytes[i]) << (8 * i);
+        return true;
+    }
+};
 
-private:
-    std::span<const std::byte> m_bytes;
-    size_t m_offset{0};
+template <>
+struct LocalRecordCodec<uint256> {
+    static std::vector<unsigned char> Encode(const uint256& value)
+    {
+        return {value.begin(), value.end()};
+    }
+    static bool Decode(const std::span<const unsigned char> bytes, uint256& value)
+    {
+        if (bytes.size() < uint256::size()) return false;
+        std::copy_n(bytes.begin(), uint256::size(), value.begin());
+        return true;
+    }
 };
 
 template <typename T>
 std::vector<unsigned char> SerializeLocalRecord(const T& value)
 {
-    LocalRecordWriter writer;
-    writer << value;
-    return writer.Bytes();
+    return LocalRecordCodec<std::remove_cv_t<T>>::Encode(value);
+}
+
+template <typename T>
+bool DeserializeLocalRecord(const std::span<const unsigned char> bytes, T& value)
+{
+    return LocalRecordCodec<T>::Decode(bytes, value);
 }
 
 } // namespace detail
@@ -153,14 +202,12 @@ public:
         const auto serialized_key = detail::SerializeLocalRecord(key);
         const auto raw = ReadRaw(serialized_key);
         if (!raw) return false;
-        const auto* begin = reinterpret_cast<const std::byte*>(raw->data());
-        detail::LocalRecordReader reader{std::span<const std::byte>{begin, raw->size()}};
+        const auto bytes = std::span{reinterpret_cast<const unsigned char*>(raw->data()), raw->size()};
         try {
-            reader >> value;
+            return detail::DeserializeLocalRecord(bytes, value);
         } catch (const std::exception&) {
             return false;
         }
-        return true;
     }
 
     template <typename K>

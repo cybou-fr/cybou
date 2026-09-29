@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <ios>
 #include <stdexcept>
 #include <string>
 
@@ -147,14 +148,14 @@ void KVStore::ForEachStringPrefix(const std::string& prefix, const size_t key_si
         if (key_slice.size() < serialized_prefix.size() ||
             std::memcmp(key_slice.data(), serialized_prefix.data(), serialized_prefix.size()) != 0) break;
         const auto value_slice = iterator->value();
-        const auto* value_begin = reinterpret_cast<const std::byte*>(value_slice.data());
-        const auto* key_begin = reinterpret_cast<const std::byte*>(key_slice.data());
-        detail::LocalRecordReader key_reader{std::span<const std::byte>{key_begin, key_slice.size()}};
-        detail::LocalRecordReader value_reader{std::span<const std::byte>{value_begin, value_slice.size()}};
+        const auto key_bytes = std::span{reinterpret_cast<const unsigned char*>(key_slice.data()), key_slice.size()};
+        const auto value_bytes = std::span{reinterpret_cast<const unsigned char*>(value_slice.data()), value_slice.size()};
         std::string decoded_key;
         std::string decoded_value;
-        key_reader >> decoded_key;
-        value_reader >> decoded_value;
+        if (!detail::DeserializeLocalRecord(key_bytes, decoded_key) ||
+            !detail::DeserializeLocalRecord(value_bytes, decoded_value)) {
+            throw std::ios_base::failure{"corrupt local CYBOU string record"};
+        }
         visitor(decoded_key, decoded_value);
     }
     CheckLevelDB(iterator->status());
@@ -176,10 +177,11 @@ void KVStore::ForEachStringPrefixRaw(const std::string& prefix, const size_t key
         if (key_slice.size() < serialized_prefix.size() ||
             std::memcmp(key_slice.data(), serialized_prefix.data(), serialized_prefix.size()) != 0) break;
         const auto value_slice = iterator->value();
-        const auto* key_begin = reinterpret_cast<const std::byte*>(key_slice.data());
-        detail::LocalRecordReader key_reader{std::span<const std::byte>{key_begin, key_slice.size()}};
+        const auto key_bytes = std::span{reinterpret_cast<const unsigned char*>(key_slice.data()), key_slice.size()};
         std::string decoded_key;
-        key_reader >> decoded_key;
+        if (!detail::DeserializeLocalRecord(key_bytes, decoded_key)) {
+            throw std::ios_base::failure{"corrupt local CYBOU string key"};
+        }
         visitor(decoded_key, std::string{value_slice.data(), value_slice.size()});
     }
     CheckLevelDB(iterator->status());
