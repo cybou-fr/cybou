@@ -34,11 +34,6 @@ struct PoaFinalityCertificate {
 uint256 ComputePoaFinalityDigest(const uint256& network_id, const uint256& block_id,
     uint64_t height, const uint256& parent_block_id);
 
-std::optional<PoaFinalityCertificate> SignPoaFinalityCertificate(
-    std::span<const unsigned char, 32> operator_recovery_entropy,
-    const uint256& network_id, const uint256& block_id, uint64_t height,
-    const uint256& parent_block_id);
-
 bool VerifyPoaFinalityCertificate(const PoaFinalityCertificate& certificate,
     const IdentityHybridPublicKey& genesis_finalizer_key,
     const uint256& expected_network_id, const uint256& expected_block_id,

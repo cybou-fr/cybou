@@ -6,9 +6,41 @@
 
 #include <cybou/crypto/cleanse.h>
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace cybou {
+namespace {
+
+bool Nonzero(const std::span<const unsigned char> bytes)
+{
+    return std::any_of(bytes.begin(), bytes.end(), [](const unsigned char value) { return value != 0; });
+}
+
+std::optional<PoaFinalityCertificate> SignFinalityCertificate(
+    const std::span<const unsigned char, 32> operator_recovery_entropy,
+    const uint256& network_id, const uint256& block_id, const uint64_t height,
+    const uint256& parent_block_id)
+{
+    if (!Nonzero(operator_recovery_entropy) || network_id.IsNull() || block_id.IsNull() ||
+        height == 0 || parent_block_id.IsNull()) return std::nullopt;
+    const auto digest = ComputePoaFinalityDigest(network_id, block_id, height, parent_block_id);
+    const auto signature = SignIdentityMessage(operator_recovery_entropy,
+        IdentityKeyPurpose::POA_FINALIZER, digest);
+    if (!signature) return std::nullopt;
+    PoaFinalityCertificate certificate{
+        .version = POA_FINALITY_CERTIFICATE_VERSION,
+        .network_id = network_id,
+        .block_id = block_id,
+        .height = height,
+        .parent_block_id = parent_block_id,
+        .signature = *signature,
+    };
+    if (!SerializePoaFinalityCertificate(certificate)) return std::nullopt;
+    return certificate;
+}
+
+} // namespace
 
 PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_id,
     const uint256& genesis_block_id, const RecoveryEntropy& operator_recovery_entropy,
@@ -51,7 +83,7 @@ PoaSigningResult PoaFinalizer::SignFinality(const uint64_t finalized_height,
     if (journal_status != PoaJournalStatus::NONE && journal_status != PoaJournalStatus::ALREADY_PREPARED) {
         return {.status = PoaSigningStatus::JOURNAL_REJECTED, .journal_status = journal_status};
     }
-    const auto certificate = SignPoaFinalityCertificate(m_operator_recovery_entropy,
+    const auto certificate = SignFinalityCertificate(m_operator_recovery_entropy,
         m_network_id, block_id, block.height, block.parent_block_id);
     if (!certificate) return {.status = PoaSigningStatus::SIGNING_FAILED, .journal_status = journal_status};
     return {

@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <string_view>
-#include <utility>
 
 namespace cybou {
 namespace {
@@ -57,28 +56,6 @@ uint256 ComputePoaFinalityDigest(const uint256& network_id, const uint256& block
     hasher.Write(parent_block_id.begin(), parent_block_id.size());
     hasher.Finalize(digest.begin());
     return digest;
-}
-
-std::optional<PoaFinalityCertificate> SignPoaFinalityCertificate(
-    const std::span<const unsigned char, 32> operator_recovery_entropy,
-    const uint256& network_id, const uint256& block_id, const uint64_t height,
-    const uint256& parent_block_id)
-{
-    if (!Nonzero(operator_recovery_entropy) || network_id.IsNull() || block_id.IsNull() ||
-        height == 0 || parent_block_id.IsNull()) return std::nullopt;
-    const auto digest = ComputePoaFinalityDigest(network_id, block_id, height, parent_block_id);
-    const auto signature = SignIdentityMessage(operator_recovery_entropy,
-        IdentityKeyPurpose::POA_FINALIZER, digest);
-    if (!signature) return std::nullopt;
-    PoaFinalityCertificate certificate{
-        .version = POA_FINALITY_CERTIFICATE_VERSION,
-        .network_id = network_id,
-        .block_id = block_id,
-        .height = height,
-        .parent_block_id = parent_block_id,
-        .signature = *signature,
-    };
-    return ValidFields(certificate) ? std::optional<PoaFinalityCertificate>{std::move(certificate)} : std::nullopt;
 }
 
 bool VerifyPoaFinalityCertificate(const PoaFinalityCertificate& certificate,
