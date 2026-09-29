@@ -130,6 +130,17 @@ public:
     void setMailRead(const QString& id, bool read);
     void setMailStarred(const QString& id, bool starred);
     void moveMail(const QString& id, CybouMailFolder folder);
+    /** Saves a local draft (never leaves the device); returns its id. */
+    QString saveMailDraft(CybouMailItem draft);
+    void deleteMail(const QString& id);
+    /**
+     * Hands a composed message to the Mail backend. The message appears in
+     * Sent as Preparing; later states come only from the adapter.
+     * Returns the message id, or empty when Mail is not connected.
+     */
+    QString requestSendMail(CybouMailItem message);
+    /** Adapter entry: lifecycle update for an outgoing message. */
+    void setMailState(const QString& id, CybouContentState state);
 
     const QVector<CybouFileItem>& fileItems() const { return m_files; }
     void setFileItems(QVector<CybouFileItem> items);
@@ -207,6 +218,7 @@ Q_SIGNALS:
     void restoreIdentityRequested();
     void fileUploadRequested(const QString& source_path);
     void fileDownloadRequested(const QString& file_id, const QString& destination);
+    void mailSendRequested(const QString& id);
 
 private:
     cybou::CybouIdentityService* m_identity_service{nullptr};

@@ -233,6 +233,75 @@ void CybouDesktopModel::moveMail(const QString& id, CybouMailFolder folder)
     }
 }
 
+namespace {
+QString NewLocalId(const char* prefix)
+{
+    static quint64 counter = 0;
+    return QStringLiteral("%1-%2-%3").arg(QLatin1String{prefix})
+        .arg(QDateTime::currentMSecsSinceEpoch()).arg(++counter);
+}
+
+QString PreviewOf(const QString& body)
+{
+    return body.simplified().left(90);
+}
+} // namespace
+
+QString CybouDesktopModel::saveMailDraft(CybouMailItem draft)
+{
+    if (draft.id.isEmpty()) draft.id = NewLocalId("draft");
+    draft.folder = CybouMailFolder::Drafts;
+    draft.draft = true;
+    draft.unread = false;
+    draft.state = CybouContentState::Local;
+    draft.from_name = m_status.primary_name;
+    draft.time = QDateTime::currentDateTime();
+    draft.preview = PreviewOf(draft.body);
+    upsertMailItem(draft);
+    return draft.id;
+}
+
+void CybouDesktopModel::deleteMail(const QString& id)
+{
+    const auto removed = m_mail.removeIf([&id](const CybouMailItem& item) { return item.id == id; });
+    if (removed > 0) Q_EMIT mailChanged();
+}
+
+QString CybouDesktopModel::requestSendMail(CybouMailItem message)
+{
+    if (!m_capabilities.mail || m_status.identity_state != CybouIdentityState::Active) return {};
+    // A sent draft becomes the outgoing message.
+    if (!message.id.isEmpty()) deleteMail(message.id);
+    message.id = NewLocalId("out");
+    message.folder = CybouMailFolder::Sent;
+    message.draft = false;
+    message.unread = false;
+    message.from_name = m_status.primary_name;
+    message.time = QDateTime::currentDateTime();
+    message.preview = PreviewOf(message.body);
+    message.state = CybouContentState::Preparing;
+    for (auto& attachment : message.attachments) {
+        if (attachment.state != CybouContentState::Protected) attachment.state = CybouContentState::Preparing;
+    }
+    upsertMailItem(message);
+    Q_EMIT mailSendRequested(message.id);
+    return message.id;
+}
+
+void CybouDesktopModel::setMailState(const QString& id, CybouContentState state)
+{
+    for (auto& item : m_mail) {
+        if (item.id != id) continue;
+        item.state = state;
+        // Reused, already protected content keeps its state.
+        for (auto& attachment : item.attachments) {
+            if (attachment.state != CybouContentState::Protected) attachment.state = state;
+        }
+        Q_EMIT mailChanged();
+        return;
+    }
+}
+
 void CybouDesktopModel::setFileItems(QVector<CybouFileItem> items)
 {
     m_files = std::move(items);

@@ -62,6 +62,7 @@ private:
     void later(int steps, std::function<void()> action);
     void runCreate();
     void runRestore();
+    void runSend(const QString& id);
 };
 
 } // namespace CybouUiFixtures

@@ -19,6 +19,8 @@ class QLineEdit;
 class QListWidget;
 class QPushButton;
 class QStackedWidget;
+class MailCompose;
+class MailReader;
 
 /**
  * CYBOU Mail: a Gmail-familiar three-pane surface over the product model
@@ -47,6 +49,10 @@ public:
     /** Messages currently listed (after folder + search filtering). */
     QStringList visibleMessageIds() const;
     void openMessage(const QString& id);
+    /** Opens the composer; draft may prefill it (reply, forward, draft). */
+    void openCompose(const CybouMailItem& draft = {});
+    MailReader* reader() const { return m_reader; }
+    MailCompose* composer() const { return m_compose; }
     bool threePane() const { return m_three_pane; }
 
 protected:
@@ -73,6 +79,11 @@ private:
     QLabel* m_list_empty{nullptr};
     QStackedWidget* m_detail{nullptr};
     QWidget* m_detail_empty{nullptr};
+    MailReader* m_reader{nullptr};
+    MailCompose* m_compose{nullptr};
+
+    CybouMailItem replyTo(const QString& id) const;
+    CybouMailItem forwardOf(const QString& id) const;
 
     bool matches(const CybouMailItem& item, const QString& needle) const;
     bool inView(const CybouMailItem& item) const;

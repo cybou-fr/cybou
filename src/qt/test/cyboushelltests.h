@@ -34,6 +34,7 @@ private Q_SLOTS:
     void restoreFlowValidatesPhrase();
     void identityPageHidesSecrets();
     void mailNavigationAndSearch();
+    void composeGatesAndSends();
     void walletPageShowsBalances();
     void filesGateActions();
     void networkPageReflectsModel();

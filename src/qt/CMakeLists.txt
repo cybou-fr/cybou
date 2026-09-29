@@ -70,6 +70,10 @@ add_library(cybou_qt STATIC
   pages/emailpage.h
   pages/homepage.cpp
   pages/homepage.h
+  pages/mailcompose.cpp
+  pages/mailcompose.h
+  pages/mailreader.cpp
+  pages/mailreader.h
   pages/identitypage.cpp
   pages/identitypage.h
   pages/networkpage.cpp

@@ -7,12 +7,15 @@
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
+#include <qt/pages/mailcompose.h>
+#include <qt/pages/mailreader.h>
 
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QLocale>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QShowEvent>
@@ -219,7 +222,21 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     empty_label->setAlignment(Qt::AlignCenter);
     empty_layout->addWidget(empty_label);
     m_detail->addWidget(m_detail_empty);
+    m_reader = new MailReader{m_model, m_detail};
+    m_detail->addWidget(m_reader);
+    m_compose = new MailCompose{m_model, m_detail};
+    m_detail->addWidget(m_compose);
     root->addWidget(m_detail, 7);
+
+    connect(m_compose_button, &QPushButton::clicked, this, [this] { openCompose(); });
+    m_reader->onBack = [this] { closeDetail(); };
+    m_reader->onReply = [this](const QString& id) { openCompose(replyTo(id)); };
+    m_reader->onForward = [this](const QString& id) { openCompose(forwardOf(id)); };
+    m_compose->onClosed = [this] { closeDetail(); };
+    m_compose->onSent = [this](const QString& id) {
+        setView(View::Sent);
+        openMessage(id);
+    };
 
     connect(m_folders, &QListWidget::currentRowChanged, this, [this](int row) {
         if (row >= 0) setView(static_cast<View>(row));
@@ -363,10 +380,53 @@ void EmailPage::openMessage(const QString& id)
     const auto* item = m_model->mailItem(id);
     if (!item) return;
     m_current_id = id;
+    if (item->draft) {
+        openCompose(*item);
+        return;
+    }
     if (item->unread) m_model->setMailRead(id, true);
-    m_detail->setCurrentWidget(m_detail_empty);
+    m_reader->showMessage(id);
+    m_detail->setCurrentWidget(m_reader);
     m_detail_open = true;
     updateLayoutMode();
+}
+
+void EmailPage::openCompose(const CybouMailItem& draft)
+{
+    if (m_model->status().identity_state != CybouIdentityState::Active) return;
+    m_current_id.clear();
+    m_compose->start(draft);
+    m_detail->setCurrentWidget(m_compose);
+    m_detail_open = true;
+    updateLayoutMode();
+}
+
+CybouMailItem EmailPage::replyTo(const QString& id) const
+{
+    CybouMailItem reply;
+    const auto* item = m_model->mailItem(id);
+    if (!item) return reply;
+    const bool outgoing = item->folder == CybouMailFolder::Sent;
+    reply.to_name = outgoing ? item->to_name : item->from_name;
+    reply.subject = item->subject.startsWith(QStringLiteral("Re:")) ? item->subject : tr("Re: %1").arg(item->subject);
+    QString quoted;
+    for (const auto& line : item->body.split(QLatin1Char{'\n'})) quoted += QStringLiteral("> %1\n").arg(line);
+    reply.body = tr("\n\nOn %1, %2 wrote:\n%3").arg(QLocale{QLocale::English}.toString(item->time, QStringLiteral("MMM d, HH:mm")),
+        item->from_name, quoted);
+    return reply;
+}
+
+CybouMailItem EmailPage::forwardOf(const QString& id) const
+{
+    CybouMailItem forward;
+    const auto* item = m_model->mailItem(id);
+    if (!item) return forward;
+    forward.subject = item->subject.startsWith(QStringLiteral("Fwd:")) ? item->subject : tr("Fwd: %1").arg(item->subject);
+    forward.body = tr("\n\n---------- Forwarded message ----------\nFrom: %1\nTo: %2\nSubject: %3\n\n%4")
+        .arg(item->from_name, item->to_name, item->subject, item->body);
+    // Forwarding reuses the already protected attachment content.
+    forward.attachments = item->attachments;
+    return forward;
 }
 
 void EmailPage::closeDetail()
@@ -389,6 +449,8 @@ void EmailPage::updateLayoutMode()
         m_list_pane->setVisible(!m_detail_open);
         m_detail->setVisible(m_detail_open);
     }
+    m_reader->setBackVisible(!m_three_pane);
+    m_compose->setBackVisible(!m_three_pane);
 }
 
 void EmailPage::resizeEvent(QResizeEvent* event)

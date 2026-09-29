@@ -88,6 +88,7 @@ struct CybouAttachmentItem {
     quint64 logical_size{0};
     CybouContentState state{CybouContentState::Local};
     int progress_percent{-1}; ///< -1 when no meaningful percentage exists
+    CybouRetrievalState retrieval{CybouRetrievalState::Idle};
 };
 
 enum class CybouMailFolder {
@@ -112,6 +113,10 @@ struct CybouMailItem {
     bool draft{false};
     CybouContentState state{CybouContentState::Protected};
     QVector<CybouAttachmentItem> attachments;
+    /** Evidence for Security Details → Advanced; empty until reported. */
+    QString operation_id;
+    quint64 finalized_height{0};
+    QString root_chunk_id;
 };
 
 struct CybouFileItem {

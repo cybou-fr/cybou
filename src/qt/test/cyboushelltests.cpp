@@ -10,6 +10,7 @@
 #include <qt/cyboutheme.h>
 #include <qt/cybouuifixtures.h>
 #include <qt/pages/emailpage.h>
+#include <qt/pages/mailreader.h>
 
 #include <cybou/network_definition.h>
 #include <test/cybou_test_helpers.h>
@@ -298,6 +299,50 @@ void CybouShellTests::mailNavigationAndSearch()
     mail->setView(EmailPage::View::Inbox);
     mail->openMessage(QStringLiteral("m-project"));
     QCOMPARE(model->unreadMailCount(), 3);
+    QCOMPARE(mail->reader()->messageId(), QStringLiteral("m-project"));
+    for (const auto* label : mail->reader()->findChildren<QLabel*>()) {
+        // Evidence stays in Security Details, not in the reader.
+        QVERIFY(!label->text().contains(QLatin1String{"Operation"}));
+        QVERIFY(!label->text().contains(QLatin1String{"BFT"}));
+    }
+}
+
+void CybouShellTests::composeGatesAndSends()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("mail")));
+    auto* mail = dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
+    mail->openCompose();
+    auto* send = mail->findChild<QPushButton*>(QStringLiteral("sendButton"));
+    auto* to = mail->findChild<QLineEdit*>(QStringLiteral("recipientEdit"));
+    auto* body = mail->findChild<QTextEdit*>(QStringLiteral("composeBody"));
+    QVERIFY(send && to && body);
+    to->setText(QStringLiteral("alice.cybou, bob.cybou"));
+    body->setPlainText(QStringLiteral("hello"));
+    QVERIFY(!send->isEnabled()); // one recipient only
+    to->setText(QStringLiteral("alice"));
+    QVERIFY(!send->isEnabled()); // must be a .cybou name
+    to->setText(QStringLiteral("alice.cybou"));
+    QVERIFY(send->isEnabled());
+
+    const int before = model->mailItems().size();
+    send->click();
+    QCOMPARE(model->mailItems().size(), before + 1);
+    const auto& sent = model->mailItems().first();
+    QCOMPARE(sent.folder, CybouMailFolder::Sent);
+    // Finality-first: a new message starts local, never as Sent.
+    QCOMPARE(sent.state, CybouContentState::Preparing);
+    QCOMPARE(CybouProduct::mailStateText(sent), QStringLiteral("Preparing…"));
+
+    // Without a connected Mail backend, Send stays disabled and says why.
+    CybouCapabilities caps = model->capabilities();
+    caps.mail = false;
+    model->setCapabilities(caps);
+    mail->openCompose();
+    to->setText(QStringLiteral("alice.cybou"));
+    body->setPlainText(QStringLiteral("hello"));
+    QVERIFY(!send->isEnabled());
 }
 
 void CybouShellTests::walletPageShowsBalances()

@@ -492,6 +492,21 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         showPage(static_cast<CybouPage>(i));
         save(pages[i]);
     }
+    if (m_desktop_model->status().identity_state == CybouIdentityState::Active) {
+        auto* mail = static_cast<EmailPage*>(page(CybouPage::Mail));
+        showPage(CybouPage::Mail);
+        const auto ids = mail->visibleMessageIds();
+        if (!ids.isEmpty()) {
+            mail->openMessage(ids.first());
+            save(QStringLiteral("mail-reader"));
+        }
+        CybouMailItem draft;
+        draft.to_name = QStringLiteral("alice.cybou");
+        draft.subject = tr("Project files");
+        draft.body = tr("Hello Alice,\n\nHere are the final files.\n\nStan");
+        mail->openCompose(draft);
+        save(QStringLiteral("mail-compose"));
+    }
     qApp->quit();
 }
 

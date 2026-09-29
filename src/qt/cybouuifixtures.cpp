@@ -46,6 +46,11 @@ CybouMailItem Mail(const QString& id, CybouMailFolder folder, const QString& fro
     item.unread = unread;
     item.draft = folder == CybouMailFolder::Drafts;
     item.state = folder == CybouMailFolder::Drafts ? CybouContentState::Local : CybouContentState::Protected;
+    if (!item.draft) {
+        item.operation_id = QStringLiteral("9c41e7a0b3d25f86e1c07a4d92b3f5e8c6a1d0e7f2b4a9c3d8e5f1a0b7c26d4e");
+        item.finalized_height = 1180 + static_cast<quint64>(qHash(id) % 60);
+        item.root_chunk_id = QStringLiteral("5e0a91c4d7b2f83e6a1c9d04b7e5f2a8c3d6b190e4f7a2c5d8b1e04f9a3c67b2");
+    }
     return item;
 }
 
@@ -264,6 +269,7 @@ Driver::Driver(CybouDesktopModel* model, QObject* parent)
 {
     connect(m_model, &CybouDesktopModel::createIdentityRequested, this, [this] { runCreate(); });
     connect(m_model, &CybouDesktopModel::restoreIdentityRequested, this, [this] { runRestore(); });
+    connect(m_model, &CybouDesktopModel::mailSendRequested, this, [this](const QString& id) { runSend(id); });
     connect(m_model, &CybouDesktopModel::nameClaimRequested, this, [this](const QString& label) {
         later(3, [this, label] {
             const QString name = label + QStringLiteral(".cybou");
@@ -295,6 +301,15 @@ void Driver::runCreate()
         m_model->setActivity({{CybouActivityKind::OnboardingCredit, QStringLiteral("Identity created"),
             QStringLiteral("5,000 CYBOU onboarding credit"), referenceTime()}});
     });
+}
+
+void Driver::runSend(const QString& id)
+{
+    // Finality-first lifecycle: local prepare -> PoA confirmation ->
+    // storage admission of authorized chunks -> durability.
+    later(1, [this, id] { m_model->setMailState(id, CybouContentState::WaitingForConfirmation); });
+    later(3, [this, id] { m_model->setMailState(id, CybouContentState::Securing); });
+    later(5, [this, id] { m_model->setMailState(id, CybouContentState::Protected); });
 }
 
 void Driver::runRestore()
