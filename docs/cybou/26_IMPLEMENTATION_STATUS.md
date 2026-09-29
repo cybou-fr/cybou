@@ -34,6 +34,9 @@ recovery gates pass together. See
 - `AuthorizedRootPublication` as a typed Identity-authorized operation,
   deterministic nonce/state execution, byte-and-chunk System Balance fee, and
   lookup from verified canonical finalized block history.
+- A separate `POA_FINALIZER` Ed25519 + ML-DSA-65 key derivation purpose for the
+  dedicated operator recovery phrase. PoA signing, genesis commitment, durable
+  anti-equivocation, and finality acceptance remain cutover gates.
 
 These components are substrate code. Their integration with the canonical
 Identity operation path, state transition, block finality, and provider network
@@ -49,7 +52,8 @@ serialization or cryptography code.
 - RootPublication client construction/submission, publication scanning, and
   clean-machine reconstruction of accessible roots.
 - Genesis-bound PoA signing, hybrid signature verification, anti-equivocation
-  journal durability, fork handling, and operator recovery.
+  journal durability, fork handling, operator recovery, and cross-implementation
+  vectors for operator recovery phrase key derivation.
 - Connecting provider admission to the PUT/GET peer wire; independent chunk
   placement, durability, retry, retention, repair, and provider-loss handling.
 - Publication scanning, recursive retrieval, and clean-machine Identity,

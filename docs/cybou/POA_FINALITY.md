@@ -21,9 +21,11 @@ pending state.
 
 ## PoA signing role
 
-The PoA signing role is derived in memory from a dedicated operator recovery
-mnemonic domain. Its public key is committed by the network definition at
-genesis. It is independent of every CYBOU Identity, Release Signing, and
+The operator supplies a dedicated 24-word recovery phrase for the PoA finalizer.
+Its entropy derives the `POA_FINALIZER` hybrid key purpose through the existing
+HKDF-SHA256 key derivation, with the `POA_FINALIZER` purpose label. Its public
+key is committed by the network definition at genesis. It is independent of
+every CYBOU Identity, Validator, Operator Authority, Release Signing, and
 Treasury key. Private signing material is never persisted and is cleansed when
 the finalizer session ends.
 

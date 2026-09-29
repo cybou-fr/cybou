@@ -20,6 +20,7 @@ enum class IdentityKeyPurpose : uint8_t {
     OPERATOR_AUTHORITY = 4,
     RELEASE_SIGNING = 5,
     TREASURY = 6,
+    POA_FINALIZER = 7,
 };
 
 struct IdentityHybridPublicKey {
