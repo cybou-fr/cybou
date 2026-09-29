@@ -206,6 +206,7 @@ add_executable(cybou-core-test
   cybou_kv_store_tests.cpp
   cybou_private_application_store_tests.cpp
   cybou_private_application_schema_tests.cpp
+  cybou_publication_bundle_stager_tests.cpp
   cybou_root_publication_tests.cpp
   cybou_root_publication_capsule_tests.cpp
   cybou_crypto_tests.cpp

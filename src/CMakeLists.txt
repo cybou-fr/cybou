@@ -207,6 +207,7 @@ add_library(cybou_node STATIC
   cybou/chunk_blob_store.cpp
   cybou/finalized_chunk_store.cpp
   cybou/chunk_authorization_proof_index.cpp
+  cybou/publication_bundle_stager.cpp
   cybou/poa_conflict_detector.cpp
   cybou/poa_finalizer.cpp
   cybou/poa_signing_journal.cpp

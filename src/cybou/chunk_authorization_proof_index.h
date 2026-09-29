@@ -22,6 +22,9 @@ public:
     ChunkAuthorizationProofIndex(KVStore& db, std::string index_id);
 
     bool Add(std::uint32_t leaf_index, const AuthorizedChunk& chunk);
+    std::uint32_t StagedCount() const;
+    bool Contains(const ChunkId& id) const;
+    std::optional<ChunkId> GetLeafId(std::uint32_t leaf_index) const;
     std::optional<ChunkAuthorizationSummary> Finish();
     std::optional<ChunkAuthorizationProof> GetProof(std::uint32_t leaf_index) const;
     bool Discard();

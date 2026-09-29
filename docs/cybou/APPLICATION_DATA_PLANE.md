@@ -233,6 +233,12 @@ RootChunkIDs and child ContentKeys remain encrypted inside that main root.
 `PublicationBundle` is an implementation abstraction only. Do not introduce a
 BundleID, bundle wire format or bundle consensus registry.
 
+The implemented `PublicationBundleStager` streams each tree into the common
+local ChunkBlobStore and appends its staged chunks to one durable authorization
+proof index. It can reopen a completed child-tree index to append the main
+tree. An interrupted tree marks that local index unusable until discard; it
+never authorizes remote provider storage before publication finality.
+
 ## 8. Self capsule
 
 Every publication required for clean owner recovery includes a self capsule.

@@ -119,6 +119,26 @@ bool ChunkAuthorizationProofIndex::Add(const std::uint32_t leaf_index, const Aut
     }
 }
 
+std::uint32_t ChunkAuthorizationProofIndex::StagedCount() const
+{
+    std::lock_guard lock{m_mutex};
+    return m_chunk_count;
+}
+
+bool ChunkAuthorizationProofIndex::Contains(const ChunkId& id) const
+{
+    std::lock_guard lock{m_mutex};
+    return !m_failed && !m_discarded && !IsZero(id) && m_db.Exists(SeenKey(id));
+}
+
+std::optional<ChunkId> ChunkAuthorizationProofIndex::GetLeafId(const std::uint32_t leaf_index) const
+{
+    std::lock_guard lock{m_mutex};
+    ChunkId id{};
+    return !m_failed && !m_discarded && leaf_index < m_chunk_count && ReadLeaf(leaf_index, id) ?
+        std::optional<ChunkId>{id} : std::nullopt;
+}
+
 std::optional<ChunkAuthorizationSummary> ChunkAuthorizationProofIndex::Finish()
 {
     std::lock_guard lock{m_mutex};
