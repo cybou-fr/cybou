@@ -73,6 +73,23 @@ Current `main` implements the canonical low-level substrate:
 - only after the soak: bind immutable Authority rules to the network and
   enforce Authority-derived generic resource budgets.
 
+### Bounded DEV canary evidence (2026-09-29 to 2026-09-30)
+
+- A finalized private Files RootPublication reached the development target of
+  two remote replicas. Removing its provider-1 root blob while the provider
+  stayed online caused `StorageService::Audit` to detect and repair the missing
+  copy from provider-2; verified retrieval still matched the original content
+  after the local root was evicted.
+- The same root blob survived independent provider-1 and provider-2 restarts.
+  Provider-2 was also unavailable for 12 seconds while authority and provider-1
+  stayed online; its service rejoined afterward. Both remote SHA-256 values
+  remained `91b99c6cfac6e49dd0c981603e0a2cf45042882f5ec0f88f330df2da6fd974db`.
+- At the final sample, all three services were active and listening; finalized
+  heights were authority `34231`, provider-1 `34230`, provider-2 `34229`.
+- This is bounded recovery evidence, not a sustained soak. Long-running
+  operation/restart coverage, clean-machine Beta acceptance, and live desktop
+  observation of the `Protected` to `Securing` transition remain outstanding.
+
 ## Evidence-gated later work
 
 - NodeID binding and canonical uptime evidence;
