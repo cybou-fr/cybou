@@ -6,22 +6,34 @@
 #define BITCOIN_QT_CYBOUMAINWINDOW_H
 
 #include <QMainWindow>
+#include <QVector>
 
 #include <filesystem>
 #include <memory>
-
-namespace CybouUi {
-class StatusStrip;
-}
 
 class CybouDesktopModel;
 class CybouDesktopController;
 class QButtonGroup;
 class QCloseEvent;
 class QDialog;
+class QFrame;
+class QLabel;
 class QMenu;
+class QResizeEvent;
 class QStackedWidget;
 class QSystemTrayIcon;
+class QToolButton;
+
+/** Stable page order of the Identity-centric shell. */
+enum class CybouPage {
+    Home = 0,
+    Mail,
+    Files,
+    Wallet,
+    Identity,
+    Diagnostics,
+    Settings,
+};
 
 class CybouMainWindow final : public QMainWindow
 {
@@ -33,34 +45,52 @@ public:
 
     void startRuntime();
     void showDebugWindow();
+    void showPage(CybouPage page);
 
     /** Page access used by desktop shell smoke tests. */
     CybouDesktopModel* desktopModel() const { return m_desktop_model; }
     QWidget* pageAt(int index) const;
+    QWidget* page(CybouPage page) const { return pageAt(static_cast<int>(page)); }
     int currentPageIndex() const;
     int pageCount() const;
+    bool sidebarCompact() const { return m_sidebar_compact; }
 
 Q_SIGNALS:
     void quitRequested();
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     CybouDesktopModel* m_desktop_model;
     std::unique_ptr<CybouDesktopController> m_controller;
     QStackedWidget* m_pages;
+    QVector<QWidget*> m_page_widgets;
     QButtonGroup* m_navigation;
-    std::unique_ptr<CybouUi::StatusStrip> m_status_strip;
+    QFrame* m_sidebar{nullptr};
+    QLabel* m_brand_text{nullptr};
+    QLabel* m_brand_name{nullptr};
+    QLabel* m_header_title{nullptr};
+    QLabel* m_status_dot{nullptr};
+    QLabel* m_status_text{nullptr};
+    QToolButton* m_identity_button{nullptr};
+    QMenu* m_identity_menu{nullptr};
     QSystemTrayIcon* m_tray_icon{nullptr};
     QMenu* m_tray_menu{nullptr};
     QDialog* m_diagnostics{nullptr};
+    bool m_sidebar_compact{false};
 
     void buildShell();
+    QFrame* buildSidebar(QWidget* parent);
+    QFrame* buildHeader(QWidget* parent);
     void buildMenus();
     void buildTrayMenu();
     void applyStyle();
-    void showPage(int index);
+    void addPage(QWidget* page, bool scrolls);
+    void refreshHeader();
+    void setSidebarCompact(bool compact);
+    void runScreenshotHarness(const QString& directory);
 };
 
 #endif // BITCOIN_QT_CYBOUMAINWINDOW_H

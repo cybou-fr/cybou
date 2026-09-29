@@ -21,6 +21,7 @@
 #include <QSignalSpy>
 #include <QStackedWidget>
 #include <QTextEdit>
+#include <QPlainTextEdit>
 #include <QTest>
 #include <QToolButton>
 #include <QDialog>
@@ -116,7 +117,11 @@ void CybouShellTests::mainWindowStarts()
     QVERIFY(window);
     QVERIFY(window->centralWidget());
     QVERIFY(window->windowTitle().contains(QStringLiteral("CYBOU")));
-    QCOMPARE(window->pageCount(), 8);
+    QCOMPARE(window->pageCount(), 7);
+    // Backup is not part of the Beta shell.
+    for (auto* button : window->findChildren<QToolButton*>()) {
+        QVERIFY(!button->text().contains(QStringLiteral("Backup")));
+    }
 }
 
 void CybouShellTests::homePageIsDefault()
@@ -157,44 +162,97 @@ void CybouShellTests::diagnosticsStaySecondaryWindow()
 void CybouShellTests::identityCreateFollowsCapabilities()
 {
     auto window = makeWindow();
-    auto* identity = window->pageAt(1);
-    QVERIFY(identity);
+    auto* model = window->desktopModel();
+    auto* home = window->page(CybouPage::Home);
+    QVERIFY(home);
 
-    QPushButton* create{nullptr};
-    for (auto* btn : identity->findChildren<QPushButton*>()) {
-        if (btn->property("cybouId").toString() == QLatin1String{"createIdentity"}) {
-            create = btn;
-            break;
+    const auto find_button = [home](const char* id) -> QPushButton* {
+        for (auto* button : home->findChildren<QPushButton*>()) {
+            if (button->property("cybouId").toString() == QLatin1String{id}) return button;
         }
-    }
-    if (!create) create = identity->findChild<QPushButton*>(QStringLiteral("primaryButton"));
+        return nullptr;
+    };
+    auto* create = find_button("createIdentity");
     QVERIFY(create);
     QVERIFY(!create->isEnabled());
 
-    // Capabilities come from the desktop model boundary, never from
-    // version hacks or compile-time guesses.
+    // Capabilities come from the desktop model boundary.
+    model->setFixtureMode(true); // deterministic recovery words, no core
     CybouCapabilities capabilities;
     capabilities.account_creation = true;
-    window->desktopModel()->setCapabilities(capabilities);
+    model->setCapabilities(capabilities);
     QVERIFY(create->isEnabled());
 
-    // Clicking emits the UI -> core request; the page invents no protocol
-    // behavior of its own.
-    QSignalSpy spy{window->desktopModel(), &CybouDesktopModel::createIdentityRequested};
-    QTest::mouseClick(create, Qt::LeftButton);
-    QCOMPARE(spy.count(), 1);
+    // Create -> vault password -> recovery words -> confirmation.
+    QSignalSpy spy{model, &CybouDesktopModel::createIdentityRequested};
+    create->click();
+    auto* password = home->findChild<QLineEdit*>(QStringLiteral("vaultPassword"));
+    auto* confirm = home->findChild<QLineEdit*>(QStringLiteral("vaultPasswordConfirm"));
+    QVERIFY(password && confirm);
+    auto* next = find_button("passwordContinue");
+    password->setText(QStringLiteral("short"));
+    confirm->setText(QStringLiteral("short"));
+    QVERIFY(!next->isEnabled());
+    password->setText(QStringLiteral("correct horse battery"));
+    confirm->setText(QStringLiteral("correct horse battery"));
+    QVERIFY(next->isEnabled());
+    next->click();
+    find_button("wordsContinue")->click();
 
-    // The request is tracked UI-side: the button stands down and the page
-    // says it is waiting for the node, without inventing protocol phases.
-    QVERIFY(window->desktopModel()->identityCreationRequestPending());
-    QVERIFY(!create->isEnabled());
-    QVERIFY(create->text().contains(QStringLiteral("requested")));
+    // Fixture confirmation asks for words #4, #12 and #21.
+    const QStringList expected{QStringLiteral("stone"), QStringLiteral("garden"), QStringLiteral("falcon")};
+    auto* submit = find_button("confirmCreate");
+    for (int i = 0; i < 3; ++i) {
+        auto* input = home->findChild<QLineEdit*>(QStringLiteral("confirmWord%1").arg(i));
+        QVERIFY(input);
+        input->setText(i == 0 ? QStringLiteral("wrong") : expected.at(i));
+    }
+    submit->click();
+    QCOMPARE(spy.count(), 0); // a wrong word blocks creation
+    home->findChild<QLineEdit*>(QStringLiteral("confirmWord0"))->setText(expected.at(0));
+    submit->click();
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(model->identityCreationRequestPending());
+}
+
+void CybouShellTests::restoreFlowValidatesPhrase()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    model->setFixtureMode(true);
+    CybouCapabilities capabilities;
+    capabilities.account_creation = true;
+    model->setCapabilities(capabilities);
+    auto* home = window->page(CybouPage::Home);
+    QPushButton* restore{nullptr};
+    QPushButton* submit{nullptr};
+    for (auto* button : home->findChildren<QPushButton*>()) {
+        if (button->property("cybouId").toString() == QLatin1String{"restoreIdentity"}) restore = button;
+        if (button->property("cybouId").toString() == QLatin1String{"restoreSubmit"}) submit = button;
+    }
+    QVERIFY(restore && submit);
+    restore->click();
+    auto* phrase = home->findChild<QPlainTextEdit*>(QStringLiteral("recoveryPhrase"));
+    auto* password = home->findChild<QLineEdit*>(QStringLiteral("restorePassword"));
+    auto* confirm = home->findChild<QLineEdit*>(QStringLiteral("restorePasswordConfirm"));
+    QVERIFY(phrase && password && confirm);
+    phrase->setPlainText(QStringLiteral("one two three"));
+    password->setText(QStringLiteral("correct horse battery"));
+    confirm->setText(QStringLiteral("correct horse battery"));
+    QVERIFY(!submit->isEnabled());
+    QStringList words;
+    for (int i = 0; i < 24; ++i) words << QStringLiteral("word%1").arg(i);
+    phrase->setPlainText(words.join(QLatin1Char{' '}));
+    QVERIFY(submit->isEnabled());
+    submit->click();
+    QCOMPARE(model->status().identity_state, CybouIdentityState::Restoring);
+    QVERIFY(phrase->toPlainText().isEmpty());
 }
 
 void CybouShellTests::emailPageGatesSending()
 {
     auto window = makeWindow();
-    auto* email = window->pageAt(2);
+    auto* email = window->page(CybouPage::Mail);
     QVERIFY(email);
 
     // The full client UI is present: compose, recipient field, send.
@@ -221,7 +279,7 @@ void CybouShellTests::emailPageGatesSending()
 void CybouShellTests::walletPageShowsBalances()
 {
     auto window = makeWindow();
-    auto* wallet = window->pageAt(5);
+    auto* wallet = window->page(CybouPage::Wallet);
     QVERIFY(wallet);
 
     // Amounts render as whole CYBOU (indivisible asset, decimals = 0).
@@ -241,26 +299,23 @@ void CybouShellTests::walletPageShowsBalances()
     }
 }
 
-void CybouShellTests::storageAndBackupGateActions()
+void CybouShellTests::filesGateActions()
 {
     auto window = makeWindow();
-    // Both pages are full client UIs now; without an identity every action
-    // must stay disabled and the page must say why.
-    for (int index = 3; index <= 4; ++index) {
-        auto* page = window->pageAt(index);
-        QVERIFY2(page, qPrintable(QStringLiteral("service page %1 exists").arg(index)));
-        const auto buttons = page->findChildren<QPushButton*>();
-        QVERIFY(!buttons.isEmpty());
-        for (const auto* button : buttons) {
-            QVERIFY(!button->isEnabled());
-        }
+    // Without an identity every Files action stays disabled.
+    auto* page = window->page(CybouPage::Files);
+    QVERIFY(page);
+    const auto buttons = page->findChildren<QPushButton*>();
+    QVERIFY(!buttons.isEmpty());
+    for (const auto* button : buttons) {
+        QVERIFY(!button->isEnabled());
     }
 }
 
 void CybouShellTests::networkPageReflectsModel()
 {
     auto window = makeWindow();
-    auto* network = window->pageAt(6);
+    auto* network = window->page(CybouPage::Diagnostics);
     QVERIFY(network);
 
     const QString network_name = window->desktopModel()->status().network_name;
@@ -287,7 +342,7 @@ void CybouShellTests::adapterSettersDrivePages()
     QVERIFY(model->status().finality_known);
     QVERIFY(status_spy.count() >= 1);
 
-    auto* network = window->pageAt(6);
+    auto* network = window->page(CybouPage::Diagnostics);
     QVERIFY(network);
     const auto labels = network->findChildren<QLabel*>();
     bool found_height = false;

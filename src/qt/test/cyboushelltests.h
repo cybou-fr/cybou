@@ -31,9 +31,10 @@ private Q_SLOTS:
     void navigationSwitchesPages();
     void diagnosticsStaySecondaryWindow();
     void identityCreateFollowsCapabilities();
+    void restoreFlowValidatesPhrase();
     void emailPageGatesSending();
     void walletPageShowsBalances();
-    void storageAndBackupGateActions();
+    void filesGateActions();
     void networkPageReflectsModel();
     void adapterSettersDrivePages();
     void productCollectionsDriveModel();

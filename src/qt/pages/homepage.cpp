@@ -7,6 +7,7 @@
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
+#include <qt/pages/onboardingview.h>
 
 #include <QClipboard>
 #include <QFrame>
@@ -15,6 +16,7 @@
 #include <QLabel>
 #include <QLocale>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -62,7 +64,16 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> diagnostics_r
 {
     setMinimumWidth(0);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    auto* root = new QHBoxLayout{this};
+    // Home is onboarding until an Identity is active, then the dashboard.
+    auto* outer = new QVBoxLayout{this};
+    outer->setContentsMargins(0, 0, 0, 0);
+    m_stack = new QStackedWidget{this};
+    outer->addWidget(m_stack);
+    m_onboarding = new OnboardingView{m_model, m_stack};
+    m_stack->addWidget(m_onboarding);
+    m_dashboard = new QWidget{m_stack};
+    m_stack->addWidget(m_dashboard);
+    auto* root = new QHBoxLayout{m_dashboard};
     root->setContentsMargins(24, 22, 24, 22);
     root->setSpacing(18);
 
@@ -228,6 +239,8 @@ void HomePage::refresh()
 {
     const auto& status = m_model->status();
     const bool active = status.identity_state == CybouIdentityState::Active;
+    m_stack->setCurrentWidget(active || status.identity_state == CybouIdentityState::Syncing
+        ? m_dashboard : static_cast<QWidget*>(m_onboarding));
 
     // Identity hero.
     if (active) {

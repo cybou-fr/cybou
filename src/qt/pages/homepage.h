@@ -12,6 +12,8 @@
 class CybouDesktopModel;
 class QLabel;
 class QPushButton;
+class QStackedWidget;
+class OnboardingView;
 
 class HomePage : public QWidget
 {
@@ -23,6 +25,9 @@ public:
 
 private:
     CybouDesktopModel* const m_model;
+    QStackedWidget* m_stack{nullptr};
+    OnboardingView* m_onboarding{nullptr};
+    QWidget* m_dashboard{nullptr};
     QLabel* m_identity_name;
     QLabel* m_identity_subtitle;
     QLabel* m_chip_protected;

@@ -60,15 +60,12 @@ add_library(cybou_qt STATIC
   cyboudesktopmodel.h
   cyboumainwindow.cpp
   cyboumainwindow.h
-  cyboustrip.h
   cyboutheme.cpp
   cyboutheme.h
   cybouproduct.h
   cybouui.h
   cybouuifixtures.cpp
   cybouuifixtures.h
-  pages/backuppage.cpp
-  pages/backuppage.h
   pages/emailpage.cpp
   pages/emailpage.h
   pages/homepage.cpp
@@ -77,6 +74,8 @@ add_library(cybou_qt STATIC
   pages/identitypage.h
   pages/networkpage.cpp
   pages/networkpage.h
+  pages/onboardingview.cpp
+  pages/onboardingview.h
   pages/settingspage.cpp
   pages/settingspage.h
   pages/storagepage.cpp
