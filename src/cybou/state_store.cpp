@@ -30,11 +30,6 @@ inline std::string BlockHeightKey(const uint64_t height)
     return "cybou/block-height/" + std::to_string(height);
 }
 
-inline std::string MailFilterKey(const uint256& block_id)
-{
-    return "cybou/mail-filter/" + block_id.GetHex();
-}
-
 inline std::string OperationKey(const uint256& op_id)
 {
     return "cybou/operation/" + op_id.GetHex();
@@ -55,13 +50,6 @@ CybouStateStore::CybouStateStore(
     if (!m_operator_verifier) {
         m_operator_verifier = std::make_shared<OpenSslOperatorAuthoritySignatureVerifier>();
     }
-}
-
-std::optional<ValidatorSet> CybouStateStore::GetValidatorSet() const
-{
-    const auto loaded{LoadState()};
-    if (!loaded) return std::nullopt;
-    return loaded.state->validator_set;
 }
 
 std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
@@ -102,9 +90,6 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     if (!state_hash || *state_hash != m_network_definition.genesis_state_root) {
         return {GenesisInitError::GENESIS_STATE_MISMATCH};
     }
-    if (ValidateValidatorSet(genesis_state.validator_set) != ValidatorSetValidationError::NONE) {
-        return {GenesisInitError::INVALID_GENESIS_VALIDATOR_SET};
-    }
     const auto serialized_state = SerializeCybouState(genesis_state);
     if (!serialized_state) {
         return {GenesisInitError::GENESIS_STATE_MISMATCH};
@@ -118,8 +103,6 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     batch.Write(HASH_KEY, *state_hash);
     batch.Write(HEAD_KEY, initial_head);
     batch.Write(NETWORK_ID_KEY, m_network_id);
-    const auto genesis_filter{BuildMailDiscoveryFilter(m_network_definition.genesis_block_id, {})};
-    batch.Write(MailFilterKey(m_network_definition.genesis_block_id), SerializeMailDiscoveryFilter(genesis_filter));
     m_db.WriteBatch(batch, sync);
     return {};
 }
@@ -199,7 +182,6 @@ std::optional<uint256> CybouStateStore::GetStoredNetworkId() const
 
 BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     const FinalizedBlock& finalized_block,
-    const std::optional<ValidatorSet>& validator_set,
     const bool sync)
 {
     const auto loaded{LoadState()};
@@ -214,10 +196,6 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
             return {BlockTransitionError::CORRUPT_STATE};
         }
         return {BlockTransitionError::STATE_NOT_INITIALIZED};
-    }
-
-    if (validator_set.has_value() && *validator_set != loaded.state->validator_set) {
-        return {BlockTransitionError::VALIDATOR_SET_MISMATCH};
     }
 
     const auto& block = finalized_block.block;
@@ -237,13 +215,14 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         return {BlockTransitionError::INVALID_HEIGHT};
     }
 
-    if (cert.block_id != block_id || cert.height != block.height) {
+    if (cert.network_id != m_network_id || cert.block_id != block_id || cert.height != block.height ||
+        cert.parent_block_id != block.parent_block_id) {
         return {.error = BlockTransitionError::INVALID_CERTIFICATE};
     }
 
-    const auto cert_res = VerifyFinalityCertificate(cert, loaded.state->validator_set, m_network_id);
-    if (cert_res != FinalityVerificationError::NONE) {
-        return {.error = BlockTransitionError::INVALID_CERTIFICATE, .cert_error = cert_res};
+    if (!VerifyPoaCertificateForBlock(cert, m_network_definition.poa_finalizer_public_key,
+        m_network_id, block)) {
+        return {.error = BlockTransitionError::INVALID_CERTIFICATE};
     }
 
     const auto& params = m_network_definition.protocol_parameters;
@@ -297,8 +276,6 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         if (!op_id || op_id->IsNull()) return {BlockTransitionError::INVALID_OPERATION};
         batch.Write(OperationKey(*op_id), block_id);
     }
-    const auto mail_filter{BuildBlockMailDiscoveryFilter(block)};
-    batch.Write(MailFilterKey(block_id), SerializeMailDiscoveryFilter(mail_filter));
     m_db.WriteBatch(batch, sync);
     return {};
 }
@@ -357,17 +334,6 @@ std::optional<uint64_t> CybouStateStore::GetFinalizedOperationHeight(const uint2
         [&](const ProtocolOperation& operation) { return ComputeOperationId(operation) == op_id; });
     if (!found) return std::nullopt;
     return finalized->block.height;
-}
-
-std::optional<CybouMailDiscoveryFilter> CybouStateStore::GetBlockMailFilter(const uint256& block_id) const
-{
-    std::vector<unsigned char> bytes;
-    if (!m_db.Read(MailFilterKey(block_id), bytes)) {
-        return std::nullopt;
-    }
-    auto filter{DeserializeMailDiscoveryFilter(bytes)};
-    if (filter && filter->block_id != block_id) return std::nullopt;
-    return filter;
 }
 
 } // namespace cybou

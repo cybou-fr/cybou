@@ -1,55 +1,23 @@
-# 42 — Competitive positioning — Email-first
+# 42 — Competitive positioning
 
-CYBOU should not be compared primarily to secure messengers or positioned as
-post-quantum email.
+CYBOU is an identity-centered sovereign communication and file platform. Mail
+and Files provide familiar Gmail and Google Drive workflows over user-held
+Identity keys, generic RootPublication, and a shared encrypted content layer.
 
-## Category
+## Product distinction
 
-```text
-European sovereign identity and communication network
-```
+Traditional email and file products rely on provider accounts and centralized
+content control. CYBOU keeps Identity keys and application indexes with the
+user, encrypts content before upload, and permits every full node to verify
+finalized state independently.
 
-CYBOU Email is the first application of that network.
+The initial network still relies on one CYBOU-operated PoA finalizer. Product
+claims must state that central ordering trust plainly. Storage-provider
+replication does not decentralize finality.
 
-## Competitive axes
+## Security claims
 
-```text
-network-native identity
-user-owned network state
-E2E encryption by default
-signed mail commitments
-BFT registration/finality
-full-node verification
-recipient can be offline
-hybrid PQ recovery and Identity authorization
-encrypted Object Storage-backed Mail attachments in Beta
-```
-
-## Distinction
-
-Traditional email systems center SMTP/IMAP servers and provider mailboxes.
-
-The initial DEV/Alpha profile centers:
-
-```text
-MailTx
-+
-consensus finality
-+
-compact bounded mail-validation state
-+
-opaque encrypted attachment objects in CYBOU Store
-+
-local decrypted mailbox
-```
-
-The primary competitive axis is provider account versus user-controlled
-network identity and state. Post-quantum cryptography is a security property,
-not CYBOU's sole product differentiation.
-
-## Do not claim
-
-Do not say:
+Do not claim:
 
 ```text
 compatible with all Internet email
@@ -61,6 +29,5 @@ ANSSI certified
 government approved
 ```
 
-unless objectively true.
-
-SMTP interoperability, if later added, is a gateway with a different trust/security boundary.
+unless objectively true. SMTP interoperability, if later added, is a gateway
+with a different trust and security boundary.

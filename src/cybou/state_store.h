@@ -5,15 +5,12 @@
 #ifndef CYBOU_STATE_STORE_H
 #define CYBOU_STATE_STORE_H
 
-#include <cybou/bft.h>
 #include <cybou/block.h>
 #include <cybou/block_executor.h>
-#include <cybou/mail_filter.h>
 #include <cybou/kv_store.h>
 #include <cybou/network_definition.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/state.h>
-#include <cybou/validator.h>
 #include <serialize.h>
 
 #include <cstdint>
@@ -56,7 +53,6 @@ enum class GenesisInitError : uint8_t {
     ALREADY_INITIALIZED,
     INVALID_NETWORK_DEFINITION,
     GENESIS_STATE_MISMATCH,
-    INVALID_GENESIS_VALIDATOR_SET,
 };
 
 struct GenesisInitResult {
@@ -81,21 +77,18 @@ enum class BlockTransitionError : uint8_t {
     INVALID_CERTIFICATE,
     STATE_ROOT_MISMATCH,
     FEE_ROUTING_FAILED,
-    VALIDATOR_SET_MISMATCH,
 };
 
 struct BlockTransitionResult {
     BlockTransitionError error{BlockTransitionError::NONE};
     BlockExecutionResult op_result{};
-    FinalityVerificationError cert_error{FinalityVerificationError::NONE};
-
     explicit operator bool() const { return error == BlockTransitionError::NONE; }
 };
 
 /**
  * Sole owner of the canonical CYBOU state.
  *
- * CYBOU has explicit BFT finality: a finalized block is never reorged, so
+ * CYBOU accepts one genesis-bound PoA finalizer: a finalized block is never reorged, so
  * there is intentionally no production rollback/undo path. State transition
  * is strictly candidate-validate-commit on top of the store's own canonical
  * state; callers never hold or supply a copy of consensus state and there is
@@ -108,9 +101,6 @@ public:
         KVStore& db,
         CybouNetworkDefinition network_definition,
         std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier = nullptr);
-
-    /** Retrieve canonical active validator set from persisted state. */
-    std::optional<ValidatorSet> GetValidatorSet() const;
 
     /** Persist genesis state at height 0. Fails if already initialized. */
     GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true);
@@ -137,22 +127,23 @@ public:
 
     /** Network identity derived from the immutable canonical definition. */
     const uint256& GetNetworkId() const { return m_network_id; }
+    const CybouNetworkDefinition& GetNetworkDefinition() const { return m_network_definition; }
+    KVStore& GetDatabase() const { return m_db; }
 
     /** Network identity persisted with genesis, if initialized. */
     std::optional<uint256> GetStoredNetworkId() const;
 
     /**
-     * Atomically commit a BFT-finalized block:
+     * Atomically commit a PoA-finalized block:
      * - verifies parent equals current head
      * - verifies height equals head.height + 1
-     * - verifies block ID and BFT finality certificate over the validator set
+     * - verifies block ID and genesis-bound PoA finality certificate
      * - verifies operations and fee routing against a throwaway candidate
      * - verifies candidate state root matches block.resulting_state_root
      * - atomically writes new state, hash, head, and finalized block in one batch.
      */
     BlockTransitionResult CommitFinalizedBlock(
         const FinalizedBlock& finalized_block,
-        const std::optional<ValidatorSet>& validator_set = std::nullopt,
         bool sync = true);
 
     /** Retrieve a persisted finalized block by its block ID. */
@@ -166,8 +157,6 @@ public:
     /** Return the indexed finalized height for an operation, if present and valid. */
     std::optional<uint64_t> GetFinalizedOperationHeight(const uint256& op_id) const;
 
-    /** Retrieve a persisted compact mail discovery filter by block ID. */
-    std::optional<CybouMailDiscoveryFilter> GetBlockMailFilter(const uint256& block_id) const;
 
 private:
     KVStore& m_db;

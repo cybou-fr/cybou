@@ -28,7 +28,7 @@ unit toggle, no satoshi-style subunit anywhere in the desktop UI.
   without the user's own authorization.
 - `System Balance` is frozen CYBOU that pays deterministic protocol fees
   (Beta Email/Storage and later services) and contributes
-  to Proof of Trust. It cannot be transferred, withdrawn or traded, and the
+  to protocol fees. It cannot be transferred, withdrawn or traded, and the
   UI offers no path that contradicts this.
 
 ## One-way lock
@@ -51,13 +51,13 @@ balances:
 
 ```text
 Onboarding bonus   OnboardingPool -> System Balance (AccountCreate)
-Email fee          deterministic size-aware fee, debited from System Balance
+Publication fee    deterministic size-aware fee, debited from System Balance
 Payment            user-authorized Balance transfer
 Lock to System     Balance -> System Balance (one-way)
 ```
 
 Every entry shows the affected side (Balance or System), the signed amount
-and its BFT finality state. The ledger is a local view: consensus state
+and its verified PoA finality state. The ledger is a local view: consensus state
 keeps validation-relevant balances only.
 
 ## Gating

@@ -67,7 +67,7 @@ bool ServeFinalizedBlockRequest(CybouStateStore& store, boost::asio::ip::tcp::so
 FetchBlockResult FetchFinalizedBlock(
     const std::string& host, uint16_t port, const uint256& network_id, uint64_t height);
 
-/** Submit a protocol operation to a remote peer (authority / validator). Returns structured result. */
+/** Submit a protocol operation to a remote peer (PoA finalizer / full node). Returns structured result. */
 OperationSubmitResult SubmitOperationRemote(
     const std::string& host, uint16_t port, const uint256& network_id, const ProtocolOperation& op);
 

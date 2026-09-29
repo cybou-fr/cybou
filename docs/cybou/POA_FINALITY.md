@@ -84,9 +84,10 @@ and hybrid PoA public key. It contains no initial ValidatorSet commitment or
 Operator Authority key. `cybou.cybou` remains an ordinary Identity unrelated
 to the PoA signer.
 
-DEV cutover is one coordinated protocol reset only after the complete format,
+DEV cutover is one coordinated protocol reset after the canonical format,
 names integration, finality, state execution, storage admission, and clean-node
-recovery gates pass. Preserve the existing DEV executable and validator
-materials for rollback; do not run old and new protocol formats together.
+recovery gates pass. Delete obsolete DEV chain state and vaults as part of the
+reset. The repository's Git history is sufficient record of the old protocol;
+runtime compatibility and old-state import are not required.
 
 \n

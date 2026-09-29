@@ -6,11 +6,9 @@
 #define CYBOU_STATE_H
 
 #include <cybou/identity_registry.h>
-#include <cybou/mail_tx.h>
 #include <cybou/name_registry.h>
 #include <cybou/root_publication.h>
 #include <cybou/protocol_params.h>
-#include <cybou/validator.h>
 
 #include <cstdint>
 #include <map>
@@ -20,15 +18,13 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_STATE_VERSION{4};
+inline constexpr uint8_t CYBOU_STATE_VERSION{6};
 
 struct AccountState {
     uint64_t balance{0};
     uint64_t system_balance{0};
     uint64_t creation_height{0};
     uint64_t creation_epoch{0};
-    uint64_t last_mail_epoch{0};
-    uint32_t mail_count_in_epoch{0};
 
     friend bool operator==(const AccountState&, const AccountState&) = default;
 };
@@ -39,7 +35,6 @@ struct CybouState {
     uint64_t pending_fee_pool{0};
     std::map<AccountId, AccountState> accounts;
     IdentityRegistry identities;
-    ValidatorSet validator_set;
     NameRegistry names;
 };
 
@@ -67,10 +62,6 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
     const uint256& network_id, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state);
 
-MailError ApplyMail(const AuthorizedMail& op,
-    const uint256& network_id, uint64_t block_height,
-    const CybouProtocolParameters& params, CybouState& state);
-
 enum class RootPublicationError : uint8_t {
     NONE,
     INVALID_PAYLOAD,
@@ -89,7 +80,6 @@ enum class StateValidationError : uint8_t {
     ACCOUNT_IDENTITY_COUNT_MISMATCH,
     MISSING_IDENTITY,
     DUPLICATE_RECOVERY_BINDING,
-    INVALID_VALIDATOR_SET,
     BALANCE_OVERFLOW,
     INVALID_NAME_REGISTRY,
 };

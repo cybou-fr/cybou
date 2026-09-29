@@ -350,28 +350,6 @@ size_t CybouWalletService::SyncLedger()
                             working_entries.push_back(entry);
                         }
                     }
-                } else if constexpr (std::is_same_v<T, AuthorizedMail>) {
-                    const auto& auth = op.authorization;
-                    const auto& payload = op.mail;
-                    if (auth.account_id == *my_account) {
-                        const auto it = std::find_if(working_entries.begin(), working_entries.end(), [&](const auto& e) {
-                            return e.entry_id == op_id;
-                        });
-                        if (it == working_entries.end()) {
-                            const uint64_t fee = MailFeeForSize(payload.ciphertext.size());
-                            WalletLedgerEntry entry{
-                                .entry_id = op_id,
-                                .kind = WalletEntryKind::MAIL_FEE,
-                                .amount = -static_cast<int64_t>(fee),
-                                .system_side = true,
-                                .counterparty = payload.recipient,
-                                .timestamp = 0,
-                                .height = h,
-                                .finality = WalletEntryFinality::FINAL,
-                            };
-                            working_entries.push_back(entry);
-                        }
-                    }
                 } else if constexpr (std::is_same_v<T, AuthorizedRootPublication>) {
                     if (op.authorization.account_id == *my_account) {
                         const auto it = std::find_if(working_entries.begin(), working_entries.end(), [&](const auto& e) {

@@ -265,11 +265,6 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const Proto
         if (!body) return std::nullopt;
         out.push_back(static_cast<unsigned char>(ProtocolOperationKind::NAME_REVEAL));
         out.insert(out.end(), body->begin(), body->end());
-    } else if (const auto* mail = std::get_if<AuthorizedMail>(&operation)) {
-        const auto body = SerializeAuthorizedMail(*mail);
-        if (!body) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::MAIL));
-        out.insert(out.end(), body->begin(), body->end());
     } else if (const auto* publication = std::get_if<AuthorizedRootPublication>(&operation)) {
         const auto body = SerializeRootPublicationOperation(*publication);
         if (!body || body->size() + 2 > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
@@ -316,10 +311,6 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
         const auto op = DeserializeNameReveal(bytes.subspan(2));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
-    case ProtocolOperationKind::MAIL: {
-        const auto op = DeserializeAuthorizedMail(bytes.subspan(2));
-        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
-    }
     case ProtocolOperationKind::ROOT_PUBLICATION: {
         if (bytes.size() > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
         const auto op = DeserializeRootPublicationOperation(bytes.subspan(2));
@@ -331,7 +322,7 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
 
 std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation)
 {
-    constexpr std::string_view domain{"CYBOU/OP-ID/V4"};
+    constexpr std::string_view domain{"CYBOU/OP-ID/V5"};
     const auto bytes = SerializeProtocolOperation(operation);
     if (!bytes) return std::nullopt;
     uint256 id;

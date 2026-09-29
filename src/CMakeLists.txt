@@ -157,8 +157,6 @@ target_link_libraries(bitcoin_common
 # inherited Bitcoin common library.
 add_library(cybou_core STATIC
   cybou/account_creation.cpp
-  cybou/bft.cpp
-  cybou/bft_engine.cpp
   cybou/block.cpp
   cybou/canonical_cbor.cpp
   cybou/chunk_id.cpp
@@ -170,7 +168,6 @@ add_library(cybou_core STATIC
   cybou/crypto/chacha20_poly1305.cpp
   cybou/crypto/hkdf_sha256.cpp
   cybou/crypto/sha256.cpp
-  cybou/evidence.cpp
   cybou/hex.cpp
   cybou/identity.cpp
   cybou/identity_authorization.cpp
@@ -189,7 +186,6 @@ add_library(cybou_core STATIC
   cybou/storage_crypto.cpp
   cybou/storage_key_ring.cpp
   cybou/state.cpp
-  cybou/validator.cpp
 )
 target_link_libraries(cybou_core
   PUBLIC
@@ -224,7 +220,6 @@ add_library(cybou_node STATIC
   cybou/network_definition.cpp
   cybou/protocol_operation.cpp
   cybou/gcs_filter.cpp
-  cybou/mail_filter.cpp
   cybou/mail_envelope.cpp
   cybou/mail_service.cpp
   cybou/identity_operation_coordinator.cpp

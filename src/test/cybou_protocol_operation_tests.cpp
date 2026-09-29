@@ -112,30 +112,6 @@ cybou::AuthorizedSystemLock MakeTestSystemLock(const TestIdentity& sender, uint6
     return cybou::AuthorizedSystemLock{.authorization = auth, .lock = payload};
 }
 
-cybou::AuthorizedMail MakeTestMail(const TestIdentity& sender, const cybou::AccountId& recipient)
-{
-    const auto net_id = TestNetworkId();
-    cybou::MailPayload payload{
-        .version = cybou::MAIL_TX_VERSION,
-        .recipient = recipient,
-        .ciphertext = std::vector<unsigned char>(128, 0x77),
-    };
-    payload.discovery_tag.begin()[0] = 0x11;
-    payload.content_commitment.begin()[0] = 0x22;
-
-    const auto commit = cybou::ComputeMailPayloadCommitment(payload);
-    cybou::IdentityOperationAuthorization auth{
-        .account_id = sender.account_id,
-        .nonce = 2,
-        .key_epoch = 0,
-        .kind = cybou::IdentityOperationKind::MAIL,
-        .payload_commitment = *commit,
-    };
-    const auto digest = cybou::ComputeIdentityOperationDigest(net_id, auth);
-    auth.signature = *cybou::SignIdentityMessage(sender.dev_seed, cybou::IdentityKeyPurpose::AUTHORIZATION, *digest);
-
-    return cybou::AuthorizedMail{.authorization = auth, .mail = payload};
-}
 
 } // namespace
 
@@ -200,24 +176,6 @@ BOOST_AUTO_TEST_CASE(system_lock_canonical_typed_roundtrip)
     const auto decoded = cybou::DeserializeProtocolOperation(*encoded);
     BOOST_REQUIRE(decoded.has_value());
     BOOST_CHECK(std::holds_alternative<cybou::AuthorizedSystemLock>(*decoded));
-    BOOST_CHECK(*decoded == op);
-}
-
-BOOST_AUTO_TEST_CASE(mail_canonical_typed_roundtrip)
-{
-    const auto alice = MakeTestIdentity(1);
-    const auto bob = MakeTestIdentity(2);
-    const auto mail_op = MakeTestMail(alice, bob.account_id);
-    const cybou::ProtocolOperation op{mail_op};
-
-    const auto encoded = cybou::SerializeProtocolOperation(op);
-    BOOST_REQUIRE(encoded.has_value());
-    BOOST_CHECK_EQUAL((*encoded)[0], cybou::PROTOCOL_OPERATION_VERSION);
-    BOOST_CHECK_EQUAL((*encoded)[1], static_cast<uint8_t>(cybou::ProtocolOperationKind::MAIL));
-
-    const auto decoded = cybou::DeserializeProtocolOperation(*encoded);
-    BOOST_REQUIRE(decoded.has_value());
-    BOOST_CHECK(std::holds_alternative<cybou::AuthorizedMail>(*decoded));
     BOOST_CHECK(*decoded == op);
 }
 

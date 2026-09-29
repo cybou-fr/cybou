@@ -27,8 +27,6 @@ const char* Algorithm(IdentityKeyPurpose purpose)
     switch (purpose) {
     case IdentityKeyPurpose::RECOVERY_ROOT: return "ML-DSA-65";
     case IdentityKeyPurpose::AUTHORIZATION: return "ML-DSA-44";
-    case IdentityKeyPurpose::VALIDATOR:
-    case IdentityKeyPurpose::OPERATOR_AUTHORITY:
     case IdentityKeyPurpose::RELEASE_SIGNING:
     case IdentityKeyPurpose::TREASURY:
     case IdentityKeyPurpose::POA_FINALIZER: return "ML-DSA-65";
@@ -56,8 +54,6 @@ std::optional<std::array<unsigned char, 32>> DeriveSeed(
     switch (purpose) {
     case IdentityKeyPurpose::RECOVERY_ROOT: purpose_label = "ROOT"; break;
     case IdentityKeyPurpose::AUTHORIZATION: purpose_label = "AUTH"; break;
-    case IdentityKeyPurpose::VALIDATOR: purpose_label = "VALIDATOR"; break;
-    case IdentityKeyPurpose::OPERATOR_AUTHORITY: purpose_label = "OPERATOR"; break;
     case IdentityKeyPurpose::RELEASE_SIGNING: purpose_label = "RELEASE"; break;
     case IdentityKeyPurpose::TREASURY: purpose_label = "TREASURY"; break;
     case IdentityKeyPurpose::POA_FINALIZER: purpose_label = "POA_FINALIZER"; break;
@@ -187,22 +183,6 @@ std::optional<std::array<unsigned char, 32>> ComputeAuthorizationKeyId(
     std::array<unsigned char, 32> id{};
     if (!crypto::ComputeSha256({
         crypto::Sha256Bytes(domain), suite, authorization_key.ed25519, authorization_key.ml_dsa,
-    }, id.data())) return std::nullopt;
-    return id;
-}
-
-std::optional<std::array<unsigned char, 32>> ComputeValidatorKeyId(
-    const IdentityHybridPublicKey& validator_key)
-{
-    if (validator_key.purpose != IdentityKeyPurpose::VALIDATOR ||
-        validator_key.ml_dsa.size() != PublicSize(IdentityKeyPurpose::VALIDATOR) ||
-        std::all_of(validator_key.ed25519.begin(), validator_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
-        std::all_of(validator_key.ml_dsa.begin(), validator_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
-    constexpr std::string_view domain{"CYBOU/VALIDATOR-KEY-ID/V2"};
-    constexpr std::array<unsigned char, 2> suite{3, 1};
-    std::array<unsigned char, 32> id{};
-    if (!crypto::ComputeSha256({
-        crypto::Sha256Bytes(domain), suite, validator_key.ed25519, validator_key.ml_dsa,
     }, id.data())) return std::nullopt;
     return id;
 }

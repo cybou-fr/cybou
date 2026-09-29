@@ -58,10 +58,10 @@ std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
     const uint256& network_id, const IdentityOperationAuthorization& request)
 {
     const auto kind = static_cast<uint8_t>(request.kind);
-    if (kind < 1 || kind > 6 || !Nonzero(request.payload_commitment) ||
+    if (kind < 1 || kind > 5 || !Nonzero(request.payload_commitment) ||
         network_id.IsNull() || request.account_id.IsNull()) return std::nullopt;
     std::vector<unsigned char> preimage;
-    constexpr std::string_view domain{"CYBOU/IDENTITY-OP/V1"};
+    constexpr std::string_view domain{"CYBOU/IDENTITY-OP/V2"};
     preimage.insert(preimage.end(), domain.begin(), domain.end());
     preimage.insert(preimage.end(), network_id.begin(), network_id.end());
     const auto account = request.account_id.Value();
@@ -70,7 +70,7 @@ std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
     Append64(preimage, request.key_epoch);
     preimage.push_back(kind);
     preimage.insert(preimage.end(), request.payload_commitment.begin(), request.payload_commitment.end());
-    return Hash("CYBOU/IDENTITY-OP-DIGEST/V1", preimage);
+    return Hash("CYBOU/IDENTITY-OP-DIGEST/V2", preimage);
 }
 
 IdentityRegistryError IdentityRegistry::Register(const AccountCreateOp& create,

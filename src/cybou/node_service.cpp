@@ -130,9 +130,7 @@ void CybouNodeService::StopNetwork()
 int CybouNodeService::RunAuthority(const CybouAuthorityServiceConfig& config, std::atomic_bool& stopping)
 {
     if (!m_started) throw std::logic_error("CYBOU node service must be started before authority service");
-    if (!m_runtime->GetStatus().is_authority) throw std::logic_error("authority service requires a validator runtime");
-    const auto validator_set = m_runtime->GetValidatorSet();
-    if (!validator_set || validator_set->validators.empty()) throw std::runtime_error("validator set is empty");
+    if (!m_runtime->GetStatus().is_authority) throw std::logic_error("authority service requires a PoA finalizer runtime");
     if (config.block_feed_port == 0 || config.block_interval_ms == 0 || config.block_interval_ms > 60000) {
         throw std::invalid_argument("invalid authority listener or block interval");
     }
@@ -140,11 +138,6 @@ int CybouNodeService::RunAuthority(const CybouAuthorityServiceConfig& config, st
     const auto bind_address = boost::asio::ip::make_address(config.bind_address);
     if (config.p2p_port && *config.p2p_port == config.block_feed_port) {
         throw std::invalid_argument("P2P port must differ from block feed port");
-    }
-    if (validator_set->validators.size() > 1) {
-        if (!config.p2p_port || config.peers.size() < validator_set->validators.size() - 1) {
-            throw std::runtime_error("multi-validator serve requires a CYP2 listener and at least N-1 peers");
-        }
     }
     if (config.p2p_port) {
         for (const auto& [address, peer_port] : config.peers) {
@@ -176,20 +169,11 @@ int CybouNodeService::RunAuthority(const CybouAuthorityServiceConfig& config, st
     } stop_workers_on_exit{stopping};
     block_worker = std::jthread{[&] {
         while (!stopping) {
-            if (m_runtime->GetStatus().validator_count > 1) {
-                m_runtime->TickConsensus(std::chrono::milliseconds{config.block_interval_ms});
-                std::this_thread::sleep_for(std::chrono::milliseconds{50});
-                continue;
-            }
             const auto block = m_runtime->ProduceBlock();
             if (!block) {
-                if (m_runtime->GetStatus().validator_count <= 1) {
-                    std::cerr << "block production stopped\n";
-                    stopping = true;
-                    break;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds{config.block_interval_ms});
-                continue;
+                std::cerr << "PoA block production stopped\n";
+                stopping = true;
+                break;
             }
             std::cout << "height=" << block->block.height << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds{config.block_interval_ms});
@@ -202,8 +186,6 @@ int CybouNodeService::RunAuthority(const CybouAuthorityServiceConfig& config, st
         m_runtime->SetExplicitPeerEndpoints(config.peers);
         p2p::PeerManager peers{*m_runtime};
         std::map<std::pair<std::string, uint16_t>, std::chrono::steady_clock::time_point> retry_after;
-        const auto drain_delay_str = std::getenv("CYBOU_CONSENSUS_DRAIN_DELAY_MS");
-        const int drain_delay_ms = drain_delay_str ? std::max(0, std::atoi(drain_delay_str)) : 0;
         const auto reconnect_interval_str = std::getenv("CYBOU_RECONNECT_INTERVAL_MS");
         const int reconnect_interval_ms = reconnect_interval_str ? std::max(0, std::atoi(reconnect_interval_str)) : 0;
         auto last_reconnect = std::chrono::steady_clock::now();
@@ -223,18 +205,13 @@ int CybouNodeService::RunAuthority(const CybouAuthorityServiceConfig& config, st
                 });
                 const auto endpoint = std::make_pair(host, peer_port);
                 if (!present && std::chrono::steady_clock::now() >= retry_after[endpoint]) {
-                    if (peers.Connect(host, peer_port)) {
-                        m_runtime->ReplayConsensusToPeer(peers, host, peer_port);
-                    } else {
+                    if (!peers.Connect(host, peer_port)) {
                         retry_after[endpoint] = std::chrono::steady_clock::now() + std::chrono::seconds{5};
                     }
                 }
             }
-            if (drain_delay_ms > 0) std::this_thread::sleep_for(std::chrono::milliseconds{drain_delay_ms});
             if (!stopping) {
-                m_runtime->DrainConsensusMessages(peers);
                 peers.FanoutRecentBlocks();
-                peers.FanoutRecentOperations();
                 peers.PingAll();
             }
 
@@ -253,11 +230,7 @@ int CybouNodeService::RunAuthority(const CybouAuthorityServiceConfig& config, st
                 }
             }
 
-            for (int i = 0; i < 20 && !stopping; ++i) {
-                if (drain_delay_ms > 0) std::this_thread::sleep_for(std::chrono::milliseconds{drain_delay_ms});
-                m_runtime->DrainConsensusMessages(peers);
-                std::this_thread::sleep_for(std::chrono::milliseconds{50});
-            }
+            std::this_thread::sleep_for(std::chrono::milliseconds{250});
         }
     });
 

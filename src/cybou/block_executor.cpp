@@ -81,14 +81,6 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 failure.name_reveal_error = result;
                 return failure;
             }
-        } else if (const auto* mail = std::get_if<AuthorizedMail>(&operations[i])) {
-            const auto result = ApplyMail(*mail, network_id, block_height, params, candidate);
-            if (result != MailError::NONE) {
-                auto failure = fail(BlockExecutionError::INVALID_MAIL);
-                failure.failed_operation_index = i;
-                failure.mail_error = result;
-                return failure;
-            }
         } else if (const auto* publication = std::get_if<AuthorizedRootPublication>(&operations[i])) {
             const auto result = ApplyRootPublication(*publication, network_id, params, candidate);
             if (result != RootPublicationError::NONE) {

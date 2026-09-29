@@ -2,7 +2,6 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#include <cybou/bft.h>
 #include <cybou/block_executor.h>
 #include <cybou/network_definition.h>
 #include <test/cybou_test_helpers.h>
@@ -13,21 +12,6 @@
 #include <algorithm>
 #include <array>
 
-namespace {
-cybou::Validator MakeTestValidator(uint8_t seed_byte)
-{
-    std::array<unsigned char, 32> seed{};
-    seed[0] = seed_byte;
-    const auto pub = cybou::DeriveIdentityPublicKey(seed, cybou::IdentityKeyPurpose::VALIDATOR);
-    assert(pub.has_value());
-    const auto id = cybou::ComputeValidatorKeyId(*pub);
-    assert(id.has_value());
-    uint256 val_id;
-    std::copy_n(id->begin(), 32, val_id.begin());
-    return cybou::Validator{val_id, *pub, 1};
-}
-} // namespace
-
 BOOST_AUTO_TEST_SUITE(cybou_state_tests)
 
 BOOST_AUTO_TEST_CASE(network_id_commits_to_name_rules)
@@ -35,10 +19,8 @@ BOOST_AUTO_TEST_CASE(network_id_commits_to_name_rules)
     using namespace cybou;
     std::array<unsigned char, 32> seed{};
     seed[0] = 0x51;
-    const auto validator = GenerateValidatorKeyPair(seed);
-    BOOST_REQUIRE(validator);
     const auto definition = CreateDevNetworkDefinition(
-        CreateDevGenesisState(validator->public_key), cybou::TestPoaFinalizerPublicKey());
+        CreateDevGenesisState(), cybou::TestPoaFinalizerPublicKey());
     BOOST_CHECK(ValidateNetworkDefinition(definition) == NetworkDefinitionError::NONE);
     const auto encoded = SerializeNetworkDefinition(definition);
     const auto decoded = DeserializeNetworkDefinition(encoded);
@@ -84,7 +66,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.validator_set.validators.push_back(MakeTestValidator(5));
+
     auto damaged_create = create;
     damaged_create.authorization_pop.ed25519[0] ^= 1;
     BOOST_CHECK(ApplyAccountCreate(damaged_create, network_id, 0, params, state) == AccountCreateStateError::INVALID_CREATE);
@@ -239,7 +221,7 @@ BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_determinis
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.validator_set.validators.push_back(MakeTestValidator(0x75));
+
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
     RootPublication publication;
@@ -319,7 +301,7 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.validator_set.validators.push_back(MakeTestValidator(17));
+
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
     const IdentityAuthorization next_auth{*new_recovery, *new_authorization};
@@ -394,7 +376,7 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.validator_set.validators.push_back(MakeTestValidator(25));
+
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
     // Fund account balance
@@ -456,7 +438,7 @@ BOOST_AUTO_TEST_CASE(state_validation_invariants)
 {
     using namespace cybou;
     CybouState state{};
-    state.validator_set.validators.push_back(MakeTestValidator(31));
+
     BOOST_CHECK(ValidateCybouState(state) == StateValidationError::NONE);
 
     // Mismatched account count
@@ -470,120 +452,6 @@ BOOST_AUTO_TEST_CASE(state_validation_invariants)
     state.accounts.clear();
     state.onboarding_pool = 100'000'000'001ULL;
     BOOST_CHECK(ValidateCybouState(state) == StateValidationError::BALANCE_OVERFLOW);
-}
-
-BOOST_AUTO_TEST_CASE(post_quantum_validator_set_and_bft_certificate)
-{
-    using namespace cybou;
-    std::array<std::array<unsigned char, 32>, 4> seeds{};
-    for (size_t i = 0; i < 4; ++i) {
-        seeds[i][0] = static_cast<unsigned char>(101 + i);
-    }
-    std::vector<Validator> validators;
-    for (size_t i = 0; i < 4; ++i) {
-        validators.push_back(MakeTestValidator(static_cast<uint8_t>(101 + i)));
-    }
-
-    ValidatorSet val_set{.validators = validators};
-    BOOST_CHECK(val_set.version == VALIDATOR_SET_VERSION);
-    BOOST_CHECK_EQUAL(val_set.Size(), 4U);
-    BOOST_CHECK_EQUAL(val_set.TotalWeight(), 4U);
-    BOOST_CHECK_EQUAL(val_set.FaultTolerance(), 1U);
-    BOOST_CHECK_EQUAL(val_set.QuorumThreshold(), 3U);
-    BOOST_CHECK(val_set.Mode() == ConsensusMode::BFT);
-    BOOST_CHECK(ValidateValidatorSet(val_set) == ValidatorSetValidationError::NONE);
-
-    // Hardening check: duplicate ML-DSA-65 key rejection
-    auto dup_ml_set = val_set;
-    dup_ml_set.validators[1].consensus_public_key.ml_dsa = dup_ml_set.validators[0].consensus_public_key.ml_dsa;
-    const auto dup_val_id = ComputeValidatorKeyId(dup_ml_set.validators[1].consensus_public_key);
-    BOOST_REQUIRE(dup_val_id.has_value());
-    std::copy_n(dup_val_id->begin(), 32, dup_ml_set.validators[1].validator_id.begin());
-    BOOST_CHECK(ValidateValidatorSet(dup_ml_set) == ValidatorSetValidationError::DUPLICATE_CONSENSUS_KEY);
-
-    // Serialization roundtrip
-    const auto serialized = SerializeValidatorSet(val_set);
-    BOOST_CHECK_EQUAL(serialized.size(), 5 + 4 * VALIDATOR_ENTRY_SIZE);
-    const auto deserialized = DeserializeValidatorSet(serialized);
-    BOOST_REQUIRE(deserialized.has_value());
-    BOOST_CHECK(*deserialized == val_set);
-
-    const auto commitment = ComputeValidatorSetCommitment(val_set);
-    BOOST_CHECK(!commitment.IsNull());
-
-    // Build BFT Finality Certificate with 3 votes (quorum threshold = 3)
-    uint256 network_id{}, block_id{};
-    network_id.begin()[0] = 77;
-    block_id.begin()[0] = 88;
-    const uint64_t height = 1000;
-    const uint32_t round = 0;
-
-    const uint256 commit_digest = ComputeBftCommitDigest(network_id, block_id, height, round, commitment);
-    std::array<unsigned char, 32> digest_bytes{};
-    std::copy_n(commit_digest.begin(), 32, digest_bytes.begin());
-
-    BftFinalityCertificate cert{};
-    cert.network_id = network_id;
-    cert.block_id = block_id;
-    cert.height = height;
-    cert.round = round;
-    cert.validator_set_commitment = commitment;
-
-    for (size_t i = 0; i < 3; ++i) {
-        const auto sig = SignIdentityMessage(seeds[i], IdentityKeyPurpose::VALIDATOR, digest_bytes);
-        BOOST_REQUIRE(sig.has_value());
-        cert.commit_votes.push_back(BftCommitVote{
-            .validator_id = validators[i].validator_id,
-            .signature = *sig,
-        });
-    }
-
-    // Verification succeeds
-    BOOST_CHECK(VerifyFinalityCertificate(cert, val_set, network_id) == FinalityVerificationError::NONE);
-
-    // Serialization roundtrip
-    const auto cert_bytes = SerializeFinalityCertificate(cert);
-    BOOST_REQUIRE(cert_bytes.has_value());
-    BOOST_CHECK_EQUAL(cert_bytes->size(), 113 + 3 * BFT_COMMIT_VOTE_SIZE);
-    const auto decoded_cert = DeserializeFinalityCertificate(*cert_bytes);
-    BOOST_REQUIRE(decoded_cert.has_value());
-    BOOST_CHECK(*decoded_cert == cert);
-
-    // Fail-closed malformed certificate serialization
-    auto bad_ml_cert = cert;
-    bad_ml_cert.commit_votes[0].signature.ml_dsa.pop_back(); // 3308 != 3309
-    BOOST_CHECK(!SerializeFinalityCertificate(bad_ml_cert).has_value());
-
-    // Adversarial verification checks
-    // 1. Wrong network
-    uint256 wrong_net = network_id;
-    wrong_net.begin()[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificate(cert, val_set, wrong_net) == FinalityVerificationError::NETWORK_MISMATCH);
-
-    // 2. Wrong validator set commitment
-    auto bad_commitment_cert = cert;
-    bad_commitment_cert.validator_set_commitment.begin()[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificate(bad_commitment_cert, val_set, network_id) == FinalityVerificationError::VALIDATOR_SET_MISMATCH);
-
-    // 3. Insufficient votes (2 < 3)
-    auto short_cert = cert;
-    short_cert.commit_votes.pop_back();
-    BOOST_CHECK(VerifyFinalityCertificate(short_cert, val_set, network_id) == FinalityVerificationError::INSUFFICIENT_VOTES);
-
-    // 4. Duplicate vote
-    auto dup_cert = cert;
-    dup_cert.commit_votes[2] = dup_cert.commit_votes[0];
-    BOOST_CHECK(VerifyFinalityCertificate(dup_cert, val_set, network_id) == FinalityVerificationError::DUPLICATE_VOTE);
-
-    // 5. Unknown validator
-    auto unknown_cert = cert;
-    unknown_cert.commit_votes[0].validator_id.begin()[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificate(unknown_cert, val_set, network_id) == FinalityVerificationError::UNKNOWN_VALIDATOR);
-
-    // 6. Invalid signature
-    auto bad_sig_cert = cert;
-    bad_sig_cert.commit_votes[0].signature.ed25519[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificate(bad_sig_cert, val_set, network_id) == FinalityVerificationError::INVALID_SIGNATURE);
 }
 
 BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
@@ -640,7 +508,7 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     params.name_commit_max_lifetime = 100;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.validator_set.validators.push_back(MakeTestValidator(55));
+
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
 
@@ -801,218 +669,6 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_CHECK(ValidateCybouState(corrupted_state) == StateValidationError::ACCOUNT_IDENTITY_COUNT_MISMATCH);
 }
 
-BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
-{
-    using namespace cybou;
-
-    // 1. Fee calculation logic
-    auto params = DevProtocolParameters();
-    BOOST_CHECK_EQUAL(MailFeeForSize(100), 5ULL);     // 4 + 1
-    BOOST_CHECK_EQUAL(MailFeeForSize(1024), 5ULL);    // 4 + 1
-    BOOST_CHECK_EQUAL(MailFeeForSize(1025), 6ULL);    // 4 + 2
-    BOOST_CHECK_EQUAL(MailFeeForSize(2048), 6ULL);    // 4 + 2
-    BOOST_CHECK_EQUAL(MailFeeForSize(64 * 1024), 68ULL); // 4 + 64
-
-    // 2. Setup state with Alice (sender) and Bob (recipient)
-    std::array<unsigned char, 32> alice_root_seed{}, alice_dev_seed{};
-    alice_root_seed[0] = 61;
-    alice_dev_seed[0] = 62;
-    uint256 alice_raw{}, bob_raw{}, network_id{};
-    alice_raw.begin()[0] = 63;
-    bob_raw.begin()[0] = 64;
-    network_id.begin()[0] = 65;
-    const AccountId alice{alice_raw};
-    const AccountId bob{bob_raw};
-
-    std::array<unsigned char, 32> bob_root_seed{}, bob_dev_seed{};
-    bob_root_seed[0] = 71;
-    bob_dev_seed[0] = 72;
-
-    const auto alice_root = DeriveIdentityPublicKey(alice_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto alice_dev = DeriveIdentityPublicKey(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION);
-    const auto bob_root = DeriveIdentityPublicKey(bob_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto bob_dev = DeriveIdentityPublicKey(bob_dev_seed, IdentityKeyPurpose::AUTHORIZATION);
-    BOOST_REQUIRE(alice_root && alice_dev && bob_root && bob_dev);
-
-
-    const IdentityAuthorization alice_auth{*alice_root, *alice_dev};
-    const auto alice_binding = test::MakeIdentityKemBinding(network_id, alice, alice_auth);
-    const AccountCreateOp create_alice{alice, alice_auth, alice_binding.package,
-        {.network_id = network_id, .account_id = alice, .authorization_commitment = alice_binding.authorization_commitment},
-        *SignIdentityMessage(alice_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, alice_binding.pop_digest),
-        *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, alice_binding.pop_digest)};
-
-    const IdentityAuthorization bob_auth{*bob_root, *bob_dev};
-    const auto bob_binding = test::MakeIdentityKemBinding(network_id, bob, bob_auth);
-    const AccountCreateOp create_bob{bob, bob_auth, bob_binding.package,
-        {.network_id = network_id, .account_id = bob, .authorization_commitment = bob_binding.authorization_commitment},
-        *SignIdentityMessage(bob_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, bob_binding.pop_digest),
-        *SignIdentityMessage(bob_dev_seed, IdentityKeyPurpose::AUTHORIZATION, bob_binding.pop_digest)};
-
-    params.account_creation_work_bits = 0;
-    CybouState state{};
-    state.onboarding_pool = params.onboarding_bonus * 10;
-    state.validator_set.validators.push_back(MakeTestValidator(88));
-    BOOST_REQUIRE(ApplyAccountCreate(create_alice, network_id, 0, params, state) == AccountCreateStateError::NONE);
-    BOOST_REQUIRE(ApplyAccountCreate(create_bob, network_id, 0, params, state) == AccountCreateStateError::NONE);
-
-    // Initial state check
-    BOOST_CHECK_EQUAL(state.accounts.at(alice).system_balance, params.onboarding_bonus);
-    BOOST_CHECK_EQUAL(state.accounts.at(alice).mail_count_in_epoch, 0U);
-
-    // 3. Create MailTx from Alice to Bob
-    MailPayload payload{};
-    payload.recipient = bob;
-    payload.discovery_tag.begin()[0] = 99;
-    payload.content_commitment.begin()[0] = 100;
-    payload.ciphertext = std::vector<unsigned char>(300, 0xAA); // 300 bytes ciphertext -> tier 1 -> fee = 5
-
-    const auto payload_commitment = ComputeMailPayloadCommitment(payload);
-    BOOST_REQUIRE(payload_commitment.has_value());
-
-    AuthorizedMail mail_op{};
-    mail_op.mail = payload;
-    mail_op.authorization.account_id = alice;
-    mail_op.authorization.nonce = 0;
-    mail_op.authorization.kind = IdentityOperationKind::MAIL;
-    mail_op.authorization.payload_commitment = *payload_commitment;
-    const auto op_digest = ComputeIdentityOperationDigest(network_id, mail_op.authorization);
-    BOOST_REQUIRE(op_digest.has_value());
-    mail_op.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *op_digest);
-
-    // Wire serialization roundtrip
-    const ProtocolOperation proto_op{mail_op};
-    const auto wire_bytes = SerializeProtocolOperation(proto_op);
-    BOOST_REQUIRE(wire_bytes.has_value());
-    BOOST_CHECK_EQUAL(wire_bytes->size(), 2 + 2597 + MAIL_PAYLOAD_HEADER_SIZE + payload.ciphertext.size());
-
-    const auto decoded_proto_op = DeserializeProtocolOperation(*wire_bytes);
-    BOOST_REQUIRE(decoded_proto_op.has_value());
-    BOOST_CHECK(std::holds_alternative<AuthorizedMail>(*decoded_proto_op));
-    BOOST_CHECK(ComputeOperationId(*decoded_proto_op) == ComputeOperationId(proto_op));
-
-    // 4. Execute mail at block height 10 (epoch 0)
-    const auto block_res = ExecuteBlockOperations(state, {proto_op}, network_id, 10, params);
-    BOOST_REQUIRE(block_res);
-    const auto& post_state = *block_res.state;
-
-    // Check balance deduction and counter updates
-    const uint64_t expected_fee = MailFeeForSize(payload.ciphertext.size()); // 5
-    BOOST_CHECK_EQUAL(expected_fee, 5ULL);
-    BOOST_CHECK_EQUAL(post_state.accounts.at(alice).system_balance, params.onboarding_bonus - expected_fee);
-    BOOST_CHECK_EQUAL(post_state.accounts.at(alice).last_mail_epoch, 0ULL);
-    BOOST_CHECK_EQUAL(post_state.accounts.at(alice).mail_count_in_epoch, 1U);
-    BOOST_CHECK_EQUAL(post_state.identities.Find(alice)->nonce, 1ULL);
-
-    // Fee routing check (4 fees -> 3 security + 1 onboarding)
-    // Fee = 5: chunks = 5/4 = 1. security += 3, onboarding += 1, pending %= 4 -> 1 remainder
-    BOOST_CHECK_EQUAL(post_state.pending_fee_pool, 1ULL);
-    BOOST_CHECK_EQUAL(post_state.security_reward_pool, 3ULL);
-    BOOST_CHECK_EQUAL(post_state.onboarding_pool, state.onboarding_pool + 1);
-
-    // State serialization roundtrip: no mail body stored in state
-    const auto state_serialized = SerializeCybouState(post_state);
-    BOOST_REQUIRE(state_serialized.has_value());
-    const auto state_deserialized = DeserializeCybouState(*state_serialized);
-    BOOST_REQUIRE(state_deserialized.has_value());
-    BOOST_CHECK(SerializeCybouState(*state_deserialized) == state_serialized);
-    BOOST_CHECK(state_deserialized->accounts.at(alice) == post_state.accounts.at(alice));
-    BOOST_CHECK(state_deserialized->accounts.at(bob) == post_state.accounts.at(bob));
-
-    // 5. Test quota enforcement: send 24 more mails in epoch 0 to reach 25
-    auto current_state = post_state;
-    uint64_t nonce = 1;
-    for (uint32_t i = 2; i <= 25; ++i) {
-        AuthorizedMail next_mail = mail_op;
-        next_mail.authorization.nonce = nonce++;
-        const auto dig = ComputeIdentityOperationDigest(network_id, next_mail.authorization);
-        BOOST_REQUIRE(dig.has_value());
-        next_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig);
-        const auto res = ExecuteBlockOperations(current_state, {ProtocolOperation{next_mail}}, network_id, 10 + i, params);
-        BOOST_REQUIRE(res);
-        current_state = *res.state;
-        BOOST_CHECK_EQUAL(current_state.accounts.at(alice).mail_count_in_epoch, i);
-    }
-    BOOST_CHECK_EQUAL(current_state.accounts.at(alice).mail_count_in_epoch, 25U);
-
-    // 26th mail in epoch 0: must fail with MAIL_QUOTA_EXCEEDED
-    AuthorizedMail quota_exceed_mail = mail_op;
-    quota_exceed_mail.authorization.nonce = nonce++;
-    const auto dig_exceed = ComputeIdentityOperationDigest(network_id, quota_exceed_mail.authorization);
-    BOOST_REQUIRE(dig_exceed.has_value());
-    quota_exceed_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig_exceed);
-    const auto quota_fail_res = ExecuteBlockOperations(current_state, {ProtocolOperation{quota_exceed_mail}}, network_id, 50, params);
-    BOOST_CHECK(quota_fail_res.error == BlockExecutionError::INVALID_MAIL);
-    BOOST_CHECK(quota_fail_res.mail_error == MailError::MAIL_QUOTA_EXCEEDED);
-
-    // 6. Reset in epoch 1: block height 1024 -> epoch 1
-    const uint64_t epoch1_height = params.epoch_blocks;
-    BOOST_CHECK_EQUAL(EpochForHeight(epoch1_height, params), 1ULL);
-    // Reuse the same mail op with correct nonce
-    quota_exceed_mail.authorization.nonce = nonce - 1; // nonce was not consumed by failed op
-    const auto dig_epoch1 = ComputeIdentityOperationDigest(network_id, quota_exceed_mail.authorization);
-    BOOST_REQUIRE(dig_epoch1.has_value());
-    quota_exceed_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig_epoch1);
-    const auto epoch1_res = ExecuteBlockOperations(current_state, {ProtocolOperation{quota_exceed_mail}}, network_id, epoch1_height, params);
-    BOOST_REQUIRE(epoch1_res);
-    BOOST_CHECK_EQUAL(epoch1_res.state->accounts.at(alice).last_mail_epoch, 1ULL);
-    BOOST_CHECK_EQUAL(epoch1_res.state->accounts.at(alice).mail_count_in_epoch, 1U);
-
-    // 7. Adversarial checks
-    // A. Recipient not found
-    AuthorizedMail bad_recipient_mail = mail_op;
-    uint256 unknown_raw{};
-    unknown_raw.begin()[0] = 0xFE;
-    bad_recipient_mail.mail.recipient = AccountId{unknown_raw};
-    const auto bad_recip_commit = ComputeMailPayloadCommitment(bad_recipient_mail.mail);
-    BOOST_REQUIRE(bad_recip_commit.has_value());
-    bad_recipient_mail.authorization.payload_commitment = *bad_recip_commit;
-    bad_recipient_mail.authorization.nonce = nonce;
-    const auto dig_bad_recip = ComputeIdentityOperationDigest(network_id, bad_recipient_mail.authorization);
-    BOOST_REQUIRE(dig_bad_recip.has_value());
-    bad_recipient_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig_bad_recip);
-    const auto bad_recip_res = ExecuteBlockOperations(*epoch1_res.state, {ProtocolOperation{bad_recipient_mail}}, network_id, epoch1_height + 1, params);
-    BOOST_CHECK(bad_recip_res.error == BlockExecutionError::INVALID_MAIL);
-    BOOST_CHECK(bad_recip_res.mail_error == MailError::RECIPIENT_NOT_FOUND);
-
-    // B. Insufficient system balance
-    auto poor_state = *epoch1_res.state;
-    poor_state.accounts.at(alice).system_balance = 0;
-    AuthorizedMail poor_mail = mail_op;
-    poor_mail.authorization.nonce = nonce;
-    const auto dig_poor = ComputeIdentityOperationDigest(network_id, poor_mail.authorization);
-    BOOST_REQUIRE(dig_poor.has_value());
-    poor_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig_poor);
-    const auto poor_res = ExecuteBlockOperations(poor_state, {ProtocolOperation{poor_mail}}, network_id, epoch1_height + 1, params);
-    BOOST_CHECK(poor_res.error == BlockExecutionError::INVALID_MAIL);
-    BOOST_CHECK(poor_res.mail_error == MailError::INSUFFICIENT_SYSTEM_BALANCE);
-
-    // C. Ciphertext size limits: wire limit vs consensus execution limit
-    MailPayload wire_oversized_payload = payload;
-    wire_oversized_payload.ciphertext = std::vector<unsigned char>(MAX_MAIL_WIRE_CIPHERTEXT_SIZE + 1, 0xFF);
-    BOOST_CHECK(!SerializeMailPayload(wire_oversized_payload));
-    MailPayload empty_payload = payload;
-    empty_payload.ciphertext.clear();
-    BOOST_CHECK(!SerializeMailPayload(empty_payload));
-
-    // Consensus parameter execution check: payload within wire framing (e.g. 65 KiB)
-    // but exceeding the transitional Mail ciphertext cap is rejected
-    MailPayload param_oversized_payload = payload;
-    param_oversized_payload.ciphertext = std::vector<unsigned char>(MAX_MAIL_CIPHERTEXT_SIZE + 1, 0xEE);
-    const auto param_commit = ComputeMailPayloadCommitment(param_oversized_payload);
-    BOOST_REQUIRE(param_commit.has_value());
-    AuthorizedMail param_oversized_mail = mail_op;
-    param_oversized_mail.mail = param_oversized_payload;
-    param_oversized_mail.authorization.payload_commitment = *param_commit;
-    param_oversized_mail.authorization.nonce = nonce;
-    const auto dig_oversized = ComputeIdentityOperationDigest(network_id, param_oversized_mail.authorization);
-    BOOST_REQUIRE(dig_oversized.has_value());
-    param_oversized_mail.authorization.signature = *SignIdentityMessage(alice_dev_seed, IdentityKeyPurpose::AUTHORIZATION, *dig_oversized);
-    const auto param_res = ExecuteBlockOperations(*epoch1_res.state, {ProtocolOperation{param_oversized_mail}}, network_id, epoch1_height + 1, params);
-    BOOST_CHECK(param_res.error == BlockExecutionError::INVALID_MAIL);
-    BOOST_CHECK(param_res.mail_error == MailError::INVALID_PAYLOAD);
-}
-
 BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
 {
     using namespace cybou;
@@ -1023,7 +679,6 @@ BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
     // Build unversioned CybouState
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus * 5;
-    state.validator_set.validators.push_back(MakeTestValidator(111));
 
     uint256 network_id{};
     network_id.begin()[0] = 0xAA;
@@ -1085,7 +740,7 @@ BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
     // Execute block with parent state
     CybouState parent{};
     parent.onboarding_pool = params.onboarding_bonus * 5;
-    parent.validator_set.validators.push_back(MakeTestValidator(111));
+
     const auto block_res = ExecuteBlockOperations(parent, {*decoded_proto}, network_id, 0, params);
     BOOST_REQUIRE(block_res);
     BOOST_CHECK_EQUAL(block_res.state->accounts.at(account).system_balance, params.onboarding_bonus);
@@ -1113,9 +768,9 @@ BOOST_AUTO_TEST_CASE(supply_conservation_invariant_check)
     // Total supply calculation
     BOOST_CHECK_EQUAL(TotalSupply(state), 1'000'000ULL + 2'000'000ULL + 500ULL + 3'000'000ULL + 500'000ULL);
 
-    // Over-supply check (with valid zero-account state and valid validator set)
+    // Over-supply check (with valid zero-account state and valid zero-account state)
     CybouState overflow_state{};
-    overflow_state.validator_set.validators.push_back(MakeTestValidator(1));
+
     overflow_state.onboarding_pool = 100'000'000'001ULL;
     BOOST_CHECK(ValidateCybouState(overflow_state) == StateValidationError::BALANCE_OVERFLOW);
 }

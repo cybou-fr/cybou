@@ -167,7 +167,6 @@ void CybouDesktopController::start()
                             case cybou::WalletEntryKind::LOCK_TO_SYSTEM:
                                 item.kind = CybouWalletEntryKind::MovedToSystemBalance;
                                 break;
-                            case cybou::WalletEntryKind::MAIL_FEE:
                             case cybou::WalletEntryKind::ROOT_PUBLICATION_FEE:
                                 item.kind = CybouWalletEntryKind::NetworkServiceFee;
                                 break;

@@ -186,7 +186,6 @@ CybouMailService::CybouMailService(
 
 bool CybouMailService::LoadMailbox()
 {
-    std::lock_guard sync_lock(m_sync_mutex);
     std::lock_guard lock(m_mutex);
     m_messages.clear();
 
@@ -208,9 +207,6 @@ bool CybouMailService::LoadMailbox()
     const uint32_t version = ReadUint32LE(bytes.data() + offset);
     offset += 4;
     if (version != MAILBOX_FILE_VERSION) return false;
-
-    m_last_scanned_height = ReadUint64LE(bytes.data() + offset);
-    offset += 8;
 
     if (offset + 4 > bytes.size()) return false;
     const uint32_t count = ReadUint32LE(bytes.data() + offset);
@@ -247,27 +243,12 @@ bool CybouMailService::LoadMailbox()
         item.body.assign(reinterpret_cast<const char*>(bytes.data() + offset), body_len);
         offset += body_len;
 
-        if (offset + 8 + 1 + 1 + 8 + 32 + 8 + 32 + 32 + 32 + 8 + 1 > bytes.size()) return false;
+        if (offset + 8 + 1 + 1 + 32 + 32 > bytes.size()) return false;
         item.timestamp = ReadUint64LE(bytes.data() + offset); offset += 8;
         item.read = (bytes[offset++] != 0);
-        item.finality = static_cast<MailFinalityStatus>(bytes[offset++]);
-        item.block_height = ReadUint64LE(bytes.data() + offset); offset += 8;
-        std::copy(bytes.begin() + offset, bytes.begin() + offset + 32, item.block_id.begin()); offset += 32;
-        item.operation_index = ReadUint64LE(bytes.data() + offset); offset += 8;
+        item.delivery = static_cast<MailDeliveryStatus>(bytes[offset++]);
         std::copy(bytes.begin() + offset, bytes.begin() + offset + 32, item.salt.begin()); offset += 32;
         std::copy(bytes.begin() + offset, bytes.begin() + offset + 32, item.content_commitment.begin()); offset += 32;
-        std::copy(bytes.begin() + offset, bytes.begin() + offset + 32, item.discovery_tag.begin()); offset += 32;
-        item.fee = ReadUint64LE(bytes.data() + offset); offset += 8;
-
-        const uint8_t has_evidence = bytes[offset++];
-        if (has_evidence) {
-            if (offset + 4 > bytes.size()) return false;
-            const uint32_t ev_len = ReadUint32LE(bytes.data() + offset);
-            offset += 4;
-            if (offset + ev_len > bytes.size()) return false;
-            item.evidence_bundle = DeserializeMailEvidenceBundle(std::span{bytes}.subspan(offset, ev_len));
-            offset += ev_len;
-        }
 
         m_messages.push_back(std::move(item));
     }
@@ -280,7 +261,6 @@ bool CybouMailService::SaveMailbox() const
     std::vector<unsigned char> bytes;
     bytes.insert(bytes.end(), MAILBOX_MAGIC.begin(), MAILBOX_MAGIC.end());
     AppendUint32LE(bytes, MAILBOX_FILE_VERSION);
-    AppendUint64LE(bytes, m_last_scanned_height);
     AppendUint32LE(bytes, static_cast<uint32_t>(m_messages.size()));
 
     for (const auto& item : m_messages) {
@@ -297,27 +277,10 @@ bool CybouMailService::SaveMailbox() const
 
         AppendUint64LE(bytes, item.timestamp);
         bytes.push_back(item.read ? 1 : 0);
-        bytes.push_back(static_cast<uint8_t>(item.finality));
-        AppendUint64LE(bytes, item.block_height);
-        bytes.insert(bytes.end(), item.block_id.begin(), item.block_id.end());
-        AppendUint64LE(bytes, item.operation_index);
+        bytes.push_back(static_cast<uint8_t>(item.delivery));
         bytes.insert(bytes.end(), item.salt.begin(), item.salt.end());
         bytes.insert(bytes.end(), item.content_commitment.begin(), item.content_commitment.end());
-        bytes.insert(bytes.end(), item.discovery_tag.begin(), item.discovery_tag.end());
-        AppendUint64LE(bytes, item.fee);
 
-        if (item.evidence_bundle.has_value()) {
-            const auto ev_bytes = SerializeMailEvidenceBundle(*item.evidence_bundle);
-            if (ev_bytes) {
-                bytes.push_back(1);
-                AppendUint32LE(bytes, static_cast<uint32_t>(ev_bytes->size()));
-                bytes.insert(bytes.end(), ev_bytes->begin(), ev_bytes->end());
-            } else {
-                bytes.push_back(0);
-            }
-        } else {
-            bytes.push_back(0);
-        }
     }
 
     const auto tmp_path = m_mailbox_path.string() + ".tmp";
@@ -442,7 +405,7 @@ uint256 CybouMailService::SaveDraft(
     item.body = body;
     item.timestamp = static_cast<uint64_t>(std::time(nullptr));
     item.read = true;
-    item.finality = MailFinalityStatus::DRAFT;
+    item.delivery = MailDeliveryStatus::DRAFT;
 
     m_messages.push_back(std::move(item));
     SaveMailbox();
@@ -499,14 +462,6 @@ SendMailResult CybouMailService::SendMail(
         return {.error = SendMailError::SENDER_NOT_FOUND, .error_message = "Sender account not found on-chain"};
     }
 
-    const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
-    const uint64_t current_height = m_runtime.GetFinalizedHeight().value_or(0);
-    const uint64_t current_epoch = EpochForHeight(current_height, params);
-    if (sender_state->last_mail_epoch == current_epoch &&
-        sender_state->mail_count_in_epoch >= NEW_ACCOUNT_MAIL_LIMIT_PER_EPOCH) {
-        return {.error = SendMailError::RATE_LIMIT_EXCEEDED, .error_message = "Mail quota exceeded for current epoch"};
-    }
-
     const auto loaded = m_runtime.GetStore().LoadState();
     if (!loaded || !loaded.state) {
         return {.error = SendMailError::RUNTIME_ERROR, .error_message = "Failed to load state"};
@@ -518,133 +473,15 @@ SendMailResult CybouMailService::SendMail(
     // Identity state publishes one account X-Wing package, but Mail has no
     // frozen ciphertext/recipient-set profile yet. Do not construct or submit
     // ciphertext until that wire profile is implemented.
-    return {.error = SendMailError::CRYPTO_FAILURE,
-        .error_message = "Protected Mail profile is not enabled; no message was submitted"};
+    return {.error = SendMailError::SUBMIT_FAILED,
+        .error_message = "Encrypted Object Storage delivery is not connected; no message was submitted"};
 }
 
 size_t CybouMailService::SyncMailbox()
 {
-    std::lock_guard sync_lock(m_sync_mutex);
-
-    const auto my_account = m_keystore.GetAccountId();
-    if (!my_account || my_account->IsNull()) {
-        return 0;
-    }
-
-    const auto current_height_opt = m_runtime.GetFinalizedHeight();
-    if (!current_height_opt) return 0;
-    const uint64_t current_height = *current_height_opt;
-
-    std::vector<std::pair<uint256, uint256>> sent_snapshot;
-    uint64_t original_height{0};
-    {
-        std::lock_guard lock(m_mutex);
-        original_height = m_last_scanned_height;
-        sent_snapshot.reserve(m_messages.size());
-        for (const auto& item : m_messages) {
-            if (item.folder == MailFolder::SENT) {
-                sent_snapshot.emplace_back(item.mail_id, item.content_commitment);
-            }
-        }
-    }
-
-    struct SentFinalityUpdate {
-        uint256 original_mail_id;
-        uint256 content_commitment;
-        uint256 mail_id;
-        uint64_t block_height{0};
-        uint256 block_id;
-        size_t operation_index{0};
-        std::optional<MailEvidenceBundle> evidence_bundle;
-    };
-    std::vector<SentFinalityUpdate> sent_updates;
-
-    uint64_t scanned_height = original_height;
-
-    for (uint64_t h = original_height + 1; h <= current_height; ++h) {
-        const auto block_opt = m_runtime.GetBlockAtHeight(h);
-        if (!block_opt) break;
-        const auto& fin_block = *block_opt;
-        const auto block_id = ComputeBlockId(fin_block.block);
-
-        for (size_t op_idx = 0; op_idx < fin_block.block.operations.size(); ++op_idx) {
-            const auto& proto_op = fin_block.block.operations[op_idx];
-            if (!std::holds_alternative<AuthorizedMail>(proto_op)) {
-                continue;
-            }
-            const auto& auth_mail = std::get<AuthorizedMail>(proto_op);
-            const auto& auth_op = auth_mail.authorization;
-            const auto& mail_op = auth_mail.mail;
-            const auto op_id_opt = ComputeOperationId(proto_op);
-            const uint256 op_id = op_id_opt.value_or(uint256{});
-
-            std::optional<IdentityHybridPublicKey> sender_authorization_key;
-            const auto loaded = m_runtime.GetStore().LoadState();
-            if (loaded && loaded.state) {
-                const auto* rec = loaded.state->identities.Find(auth_op.account_id);
-                if (rec && rec->key_epoch == auth_op.key_epoch) sender_authorization_key = rec->authorization_key;
-            }
-
-            if (auth_op.account_id == *my_account) {
-                for (const auto& [mail_id, content_commitment] : sent_snapshot) {
-                    if (mail_id == op_id || content_commitment == mail_op.content_commitment) {
-                        const bool already_updated = std::any_of(sent_updates.begin(), sent_updates.end(),
-                            [&](const SentFinalityUpdate& update) { return update.original_mail_id == mail_id; });
-                        if (!already_updated) {
-                            sent_updates.push_back(SentFinalityUpdate{
-                                .original_mail_id = mail_id,
-                                .content_commitment = content_commitment,
-                                .mail_id = op_id,
-                                .block_height = h,
-                                .block_id = block_id,
-                                .operation_index = op_idx,
-                                .evidence_bundle = sender_authorization_key ? CreateMailEvidenceBundle(
-                                    fin_block.block, op_idx, fin_block.certificate,
-                                    *sender_authorization_key, m_runtime.GetNetworkId()) : std::nullopt,
-                            });
-                        }
-                        break;
-                    }
-                }
-            }
-
-            // The Mail ciphertext profile and historical sender authorization
-            // are not integrated yet. Do not decrypt consensus payloads.
-        }
-        scanned_height = h;
-    }
-
-    {
-        std::lock_guard lock(m_mutex);
-        bool changed = false;
-        for (const auto& update : sent_updates) {
-            const auto live = std::find_if(m_messages.begin(), m_messages.end(), [&](const MailItem& item) {
-                return item.folder == MailFolder::SENT &&
-                    (item.mail_id == update.original_mail_id ||
-                        item.content_commitment == update.content_commitment);
-            });
-            if (live == m_messages.end()) continue;
-            live->mail_id = update.mail_id;
-            live->finality = MailFinalityStatus::FINAL;
-            live->block_height = update.block_height;
-            live->block_id = update.block_id;
-            live->operation_index = update.operation_index;
-            live->evidence_bundle = update.evidence_bundle;
-            changed = true;
-        }
-        if (m_last_scanned_height < scanned_height) {
-            m_last_scanned_height = scanned_height;
-            changed = true;
-        }
-        if (changed) SaveMailbox();
-    }
+    // Consensus blocks no longer carry mail. Object Storage will own delivery
+    // transport and indexing; local folders remain client-owned.
     return 0;
-}
-
-uint64_t CybouMailService::GetLastScannedHeight() const
-{
-    std::lock_guard lock(m_mutex);
-    return m_last_scanned_height;
 }
 
 } // namespace cybou

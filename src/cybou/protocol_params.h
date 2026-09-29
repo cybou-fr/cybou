@@ -25,7 +25,7 @@ inline constexpr uint32_t DEFAULT_MAX_PENDING_NAME_COMMITS{10000};
 
 /**
  * Immutable protocol parameters. For DEV/Beta these are fixed network
- * parameters: every validator derives the identical set from the genesis /
+ * parameters: every full node derives the identical set from the genesis /
  * network definition. There is intentionally no runtime governance path that
  * mutates consensus parameters — a parameter change is a versioned software
  * upgrade or a new genesis.

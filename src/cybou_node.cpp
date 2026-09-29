@@ -10,7 +10,6 @@
 #include <cybou/node_service.h>
 #include <cybou/p2p/peer_manager.h>
 #include <cybou/signing.h>
-#include <cybou/validator.h>
 #include <support/cleanse.h>
 
 #include <boost/asio.hpp>
@@ -149,7 +148,7 @@ int Main(const int argc, char* argv[])
         }
         return 0;
     }
-    if (argc >= 5 && std::string_view{argv[1]} == "init-dev") {
+    if (argc == 4 && std::string_view{argv[1]} == "init-dev") {
         auto poa_seed_bytes = ReadFile(argv[3], 32);
         if (poa_seed_bytes.size() != 32) throw std::runtime_error("PoA finalizer key file must contain exactly 32 raw bytes");
         std::array<unsigned char, 32> poa_seed{};
@@ -159,30 +158,7 @@ int Main(const int argc, char* argv[])
         memory_cleanse(poa_seed.data(), poa_seed.size());
         if (!poa_finalizer_key) throw std::runtime_error("cannot derive PoA finalizer public key");
 
-        std::vector<cybou::IdentityHybridPublicKey> validator_keys;
-        for (int i = 4; i < argc; ++i) {
-            auto key_bytes = ReadFile(argv[i], 32);
-            if (key_bytes.size() != 32) throw std::runtime_error("validator key file must contain exactly 32 raw bytes");
-            std::array<unsigned char, 32> key{};
-            std::copy(key_bytes.begin(), key_bytes.end(), key.begin());
-            memory_cleanse(key_bytes.data(), key_bytes.size());
-            const auto keypair = cybou::GenerateValidatorKeyPair(key);
-            memory_cleanse(key.data(), key.size());
-            if (!keypair) throw std::runtime_error("cannot derive validator key pair");
-            validator_keys.push_back(keypair->public_key);
-        }
-        auto genesis = cybou::CreateDevGenesisState(validator_keys.front());
-        auto& validators = genesis.validator_set.validators;
-        for (size_t i = 1; i < validator_keys.size(); ++i) {
-            validators.push_back(cybou::Validator{.validator_id = cybou::ComputeValidatorId(validator_keys[i]),
-                .consensus_public_key = validator_keys[i], .weight = 1});
-        }
-        std::sort(validators.begin(), validators.end(), [](const cybou::Validator& left, const cybou::Validator& right) {
-            return left.validator_id < right.validator_id;
-        });
-        if (cybou::ValidateValidatorSet(genesis.validator_set) != cybou::ValidatorSetValidationError::NONE) {
-            throw std::runtime_error("invalid or duplicate validator keys");
-        }
+        auto genesis = cybou::CreateDevGenesisState();
         const auto definition = cybou::CreateDevNetworkDefinition(genesis, *poa_finalizer_key);
         auto definition_bytes = cybou::SerializeNetworkDefinition(definition);
         auto state_bytes = cybou::SerializeCybouState(genesis);
@@ -194,18 +170,9 @@ int Main(const int argc, char* argv[])
         out.insert(out.end(), state_bytes->begin(), state_bytes->end());
         WriteNewFile(argv[2], out);
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
-        for (size_t val_idx = 0; val_idx < genesis.validator_set.validators.size(); ++val_idx) {
-            const auto& val = genesis.validator_set.validators[val_idx];
-            for (size_t input_idx = 0; input_idx < validator_keys.size(); ++input_idx) {
-                if (validator_keys[input_idx] == val.consensus_public_key) {
-                    std::cout << "validator." << val_idx << "=" << input_idx << '\n';
-                    break;
-                }
-            }
-        }
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE POA_FINALIZER_SEED_FILE VALIDATOR_KEY_FILE [MORE_VALIDATOR_KEY_FILES...] | bootstrap | serve NETWORK_FILE DB_DIR KEY_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT [PEERS_FILE [STORAGE_CAPACITY_BYTES]]]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE POA_FINALIZER_SEED_FILE | bootstrap | serve NETWORK_FILE DB_DIR POA_FINALIZER_SEED_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT [PEERS_FILE [STORAGE_CAPACITY_BYTES]]]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID");
     const auto network = cybou::LoadCybouNetworkFile(argv[2]);
     if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
@@ -431,7 +398,7 @@ int Main(const int argc, char* argv[])
     }
     if (std::string_view{argv[1]} == "serve" && (argc == 7 || argc == 8 || argc == 9 || argc == 10 || argc == 11)) {
         auto key_bytes = ReadFile(argv[4], 32);
-        if (key_bytes.size() != 32) throw std::runtime_error("validator key file must contain exactly 32 raw bytes");
+        if (key_bytes.size() != 32) throw std::runtime_error("PoA finalizer recovery entropy must contain exactly 32 raw bytes");
         std::array<unsigned char, 32> key{};
         std::copy(key_bytes.begin(), key_bytes.end(), key.begin());
         memory_cleanse(key_bytes.data(), key_bytes.size());

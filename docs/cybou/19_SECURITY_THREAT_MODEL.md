@@ -1,72 +1,58 @@
 # 19 — Security and threat model
 
-## Next DEV protocol trust boundary (DEC-195)
+## Trust boundary
 
-The current DEV chain uses BFT and its present ValidatorSet. The next protocol
-target replaces that with a single genesis-bound hybrid-PQ PoA signer. This
-centralizes block ordering and censorship resistance in the operator; it is
-not Byzantine-fault-tolerant finality. Full nodes independently validate all
-operations and state roots, but cannot make progress if the PoA operator is
-offline or compromised. A conflicting valid PoA signature is a network safety
-incident; deterministic fork handling and journal rollback recovery are
-mandatory before DEV reset. RootPublication finality authorizes chunk storage
-but does not itself establish chunk availability.
+The network definition binds one hybrid-PQ PoA finalizer key. That operator
+controls block ordering and can censor or stop progress. PoA is centralized
+finality, not BFT. Every full node independently checks the finality
+certificate, parent, height, operation authorization, deterministic state
+transition, and state root. Operator equivocation or journal rollback is a
+network safety incident and must halt verification.
+
+Finalized RootPublication authorizes chunk admission; it does not prove that
+any provider retained or can serve a chunk. Clients must distinguish finalized,
+available, retrievable, and protected states.
 
 ## Security goals
 
 Protect against:
 
-- malicious peers;
-- invalid blocks/transactions;
-- storage-node plaintext access;
-- corrupted storage;
-- false capacity claims;
-- replayed storage proofs;
-- network spam;
-- downgrade attacks;
-- compromised individual storage nodes;
+- malicious or malformed peers and invalid blocks;
+- unauthorized Identity operations, replay, and key substitution;
+- storage providers learning plaintext or private application schemas;
+- corrupted, missing, or falsely claimed stored content;
+- network spam and resource-exhaustion inputs;
+- protocol downgrade and noncanonical serialization;
 - accidental connection to Bitcoin networks;
-- malicious snapshots;
-- supply-chain/release compromise.
+- malicious snapshots and supply-chain or release compromise.
 
-## Important non-goals / unresolved guarantees
+## Explicit limitations
 
-CYBOU does not yet claim:
+CYBOU does not claim:
 
-- recovery after loss of all Identity keys without any additional trust mechanism;
-- resistance to a majority/2/3+ consensus compromise beyond the selected BFT model;
-- perfect traffic-analysis resistance;
-- guaranteed physical-geography independence of anonymous peers;
-- proven production durability parameters before simulation/field data.
+- progress while the PoA operator is offline;
+- censorship resistance against the PoA operator;
+- BFT or independent-operator fault tolerance;
+- guaranteed physical or administrative independence of storage peers;
+- production durability before measured provider operation;
+- recovery after loss of every authorized Identity secret.
 
-## Critical invariants
+## Invariants
 
-1. Bitcoin network quarantine precedes first manual desktop launch.
-2. Plaintext application data is encrypted before storage-network transmission.
-3. Storage peers do not receive plaintext semantic metadata.
-4. State snapshots are verified against trusted/finalized commitments.
-5. Consensus-critical serialization is canonical and bounded.
-6. Crypto negotiation is downgrade-protected.
-7. Network input parsing is length-bounded before allocation.
-8. No local HTTP/RPC administrative surface is required for desktop operation.
-9. Release authenticity is independently verifiable.
-10. A configured disk-size claim alone earns no storage entitlement.
+1. Network quarantine precedes manual desktop launch.
+2. Application content is encrypted before leaving the client.
+3. Providers receive opaque, content-addressed ciphertext and admission proofs.
+4. Full nodes verify canonical bounded encodings and execute state transitions locally.
+5. Every production signature follows the required hybrid post-quantum key policy.
+6. Network input lengths and tree traversal are bounded before allocation or output.
+7. Desktop operation does not require a local HTTP/RPC administrative surface.
+8. Release authenticity is independently verifiable.
+9. A claimed disk capacity alone never grants protocol entitlement.
 
-## Key-loss reality
+## Identity key loss
 
-Identity V2 targets user-held 24-word Recovery Root, portable encrypted vault,
-and account-level key rotation. The current DEV runtime does not implement these.
-Compromise of an installation requires Identity key rotation; compromise
-of a recovery phrase requires the same all-role IdentityRotate transition. Offline password guessing against
-stolen vaults, tampered headers, key substitution, mnemonic transcription,
-and loss of the phrase remain explicit threats. See `76_IDENTITY_VAULT_RECOVERY.md`.
-
-Without:
-
-- a provider recovery authority/KMS;
-- a user-held recovery secret;
-- or another explicit social/multi-party recovery mechanism,
-
-loss of all authorized private keys can make encrypted data unrecoverable.
-
-This remains a production blocker to solve honestly.
+Identity recovery uses the user's 24-word phrase and portable encrypted vault.
+Loss of both makes protected content unrecoverable unless a separately reviewed
+recovery mechanism exists. Recovery and clean-machine restore requirements are
+defined in `76_IDENTITY_VAULT_RECOVERY.md` and
+`IDENTITY_DISCOVERY_AND_RECOVERY.md`.

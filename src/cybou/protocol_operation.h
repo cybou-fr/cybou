@@ -6,7 +6,6 @@
 #define CYBOU_PROTOCOL_OPERATION_H
 
 #include <cybou/account_creation.h>
-#include <cybou/mail_tx.h>
 #include <cybou/name_registry.h>
 #include <cybou/payment.h>
 #include <cybou/root_publication.h>
@@ -18,7 +17,7 @@
 
 namespace cybou {
 
-inline constexpr uint8_t PROTOCOL_OPERATION_VERSION{4};
+inline constexpr uint8_t PROTOCOL_OPERATION_VERSION{5};
 inline constexpr size_t AUTHORIZED_PAYMENT_SIZE{IDENTITY_OPERATION_AUTH_SIZE + 41};
 inline constexpr size_t IDENTITY_ROTATE_SIZE{13825};
 inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_SIZE{IDENTITY_OPERATION_AUTH_SIZE + 9};
@@ -30,8 +29,7 @@ enum class ProtocolOperationKind : uint8_t {
     SYSTEM_LOCK = 4,
     NAME_COMMIT = 5,
     NAME_REVEAL = 6,
-    MAIL = 7,
-    ROOT_PUBLICATION = 8,
+    ROOT_PUBLICATION = 7,
 };
 
 using ProtocolOperation = std::variant<
@@ -41,7 +39,6 @@ using ProtocolOperation = std::variant<
     AuthorizedSystemLock,
     AuthorizedNameCommit,
     AuthorizedNameReveal,
-    AuthorizedMail,
     AuthorizedRootPublication>;
 
 std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const ProtocolOperation& operation);

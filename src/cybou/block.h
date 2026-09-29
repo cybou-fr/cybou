@@ -5,8 +5,8 @@
 #ifndef CYBOU_BLOCK_H
 #define CYBOU_BLOCK_H
 
-#include <cybou/bft.h>
 #include <cybou/protocol_operation.h>
+#include <cybou/poa_finality.h>
 #include <uint256.h>
 
 #include <cstdint>
@@ -16,7 +16,8 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_BLOCK_VERSION{2};
+inline constexpr uint8_t CYBOU_BLOCK_VERSION{3};
+inline constexpr size_t MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES{32U * 1024U * 1024U};
 
 /**
  * Canonical CYBOU block format.
@@ -55,11 +56,11 @@ std::optional<std::vector<unsigned char>> SerializeBlock(const CybouBlock& block
 std::optional<CybouBlock> DeserializeBlock(std::span<const unsigned char> bytes);
 
 /**
- * Finalized CYBOU block containing the canonical block and its BFT finality certificate.
+ * Finalized CYBOU block containing the canonical block and PoA certificate.
  */
 struct FinalizedBlock {
     CybouBlock block;
-    BftFinalityCertificate certificate;
+    PoaFinalityCertificate certificate;
 
     friend bool operator==(const FinalizedBlock&, const FinalizedBlock&) = default;
 };

@@ -16,8 +16,6 @@ namespace cybou {
 enum class IdentityKeyPurpose : uint8_t {
     RECOVERY_ROOT = 1,
     AUTHORIZATION = 2,
-    VALIDATOR = 3,
-    OPERATOR_AUTHORITY = 4,
     RELEASE_SIGNING = 5,
     TREASURY = 6,
     POA_FINALIZER = 7,
@@ -56,8 +54,6 @@ std::optional<std::array<unsigned char, 32>> ComputeRecoveryKeyId(
     const IdentityHybridPublicKey& recovery_key);
 std::optional<std::array<unsigned char, 32>> ComputeAuthorizationKeyId(
     const IdentityHybridPublicKey& authorization_key);
-std::optional<std::array<unsigned char, 32>> ComputeValidatorKeyId(
-    const IdentityHybridPublicKey& validator_key);
 std::optional<std::array<unsigned char, 32>> ComputePoaFinalizerKeyId(
     const IdentityHybridPublicKey& poa_finalizer_key);
 

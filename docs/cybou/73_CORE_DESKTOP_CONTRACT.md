@@ -3,10 +3,9 @@
 Boundary between CYBOU core and the desktop GUI. The desktop never invents
 protocol behavior: every state it shows arrives through this contract.
 
-Identity V2 extends this contract only after core support exists: create and
-restore requests, vault/phrase confirmation (local state), verified recovery
-lookup, IdentityRotate finality, and name commit/work/reveal finality. The
-current fields below remain V1 DEV behavior. See `78_IDENTITY_DESKTOP_UX.md`.
+This contract describes the desktop boundary for the current Identity and
+genesis-bound PoA target. See `78_IDENTITY_DESKTOP_UX.md` for create, restore,
+and rotation flows.
 `CybouNodeRuntime` implements the native producer/observer boundary; the GUI
 (`src/qt`) consumes its verified state.
 
@@ -29,7 +28,7 @@ data_directory                     after node startup (already live)
 identity_state                     AccountCreateOp accepted -> CreatingKeys
                                    work verified            -> PerformingWork
                                    op broadcast             -> Broadcasting
-                                   BFT certificate attached -> Active
+                                   verified PoA certificate attached -> Active
                                    (transitions only; the GUI never sets them)
 account_id, creation_height        from the finalized AccountCreateOp
 balance, system_balance            from AccountState after every
@@ -37,16 +36,14 @@ balance, system_balance            from AccountState after every
 network_id                         canonical DEV NetworkID (already exposed)
 last_finalized_height              from native runtime verified state
                                    (already exposed; GUI never derives it)
-validator_count                    active validator set from native state
-                                   (already exposed; weight 1)
 ```
 
 `WaitingForFinality` is entered when the op is broadcast and left only when
-a BFT finality certificate commits the block.
+a genesis-authorized hybrid-PQ PoA certificate commits the block.
 
 The current desktop opens native CYBOU state, connects through the default DEV
 CYP2 bootstrap path for finalized blocks, and reports verified
-height/validator count.
+height and verified finality.
 The bootstrap address supplies transport location, not consensus trust.
 The identity service submits AccountCreate remotely and waits for the
 verified account state before reporting `Active`. Email and Storage pages
@@ -64,8 +61,8 @@ each is a no-op when the value is unchanged and emits `statusChanged()`
 (resp. `capabilitiesChanged()`) only on real changes:
 
 ```text
-setFinalityStatus(last_finalized_height, validator_count)
-    BFT finality feed; -1 / 0 mean "not exposed".
+setFinalityStatus(last_finalized_height)
+    verified finality feed; -1 means "not exposed".
 setIdentityState(state, account_id, creation_height)
     Core drives identity transitions only (see the phase table above);
     reaching Active also clears the UI-side request-pending flag.
@@ -87,8 +84,8 @@ on the node, not when it is planned:
 ```text
 account_creation   node accepts AccountCreateOp + AccountCreationWorkV1
 payments           PaymentOpV1 processing wired
-email              MailOp/MailTx processing wired
-storage            Object Storage placement, retrieval and Beta durability path wired
+email              encrypted RootPublication delivery and local mailbox scanning wired
+storage            chunk-tree placement, retrieval and Beta durability path wired
 backup             Backup service wired (post-Beta)
 ```
 
@@ -105,13 +102,12 @@ when disabled.
 ## Service data
 
 - Wallet ledger entries come from finalized protocol operations
-  (onboarding bonus, MailTx fees, payments, LOCK_TO_SYSTEM).
-- Email messages arrive with their evidence bundle (doc 69: inclusion
-  proof, BFT finality certificate, sender-key authorization, salted
-  domain-separated content commitment); the local client owns Inbox/Sent/
-  read-state indexes.
-- Storage objects are opaque CIDs with size and retention; the GUI never
-  sees plaintext names or paths.
+  (onboarding bonus, payments, LOCK_TO_SYSTEM).
+- Email payloads are encrypted application data in RootPublication trees;
+  only local client indexes own Inbox/Sent/read state. Mail is not a
+  consensus operation and has no per-message consensus state.
+- Storage providers receive opaque encrypted chunks by ChunkID with
+  publication inclusion proofs; the GUI never sends plaintext names or paths.
 - Backup sets report size, time and verification state; restore is bound
   to the local identity keys.
 

@@ -288,7 +288,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
 
     // Phase 4: WAITING_FOR_FINALITY
     m_phase.store(IdentityCreationPhase::WAITING_FOR_FINALITY);
-    if (on_phase) on_phase(IdentityCreationPhase::WAITING_FOR_FINALITY, "Waiting for BFT finality certificate...");
+    if (on_phase) on_phase(IdentityCreationPhase::WAITING_FOR_FINALITY, "Waiting for PoA finality certificate...");
 
     if (m_runtime.GetStatus().is_authority) {
         m_runtime.ProduceBlock();
@@ -313,7 +313,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     }
 
     m_phase.store(IdentityCreationPhase::FAILED);
-    return Failure(IdentityCreationPhase::FAILED, m_cancelled.load() ? "Cancelled" : "Timed out waiting for BFT finality", account_id);
+    return Failure(IdentityCreationPhase::FAILED, m_cancelled.load() ? "Cancelled" : "Timed out waiting for PoA finality", account_id);
 }
 
 void CybouIdentityService::CreateIdentityAsync(

@@ -4,32 +4,26 @@
 #ifndef CYBOU_AUTHORITY_NODE_H
 #define CYBOU_AUTHORITY_NODE_H
 
-#include <cybou/bft_engine.h>
 #include <cybou/block.h>
 #include <cybou/operation_pool.h>
+#include <cybou/poa_finalizer.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/state_store.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace cybou {
 
-// MAX_AUTHORITY_SERIALIZED_BLOCK_BYTES is canonical in bft_engine.h.
-
 enum class AuthorityProductionError : uint8_t {
     NONE,
     STATE_UNAVAILABLE,
-    NOT_AUTHORITY_MODE,
-    VALIDATOR_KEY_MISMATCH,
     INVALID_PENDING_OPERATIONS,
     BLOCK_TOO_LARGE,
-    CONSENSUS_FAILED,
+    POA_SIGNING_FAILED,
     COMMIT_FAILED,
 };
 
@@ -39,14 +33,6 @@ struct AuthorityProductionResult {
     BlockTransitionResult commit_result{};
 
     explicit operator bool() const { return error == AuthorityProductionError::NONE; }
-};
-
-/** Runtime-facing snapshot of the validator's recovered/advancing BFT state. */
-struct ConsensusProgress {
-    uint64_t height{0};
-    uint32_t round{0};
-    BftStep step{BftStep::PROPOSE};
-    int32_t locked_round{-1};
 };
 
 enum class OperationSubmitStatus : uint8_t {
@@ -72,12 +58,11 @@ struct OperationSubmitResult {
     }
 };
 
-/** Single-validator producer for canonical CYBOU blocks and 1/1 finality. */
+/** Single genesis-bound PoA producer for canonical CYBOU blocks. */
 class CybouAuthorityNode
 {
 public:
-    CybouAuthorityNode(CybouStateStore& store, std::array<unsigned char, 32> validator_private_key,
-                       std::optional<std::filesystem::path> signing_journal = std::nullopt);
+    CybouAuthorityNode(CybouStateStore& store, const RecoveryEntropy& poa_recovery_entropy);
     ~CybouAuthorityNode();
 
     /** Add an operation only if the complete pending batch executes on the current head. */
@@ -92,31 +77,10 @@ public:
     /** Finalize the pending batch, including an empty block when the queue is empty. */
     AuthorityProductionResult ProduceNextBlock(bool sync = true);
 
-    /** Multi-validator consensus methods */
-    std::optional<BftProposalMsg> StartConsensusRound(uint32_t round);
-    BftProposalResult ReceiveProposal(const BftProposalMsg& proposal);
-    std::optional<BftPrecommitMsg> ReceivePrevote(const BftPrevoteMsg& prevote);
-    std::optional<BftProposalMsg> TakeBufferedProposalForCurrentRound();
-    std::optional<FinalizedBlock> ReceivePrecommit(const BftPrecommitMsg& precommit);
-    std::optional<BftPrevoteMsg> OnProposalTimeout();
-    std::optional<BftPrecommitMsg> OnPrevoteTimeout();
-    const std::optional<FinalizedBlock>& GetLatestFinalizedBlock() const;
-    std::optional<size_t> GetValidatorIndex() const;
-    /**
-     * Current validator progress, forcing lazy validator creation/height sync.
-     * After a CBS2 restart this reports the recovered round/step/lock so the
-     * runtime driver can resume orchestration where the engine actually is.
-     */
-    std::optional<ConsensusProgress> GetConsensusProgress();
-
 private:
-    bool EnsureValidator();
-
     CybouStateStore& m_store;
-    std::array<unsigned char, 32> m_validator_private_key;
-    std::optional<std::filesystem::path> m_signing_journal;
+    std::unique_ptr<PoaFinalizer> m_finalizer;
     OperationPool m_pool;
-    std::unique_ptr<BftValidatorNode> m_validator;
 };
 
 } // namespace cybou

@@ -6,7 +6,6 @@
 
 #include <uint256.h>
 #include <cybou/authority_node.h>
-#include <cybou/bft_engine.h>
 #include <cybou/storage_store.h>
 
 #include <boost/asio/ip/tcp.hpp>
@@ -24,10 +23,8 @@ inline constexpr uint32_t MAX_FRAME_PAYLOAD{4096};
 inline constexpr uint8_t WIRE_VERSION{1};
 inline constexpr uint64_t CAP_SERVE_BLOCKS{1ULL << 0};
 inline constexpr uint64_t CAP_ACCEPT_OPERATIONS{1ULL << 1};
-inline constexpr uint64_t CAP_OP_INVENTORY{1ULL << 2};
 inline constexpr uint64_t CAP_BLOCK_INVENTORY{1ULL << 3};
 inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
-inline constexpr uint64_t CAP_CONSENSUS{1ULL << 5};
 inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
 inline constexpr uint64_t CAP_STORAGE{1ULL << 7};
 /** Provider supports explicit cleanup of uncommitted sequential uploads. */
@@ -41,11 +38,12 @@ inline constexpr uint8_t MAX_PEER_DISCOVERY_ENTRIES{32};
 enum class MessageType : uint8_t {
     HELLO = 1, PING = 2, PONG = 3, GET_BLOCK = 4, BLOCK_META = 5,
     BLOCK_CHUNK = 6, OP_META = 7, OP_CHUNK = 8, OP_RESULT = 9,
-    OP_INV = 10, GET_OP = 11, OP = 12, GET_BLOCKS = 13, BLOCK_INV = 14,
+    RESERVED_10 = 10, RESERVED_11 = 11, RESERVED_12 = 12,
+    GET_BLOCKS = 13, BLOCK_INV = 14,
     BLOCK_RESULT = 15,
-    CONSENSUS_PROPOSAL = 16,
-    CONSENSUS_PREVOTE = 17,
-    CONSENSUS_PRECOMMIT = 18,
+    RESERVED_16 = 16,
+    RESERVED_17 = 17,
+    RESERVED_18 = 18,
     GET_PEERS = 19,
     PEERS = 20,
     STORAGE_PUT_CHUNK = 21,
@@ -128,16 +126,6 @@ public:
     std::optional<BlockAnnounceResult> AdvertiseBlock(const BlockAnnouncement& announcement,
         const FinalizedBlock& block, uint64_t& peer_finalized_height);
     std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation);
-    std::optional<OperationSubmitResult> AdvertiseOperation(const ProtocolOperation& operation);
-    bool SendProposal(const BftProposalMsg& proposal);
-    bool SendPrevote(const BftPrevoteMsg& prevote);
-    bool SendPrecommit(const BftPrecommitMsg& precommit);
-    std::optional<BftProposalMsg> ReadProposal(
-        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10});
-    std::optional<BftPrevoteMsg> ReadPrevote(
-        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10});
-    std::optional<BftPrecommitMsg> ReadPrecommit(
-        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10});
     std::vector<std::pair<std::string, uint16_t>> RequestPeers(
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     bool SendPeers(const std::vector<std::pair<std::string, uint16_t>>& peers,

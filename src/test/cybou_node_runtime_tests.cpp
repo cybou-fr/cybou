@@ -15,7 +15,6 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     const auto status = fixture.runtime->GetStatus();
     BOOST_CHECK(status.is_initialized);
     BOOST_CHECK(status.is_authority);
-    BOOST_CHECK_EQUAL(status.validator_count, 1U);
     const auto alice = fixture.CreateIdentity("alice.cybou");
     const auto account = alice->GetAccountId();
     BOOST_REQUIRE(account);
@@ -148,9 +147,8 @@ BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)
     CybouServiceTestFixture fixture;
     std::array<unsigned char, 32> foreign_seed{};
     foreign_seed[0] = 0x41;
-    const auto foreign_pair = cybou::GenerateValidatorKeyPair(foreign_seed);
-    BOOST_REQUIRE(foreign_pair);
-    const auto foreign_genesis = cybou::CreateDevGenesisState(foreign_pair->public_key);
+    auto foreign_genesis = cybou::CreateDevGenesisState();
+    ++foreign_genesis.onboarding_pool;
     cybou::NodeRuntimeConfig config{
         .network_definition = fixture.definition,
         .data_dir = fixture.directory / "foreign-observer",

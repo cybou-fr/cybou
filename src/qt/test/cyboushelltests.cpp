@@ -16,7 +16,6 @@
 
 #include <cybou/network_definition.h>
 #include <test/cybou_test_helpers.h>
-#include <cybou/validator.h>
 
 #include <QApplication>
 #include <QAbstractButton>
@@ -47,12 +46,9 @@ void AppendUint32LE(std::vector<unsigned char>& out, uint32_t value)
 
 bool WriteNetworkFile(const QString& path, const unsigned char seed_byte)
 {
-    std::array<unsigned char, 32> seed{};
-    seed[0] = seed_byte;
-    const auto keypair = cybou::GenerateValidatorKeyPair(seed);
-    if (!keypair) return false;
-    const auto genesis = cybou::CreateDevGenesisState(keypair->public_key);
-    const auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey());
+    // Distinct PoA finalizer keys give distinct networks.
+    const auto genesis = cybou::CreateDevGenesisState();
+    const auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(seed_byte));
     const auto definition_bytes = cybou::SerializeNetworkDefinition(definition);
     const auto state_bytes = cybou::SerializeCybouState(genesis);
     if (!state_bytes) return false;
