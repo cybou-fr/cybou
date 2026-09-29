@@ -3,7 +3,7 @@
 
 #include <cybou/p2p/peer_manager.h>
 #include <test/cybou_service_test_fixture.h>
-#include <test/util/setup_common.h>
+#include <test/cybou_test_setup.h>
 
 #include <boost/asio.hpp>
 #include <boost/test/unit_test.hpp>
@@ -16,7 +16,7 @@
 #include <thread>
 #include <vector>
 
-BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, CybouTestSetup)
 
 BOOST_AUTO_TEST_CASE(removed_storage_wire_ids_are_rejected)
 {

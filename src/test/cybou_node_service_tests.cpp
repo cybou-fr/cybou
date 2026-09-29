@@ -4,7 +4,7 @@
 #include <cybou/node_service.h>
 #include <cybou/p2p/session.h>
 #include <test/cybou_service_test_fixture.h>
-#include <test/util/setup_common.h>
+#include <test/cybou_test_setup.h>
 
 #include <boost/asio.hpp>
 #include <boost/test/unit_test.hpp>
@@ -15,7 +15,7 @@
 #include <mutex>
 #include <thread>
 
-BOOST_FIXTURE_TEST_SUITE(cybou_node_service_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(cybou_node_service_tests, CybouTestSetup)
 
 BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
 {

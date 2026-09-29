@@ -3,7 +3,7 @@
 
 #include <cybou/wallet_service.h>
 #include <test/cybou_service_test_fixture.h>
-#include <test/util/setup_common.h>
+#include <test/cybou_test_setup.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -12,7 +12,7 @@
 #include <mutex>
 #include <thread>
 
-BOOST_FIXTURE_TEST_SUITE(cybou_wallet_service_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(cybou_wallet_service_tests, CybouTestSetup)
 
 BOOST_AUTO_TEST_CASE(wallet_reads_finalized_balances_and_rejects_invalid_payments)
 {

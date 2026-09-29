@@ -4,7 +4,6 @@
 
 #include <cybou/root_publication.h>
 
-#include <test/util/setup_common.h>
 
 #include <boost/test/unit_test.hpp>
 

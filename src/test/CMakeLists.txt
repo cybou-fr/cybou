@@ -218,15 +218,7 @@ target_link_libraries(cybou-core-test
   cybou_core
   cybou_node
   core_interface
-  test_util
-  bitcoin_cli
-  bitcoin_node
-  bitcoin_consensus
-  minisketch
-  secp256k1
   Boost::headers
-  libevent::extra
-  $<TARGET_NAME_IF_EXISTS:USDT::headers>
 )
 
 if(ENABLE_IPC)

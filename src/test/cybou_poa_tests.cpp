@@ -8,7 +8,7 @@
 #include <cybou/crypto/cleanse.h>
 #include <cybou/crypto/hkdf_sha256.h>
 #include <cybou/crypto/sha256.h>
-#include <test/util/setup_common.h>
+#include <test/cybou_test_setup.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -124,7 +124,7 @@ std::optional<std::vector<unsigned char>> DeterministicMldsa65Signature(
 
 } // namespace
 
-BOOST_FIXTURE_TEST_SUITE(cybou_poa_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(cybou_poa_tests, CybouTestSetup)
 
 BOOST_AUTO_TEST_CASE(finality_digest_key_and_encoding_golden_vectors)
 {
@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(finality_digest_key_and_encoding_golden_vectors)
 
 BOOST_AUTO_TEST_CASE(finalizer_retries_same_intent_and_recovers_after_restart)
 {
-    const auto path = m_args.GetDataDirBase() / "cybou-poa-finalizer-retry";
+    const auto path = m_data_dir / "cybou-poa-finalizer-retry";
     std::filesystem::remove_all(path);
     const auto entropy = TestEntropy(11);
     const auto genesis = TestId(21);
@@ -264,7 +264,7 @@ BOOST_AUTO_TEST_CASE(finalizer_retries_same_intent_and_recovers_after_restart)
 
 BOOST_AUTO_TEST_CASE(finalizer_rejects_wrong_recovery_and_halts_on_any_same_height_change)
 {
-    const auto path = m_args.GetDataDirBase() / "cybou-poa-finalizer-equivocation";
+    const auto path = m_data_dir / "cybou-poa-finalizer-equivocation";
     std::filesystem::remove_all(path);
     const auto entropy = TestEntropy(12);
     const auto wrong_entropy = TestEntropy(13);
@@ -308,7 +308,7 @@ BOOST_AUTO_TEST_CASE(finalizer_rejects_wrong_recovery_and_halts_on_any_same_heig
 
 BOOST_AUTO_TEST_CASE(finalizer_halts_on_parent_or_canonical_history_mismatch)
 {
-    const auto base = m_args.GetDataDirBase();
+    const auto base = m_data_dir;
     const auto parent_path = base / "cybou-poa-finalizer-parent-mismatch";
     const auto history_path = base / "cybou-poa-finalizer-history-mismatch";
     std::filesystem::remove_all(parent_path);
@@ -347,7 +347,7 @@ BOOST_AUTO_TEST_CASE(finalizer_halts_on_parent_or_canonical_history_mismatch)
 
 BOOST_AUTO_TEST_CASE(conflict_detector_persists_observations_and_equivocation_evidence)
 {
-    const auto base = m_args.GetDataDirBase();
+    const auto base = m_data_dir;
     const auto first_path = base / "cybou-poa-conflict-signer-a";
     const auto second_path = base / "cybou-poa-conflict-signer-b";
     const auto detector_path = base / "cybou-poa-conflict-detector";

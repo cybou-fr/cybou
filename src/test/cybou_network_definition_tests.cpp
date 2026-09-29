@@ -3,7 +3,7 @@
 
 #include <cybou/network_definition.h>
 #include <test/cybou_test_helpers.h>
-#include <test/util/setup_common.h>
+#include <test/cybou_test_setup.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -11,7 +11,7 @@
 #include <array>
 #include <limits>
 
-BOOST_FIXTURE_TEST_SUITE(cybou_network_definition_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(cybou_network_definition_tests, CybouTestSetup)
 
 BOOST_AUTO_TEST_CASE(network_definition_binds_poa_key_and_rejects_invalid_keys)
 {

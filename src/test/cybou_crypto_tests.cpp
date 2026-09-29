@@ -8,7 +8,6 @@
 #include <crypto/chacha20poly1305.h>
 #include <crypto/hkdf_sha256_32.h>
 #include <crypto/sha256.h>
-#include <test/util/setup_common.h>
 #include <util/strencodings.h>
 
 #include <boost/test/unit_test.hpp>

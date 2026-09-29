@@ -7,7 +7,7 @@
 #include <cybou/crypto/cleanse.h>
 #include <cybou/name_registry.h>
 
-#include <test/util/setup_common.h>
+#include <test/cybou_test_setup.h>
 #include <test/cybou_service_test_fixture.h>
 
 #include <boost/asio.hpp>
@@ -22,7 +22,7 @@
 #include <fstream>
 #include <thread>
 
-BOOST_FIXTURE_TEST_SUITE(cybou_identity_operation_coordinator_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(cybou_identity_operation_coordinator_tests, CybouTestSetup)
 
 BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart_and_corruption)
 {

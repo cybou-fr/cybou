@@ -7,7 +7,6 @@
 #include <consensus/consensus.h>
 #include <kernel/chainparams.h>
 #include <pow.h>
-#include <test/util/setup_common.h>
 #include <uint256.h>
 #include <validation.h>
 

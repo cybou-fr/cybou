@@ -8,7 +8,7 @@
 #include <cybou/network_definition.h>
 #include <cybou/name_service.h>
 #include <test/cybou_test_helpers.h>
-#include <test/util/setup_common.h>
+#include <test/cybou_test_setup.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -18,7 +18,7 @@
 #include <fstream>
 #include <iterator>
 
-BOOST_FIXTURE_TEST_SUITE(cybou_identity_service_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(cybou_identity_service_tests, CybouTestSetup)
 
 namespace {
 struct RuntimeFixture {

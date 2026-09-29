@@ -6,7 +6,7 @@
 #include <cybou/chunk_authorization_proof_index.h>
 #include <cybou/kv_store.h>
 
-#include <test/util/setup_common.h>
+#include <test/cybou_test_setup.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -112,11 +112,11 @@ BOOST_AUTO_TEST_CASE(chunk_authorization_rejects_noncanonical_odd_duplication)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-BOOST_FIXTURE_TEST_SUITE(cybou_chunk_authorization_disk_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(cybou_chunk_authorization_disk_tests, CybouTestSetup)
 
 BOOST_AUTO_TEST_CASE(disk_proof_index_matches_materialized_tree_and_survives_restart)
 {
-    const auto path = m_args.GetDataDirBase() / "cybou-chunk-auth-disk-index";
+    const auto path = m_data_dir / "cybou-chunk-auth-disk-index";
     std::filesystem::remove_all(path);
     auto db = std::make_unique<cybou::KVStore>(cybou::KVStoreOptions{
         .path = path, .cache_bytes = 1 << 20});
