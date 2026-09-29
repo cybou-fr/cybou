@@ -48,6 +48,7 @@
 #include <QTemporaryDir>
 
 #include <algorithm>
+#include <functional>
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -1410,6 +1411,103 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QCOMPARE(bob_model->unreadMailCount(), 1);
     bob_model->requestMailRead(sent_id, true);
     QTRY_COMPARE(bob_model->unreadMailCount(), 0);
+
+    // Attachments: a new local file travels encrypted inside the publication.
+    const auto produce_until = [&](const std::function<bool()>& done) {
+        for (int i = 0; i < 25 && !done(); ++i) {
+            fixture.runtime->ProduceBlock();
+            QTest::qWait(60);
+        }
+        return done();
+    };
+    QTemporaryDir attach_dir;
+    QByteArray contract(300 * 1024, '\0');
+    for (int i = 0; i < contract.size(); ++i) contract[i] = static_cast<char>(i * 7 + 3);
+    const QString contract_path = attach_dir.filePath(QStringLiteral("contract.pdf"));
+    {
+        QFile out{contract_path};
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        out.write(contract);
+    }
+    CybouMailItem with_attachment;
+    with_attachment.to_name = bob_id;
+    with_attachment.subject = QStringLiteral("Contract");
+    with_attachment.body = QStringLiteral("Signed copy attached.");
+    with_attachment.attachments.append(alice_model->localAttachment(contract_path));
+    QVERIFY(!alice_model->requestSendMail(with_attachment).isEmpty());
+    const auto bob_contract = [&]() -> const CybouMailItem* {
+        for (const auto& item : bob_model->mailItems()) {
+            if (item.subject == QStringLiteral("Contract")) return bob_model->mailItem(item.id);
+        }
+        return nullptr;
+    };
+    QVERIFY(produce_until([&] { return bob_contract() != nullptr; }));
+    QCOMPARE(bob_contract()->attachments.size(), 1);
+    const auto received_attachment = bob_contract()->attachments.first();
+    QCOMPARE(received_attachment.name, QStringLiteral("contract.pdf"));
+    QCOMPARE(received_attachment.logical_size, quint64(contract.size()));
+    QCOMPARE(received_attachment.state, CybouContentState::Protected);
+    QVERIFY(received_attachment.source_path.isEmpty());
+    const QString contract_message = bob_contract()->id;
+    const QString bob_download = attach_dir.filePath(QStringLiteral("bob-contract.pdf"));
+    bob_model->requestAttachmentDownload(contract_message, received_attachment.id, bob_download);
+    QTRY_VERIFY(QFile::exists(bob_download));
+    {
+        QFile in{bob_download};
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        QCOMPARE(in.readAll(), contract);
+    }
+
+    // Mail attachment -> Files: a catalog entry referencing the same content.
+    QVERIFY(!bob_model->requestSaveAttachmentToFiles(contract_message, received_attachment.id).isEmpty());
+    const auto bob_file = [&]() -> const CybouFileItem* {
+        for (const auto& item : bob_model->fileItems()) {
+            if (item.name == QStringLiteral("contract.pdf")) return bob_model->fileItem(item.id);
+        }
+        return nullptr;
+    };
+    QTRY_VERIFY(bob_file() != nullptr);
+    QVERIFY(produce_until([&] { return bob_file() && bob_file()->state == CybouContentState::Securing; }));
+    QTRY_VERIFY(bob_contract() && !bob_contract()->attachments.first().saved_file_id.isEmpty());
+    const QString saved_id = bob_file()->id;
+    const QString from_files = attach_dir.filePath(QStringLiteral("from-files.pdf"));
+    bob_model->requestFileDownload(saved_id, from_files);
+    QTRY_VERIFY(QFile::exists(from_files));
+    {
+        QFile in{from_files};
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        QCOMPARE(in.readAll(), contract);
+    }
+
+    // Files -> Mail: Bob forwards his Files item by reference, without re-upload.
+    CybouMailItem forward;
+    forward.to_name = QString::fromStdString(alice->GetAccountId()->Value().GetHex());
+    forward.subject = QStringLiteral("Fwd: Contract");
+    forward.body = QStringLiteral("Here it is.");
+    CybouAttachmentItem reference;
+    reference.id = QStringLiteral("ref-") + saved_id;
+    reference.name = QStringLiteral("contract.pdf");
+    reference.logical_size = quint64(contract.size());
+    reference.state = CybouContentState::Protected;
+    forward.attachments.append(reference);
+    QVERIFY(!bob_model->requestSendMail(forward).isEmpty());
+    const auto alice_forward = [&]() -> const CybouMailItem* {
+        for (const auto& item : alice_model->mailItems()) {
+            if (item.subject == QStringLiteral("Fwd: Contract") && item.folder == CybouMailFolder::Inbox) {
+                return alice_model->mailItem(item.id);
+            }
+        }
+        return nullptr;
+    };
+    QVERIFY(produce_until([&] { return alice_forward() != nullptr; }));
+    const QString alice_download = attach_dir.filePath(QStringLiteral("alice-forward.pdf"));
+    alice_model->requestAttachmentDownload(alice_forward()->id, alice_forward()->attachments.first().id, alice_download);
+    QTRY_VERIFY(QFile::exists(alice_download));
+    {
+        QFile in{alice_download};
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        QCOMPARE(in.readAll(), contract);
+    }
 
     // An unknown recipient needs attention instead of pretending to send.
     CybouMailItem nobody;

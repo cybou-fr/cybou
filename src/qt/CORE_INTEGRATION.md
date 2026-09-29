@@ -36,6 +36,13 @@ reach core.
   Identity operation is unconfirmed queues behind it. Trash does not keep the
   old location, so Restore returns items to My files. Starred and
   "Available offline" are device-local.
+- **Attachments:** new local files are encrypted as child trees of the Mail
+  publication (Compose keeps a device-local source path that is never shown
+  or published); a Files item attached by reference (`ref-<file>`) reuses its
+  protected root and key without re-upload. Received attachments download
+  through StorageService, and "Save to Files" publishes a Files entry that
+  references the same content. An attachment is shown as saved when a Files
+  item references its content.
 - **Capabilities:** `mail` and `files` turn on only once the adapter session
   has opened the core services.
 - **Restore progress:** the Mail row follows the application scan.
@@ -47,7 +54,6 @@ reach core.
 
 ## Not connected yet
 
-- Mail attachments and Mail ↔ Files reuse — core supports both.
 - Drafts are device-local compose state held in memory by the adapter.
 - Re-securing Sent/Files rebuilt from history after the Application DB was
   lost (their placement leaves are not reconstructed yet).

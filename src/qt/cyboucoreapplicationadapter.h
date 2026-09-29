@@ -27,8 +27,8 @@ class CybouIdentityService;
  * durability, and posts product snapshots back to the GUI thread. Pages never
  * see core types; core never sees Qt types.
  *
- * Current scope is live text-only Mail and Files (catalog, upload, download).
- * Mail attachment transfer reports itself unavailable until connected here.
+ * Current scope is live Mail with attachments and Files, including reuse of
+ * protected content between them.
  */
 class CybouCoreApplicationAdapter final : public CybouApplicationBackend
 {

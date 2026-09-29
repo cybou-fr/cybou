@@ -244,6 +244,10 @@ struct CybouCoreApplicationAdapter::Session {
         const auto loaded = runtime.GetStore().LoadState();
         const cybou::CybouState* state = loaded && loaded.state ? &*loaded.state : nullptr;
         QVector<CybouMailItem> items;
+        std::map<cybou::ChunkId, std::string> saved_roots;
+        for (const auto& [hex, file] : Catalog()) {
+            if (file.root_chunk_id) saved_roots.emplace(*file.root_chunk_id, hex);
+        }
         for (const auto& record : application->ListMail()) {
             const auto id = ToHex(record.message.message_id);
             outbox.erase(id);
@@ -278,8 +282,12 @@ struct CybouCoreApplicationAdapter::Session {
                 a.id = QString::fromStdString(ToHex(attachment.attachment_id));
                 a.name = QString::fromStdString(attachment.filename);
                 a.logical_size = attachment.logical_size;
-                // Attachment transfer is not connected to the desktop yet.
-                a.state = CybouContentState::TemporarilyUnavailable;
+                // Sent content shares its message's durability; received content is the sender's.
+                a.state = record.outgoing ? item.state : CybouContentState::Protected;
+                // "Saved to Files" is a Files entry referencing the same protected content.
+                if (const auto saved = saved_roots.find(attachment.root_chunk_id); saved != saved_roots.end()) {
+                    a.saved_file_id = QString::fromStdString(saved->second);
+                }
                 item.attachments.append(a);
             }
             items.append(item);
@@ -311,6 +319,53 @@ struct CybouCoreApplicationAdapter::Session {
         if (!id) return std::nullopt;
         const auto record = application->GetFile(*id);
         return record ? std::optional{record->item} : std::nullopt;
+    }
+
+    /** Protected content behind a Compose "ref-<file>" attachment: root, key, size. */
+    std::optional<std::pair<cybou::ChunkId, std::pair<cybou::ContentKey, std::uint64_t>>> ContentOfAttachmentSource(
+        const QString& attachment_id)
+    {
+        if (!attachment_id.startsWith(QStringLiteral("ref-"))) return std::nullopt;
+        const auto item = CurrentFile(attachment_id.mid(4).toStdString());
+        if (!item || !item->root_chunk_id || !item->content_key) return std::nullopt;
+        return std::pair{*item->root_chunk_id, std::pair{*item->content_key, item->logical_size}};
+    }
+
+    /** Streams verified content into destination via a .part file; empty on success. */
+    QString DownloadContent(const cybou::ChunkId& root, const cybou::ContentKey& key, std::uint64_t size,
+        const QString& destination)
+    {
+        const QString part = destination + QStringLiteral(".part");
+        QFile out{part};
+        if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) return tr("The destination cannot be written.");
+        std::set<cybou::ChunkId> seen;
+        bool missing{false};
+        const auto written = cybou::FetchEncryptedChunkTree(
+            std::span<const unsigned char, 32>{runtime.GetNetworkId().begin(), 32}, key, root,
+            [&](const cybou::ChunkId& chunk) {
+                auto bytes = storage->Fetch(chunk);
+                if (!bytes) missing = true;
+                return bytes;
+            },
+            [](std::span<const unsigned char>) { return true; },
+            [&](const cybou::ChunkId& chunk) { return seen.insert(chunk).second; },
+            [&](std::span<const unsigned char> data) {
+                return out.write(reinterpret_cast<const char*>(data.data()), static_cast<qint64>(data.size())) ==
+                    static_cast<qint64>(data.size());
+            },
+            std::max<std::uint64_t>(size, 1));
+        out.close();
+        if (!written || *written != size) {
+            QFile::remove(part);
+            return missing ? tr("This content is temporarily unavailable. Try again later.")
+                           : tr("This content could not be verified.");
+        }
+        QFile::remove(destination);
+        if (!QFile::rename(part, destination)) {
+            QFile::remove(part);
+            return tr("The destination cannot be written.");
+        }
+        return {};
     }
 
     /** Current catalog: indexed history overlaid with pending local changes. */
@@ -606,13 +661,6 @@ void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message)
     if (!m_session) return;
     const QString client_id = message.id;
     CybouMailItem pending = message;
-    if (!message.attachments.isEmpty()) {
-        pending.state = CybouContentState::NeedsAttention;
-        m_pending_sends.insert(client_id, pending);
-        Q_EMIT mailStateChanged(client_id, CybouContentState::NeedsAttention);
-        Q_EMIT commandFailed(tr("Attachments cannot be sent yet. Remove them and send again."));
-        return;
-    }
     m_pending_sends.insert(client_id, pending);
     m_session->Post([client_id, message](Session& s) {
         const auto recipient = s.ResolveRecipient(message.to_name);
@@ -634,18 +682,68 @@ void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message)
         mail.client_timestamp_ms = static_cast<std::uint64_t>(message.time.toMSecsSinceEpoch());
         mail.subject = message.subject.toStdString();
         mail.body = message.body.toStdString();
+        // New local files become encrypted child trees of this publication; Files
+        // references reuse their protected content without re-upload.
+        std::vector<std::pair<std::size_t, cybou::NewContent>> new_content;
+        QString attachment_error;
+        for (const auto& attachment : message.attachments) {
+            const auto attachment_id = cybou::NewPrivateItemId();
+            if (!attachment_id) {
+                attachment_error = tr("Could not prepare the message.");
+                break;
+            }
+            cybou::MailAttachment descriptor{.attachment_id = *attachment_id, .filename = attachment.name.toStdString(),
+                .logical_size = attachment.logical_size};
+            if (!attachment.source_path.isEmpty()) {
+                auto file = std::make_shared<QFile>(attachment.source_path);
+                if (!file->open(QIODevice::ReadOnly)) {
+                    attachment_error = tr("%1 could not be read.").arg(attachment.name);
+                    break;
+                }
+                new_content.emplace_back(mail.attachments.size(), cybou::NewContent{
+                    [file](std::span<unsigned char> out) -> std::optional<std::size_t> {
+                        const auto n = file->read(reinterpret_cast<char*>(out.data()), static_cast<qint64>(out.size()));
+                        if (n < 0) return std::nullopt;
+                        return static_cast<std::size_t>(n);
+                    }});
+            } else if (const auto reused = s.ContentOfAttachmentSource(attachment.id)) {
+                descriptor.root_chunk_id = reused->first;
+                descriptor.content_key = reused->second.first;
+                descriptor.logical_size = reused->second.second;
+            } else {
+                attachment_error = tr("%1 is not protected yet.").arg(attachment.name);
+                break;
+            }
+            mail.attachments.push_back(descriptor);
+        }
+        if (!attachment_error.isEmpty()) {
+            s.ToGui([owner = s.owner, client_id, attachment_error] {
+                if (auto it = owner->m_pending_sends.find(client_id); it != owner->m_pending_sends.end()) {
+                    it->state = CybouContentState::NeedsAttention;
+                }
+                Q_EMIT owner->mailStateChanged(client_id, CybouContentState::NeedsAttention);
+                Q_EMIT owner->commandFailed(attachment_error);
+            });
+            return;
+        }
         // The job ID is the message ID, so the outbox and Sent entries line up.
         const auto job_id = ToHex(*message_id);
         CybouMailItem outgoing = message;
         outgoing.id = QString::fromStdString(job_id);
         outgoing.state = CybouContentState::Preparing;
+        for (int i = 0; i < outgoing.attachments.size(); ++i) {
+            auto& shown = outgoing.attachments[i];
+            shown.id = QString::fromStdString(ToHex(mail.attachments[static_cast<std::size_t>(i)].attachment_id));
+            shown.source_path.clear();
+            if (shown.state != CybouContentState::Protected) shown.state = CybouContentState::Preparing;
+        }
         s.outbox[job_id] = outgoing;
         s.ToGui([owner = s.owner, client_id, outgoing] {
             owner->m_pending_sends.remove(client_id);
             Q_EMIT owner->mailItemRemoved(client_id);
             Q_EMIT owner->mailItemChanged(outgoing);
         });
-        s.jobs[job_id] = s.publication->PublishMail(job_id, std::move(mail));
+        s.jobs[job_id] = s.publication->PublishMail(job_id, std::move(mail), std::move(new_content));
         if (s.jobs[job_id].phase == cybou::PublicationJobPhase::NEEDS_ATTENTION) {
             s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The message could not be sent.")); });
         }
@@ -702,15 +800,58 @@ void CybouCoreApplicationAdapter::deleteMail(const QString& id)
 }
 
 void CybouCoreApplicationAdapter::downloadAttachment(const QString& message_id, const QString& attachment_id,
-    const QString&)
+    const QString& destination)
 {
-    Q_EMIT attachmentRetrievalChanged(message_id, attachment_id, CybouRetrievalState::Idle);
-    notAvailable();
+    const auto message = FromHex(message_id);
+    if (!m_session || !message) return;
+    m_session->Post([message = *message, message_id, attachment_id, destination](Session& s) {
+        QString error = tr("This attachment is not available.");
+        if (const auto record = s.application->GetMail(message)) {
+            for (const auto& attachment : record->message.attachments) {
+                if (QString::fromStdString(ToHex(attachment.attachment_id)) != attachment_id) continue;
+                error = s.DownloadContent(attachment.root_chunk_id, attachment.content_key, attachment.logical_size,
+                    destination);
+            }
+        }
+        s.ToGui([owner = s.owner, message_id, attachment_id, error] {
+            if (!error.isEmpty()) {
+                Q_EMIT owner->attachmentRetrievalChanged(message_id, attachment_id, CybouRetrievalState::Idle);
+                Q_EMIT owner->commandFailed(error);
+                return;
+            }
+            Q_EMIT owner->attachmentRetrievalChanged(message_id, attachment_id, CybouRetrievalState::Ready);
+            QMetaObject::invokeMethod(owner, [owner, message_id, attachment_id] {
+                Q_EMIT owner->attachmentRetrievalChanged(message_id, attachment_id, CybouRetrievalState::Idle);
+            }, Qt::QueuedConnection);
+        });
+    });
 }
 
-void CybouCoreApplicationAdapter::saveAttachmentToFiles(const QString&, const QString&, const QString&)
+void CybouCoreApplicationAdapter::saveAttachmentToFiles(const QString& message_id, const QString& attachment_id,
+    const QString& file_id)
 {
-    notAvailable();
+    const auto message = FromHex(message_id);
+    const auto item_id = cybou::NewPrivateItemId();
+    if (!m_session || !message || !item_id) return;
+    const QString hex = QString::fromStdString(ToHex(*item_id));
+    m_client_ids.insert(file_id, hex);
+    m_session->Post([message = *message, attachment_id, item_id = *item_id](Session& s) {
+        const auto record = s.application->GetMail(message);
+        if (!record) return;
+        for (const auto& attachment : record->message.attachments) {
+            if (QString::fromStdString(ToHex(attachment.attachment_id)) != attachment_id) continue;
+            // A new Files entry referencing the same protected content: no download, no upload.
+            cybou::FilesMutationBatch batch;
+            batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item_id,
+                cybou::FileItem{.item_id = item_id, .kind = cybou::FileItemKind::FILE, .name = attachment.filename,
+                    .logical_size = attachment.logical_size, .root_chunk_id = attachment.root_chunk_id,
+                    .content_key = attachment.content_key}});
+            if (!s.PublishFileChange(std::move(batch), std::nullopt)) {
+                s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The attachment could not be saved to Files.")); });
+            }
+            return;
+        }
+    });
 }
 
 /* ---- Files ---- */
@@ -785,46 +926,16 @@ void CybouCoreApplicationAdapter::downloadFile(const QString& file_id, const QSt
     m_session->Post([hex = hex.toStdString(), destination](Session& s) {
         const auto item = s.CurrentFile(hex);
         const auto id = QString::fromStdString(hex);
-        const auto fail = [&s, id](const QString& text) {
-            s.ToGui([owner = s.owner, id, text] {
+        const QString error = item && item->root_chunk_id && item->content_key
+            ? s.DownloadContent(*item->root_chunk_id, *item->content_key, item->logical_size, destination)
+            : tr("This file has no content yet.");
+        if (error.isEmpty()) s.offline_files.insert(hex);
+        s.ToGui([owner = s.owner, id, error] {
+            if (!error.isEmpty()) {
                 Q_EMIT owner->fileRetrievalChanged(id, CybouRetrievalState::Idle);
-                Q_EMIT owner->commandFailed(text);
-            });
-        };
-        if (!item || !item->root_chunk_id || !item->content_key) return fail(tr("This file has no content yet."));
-        const QString part = destination + QStringLiteral(".part");
-        QFile out{part};
-        if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) return fail(tr("The destination cannot be written."));
-        std::set<cybou::ChunkId> seen;
-        bool missing{false};
-        const auto written = cybou::FetchEncryptedChunkTree(
-            std::span<const unsigned char, 32>{s.runtime.GetNetworkId().begin(), 32}, *item->content_key,
-            *item->root_chunk_id,
-            [&](const cybou::ChunkId& chunk) {
-                auto bytes = s.storage->Fetch(chunk);
-                if (!bytes) missing = true;
-                return bytes;
-            },
-            [](std::span<const unsigned char>) { return true; },
-            [&](const cybou::ChunkId& chunk) { return seen.insert(chunk).second; },
-            [&](std::span<const unsigned char> data) {
-                return out.write(reinterpret_cast<const char*>(data.data()), static_cast<qint64>(data.size())) ==
-                    static_cast<qint64>(data.size());
-            },
-            std::max<std::uint64_t>(item->logical_size, 1));
-        out.close();
-        if (!written || *written != item->logical_size) {
-            QFile::remove(part);
-            return fail(missing ? tr("This file is temporarily unavailable. Try again later.")
-                                : tr("This file could not be verified."));
-        }
-        QFile::remove(destination);
-        if (!QFile::rename(part, destination)) {
-            QFile::remove(part);
-            return fail(tr("The destination cannot be written."));
-        }
-        s.offline_files.insert(hex);
-        s.ToGui([owner = s.owner, id] {
+                Q_EMIT owner->commandFailed(error);
+                return;
+            }
             Q_EMIT owner->fileRetrievalChanged(id, CybouRetrievalState::Ready);
             QMetaObject::invokeMethod(owner, [owner, id] {
                 Q_EMIT owner->fileRetrievalChanged(id, CybouRetrievalState::Idle);

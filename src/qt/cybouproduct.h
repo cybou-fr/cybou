@@ -91,6 +91,8 @@ struct CybouAttachmentItem {
     CybouRetrievalState retrieval{CybouRetrievalState::Idle};
     /** Files item created by "Save to Files" for this attachment, if any. */
     QString saved_file_id;
+    /** Local file chosen in Compose; device-local, never shown or published. */
+    QString source_path;
 };
 
 enum class CybouMailFolder {

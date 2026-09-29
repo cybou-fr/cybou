@@ -482,6 +482,7 @@ CybouAttachmentItem CybouDesktopModel::localAttachment(const QString& path) cons
     item.name = info.fileName();
     item.logical_size = static_cast<quint64>(qMax<qint64>(0, info.size()));
     item.state = CybouContentState::Local;
+    item.source_path = info.absoluteFilePath();
     return item;
 }
 
