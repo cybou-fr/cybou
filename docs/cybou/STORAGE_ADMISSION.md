@@ -17,7 +17,8 @@ leaf = H(CYBOU/CHUNK-AUTH/LEAF || ChunkID)
 
 The root and chunk count are committed by a finalized RootPublication and
 verified by each inclusion proof. ChunkID already commits to the exact stored
-bytes, so the proof carries no redundant size. Providers enforce local physical
+bytes, so the proof carries no redundant size, ChunkID, or chunk count: PUT_CHUNK provides
+the ChunkID and the finalized RootPublication provides the count. Providers enforce local physical
 capacity independently of publication. The provider records each leaf index as
 it durably stages a chunk.
 

@@ -22,9 +22,7 @@ struct AuthorizedChunk {
 };
 
 struct ChunkAuthorizationProof {
-    ChunkId chunk_id{};
     std::uint32_t leaf_index{0};
-    std::uint32_t chunk_count{0};
     std::vector<ChunkId> siblings;
 };
 
@@ -56,7 +54,7 @@ std::optional<ChunkAuthorizationCommitment> BuildChunkAuthorizationCommitment(
 
 bool VerifyChunkAuthorizationPath(
     const ChunkId& expected_root,
-    const AuthorizedChunk& chunk,
+    const ChunkId& chunk_id,
     std::uint32_t leaf_index,
     std::uint32_t chunk_count,
     std::span<const ChunkId> siblings);
@@ -64,6 +62,7 @@ bool VerifyChunkAuthorizationPath(
 /** Check the chunk inclusion path against the finalized publication commitment. */
 bool VerifyChunkAuthorizationProof(
     const RootPublication& publication,
+    const ChunkId& chunk_id,
     const ChunkAuthorizationProof& proof);
 
 } // namespace cybou

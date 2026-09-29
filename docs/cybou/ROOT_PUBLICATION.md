@@ -70,8 +70,9 @@ leaf index at staging time. Each leaf hashes
 `CYBOU/CHUNK-AUTH/LEAF || ChunkID`; internal pairs hash
 `CYBOU/CHUNK-AUTH/NODE || left || right`. An unpaired final child is duplicated.
 Empty trees and duplicate ChunkIDs are invalid. An inclusion proof has at most
-32 siblings, ordered leaf to root, and carries the leaf index and chunk count.
-The proof binds one ChunkID to the committed tree. Providers enforce local
+32 siblings, ordered leaf to root. The proof is only the leaf index and sibling
+hashes; PUT_CHUNK supplies ChunkID and finalized RootPublication supplies
+chunk_count. The proof binds that ChunkID to the committed tree. Providers enforce local
 physical capacity; publication-level byte declarations are not part of the
 protocol. The publisher must include proofs for every staged chunk, including
 `root_chunk_id`; the client can validate these locally before submitting the publication.

@@ -37,12 +37,11 @@ std::string PublicationChunkKey(const std::string& name_space, const uint256& pu
 std::vector<unsigned char> EncodeProofMetadata(const ChunkAuthorizationProof& proof)
 {
     std::vector<unsigned char> encoded;
-    encoded.reserve(12 + proof.siblings.size() * ChunkId{}.size());
+    encoded.reserve(8 + proof.siblings.size() * ChunkId{}.size());
     const auto append_u32 = [&encoded](const std::uint32_t value) {
         for (int shift = 24; shift >= 0; shift -= 8) encoded.push_back(static_cast<unsigned char>(value >> shift));
     };
     append_u32(proof.leaf_index);
-    append_u32(proof.chunk_count);
     append_u32(static_cast<std::uint32_t>(proof.siblings.size()));
     for (const auto& sibling : proof.siblings) encoded.insert(encoded.end(), sibling.begin(), sibling.end());
     return encoded;
@@ -53,7 +52,7 @@ std::vector<unsigned char> EncodeProofMetadata(const ChunkAuthorizationProof& pr
 FinalizedChunkStore::FinalizedChunkStore(const std::filesystem::path& path,
     const std::span<const unsigned char, 32> network_id, const std::uint64_t capacity_bytes,
     const bool memory_only, const bool wipe_data)
-    : m_namespace{"chunk-store/v2/" + Hex(network_id)}, m_capacity_bytes{capacity_bytes}
+    : m_namespace{"chunk-store/v3/" + Hex(network_id)}, m_capacity_bytes{capacity_bytes}
 {
     if (capacity_bytes == 0 || std::all_of(network_id.begin(), network_id.end(), [](const auto byte) { return byte == 0; }) ||
         (!memory_only && path.empty())) {
@@ -68,7 +67,7 @@ FinalizedChunkStore::FinalizedChunkStore(const std::filesystem::path& path,
 
     // The path is operator-configured and can accidentally be reused across networks.
     // Refuse that configuration rather than mixing provider data or accounting.
-    const std::string network_key{"chunk-store/v2/network-id"};
+    const std::string network_key{"chunk-store/v3/network-id"};
     std::vector<unsigned char> saved_network_id;
     if (m_db->Read(network_key, saved_network_id)) {
         if (!std::equal(saved_network_id.begin(), saved_network_id.end(), network_id.begin(), network_id.end())) {
@@ -98,13 +97,13 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(
     const FinalizedPublicationLookup& lookup)
 {
     if (publication_operation_id.IsNull() || chunk_id == ChunkId{} || stored_bytes.empty() || !lookup ||
-        ComputeChunkId(stored_bytes) != chunk_id || proof.chunk_id != chunk_id) return {ChunkAdmissionStatus::INVALID};
+        ComputeChunkId(stored_bytes) != chunk_id) return {ChunkAdmissionStatus::INVALID};
 
     std::optional<RootPublication> publication;
     try { publication = lookup(publication_operation_id); }
     catch (...) { return {ChunkAdmissionStatus::NOT_FINALIZED}; }
     if (!publication) return {ChunkAdmissionStatus::NOT_FINALIZED};
-    if (!VerifyChunkAuthorizationProof(*publication, proof)) return {ChunkAdmissionStatus::NOT_AUTHORIZED};
+    if (!VerifyChunkAuthorizationProof(*publication, chunk_id, proof)) return {ChunkAdmissionStatus::NOT_AUTHORIZED};
 
     try {
         const auto stored_bytes_vector = std::vector<unsigned char>{stored_bytes.begin(), stored_bytes.end()};

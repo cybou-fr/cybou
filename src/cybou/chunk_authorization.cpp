@@ -102,15 +102,15 @@ std::optional<ChunkAuthorizationSummary> ChunkAuthorizationAccumulator::Finish()
 
 bool VerifyChunkAuthorizationPath(
     const ChunkId& expected_root,
-    const AuthorizedChunk& chunk,
+    const ChunkId& chunk_id,
     const std::uint32_t leaf_index,
     const std::uint32_t chunk_count,
     const std::span<const ChunkId> siblings)
 {
     if (chunk_count == 0 || leaf_index >= chunk_count ||
-        IsZero(chunk.id) || siblings.size() > 32) return false;
+        IsZero(chunk_id) || siblings.size() > 32) return false;
     try {
-        ChunkId current = HashLeaf(chunk);
+        ChunkId current = HashLeaf(AuthorizedChunk{chunk_id});
         auto index = static_cast<std::size_t>(leaf_index);
         auto width = static_cast<std::size_t>(chunk_count);
         std::size_t sibling_index{0};
@@ -164,9 +164,7 @@ std::optional<ChunkAuthorizationCommitment> BuildChunkAuthorizationCommitment(
         result.proofs.reserve(ordered.size());
         for (std::size_t leaf = 0; leaf < ordered.size(); ++leaf) {
             ChunkAuthorizationProof proof;
-            proof.chunk_id = ordered[leaf].id;
             proof.leaf_index = static_cast<std::uint32_t>(leaf);
-            proof.chunk_count = result.chunk_count;
             auto index = leaf;
             auto width = ordered.size();
             for (std::size_t level = 0; width > 1; ++level) {
@@ -185,12 +183,12 @@ std::optional<ChunkAuthorizationCommitment> BuildChunkAuthorizationCommitment(
 
 bool VerifyChunkAuthorizationProof(
     const RootPublication& publication,
+    const ChunkId& chunk_id,
     const ChunkAuthorizationProof& proof)
 {
-    if (publication.chunk_count == 0 || publication.chunk_count != proof.chunk_count ||
-        proof.leaf_index >= proof.chunk_count || IsZero(proof.chunk_id)) return false;
+    if (publication.chunk_count == 0 || proof.leaf_index >= publication.chunk_count || IsZero(chunk_id)) return false;
     return VerifyChunkAuthorizationPath(publication.chunk_authorization_root,
-        {proof.chunk_id}, proof.leaf_index, proof.chunk_count, proof.siblings);
+        chunk_id, proof.leaf_index, publication.chunk_count, proof.siblings);
 }
 
 } // namespace cybou

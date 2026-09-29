@@ -43,12 +43,14 @@ BOOST_AUTO_TEST_CASE(chunk_authorization_builds_ordered_proofs)
     BOOST_REQUIRE(reordered.has_value());
     BOOST_CHECK(first->root != reordered->root);
     BOOST_CHECK(first->chunk_count == chunks.size());
-
     cybou::RootPublication publication;
     publication.root_chunk_id.fill(0x55);
     publication.chunk_authorization_root = first->root;
     publication.chunk_count = first->chunk_count;
-    for (const auto& proof : first->proofs) BOOST_CHECK(cybou::VerifyChunkAuthorizationProof(publication, proof));
+    for (std::size_t i = 0; i < first->proofs.size(); ++i) {
+        BOOST_CHECK(cybou::VerifyChunkAuthorizationProof(publication, chunks[i].id, first->proofs[i]));
+    }
+    std::reverse(chunks.begin(), chunks.end());
 }
 
 BOOST_AUTO_TEST_CASE(chunk_authorization_streaming_accumulator_matches_tree_for_odd_counts)
@@ -78,10 +80,10 @@ BOOST_AUTO_TEST_CASE(chunk_authorization_rejects_bad_path_count_and_duplicate_id
     publication.chunk_count = commitment->chunk_count;
     auto bad_path = commitment->proofs.back();
     bad_path.siblings[0][0] ^= 1;
-    BOOST_CHECK(!cybou::VerifyChunkAuthorizationProof(publication, bad_path));
-    auto bad_count = commitment->proofs.front();
-    ++bad_count.chunk_count;
-    BOOST_CHECK(!cybou::VerifyChunkAuthorizationProof(publication, bad_count));
+    BOOST_CHECK(!cybou::VerifyChunkAuthorizationProof(publication, Chunks().back().id, bad_path));
+    auto bad_count = publication;
+    --bad_count.chunk_count;
+    BOOST_CHECK(!cybou::VerifyChunkAuthorizationProof(bad_count, Chunks().back().id, commitment->proofs.back()));
 
     auto duplicate = Chunks();
     duplicate[2].id = duplicate[1].id;
@@ -99,7 +101,7 @@ BOOST_AUTO_TEST_CASE(chunk_authorization_rejects_noncanonical_odd_duplication)
     auto odd_leaf = commitment->proofs.back();
     BOOST_REQUIRE(!odd_leaf.siblings.empty());
     odd_leaf.siblings[0][0] ^= 1;
-    BOOST_CHECK(!cybou::VerifyChunkAuthorizationProof(publication, odd_leaf));
+    BOOST_CHECK(!cybou::VerifyChunkAuthorizationProof(publication, chunks.back().id, odd_leaf));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

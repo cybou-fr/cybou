@@ -95,6 +95,7 @@ chunks:
     odd_node_rule: duplicate_last
     empty_tree: rejected
     maximum_leaf_count: 4294967295
+    inclusion_proof_fields: [leaf_index_u32, sibling_hashes]
     inclusion_proof_sibling_order: leaf_to_root
     inclusion_proof_max_siblings: 32
 
