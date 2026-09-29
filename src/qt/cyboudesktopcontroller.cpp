@@ -104,7 +104,7 @@ void CybouDesktopController::start()
         m_identity_service = std::make_unique<cybou::CybouIdentityService>(runtime, identity_path);
         m_model->setIdentityService(m_identity_service.get());
 
-        // Mail and Files wait for the RootPublication client; the old
+        // Mail and Files wait for the finality-first content client; the old
         // legacy mail and object-storage services are intentionally not wired.
         m_wallet_service = std::make_unique<cybou::CybouWalletService>(
             runtime, m_identity_service->GetKeyStore());

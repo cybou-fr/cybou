@@ -22,7 +22,6 @@ QString iconResource(CybouTheme::NavIcon icon)
     case CybouTheme::NavIcon::Identity: return QStringLiteral(":/icons/cybou/identity");
     case CybouTheme::NavIcon::Email: return QStringLiteral(":/icons/cybou/email");
     case CybouTheme::NavIcon::Storage: return QStringLiteral(":/icons/cybou/storage");
-    case CybouTheme::NavIcon::Backup: return QStringLiteral(":/icons/cybou/backup");
     case CybouTheme::NavIcon::Wallet: return QStringLiteral(":/icons/cybou/wallet");
     case CybouTheme::NavIcon::Network: return QStringLiteral(":/icons/cybou/network");
     case CybouTheme::NavIcon::Settings: return QStringLiteral(":/icons/cybou/settings");

@@ -19,6 +19,7 @@
 #include <cybou/validator.h>
 
 #include <QApplication>
+#include <QAbstractButton>
 #include <QLabel>
 #include <QListWidget>
 #include <QLineEdit>
@@ -692,6 +693,31 @@ void CybouShellTests::fixturesLoadDeterministically()
     QCOMPARE(model.status().identity_state, CybouIdentityState::Active);
 }
 
+void CybouShellTests::normalUiAvoidsProtocolVocabulary()
+{
+    // docs/cybou/82-83: protocol machinery stays out of the normal UI.
+    const QStringList forbidden{QStringLiteral("MailTx"), QStringLiteral("BFT"), QStringLiteral("alidator"),
+        QStringLiteral("ObjectID"), QStringLiteral("Object ID"), QStringLiteral("Merkle"), QStringLiteral("ChunkID"),
+        QStringLiteral("RootPublication"), QStringLiteral("nonce"), QStringLiteral("block hash"),
+        QStringLiteral("provider"), QStringLiteral("KEM capsule"), QStringLiteral("Backup"), QStringLiteral("shard"),
+        QStringLiteral("Mail fee")};
+    for (const auto& fixture : {QStringLiteral("empty"), QStringLiteral("active"), QStringLiteral("offline")}) {
+        auto window = makeWindow();
+        QVERIFY(CybouUiFixtures::apply(*window->desktopModel(), fixture));
+        for (int i = 0; i < window->pageCount(); ++i) {
+            QStringList texts;
+            for (const auto* label : window->pageAt(i)->findChildren<QLabel*>()) texts << label->text();
+            for (const auto* button : window->pageAt(i)->findChildren<QAbstractButton*>()) texts << button->text();
+            for (const auto& text : texts) {
+                for (const auto& word : forbidden) {
+                    QVERIFY2(!text.contains(word, Qt::CaseInsensitive),
+                        qPrintable(QStringLiteral("page %1 (%2) shows \"%3\"").arg(i).arg(fixture, text)));
+                }
+            }
+        }
+    }
+}
+
 void CybouShellTests::themeResolvesAllTokens()
 {
     // Regression guard for the numbered-%N .arg() shift: every @token@ in the
@@ -725,7 +751,6 @@ void CybouShellTests::navIconsRender()
         CybouTheme::NavIcon::Identity,
         CybouTheme::NavIcon::Email,
         CybouTheme::NavIcon::Storage,
-        CybouTheme::NavIcon::Backup,
         CybouTheme::NavIcon::Network,
         CybouTheme::NavIcon::Settings,
         CybouTheme::NavIcon::Diagnostics,

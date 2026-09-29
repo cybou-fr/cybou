@@ -43,6 +43,7 @@ private Q_SLOTS:
     void adapterSettersDrivePages();
     void productCollectionsDriveModel();
     void fixturesLoadDeterministically();
+    void normalUiAvoidsProtocolVocabulary();
     void themeResolvesAllTokens();
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();

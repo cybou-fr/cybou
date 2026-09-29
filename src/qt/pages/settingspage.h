@@ -5,6 +5,7 @@
 #ifndef BITCOIN_QT_PAGES_SETTINGSPAGE_H
 #define BITCOIN_QT_PAGES_SETTINGSPAGE_H
 
+#include <QCoreApplication>
 #include <QWidget>
 
 #include <functional>
@@ -12,24 +13,28 @@
 class CybouDesktopModel;
 class QCheckBox;
 class QLabel;
-class QLineEdit;
-class QSpinBox;
 
+/** Settings: General, Privacy, Files, Storage contribution, Advanced. */
 class SettingsPage : public QWidget
 {
+    Q_DECLARE_TR_FUNCTIONS(SettingsPage)
+
 public:
     SettingsPage(CybouDesktopModel* model, std::function<void()> diagnostics_requested,
         QWidget* parent = nullptr);
 
+    /** QSettings keys shared with the shell. */
+    static QString runInBackgroundKey() { return QStringLiteral("desktop/run_in_background"); }
+    static QString mailPreviewsKey() { return QStringLiteral("privacy/mail_previews"); }
+    static QString downloadFolderKey() { return QStringLiteral("files/download_folder"); }
+
 private:
     CybouDesktopModel* const m_model;
-    QCheckBox* m_run_in_background;
-    QCheckBox* m_proxy_enabled;
-    QLineEdit* m_proxy_host;
-    QSpinBox* m_proxy_port;
-    QCheckBox* m_listen;
-    QLabel* m_data_directory;
-    const std::function<void()> m_diagnostics_requested;
+    QCheckBox* m_start_with_windows{nullptr};
+    QCheckBox* m_run_in_background{nullptr};
+    QCheckBox* m_mail_previews{nullptr};
+    QLabel* m_download_folder{nullptr};
+    QLabel* m_data_directory{nullptr};
 
     void refresh();
 };

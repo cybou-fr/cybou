@@ -9,10 +9,10 @@
 #include <qt/cyboutheme.h>
 #include <qt/cybouuifixtures.h>
 #include <qt/cybouui.h>
+#include <qt/pages/diagnosticspage.h>
 #include <qt/pages/emailpage.h>
 #include <qt/pages/homepage.h>
 #include <qt/pages/identitypage.h>
-#include <qt/pages/networkpage.h>
 #include <qt/pages/settingspage.h>
 #include <qt/pages/storagepage.h>
 #include <qt/pages/walletpage.h>
@@ -363,7 +363,7 @@ void CybouMainWindow::buildShell()
     auto* files = new StoragePage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
     auto* wallet = new WalletPage{m_desktop_model, nullptr};
     auto* identity = new IdentityPage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
-    auto* diagnostics = new NetworkPage{m_desktop_model, [this] { showDebugWindow(); }, nullptr};
+    auto* diagnostics = new DiagnosticsPage{m_desktop_model, [this] { showDebugWindow(); }, nullptr};
     auto* settings = new SettingsPage{m_desktop_model, [this] { showPage(CybouPage::Diagnostics); }, nullptr};
     files->onSendByMail = [this, mail](const QString& file_id) {
         const auto attachment = m_desktop_model->attachmentFromFile(file_id);

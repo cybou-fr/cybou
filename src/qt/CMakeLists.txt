@@ -66,6 +66,8 @@ add_library(cybou_qt STATIC
   cybouui.h
   cybouuifixtures.cpp
   cybouuifixtures.h
+  pages/diagnosticspage.cpp
+  pages/diagnosticspage.h
   pages/emailpage.cpp
   pages/emailpage.h
   pages/homepage.cpp
@@ -76,8 +78,6 @@ add_library(cybou_qt STATIC
   pages/mailreader.h
   pages/identitypage.cpp
   pages/identitypage.h
-  pages/networkpage.cpp
-  pages/networkpage.h
   pages/onboardingview.cpp
   pages/onboardingview.h
   pages/settingspage.cpp

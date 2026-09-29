@@ -70,7 +70,6 @@ enum class NavIcon {
     Identity,
     Email,
     Storage,
-    Backup,
     Wallet,
     Network,
     Settings,
