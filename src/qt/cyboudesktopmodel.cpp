@@ -13,6 +13,7 @@
 
 #include <support/cleanse.h>
 
+#include <QFileInfo>
 #include <QRegularExpression>
 
 #include <algorithm>
@@ -300,6 +301,72 @@ void CybouDesktopModel::setMailState(const QString& id, CybouContentState state)
         Q_EMIT mailChanged();
         return;
     }
+}
+
+namespace {
+CybouAttachmentItem* FindAttachment(QVector<CybouMailItem>& mail, const QString& message_id,
+    const QString& attachment_id)
+{
+    for (auto& item : mail) {
+        if (item.id != message_id) continue;
+        for (auto& attachment : item.attachments) {
+            if (attachment.id == attachment_id) return &attachment;
+        }
+    }
+    return nullptr;
+}
+} // namespace
+
+void CybouDesktopModel::setAttachmentState(const QString& message_id, const QString& attachment_id,
+    CybouContentState state, int progress_percent)
+{
+    if (auto* attachment = FindAttachment(m_mail, message_id, attachment_id)) {
+        attachment->state = state;
+        attachment->progress_percent = progress_percent;
+        Q_EMIT mailChanged();
+    }
+}
+
+void CybouDesktopModel::setAttachmentRetrieval(const QString& message_id, const QString& attachment_id,
+    CybouRetrievalState retrieval)
+{
+    if (auto* attachment = FindAttachment(m_mail, message_id, attachment_id)) {
+        attachment->retrieval = retrieval;
+        Q_EMIT mailChanged();
+    }
+}
+
+void CybouDesktopModel::retrySendMail(const QString& id)
+{
+    for (auto& item : m_mail) {
+        if (item.id != id || item.state != CybouContentState::NeedsAttention) continue;
+        item.state = CybouContentState::Preparing;
+        for (auto& attachment : item.attachments) {
+            if (attachment.state != CybouContentState::Protected) attachment.state = CybouContentState::Preparing;
+        }
+        Q_EMIT mailChanged();
+        Q_EMIT mailSendRequested(id);
+        return;
+    }
+}
+
+void CybouDesktopModel::requestAttachmentDownload(const QString& message_id, const QString& attachment_id,
+    const QString& destination)
+{
+    if (m_status.identity_state != CybouIdentityState::Active) return;
+    setAttachmentRetrieval(message_id, attachment_id, CybouRetrievalState::Downloading);
+    Q_EMIT attachmentDownloadRequested(message_id, attachment_id, destination);
+}
+
+CybouAttachmentItem CybouDesktopModel::localAttachment(const QString& path) const
+{
+    const QFileInfo info{path};
+    CybouAttachmentItem item;
+    item.id = NewLocalId("att");
+    item.name = info.fileName();
+    item.logical_size = static_cast<quint64>(qMax<qint64>(0, info.size()));
+    item.state = CybouContentState::Local;
+    return item;
 }
 
 void CybouDesktopModel::setFileItems(QVector<CybouFileItem> items)

@@ -500,6 +500,15 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
             mail->openMessage(ids.first());
             save(QStringLiteral("mail-reader"));
         }
+        for (const auto& item : m_desktop_model->mailItems()) {
+            if (item.folder == CybouMailFolder::Sent && item.state != CybouContentState::Protected) {
+                mail->setView(EmailPage::View::Sent);
+                mail->openMessage(item.id);
+                save(QStringLiteral("mail-attachment-progress"));
+                break;
+            }
+        }
+        mail->setView(EmailPage::View::Inbox);
         CybouMailItem draft;
         draft.to_name = QStringLiteral("alice.cybou");
         draft.subject = tr("Project files");

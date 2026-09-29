@@ -76,7 +76,7 @@ QString RowPeer(const CybouMailItem& item)
         ? EmailPage::tr("To: %1").arg(item.to_name) : item.from_name;
 }
 
-QWidget* MailRow(const CybouMailItem& item, QWidget* parent)
+QWidget* MailRow(const CybouMailItem& item, bool online, QWidget* parent)
 {
     auto* row = new QWidget{parent};
     row->setObjectName(QStringLiteral("mailRow"));
@@ -109,7 +109,7 @@ QWidget* MailRow(const CybouMailItem& item, QWidget* parent)
         top->addWidget(star);
     }
     const bool pending = CybouProduct::contentPending(item.state) || item.state == CybouContentState::NeedsAttention;
-    auto* when = new QLabel{pending && !item.draft ? CybouProduct::mailStateText(item) : shortTime(item.time), row};
+    auto* when = new QLabel{pending && !item.draft ? CybouProduct::contentStateText(item.state, online) : shortTime(item.time), row};
     when->setObjectName(QStringLiteral("rowMeta"));
     if (pending && !item.draft) {
         when->setStyleSheet(QStringLiteral("color: %1;").arg(CybouTheme::color(
@@ -352,7 +352,7 @@ void EmailPage::rebuildList()
         item->setData(Qt::UserRole, mail.id);
         item->setData(Qt::AccessibleTextRole, tr("%1, %2").arg(RowPeer(mail), mail.subject));
         item->setSizeHint(QSize{0, 76});
-        m_list->setItemWidget(item, MailRow(mail, m_list));
+        m_list->setItemWidget(item, MailRow(mail, m_model->status().online, m_list));
         if (mail.id == m_current_id) m_list->setCurrentItem(item);
     }
     const bool identity = m_model->status().identity_state == CybouIdentityState::Active;

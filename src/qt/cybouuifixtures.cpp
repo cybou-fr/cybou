@@ -142,6 +142,14 @@ void ApplyMail(CybouDesktopModel& model)
         QStringLiteral("alice.cybou"), QStringLiteral("Re: Budget draft"),
         QStringLiteral("Looks good to me. I left two comments in the second section."),
         At(1, 12, 20)));
+    auto securing = Mail(QStringLiteral("m-sent-securing"), CybouMailFolder::Sent, QStringLiteral("stan.cybou"),
+        QStringLiteral("carol.cybou"), QStringLiteral("Quarterly numbers"),
+        QStringLiteral("Carol, the Q3 report is attached. The summary is on the first page."), At(0, 10, 35));
+    securing.state = CybouContentState::Securing;
+    securing.attachments = {Attachment(QStringLiteral("c-q3"), QStringLiteral("q3-report.pdf"), 7340032,
+        CybouContentState::Securing)};
+    securing.attachments.first().progress_percent = 42;
+    mail.append(securing);
     mail.append(Mail(QStringLiteral("m-draft-1"), CybouMailFolder::Drafts, QStringLiteral("stan.cybou"),
         QStringLiteral("bob.cybou"), QStringLiteral("Weekend plans"),
         QStringLiteral("Hey Bob, about Saturday —"), At(0, 8, 2)));
@@ -270,6 +278,10 @@ Driver::Driver(CybouDesktopModel* model, QObject* parent)
     connect(m_model, &CybouDesktopModel::createIdentityRequested, this, [this] { runCreate(); });
     connect(m_model, &CybouDesktopModel::restoreIdentityRequested, this, [this] { runRestore(); });
     connect(m_model, &CybouDesktopModel::mailSendRequested, this, [this](const QString& id) { runSend(id); });
+    connect(m_model, &CybouDesktopModel::attachmentDownloadRequested, this,
+        [this](const QString& message_id, const QString& attachment_id, const QString&) {
+            runDownload(message_id, attachment_id);
+        });
     connect(m_model, &CybouDesktopModel::nameClaimRequested, this, [this](const QString& label) {
         later(3, [this, label] {
             const QString name = label + QStringLiteral(".cybou");
@@ -306,10 +318,37 @@ void Driver::runCreate()
 void Driver::runSend(const QString& id)
 {
     // Finality-first lifecycle: local prepare -> PoA confirmation ->
-    // storage admission of authorized chunks -> durability.
+    // storage admission of authorized chunks -> durability. Offline, the
+    // message waits for the network and does not advance.
+    if (!m_model->status().online) return;
+    const auto progress = [this, id](int percent) {
+        const auto* item = m_model->mailItem(id);
+        if (!item) return;
+        for (const auto& attachment : item->attachments) {
+            if (attachment.state != CybouContentState::Protected)
+                m_model->setAttachmentState(id, attachment.id, CybouContentState::Securing, percent);
+        }
+    };
     later(1, [this, id] { m_model->setMailState(id, CybouContentState::WaitingForConfirmation); });
-    later(3, [this, id] { m_model->setMailState(id, CybouContentState::Securing); });
+    later(3, [this, id, progress] {
+        m_model->setMailState(id, CybouContentState::Securing);
+        progress(35);
+    });
+    later(4, [progress] { progress(80); });
     later(5, [this, id] { m_model->setMailState(id, CybouContentState::Protected); });
+}
+
+void Driver::runDownload(const QString& message_id, const QString& attachment_id)
+{
+    later(1, [this, message_id, attachment_id] {
+        m_model->setAttachmentRetrieval(message_id, attachment_id, CybouRetrievalState::Verifying);
+    });
+    later(2, [this, message_id, attachment_id] {
+        m_model->setAttachmentRetrieval(message_id, attachment_id, CybouRetrievalState::Decrypting);
+    });
+    later(3, [this, message_id, attachment_id] {
+        m_model->setAttachmentRetrieval(message_id, attachment_id, CybouRetrievalState::Ready);
+    });
 }
 
 void Driver::runRestore()

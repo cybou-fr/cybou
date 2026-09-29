@@ -38,7 +38,10 @@ void clearLayoutDeep(QLayout* layout)
             }
             sub->deleteLater();
         } else {
-            if (QWidget* widget = item->widget()) widget->deleteLater();
+            if (QWidget* widget = item->widget()) {
+            widget->hide();
+            widget->deleteLater();
+        }
             delete item;
         }
     }

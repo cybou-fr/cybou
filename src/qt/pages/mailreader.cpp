@@ -10,6 +10,7 @@
 
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLocale>
@@ -54,7 +55,10 @@ void ClearLayout(QLayout* layout)
 {
     while (QLayoutItem* item = layout->takeAt(0)) {
         if (item->layout()) ClearLayout(item->layout());
-        if (QWidget* widget = item->widget()) widget->deleteLater();
+        if (QWidget* widget = item->widget()) {
+            widget->hide();
+            widget->deleteLater();
+        }
         delete item;
     }
 }
@@ -163,6 +167,21 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     security_row->addWidget(details);
     root->addLayout(security_row);
 
+    // Outgoing delivery state (finality-first; finalized is not Sent).
+    m_delivery = new QFrame{this};
+    m_delivery->setObjectName(QStringLiteral("deliveryBanner"));
+    auto* delivery_layout = new QHBoxLayout{m_delivery};
+    delivery_layout->setContentsMargins(14, 10, 10, 10);
+    m_delivery_text = new QLabel{m_delivery};
+    m_delivery_text->setWordWrap(true);
+    delivery_layout->addWidget(m_delivery_text, 1);
+    m_retry = new QPushButton{tr("Retry"), m_delivery};
+    m_retry->setObjectName(QStringLiteral("secondaryButton"));
+    m_retry->setProperty("cybouId", QStringLiteral("retrySend"));
+    connect(m_retry, &QPushButton::clicked, this, [this] { m_model->retrySendMail(m_id); });
+    delivery_layout->addWidget(m_retry);
+    root->addWidget(m_delivery);
+
     auto* separator = new QFrame{this};
     separator->setFrameShape(QFrame::HLine);
     separator->setObjectName(QStringLiteral("separator"));
@@ -247,6 +266,40 @@ void MailReader::refresh()
     } else {
         m_security->setText(CybouProduct::contentStateText(item->state));
     }
+    const bool online = m_model->status().online;
+    const bool pending = outgoing && !item->draft && item->state != CybouContentState::Protected;
+    m_delivery->setVisible(pending);
+    if (pending) {
+        QString text;
+        switch (item->state) {
+        case CybouContentState::Local:
+        case CybouContentState::Preparing:
+            text = online ? tr("Preparing… Your message is being encrypted on this computer.")
+                          : tr("Waiting for network. Your message is saved and will be sent when CYBOU reconnects.");
+            break;
+        case CybouContentState::WaitingForConfirmation:
+            text = online ? tr("Waiting for confirmation… The network is confirming your message.")
+                          : tr("Waiting for network. Your message is saved and will be sent when CYBOU reconnects.");
+            break;
+        case CybouContentState::Securing:
+            text = tr("Securing… Confirmed by the network. Keep CYBOU open until your message is stored securely.");
+            break;
+        case CybouContentState::NeedsAttention:
+            text = tr("Needs attention. Your message could not be secured yet. It is kept on this computer.");
+            break;
+        case CybouContentState::TemporarilyUnavailable:
+            text = tr("Temporarily unavailable — retrying.");
+            break;
+        case CybouContentState::Protected:
+            break;
+        }
+        m_delivery_text->setText(text);
+        const bool attention = item->state == CybouContentState::NeedsAttention;
+        m_delivery->setStyleSheet(QStringLiteral("QFrame#deliveryBanner { background: %1; border-radius: 10px; } QLabel { color: %2; }")
+            .arg(CybouTheme::color(attention ? CybouTheme::ROSE_SOFT : CybouTheme::AMBER_SOFT).name(),
+                CybouTheme::color(attention ? CybouTheme::ROSE : CybouTheme::TEXT_PRIMARY).name()));
+        m_retry->setVisible(attention);
+    }
     m_body->setText(item->body);
     m_reply->setEnabled(!item->draft);
     m_forward->setEnabled(!item->draft);
@@ -272,7 +325,7 @@ void MailReader::refresh()
         text->addWidget(name);
         const QString retrieval = CybouProduct::retrievalText(attachment.retrieval);
         auto* meta = new QLabel{QStringLiteral("%1  ·  %2").arg(CybouProduct::sizeText(attachment.logical_size),
-            retrieval.isEmpty() ? CybouProduct::contentStateText(attachment.state) : retrieval), chip};
+            retrieval.isEmpty() ? CybouProduct::progressText(attachment.state, attachment.progress_percent, online) : retrieval), chip};
         meta->setObjectName(QStringLiteral("rowSub"));
         text->addWidget(meta);
         layout->addLayout(text, 1);
@@ -288,8 +341,14 @@ void MailReader::refresh()
         layout->addWidget(download);
         layout->addWidget(save);
         const QString attachment_id = attachment.id;
-        connect(download, &QPushButton::clicked, this, [this, attachment_id] {
-            if (onDownloadAttachment) onDownloadAttachment(m_id, attachment_id);
+        const QString attachment_name = attachment.name;
+        connect(download, &QPushButton::clicked, this, [this, attachment_id, attachment_name] {
+            if (onDownloadAttachment) {
+                onDownloadAttachment(m_id, attachment_id);
+                return;
+            }
+            const QString destination = QFileDialog::getSaveFileName(this, tr("Download attachment"), attachment_name);
+            if (!destination.isEmpty()) m_model->requestAttachmentDownload(m_id, attachment_id, destination);
         });
         connect(save, &QPushButton::clicked, this, [this, attachment_id] {
             if (onSaveAttachment) onSaveAttachment(m_id, attachment_id);

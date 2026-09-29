@@ -55,6 +55,9 @@ private:
     QLabel* m_recipient{nullptr};
     QLabel* m_time{nullptr};
     QLabel* m_security{nullptr};
+    QFrame* m_delivery{nullptr};
+    QLabel* m_delivery_text{nullptr};
+    QPushButton* m_retry{nullptr};
     QLabel* m_body{nullptr};
     QWidget* m_attachments{nullptr};
     QVBoxLayout* m_attachment_rows{nullptr};

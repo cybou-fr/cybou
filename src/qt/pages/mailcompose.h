@@ -14,6 +14,9 @@
 
 class CybouDesktopModel;
 class QCompleter;
+class QDragEnterEvent;
+class QDragLeaveEvent;
+class QDropEvent;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -39,8 +42,18 @@ public:
 
     /** Starts a fresh message, or continues/replies based on draft. */
     void start(const CybouMailItem& draft = {});
+    /** Adds local files as attachments (Attach file / drag & drop). */
+    void addAttachments(const QStringList& paths);
+    /** Adds already protected content (Files → Send by CYBOU Mail). */
+    void addProtectedAttachment(const CybouAttachmentItem& attachment);
+    const QVector<CybouAttachmentItem>& attachments() const { return m_attachments; }
     void setBackVisible(bool visible);
     bool hasContent() const;
+
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     CybouDesktopModel* const m_model;
@@ -51,6 +64,10 @@ private:
     QCompleter* m_completer{nullptr};
     QLineEdit* m_subject{nullptr};
     QTextEdit* m_body{nullptr};
+    QWidget* m_attachment_area{nullptr};
+    QVBoxLayout* m_attachment_rows{nullptr};
+    QVector<CybouAttachmentItem> m_attachments;
+    QLabel* m_drop_hint{nullptr};
     QPushButton* m_send{nullptr};
     QLabel* m_send_hint{nullptr};
 
@@ -58,6 +75,7 @@ private:
     const CybouContact* resolvedContact() const;
     QString recipientProblem() const;
     void rebuildCompleter();
+    void rebuildAttachments();
     void updateGates();
     void send();
     void saveDraftAndClose();

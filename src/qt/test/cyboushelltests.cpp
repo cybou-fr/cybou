@@ -10,6 +10,7 @@
 #include <qt/cyboutheme.h>
 #include <qt/cybouuifixtures.h>
 #include <qt/pages/emailpage.h>
+#include <qt/pages/mailcompose.h>
 #include <qt/pages/mailreader.h>
 
 #include <cybou/network_definition.h>
@@ -291,7 +292,7 @@ void CybouShellTests::mailNavigationAndSearch()
     search->clear();
 
     mail->setView(EmailPage::View::Sent);
-    QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-sent-1")});
+    QCOMPARE(mail->visibleMessageIds(), (QStringList{QStringLiteral("m-sent-securing"), QStringLiteral("m-sent-1")}));
     mail->setView(EmailPage::View::Starred);
     QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-welcome")});
 
@@ -334,6 +335,30 @@ void CybouShellTests::composeGatesAndSends()
     // Finality-first: a new message starts local, never as Sent.
     QCOMPARE(sent.state, CybouContentState::Preparing);
     QCOMPARE(CybouProduct::mailStateText(sent), QStringLiteral("Preparing…"));
+
+    // Attachments stay local until Send, then follow the message lifecycle.
+    auto* composer = mail->composer();
+    mail->openCompose();
+    to->setText(QStringLiteral("alice.cybou"));
+    body->setPlainText(QStringLiteral("see attached"));
+    CybouAttachmentItem local;
+    local.id = QStringLiteral("att-local");
+    local.name = QStringLiteral("plan.pdf");
+    local.logical_size = 1024;
+    composer->addProtectedAttachment(local);
+    QCOMPARE(composer->attachments().size(), 1);
+    send->click();
+    const auto& with_attachment = model->mailItems().first();
+    QCOMPARE(with_attachment.attachments.size(), 1);
+    QCOMPARE(with_attachment.attachments.first().state, CybouContentState::Preparing);
+    model->setMailState(with_attachment.id, CybouContentState::NeedsAttention);
+    QCOMPARE(model->mailItems().first().state, CybouContentState::NeedsAttention);
+    QSignalSpy retry{model, &CybouDesktopModel::mailSendRequested};
+    model->retrySendMail(model->mailItems().first().id);
+    QCOMPARE(retry.count(), 1);
+    QCOMPARE(model->mailItems().first().state, CybouContentState::Preparing);
+    QCOMPARE(CybouProduct::contentStateText(CybouContentState::WaitingForConfirmation, false),
+        QStringLiteral("Waiting for network"));
 
     // Without a connected Mail backend, Send stays disabled and says why.
     CybouCapabilities caps = model->capabilities();

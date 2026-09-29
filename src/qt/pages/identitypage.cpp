@@ -76,7 +76,10 @@ void ClearLayout(QLayout* layout)
 {
     while (QLayoutItem* item = layout->takeAt(0)) {
         if (item->layout()) ClearLayout(item->layout());
-        if (QWidget* widget = item->widget()) widget->deleteLater();
+        if (QWidget* widget = item->widget()) {
+            widget->hide();
+            widget->deleteLater();
+        }
         delete item;
     }
 }

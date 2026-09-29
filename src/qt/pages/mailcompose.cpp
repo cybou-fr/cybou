@@ -10,6 +10,10 @@
 
 #include <QAbstractItemView>
 #include <QCompleter>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QFileDialog>
+#include <QMimeData>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -105,6 +109,20 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     m_body->setTabChangesFocus(true);
     root->addWidget(m_body, 1);
 
+    // Attachments: local until Send, then one RootPublication with the text.
+    m_attachment_area = new QWidget{this};
+    m_attachment_rows = new QVBoxLayout{m_attachment_area};
+    m_attachment_rows->setContentsMargins(0, 0, 0, 0);
+    m_attachment_rows->setSpacing(6);
+    root->addWidget(m_attachment_area);
+    m_drop_hint = MutedText(tr("Drop files to attach them"), this);
+    m_drop_hint->setAlignment(Qt::AlignCenter);
+    m_drop_hint->setStyleSheet(QStringLiteral("border: 2px dashed %1; border-radius: 10px; padding: 18px; color: %2;")
+        .arg(CybouTheme::color(CybouTheme::MINT).name(), CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
+    m_drop_hint->setVisible(false);
+    root->addWidget(m_drop_hint);
+    setAcceptDrops(true);
+
     auto* actions = new QHBoxLayout;
     actions->setSpacing(10);
     m_send = new QPushButton{tr("Send"), this};
@@ -119,6 +137,14 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     m_send->setShortcut(QKeySequence{QStringLiteral("Ctrl+Return")});
     m_send->setToolTip(tr("Send (Ctrl+Enter)"));
     actions->addWidget(m_send);
+    auto* attach = new QPushButton{tr("Attach file"), this};
+    attach->setObjectName(QStringLiteral("secondaryButton"));
+    attach->setProperty("cybouId", QStringLiteral("attachFile"));
+    attach->setIcon(QIcon{glyphPixmap(Glyph::File, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
+    connect(attach, &QPushButton::clicked, this, [this] {
+        addAttachments(QFileDialog::getOpenFileNames(this, tr("Attach files")));
+    });
+    actions->addWidget(attach);
     m_send_hint = MutedText({}, this);
     actions->addWidget(m_send_hint, 1);
     auto* discard_button = IconButton(Glyph::Trash, this, tr("Discard draft"));
@@ -160,6 +186,8 @@ void MailCompose::start(const CybouMailItem& draft)
     m_to->setText(draft.to_name);
     m_subject->setText(draft.subject);
     m_body->setPlainText(draft.body);
+    m_attachments = draft.attachments;
+    rebuildAttachments();
     updateGates();
     if (draft.to_name.isEmpty()) {
         m_to->setFocus();
@@ -172,7 +200,92 @@ void MailCompose::start(const CybouMailItem& draft)
 bool MailCompose::hasContent() const
 {
     return !m_to->text().trimmed().isEmpty() || !m_subject->text().trimmed().isEmpty() ||
-        !m_body->toPlainText().trimmed().isEmpty();
+        !m_body->toPlainText().trimmed().isEmpty() || !m_attachments.isEmpty();
+}
+
+void MailCompose::addAttachments(const QStringList& paths)
+{
+    for (const auto& path : paths) {
+        if (path.isEmpty()) continue;
+        m_attachments.append(m_model->localAttachment(path));
+    }
+    rebuildAttachments();
+    updateGates();
+}
+
+void MailCompose::addProtectedAttachment(const CybouAttachmentItem& attachment)
+{
+    m_attachments.append(attachment);
+    rebuildAttachments();
+    updateGates();
+}
+
+void MailCompose::rebuildAttachments()
+{
+    while (QLayoutItem* item = m_attachment_rows->takeAt(0)) {
+        if (QWidget* widget = item->widget()) {
+            widget->hide();
+            widget->deleteLater();
+        }
+        delete item;
+    }
+    m_attachment_area->setVisible(!m_attachments.isEmpty());
+    for (int i = 0; i < m_attachments.size(); ++i) {
+        const auto& attachment = m_attachments.at(i);
+        auto* chip = new QFrame{m_attachment_area};
+        chip->setObjectName(QStringLiteral("attachmentChip"));
+        chip->setStyleSheet(QStringLiteral("QFrame#attachmentChip { border: 1px solid %1; border-radius: 10px; }")
+            .arg(CybouTheme::color(CybouTheme::BORDER).name()));
+        auto* layout = new QHBoxLayout{chip};
+        layout->setContentsMargins(10, 6, 6, 6);
+        layout->setSpacing(10);
+        layout->addWidget(Chip(Glyph::FileText, Tint::Blue, chip, 28, 16));
+        auto* name = new ElidedLabel{attachment.name, chip};
+        name->setObjectName(QStringLiteral("rowTitle"));
+        layout->addWidget(name, 1);
+        auto* size = new QLabel{CybouProduct::sizeText(attachment.logical_size), chip};
+        size->setObjectName(QStringLiteral("rowSub"));
+        layout->addWidget(size);
+        // Before Send an attachment exists only on this device (or is
+        // already protected content being reused from Files).
+        auto* state = new QLabel{attachment.state == CybouContentState::Protected ? tr("Protected") : tr("On this device"), chip};
+        state->setObjectName(QStringLiteral("rowMeta"));
+        layout->addWidget(state);
+        auto* remove = IconButton(Glyph::Trash, chip, tr("Remove %1").arg(attachment.name));
+        remove->setAccessibleName(tr("Remove %1").arg(attachment.name));
+        connect(remove, &QToolButton::clicked, this, [this, id = attachment.id] {
+            m_attachments.removeIf([&id](const CybouAttachmentItem& item) { return item.id == id; });
+            rebuildAttachments();
+            updateGates();
+        });
+        layout->addWidget(remove);
+        m_attachment_rows->addWidget(chip);
+    }
+}
+
+void MailCompose::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasUrls()) {
+        m_drop_hint->setVisible(true);
+        event->acceptProposedAction();
+    }
+}
+
+void MailCompose::dragLeaveEvent(QDragLeaveEvent* event)
+{
+    m_drop_hint->setVisible(false);
+    QFrame::dragLeaveEvent(event);
+}
+
+void MailCompose::dropEvent(QDropEvent* event)
+{
+    m_drop_hint->setVisible(false);
+    QStringList paths;
+    for (const auto& url : event->mimeData()->urls()) {
+        if (url.isLocalFile()) paths << url.toLocalFile();
+    }
+    addAttachments(paths);
+    event->acceptProposedAction();
 }
 
 const CybouContact* MailCompose::resolvedContact() const
@@ -231,6 +344,7 @@ CybouMailItem MailCompose::currentMessage() const
     item.to_name = m_to->text().trimmed().toLower();
     item.subject = m_subject->text().trimmed();
     item.body = m_body->toPlainText();
+    item.attachments = m_attachments;
     return item;
 }
 
@@ -246,6 +360,8 @@ void MailCompose::send()
     m_to->clear();
     m_subject->clear();
     m_body->clear();
+    m_attachments.clear();
+    rebuildAttachments();
     if (onSent) onSent(id);
 }
 
@@ -258,6 +374,8 @@ void MailCompose::saveDraftAndClose()
     m_to->clear();
     m_subject->clear();
     m_body->clear();
+    m_attachments.clear();
+    rebuildAttachments();
     if (onClosed) onClosed();
 }
 
@@ -268,5 +386,7 @@ void MailCompose::discard()
     m_to->clear();
     m_subject->clear();
     m_body->clear();
+    m_attachments.clear();
+    rebuildAttachments();
     if (onClosed) onClosed();
 }

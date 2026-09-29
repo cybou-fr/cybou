@@ -196,6 +196,25 @@ inline QString contentStateText(CybouContentState state)
     return {};
 }
 
+/**
+ * State text that accounts for connectivity: pending content that cannot
+ * progress while offline reads "Waiting for network".
+ */
+inline QString contentStateText(CybouContentState state, bool online)
+{
+    if (!online && (state == CybouContentState::Preparing || state == CybouContentState::WaitingForConfirmation))
+        return QCoreApplication::translate("CybouProduct", "Waiting for network");
+    return contentStateText(state);
+}
+
+/** Attachment/file progress text, e.g. "Securing 42%". */
+inline QString progressText(CybouContentState state, int percent, bool online = true)
+{
+    if (state == CybouContentState::Securing && percent >= 0)
+        return QCoreApplication::translate("CybouProduct", "Securing %1%").arg(percent);
+    return contentStateText(state, online);
+}
+
 /** Mail send wording: a Protected outgoing message reads as Sent. */
 inline QString mailStateText(const CybouMailItem& item)
 {

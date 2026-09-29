@@ -141,6 +141,19 @@ public:
     QString requestSendMail(CybouMailItem message);
     /** Adapter entry: lifecycle update for an outgoing message. */
     void setMailState(const QString& id, CybouContentState state);
+    /** Adapter entry: per-attachment lifecycle and optional progress. */
+    void setAttachmentState(const QString& message_id, const QString& attachment_id,
+        CybouContentState state, int progress_percent = -1);
+    /** Adapter entry: retrieval progress for a received attachment. */
+    void setAttachmentRetrieval(const QString& message_id, const QString& attachment_id,
+        CybouRetrievalState retrieval);
+    /** Retries a message in Needs attention from the retained local ciphertext. */
+    void retrySendMail(const QString& id);
+    void requestAttachmentDownload(const QString& message_id, const QString& attachment_id,
+        const QString& destination);
+    /** Local attachment for Compose: read metadata only; content is
+        encrypted and chunked by the backend after Send. */
+    CybouAttachmentItem localAttachment(const QString& path) const;
 
     const QVector<CybouFileItem>& fileItems() const { return m_files; }
     void setFileItems(QVector<CybouFileItem> items);
@@ -219,6 +232,8 @@ Q_SIGNALS:
     void fileUploadRequested(const QString& source_path);
     void fileDownloadRequested(const QString& file_id, const QString& destination);
     void mailSendRequested(const QString& id);
+    void attachmentDownloadRequested(const QString& message_id, const QString& attachment_id,
+        const QString& destination);
 
 private:
     cybou::CybouIdentityService* m_identity_service{nullptr};
