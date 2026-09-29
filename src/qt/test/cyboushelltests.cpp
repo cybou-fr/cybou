@@ -249,6 +249,23 @@ void CybouShellTests::restoreFlowValidatesPhrase()
     QVERIFY(phrase->toPlainText().isEmpty());
 }
 
+void CybouShellTests::identityPageHidesSecrets()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    auto* identity = window->page(CybouPage::Identity);
+    bool found_name = false;
+    for (const auto* label : identity->findChildren<QLabel*>()) {
+        if (label->text() == QLatin1String{"stan.cybou"}) found_name = true;
+        // The recovery phrase is never rendered persistently.
+        QVERIFY(!label->text().contains(QLatin1String{"ocean"}));
+    }
+    QVERIFY(found_name);
+    QVERIFY(model->nameLabelProblem(QStringLiteral("abc")).size() > 0);
+    QVERIFY(model->nameLabelProblem(QStringLiteral("alice-2")).isEmpty());
+}
+
 void CybouShellTests::emailPageGatesSending()
 {
     auto window = makeWindow();

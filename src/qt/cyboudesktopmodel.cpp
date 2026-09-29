@@ -4,7 +4,10 @@
 
 #include <qt/cyboudesktopmodel.h>
 
+#include <cybou/identity_operation_coordinator.h>
 #include <cybou/identity_service.h>
+#include <cybou/recovery_phrase.h>
+#include <cybou/name_registry.h>
 #include <cybou/name_service.h>
 #include <cybou/wallet_service.h>
 
@@ -276,6 +279,14 @@ void CybouDesktopModel::setWalletService(cybou::CybouWalletService* wallet_servi
 
 bool CybouDesktopModel::requestClaimName(const QString& label, const QString& vault_password)
 {
+    if (m_fixture_mode) {
+        if (m_status.identity_state != CybouIdentityState::Active || m_status.name_claim_pending) return false;
+        m_status.name_claim_pending = true;
+        m_status.name_claim_status = tr("Claiming %1.cybou…").arg(label);
+        Q_EMIT statusChanged();
+        Q_EMIT nameClaimRequested(label);
+        return true;
+    }
     if (!m_name_service || m_status.identity_state != CybouIdentityState::Active ||
         m_status.name_claim_pending || !m_status.primary_name.isEmpty()) return false;
     if (m_name_worker.joinable()) m_name_worker.join();
@@ -305,7 +316,18 @@ bool CybouDesktopModel::requestClaimName(const QString& label, const QString& va
 bool CybouDesktopModel::requestRecoveryRootRotation(const QStringList& new_phrase,
     const QString& vault_password, bool resume_pending)
 {
-    if (!m_identity_service || m_recovery_rotation_pending) return false;
+    if (m_recovery_rotation_pending) return false;
+    if (m_fixture_mode) {
+        m_recovery_rotation_pending = true;
+        Q_EMIT statusChanged();
+        QMetaObject::invokeMethod(this, [this] {
+            m_recovery_rotation_pending = false;
+            setKeyEpoch(m_status.key_epoch + 1);
+            Q_EMIT recoveryRotationFinished(CybouOperationOutcome::Finalized, {});
+        }, Qt::QueuedConnection);
+        return true;
+    }
+    if (!m_identity_service) return false;
     cybou::RecoveryWords words{};
     if (!resume_pending) {
         if (new_phrase.size() != static_cast<int>(words.size())) return false;
@@ -321,13 +343,15 @@ bool CybouDesktopModel::requestRecoveryRootRotation(const QStringList& new_phras
             : m_identity_service->RotateIdentitySync(words, password);
         memory_cleanse(password.data(), password.size());
         for (auto& word : words) memory_cleanse(word.data(), word.size());
-        const auto phase = static_cast<quint8>(result.phase);
+        const auto outcome = result.phase == cybou::IdentityOperationPhase::FINALIZED ? CybouOperationOutcome::Finalized
+            : result.phase == cybou::IdentityOperationPhase::ACCEPTED ||
+                result.phase == cybou::IdentityOperationPhase::UNCERTAIN ? CybouOperationOutcome::Pending
+            : CybouOperationOutcome::Failed;
         const auto error = QString::fromStdString(result.error);
-        const auto height = result.finalized_height;
-        QMetaObject::invokeMethod(this, [this, phase, error, height] {
+        QMetaObject::invokeMethod(this, [this, outcome, error] {
             m_recovery_rotation_pending = false;
             Q_EMIT statusChanged();
-            Q_EMIT recoveryRotationFinished(phase, error, height);
+            Q_EMIT recoveryRotationFinished(outcome, error);
         }, Qt::QueuedConnection);
     });
     return true;
@@ -414,6 +438,55 @@ bool CybouDesktopModel::recoveryPhraseValid(const QString& phrase) const
     if (entropy) memory_cleanse(entropy->data(), entropy->size());
     for (auto& word : words) memory_cleanse(word.data(), word.size());
     return valid;
+}
+
+std::optional<QStringList> CybouDesktopModel::generateRotationWords()
+{
+    if (m_fixture_mode) return FixtureWords();
+    auto entropy = cybou::GenerateRecoveryEntropy();
+    if (!entropy) return std::nullopt;
+    auto words = cybou::EncodeRecoveryWords(*entropy);
+    memory_cleanse(entropy->data(), entropy->size());
+    QStringList list = ToQStringList(words);
+    for (auto& word : words) memory_cleanse(word.data(), word.size());
+    return list;
+}
+
+bool CybouDesktopModel::hasPendingRecoveryRotation() const
+{
+    return !m_fixture_mode && m_identity_service && m_identity_service->HasPendingIdentityRotation();
+}
+
+void CybouDesktopModel::setKeyEpoch(quint32 key_epoch)
+{
+    if (m_status.key_epoch == key_epoch) return;
+    m_status.key_epoch = key_epoch;
+    Q_EMIT statusChanged();
+}
+
+QString CybouDesktopModel::nameLabelProblem(const QString& label) const
+{
+    using E = cybou::NameValidationError;
+    switch (cybou::ValidateNameLabel(label.toStdString())) {
+    case E::NONE: return {};
+    case E::EMPTY: return tr("Enter a name.");
+    case E::TOO_SHORT: return tr("Use at least 5 characters.");
+    case E::TOO_LONG: return tr("Use at most 32 characters.");
+    case E::INVALID_CHARACTER: return tr("Use lowercase letters a–z, digits and hyphens.");
+    case E::INVALID_START_END: return tr("A name cannot start or end with a hyphen.");
+    case E::CONSECUTIVE_HYPHENS: return tr("A name cannot contain two hyphens in a row.");
+    case E::IDN_PREFIX: return tr("Names cannot start with \"xn--\".");
+    case E::ALL_DIGITS: return tr("A name needs at least one letter.");
+    case E::RESERVED_NAME: return tr("This name is reserved.");
+    }
+    return tr("This name is not valid.");
+}
+
+void CybouDesktopModel::setNameClaimFinished()
+{
+    m_status.name_claim_pending = false;
+    m_status.name_claim_status.clear();
+    Q_EMIT statusChanged();
 }
 
 void CybouDesktopModel::requestLockVault()

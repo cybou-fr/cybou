@@ -32,6 +32,7 @@ private Q_SLOTS:
     void diagnosticsStaySecondaryWindow();
     void identityCreateFollowsCapabilities();
     void restoreFlowValidatesPhrase();
+    void identityPageHidesSecrets();
     void emailPageGatesSending();
     void walletPageShowsBalances();
     void filesGateActions();

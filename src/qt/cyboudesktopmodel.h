@@ -161,6 +161,17 @@ public:
     std::optional<QStringList> revealRecoveryWords(const QString& vault_password);
     /** True when the phrase has 24 words that decode to valid entropy. */
     bool recoveryPhraseValid(const QString& phrase) const;
+    /** Fresh 24 words for replacing the recovery phrase (IdentityRotate). */
+    std::optional<QStringList> generateRotationWords();
+    /** True when an encrypted rotation candidate awaits finality. */
+    bool hasPendingRecoveryRotation() const;
+    /** True while an IdentityRotate request is in flight. */
+    bool recoveryRotationPending() const { return m_recovery_rotation_pending; }
+    void setKeyEpoch(quint32 key_epoch);
+    /** Empty when label is a valid .cybou label, else a user-facing reason. */
+    QString nameLabelProblem(const QString& label) const;
+    /** Adapter entry: the pending name claim finished (success or not). */
+    void setNameClaimFinished();
 
     /* ---- UI -> core requests. The UI emits; adapters do the work. ---- */
     void requestCreateIdentity(const QString& vault_password);
@@ -184,7 +195,9 @@ Q_SIGNALS:
     void createIdentityRequested();
     void identityCreationFailed(const QString& reason);
     void nameClaimFailed(const QString& reason);
-    void recoveryRotationFinished(quint8 phase, const QString& error, quint64 finalized_height);
+    /** outcome: Finalized, Pending (accepted/uncertain) or Failed. */
+    void recoveryRotationFinished(CybouOperationOutcome outcome, const QString& error);
+    void nameClaimRequested(const QString& label);
     void lockVaultRequested();
     void restoreIdentityRequested();
     void fileUploadRequested(const QString& source_path);

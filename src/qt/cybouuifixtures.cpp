@@ -79,6 +79,7 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     model.setIdentityState(state,
         QStringLiteral("2af3c8e41b9d07f6a25e3c19d84b72a0f6e5d4c3b2a1908f7e6d5c4b3a2991bc"), 118);
     model.setPrimaryName(QStringLiteral("stan.cybou"));
+    model.setKeyEpoch(1);
     model.setNames({{QStringLiteral("stan.cybou"), true}});
     model.setBalances(5820, 4621);
     model.setStorageUsage(13314398618ULL, 100ULL * 1024 * MB);
@@ -263,6 +264,14 @@ Driver::Driver(CybouDesktopModel* model, QObject* parent)
 {
     connect(m_model, &CybouDesktopModel::createIdentityRequested, this, [this] { runCreate(); });
     connect(m_model, &CybouDesktopModel::restoreIdentityRequested, this, [this] { runRestore(); });
+    connect(m_model, &CybouDesktopModel::nameClaimRequested, this, [this](const QString& label) {
+        later(3, [this, label] {
+            const QString name = label + QStringLiteral(".cybou");
+            m_model->setPrimaryName(name);
+            m_model->setNames({{name, true}});
+            m_model->setNameClaimFinished();
+        });
+    });
 }
 
 void Driver::later(int steps, std::function<void()> action)

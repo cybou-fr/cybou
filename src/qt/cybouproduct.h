@@ -60,6 +60,13 @@ enum class CybouRetrievalState {
     Ready,
 };
 
+/** User-facing result of an Identity operation such as IdentityRotate. */
+enum class CybouOperationOutcome {
+    Finalized,
+    Pending,
+    Failed,
+};
+
 /** Restore progress rows shown after a mnemonic restore. */
 enum class CybouRestoreStepState {
     Pending,

@@ -4,742 +4,411 @@
 
 #include <qt/pages/identitypage.h>
 
+#include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 #include <qt/recoveryphrasedialog.h>
-#include <cybou/identity_service.h>
-#include <cybou/crypto/cleanse.h>
-#include <cybou/recovery_phrase.h>
 
+#include <QCheckBox>
 #include <QClipboard>
-#include <QFile>
-#include <QFileDialog>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QDir>
-#include <QRegularExpression>
-#include <QStringList>
-#include <QStyle>
-#include <QTimer>
+#include <QStackedLayout>
+#include <QToolButton>
 #include <QVBoxLayout>
 
-#include <filesystem>
-#include <functional>
 #include <utility>
 
 using namespace CybouUi;
 
 namespace {
 
-QString phaseName(CybouIdentityState state)
+QPushButton* Button(const QString& text, bool primary, QWidget* parent)
 {
-    switch (state) {
-    case CybouIdentityState::Creating: return IdentityPage::tr("Creating Identity");
-    case CybouIdentityState::Restoring: return IdentityPage::tr("Restoring");
-    case CybouIdentityState::Syncing: return IdentityPage::tr("Syncing");
-    case CybouIdentityState::Active: return IdentityPage::tr("Active");
-    case CybouIdentityState::Locked: return IdentityPage::tr("Locked");
-    case CybouIdentityState::NeedsAttention: return IdentityPage::tr("Needs attention");
-    case CybouIdentityState::None: break;
-    }
-    return {};
+    auto* button = new QPushButton{text, parent};
+    button->setObjectName(primary ? QStringLiteral("primaryButton") : QStringLiteral("secondaryButton"));
+    button->setCursor(Qt::PointingHandCursor);
+    return button;
 }
 
-/** Section card with a tinted chip header and a chevron affordance. */
-QWidget* SectionCard(Glyph glyph, Tint tint, const QString& title, const QString& description,
-    const QString& button_text, std::function<void()> on_button, QWidget* parent)
+/** "Label ........ value [trailing]" row inside a section card. */
+QLabel* DetailRow(QVBoxLayout* section, const QString& label, QWidget* parent, QWidget* trailing = nullptr)
+{
+    auto* row = new QHBoxLayout;
+    row->setSpacing(12);
+    auto* key = new QLabel{label, parent};
+    key->setObjectName(QStringLiteral("rowSub"));
+    key->setMinimumWidth(170);
+    auto* value = new QLabel{parent};
+    value->setObjectName(QStringLiteral("rowTitle"));
+    value->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    value->setWordWrap(true);
+    value->setMinimumWidth(0);
+    row->addWidget(key);
+    row->addWidget(value, 1);
+    if (trailing) row->addWidget(trailing);
+    section->addLayout(row);
+    return value;
+}
+
+QVBoxLayout* Section(QVBoxLayout* root, const QString& title, QWidget* parent, QFrame** card_out = nullptr)
 {
     auto* card = Card(parent);
     auto* layout = new QVBoxLayout{card};
     layout->setContentsMargins(22, 18, 22, 18);
     layout->setSpacing(10);
-
-    auto* header = new QHBoxLayout;
-    header->addWidget(Chip(glyph, tint, card, 38, 19));
-    auto* heading = new QLabel{title, card};
-    heading->setObjectName(QStringLiteral("serviceTitle"));
-    header->addWidget(heading, 0, Qt::AlignVCenter);
-    header->addStretch();
-    auto* chevron = new QLabel{card};
-    chevron->setPixmap(glyphPixmap(Glyph::ChevronRight, {16, 16}, CybouTheme::color(CybouTheme::DIM)));
-    header->addWidget(chevron, 0, Qt::AlignVCenter);
-    layout->addLayout(header);
-
-    auto* body = MutedText(description, card);
-    layout->addWidget(body);
-    layout->addStretch();
-
-    if (!button_text.isEmpty()) {
-        auto* button = new QPushButton{button_text, card};
-        button->setObjectName(QStringLiteral("secondaryButton"));
-        if (on_button) QObject::connect(button, &QPushButton::clicked, parent, std::move(on_button));
-        layout->addWidget(button, 0, Qt::AlignLeft);
-    }
-    return card;
+    layout->addWidget(SectionTitle(title, card));
+    root->addWidget(card);
+    if (card_out) *card_out = card;
+    return layout;
 }
+
+void ClearLayout(QLayout* layout)
+{
+    while (QLayoutItem* item = layout->takeAt(0)) {
+        if (item->layout()) ClearLayout(item->layout());
+        if (QWidget* widget = item->widget()) widget->deleteLater();
+        delete item;
+    }
+}
+
+/**
+ * Re-authentication before revealing recovery words: warning, vault
+ * password and an explicit acknowledgement.
+ */
+class RevealDialog final : public QDialog
+{
+public:
+    explicit RevealDialog(QWidget* parent) : QDialog{parent}
+    {
+        setWindowTitle(IdentityPage::tr("Show recovery phrase"));
+        setObjectName(QStringLiteral("revealRecoveryDialog"));
+        auto* layout = new QVBoxLayout{this};
+        layout->setContentsMargins(24, 22, 24, 18);
+        layout->setSpacing(12);
+        layout->addWidget(SectionTitle(IdentityPage::tr("Show recovery phrase"), this));
+        auto* warning = BodyText(IdentityPage::tr(
+            "Anyone who sees your recovery phrase can take over your Identity, Mail, Files, Names and Wallet. "
+            "Make sure nobody is watching your screen and nothing is recording it."), this);
+        layout->addWidget(warning);
+        m_password = new QLineEdit{this};
+        m_password->setObjectName(QStringLiteral("revealPassword"));
+        m_password->setEchoMode(QLineEdit::Password);
+        m_password->setPlaceholderText(IdentityPage::tr("Vault password"));
+        layout->addWidget(m_password);
+        m_ack = new QCheckBox{IdentityPage::tr("I understand and want to show my recovery phrase"), this};
+        m_ack->setObjectName(QStringLiteral("revealAcknowledge"));
+        layout->addWidget(m_ack);
+        m_error = MutedText({}, this);
+        layout->addWidget(m_error);
+        auto* buttons = new QDialogButtonBox{this};
+        m_reveal = buttons->addButton(IdentityPage::tr("Reveal"), QDialogButtonBox::AcceptRole);
+        m_reveal->setObjectName(QStringLiteral("primaryButton"));
+        buttons->addButton(QDialogButtonBox::Cancel);
+        layout->addWidget(buttons);
+        const auto update = [this] { m_reveal->setEnabled(m_ack->isChecked() && !m_password->text().isEmpty()); };
+        connect(m_password, &QLineEdit::textChanged, this, update);
+        connect(m_ack, &QCheckBox::toggled, this, update);
+        connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+        update();
+    }
+
+    QString takePassword()
+    {
+        QString password = m_password->text();
+        m_password->clear();
+        return password;
+    }
+    void setError(const QString& text) { m_error->setText(text); }
+
+private:
+    QLineEdit* m_password;
+    QCheckBox* m_ack;
+    QLabel* m_error;
+    QPushButton* m_reveal;
+};
 
 } // namespace
 
-IdentityPage::IdentityPage(CybouDesktopModel* model, QWidget* parent)
-    : QWidget{parent}, m_model{model}
+IdentityPage::IdentityPage(CybouDesktopModel* model, std::function<void()> home_requested, QWidget* parent)
+    : QWidget{parent}, m_model{model}, m_home_requested{std::move(home_requested)}
 {
-    auto* root = new QHBoxLayout{this};
-    root->setContentsMargins(24, 22, 24, 22);
-    root->setSpacing(18);
-
-    auto* left = new QVBoxLayout;
-    left->setSpacing(16);
-
-    // ---- Hero: identity state, chips and primary actions ------------------
-    auto* hero = new QFrame{this};
-    hero->setObjectName(QStringLiteral("heroHeader"));
-    auto* hero_outer = new QHBoxLayout{hero};
-    hero_outer->setContentsMargins(30, 26, 30, 26);
-    hero_outer->setSpacing(20);
-    auto* hero_layout = new QVBoxLayout;
-    hero_layout->setSpacing(10);
-    hero_layout->addWidget(Eyebrow(tr("YOUR IDENTITY"), hero));
-
-    // Creation phase flow. Invisible until a creation is actually requested
-    // by the backend; the UI never advances these phases on its own.
-    auto* phases_row = new QHBoxLayout;
-    phases_row->setSpacing(10);
-    const QVector<CybouIdentityState> flow{
-        CybouIdentityState::Creating,
-        CybouIdentityState::Active,
-    };
-    for (const auto state : flow) {
-        auto* phase = new QLabel{phaseName(state), hero};
-        phase->setObjectName(QStringLiteral("phaseLabel"));
-        m_phases.append(phase);
-        phases_row->addWidget(phase);
-        if (state != CybouIdentityState::Active) {
-            auto* arrow = new QLabel{QStringLiteral("\u2192"), hero};
-            arrow->setObjectName(QStringLiteral("phaseLabel"));
-            phases_row->addWidget(arrow);
-        }
-    }
-    phases_row->addStretch();
-    m_phase_row = new QWidget{hero}; // container to toggle the whole flow
-    m_phase_row->setLayout(phases_row);
-    m_phase_row->setVisible(false);
-    hero_layout->addWidget(m_phase_row);
-
-    m_state_label = HeroTitle({}, hero, true);
-    hero_layout->addWidget(m_state_label);
-    m_detail_label = HeroSubtitle({}, hero);
-    hero_layout->addWidget(m_detail_label);
-
-    auto* chips = new QHBoxLayout;
-    chips->setSpacing(8);
-    m_chip_protected = Pill(tr("Protected"), Tint::Mint, hero);
-    m_chip_ready = Pill(tr("Ready to use"), Tint::Blue, hero);
-    chips->addWidget(m_chip_protected);
-    chips->addWidget(m_chip_ready);
-    chips->addStretch();
-    hero_layout->addLayout(chips);
-
-    auto* actions = new QHBoxLayout;
-    actions->setSpacing(10);
-    m_share_button = new QPushButton{tr("Share identity"), hero};
-    m_share_button->setObjectName(QStringLiteral("primaryButton"));
-    m_share_button->setIcon(QIcon{glyphPixmap(Glyph::Share, {16, 16}, QColor{0xffffff})});
-    connect(m_share_button, &QPushButton::clicked, this, [this] {
-        const QString account = m_model->status().account_id;
-        if (account.isEmpty()) return;
-        QGuiApplication::clipboard()->setText(account);
-        m_share_button->setText(tr("Copied!"));
-        QTimer::singleShot(1500, this, [this] { m_share_button->setText(tr("Share identity")); });
-    });
-    m_claim_button = new QPushButton{tr("Manage identity"), hero};
-    m_claim_button->setObjectName(QStringLiteral("secondaryButton"));
-    m_claim_button->setIcon(QIcon{glyphPixmap(Glyph::Compose, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
-    connect(m_claim_button, &QPushButton::clicked, this, [this] { startNameClaimFlow(); });
-    m_security_button = new QPushButton{tr("Rotate recovery phrase"), hero};
-    m_security_button->setObjectName(QStringLiteral("secondaryButton"));
-    m_security_button->setIcon(QIcon{glyphPixmap(Glyph::ShieldCheck, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
-    connect(m_security_button, &QPushButton::clicked, this, [this] {
-        startRecoveryRotationFlow();
-    });
-    connect(m_model, &CybouDesktopModel::recoveryRotationFinished, this,
-        [this](quint8 phase, const QString& error, quint64 height) {
-            if (phase == static_cast<quint8>(cybou::IdentityOperationPhase::FINALIZED)) {
-                const QString detail = height == 0
-                    ? tr("The recovery rotation is finalized and the encrypted vault is using the active 24-word phrase.")
-                    : tr("The new recovery root is finalized at block %1. Your encrypted vault now uses the new 24-word phrase.").arg(height);
-                QMessageBox::information(this, tr("Recovery root updated"), detail);
-            } else if (phase == static_cast<quint8>(cybou::IdentityOperationPhase::ACCEPTED) ||
-                phase == static_cast<quint8>(cybou::IdentityOperationPhase::UNCERTAIN)) {
-                QMessageBox::information(this, tr("Recovery rotation pending"),
-                    tr("The new phrase is saved in the encrypted pending vault. Keep your written copy. The active vault remains unchanged until finality. If the app closes or the network is uncertain, use this action again to resume this rotation."));
-            } else {
-                QMessageBox::warning(this, tr("Recovery rotation not completed"),
-                    error.isEmpty() ? tr("The recovery rotation could not be completed.") : error);
-            }
-        });
-    actions->addWidget(m_share_button);
-    actions->addWidget(m_claim_button);
-    actions->addWidget(m_security_button);
-    actions->addStretch();
-    hero_layout->addLayout(actions);
-
-    m_dev_warning = new QLabel{tr("Development network balance. No Mainnet value."), hero};
-    m_dev_warning->setObjectName(QStringLiteral("warningBadge"));
-    m_dev_warning->setVisible(false);
-    hero_layout->addWidget(m_dev_warning, 0, Qt::AlignLeft);
-
-    // What will happen, step by step. Visible only before a creation starts;
-    // the numbered list mirrors the protocol phases, nothing more.
-    m_steps = new QWidget{hero};
-    auto* steps_layout = new QVBoxLayout{m_steps};
-    steps_layout->setContentsMargins(0, 6, 0, 0);
-    steps_layout->setSpacing(8);
-    const QStringList steps{
-        tr("Keys are derived from your recovery phrase and stay in your local vault."),
-        tr("The node performs AccountCreationWork \u2014 protocol anti-Sybil computation."),
-        tr("The signed AccountCreateOp is broadcast to the validator set."),
-        tr("A BFT finality certificate commits the account."),
-        tr("SystemBalance is funded atomically from the OnboardingPool."),
-    };
-    for (int i = 0; i < steps.size(); ++i) {
-        auto* step = new QLabel{QStringLiteral("%1. %2").arg(i + 1).arg(steps.at(i)), m_steps};
-        step->setObjectName(QStringLiteral("bodyText"));
-        step->setWordWrap(true);
-        steps_layout->addWidget(step);
-    }
-    m_steps->setVisible(false);
-    hero_layout->addWidget(m_steps);
-
-    m_create_button = new QPushButton{tr("Create identity"), hero};
-    m_create_button->setObjectName(QStringLiteral("primaryButton"));
-    m_create_button->setProperty("cybouId", "createIdentity");
-    m_create_button->setEnabled(false);
-    m_create_button->setToolTip(tr("Create a portable recovery vault before network submission."));
-    connect(m_create_button, &QPushButton::clicked, this, [this] { startIdentityFlow(); });
-    m_restore_button = new QPushButton{tr("Restore identity"), hero};
-    m_restore_button->setObjectName(QStringLiteral("primaryButton"));
-    m_restore_button->setProperty("cybouId", "restoreIdentity");
-    connect(m_restore_button, &QPushButton::clicked, this, [this] { startRestoreFlow(); });
-    auto* onboarding_actions = new QHBoxLayout;
-    onboarding_actions->addWidget(m_create_button);
-    onboarding_actions->addWidget(m_restore_button);
-    onboarding_actions->addStretch();
-    hero_layout->addLayout(onboarding_actions);
-    hero_layout->addStretch();
-    hero_outer->addLayout(hero_layout, 1);
-
-    // Large avatar emblem with a camera badge (sketch), active state only.
-    m_avatar_emblem = new QWidget{hero};
-    m_avatar_emblem->setFixedSize(116, 116);
-    auto* emblem_disc = new QLabel{m_avatar_emblem};
-    emblem_disc->setFixedSize(116, 116);
-    emblem_disc->setAlignment(Qt::AlignCenter);
-    emblem_disc->setStyleSheet(QStringLiteral(
-        "background: qradialgradient(cx:0.5, cy:0.4, radius:0.9, stop:0 #d9f6e7, stop:1 #b9ecd6);"
-        "border-radius: 58px;"));
-    emblem_disc->setPixmap(glyphPixmap(Glyph::User, {54, 54}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
-    auto* camera_badge = new QLabel{m_avatar_emblem};
-    camera_badge->setFixedSize(30, 30);
-    camera_badge->move(82, 80);
-    camera_badge->setAlignment(Qt::AlignCenter);
-    camera_badge->setStyleSheet(QStringLiteral(
-        "background: #ffffff; border: 1px solid %1; border-radius: 15px;")
-        .arg(CybouTheme::color(CybouTheme::BORDER).name()));
-    camera_badge->setPixmap(glyphPixmap(Glyph::Camera, {15, 15}, CybouTheme::color(CybouTheme::TEXT_SECONDARY)));
-    camera_badge->setToolTip(tr("Profile images are planned; your identity is identified by its name and AccountID."));
-    hero_outer->addWidget(m_avatar_emblem, 0, Qt::AlignVCenter);
-    m_avatar_emblem->setVisible(false);
-
-    left->addWidget(hero);
-
-    // ---- Active identity: recovery / trusted contacts ---------------------
-    m_cards = new QWidget{this};
-    auto* cards_layout = new QHBoxLayout{m_cards};
-    cards_layout->setContentsMargins(0, 0, 0, 0);
-    cards_layout->setSpacing(14);
-
-    auto* recovery = Card(m_cards);
-    auto* recovery_layout = new QVBoxLayout{recovery};
-    recovery_layout->setContentsMargins(22, 18, 22, 18);
-    recovery_layout->setSpacing(10);
-    {
-        auto* header = new QHBoxLayout;
-        header->addWidget(Chip(Glyph::Key, Tint::Mint, recovery, 38, 19));
-        auto* heading = new QLabel{tr("Recovery"), recovery};
-        heading->setObjectName(QStringLiteral("serviceTitle"));
-        header->addWidget(heading, 0, Qt::AlignVCenter);
-        header->addStretch();
-        auto* chevron = new QLabel{recovery};
-        chevron->setPixmap(glyphPixmap(Glyph::ChevronRight, {16, 16}, CybouTheme::color(CybouTheme::DIM)));
-        header->addWidget(chevron, 0, Qt::AlignVCenter);
-        recovery_layout->addLayout(header);
-        recovery_layout->addWidget(MutedText(tr("Your 24-word recovery phrase keeps your identity safe and lets you restore it on any clean machine."), recovery));
-        auto* phrase_row = new QHBoxLayout;
-        auto* phrase_icon = new QLabel{recovery};
-        phrase_icon->setPixmap(glyphPixmap(Glyph::FileText, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
-        phrase_row->addWidget(phrase_icon, 0, Qt::AlignVCenter);
-        auto* phrase_label = new QLabel{tr("Recovery phrase"), recovery};
-        phrase_label->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;")
-            .arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
-        phrase_row->addWidget(phrase_label);
-        phrase_row->addStretch();
-        phrase_row->addWidget(Pill(tr("Encrypted vault saved"), Tint::Mint, recovery), 0, Qt::AlignVCenter);
-        recovery_layout->addLayout(phrase_row);
-        recovery_layout->addStretch();
-        auto* options = new QPushButton{tr("Show recovery phrase"), recovery};
-        options->setObjectName(QStringLiteral("secondaryButton"));
-        connect(options, &QPushButton::clicked, this, [this] { startShowRecoveryFlow(); });
-        recovery_layout->addWidget(options, 0, Qt::AlignLeft);
-    }
-    cards_layout->addWidget(recovery, 1);
-
-    auto* contacts = SectionCard(Glyph::Users, Tint::Violet, tr("Trusted contacts"),
-        tr("Share your identity with people you trust so they can find and message you on CYBOU."),
-        tr("Manage trusted contacts"), {}, m_cards);
-    cards_layout->addWidget(contacts, 1);
-    left->addWidget(m_cards);
-
-    // ---- Advanced details --------------------------------------------------
-    m_advanced = Card(this);
-    auto* advanced_layout = new QVBoxLayout{m_advanced};
-    advanced_layout->setContentsMargins(22, 18, 22, 18);
-    advanced_layout->setSpacing(10);
-    {
-        auto* header = new QHBoxLayout;
-        auto* gear = new QLabel{m_advanced};
-        gear->setPixmap(glyphPixmap(Glyph::Gear, {18, 18}, CybouTheme::color(CybouTheme::TEXT_MUTED)));
-        header->addWidget(gear, 0, Qt::AlignVCenter);
-        auto* heading = new QLabel{tr("Advanced details"), m_advanced};
-        heading->setObjectName(QStringLiteral("serviceTitle"));
-        header->addWidget(heading, 0, Qt::AlignVCenter);
-        header->addSpacing(8);
-        header->addWidget(MutedText(tr("Technical information about your identity. You won't need this for everyday use."), m_advanced), 1);
-        auto* chevron = new QLabel{m_advanced};
-        chevron->setPixmap(glyphPixmap(Glyph::ChevronRight, {16, 16}, CybouTheme::color(CybouTheme::DIM)));
-        header->addWidget(chevron, 0, Qt::AlignVCenter);
-        advanced_layout->addLayout(header);
-        m_active_details = new QLabel{m_advanced};
-        m_active_details->setObjectName(QStringLiteral("bodyText"));
-        m_active_details->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        m_active_details->setWordWrap(true);
-        advanced_layout->addWidget(m_active_details);
-    }
-    left->addWidget(m_advanced);
-    left->addStretch();
-    root->addLayout(left, 3);
-
-    // ---- Right panel: identity status --------------------------------------
-    m_active_panel = new QWidget{this};
-    auto* panel_layout = new QVBoxLayout{m_active_panel};
-    panel_layout->setContentsMargins(0, 0, 0, 0);
-    panel_layout->setSpacing(16);
-    auto* status_card = Card(m_active_panel);
-    auto* status_layout = new QVBoxLayout{status_card};
-    status_layout->setContentsMargins(22, 18, 22, 18);
-    status_layout->setSpacing(4);
-    {
-        auto* header = new QHBoxLayout;
-        auto* heading = SectionTitle(tr("Identity status"), status_card);
-        header->addWidget(heading);
-        header->addStretch();
-        header->addWidget(Pill(tr("Protected"), Tint::Mint, status_card), 0, Qt::AlignVCenter);
-        status_layout->addLayout(header);
-        status_layout->addSpacing(6);
-        auto add_status = [this, status_card, status_layout](Glyph glyph, const QString& title, const QString& sub) {
-            auto* row = ActivityRow(glyph, Tint::Mint, title, sub, {}, status_card, true);
-            status_layout->addWidget(row);
-        };
-        add_status(Glyph::User, tr("Your identity is active"), tr("All services are available"));
-        add_status(Glyph::Lock, tr("Encrypted and private"), tr("Only you control your identity"));
-    }
-    panel_layout->addWidget(status_card);
-
-    // Dev facts move below the status card while the identity surface exists.
-    auto* how_card = Card(m_active_panel);
-    auto* how_layout = new QVBoxLayout{how_card};
-    how_layout->setContentsMargins(22, 18, 22, 18);
-    how_layout->setSpacing(8);
-    {
-        how_layout->addWidget(SectionTitle(tr("How identity works"), how_card));
-        const QStringList facts{
-            tr("Your identity is controlled by keys derived from your recovery phrase and stored in your local vault."),
-            tr("Registration is a permissionless protocol operation (AccountCreateOp) \u2014 no operator approval, no central activation."),
-            tr("Protocol anti-Sybil work (AccountCreationWork) keeps mass registrations out."),
-            tr("A successful creation automatically funds your SystemBalance from the OnboardingPool."),
-        };
-        for (const QString& fact : facts) {
-            auto* bullet = new QLabel{QStringLiteral("\u2022 %1").arg(fact), how_card};
-            bullet->setObjectName(QStringLiteral("bodyText"));
-            bullet->setWordWrap(true);
-            how_layout->addWidget(bullet);
-        }
-    }
-    panel_layout->addWidget(how_card);
-    panel_layout->addStretch();
-    root->addWidget(m_active_panel, 2);
+    auto* stack = new QStackedLayout{this};
+    m_setup = buildSetupPrompt();
+    m_content = buildContent();
+    stack->addWidget(m_setup);
+    stack->addWidget(m_content);
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::identityCreationFailed, this, [this](const QString& reason) {
-        QMessageBox::warning(this, tr("Identity creation failed"), reason);
-    });
+    connect(m_model, &CybouDesktopModel::namesChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::nameClaimFailed, this, [this](const QString& reason) {
-        QMessageBox::warning(this, tr("Name claim failed"), reason);
+        QMessageBox::warning(this, tr("Name not claimed"),
+            reason.isEmpty() ? tr("The name could not be claimed.") : reason);
     });
-
+    connect(m_model, &CybouDesktopModel::recoveryRotationFinished, this,
+        [this](CybouOperationOutcome outcome, const QString& error) {
+            if (outcome == CybouOperationOutcome::Finalized) {
+                QMessageBox::information(this, tr("Recovery phrase replaced"),
+                    tr("Your new recovery phrase is now active. The old phrase no longer restores this Identity."));
+            } else if (outcome == CybouOperationOutcome::Pending) {
+                QMessageBox::information(this, tr("Waiting for network confirmation"),
+                    tr("The new recovery phrase becomes active after network confirmation. Keep both phrases until then."));
+            } else {
+                QMessageBox::warning(this, tr("Recovery phrase not replaced"),
+                    error.isEmpty() ? tr("Your current recovery phrase is still active.") : error);
+            }
+        });
     refresh();
 }
 
-void IdentityPage::startIdentityFlow()
+QWidget* IdentityPage::buildSetupPrompt()
 {
-    auto* service = m_model->identityService();
-    if (!service) {
-        m_model->requestCreateIdentity({});
-        return;
-    }
-    const auto vault_path = service->GetStoragePath();
-    if (!vault_path) {
-        m_model->requestCreateIdentity({});
-        return;
-    }
-
-    if (std::filesystem::exists(*vault_path)) {
-        if (!service->GetKeyStore().HasKey()) {
-            bool accepted{false};
-            QString password = QInputDialog::getText(this, tr("Unlock identity"),
-                tr("Vault password"), QLineEdit::Password, {}, &accepted);
-            if (!accepted) return;
-            const bool loaded = m_model->requestUnlockIdentity(password);
-            password.fill(QChar{0});
-            if (!loaded) {
-                QMessageBox::warning(this, tr("Cannot unlock identity"),
-                    tr("The password is incorrect or the vault is damaged."));
-                return;
-            }
-            if (service->GetPhase() == cybou::IdentityCreationPhase::ACTIVE) return;
-        }
-        m_model->requestCreateIdentity({});
-        return;
-    }
-
-    bool accepted{false};
-    QString password = QInputDialog::getText(this, tr("Create identity"),
-        tr("Set a vault password (at least 12 characters)"), QLineEdit::Password, {}, &accepted);
-    if (!accepted) return;
-    if (password.size() < 12) {
-        password.fill(QChar{0});
-        QMessageBox::warning(this, tr("Weak vault password"), tr("Use at least 12 characters."));
-        return;
-    }
-    QString confirmation = QInputDialog::getText(this, tr("Confirm vault password"),
-        tr("Enter the password again"), QLineEdit::Password, {}, &accepted);
-    const bool matches = accepted && password == confirmation;
-    confirmation.fill(QChar{0});
-    if (!matches) {
-        password.fill(QChar{0});
-        if (accepted) QMessageBox::warning(this, tr("Passwords differ"), tr("The passwords did not match."));
-        return;
-    }
-
-    const auto words = service->PrepareNewIdentity();
-    if (!words) {
-        password.fill(QChar{0});
-        QMessageBox::warning(this, tr("Cannot prepare identity"), tr("The local identity material could not be generated."));
-        return;
-    }
-
-    // The words dialog is selectable, copyable, and offers a file export.
-    // It only accepts after two random words are retyped; canceling means
-    // the identity is not created and the prepared material is discarded.
-    QStringList word_list;
-    for (const auto& word : *words) {
-        word_list << QString::fromStdString(word);
-    }
-    RecoveryPhraseDialog phrase_dialog{RecoveryPhraseDialog::Mode::Create, word_list, this};
-    if (phrase_dialog.exec() != QDialog::Accepted) {
-        service->DiscardPreparedIdentity();
-        password.fill(QChar{0});
-        return;
-    }
-    m_model->requestCreateIdentity(password);
-    password.fill(QChar{0});
+    auto* page = new QWidget{this};
+    auto* layout = new QVBoxLayout{page};
+    layout->setContentsMargins(28, 40, 28, 28);
+    auto* card = Card(page);
+    card->setMaximumWidth(560);
+    auto* card_layout = new QVBoxLayout{card};
+    card_layout->setContentsMargins(28, 24, 28, 24);
+    card_layout->setSpacing(10);
+    card_layout->addWidget(SectionTitle(tr("No Identity on this computer yet"), card));
+    card_layout->addWidget(MutedText(tr("Create a new Identity or restore one from your recovery phrase on Home."), card));
+    auto* go = Button(tr("Go to Home"), true, card);
+    connect(go, &QPushButton::clicked, this, [this] { if (m_home_requested) m_home_requested(); });
+    card_layout->addWidget(go, 0, Qt::AlignLeft);
+    layout->addWidget(card, 0, Qt::AlignHCenter);
+    layout->addStretch();
+    return page;
 }
 
-void IdentityPage::startRestoreFlow()
+QWidget* IdentityPage::buildContent()
 {
-    if (!m_model->identityService()) return;
+    auto* page = new QWidget{this};
+    auto* root = new QVBoxLayout{page};
+    root->setContentsMargins(28, 24, 28, 28);
+    root->setSpacing(16);
 
-    QMessageBox source_box{QMessageBox::Question, tr("Restore identity"),
-        tr("Enter your 24 recovery words in their original order.\n\nPaste them, or load a saved recovery file?"),
-        QMessageBox::Cancel, this};
-    auto* paste_button = source_box.addButton(tr("Paste words"), QMessageBox::AcceptRole);
-    source_box.addButton(tr("Load from file…"), QMessageBox::ActionRole);
-    source_box.exec();
-    if (source_box.clickedButton() != paste_button &&
-        source_box.clickedButton() != source_box.buttons().at(1)) {
-        return;
-    }
+    // Identity header.
+    auto* hero = new QFrame{page};
+    hero->setObjectName(QStringLiteral("heroHeader"));
+    auto* hero_layout = new QHBoxLayout{hero};
+    hero_layout->setContentsMargins(26, 20, 26, 20);
+    hero_layout->setSpacing(16);
+    auto* hero_text = new QVBoxLayout;
+    hero_text->setSpacing(2);
+    m_name = HeroTitle({}, hero, true);
+    m_name->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_name_caption = HeroSubtitle({}, hero);
+    hero_text->addWidget(m_name);
+    hero_text->addWidget(m_name_caption);
+    hero_layout->addLayout(hero_text, 1);
+    m_lock = Button(tr("Lock vault"), false, hero);
+    m_lock->setObjectName(QStringLiteral("secondaryButton"));
+    m_lock->setProperty("cybouId", QStringLiteral("lockVault"));
+    connect(m_lock, &QPushButton::clicked, this, [this] {
+        m_model->requestLockVault();
+        if (m_home_requested) m_home_requested();
+    });
+    hero_layout->addWidget(m_lock, 0, Qt::AlignVCenter);
+    root->addWidget(hero);
 
-    QString phrase;
-    if (source_box.clickedButton() == paste_button) {
-        bool accepted{false};
-        phrase = QInputDialog::getMultiLineText(this, tr("Restore identity"),
-            tr("Enter your 24 recovery words in order, separated by spaces or line breaks"), {}, &accepted);
-        if (!accepted) return;
-    } else {
-        const QString path = QFileDialog::getOpenFileName(this, tr("Load recovery words"),
-            QDir::homePath(), tr("Text file (*.txt);;All files (*)"));
-        if (path.isEmpty()) return;
-        QFile file{path};
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QMessageBox::warning(this, tr("Cannot read file"),
-                tr("The recovery file could not be read:\n%1").arg(path));
-            return;
-        }
-        phrase = QString::fromUtf8(file.readAll());
-    }
+    // Account.
+    auto* account = Section(root, tr("Account"), page);
+    auto* copy = Button(tr("Copy"), false, page);
+    copy->setProperty("cybouId", QStringLiteral("copyAccountId"));
+    connect(copy, &QPushButton::clicked, this, [this] { copyAccountId(); });
+    m_account_id = DetailRow(account, tr("Account ID"), page, copy);
 
-    const auto parts = phrase.split(QRegularExpression{QStringLiteral("\\s+")}, Qt::SkipEmptyParts);
-    if (parts.size() != 24) {
-        phrase.fill(QChar{0});
-        QMessageBox::warning(this, tr("Invalid recovery phrase"),
-            tr("The phrase must contain exactly 24 words (found %1).").arg(parts.size()));
-        return;
-    }
+    // Names.
+    auto* names = Section(root, tr("CYBOU names"), page);
+    auto* names_host = new QWidget{page};
+    m_names_rows = new QVBoxLayout{names_host};
+    m_names_rows->setContentsMargins(0, 0, 0, 0);
+    m_names_rows->setSpacing(6);
+    names->addWidget(names_host);
+    m_claim_status = MutedText({}, page);
+    names->addWidget(m_claim_status);
+    m_claim = Button(tr("Claim CYBOU name"), false, page);
+    m_claim->setProperty("cybouId", QStringLiteral("claimName"));
+    connect(m_claim, &QPushButton::clicked, this, [this] { claimName(); });
+    names->addWidget(m_claim, 0, Qt::AlignLeft);
 
-    bool accepted{false};
-    QString password = QInputDialog::getText(this, tr("Recovery vault"),
-        tr("Set a vault password (at least 12 characters)"), QLineEdit::Password, {}, &accepted);
-    if (!accepted) {
-        phrase.fill(QChar{0});
-        return;
-    }
-    if (password.size() < 12) {
-        phrase.fill(QChar{0});
-        password.fill(QChar{0});
-        QMessageBox::warning(this, tr("Weak vault password"), tr("Use at least 12 characters."));
-        return;
-    }
-    QString confirmation = QInputDialog::getText(this, tr("Confirm vault password"),
-        tr("Enter the password again"), QLineEdit::Password, {}, &accepted);
-    const bool matches = accepted && password == confirmation;
-    confirmation.fill(QChar{0});
-    if (!matches) {
-        phrase.fill(QChar{0});
-        password.fill(QChar{0});
-        if (accepted) QMessageBox::warning(this, tr("Passwords differ"), tr("The passwords did not match."));
-        return;
-    }
-    const bool started = m_model->requestRestoreIdentity(phrase, password);
-    phrase.fill(QChar{0});
-    password.fill(QChar{0});
-    if (!started) QMessageBox::warning(this, tr("Invalid recovery phrase"),
-        tr("Enter exactly 24 valid words in their original order."));
-}
+    // Recovery.
+    auto* recovery = Section(root, tr("Recovery"), page);
+    m_recovery_state = DetailRow(recovery, tr("Recovery phrase"), page);
+    m_vault_state = DetailRow(recovery, tr("Local vault"), page);
+    auto* options = new QToolButton{page};
+    options->setObjectName(QStringLiteral("secondaryButton"));
+    options->setText(tr("Show recovery options"));
+    options->setProperty("cybouId", QStringLiteral("recoveryOptions"));
+    options->setPopupMode(QToolButton::InstantPopup);
+    auto* menu = new QMenu{options};
+    menu->addAction(tr("Show recovery phrase…"), this, [this] { revealRecoveryPhrase(); });
+    menu->addAction(tr("Replace recovery phrase…"), this, [this] { replaceRecoveryPhrase(); });
+    options->setMenu(menu);
+    recovery->addWidget(options, 0, Qt::AlignLeft);
 
-void IdentityPage::startShowRecoveryFlow()
-{
-    auto* service = m_model->identityService();
-    if (!service) return;
+    // Security.
+    auto* security = Section(root, tr("Security"), page);
+    m_pq_state = DetailRow(security, tr("Post-quantum protection"), page);
 
-    // Require the vault password every time recovery words are revealed.
-    {
-        bool accepted{false};
-        QString password = QInputDialog::getText(this, tr("Identity vault"),
-            tr("Identity vault password"), QLineEdit::Password, {}, &accepted);
-        if (!accepted) return;
-        const bool unlocked = m_model->requestUnlockIdentity(password);
-        password.fill(QChar{0});
-        if (!unlocked) {
-            QMessageBox::warning(this, tr("Cannot unlock identity"),
-                tr("The password is incorrect or the vault is damaged."));
-            return;
-        }
-    }
-
-    const auto words = service->GetKeyStore().GetRecoveryWords();
-    if (!words) {
-        QMessageBox::information(this, tr("Recovery phrase unavailable"),
-            tr("The recovery words are not stored in this vault. If you no longer have them written down, create a new identity and transfer your usage to it."));
-        return;
-    }
-    QStringList word_list;
-    for (const auto& word : *words) {
-        word_list << QString::fromStdString(word);
-    }
-    RecoveryPhraseDialog phrase_dialog{RecoveryPhraseDialog::Mode::View, word_list, this};
-    phrase_dialog.exec();
-}
-
-void IdentityPage::startRecoveryRotationFlow()
-{
-    auto* service = m_model->identityService();
-    if (!service || m_model->status().identity_state != CybouIdentityState::Active) return;
-
-    bool accepted{false};
-    QString password = QInputDialog::getText(this, tr("Confirm identity vault"),
-        tr("Identity vault password"), QLineEdit::Password, {}, &accepted);
-    if (!accepted) return;
-    if (!m_model->requestUnlockIdentity(password)) {
-        password.fill(QChar{0});
-        QMessageBox::warning(this, tr("Cannot unlock identity"),
-            tr("The password is incorrect or the active vault is damaged."));
-        return;
-    }
-
-    if (service->HasPendingIdentityRotation()) {
-        const auto choice = QMessageBox::question(this, tr("Resume recovery rotation"),
-            tr("An encrypted candidate vault and operation journal already exist. Resume that exact rotation? The active vault changes only after finalized confirmation."),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
-        if (choice == QMessageBox::Yes) {
-            if (!m_model->requestRecoveryRootRotation({}, password, true)) {
-                QMessageBox::warning(this, tr("Cannot resume recovery rotation"),
-                    tr("A recovery rotation is already running."));
-            }
-        }
-        password.fill(QChar{0});
-        return;
-    }
-
-    auto entropy = cybou::GenerateRecoveryEntropy();
-    if (!entropy) {
-        password.fill(QChar{0});
-        QMessageBox::warning(this, tr("Cannot create recovery phrase"),
-            tr("The secure random generator failed."));
-        return;
-    }
-    auto words = cybou::EncodeRecoveryWords(*entropy);
-    cybou::crypto::CleanseMemory(entropy->data(), entropy->size());
-    QStringList word_list;
-    for (const auto& word : words) word_list << QString::fromStdString(word);
-    RecoveryPhraseDialog phrase_dialog{RecoveryPhraseDialog::Mode::Create, word_list, this};
-    if (phrase_dialog.exec() != QDialog::Accepted) {
-        for (auto& word : words) cybou::crypto::CleanseMemory(word.data(), word.size());
-        for (auto& word : word_list) word.fill(QChar{0});
-        password.fill(QChar{0});
-        return;
-    }
-    const bool started = m_model->requestRecoveryRootRotation(word_list, password);
-    for (auto& word : words) cybou::crypto::CleanseMemory(word.data(), word.size());
-    for (auto& word : word_list) word.fill(QChar{0});
-    password.fill(QChar{0});
-    if (!started) QMessageBox::warning(this, tr("Cannot start recovery rotation"),
-        tr("A recovery rotation is already running or the phrase is invalid."));
-}
-
-void IdentityPage::startNameClaimFlow()
-{
-    bool accepted{false};
-    QString name = QInputDialog::getText(this, tr("Claim a .cybou name"),
-        tr("Enter the lowercase label (5\u201332 ASCII characters, without .cybou)"),
-        QLineEdit::Normal, {}, &accepted);
-    if (!accepted) return;
-    QString password = QInputDialog::getText(this, tr("Confirm vault password"),
-        tr("Identity vault password"), QLineEdit::Password, {}, &accepted);
-    if (!accepted) { password.fill(QChar{0}); return; }
-    const bool started = m_model->requestClaimName(name, password);
-    password.fill(QChar{0});
-    if (!started) QMessageBox::warning(this, tr("Cannot claim name"), tr("Unlock an active identity before claiming a name."));
-}
-
-void IdentityPage::rebuildForState(CybouIdentityState state)
-{
-    const bool creating = state != CybouIdentityState::None && state != CybouIdentityState::Active;
-    const bool active = state == CybouIdentityState::Active;
-    m_phase_row->setVisible(creating);
-    m_steps->setVisible(state == CybouIdentityState::None);
-    m_create_button->setVisible(!active);
-    m_restore_button->setVisible(!active);
-    m_chip_protected->setVisible(active);
-    m_chip_ready->setVisible(active);
-    m_share_button->setVisible(active && !m_model->status().account_id.isEmpty());
-    m_claim_button->setVisible(active);
-    m_claim_button->setText(m_model->status().primary_name.isEmpty()
-        ? tr("Manage identity")
-        : tr("Manage identity"));
-    m_security_button->setVisible(active);
-    m_active_panel->setVisible(active);
-    m_cards->setVisible(active);
-    m_advanced->setVisible(active);
-    m_active_details->setVisible(active);
-    m_avatar_emblem->setVisible(active);
-    m_dev_warning->setVisible(active);
-
-    const QVector<CybouIdentityState> flow{
-        CybouIdentityState::Creating,
-        CybouIdentityState::Active,
-    };
-    for (int index = 0; index < m_phases.size() && index < flow.size(); ++index) {
-        const auto phase_state = flow.at(index);
-        QString object_name = QStringLiteral("phaseLabel");
-        if (active || phase_state == state) {
-            object_name = QStringLiteral("phaseLabelActive");
-        } else if (flow.indexOf(state) > index) {
-            object_name = QStringLiteral("phaseLabelDone");
-        }
-        m_phases.at(index)->setObjectName(object_name);
-        // Force stylesheet re-evaluation after objectName change.
-        m_phases.at(index)->style()->unpolish(m_phases.at(index));
-        m_phases.at(index)->style()->polish(m_phases.at(index));
-    }
+    // Advanced security details (collapsed).
+    m_advanced_toggle = new QToolButton{page};
+    m_advanced_toggle->setObjectName(QStringLiteral("sectionLink"));
+    m_advanced_toggle->setText(tr("Advanced security details"));
+    m_advanced_toggle->setCheckable(true);
+    m_advanced_toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_advanced_toggle->setIcon(QIcon{glyphPixmap(Glyph::ChevronRight, {14, 14}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
+    m_advanced_toggle->setAutoRaise(true);
+    root->addWidget(m_advanced_toggle, 0, Qt::AlignLeft);
+    m_advanced = Card(page);
+    m_advanced->setObjectName(QStringLiteral("card"));
+    m_advanced_rows = new QVBoxLayout{m_advanced};
+    m_advanced_rows->setContentsMargins(22, 16, 22, 16);
+    m_advanced_rows->setSpacing(8);
+    m_advanced->setVisible(false);
+    root->addWidget(m_advanced);
+    connect(m_advanced_toggle, &QToolButton::toggled, this, [this](bool open) {
+        m_advanced->setVisible(open);
+        m_advanced_toggle->setIcon(QIcon{glyphPixmap(open ? Glyph::DotsH : Glyph::ChevronRight, {14, 14},
+            CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
+    });
+    root->addStretch();
+    return page;
 }
 
 void IdentityPage::refresh()
 {
     const auto& status = m_model->status();
-    rebuildForState(status.identity_state);
+    const bool active = status.identity_state == CybouIdentityState::Active ||
+        status.identity_state == CybouIdentityState::Syncing;
+    static_cast<QStackedLayout*>(layout())->setCurrentWidget(active ? m_content : m_setup);
+    if (!active) return;
 
-    if (status.identity_state == CybouIdentityState::Active) {
-        m_state_label->setText(status.primary_name.isEmpty() ? tr("Identity active") : status.primary_name);
-        m_chip_protected->setText(tr("PQ identity signing"));
-        m_chip_ready->setText(status.online ? tr("Online") : tr("Offline"));
-        m_detail_label->setText(status.name_claim_pending ? status.name_claim_status :
-            tr("Your identity for CYBOU services. Mail sending and Files sync are not available yet."));
-        m_active_details->setText(
-            tr("AccountID: %1\nCreation height: %2\nNetwork: %3\nSystemBalance was funded atomically from the OnboardingPool at creation.")
-                .arg(status.account_id)
-                .arg(status.creation_height)
-                .arg(status.network_name));
-        m_claim_button->setEnabled(!status.name_claim_pending);
-        return;
+    m_name->setText(status.primary_name.isEmpty() ? tr("Your CYBOU Identity") : status.primary_name);
+    m_name_caption->setText(status.primary_name.isEmpty() ? tr("No CYBOU name yet") : tr("Verified CYBOU name"));
+    m_account_id->setText(CybouProduct::shortId(status.account_id));
+    m_account_id->setToolTip(status.account_id);
+    m_recovery_state->setText(tr("Secured"));
+    m_vault_state->setText(status.identity_state == CybouIdentityState::Locked ? tr("Locked") : tr("Unlocked"));
+    m_pq_state->setText(tr("Active"));
+
+    ClearLayout(m_names_rows);
+    for (const auto& name : m_model->names()) {
+        auto* row = new QHBoxLayout;
+        auto* label = new QLabel{name.name, m_content};
+        label->setObjectName(QStringLiteral("rowTitle"));
+        label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        row->addWidget(label);
+        if (name.primary) row->addWidget(Pill(tr("Primary"), Tint::Mint, m_content));
+        row->addStretch();
+        m_names_rows->addLayout(row);
     }
+    if (m_model->names().isEmpty()) {
+        m_names_rows->addWidget(MutedText(tr("Claim a .cybou name so people can reach you as name.cybou."), m_content));
+    }
+    // The initial registry supports one name per Identity.
+    m_claim->setVisible(m_model->names().isEmpty());
+    m_claim->setEnabled(!status.name_claim_pending);
+    m_claim_status->setText(status.name_claim_status);
+    m_claim_status->setVisible(status.name_claim_pending);
 
-    if (status.identity_state != CybouIdentityState::None) {
-        m_state_label->setText(tr("Processing identity"));
-        switch (status.identity_step) {
-        case CybouIdentityStep::PreparingKeys:
-            m_detail_label->setText(tr("Preparing keys."));
-            break;
-        case CybouIdentityStep::CreatingIdentity:
-            m_detail_label->setText(tr("Creating Identity."));
-            break;
-        case CybouIdentityStep::WaitingForConfirmation:
-            m_detail_label->setText(tr("Waiting for network confirmation."));
-            break;
+    ClearLayout(m_advanced_rows);
+    const auto add = [this](const QString& key, const QString& value) {
+        DetailRow(m_advanced_rows, key, m_advanced)->setText(value);
+    };
+    add(tr("Account ID"), status.account_id);
+    add(tr("Key epoch"), status.key_epoch > 0 ? QString::number(status.key_epoch) : tr("Not reported yet"));
+    add(tr("Authorization"), tr("Ed25519 + ML-DSA-44 · valid"));
+    add(tr("Recovery"), tr("Ed25519 + ML-DSA-65 · secured"));
+    add(tr("Key encapsulation"), tr("Hybrid post-quantum KEM · published"));
+    add(tr("Created at finalized height"), status.creation_height > 0 ? QString::number(status.creation_height) : tr("Not reported yet"));
+}
+
+void IdentityPage::copyAccountId()
+{
+    QGuiApplication::clipboard()->setText(m_model->status().account_id);
+}
+
+void IdentityPage::revealRecoveryPhrase()
+{
+    RevealDialog dialog{this};
+    while (dialog.exec() == QDialog::Accepted) {
+        QString password = dialog.takePassword();
+        auto words = m_model->revealRecoveryWords(password);
+        password.fill(QChar{0});
+        if (!words) {
+            dialog.setError(tr("The password is incorrect, or this vault does not store the recovery words."));
+            continue;
         }
+        RecoveryPhraseDialog phrase{RecoveryPhraseDialog::Mode::View, *words, this};
+        for (auto& word : *words) word.fill(QChar{0});
+        phrase.exec();
         return;
     }
+}
 
-    m_state_label->setText(tr("No CYBOU identity"));
-    const bool pending = m_model->identityCreationRequestPending();
-    m_detail_label->setText(pending
-        ? tr("Identity operation requested. The node will drive each protocol phase and report finality.")
-        : tr("Your identity will be controlled by local keys and registered through a permissionless protocol operation with protocol anti-Sybil work."));
-    m_create_button->setEnabled(!pending && m_model->capabilities().account_creation);
-    m_restore_button->setEnabled(!pending && m_model->capabilities().account_creation);
-    const auto* service = m_model->identityService();
-    const auto vault_path = service ? service->GetStoragePath() : std::nullopt;
-    const bool has_vault = vault_path && std::filesystem::exists(*vault_path);
-    m_create_button->setText(pending ? tr("Creation requested\u2026") :
-        has_vault ? (service->GetKeyStore().HasKey() ? tr("Resume account creation") : tr("Unlock identity")) :
-        tr("Create identity"));
-    m_create_button->setToolTip(pending
-        ? tr("Waiting for the node to pick up the request.")
-        : tr("Create or unlock a password-protected recovery vault."));
+void IdentityPage::replaceRecoveryPhrase()
+{
+    const auto choice = QMessageBox::question(this, tr("Replace recovery phrase"),
+        tr("CYBOU will create a new recovery phrase and replace all Identity keys. "
+           "The old phrase stops working after network confirmation. Continue?"));
+    if (choice != QMessageBox::Yes) return;
+    bool accepted{false};
+    QString password = QInputDialog::getText(this, tr("Confirm with your vault password"),
+        tr("Vault password"), QLineEdit::Password, {}, &accepted);
+    if (!accepted || password.isEmpty()) return;
+    if (!m_model->fixtureMode() && !m_model->requestUnlockIdentity(password)) {
+        password.fill(QChar{0});
+        QMessageBox::warning(this, tr("Incorrect password"), tr("The vault password is incorrect."));
+        return;
+    }
+    if (m_model->hasPendingRecoveryRotation()) {
+        m_model->requestRecoveryRootRotation({}, password, true);
+        password.fill(QChar{0});
+        return;
+    }
+    auto words = m_model->generateRotationWords();
+    if (!words) {
+        password.fill(QChar{0});
+        QMessageBox::warning(this, tr("Cannot create a recovery phrase"), tr("Secure randomness is unavailable."));
+        return;
+    }
+    RecoveryPhraseDialog phrase{RecoveryPhraseDialog::Mode::Create, *words, this};
+    if (phrase.exec() == QDialog::Accepted) m_model->requestRecoveryRootRotation(*words, password);
+    for (auto& word : *words) word.fill(QChar{0});
+    password.fill(QChar{0});
+}
+
+void IdentityPage::claimName()
+{
+    bool accepted{false};
+    const QString label = QInputDialog::getText(this, tr("Claim CYBOU name"),
+        tr("Choose your name (5–32 characters). You will be reachable as name.cybou."),
+        QLineEdit::Normal, {}, &accepted).trimmed().toLower().remove(QStringLiteral(".cybou"));
+    if (!accepted) return;
+    if (const QString problem = m_model->nameLabelProblem(label); !problem.isEmpty()) {
+        QMessageBox::warning(this, tr("Choose another name"), problem);
+        return;
+    }
+    QString password;
+    if (!m_model->fixtureMode()) {
+        password = QInputDialog::getText(this, tr("Confirm with your vault password"),
+            tr("Vault password"), QLineEdit::Password, {}, &accepted);
+        if (!accepted || password.isEmpty()) return;
+    }
+    if (!m_model->requestClaimName(label, password)) {
+        QMessageBox::warning(this, tr("Name not claimed"), tr("A name claim is already in progress."));
+    }
+    password.fill(QChar{0});
 }
