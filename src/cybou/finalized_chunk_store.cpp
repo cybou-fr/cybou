@@ -130,8 +130,12 @@ FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::files
                 size > std::numeric_limits<std::uint64_t>::max() - total) {
                 throw std::runtime_error{"invalid finalized chunk size metadata"};
             }
-            const auto blob = m_blobs.Get(*id);
-            if (!blob || blob->size() != size) throw std::runtime_error{"provider chunk blob is missing or corrupt"};
+            // Startup checks presence and size only; content is verified by
+            // BLAKE3 on every GET and by owner audits, never by rereading
+            // the whole store here.
+            if (m_blobs.StoredSize(*id) != std::optional<std::uint64_t>{size}) {
+                throw std::runtime_error{"provider chunk blob is missing or has the wrong size"};
+            }
             total += size;
         });
         if (total > capacity_bytes) throw std::runtime_error{"provider chunk usage exceeds capacity"};
@@ -246,7 +250,10 @@ std::optional<std::vector<unsigned char>> FinalizedChunkStore::GetChunk(const Ch
 
 bool FinalizedChunkStore::HasChunk(const ChunkId& chunk_id) const
 {
-    return GetChunk(chunk_id).has_value();
+    if (chunk_id == ChunkId{}) return false;
+    std::uint64_t expected_size{0};
+    if (!m_db->Read(ChunkKey(m_namespace, chunk_id), expected_size)) return false;
+    return m_blobs.StoredSize(chunk_id) == std::optional<std::uint64_t>{expected_size};
 }
 
 std::uint64_t FinalizedChunkStore::UsedBytes() const

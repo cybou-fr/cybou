@@ -13,6 +13,7 @@
 
 #include <array>
 #include <filesystem>
+#include <fstream>
 #include <vector>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_chunk_blob_store_tests, CybouTestSetup)
@@ -98,6 +99,62 @@ BOOST_AUTO_TEST_CASE(runtime_exposes_local_blobs_without_provider_admission)
     BOOST_CHECK(runtime.GetChunkBlobStore().Put(id, bytes) == cybou::ChunkBlobPutStatus::STORED);
     BOOST_CHECK(runtime.GetChunkBlobStore().Get(id) == bytes);
     BOOST_CHECK(!runtime.GetFinalizedChunk(id));
+}
+
+BOOST_AUTO_TEST_CASE(provider_startup_checks_size_not_content_and_put_heals_damage)
+{
+    const auto provider_path = m_data_dir / "storage-heal";
+    const auto blob_root = provider_path / "chunks";
+    const std::vector<unsigned char> bytes(1200, 0x3c);
+    const auto id = cybou::ComputeChunkId(bytes);
+    std::array<unsigned char, 32> network_id{};
+    network_id.fill(0x6d);
+    cybou::AuthorizedChunk authorized{id};
+    const auto commitment = cybou::BuildChunkAuthorizationCommitment(
+        std::span<const cybou::AuthorizedChunk>{&authorized, 1});
+    BOOST_REQUIRE(commitment);
+    cybou::RootPublication publication;
+    publication.root_chunk_id = id;
+    publication.chunk_authorization_root = commitment->root;
+    publication.chunk_count = commitment->chunk_count;
+    const uint256 operation_id{uint8_t{7}};
+    const auto lookup = [operation_id, publication](const uint256& candidate)
+        -> std::optional<cybou::RootPublication> {
+        return candidate == operation_id ? std::optional{publication} : std::nullopt;
+    };
+    std::filesystem::path blob_file;
+    {
+        cybou::ChunkBlobStore blobs(blob_root);
+        cybou::FinalizedChunkStore provider(blobs, provider_path, network_id, 4096);
+        BOOST_REQUIRE(provider.PutChunk(operation_id, id, bytes, commitment->proofs.front(), lookup).status ==
+            cybou::ChunkAdmissionStatus::STORED);
+    }
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(blob_root)) {
+        if (entry.is_regular_file()) blob_file = entry.path();
+    }
+    BOOST_REQUIRE(!blob_file.empty());
+    // Silent bit rot, same size: a size-only startup must not reread content.
+    {
+        std::fstream file(blob_file, std::ios::in | std::ios::out | std::ios::binary);
+        file.seekp(100);
+        file.put(static_cast<char>(0x00));
+    }
+    cybou::ChunkBlobStore blobs(blob_root);
+    BOOST_CHECK_EQUAL(*blobs.StoredSize(id), bytes.size());
+    cybou::FinalizedChunkStore provider(blobs, provider_path, network_id, 4096); // no throw, no hashing
+    BOOST_CHECK(provider.HasChunk(id));
+    // Content is verified where it is served: damaged bytes never leave.
+    BOOST_CHECK(!provider.GetChunk(id));
+    BOOST_CHECK(!blobs.Get(id));
+    // An owner repairing with the valid bytes heals the provider copy.
+    BOOST_CHECK(provider.PutChunk(operation_id, id, bytes, commitment->proofs.front(), lookup).status ==
+        cybou::ChunkAdmissionStatus::ALREADY_STORED);
+    BOOST_CHECK(provider.GetChunk(id) == bytes);
+    BOOST_CHECK_EQUAL(blobs.UsedBytes(), bytes.size());
+    // A wrong-size file fails startup instead of being served.
+    std::filesystem::resize_file(blob_file, bytes.size() - 1);
+    cybou::ChunkBlobStore truncated(blob_root);
+    BOOST_CHECK_THROW(cybou::FinalizedChunkStore(truncated, provider_path, network_id, 4096), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -114,8 +114,9 @@ bool SyncDirectory(const std::filesystem::path& directory)
 #endif
 }
 
+/** replace: overwrite a damaged existing blob (POSIX rename always replaces). */
 bool WriteBlobAtomically(const std::filesystem::path& path, const ChunkId& id,
-    const std::span<const unsigned char> bytes)
+    const std::span<const unsigned char> bytes, const bool replace = false)
 {
     std::error_code ec;
     std::filesystem::create_directories(path.parent_path(), ec);
@@ -145,7 +146,8 @@ bool WriteBlobAtomically(const std::filesystem::path& path, const ChunkId& id,
         return false;
     }
 #ifdef _WIN32
-    if (!MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_WRITE_THROUGH)) {
+    if (!MoveFileExW(temp.c_str(), path.c_str(),
+            MOVEFILE_WRITE_THROUGH | (replace ? MOVEFILE_REPLACE_EXISTING : 0))) {
         std::filesystem::remove(temp, ec);
         return false;
     }
@@ -231,13 +233,22 @@ ChunkBlobPutStatus ChunkBlobStore::Put(const ChunkId& id, const std::span<const 
     try {
         const auto path = BlobPath(m_root, id);
         if (std::filesystem::exists(path)) {
-            const auto existing = ReadBlob(path, id);
-            if (!existing) return ChunkBlobPutStatus::STORAGE_ERROR;
-            if (!std::equal(existing->begin(), existing->end(), stored_bytes.begin(), stored_bytes.end())) {
-                return ChunkBlobPutStatus::CONFLICT;
+            if (const auto existing = ReadBlob(path, id)) {
+                if (!std::equal(existing->begin(), existing->end(), stored_bytes.begin(), stored_bytes.end())) {
+                    return ChunkBlobPutStatus::CONFLICT;
+                }
+                return SyncDirectory(path.parent_path()) ? ChunkBlobPutStatus::ALREADY_STORED :
+                    ChunkBlobPutStatus::STORAGE_ERROR;
             }
-            return SyncDirectory(path.parent_path()) ? ChunkBlobPutStatus::ALREADY_STORED :
-                ChunkBlobPutStatus::STORAGE_ERROR;
+            // Damaged on disk (bit rot, truncation): the bytes offered hash to
+            // the ChunkID, so replace the file with them.
+            if (std::filesystem::is_symlink(path) || !std::filesystem::is_regular_file(path)) {
+                return ChunkBlobPutStatus::STORAGE_ERROR;
+            }
+            const auto damaged_size = std::filesystem::file_size(path);
+            if (!WriteBlobAtomically(path, id, stored_bytes, /*replace=*/true)) return ChunkBlobPutStatus::STORAGE_ERROR;
+            m_used_bytes = m_used_bytes - std::min<std::uint64_t>(m_used_bytes, damaged_size) + stored_bytes.size();
+            return ChunkBlobPutStatus::ALREADY_STORED;
         }
         if (stored_bytes.size() > std::numeric_limits<std::uint64_t>::max() - m_used_bytes) {
             return ChunkBlobPutStatus::STORAGE_ERROR;
@@ -267,9 +278,29 @@ std::optional<std::vector<unsigned char>> ChunkBlobStore::Get(const ChunkId& id)
     return ReadBlob(BlobPath(m_root, id), id);
 }
 
+std::optional<std::uint64_t> ChunkBlobStore::StoredSize(const ChunkId& id) const
+{
+    if (id == ChunkId{}) return std::nullopt;
+    std::lock_guard lock{m_mutex};
+    if (m_memory_only) {
+        const auto it = m_memory_blobs.find(id);
+        return it == m_memory_blobs.end() ? std::nullopt : std::optional<std::uint64_t>{it->second.size()};
+    }
+    try {
+        const auto path = BlobPath(m_root, id);
+        const auto status = std::filesystem::symlink_status(path);
+        if (!std::filesystem::is_regular_file(status)) return std::nullopt;
+        const auto size = std::filesystem::file_size(path);
+        if (size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES) return std::nullopt;
+        return size;
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
 bool ChunkBlobStore::Has(const ChunkId& id) const
 {
-    return Get(id).has_value();
+    return StoredSize(id).has_value();
 }
 
 bool ChunkBlobStore::Remove(const ChunkId& id)

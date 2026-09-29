@@ -34,6 +34,12 @@ public:
 
     ChunkBlobPutStatus Put(const ChunkId& id, std::span<const unsigned char> stored_bytes);
     std::optional<std::vector<unsigned char>> Get(const ChunkId& id) const;
+    /**
+     * Cheap presence check: the blob is a regular (non-symlink) file at its
+     * canonical path with a valid chunk size. Content is not read or hashed;
+     * Get(), provider GET and audits verify BLAKE3.
+     */
+    std::optional<std::uint64_t> StoredSize(const ChunkId& id) const;
     bool Has(const ChunkId& id) const;
     /** Caller must first release every local and provider retention obligation. */
     bool Remove(const ChunkId& id);
