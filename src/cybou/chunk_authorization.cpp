@@ -45,6 +45,16 @@ bool ValidChunkSet(const std::span<const AuthorizedChunk> chunks)
 
 } // namespace
 
+ChunkId ChunkAuthorizationLeafHash(const ChunkId& chunk_id)
+{
+    return HashLeaf(AuthorizedChunk{chunk_id});
+}
+
+ChunkId ChunkAuthorizationNodeHash(const ChunkId& left, const ChunkId& right)
+{
+    return HashNode(left, right);
+}
+
 bool ChunkAuthorizationAccumulator::Add(const AuthorizedChunk& chunk)
 {
     if (m_failed || m_chunk_count >= ROOT_PUBLICATION_MAX_CHUNKS || IsZero(chunk.id)) {

@@ -37,6 +37,9 @@ struct ChunkAuthorizationSummary {
     std::uint32_t chunk_count{0};
 };
 
+ChunkId ChunkAuthorizationLeafHash(const ChunkId& chunk_id);
+ChunkId ChunkAuthorizationNodeHash(const ChunkId& left, const ChunkId& right);
+
 /** Streaming Merkle accumulator; caller rejects duplicate IDs; memory is O(log N). */
 class ChunkAuthorizationAccumulator final {
 public:

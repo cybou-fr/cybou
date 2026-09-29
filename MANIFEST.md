@@ -33,7 +33,7 @@ editing an included file.
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 130 | f920aa7287022759 |
 | docs/cybou/24_DECISIONS.md | 212 | eb21adfe825a2370 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 39 | a9154a19525304c4 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 73 | 264bb083bef51a96 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 75 | b10c97e7584c817e |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 34c65e3a9e47145b |
 | docs/cybou/30_REPOSITORY_DOCUMENTATION_CLEANUP.md | 215 | 05597f40cb045934 |
 | docs/cybou/31_IMPLEMENTATION_DETAIL_GATES.md | 103 | 8af315a4660802e0 |
@@ -80,7 +80,7 @@ editing an included file.
 | docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 115 | 20f23e7c6e4174ee |
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 35 | 99f404c956cac7a7 |
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 25 | f7d1dd6b57af4b61 |
-| docs/cybou/ENCRYPTED_CHUNK_TREE.md | 81 | ad6ab37e0eeec675 |
+| docs/cybou/ENCRYPTED_CHUNK_TREE.md | 85 | c35c8a7244250578 |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 27 | 8d7a331841060278 |
 | docs/cybou/POA_FINALITY.md | 87 | 50b21e05ea620e6f |
 | docs/cybou/ROOT_PUBLICATION.md | 115 | 5d60eb2a135d84a0 |

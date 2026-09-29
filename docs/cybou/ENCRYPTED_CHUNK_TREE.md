@@ -59,10 +59,14 @@ boundaries, encrypts each piece, and durably stages it locally before moving
 on. It retains only bounded buffers and at most 128 child references at each
 tree level. The durable staging callback receives the assigned leaf index and
 must reject duplicate ChunkIDs; this lets the local store build its proof index
-without holding the object in memory. It returns the root ChunkID, content key,
-chunk-authorization root, and uint64 counters; it does not return a whole-file
-vector or all encrypted chunks. It performs no network writes. Unfinalized
-chunks remain in local staging.
+without holding the object in memory. `ChunkAuthorizationProofIndex` stores
+ordered ChunkIDs and Merkle levels in LevelDB, then returns a requested leaf
+proof without materializing the complete proof set in RAM. After upload or
+abandonment, the client discards the proof index to release its local metadata.
+The builder returns the root ChunkID, content key, chunk-authorization root,
+and uint64 counters; it does not return a whole-file vector or all encrypted
+chunks. It performs no network writes. Unfinalized chunks remain in local
+staging.
 
 The reader fetches one encrypted chunk at a time, verifies its full BLAKE3
 address, authenticates and decrypts it, then writes DATA bytes to a caller

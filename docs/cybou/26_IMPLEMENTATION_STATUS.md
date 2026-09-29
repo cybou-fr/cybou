@@ -23,8 +23,10 @@ recovery gates pass together. See
 - Canonical RootPublication CBOR body, strict resource limits, identity-bound
   recipient capsules, and size-aware deterministic integer fee calculation.
 - BLAKE3 chunk authorization commitments in durable staging order, an O(log N)
-  Merkle accumulator, bounded inclusion-proof generation/verification, and a
-  compact RootPublication that does not reveal the complete ChunkID set.
+  Merkle accumulator, bounded inclusion-proof verification, and a compact
+  RootPublication that does not reveal the complete ChunkID set. The
+  disk-backed `ChunkAuthorizationProofIndex` stores ordered leaves and Merkle
+  levels and emits one proof on demand without materializing every proof.
 - Durable content-addressed provider admission by ChunkID with finalized-
   publication lookup, per-publication proof association, provider capacity
   enforcement, and idempotent deduplication. Persistent providers keep opaque
