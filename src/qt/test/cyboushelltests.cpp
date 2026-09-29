@@ -380,13 +380,13 @@ void CybouShellTests::mailFilesCrossProduct()
     // Mail attachment -> Save to Files: a new catalog reference, same content.
     auto* mail = dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
     mail->openMessage(QStringLiteral("m-contract"));
-    QPushButton* save{nullptr};
-    for (auto* button : mail->reader()->findChildren<QPushButton*>()) {
-        if (button->property("cybouId").toString() == QLatin1String{"saveToFiles"}) save = button;
+    QAction* save{nullptr};
+    for (auto* action : mail->reader()->findChildren<QAction*>()) {
+        if (action->objectName() == QLatin1String{"saveToFiles"}) save = action;
     }
     QVERIFY(save);
     QVERIFY(save->isEnabled());
-    save->click();
+    save->trigger();
     QCOMPARE(model->fileItems().size(), files_before + 1);
     const auto& saved = model->fileItems().last();
     QCOMPARE(saved.name, QStringLiteral("contract-signed.pdf"));

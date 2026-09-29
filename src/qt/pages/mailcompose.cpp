@@ -58,10 +58,13 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     auto* title = new QLabel{tr("New message"), this};
     title->setObjectName(QStringLiteral("pageTitle"));
     title_row->addWidget(title, 1);
-    auto* close = new QPushButton{tr("Close"), this};
-    close->setObjectName(QStringLiteral("softButton"));
+    auto* close = new QToolButton{this};
+    close->setObjectName(QStringLiteral("iconButton"));
+    close->setText(QStringLiteral("✕"));
+    close->setFixedSize(34, 34);
     close->setToolTip(tr("Close and keep the draft"));
-    connect(close, &QPushButton::clicked, this, [this] { saveDraftAndClose(); });
+    close->setAccessibleName(tr("Close and keep the draft"));
+    connect(close, &QToolButton::clicked, this, [this] { saveDraftAndClose(); });
     title_row->addWidget(close);
     root->addLayout(title_row);
 
@@ -147,9 +150,10 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     actions->addWidget(attach);
     m_send_hint = MutedText({}, this);
     actions->addWidget(m_send_hint, 1);
-    auto* discard_button = IconButton(Glyph::Trash, this, tr("Discard draft"));
-    discard_button->setAccessibleName(tr("Discard draft"));
-    connect(discard_button, &QToolButton::clicked, this, [this] { discard(); });
+    auto* discard_button = new QPushButton{tr("Discard"), this};
+    discard_button->setObjectName(QStringLiteral("secondaryButton"));
+    discard_button->setToolTip(tr("Discard this draft"));
+    connect(discard_button, &QPushButton::clicked, this, [this] { discard(); });
     actions->addWidget(discard_button);
     root->addLayout(actions);
 

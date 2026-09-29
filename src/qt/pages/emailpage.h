@@ -79,6 +79,7 @@ private:
     QLabel* m_list_empty{nullptr};
     QStackedWidget* m_detail{nullptr};
     QWidget* m_detail_empty{nullptr};
+    QLabel* m_empty_hint{nullptr};
     MailReader* m_reader{nullptr};
     MailCompose* m_compose{nullptr};
 
@@ -90,6 +91,7 @@ private:
     void rebuildFolders();
     void rebuildList();
     void refreshBanner();
+    void refreshEmptyHint();
     void updateLayoutMode();
     void closeDetail();
 };

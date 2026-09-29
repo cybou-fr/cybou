@@ -14,6 +14,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLocale>
+#include <QMenu>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QToolButton>
@@ -79,6 +80,15 @@ void AddDetailRow(QVBoxLayout* layout, const QString& key, const QString& value,
     layout->addLayout(row);
 }
 
+Glyph AttachmentGlyph(const QString& name)
+{
+    const QString lower = name.toLower();
+    for (const char* ext : {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic"}) {
+        if (lower.endsWith(QLatin1String{ext})) return Glyph::Image;
+    }
+    return Glyph::FileText;
+}
+
 } // namespace
 
 MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
@@ -94,8 +104,14 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     // Toolbar: Back (narrow layouts) + message actions.
     auto* toolbar = new QHBoxLayout;
     toolbar->setSpacing(4);
-    m_back = Action(Glyph::ChevronLeft, tr("Back to list"), this);
+    m_back = new QToolButton{this};
     m_back->setObjectName(QStringLiteral("readerBack"));
+    m_back->setText(tr("Back"));
+    m_back->setToolTip(tr("Back to list (Esc)"));
+    m_back->setAccessibleName(tr("Back to list"));
+    m_back->setIcon(QIcon{glyphPixmap(Glyph::ChevronLeft, {18, 18}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
+    m_back->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_back->setCursor(Qt::PointingHandCursor);
     connect(m_back, &QToolButton::clicked, this, [this] { if (onBack) onBack(); });
     toolbar->addWidget(m_back);
     toolbar->addStretch();
@@ -170,8 +186,13 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     m_security->setStyleSheet(QStringLiteral("color: %1;").arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
     m_security->setWordWrap(true);
     security_row->addWidget(m_security, 1);
-    auto* details = new QPushButton{tr("Security details"), this};
-    details->setObjectName(QStringLiteral("softButton"));
+    auto* details = new QPushButton{tr("Details"), this};
+    details->setFlat(true);
+    details->setToolTip(tr("Security details"));
+    details->setAccessibleName(tr("Security details"));
+    details->setStyleSheet(QStringLiteral("QPushButton { border: none; background: transparent; color: %1; padding: 0 4px;"
+                                          " min-height: 0; text-decoration: underline; font-weight: 600; }")
+        .arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
     details->setProperty("cybouId", QStringLiteral("securityDetails"));
     details->setCursor(Qt::PointingHandCursor);
     connect(details, &QPushButton::clicked, this, [this] { showSecurityDetails(); });
@@ -329,7 +350,7 @@ void MailReader::refresh()
         auto* layout = new QHBoxLayout{chip};
         layout->setContentsMargins(12, 10, 12, 10);
         layout->setSpacing(10);
-        layout->addWidget(Chip(Glyph::FileText, Tint::Blue, chip, 34, 18));
+        layout->addWidget(Chip(AttachmentGlyph(attachment.name), Tint::Blue, chip, 34, 18));
         auto* text = new QVBoxLayout;
         text->setSpacing(0);
         auto* name = new ElidedLabel{attachment.name, chip};
@@ -337,23 +358,32 @@ void MailReader::refresh()
         text->addWidget(name);
         const QString retrieval = CybouProduct::retrievalText(attachment.retrieval);
         auto* meta = new QLabel{QStringLiteral("%1  ·  %2").arg(CybouProduct::sizeText(attachment.logical_size),
-            retrieval.isEmpty() ? CybouProduct::progressText(attachment.state, attachment.progress_percent, online) : retrieval), chip};
+            !retrieval.isEmpty() ? retrieval : !attachment.saved_file_id.isEmpty() ? tr("Saved to Files")
+                : CybouProduct::progressText(attachment.state, attachment.progress_percent, online)), chip};
         meta->setObjectName(QStringLiteral("rowSub"));
         text->addWidget(meta);
         layout->addLayout(text, 1);
         const bool available = attachment.state == CybouContentState::Protected;
+        const bool saved = !attachment.saved_file_id.isEmpty();
         auto* download = new QPushButton{tr("Download"), chip};
         download->setObjectName(QStringLiteral("secondaryButton"));
         download->setProperty("cybouId", QStringLiteral("downloadAttachment"));
         download->setEnabled(available && attachment.retrieval == CybouRetrievalState::Idle);
-        const bool saved = !attachment.saved_file_id.isEmpty();
-        auto* save = new QPushButton{saved ? tr("Saved to Files") : tr("Save to Files"), chip};
-        save->setObjectName(QStringLiteral("secondaryButton"));
-        save->setProperty("cybouId", QStringLiteral("saveToFiles"));
+        auto* more = new QToolButton{chip};
+        more->setObjectName(QStringLiteral("iconButton"));
+        more->setIcon(QIcon{glyphPixmap(Glyph::DotsV, {18, 18}, CybouTheme::color(CybouTheme::TEXT_SECONDARY))});
+        more->setToolTip(tr("More actions"));
+        more->setAccessibleName(tr("More actions for %1").arg(attachment.name));
+        more->setPopupMode(QToolButton::InstantPopup);
+        more->setFixedSize(34, 34);
+        more->setStyleSheet(QStringLiteral("QToolButton::menu-indicator { image: none; width: 0; }"));
+        auto* menu = new QMenu{more};
+        auto* save = menu->addAction(saved ? tr("Saved to Files") : tr("Save to Files"));
+        save->setObjectName(QStringLiteral("saveToFiles"));
         save->setEnabled(available && !outgoing && !saved && m_model->capabilities().files);
-        if (saved) save->setIcon(QIcon{glyphPixmap(Glyph::Check, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
+        more->setMenu(menu);
         layout->addWidget(download);
-        layout->addWidget(save);
+        layout->addWidget(more);
         const QString attachment_id = attachment.id;
         const QString attachment_name = attachment.name;
         connect(download, &QPushButton::clicked, this, [this, attachment_id, attachment_name] {
@@ -364,7 +394,7 @@ void MailReader::refresh()
             const QString destination = QFileDialog::getSaveFileName(this, tr("Download attachment"), attachment_name);
             if (!destination.isEmpty()) m_model->requestAttachmentDownload(m_id, attachment_id, destination);
         });
-        connect(save, &QPushButton::clicked, this, [this, attachment_id] {
+        connect(save, &QAction::triggered, this, [this, attachment_id] {
             if (onSaveAttachment) {
                 onSaveAttachment(m_id, attachment_id);
                 return;

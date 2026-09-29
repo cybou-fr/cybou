@@ -12,6 +12,7 @@
 
 #include <QApplication>
 #include <QFrame>
+#include <QPainter>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -78,6 +79,44 @@ QString RowPeer(const CybouMailItem& item)
         ? EmailPage::tr("To: %1").arg(item.to_name) : item.from_name;
 }
 
+/** "Subject — preview" on one line, subject emphasised, elided to fit. */
+class SubjectPreview final : public QWidget
+{
+public:
+    SubjectPreview(QString subject, QString preview, bool unread, QWidget* parent)
+        : QWidget{parent}, m_subject{std::move(subject)}, m_preview{std::move(preview)}, m_unread{unread}
+    {
+        setMinimumWidth(0);
+        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+        setFixedHeight(fontMetrics().height() + 2);
+        setAccessibleName(m_subject);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter{this};
+        QFont bold = font();
+        bold.setWeight(m_unread ? QFont::Bold : QFont::DemiBold);
+        const QFontMetrics bold_metrics{bold};
+        const QString subject = bold_metrics.elidedText(m_subject, Qt::ElideRight, width());
+        painter.setFont(bold);
+        painter.setPen(CybouTheme::color(CybouTheme::TEXT_PRIMARY));
+        painter.drawText(QRect{0, 0, width(), height()}, Qt::AlignLeft | Qt::AlignVCenter, subject);
+        const int used = bold_metrics.horizontalAdvance(subject);
+        if (m_preview.isEmpty() || used >= width() - 24) return;
+        painter.setFont(font());
+        painter.setPen(CybouTheme::color(CybouTheme::TEXT_MUTED));
+        const QString rest = fontMetrics().elidedText(QStringLiteral(" — ") + m_preview, Qt::ElideRight, width() - used);
+        painter.drawText(QRect{used, 0, width() - used, height()}, Qt::AlignLeft | Qt::AlignVCenter, rest);
+    }
+
+private:
+    QString m_subject;
+    QString m_preview;
+    bool m_unread;
+};
+
 QWidget* MailRow(const CybouMailItem& item, bool online, QWidget* parent)
 {
     auto* row = new QWidget{parent};
@@ -85,14 +124,20 @@ QWidget* MailRow(const CybouMailItem& item, bool online, QWidget* parent)
     row->setAccessibleName(EmailPage::tr("%1, %2%3").arg(RowPeer(item), item.subject,
         item.unread ? EmailPage::tr(", unread") : QString{}));
     auto* layout = new QHBoxLayout{row};
-    layout->setContentsMargins(12, 8, 12, 8);
-    layout->setSpacing(12);
+    layout->setContentsMargins(6, 6, 12, 6);
+    layout->setSpacing(10);
+    // Unread marker keeps its space so rows stay aligned.
+    auto* marker = new QLabel{row};
+    marker->setFixedSize(8, 8);
+    marker->setStyleSheet(item.unread ? QStringLiteral("background: %1; border-radius: 4px;").arg(CybouTheme::color(CybouTheme::MINT).name())
+                                      : QStringLiteral("background: transparent;"));
+    layout->addWidget(marker, 0, Qt::AlignVCenter);
     const QString peer = item.folder == CybouMailFolder::Inbox || item.folder == CybouMailFolder::Archive ||
             item.folder == CybouMailFolder::Trash ? item.from_name : item.to_name;
-    layout->addWidget(Avatar(peer.left(1), PeerColor(peer), row, 34), 0, Qt::AlignTop);
+    layout->addWidget(Avatar(peer.left(1), PeerColor(peer), row, 32), 0, Qt::AlignVCenter);
 
     auto* text = new QVBoxLayout;
-    text->setSpacing(2);
+    text->setSpacing(3);
     auto* top = new QHBoxLayout;
     top->setSpacing(8);
     auto* who = new ElidedLabel{RowPeer(item), row};
@@ -117,17 +162,12 @@ QWidget* MailRow(const CybouMailItem& item, bool online, QWidget* parent)
     } else {
         when = new QLabel{shortTime(item.time), row};
         when->setObjectName(QStringLiteral("rowMeta"));
+        if (item.unread) when->setStyleSheet(QStringLiteral("color: %1; font-weight: 700;").arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
     }
     top->addWidget(when);
     text->addLayout(top);
-
-    auto* subject = new ElidedLabel{item.subject.isEmpty() ? EmailPage::tr("(no subject)") : item.subject, row};
-    subject->setStyleSheet(item.unread ? QStringLiteral("font-weight: 700; color: %1;").arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name())
-                                       : QStringLiteral("color: %1;").arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
-    text->addWidget(subject);
-    auto* preview = new ElidedLabel{item.preview, row};
-    preview->setObjectName(QStringLiteral("rowSub"));
-    text->addWidget(preview);
+    text->addWidget(new SubjectPreview{item.subject.isEmpty() ? EmailPage::tr("(no subject)") : item.subject,
+        item.preview, item.unread, row});
     layout->addLayout(text, 1);
     return row;
 }
@@ -221,9 +261,22 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     m_detail_empty = new QFrame{m_detail};
     m_detail_empty->setObjectName(QStringLiteral("card"));
     auto* empty_layout = new QVBoxLayout{m_detail_empty};
-    auto* empty_label = MutedText(tr("Select a message to read it."), m_detail_empty);
-    empty_label->setAlignment(Qt::AlignCenter);
-    empty_layout->addWidget(empty_label);
+    empty_layout->addStretch();
+    auto* empty_icon = new QLabel{m_detail_empty};
+    empty_icon->setPixmap(glyphPixmap(Glyph::Envelope, {56, 56}, CybouTheme::color(CybouTheme::BORDER_MEDIUM)));
+    empty_icon->setAlignment(Qt::AlignCenter);
+    empty_layout->addWidget(empty_icon);
+    auto* empty_title = SectionTitle(tr("No message selected"), m_detail_empty);
+    empty_title->setAlignment(Qt::AlignCenter);
+    empty_layout->addWidget(empty_title);
+    m_empty_hint = MutedText({}, m_detail_empty);
+    m_empty_hint->setAlignment(Qt::AlignCenter);
+    empty_layout->addWidget(m_empty_hint);
+    auto* empty_compose = new QPushButton{tr("Compose"), m_detail_empty};
+    empty_compose->setObjectName(QStringLiteral("secondaryButton"));
+    connect(empty_compose, &QPushButton::clicked, this, [this] { openCompose(); });
+    empty_layout->addWidget(empty_compose, 0, Qt::AlignHCenter);
+    empty_layout->addStretch();
     m_detail->addWidget(m_detail_empty);
     m_reader = new MailReader{m_model, m_detail};
     m_detail->addWidget(m_reader);
@@ -255,6 +308,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     connect(m_model, &CybouDesktopModel::mailChanged, this, [this] {
         rebuildFolders();
         rebuildList();
+        refreshEmptyHint();
     });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshBanner(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refreshBanner(); });
@@ -292,6 +346,14 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     m_folders->setCurrentRow(0);
     rebuildList();
     refreshBanner();
+    refreshEmptyHint();
+}
+
+void EmailPage::refreshEmptyHint()
+{
+    const int unread = m_model->unreadMailCount();
+    m_empty_hint->setText(unread == 0 ? tr("You're all caught up.")
+        : unread == 1 ? tr("1 unread message in your Inbox.") : tr("%1 unread messages in your Inbox.").arg(unread));
 }
 
 void EmailPage::setView(View view)
@@ -384,7 +446,7 @@ void EmailPage::rebuildList()
         auto* item = new QListWidgetItem{m_list};
         item->setData(Qt::UserRole, mail.id);
         item->setData(Qt::AccessibleTextRole, tr("%1, %2").arg(RowPeer(mail), mail.subject));
-        item->setSizeHint(QSize{0, 76});
+        item->setSizeHint(QSize{0, 62});
         m_list->setItemWidget(item, MailRow(mail, m_model->status().online, m_list));
         if (mail.id == m_current_id) m_list->setCurrentItem(item);
     }
