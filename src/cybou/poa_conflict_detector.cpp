@@ -159,6 +159,41 @@ bool PoaConflictDetector::SafetyHalted() const
     return m_halted;
 }
 
+PoaEvidenceReadResult PoaConflictDetector::ReadSafetyEvidence() const
+{
+    std::lock_guard lock{m_mutex};
+    const auto halt_key = m_prefix + "halt";
+    std::vector<unsigned char> record;
+    try {
+        if (!m_db.Read(halt_key, record)) {
+            if (m_halted || m_db.Exists(halt_key)) return {PoaEvidenceReadStatus::UNAVAILABLE, std::nullopt};
+            return {PoaEvidenceReadStatus::NOT_HALTED, std::nullopt};
+        }
+    } catch (...) {
+        return {PoaEvidenceReadStatus::UNAVAILABLE, std::nullopt};
+    }
+
+    if (record.size() == 2 && record[0] == RECORD_VERSION && record[1] == HALT_CORRUPT_STORAGE) {
+        m_halted = true;
+        return {PoaEvidenceReadStatus::HALTED_CORRUPT_STORAGE, std::nullopt};
+    }
+    if (!ValidConflictRecord(record, m_network_id, m_genesis_finalizer_key)) {
+        m_halted = true;
+        return {PoaEvidenceReadStatus::UNAVAILABLE, std::nullopt};
+    }
+
+    const auto cert_size = POA_FINALITY_CERTIFICATE_SIZE;
+    const auto first = DeserializePoaFinalityCertificate(std::span<const unsigned char>{record}.subspan(2, cert_size));
+    const auto second = DeserializePoaFinalityCertificate(
+        std::span<const unsigned char>{record}.subspan(2 + cert_size, cert_size));
+    if (!first || !second) {
+        m_halted = true;
+        return {PoaEvidenceReadStatus::UNAVAILABLE, std::nullopt};
+    }
+    m_halted = true;
+    return {PoaEvidenceReadStatus::EQUIVOCATION, PoaEquivocationEvidence{*first, *second}};
+}
+
 bool PoaConflictDetector::PersistHalt(const std::vector<unsigned char>& record) noexcept
 {
     m_halted = true;

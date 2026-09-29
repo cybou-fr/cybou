@@ -72,7 +72,10 @@ If a node verifies two valid PoA signatures for different blocks at the same
 height and parent, it enters a permanent safety halt. It does not select a fork,
 retry with a mini-BFT protocol, or recover automatically. The operator must
 investigate and perform an explicit network recovery procedure outside normal
-startup. A rolled-back or conflicting anti-equivocation journal also halts.
+startup. `PoaConflictDetector::ReadSafetyEvidence` returns both revalidated
+certificates for an equivocation halt; a corruption halt is reported without
+inventing certificate evidence. This read-only inspection does not clear the
+halt. A rolled-back or conflicting anti-equivocation journal also halts.
 
 ## Genesis and cutover
 

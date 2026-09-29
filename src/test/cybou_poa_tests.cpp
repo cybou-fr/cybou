@@ -351,9 +351,11 @@ BOOST_AUTO_TEST_CASE(conflict_detector_persists_observations_and_equivocation_ev
     const auto first_path = base / "cybou-poa-conflict-signer-a";
     const auto second_path = base / "cybou-poa-conflict-signer-b";
     const auto detector_path = base / "cybou-poa-conflict-detector";
+    const auto corrupt_path = base / "cybou-poa-conflict-corrupt-evidence";
     std::filesystem::remove_all(first_path);
     std::filesystem::remove_all(second_path);
     std::filesystem::remove_all(detector_path);
+    std::filesystem::remove_all(corrupt_path);
 
     const auto entropy = TestEntropy(14);
     const auto genesis = TestId(25);
@@ -382,7 +384,9 @@ BOOST_AUTO_TEST_CASE(conflict_detector_persists_observations_and_equivocation_ev
     {
         auto db = OpenDb(detector_path, true);
         cybou::PoaConflictDetector detector{*db, network, *finalizer_key};
+        BOOST_CHECK(detector.ReadSafetyEvidence().status == cybou::PoaEvidenceReadStatus::NOT_HALTED);
         BOOST_CHECK(detector.Observe(first_certificate, first_block) == cybou::PoaConflictStatus::OBSERVED);
+        BOOST_CHECK(detector.ReadSafetyEvidence().status == cybou::PoaEvidenceReadStatus::NOT_HALTED);
         BOOST_CHECK(detector.Observe(first_certificate, first_block) == cybou::PoaConflictStatus::ALREADY_OBSERVED);
     }
 
@@ -392,18 +396,44 @@ BOOST_AUTO_TEST_CASE(conflict_detector_persists_observations_and_equivocation_ev
         BOOST_CHECK(recovered.Observe(first_certificate, first_block) == cybou::PoaConflictStatus::ALREADY_OBSERVED);
         BOOST_CHECK(recovered.Observe(second_certificate, second_block) == cybou::PoaConflictStatus::SAFETY_CONFLICT);
         BOOST_CHECK(recovered.SafetyHalted());
+        const auto evidence = recovered.ReadSafetyEvidence();
+        BOOST_CHECK(evidence.status == cybou::PoaEvidenceReadStatus::EQUIVOCATION);
+        BOOST_REQUIRE(evidence.equivocation);
+        BOOST_CHECK(evidence.equivocation->first == first_certificate);
+        BOOST_CHECK(evidence.equivocation->second == second_certificate);
     }
 
     {
         auto db = OpenDb(detector_path, false);
         cybou::PoaConflictDetector recovered{*db, network, *finalizer_key};
         BOOST_CHECK(recovered.SafetyHalted());
+        const auto evidence = recovered.ReadSafetyEvidence();
+        BOOST_CHECK(evidence.status == cybou::PoaEvidenceReadStatus::EQUIVOCATION);
+        BOOST_REQUIRE(evidence.equivocation);
+        BOOST_CHECK(evidence.equivocation->first == first_certificate);
+        BOOST_CHECK(evidence.equivocation->second == second_certificate);
         BOOST_CHECK(recovered.Observe(first_certificate, first_block) == cybou::PoaConflictStatus::ALREADY_HALTED);
+    }
+
+    {
+        const auto key_id = cybou::ComputePoaFinalizerKeyId(*finalizer_key);
+        BOOST_REQUIRE(key_id);
+        const std::string prefix = "poa-conflict-detector/" +
+            BytesHex(std::span<const unsigned char>{network.begin(), network.size()}) + "/" +
+            BytesHex(*key_id) + "/";
+        auto db = OpenDb(corrupt_path, true);
+        cybou::PoaConflictDetector detector{*db, network, *finalizer_key};
+        db->Write(prefix + "halt", std::vector<unsigned char>{1, 1}, true);
+        const auto evidence = detector.ReadSafetyEvidence();
+        BOOST_CHECK(evidence.status == cybou::PoaEvidenceReadStatus::HALTED_CORRUPT_STORAGE);
+        BOOST_CHECK(!evidence.equivocation);
+        BOOST_CHECK(detector.SafetyHalted());
     }
 
     std::filesystem::remove_all(first_path);
     std::filesystem::remove_all(second_path);
     std::filesystem::remove_all(detector_path);
+    std::filesystem::remove_all(corrupt_path);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

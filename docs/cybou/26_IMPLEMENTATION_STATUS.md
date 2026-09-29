@@ -21,7 +21,8 @@ recovery gates pass together. See
 - Local streaming ROOT/INDEX/DATA tree builder and sink-based reader with bounded
   chunk buffers, fan-out, depth, and caller-supplied output limits.
 - Canonical RootPublication CBOR body, strict resource limits, identity-bound
-  recipient capsules, and size-aware deterministic integer fee calculation.
+  recipient capsules, and size-aware deterministic integer fees committed by
+  immutable network parameters.
 - BLAKE3 chunk authorization commitments in durable staging order, an O(log N)
   Merkle accumulator, bounded inclusion-proof verification, and a compact
   RootPublication that does not reveal the complete ChunkID set. The
@@ -43,9 +44,13 @@ recovery gates pass together. See
   consistency. `PoaFinalizer` verifies the recovery entropy, serializes the
   candidate block, journals, then signs. `VerifyPoaCertificateForBlock`
   binds verification to canonical block bytes. `PoaConflictDetector` stores
-  observations and halt evidence. Genesis commitment, runtime wiring,
-  finalized-block execution/acceptance, evidence inspection, and operator
-  recovery remain cutover gates.
+  observations and halt evidence. Local fixed key-derivation, digest,
+  Ed25519, deterministic test-only ML-DSA, and certificate-encoding vectors are
+  in `POA_FINALITY_VECTORS.md`; an independent implementation has not yet
+  confirmed them. `PoaConflictDetector::ReadSafetyEvidence` revalidates and
+  exposes both certificates after an equivocation halt. Genesis commitment,
+  runtime wiring, finalized-block execution/acceptance, and operator recovery
+  remain cutover gates.
 
 These components are substrate code. Their integration with the canonical
 Identity operation path, state transition, block finality, and provider network
@@ -61,8 +66,9 @@ serialization or cryptography code.
 - RootPublication client construction/submission, publication scanning, and
   clean-machine reconstruction of accessible roots.
 - Genesis-bound PoA signing, hybrid signature verification, anti-equivocation
-  journal durability, fork handling, operator recovery, and cross-implementation
-  vectors for operator recovery phrase key derivation.
+  journal durability, fork handling, operator recovery, and independent
+  cross-implementation confirmation of the vectors in
+  `POA_FINALITY_VECTORS.md`.
 - Connecting provider admission to the PUT/GET peer wire; independent chunk
   placement, durability, retry, retention, repair, and provider-loss handling.
 - Publication scanning, recursive retrieval, and clean-machine Identity,

@@ -9,6 +9,7 @@
 #include <cybou/poa_finality.h>
 
 #include <mutex>
+#include <optional>
 #include <string>
 
 namespace cybou {
@@ -23,6 +24,25 @@ enum class PoaConflictStatus : uint8_t {
     STORAGE_ERROR,
 };
 
+enum class PoaEvidenceReadStatus : uint8_t {
+    NOT_HALTED,
+    EQUIVOCATION,
+    HALTED_CORRUPT_STORAGE,
+    UNAVAILABLE,
+};
+
+struct PoaEquivocationEvidence {
+    PoaFinalityCertificate first;
+    PoaFinalityCertificate second;
+
+    friend bool operator==(const PoaEquivocationEvidence&, const PoaEquivocationEvidence&) = default;
+};
+
+struct PoaEvidenceReadResult {
+    PoaEvidenceReadStatus status{PoaEvidenceReadStatus::UNAVAILABLE};
+    std::optional<PoaEquivocationEvidence> equivocation;
+};
+
 /** Persists finality observations and halts on valid same-parent equivocation. */
 class PoaConflictDetector final {
 public:
@@ -31,6 +51,8 @@ public:
 
     PoaConflictStatus Observe(const PoaFinalityCertificate& certificate, const CybouBlock& block);
     bool SafetyHalted() const;
+    /** Read and revalidate the durable halt record for operator investigation. */
+    PoaEvidenceReadResult ReadSafetyEvidence() const;
 
 private:
     bool PersistHalt(const std::vector<unsigned char>& record) noexcept;
@@ -40,7 +62,7 @@ private:
     const IdentityHybridPublicKey m_genesis_finalizer_key;
     const std::string m_prefix;
     mutable std::mutex m_mutex;
-    bool m_halted{false};
+    mutable bool m_halted{false};
 };
 
 } // namespace cybou

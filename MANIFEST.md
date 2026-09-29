@@ -33,7 +33,7 @@ editing an included file.
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 130 | f920aa7287022759 |
 | docs/cybou/24_DECISIONS.md | 212 | 35efbe9c3122b2b0 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 39 | a9154a19525304c4 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 75 | b10c97e7584c817e |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 81 | 28d97a330eaa3b72 |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 34c65e3a9e47145b |
 | docs/cybou/30_REPOSITORY_DOCUMENTATION_CLEANUP.md | 215 | 05597f40cb045934 |
 | docs/cybou/31_IMPLEMENTATION_DETAIL_GATES.md | 103 | 8af315a4660802e0 |
@@ -82,7 +82,7 @@ editing an included file.
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 25 | f7d1dd6b57af4b61 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 85 | c35c8a7244250578 |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 27 | 8d7a331841060278 |
-| docs/cybou/POA_FINALITY.md | 89 | c1103340263b3a26 |
+| docs/cybou/POA_FINALITY.md | 92 | a17b35081e937adb |
 | docs/cybou/POA_FINALITY_VECTORS.md | 96 | 3df7ad8e2b56be8f |
 | docs/cybou/ROOT_PUBLICATION.md | 118 | 7b0ab4d9fab64865 |
 | docs/cybou/STORAGE_ADMISSION.md | 66 | eebc8b9c820222c8 |
