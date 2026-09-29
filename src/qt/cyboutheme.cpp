@@ -65,6 +65,8 @@ const QHash<QRgb, QRgb>& DarkPalette()
         {AMBER, 0xfbbf24},
         {ROSE, 0xfb7185},
         {SUCCESS, 0x4ade80},
+        // The black logo tile needs a visible edge on dark surfaces.
+        {LOGO_TILE_BORDER, 0x4b5563},
     };
     return map;
 }
