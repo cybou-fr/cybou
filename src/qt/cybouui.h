@@ -11,6 +11,8 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLocale>
+#include <QResizeEvent>
 #include <QPainter>
 #include <QPen>
 #include <QPixmap>
@@ -461,6 +463,48 @@ inline QVBoxLayout* StatColumn(const QString& caption, const QString& value, QWi
     column->addWidget(caption_label);
     column->addWidget(value_label);
     return column;
+}
+
+/** Single-line label that elides with "…" instead of widening its parent. */
+class ElidedLabel : public QLabel
+{
+public:
+    explicit ElidedLabel(const QString& text = {}, QWidget* parent = nullptr, Qt::TextElideMode mode = Qt::ElideRight)
+        : QLabel{parent}, m_full{text}, m_mode{mode}
+    {
+        setMinimumWidth(0);
+        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        setToolTip(text);
+        updateElided();
+    }
+    void setFullText(const QString& text)
+    {
+        m_full = text;
+        setToolTip(text);
+        updateElided();
+    }
+    QString fullText() const { return m_full; }
+
+protected:
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QLabel::resizeEvent(event);
+        updateElided();
+    }
+
+private:
+    QString m_full;
+    Qt::TextElideMode m_mode;
+    void updateElided() { setText(fontMetrics().elidedText(m_full, m_mode, qMax(0, width()))); }
+};
+
+/** Mail-style short time: 10:42 today, weekday this week, else "Sep 25". */
+inline QString shortTime(const QDateTime& when, const QDateTime& now = QDateTime::currentDateTime())
+{
+    if (!when.isValid()) return {};
+    if (when.date() == now.date()) return when.toString(QStringLiteral("HH:mm"));
+    if (when.daysTo(now) < 7) return QLocale{QLocale::English}.toString(when, QStringLiteral("ddd"));
+    return QLocale{QLocale::English}.toString(when, QStringLiteral("MMM d"));
 }
 
 inline QString relTime(const QDateTime& when, const QDateTime& now = QDateTime::currentDateTime())

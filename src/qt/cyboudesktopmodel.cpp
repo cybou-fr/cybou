@@ -192,6 +192,47 @@ int CybouDesktopModel::unreadMailCount() const
     }));
 }
 
+const CybouMailItem* CybouDesktopModel::mailItem(const QString& id) const
+{
+    for (const auto& item : m_mail) {
+        if (item.id == id) return &item;
+    }
+    return nullptr;
+}
+
+void CybouDesktopModel::setMailRead(const QString& id, bool read)
+{
+    for (auto& item : m_mail) {
+        if (item.id == id && item.unread == read) {
+            item.unread = !read;
+            Q_EMIT mailChanged();
+            return;
+        }
+    }
+}
+
+void CybouDesktopModel::setMailStarred(const QString& id, bool starred)
+{
+    for (auto& item : m_mail) {
+        if (item.id == id && item.starred != starred) {
+            item.starred = starred;
+            Q_EMIT mailChanged();
+            return;
+        }
+    }
+}
+
+void CybouDesktopModel::moveMail(const QString& id, CybouMailFolder folder)
+{
+    for (auto& item : m_mail) {
+        if (item.id == id && item.folder != folder) {
+            item.folder = folder;
+            Q_EMIT mailChanged();
+            return;
+        }
+    }
+}
+
 void CybouDesktopModel::setFileItems(QVector<CybouFileItem> items)
 {
     m_files = std::move(items);

@@ -125,6 +125,11 @@ public:
     void setMailItems(QVector<CybouMailItem> items);
     void upsertMailItem(const CybouMailItem& item);
     int unreadMailCount() const;
+    const CybouMailItem* mailItem(const QString& id) const;
+    /** Local mailbox state (never consensus state). */
+    void setMailRead(const QString& id, bool read);
+    void setMailStarred(const QString& id, bool starred);
+    void moveMail(const QString& id, CybouMailFolder folder);
 
     const QVector<CybouFileItem>& fileItems() const { return m_files; }
     void setFileItems(QVector<CybouFileItem> items);

@@ -9,6 +9,7 @@
 #include <qt/cyboumainwindow.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouuifixtures.h>
+#include <qt/pages/emailpage.h>
 
 #include <cybou/network_definition.h>
 #include <test/cybou_test_helpers.h>
@@ -266,31 +267,37 @@ void CybouShellTests::identityPageHidesSecrets()
     QVERIFY(model->nameLabelProblem(QStringLiteral("alice-2")).isEmpty());
 }
 
-void CybouShellTests::emailPageGatesSending()
+void CybouShellTests::mailNavigationAndSearch()
 {
     auto window = makeWindow();
-    auto* email = window->page(CybouPage::Mail);
-    QVERIFY(email);
+    auto* model = window->desktopModel();
+    auto* mail = dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
+    QVERIFY(mail);
+    // Without an Identity, Mail explains the gate.
+    QVERIFY(!mail->findChild<QFrame*>(QStringLiteral("identityBanner"))->isHidden());
 
-    // The full client UI is present: compose, recipient field, send.
-    auto* send = email->findChild<QPushButton*>(QStringLiteral("sendButton"));
-    auto* recipient = email->findChild<QLineEdit*>(QStringLiteral("recipientEdit"));
-    auto* body = email->findChild<QTextEdit*>(QStringLiteral("composeBody"));
-    QVERIFY(send);
-    QVERIFY(recipient);
-    QVERIFY(body);
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("mail")));
+    QCOMPARE(mail->visibleMessageIds().size(), 5);
+    QCOMPARE(model->unreadMailCount(), 4);
 
-    // Without an active identity the composer explains the gate and Send
-    // stays disabled no matter how complete the draft is.
-    QVERIFY(email->findChild<QFrame*>(QStringLiteral("identityBanner")));
-    recipient->setText(QStringLiteral("peer@cybou"));
-    body->setPlainText(QStringLiteral("hello"));
-    QVERIFY(!send->isEnabled());
+    // Search is local and covers sender, subject, body and attachment names.
+    auto* search = mail->findChild<QLineEdit*>(QStringLiteral("mailSearch"));
+    QCOMPARE(search->placeholderText(), QStringLiteral("Search mail"));
+    search->setText(QStringLiteral("contract-signed"));
+    QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-contract")});
+    search->setText(QStringLiteral("bob.cybou"));
+    QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-dinner")});
+    search->clear();
 
-    // The one-recipient rule is enforced in the field itself: a second
-    // recipient is rejected before any protocol interaction can happen.
-    recipient->setText(QStringLiteral("a@cybou, b@cybou"));
-    QVERIFY(recipient->text().contains(QStringLiteral(",")));
+    mail->setView(EmailPage::View::Sent);
+    QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-sent-1")});
+    mail->setView(EmailPage::View::Starred);
+    QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-welcome")});
+
+    // Opening a message marks it read (local mailbox state).
+    mail->setView(EmailPage::View::Inbox);
+    mail->openMessage(QStringLiteral("m-project"));
+    QCOMPARE(model->unreadMailCount(), 3);
 }
 
 void CybouShellTests::walletPageShowsBalances()

@@ -33,7 +33,7 @@ private Q_SLOTS:
     void identityCreateFollowsCapabilities();
     void restoreFlowValidatesPhrase();
     void identityPageHidesSecrets();
-    void emailPageGatesSending();
+    void mailNavigationAndSearch();
     void walletPageShowsBalances();
     void filesGateActions();
     void networkPageReflectsModel();
