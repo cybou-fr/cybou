@@ -35,6 +35,9 @@ Current `main` implements the canonical low-level substrate:
   RootPublications, capsule opening inside the key store, fetch through
   StorageService, Mail Inbox/Sent and last-canonical-mutation-wins Files
   projections in the Application DB, retry of temporarily unavailable roots;
+- derived Identity Authority preview: finalized-height Age, capped activity,
+  voluntary System Balance contribution, integer tiers and generic budget
+  calculations; not bound to network parameters and not enforced;
 - Identity RecoveryBridge: verified before IdentityRotate, readable by the
   next KEM key, and imported on restore only for seeds that reproduce the
   canonical historical KEM package, followed by a rescan;
@@ -57,9 +60,9 @@ Current `main` implements the canonical low-level substrate:
   restart, audit and repair;
 - complete and verify the Beta desktop acceptance matrix on clean installations
   and across supported Windows sizes, DPI settings and accessibility paths;
-- persist drafts across desktop restarts;
-- basic Identity Authority (Age, capped Activity, SystemContribution);
-- Authority-derived generic resource budgets.
+- verify Mail drafts persist across desktop restarts;
+- bind immutable Authority rules and policy constants to the current network;
+- Authority-derived generic resource budget enforcement.
 
 ## Evidence-gated later work
 
