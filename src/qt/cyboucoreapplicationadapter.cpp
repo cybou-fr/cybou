@@ -137,6 +137,9 @@ struct CybouCoreApplicationAdapter::Session {
     /** Messages sent from this device that the scanner has not indexed yet. */
     std::map<std::string, CybouMailItem> outbox;
     std::map<std::string, cybou::PublicationJobResult> jobs;
+    std::uint64_t ticks{0};
+    static constexpr std::uint64_t AUDIT_EVERY_TICKS{5};
+    static constexpr std::size_t AUDIT_CHUNKS_PER_PASS{8};
     /** Files changes published from this device that the scanner has not reflected yet. */
     struct PendingFile {
         cybou::FileItem item;
@@ -259,6 +262,8 @@ struct CybouCoreApplicationAdapter::Session {
             return;
         }
         const auto progress = application->Scan();
+        // Bounded durability audit every few ticks: Protected can fall back to Securing.
+        if (++ticks % AUDIT_EVERY_TICKS == 0) publication->AuditDurability(*storage, AUDIT_CHUNKS_PER_PASS);
         for (const auto& [id, status] : publication->ProcessDurability(*storage)) jobs[id] = status;
         AdvanceRotation();
         Snapshot(progress.Complete() ? CybouRestoreStepState::Done : CybouRestoreStepState::Running);

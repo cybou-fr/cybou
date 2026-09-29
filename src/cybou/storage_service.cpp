@@ -381,6 +381,33 @@ PublicationDurability StorageService::Place(Placement& placement)
     return result;
 }
 
+PublicationDurability StorageService::AuditSome(const uint256& operation_id, const std::size_t max_chunks)
+{
+    std::lock_guard lock{m_mutex};
+    auto placement = Load(operation_id);
+    if (!placement) return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Unknown publication placement"};
+    const std::size_t count = placement->leaves.size();
+    auto& cursor = m_audit_cursor[operation_id];
+    bool changed{false};
+    for (std::size_t checked{0}; checked < std::min(max_chunks, count); ++checked) {
+        const std::size_t i = cursor % count;
+        cursor = (cursor + 1) % count;
+        auto& replicas = placement->replicas[i];
+        const auto before = replicas.size();
+        std::erase_if(replicas, [&](const StorageEndpoint& provider) {
+            const auto bytes = m_transport.Get(provider, placement->leaves[i]);
+            return !bytes || ComputeChunkId(*bytes) != placement->leaves[i];
+        });
+        changed = changed || replicas.size() != before;
+    }
+    if (changed && !Save(*placement)) {
+        return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save placement state"};
+    }
+    auto result = Summarize(*placement);
+    if (result.state != DurabilityState::PROTECTED) result.error = "A remote copy is missing or damaged";
+    return result;
+}
+
 PublicationDurability StorageService::Audit(const uint256& operation_id)
 {
     std::lock_guard lock{m_mutex};

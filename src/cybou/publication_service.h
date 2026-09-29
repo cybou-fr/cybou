@@ -109,6 +109,14 @@ public:
 
     /** Local job IDs known to this Identity, oldest first. */
     std::vector<std::string> Jobs();
+    /**
+     * Periodic durability check of PROTECTED jobs, round-robin, at most
+     * max_chunks chunks per call. A job whose remote copies fell below the
+     * target goes back to SECURING, so the next ProcessDurability repairs it:
+     * Protected is never a one-way state. Returns the jobs downgraded.
+     */
+    std::vector<std::string> AuditDurability(StorageService& storage, std::size_t max_chunks);
+
     /** Advances every unfinished job: finality, then StorageService placement. */
     std::vector<std::pair<std::string, PublicationJobResult>> ProcessDurability(StorageService& storage);
 
@@ -144,6 +152,7 @@ private:
     PrivateApplicationStore& m_application_db;
     IdentityOperationCoordinator& m_coordinator;
     KVStore* m_staging_db{nullptr};
+    std::size_t m_audit_job_cursor{0};
     std::mutex m_mutex;
 };
 

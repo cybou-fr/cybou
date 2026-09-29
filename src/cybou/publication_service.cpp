@@ -698,6 +698,32 @@ std::vector<std::string> PublicationService::Jobs()
     return jobs;
 }
 
+std::vector<std::string> PublicationService::AuditDurability(StorageService& storage, const std::size_t max_chunks)
+{
+    std::vector<std::string> downgraded;
+    const auto jobs = Jobs();
+    for (std::size_t tried{0}; tried < jobs.size(); ++tried) {
+        const auto& id = jobs[m_audit_job_cursor++ % jobs.size()];
+        std::optional<Job> job;
+        {
+            std::lock_guard lock{m_mutex};
+            job = Load(id);
+        }
+        if (!job || job->phase != PublicationJobPhase::PROTECTED) continue;
+        const auto durability = storage.AuditSome(job->operation_id, max_chunks);
+        if (durability.state == DurabilityState::SECURING) {
+            std::lock_guard lock{m_mutex};
+            auto current = Load(id);
+            if (current && current->phase == PublicationJobPhase::PROTECTED) {
+                current->phase = PublicationJobPhase::SECURING;
+                if (Save(id, *current)) downgraded.push_back(id);
+            }
+        }
+        break; // one PROTECTED job per call keeps the work bounded
+    }
+    return downgraded;
+}
+
 std::vector<std::pair<std::string, PublicationJobResult>> PublicationService::ProcessDurability(StorageService& storage)
 {
     std::vector<std::pair<std::string, PublicationJobResult>> results;

@@ -552,4 +552,36 @@ BOOST_AUTO_TEST_CASE(interrupted_indexing_is_repaired_on_the_next_scan)
     BOOST_CHECK_EQUAL(bob.application->ListMail().size(), 2U);
 }
 
+BOOST_AUTO_TEST_CASE(protected_falls_back_to_securing_when_replicas_die)
+{
+    CybouServiceTestFixture fixture;
+    ProviderNetwork network{fixture};
+    Party owner{fixture, network, "owner"};
+    network.Sync();
+    const auto message = Message(owner.Account(), "Durable", "note to self");
+    BOOST_REQUIRE(owner.publication->PublishMail("mail-durable", message).phase ==
+        cybou::PublicationJobPhase::WAITING_FINALITY);
+    Finalize(fixture, network);
+    BOOST_REQUIRE(owner.publication->ProcessDurability(*owner.storage).front().second.phase ==
+        cybou::PublicationJobPhase::PROTECTED);
+    // A healthy audit keeps it Protected.
+    BOOST_CHECK(owner.publication->AuditDurability(*owner.storage, 8).empty());
+    BOOST_CHECK(owner.publication->GetJob("mail-durable")->phase == cybou::PublicationJobPhase::PROTECTED);
+
+    // Two providers die after acknowledging: Protected must not be one-way.
+    network.SetAllOffline(true);
+    network.offline.erase(network.Endpoints().front());
+    std::vector<std::string> downgraded;
+    for (int i = 0; i < 8 && downgraded.empty(); ++i) downgraded = owner.publication->AuditDurability(*owner.storage, 8);
+    BOOST_REQUIRE_EQUAL(downgraded.size(), 1U);
+    BOOST_CHECK(owner.publication->GetJob("mail-durable")->phase == cybou::PublicationJobPhase::SECURING);
+    // With only one reachable provider the target cannot be met yet.
+    const auto waiting = owner.publication->ProcessDurability(*owner.storage);
+    BOOST_CHECK(waiting.front().second.phase == cybou::PublicationJobPhase::SECURING);
+    // Providers return: the next pass repairs to the target and Protected is back.
+    network.SetAllOffline(false);
+    const auto repaired = owner.publication->ProcessDurability(*owner.storage);
+    BOOST_CHECK(repaired.front().second.phase == cybou::PublicationJobPhase::PROTECTED);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

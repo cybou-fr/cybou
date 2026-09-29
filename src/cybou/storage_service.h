@@ -13,6 +13,7 @@
 
 #include <compare>
 #include <cstdint>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -112,6 +113,13 @@ public:
     PublicationDurability Resume(const uint256& publication_operation_id);
     /** Re-reads every recorded replica, drops missing/corrupt ones and repairs to target. */
     PublicationDurability Audit(const uint256& publication_operation_id);
+    /**
+     * Bounded periodic health check: re-reads the replicas of at most
+     * max_chunks chunks (continuing where the previous call stopped), drops
+     * missing or BLAKE3-mismatching ones and reports the resulting state. It
+     * does not repair; a SECURING result is repaired by Secure/Resume.
+     */
+    PublicationDurability AuditSome(const uint256& publication_operation_id, std::size_t max_chunks);
     std::optional<PublicationDurability> GetDurability(const uint256& publication_operation_id);
 
     /** Local encrypted blob, else the first BLAKE3-valid provider copy (cached locally). */
@@ -133,6 +141,8 @@ private:
     PrivateApplicationStore& m_application_db;
     const std::uint8_t m_target;
     std::mutex m_mutex;
+    /** Next chunk to audit per publication; restarting from 0 is harmless. */
+    std::map<uint256, std::size_t> m_audit_cursor;
 };
 
 } // namespace cybou
