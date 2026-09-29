@@ -32,9 +32,9 @@ void CheckSocketFinalityAfterValidatorRestart(bool after_precommit)
         BOOST_REQUIRE(key);
         keys[i] = key->public_key;
     }
-    const auto genesis = cybou::CreateDevGenesisState(std::span<const cybou::IdentityHybridPublicKey>{keys});
+    const auto genesis = cybou::CreateTestGenesisState(std::span<const cybou::IdentityHybridPublicKey>{keys});
     BOOST_REQUIRE(genesis);
-    const auto definition = cybou::CreateDevNetworkDefinition(*genesis);
+    const auto definition = cybou::CreateDevNetworkDefinition(*genesis, cybou::TestPoaFinalizerPublicKey());
     const auto base = std::filesystem::temp_directory_path() /
         ("cybou-bft-restart-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(base);
@@ -210,9 +210,9 @@ BOOST_AUTO_TEST_CASE(socket_consensus_rotates_past_offline_leader)
         BOOST_REQUIRE(key);
         keys[i] = key->public_key;
     }
-    const auto genesis = cybou::CreateDevGenesisState(std::span<const cybou::IdentityHybridPublicKey>{keys});
+    const auto genesis = cybou::CreateTestGenesisState(std::span<const cybou::IdentityHybridPublicKey>{keys});
     BOOST_REQUIRE(genesis);
-    const auto definition = cybou::CreateDevNetworkDefinition(*genesis);
+    const auto definition = cybou::CreateDevNetworkDefinition(*genesis, cybou::TestPoaFinalizerPublicKey());
     const auto offline = cybou::BftLeaderIndex(1, 0, 4);
     std::array<std::unique_ptr<cybou::CybouNodeRuntime>, 4> nodes;
     for (size_t i = 0; i < 4; ++i) {

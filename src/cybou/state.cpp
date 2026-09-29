@@ -4,6 +4,7 @@
 
 #include <cybou/state.h>
 #include <cybou/protocol_operation.h>
+#include <cybou/mail_tx.h>
 #include <cybou/crypto/sha256.h>
 
 #include <algorithm>
@@ -210,7 +211,7 @@ MailError ApplyMail(const AuthorizedMail& op,
         op.mail.discovery_tag.IsNull() ||
         op.mail.content_commitment.IsNull() ||
         op.mail.ciphertext.empty() ||
-        op.mail.ciphertext.size() > params.max_mail_ciphertext_size) {
+        op.mail.ciphertext.size() > MAX_MAIL_CIPHERTEXT_SIZE) {
         return MailError::INVALID_PAYLOAD;
     }
     if (op.authorization.kind != IdentityOperationKind::MAIL) {
@@ -227,7 +228,7 @@ MailError ApplyMail(const AuthorizedMail& op,
     if (!state.accounts.contains(op.mail.recipient)) {
         return MailError::RECIPIENT_NOT_FOUND;
     }
-    const uint64_t fee = params.MailFeeForSize(op.mail.ciphertext.size());
+    const uint64_t fee = MailFeeForSize(op.mail.ciphertext.size());
     if (sender_it->second.system_balance < fee) {
         return MailError::INSUFFICIENT_SYSTEM_BALANCE;
     }
@@ -238,7 +239,7 @@ MailError ApplyMail(const AuthorizedMail& op,
     const uint32_t current_count = (sender_it->second.last_mail_epoch == current_epoch)
         ? sender_it->second.mail_count_in_epoch
         : 0;
-    if (current_count >= params.new_account_mail_limit_per_epoch) {
+    if (current_count >= NEW_ACCOUNT_MAIL_LIMIT_PER_EPOCH) {
         return MailError::MAIL_QUOTA_EXCEEDED;
     }
     if (state.identities.AuthorizeOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {

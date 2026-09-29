@@ -21,6 +21,7 @@
 #include <blockfilter.h>
 #include <util/fastrange.h>
 #include <test/util/setup_common.h>
+#include <test/cybou_test_helpers.h>
 #include <uint256.h>
 
 #include <boost/test/unit_test.hpp>
@@ -87,10 +88,11 @@ cybou::CybouNetworkDefinition TestNetworkDefinition()
 {
     return cybou::CybouNetworkDefinition{
         .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
-        .genesis_block_id = uint256::ONE,
+        .genesis_block_id = cybou::ComputeGenesisBlockId(
+            *cybou::CybouStateHash(GenesisState()), cybou::TestPoaFinalizerPublicKey()),
         .genesis_state_root = *cybou::CybouStateHash(GenesisState()),
+        .poa_finalizer_public_key = cybou::TestPoaFinalizerPublicKey(),
         .protocol_parameters = PARAMS,
-        .initial_validator_set_commitment = cybou::ComputeValidatorSetCommitment(TEST_VALIDATOR_SET),
     };
 }
 

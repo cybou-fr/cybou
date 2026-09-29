@@ -7,27 +7,26 @@
 
 #include <cybou/protocol_params.h>
 #include <cybou/signing.h>
+#include <cybou/identity_crypto.h>
 #include <cybou/state.h>
 #include <uint256.h>
 
 #include <cstdint>
 #include <filesystem>
 #include <optional>
-#include <span>
 #include <vector>
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_NETWORK_DEFINITION_VERSION{4};
+inline constexpr uint8_t CYBOU_NETWORK_DEFINITION_VERSION{5};
 
 /** Immutable consensus identity for one DEV, Beta, or Mainnet network. */
 struct CybouNetworkDefinition {
     uint8_t protocol_version{CYBOU_NETWORK_DEFINITION_VERSION};
     uint256 genesis_block_id;
     uint256 genesis_state_root;
+    IdentityHybridPublicKey poa_finalizer_public_key{IdentityKeyPurpose::POA_FINALIZER, {}, {}};
     CybouProtocolParameters protocol_parameters;
-    uint256 initial_validator_set_commitment;
-    std::optional<OperatorAuthorityKeySet> operator_authority;
 
     friend bool operator==(const CybouNetworkDefinition&, const CybouNetworkDefinition&) = default;
 };
@@ -37,15 +36,13 @@ enum class NetworkDefinitionError : uint8_t {
     UNSUPPORTED_VERSION,
     NULL_GENESIS_BLOCK_ID,
     NULL_GENESIS_STATE_ROOT,
-    NULL_VALIDATOR_SET_COMMITMENT,
+    INVALID_POA_FINALIZER_KEY,
+    GENESIS_BLOCK_ID_MISMATCH,
     INVALID_ACCOUNT_CREATION_WORK_BITS,
     ZERO_MAX_ACCOUNT_CREATES_PER_BLOCK,
     ZERO_EPOCH_BLOCKS,
     INVALID_ROOT_PUBLICATION_FEES,
     INVALID_NAME_PARAMETERS,
-    NULL_OPERATOR_AUTHORITY_KEYSET_ID,
-    NULL_OPERATOR_AUTHORITY_KEY,
-    INVALID_OPERATOR_AUTHORITY_EPOCH,
 };
 
 NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& definition);
@@ -60,11 +57,12 @@ struct CybouNetworkFile {
 
 std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path& path);
 
-uint256 ComputeGenesisBlockId(const uint256& state_root, const uint256& validator_set_commitment);
+uint256 ComputeGenesisBlockId(const uint256& state_root, const IdentityHybridPublicKey& poa_finalizer_public_key);
 
 CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public_key);
-std::optional<CybouState> CreateDevGenesisState(std::span<const IdentityHybridPublicKey> validator_public_keys);
-CybouNetworkDefinition CreateDevNetworkDefinition(const CybouState& genesis);
+CybouNetworkDefinition CreateDevNetworkDefinition(
+    const CybouState& genesis,
+    const IdentityHybridPublicKey& poa_finalizer_public_key);
 
 } // namespace cybou
 

@@ -8,7 +8,6 @@
 #include <cybou/crypto/sha256.h>
 #include <cybou/account_id.h>
 #include <cybou/identity_registry.h>
-#include <cybou/protocol_params.h>
 #include <uint256.h>
 
 #include <algorithm>
@@ -26,6 +25,19 @@ inline constexpr size_t MAIL_PAYLOAD_HEADER_SIZE{1 + 32 + 32 + 32 + 4}; // 101 b
 inline constexpr size_t AUTHORIZED_MAIL_HEADER_SIZE{2565 + MAIL_PAYLOAD_HEADER_SIZE}; // 2666 bytes
 inline constexpr uint32_t MAX_MAIL_WIRE_CIPHERTEXT_SIZE{1024 * 1024}; // 1 MiB absolute hard wire framing limit
 inline constexpr size_t MAX_MAIL_WIRE_BYTES{AUTHORIZED_MAIL_HEADER_SIZE + MAX_MAIL_WIRE_CIPHERTEXT_SIZE};
+// Transitional local Mail policy. Mail is removed from consensus parameters
+// and will be removed from the protocol operation in the following cutover.
+inline constexpr uint64_t MAIL_BASE_FEE{4};
+inline constexpr uint64_t MAIL_TIER_BYTES{1024};
+inline constexpr uint64_t MAIL_TIER_FEE{1};
+inline constexpr uint32_t MAX_MAIL_CIPHERTEXT_SIZE{64 * 1024};
+inline constexpr uint32_t NEW_ACCOUNT_MAIL_LIMIT_PER_EPOCH{25};
+
+constexpr uint64_t MailFeeForSize(size_t ciphertext_size)
+{
+    const uint64_t tiers = (static_cast<uint64_t>(ciphertext_size) + MAIL_TIER_BYTES - 1) / MAIL_TIER_BYTES;
+    return MAIL_BASE_FEE + tiers * MAIL_TIER_FEE;
+}
 
 struct MailPayload {
     uint8_t version{MAIL_TX_VERSION};

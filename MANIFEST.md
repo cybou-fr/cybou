@@ -33,7 +33,7 @@ editing an included file.
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 130 | f920aa7287022759 |
 | docs/cybou/24_DECISIONS.md | 212 | 35efbe9c3122b2b0 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 39 | a9154a19525304c4 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 79 | 93ad36e6463824e1 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 84 | 5c16e4770bb47db0 |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 34c65e3a9e47145b |
 | docs/cybou/30_REPOSITORY_DOCUMENTATION_CLEANUP.md | 215 | 05597f40cb045934 |
 | docs/cybou/31_IMPLEMENTATION_DETAIL_GATES.md | 103 | 8af315a4660802e0 |
@@ -66,7 +66,7 @@ editing an included file.
 | docs/cybou/71_WINDOWS_MINGW_BUILD.md | 147 | 347f5cd755e85843 |
 | docs/cybou/72_DESKTOP_WALLET_UI.md | 81 | df728769e0351a3f |
 | docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 171 | 2461370b0bad9fb4 |
-| docs/cybou/75_DEV_NODE_RUNBOOK.md | 228 | 737e327e1ac4c077 |
+| docs/cybou/75_DEV_NODE_RUNBOOK.md | 234 | 4e40d1f07aa36208 |
 | docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 38 | 8b8525195fcbdce0 |
 | docs/cybou/77_CYBOU_NAME_REGISTRY.md | 38 | 5bb56fbfa0e4efc5 |
 | docs/cybou/78_IDENTITY_DESKTOP_UX.md | 23 | 0e985ee3d5e8f201 |

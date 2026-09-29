@@ -56,7 +56,6 @@ enum class GenesisInitError : uint8_t {
     ALREADY_INITIALIZED,
     INVALID_NETWORK_DEFINITION,
     GENESIS_STATE_MISMATCH,
-    VALIDATOR_SET_COMMITMENT_MISMATCH,
     INVALID_GENESIS_VALIDATOR_SET,
 };
 
@@ -109,8 +108,6 @@ public:
         KVStore& db,
         CybouNetworkDefinition network_definition,
         std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier = nullptr);
-
-    const std::optional<OperatorAuthorityKeySet>& GetOperatorAuthority() const { return m_network_definition.operator_authority; }
 
     /** Retrieve canonical active validator set from persisted state. */
     std::optional<ValidatorSet> GetValidatorSet() const;

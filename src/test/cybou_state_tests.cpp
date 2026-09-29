@@ -5,6 +5,7 @@
 #include <cybou/bft.h>
 #include <cybou/block_executor.h>
 #include <cybou/network_definition.h>
+#include <test/cybou_test_helpers.h>
 #include "cybou_test_identity_helpers.h"
 
 #include <boost/test/unit_test.hpp>
@@ -36,7 +37,8 @@ BOOST_AUTO_TEST_CASE(network_id_commits_to_name_rules)
     seed[0] = 0x51;
     const auto validator = GenerateValidatorKeyPair(seed);
     BOOST_REQUIRE(validator);
-    const auto definition = CreateDevNetworkDefinition(CreateDevGenesisState(validator->public_key));
+    const auto definition = CreateDevNetworkDefinition(
+        CreateDevGenesisState(validator->public_key), cybou::TestPoaFinalizerPublicKey());
     BOOST_CHECK(ValidateNetworkDefinition(definition) == NetworkDefinitionError::NONE);
     const auto encoded = SerializeNetworkDefinition(definition);
     const auto decoded = DeserializeNetworkDefinition(encoded);
@@ -805,11 +807,11 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
 
     // 1. Fee calculation logic
     auto params = DevProtocolParameters();
-    BOOST_CHECK_EQUAL(params.MailFeeForSize(100), 5ULL);     // 4 + 1
-    BOOST_CHECK_EQUAL(params.MailFeeForSize(1024), 5ULL);    // 4 + 1
-    BOOST_CHECK_EQUAL(params.MailFeeForSize(1025), 6ULL);    // 4 + 2
-    BOOST_CHECK_EQUAL(params.MailFeeForSize(2048), 6ULL);    // 4 + 2
-    BOOST_CHECK_EQUAL(params.MailFeeForSize(64 * 1024), 68ULL); // 4 + 64
+    BOOST_CHECK_EQUAL(MailFeeForSize(100), 5ULL);     // 4 + 1
+    BOOST_CHECK_EQUAL(MailFeeForSize(1024), 5ULL);    // 4 + 1
+    BOOST_CHECK_EQUAL(MailFeeForSize(1025), 6ULL);    // 4 + 2
+    BOOST_CHECK_EQUAL(MailFeeForSize(2048), 6ULL);    // 4 + 2
+    BOOST_CHECK_EQUAL(MailFeeForSize(64 * 1024), 68ULL); // 4 + 64
 
     // 2. Setup state with Alice (sender) and Bob (recipient)
     std::array<unsigned char, 32> alice_root_seed{}, alice_dev_seed{};
@@ -895,7 +897,7 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     const auto& post_state = *block_res.state;
 
     // Check balance deduction and counter updates
-    const uint64_t expected_fee = params.MailFeeForSize(payload.ciphertext.size()); // 5
+    const uint64_t expected_fee = MailFeeForSize(payload.ciphertext.size()); // 5
     BOOST_CHECK_EQUAL(expected_fee, 5ULL);
     BOOST_CHECK_EQUAL(post_state.accounts.at(alice).system_balance, params.onboarding_bonus - expected_fee);
     BOOST_CHECK_EQUAL(post_state.accounts.at(alice).last_mail_epoch, 0ULL);
@@ -994,9 +996,9 @@ BOOST_AUTO_TEST_CASE(mail_tx_execution_and_quotas)
     BOOST_CHECK(!SerializeMailPayload(empty_payload));
 
     // Consensus parameter execution check: payload within wire framing (e.g. 65 KiB)
-    // but exceeding params.max_mail_ciphertext_size (64 KiB) is rejected by consensus
+    // but exceeding the transitional Mail ciphertext cap is rejected
     MailPayload param_oversized_payload = payload;
-    param_oversized_payload.ciphertext = std::vector<unsigned char>(params.max_mail_ciphertext_size + 1, 0xEE);
+    param_oversized_payload.ciphertext = std::vector<unsigned char>(MAX_MAIL_CIPHERTEXT_SIZE + 1, 0xEE);
     const auto param_commit = ComputeMailPayloadCommitment(param_oversized_payload);
     BOOST_REQUIRE(param_commit.has_value());
     AuthorizedMail param_oversized_mail = mail_op;

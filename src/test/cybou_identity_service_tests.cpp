@@ -8,6 +8,7 @@
 #include <cybou/network_definition.h>
 #include <cybou/name_service.h>
 #include <cybou/validator.h>
+#include <test/cybou_test_helpers.h>
 #include <test/util/setup_common.h>
 
 #include <boost/test/unit_test.hpp>
@@ -31,7 +32,7 @@ struct RuntimeFixture {
         validator_seed[0] = 0x73;
         const auto keypair = cybou::GenerateValidatorKeyPair(validator_seed);
         genesis = cybou::CreateDevGenesisState(keypair->public_key);
-        definition = cybou::CreateDevNetworkDefinition(genesis);
+        definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey());
         definition.protocol_parameters.account_creation_work_bits = 0;
     }
 

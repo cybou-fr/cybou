@@ -48,9 +48,14 @@ recovery gates pass together. See
   Ed25519, deterministic test-only ML-DSA, and certificate-encoding vectors are
   in `POA_FINALITY_VECTORS.md` and have been reproduced with independent
   implementations. `PoaConflictDetector::ReadSafetyEvidence` revalidates and
-  exposes both certificates after an equivocation halt. Genesis commitment,
-  runtime wiring, finalized-block execution/acceptance, and operator recovery
-  remain cutover gates.
+  exposes both certificates after an equivocation halt. Runtime wiring,
+  finalized-block execution/acceptance, and operator recovery remain cutover
+  gates.
+- Version-5 network definitions commit the fixed-purpose PoA finalizer public
+  key, omit ValidatorSet commitments and Operator Authority, and derive the
+  genesis block ID from the genesis state root plus the PoA key ID. This is the
+  first architecture-cutover step only: canonical state and the active block
+  runtime still retain the legacy validator/BFT path until later steps.
 
 These components are substrate code. Their integration with the canonical
 Identity operation path, state transition, block finality, and provider network

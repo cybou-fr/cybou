@@ -7,6 +7,7 @@
 #include <cybou/block.h>
 #include <cybou/block_executor.h>
 #include <cybou/network_definition.h>
+#include <test/cybou_test_helpers.h>
 #include <cybou/signing.h>
 #include <cybou/state_store.h>
 #include <cybou/validator.h>
@@ -715,15 +716,16 @@ BOOST_AUTO_TEST_CASE(bft_consensus_round_to_state_store_execution)
         .epoch_blocks = 10,
     };
 
-    const uint256 genesis_block_id{uint256::FromUserHex("1000").value()};
+    const auto poa_finalizer_key = cybou::TestPoaFinalizerPublicKey();
+    const uint256 genesis_block_id{cybou::ComputeGenesisBlockId(
+        *cybou::CybouStateHash(genesis_state), poa_finalizer_key)};
 
     const cybou::CybouNetworkDefinition definition{
         .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
         .genesis_block_id = genesis_block_id,
         .genesis_state_root = *cybou::CybouStateHash(genesis_state),
+        .poa_finalizer_public_key = poa_finalizer_key,
         .protocol_parameters = params,
-        .initial_validator_set_commitment = val_set_commitment,
-        .operator_authority = std::nullopt,
     };
     const uint256 network_id = cybou::NetworkId(definition);
 
@@ -952,15 +954,16 @@ BOOST_AUTO_TEST_CASE(authority_mode_n1_consensus_and_state_store)
         .epoch_blocks = 10,
     };
 
-    const uint256 genesis_block_id{uint256::FromUserHex("1001").value()};
+    const auto poa_finalizer_key = cybou::TestPoaFinalizerPublicKey(0xBC);
+    const uint256 genesis_block_id{cybou::ComputeGenesisBlockId(
+        *cybou::CybouStateHash(genesis_state), poa_finalizer_key)};
 
     const cybou::CybouNetworkDefinition definition{
         .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
         .genesis_block_id = genesis_block_id,
         .genesis_state_root = *cybou::CybouStateHash(genesis_state),
+        .poa_finalizer_public_key = poa_finalizer_key,
         .protocol_parameters = params,
-        .initial_validator_set_commitment = val_set_commitment,
-        .operator_authority = std::nullopt,
     };
     const uint256 network_id = cybou::NetworkId(definition);
 

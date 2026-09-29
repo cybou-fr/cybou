@@ -358,7 +358,7 @@ size_t CybouWalletService::SyncLedger()
                             return e.entry_id == op_id;
                         });
                         if (it == working_entries.end()) {
-                            const uint64_t fee = MailFeeForSize(payload.ciphertext.size(), params);
+                            const uint64_t fee = MailFeeForSize(payload.ciphertext.size());
                             WalletLedgerEntry entry{
                                 .entry_id = op_id,
                                 .kind = WalletEntryKind::MAIL_FEE,

@@ -23,8 +23,16 @@ NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& d
     }
     if (definition.genesis_block_id.IsNull()) return NetworkDefinitionError::NULL_GENESIS_BLOCK_ID;
     if (definition.genesis_state_root.IsNull()) return NetworkDefinitionError::NULL_GENESIS_STATE_ROOT;
-    if (definition.initial_validator_set_commitment.IsNull()) {
-        return NetworkDefinitionError::NULL_VALIDATOR_SET_COMMITMENT;
+    const auto& poa_key = definition.poa_finalizer_public_key;
+    if (poa_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||
+        poa_key.ml_dsa.size() != MLDSA65_PUBLIC_KEY_SIZE ||
+        std::all_of(poa_key.ed25519.begin(), poa_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
+        std::all_of(poa_key.ml_dsa.begin(), poa_key.ml_dsa.end(), [](unsigned char b) { return b == 0; }) ||
+        !ComputePoaFinalizerKeyId(poa_key)) {
+        return NetworkDefinitionError::INVALID_POA_FINALIZER_KEY;
+    }
+    if (ComputeGenesisBlockId(definition.genesis_state_root, poa_key) != definition.genesis_block_id) {
+        return NetworkDefinitionError::GENESIS_BLOCK_ID_MISMATCH;
     }
     if (definition.protocol_parameters.account_creation_work_bits > uint256::size() * 8) {
         return NetworkDefinitionError::INVALID_ACCOUNT_CREATION_WORK_BITS;
@@ -54,21 +62,6 @@ NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& d
         definition.protocol_parameters.max_pending_name_commits > DEFAULT_MAX_PENDING_NAME_COMMITS) {
         return NetworkDefinitionError::INVALID_NAME_PARAMETERS;
     }
-    if (definition.operator_authority) {
-        const auto& authority = *definition.operator_authority;
-        if (authority.keyset_id.IsNull()) {
-            return NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEYSET_ID;
-        }
-        if (std::all_of(authority.ed25519_public_key.begin(), authority.ed25519_public_key.end(), [](unsigned char b) { return b == 0; })) {
-            return NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEY;
-        }
-        if (std::all_of(authority.mldsa65_public_key.begin(), authority.mldsa65_public_key.end(), [](unsigned char b) { return b == 0; })) {
-            return NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEY;
-        }
-        if (authority.active_from_epoch != 0 || authority.retired_from_epoch.has_value()) {
-            return NetworkDefinitionError::INVALID_OPERATOR_AUTHORITY_EPOCH;
-        }
-    }
     return NetworkDefinitionError::NONE;
 }
 
@@ -88,6 +81,10 @@ std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefiniti
     out.push_back(definition.protocol_version);
     append_hash(definition.genesis_block_id);
     append_hash(definition.genesis_state_root);
+    out.insert(out.end(), definition.poa_finalizer_public_key.ed25519.begin(),
+        definition.poa_finalizer_public_key.ed25519.end());
+    out.insert(out.end(), definition.poa_finalizer_public_key.ml_dsa.begin(),
+        definition.poa_finalizer_public_key.ml_dsa.end());
     append_u32le(static_cast<uint32_t>(definition.protocol_parameters.account_creation_work_bits));
     append_u64le(definition.protocol_parameters.account_creation_epoch_lag);
     append_u32le(definition.protocol_parameters.max_account_creates_per_block);
@@ -96,27 +93,11 @@ std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefiniti
     append_u64le(definition.protocol_parameters.payment_fee);
     append_u64le(definition.protocol_parameters.root_publication_fee_per_started_kib);
     append_u64le(definition.protocol_parameters.root_publication_fee_per_chunk);
-    append_u64le(definition.protocol_parameters.mail_base_fee);
-    append_u64le(definition.protocol_parameters.mail_tier_bytes);
-    append_u64le(definition.protocol_parameters.mail_tier_fee);
-    append_u32le(definition.protocol_parameters.max_mail_ciphertext_size);
-    append_u32le(definition.protocol_parameters.new_account_mail_limit_per_epoch);
     append_u32le(definition.protocol_parameters.name_claim_work_bits);
     append_u64le(definition.protocol_parameters.name_commit_min_depth);
     append_u64le(definition.protocol_parameters.name_commit_max_lifetime);
     append_u32le(definition.protocol_parameters.max_pending_name_commits);
     out.push_back(definition.protocol_parameters.identity_kem_xwing_enabled ? 1 : 0);
-    append_hash(definition.initial_validator_set_commitment);
-    out.push_back(definition.operator_authority.has_value() ? 1 : 0);
-    if (definition.operator_authority) {
-        const auto& authority = *definition.operator_authority;
-        append_hash(authority.keyset_id);
-        out.insert(out.end(), authority.ed25519_public_key.begin(), authority.ed25519_public_key.end());
-        out.insert(out.end(), authority.mldsa65_public_key.begin(), authority.mldsa65_public_key.end());
-        append_u64le(authority.active_from_epoch);
-        out.push_back(authority.retired_from_epoch.has_value() ? 1 : 0);
-        if (authority.retired_from_epoch) append_u64le(*authority.retired_from_epoch);
-    }
     return out;
 }
 
@@ -161,6 +142,14 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
 
     const auto genesis_block_id = read_hash();
     const auto genesis_state_root = read_hash();
+    if (pos + ED25519_PUBLIC_KEY_SIZE + MLDSA65_PUBLIC_KEY_SIZE > bytes.size()) return std::nullopt;
+    definition.poa_finalizer_public_key.purpose = IdentityKeyPurpose::POA_FINALIZER;
+    std::copy_n(bytes.begin() + pos, ED25519_PUBLIC_KEY_SIZE,
+        definition.poa_finalizer_public_key.ed25519.begin());
+    pos += ED25519_PUBLIC_KEY_SIZE;
+    definition.poa_finalizer_public_key.ml_dsa.assign(
+        bytes.begin() + pos, bytes.begin() + pos + MLDSA65_PUBLIC_KEY_SIZE);
+    pos += MLDSA65_PUBLIC_KEY_SIZE;
     const auto work_bits = read_u32le();
     const auto epoch_lag = read_u64le();
     const auto max_creates = read_u32le();
@@ -169,25 +158,15 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
     const auto payment_fee = read_u64le();
     const auto root_publication_fee_per_kib = read_u64le();
     const auto root_publication_fee_per_chunk = read_u64le();
-    const auto mail_base_fee = read_u64le();
-    const auto mail_tier_bytes = read_u64le();
-    const auto mail_tier_fee = read_u64le();
-    const auto max_mail_size = read_u32le();
-    const auto mail_limit = read_u32le();
     const auto name_work_bits = read_u32le();
     const auto name_min_depth = read_u64le();
     const auto name_max_lifetime = read_u64le();
     const auto max_pending_names = read_u32le();
     const auto kem_enabled = read_u8();
-    const auto validator_commitment = read_hash();
-    const auto has_operator = read_u8();
-
     if (!genesis_block_id || !genesis_state_root || !work_bits || !epoch_lag || !max_creates ||
         !onboarding_bonus || !epoch_blocks || !payment_fee || !root_publication_fee_per_kib ||
-        !root_publication_fee_per_chunk || !mail_base_fee || !mail_tier_bytes ||
-        !mail_tier_fee || !max_mail_size || !mail_limit || !name_work_bits || !name_min_depth ||
-        !name_max_lifetime || !max_pending_names || !kem_enabled || *kem_enabled > 1 ||
-        !validator_commitment || !has_operator) {
+        !root_publication_fee_per_chunk || !name_work_bits || !name_min_depth ||
+        !name_max_lifetime || !max_pending_names || !kem_enabled || *kem_enabled > 1) {
         return std::nullopt;
     }
 
@@ -201,57 +180,18 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
     definition.protocol_parameters.payment_fee = *payment_fee;
     definition.protocol_parameters.root_publication_fee_per_started_kib = *root_publication_fee_per_kib;
     definition.protocol_parameters.root_publication_fee_per_chunk = *root_publication_fee_per_chunk;
-    definition.protocol_parameters.mail_base_fee = *mail_base_fee;
-    definition.protocol_parameters.mail_tier_bytes = *mail_tier_bytes;
-    definition.protocol_parameters.mail_tier_fee = *mail_tier_fee;
-    definition.protocol_parameters.max_mail_ciphertext_size = *max_mail_size;
-    definition.protocol_parameters.new_account_mail_limit_per_epoch = *mail_limit;
     definition.protocol_parameters.name_claim_work_bits = *name_work_bits;
     definition.protocol_parameters.name_commit_min_depth = *name_min_depth;
     definition.protocol_parameters.name_commit_max_lifetime = *name_max_lifetime;
     definition.protocol_parameters.max_pending_name_commits = *max_pending_names;
     definition.protocol_parameters.identity_kem_xwing_enabled = *kem_enabled == 1;
-    definition.initial_validator_set_commitment = *validator_commitment;
-
-    if (*has_operator == 1) {
-        const auto keyset_id = read_hash();
-        if (!keyset_id) return std::nullopt;
-
-        OperatorAuthorityKeySet authority;
-        authority.keyset_id = *keyset_id;
-        if (pos + authority.ed25519_public_key.size() + authority.mldsa65_public_key.size() > bytes.size()) {
-            return std::nullopt;
-        }
-        std::copy_n(bytes.begin() + pos, authority.ed25519_public_key.size(), authority.ed25519_public_key.begin());
-        pos += authority.ed25519_public_key.size();
-        std::copy_n(bytes.begin() + pos, authority.mldsa65_public_key.size(), authority.mldsa65_public_key.begin());
-        pos += authority.mldsa65_public_key.size();
-
-        const auto active_from = read_u64le();
-        const auto has_retired = read_u8();
-        if (!active_from || !has_retired) return std::nullopt;
-
-        authority.active_from_epoch = *active_from;
-        if (*has_retired == 1) {
-            const auto retired_from = read_u64le();
-            if (!retired_from) return std::nullopt;
-            authority.retired_from_epoch = *retired_from;
-        } else if (*has_retired != 0) {
-            return std::nullopt;
-        }
-
-        definition.operator_authority = authority;
-    } else if (*has_operator != 0) {
-        return std::nullopt;
-    }
-
     if (pos != bytes.size() || ValidateNetworkDefinition(definition) != NetworkDefinitionError::NONE) return std::nullopt;
     return definition;
 }
 
 uint256 NetworkId(const CybouNetworkDefinition& definition)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V3"};
+    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V4"};
     const auto bytes = SerializeNetworkDefinition(definition);
     uint256 result;
     ::cybou::crypto::Sha256 hasher;
@@ -285,8 +225,7 @@ std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path
     const auto genesis = DeserializeCybouState(
         std::span<const unsigned char>{bytes.data() + state_offset + 4, state_size});
     if (!definition || !genesis || CybouStateHash(*genesis) != definition->genesis_state_root ||
-        ComputeValidatorSetCommitment(genesis->validator_set) != definition->initial_validator_set_commitment ||
-        ComputeGenesisBlockId(definition->genesis_state_root, definition->initial_validator_set_commitment) != definition->genesis_block_id) {
+        ComputeGenesisBlockId(definition->genesis_state_root, definition->poa_finalizer_public_key) != definition->genesis_block_id) {
         return std::nullopt;
     }
     return CybouNetworkFile{*definition, *genesis};
@@ -315,46 +254,32 @@ CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public
     };
 }
 
-std::optional<CybouState> CreateDevGenesisState(std::span<const IdentityHybridPublicKey> validator_public_keys)
+uint256 ComputeGenesisBlockId(const uint256& state_root, const IdentityHybridPublicKey& poa_finalizer_public_key)
 {
-    if (validator_public_keys.empty()) return std::nullopt;
-    CybouState genesis = CreateDevGenesisState(validator_public_keys.front());
-    auto& validators = genesis.validator_set.validators;
-    for (size_t i = 1; i < validator_public_keys.size(); ++i) {
-        validators.push_back(Validator{.validator_id = ComputeValidatorId(validator_public_keys[i]),
-            .consensus_public_key = validator_public_keys[i], .weight = 1});
-    }
-    std::sort(validators.begin(), validators.end(), [](const Validator& left, const Validator& right) {
-        return left.validator_id < right.validator_id;
-    });
-    if (ValidateValidatorSet(genesis.validator_set) != ValidatorSetValidationError::NONE) return std::nullopt;
-    return genesis;
-}
-
-uint256 ComputeGenesisBlockId(const uint256& state_root, const uint256& validator_set_commitment)
-{
-    static constexpr std::string_view DOMAIN{"CYBOU/GENESIS-BLOCK/V2"};
+    static constexpr std::string_view DOMAIN{"CYBOU/GENESIS-BLOCK/V3"};
+    const auto key_id = ComputePoaFinalizerKeyId(poa_finalizer_public_key);
+    if (!key_id) return {};
     ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(state_root.begin(), state_root.size());
-    hasher.Write(validator_set_commitment.begin(), validator_set_commitment.size());
+    hasher.Write(key_id->data(), key_id->size());
     uint256 out;
     hasher.Finalize(out.begin());
     return out;
 }
 
-CybouNetworkDefinition CreateDevNetworkDefinition(const CybouState& genesis)
+CybouNetworkDefinition CreateDevNetworkDefinition(
+    const CybouState& genesis,
+    const IdentityHybridPublicKey& poa_finalizer_public_key)
 {
     const auto state_root_opt = CybouStateHash(genesis);
     const uint256 state_root = state_root_opt.value_or(uint256{});
-    const uint256 val_commitment = ComputeValidatorSetCommitment(genesis.validator_set);
     return CybouNetworkDefinition{
         .protocol_version = CYBOU_NETWORK_DEFINITION_VERSION,
-        .genesis_block_id = ComputeGenesisBlockId(state_root, val_commitment),
+        .genesis_block_id = ComputeGenesisBlockId(state_root, poa_finalizer_public_key),
         .genesis_state_root = state_root,
+        .poa_finalizer_public_key = poa_finalizer_public_key,
         .protocol_parameters = DevProtocolParameters(),
-        .initial_validator_set_commitment = val_commitment,
-        .operator_authority = std::nullopt,
     };
 }
 

@@ -10,6 +10,7 @@
 #include <qt/cyboutheme.h>
 
 #include <cybou/network_definition.h>
+#include <test/cybou_test_helpers.h>
 #include <cybou/validator.h>
 
 #include <QApplication>
@@ -43,7 +44,7 @@ bool WriteNetworkFile(const QString& path, const unsigned char seed_byte)
     const auto keypair = cybou::GenerateValidatorKeyPair(seed);
     if (!keypair) return false;
     const auto genesis = cybou::CreateDevGenesisState(keypair->public_key);
-    const auto definition = cybou::CreateDevNetworkDefinition(genesis);
+    const auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey());
     const auto definition_bytes = cybou::SerializeNetworkDefinition(definition);
     const auto state_bytes = cybou::SerializeCybouState(genesis);
     if (!state_bytes) return false;

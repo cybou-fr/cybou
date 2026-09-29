@@ -116,14 +116,14 @@ BOOST_AUTO_TEST_CASE(n4_bft_distributed_consensus_with_fault_tolerance_and_catch
         pubkeys[i] = key->public_key;
     }
 
-    const auto genesis_opt = cybou::CreateDevGenesisState(pubkeys);
+    const auto genesis_opt = cybou::CreateTestGenesisState(pubkeys);
     BOOST_REQUIRE(genesis_opt);
     const auto genesis = *genesis_opt;
     BOOST_REQUIRE_EQUAL(genesis.validator_set.validators.size(), 4U);
     BOOST_CHECK_EQUAL(genesis.validator_set.QuorumThreshold(), 3U);
     BOOST_CHECK_EQUAL(genesis.validator_set.FaultTolerance(), 1U);
 
-    auto definition = cybou::CreateDevNetworkDefinition(genesis);
+    auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey());
     definition.protocol_parameters.account_creation_work_bits = 0;
 
     const auto base_dir = std::filesystem::temp_directory_path() / "cybou-n4-bft-dist";

@@ -16,6 +16,7 @@
 #include <cybou/state_store.h>
 #include "cybou_test_identity_helpers.h"
 #include <cybou/validator.h>
+#include <test/cybou_test_helpers.h>
 
 #include <dbwrapper.h>
 #include <test/util/setup_common.h>
@@ -162,11 +163,11 @@ cybou::CybouNetworkDefinition TestNetworkDefinition()
     const auto genesis = GenesisState();
     return cybou::CybouNetworkDefinition{
         .protocol_version = cybou::CYBOU_NETWORK_DEFINITION_VERSION,
-        .genesis_block_id = uint256::ONE,
+        .genesis_block_id = cybou::ComputeGenesisBlockId(
+            *cybou::CybouStateHash(genesis), cybou::TestPoaFinalizerPublicKey()),
         .genesis_state_root = *cybou::CybouStateHash(genesis),
+        .poa_finalizer_public_key = cybou::TestPoaFinalizerPublicKey(),
         .protocol_parameters = PARAMS,
-        .initial_validator_set_commitment = cybou::ComputeValidatorSetCommitment(TEST_VALIDATOR_SET),
-        .operator_authority = std::nullopt,
     };
 }
 
@@ -289,44 +290,10 @@ BOOST_AUTO_TEST_CASE(network_definition_roundtrip_rejects_truncation_and_trailin
     bytes.push_back(0);
     BOOST_CHECK(!cybou::DeserializeNetworkDefinition(bytes));
 
-    definition.operator_authority = cybou::OperatorAuthorityKeySet{
-        .keyset_id = uint256::ONE,
-        .ed25519_public_key = {1},
-        .mldsa65_public_key = {1},
-        .active_from_epoch = 0,
-        .retired_from_epoch = std::nullopt,
-    };
-    const auto authority_bytes = cybou::SerializeNetworkDefinition(definition);
-    const auto decoded_authority = cybou::DeserializeNetworkDefinition(authority_bytes);
-    BOOST_REQUIRE(decoded_authority);
-    BOOST_CHECK(cybou::SerializeNetworkDefinition(*decoded_authority) == authority_bytes);
-    BOOST_CHECK(!cybou::DeserializeNetworkDefinition(std::span{authority_bytes}.first(authority_bytes.size() - 1)));
-
-    // Invalid authority validations
-    auto bad_auth_def = definition;
-    bad_auth_def.operator_authority->keyset_id = uint256{};
-    BOOST_CHECK(cybou::ValidateNetworkDefinition(bad_auth_def) ==
-                cybou::NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEYSET_ID);
-
-    bad_auth_def = definition;
-    bad_auth_def.operator_authority->ed25519_public_key.fill(0);
-    BOOST_CHECK(cybou::ValidateNetworkDefinition(bad_auth_def) ==
-                cybou::NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEY);
-
-    bad_auth_def = definition;
-    bad_auth_def.operator_authority->mldsa65_public_key.fill(0);
-    BOOST_CHECK(cybou::ValidateNetworkDefinition(bad_auth_def) ==
-                cybou::NetworkDefinitionError::NULL_OPERATOR_AUTHORITY_KEY);
-
-    bad_auth_def = definition;
-    bad_auth_def.operator_authority->active_from_epoch = 1;
-    BOOST_CHECK(cybou::ValidateNetworkDefinition(bad_auth_def) ==
-                cybou::NetworkDefinitionError::INVALID_OPERATOR_AUTHORITY_EPOCH);
-
-    bad_auth_def = definition;
-    bad_auth_def.operator_authority->retired_from_epoch = 10;
-    BOOST_CHECK(cybou::ValidateNetworkDefinition(bad_auth_def) ==
-                cybou::NetworkDefinitionError::INVALID_OPERATOR_AUTHORITY_EPOCH);
+    auto invalid_key = definition;
+    invalid_key.poa_finalizer_public_key.ml_dsa.clear();
+    BOOST_CHECK(cybou::ValidateNetworkDefinition(invalid_key) ==
+                cybou::NetworkDefinitionError::INVALID_POA_FINALIZER_KEY);
 }
 
 BOOST_AUTO_TEST_CASE(genesis_initializes_once_and_loads)
@@ -383,12 +350,14 @@ BOOST_AUTO_TEST_CASE(candidate_root_uses_canonical_state_and_height)
 BOOST_AUTO_TEST_CASE(genesis_rejects_invalid_definition_or_state_mismatch)
 {
     auto db{MemoryDb()};
-    auto bad_definition{TestNetworkDefinition()};
-    bad_definition.genesis_state_root = uint256::FromUserHex("99").value();
-    cybou::CybouStateStore store{db, bad_definition};
-    BOOST_CHECK(store.InitializeGenesis(GenesisState()).error ==
+    const auto definition{TestNetworkDefinition()};
+    cybou::CybouStateStore store{db, definition};
+    auto mismatched_state = GenesisState();
+    ++mismatched_state.onboarding_pool;
+    BOOST_CHECK(store.InitializeGenesis(mismatched_state).error ==
         cybou::GenesisInitError::GENESIS_STATE_MISMATCH);
 
+    auto bad_definition{definition};
     bad_definition.protocol_version = 0;
     cybou::CybouStateStore invalid_store{db, bad_definition};
     BOOST_CHECK(invalid_store.InitializeGenesis(GenesisState()).error ==
@@ -449,23 +418,13 @@ BOOST_AUTO_TEST_CASE(state_store_rejects_reopen_with_different_network_definitio
     cybou::CybouStateStore incompatible{db, incompatible_definition};
     BOOST_CHECK(incompatible.LoadState().error == cybou::StateLoadError::NETWORK_MISMATCH);
 
-    auto mail_policy_definition{definition};
-    ++mail_policy_definition.protocol_parameters.new_account_mail_limit_per_epoch;
-    BOOST_CHECK(cybou::NetworkId(mail_policy_definition) != original.GetNetworkId());
-    cybou::CybouStateStore mail_policy_store{db, mail_policy_definition};
-    BOOST_CHECK(mail_policy_store.LoadState().error == cybou::StateLoadError::NETWORK_MISMATCH);
-
-    auto authority_definition{definition};
-    authority_definition.operator_authority = cybou::OperatorAuthorityKeySet{
-        .keyset_id = uint256::ONE,
-        .ed25519_public_key = {1},
-        .mldsa65_public_key = {1},
-        .active_from_epoch = 0,
-        .retired_from_epoch = std::nullopt,
-    };
-    BOOST_CHECK(cybou::NetworkId(authority_definition) != original.GetNetworkId());
-    cybou::CybouStateStore authority_store{db, authority_definition};
-    BOOST_CHECK(authority_store.LoadState().error == cybou::StateLoadError::NETWORK_MISMATCH);
+    auto poa_definition{definition};
+    poa_definition.poa_finalizer_public_key = cybou::TestPoaFinalizerPublicKey(0xBC);
+    poa_definition.genesis_block_id = cybou::ComputeGenesisBlockId(
+        poa_definition.genesis_state_root, poa_definition.poa_finalizer_public_key);
+    BOOST_CHECK(cybou::NetworkId(poa_definition) != original.GetNetworkId());
+    cybou::CybouStateStore poa_store{db, poa_definition};
+    BOOST_CHECK(poa_store.LoadState().error == cybou::StateLoadError::NETWORK_MISMATCH);
 
     const auto fb = MakeFinalizedBlock(original, {});
     BOOST_CHECK(incompatible.CommitFinalizedBlock(fb, TEST_VALIDATOR_SET).error ==

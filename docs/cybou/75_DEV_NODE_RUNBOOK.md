@@ -5,10 +5,14 @@ CYBOU DEV state chain. It does not use the inherited Bitcoin PoW chain.
 
 ## Network setup
 
-Create a 32-byte raw validator seed and keep it private. On Windows,
+Create two 32-byte raw seeds and keep them private: one dedicated PoA finalizer
+seed and one validator seed for the transitional BFT runtime. On Windows,
 PowerShell can create one with a cryptographic random source:
 
 ```powershell
+$key = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($key)
+[System.IO.File]::WriteAllBytes('poa-finalizer.key', $key)
 $key = New-Object byte[] 32
 [System.Security.Cryptography.RandomNumberGenerator]::Fill($key)
 [System.IO.File]::WriteAllBytes('validator.key', $key)
@@ -17,16 +21,18 @@ $key = New-Object byte[] 32
 Restrict access to that key file before using it on a shared machine.
 
 ```text
-cybou-node init-dev network.bin validator.key
+cybou-node init-dev network.bin poa-finalizer.key validator.key
 ```
 
-`init-dev` derives the Ed25519 and ML-DSA validator public keys from that
-seed. The same seed file must be passed to `serve`.
+`init-dev` commits the derived PoA finalizer public key into the version-5
+network definition and derives the Ed25519 and ML-DSA validator public keys
+from each validator seed. The PoA key is genesis-bound but is not yet wired to
+the active BFT runtime. Pass the validator seed to `serve`.
 
 For a four-validator genesis, pass four distinct seed files:
 
 ```text
-cybou-node init-dev network.bin validator-1.key validator-2.key validator-3.key validator-4.key
+cybou-node init-dev network.bin poa-finalizer.key validator-1.key validator-2.key validator-3.key validator-4.key
 ```
 
 The public validator set is sorted by validator ID, so input file order does

@@ -503,7 +503,7 @@ SendMailResult CybouMailService::SendMail(
     const uint64_t current_height = m_runtime.GetFinalizedHeight().value_or(0);
     const uint64_t current_epoch = EpochForHeight(current_height, params);
     if (sender_state->last_mail_epoch == current_epoch &&
-        sender_state->mail_count_in_epoch >= params.new_account_mail_limit_per_epoch) {
+        sender_state->mail_count_in_epoch >= NEW_ACCOUNT_MAIL_LIMIT_PER_EPOCH) {
         return {.error = SendMailError::RATE_LIMIT_EXCEEDED, .error_message = "Mail quota exceeded for current epoch"};
     }
 

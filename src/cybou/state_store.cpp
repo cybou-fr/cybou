@@ -102,10 +102,6 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     if (!state_hash || *state_hash != m_network_definition.genesis_state_root) {
         return {GenesisInitError::GENESIS_STATE_MISMATCH};
     }
-    if (ComputeValidatorSetCommitment(genesis_state.validator_set) !=
-        m_network_definition.initial_validator_set_commitment) {
-        return {GenesisInitError::VALIDATOR_SET_COMMITMENT_MISMATCH};
-    }
     if (ValidateValidatorSet(genesis_state.validator_set) != ValidatorSetValidationError::NONE) {
         return {GenesisInitError::INVALID_GENESIS_VALIDATOR_SET};
     }
