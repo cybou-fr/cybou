@@ -89,6 +89,8 @@ struct CybouAttachmentItem {
     CybouContentState state{CybouContentState::Local};
     int progress_percent{-1}; ///< -1 when no meaningful percentage exists
     CybouRetrievalState retrieval{CybouRetrievalState::Idle};
+    /** Files item created by "Save to Files" for this attachment, if any. */
+    QString saved_file_id;
 };
 
 enum class CybouMailFolder {

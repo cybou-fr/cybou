@@ -226,6 +226,14 @@ public:
     void restoreFile(const QString& id);
     void deleteFileForever(const QString& id);
     const CybouFileItem* fileItem(const QString& id) const;
+    /**
+     * Mail attachment -> Files: adds an independent private Files catalog
+     * reference that reuses the existing protected content (no download or
+     * re-upload). Returns the Files item id; repeated calls reuse it.
+     */
+    QString saveAttachmentToFiles(const QString& message_id, const QString& attachment_id);
+    /** Files -> Mail: an attachment that references existing protected content. */
+    std::optional<CybouAttachmentItem> attachmentFromFile(const QString& file_id) const;
     /** Adapter entries for upload/download progress. */
     void setFileState(const QString& id, CybouContentState state, int progress_percent = -1);
     void setFileRetrieval(const QString& id, CybouRetrievalState retrieval);

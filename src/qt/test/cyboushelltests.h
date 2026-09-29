@@ -35,6 +35,7 @@ private Q_SLOTS:
     void identityPageHidesSecrets();
     void mailNavigationAndSearch();
     void composeGatesAndSends();
+    void mailFilesCrossProduct();
     void walletPageShowsBalances();
     void filesGateActions();
     void filesNavigationAndViews();

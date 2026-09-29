@@ -334,10 +334,12 @@ void MailReader::refresh()
         download->setObjectName(QStringLiteral("secondaryButton"));
         download->setProperty("cybouId", QStringLiteral("downloadAttachment"));
         download->setEnabled(available && attachment.retrieval == CybouRetrievalState::Idle);
-        auto* save = new QPushButton{tr("Save to Files"), chip};
+        const bool saved = !attachment.saved_file_id.isEmpty();
+        auto* save = new QPushButton{saved ? tr("Saved to Files") : tr("Save to Files"), chip};
         save->setObjectName(QStringLiteral("secondaryButton"));
         save->setProperty("cybouId", QStringLiteral("saveToFiles"));
-        save->setEnabled(available && !outgoing);
+        save->setEnabled(available && !outgoing && !saved && m_model->capabilities().files);
+        if (saved) save->setIcon(QIcon{glyphPixmap(Glyph::Check, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
         layout->addWidget(download);
         layout->addWidget(save);
         const QString attachment_id = attachment.id;
@@ -351,7 +353,11 @@ void MailReader::refresh()
             if (!destination.isEmpty()) m_model->requestAttachmentDownload(m_id, attachment_id, destination);
         });
         connect(save, &QPushButton::clicked, this, [this, attachment_id] {
-            if (onSaveAttachment) onSaveAttachment(m_id, attachment_id);
+            if (onSaveAttachment) {
+                onSaveAttachment(m_id, attachment_id);
+                return;
+            }
+            m_model->saveAttachmentToFiles(m_id, attachment_id);
         });
         m_attachment_rows->addWidget(chip);
     }

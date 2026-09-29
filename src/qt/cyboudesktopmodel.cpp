@@ -890,6 +890,41 @@ void CybouDesktopModel::deleteFileForever(const QString& id)
     Q_EMIT filesChanged();
 }
 
+QString CybouDesktopModel::saveAttachmentToFiles(const QString& message_id, const QString& attachment_id)
+{
+    if (m_status.identity_state != CybouIdentityState::Active) return {};
+    auto* attachment = FindAttachment(m_mail, message_id, attachment_id);
+    if (!attachment || attachment->state != CybouContentState::Protected) return {};
+    if (!attachment->saved_file_id.isEmpty() && fileItem(attachment->saved_file_id)) return attachment->saved_file_id;
+    CybouFileItem item;
+    item.id = NewLocalId("saved");
+    item.name = attachment->name;
+    item.logical_size = attachment->logical_size;
+    item.modified = QDateTime::currentDateTime();
+    // Same encrypted content, new independent catalog/retention reference.
+    item.state = CybouContentState::Protected;
+    attachment->saved_file_id = item.id;
+    m_files.append(item);
+    Q_EMIT filesChanged();
+    Q_EMIT mailChanged();
+    addActivity({CybouActivityKind::FileUploaded, tr("%1 saved to Files").arg(item.name), tr("From Mail"),
+        QDateTime::currentDateTime()});
+    return item.id;
+}
+
+std::optional<CybouAttachmentItem> CybouDesktopModel::attachmentFromFile(const QString& file_id) const
+{
+    const auto* file = fileItem(file_id);
+    if (!file || file->folder || file->state != CybouContentState::Protected) return std::nullopt;
+    CybouAttachmentItem attachment;
+    attachment.id = QStringLiteral("ref-") + file->id;
+    attachment.name = file->name;
+    attachment.logical_size = file->logical_size;
+    // Existing protected content: the Mail root only references it.
+    attachment.state = CybouContentState::Protected;
+    return attachment;
+}
+
 void CybouDesktopModel::setFileState(const QString& id, CybouContentState state, int progress_percent)
 {
     if (MutateFile(m_files, id, [&](CybouFileItem& item) { item.state = state; item.progress_percent = progress_percent; }))

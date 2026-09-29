@@ -372,6 +372,44 @@ void CybouShellTests::composeGatesAndSends()
     QVERIFY(!send->isEnabled());
 }
 
+void CybouShellTests::mailFilesCrossProduct()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    const int files_before = model->fileItems().size();
+
+    // Mail attachment -> Save to Files: a new catalog reference, same content.
+    auto* mail = dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
+    mail->openMessage(QStringLiteral("m-contract"));
+    QPushButton* save{nullptr};
+    for (auto* button : mail->reader()->findChildren<QPushButton*>()) {
+        if (button->property("cybouId").toString() == QLatin1String{"saveToFiles"}) save = button;
+    }
+    QVERIFY(save);
+    QVERIFY(save->isEnabled());
+    save->click();
+    QCOMPARE(model->fileItems().size(), files_before + 1);
+    const auto& saved = model->fileItems().last();
+    QCOMPARE(saved.name, QStringLiteral("contract-signed.pdf"));
+    QCOMPARE(saved.state, CybouContentState::Protected); // reused, not re-uploaded
+    // Saving again reuses the same Files item.
+    QCOMPARE(model->saveAttachmentToFiles(QStringLiteral("m-contract"), QStringLiteral("c-contract")), saved.id);
+    QCOMPARE(model->fileItems().size(), files_before + 1);
+
+    // Files -> Send by CYBOU Mail: compose opens with the file attached.
+    auto* files = dynamic_cast<StoragePage*>(window->page(CybouPage::Files));
+    QVERIFY(files->onSendByMail);
+    files->onSendByMail(QStringLiteral("f-report"));
+    QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Mail));
+    const auto attachments = mail->composer()->attachments();
+    QCOMPARE(attachments.size(), 1);
+    QCOMPARE(attachments.first().name, QStringLiteral("report.pdf"));
+    QCOMPARE(attachments.first().state, CybouContentState::Protected);
+    // Unfinished uploads cannot be sent by Mail yet.
+    QVERIFY(!model->attachmentFromFile(QStringLiteral("f-archive")).has_value());
+}
+
 void CybouShellTests::walletPageShowsBalances()
 {
     auto window = makeWindow();

@@ -365,6 +365,15 @@ void CybouMainWindow::buildShell()
     auto* identity = new IdentityPage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
     auto* diagnostics = new NetworkPage{m_desktop_model, [this] { showDebugWindow(); }, nullptr};
     auto* settings = new SettingsPage{m_desktop_model, [this] { showPage(CybouPage::Diagnostics); }, nullptr};
+    files->onSendByMail = [this, mail](const QString& file_id) {
+        const auto attachment = m_desktop_model->attachmentFromFile(file_id);
+        if (!attachment) return;
+        CybouMailItem draft;
+        draft.subject = attachment->name;
+        draft.attachments = {*attachment};
+        showPage(CybouPage::Mail);
+        mail->openCompose(draft);
+    };
     addPage(home, true);
     addPage(mail, false);
     addPage(files, false);
