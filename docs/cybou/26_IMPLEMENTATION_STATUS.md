@@ -46,8 +46,8 @@ recovery gates pass together. See
   binds verification to canonical block bytes. `PoaConflictDetector` stores
   observations and halt evidence. Local fixed key-derivation, digest,
   Ed25519, deterministic test-only ML-DSA, and certificate-encoding vectors are
-  in `POA_FINALITY_VECTORS.md`; an independent implementation has not yet
-  confirmed them. `PoaConflictDetector::ReadSafetyEvidence` revalidates and
+  in `POA_FINALITY_VECTORS.md` and have been reproduced with independent
+  implementations. `PoaConflictDetector::ReadSafetyEvidence` revalidates and
   exposes both certificates after an equivocation halt. Genesis commitment,
   runtime wiring, finalized-block execution/acceptance, and operator recovery
   remain cutover gates.
@@ -66,9 +66,7 @@ serialization or cryptography code.
 - RootPublication client construction/submission, publication scanning, and
   clean-machine reconstruction of accessible roots.
 - Genesis-bound PoA signing, hybrid signature verification, anti-equivocation
-  journal durability, fork handling, operator recovery, and independent
-  cross-implementation confirmation of the vectors in
-  `POA_FINALITY_VECTORS.md`.
+  journal durability, fork handling, and operator recovery.
 - Connecting provider admission to the PUT/GET peer wire; independent chunk
   placement, durability, retry, retention, repair, and provider-loss handling.
 - Publication scanning, recursive retrieval, and clean-machine Identity,

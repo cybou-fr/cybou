@@ -76,10 +76,20 @@ SHA-256(ML-DSA-65 signature):
 
 Production signing keeps OpenSSL's randomized default. The fixed signature
 vector is only for deterministic interoperability testing and does not change
-the production signature policy. Cross-implementation confirmation remains an
-open cutover gate. OpenSSL documents both the randomized default and the
-deterministic test parameter in its
+the production signature policy. The key derivation, Ed25519 public key and
+signature, PoA digest, ML-DSA public-key and signature hashes, composite key
+ID, and certificate field layout were independently reproduced. Ed25519 uses
+PyNaCl 1.6.2 (libsodium); ML-DSA-65 uses `dilithium-py` 1.4.0 with its FIPS
+204 key-derivation and deterministic-signing APIs; Python `hashlib` and
+`hmac` reproduce the digest and key-ID calculations. The educational ML-DSA
+implementation is only a vector checker, never a production dependency.
+OpenSSL documents both the randomized default and the deterministic test
+parameter in its
 [ML-DSA EVP reference](https://docs.openssl.org/3.5/man7/EVP_SIGNATURE-ML-DSA/).
+The independent checker is available as
+[`dilithium-py` 1.4.0](https://pypi.org/project/dilithium-py/1.4.0/).
+PyNaCl's independent Ed25519 binding is available at
+[PyNaCl](https://pypi.org/project/PyNaCl/1.6.2/).
 
 ## Certificate encoding
 

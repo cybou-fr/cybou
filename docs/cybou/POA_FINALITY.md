@@ -43,10 +43,10 @@ certificate encoding is `version_u8 || NetworkID || BlockID || height_u64le ||
 parent_block_id || Ed25519_signature || ML-DSA-65_signature`; signatures are
 64 and 3,309 bytes, respectively. Verification also compares every certificate
 field with the independently reconstructed canonical block. Key-derivation,
-digest, Ed25519, and certificate-encoding vectors are recorded in
-`POA_FINALITY_VECTORS.md`. A fixed-output ML-DSA-65 test vector uses OpenSSL's
-deterministic test parameter; cross-implementation confirmation remains
-required before cutover. Production signing retains randomized ML-DSA behavior.
+digest, Ed25519, ML-DSA-65, key-ID, and certificate-encoding vectors are
+recorded in `POA_FINALITY_VECTORS.md` and were independently reproduced using
+PyNaCl/libsodium, `dilithium-py`, and Python's standard hash implementation.
+Production signing retains randomized ML-DSA behavior.
 Use the existing consensus hash primitive for block/finality IDs; BLAKE3 is
 introduced only for content-addressed encrypted chunks and their proofs.
 
