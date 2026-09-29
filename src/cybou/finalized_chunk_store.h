@@ -5,6 +5,7 @@
 #ifndef CYBOU_FINALIZED_CHUNK_STORE_H
 #define CYBOU_FINALIZED_CHUNK_STORE_H
 
+#include <cybou/chunk_blob_store.h>
 #include <cybou/chunk_authorization.h>
 #include <cybou/kv_store.h>
 
@@ -47,9 +48,9 @@ using FinalizedPublicationLookup = std::function<std::optional<RootPublication>(
 /** Content-addressed immutable provider store for finalized RootPublication chunks. */
 class FinalizedChunkStore final {
 public:
-    FinalizedChunkStore(const std::filesystem::path& path,
+    FinalizedChunkStore(ChunkBlobStore& blobs, const std::filesystem::path& path,
         std::span<const unsigned char, 32> network_id, std::uint64_t capacity_bytes,
-        bool memory_only = false, bool wipe_data = false);
+        bool wipe_data = false);
     ~FinalizedChunkStore();
     FinalizedChunkStore(const FinalizedChunkStore&) = delete;
     FinalizedChunkStore& operator=(const FinalizedChunkStore&) = delete;
@@ -65,9 +66,8 @@ public:
 private:
     std::optional<std::uint64_t> ReadCounter(const std::string& key) const;
 
+    ChunkBlobStore& m_blobs;
     const std::string m_namespace;
-    const std::filesystem::path m_blob_root;
-    const bool m_memory_only;
     const std::uint64_t m_capacity_bytes;
     mutable std::mutex m_mutex;
     std::unique_ptr<KVStore> m_db;

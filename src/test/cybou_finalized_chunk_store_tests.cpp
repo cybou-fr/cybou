@@ -49,7 +49,8 @@ BOOST_AUTO_TEST_SUITE(cybou_finalized_chunk_store_tests)
 BOOST_AUTO_TEST_CASE(finalized_chunk_store_requires_finality_and_valid_proof)
 {
     AuthorizedFixture fixture;
-    cybou::FinalizedChunkStore store({}, fixture.network_id, 4096, true);
+    cybou::ChunkBlobStore blobs({}, true);
+    cybou::FinalizedChunkStore store(blobs, {}, fixture.network_id, 4096);
     const auto unavailable = [](const uint256&) -> std::optional<cybou::RootPublication> { return std::nullopt; };
     BOOST_CHECK(store.PutChunk(fixture.operation_id, fixture.chunk_id, fixture.bytes, fixture.proof, unavailable).status ==
         cybou::ChunkAdmissionStatus::NOT_FINALIZED);
@@ -70,7 +71,8 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_requires_finality_and_valid_proof)
 BOOST_AUTO_TEST_CASE(finalized_chunk_store_is_content_addressed_idempotent_and_capacity_bounded)
 {
     AuthorizedFixture fixture;
-    cybou::FinalizedChunkStore store({}, fixture.network_id, fixture.bytes.size(), true);
+    cybou::ChunkBlobStore blobs({}, true);
+    cybou::FinalizedChunkStore store(blobs, {}, fixture.network_id, fixture.bytes.size());
     const auto lookup = fixture.Lookup();
     const auto first = store.PutChunk(fixture.operation_id, fixture.chunk_id, fixture.bytes, fixture.proof, lookup);
     BOOST_REQUIRE(first.status == cybou::ChunkAdmissionStatus::STORED);
@@ -139,7 +141,8 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_allows_proven_chunks_until_provider_c
         id.fill(0x7c);
         return id;
     }();
-    cybou::FinalizedChunkStore store({}, network_id, 4096, true);
+    cybou::ChunkBlobStore blobs({}, true);
+    cybou::FinalizedChunkStore store(blobs, {}, network_id, 4096);
     BOOST_CHECK(store.PutChunk(publication_id, chunks[0].id, first_bytes, commitment->proofs[0], lookup).status ==
         cybou::ChunkAdmissionStatus::STORED);
     BOOST_CHECK(store.PutChunk(publication_id, chunks[1].id, second_bytes, commitment->proofs[1], lookup).status ==
@@ -154,13 +157,14 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_binds_persistent_database_to_network)
     network_id.fill(0x7c);
     auto other_network_id = network_id;
     other_network_id[0] ^= 1;
+    cybou::ChunkBlobStore blobs(path / "chunks", false, true);
     {
-        cybou::FinalizedChunkStore store(path, network_id, 4096, false, true);
+        cybou::FinalizedChunkStore store(blobs, path, network_id, 4096, true);
         BOOST_CHECK(store.UsedBytes() == 0);
     }
-    BOOST_CHECK_THROW((cybou::FinalizedChunkStore{path, other_network_id, 4096}), std::invalid_argument);
+    BOOST_CHECK_THROW((cybou::FinalizedChunkStore{blobs, path, other_network_id, 4096}), std::invalid_argument);
     {
-        cybou::FinalizedChunkStore store(path, network_id, 4096);
+        cybou::FinalizedChunkStore store(blobs, path, network_id, 4096);
         BOOST_CHECK(store.UsedBytes() == 0);
     }
     std::filesystem::remove_all(path);

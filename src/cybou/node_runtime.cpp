@@ -86,17 +86,20 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
       m_store{*m_db, m_config.network_definition},
       m_submit_endpoint{m_config.submit_endpoint}
 {
+    std::filesystem::path storage_path;
+    if (!m_config.memory_only) {
+        storage_path = std::filesystem::path{m_config.data_dir.string() + ".chunks"};
+    }
+    m_chunk_blob_store = std::make_unique<ChunkBlobStore>(
+        m_config.memory_only ? std::filesystem::path{} : storage_path / "chunks",
+        m_config.memory_only, m_config.wipe_data);
     if (m_config.storage_enabled) {
         if (m_config.storage_capacity_bytes == 0) {
             throw std::invalid_argument("storage provider requires a positive capacity");
         }
-        std::filesystem::path storage_path;
-        if (!m_config.memory_only) {
-            storage_path = std::filesystem::path{m_config.data_dir.string() + ".chunks"};
-        }
-        m_finalized_chunk_store = std::make_unique<FinalizedChunkStore>(storage_path,
+        m_finalized_chunk_store = std::make_unique<FinalizedChunkStore>(*m_chunk_blob_store, storage_path,
             std::span<const unsigned char, 32>{m_network_id.begin(), 32},
-            m_config.storage_capacity_bytes, m_config.memory_only, m_config.wipe_data);
+            m_config.storage_capacity_bytes, m_config.wipe_data);
     }
     if (m_config.validator_private_key.has_value()) {
         m_authority_node = std::make_unique<CybouAuthorityNode>(

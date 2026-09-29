@@ -11,6 +11,7 @@ Current `main` implements the canonical low-level substrate:
 - generic Identity-authorized RootPublication;
 - recipient capsules and finalized-history lookup;
 - encrypted content-addressed chunks;
+- common persistent/in-memory ChunkBlobStore independent of provider admission;
 - streaming ROOT/INDEX/DATA tree;
 - chunk-authorization Merkle proofs;
 - finalized provider chunk admission;

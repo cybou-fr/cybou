@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 63 | a5acc5e341f194bd |
 | docs/cybou/24_DECISIONS.md | 58 | 501c4699046e3fb4 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 73 | 1c76c6d20ad70f26 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 49 | 11447b32914cf249 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 50 | 8672704f9df6b376 |
 | docs/cybou/37_FRANCE_EU_GLOBAL_STRATEGY.md | 96 | 99058ca64593188d |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 28 | ee4d307774069584 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
@@ -67,7 +67,7 @@ editing an included file.
 | docs/cybou/POA_FINALITY_VECTORS.md | 106 | 6bcebb272715c313 |
 | docs/cybou/POA_FINALITY.md | 97 | d528a50cbe250771 |
 | docs/cybou/ROOT_PUBLICATION.md | 113 | c737c5ee18676159 |
-| docs/cybou/STORAGE_ADMISSION.md | 135 | ae30477e6c1ac4e1 |
+| docs/cybou/STORAGE_ADMISSION.md | 139 | 80983e480fb78be0 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |
 | spec/circulation_scenarios.csv | 74 | db240cf0d3280644 |
 | spec/fee_router_test_vectors.csv | 9 | db9274d10b0a3dfa |

@@ -147,9 +147,10 @@ BOOST_AUTO_TEST_CASE(explicit_validator_peer_evicts_discovered_peer_at_capacity)
     for (size_t i = 0; i < handshakes.size(); ++i) {
         acceptors.push_back(std::make_unique<tcp::acceptor>(io, tcp::endpoint{loopback, 0}));
         ports.push_back(acceptors.back()->local_endpoint().port());
-        replacement_servers.emplace_back([&, i] {
+        auto* listener = acceptors.back().get();
+        replacement_servers.emplace_back([&, i, listener] {
             tcp::socket socket{io};
-            acceptors[i]->accept(socket);
+            listener->accept(socket);
             cybou::p2p::PeerSession session{std::move(socket)};
             handshakes[i] = session.Handshake({.network_id = network,
                 .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,

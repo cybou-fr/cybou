@@ -22,6 +22,10 @@ File
 ```
 
 Provider metadata is separate from blob bytes.
+Local staging/cache and provider retention use the same physical blob. A local
+blob survives restart and provider-metadata reset; remote GET still requires
+provider admission metadata for a finalized publication. Provider capacity
+counts admitted bytes, while the common store counts each physical blob once.
 
 ## Admission
 

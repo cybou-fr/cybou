@@ -169,6 +169,9 @@ public:
     size_t ConnectedPeerCount() const;
     bool HasP2pEndpoint() const { return m_config.p2p_endpoint.has_value(); }
     bool HasStorageProvider() const { return m_finalized_chunk_store != nullptr; }
+    /** Local encrypted staging/cache, available independently of provider mode. */
+    ChunkBlobStore& GetChunkBlobStore() { return *m_chunk_blob_store; }
+    const ChunkBlobStore& GetChunkBlobStore() const { return *m_chunk_blob_store; }
     ChunkAdmissionResult PutFinalizedChunk(const uint256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
         const ChunkAuthorizationProof& proof);
@@ -210,6 +213,7 @@ private:
     NodeRuntimeConfig m_config;
     uint256 m_network_id;
     std::unique_ptr<KVStore> m_db;
+    std::unique_ptr<ChunkBlobStore> m_chunk_blob_store;
     std::unique_ptr<FinalizedChunkStore> m_finalized_chunk_store;
     CybouStateStore m_store;
     std::unique_ptr<CybouAuthorityNode> m_authority_node;
