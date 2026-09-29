@@ -205,6 +205,7 @@ add_library(cybou_node STATIC
   cybou/kv_store.cpp
   cybou/private_application_store.cpp
   cybou/chunk_blob_store.cpp
+  cybou/chunk_retention.cpp
   cybou/finalized_chunk_store.cpp
   cybou/chunk_authorization_proof_index.cpp
   cybou/publication_bundle_stager.cpp

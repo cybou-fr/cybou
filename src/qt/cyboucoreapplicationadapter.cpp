@@ -142,6 +142,9 @@ struct CybouCoreApplicationAdapter::Session {
     std::uint64_t ticks{0};
     static constexpr std::uint64_t AUDIT_EVERY_TICKS{5};
     static constexpr std::size_t AUDIT_CHUNKS_PER_PASS{8};
+    /** Local encrypted cache beyond pins and provider obligations; LRU-evicted. */
+    static constexpr std::uint64_t GC_EVERY_TICKS{60};
+    static constexpr std::uint64_t LOCAL_CACHE_BUDGET_BYTES{2ULL << 30};
     /** Files changes published from this device that the scanner has not reflected yet. */
     struct PendingFile {
         cybou::FileItem item;
@@ -275,6 +278,10 @@ struct CybouCoreApplicationAdapter::Session {
         const auto progress = application->Scan();
         // Bounded durability audit every few ticks: Protected can fall back to Securing.
         if (++ticks % AUDIT_EVERY_TICKS == 0) storage->AuditNextPlacement(AUDIT_CHUNKS_PER_PASS);
+        if (ticks % GC_EVERY_TICKS == 0) {
+            (void)runtime.CollectChunkGarbage(LOCAL_CACHE_BUDGET_BYTES, static_cast<std::uint64_t>(
+                QDateTime::currentMSecsSinceEpoch()));
+        }
         for (const auto& [id, status] : publication->ProcessDurability(*storage)) jobs[id] = status;
         AdvanceRotation();
         Snapshot(progress.Complete() ? CybouRestoreStepState::Done : CybouRestoreStepState::Running);

@@ -64,6 +64,8 @@ public:
         const FinalizedPublicationLookup& lookup) const;
     std::optional<std::vector<unsigned char>> GetChunk(const ChunkId& chunk_id) const;
     bool HasChunk(const ChunkId& chunk_id) const;
+    /** Deletes a local cache blob unless this provider has admitted it (atomic with admission). */
+    bool RemoveUnlessAdmitted(const ChunkId& chunk_id);
     std::uint64_t UsedBytes() const;
     std::uint64_t CapacityBytes() const { return m_capacity_bytes; }
 

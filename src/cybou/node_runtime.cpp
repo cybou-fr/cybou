@@ -124,6 +124,9 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     m_chunk_blob_store = std::make_unique<ChunkBlobStore>(
         m_config.memory_only ? std::filesystem::path{} : storage_path / "chunks",
         m_config.memory_only, m_config.wipe_data);
+    m_chunk_retention = std::make_unique<ChunkRetentionRegistry>(
+        m_config.memory_only ? std::filesystem::path{} : storage_path / "retention",
+        m_config.memory_only, m_config.wipe_data);
     if (m_config.storage_enabled) {
         if (m_config.storage_capacity_bytes == 0) {
             throw std::invalid_argument("storage provider requires a positive capacity");
@@ -153,6 +156,18 @@ CybouNodeRuntime::~CybouNodeRuntime()
 }
 
 std::optional<std::array<unsigned char, 32>> CybouNodeRuntime::LocalProviderId() const { return m_provider_id; }
+
+ChunkRetentionRegistry::CollectResult CybouNodeRuntime::CollectChunkGarbage(const std::uint64_t cache_budget_bytes,
+    const std::uint64_t now_ms, const std::size_t max_removals)
+{
+    // A freshly cached or released blob may be in active use by a download.
+    constexpr std::uint64_t GRACE_MS{10 * 60 * 1000};
+    return m_chunk_retention->Collect(*m_chunk_blob_store, cache_budget_bytes, now_ms, GRACE_MS, max_removals,
+        [&](const ChunkId& id) {
+            return m_finalized_chunk_store ? m_finalized_chunk_store->RemoveUnlessAdmitted(id)
+                                           : m_chunk_blob_store->Remove(id);
+        });
+}
 
 std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignProviderProof(
     const std::span<const unsigned char> message) const

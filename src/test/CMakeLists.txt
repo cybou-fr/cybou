@@ -202,6 +202,7 @@ add_executable(cybou-core-test
   cybou_encrypted_chunk_tests.cpp
   cybou_encrypted_chunk_tree_tests.cpp
   cybou_chunk_blob_store_tests.cpp
+  cybou_chunk_retention_tests.cpp
   cybou_finalized_chunk_store_tests.cpp
   cybou_kv_store_tests.cpp
   cybou_private_application_store_tests.cpp

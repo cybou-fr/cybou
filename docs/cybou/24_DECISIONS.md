@@ -40,6 +40,7 @@ Git history.
 | DEC-204 | Identity rotation must protect required historical KEM recovery material before rotation when clean recovery needs old epochs. | Frozen |
 | DEC-205 | Development targets 1 remote full replica; Beta targets 2 independent remote full replicas. Local encrypted cache does not count (it is normally a further physical copy); Beta erasure coding is disabled. | Frozen |
 | DEC-206 | Placement, provider health, audit and repair are StorageService policy, not consensus state. | Frozen |
+| DEC-213 | Local blob retention is a generic node-local pin/cache registry keyed by opaque (holder, reference) tags; GC evicts only unpinned, non-admitted cache entries past a grace period. ChunkStore stays free of application semantics. | Frozen |
 | DEC-212 | A storage provider is identified by `ProviderID = BLAKE3(provider public key)`, proven per CYP2 session; placement stores ProviderID plus last endpoint and the replica target counts distinct ProviderIDs. | Frozen |
 | DEC-207 | Identity Authority supersedes the earlier Proof-of-Trust design and never grants PoA finalization power. | Frozen target |
 | DEC-208 | Authority uses immutable rules; initial canonical sources are Age, capped finalized Activity and voluntary System Balance contribution. Liveness/Storage activate only with canonical evidence. | Frozen target |

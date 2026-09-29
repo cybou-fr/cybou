@@ -119,6 +119,32 @@ content-addressed blob.
 
 Provider/network metadata and local lifecycle pins are separate from the bytes.
 
+### Retention and garbage collection
+
+A node-local `ChunkRetentionRegistry` records why a local blob stays, without
+any application semantics:
+
+```text
+pin:   (holder, reference) -> ChunkIDs   never evicted
+cache: ChunkID -> last use               evictable, least recently used first
+```
+
+Holder and reference are opaque 32-byte tags (for example an Identity and one
+of its publication jobs). Provider obligations remain FinalizedChunkStore
+admission records.
+
+- Staged publication chunks are pinned before the job records its leaves:
+  until remote durability the local copy is the only copy.
+- When the job becomes PROTECTED the pin is released and the chunks become
+  cache entries.
+- Blobs fetched from providers, or read locally, are cache entries.
+
+Garbage collection deletes a blob only if it is a cache entry, pinned by no
+reference, not provider-admitted (checked atomically with admission) and
+unused for the grace period (10 minutes). Eviction runs least recently used
+first, bounded per pass, until the cache fits its budget (desktop default
+2 GiB). A blob the registry has never recorded is never deleted.
+
 The GUI has no API to enumerate the ChunkStore.
 
 ## 3. Identity Application DB

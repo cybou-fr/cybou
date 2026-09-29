@@ -256,6 +256,14 @@ bool FinalizedChunkStore::HasChunk(const ChunkId& chunk_id) const
     return m_blobs.StoredSize(chunk_id) == std::optional<std::uint64_t>{expected_size};
 }
 
+bool FinalizedChunkStore::RemoveUnlessAdmitted(const ChunkId& chunk_id)
+{
+    std::lock_guard lock{m_mutex};
+    std::uint64_t admitted_size{0};
+    if (m_db->Read(ChunkKey(m_namespace, chunk_id), admitted_size)) return false;
+    return m_blobs.Remove(chunk_id);
+}
+
 std::uint64_t FinalizedChunkStore::UsedBytes() const
 {
     const auto bytes = ReadCounter(m_namespace + "/provider-bytes");

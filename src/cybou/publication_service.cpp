@@ -4,6 +4,7 @@
 
 #include <cybou/publication_service.h>
 
+#include <cybou/chunk_retention.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/encrypted_chunk_tree.h>
 #include <cybou/identity_kem.h>
@@ -24,6 +25,21 @@
 
 namespace cybou {
 namespace {
+
+/** Local pin of a job's staged chunks: opaque Identity holder + job reference. */
+RetentionKey JobRetention(const AccountId& account, const std::string_view job_id)
+{
+    const auto& value = account.Value();
+    return {.holder = RetentionTag("CYBOU/RETENTION/IDENTITY/v1", std::span{value.begin(), 32}),
+        .reference = RetentionTag("CYBOU/RETENTION/PUBLICATION-JOB/v1",
+            std::span{reinterpret_cast<const unsigned char*>(job_id.data()), job_id.size()})};
+}
+
+std::uint64_t NowMs()
+{
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
+}
 
 constexpr std::array<unsigned char, 5> MAGIC{'C', 'Y', 'P', 'J', 1};
 constexpr std::size_t FIXED_SIZE{5 + 32 + 32 + 1 + 8 + 8 + 32 + 4};
@@ -493,6 +509,12 @@ std::optional<PublicationService::Staged> PublicationService::Stage(const std::s
             staged.leaves.push_back(*leaf);
             encoded.insert(encoded.end(), leaf->begin(), leaf->end());
         }
+        // Until remote durability the local copy is the only one: pin it.
+        if (!m_runtime.GetChunkRetention().Pin(JobRetention(m_application_db.Account(), local_job_id), staged.leaves)) {
+            stager.Discard();
+            error = "Cannot pin staged content";
+            return std::nullopt;
+        }
         // StorageService needs the exact ordered chunk set after finality.
         if (!m_application_db.Put(LeavesKey(local_job_id), encoded)) {
             stager.Discard();
@@ -717,6 +739,8 @@ std::vector<std::pair<std::string, PublicationJobResult>> PublicationService::Pr
                 status->durability_percent = durability.ProgressPercent(storage.RemoteReplicaTarget());
                 if (durability.state == DurabilityState::PROTECTED && MarkProtected(id)) {
                     status->phase = PublicationJobPhase::PROTECTED;
+                    // Remotely durable: the local copy becomes evictable cache.
+                    (void)m_runtime.GetChunkRetention().Release(JobRetention(m_application_db.Account(), id), NowMs());
                 } else if (!durability.error.empty()) {
                     status->error = durability.error;
                 }

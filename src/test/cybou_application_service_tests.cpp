@@ -630,4 +630,35 @@ BOOST_AUTO_TEST_CASE(clean_restored_placements_are_audited_and_repaired)
     BOOST_CHECK(owner.storage->GetDurability(operation)->state == cybou::DurabilityState::PROTECTED);
 }
 
+BOOST_AUTO_TEST_CASE(staged_content_stays_pinned_until_protected_then_is_evictable_cache)
+{
+    CybouServiceTestFixture fixture;
+    ProviderNetwork network{fixture, 3};
+    Party owner{fixture, network, "owner"};
+    network.Sync();
+    const auto message = Message(owner.Account(), "Pinned", "local copy is the only copy until durable");
+    BOOST_REQUIRE(owner.publication->PublishMail("mail-pinned", message).phase ==
+        cybou::PublicationJobPhase::WAITING_FINALITY);
+    const auto far_future = static_cast<std::uint64_t>(1) << 60;
+    auto& blobs = fixture.runtime->GetChunkBlobStore();
+    const auto before = blobs.UsedBytes();
+    // Before remote durability nothing staged may be evicted, whatever the budget.
+    BOOST_CHECK_EQUAL(fixture.runtime->CollectChunkGarbage(0, far_future).removed, 0U);
+    BOOST_CHECK_EQUAL(blobs.UsedBytes(), before);
+
+    Finalize(fixture, network);
+    BOOST_REQUIRE(owner.publication->ProcessDurability(*owner.storage).front().second.phase ==
+        cybou::PublicationJobPhase::PROTECTED);
+    const auto operation = owner.publication->GetJob("mail-pinned")->operation_id;
+    const auto placement = owner.storage->DescribePlacement(operation);
+    BOOST_REQUIRE(placement);
+    for (const auto& leaf : placement->leaves) BOOST_CHECK(!fixture.runtime->GetChunkRetention().IsPinned(leaf));
+
+    // Protected: the local copy is cache, evicted over budget, and fetched back from providers.
+    BOOST_CHECK(fixture.runtime->CollectChunkGarbage(0, far_future).removed >= placement->leaves.size());
+    for (const auto& leaf : placement->leaves) BOOST_CHECK(!blobs.Has(leaf));
+    for (const auto& leaf : placement->leaves) BOOST_CHECK(owner.storage->Fetch(leaf).has_value());
+    for (const auto& leaf : placement->leaves) BOOST_CHECK(blobs.Has(leaf));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

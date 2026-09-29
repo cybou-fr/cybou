@@ -10,6 +10,7 @@
 #include <openssl/rand.h>
 
 #include <algorithm>
+#include <chrono>
 #include <array>
 #include <limits>
 #include <set>
@@ -511,7 +512,10 @@ std::optional<std::vector<unsigned char>> StorageService::Fetch(const ChunkId& c
 std::optional<std::vector<unsigned char>> StorageService::FetchLocked(const ChunkId& chunk_id,
     const std::span<const StorageEndpoint> preferred)
 {
+    const auto now_ms = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
     if (auto local = m_runtime.GetChunkBlobStore().Get(chunk_id); local && ComputeChunkId(*local) == chunk_id) {
+        (void)m_runtime.GetChunkRetention().NoteCacheUse(chunk_id, now_ms);
         return local;
     }
     std::vector<StorageEndpoint> candidates{preferred.begin(), preferred.end()};
@@ -527,6 +531,7 @@ std::optional<std::vector<unsigned char>> StorageService::FetchLocked(const Chun
         if (!bytes || ComputeChunkId(*bytes) != chunk_id) continue;
         // Cache the verified ciphertext; a failed cache write does not fail retrieval.
         (void)m_runtime.GetChunkBlobStore().Put(chunk_id, *bytes);
+        (void)m_runtime.GetChunkRetention().NoteCacheUse(chunk_id, now_ms);
         return bytes;
     }
     return std::nullopt;

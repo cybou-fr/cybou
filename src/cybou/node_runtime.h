@@ -8,6 +8,7 @@
 #include <cybou/block_feed.h>
 #include <cybou/network_definition.h>
 #include <cybou/state_store.h>
+#include <cybou/chunk_retention.h>
 #include <cybou/finalized_chunk_store.h>
 
 #include <array>
@@ -171,6 +172,14 @@ public:
     bool HasStorageProvider() const { return m_finalized_chunk_store != nullptr; }
     /** Local encrypted staging/cache, available independently of provider mode. */
     ChunkBlobStore& GetChunkBlobStore() { return *m_chunk_blob_store; }
+    /** Why local blobs stay: pins and evictable cache entries (never content semantics). */
+    ChunkRetentionRegistry& GetChunkRetention() { return *m_chunk_retention; }
+    /**
+     * Evicts least-recently-used unpinned cache blobs over cache_budget_bytes.
+     * Pinned and provider-admitted blobs are never removed.
+     */
+    ChunkRetentionRegistry::CollectResult CollectChunkGarbage(std::uint64_t cache_budget_bytes,
+        std::uint64_t now_ms, std::size_t max_removals = 256);
     const ChunkBlobStore& GetChunkBlobStore() const { return *m_chunk_blob_store; }
     ChunkAdmissionResult PutFinalizedChunk(const uint256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
@@ -237,6 +246,7 @@ private:
     std::unique_ptr<KVStore> m_db;
     std::unique_ptr<ChunkBlobStore> m_chunk_blob_store;
     std::unique_ptr<FinalizedChunkStore> m_finalized_chunk_store;
+    std::unique_ptr<ChunkRetentionRegistry> m_chunk_retention;
     /** Storage provider key secret (persisted beside provider data). */
     std::optional<std::array<unsigned char, 32>> m_provider_secret;
     std::optional<std::array<unsigned char, 32>> m_provider_id;

@@ -29,6 +29,9 @@ Current `main` implements the canonical low-level substrate:
   storage providers, distinct by handshake-proven ProviderID (not
   address:port), to the remote replica target (development 1, Beta 2; local
   copy excluded), GET/BLAKE3 audit, repair and verified remote retrieval;
+- local retention: generic pin/cache registry; staged publication chunks are
+  pinned until PROTECTED, then become LRU cache under a budget; GC never
+  removes pinned, provider-admitted or unrecorded blobs;
 - placement recovery: rebuilds the ordered authorized-chunk set from
   provider-held verified proofs after Application DB loss, including private
   Mail attachments and Files content while excluding reused trees;
