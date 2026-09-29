@@ -56,15 +56,16 @@ There is no remote upload of unfinalized chunks.
 For every required chunk:
 
 ```text
-3 independent remote full replicas
+2 independent remote full replicas
 ```
 
 are required for Beta `Protected`.
 
 The local encrypted copy is useful cache/offline state but does not count as
-one of the three remote replicas.
+one of the two remote replicas; with it Beta normally keeps three physical
+copies.
 
-Development may use two remote replicas before the Beta gate.
+Development uses one remote replica before the Beta gate.
 
 Beta does not use Reed-Solomon/erasure coding.
 

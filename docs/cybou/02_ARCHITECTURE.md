@@ -69,9 +69,9 @@ prepare encrypted chunks locally
 -> reach durability target
 ```
 
-Development targets two independent remote full replicas; Beta targets three.
-The local encrypted copy is cache/staging and does not count toward remote
-durability. Beta does not use erasure coding.
+Development targets one remote full replica; Beta targets two independent
+remote full replicas. The local encrypted copy is cache/staging and does not
+count toward remote durability, though it is normally a further physical copy. Beta does not use erasure coding.
 
 ## Application projection
 

@@ -19,8 +19,8 @@ RootPublication and one encrypted content-addressed chunk tree.
 
 The encrypted per-Identity Application DB, ApplicationService,
 PublicationService, StorageService, private Mail and Files backends,
-clean-machine recovery with RecoveryBridge, development durability with 2
-remote replicas, audit/repair and placement recovery are implemented and
+clean-machine recovery with RecoveryBridge, development durability with a
+remote replica target, audit/repair and placement recovery are implemented and
 connected to the desktop.
 
 ## Current phase: soak, hardening, Beta preparation
@@ -31,7 +31,7 @@ No large new features. In order:
    repair, lost local state, long runs);
 2. reproducible build + core + Qt tests after every vertical batch;
 3. Beta desktop acceptance on clean installations;
-4. 3 independent remote replicas;
+4. 2 independent remote replicas (Beta target);
 5. only then move Authority from preview towards enforcement.
 
 ## Identity Authority
@@ -52,7 +52,7 @@ Beta requires:
 
 - Gmail-familiar Mail and Google-Drive-familiar Files UX;
 - clean-machine recovery without old Application DB;
-- 3 independent remote full replicas per required chunk;
+- 2 independent remote full replicas per required chunk (plus the local copy);
 - measured provider loss/repair behavior;
 - honest `Protected`/`Sent` states;
 - operational cost and anti-abuse measurements;

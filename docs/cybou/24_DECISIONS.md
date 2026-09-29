@@ -38,7 +38,7 @@ Git history.
 | DEC-202 | Recoverable publisher content uses an application-layer self capsule. | Frozen |
 | DEC-203 | Files persistent private history uses a minimal ordered mutation model (`UPSERT_ITEM`, `DELETE_ITEM`) over canonical PoA order. | Frozen |
 | DEC-204 | Identity rotation must protect required historical KEM recovery material before rotation when clean recovery needs old epochs. | Frozen |
-| DEC-205 | Development targets 2 independent remote full replicas; Beta targets 3. Local encrypted cache does not count; Beta erasure coding is disabled. | Frozen |
+| DEC-205 | Development targets 1 remote full replica; Beta targets 2 independent remote full replicas. Local encrypted cache does not count (it is normally a further physical copy); Beta erasure coding is disabled. | Frozen |
 | DEC-206 | Placement, provider health, audit and repair are StorageService policy, not consensus state. | Frozen |
 | DEC-207 | Identity Authority supersedes the earlier Proof-of-Trust design and never grants PoA finalization power. | Frozen target |
 | DEC-208 | Authority uses immutable rules; initial canonical sources are Age, capped finalized Activity and voluntary System Balance contribution. Liveness/Storage activate only with canonical evidence. | Frozen target |

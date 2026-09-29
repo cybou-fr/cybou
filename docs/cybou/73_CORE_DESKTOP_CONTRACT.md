@@ -81,8 +81,8 @@ durability target.
 
 ## Durability
 
-Development target: 2 remote replicas.
-Beta target: 3 remote replicas.
+Development target: 1 remote replica.
+Beta target: 2 independent remote replicas.
 
 The local encrypted copy is separate `Available offline`/cache state and does
 not count toward `Protected`.

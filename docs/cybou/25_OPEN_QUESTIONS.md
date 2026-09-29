@@ -22,8 +22,8 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 Decided:
 
 ```text
-development = 2 remote full replicas
-Beta        = 3 remote full replicas
+development = 1 remote full replica
+Beta        = 2 remote full replicas
 local copy  = not counted
 erasure coding Beta = disabled
 ```

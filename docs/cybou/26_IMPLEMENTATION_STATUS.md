@@ -26,8 +26,8 @@ Current `main` implements the canonical low-level substrate:
   content, queued publication while another Identity operation is unresolved,
   and PROTECTED only after StorageService reports remote durability;
 - StorageService: post-finality placement on distinct CSPRNG-selected CYP2
-  storage peers to the development target of 2 remote replicas (local copy
-  excluded), GET/BLAKE3 audit, repair and verified remote retrieval;
+  storage peers to the remote replica target (development 1, Beta 2; local
+  copy excluded), GET/BLAKE3 audit, repair and verified remote retrieval;
 - placement recovery: rebuilds the ordered authorized-chunk set from
   provider-held verified proofs after Application DB loss, including private
   Mail attachments and Files content while excluding reused trees;
@@ -69,7 +69,7 @@ Current `main` implements the canonical low-level substrate:
 - reproducible build + core + Qt tests after every vertical batch (CI);
 - complete and verify the Beta desktop acceptance matrix on clean installations
   and across supported Windows sizes, DPI settings and accessibility paths;
-- 3 independent remote replicas for Beta;
+- 2 independent remote replicas for Beta;
 - only after the soak: bind immutable Authority rules to the network and
   enforce Authority-derived generic resource budgets.
 

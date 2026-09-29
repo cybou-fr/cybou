@@ -52,8 +52,8 @@ retry and uncertain-outcome reconciliation.
 - maintain remote replica target;
 - audit/health-check and repair degraded protection.
 
-Development target: 2 remote replicas.
-Beta target: 3 remote replicas.
+Development target: 1 remote replica.
+Beta target: 2 independent remote replicas.
 Local cache is not a remote replica.
 
 ## Authority farming

@@ -48,7 +48,9 @@ struct Party {
         storage.reset();
         db.reset(); // release the LevelDB lock before reopening
         db = std::make_unique<cybou::PrivateApplicationStore>(identity->GetKeyStore(), root / "app");
-        storage = std::make_unique<cybou::StorageService>(*fixture.runtime, network, *db);
+        // Multi-replica behaviour is exercised under the Beta policy.
+        storage = std::make_unique<cybou::StorageService>(*fixture.runtime, network, *db,
+            cybou::BETA_REMOTE_REPLICA_TARGET);
         publication = std::make_unique<cybou::PublicationService>(*fixture.runtime, identity->GetKeyStore(),
             *db, *coordinator, *staging);
         application = std::make_unique<cybou::ApplicationService>(*fixture.runtime, identity->GetKeyStore(),
@@ -464,7 +466,7 @@ BOOST_AUTO_TEST_CASE(rotation_bridge_restores_pre_rotation_content_on_clean_mach
     cybou::crypto::CleanseMemory(next_entropy->data(), next_entropy->size());
 
     cybou::PrivateApplicationStore db{restored.GetKeyStore(), fixture.directory / "machine-b-app"};
-    cybou::StorageService storage{*fixture.runtime, network, db};
+    cybou::StorageService storage{*fixture.runtime, network, db, cybou::BETA_REMOTE_REPLICA_TARGET};
     cybou::ApplicationService application{*fixture.runtime, restored.GetKeyStore(), db, storage};
     const auto progress = application.Scan();
     BOOST_CHECK(progress.Complete());

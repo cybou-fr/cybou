@@ -81,14 +81,14 @@ BOOST_AUTO_TEST_CASE(nothing_leaves_the_node_before_finality)
     cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
     const auto content = Publish(fixture, *identity, application_db, /*finalize=*/false);
     BOOST_REQUIRE_GT(content.leaves.size(), 1U);
-    cybou::StorageService storage{*fixture.runtime, network, application_db};
+    cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
     const auto result = storage.Secure(content.operation_id, content.leaves);
     BOOST_CHECK(result.state == cybou::DurabilityState::SECURING);
     BOOST_CHECK_EQUAL(network.puts, 0);
     BOOST_CHECK(!storage.GetDurability(content.operation_id));
 }
 
-BOOST_AUTO_TEST_CASE(finalized_publication_reaches_two_remote_replicas)
+BOOST_AUTO_TEST_CASE(beta_target_places_two_distinct_remote_replicas)
 {
     CybouServiceTestFixture fixture;
     auto identity = fixture.CreateIdentity("storage-owner.cybou");
@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(finalized_publication_reaches_two_remote_replicas)
     cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
     const auto content = Publish(fixture, *identity, application_db, true);
     network.Sync();
-    cybou::StorageService storage{*fixture.runtime, network, application_db};
+    cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
 
     // A wrong chunk list is refused outright.
     auto wrong = content.leaves;
@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(finalized_publication_reaches_two_remote_replicas)
     const int puts = network.puts;
     BOOST_CHECK(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
     BOOST_CHECK_EQUAL(network.puts, puts);
-    cybou::StorageService reopened{*fixture.runtime, network, application_db};
+    cybou::StorageService reopened{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
     const auto durability = reopened.GetDurability(content.operation_id);
     BOOST_REQUIRE(durability);
     BOOST_CHECK(durability->state == cybou::DurabilityState::PROTECTED);
@@ -136,7 +136,7 @@ BOOST_AUTO_TEST_CASE(too_few_or_lagging_providers_keep_content_securing)
     network.lagging.insert(endpoints[0]);
     network.offline.insert(endpoints[1]);
     network.Sync();
-    cybou::StorageService storage{*fixture.runtime, network, application_db};
+    cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
     auto result = storage.Secure(content.operation_id, content.leaves);
     BOOST_CHECK(result.state == cybou::DurabilityState::SECURING);
     BOOST_CHECK_EQUAL(result.min_replicas, 1U);
@@ -157,7 +157,7 @@ BOOST_AUTO_TEST_CASE(provider_loss_and_corruption_are_repaired)
     cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
     const auto content = Publish(fixture, *identity, application_db, true);
     network.Sync();
-    cybou::StorageService storage{*fixture.runtime, network, application_db};
+    cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
     BOOST_REQUIRE(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
 
     // One provider dies after ACK; another starts returning corrupt bytes.
@@ -204,7 +204,7 @@ BOOST_AUTO_TEST_CASE(fetch_uses_local_cache_then_verified_remote_copy)
         const auto content = Publish(fixture, *identity, application_db, true);
         leaves = content.leaves;
         network.Sync();
-        cybou::StorageService storage{*fixture.runtime, network, application_db};
+        cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
         BOOST_REQUIRE(storage.Secure(content.operation_id, leaves).state == cybou::DurabilityState::PROTECTED);
     }
     const auto original = fixture.runtime->GetChunkBlobStore().Get(leaves.front());
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(fetch_uses_local_cache_then_verified_remote_copy)
     std::filesystem::remove_all(app_path);
     BOOST_REQUIRE(fixture.runtime->GetChunkBlobStore().Remove(leaves.front()));
     cybou::PrivateApplicationStore fresh{identity->GetKeyStore(), app_path};
-    cybou::StorageService storage{*fixture.runtime, network, fresh};
+    cybou::StorageService storage{*fixture.runtime, network, fresh, cybou::BETA_REMOTE_REPLICA_TARGET};
     // A corrupt provider is skipped in favour of a valid copy.
     network.corrupt.insert(network.Endpoints().front());
     const auto fetched = storage.Fetch(leaves.front());
@@ -268,7 +268,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
         BOOST_REQUIRE_EQUAL(client.StoragePeerEndpoints().size(), 2U);
 
         cybou::RuntimeStorageTransport transport{client};
-        cybou::StorageService storage{*fixture.runtime, transport, application_db};
+        cybou::StorageService storage{*fixture.runtime, transport, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
         const auto result = storage.Secure(content.operation_id, content.leaves);
         BOOST_CHECK(result.state == cybou::DurabilityState::PROTECTED);
         const auto publication = fixture.runtime->FindFinalizedRootPublication(content.operation_id);
@@ -293,6 +293,26 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
     }
     stopping = true;
     listeners.clear();
+}
+
+BOOST_AUTO_TEST_CASE(development_target_is_one_remote_replica)
+{
+    BOOST_CHECK_EQUAL(cybou::DEVELOPMENT_REMOTE_REPLICA_TARGET, 1);
+    BOOST_CHECK_EQUAL(cybou::BETA_REMOTE_REPLICA_TARGET, 2);
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("storage-owner.cybou");
+    ProviderNetwork network{fixture};
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    const auto content = Publish(fixture, *identity, application_db, true);
+    network.Sync();
+    // Only one provider is reachable: enough for the development target.
+    network.SetAllOffline(true);
+    network.offline.erase(network.Endpoints().front());
+    cybou::StorageService storage{*fixture.runtime, network, application_db};
+    BOOST_CHECK_EQUAL(storage.RemoteReplicaTarget(), 1);
+    const auto result = storage.Secure(content.operation_id, content.leaves);
+    BOOST_CHECK(result.state == cybou::DurabilityState::PROTECTED);
+    BOOST_CHECK_EQUAL(result.min_replicas, 1U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

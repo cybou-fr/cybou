@@ -87,8 +87,8 @@ storage:
   local_copy:
     encrypted: true
     counts_as_remote_replica: false
-  development_remote_full_replicas: 2
-  beta_remote_full_replicas: 3
+  development_remote_full_replicas: 1
+  beta_remote_full_replicas: 2
   erasure_coding_beta: false
   placement_granularity: chunk_id
   deterministic_provider_ranking_frozen: false

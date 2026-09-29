@@ -80,8 +80,8 @@ No separate user-visible provider layer exists.
 The implemented `StorageService` places only finalized publications: the
 ordered chunk list must reproduce the publication's chunk-authorization root,
 and per-chunk proofs are rebuilt from it. Each chunk goes to distinct
-CSPRNG-selected CYP2 storage peers until the remote target is met (2 in
-development); STORED and ALREADY_STORED both count, the local copy never does.
+CSPRNG-selected CYP2 storage peers until the remote target is met (1 in
+development, 2 in Beta); STORED and ALREADY_STORED both count, the local copy never does.
 Placement records live in the Identity's encrypted Application DB as an
 operational cache. `Audit` re-reads every recorded replica, drops missing or
 BLAKE3-mismatching ones and repairs from any valid copy. `Fetch` returns the
@@ -369,16 +369,17 @@ A DHT/provider directory is not required for the first Beta-scale network.
 Development target:
 
 ```text
-2 independent remote full replicas
+1 remote full replica
 ```
 
 Beta target:
 
 ```text
-3 independent remote full replicas
+2 independent remote full replicas
 ```
 
-The local encrypted copy does not count toward those remote targets.
+The local encrypted copy does not count toward the remote target, but it
+normally exists as one more physical copy (Beta: local + 2 remote = 3).
 
 Erasure coding is disabled for Beta.
 

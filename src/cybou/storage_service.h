@@ -24,8 +24,11 @@ namespace cybou {
 
 class CybouNodeRuntime;
 
-/** Development target; Beta raises it to 3. The local copy never counts. */
-inline constexpr std::uint8_t DEVELOPMENT_REMOTE_REPLICA_TARGET{2};
+/** Remote full replicas required for PROTECTED. The local copy never counts
+ * (it is normally one more physical copy). DEV may run more providers than
+ * the target for failover, repair and soak. */
+inline constexpr std::uint8_t DEVELOPMENT_REMOTE_REPLICA_TARGET{1};
+inline constexpr std::uint8_t BETA_REMOTE_REPLICA_TARGET{2};
 
 struct StorageEndpoint {
     std::string address;

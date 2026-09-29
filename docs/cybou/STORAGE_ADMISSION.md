@@ -57,16 +57,17 @@ Unfinalized chunks are rejected remotely.
 Development target:
 
 ```text
-2 independent remote full replicas per required chunk
+1 remote full replica per required chunk
 ```
 
 Beta target:
 
 ```text
-3 independent remote full replicas per required chunk
+2 independent remote full replicas per required chunk
 ```
 
-The local encrypted copy does not count as a remote replica.
+The local encrypted copy does not count toward the remote target, but it
+normally exists as one more physical copy (Beta: local + 2 remote = 3).
 
 `Protected` in Beta means all required chunks satisfy the three-remote-replica
 target.

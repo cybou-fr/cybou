@@ -73,7 +73,7 @@ PoA-finalized
 Sent / Protected
 ```
 
-Beta `Sent` requires the publication's required chunks to reach three
+Beta `Sent` requires the publication's required chunks to reach two
 independent remote replicas. The local encrypted copy does not count.
 
 ## Recovery

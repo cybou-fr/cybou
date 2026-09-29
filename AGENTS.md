@@ -72,8 +72,10 @@ compatibility.
 
 ## Storage durability
 
-- Development target: 2 independent remote full replicas per required chunk.
-- Beta target: 3 independent remote full replicas per required chunk.
+- Development target: 1 remote full replica per required chunk.
+- Beta target: 2 independent remote full replicas per required chunk.
+- DEV may run more provider daemons than the target for failover, repair
+  and soak; they do not raise the target.
 - Local encrypted content is useful cache/staging but does not count toward the
   remote durability target.
 - Beta uses full replication. Reed-Solomon/erasure coding is disabled.
