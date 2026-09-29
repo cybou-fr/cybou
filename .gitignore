@@ -18,6 +18,10 @@
 
 /CMakeUserPresets.json
 /.vscode/
+/compile_diag.txt
+/cybou-identity-service-test/
+/OVERLAY_MANIFEST.md
+/README_OVERLAY.txt
 
 # Previous releases
 /releases
