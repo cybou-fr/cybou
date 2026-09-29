@@ -207,4 +207,21 @@ std::optional<std::array<unsigned char, 32>> ComputeValidatorKeyId(
     return id;
 }
 
+std::optional<std::array<unsigned char, 32>> ComputePoaFinalizerKeyId(
+    const IdentityHybridPublicKey& poa_finalizer_key)
+{
+    if (poa_finalizer_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||
+        poa_finalizer_key.ml_dsa.size() != PublicSize(IdentityKeyPurpose::POA_FINALIZER) ||
+        std::all_of(poa_finalizer_key.ed25519.begin(), poa_finalizer_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
+        std::all_of(poa_finalizer_key.ml_dsa.begin(), poa_finalizer_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) {
+        return std::nullopt;
+    }
+    constexpr std::string_view domain{"CYBOU/POA-FINALIZER-KEY-ID/V1"};
+    std::array<unsigned char, 32> id{};
+    if (!crypto::ComputeSha256({
+        crypto::Sha256Bytes(domain), poa_finalizer_key.ed25519, poa_finalizer_key.ml_dsa,
+    }, id.data())) return std::nullopt;
+    return id;
+}
+
 } // namespace cybou

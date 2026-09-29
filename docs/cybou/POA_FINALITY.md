@@ -28,6 +28,10 @@ key is committed by the network definition at genesis. It is independent of
 every CYBOU Identity, Validator, Operator Authority, Release Signing, and
 Treasury key. Private signing material is never persisted and is cleansed when
 the finalizer session ends.
+Its journal and operator diagnostics identify the public key by
+`SHA256(CYBOU/POA-FINALIZER-KEY-ID/V1 || Ed25519_public_key ||
+ML-DSA-65_public_key)`; the genesis definition still commits the full public
+key.
 
 PoA block signatures follow the repository's hybrid-PQ policy: Ed25519 **and**
 ML-DSA-65 are both required and verified. No classical-only fallback is

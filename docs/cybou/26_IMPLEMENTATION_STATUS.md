@@ -35,10 +35,10 @@ recovery gates pass together. See
   deterministic nonce/state execution, byte-and-chunk System Balance fee, and
   lookup from verified canonical finalized block history.
 - A separate `POA_FINALIZER` Ed25519 + ML-DSA-65 key derivation purpose for the
-  dedicated operator recovery phrase, plus fixed-format PoA finality certificate
-  signing and verification primitives. Genesis commitment, runtime finality
-  acceptance, durable anti-equivocation, and operator recovery remain cutover
-  gates.
+  dedicated operator recovery phrase, public-key identity hash, and fixed-format
+  PoA finality certificate signing and verification primitives. Genesis
+  commitment, runtime finality acceptance, durable anti-equivocation, and
+  operator recovery remain cutover gates.
 
 These components are substrate code. Their integration with the canonical
 Identity operation path, state transition, block finality, and provider network

@@ -58,6 +58,8 @@ std::optional<std::array<unsigned char, 32>> ComputeAuthorizationKeyId(
     const IdentityHybridPublicKey& authorization_key);
 std::optional<std::array<unsigned char, 32>> ComputeValidatorKeyId(
     const IdentityHybridPublicKey& validator_key);
+std::optional<std::array<unsigned char, 32>> ComputePoaFinalizerKeyId(
+    const IdentityHybridPublicKey& poa_finalizer_key);
 
 } // namespace cybou
 #endif
