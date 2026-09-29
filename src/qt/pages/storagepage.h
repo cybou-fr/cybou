@@ -5,43 +5,85 @@
 #ifndef BITCOIN_QT_PAGES_STORAGEPAGE_H
 #define BITCOIN_QT_PAGES_STORAGEPAGE_H
 
+#include <qt/cybouproduct.h>
+
 #include <QCoreApplication>
-#include <QDateTime>
-#include <QVector>
 #include <QWidget>
 
-#include <qt/cyboudesktopmodel.h>
+#include <functional>
 
 class CybouDesktopModel;
+class QFrame;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QProgressBar;
 class QPushButton;
+class QStackedWidget;
+class QToolButton;
+class QTreeWidget;
 
-/** Files view over the product model (docs/cybou/83_STORAGE_UI_UX.md). */
+/**
+ * CYBOU Files: Google Drive-familiar file management over the product
+ * model (docs/cybou/83_STORAGE_UI_UX.md). Users manage files and folders,
+ * never chunks, providers or content identifiers.
+ */
 class StoragePage : public QWidget
 {
     Q_DECLARE_TR_FUNCTIONS(StoragePage)
 
 public:
-    StoragePage(CybouDesktopModel* model, QWidget* parent = nullptr);
+    enum class View {
+        MyFiles,
+        Recent,
+        Starred,
+        Trash,
+    };
+
+    StoragePage(CybouDesktopModel* model, std::function<void()> home_requested = {}, QWidget* parent = nullptr);
+
+    View view() const { return m_view; }
+    void setView(View view);
+    void openFolder(const QString& folder_id);
+    QString currentFolder() const { return m_folder; }
+    bool gridMode() const { return m_grid; }
+    void setGridMode(bool grid);
+    /** Item ids currently listed (after view, folder and search). */
+    QStringList visibleIds() const;
+
+protected:
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
-    CybouDesktopModel* m_model;
-    QVector<CybouFileItem> m_objects;
+    CybouDesktopModel* const m_model;
+    const std::function<void()> m_home_requested;
+    View m_view{View::MyFiles};
+    QString m_folder;
+    bool m_grid{false};
+    QStringList m_visible;
 
-    QLabel* m_usage_value{nullptr};
-    QLabel* m_usage_caption{nullptr};
-    QLabel* m_gate_hint{nullptr};
+    QPushButton* m_new{nullptr};
+    QListWidget* m_nav{nullptr};
+    QLabel* m_usage_text{nullptr};
+    QProgressBar* m_usage_bar{nullptr};
+    QLabel* m_title{nullptr};
+    QPushButton* m_up{nullptr};
     QLineEdit* m_search{nullptr};
-    QListWidget* m_list{nullptr};
-    QPushButton* m_upload{nullptr};
-    QPushButton* m_refresh{nullptr};
-    QWidget* m_details{nullptr};
+    QToolButton* m_list_toggle{nullptr};
+    QToolButton* m_grid_toggle{nullptr};
+    QFrame* m_banner{nullptr};
+    QLabel* m_banner_text{nullptr};
+    QStackedWidget* m_views{nullptr};
+    QTreeWidget* m_table{nullptr};
+    QListWidget* m_tiles{nullptr};
+    QLabel* m_empty{nullptr};
 
-    void refresh();
-    void rebuildList();
-    void showDetails(int index);
+    QVector<CybouFileItem> collect() const;
+    QString folderName(const QString& id) const;
+    void rebuild();
+    void refreshChrome();
+    void updateColumns();
+    void activate(const QString& id);
 };
 
 #endif // BITCOIN_QT_PAGES_STORAGEPAGE_H

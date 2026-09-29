@@ -360,7 +360,7 @@ void CybouMainWindow::buildShell()
         [this] { showPage(CybouPage::Files); },
         nullptr};
     auto* mail = new EmailPage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
-    auto* files = new StoragePage{m_desktop_model, nullptr};
+    auto* files = new StoragePage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
     auto* wallet = new WalletPage{m_desktop_model, nullptr};
     auto* identity = new IdentityPage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
     auto* diagnostics = new NetworkPage{m_desktop_model, [this] { showDebugWindow(); }, nullptr};

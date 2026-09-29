@@ -37,6 +37,7 @@ private Q_SLOTS:
     void composeGatesAndSends();
     void walletPageShowsBalances();
     void filesGateActions();
+    void filesNavigationAndViews();
     void networkPageReflectsModel();
     void adapterSettersDrivePages();
     void productCollectionsDriveModel();

@@ -12,6 +12,7 @@
 #include <qt/pages/emailpage.h>
 #include <qt/pages/mailcompose.h>
 #include <qt/pages/mailreader.h>
+#include <qt/pages/storagepage.h>
 
 #include <cybou/network_definition.h>
 #include <test/cybou_test_helpers.h>
@@ -19,6 +20,7 @@
 
 #include <QApplication>
 #include <QLabel>
+#include <QListWidget>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -396,14 +398,46 @@ void CybouShellTests::walletPageShowsBalances()
 void CybouShellTests::filesGateActions()
 {
     auto window = makeWindow();
-    // Without an identity every Files action stays disabled.
+    // Without an identity Files explains the gate and New is disabled.
     auto* page = window->page(CybouPage::Files);
     QVERIFY(page);
-    const auto buttons = page->findChildren<QPushButton*>();
-    QVERIFY(!buttons.isEmpty());
-    for (const auto* button : buttons) {
-        QVERIFY(!button->isEnabled());
+    QPushButton* create{nullptr};
+    for (auto* button : page->findChildren<QPushButton*>()) {
+        if (button->property("cybouId").toString() == QLatin1String{"filesNew"}) create = button;
     }
+    QVERIFY(create);
+    QVERIFY(!create->isEnabled());
+    QVERIFY(!page->findChild<QFrame*>(QStringLiteral("identityBanner"))->isHidden());
+}
+
+void CybouShellTests::filesNavigationAndViews()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("files")));
+    auto* files = dynamic_cast<StoragePage*>(window->page(CybouPage::Files));
+    QVERIFY(files);
+    // My files: folders first, trashed items hidden.
+    const QStringList root{QStringLiteral("f-docs"), QStringLiteral("f-photos"), QStringLiteral("f-archive"),
+        QStringLiteral("f-photo"), QStringLiteral("f-report")};
+    QCOMPARE(files->visibleIds(), root);
+    files->openFolder(QStringLiteral("f-docs"));
+    QCOMPARE(files->visibleIds(), (QStringList{QStringLiteral("f-budget"), QStringLiteral("f-notes")}));
+    files->setView(StoragePage::View::Starred);
+    QCOMPARE(files->visibleIds(), QStringList{QStringLiteral("f-report")});
+    files->setView(StoragePage::View::Trash);
+    QCOMPARE(files->visibleIds(), QStringList{QStringLiteral("f-old")});
+    files->setView(StoragePage::View::Recent);
+    QCOMPARE(files->visibleIds().first(), QStringLiteral("f-report"));
+    // Grid shows the same items.
+    files->setGridMode(true);
+    QVERIFY(files->gridMode());
+    QCOMPARE(files->findChild<QListWidget*>(QStringLiteral("filesGrid"))->count(), files->visibleIds().size());
+    // Search is local over the private catalog.
+    auto* search = files->findChild<QLineEdit*>(QStringLiteral("filesSearch"));
+    QCOMPARE(search->placeholderText(), QStringLiteral("Search files"));
+    search->setText(QStringLiteral("mountain"));
+    QCOMPARE(files->visibleIds(), QStringList{QStringLiteral("f-mountain")});
 }
 
 void CybouShellTests::networkPageReflectsModel()
