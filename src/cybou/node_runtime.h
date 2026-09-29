@@ -224,7 +224,7 @@ private:
     std::unique_ptr<FinalizedChunkStore> m_finalized_chunk_store;
     CybouStateStore m_store;
     std::unique_ptr<CybouAuthorityNode> m_authority_node;
-    std::unique_ptr<IdentityOperationCoordinator> m_identity_operation_coordinator;
+    std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;
     std::map<uint256, OperationStatus> m_recent_operation_status;
     std::deque<uint256> m_recent_operation_status_order;
     std::optional<std::pair<std::string, uint16_t>> m_submit_endpoint;

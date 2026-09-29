@@ -341,4 +341,17 @@ BOOST_AUTO_TEST_CASE(concurrent_execute_reserves_only_one_identity_operation)
     BOOST_CHECK(results[0].op_id == results[1].op_id);
 }
 
+BOOST_AUTO_TEST_CASE(each_key_store_gets_its_own_coordinator)
+{
+    CybouServiceTestFixture fixture;
+    auto first = fixture.CreateIdentity("coordinator-first.cybou");
+    auto second = fixture.CreateIdentity("coordinator-second.cybou");
+    auto& a = fixture.runtime->GetIdentityOperationCoordinator(first->GetKeyStore());
+    auto& b = fixture.runtime->GetIdentityOperationCoordinator(second->GetKeyStore());
+    // A coordinator signs with its own key store, so it is never shared.
+    BOOST_CHECK(&a != &b);
+    BOOST_CHECK(&a == &fixture.runtime->GetIdentityOperationCoordinator(first->GetKeyStore()));
+    BOOST_CHECK(&b == &fixture.runtime->GetIdentityOperationCoordinator(second->GetKeyStore()));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

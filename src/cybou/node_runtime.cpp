@@ -265,11 +265,17 @@ OperationStatus CybouNodeRuntime::GetOperationStatus(const uint256& op_id) const
 IdentityOperationCoordinator& CybouNodeRuntime::GetIdentityOperationCoordinator(CybouKeyStore& keystore)
 {
     std::lock_guard lock(m_mutex);
-    if (!m_identity_operation_coordinator) {
-        m_identity_operation_coordinator = std::make_unique<IdentityOperationCoordinator>(
-            *this, keystore, m_config.data_dir / "identity-operation.cyiop");
+    // One coordinator (and nonce journal) per key store: a coordinator signs
+    // with the key store it was created for, so it must never be shared.
+    if (const auto it = m_identity_operation_coordinators.find(&keystore); it != m_identity_operation_coordinators.end()) {
+        return *it->second;
     }
-    return *m_identity_operation_coordinator;
+    const auto index = m_identity_operation_coordinators.size();
+    const auto journal = index == 0 ? m_config.data_dir / "identity-operation.cyiop"
+        : m_config.data_dir / ("identity-operation-" + std::to_string(index) + ".cyiop");
+    auto& coordinator = m_identity_operation_coordinators[&keystore];
+    coordinator = std::make_unique<IdentityOperationCoordinator>(*this, keystore, journal);
+    return *coordinator;
 }
 
 void CybouNodeRuntime::RememberOperationStatus(const uint256& id, OperationStatus status)
