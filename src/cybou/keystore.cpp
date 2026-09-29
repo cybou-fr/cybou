@@ -4,6 +4,7 @@
 #include <cybou/keystore.h>
 
 #include <cybou/crypto/cleanse.h>
+#include <cybou/crypto/hkdf_sha256.h>
 
 #include <algorithm>
 
@@ -123,6 +124,19 @@ std::optional<IdentityHybridSignature> CybouKeyStore::SignRecovery(std::span<con
 {
     if (!m_impl->material) return std::nullopt;
     return SignIdentityMessage(m_impl->material->recovery_entropy, IdentityKeyPurpose::RECOVERY_ROOT, digest);
+}
+
+std::optional<std::array<unsigned char, 32>> CybouKeyStore::DeriveApplicationStoreKey() const
+{
+    if (!m_impl->material) return std::nullopt;
+    constexpr std::string_view salt{"CYBOU/LOCAL-APPLICATION-STORE/v1"};
+    const auto salt_bytes = std::span{reinterpret_cast<const unsigned char*>(salt.data()), salt.size()};
+    // Bind the derived key to the stable AccountID, while keeping the recovery
+    // entropy within the key store.
+    std::array<unsigned char, 32> key{};
+    if (!crypto::HkdfSha256(m_impl->material->recovery_entropy, salt_bytes,
+            m_impl->material->account_id, key)) return std::nullopt;
+    return key;
 }
 
 } // namespace cybou

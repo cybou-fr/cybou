@@ -56,6 +56,9 @@ public:
     std::optional<IdentityHybridSignature> SignAuthorization(std::span<const unsigned char> digest) const;
     std::optional<IdentityHybridSignature> SignRecovery(std::span<const unsigned char> digest) const;
 
+    /** Key for the rebuildable, per-Identity local application projection. */
+    std::optional<std::array<unsigned char, 32>> DeriveApplicationStoreKey() const;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;

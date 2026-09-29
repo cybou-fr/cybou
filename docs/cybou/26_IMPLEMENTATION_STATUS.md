@@ -15,13 +15,15 @@ Current `main` implements the canonical low-level substrate:
 - streaming ROOT/INDEX/DATA tree;
 - chunk-authorization Merkle proofs;
 - finalized provider chunk admission;
+- encrypted per-Identity local Application DB primitives, bound to the unlocked
+  key store and rebuildable without changing canonical state;
 - CYP2 verified block sync and content-addressed PUT/GET;
 - removal of legacy BFT, ValidatorSet, MailTx and indexed StorageObject runtime
   paths.
 
 ## Designed next, not yet implemented as complete product paths
 
-- encrypted per-Identity Application DB;
+- Mail/Files semantic records and indexing atop the encrypted Application DB;
 - ApplicationService publication scanning/indexing;
 - PublicationService bundle staging/self-capsule/finality flow;
 - StorageService provider placement, replication, health, audit and repair;

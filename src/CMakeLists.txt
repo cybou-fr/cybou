@@ -202,6 +202,7 @@ include(InstallBinaryComponent)
 # CYBOU node runtime and P2P library.
 add_library(cybou_node STATIC
   cybou/kv_store.cpp
+  cybou/private_application_store.cpp
   cybou/chunk_blob_store.cpp
   cybou/finalized_chunk_store.cpp
   cybou/chunk_authorization_proof_index.cpp

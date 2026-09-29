@@ -100,6 +100,12 @@ The GUI has no API to enumerate the ChunkStore.
 
 ## 3. Identity Application DB
 
+The implemented `PrivateApplicationStore` provides an encrypted per-record
+LevelDB substrate at `identities/<AccountID>/app.db`. Record names are keyed
+before persistence, values use authenticated encryption, and access requires
+the original unlocked `CybouKeyStore`. It is a rebuildable projection; the
+Mail/Files schemas and scanners still need to be layered on top.
+
 Each unlocked Identity has a private encrypted rebuildable database, conceptually:
 
 ```text
