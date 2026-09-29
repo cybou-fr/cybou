@@ -13,7 +13,7 @@ workflow is defined.
 ```text
 Pages -> CybouDesktopModel -> CybouApplicationBackend
                                 ├── CybouFixtureApplicationBackend  (CYBOU_UI_FIXTURE)
-                                └── CybouCoreApplicationAdapter     (not yet: needs core services)
+                                └── CybouCoreApplicationAdapter     (blocked: see CORE_INTEGRATION.md)
 ```
 
 - Pages call `CybouDesktopModel::request*` for every persistent Mail/Files
