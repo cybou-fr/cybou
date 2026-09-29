@@ -1599,6 +1599,22 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     }
     QTRY_VERIFY(alice_model->fileItem(report_id) &&
         alice_model->fileItem(report_id)->retrieval == CybouRetrievalState::Idle);
+    QVERIFY(alice_model->fileItem(report_id)->available_offline); // every chunk is local
+
+    // Starred is encrypted Identity state: it survives closing the session.
+    alice_model->requestFileStarred(report_id, true);
+    QTRY_VERIFY(alice_model->fileItem(report_id) && alice_model->fileItem(report_id)->starred);
+    QTest::qWait(300); // let the worker store it
+    alice_adapter->closeIdentity();
+    QTRY_VERIFY(!alice_model->capabilities().files);
+    QSignalSpy reopened{alice_adapter.get(), &CybouCoreApplicationAdapter::filesSnapshot};
+    alice_adapter->openIdentity();
+    // Judge only a snapshot of the reopened session, not what the model still shows.
+    QTRY_VERIFY(alice_model->capabilities().files && reopened.count() > 0);
+    const auto fresh = reopened.last().at(0).value<QVector<CybouFileItem>>();
+    const auto stored = std::find_if(fresh.begin(), fresh.end(), [&](const CybouFileItem& f) { return f.id == report_id; });
+    QVERIFY(stored != fresh.end() && stored->starred);
+    QVERIFY(stored->available_offline);
 
     alice_model->requestTrashFile(work_id); // contents follow the folder
     QTRY_VERIFY(alice_model->fileItem(report_id) && alice_model->fileItem(report_id)->trashed);

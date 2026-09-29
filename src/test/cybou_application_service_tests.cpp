@@ -263,6 +263,13 @@ BOOST_AUTO_TEST_CASE(files_catalog_and_content_survive_rebuild)
     BOOST_CHECK_EQUAL(uploaded->item.logical_size, report.size());
     BOOST_REQUIRE(uploaded->item.root_chunk_id && uploaded->item.content_key);
 
+    // Star is local encrypted Identity state: it survives reopen and later re-indexing.
+    BOOST_CHECK(!uploaded->starred);
+    BOOST_CHECK(owner.application->SetFileStarred(report_id, true));
+    BOOST_CHECK(!owner.application->SetFileStarred(*cybou::NewPrivateItemId(), true));
+    owner.Open(fixture, network);
+    BOOST_CHECK(owner.application->GetFile(report_id)->starred);
+
     // Rename and move into Work: a full-item UPSERT reusing the same content.
     auto renamed = uploaded->item;
     renamed.name = "report-final.pdf";
@@ -293,6 +300,10 @@ BOOST_AUTO_TEST_CASE(files_catalog_and_content_survive_rebuild)
     for (const auto& [id, status] : owner.publication->ProcessDurability(*owner.storage)) {
         BOOST_CHECK_MESSAGE(status.phase == cybou::PublicationJobPhase::PROTECTED, id);
     }
+
+    BOOST_CHECK(owner.application->GetFile(report_id)->starred); // not reset by the rename
+    BOOST_CHECK(owner.application->SetFileStarred(report_id, false));
+    BOOST_CHECK(!owner.application->GetFile(report_id)->starred);
 
     const auto check_catalog = [&] {
         const auto files = owner.application->ListFiles();

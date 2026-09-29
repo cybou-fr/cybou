@@ -349,7 +349,14 @@ delete      -> DELETE_ITEM
 ```
 
 Starred, Recent, list/grid preference and access history remain local unless a
-later explicit sync feature is designed.
+later explicit sync feature is designed. Starred is persisted as encrypted
+local state in the Identity Application DB (never published), so it survives
+restarts but not a clean restore.
+
+"Available offline" is derived from real local chunks, never from past
+actions: the file's content tree must enumerate from local ROOT/INDEX blobs
+and every DATA chunk must be present in the local ChunkStore. It turns false
+once cache eviction removes any of them.
 
 ## 10. Mail model
 

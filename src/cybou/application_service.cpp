@@ -66,6 +66,7 @@ std::string Hex(const Bytes& bytes)
 std::string AccessibleKey(const uint256& id) { return "app/pub/" + id.GetHex(); }
 std::string MailKey(const PrivateItemId& id) { return "mail/msg/" + Hex(id); }
 std::string FileKey(const PrivateItemId& id) { return "files/item/" + Hex(id); }
+std::string FileStarKey(const PrivateItemId& id) { return "files/starred/" + Hex(id); }
 std::string BridgeKey(const uint256& id) { return "recovery/bridge/" + id.GetHex(); }
 
 class Writer {
@@ -319,6 +320,7 @@ std::optional<FileRecord> ApplicationService::LoadFile(const PrivateItemId& id) 
     if (batch.mutations.size() != 1 || !batch.mutations.front().item ||
         batch.mutations.front().item->item_id != id) return std::nullopt;
     record.item = *batch.mutations.front().item;
+    record.starred = m_application_db.Has(FileStarKey(id));
     return record;
 }
 
@@ -885,6 +887,15 @@ bool ApplicationService::SetMailStarred(const PrivateItemId& id, const bool star
     record->starred = starred;
     PrivateApplicationStore::Batch batch{m_application_db};
     return SaveMail(*record) && batch.Commit();
+}
+
+bool ApplicationService::SetFileStarred(const PrivateItemId& id, const bool starred)
+{
+    std::lock_guard lock{m_mutex};
+    const auto record = LoadFile(id);
+    if (!record || record->deleted) return false;
+    if (starred) return m_application_db.Put(FileStarKey(id), std::vector<unsigned char>{1});
+    return !m_application_db.Has(FileStarKey(id)) || m_application_db.Erase(FileStarKey(id));
 }
 
 bool ApplicationService::MoveMail(const PrivateItemId& id, const MailFolder folder)

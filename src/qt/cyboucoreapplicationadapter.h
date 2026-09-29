@@ -102,7 +102,9 @@ private:
     /** Model client IDs of created items -> private item IDs. */
     QHash<QString, QString> m_client_ids;
     /** Starred is local-only Files state. */
-    QSet<QString> m_starred_files;
+    /** Star changes shown before the stored state reflects them. */
+    QHash<QString, bool> m_pending_stars;
+    void postFileStar(const QString& hex, bool starred);
     QVector<CybouFileItem> m_last_files;
     /** Items shown before the worker's snapshot includes them. */
     QHash<QString, CybouFileItem> m_pending_files;

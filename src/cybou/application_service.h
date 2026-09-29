@@ -52,6 +52,8 @@ struct FileRecord {
     uint256 operation_id;
     PrivateOrder order;
     bool deleted{false};
+    /** Local, encrypted Identity state; never published. */
+    bool starred{false};
 };
 
 enum class AccessibleRootState : std::uint8_t {
@@ -118,6 +120,8 @@ public:
     /** Local mailbox state; never published. */
     bool SetMailRead(const PrivateItemId& message_id, bool read);
     bool SetMailStarred(const PrivateItemId& message_id, bool starred);
+    /** Persists the local star of an existing Files item. */
+    bool SetFileStarred(const PrivateItemId& item_id, bool starred);
     bool MoveMail(const PrivateItemId& message_id, MailFolder folder);
 
     /** Current Files catalog (deleted items excluded). */

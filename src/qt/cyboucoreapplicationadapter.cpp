@@ -156,8 +156,32 @@ struct CybouCoreApplicationAdapter::Session {
     /** Last publication job that touched each Files item. */
     std::map<std::string, std::string> item_jobs;
     std::map<std::string, QDateTime> file_modified;
-    /** Items whose content is on this device (uploaded or downloaded here). */
-    std::set<std::string> offline_files;
+    /** Content root -> its whole encrypted tree is in the local ChunkStore; refreshed on change. */
+    std::map<cybou::ChunkId, bool> locally_complete;
+
+    /**
+     * Available offline from real local chunks, never from past actions:
+     * ROOT/INDEX chunks decrypt from local blobs and every DATA chunk is
+     * present locally. DATA is not read.
+     */
+    bool AvailableOffline(const cybou::FileItem& item)
+    {
+        if (!item.root_chunk_id || !item.content_key) return false;
+        const auto cached = locally_complete.find(*item.root_chunk_id);
+        if (cached != locally_complete.end()) return cached->second;
+        const auto& blobs = runtime.GetChunkBlobStore();
+        bool all_present{true};
+        const bool walked = cybou::EnumerateEncryptedTreeChunks(
+            std::span<const unsigned char, 32>{runtime.GetNetworkId().begin(), 32}, *item.content_key,
+            *item.root_chunk_id, [&](const cybou::ChunkId& id) { return blobs.Get(id); },
+            [&](const cybou::ChunkId& id) {
+                all_present = all_present && blobs.Has(id);
+                return all_present;
+            });
+        const bool complete = walked && all_present;
+        locally_complete[*item.root_chunk_id] = complete;
+        return complete;
+    }
 
     /** RecoveryBridge being secured before IdentityRotate. */
     struct RotationPrep {
@@ -281,6 +305,7 @@ struct CybouCoreApplicationAdapter::Session {
         if (ticks % GC_EVERY_TICKS == 0) {
             (void)runtime.CollectChunkGarbage(LOCAL_CACHE_BUDGET_BYTES, static_cast<std::uint64_t>(
                 QDateTime::currentMSecsSinceEpoch()));
+            locally_complete.clear(); // eviction or outside changes
         }
         for (const auto& [id, status] : publication->ProcessDurability(*storage)) jobs[id] = status;
         AdvanceRotation();
@@ -494,7 +519,11 @@ struct CybouCoreApplicationAdapter::Session {
             it = indexed ? file_overlay.erase(it) : std::next(it);
         }
         std::map<std::string, uint256> operations;
-        for (const auto& record : application->ListFiles()) operations[ToHex(record.item.item_id)] = record.operation_id;
+        std::set<std::string> starred;
+        for (const auto& record : application->ListFiles()) {
+            operations[ToHex(record.item.item_id)] = record.operation_id;
+            if (record.starred) starred.insert(ToHex(record.item.item_id));
+        }
         const auto catalog = Catalog();
         const auto trash = ToHex(cybou::FilesTrashParent());
         const auto parent_of = [&](const cybou::FileItem& item) {
@@ -522,9 +551,10 @@ struct CybouCoreApplicationAdapter::Session {
             out.trashed = in_trash(hex);
             if (item.modified_ms != 0) out.modified = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(item.modified_ms));
             if (item.root_chunk_id) out.content_root_id = ChunkHex(*item.root_chunk_id);
-            out.available_offline = offline_files.contains(hex);
+            out.starred = starred.contains(hex);
             const auto job = item_jobs.find(hex);
             const auto status = job != item_jobs.end() ? jobs.find(job->second) : jobs.end();
+            out.available_offline = AvailableOffline(item);
             if (status != jobs.end()) {
                 out.state = StateOf(status->second);
                 out.progress_percent = status->second.phase == cybou::PublicationJobPhase::SECURING
@@ -640,6 +670,7 @@ void CybouCoreApplicationAdapter::closeIdentity()
     m_client_ids.clear();
     m_last_files.clear();
     m_pending_files.clear();
+    m_pending_stars.clear();
     setReady(false);
 }
 
@@ -712,7 +743,19 @@ void CybouCoreApplicationAdapter::emitFiles()
     QVector<CybouFileItem> files = m_last_files;
     for (const auto& file : std::as_const(m_last_files)) m_pending_files.remove(file.id);
     for (const auto& pending : std::as_const(m_pending_files)) files.append(pending);
-    for (auto& file : files) file.starred = m_starred_files.contains(file.id);
+    for (auto& file : files) {
+        const auto pending = m_pending_stars.find(file.id);
+        if (pending == m_pending_stars.end()) continue;
+        const bool indexed = std::any_of(m_last_files.begin(), m_last_files.end(),
+            [&](const CybouFileItem& f) { return f.id == file.id; });
+        if (indexed && file.starred == *pending) {
+            m_pending_stars.erase(pending);
+            continue;
+        }
+        // Starred before it was indexed: store it now that the item exists.
+        if (indexed) postFileStar(file.id, *pending);
+        file.starred = *pending;
+    }
     Q_EMIT filesSnapshot(files);
 }
 
@@ -1056,7 +1099,6 @@ void CybouCoreApplicationAdapter::uploadFile(const QString& file_id, const QStri
         }};
         const bool ok = s.PublishFileChange(std::move(batch), std::pair{std::size_t{0}, std::move(content)});
         if (ok) {
-            s.offline_files.insert(hex);
             // The staged size is authoritative once indexed; show the source size meanwhile.
             s.file_overlay[hex].item.logical_size = static_cast<std::uint64_t>(file->size());
         } else {
@@ -1081,7 +1123,7 @@ void CybouCoreApplicationAdapter::downloadFile(const QString& file_id, const QSt
         const QString error = item && item->root_chunk_id && item->content_key
             ? s.DownloadContent(*item->root_chunk_id, *item->content_key, item->logical_size, destination)
             : tr("This file has no content yet.");
-        if (error.isEmpty()) s.offline_files.insert(hex);
+        if (error.isEmpty()) s.locally_complete.clear();
         s.ToGui([owner = s.owner, id, error] {
             if (!error.isEmpty()) {
                 Q_EMIT owner->fileRetrievalChanged(id, CybouRetrievalState::Idle);
@@ -1181,9 +1223,18 @@ void CybouCoreApplicationAdapter::copyFile(const QString& id, const QString& cop
 void CybouCoreApplicationAdapter::setFileStarred(const QString& id, bool starred)
 {
     const QString hex = resolveFileId(id);
-    if (starred) m_starred_files.insert(hex);
-    else m_starred_files.remove(hex);
+    if (!m_session) return;
+    // Shown at once; persisted as encrypted Identity state once the item is indexed.
+    m_pending_stars.insert(hex, starred);
     emitFiles();
+    postFileStar(hex, starred);
+}
+
+void CybouCoreApplicationAdapter::postFileStar(const QString& hex, bool starred)
+{
+    const auto item_id = FromHex(hex);
+    if (!m_session || !item_id) return;
+    m_session->Post([item_id = *item_id, starred](Session& s) { (void)s.application->SetFileStarred(item_id, starred); });
 }
 
 void CybouCoreApplicationAdapter::trashFile(const QString& id)
