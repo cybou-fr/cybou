@@ -129,9 +129,9 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
         const QString id = m_id;
         const auto from = item->folder;
         const auto to = from == CybouMailFolder::Archive ? CybouMailFolder::Inbox : CybouMailFolder::Archive;
-        m_model->moveMail(id, to);
+        m_model->requestMoveMail(id, to);
         m_model->notify(to == CybouMailFolder::Archive ? tr("Conversation archived") : tr("Moved to Inbox"),
-            tr("Undo"), [model = m_model, id, from] { model->moveMail(id, from); });
+            tr("Undo"), [model = m_model, id, from] { model->requestMoveMail(id, from); });
         if (onBack) onBack();
     });
     connect(trash, &QToolButton::clicked, this, [this] {
@@ -139,11 +139,11 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
         if (!item) return;
         const QString id = m_id;
         const auto from = item->folder;
-        m_model->moveMail(id, CybouMailFolder::Trash);
-        m_model->notify(tr("Moved to Trash"), tr("Undo"), [model = m_model, id, from] { model->moveMail(id, from); });
+        m_model->requestMoveMail(id, CybouMailFolder::Trash);
+        m_model->notify(tr("Moved to Trash"), tr("Undo"), [model = m_model, id, from] { model->requestMoveMail(id, from); });
         if (onBack) onBack();
     });
-    connect(m_star, &QToolButton::clicked, this, [this](bool on) { m_model->setMailStarred(m_id, on); });
+    connect(m_star, &QToolButton::clicked, this, [this](bool on) { m_model->requestMailStarred(m_id, on); });
 
     m_subject = new QLabel{this};
     m_subject->setObjectName(QStringLiteral("pageTitle"));
@@ -210,7 +210,7 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     m_retry = new QPushButton{tr("Retry"), m_delivery};
     m_retry->setObjectName(QStringLiteral("secondaryButton"));
     m_retry->setProperty("cybouId", QStringLiteral("retrySend"));
-    connect(m_retry, &QPushButton::clicked, this, [this] { m_model->retrySendMail(m_id); });
+    connect(m_retry, &QPushButton::clicked, this, [this] { m_model->requestRetryMail(m_id); });
     delivery_layout->addWidget(m_retry);
     root->addWidget(m_delivery);
 
@@ -399,7 +399,7 @@ void MailReader::refresh()
                 onSaveAttachment(m_id, attachment_id);
                 return;
             }
-            if (!m_model->saveAttachmentToFiles(m_id, attachment_id).isEmpty()) m_model->notify(tr("Saved to Files"));
+            if (!m_model->requestSaveAttachmentToFiles(m_id, attachment_id).isEmpty()) m_model->notify(tr("Saved to Files"));
         });
         m_attachment_rows->addWidget(chip);
     }

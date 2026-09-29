@@ -25,6 +25,8 @@ class CybouWalletService;
 class CybouNameService;
 }
 
+class CybouApplicationBackend;
+
 struct CybouCapabilities {
     bool account_creation{false};
     bool payments{false};
@@ -118,6 +120,15 @@ public:
     void setBalances(quint64 balance, quint64 system_balance);
     void setStorageUsage(quint64 used, quint64 quota);
 
+    /**
+     * Connects the Mail/Files application backend (not owned). Every
+     * persistent Mail/Files action becomes a command on it, and the Mail and
+     * Files collections below are the projection it reports back. Without a
+     * backend, Mail and Files capabilities stay off.
+     */
+    void setApplicationBackend(CybouApplicationBackend* backend);
+    CybouApplicationBackend* applicationBackend() const { return m_backend; }
+
     /* ---- Product collections (fed by adapters or fixtures). ---- */
     const QVector<CybouNameItem>& names() const { return m_names; }
     void setNames(QVector<CybouNameItem> names);
@@ -125,19 +136,20 @@ public:
     const QVector<CybouMailItem>& mailItems() const { return m_mail; }
     void setMailItems(QVector<CybouMailItem> items);
     void upsertMailItem(const CybouMailItem& item);
+    void removeMailItem(const QString& id);
     int unreadMailCount() const;
     const CybouMailItem* mailItem(const QString& id) const;
-    /** Local mailbox state (never consensus state). */
-    void setMailRead(const QString& id, bool read);
-    void setMailStarred(const QString& id, bool starred);
-    void moveMail(const QString& id, CybouMailFolder folder);
-    /** Saves a local draft (never leaves the device); returns its id. */
-    QString saveMailDraft(CybouMailItem draft);
-    void deleteMail(const QString& id);
+    /* Mailbox organization: backend commands; the projection follows its reply. */
+    void requestMailRead(const QString& id, bool read);
+    void requestMailStarred(const QString& id, bool starred);
+    void requestMoveMail(const QString& id, CybouMailFolder folder);
+    /** Saves a draft in the Identity's private mailbox; returns its id. */
+    QString requestSaveMailDraft(CybouMailItem draft);
+    void requestDeleteMail(const QString& id);
     /**
      * Hands a composed message to the Mail backend. The message appears in
-     * Sent as Preparing; later states come only from the adapter.
-     * Returns the message id, or empty when Mail is not connected.
+     * Sent as Preparing at once (optimistic); every later state comes from
+     * the backend. Returns the message id, or empty when Mail is unavailable.
      */
     QString requestSendMail(CybouMailItem message);
     /** Adapter entry: lifecycle update for an outgoing message. */
@@ -148,8 +160,8 @@ public:
     /** Adapter entry: retrieval progress for a received attachment. */
     void setAttachmentRetrieval(const QString& message_id, const QString& attachment_id,
         CybouRetrievalState retrieval);
-    /** Retries a message in Needs attention from the retained local ciphertext. */
-    void retrySendMail(const QString& id);
+    /** Retries a message in Needs attention. */
+    void requestRetryMail(const QString& id);
     void requestAttachmentDownload(const QString& message_id, const QString& attachment_id,
         const QString& destination);
     /** Local attachment for Compose: read metadata only; content is
@@ -159,6 +171,7 @@ public:
     const QVector<CybouFileItem>& fileItems() const { return m_files; }
     void setFileItems(QVector<CybouFileItem> items);
     void upsertFileItem(const CybouFileItem& item);
+    void removeFileItems(const QStringList& ids);
 
     const QVector<CybouActivityItem>& activity() const { return m_activity; }
     void setActivity(QVector<CybouActivityItem> items);
@@ -241,27 +254,32 @@ public:
     bool requestRecoveryRootRotation(const QStringList& new_phrase, const QString& vault_password,
         bool resume_pending = false);
     /**
-     * Adds the file to the private catalog as Preparing and hands it to the
-     * Files backend. Returns the new item id, or empty when Files is not
-     * connected. Nothing is uploaded before RootPublication finality.
+     * Hands a local file to the Files backend. The backend reports the new
+     * item (Preparing first). Returns its id, or empty when Files is
+     * unavailable.
      */
     QString requestFileUpload(const QString& source_path, const QString& parent_id = {});
     void requestFileDownload(const QString& file_id, const QString& destination);
-    /* Private catalog organization (encrypted catalog updates). */
-    QString createFolder(const QString& name, const QString& parent_id = {});
-    void renameFile(const QString& id, const QString& name);
-    void moveFile(const QString& id, const QString& parent_id);
-    void setFileStarred(const QString& id, bool starred);
-    void trashFile(const QString& id);
-    void restoreFile(const QString& id);
-    void deleteFileForever(const QString& id);
+    /*
+     * Private catalog organization. These are backend commands: the Files
+     * projection changes only when the backend reports the result. Commands
+     * that create an item return its client id, or empty when unavailable.
+     */
+    QString requestCreateFolder(const QString& name, const QString& parent_id = {});
+    void requestRenameFile(const QString& id, const QString& name);
+    void requestMoveFile(const QString& id, const QString& parent_id);
+    QString requestCopyFile(const QString& id, const QString& parent_id);
+    void requestFileStarred(const QString& id, bool starred);
+    void requestTrashFile(const QString& id);
+    void requestRestoreFile(const QString& id);
+    void requestDeleteFile(const QString& id);
     const CybouFileItem* fileItem(const QString& id) const;
     /**
-     * Mail attachment -> Files: adds an independent private Files catalog
-     * reference that reuses the existing protected content (no download or
-     * re-upload). Returns the Files item id; repeated calls reuse it.
+     * Mail attachment -> Files: asks the backend for an independent Files
+     * catalog reference to the existing protected content. Returns the Files
+     * item id; repeated calls reuse an existing one.
      */
-    QString saveAttachmentToFiles(const QString& message_id, const QString& attachment_id);
+    QString requestSaveAttachmentToFiles(const QString& message_id, const QString& attachment_id);
     /** Files -> Mail: an attachment that references existing protected content. */
     std::optional<CybouAttachmentItem> attachmentFromFile(const QString& file_id) const;
     /** Adapter entries for upload/download progress. */
@@ -285,17 +303,13 @@ Q_SIGNALS:
     void nameClaimRequested(const QString& label);
     void lockVaultRequested();
     void restoreIdentityRequested();
-    void fileUploadRequested(const QString& file_id, const QString& source_path);
-    void fileDownloadRequested(const QString& file_id, const QString& destination);
-    void mailSendRequested(const QString& id);
     void paymentRequested(const QString& to_name, quint64 amount);
     void paymentFinished(bool ok, const QString& error);
-    void attachmentDownloadRequested(const QString& message_id, const QString& attachment_id,
-        const QString& destination);
 
 private:
     cybou::CybouIdentityService* m_identity_service{nullptr};
     cybou::CybouWalletService* m_wallet_service{nullptr};
+    CybouApplicationBackend* m_backend{nullptr};
     std::unique_ptr<cybou::CybouNameService> m_name_service;
     std::jthread m_name_worker;
     std::jthread m_recovery_rotation_worker;
@@ -320,6 +334,15 @@ private:
     CybouRestoreProgress m_restore_progress;
 
     void refreshFinalizedName();
+    /** True when private Mail/Files commands may be issued. */
+    bool mailReady() const;
+    bool filesReady() const;
+    /** Opens or closes the backend's Identity session to match identity_state. */
+    void syncIdentitySession();
+    bool m_session_open{false};
+    /** Mail/Files capabilities never exceed what the backend can do. */
+    CybouCapabilities honest(CybouCapabilities capabilities) const;
+    CybouCapabilities m_requested_capabilities;
 };
 
 #endif // BITCOIN_QT_CYBOUDESKTOPMODEL_H

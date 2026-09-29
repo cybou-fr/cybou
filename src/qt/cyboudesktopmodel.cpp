@@ -4,6 +4,8 @@
 
 #include <qt/cyboudesktopmodel.h>
 
+#include <qt/cybouapplicationbackend.h>
+
 #include <cybou/identity_operation_coordinator.h>
 #include <cybou/identity_service.h>
 #include <cybou/recovery_phrase.h>
@@ -84,8 +86,18 @@ void CybouDesktopModel::setNodeStatus(bool running, int peer_count, bool online,
     Q_EMIT statusChanged();
 }
 
-void CybouDesktopModel::setCapabilities(const CybouCapabilities& capabilities)
+CybouCapabilities CybouDesktopModel::honest(CybouCapabilities capabilities) const
 {
+    // Never claim Mail or Files without a backend that can carry them out.
+    capabilities.mail = capabilities.mail && m_backend && m_backend->mailAvailable();
+    capabilities.files = capabilities.files && m_backend && m_backend->filesAvailable();
+    return capabilities;
+}
+
+void CybouDesktopModel::setCapabilities(const CybouCapabilities& requested)
+{
+    m_requested_capabilities = requested;
+    const CybouCapabilities capabilities = honest(requested);
     if (m_capabilities.account_creation == capabilities.account_creation &&
         m_capabilities.payments == capabilities.payments &&
         m_capabilities.mail == capabilities.mail &&
@@ -160,8 +172,73 @@ void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString
         m_capabilities.payments = true;
         Q_EMIT capabilitiesChanged();
     }
+    syncIdentitySession();
     Q_EMIT statusChanged();
     if (state == CybouIdentityState::Active) refreshFinalizedName();
+}
+
+void CybouDesktopModel::syncIdentitySession()
+{
+    const auto state = m_status.identity_state;
+    const bool open = state == CybouIdentityState::Active || state == CybouIdentityState::Syncing ||
+        state == CybouIdentityState::NeedsAttention;
+    if (open == m_session_open) return;
+    m_session_open = open;
+    if (!open) {
+        // Private semantic data never outlives the unlocked Identity.
+        const bool had_mail = !m_mail.isEmpty();
+        const bool had_files = !m_files.isEmpty();
+        m_mail.clear();
+        m_files.clear();
+        if (had_mail) Q_EMIT mailChanged();
+        if (had_files) Q_EMIT filesChanged();
+    }
+    if (!m_backend) return;
+    if (open) m_backend->openIdentity();
+    else m_backend->closeIdentity();
+}
+
+void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
+{
+    if (m_backend == backend) return;
+    if (m_backend) {
+        if (m_session_open) m_backend->closeIdentity();
+        disconnect(m_backend, nullptr, this, nullptr);
+    }
+    m_backend = backend;
+    if (m_backend) {
+        using B = CybouApplicationBackend;
+        connect(m_backend, &B::availabilityChanged, this, [this] { setCapabilities(m_requested_capabilities); });
+        connect(m_backend, &B::mailSnapshot, this, [this](const QVector<CybouMailItem>& items) {
+            if (m_session_open) setMailItems(items);
+        });
+        connect(m_backend, &B::mailItemChanged, this, [this](const CybouMailItem& item) {
+            if (m_session_open) upsertMailItem(item);
+        });
+        connect(m_backend, &B::mailItemRemoved, this, &CybouDesktopModel::removeMailItem);
+        connect(m_backend, &B::mailStateChanged, this, &CybouDesktopModel::setMailState);
+        connect(m_backend, &B::attachmentStateChanged, this, &CybouDesktopModel::setAttachmentState);
+        connect(m_backend, &B::attachmentRetrievalChanged, this, &CybouDesktopModel::setAttachmentRetrieval);
+        connect(m_backend, &B::filesSnapshot, this, [this](const QVector<CybouFileItem>& items) {
+            if (m_session_open) setFileItems(items);
+        });
+        connect(m_backend, &B::fileItemChanged, this, [this](const CybouFileItem& item) {
+            if (m_session_open) upsertFileItem(item);
+        });
+        connect(m_backend, &B::fileItemsRemoved, this, &CybouDesktopModel::removeFileItems);
+        connect(m_backend, &B::fileStateChanged, this, &CybouDesktopModel::setFileState);
+        connect(m_backend, &B::fileRetrievalChanged, this, &CybouDesktopModel::setFileRetrieval);
+        connect(m_backend, &B::restoreProgressChanged, this,
+            [this](CybouRestoreStepState mail, CybouRestoreStepState files) {
+                CybouRestoreProgress progress = m_restore_progress;
+                progress.mail = mail;
+                progress.files = files;
+                setRestoreProgress(progress);
+            });
+        connect(m_backend, &B::commandFailed, this, [this](const QString& text) { notify(text); });
+        if (m_session_open) m_backend->openIdentity();
+    }
+    setCapabilities(m_requested_capabilities);
 }
 
 void CybouDesktopModel::setIdentityStep(CybouIdentityStep step)
@@ -230,37 +307,37 @@ const CybouMailItem* CybouDesktopModel::mailItem(const QString& id) const
     return nullptr;
 }
 
-void CybouDesktopModel::setMailRead(const QString& id, bool read)
+void CybouDesktopModel::removeMailItem(const QString& id)
 {
-    for (auto& item : m_mail) {
-        if (item.id == id && item.unread == read) {
-            item.unread = !read;
-            Q_EMIT mailChanged();
-            return;
-        }
-    }
+    if (m_mail.removeIf([&id](const CybouMailItem& item) { return item.id == id; }) > 0) Q_EMIT mailChanged();
 }
 
-void CybouDesktopModel::setMailStarred(const QString& id, bool starred)
+bool CybouDesktopModel::mailReady() const
 {
-    for (auto& item : m_mail) {
-        if (item.id == id && item.starred != starred) {
-            item.starred = starred;
-            Q_EMIT mailChanged();
-            return;
-        }
-    }
+    return m_backend && m_capabilities.mail && m_status.identity_state == CybouIdentityState::Active;
 }
 
-void CybouDesktopModel::moveMail(const QString& id, CybouMailFolder folder)
+bool CybouDesktopModel::filesReady() const
 {
-    for (auto& item : m_mail) {
-        if (item.id == id && item.folder != folder) {
-            item.folder = folder;
-            Q_EMIT mailChanged();
-            return;
-        }
-    }
+    return m_backend && m_capabilities.files && m_status.identity_state == CybouIdentityState::Active;
+}
+
+void CybouDesktopModel::requestMailRead(const QString& id, bool read)
+{
+    const auto* item = mailItem(id);
+    if (mailReady() && item && item->unread == read) m_backend->setMailRead(id, read);
+}
+
+void CybouDesktopModel::requestMailStarred(const QString& id, bool starred)
+{
+    const auto* item = mailItem(id);
+    if (mailReady() && item && item->starred != starred) m_backend->setMailStarred(id, starred);
+}
+
+void CybouDesktopModel::requestMoveMail(const QString& id, CybouMailFolder folder)
+{
+    const auto* item = mailItem(id);
+    if (mailReady() && item && item->folder != folder) m_backend->moveMail(id, folder);
 }
 
 namespace {
@@ -277,8 +354,9 @@ QString PreviewOf(const QString& body)
 }
 } // namespace
 
-QString CybouDesktopModel::saveMailDraft(CybouMailItem draft)
+QString CybouDesktopModel::requestSaveMailDraft(CybouMailItem draft)
 {
+    if (!mailReady()) return {};
     if (draft.id.isEmpty()) draft.id = NewLocalId("draft");
     draft.folder = CybouMailFolder::Drafts;
     draft.draft = true;
@@ -287,21 +365,20 @@ QString CybouDesktopModel::saveMailDraft(CybouMailItem draft)
     draft.from_name = m_status.primary_name;
     draft.time = QDateTime::currentDateTime();
     draft.preview = PreviewOf(draft.body);
-    upsertMailItem(draft);
+    m_backend->saveMailDraft(draft);
     return draft.id;
 }
 
-void CybouDesktopModel::deleteMail(const QString& id)
+void CybouDesktopModel::requestDeleteMail(const QString& id)
 {
-    const auto removed = m_mail.removeIf([&id](const CybouMailItem& item) { return item.id == id; });
-    if (removed > 0) Q_EMIT mailChanged();
+    if (mailReady() && mailItem(id)) m_backend->deleteMail(id);
 }
 
 QString CybouDesktopModel::requestSendMail(CybouMailItem message)
 {
-    if (!m_capabilities.mail || m_status.identity_state != CybouIdentityState::Active) return {};
+    if (!mailReady()) return {};
     // A sent draft becomes the outgoing message.
-    if (!message.id.isEmpty()) deleteMail(message.id);
+    if (!message.id.isEmpty() && mailItem(message.id)) m_backend->deleteMail(message.id);
     message.id = NewLocalId("out");
     message.folder = CybouMailFolder::Sent;
     message.draft = false;
@@ -313,8 +390,10 @@ QString CybouDesktopModel::requestSendMail(CybouMailItem message)
     for (auto& attachment : message.attachments) {
         if (attachment.state != CybouContentState::Protected) attachment.state = CybouContentState::Preparing;
     }
+    // Optimistic Preparing; the backend is the authority from here on and
+    // never reports Sent before the content is Protected.
     upsertMailItem(message);
-    Q_EMIT mailSendRequested(message.id);
+    m_backend->sendMail(message);
     return message.id;
 }
 
@@ -365,26 +444,25 @@ void CybouDesktopModel::setAttachmentRetrieval(const QString& message_id, const 
     }
 }
 
-void CybouDesktopModel::retrySendMail(const QString& id)
+void CybouDesktopModel::requestRetryMail(const QString& id)
 {
-    for (auto& item : m_mail) {
-        if (item.id != id || item.state != CybouContentState::NeedsAttention) continue;
-        item.state = CybouContentState::Preparing;
-        for (auto& attachment : item.attachments) {
-            if (attachment.state != CybouContentState::Protected) attachment.state = CybouContentState::Preparing;
-        }
-        Q_EMIT mailChanged();
-        Q_EMIT mailSendRequested(id);
-        return;
+    const auto* item = mailItem(id);
+    if (!mailReady() || !item || item->state != CybouContentState::NeedsAttention) return;
+    CybouMailItem pending = *item;
+    pending.state = CybouContentState::Preparing;
+    for (auto& attachment : pending.attachments) {
+        if (attachment.state != CybouContentState::Protected) attachment.state = CybouContentState::Preparing;
     }
+    upsertMailItem(pending);
+    m_backend->retryMail(id);
 }
 
 void CybouDesktopModel::requestAttachmentDownload(const QString& message_id, const QString& attachment_id,
     const QString& destination)
 {
-    if (m_status.identity_state != CybouIdentityState::Active) return;
+    if (!m_backend || m_status.identity_state != CybouIdentityState::Active) return;
     setAttachmentRetrieval(message_id, attachment_id, CybouRetrievalState::Downloading);
-    Q_EMIT attachmentDownloadRequested(message_id, attachment_id, destination);
+    m_backend->downloadAttachment(message_id, attachment_id, destination);
 }
 
 CybouAttachmentItem CybouDesktopModel::localAttachment(const QString& path) const
@@ -411,6 +489,12 @@ void CybouDesktopModel::upsertFileItem(const CybouFileItem& item)
     if (it != m_files.end()) *it = item;
     else m_files.append(item);
     Q_EMIT filesChanged();
+}
+
+void CybouDesktopModel::removeFileItems(const QStringList& ids)
+{
+    if (m_files.removeIf([&ids](const CybouFileItem& item) { return ids.contains(item.id); }) > 0)
+        Q_EMIT filesChanged();
 }
 
 void CybouDesktopModel::setActivity(QVector<CybouActivityItem> items)
@@ -912,25 +996,17 @@ bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, c
 
 QString CybouDesktopModel::requestFileUpload(const QString& source_path, const QString& parent_id)
 {
-    if (m_status.identity_state != CybouIdentityState::Active || !m_capabilities.files) return {};
-    const QFileInfo info{source_path};
-    CybouFileItem item;
-    item.id = NewLocalId("file");
-    item.name = info.fileName();
-    item.parent_id = parent_id;
-    item.logical_size = static_cast<quint64>(qMax<qint64>(0, info.size()));
-    item.modified = QDateTime::currentDateTime();
-    item.state = CybouContentState::Preparing;
-    upsertFileItem(item);
-    Q_EMIT fileUploadRequested(item.id, source_path);
-    return item.id;
+    if (!filesReady() || !QFileInfo{source_path}.isFile()) return {};
+    const QString id = NewLocalId("file");
+    m_backend->uploadFile(id, source_path, parent_id);
+    return id;
 }
 
 void CybouDesktopModel::requestFileDownload(const QString& file_id, const QString& destination)
 {
-    if (m_status.identity_state != CybouIdentityState::Active) return;
+    if (!m_backend || m_status.identity_state != CybouIdentityState::Active || !fileItem(file_id)) return;
     setFileRetrieval(file_id, CybouRetrievalState::Downloading);
-    Q_EMIT fileDownloadRequested(file_id, destination);
+    m_backend->downloadFile(file_id, destination);
 }
 
 const CybouFileItem* CybouDesktopModel::fileItem(const QString& id) const
@@ -941,18 +1017,77 @@ const CybouFileItem* CybouDesktopModel::fileItem(const QString& id) const
     return nullptr;
 }
 
-QString CybouDesktopModel::createFolder(const QString& name, const QString& parent_id)
+QString CybouDesktopModel::requestCreateFolder(const QString& name, const QString& parent_id)
 {
-    if (m_status.identity_state != CybouIdentityState::Active || name.trimmed().isEmpty()) return {};
-    CybouFileItem folder;
-    folder.id = NewLocalId("folder");
-    folder.name = name.trimmed();
-    folder.parent_id = parent_id;
-    folder.folder = true;
-    folder.modified = QDateTime::currentDateTime();
-    folder.state = CybouContentState::Protected;
-    upsertFileItem(folder);
-    return folder.id;
+    if (!filesReady() || name.trimmed().isEmpty()) return {};
+    const QString id = NewLocalId("folder");
+    m_backend->createFolder(id, name.trimmed(), parent_id);
+    return id;
+}
+
+void CybouDesktopModel::requestRenameFile(const QString& id, const QString& name)
+{
+    const auto* item = fileItem(id);
+    if (!filesReady() || !item || name.trimmed().isEmpty() || item->name == name.trimmed()) return;
+    m_backend->renameFile(id, name.trimmed());
+}
+
+void CybouDesktopModel::requestMoveFile(const QString& id, const QString& parent_id)
+{
+    const auto* item = fileItem(id);
+    if (!filesReady() || !item || id == parent_id || item->parent_id == parent_id) return;
+    m_backend->moveFile(id, parent_id);
+}
+
+QString CybouDesktopModel::requestCopyFile(const QString& id, const QString& parent_id)
+{
+    const auto* item = fileItem(id);
+    if (!filesReady() || !item || item->folder) return {};
+    const QString copy_id = NewLocalId("copy");
+    m_backend->copyFile(id, copy_id, parent_id);
+    return copy_id;
+}
+
+void CybouDesktopModel::requestFileStarred(const QString& id, bool starred)
+{
+    const auto* item = fileItem(id);
+    if (filesReady() && item && item->starred != starred) m_backend->setFileStarred(id, starred);
+}
+
+void CybouDesktopModel::requestTrashFile(const QString& id)
+{
+    if (filesReady() && fileItem(id)) m_backend->trashFile(id);
+}
+
+void CybouDesktopModel::requestRestoreFile(const QString& id)
+{
+    if (filesReady() && fileItem(id)) m_backend->restoreFile(id);
+}
+
+void CybouDesktopModel::requestDeleteFile(const QString& id)
+{
+    if (filesReady() && fileItem(id)) m_backend->deleteFile(id);
+}
+
+QString CybouDesktopModel::requestSaveAttachmentToFiles(const QString& message_id, const QString& attachment_id)
+{
+    if (!filesReady() || !m_backend->mailAvailable()) return {};
+    const auto* message = mailItem(message_id);
+    if (!message) return {};
+    for (const auto& attachment : message->attachments) {
+        if (attachment.id != attachment_id) continue;
+        if (attachment.state != CybouContentState::Protected) return {};
+        if (!attachment.saved_file_id.isEmpty() && fileItem(attachment.saved_file_id)) return attachment.saved_file_id;
+        const QString id = NewLocalId("saved");
+        const QString name = attachment.name;
+        m_backend->saveAttachmentToFiles(message_id, attachment_id, id);
+        if (fileItem(id)) {
+            addActivity({CybouActivityKind::FileUploaded, tr("%1 saved to Files").arg(name), tr("From Mail"),
+                QDateTime::currentDateTime()});
+        }
+        return id;
+    }
+    return {};
 }
 
 namespace {
@@ -968,87 +1103,6 @@ bool MutateFile(QVector<CybouFileItem>& files, const QString& id, F mutate)
     return false;
 }
 } // namespace
-
-void CybouDesktopModel::renameFile(const QString& id, const QString& name)
-{
-    if (name.trimmed().isEmpty()) return;
-    if (MutateFile(m_files, id, [&](CybouFileItem& item) { item.name = name.trimmed(); item.modified = QDateTime::currentDateTime(); }))
-        Q_EMIT filesChanged();
-}
-
-void CybouDesktopModel::moveFile(const QString& id, const QString& parent_id)
-{
-    if (id == parent_id) return;
-    if (MutateFile(m_files, id, [&](CybouFileItem& item) { item.parent_id = parent_id; })) Q_EMIT filesChanged();
-}
-
-void CybouDesktopModel::setFileStarred(const QString& id, bool starred)
-{
-    if (MutateFile(m_files, id, [&](CybouFileItem& item) { item.starred = starred; })) Q_EMIT filesChanged();
-}
-
-void CybouDesktopModel::trashFile(const QString& id)
-{
-    // Trashing a folder trashes its contents with it.
-    QStringList ids{id};
-    for (int i = 0; i < ids.size(); ++i) {
-        for (const auto& item : m_files) {
-            if (item.parent_id == ids.at(i)) ids << item.id;
-        }
-    }
-    for (auto& item : m_files) {
-        if (ids.contains(item.id)) item.trashed = true;
-    }
-    Q_EMIT filesChanged();
-}
-
-void CybouDesktopModel::restoreFile(const QString& id)
-{
-    QStringList ids{id};
-    for (int i = 0; i < ids.size(); ++i) {
-        for (const auto& item : m_files) {
-            if (item.parent_id == ids.at(i)) ids << item.id;
-        }
-    }
-    for (auto& item : m_files) {
-        if (ids.contains(item.id)) item.trashed = false;
-    }
-    Q_EMIT filesChanged();
-}
-
-void CybouDesktopModel::deleteFileForever(const QString& id)
-{
-    QStringList ids{id};
-    for (int i = 0; i < ids.size(); ++i) {
-        for (const auto& item : m_files) {
-            if (item.parent_id == ids.at(i)) ids << item.id;
-        }
-    }
-    m_files.removeIf([&ids](const CybouFileItem& item) { return ids.contains(item.id); });
-    Q_EMIT filesChanged();
-}
-
-QString CybouDesktopModel::saveAttachmentToFiles(const QString& message_id, const QString& attachment_id)
-{
-    if (m_status.identity_state != CybouIdentityState::Active) return {};
-    auto* attachment = FindAttachment(m_mail, message_id, attachment_id);
-    if (!attachment || attachment->state != CybouContentState::Protected) return {};
-    if (!attachment->saved_file_id.isEmpty() && fileItem(attachment->saved_file_id)) return attachment->saved_file_id;
-    CybouFileItem item;
-    item.id = NewLocalId("saved");
-    item.name = attachment->name;
-    item.logical_size = attachment->logical_size;
-    item.modified = QDateTime::currentDateTime();
-    // Same encrypted content, new independent catalog/retention reference.
-    item.state = CybouContentState::Protected;
-    attachment->saved_file_id = item.id;
-    m_files.append(item);
-    Q_EMIT filesChanged();
-    Q_EMIT mailChanged();
-    addActivity({CybouActivityKind::FileUploaded, tr("%1 saved to Files").arg(item.name), tr("From Mail"),
-        QDateTime::currentDateTime()});
-    return item.id;
-}
 
 std::optional<CybouAttachmentItem> CybouDesktopModel::attachmentFromFile(const QString& file_id) const
 {

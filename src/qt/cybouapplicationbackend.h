@@ -1,0 +1,109 @@
+// Copyright (c) 2026 Stanislav Saveliev
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/license/mit/.
+
+#ifndef BITCOIN_QT_CYBOUAPPLICATIONBACKEND_H
+#define BITCOIN_QT_CYBOUAPPLICATIONBACKEND_H
+
+#include <qt/cybouproduct.h>
+
+#include <QObject>
+#include <QString>
+#include <QStringList>
+#include <QVector>
+
+/**
+ * The one Qt-side application backend contract for Mail and Files.
+ *
+ * CybouDesktopModel turns page actions into commands on this interface and
+ * renders what the backend reports back. The backend owns the Identity's
+ * semantic Mail/Files state (the encrypted Application DB); the model only
+ * holds the last reported projection plus UI-local state.
+ *
+ * Commands and events use product DTOs only. Publication, capsule, chunk,
+ * provider and finality mechanics stay behind the implementation:
+ *
+ *   CybouApplicationBackend
+ *     ├── CybouFixtureApplicationBackend   (deterministic UI fixtures)
+ *     └── CybouCoreApplicationAdapter      (core services, once available)
+ *
+ * Ids passed to commands that create items (outgoing mail, uploads, folders,
+ * copies, saved attachments) are opaque client ids chosen by the model; the
+ * backend reports the new item under that id.
+ *
+ * All calls and signals happen on the GUI thread.
+ */
+class CybouApplicationBackend : public QObject
+{
+    Q_OBJECT
+
+public:
+    using QObject::QObject;
+    ~CybouApplicationBackend() override = default;
+
+    /** True when real Mail/Files work can be carried out right now. */
+    virtual bool mailAvailable() const = 0;
+    virtual bool filesAvailable() const = 0;
+
+    /* ---- Identity session. Private semantic data exists only while open. ---- */
+    /** The Identity is unlocked: open its Application DB and report snapshots. */
+    virtual void openIdentity() = 0;
+    /** The Identity locked or went away: drop plaintext state and indexes. */
+    virtual void closeIdentity() = 0;
+
+    /* ---- Mail commands. ---- */
+    virtual void saveMailDraft(const CybouMailItem& draft) = 0;
+    /** message.id is the client id; the backend drives its lifecycle. */
+    virtual void sendMail(const CybouMailItem& message) = 0;
+    virtual void retryMail(const QString& id) = 0;
+    virtual void setMailRead(const QString& id, bool read) = 0;
+    virtual void setMailStarred(const QString& id, bool starred) = 0;
+    virtual void moveMail(const QString& id, CybouMailFolder folder) = 0;
+    virtual void deleteMail(const QString& id) = 0;
+    virtual void downloadAttachment(const QString& message_id, const QString& attachment_id,
+        const QString& destination) = 0;
+    /** Mail -> Files. The backend decides how protected content is reused. */
+    virtual void saveAttachmentToFiles(const QString& message_id, const QString& attachment_id,
+        const QString& file_id) = 0;
+
+    /* ---- Files commands. ---- */
+    virtual void uploadFile(const QString& file_id, const QString& source_path, const QString& parent_id) = 0;
+    virtual void downloadFile(const QString& file_id, const QString& destination) = 0;
+    virtual void createFolder(const QString& folder_id, const QString& name, const QString& parent_id) = 0;
+    virtual void renameFile(const QString& id, const QString& name) = 0;
+    virtual void moveFile(const QString& id, const QString& parent_id) = 0;
+    virtual void copyFile(const QString& id, const QString& copy_id, const QString& parent_id) = 0;
+    virtual void setFileStarred(const QString& id, bool starred) = 0;
+    /** Trash, restore and delete apply to a folder's contents too. */
+    virtual void trashFile(const QString& id) = 0;
+    virtual void restoreFile(const QString& id) = 0;
+    virtual void deleteFile(const QString& id) = 0;
+
+Q_SIGNALS:
+    void availabilityChanged();
+
+    /* Mail projection. */
+    void mailSnapshot(const QVector<CybouMailItem>& items);
+    void mailItemChanged(const CybouMailItem& item);
+    void mailItemRemoved(const QString& id);
+    void mailStateChanged(const QString& id, CybouContentState state);
+    void attachmentStateChanged(const QString& message_id, const QString& attachment_id,
+        CybouContentState state, int progress_percent);
+    void attachmentRetrievalChanged(const QString& message_id, const QString& attachment_id,
+        CybouRetrievalState retrieval);
+
+    /* Files projection. */
+    void filesSnapshot(const QVector<CybouFileItem>& items);
+    void fileItemChanged(const CybouFileItem& item);
+    void fileItemsRemoved(const QStringList& ids);
+    void fileStateChanged(const QString& id, CybouContentState state, int progress_percent);
+    void fileRetrievalChanged(const QString& id, CybouRetrievalState retrieval);
+
+    /** Mail/Files rows of the restore progress (Identity rows belong to core). */
+    void restoreProgressChanged(CybouRestoreStepState mail, CybouRestoreStepState files);
+
+    /** A command could not be carried out; text is user-facing. */
+    void commandFailed(const QString& text);
+};
+
+#endif // BITCOIN_QT_CYBOUAPPLICATIONBACKEND_H

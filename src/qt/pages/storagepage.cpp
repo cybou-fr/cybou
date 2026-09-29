@@ -237,13 +237,13 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
         return button;
     };
     selection_action(tr("Star"), [this] {
-        for (const auto& id : selectedIds()) m_model->setFileStarred(id, true);
+        for (const auto& id : selectedIds()) m_model->requestFileStarred(id, true);
     });
     selection_action(tr("Move to Trash"), [this] {
         const auto ids = selectedIds();
-        for (const auto& id : ids) m_model->trashFile(id);
+        for (const auto& id : ids) m_model->requestTrashFile(id);
         m_model->notify(tr("%1 items moved to Trash").arg(ids.size()), tr("Undo"),
-            [model = m_model, ids] { for (const auto& i : ids) model->restoreFile(i); });
+            [model = m_model, ids] { for (const auto& i : ids) model->requestRestoreFile(i); });
     });
     auto* clear_selection = new QToolButton{m_selection_bar};
     clear_selection->setObjectName(QStringLiteral("iconButton"));
@@ -360,9 +360,9 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     connect(trash_key, &QShortcut::activated, this, [this] {
         const auto ids = selectedIds();
         if (m_view == View::Trash || ids.isEmpty()) return;
-        for (const auto& id : ids) m_model->trashFile(id);
+        for (const auto& id : ids) m_model->requestTrashFile(id);
         m_model->notify(ids.size() == 1 ? tr("Moved to Trash") : tr("%1 items moved to Trash").arg(ids.size()),
-            tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->restoreFile(i); });
+            tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->requestRestoreFile(i); });
     });
     auto* rename_key = new QShortcut{QKeySequence{Qt::Key_F2}, this};
     rename_key->setContext(Qt::WidgetWithChildrenShortcut);
@@ -432,10 +432,10 @@ bool StoragePage::moveFilesTo(const QStringList& ids, const QString& folder_id)
         before.append({id, item->parent_id});
     }
     if (before.isEmpty()) return false;
-    for (const auto& [id, _] : before) m_model->moveFile(id, folder_id);
+    for (const auto& [id, _] : before) m_model->requestMoveFile(id, folder_id);
     const QString target = folder_id.isEmpty() ? ViewName(View::MyFiles) : folderName(folder_id);
     m_model->notify(before.size() == 1 ? tr("Moved to “%1”").arg(target) : tr("%1 items moved to “%2”").arg(before.size()).arg(target),
-        tr("Undo"), [model = m_model, before] { for (const auto& [id, parent] : before) model->moveFile(id, parent); });
+        tr("Undo"), [model = m_model, before] { for (const auto& [id, parent] : before) model->requestMoveFile(id, parent); });
     return true;
 }
 
@@ -544,12 +544,12 @@ bool StoragePage::eventFilter(QObject* watched, QEvent* event)
         } else if (row == static_cast<int>(View::MyFiles)) {
             moveFilesTo(ids, {});
         } else if (row == static_cast<int>(View::Starred)) {
-            for (const auto& id : ids) m_model->setFileStarred(id, true);
+            for (const auto& id : ids) m_model->requestFileStarred(id, true);
             m_model->notify(ids.size() == 1 ? tr("Starred") : tr("%1 items starred").arg(ids.size()));
         } else {
-            for (const auto& id : ids) m_model->trashFile(id);
+            for (const auto& id : ids) m_model->requestTrashFile(id);
             m_model->notify(ids.size() == 1 ? tr("Moved to Trash") : tr("%1 items moved to Trash").arg(ids.size()),
-                tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->restoreFile(i); });
+                tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->requestRestoreFile(i); });
         }
         drag->acceptProposedAction();
         return true;
@@ -651,10 +651,7 @@ void StoragePage::rebuild()
         m_visible << file.id;
         const QIcon icon{glyphPixmap(FileGlyph(file), {20, 20},
             CybouTheme::color(file.folder ? CybouTheme::BLUE : CybouTheme::TEXT_SECONDARY))};
-        const QString status = file.folder ? QString{}
-            : file.retrieval != CybouRetrievalState::Idle && file.retrieval != CybouRetrievalState::Ready
-                ? CybouProduct::retrievalText(file.retrieval)
-                : CybouProduct::progressText(file.state, file.progress_percent, online);
+        const QString status = CybouProduct::fileStatusText(file, online);
 
         auto* row = new QTreeWidgetItem{m_table};
         row->setIcon(NameColumn, icon);
@@ -847,7 +844,7 @@ void StoragePage::promptNewFolder()
     bool ok{false};
     const QString name = QInputDialog::getText(this, tr("New folder"), tr("Folder name"), QLineEdit::Normal,
         tr("Untitled folder"), &ok).trimmed();
-    if (ok && !name.isEmpty() && !m_model->createFolder(name, m_view == View::MyFiles ? m_folder : QString{}).isEmpty())
+    if (ok && !name.isEmpty() && !m_model->requestCreateFolder(name, m_view == View::MyFiles ? m_folder : QString{}).isEmpty())
         m_model->notify(tr("Folder “%1” created").arg(name));
 }
 
@@ -855,7 +852,7 @@ void StoragePage::promptUploadFolder()
 {
     const QString directory = QFileDialog::getExistingDirectory(this, tr("Upload folder"));
     if (directory.isEmpty()) return;
-    const QString root_id = m_model->createFolder(QFileInfo{directory}.fileName(),
+    const QString root_id = m_model->requestCreateFolder(QFileInfo{directory}.fileName(),
         m_view == View::MyFiles ? m_folder : QString{});
     if (root_id.isEmpty()) return;
     QDirIterator it{directory, QDir::Files, QDirIterator::NoIteratorFlags};
@@ -868,7 +865,7 @@ void StoragePage::promptRename(const QString& id)
     if (!item) return;
     bool ok{false};
     const QString name = QInputDialog::getText(this, tr("Rename"), tr("New name"), QLineEdit::Normal, item->name, &ok);
-    if (ok) m_model->renameFile(id, name);
+    if (ok) m_model->requestRenameFile(id, name);
 }
 
 void StoragePage::promptMove(const QString& id)
@@ -883,7 +880,7 @@ void StoragePage::promptMove(const QString& id)
     }
     bool ok{false};
     const QString choice = QInputDialog::getItem(this, tr("Move"), tr("Move to"), labels, 0, false, &ok);
-    if (ok) m_model->moveFile(id, ids.at(labels.indexOf(choice)));
+    if (ok) m_model->requestMoveFile(id, ids.at(labels.indexOf(choice)));
 }
 
 void StoragePage::download(const QString& id)
@@ -904,14 +901,14 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
     QMenu menu{this};
     if (m_view == View::Trash) {
         menu.addAction(tr("Restore"), this, [this, ids] {
-            for (const auto& i : ids) m_model->restoreFile(i);
+            for (const auto& i : ids) m_model->requestRestoreFile(i);
             m_model->notify(ids.size() == 1 ? tr("Restored") : tr("%1 items restored").arg(ids.size()));
         });
         menu.addAction(tr("Delete forever"), this, [this, ids] {
             if (QMessageBox::question(this, tr("Delete forever"),
                     tr("Remove from your Files? CYBOU releases retained storage according to the Storage retention policy."))
                 == QMessageBox::Yes) {
-                for (const auto& i : ids) m_model->deleteFileForever(i);
+                for (const auto& i : ids) m_model->requestDeleteFile(i);
             }
         });
         menu.exec(global_pos);
@@ -925,17 +922,22 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
     menu.addSeparator();
     menu.addAction(tr("Rename"), this, [this, id] { promptRename(id); })->setShortcut(QKeySequence{Qt::Key_F2});
     menu.addAction(tr("Move"), this, [this, id] { promptMove(id); });
+    if (!item->folder) {
+        menu.addAction(tr("Make a copy"), this, [this, id, parent = item->parent_id] {
+            if (!m_model->requestCopyFile(id, parent).isEmpty()) m_model->notify(tr("Copy created"));
+        });
+    }
     menu.addAction(item->starred ? tr("Remove star") : tr("Star"), this,
-        [this, id, starred = item->starred] { m_model->setFileStarred(id, !starred); });
+        [this, id, starred = item->starred] { m_model->requestFileStarred(id, !starred); });
     if (!item->folder) {
         auto* send = menu.addAction(tr("Send by CYBOU Mail"), this, [this, id] { if (onSendByMail) onSendByMail(id); });
         send->setEnabled(item->state == CybouContentState::Protected && onSendByMail && m_model->capabilities().mail);
     }
     menu.addSeparator();
     menu.addAction(tr("Move to Trash"), this, [this, ids] {
-        for (const auto& i : ids) m_model->trashFile(i);
+        for (const auto& i : ids) m_model->requestTrashFile(i);
         m_model->notify(ids.size() == 1 ? tr("Moved to Trash") : tr("%1 items moved to Trash").arg(ids.size()),
-            tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->restoreFile(i); });
+            tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->requestRestoreFile(i); });
     })
         ->setShortcut(QKeySequence::Delete);
     menu.addAction(tr("Details"), this, [this, id] { showDetails(id); });
@@ -1020,6 +1022,7 @@ void StoragePage::rebuildDetails()
         const QString retrieval = CybouProduct::retrievalText(item->retrieval);
         DetailPair(layout, tr("Status"), retrieval.isEmpty()
             ? CybouProduct::progressText(item->state, item->progress_percent, online) : retrieval, m_details);
+        DetailPair(layout, tr("On this computer"), CybouProduct::localAvailabilityText(*item), m_details);
     }
     const auto& status = m_model->status();
     DetailPair(layout, tr("Owner"), status.primary_name.isEmpty() ? tr("You") : status.primary_name, m_details);
@@ -1055,6 +1058,7 @@ void StoragePage::rebuildDetails()
         DetailPair(box_layout, tr("Root content identifier"), item->content_root_id.isEmpty() ? none : item->content_root_id, box);
         DetailPair(box_layout, tr("Finalized height"), item->finalized_height > 0 ? QString::number(item->finalized_height) : none, box);
         DetailPair(box_layout, tr("Protection status"), CybouProduct::contentStateText(item->state), box);
+        DetailPair(box_layout, tr("Local availability"), CybouProduct::localAvailabilityText(*item), box);
         DetailPair(box_layout, tr("Retrieval status"), item->retrieval == CybouRetrievalState::Idle
             ? tr("Not retrieved on this computer") : CybouProduct::retrievalText(item->retrieval), box);
         box->setVisible(false);

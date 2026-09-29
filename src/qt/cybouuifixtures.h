@@ -18,8 +18,9 @@ class CybouDesktopModel;
  * Deterministic desktop UI fixtures (CYBOU_UI_FIXTURE=<name>).
  *
  * A fixture only feeds product state into the desktop model so every screen
- * can be developed and screenshotted without a running core. It does not
- * simulate the protocol and it never calls a backend.
+ * can be developed and screenshotted without a running core. Mail and Files
+ * go through CybouFixtureApplicationBackend, the same command/projection
+ * path a live backend uses. Nothing simulates the protocol or calls core.
  */
 namespace CybouUiFixtures {
 
@@ -42,9 +43,10 @@ bool apply(CybouDesktopModel& model, const QString& name);
 QString initialPage(const QString& name);
 
 /**
- * Fixture-mode stand-in for backend replies. It advances product states on
- * short timers so flows (create, restore, send, upload) can be exercised
- * visually. It is only ever attached when a fixture is active.
+ * Fixture-mode stand-in for Identity, Wallet and Names replies. It advances
+ * product states on short timers so flows (create, restore, pay, claim) can
+ * be exercised visually, and turns on the fixture Mail/Files backend's timed
+ * lifecycle. It is only ever attached when a fixture is active.
  */
 class Driver final : public QObject
 {
@@ -53,7 +55,7 @@ public:
     explicit Driver(CybouDesktopModel* model, QObject* parent = nullptr);
 
     /** Step delay in milliseconds (tests use 0). */
-    void setStepDelay(int ms) { m_step_ms = ms; }
+    void setStepDelay(int ms);
 
 private:
     CybouDesktopModel* const m_model;
@@ -62,9 +64,6 @@ private:
     void later(int steps, std::function<void()> action);
     void runCreate();
     void runRestore();
-    void runSend(const QString& id);
-    void runUpload(const QString& id);
-    void runDownload(const QString& message_id, const QString& attachment_id);
 };
 
 } // namespace CybouUiFixtures

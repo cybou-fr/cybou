@@ -354,7 +354,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     });
     shortcut(QKeySequence::Delete, [this, typing] {
         if (typing() || m_detail->currentWidget() != m_reader) return;
-        m_model->moveMail(m_reader->messageId(), CybouMailFolder::Trash);
+        m_model->requestMoveMail(m_reader->messageId(), CybouMailFolder::Trash);
         closeDetail();
     });
     shortcut(QKeySequence{Qt::Key_Escape}, [this] {
@@ -401,12 +401,12 @@ void EmailPage::moveMessagesTo(const QStringList& ids, View target)
     QString text;
     for (const auto& entry : before) {
         switch (target) {
-        case View::Starred: m_model->setMailStarred(entry.id, true); break;
-        case View::Archive: m_model->moveMail(entry.id, CybouMailFolder::Archive); break;
-        case View::Trash: m_model->moveMail(entry.id, CybouMailFolder::Trash); break;
+        case View::Starred: m_model->requestMailStarred(entry.id, true); break;
+        case View::Archive: m_model->requestMoveMail(entry.id, CybouMailFolder::Archive); break;
+        case View::Trash: m_model->requestMoveMail(entry.id, CybouMailFolder::Trash); break;
         case View::Inbox:
             // Only received mail belongs in Inbox; sent mail stays in Sent.
-            if (entry.folder != CybouMailFolder::Sent) m_model->moveMail(entry.id, CybouMailFolder::Inbox);
+            if (entry.folder != CybouMailFolder::Sent) m_model->requestMoveMail(entry.id, CybouMailFolder::Inbox);
             break;
         case View::Sent:
         case View::Drafts:
@@ -423,8 +423,8 @@ void EmailPage::moveMessagesTo(const QStringList& ids, View target)
     if (before.size() == 1 && before.first().id == m_current_id && target != View::Starred) closeDetail();
     m_model->notify(text, tr("Undo"), [model = m_model, before] {
         for (const auto& entry : before) {
-            model->moveMail(entry.id, entry.folder);
-            model->setMailStarred(entry.id, entry.starred);
+            model->requestMoveMail(entry.id, entry.folder);
+            model->requestMailStarred(entry.id, entry.starred);
         }
     });
 }
@@ -456,14 +456,14 @@ QMenu* EmailPage::buildContextMenu(const QStringList& ids, QWidget* parent)
         return item && item->unread;
     });
     add(any_unread ? tr("Mark as read") : tr("Mark as unread"), "mailMarkRead", [this, ids, any_unread] {
-        for (const auto& id : ids) m_model->setMailRead(id, any_unread);
+        for (const auto& id : ids) m_model->requestMailRead(id, any_unread);
     });
     const bool all_starred = std::all_of(ids.begin(), ids.end(), [this](const QString& id) {
         const auto* item = m_model->mailItem(id);
         return item && item->starred;
     });
     add(all_starred ? tr("Remove star") : tr("Star"), "mailStar", [this, ids, all_starred] {
-        for (const auto& id : ids) m_model->setMailStarred(id, !all_starred);
+        for (const auto& id : ids) m_model->requestMailStarred(id, !all_starred);
     });
     if (!first->draft) {
         menu->addSeparator();
@@ -479,7 +479,7 @@ QMenu* EmailPage::buildContextMenu(const QStringList& ids, QWidget* parent)
     } else {
         menu->addSeparator();
         add(tr("Discard draft"), "mailDiscard", [this, ids] {
-            for (const auto& id : ids) m_model->deleteMail(id);
+            for (const auto& id : ids) m_model->requestDeleteMail(id);
             m_model->notify(tr("Draft discarded"));
         });
     }
@@ -677,7 +677,7 @@ void EmailPage::openMessage(const QString& id)
         openCompose(*item);
         return;
     }
-    if (item->unread) m_model->setMailRead(id, true);
+    if (item->unread) m_model->requestMailRead(id, true);
     m_reader->showMessage(id);
     m_detail->setCurrentWidget(m_reader);
     m_detail_open = true;

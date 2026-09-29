@@ -57,6 +57,12 @@ private Q_SLOTS:
     void closingWithoutNodeRequestsQuit();
     void runtimeStartupFailureCanBeRetried();
     void runtimeRejectsStateFromAnotherNetwork();
+    void backendCommandsDriveProjection();
+    void liveCapabilitiesStayHonest();
+    void fixtureLifecycleFollowsBackend();
+    void filesShowLocalAvailability();
+    void lockHidesPrivateContent();
+    void restoreFillsInProgressively();
 
 private:
     std::unique_ptr<CybouMainWindow> makeWindow();

@@ -133,6 +133,9 @@ struct CybouFileItem {
     CybouContentState state{CybouContentState::Local};
     int progress_percent{-1};
     CybouRetrievalState retrieval{CybouRetrievalState::Idle};
+    /** Decrypted content can be opened on this device without fetching.
+        Independent of Protected, which is about network durability. */
+    bool available_offline{false};
     /** Advanced details only; empty until the backend reports them. */
     QString content_root_id;
     quint64 finalized_height{0};
@@ -247,6 +250,29 @@ inline QString retrievalText(CybouRetrievalState state)
     case CybouRetrievalState::Ready: return QCoreApplication::translate("CybouProduct", "Ready");
     }
     return {};
+}
+
+/**
+ * Local availability, independent of protection: a Protected file may be
+ * fetched from the network when opened, and an unprotected upload is still
+ * available on the device that is uploading it.
+ */
+inline QString localAvailabilityText(const CybouFileItem& item)
+{
+    return item.available_offline ? QCoreApplication::translate("CybouProduct", "Available offline")
+                                  : QCoreApplication::translate("CybouProduct", "Downloaded when opened");
+}
+
+/** List status: protection state, plus "Available offline" once Protected. */
+inline QString fileStatusText(const CybouFileItem& item, bool online)
+{
+    if (item.folder) return {};
+    if (item.retrieval != CybouRetrievalState::Idle && item.retrieval != CybouRetrievalState::Ready)
+        return retrievalText(item.retrieval);
+    const QString state = progressText(item.state, item.progress_percent, online);
+    if (item.state == CybouContentState::Protected && item.available_offline)
+        return state + QStringLiteral("  ·  ") + localAvailabilityText(item);
+    return state;
 }
 
 inline QString sizeText(quint64 bytes)

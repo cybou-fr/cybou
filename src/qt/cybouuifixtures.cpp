@@ -5,6 +5,7 @@
 #include <qt/cybouuifixtures.h>
 
 #include <qt/cyboudesktopmodel.h>
+#include <qt/cyboufixturebackend.h>
 
 #include <QTimeZone>
 #include <QTimer>
@@ -110,7 +111,7 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     });
 }
 
-void ApplyMail(CybouDesktopModel& model)
+QVector<CybouMailItem> FixtureMail()
 {
     QVector<CybouMailItem> mail;
     auto project = Mail(QStringLiteral("m-project"), CybouMailFolder::Inbox, QStringLiteral("alice.cybou"),
@@ -161,29 +162,45 @@ void ApplyMail(CybouDesktopModel& model)
     mail.append(Mail(QStringLiteral("m-archive-1"), CybouMailFolder::Archive, QStringLiteral("carol.cybou"),
         QStringLiteral("stan.cybou"), QStringLiteral("Meeting notes"),
         QStringLiteral("Notes from the planning session are below."), At(12, 15, 0)));
-    model.setMailItems(mail);
+    return mail;
 }
 
-void ApplyFiles(CybouDesktopModel& model)
+QVector<CybouFileItem> FixtureFiles()
 {
     QVector<CybouFileItem> files;
     files.append(Folder(QStringLiteral("f-docs"), QStringLiteral("Documents"), At(0, 9, 0)));
     files.append(Folder(QStringLiteral("f-photos"), QStringLiteral("Photos"), At(3, 18, 0)));
     auto report = File(QStringLiteral("f-report"), QStringLiteral("report.pdf"), {}, 4404019, At(0, 10, 50));
     report.starred = true;
+    report.available_offline = true;
     files.append(report);
     files.append(File(QStringLiteral("f-photo"), QStringLiteral("photo.jpg"), {}, 8493466, At(1, 19, 12)));
+    files.back().available_offline = true;
     auto archive = File(QStringLiteral("f-archive"), QStringLiteral("archive.zip"), {}, 1288490189ULL,
         At(4, 14, 3), CybouContentState::Securing);
     archive.progress_percent = 42;
+    archive.available_offline = true; // still uploading from this device
     files.append(archive);
     files.append(File(QStringLiteral("f-budget"), QStringLiteral("budget-2026.xlsx"), QStringLiteral("f-docs"), 245760, At(2, 11, 30)));
+    files.back().available_offline = true;
     files.append(File(QStringLiteral("f-notes"), QStringLiteral("meeting-notes.txt"), QStringLiteral("f-docs"), 12288, At(5, 9, 45)));
     files.append(File(QStringLiteral("f-mountain"), QStringLiteral("mountains.jpg"), QStringLiteral("f-photos"), 6291456, At(3, 18, 0)));
     auto old = File(QStringLiteral("f-old"), QStringLiteral("old-draft.docx"), {}, 88064, At(20, 10, 0));
     old.trashed = true;
     files.append(old);
-    model.setFileItems(files);
+    return files;
+}
+
+/** The fixture Mail/Files backend owned by the model, created on first use. */
+CybouFixtureApplicationBackend* Backend(CybouDesktopModel& model)
+{
+    auto* backend = qobject_cast<CybouFixtureApplicationBackend*>(model.applicationBackend());
+    if (!backend) {
+        backend = new CybouFixtureApplicationBackend{&model};
+        backend->setOnlineProvider([&model] { return model.status().online; });
+        model.setApplicationBackend(backend);
+    }
+    return backend;
 }
 
 void ApplyWallet(CybouDesktopModel& model)
@@ -228,6 +245,8 @@ bool apply(CybouDesktopModel& model, const QString& name)
 {
     if (!names().contains(name)) return false;
     model.setFixtureMode(true);
+    auto* backend = Backend(model);
+    backend->seed({}, {});
 
     if (name == QLatin1String{"empty"}) {
         model.setNodeStatus(true, 3, true, QStringLiteral("C:/Users/stan/AppData/Local/CYBOU"));
@@ -252,10 +271,9 @@ bool apply(CybouDesktopModel& model, const QString& name)
     }
 
     ApplyIdentity(model, CybouIdentityState::Active);
-    ApplyMail(model);
-    ApplyFiles(model);
     ApplyWallet(model);
     ApplyActivity(model);
+    auto mail = FixtureMail();
 
     if (name == QLatin1String{"offline"}) {
         model.setNodeStatus(true, 0, false);
@@ -265,8 +283,9 @@ bool apply(CybouDesktopModel& model, const QString& name)
         outgoing.state = CybouContentState::WaitingForConfirmation;
         outgoing.attachments = {Attachment(QStringLiteral("c-invoice"), QStringLiteral("invoice-09.pdf"), 310272,
             CybouContentState::WaitingForConfirmation)};
-        model.upsertMailItem(outgoing);
+        mail.prepend(outgoing);
     }
+    backend->seed(mail, FixtureFiles());
     return true;
 }
 
@@ -282,14 +301,7 @@ Driver::Driver(CybouDesktopModel* model, QObject* parent)
 {
     connect(m_model, &CybouDesktopModel::createIdentityRequested, this, [this] { runCreate(); });
     connect(m_model, &CybouDesktopModel::restoreIdentityRequested, this, [this] { runRestore(); });
-    connect(m_model, &CybouDesktopModel::fileUploadRequested, this,
-        [this](const QString& id, const QString&) { runUpload(id); });
-    connect(m_model, &CybouDesktopModel::fileDownloadRequested, this, [this](const QString& id, const QString&) {
-        later(1, [this, id] { m_model->setFileRetrieval(id, CybouRetrievalState::Verifying); });
-        later(2, [this, id] { m_model->setFileRetrieval(id, CybouRetrievalState::Decrypting); });
-        later(3, [this, id] { m_model->setFileRetrieval(id, CybouRetrievalState::Ready); });
-        later(6, [this, id] { m_model->setFileRetrieval(id, CybouRetrievalState::Idle); });
-    });
+    Backend(*m_model)->setAutoAdvance(true, m_step_ms);
     connect(m_model, &CybouDesktopModel::paymentRequested, this, [this](const QString& to, quint64 amount) {
         later(2, [this, to, amount] {
             const quint64 fee = m_model->paymentFee().value_or(0);
@@ -310,11 +322,6 @@ Driver::Driver(CybouDesktopModel* model, QObject* parent)
             m_model->setPaymentFinished(true);
         });
     });
-    connect(m_model, &CybouDesktopModel::mailSendRequested, this, [this](const QString& id) { runSend(id); });
-    connect(m_model, &CybouDesktopModel::attachmentDownloadRequested, this,
-        [this](const QString& message_id, const QString& attachment_id, const QString&) {
-            runDownload(message_id, attachment_id);
-        });
     connect(m_model, &CybouDesktopModel::nameClaimRequested, this, [this](const QString& label) {
         later(3, [this, label] {
             const QString name = label + QStringLiteral(".cybou");
@@ -323,6 +330,12 @@ Driver::Driver(CybouDesktopModel* model, QObject* parent)
             m_model->setNameClaimFinished();
         });
     });
+}
+
+void Driver::setStepDelay(int ms)
+{
+    m_step_ms = ms;
+    Backend(*m_model)->setAutoAdvance(true, ms);
 }
 
 void Driver::later(int steps, std::function<void()> action)
@@ -348,52 +361,6 @@ void Driver::runCreate()
     });
 }
 
-void Driver::runSend(const QString& id)
-{
-    // Finality-first lifecycle: local prepare -> PoA confirmation ->
-    // storage admission of authorized chunks -> durability. Offline, the
-    // message waits for the network and does not advance.
-    if (!m_model->status().online) return;
-    const auto progress = [this, id](int percent) {
-        const auto* item = m_model->mailItem(id);
-        if (!item) return;
-        for (const auto& attachment : item->attachments) {
-            if (attachment.state != CybouContentState::Protected)
-                m_model->setAttachmentState(id, attachment.id, CybouContentState::Securing, percent);
-        }
-    };
-    later(1, [this, id] { m_model->setMailState(id, CybouContentState::WaitingForConfirmation); });
-    later(3, [this, id, progress] {
-        m_model->setMailState(id, CybouContentState::Securing);
-        progress(35);
-    });
-    later(4, [progress] { progress(80); });
-    later(5, [this, id] { m_model->setMailState(id, CybouContentState::Protected); });
-}
-
-void Driver::runUpload(const QString& id)
-{
-    // Same finality-first lifecycle as Mail; offline uploads wait.
-    if (!m_model->status().online) return;
-    later(1, [this, id] { m_model->setFileState(id, CybouContentState::WaitingForConfirmation); });
-    later(3, [this, id] { m_model->setFileState(id, CybouContentState::Securing, 20); });
-    later(4, [this, id] { m_model->setFileState(id, CybouContentState::Securing, 65); });
-    later(5, [this, id] { m_model->setFileState(id, CybouContentState::Protected); });
-}
-
-void Driver::runDownload(const QString& message_id, const QString& attachment_id)
-{
-    later(1, [this, message_id, attachment_id] {
-        m_model->setAttachmentRetrieval(message_id, attachment_id, CybouRetrievalState::Verifying);
-    });
-    later(2, [this, message_id, attachment_id] {
-        m_model->setAttachmentRetrieval(message_id, attachment_id, CybouRetrievalState::Decrypting);
-    });
-    later(3, [this, message_id, attachment_id] {
-        m_model->setAttachmentRetrieval(message_id, attachment_id, CybouRetrievalState::Ready);
-    });
-}
-
 void Driver::runRestore()
 {
     const auto step = [this](auto mutate) {
@@ -403,12 +370,16 @@ void Driver::runRestore()
     };
     later(1, [step] { step([](CybouRestoreProgress& p) { p.identity = CybouRestoreStepState::Done; p.wallet = CybouRestoreStepState::Running; }); });
     later(2, [step] { step([](CybouRestoreProgress& p) { p.wallet = CybouRestoreStepState::Done; p.names = CybouRestoreStepState::Running; }); });
-    later(3, [step] { step([](CybouRestoreProgress& p) { p.names = CybouRestoreStepState::Done; p.mail = CybouRestoreStepState::Running; p.files = CybouRestoreStepState::Running; }); });
-    later(5, [this, step] {
-        step([](CybouRestoreProgress& p) { p.mail = CybouRestoreStepState::Done; p.files = CybouRestoreStepState::Done; });
+    later(3, [this, step] {
+        step([](CybouRestoreProgress& p) { p.names = CybouRestoreStepState::Done; });
+        // Mail and Files rebuild progressively in the backend; the desktop
+        // is usable ("Open CYBOU") while they fill in.
+        Backend(*m_model)->seedProgressively(FixtureMail(), FixtureFiles());
+    });
+    later(6, [this] {
+        const auto state = m_model->status().identity_state;
+        if (state != CybouIdentityState::Restoring && state != CybouIdentityState::Syncing) return;
         ApplyIdentity(*m_model, CybouIdentityState::Active);
-        ApplyMail(*m_model);
-        ApplyFiles(*m_model);
         ApplyWallet(*m_model);
         ApplyActivity(*m_model);
     });

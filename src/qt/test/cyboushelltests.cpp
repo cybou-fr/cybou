@@ -4,7 +4,9 @@
 
 #include <qt/test/cyboushelltests.h>
 
+#include <qt/cybouapplicationbackend.h>
 #include <qt/cyboudesktopcontroller.h>
+#include <qt/cyboufixturebackend.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboumainwindow.h>
 #include <qt/cyboutheme.h>
@@ -112,6 +114,71 @@ private:
     bool m_was_set;
     QByteArray m_previous;
 };
+} // namespace
+
+namespace {
+/**
+ * Records commands and never answers on its own, so tests can check that
+ * the model issues each command once and changes nothing until the backend
+ * reports a result.
+ */
+class RecordingBackend final : public CybouApplicationBackend
+{
+public:
+    using CybouApplicationBackend::CybouApplicationBackend;
+    QStringList commands;
+    bool available{true};
+    bool open{false};
+
+    bool mailAvailable() const override { return available; }
+    bool filesAvailable() const override { return available; }
+    void openIdentity() override { open = true; commands << QStringLiteral("open"); }
+    void closeIdentity() override { open = false; commands << QStringLiteral("close"); }
+    void saveMailDraft(const CybouMailItem& d) override { commands << QStringLiteral("draft:") + d.id; }
+    void sendMail(const CybouMailItem& m) override { commands << QStringLiteral("send:") + m.id; }
+    void retryMail(const QString& id) override { commands << QStringLiteral("retry:") + id; }
+    void setMailRead(const QString& id, bool) override { commands << QStringLiteral("read:") + id; }
+    void setMailStarred(const QString& id, bool) override { commands << QStringLiteral("starMail:") + id; }
+    void moveMail(const QString& id, CybouMailFolder) override { commands << QStringLiteral("moveMail:") + id; }
+    void deleteMail(const QString& id) override { commands << QStringLiteral("deleteMail:") + id; }
+    void downloadAttachment(const QString& m, const QString&, const QString&) override { commands << QStringLiteral("attachment:") + m; }
+    void saveAttachmentToFiles(const QString& m, const QString&, const QString&) override { commands << QStringLiteral("saveAttachment:") + m; }
+    void uploadFile(const QString& id, const QString&, const QString&) override { commands << QStringLiteral("upload:") + id; }
+    void downloadFile(const QString& id, const QString&) override { commands << QStringLiteral("download:") + id; }
+    void createFolder(const QString& id, const QString&, const QString&) override { commands << QStringLiteral("folder:") + id; }
+    void renameFile(const QString& id, const QString&) override { commands << QStringLiteral("rename:") + id; }
+    void moveFile(const QString& id, const QString&) override { commands << QStringLiteral("move:") + id; }
+    void copyFile(const QString& id, const QString&, const QString&) override { commands << QStringLiteral("copy:") + id; }
+    void setFileStarred(const QString& id, bool) override { commands << QStringLiteral("starFile:") + id; }
+    void trashFile(const QString& id) override { commands << QStringLiteral("trash:") + id; }
+    void restoreFile(const QString& id) override { commands << QStringLiteral("restore:") + id; }
+    void deleteFile(const QString& id) override { commands << QStringLiteral("delete:") + id; }
+
+    void setAvailable(bool value)
+    {
+        available = value;
+        Q_EMIT availabilityChanged();
+    }
+};
+
+CybouCapabilities AllCapabilities()
+{
+    CybouCapabilities caps;
+    caps.account_creation = true;
+    caps.payments = true;
+    caps.mail = true;
+    caps.files = true;
+    return caps;
+}
+
+CybouFileItem ProtectedFile(const QString& id, const QString& name)
+{
+    CybouFileItem item;
+    item.id = id;
+    item.name = name;
+    item.state = CybouContentState::Protected;
+    return item;
+}
 } // namespace
 
 CybouShellTests::~CybouShellTests() = default;
@@ -366,9 +433,7 @@ void CybouShellTests::composeGatesAndSends()
     QCOMPARE(with_attachment.attachments.first().state, CybouContentState::Preparing);
     model->setMailState(with_attachment.id, CybouContentState::NeedsAttention);
     QCOMPARE(model->mailItems().first().state, CybouContentState::NeedsAttention);
-    QSignalSpy retry{model, &CybouDesktopModel::mailSendRequested};
-    model->retrySendMail(model->mailItems().first().id);
-    QCOMPARE(retry.count(), 1);
+    model->requestRetryMail(model->mailItems().first().id);
     QCOMPARE(model->mailItems().first().state, CybouContentState::Preparing);
     QCOMPARE(CybouProduct::contentStateText(CybouContentState::WaitingForConfirmation, false),
         QStringLiteral("Waiting for network"));
@@ -405,7 +470,7 @@ void CybouShellTests::mailFilesCrossProduct()
     QCOMPARE(saved.name, QStringLiteral("contract-signed.pdf"));
     QCOMPARE(saved.state, CybouContentState::Protected); // reused, not re-uploaded
     // Saving again reuses the same Files item.
-    QCOMPARE(model->saveAttachmentToFiles(QStringLiteral("m-contract"), QStringLiteral("c-contract")), saved.id);
+    QCOMPARE(model->requestSaveAttachmentToFiles(QStringLiteral("m-contract"), QStringLiteral("c-contract")), saved.id);
     QCOMPARE(model->fileItems().size(), files_before + 1);
 
     // Files -> Send by CYBOU Mail: compose opens with the file attached.
@@ -522,15 +587,15 @@ void CybouShellTests::filesNavigationAndViews()
 
     // Organization is local catalog state.
     files->setView(StoragePage::View::MyFiles);
-    const QString folder = model->createFolder(QStringLiteral("Taxes"));
+    const QString folder = model->requestCreateFolder(QStringLiteral("Taxes"));
     QVERIFY(files->visibleIds().contains(folder));
-    model->moveFile(QStringLiteral("f-photo"), folder);
+    model->requestMoveFile(QStringLiteral("f-photo"), folder);
     QVERIFY(!files->visibleIds().contains(QStringLiteral("f-photo")));
-    model->renameFile(QStringLiteral("f-photo"), QStringLiteral("receipt.jpg"));
+    model->requestRenameFile(QStringLiteral("f-photo"), QStringLiteral("receipt.jpg"));
     QCOMPARE(model->fileItem(QStringLiteral("f-photo"))->name, QStringLiteral("receipt.jpg"));
-    model->trashFile(folder);
+    model->requestTrashFile(folder);
     QVERIFY(model->fileItem(QStringLiteral("f-photo"))->trashed); // contents follow the folder
-    model->restoreFile(folder);
+    model->requestRestoreFile(folder);
     QVERIFY(!model->fileItem(QStringLiteral("f-photo"))->trashed);
 
     // Details drawer shows user-facing status, never chunk/provider data.
@@ -544,10 +609,12 @@ void CybouShellTests::filesNavigationAndViews()
     QVERIFY(file.open(QIODevice::WriteOnly));
     file.write("hello");
     file.close();
-    QSignalSpy uploads{model, &CybouDesktopModel::fileUploadRequested};
+    const int before_upload = model->fileItems().size();
     files->uploadFiles({path});
-    QCOMPARE(uploads.count(), 1);
-    const QString uploaded = uploads.first().at(0).toString();
+    QCOMPARE(model->fileItems().size(), before_upload + 1);
+    const QString uploaded = model->fileItems().last().id;
+    QCOMPARE(model->fileItem(uploaded)->name, QStringLiteral("notes.txt"));
+    QVERIFY(model->fileItem(uploaded)->available_offline); // the uploading device keeps its copy
     QCOMPARE(model->fileItem(uploaded)->state, CybouContentState::Preparing);
     QCOMPARE(model->fileItem(uploaded)->logical_size, quint64{5});
 }
@@ -919,7 +986,7 @@ void CybouShellTests::filesDropIntoFolders()
     window->notifier()->trigger(); // Undo
     QVERIFY(model->fileItem(QStringLiteral("f-report"))->parent_id.isEmpty());
     // No folder cycles: Documents cannot move into itself or its child.
-    const QString child = model->createFolder(QStringLiteral("Taxes"), QStringLiteral("f-docs"));
+    const QString child = model->requestCreateFolder(QStringLiteral("Taxes"), QStringLiteral("f-docs"));
     QVERIFY(!files->moveFilesTo({QStringLiteral("f-docs")}, QStringLiteral("f-docs")));
     QVERIFY(!files->moveFilesTo({QStringLiteral("f-docs")}, child));
     // Drag mime round-trip.
@@ -1034,4 +1101,255 @@ void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()
     QCOMPARE(failures.count(), 1);
     QVERIFY(failures.takeFirst().at(0).toString().contains(QStringLiteral("belongs to another network")));
     QVERIFY(!model.status().node_running);
+}
+
+void CybouShellTests::backendCommandsDriveProjection()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    RecordingBackend backend;
+    model.setApplicationBackend(&backend);
+    model.setCapabilities(AllCapabilities());
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    QVERIFY(backend.open);
+    model.setFileItems({ProtectedFile(QStringLiteral("f1"), QStringLiteral("report.pdf"))});
+    backend.commands.clear();
+
+    // Persistent Files actions are commands, sent once; the projection waits.
+    QSignalSpy files_changed{&model, &CybouDesktopModel::filesChanged};
+    model.requestRenameFile(QStringLiteral("f1"), QStringLiteral("renamed.pdf"));
+    model.requestMoveFile(QStringLiteral("f1"), QStringLiteral("folder"));
+    model.requestTrashFile(QStringLiteral("f1"));
+    model.requestFileStarred(QStringLiteral("f1"), true);
+    const QString copy = model.requestCopyFile(QStringLiteral("f1"), {});
+    const QString folder = model.requestCreateFolder(QStringLiteral("Taxes"));
+    QVERIFY(!copy.isEmpty());
+    QVERIFY(!folder.isEmpty());
+    QCOMPARE(backend.commands, (QStringList{QStringLiteral("rename:f1"), QStringLiteral("move:f1"),
+        QStringLiteral("trash:f1"), QStringLiteral("starFile:f1"), QStringLiteral("copy:f1"),
+        QStringLiteral("folder:") + folder}));
+    QCOMPARE(files_changed.count(), 0);
+    QCOMPARE(model.fileItems().size(), 1);
+    QCOMPARE(model.fileItem(QStringLiteral("f1"))->name, QStringLiteral("report.pdf"));
+    QVERIFY(!model.fileItem(QStringLiteral("f1"))->trashed);
+    QVERIFY(!model.fileItem(folder));
+    // Unknown items and no-op changes send nothing.
+    backend.commands.clear();
+    model.requestRenameFile(QStringLiteral("missing"), QStringLiteral("x"));
+    model.requestRenameFile(QStringLiteral("f1"), QStringLiteral("report.pdf"));
+    QVERIFY(backend.commands.isEmpty());
+
+    // The backend's reply is what changes the projection.
+    auto renamed = *model.fileItem(QStringLiteral("f1"));
+    renamed.name = QStringLiteral("renamed.pdf");
+    Q_EMIT backend.fileItemChanged(renamed);
+    QCOMPARE(model.fileItem(QStringLiteral("f1"))->name, QStringLiteral("renamed.pdf"));
+    Q_EMIT backend.fileItemsRemoved({QStringLiteral("f1")});
+    QVERIFY(model.fileItems().isEmpty());
+
+    // Send: optimistic Preparing in Sent, one command, later states from the backend.
+    CybouMailItem message;
+    message.to_name = QStringLiteral("alice.cybou");
+    message.body = QStringLiteral("hello");
+    const QString id = model.requestSendMail(message);
+    QVERIFY(!id.isEmpty());
+    QCOMPARE(backend.commands.filter(QStringLiteral("send:")), QStringList{QStringLiteral("send:") + id});
+    QCOMPARE(model.mailItem(id)->state, CybouContentState::Preparing);
+    QCOMPARE(model.mailItem(id)->folder, CybouMailFolder::Sent);
+    Q_EMIT backend.mailStateChanged(id, CybouContentState::Securing);
+    QVERIFY(CybouProduct::mailStateText(*model.mailItem(id)) != QStringLiteral("Sent"));
+    Q_EMIT backend.mailStateChanged(id, CybouContentState::NeedsAttention);
+    backend.commands.clear();
+    model.requestRetryMail(id);
+    QCOMPARE(backend.commands, QStringList{QStringLiteral("retry:") + id});
+    QCOMPARE(model.mailItem(id)->state, CybouContentState::Preparing);
+    Q_EMIT backend.mailStateChanged(id, CybouContentState::Protected);
+    QCOMPARE(CybouProduct::mailStateText(*model.mailItem(id)), QStringLiteral("Sent"));
+
+    // Mailbox organization is also a command.
+    backend.commands.clear();
+    model.requestMoveMail(id, CybouMailFolder::Trash);
+    QCOMPARE(backend.commands, QStringList{QStringLiteral("moveMail:") + id});
+    QCOMPARE(model.mailItem(id)->folder, CybouMailFolder::Sent);
+
+    // Locking closes the Identity session and drops the projection.
+    model.requestLockVault();
+    QVERIFY(!backend.open);
+    QVERIFY(model.mailItems().isEmpty());
+    Q_EMIT backend.mailItemChanged(message); // late replies are not shown while locked
+    QVERIFY(model.mailItems().isEmpty());
+}
+
+void CybouShellTests::liveCapabilitiesStayHonest()
+{
+    // No backend: Mail and Files are never claimed, and actions do nothing.
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    model.setCapabilities(AllCapabilities());
+    QVERIFY(!model.capabilities().mail);
+    QVERIFY(!model.capabilities().files);
+    QVERIFY(model.capabilities().payments);
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    QVERIFY(model.requestCreateFolder(QStringLiteral("Taxes")).isEmpty());
+    QVERIFY(model.requestSendMail({}).isEmpty());
+    QVERIFY(model.fileItems().isEmpty());
+    QVERIFY(model.mailItems().isEmpty());
+
+    // A backend enables them only while it reports availability.
+    RecordingBackend backend;
+    model.setApplicationBackend(&backend);
+    QVERIFY(backend.open);
+    QVERIFY(model.capabilities().mail);
+    QVERIFY(model.capabilities().files);
+    backend.setAvailable(false);
+    QVERIFY(!model.capabilities().files);
+    QVERIFY(model.requestCreateFolder(QStringLiteral("Taxes")).isEmpty());
+    backend.setAvailable(true);
+    QVERIFY(model.capabilities().files);
+    model.setApplicationBackend(nullptr);
+    QVERIFY(!backend.open);
+    QVERIFY(!model.capabilities().mail);
+}
+
+void CybouShellTests::fixtureLifecycleFollowsBackend()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("active")));
+    auto* backend = qobject_cast<CybouFixtureApplicationBackend*>(model.applicationBackend());
+    QVERIFY(backend);
+    backend->setAutoAdvance(true, 0);
+
+    CybouMailItem message;
+    message.to_name = QStringLiteral("alice.cybou");
+    message.body = QStringLiteral("hello");
+    const QString id = model.requestSendMail(message);
+    QCOMPARE(model.mailItem(id)->state, CybouContentState::Preparing);
+    QList<CybouContentState> seen;
+    QObject::connect(&model, &CybouDesktopModel::mailChanged, &model, [&] {
+        if (const auto* item = model.mailItem(id); item && (seen.isEmpty() || seen.last() != item->state))
+            seen << item->state;
+    });
+    QTRY_COMPARE(model.mailItem(id)->state, CybouContentState::Protected);
+    QCOMPARE(seen, (QList<CybouContentState>{CybouContentState::WaitingForConfirmation,
+        CybouContentState::Securing, CybouContentState::Protected}));
+    QCOMPARE(CybouProduct::mailStateText(*model.mailItem(id)), QStringLiteral("Sent"));
+
+    // Upload runs the same lifecycle; retrieval is separate from protection.
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("notes.txt"));
+    QFile file{path};
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("hello");
+    file.close();
+    const QString uploaded = model.requestFileUpload(path);
+    QCOMPARE(model.fileItem(uploaded)->state, CybouContentState::Preparing);
+    QTRY_COMPARE(model.fileItem(uploaded)->state, CybouContentState::Protected);
+    model.requestFileDownload(QStringLiteral("f-mountain"), dir.filePath(QStringLiteral("m.jpg")));
+    QCOMPARE(model.fileItem(QStringLiteral("f-mountain"))->retrieval, CybouRetrievalState::Downloading);
+    QCOMPARE(model.fileItem(QStringLiteral("f-mountain"))->state, CybouContentState::Protected);
+    // Retrieval ends back at Idle with the content now cached on this computer.
+    QTRY_VERIFY(model.fileItem(QStringLiteral("f-mountain"))->available_offline);
+    QTRY_COMPARE(model.fileItem(QStringLiteral("f-mountain"))->retrieval, CybouRetrievalState::Idle);
+    QCOMPARE(model.fileItem(QStringLiteral("f-mountain"))->state, CybouContentState::Protected);
+
+    // Offline: new work waits for the network and reads "Waiting for network".
+    model.setNodeStatus(true, 0, false);
+    const QString waiting = model.requestSendMail(message);
+    QTest::qWait(20);
+    QCOMPARE(model.mailItem(waiting)->state, CybouContentState::Preparing);
+    QCOMPARE(CybouProduct::contentStateText(model.mailItem(waiting)->state, false), QStringLiteral("Waiting for network"));
+}
+
+void CybouShellTests::filesShowLocalAvailability()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("files")));
+    window->show();
+    window->showPage(CybouPage::Files);
+    auto* files = dynamic_cast<StoragePage*>(window->page(CybouPage::Files));
+    QVERIFY(files);
+    const auto* report = model->fileItem(QStringLiteral("f-report"));
+    const auto* mountain = model->fileItem(QStringLiteral("f-mountain"));
+    QCOMPARE(report->state, CybouContentState::Protected);
+    QCOMPARE(mountain->state, CybouContentState::Protected);
+    QVERIFY(report->available_offline);
+    QVERIFY(!mountain->available_offline);
+    QCOMPARE(CybouProduct::fileStatusText(*report, true), QStringLiteral("Protected  ·  Available offline"));
+    QCOMPARE(CybouProduct::fileStatusText(*mountain, true), QStringLiteral("Protected"));
+
+    const auto label_texts = [files] {
+        QStringList texts;
+        for (const auto* label : files->findChildren<QLabel*>()) {
+            if (label->isVisibleTo(files)) texts << label->text();
+        }
+        return texts;
+    };
+    files->showDetails(QStringLiteral("f-report"));
+    QTRY_VERIFY(label_texts().contains(QStringLiteral("Available offline")));
+    files->showDetails(QStringLiteral("f-mountain"));
+    QTRY_VERIFY(label_texts().contains(QStringLiteral("Downloaded when opened")));
+
+    // Content that cannot be fetched right now stays listed and says so.
+    model->setFileState(QStringLiteral("f-mountain"), CybouContentState::TemporarilyUnavailable);
+    files->openFolder(QStringLiteral("f-photos"));
+    QVERIFY(files->visibleIds().contains(QStringLiteral("f-mountain")));
+    QCOMPARE(CybouProduct::fileStatusText(*model->fileItem(QStringLiteral("f-mountain")), true),
+        QStringLiteral("Temporarily unavailable"));
+
+    // Copy is a backend command that references the same protected content.
+    const int before = model->fileItems().size();
+    const QString copy = model->requestCopyFile(QStringLiteral("f-report"), {});
+    QCOMPARE(model->fileItems().size(), before + 1);
+    QCOMPARE(model->fileItem(copy)->state, CybouContentState::Protected);
+    QCOMPARE(model->fileItem(copy)->name, QStringLiteral("Copy of report.pdf"));
+}
+
+void CybouShellTests::lockHidesPrivateContent()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    auto* completer = window->globalSearch()->completer();
+    completer->setCompletionPrefix(QStringLiteral("budget"));
+    QVERIFY(completer->completionCount() >= 1);
+
+    model->requestLockVault();
+    QCOMPARE(model->status().identity_state, CybouIdentityState::Locked);
+    QVERIFY(model->mailItems().isEmpty());
+    QVERIFY(model->fileItems().isEmpty());
+    completer->setCompletionPrefix(QStringLiteral("budget"));
+    QCOMPARE(completer->completionCount(), 0);
+    completer->setCompletionPrefix(QStringLiteral("contract"));
+    QCOMPARE(completer->completionCount(), 0);
+    // Private actions are unavailable while locked.
+    QVERIFY(model->requestCreateFolder(QStringLiteral("Taxes")).isEmpty());
+    QVERIFY(model->requestSendMail({}).isEmpty());
+    // Network status stays visible.
+    QVERIFY(model->status().online);
+
+    bool done = false;
+    model->requestUnlockIdentityAsync(QStringLiteral("correct horse battery"), [&done](bool ok) { done = ok; });
+    QTRY_VERIFY(done);
+    QVERIFY(!model->mailItems().isEmpty());
+    QVERIFY(model->fileItem(QStringLiteral("f-budget")));
+}
+
+void CybouShellTests::restoreFillsInProgressively()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("empty")));
+    CybouUiFixtures::Driver driver{&model};
+    driver.setStepDelay(150);
+    const QString phrase = QStringList(24, QStringLiteral("ocean")).join(QLatin1Char{' '});
+    QVERIFY(model.requestRestoreIdentity(phrase, QStringLiteral("correct horse battery")));
+    // Identity, Wallet and Names first; Mail and Files keep restoring.
+    QTRY_COMPARE(model.restoreProgress().names, CybouRestoreStepState::Done);
+    QCOMPARE(model.restoreProgress().identity, CybouRestoreStepState::Done);
+    QVERIFY(model.restoreProgress().mail != CybouRestoreStepState::Done);
+    // The user opens the desktop while Mail and Files fill in.
+    model.setIdentityState(CybouIdentityState::Syncing, model.status().account_id, model.status().creation_height);
+    QTRY_COMPARE(model.restoreProgress().files, CybouRestoreStepState::Done);
+    QTRY_VERIFY(!model.fileItems().isEmpty());
+    QTRY_COMPARE(model.restoreProgress().mail, CybouRestoreStepState::Done);
+    QTRY_VERIFY(!model.mailItems().isEmpty());
+    QTRY_COMPARE(model.status().identity_state, CybouIdentityState::Active);
 }
