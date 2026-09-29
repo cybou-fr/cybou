@@ -13,6 +13,7 @@
 #include <qt/pages/emailpage.h>
 #include <qt/pages/homepage.h>
 #include <qt/pages/identitypage.h>
+#include <qt/pages/onboardingview.h>
 #include <qt/pages/settingspage.h>
 #include <qt/pages/storagepage.h>
 #include <qt/pages/walletpage.h>
@@ -22,6 +23,8 @@
 #include <QButtonGroup>
 #include <QCloseEvent>
 #include <QDir>
+#include <QFile>
+#include <QTemporaryDir>
 #include <QDialog>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -489,57 +492,87 @@ void CybouMainWindow::buildTrayMenu()
 
 void CybouMainWindow::runScreenshotHarness(const QString& directory)
 {
+    // Dev-only QA harness (CYBOU_SCREENSHOT_DIR): captures the named
+    // screens for the active fixture and quits. File names are
+    // <prefix><screen>.png, e.g. 1280x860-mail-reader.png.
     QDir{}.mkpath(directory);
     const QString prefix = qEnvironmentVariable("CYBOU_SCREENSHOT_PREFIX");
-    const auto save = [this, directory, prefix](const QString& slug) {
-        qApp->processEvents();
-        grab().save(QDir{directory}.filePath(QStringLiteral("%1%2.png").arg(prefix, slug)));
+    const QString fixture = CybouUiFixtures::requestedFixture();
+    const auto save = [this, directory, prefix](const QString& screen) {
+        for (int i = 0; i < 3; ++i) qApp->processEvents();
+        grab().save(QDir{directory}.filePath(QStringLiteral("%1%2.png").arg(prefix, screen)));
     };
-    const QString pages[] = {QStringLiteral("home"), QStringLiteral("mail"), QStringLiteral("files"),
-        QStringLiteral("wallet"), QStringLiteral("identity"), QStringLiteral("diagnostics"), QStringLiteral("settings")};
-    for (int i = 0; i < m_pages->count(); ++i) {
-        showPage(static_cast<CybouPage>(i));
-        save(pages[i]);
-    }
-    if (m_desktop_model->status().identity_state == CybouIdentityState::Active) {
-        auto* mail = static_cast<EmailPage*>(page(CybouPage::Mail));
+    auto* home = static_cast<HomePage*>(page(CybouPage::Home));
+    auto* mail = static_cast<EmailPage*>(page(CybouPage::Mail));
+    auto* files = static_cast<StoragePage*>(page(CybouPage::Files));
+    auto* model = m_desktop_model;
+
+    if (fixture == QLatin1String{"empty"} || fixture.isEmpty()) {
+        showPage(CybouPage::Home);
+        save(QStringLiteral("home-empty"));
+        home->onboarding()->showScreen(OnboardingView::Screen::Restore);
+        save(QStringLiteral("identity-restore"));
+    } else if (fixture == QLatin1String{"restoring"}) {
+        showPage(CybouPage::Home);
+        save(QStringLiteral("identity-restoring"));
+    } else if (fixture == QLatin1String{"offline"}) {
         showPage(CybouPage::Mail);
-        const auto ids = mail->visibleMessageIds();
-        if (!ids.isEmpty()) {
-            mail->openMessage(ids.first());
-            save(QStringLiteral("mail-reader"));
-        }
-        for (const auto& item : m_desktop_model->mailItems()) {
-            if (item.folder == CybouMailFolder::Sent && item.state != CybouContentState::Protected) {
-                mail->setView(EmailPage::View::Sent);
-                mail->openMessage(item.id);
-                save(QStringLiteral("mail-attachment-progress"));
-                break;
-            }
-        }
-        auto* files = static_cast<StoragePage*>(page(CybouPage::Files));
-        showPage(CybouPage::Files);
-        files->setGridMode(true);
-        save(QStringLiteral("files-grid"));
-        files->setGridMode(false);
-        const auto file_ids = files->visibleIds();
-        for (const auto& id : file_ids) {
-            const auto* item = m_desktop_model->fileItem(id);
-            if (item && !item->folder && item->state == CybouContentState::Protected) {
-                files->showDetails(id);
-                save(QStringLiteral("files-details"));
-                files->showDetails({});
-                break;
-            }
-        }
+        mail->setView(EmailPage::View::Sent);
+        mail->openMessage(QStringLiteral("m-outgoing"));
+        save(QStringLiteral("mail-offline"));
+    } else {
+        showPage(CybouPage::Home);
+        save(QStringLiteral("home-active"));
+        showPage(CybouPage::Identity);
+        save(QStringLiteral("identity-active"));
+
         showPage(CybouPage::Mail);
+        mail->setView(EmailPage::View::Inbox);
+        save(QStringLiteral("mail-inbox"));
+        mail->openMessage(QStringLiteral("m-project"));
+        save(QStringLiteral("mail-reader"));
+        mail->setView(EmailPage::View::Sent);
+        mail->openMessage(QStringLiteral("m-sent-securing"));
+        save(QStringLiteral("mail-attachment-progress"));
         mail->setView(EmailPage::View::Inbox);
         CybouMailItem draft;
         draft.to_name = QStringLiteral("alice.cybou");
         draft.subject = tr("Project files");
         draft.body = tr("Hello Alice,\n\nHere are the final files.\n\nStan");
+        if (const auto attachment = model->attachmentFromFile(QStringLiteral("f-report"))) draft.attachments = {*attachment};
         mail->openCompose(draft);
         save(QStringLiteral("mail-compose"));
+
+        showPage(CybouPage::Files);
+        files->setView(StoragePage::View::MyFiles);
+        save(QStringLiteral("files-list"));
+        files->setGridMode(true);
+        save(QStringLiteral("files-grid"));
+        files->setGridMode(false);
+        files->showDetails(QStringLiteral("f-report"));
+        save(QStringLiteral("files-details"));
+        files->showDetails({});
+        QTemporaryDir temp;
+        const QString upload = temp.filePath(QStringLiteral("presentation.pdf"));
+        QFile file{upload};
+        if (file.open(QIODevice::WriteOnly)) {
+            file.write(QByteArray(2 * 1024 * 1024, 'x'));
+            file.close();
+            const QString id = model->requestFileUpload(upload);
+            model->setFileState(id, CybouContentState::Securing, 42);
+        }
+        save(QStringLiteral("files-upload"));
+
+        showPage(CybouPage::Wallet);
+        save(QStringLiteral("wallet"));
+        showPage(CybouPage::Diagnostics);
+        save(QStringLiteral("diagnostics"));
+        showPage(CybouPage::Settings);
+        save(QStringLiteral("settings"));
+
+        model->setFileItems({});
+        showPage(CybouPage::Files);
+        save(QStringLiteral("files-empty"));
     }
     qApp->quit();
 }

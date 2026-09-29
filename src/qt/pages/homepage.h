@@ -33,6 +33,8 @@ public:
         std::function<void()> mail_requested, std::function<void()> files_requested,
         QWidget* parent = nullptr);
 
+    OnboardingView* onboarding() const { return m_onboarding; }
+
 private:
     CybouDesktopModel* const m_model;
     QStackedWidget* m_stack{nullptr};

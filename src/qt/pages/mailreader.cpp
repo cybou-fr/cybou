@@ -36,6 +36,7 @@ QRgb PeerColor(const QString& peer)
 
 QString DisplayName(const CybouDesktopModel& model, const QString& name)
 {
+    if (!name.isEmpty() && name == model.status().primary_name) return MailReader::tr("Me");
     for (const auto& contact : model.contacts()) {
         if (contact.name == name) return contact.display_name;
     }
@@ -262,7 +263,8 @@ void MailReader::refresh()
     if (item->state == CybouContentState::Protected) {
         m_security->setText(tr("Protected end to end  •  Post-quantum protected  •  Network confirmed"));
     } else if (outgoing) {
-        m_security->setText(tr("Protected end to end  •  %1").arg(CybouProduct::mailStateText(*item)));
+        m_security->setText(tr("Protected end to end  •  %1").arg(item->draft ? CybouProduct::mailStateText(*item)
+            : CybouProduct::contentStateText(item->state, m_model->status().online)));
     } else {
         m_security->setText(CybouProduct::contentStateText(item->state));
     }

@@ -718,6 +718,33 @@ void CybouShellTests::normalUiAvoidsProtocolVocabulary()
     }
 }
 
+void CybouShellTests::layoutsFitWithoutHorizontalScroll()
+{
+    // Supported desktop widths must never force a wider window or a
+    // horizontal scrollbar; Mail switches between two and three panes.
+    auto window = makeWindow();
+    QVERIFY(CybouUiFixtures::apply(*window->desktopModel(), QStringLiteral("active")));
+    window->show();
+    auto* mail = dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
+    for (const QSize size : {QSize{1040, 720}, QSize{1280, 860}, QSize{1600, 900}, QSize{1920, 1080}}) {
+        window->resize(size);
+        for (int i = 0; i < window->pageCount(); ++i) {
+            window->showPage(static_cast<CybouPage>(i));
+            QCoreApplication::processEvents();
+            QVERIFY2(window->width() == size.width(),
+                qPrintable(QStringLiteral("page %1 widened the window to %2 at %3").arg(i).arg(window->width()).arg(size.width())));
+            QVERIFY2(window->centralWidget()->minimumSizeHint().width() <= size.width(),
+                qPrintable(QStringLiteral("page %1 needs %2 px at %3").arg(i)
+                    .arg(window->centralWidget()->minimumSizeHint().width()).arg(size.width())));
+        }
+        QCOMPARE(window->sidebarCompact(), size.width() < 1180);
+        window->showPage(CybouPage::Mail);
+        QCoreApplication::processEvents();
+        QCOMPARE(mail->threePane(), size.width() >= 1400);
+    }
+    window->close();
+}
+
 void CybouShellTests::themeResolvesAllTokens()
 {
     // Regression guard for the numbered-%N .arg() shift: every @token@ in the

@@ -44,6 +44,7 @@ private Q_SLOTS:
     void productCollectionsDriveModel();
     void fixturesLoadDeterministically();
     void normalUiAvoidsProtocolVocabulary();
+    void layoutsFitWithoutHorizontalScroll();
     void themeResolvesAllTokens();
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();
