@@ -4,6 +4,7 @@
 
 #include <cybou/poa_finality.h>
 
+#include <cybou/block.h>
 #include <cybou/crypto/sha256.h>
 
 #include <algorithm>
@@ -74,6 +75,17 @@ bool VerifyPoaFinalityCertificate(const PoaFinalityCertificate& certificate,
     const auto digest = ComputePoaFinalityDigest(certificate.network_id, certificate.block_id,
         certificate.height, certificate.parent_block_id);
     return VerifyIdentityMessage(genesis_finalizer_key, certificate.signature, digest);
+}
+
+bool VerifyPoaCertificateForBlock(const PoaFinalityCertificate& certificate,
+    const IdentityHybridPublicKey& genesis_finalizer_key,
+    const uint256& expected_network_id, const CybouBlock& block)
+{
+    if (!SerializeBlock(block)) return false;
+    const auto block_id = ComputeBlockId(block);
+    if (block_id.IsNull()) return false;
+    return VerifyPoaFinalityCertificate(certificate, genesis_finalizer_key,
+        expected_network_id, block_id, block.height, block.parent_block_id);
 }
 
 std::optional<std::vector<unsigned char>> SerializePoaFinalityCertificate(

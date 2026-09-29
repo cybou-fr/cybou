@@ -16,6 +16,8 @@
 
 namespace cybou {
 
+struct CybouBlock;
+
 inline constexpr uint8_t POA_FINALITY_CERTIFICATE_VERSION{1};
 inline constexpr size_t POA_FINALITY_CERTIFICATE_SIZE{1 + 32 + 32 + 8 + 32 + 64 + 3309};
 
@@ -38,6 +40,11 @@ bool VerifyPoaFinalityCertificate(const PoaFinalityCertificate& certificate,
     const IdentityHybridPublicKey& genesis_finalizer_key,
     const uint256& expected_network_id, const uint256& expected_block_id,
     uint64_t expected_height, const uint256& expected_parent_block_id);
+
+/** Verify the certificate against the exact canonical block it finalizes. */
+bool VerifyPoaCertificateForBlock(const PoaFinalityCertificate& certificate,
+    const IdentityHybridPublicKey& genesis_finalizer_key,
+    const uint256& expected_network_id, const CybouBlock& block);
 
 std::optional<std::vector<unsigned char>> SerializePoaFinalityCertificate(
     const PoaFinalityCertificate& certificate);
