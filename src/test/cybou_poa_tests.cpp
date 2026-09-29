@@ -5,16 +5,23 @@
 #include <cybou/poa_finalizer.h>
 #include <cybou/poa_finality.h>
 #include <cybou/poa_signing_journal.h>
+#include <cybou/crypto/cleanse.h>
+#include <cybou/crypto/hkdf_sha256.h>
 #include <cybou/crypto/sha256.h>
 #include <test/util/setup_common.h>
 
 #include <boost/test/unit_test.hpp>
+
+#include <openssl/core_names.h>
+#include <openssl/evp.h>
+#include <openssl/params.h>
 
 #include <algorithm>
 #include <filesystem>
 #include <iomanip>
 #include <memory>
 #include <sstream>
+#include <string_view>
 
 namespace {
 
@@ -61,6 +68,60 @@ std::string BytesHex(const Range& bytes)
     return out.str();
 }
 
+std::optional<std::vector<unsigned char>> DeterministicMldsa65Signature(
+    const cybou::RecoveryEntropy& entropy, const std::span<const unsigned char> message)
+{
+    using Pkey = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
+    using PkeyContext = std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)>;
+    using MdContext = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
+
+    constexpr std::string_view salt_text{"CYBOU/IDENTITY-V2/HKDF-SHA256"};
+    constexpr std::string_view info_text{"CYBOU/IDENTITY-V2/POA_FINALIZER/ML-DSA-65"};
+    const auto salt = std::span<const unsigned char>{
+        reinterpret_cast<const unsigned char*>(salt_text.data()), salt_text.size()};
+    const auto info = std::span<const unsigned char>{
+        reinterpret_cast<const unsigned char*>(info_text.data()), info_text.size()};
+    std::array<unsigned char, 32> seed{};
+    if (!cybou::crypto::HkdfSha256(entropy, salt, info, seed)) return std::nullopt;
+
+    PkeyContext keygen{EVP_PKEY_CTX_new_from_name(nullptr, "ML-DSA-65", nullptr), EVP_PKEY_CTX_free};
+    if (!keygen || EVP_PKEY_keygen_init(keygen.get()) != 1) {
+        cybou::crypto::CleanseMemory(seed.data(), seed.size());
+        return std::nullopt;
+    }
+    OSSL_PARAM key_params[] = {
+        OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_ML_DSA_SEED, seed.data(), seed.size()),
+        OSSL_PARAM_construct_end(),
+    };
+    EVP_PKEY* raw_key{nullptr};
+    const bool key_ok = EVP_PKEY_CTX_set_params(keygen.get(), key_params) == 1 &&
+        EVP_PKEY_keygen(keygen.get(), &raw_key) == 1;
+    cybou::crypto::CleanseMemory(seed.data(), seed.size());
+    Pkey key{raw_key, EVP_PKEY_free};
+    if (!key_ok || !key) return std::nullopt;
+
+    MdContext signing{EVP_MD_CTX_new(), EVP_MD_CTX_free};
+    if (!signing || EVP_DigestSignInit_ex(signing.get(), nullptr, nullptr, nullptr, nullptr,
+        key.get(), nullptr) != 1) return std::nullopt;
+    int deterministic{1}; // OpenSSL test-vector mode: ML-DSA per-message randomness is zero.
+    OSSL_PARAM sign_params[] = {
+        OSSL_PARAM_construct_int(OSSL_SIGNATURE_PARAM_DETERMINISTIC, &deterministic),
+        OSSL_PARAM_construct_end(),
+    };
+    auto* sign_context = EVP_MD_CTX_get_pkey_ctx(signing.get());
+    if (!sign_context || EVP_PKEY_CTX_set_params(sign_context, sign_params) != 1) return std::nullopt;
+    size_t signature_size{0};
+    if (EVP_DigestSign(signing.get(), nullptr, &signature_size, message.data(), message.size()) != 1) {
+        return std::nullopt;
+    }
+    std::vector<unsigned char> signature(signature_size);
+    if (EVP_DigestSign(signing.get(), signature.data(), &signature_size, message.data(), message.size()) != 1) {
+        return std::nullopt;
+    }
+    signature.resize(signature_size);
+    return signature;
+}
+
 } // namespace
 
 BOOST_FIXTURE_TEST_SUITE(cybou_poa_tests, BasicTestingSetup)
@@ -88,6 +149,20 @@ BOOST_AUTO_TEST_CASE(finality_digest_key_and_encoding_golden_vectors)
     const auto signature = cybou::SignIdentityMessage(entropy, cybou::IdentityKeyPurpose::POA_FINALIZER, digest);
     BOOST_REQUIRE(signature);
     BOOST_CHECK(cybou::VerifyIdentityMessage(*key, *signature, digest));
+    const auto deterministic_ml_signature = DeterministicMldsa65Signature(entropy,
+        std::span<const unsigned char>{digest.begin(), digest.size()});
+    BOOST_REQUIRE(deterministic_ml_signature);
+    BOOST_CHECK_EQUAL(deterministic_ml_signature->size(), 3309U);
+    std::array<unsigned char, 32> deterministic_ml_signature_hash{};
+    BOOST_REQUIRE(cybou::crypto::ComputeSha256({*deterministic_ml_signature},
+        deterministic_ml_signature_hash.data()));
+    BOOST_CHECK_EQUAL(BytesHex(deterministic_ml_signature_hash),
+        "898c9460754801d9af68ba5050b792f061533858cd4259ef3fa2cb5063332a4b");
+    cybou::IdentityHybridSignature deterministic_hybrid_signature{
+        .ed25519 = signature->ed25519,
+        .ml_dsa = *deterministic_ml_signature,
+    };
+    BOOST_CHECK(cybou::VerifyIdentityMessage(*key, deterministic_hybrid_signature, digest));
     BOOST_CHECK_EQUAL(BytesHex(key->ed25519), "8254c6e332edef49152acb98e85b9d566e094aeaa5aeac2bb3670c9929a633d6");
     BOOST_CHECK_EQUAL(BytesHex(signature->ed25519),
         "1a78228567fe880a16481319d354f8a0b1291ee157022b22ceee278495fd15cb183db9dc21d86e2e3fed1f05264454e65fbe333f617c58536fc16f425f8a7409");

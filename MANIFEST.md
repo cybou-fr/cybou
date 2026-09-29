@@ -82,8 +82,8 @@ editing an included file.
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 25 | f7d1dd6b57af4b61 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 85 | c35c8a7244250578 |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 27 | 8d7a331841060278 |
-| docs/cybou/POA_FINALITY.md | 91 | b64963789d843296 |
-| docs/cybou/POA_FINALITY_VECTORS.md | 88 | f6b3df4c17b611bd |
+| docs/cybou/POA_FINALITY.md | 89 | c1103340263b3a26 |
+| docs/cybou/POA_FINALITY_VECTORS.md | 96 | 3df7ad8e2b56be8f |
 | docs/cybou/ROOT_PUBLICATION.md | 118 | 7b0ab4d9fab64865 |
 | docs/cybou/STORAGE_ADMISSION.md | 66 | eebc8b9c820222c8 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |

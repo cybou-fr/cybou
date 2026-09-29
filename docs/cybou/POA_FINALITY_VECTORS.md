@@ -65,12 +65,20 @@ Ed25519 signature for the digest:
 1a78228567fe880a16481319d354f8a0b1291ee157022b22ceee278495fd15cb183db9dc21d86e2e3fed1f05264454e65fbe333f617c58536fc16f425f8a7409
 ```
 
-ML-DSA-65 uses randomized signing in the current OpenSSL integration. Its
-signature bytes therefore vary across signing calls for this same key and
-digest. Tests verify generated signatures; they do not freeze a randomly
-generated signature as a reproducible output. A cross-implementation fixed
-ML-DSA signature vector remains an open cutover gate. OpenSSL documents the
-randomized default and a deterministic test-only signing parameter in its
+The fixed ML-DSA-65 signature check uses OpenSSL's test-only deterministic
+parameter set to `1`, which sets the per-message random value to 32 zero bytes.
+It uses pure ML-DSA message encoding with the default empty context:
+
+```text
+SHA-256(ML-DSA-65 signature):
+898c9460754801d9af68ba5050b792f061533858cd4259ef3fa2cb5063332a4b
+```
+
+Production signing keeps OpenSSL's randomized default. The fixed signature
+vector is only for deterministic interoperability testing and does not change
+the production signature policy. Cross-implementation confirmation remains an
+open cutover gate. OpenSSL documents both the randomized default and the
+deterministic test parameter in its
 [ML-DSA EVP reference](https://docs.openssl.org/3.5/man7/EVP_SIGNATURE-ML-DSA/).
 
 ## Certificate encoding
