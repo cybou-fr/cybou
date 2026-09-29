@@ -17,6 +17,7 @@ Current `main` implements the canonical low-level substrate:
 - finalized provider chunk admission;
 - encrypted per-Identity local Application DB primitives, bound to the unlocked
   key store and rebuildable without changing canonical state;
+- strict canonical-CBOR private Mail, Files and RecoveryBridge schema codecs;
 - CYP2 verified block sync and content-addressed PUT/GET;
 - removal of legacy BFT, ValidatorSet, MailTx and indexed StorageObject runtime
   paths.

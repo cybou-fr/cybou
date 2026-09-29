@@ -177,6 +177,7 @@ add_library(cybou_core STATIC
   cybou/identity_registry_codec.cpp
   cybou/identity_vault.cpp
   cybou/keystore.cpp
+  cybou/private_application_schema.cpp
   cybou/payment.cpp
   cybou/poa_finality.cpp
   cybou/recovery_phrase.cpp

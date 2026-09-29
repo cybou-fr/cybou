@@ -192,6 +192,20 @@ FILES_MUTATION_BATCH
 IDENTITY_RECOVERY_BRIDGE
 ```
 
+The implemented v1 codecs use strict canonical CBOR arrays. The first two
+fields are the private schema type and version; unknown types, versions and
+extra fields are rejected. The three types are Mail (1), Files mutation batch
+(2), and Identity RecoveryBridge (3). They are placed only inside encrypted
+application content, never in a consensus operation or public chunk metadata.
+
+Mail carries a random message ID, optional reply ID, recipient AccountID,
+client timestamp, subject, body and bounded attachment references. The sender
+comes from the outer authorized publication. Files carries only full-item
+upserts and item deletes; a null parent means root and the reserved all-FF
+parent denotes trash. RecoveryBridge carries the AccountID, next key epoch and
+ordered historical X-Wing seeds. Import must verify each recovered seed
+against its historical canonical KEM commitment before use.
+
 Generic file/attachment content does not need a `FILE_BLOB` application schema;
 it is simply an encrypted ROOT/INDEX/DATA content tree referenced privately by
 Mail or Files metadata.
