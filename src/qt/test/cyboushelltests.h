@@ -37,6 +37,7 @@ private Q_SLOTS:
     void networkPageReflectsModel();
     void adapterSettersDrivePages();
     void productCollectionsDriveModel();
+    void fixturesLoadDeterministically();
     void themeResolvesAllTokens();
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();

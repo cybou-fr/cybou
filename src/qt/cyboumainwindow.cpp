@@ -8,6 +8,7 @@
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 #include <qt/cyboustrip.h>
+#include <qt/cybouuifixtures.h>
 #include <qt/pages/backuppage.h>
 #include <qt/pages/emailpage.h>
 #include <qt/pages/homepage.h>
@@ -78,6 +79,11 @@ CybouMainWindow::CybouMainWindow(
                 QMessageBox::critical(this, tr("CYBOU startup failed"), reason);
             });
         });
+    // Deterministic UI fixtures replace the runtime entirely (no core calls).
+    const QString fixture = CybouUiFixtures::requestedFixture();
+    if (!fixture.isEmpty() && CybouUiFixtures::apply(*m_desktop_model, fixture)) {
+        new CybouUiFixtures::Driver{m_desktop_model, this};
+    }
     setObjectName("cybouMainWindow");
     setWindowTitle(tr("CYBOU — Protected communication infrastructure"));
     setMinimumSize(1040, 720);
@@ -140,6 +146,7 @@ CybouMainWindow::~CybouMainWindow()
 
 void CybouMainWindow::startRuntime()
 {
+    if (m_desktop_model->fixtureMode()) return;
     m_controller->start();
 }
 

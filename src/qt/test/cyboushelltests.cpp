@@ -8,6 +8,7 @@
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboumainwindow.h>
 #include <qt/cyboutheme.h>
+#include <qt/cybouuifixtures.h>
 
 #include <cybou/network_definition.h>
 #include <test/cybou_test_helpers.h>
@@ -376,6 +377,44 @@ void CybouShellTests::productCollectionsDriveModel()
     QCOMPARE(cybouConnectionText(status), QStringLiteral("Syncing"));
     status.sync_error = QStringLiteral("x");
     QCOMPARE(cybouConnectionText(status), QStringLiteral("Needs attention"));
+}
+
+void CybouShellTests::fixturesLoadDeterministically()
+{
+    {
+        CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+        QVERIFY(!CybouUiFixtures::apply(model, QStringLiteral("unknown")));
+        QVERIFY(!model.fixtureMode());
+    }
+    for (const auto& name : CybouUiFixtures::names()) {
+        CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+        QVERIFY2(CybouUiFixtures::apply(model, name), qPrintable(name));
+        QVERIFY(model.fixtureMode());
+        const auto state = model.status().identity_state;
+        if (name == QLatin1String{"empty"}) {
+            QCOMPARE(state, CybouIdentityState::None);
+            QVERIFY(model.mailItems().isEmpty());
+        } else if (name == QLatin1String{"restoring"}) {
+            QCOMPARE(state, CybouIdentityState::Restoring);
+            QCOMPARE(model.restoreProgress().identity, CybouRestoreStepState::Done);
+        } else {
+            QCOMPARE(state, CybouIdentityState::Active);
+            QCOMPARE(model.status().primary_name, QStringLiteral("stan.cybou"));
+            QVERIFY(model.unreadMailCount() > 0);
+            QVERIFY(!model.fileItems().isEmpty());
+        }
+        if (name == QLatin1String{"offline"}) QVERIFY(!model.status().online);
+    }
+
+    // The fixture driver answers UI requests with UI-only transitions.
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("empty")));
+    CybouUiFixtures::Driver driver{&model};
+    driver.setStepDelay(0);
+    model.requestCreateIdentity(QStringLiteral("correct horse battery"));
+    QCOMPARE(model.status().identity_state, CybouIdentityState::Creating);
+    for (int i = 0; i < 50 && model.status().identity_state != CybouIdentityState::Active; ++i) QTest::qWait(10);
+    QCOMPARE(model.status().identity_state, CybouIdentityState::Active);
 }
 
 void CybouShellTests::themeResolvesAllTokens()
