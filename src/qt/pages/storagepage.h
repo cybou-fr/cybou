@@ -47,6 +47,7 @@ public:
     View view() const { return m_view; }
     void setView(View view);
     void openFolder(const QString& folder_id);
+    void setSearchText(const QString& text);
     QString currentFolder() const { return m_folder; }
     bool gridMode() const { return m_grid; }
     void setGridMode(bool grid);

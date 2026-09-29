@@ -49,6 +49,7 @@ public:
     /** Messages currently listed (after folder + search filtering). */
     QStringList visibleMessageIds() const;
     void openMessage(const QString& id);
+    void setSearchText(const QString& text);
     /** Opens the composer; draft may prefill it (reply, forward, draft). */
     void openCompose(const CybouMailItem& draft = {});
     MailReader* reader() const { return m_reader; }

@@ -17,7 +17,9 @@ class QButtonGroup;
 class QCloseEvent;
 class QDialog;
 class QFrame;
+class QCompleter;
 class QLabel;
+class QLineEdit;
 class QMenu;
 class QResizeEvent;
 class QStackedWidget;
@@ -58,6 +60,7 @@ public:
     int currentPageIndex() const;
     int pageCount() const;
     CybouUi::Notifier* notifier() const { return m_notifier; }
+    QLineEdit* globalSearch() const { return m_global_search; }
     bool sidebarCompact() const { return m_sidebar_compact; }
 
 Q_SIGNALS:
@@ -77,6 +80,8 @@ private:
     QLabel* m_brand_text{nullptr};
     QLabel* m_brand_name{nullptr};
     QLabel* m_header_title{nullptr};
+    QLineEdit* m_global_search{nullptr};
+    QCompleter* m_search_completer{nullptr};
     QLabel* m_status_dot{nullptr};
     QLabel* m_status_text{nullptr};
     QToolButton* m_identity_button{nullptr};
@@ -95,6 +100,9 @@ private:
     void applyStyle();
     void addPage(QWidget* page, bool scrolls);
     void refreshHeader();
+    void rebuildSearchIndex();
+    void openSearchResult(const QString& kind, const QString& id);
+    void submitSearch(const QString& text);
     void setSidebarCompact(bool compact);
     void runScreenshotHarness(const QString& directory);
 };

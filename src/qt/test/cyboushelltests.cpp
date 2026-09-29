@@ -21,6 +21,8 @@
 
 #include <QApplication>
 #include <QAbstractButton>
+#include <QCompleter>
+#include <QMenuBar>
 #include <QLabel>
 #include <QListWidget>
 #include <QLineEdit>
@@ -825,6 +827,29 @@ void CybouShellTests::homeFirstStepsAndQuickActions()
     QVERIFY(home->onCompose);
     home->onCompose();
     QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Mail));
+}
+
+void CybouShellTests::globalSearchFindsMailAndFiles()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    auto* search = window->globalSearch();
+    QVERIFY(search);
+    auto* completer = search->completer();
+    completer->setCompletionPrefix(QStringLiteral("contract"));
+    QStringList hits;
+    for (int i = 0; completer->setCurrentRow(i); ++i) hits << completer->currentCompletion();
+    QVERIFY(hits.size() >= 1); // the signed-contract mail (subject + attachment)
+    completer->setCompletionPrefix(QStringLiteral("budget"));
+    QVERIFY(completer->completionCount() >= 1); // budget-2026.xlsx
+    // Enter without a suggestion searches Mail.
+    search->setText(QStringLiteral("dinner"));
+    Q_EMIT search->returnPressed();
+    QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Mail));
+    auto* mail = dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
+    QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-dinner")});
+    QVERIFY(window->menuBar()->isHidden());
 }
 
 void CybouShellTests::themeResolvesAllTokens()

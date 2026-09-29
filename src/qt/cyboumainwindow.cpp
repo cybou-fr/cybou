@@ -23,7 +23,12 @@
 #include <QApplication>
 #include <QButtonGroup>
 #include <QCloseEvent>
+#include <QAbstractItemView>
+#include <QCompleter>
 #include <QDir>
+#include <QLineEdit>
+#include <QShortcut>
+#include <QStandardItemModel>
 #include <QFileDialog>
 #include <QFile>
 #include <QTemporaryDir>
@@ -286,10 +291,38 @@ QFrame* CybouMainWindow::buildHeader(QWidget* parent)
     layout->setSpacing(10);
 
     m_header_title = new QLabel{header};
-    m_header_title->setObjectName(QStringLiteral("stripValue"));
-    m_header_title->setStyleSheet(QStringLiteral("font-size: 16px;"));
-    layout->addWidget(m_header_title);
-    layout->addStretch();
+    m_header_title->hide();
+    // Global search across Mail and Files (local, never sent to the network).
+    m_global_search = new QLineEdit{header};
+    m_global_search->setObjectName(QStringLiteral("globalSearch"));
+    m_global_search->setPlaceholderText(tr("Search mail and files"));
+    m_global_search->setAccessibleName(tr("Search mail and files"));
+    m_global_search->setToolTip(tr("Search mail and files (Ctrl+K)"));
+    m_global_search->setClearButtonEnabled(true);
+    m_global_search->addAction(QIcon{CybouUi::glyphPixmap(CybouUi::Glyph::Search, {16, 16},
+        CybouTheme::color(CybouTheme::TEXT_MUTED))}, QLineEdit::LeadingPosition);
+    m_global_search->setMinimumHeight(38);
+    m_global_search->setMaximumWidth(560);
+    m_global_search->setStyleSheet(QStringLiteral("QLineEdit#globalSearch { background: %1; border-color: %1; border-radius: 19px; }"
+                                                  "QLineEdit#globalSearch:focus { background: %2; border-color: %3; }")
+        .arg(CybouTheme::color(CybouTheme::SURFACE).name(), CybouTheme::color(CybouTheme::CANVAS).name(),
+            CybouTheme::color(CybouTheme::BRAND_TEAL).name()));
+    m_search_completer = new QCompleter{new QStandardItemModel{this}, this};
+    m_search_completer->setCaseSensitivity(Qt::CaseInsensitive);
+    m_search_completer->setFilterMode(Qt::MatchContains);
+    m_search_completer->setCompletionMode(QCompleter::PopupCompletion);
+    m_search_completer->setMaxVisibleItems(10);
+    m_global_search->setCompleter(m_search_completer);
+    connect(m_search_completer, qOverload<const QModelIndex&>(&QCompleter::activated), this, [this](const QModelIndex& index) {
+        openSearchResult(index.data(Qt::UserRole + 1).toString(), index.data(Qt::UserRole + 2).toString());
+        QTimer::singleShot(0, m_global_search, [this] { m_global_search->clear(); });
+    });
+    connect(m_global_search, &QLineEdit::returnPressed, this, [this] {
+        if (m_search_completer->popup()->isVisible()) return;
+        submitSearch(m_global_search->text().trimmed());
+    });
+    layout->addWidget(m_global_search, 1);
+    layout->addStretch(0);
 
     m_status_dot = CybouUi::Dot(CybouUi::Tint::Mint, header, 8);
     m_status_text = new QLabel{header};
@@ -337,6 +370,15 @@ QFrame* CybouMainWindow::buildHeader(QWidget* parent)
         });
         lock->setEnabled(active);
         m_identity_menu->addAction(tr("Settings"), this, [this] { showPage(CybouPage::Settings); });
+        m_identity_menu->addSeparator();
+        m_identity_menu->addAction(tr("Diagnostics window"), this, &CybouMainWindow::showDebugWindow);
+        m_identity_menu->addAction(tr("About CYBOU"), this, [this] {
+            QMessageBox::about(this, tr("About CYBOU"),
+                tr("CYBOU gives you one private Identity for Mail, Files, Names and Wallet."));
+        });
+        if (QSystemTrayIcon::isSystemTrayAvailable())
+            m_identity_menu->addAction(tr("Hide CYBOU"), this, &QWidget::hide);
+        m_identity_menu->addAction(tr("Quit CYBOU"), this, [this] { Q_EMIT quitRequested(); });
     });
     return header;
 }
@@ -408,7 +450,10 @@ void CybouMainWindow::buildShell()
     setCentralWidget(shell);
 
     connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, [this] { refreshHeader(); });
+    connect(m_desktop_model, &CybouDesktopModel::mailChanged, this, [this] { rebuildSearchIndex(); });
+    connect(m_desktop_model, &CybouDesktopModel::filesChanged, this, [this] { rebuildSearchIndex(); });
     refreshHeader();
+    rebuildSearchIndex();
 
     m_notifier = new CybouUi::Notifier{main_column};
     connect(m_desktop_model, &CybouDesktopModel::notificationRequested, this,
@@ -461,27 +506,86 @@ void CybouMainWindow::resizeEvent(QResizeEvent* event)
 
 void CybouMainWindow::buildMenus()
 {
-    menuBar()->clear();
-    auto* file = menuBar()->addMenu(tr("File"));
-    if (QSystemTrayIcon::isSystemTrayAvailable()) {
-        file->addAction(tr("Hide CYBOU"), this, &QWidget::hide);
+    // No classic menu bar: product navigation lives in the sidebar and the
+    // identity menu. Keyboard shortcuts stay available.
+    menuBar()->hide();
+    for (int i = 0; i < 4; ++i) {
+        auto* shortcut = new QShortcut{QKeySequence{QStringLiteral("Ctrl+%1").arg(i + 1)}, this};
+        connect(shortcut, &QShortcut::activated, this, [this, i] { showPage(static_cast<CybouPage>(i)); });
     }
-    file->addAction(tr("Quit CYBOU"), this, [this] { Q_EMIT quitRequested(); });
-
-    auto* view = menuBar()->addMenu(tr("View"));
-    for (int i = 0; i < m_pages->count(); ++i) {
-        const auto page = static_cast<CybouPage>(i);
-        auto* action = view->addAction(PageTitle(page), this, [this, page] { showPage(page); });
-        if (i < 4) action->setShortcut(QKeySequence{QStringLiteral("Ctrl+%1").arg(i + 1)});
-    }
-
-    auto* help = menuBar()->addMenu(tr("Help"));
-    help->addAction(tr("Diagnostics window"), this, &CybouMainWindow::showDebugWindow);
-    help->addAction(tr("About CYBOU"), this, [this] {
-        QMessageBox::about(this, tr("About CYBOU"),
-            tr("CYBOU gives you one private Identity for Mail, Files, Names and Wallet."));
+    auto* search = new QShortcut{QKeySequence{QStringLiteral("Ctrl+K")}, this};
+    connect(search, &QShortcut::activated, this, [this] {
+        m_global_search->setFocus(Qt::ShortcutFocusReason);
+        m_global_search->selectAll();
     });
-    help->addAction(tr("About Qt"), qApp, &QApplication::aboutQt);
+    auto* quit = new QShortcut{QKeySequence::Quit, this};
+    connect(quit, &QShortcut::activated, this, [this] { Q_EMIT quitRequested(); });
+}
+
+void CybouMainWindow::rebuildSearchIndex()
+{
+    auto* model = static_cast<QStandardItemModel*>(m_search_completer->model());
+    model->clear();
+    const QIcon mail_icon{CybouUi::glyphPixmap(CybouUi::Glyph::Envelope, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))};
+    const QIcon file_icon{CybouUi::glyphPixmap(CybouUi::Glyph::FileText, {16, 16}, CybouTheme::color(CybouTheme::BLUE))};
+    const QIcon folder_icon{CybouUi::glyphPixmap(CybouUi::Glyph::Folder, {16, 16}, CybouTheme::color(CybouTheme::BLUE))};
+    for (const auto& mail : m_desktop_model->mailItems()) {
+        if (mail.folder == CybouMailFolder::Trash) continue;
+        const QString peer = mail.folder == CybouMailFolder::Inbox || mail.folder == CybouMailFolder::Archive
+            ? mail.from_name : mail.to_name;
+        QStringList attachments;
+        for (const auto& attachment : mail.attachments) attachments << attachment.name;
+        auto* item = new QStandardItem{mail_icon, QStringLiteral("%1 — %2%3").arg(
+            mail.subject.isEmpty() ? tr("(no subject)") : mail.subject, peer,
+            attachments.isEmpty() ? QString{} : QStringLiteral("  ·  ") + attachments.join(QStringLiteral(", ")))};
+        item->setData(QStringLiteral("mail"), Qt::UserRole + 1);
+        item->setData(mail.id, Qt::UserRole + 2);
+        model->appendRow(item);
+    }
+    for (const auto& file : m_desktop_model->fileItems()) {
+        if (file.trashed) continue;
+        auto* item = new QStandardItem{file.folder ? folder_icon : file_icon, file.name};
+        item->setData(QStringLiteral("file"), Qt::UserRole + 1);
+        item->setData(file.id, Qt::UserRole + 2);
+        model->appendRow(item);
+    }
+}
+
+void CybouMainWindow::openSearchResult(const QString& kind, const QString& id)
+{
+    if (kind == QLatin1String{"mail"}) {
+        auto* mail = static_cast<EmailPage*>(page(CybouPage::Mail));
+        showPage(CybouPage::Mail);
+        const auto* item = m_desktop_model->mailItem(id);
+        if (!item) return;
+        mail->setView(item->folder == CybouMailFolder::Sent ? EmailPage::View::Sent
+            : item->folder == CybouMailFolder::Drafts ? EmailPage::View::Drafts
+            : item->folder == CybouMailFolder::Archive ? EmailPage::View::Archive : EmailPage::View::Inbox);
+        mail->openMessage(id);
+    } else if (kind == QLatin1String{"file"}) {
+        auto* files = static_cast<StoragePage*>(page(CybouPage::Files));
+        showPage(CybouPage::Files);
+        const auto* item = m_desktop_model->fileItem(id);
+        if (!item) return;
+        if (item->folder) {
+            files->openFolder(id);
+        } else {
+            files->openFolder(item->parent_id);
+            files->showDetails(id);
+        }
+    }
+}
+
+void CybouMainWindow::submitSearch(const QString& text)
+{
+    if (text.isEmpty()) return;
+    // Enter without choosing a suggestion searches the current product.
+    if (currentPageIndex() == static_cast<int>(CybouPage::Files)) {
+        static_cast<StoragePage*>(page(CybouPage::Files))->setSearchText(text);
+    } else {
+        showPage(CybouPage::Mail);
+        static_cast<EmailPage*>(page(CybouPage::Mail))->setSearchText(text);
+    }
 }
 
 void CybouMainWindow::buildTrayMenu()

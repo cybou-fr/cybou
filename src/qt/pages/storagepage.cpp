@@ -365,9 +365,6 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
         const auto ids = selectedIds();
         if (ids.size() == 1) promptRename(ids.first());
     });
-    auto* search_key = new QShortcut{QKeySequence{QStringLiteral("Ctrl+K")}, this};
-    search_key->setContext(Qt::WidgetWithChildrenShortcut);
-    connect(search_key, &QShortcut::activated, m_search, [this] { m_search->setFocus(); });
     auto* close_key = new QShortcut{QKeySequence{Qt::Key_Escape}, this};
     close_key->setContext(Qt::WidgetWithChildrenShortcut);
     connect(close_key, &QShortcut::activated, this, [this] { showDetails({}); });
@@ -412,6 +409,11 @@ void StoragePage::setView(View view)
     m_folder.clear();
     if (m_nav->currentRow() != static_cast<int>(view)) m_nav->setCurrentRow(static_cast<int>(view));
     rebuild();
+}
+
+void StoragePage::setSearchText(const QString& text)
+{
+    m_search->setText(text);
 }
 
 void StoragePage::openFolder(const QString& folder_id)

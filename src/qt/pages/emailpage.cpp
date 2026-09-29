@@ -326,7 +326,6 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     shortcut(QKeySequence{QStringLiteral("Ctrl+N")}, [this] { openCompose(); });
     shortcut(QKeySequence{Qt::Key_C}, [this, typing] { if (!typing()) openCompose(); });
     shortcut(QKeySequence{Qt::Key_Slash}, [this, typing] { if (!typing()) m_search->setFocus(); });
-    shortcut(QKeySequence{QStringLiteral("Ctrl+K")}, [this] { m_search->setFocus(); });
     shortcut(QKeySequence{Qt::Key_R}, [this, typing] {
         if (!typing() && m_detail->currentWidget() == m_reader) openCompose(replyTo(m_reader->messageId()));
     });
@@ -354,6 +353,11 @@ void EmailPage::refreshEmptyHint()
     const int unread = m_model->unreadMailCount();
     m_empty_hint->setText(unread == 0 ? tr("You're all caught up.")
         : unread == 1 ? tr("1 unread message in your Inbox.") : tr("%1 unread messages in your Inbox.").arg(unread));
+}
+
+void EmailPage::setSearchText(const QString& text)
+{
+    m_search->setText(text);
 }
 
 void EmailPage::setView(View view)
