@@ -210,8 +210,25 @@ public:
     bool requestClaimName(const QString& label, const QString& vault_password);
     bool requestRecoveryRootRotation(const QStringList& new_phrase, const QString& vault_password,
         bool resume_pending = false);
-    void requestFileUpload(const QString& source_path);
+    /**
+     * Adds the file to the private catalog as Preparing and hands it to the
+     * Files backend. Returns the new item id, or empty when Files is not
+     * connected. Nothing is uploaded before RootPublication finality.
+     */
+    QString requestFileUpload(const QString& source_path, const QString& parent_id = {});
     void requestFileDownload(const QString& file_id, const QString& destination);
+    /* Private catalog organization (encrypted catalog updates). */
+    QString createFolder(const QString& name, const QString& parent_id = {});
+    void renameFile(const QString& id, const QString& name);
+    void moveFile(const QString& id, const QString& parent_id);
+    void setFileStarred(const QString& id, bool starred);
+    void trashFile(const QString& id);
+    void restoreFile(const QString& id);
+    void deleteFileForever(const QString& id);
+    const CybouFileItem* fileItem(const QString& id) const;
+    /** Adapter entries for upload/download progress. */
+    void setFileState(const QString& id, CybouContentState state, int progress_percent = -1);
+    void setFileRetrieval(const QString& id, CybouRetrievalState retrieval);
 
 Q_SIGNALS:
     void statusChanged();
@@ -229,7 +246,7 @@ Q_SIGNALS:
     void nameClaimRequested(const QString& label);
     void lockVaultRequested();
     void restoreIdentityRequested();
-    void fileUploadRequested(const QString& source_path);
+    void fileUploadRequested(const QString& file_id, const QString& source_path);
     void fileDownloadRequested(const QString& file_id, const QString& destination);
     void mailSendRequested(const QString& id);
     void attachmentDownloadRequested(const QString& message_id, const QString& attachment_id,

@@ -8,7 +8,17 @@
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 
+#include <QAction>
+#include <QDirIterator>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFrame>
+#include <QInputDialog>
+#include <QMessageBox>
+#include <QMimeData>
+#include <QShortcut>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -127,7 +137,15 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_new->setIcon(QIcon{glyphPixmap(Glyph::Plus, {18, 18}, QColor{Qt::white})});
     m_new->setMinimumHeight(44);
     m_new->setCursor(Qt::PointingHandCursor);
-    m_new->setMenu(new QMenu{m_new});
+    auto* new_menu = new QMenu{m_new};
+    new_menu->addAction(QIcon{glyphPixmap(Glyph::Folder, {16, 16}, CybouTheme::color(CybouTheme::TEXT_SECONDARY))},
+        tr("New folder"), this, [this] { promptNewFolder(); });
+    new_menu->addSeparator();
+    new_menu->addAction(QIcon{glyphPixmap(Glyph::Upload, {16, 16}, CybouTheme::color(CybouTheme::TEXT_SECONDARY))},
+        tr("Upload files"), this, [this] { uploadFiles(QFileDialog::getOpenFileNames(this, tr("Upload files"))); });
+    new_menu->addAction(QIcon{glyphPixmap(Glyph::Folder, {16, 16}, CybouTheme::color(CybouTheme::TEXT_SECONDARY))},
+        tr("Upload folder"), this, [this] { promptUploadFolder(); });
+    m_new->setMenu(new_menu);
     rail_layout->addWidget(m_new);
     m_nav = new QListWidget{rail};
     m_nav->setObjectName(QStringLiteral("folderList"));
@@ -249,6 +267,40 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     main_layout->addWidget(m_empty);
     root->addWidget(main, 1);
 
+    m_details = new QFrame{this};
+    m_details->setObjectName(QStringLiteral("card"));
+    m_details->setAccessibleName(tr("Details"));
+    m_details->setFixedWidth(300);
+    new QVBoxLayout{m_details};
+    m_details->setVisible(false);
+    root->addWidget(m_details);
+
+    for (QAbstractItemView* view : {static_cast<QAbstractItemView*>(m_table), static_cast<QAbstractItemView*>(m_tiles)}) {
+        view->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(view, &QWidget::customContextMenuRequested, this, [this, view](const QPoint& pos) {
+            showContextMenu(view->viewport()->mapToGlobal(pos));
+        });
+    }
+    connect(m_table, &QTreeWidget::itemSelectionChanged, this, [this] {
+        const auto ids = selectedIds();
+        if (m_details->isVisible() && ids.size() == 1) showDetails(ids.first());
+    });
+    auto* trash_key = new QShortcut{QKeySequence::Delete, this};
+    trash_key->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(trash_key, &QShortcut::activated, this, [this] {
+        for (const auto& id : selectedIds()) {
+            if (m_view == View::Trash) continue;
+            m_model->trashFile(id);
+        }
+    });
+    auto* rename_key = new QShortcut{QKeySequence{Qt::Key_F2}, this};
+    rename_key->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(rename_key, &QShortcut::activated, this, [this] {
+        const auto ids = selectedIds();
+        if (ids.size() == 1) promptRename(ids.first());
+    });
+    setAcceptDrops(true);
+
     connect(m_nav, &QListWidget::currentRowChanged, this, [this](int row) {
         if (row >= 0) setView(static_cast<View>(row));
     });
@@ -270,7 +322,10 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     connect(m_tiles, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
         activate(item->data(kIdRole).toString());
     });
-    connect(m_model, &CybouDesktopModel::filesChanged, this, [this] { rebuild(); });
+    connect(m_model, &CybouDesktopModel::filesChanged, this, [this] {
+        rebuild();
+        rebuildDetails();
+    });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshChrome(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refreshChrome(); });
 
@@ -436,6 +491,7 @@ void StoragePage::activate(const QString& id)
     for (const auto& item : m_model->fileItems()) {
         if (item.id != id) continue;
         if (item.folder && !item.trashed) openFolder(id);
+        else showDetails(id);
         return;
     }
 }
@@ -444,8 +500,8 @@ void StoragePage::updateColumns()
 {
     // Hide secondary columns before any horizontal scrolling can appear.
     const int width = m_views->width();
-    m_table->setColumnHidden(ModifiedColumn, width < 620);
-    m_table->setColumnHidden(SizeColumn, width < 480);
+    m_table->setColumnHidden(ModifiedColumn, width < 700);
+    m_table->setColumnHidden(SizeColumn, width < 560);
 }
 
 void StoragePage::resizeEvent(QResizeEvent* event)
@@ -453,4 +509,251 @@ void StoragePage::resizeEvent(QResizeEvent* event)
     QWidget::resizeEvent(event);
     // Measure after the layout has settled.
     QTimer::singleShot(0, this, [this] { updateColumns(); });
+}
+
+QStringList StoragePage::selectedIds() const
+{
+    QStringList ids;
+    if (m_grid) {
+        for (const auto* item : m_tiles->selectedItems()) ids << item->data(kIdRole).toString();
+    } else {
+        for (const auto* item : m_table->selectedItems()) ids << item->data(NameColumn, kIdRole).toString();
+    }
+    return ids;
+}
+
+void StoragePage::uploadFiles(const QStringList& paths)
+{
+    const QString parent = m_view == View::MyFiles ? m_folder : QString{};
+    for (const auto& path : paths) {
+        if (!path.isEmpty() && QFileInfo{path}.isFile()) m_model->requestFileUpload(path, parent);
+    }
+}
+
+void StoragePage::promptNewFolder()
+{
+    bool ok{false};
+    const QString name = QInputDialog::getText(this, tr("New folder"), tr("Folder name"), QLineEdit::Normal,
+        tr("Untitled folder"), &ok).trimmed();
+    if (ok && !name.isEmpty()) m_model->createFolder(name, m_view == View::MyFiles ? m_folder : QString{});
+}
+
+void StoragePage::promptUploadFolder()
+{
+    const QString directory = QFileDialog::getExistingDirectory(this, tr("Upload folder"));
+    if (directory.isEmpty()) return;
+    const QString root_id = m_model->createFolder(QFileInfo{directory}.fileName(),
+        m_view == View::MyFiles ? m_folder : QString{});
+    if (root_id.isEmpty()) return;
+    QDirIterator it{directory, QDir::Files, QDirIterator::NoIteratorFlags};
+    while (it.hasNext()) m_model->requestFileUpload(it.next(), root_id);
+}
+
+void StoragePage::promptRename(const QString& id)
+{
+    const auto* item = m_model->fileItem(id);
+    if (!item) return;
+    bool ok{false};
+    const QString name = QInputDialog::getText(this, tr("Rename"), tr("New name"), QLineEdit::Normal, item->name, &ok);
+    if (ok) m_model->renameFile(id, name);
+}
+
+void StoragePage::promptMove(const QString& id)
+{
+    QStringList labels{tr("My files")};
+    QStringList ids{QString{}};
+    for (const auto& item : m_model->fileItems()) {
+        if (item.folder && !item.trashed && item.id != id) {
+            labels << item.name;
+            ids << item.id;
+        }
+    }
+    bool ok{false};
+    const QString choice = QInputDialog::getItem(this, tr("Move"), tr("Move to"), labels, 0, false, &ok);
+    if (ok) m_model->moveFile(id, ids.at(labels.indexOf(choice)));
+}
+
+void StoragePage::download(const QString& id)
+{
+    const auto* item = m_model->fileItem(id);
+    if (!item || item->folder) return;
+    const QString destination = QFileDialog::getSaveFileName(this, tr("Download"), item->name);
+    if (!destination.isEmpty()) m_model->requestFileDownload(id, destination);
+}
+
+void StoragePage::showContextMenu(const QPoint& global_pos)
+{
+    const auto ids = selectedIds();
+    if (ids.isEmpty()) return;
+    const auto* item = m_model->fileItem(ids.first());
+    if (!item) return;
+    const QString id = item->id;
+    QMenu menu{this};
+    if (m_view == View::Trash) {
+        menu.addAction(tr("Restore"), this, [this, ids] { for (const auto& i : ids) m_model->restoreFile(i); });
+        menu.addAction(tr("Delete forever"), this, [this, ids] {
+            if (QMessageBox::question(this, tr("Delete forever"),
+                    tr("Remove from your Files? CYBOU releases retained storage according to the Storage retention policy."))
+                == QMessageBox::Yes) {
+                for (const auto& i : ids) m_model->deleteFileForever(i);
+            }
+        });
+        menu.exec(global_pos);
+        return;
+    }
+    menu.addAction(tr("Open"), this, [this, id] { activate(id); });
+    if (!item->folder) {
+        auto* dl = menu.addAction(tr("Download"), this, [this, id] { download(id); });
+        dl->setEnabled(item->state == CybouContentState::Protected);
+    }
+    menu.addSeparator();
+    menu.addAction(tr("Rename"), this, [this, id] { promptRename(id); })->setShortcut(QKeySequence{Qt::Key_F2});
+    menu.addAction(tr("Move"), this, [this, id] { promptMove(id); });
+    menu.addAction(item->starred ? tr("Remove star") : tr("Star"), this,
+        [this, id, starred = item->starred] { m_model->setFileStarred(id, !starred); });
+    if (!item->folder) {
+        auto* send = menu.addAction(tr("Send by CYBOU Mail"), this, [this, id] { if (onSendByMail) onSendByMail(id); });
+        send->setEnabled(item->state == CybouContentState::Protected && onSendByMail && m_model->capabilities().mail);
+    }
+    menu.addSeparator();
+    menu.addAction(tr("Move to Trash"), this, [this, ids] { for (const auto& i : ids) m_model->trashFile(i); })
+        ->setShortcut(QKeySequence::Delete);
+    menu.addAction(tr("Details"), this, [this, id] { showDetails(id); });
+    menu.exec(global_pos);
+}
+
+void StoragePage::showDetails(const QString& id)
+{
+    m_details_id = id;
+    m_details->setVisible(!id.isEmpty());
+    rebuildDetails();
+    QTimer::singleShot(0, this, [this] { updateColumns(); });
+}
+
+namespace {
+QString TypeText(const CybouFileItem& item)
+{
+    if (item.folder) return StoragePage::tr("Folder");
+    const QString suffix = QFileInfo{item.name}.suffix().toUpper();
+    if (suffix == QLatin1String{"PDF"}) return StoragePage::tr("PDF document");
+    if (suffix == QLatin1String{"JPG"} || suffix == QLatin1String{"JPEG"} || suffix == QLatin1String{"PNG"})
+        return StoragePage::tr("Image");
+    if (suffix == QLatin1String{"ZIP"}) return StoragePage::tr("Archive");
+    return suffix.isEmpty() ? StoragePage::tr("File") : StoragePage::tr("%1 file").arg(suffix);
+}
+
+void DetailPair(QVBoxLayout* layout, const QString& key, const QString& value, QWidget* parent)
+{
+    auto* k = new QLabel{key, parent};
+    k->setObjectName(QStringLiteral("metricCaption"));
+    auto* v = new QLabel{value, parent};
+    v->setObjectName(QStringLiteral("rowTitle"));
+    v->setWordWrap(true);
+    v->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(k);
+    layout->addWidget(v);
+}
+} // namespace
+
+void StoragePage::rebuildDetails()
+{
+    if (!m_details->isVisible()) return;
+    auto* layout = static_cast<QVBoxLayout*>(m_details->layout());
+    while (QLayoutItem* entry = layout->takeAt(0)) {
+        if (entry->layout()) {
+            while (QLayoutItem* inner = entry->layout()->takeAt(0)) {
+                if (inner->widget()) { inner->widget()->hide(); inner->widget()->deleteLater(); }
+                delete inner;
+            }
+        }
+        if (entry->widget()) { entry->widget()->hide(); entry->widget()->deleteLater(); }
+        delete entry;
+    }
+    layout->setContentsMargins(20, 16, 20, 16);
+    layout->setSpacing(6);
+    const auto* item = m_model->fileItem(m_details_id);
+    if (!item) {
+        m_details->setVisible(false);
+        return;
+    }
+    auto* head = new QHBoxLayout;
+    auto* title = new QLabel{item->name, m_details};
+    title->setObjectName(QStringLiteral("sectionTitle"));
+    title->setWordWrap(true);
+    head->addWidget(title, 1);
+    auto* close = new QPushButton{tr("Close"), m_details};
+    close->setObjectName(QStringLiteral("softButton"));
+    connect(close, &QPushButton::clicked, this, [this] { showDetails({}); });
+    head->addWidget(close, 0, Qt::AlignTop);
+    layout->addLayout(head);
+    auto* icon = new QLabel{m_details};
+    icon->setPixmap(glyphPixmap(FileGlyph(*item), {56, 56}, CybouTheme::color(item->folder ? CybouTheme::BLUE : CybouTheme::TEXT_SECONDARY)));
+    icon->setAlignment(Qt::AlignCenter);
+    icon->setMinimumHeight(90);
+    layout->addWidget(icon);
+    layout->addWidget(MutedText(item->folder ? TypeText(*item)
+        : QStringLiteral("%1  ·  %2").arg(TypeText(*item), CybouProduct::sizeText(item->logical_size)), m_details));
+    layout->addWidget(MutedText(tr("Modified %1").arg(ModifiedText(item->modified).toLower()), m_details));
+    layout->addSpacing(8);
+    if (!item->folder) {
+        const bool online = m_model->status().online;
+        const QString retrieval = CybouProduct::retrievalText(item->retrieval);
+        DetailPair(layout, tr("Status"), retrieval.isEmpty()
+            ? CybouProduct::progressText(item->state, item->progress_percent, online) : retrieval, m_details);
+    }
+    const auto& status = m_model->status();
+    DetailPair(layout, tr("Owner"), status.primary_name.isEmpty() ? tr("You") : status.primary_name, m_details);
+    layout->addSpacing(8);
+    if (!item->folder && !item->trashed) {
+        auto* dl = new QPushButton{tr("Download"), m_details};
+        dl->setObjectName(QStringLiteral("primaryButton"));
+        dl->setProperty("cybouId", QStringLiteral("fileDownload"));
+        dl->setEnabled(item->state == CybouContentState::Protected &&
+            (item->retrieval == CybouRetrievalState::Idle || item->retrieval == CybouRetrievalState::Ready));
+        connect(dl, &QPushButton::clicked, this, [this, id = item->id] { download(id); });
+        layout->addWidget(dl);
+        auto* send = new QPushButton{tr("Send by Mail"), m_details};
+        send->setObjectName(QStringLiteral("secondaryButton"));
+        send->setProperty("cybouId", QStringLiteral("fileSendByMail"));
+        send->setEnabled(item->state == CybouContentState::Protected && onSendByMail && m_model->capabilities().mail);
+        connect(send, &QPushButton::clicked, this, [this, id = item->id] { if (onSendByMail) onSendByMail(id); });
+        layout->addWidget(send);
+    }
+    layout->addStretch();
+    if (!item->folder) {
+        auto* advanced = new QToolButton{m_details};
+        advanced->setObjectName(QStringLiteral("sectionLink"));
+        advanced->setText(tr("Advanced"));
+        advanced->setCheckable(true);
+        advanced->setAutoRaise(true);
+        layout->addWidget(advanced, 0, Qt::AlignLeft);
+        auto* box = new QWidget{m_details};
+        auto* box_layout = new QVBoxLayout{box};
+        box_layout->setContentsMargins(0, 0, 0, 0);
+        box_layout->setSpacing(4);
+        const QString none = tr("Not reported yet");
+        DetailPair(box_layout, tr("Root content identifier"), item->content_root_id.isEmpty() ? none : item->content_root_id, box);
+        DetailPair(box_layout, tr("Finalized height"), item->finalized_height > 0 ? QString::number(item->finalized_height) : none, box);
+        DetailPair(box_layout, tr("Protection status"), CybouProduct::contentStateText(item->state), box);
+        DetailPair(box_layout, tr("Retrieval status"), item->retrieval == CybouRetrievalState::Idle
+            ? tr("Not retrieved on this computer") : CybouProduct::retrievalText(item->retrieval), box);
+        box->setVisible(false);
+        connect(advanced, &QToolButton::toggled, box, &QWidget::setVisible);
+        layout->addWidget(box);
+    }
+}
+
+void StoragePage::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasUrls() && m_new->isEnabled()) event->acceptProposedAction();
+}
+
+void StoragePage::dropEvent(QDropEvent* event)
+{
+    QStringList paths;
+    for (const auto& url : event->mimeData()->urls()) {
+        if (url.isLocalFile()) paths << url.toLocalFile();
+    }
+    uploadFiles(paths);
+    event->acceptProposedAction();
 }

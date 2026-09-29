@@ -63,6 +63,7 @@ private:
     void runCreate();
     void runRestore();
     void runSend(const QString& id);
+    void runUpload(const QString& id);
     void runDownload(const QString& message_id, const QString& attachment_id);
 };
 

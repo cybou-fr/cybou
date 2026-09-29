@@ -64,6 +64,10 @@ CybouFileItem File(const QString& id, const QString& name, const QString& parent
     item.logical_size = size;
     item.modified = modified;
     item.state = state;
+    if (state == CybouContentState::Protected) {
+        item.content_root_id = QStringLiteral("b81f0c4e92d7a35e6f1c0d8b4a29e7f3c5d61a08e9b2f4c7d0a3e5b6f1c8d924");
+        item.finalized_height = 1100 + static_cast<quint64>(qHash(id) % 120);
+    }
     return item;
 }
 
@@ -277,6 +281,14 @@ Driver::Driver(CybouDesktopModel* model, QObject* parent)
 {
     connect(m_model, &CybouDesktopModel::createIdentityRequested, this, [this] { runCreate(); });
     connect(m_model, &CybouDesktopModel::restoreIdentityRequested, this, [this] { runRestore(); });
+    connect(m_model, &CybouDesktopModel::fileUploadRequested, this,
+        [this](const QString& id, const QString&) { runUpload(id); });
+    connect(m_model, &CybouDesktopModel::fileDownloadRequested, this, [this](const QString& id, const QString&) {
+        later(1, [this, id] { m_model->setFileRetrieval(id, CybouRetrievalState::Verifying); });
+        later(2, [this, id] { m_model->setFileRetrieval(id, CybouRetrievalState::Decrypting); });
+        later(3, [this, id] { m_model->setFileRetrieval(id, CybouRetrievalState::Ready); });
+        later(6, [this, id] { m_model->setFileRetrieval(id, CybouRetrievalState::Idle); });
+    });
     connect(m_model, &CybouDesktopModel::mailSendRequested, this, [this](const QString& id) { runSend(id); });
     connect(m_model, &CybouDesktopModel::attachmentDownloadRequested, this,
         [this](const QString& message_id, const QString& attachment_id, const QString&) {
@@ -336,6 +348,16 @@ void Driver::runSend(const QString& id)
     });
     later(4, [progress] { progress(80); });
     later(5, [this, id] { m_model->setMailState(id, CybouContentState::Protected); });
+}
+
+void Driver::runUpload(const QString& id)
+{
+    // Same finality-first lifecycle as Mail; offline uploads wait.
+    if (!m_model->status().online) return;
+    later(1, [this, id] { m_model->setFileState(id, CybouContentState::WaitingForConfirmation); });
+    later(3, [this, id] { m_model->setFileState(id, CybouContentState::Securing, 20); });
+    later(4, [this, id] { m_model->setFileState(id, CybouContentState::Securing, 65); });
+    later(5, [this, id] { m_model->setFileState(id, CybouContentState::Protected); });
 }
 
 void Driver::runDownload(const QString& message_id, const QString& attachment_id)

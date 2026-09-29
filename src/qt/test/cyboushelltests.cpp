@@ -438,6 +438,38 @@ void CybouShellTests::filesNavigationAndViews()
     QCOMPARE(search->placeholderText(), QStringLiteral("Search files"));
     search->setText(QStringLiteral("mountain"));
     QCOMPARE(files->visibleIds(), QStringList{QStringLiteral("f-mountain")});
+    search->clear();
+
+    // Organization is local catalog state.
+    files->setView(StoragePage::View::MyFiles);
+    const QString folder = model->createFolder(QStringLiteral("Taxes"));
+    QVERIFY(files->visibleIds().contains(folder));
+    model->moveFile(QStringLiteral("f-photo"), folder);
+    QVERIFY(!files->visibleIds().contains(QStringLiteral("f-photo")));
+    model->renameFile(QStringLiteral("f-photo"), QStringLiteral("receipt.jpg"));
+    QCOMPARE(model->fileItem(QStringLiteral("f-photo"))->name, QStringLiteral("receipt.jpg"));
+    model->trashFile(folder);
+    QVERIFY(model->fileItem(QStringLiteral("f-photo"))->trashed); // contents follow the folder
+    model->restoreFile(folder);
+    QVERIFY(!model->fileItem(QStringLiteral("f-photo"))->trashed);
+
+    // Details drawer shows user-facing status, never chunk/provider data.
+    files->showDetails(QStringLiteral("f-report"));
+    QCOMPARE(files->detailsId(), QStringLiteral("f-report"));
+
+    // Upload: the item appears immediately as Preparing (finality-first).
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("notes.txt"));
+    QFile file{path};
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("hello");
+    file.close();
+    QSignalSpy uploads{model, &CybouDesktopModel::fileUploadRequested};
+    files->uploadFiles({path});
+    QCOMPARE(uploads.count(), 1);
+    const QString uploaded = uploads.first().at(0).toString();
+    QCOMPARE(model->fileItem(uploaded)->state, CybouContentState::Preparing);
+    QCOMPARE(model->fileItem(uploaded)->logical_size, quint64{5});
 }
 
 void CybouShellTests::networkPageReflectsModel()

@@ -22,6 +22,8 @@ class QPushButton;
 class QStackedWidget;
 class QToolButton;
 class QTreeWidget;
+class QDragEnterEvent;
+class QDropEvent;
 
 /**
  * CYBOU Files: Google Drive-familiar file management over the product
@@ -50,9 +52,18 @@ public:
     void setGridMode(bool grid);
     /** Item ids currently listed (after view, folder and search). */
     QStringList visibleIds() const;
+    /** Opens the details drawer for a file or folder. */
+    void showDetails(const QString& id);
+    QString detailsId() const { return m_details_id; }
+    /** Uploads local files into the current folder. */
+    void uploadFiles(const QStringList& paths);
+    /** Set by the shell: opens Mail compose with this file attached. */
+    std::function<void(const QString& file_id)> onSendByMail;
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     CybouDesktopModel* const m_model;
@@ -77,6 +88,17 @@ private:
     QTreeWidget* m_table{nullptr};
     QListWidget* m_tiles{nullptr};
     QLabel* m_empty{nullptr};
+    QFrame* m_details{nullptr};
+    QString m_details_id;
+
+    QStringList selectedIds() const;
+    void showContextMenu(const QPoint& global_pos);
+    void promptNewFolder();
+    void promptUploadFolder();
+    void promptRename(const QString& id);
+    void promptMove(const QString& id);
+    void download(const QString& id);
+    void rebuildDetails();
 
     QVector<CybouFileItem> collect() const;
     QString folderName(const QString& id) const;

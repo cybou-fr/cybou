@@ -772,16 +772,133 @@ bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, c
     return true;
 }
 
-void CybouDesktopModel::requestFileUpload(const QString& source_path)
+QString CybouDesktopModel::requestFileUpload(const QString& source_path, const QString& parent_id)
 {
-    if (m_status.identity_state != CybouIdentityState::Active) return;
-    Q_EMIT fileUploadRequested(source_path);
+    if (m_status.identity_state != CybouIdentityState::Active || !m_capabilities.files) return {};
+    const QFileInfo info{source_path};
+    CybouFileItem item;
+    item.id = NewLocalId("file");
+    item.name = info.fileName();
+    item.parent_id = parent_id;
+    item.logical_size = static_cast<quint64>(qMax<qint64>(0, info.size()));
+    item.modified = QDateTime::currentDateTime();
+    item.state = CybouContentState::Preparing;
+    upsertFileItem(item);
+    Q_EMIT fileUploadRequested(item.id, source_path);
+    return item.id;
 }
 
 void CybouDesktopModel::requestFileDownload(const QString& file_id, const QString& destination)
 {
     if (m_status.identity_state != CybouIdentityState::Active) return;
+    setFileRetrieval(file_id, CybouRetrievalState::Downloading);
     Q_EMIT fileDownloadRequested(file_id, destination);
+}
+
+const CybouFileItem* CybouDesktopModel::fileItem(const QString& id) const
+{
+    for (const auto& item : m_files) {
+        if (item.id == id) return &item;
+    }
+    return nullptr;
+}
+
+QString CybouDesktopModel::createFolder(const QString& name, const QString& parent_id)
+{
+    if (m_status.identity_state != CybouIdentityState::Active || name.trimmed().isEmpty()) return {};
+    CybouFileItem folder;
+    folder.id = NewLocalId("folder");
+    folder.name = name.trimmed();
+    folder.parent_id = parent_id;
+    folder.folder = true;
+    folder.modified = QDateTime::currentDateTime();
+    folder.state = CybouContentState::Protected;
+    upsertFileItem(folder);
+    return folder.id;
+}
+
+namespace {
+template <typename F>
+bool MutateFile(QVector<CybouFileItem>& files, const QString& id, F mutate)
+{
+    for (auto& item : files) {
+        if (item.id == id) {
+            mutate(item);
+            return true;
+        }
+    }
+    return false;
+}
+} // namespace
+
+void CybouDesktopModel::renameFile(const QString& id, const QString& name)
+{
+    if (name.trimmed().isEmpty()) return;
+    if (MutateFile(m_files, id, [&](CybouFileItem& item) { item.name = name.trimmed(); item.modified = QDateTime::currentDateTime(); }))
+        Q_EMIT filesChanged();
+}
+
+void CybouDesktopModel::moveFile(const QString& id, const QString& parent_id)
+{
+    if (id == parent_id) return;
+    if (MutateFile(m_files, id, [&](CybouFileItem& item) { item.parent_id = parent_id; })) Q_EMIT filesChanged();
+}
+
+void CybouDesktopModel::setFileStarred(const QString& id, bool starred)
+{
+    if (MutateFile(m_files, id, [&](CybouFileItem& item) { item.starred = starred; })) Q_EMIT filesChanged();
+}
+
+void CybouDesktopModel::trashFile(const QString& id)
+{
+    // Trashing a folder trashes its contents with it.
+    QStringList ids{id};
+    for (int i = 0; i < ids.size(); ++i) {
+        for (const auto& item : m_files) {
+            if (item.parent_id == ids.at(i)) ids << item.id;
+        }
+    }
+    for (auto& item : m_files) {
+        if (ids.contains(item.id)) item.trashed = true;
+    }
+    Q_EMIT filesChanged();
+}
+
+void CybouDesktopModel::restoreFile(const QString& id)
+{
+    QStringList ids{id};
+    for (int i = 0; i < ids.size(); ++i) {
+        for (const auto& item : m_files) {
+            if (item.parent_id == ids.at(i)) ids << item.id;
+        }
+    }
+    for (auto& item : m_files) {
+        if (ids.contains(item.id)) item.trashed = false;
+    }
+    Q_EMIT filesChanged();
+}
+
+void CybouDesktopModel::deleteFileForever(const QString& id)
+{
+    QStringList ids{id};
+    for (int i = 0; i < ids.size(); ++i) {
+        for (const auto& item : m_files) {
+            if (item.parent_id == ids.at(i)) ids << item.id;
+        }
+    }
+    m_files.removeIf([&ids](const CybouFileItem& item) { return ids.contains(item.id); });
+    Q_EMIT filesChanged();
+}
+
+void CybouDesktopModel::setFileState(const QString& id, CybouContentState state, int progress_percent)
+{
+    if (MutateFile(m_files, id, [&](CybouFileItem& item) { item.state = state; item.progress_percent = progress_percent; }))
+        Q_EMIT filesChanged();
+}
+
+void CybouDesktopModel::setFileRetrieval(const QString& id, CybouRetrievalState retrieval)
+{
+    if (MutateFile(m_files, id, [&](CybouFileItem& item) { item.retrieval = retrieval; })) Q_EMIT filesChanged();
 }
 
 void CybouDesktopModel::refreshFinalizedName()

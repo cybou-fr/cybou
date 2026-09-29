@@ -131,6 +131,9 @@ struct CybouFileItem {
     CybouContentState state{CybouContentState::Local};
     int progress_percent{-1};
     CybouRetrievalState retrieval{CybouRetrievalState::Idle};
+    /** Advanced details only; empty until the backend reports them. */
+    QString content_root_id;
+    quint64 finalized_height{0};
 };
 
 enum class CybouActivityKind {

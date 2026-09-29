@@ -508,6 +508,22 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
                 break;
             }
         }
+        auto* files = static_cast<StoragePage*>(page(CybouPage::Files));
+        showPage(CybouPage::Files);
+        files->setGridMode(true);
+        save(QStringLiteral("files-grid"));
+        files->setGridMode(false);
+        const auto file_ids = files->visibleIds();
+        for (const auto& id : file_ids) {
+            const auto* item = m_desktop_model->fileItem(id);
+            if (item && !item->folder && item->state == CybouContentState::Protected) {
+                files->showDetails(id);
+                save(QStringLiteral("files-details"));
+                files->showDetails({});
+                break;
+            }
+        }
+        showPage(CybouPage::Mail);
         mail->setView(EmailPage::View::Inbox);
         CybouMailItem draft;
         draft.to_name = QStringLiteral("alice.cybou");
