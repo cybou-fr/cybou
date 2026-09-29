@@ -114,6 +114,10 @@ public:
     void ForEachStringPrefix(const std::string& prefix, size_t key_size,
         const std::function<void(const std::string&, const std::string&)>& visitor) const;
 
+    /** Visit entries whose serialized std::string key starts with prefix, preserving raw value bytes. */
+    void ForEachStringPrefixRaw(const std::string& prefix, size_t key_size,
+        const std::function<void(const std::string&, const std::string&)>& visitor) const;
+
     template <typename K>
     void Erase(const K& key, bool sync = false)
     {

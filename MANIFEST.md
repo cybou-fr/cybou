@@ -33,7 +33,7 @@ editing an included file.
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 130 | f920aa7287022759 |
 | docs/cybou/24_DECISIONS.md | 212 | eb21adfe825a2370 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 39 | a9154a19525304c4 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 60 | c200898b5b171dba |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 62 | 7a32ec1f4c033184 |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 34c65e3a9e47145b |
 | docs/cybou/30_REPOSITORY_DOCUMENTATION_CLEANUP.md | 215 | 05597f40cb045934 |
 | docs/cybou/31_IMPLEMENTATION_DETAIL_GATES.md | 103 | 8af315a4660802e0 |
@@ -84,7 +84,7 @@ editing an included file.
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 27 | 8d7a331841060278 |
 | docs/cybou/POA_FINALITY.md | 63 | 2f5c1861a6481fb5 |
 | docs/cybou/ROOT_PUBLICATION.md | 115 | 5d60eb2a135d84a0 |
-| docs/cybou/STORAGE_ADMISSION.md | 59 | 4067fa21a9f96cad |
+| docs/cybou/STORAGE_ADMISSION.md | 66 | eebc8b9c820222c8 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |
 | spec/circulation_scenarios.csv | 74 | db240cf0d3280644 |
 | spec/email_crypto_profile.yaml | 111 | 929d4d43782d2b07 |

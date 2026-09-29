@@ -163,4 +163,31 @@ void KVStore::ForEachStringPrefix(const std::string& prefix, const size_t key_si
     CheckLevelDB(iterator->status());
 }
 
+void KVStore::ForEachStringPrefixRaw(const std::string& prefix, const size_t key_size,
+    const std::function<void(const std::string&, const std::string&)>& visitor) const
+{
+    if (prefix.size() > key_size || !visitor) throw std::invalid_argument("invalid CYBOU KV prefix scan");
+
+    DataStream encoded_key{};
+    encoded_key << std::string(key_size, '\0');
+    const size_t size_header = encoded_key.size() - key_size;
+    std::string serialized_prefix{
+        reinterpret_cast<const char*>(encoded_key.data()), size_header};
+    serialized_prefix.append(prefix);
+
+    std::unique_ptr<leveldb::Iterator> iterator{m_impl->db->NewIterator(m_impl->read_options)};
+    for (iterator->Seek(serialized_prefix); iterator->Valid(); iterator->Next()) {
+        const auto key_slice = iterator->key();
+        if (key_slice.size() < serialized_prefix.size() ||
+            std::memcmp(key_slice.data(), serialized_prefix.data(), serialized_prefix.size()) != 0) break;
+        const auto value_slice = iterator->value();
+        const auto* key_begin = reinterpret_cast<const std::byte*>(key_slice.data());
+        SpanReader key_reader{std::span<const std::byte>{key_begin, key_slice.size()}};
+        std::string decoded_key;
+        key_reader >> decoded_key;
+        visitor(decoded_key, std::string{value_slice.data(), value_slice.size()});
+    }
+    CheckLevelDB(iterator->status());
+}
+
 } // namespace cybou

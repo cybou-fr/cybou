@@ -66,6 +66,8 @@ private:
     std::optional<std::uint64_t> ReadCounter(const std::string& key) const;
 
     const std::string m_namespace;
+    const std::filesystem::path m_blob_root;
+    const bool m_memory_only;
     const std::uint64_t m_capacity_bytes;
     mutable std::mutex m_mutex;
     std::unique_ptr<KVStore> m_db;

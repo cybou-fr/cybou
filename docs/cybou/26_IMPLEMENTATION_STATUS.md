@@ -27,8 +27,10 @@ recovery gates pass together. See
   compact RootPublication that does not reveal the complete ChunkID set.
 - Durable content-addressed provider admission by ChunkID with finalized-
   publication lookup, per-publication proof association, provider capacity
-  enforcement, and idempotent deduplication. Provider capacity is local and is
-  not published in RootPublication.
+  enforcement, and idempotent deduplication. Persistent providers keep opaque
+  blobs in sharded hash-named files and admission metadata in LevelDB; startup
+  reconciliation reserves bytes for missing blobs and removes orphan files.
+  Provider capacity is local and is not published in RootPublication.
 - `AuthorizedRootPublication` as a typed Identity-authorized operation,
   deterministic nonce/state execution, byte-and-chunk System Balance fee, and
   lookup from verified canonical finalized block history.

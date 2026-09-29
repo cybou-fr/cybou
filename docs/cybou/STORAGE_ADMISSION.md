@@ -40,9 +40,16 @@ not-yet-finalized chunks. Storage is immutable and idempotent by ChunkID. They
 retain the publication reference, inclusion proof, and lease/accounting metadata
 beside the bytes for repair and revalidation.
 
-Physical layout is sharded by the full 64-character lowercase hex ChunkID;
-the sharding directories have no protocol meaning. No public manifest commit,
-indexed chunk address, or remote abort operation is required by this target.
+Persistent providers keep opaque bytes in hash-named files, sharded as
+`chunks/<first-two-hex>/<next-two-hex>/<full-64-character-lowercase-ChunkID>`.
+The files have no extension. A separate local metadata database records each
+chunk's exact stored size and per-publication proof association. Capacity is
+rebuilt from metadata, so a missing blob remains reserved and can be repaired
+without allowing over-admission; uncommitted orphan blobs and temporary files
+are removed during startup reconciliation. Reads verify both the recorded size
+and full ChunkID. The sharding directories have no protocol meaning. No public
+manifest commit, indexed chunk address, or remote abort operation is required
+by this target.
 
 ## Durability and privacy
 
