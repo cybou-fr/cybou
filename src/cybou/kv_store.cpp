@@ -40,14 +40,13 @@ KVStore::Batch::~Batch() = default;
 KVStore::Batch::Batch(Batch&&) noexcept = default;
 KVStore::Batch& KVStore::Batch::operator=(Batch&&) noexcept = default;
 
-void KVStore::Batch::PutRaw(const DataStream& key, const DataStream& value)
+void KVStore::Batch::PutRaw(const std::vector<unsigned char>& key, const std::vector<unsigned char>& value)
 {
-    m_batch->Put(
-        {reinterpret_cast<const char*>(key.data()), key.size()},
+    m_batch->Put({reinterpret_cast<const char*>(key.data()), key.size()},
         {reinterpret_cast<const char*>(value.data()), value.size()});
 }
 
-void KVStore::Batch::EraseRaw(const DataStream& key)
+void KVStore::Batch::EraseRaw(const std::vector<unsigned char>& key)
 {
     m_batch->Delete({reinterpret_cast<const char*>(key.data()), key.size()});
 }
@@ -116,7 +115,7 @@ KVStore::KVStore(const KVStoreOptions& config)
 
 KVStore::~KVStore() = default;
 
-std::optional<std::string> KVStore::ReadRaw(const DataStream& key) const
+std::optional<std::string> KVStore::ReadRaw(const std::vector<unsigned char>& key) const
 {
     std::string value;
     const leveldb::Slice key_slice{reinterpret_cast<const char*>(key.data()), key.size()};
@@ -137,11 +136,9 @@ void KVStore::ForEachStringPrefix(const std::string& prefix, const size_t key_si
 {
     if (prefix.size() > key_size || !visitor) throw std::invalid_argument("invalid CYBOU KV prefix scan");
 
-    DataStream encoded_key{};
-    encoded_key << std::string(key_size, '\0');
+    const auto encoded_key = detail::SerializeLocalRecord(std::string(key_size, '\0'));
     const size_t size_header = encoded_key.size() - key_size;
-    std::string serialized_prefix{
-        reinterpret_cast<const char*>(encoded_key.data()), size_header};
+    std::string serialized_prefix{reinterpret_cast<const char*>(encoded_key.data()), size_header};
     serialized_prefix.append(prefix);
 
     std::unique_ptr<leveldb::Iterator> iterator{m_impl->db->NewIterator(m_impl->read_options)};
@@ -150,10 +147,10 @@ void KVStore::ForEachStringPrefix(const std::string& prefix, const size_t key_si
         if (key_slice.size() < serialized_prefix.size() ||
             std::memcmp(key_slice.data(), serialized_prefix.data(), serialized_prefix.size()) != 0) break;
         const auto value_slice = iterator->value();
-        const auto* key_begin = reinterpret_cast<const std::byte*>(key_slice.data());
         const auto* value_begin = reinterpret_cast<const std::byte*>(value_slice.data());
-        SpanReader key_reader{std::span<const std::byte>{key_begin, key_slice.size()}};
-        SpanReader value_reader{std::span<const std::byte>{value_begin, value_slice.size()}};
+        const auto* key_begin = reinterpret_cast<const std::byte*>(key_slice.data());
+        detail::LocalRecordReader key_reader{std::span<const std::byte>{key_begin, key_slice.size()}};
+        detail::LocalRecordReader value_reader{std::span<const std::byte>{value_begin, value_slice.size()}};
         std::string decoded_key;
         std::string decoded_value;
         key_reader >> decoded_key;
@@ -168,11 +165,9 @@ void KVStore::ForEachStringPrefixRaw(const std::string& prefix, const size_t key
 {
     if (prefix.size() > key_size || !visitor) throw std::invalid_argument("invalid CYBOU KV prefix scan");
 
-    DataStream encoded_key{};
-    encoded_key << std::string(key_size, '\0');
+    const auto encoded_key = detail::SerializeLocalRecord(std::string(key_size, '\0'));
     const size_t size_header = encoded_key.size() - key_size;
-    std::string serialized_prefix{
-        reinterpret_cast<const char*>(encoded_key.data()), size_header};
+    std::string serialized_prefix{reinterpret_cast<const char*>(encoded_key.data()), size_header};
     serialized_prefix.append(prefix);
 
     std::unique_ptr<leveldb::Iterator> iterator{m_impl->db->NewIterator(m_impl->read_options)};
@@ -182,7 +177,7 @@ void KVStore::ForEachStringPrefixRaw(const std::string& prefix, const size_t key
             std::memcmp(key_slice.data(), serialized_prefix.data(), serialized_prefix.size()) != 0) break;
         const auto value_slice = iterator->value();
         const auto* key_begin = reinterpret_cast<const std::byte*>(key_slice.data());
-        SpanReader key_reader{std::span<const std::byte>{key_begin, key_slice.size()}};
+        detail::LocalRecordReader key_reader{std::span<const std::byte>{key_begin, key_slice.size()}};
         std::string decoded_key;
         key_reader >> decoded_key;
         visitor(decoded_key, std::string{value_slice.data(), value_slice.size()});

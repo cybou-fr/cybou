@@ -170,7 +170,7 @@ std::optional<std::uint64_t> ReconcileBlobStore(
             if (!id) throw std::runtime_error{"corrupt finalized chunk metadata key"};
             std::uint64_t size{0};
             const auto* value_begin = reinterpret_cast<const std::byte*>(raw_size.data());
-            SpanReader value_reader{std::span<const std::byte>{value_begin, raw_size.size()}};
+            detail::LocalRecordReader value_reader{std::span<const std::byte>{value_begin, raw_size.size()}};
             value_reader >> size;
             if (size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES ||
                 size > std::numeric_limits<std::uint64_t>::max() - total) {

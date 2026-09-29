@@ -230,7 +230,6 @@ target_link_libraries(cybou_node
     cybou_core
     Boost::headers
   PRIVATE
-    bitcoin_crypto
     leveldb
     $<TARGET_NAME_IF_EXISTS:libevent::core>
     $<TARGET_NAME_IF_EXISTS:libevent::extra>

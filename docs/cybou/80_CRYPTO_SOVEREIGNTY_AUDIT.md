@@ -15,18 +15,18 @@ recreating inherited Bitcoin facilities that the active protocol does not use.
   `bitcoin_crypto` directly.
 - `cybou_base` owns the shared `uint256.cpp` object and has no direct
   `bitcoin_util` link.
+- `cybou_node` no longer links `bitcoin_crypto` directly. PoA seed cleansing
+  uses the CYBOU OpenSSL wrapper.
 - `cybou_node` no longer contains the unused CYBOU GCS/compact-filter clone;
-  block filtering is not part of the active CYP2 protocol. Its direct
-  `bitcoin_crypto` link remains required by inherited secure serialization and
-  secret-cleansing symbols used by the node and local database adapter.
+  block filtering is not part of the active CYP2 protocol.
 
 ## Remaining inherited boundary
 
-The node's local LevelDB implementation uses inherited `DataStream` and
-`SpanReader` helpers. These encode local database records; they are not CYP2
-wire messages or consensus serialization. Replacing them is worthwhile only
-when it removes a real dependency or clarifies local storage ownership, while
-preserving the required database behavior.
+The node's local LevelDB implementation uses a small CYBOU byte reader/writer
+with the inherited `Serialize`/`Unserialize` formatters. The record bytes stay
+compatible with the existing database; they are local persistence, not CYP2
+wire messages or consensus serialization. The focused adapter avoids pulling
+in inherited stream classes and their secret-cleansing allocator.
 
 The shared `uint256` interface also retains inherited compile-time endian,
 span, and hex helpers. Do not change its byte order or the hash interpretation

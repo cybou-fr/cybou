@@ -4,13 +4,13 @@
 #include <cybou/authority_node.h>
 #include <cybou/block_feed.h>
 #include <cybou/bootstrap_nodes.h>
+#include <cybou/crypto/cleanse.h>
 #include <cybou/hex.h>
 #include <cybou/network_definition.h>
 #include <cybou/node_runtime.h>
 #include <cybou/node_service.h>
 #include <cybou/p2p/peer_manager.h>
 #include <cybou/signing.h>
-#include <support/cleanse.h>
 
 #include <boost/asio.hpp>
 
@@ -153,9 +153,9 @@ int Main(const int argc, char* argv[])
         if (poa_seed_bytes.size() != 32) throw std::runtime_error("PoA finalizer key file must contain exactly 32 raw bytes");
         std::array<unsigned char, 32> poa_seed{};
         std::copy(poa_seed_bytes.begin(), poa_seed_bytes.end(), poa_seed.begin());
-        memory_cleanse(poa_seed_bytes.data(), poa_seed_bytes.size());
+        cybou::crypto::CleanseMemory(poa_seed_bytes.data(), poa_seed_bytes.size());
         const auto poa_finalizer_key = cybou::DeriveIdentityPublicKey(poa_seed, cybou::IdentityKeyPurpose::POA_FINALIZER);
-        memory_cleanse(poa_seed.data(), poa_seed.size());
+        cybou::crypto::CleanseMemory(poa_seed.data(), poa_seed.size());
         if (!poa_finalizer_key) throw std::runtime_error("cannot derive PoA finalizer public key");
 
         auto genesis = cybou::CreateDevGenesisState();
@@ -401,7 +401,7 @@ int Main(const int argc, char* argv[])
         if (key_bytes.size() != 32) throw std::runtime_error("PoA finalizer recovery entropy must contain exactly 32 raw bytes");
         std::array<unsigned char, 32> key{};
         std::copy(key_bytes.begin(), key_bytes.end(), key.begin());
-        memory_cleanse(key_bytes.data(), key_bytes.size());
+        cybou::crypto::CleanseMemory(key_bytes.data(), key_bytes.size());
 
         const auto port = Port(argv[6]);
         const auto interval_ms = argc >= 8 ? PositiveCount(argv[7]) : 1000;
@@ -423,7 +423,7 @@ int Main(const int argc, char* argv[])
         if (p2p_port) {
             config.local_p2p_endpoint = std::make_pair(bind_address.to_string(), *p2p_port);
         }
-        memory_cleanse(key.data(), key.size());
+        cybou::crypto::CleanseMemory(key.data(), key.size());
         cybou::CybouNodeService node_service{{
             .runtime = std::move(config),
             .genesis = network->genesis,
