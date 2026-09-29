@@ -53,7 +53,7 @@ struct PeerSubmitResult {
 
 // Single-threaded outbound peer set. Callers schedule connection attempts and
 // health checks; this class never supplies consensus trust. Dynamic discovery
-// only collects untrusted routing hints — explicit validator endpoints keep
+// only collects untrusted routing hints — explicit operator-configured peer endpoints keep
 // gossip priority, and discovered peers never define consensus connectivity.
 class PeerManager {
 public:
@@ -61,9 +61,9 @@ public:
     bool Connect(const std::string& numeric_address, uint16_t port);
     PeerConnectStatus LastConnectStatus() const { return m_last_connect_status; }
     /**
-     * Mark endpoints as explicit validator peers. At capacity, connecting an
+     * Mark endpoints as explicit operator-configured peers. At capacity, connecting an
      * explicit endpoint evicts a connected non-explicit peer so operator-
-     * approved validators can never be crowded out by discovered hints.
+     * configured peers can never be crowded out by discovered hints.
      */
     void SetExplicitEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
     size_t PingAll();
@@ -100,16 +100,6 @@ public:
     size_t DiscoverPeers(size_t max_sessions = MAX_OUTBOUND_PEERS);
     std::vector<std::pair<std::string, uint16_t>> KnownEndpoints() const;
 
-    /** BFT consensus broadcasts to connected peers with CAP_CONSENSUS */
-    size_t BroadcastProposal(const BftProposalMsg& proposal);
-    size_t BroadcastPrevote(const BftPrevoteMsg& prevote);
-    size_t BroadcastPrecommit(const BftPrecommitMsg& precommit);
-    /** Replay current-round messages to one newly connected peer. */
-    bool SendConsensusTo(const std::string& address, uint16_t port,
-        const std::optional<BftProposalMsg>& proposal,
-        const std::optional<BftPrevoteMsg>& prevote,
-        const std::optional<BftPrecommitMsg>& precommit);
-
 private:
     using Endpoint = std::pair<std::string, uint16_t>;
     PeerSession* FindStorageSession(const std::string& address, uint16_t port, Endpoint* endpoint = nullptr);
@@ -124,7 +114,7 @@ private:
     // fanout can skip (and mark announced) heads the peer already finalized
     // without spending the per-cycle offer budget on ancient history.
     std::map<Endpoint, uint64_t> m_peer_finalized_heights;
-    // Operator-approved validator endpoints (canonical address:port form).
+    // Operator-configured peer endpoints (canonical address:port form).
     std::set<Endpoint> m_explicit_endpoints;
     PeerConnectStatus m_last_connect_status{PeerConnectStatus::INVALID_REQUEST};
 };

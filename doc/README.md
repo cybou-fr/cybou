@@ -25,6 +25,6 @@ recovery gates are not yet integrated into the deployed DEV network.
 - [Files UX](../docs/cybou/83_STORAGE_UI_UX.md)
 - [Product workflows](../spec/mail_files_architecture.yaml)
 - [Build instructions](../INSTALL.md)
-- [DEV node runbook](../docs/cybou/75_DEV_NODE_RUNBOOK.md)
+- [Verified state sync](../docs/cybou/06_BOOTSTRAP_STATE_SYNC.md)
 - [Contribution guidelines](../CONTRIBUTING.md)
 - [License](../COPYING) and [notices](../NOTICE.md)

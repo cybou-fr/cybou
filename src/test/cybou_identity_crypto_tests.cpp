@@ -80,9 +80,7 @@ BOOST_AUTO_TEST_CASE(protocol_roles_have_separate_hybrid_key_domains)
     const std::array<unsigned char, 3> message{1, 2, 3};
     const auto root = cybou::DeriveIdentityPublicKey(seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
     BOOST_REQUIRE(root);
-    for (const auto purpose : {cybou::IdentityKeyPurpose::VALIDATOR,
-             cybou::IdentityKeyPurpose::OPERATOR_AUTHORITY,
-             cybou::IdentityKeyPurpose::RELEASE_SIGNING,
+    for (const auto purpose : {cybou::IdentityKeyPurpose::RELEASE_SIGNING,
              cybou::IdentityKeyPurpose::TREASURY}) {
         const auto key = cybou::DeriveIdentityPublicKey(seed, purpose);
         const auto signature = cybou::SignIdentityMessage(seed, purpose, message);

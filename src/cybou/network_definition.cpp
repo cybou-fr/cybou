@@ -4,7 +4,6 @@
 
 #include <cybou/network_definition.h>
 #include <cybou/state.h>
-#include <cybou/validator.h>
 #include <cybou/root_publication.h>
 
 #include <cybou/crypto/sha256.h>
@@ -231,25 +230,14 @@ std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path
     return CybouNetworkFile{*definition, *genesis};
 }
 
-CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public_key)
+CybouState CreateDevGenesisState()
 {
-    const auto val_id = ComputeValidatorId(validator_public_key);
     return CybouState{
         .onboarding_pool = 10'000'000,
         .security_reward_pool = 0,
         .pending_fee_pool = 0,
         .accounts = {},
         .identities = {},
-        .validator_set = {
-            .version = VALIDATOR_SET_VERSION,
-            .validators = {
-                Validator{
-                    .validator_id = val_id,
-                    .consensus_public_key = validator_public_key,
-                    .weight = 1,
-                },
-            },
-        },
         .names = {},
     };
 }

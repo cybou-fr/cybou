@@ -94,7 +94,8 @@ Do not spend major founder time on grants before all are true:
 ```text
 [ ] working CYBOU Email prototype
 [ ] Store-backed encrypted attachment upload, offline retrieval and repair evidence
-[ ] multi-node MailTx finality + offline recipient synchronization
+[ ] PoA-finalized RootPublication, offline recipient recovery, and verified
+    encrypted-chunk retrieval evidence; clearly disclose the single operator
 [ ] clear architecture/IP/innovation statement
 [ ] security roadmap
 [ ] French legal entity or clear plan

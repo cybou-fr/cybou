@@ -55,9 +55,9 @@ must be authenticated in their respective protocols.
 
 | Capability | Authorization | Confidentiality / key ownership | Finality or durability |
 |---|---|---|---|
-| Name | Identity hybrid signature through the coordinator | No content encryption capability | BFT finality for commit and reveal |
-| Wallet | Identity hybrid signature through the coordinator | No content encryption capability | BFT finality for payment and lock operations |
-| Mail | Identity-authorized Mail operation through the coordinator (target) | DEV X-Wing MailEnvelopeV1 profile frozen but not integrated; service disabled pending vetted HPKE backend | BFT registration; Mail content and attachments use Storage when required |
+| Name | Identity hybrid signature through the coordinator | No content encryption capability | Genesis-bound PoA finality for commit and reveal |
+| Wallet | Identity hybrid signature through the coordinator | No content encryption capability | Genesis-bound PoA finality for payment and lock operations |
+| Mail | Identity-authorized generic RootPublication through the coordinator | Recipient KEM capsule and encrypted Mail schema inside the chunk tree | PoA finality authorizes chunk admission; storage availability is reported separately |
 | Files | Identity-authorized manifest/root changes through the coordinator (target) | Symmetric object encryption; account KEM capability wraps Files keys (target) | Storage durability contract, not chain inclusion alone |
 
 “Hybrid” does not mean every operation uses every key. Signatures authorize

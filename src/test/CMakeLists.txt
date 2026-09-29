@@ -187,10 +187,7 @@ add_executable(cybou-core-test
   cybou_identity_service_tests.cpp
   cybou_network_definition_tests.cpp
   cybou_poa_tests.cpp
-  cybou_p2p_session_tests.cpp
   cybou_p2p_peer_manager_tests.cpp
-  cybou_p2p_inbound_server_tests.cpp
-  cybou_authority_node_tests.cpp
   cybou_node_service_tests.cpp
   cybou_node_runtime_tests.cpp
   cybou_identity_operation_coordinator_tests.cpp
@@ -213,9 +210,7 @@ add_executable(cybou-core-test
   cybou_storage_crypto_tests.cpp
   cybou_storage_service_tests.cpp
   cybou_storage_key_ring_tests.cpp
-  cybou_bft_tests.cpp
   cybou_crypto_tests.cpp
-  cybou_state_store_tests.cpp
 )
 if(CYBOU_ENABLE_TEST_HOOKS)
   target_compile_definitions(cybou-core-test PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)

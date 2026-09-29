@@ -10,8 +10,8 @@ European sovereign identity and communication network
 CYBOU Email
 ```
 
-Native E2E encrypted consensus-registered email built on user-controlled
-network identity.
+End-to-end encrypted Mail and private Files built on user-controlled network
+Identity and one shared encrypted content layer.
 
 ## First adoption unit
 
@@ -26,7 +26,7 @@ Recommended first pilot:
 20–100 users
 French organization
 small controlled traffic volume
-4 approved validators where f=1 BFT tolerance is claimed
+single-operator PoA finality disclosed in pilot materials
 8–12 weeks
 controlled support
 ```
@@ -40,8 +40,8 @@ European sovereign identity and communication
 user-controlled network identity
 E2E encrypted email
 network-native .cybou identity
-consensus registration/finality
-cryptographic proof of origin/integrity
+finalized publication with cryptographic inclusion and sender authorization
+proofs
 recipient can be offline
 client-controlled keys
 familiar Mail and Files workflows without a central provider
@@ -79,14 +79,14 @@ install CYBOU
 
 This journey is an architecture acceptance test, not only a marketing story.
 
-- MailTx submit-to-finality latency;
+- RootPublication submit-to-finality latency;
 - successful later synchronization by recipients who were offline;
-- MailTx discovery/filter efficiency;
+- publication discovery and private-index rebuild efficiency;
 - decrypt/authentication failures;
 - recipient-key/package failures;
-- real serialized MailTx size;
+- serialized RootPublication size and chunk count;
 - blockchain/history growth;
-- validator disk growth;
+- provider disk growth and durability;
 - state size growth;
 - client CPU/RAM/network use;
 - Identity key rotation success;

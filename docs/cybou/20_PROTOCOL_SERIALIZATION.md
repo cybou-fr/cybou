@@ -1,90 +1,36 @@
-# 20 — Protocol serialization and versioning
+# 20 — Protocol serialization
 
-This document must be implemented before CYBOU freezes public consensus formats.
+## Canonical bytes
 
-## Canonical encoding rules
+Every consensus object has one canonical byte representation before hashing or
+signing. A profile specifies field order, integer encoding, byte order, bounds,
+map ordering, duplicate-field rejection, and unknown-field handling. Parsers
+check lengths and nesting limits before allocation.
 
-Define explicitly:
+The active formats are defined by their protocol authorities:
 
-- byte order;
-- integer encodings;
-- maximum lengths;
-- maximum nesting depth;
-- string encoding;
-- canonical ordering where maps/sets exist;
-- unknown-field behavior;
-- duplicate-field behavior;
-- signature/public-key algorithm identifiers;
-- network/protocol version negotiation;
-- feature activation;
-- hard-fork vs soft-compatible change rules.
+- block and PoA finality: `POA_FINALITY.md`;
+- deterministic application encoding: `ROOT_PUBLICATION.md`;
+- encrypted payload and chunk tree: `ENCRYPTED_CHUNK_TREE.md`;
+- provider admission proofs: `STORAGE_ADMISSION.md`;
+- Identity and names: `10_IDENTITY_NAMES.md` and `77_CYBOU_NAME_REGISTRY.md`.
 
-## Consensus safety
+The root-publication payload uses the bounded core-deterministic CBOR profile.
+The encrypted-content schema remains opaque to consensus and is parsed only
+after successful local decryption.
 
-A consensus object must have one canonical byte representation for hashing/signing.
+## Signing boundary
 
-Do not permit:
-
-```text
-same semantic object
--> multiple valid encodings
--> different hashes/signatures
-```
-
-unless explicitly designed and safe.
-
-## Bounds
-
-Every peer-controlled length field has a protocol maximum checked before allocation.
-
-PQ-ready variable-length keys/signatures require especially strict bounds.
-
-## Domain separation
-
-Signatures/hashes for different purposes must use explicit domain separation, for example:
-
-```text
-CYBOU/TX/...
-CYBOU/BLOCK/...
-CYBOU/VOTE/...
-CYBOU/NODE-HANDSHAKE/...
-CYBOU/STORAGE-PROOF/...
-CYBOU/MESSAGE/...
-```
-
-Exact strings/bytes are frozen with the protocol spec.
-
-Key-domain separation and object-signature separation are distinct requirements.
-An Operator Authority key domain does not by itself separate a validator admission
-signature from validator removal or protocol parameters. Every signed object type
-therefore requires its own frozen signing domain.
-
-## Signed-object boundary
-
-Consensus code must never sign a C++ object memory image, JSON document, or
-formatter-dependent representation. A signed object is split into:
-
-```text
-versioned payload without signature
--> canonical bytes
--> object-specific signing domain
--> signature-suite verification
--> typed cryptographically verified result
--> structural/state transition validation
-```
-
-A caller-provided boolean such as `signature_valid=true` is permitted only as a
-unit-test seam. It must not be accepted by a production-capable consensus path.
+Production signatures cover canonical, domain-separated digests. Code never
+signs a C++ object image, JSON document, or formatter-dependent representation.
+Verification binds each signature to its network, object kind, and relevant
+state context. Every production signature requires all components mandated by
+the key role; missing post-quantum components fail closed.
 
 ## Version policy
 
-Do not equate application version with protocol version.
-
-Track separately:
-
-- product version;
-- network protocol version;
-- consensus version;
-- storage protocol version;
-- messaging protocol version;
-- crypto suite version.
+Product releases, network definitions, consensus encodings, storage profiles,
+and cryptographic suites have separate version lifecycles. Source and public
+API names remain canonical and unversioned. Version bytes exist inside wire
+and vault encodings only. The protocol reset does not include legacy decoders,
+automatic import, or dual-format operation.

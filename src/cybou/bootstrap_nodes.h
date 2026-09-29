@@ -16,7 +16,7 @@ namespace cybou {
  *
  * Static seed list for the disposable CYBOU-DEV network only. Beta and
  * Mainnet must derive their bootstrap sets from the operator-approved
- * validator admission flow, not from a compiled-in list (docs 04, 08).
+ * operator-configured peer discovery flow, not from a compiled-in list (docs 04, 08).
  *
  * The block-feed port remains available for diagnostics and the temporary
  * legacy fallback. Desktop clients use the CYP2 port by default. The list is

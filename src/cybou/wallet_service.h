@@ -94,7 +94,7 @@ public:
     void LockToSystemBalanceAsync(uint64_t amount,
         std::function<void(WalletOperationResult)> completion);
 
-    /** Sync ledger entries against newly finalized BFT blocks */
+    /** Sync ledger entries against newly finalized blocks. */
     size_t SyncLedger();
 
     /** Get all ledger entries (most recent first) */

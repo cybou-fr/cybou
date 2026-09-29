@@ -23,7 +23,6 @@
 #include <span>
 #include <string>
 #include <vector>
-#include <variant>
 
 namespace cybou {
 namespace p2p { class PeerManager; }
@@ -57,7 +56,6 @@ struct NodeRuntimeStatus {
     uint64_t finalized_height{0};
     uint256 finalized_tip;
     uint256 state_root;
-    size_t validator_count{0};
     bool is_authority{false};
     bool is_initialized{false};
     NodeRuntimeState runtime_state{NodeRuntimeState::UNINITIALIZED};
@@ -136,9 +134,6 @@ public:
     std::optional<uint256> GetFinalizedTip() const;
     std::optional<uint256> GetStateRoot() const;
 
-    /** Current validator set */
-    std::optional<ValidatorSet> GetValidatorSet() const;
-
     /** Account state lookup */
     std::optional<AccountState> GetAccountState(const AccountId& account_id) const;
 
@@ -153,20 +148,6 @@ public:
 
     /** Produce a block if running in authority mode */
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);
-
-    /** BFT Consensus event handlers and dispatch */
-    std::optional<BftProposalMsg> ProposeConsensusBlock(uint32_t round = 0);
-    std::optional<BftPrevoteMsg> ReceiveConsensusProposal(const BftProposalMsg& proposal);
-    std::optional<BftPrecommitMsg> ReceiveConsensusPrevote(const BftPrevoteMsg& prevote);
-    bool ReceiveConsensusPrecommit(const BftPrecommitMsg& precommit);
-    /** Drive one local consensus timeout tick; the interval is a liveness timer. */
-    void TickConsensus(std::chrono::milliseconds round_timeout);
-    /** Called only by the outbound peer worker, which owns its sessions. */
-    void DrainConsensusMessages(p2p::PeerManager& peers);
-    void ReplayConsensusToPeer(p2p::PeerManager& peers, const std::string& address, uint16_t port);
-    void BroadcastConsensusProposal(const BftProposalMsg& proposal);
-    void BroadcastConsensusPrevote(const BftPrevoteMsg& prevote);
-    void BroadcastConsensusPrecommit(const BftPrecommitMsg& precommit);
 
     /** Commit a finalized block */
     BlockTransitionResult CommitBlock(const FinalizedBlock& block, bool sync = true);
@@ -202,12 +183,12 @@ public:
     /** Peer discovery endpoints */
     std::vector<std::pair<std::string, uint16_t>> GetPeerEndpointsForGossip() const;
     /**
-     * Replace the explicit validator peer set (operator-approved endpoints).
+     * Replace the explicit peer endpoints supplied by the operator.
      * Explicit peers always come first in gossip targets and cannot be crowded
      * out by discovered routing hints.
      */
     void SetExplicitPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
-    /** The explicit validator peer set as last configured. */
+    /** The explicit peer endpoints as last configured. */
     std::vector<std::pair<std::string, uint16_t>> GetExplicitPeerEndpoints() const;
     void AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
 
@@ -222,13 +203,8 @@ private:
         uint32_t temporary_failures{0};
         uint32_t protocol_failures{0};
     };
-    bool CommitConsensusPrecommit(const BftPrecommitMsg& precommit);
-    bool CommitConsensusFinalized(const FinalizedBlock& finalized);
-    BftProposalResult ProcessBufferedConsensusProposalLocked();
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
     void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
-    /** Re-sync the orchestration round/phase with the engine after it jumped rounds. Caller holds m_mutex. */
-    std::optional<BftProposalMsg> SyncConsensusDriverWithEngine();
     void RememberOperationForGossip(const ProtocolOperation& op, const uint256& id);
     void RememberOperationStatus(const uint256& id, OperationStatus status);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
@@ -252,17 +228,6 @@ private:
     std::map<std::pair<std::string, uint16_t>, PeerRetryState> m_peer_retry_after;
     std::chrono::steady_clock::time_point m_next_peer_ping{};
     std::chrono::steady_clock::time_point m_next_peer_discovery{};
-    using ConsensusMessage = std::variant<BftProposalMsg, BftPrevoteMsg, BftPrecommitMsg>;
-    std::deque<ConsensusMessage> m_consensus_outbox;
-    std::optional<BftProposalMsg> m_replay_proposal;
-    std::optional<BftPrevoteMsg> m_replay_prevote;
-    std::optional<BftPrecommitMsg> m_replay_precommit;
-    uint64_t m_replay_height{0};
-    uint32_t m_replay_round{0};
-    uint64_t m_consensus_height{0};
-    uint32_t m_consensus_round{0};
-    uint8_t m_consensus_phase{0}; // propose, prevote, precommit
-    std::chrono::steady_clock::time_point m_round_started{};
     mutable std::mutex m_mutex;
     std::deque<GossipOperation> m_recent_gossip_operations;
     std::set<uint256> m_recent_gossip_ids;

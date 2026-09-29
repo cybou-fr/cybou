@@ -1,59 +1,43 @@
-> Historical/current-DEV scope: this document describes the BFT, MailTx, validator-set, or indexed-object protocol currently running on DEV. It is superseded for the next-gen target by `POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, and `IDENTITY_DISCOVERY_AND_RECOVERY.md`. Product and UX requirements remain applicable only where they do not conflict with those target documents. No cutover is active yet.
-# 06 — Bootstrap, state sync and bounded history
-
-Current DEV observers start from a trusted genesis/network definition and
-verify subsequent finalized blocks one by one. The bounded-history snapshot
-and checkpoint flow below is not implemented yet; the compiled-in DEV
-bootstrap endpoint is transport metadata, not a trust anchor.
-
-A normal CYBOU desktop node must not require replay of every block from genesis after the network becomes old.
+# 06 — Bootstrap and verified state sync
 
 ## Node roles
 
-### Full desktop node
+Every node validates the same canonical chain. The genesis-bound PoA signer
+orders and finalizes blocks; it does not replace full-node validation. Ordinary
+desktop nodes may prune old block bodies after retaining the state and evidence
+required by the active product and protocol.
 
-Stores:
+## Initial synchronization
 
-- current verified state;
-- bounded recent block history;
-- finalized checkpoint chain/certificates required by the protocol;
-- local wallet/identity state;
-- locally assigned storage shards;
-- application data/cache.
-
-### Archive node
-
-Optionally retains full historical data.
-
-## Bootstrap model
+The initial implementation synchronizes finalized blocks from the network
+definition's genesis in height order:
 
 ```text
-genesis / trusted root
-    -> recent trusted/finalized checkpoint
-    -> state snapshot
-    -> verify canonical state commitment
-    -> verify finality and validator-set trust path
-    -> post-checkpoint blocks
-    -> current state
+trusted network definition
+-> genesis state and genesis block ID
+-> PoA certificate verification for each next block
+-> deterministic operation execution
+-> resulting state-root verification
+-> canonical finalized state
 ```
 
-## BFT bootstrap warning
+Peers are untrusted data sources. A peer's reputation, claimed height, or
+snapshot is never a substitute for local signature, parent, operation, and
+state-root verification. The genesis definition is the trust anchor and binds
+the PoA finalizer key.
 
-Explicit BFT finality does not magically tell a brand-new node which current validator set is legitimate.
+## Pruning and snapshots
 
-CYBOU therefore needs an explicit checkpoint/trust-anchor policy for bounded-history bootstrap.
+Desktop nodes may prune old block bodies. The active implementation does not
+define checkpoint trust, snapshot import, or a bounded-history fast-sync format.
+Do not add a snapshot decoder or compatibility path until its trust anchor,
+state commitment, PoA evidence, and clean-machine recovery format are specified
+together. Archive retention is an operator choice.
 
-Initial candidate:
+## Product data recovery
 
-- release contains a recent trusted checkpoint;
-- checkpoint commits to height, block hash, state root and validator set;
-- node verifies finality transitions from that point;
-- snapshot bytes remain untrusted until commitments verify.
-
-Release-signing authority and consensus-validator authority must remain separate concepts.
-
-## Snapshot sources
-
-Snapshot transport can come from any peer, archive node, removable media or multiple mirrors.
-
-Acceptance depends on cryptographic verification, not the reputation of the source.
+Mail and Files content is recovered from finalized RootPublication records and
+their admitted encrypted chunks. Local Inbox/Sent/read-state indexes and the
+private Files catalog are rebuilt after decryption; they are not consensus
+state. Clean-machine recovery requirements are defined in
+`IDENTITY_DISCOVERY_AND_RECOVERY.md` and `ENCRYPTED_CHUNK_TREE.md`.

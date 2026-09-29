@@ -5,7 +5,7 @@ CYBOU is experimental software. The native `cybou-node` and Qt desktop are DEV i
 ## Requirements
 
 - CMake 3.22 or newer and a C++20 compiler.
-- OpenSSL **3.5 or newer** for the ML-DSA-65 authority-signature verifier.
+- OpenSSL **3.5 or newer** for the hybrid Ed25519 + ML-DSA-65 PoA signer.
 - Boost, libevent, and LevelDB dependencies as configured by CMake/vcpkg.
 - Qt 6 for the optional desktop executable `cybou` (`cybou.exe` on Windows).
 
@@ -26,12 +26,12 @@ The desktop executable is `build_cybou_qt_mingw/bin/cybou.exe`; the standalone D
 
 ## Linux and other platforms
 
-The project has a CMake/vcpkg CI build for the native core and `cybou-node`; see [the core workflow](.github/workflows/cybou-core.yml) for the exact configure, test, and smoke-test commands. Linux desktop and validator deployment need platform-specific verification.
+The project has a CMake/vcpkg CI build for the native core and `cybou-node`; see [the core workflow](.github/workflows/cybou-core.yml) for the exact configure, test, and smoke-test commands. Linux desktop builds need platform-specific verification.
 
 ## DEV node
 
-Use the [DEV authority-node runbook](docs/cybou/75_DEV_NODE_RUNBOOK.md) to create a trusted network definition, start one validator, and synchronize an observer. DEV authority mode has one validator (`f=0`), and its TCP listener must remain on a trusted private network. Never use development keys or balances as production assets.
+The PoA runtime cutover is still in progress. Do not use the legacy DEV executable as an implementation guide or reset the deployed DEV network until the coordinated cutover gate in [implementation status](docs/cybou/26_IMPLEMENTATION_STATUS.md) passes. Never use development keys or balances as production assets.
 
 ## Tests
 
-`cybou-core-test` contains native CYBOU protocol tests and is the most direct check of state, BFT, identity, Mail evidence, and transport behavior. `ctest --test-dir <build-dir> --output-on-failure` runs the configured broader suite. The Qt shell tests are separate and require a GUI-capable environment.
+`cybou-core-test` contains native CYBOU protocol tests for state, Identity, PoA, RootPublication, and transport behavior. `ctest --test-dir <build-dir> --output-on-failure` runs the configured broader suite. The Qt shell tests are separate and require a GUI-capable environment.

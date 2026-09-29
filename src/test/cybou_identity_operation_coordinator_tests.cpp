@@ -6,7 +6,6 @@
 #include <cybou/identity_service.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/name_registry.h>
-#include <cybou/validator.h>
 
 #include <test/util/setup_common.h>
 #include <test/cybou_service_test_fixture.h>
@@ -37,9 +36,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
 
     std::array<unsigned char, 32> validator_seed{};
     validator_seed[0] = 0x67;
-    const auto validator = cybou::GenerateValidatorKeyPair(validator_seed);
-    BOOST_REQUIRE(validator);
-    const auto genesis = cybou::CreateDevGenesisState(validator->public_key);
+    const auto genesis = cybou::CreateDevGenesisState();
     auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey());
     definition.protocol_parameters.account_creation_work_bits = 0;
     const auto network_id = cybou::NetworkId(definition);
@@ -214,9 +211,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
 
     std::array<unsigned char, 32> foreign_validator_seed{};
     foreign_validator_seed[0] = 0x6a;
-    const auto foreign_validator = cybou::GenerateValidatorKeyPair(foreign_validator_seed);
-    BOOST_REQUIRE(foreign_validator);
-    const auto foreign_genesis = cybou::CreateDevGenesisState(foreign_validator->public_key);
+    const auto foreign_genesis = cybou::CreateDevGenesisState();
     auto foreign_definition = cybou::CreateDevNetworkDefinition(foreign_genesis, cybou::TestPoaFinalizerPublicKey(0xBC));
     foreign_definition.protocol_parameters.account_creation_work_bits = 0;
     const auto foreign_data = root / "foreign-client";

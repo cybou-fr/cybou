@@ -49,7 +49,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
             m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
             return false;
         }
-        // Explicit validator endpoint: evict a connected non-explicit peer
+        // Explicit configured peer endpoint: evict a connected non-explicit peer
         // to make room. Frontier knowledge for the evicted endpoint is kept
         // (its chain only grows, so the knowledge stays valid on reconnect).
         const auto victim = std::find_if(m_peers.begin(), m_peers.end(), [&](const auto& entry) {
@@ -90,7 +90,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
     if (m_runtime.HasStorageProvider()) caps |= (CAP_STORAGE | CAP_STORAGE_ABORT);
     if (status.is_authority) {
-        caps |= (CAP_ACCEPT_OPERATIONS | CAP_OP_INVENTORY | CAP_CONSENSUS);
+        caps |= (CAP_ACCEPT_OPERATIONS | CAP_OP_INVENTORY);
     }
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip, .capabilities = caps, .nonce = *nonce};
@@ -554,84 +554,6 @@ void PeerManager::DisconnectAll()
     // store knowledge persists across sessions. Clearing them restarts fanout
     // from the oldest recent entries, and with the per-peer offer cap a peer
     // that is behind never receives the newer blocks it actually needs.
-}
-
-bool PeerManager::SendConsensusTo(const std::string& address, uint16_t port,
-    const std::optional<BftProposalMsg>& proposal,
-    const std::optional<BftPrevoteMsg>& prevote,
-    const std::optional<BftPrecommitMsg>& precommit)
-{
-    const Endpoint endpoint{address, port};
-    const auto it = m_peers.find(endpoint);
-    if (it == m_peers.end() || !it->second || !it->second->Peer() ||
-        !(it->second->Peer()->capabilities & CAP_CONSENSUS)) return false;
-    auto& session = *it->second;
-    if ((proposal && !session.SendProposal(*proposal)) ||
-        (prevote && !session.SendPrevote(*prevote)) ||
-        (precommit && !session.SendPrecommit(*precommit))) {
-        m_peers.erase(it);
-        m_announced_operations.erase(endpoint);
-        m_announced_blocks.erase(endpoint);
-        return false;
-    }
-    return true;
-}
-
-size_t PeerManager::BroadcastProposal(const BftProposalMsg& proposal)
-{
-    size_t count{0};
-    for (auto it = m_peers.begin(); it != m_peers.end();) {
-        auto& [endpoint, session] = *it;
-        if (session && session->Peer() && (session->Peer()->capabilities & CAP_CONSENSUS)) {
-            if (!session->SendProposal(proposal)) {
-                m_announced_operations.erase(endpoint);
-                m_announced_blocks.erase(endpoint);
-                it = m_peers.erase(it);
-                continue;
-            }
-            ++count;
-        }
-        ++it;
-    }
-    return count;
-}
-
-size_t PeerManager::BroadcastPrevote(const BftPrevoteMsg& prevote)
-{
-    size_t count{0};
-    for (auto it = m_peers.begin(); it != m_peers.end();) {
-        auto& [endpoint, session] = *it;
-        if (session && session->Peer() && (session->Peer()->capabilities & CAP_CONSENSUS)) {
-            if (!session->SendPrevote(prevote)) {
-                m_announced_operations.erase(endpoint);
-                m_announced_blocks.erase(endpoint);
-                it = m_peers.erase(it);
-                continue;
-            }
-            ++count;
-        }
-        ++it;
-    }
-    return count;
-}
-
-size_t PeerManager::BroadcastPrecommit(const BftPrecommitMsg& precommit)
-{
-    size_t count{0};
-    for (auto it = m_peers.begin(); it != m_peers.end();) {
-        auto& [endpoint, session] = *it;
-        if (session && session->Peer() && (session->Peer()->capabilities & CAP_CONSENSUS)) {
-            if (!session->SendPrecommit(precommit)) {
-                m_announced_operations.erase(endpoint);
-                m_announced_blocks.erase(endpoint);
-                it = m_peers.erase(it);
-                continue;
-            }
-            ++count;
-        }
-        ++it;
-    }
-    return count;
 }
 
 size_t PeerManager::DiscoverPeers(const size_t max_sessions)

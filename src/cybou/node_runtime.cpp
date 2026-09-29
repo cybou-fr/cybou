@@ -10,7 +10,6 @@
 
 #include <algorithm>
 #include <limits>
-#include <type_traits>
 
 namespace cybou {
 
@@ -101,9 +100,7 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     }
     if (m_config.validator_private_key.has_value()) {
         m_authority_node = std::make_unique<CybouAuthorityNode>(
-            m_store, *m_config.validator_private_key,
-            m_config.memory_only ? std::nullopt :
-                std::optional<std::filesystem::path>{m_config.data_dir / "validator-signing.journal"});
+            m_store, *m_config.validator_private_key);
     }
     if (m_config.p2p_endpoint) m_peer_manager = std::make_unique<p2p::PeerManager>(*this);
 }
@@ -189,10 +186,6 @@ NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
     if (root) {
         status.state_root = *root;
     }
-    const auto val_set = m_store.GetValidatorSet();
-    if (val_set) {
-        status.validator_count = val_set->Size();
-    }
     return status;
 }
 
@@ -212,12 +205,6 @@ std::optional<uint256> CybouNodeRuntime::GetStateRoot() const
 {
     std::lock_guard lock(m_mutex);
     return m_store.GetStateRoot();
-}
-
-std::optional<ValidatorSet> CybouNodeRuntime::GetValidatorSet() const
-{
-    std::lock_guard lock(m_mutex);
-    return m_store.GetValidatorSet();
 }
 
 std::optional<AccountState> CybouNodeRuntime::GetAccountState(const AccountId& account_id) const
@@ -410,391 +397,14 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
 
 std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
 {
-    std::optional<BftProposalMsg> prop;
-    std::optional<BftPrevoteMsg> pv;
-    std::optional<BftPrecommitMsg> pc;
-    std::optional<FinalizedBlock> finalized;
-    {
-        std::lock_guard lock(m_mutex);
-        if (!m_authority_node) return std::nullopt;
-        const auto loaded = m_store.LoadState();
-        if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
-        const auto set = m_store.GetValidatorSet();
-        if (!set) return std::nullopt;
-
-        if (set->validators.size() == 1) {
-            const auto res = m_authority_node->ProduceNextBlock(sync);
-            if (!res) return std::nullopt;
-            if (res.finalized_block) RememberFinalizedBlockForGossip(*res.finalized_block);
-            return res.finalized_block;
-        }
-
-        finalized = m_authority_node->GetLatestFinalizedBlock();
-        if (finalized) RememberFinalizedBlockForGossip(*finalized);
-    }
-    return finalized;
-}
-
-void CybouNodeRuntime::TickConsensus(const std::chrono::milliseconds round_timeout)
-{
-    if (round_timeout.count() <= 0) return;
-    std::optional<BftProposalMsg> proposal;
-    std::optional<BftPrevoteMsg> prevote;
-    std::optional<BftPrecommitMsg> precommit;
-    BftProposalResult buffered_result;
-    {
-        std::lock_guard lock(m_mutex);
-        if (!m_authority_node) return;
-        const auto head = m_store.GetFinalizedHead();
-        const auto set = m_store.GetValidatorSet();
-        if (!head || !set || set->validators.size() <= 1 ||
-            head->height == std::numeric_limits<uint64_t>::max()) return;
-        const auto height = head->height + 1;
-        const auto now = std::chrono::steady_clock::now();
-        const auto round_backoff = std::chrono::milliseconds{
-            static_cast<int64_t>(std::min(m_consensus_round, 60U)) * 75};
-        const auto effective_round_timeout = std::min(
-            round_timeout + round_backoff, std::chrono::milliseconds{5000});
-        if (m_consensus_height != height) {
-            m_consensus_height = height;
-            m_consensus_round = 0;
-            m_consensus_phase = 0;
-            // Resume where the engine actually is: after a CBS2 restart the
-            // validator recovers its durable round/step/lock from the signing
-            // journal, and the driver must not restart orchestration at
-            // round 0 and slowly time its way back up.
-            if (const auto progress = m_authority_node->GetConsensusProgress();
-                progress && progress->height == height) {
-                m_consensus_round = progress->round;
-                m_consensus_phase = progress->step == BftStep::PROPOSE ? 0 :
-                    (progress->step == BftStep::PREVOTE ? 1 : 2);
-            }
-            m_round_started = now;
-            proposal = m_authority_node->StartConsensusRound(m_consensus_round);
-            if (!proposal) buffered_result = ProcessBufferedConsensusProposalLocked();
-        } else {
-            if (now - m_round_started < effective_round_timeout ||
-                m_consensus_round == std::numeric_limits<uint32_t>::max()) return;
-            if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
-                std::fprintf(stderr, "[cybou-debug] ROUND_TIMEOUT height=%llu round=%u phase=%u timeout_ms=%lld\n",
-                    static_cast<unsigned long long>(height), m_consensus_round, m_consensus_phase,
-                    static_cast<long long>(effective_round_timeout.count()));
-            }
-            m_round_started = now;
-            if (m_consensus_phase == 0) {
-                m_consensus_phase = 1;
-                prevote = m_authority_node->OnProposalTimeout();
-                if (prevote) {
-                    precommit = m_authority_node->ReceivePrevote(*prevote);
-                    if (precommit) CommitConsensusPrecommit(*precommit);
-                }
-            } else if (m_consensus_phase == 1) {
-                m_consensus_phase = 2;
-                precommit = m_authority_node->OnPrevoteTimeout();
-                if (precommit) CommitConsensusPrecommit(*precommit);
-            } else {
-                ++m_consensus_round;
-                m_consensus_phase = 0;
-                proposal = m_authority_node->StartConsensusRound(m_consensus_round);
-                if (!proposal) buffered_result = ProcessBufferedConsensusProposalLocked();
-            }
-        }
-    }
-    if (prevote) BroadcastConsensusPrevote(*prevote);
-    if (precommit) BroadcastConsensusPrecommit(*precommit);
-    if (buffered_result.prevote) BroadcastConsensusPrevote(*buffered_result.prevote);
-    if (buffered_result.precommit) BroadcastConsensusPrecommit(*buffered_result.precommit);
-    if (proposal) {
-        BroadcastConsensusProposal(*proposal);
-        ReceiveConsensusProposal(*proposal);
-    }
-}
-
-std::optional<BftProposalMsg> CybouNodeRuntime::ProposeConsensusBlock(const uint32_t round)
-{
-    std::optional<BftProposalMsg> prop;
-    {
-        std::lock_guard lock(m_mutex);
-        if (!m_authority_node) return std::nullopt;
-        const auto loaded = m_store.LoadState();
-        if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
-        prop = m_authority_node->StartConsensusRound(round);
-    }
-    if (prop) BroadcastConsensusProposal(*prop);
-    return prop;
-}
-
-std::optional<BftPrevoteMsg> CybouNodeRuntime::ReceiveConsensusProposal(const BftProposalMsg& proposal)
-{
-    std::optional<BftPrevoteMsg> pv;
-    std::optional<BftPrecommitMsg> pc;
-    std::optional<BftProposalMsg> next_proposal;
-    {
-        std::lock_guard lock(m_mutex);
-        if (!m_authority_node) return std::nullopt;
-        const auto result = m_authority_node->ReceiveProposal(proposal);
-        pv = result.prevote;
-        pc = result.precommit;
-        if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
-            std::fprintf(stderr, "[cybou-debug] PROPOSAL height=%llu round=%u id=%s prevote=%s precommit=%s\n",
-                static_cast<unsigned long long>(proposal.height), proposal.round,
-                ComputeBlockId(proposal.block).GetHex().c_str(),
-                pv ? (pv->block_id ? pv->block_id->GetHex().c_str() : "nil") : "none",
-                pc ? (pc->block_id ? pc->block_id->GetHex().c_str() : "nil") : "none");
-        }
-        if (pv && !pc && !result.finalized) {
-            pc = m_authority_node->ReceivePrevote(*pv);
-        }
-        if (pv) {
-            if (m_consensus_height != proposal.height) {
-                m_consensus_height = proposal.height;
-            }
-            m_consensus_phase = pc ? 2 : 1;
-            m_round_started = std::chrono::steady_clock::now();
-            if (pc) {
-                CommitConsensusPrecommit(*pc);
-            } else if (result.finalized) {
-                const auto& finalized = m_authority_node->GetLatestFinalizedBlock();
-                if (finalized) CommitConsensusFinalized(*finalized);
-            }
-        }
-        // The engine may have jumped to a higher round while processing.
-        next_proposal = SyncConsensusDriverWithEngine();
-    }
-    if (pv) BroadcastConsensusPrevote(*pv);
-    if (pc) BroadcastConsensusPrecommit(*pc);
-    if (next_proposal) {
-        BroadcastConsensusProposal(*next_proposal);
-        ReceiveConsensusProposal(*next_proposal);
-    }
-    return pv;
-}
-
-std::optional<BftPrecommitMsg> CybouNodeRuntime::ReceiveConsensusPrevote(const BftPrevoteMsg& prevote)
-{
-    std::optional<BftPrecommitMsg> pc;
-    std::optional<BftPrevoteMsg> buffered_prevote;
-    std::optional<BftProposalMsg> next_proposal;
-    {
-        std::lock_guard lock(m_mutex);
-        if (!m_authority_node) return std::nullopt;
-        pc = m_authority_node->ReceivePrevote(prevote);
-        if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
-            const auto progress = m_authority_node->GetConsensusProgress();
-            std::fprintf(stderr, "[cybou-debug] PREVOTE height=%llu round=%u voter=%s block=%s local_round=%u locked=%d precommit=%s\n",
-                static_cast<unsigned long long>(prevote.height), prevote.round,
-                prevote.validator_id.GetHex().c_str(),
-                prevote.block_id ? prevote.block_id->GetHex().c_str() : "nil",
-                progress ? progress->round : 0, progress ? progress->locked_round : -1,
-                pc ? (pc->block_id ? pc->block_id->GetHex().c_str() : "nil") : "none");
-        }
-        if (pc) {
-            m_consensus_phase = 2;
-            m_round_started = std::chrono::steady_clock::now();
-            CommitConsensusPrecommit(*pc);
-        }
-        const auto buffered = ProcessBufferedConsensusProposalLocked();
-        buffered_prevote = buffered.prevote;
-        if (buffered.precommit) pc = buffered.precommit;
-        next_proposal = SyncConsensusDriverWithEngine();
-    }
-    if (buffered_prevote) BroadcastConsensusPrevote(*buffered_prevote);
-    if (pc) BroadcastConsensusPrecommit(*pc);
-    if (next_proposal) {
-        BroadcastConsensusProposal(*next_proposal);
-        ReceiveConsensusProposal(*next_proposal);
-    }
-    return pc;
-}
-
-bool CybouNodeRuntime::ReceiveConsensusPrecommit(const BftPrecommitMsg& precommit)
-{
-    bool committed{false};
-    BftProposalResult buffered;
-    std::optional<BftProposalMsg> next_proposal;
-    {
-        std::lock_guard lock(m_mutex);
-        if (!m_authority_node) return false;
-        committed = CommitConsensusPrecommit(precommit);
-        if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
-            const auto progress = m_authority_node->GetConsensusProgress();
-            std::fprintf(stderr, "[cybou-debug] PRECOMMIT height=%llu round=%u voter=%s block=%s committed=%d local_round=%u locked=%d\n",
-                static_cast<unsigned long long>(precommit.height), precommit.round,
-                precommit.validator_id.GetHex().c_str(),
-                precommit.block_id ? precommit.block_id->GetHex().c_str() : "nil", committed,
-                progress ? progress->round : 0, progress ? progress->locked_round : -1);
-        }
-        buffered = ProcessBufferedConsensusProposalLocked();
-        committed = committed || buffered.finalized;
-        next_proposal = SyncConsensusDriverWithEngine();
-    }
-    if (buffered.prevote) BroadcastConsensusPrevote(*buffered.prevote);
-    if (buffered.precommit) BroadcastConsensusPrecommit(*buffered.precommit);
-    if (next_proposal) {
-        BroadcastConsensusProposal(*next_proposal);
-        ReceiveConsensusProposal(*next_proposal);
-    }
-    return committed;
-}
-
-BftProposalResult CybouNodeRuntime::ProcessBufferedConsensusProposalLocked()
-{
-    if (!m_authority_node) return {};
-    const auto proposal = m_authority_node->TakeBufferedProposalForCurrentRound();
-    if (!proposal) return {};
-    auto result = m_authority_node->ReceiveProposal(*proposal);
-    if (result.prevote && !result.precommit && !result.finalized) {
-        result.precommit = m_authority_node->ReceivePrevote(*result.prevote);
-    }
-    if (result.prevote) {
-        m_consensus_height = proposal->height;
-        m_consensus_phase = result.precommit ? 2 : 1;
-        m_round_started = std::chrono::steady_clock::now();
-    }
-    if (result.precommit) {
-        CommitConsensusPrecommit(*result.precommit);
-    } else if (result.finalized) {
-        const auto& finalized = m_authority_node->GetLatestFinalizedBlock();
-        if (finalized) CommitConsensusFinalized(*finalized);
-    }
-    return result;
-}
-
-std::optional<BftProposalMsg> CybouNodeRuntime::SyncConsensusDriverWithEngine()
-{
-    // Caller holds m_mutex. The engine may legitimately run ahead of the
-    // orchestration driver: it jumps rounds on verified higher-round votes.
-    // Follow it so the timeout machine drives the round the engine is in.
-    const auto progress = m_authority_node->GetConsensusProgress();
-    if (!progress || progress->height != m_consensus_height) return std::nullopt;
-    const auto phase = progress->step == BftStep::PROPOSE ? 0 :
-        (progress->step == BftStep::PREVOTE ? 1 : 2);
-    if (progress->round == m_consensus_round && phase == m_consensus_phase) return std::nullopt;
-    if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
-        std::fprintf(stderr, "[cybou-debug] ENGINE_PROGRESS height=%llu round=%u phase=%u -> round=%u phase=%u locked=%d\n",
-            static_cast<unsigned long long>(progress->height), m_consensus_round, m_consensus_phase,
-            progress->round, phase, progress->locked_round);
-    }
-    m_consensus_round = progress->round;
-    m_consensus_phase = phase;
-    m_round_started = std::chrono::steady_clock::now();
-    // A quorum of future-round votes can move the engine directly into a new
-    // PROPOSE step. If this validator is that round's leader, start the
-    // proposal now; waiting for the proposal timeout would make it prevote nil.
-    if (phase == 0) return m_authority_node->StartConsensusRound(progress->round);
-    return std::nullopt;
-}
-
-bool CybouNodeRuntime::CommitConsensusPrecommit(const BftPrecommitMsg& precommit)
-{
-    // Caller holds m_mutex. Commit and gossip bookkeeping share this boundary.
-    const auto finalized = m_authority_node->ReceivePrecommit(precommit);
-    if (!finalized) return false;
-    return CommitConsensusFinalized(*finalized);
-}
-
-bool CybouNodeRuntime::CommitConsensusFinalized(const FinalizedBlock& finalized)
-{
-    // Caller holds m_mutex. Commit and gossip bookkeeping share this boundary.
-    const auto set = m_store.GetValidatorSet();
-    if (!set || !m_store.CommitFinalizedBlock(finalized, *set, true)) {
-        if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
-            std::fprintf(stderr, "[cybou-debug] FINALIZED BUT COMMIT FAILED height=%llu store_height=%llu\n",
-                static_cast<unsigned long long>(finalized.block.height),
-                static_cast<unsigned long long>(m_store.GetFinalizedHead().value_or(FinalizedHead{}).height));
-        }
-        return false;
-    }
-    m_authority_node->RevalidatePending();
-    RememberFinalizedBlockForGossip(finalized);
-    if (std::getenv("CYBOU_CONSENSUS_DEBUG")) {
-        std::fprintf(stderr, "[cybou-debug] FINALIZED height=%llu\n",
-            static_cast<unsigned long long>(finalized.block.height));
-    }
-    return true;
-}
-
-void CybouNodeRuntime::BroadcastConsensusProposal(const BftProposalMsg& proposal)
-{
-    std::lock_guard lock(m_p2p_mutex);
-    if (m_replay_height != proposal.height || m_replay_round != proposal.round) {
-        m_replay_prevote.reset();
-        m_replay_precommit.reset();
-    }
-    m_replay_height = proposal.height;
-    m_replay_round = proposal.round;
-    m_replay_proposal = proposal;
-    // Keep at most one potentially large block in the outbound queue.
-    std::erase_if(m_consensus_outbox, [](const ConsensusMessage& message) {
-        return std::holds_alternative<BftProposalMsg>(message);
-    });
-    if (m_consensus_outbox.size() < 256) m_consensus_outbox.emplace_back(proposal);
-}
-
-void CybouNodeRuntime::BroadcastConsensusPrevote(const BftPrevoteMsg& prevote)
-{
-    std::lock_guard lock(m_p2p_mutex);
-    if (m_replay_height != prevote.height || m_replay_round != prevote.round) {
-        m_replay_proposal.reset();
-        m_replay_precommit.reset();
-    }
-    m_replay_height = prevote.height;
-    m_replay_round = prevote.round;
-    m_replay_prevote = prevote;
-    if (m_consensus_outbox.size() < 256) m_consensus_outbox.emplace_back(prevote);
-}
-
-void CybouNodeRuntime::BroadcastConsensusPrecommit(const BftPrecommitMsg& precommit)
-{
-    std::lock_guard lock(m_p2p_mutex);
-    if (m_replay_height != precommit.height || m_replay_round != precommit.round) {
-        m_replay_proposal.reset();
-        m_replay_prevote.reset();
-    }
-    m_replay_height = precommit.height;
-    m_replay_round = precommit.round;
-    m_replay_precommit = precommit;
-    if (m_consensus_outbox.size() < 256) m_consensus_outbox.emplace_back(precommit);
-}
-
-void CybouNodeRuntime::ReplayConsensusToPeer(p2p::PeerManager& peers,
-    const std::string& address, uint16_t port)
-{
-    uint64_t height;
-    uint32_t round;
-    {
-        std::lock_guard lock(m_mutex);
-        height = m_consensus_height;
-        round = m_consensus_round;
-    }
-    std::optional<BftProposalMsg> proposal;
-    std::optional<BftPrevoteMsg> prevote;
-    std::optional<BftPrecommitMsg> precommit;
-    {
-        std::lock_guard lock(m_p2p_mutex);
-        if (height != m_replay_height || round != m_replay_round) return;
-        proposal = m_replay_proposal;
-        prevote = m_replay_prevote;
-        precommit = m_replay_precommit;
-    }
-    peers.SendConsensusTo(address, port, proposal, prevote, precommit);
-}
-
-void CybouNodeRuntime::DrainConsensusMessages(p2p::PeerManager& peers)
-{
-    std::deque<ConsensusMessage> pending;
-    {
-        std::lock_guard lock(m_p2p_mutex);
-        pending.swap(m_consensus_outbox);
-    }
-    for (const auto& message : pending) {
-        std::visit([&](const auto& value) {
-            using T = std::decay_t<decltype(value)>;
-            if constexpr (std::is_same_v<T, BftProposalMsg>) peers.BroadcastProposal(value);
-            else if constexpr (std::is_same_v<T, BftPrevoteMsg>) peers.BroadcastPrevote(value);
-            else peers.BroadcastPrecommit(value);
-        }, message);
-    }
+    std::lock_guard lock(m_mutex);
+    if (!m_authority_node) return std::nullopt;
+    const auto loaded = m_store.LoadState();
+    if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
+    const auto result = m_authority_node->ProduceNextBlock(sync);
+    if (!result) return std::nullopt;
+    if (result.finalized_block) RememberFinalizedBlockForGossip(*result.finalized_block);
+    return result.finalized_block;
 }
 
 BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block, const bool sync)
@@ -807,7 +417,7 @@ BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block,
     if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) {
         return BlockTransitionResult{.error = BlockTransitionError::STATE_NOT_INITIALIZED};
     }
-    const auto result = m_store.CommitFinalizedBlock(block, std::nullopt, sync);
+    const auto result = m_store.CommitFinalizedBlock(block, sync);
     if (result) {
         RememberFinalizedBlockForGossip(block);
         if (m_authority_node) m_authority_node->RevalidatePending();
@@ -1176,8 +786,8 @@ std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetPeerEndpoints
     if (configured.has_value()) {
         result.push_back(*configured);
     }
-    // Explicit operator-approved validator peers come first: a flood of
-    // malicious discovered hints must never eclipse the validator topology.
+    // Explicit operator-configured peer endpoints come first: a flood of
+    // malicious discovered hints must never eclipse the configured peer topology.
     for (const auto& ep : m_explicit_peer_endpoints) {
         if (result.size() >= MAX_GOSSIP_TARGETS) break;
         if (!configured || ep != *configured) {

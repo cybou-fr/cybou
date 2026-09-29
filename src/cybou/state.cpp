@@ -4,7 +4,6 @@
 
 #include <cybou/state.h>
 #include <cybou/protocol_operation.h>
-#include <cybou/validator.h>
 #include <cybou/crypto/sha256.h>
 
 #include <algorithm>
@@ -245,7 +244,6 @@ StateValidationError ValidateCybouState(const CybouState& state)
         const auto mapped_acc = state.identities.FindByRecoveryKeyId(*root_id);
         if (!mapped_acc || *mapped_acc != id) return StateValidationError::DUPLICATE_RECOVERY_BINDING;
     }
-    if (ValidateValidatorSet(state.validator_set) != ValidatorSetValidationError::NONE) return StateValidationError::INVALID_VALIDATOR_SET;
     if (state.names.names.size() != state.names.account_names.size()) return StateValidationError::INVALID_NAME_REGISTRY;
     for (const auto& [label, acc] : state.names.names) {
         if (ValidateNameLabel(label) != NameValidationError::NONE) return StateValidationError::INVALID_NAME_REGISTRY;
@@ -289,8 +287,6 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
     if (ValidateCybouState(state) != StateValidationError::NONE) return std::nullopt;
     const auto identities = SerializeIdentityRegistry(state.identities);
     if (!identities || identities->size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
-    const auto validators = SerializeValidatorSet(state.validator_set);
-    if (validators.size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
     const auto names = SerializeNameRegistry(state.names);
     if (names.size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
     std::vector<unsigned char> out;
@@ -309,8 +305,6 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
     }
     Write32(out, static_cast<uint32_t>(identities->size()));
     out.insert(out.end(), identities->begin(), identities->end());
-    Write32(out, static_cast<uint32_t>(validators.size()));
-    out.insert(out.end(), validators.begin(), validators.end());
     Write32(out, static_cast<uint32_t>(names.size()));
     out.insert(out.end(), names.begin(), names.end());
     return out;
@@ -353,13 +347,6 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         if (!identities->Find(id)) return std::nullopt;
     }
     state.identities = std::move(*identities);
-    const auto validator_size = reader.U32();
-    if (!validator_size) return std::nullopt;
-    const auto validator_bytes = reader.Bytes(*validator_size);
-    if (!validator_bytes) return std::nullopt;
-    const auto validators = DeserializeValidatorSet(*validator_bytes);
-    if (!validators || ValidateValidatorSet(*validators) != ValidatorSetValidationError::NONE) return std::nullopt;
-    state.validator_set = *validators;
     const auto names_size = reader.U32();
     if (!names_size) return std::nullopt;
     const auto names_bytes = reader.Bytes(*names_size);
@@ -373,7 +360,7 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
 
 std::optional<uint256> CybouStateHash(const CybouState& state)
 {
-    constexpr std::string_view domain{"CYBOU/STATE/V3"};
+    constexpr std::string_view domain{"CYBOU/STATE/V4"};
     const auto bytes = SerializeCybouState(state);
     if (!bytes) return std::nullopt;
     uint256 hash;

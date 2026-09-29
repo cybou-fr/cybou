@@ -1,142 +1,38 @@
 # 52 — Balance and System Balance
 
-CYBOU has one native asset: `CYBOU`.
-
-CYBOU is indivisible:
+CYBOU has one indivisible native asset:
 
 ```text
 1 CYBOU = minimum unit
 decimals = 0
+MAX_SUPPLY = 100,000,000,000
 ```
 
-An account exposes two protocol balances:
-
-```text
-CYBOU Account
-│
-├── Balance
-│
-└── System Balance
-```
+Each account has two balances.
 
 ## Balance
 
-`Balance` is user-controlled CYBOU.
-
-It can be received, transferred and voluntarily locked into System Balance.
-
-### Absolute security invariant
-
-A debit from `Balance` requires valid user/account authorization under the transaction rules.
-
-There is no:
-
-```text
-adminDebit(account, amount)
-operatorSeize(account, amount)
-```
-
-The CYBOU owner/operator, validators and protocol infrastructure operators cannot arbitrarily debit user Balance.
+Balance is user-controlled CYBOU. It can be received, transferred, or
+voluntarily locked into System Balance. A debit requires the account's valid
+Identity authorization. No operator or service can seize or arbitrarily debit
+Balance.
 
 ## System Balance
 
-`System Balance` contains frozen CYBOU assigned to protocol use.
+System Balance is an account-funded service budget. It is not transferable,
+tradeable, or convertible back to Balance. Generic RootPublication byte and
+chunk fees are charged from it. It does not increase Proof of Trust score or
+grant consensus authority. There are no separate free-credit pools for
+individual services.
 
-It receives CYBOU from:
+## Fee routing
 
-```text
-Onboarding Bonus
-organization sponsorship
-Balance -> System Balance
-other explicit protocol grants
-```
-
-System Balance:
+Every four CYBOU of protocol fee value route as:
 
 ```text
-cannot be transferred to another user
-cannot be withdrawn back to Balance
-cannot be traded directly
-does not create validator voting power
+4 -> 3 Security + 1 Onboarding
 ```
 
-It can be debited by deterministic protocol rules for:
-
-```text
-Email
-payments / transfer processing
-identity operations
-future Storage
-Backup
-Files/Storage
-other CYBOU services
-```
-
-## One-way lock
-
-```text
-Balance
-   |
-   | LOCK_TO_SYSTEM
-   v
-System Balance
-```
-
-Irreversible.
-
-## Onboarding Bonus
-
-Dev baseline:
-
-```text
-DEV_ONBOARDING_BONUS = 6,000 CYBOU (Beta/Mainnet: TBD)
-```
-
-A newly created identity satisfying anti-Sybil work receives the bonus automatically:
-
-```text
-AccountCreateOp + AccountCreationWorkV1
--> +6,000 CYBOU System Balance (from OnboardingPool)
-```
-
-No vesting. No operator approval or invite voucher.
-
-The same System Balance directly contributes to Proof of Trust.
-
-There is no separate Trust Credit.
-
-## Why 6,000
-
-Email baseline target:
-
-```text
-standard small text MailTx ~= 1 CYBOU
-new-account hard send limit = 25 MailTx/day
-normal-budget design point ~= 15 MailTx/day
-```
-
-```text
-15 * 365 = 5,475 CYBOU/year
-Onboarding Bonus = 6,000
-margin = 525 CYBOU ~= 9.6%
-```
-
-The 25/day limit is a safety ceiling, not an assumption that every normal user sends at the ceiling every day.
-
-A heavier user can lock additional CYBOU:
-
-```text
-Balance -> System Balance
-```
-
-## System debit invariant
-
-"System may debit System Balance" means every full node independently verifies a protocol-defined operation and fee.
-
-It does not mean the CYBOU operator can manually take System Balance.
-
-## Zero System Balance
-
-Zero System Balance does not destroy an AccountID or confiscate Balance.
-
-Paid outgoing operations require replenishment first.
+Fees use deterministic integer arithmetic. Priority fees are disabled. DEV,
+Beta, and Mainnet parameters are independent; detailed rules are in
+`18_ECONOMICS_FEES.md` and the active network definition.

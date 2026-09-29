@@ -10,7 +10,7 @@ understands mainstream email can use CYBOU Mail immediately. Messages and
 attachments remain end-to-end encrypted, and the product explains finality and
 availability without exposing protocol machinery in ordinary workflows.
 
-The normal user operates mail, not a blockchain, key exchange, validator set,
+The normal user operates mail, not a blockchain, key exchange, finality mechanism,
 or storage protocol. Technical evidence remains inspectable through Security
 Details and Advanced diagnostics.
 

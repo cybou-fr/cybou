@@ -4,7 +4,7 @@ Status: canonical cross-service authorization and retry contract.
 
 ## Ownership rule
 
-All account-authorized operations pass through the runtime-owned `IdentityOperationCoordinator`. Identity has one shared account nonce and one current key_epoch. Services MUST NOT independently read, advance, or reserve nonces, construct signatures, replace bytes after uncertain delivery, or treat admission acknowledgements as BFT finality.
+All account-authorized operations pass through the runtime-owned `IdentityOperationCoordinator`. Identity has one shared account nonce and one current key_epoch. Services MUST NOT independently read, advance, or reserve nonces, construct signatures, replace bytes after uncertain delivery, or treat admission acknowledgements as PoA finality.
 
 A service supplies an operation kind, payload commitment, and operation builder that receives `IdentityOperationAuthorization`. The coordinator checks the current finalized Identity record against the unlocked Recovery, Authorization, and KEM material, signs with the current Authorization key, constructs canonical operation bytes, computes OperationID, durably journals those exact bytes, then submits.
 

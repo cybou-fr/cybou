@@ -2,7 +2,6 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#include <cybou/bft.h>
 #include <cybou/block_executor.h>
 #include <cybou/network_definition.h>
 #include <test/cybou_test_helpers.h>
@@ -13,21 +12,6 @@
 #include <algorithm>
 #include <array>
 
-namespace {
-cybou::Validator MakeTestValidator(uint8_t seed_byte)
-{
-    std::array<unsigned char, 32> seed{};
-    seed[0] = seed_byte;
-    const auto pub = cybou::DeriveIdentityPublicKey(seed, cybou::IdentityKeyPurpose::VALIDATOR);
-    assert(pub.has_value());
-    const auto id = cybou::ComputeValidatorKeyId(*pub);
-    assert(id.has_value());
-    uint256 val_id;
-    std::copy_n(id->begin(), 32, val_id.begin());
-    return cybou::Validator{val_id, *pub, 1};
-}
-} // namespace
-
 BOOST_AUTO_TEST_SUITE(cybou_state_tests)
 
 BOOST_AUTO_TEST_CASE(network_id_commits_to_name_rules)
@@ -35,10 +19,8 @@ BOOST_AUTO_TEST_CASE(network_id_commits_to_name_rules)
     using namespace cybou;
     std::array<unsigned char, 32> seed{};
     seed[0] = 0x51;
-    const auto validator = GenerateValidatorKeyPair(seed);
-    BOOST_REQUIRE(validator);
     const auto definition = CreateDevNetworkDefinition(
-        CreateDevGenesisState(validator->public_key), cybou::TestPoaFinalizerPublicKey());
+        CreateDevGenesisState(), cybou::TestPoaFinalizerPublicKey());
     BOOST_CHECK(ValidateNetworkDefinition(definition) == NetworkDefinitionError::NONE);
     const auto encoded = SerializeNetworkDefinition(definition);
     const auto decoded = DeserializeNetworkDefinition(encoded);
@@ -84,7 +66,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.validator_set.validators.push_back(MakeTestValidator(5));
+
     auto damaged_create = create;
     damaged_create.authorization_pop.ed25519[0] ^= 1;
     BOOST_CHECK(ApplyAccountCreate(damaged_create, network_id, 0, params, state) == AccountCreateStateError::INVALID_CREATE);
@@ -239,7 +221,7 @@ BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_determinis
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.validator_set.validators.push_back(MakeTestValidator(0x75));
+
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
     RootPublication publication;
@@ -319,7 +301,7 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.validator_set.validators.push_back(MakeTestValidator(17));
+
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
     const IdentityAuthorization next_auth{*new_recovery, *new_authorization};
@@ -394,7 +376,7 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.validator_set.validators.push_back(MakeTestValidator(25));
+
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
     // Fund account balance
@@ -456,7 +438,7 @@ BOOST_AUTO_TEST_CASE(state_validation_invariants)
 {
     using namespace cybou;
     CybouState state{};
-    state.validator_set.validators.push_back(MakeTestValidator(31));
+
     BOOST_CHECK(ValidateCybouState(state) == StateValidationError::NONE);
 
     // Mismatched account count
@@ -470,120 +452,6 @@ BOOST_AUTO_TEST_CASE(state_validation_invariants)
     state.accounts.clear();
     state.onboarding_pool = 100'000'000'001ULL;
     BOOST_CHECK(ValidateCybouState(state) == StateValidationError::BALANCE_OVERFLOW);
-}
-
-BOOST_AUTO_TEST_CASE(post_quantum_validator_set_and_bft_certificate)
-{
-    using namespace cybou;
-    std::array<std::array<unsigned char, 32>, 4> seeds{};
-    for (size_t i = 0; i < 4; ++i) {
-        seeds[i][0] = static_cast<unsigned char>(101 + i);
-    }
-    std::vector<Validator> validators;
-    for (size_t i = 0; i < 4; ++i) {
-        validators.push_back(MakeTestValidator(static_cast<uint8_t>(101 + i)));
-    }
-
-    ValidatorSet val_set{.validators = validators};
-    BOOST_CHECK(val_set.version == VALIDATOR_SET_VERSION);
-    BOOST_CHECK_EQUAL(val_set.Size(), 4U);
-    BOOST_CHECK_EQUAL(val_set.TotalWeight(), 4U);
-    BOOST_CHECK_EQUAL(val_set.FaultTolerance(), 1U);
-    BOOST_CHECK_EQUAL(val_set.QuorumThreshold(), 3U);
-    BOOST_CHECK(val_set.Mode() == ConsensusMode::BFT);
-    BOOST_CHECK(ValidateValidatorSet(val_set) == ValidatorSetValidationError::NONE);
-
-    // Hardening check: duplicate ML-DSA-65 key rejection
-    auto dup_ml_set = val_set;
-    dup_ml_set.validators[1].consensus_public_key.ml_dsa = dup_ml_set.validators[0].consensus_public_key.ml_dsa;
-    const auto dup_val_id = ComputeValidatorKeyId(dup_ml_set.validators[1].consensus_public_key);
-    BOOST_REQUIRE(dup_val_id.has_value());
-    std::copy_n(dup_val_id->begin(), 32, dup_ml_set.validators[1].validator_id.begin());
-    BOOST_CHECK(ValidateValidatorSet(dup_ml_set) == ValidatorSetValidationError::DUPLICATE_CONSENSUS_KEY);
-
-    // Serialization roundtrip
-    const auto serialized = SerializeValidatorSet(val_set);
-    BOOST_CHECK_EQUAL(serialized.size(), 5 + 4 * VALIDATOR_ENTRY_SIZE);
-    const auto deserialized = DeserializeValidatorSet(serialized);
-    BOOST_REQUIRE(deserialized.has_value());
-    BOOST_CHECK(*deserialized == val_set);
-
-    const auto commitment = ComputeValidatorSetCommitment(val_set);
-    BOOST_CHECK(!commitment.IsNull());
-
-    // Build BFT Finality Certificate with 3 votes (quorum threshold = 3)
-    uint256 network_id{}, block_id{};
-    network_id.begin()[0] = 77;
-    block_id.begin()[0] = 88;
-    const uint64_t height = 1000;
-    const uint32_t round = 0;
-
-    const uint256 commit_digest = ComputeBftCommitDigest(network_id, block_id, height, round, commitment);
-    std::array<unsigned char, 32> digest_bytes{};
-    std::copy_n(commit_digest.begin(), 32, digest_bytes.begin());
-
-    BftFinalityCertificate cert{};
-    cert.network_id = network_id;
-    cert.block_id = block_id;
-    cert.height = height;
-    cert.round = round;
-    cert.validator_set_commitment = commitment;
-
-    for (size_t i = 0; i < 3; ++i) {
-        const auto sig = SignIdentityMessage(seeds[i], IdentityKeyPurpose::VALIDATOR, digest_bytes);
-        BOOST_REQUIRE(sig.has_value());
-        cert.commit_votes.push_back(BftCommitVote{
-            .validator_id = validators[i].validator_id,
-            .signature = *sig,
-        });
-    }
-
-    // Verification succeeds
-    BOOST_CHECK(VerifyFinalityCertificate(cert, val_set, network_id) == FinalityVerificationError::NONE);
-
-    // Serialization roundtrip
-    const auto cert_bytes = SerializeFinalityCertificate(cert);
-    BOOST_REQUIRE(cert_bytes.has_value());
-    BOOST_CHECK_EQUAL(cert_bytes->size(), 113 + 3 * BFT_COMMIT_VOTE_SIZE);
-    const auto decoded_cert = DeserializeFinalityCertificate(*cert_bytes);
-    BOOST_REQUIRE(decoded_cert.has_value());
-    BOOST_CHECK(*decoded_cert == cert);
-
-    // Fail-closed malformed certificate serialization
-    auto bad_ml_cert = cert;
-    bad_ml_cert.commit_votes[0].signature.ml_dsa.pop_back(); // 3308 != 3309
-    BOOST_CHECK(!SerializeFinalityCertificate(bad_ml_cert).has_value());
-
-    // Adversarial verification checks
-    // 1. Wrong network
-    uint256 wrong_net = network_id;
-    wrong_net.begin()[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificate(cert, val_set, wrong_net) == FinalityVerificationError::NETWORK_MISMATCH);
-
-    // 2. Wrong validator set commitment
-    auto bad_commitment_cert = cert;
-    bad_commitment_cert.validator_set_commitment.begin()[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificate(bad_commitment_cert, val_set, network_id) == FinalityVerificationError::VALIDATOR_SET_MISMATCH);
-
-    // 3. Insufficient votes (2 < 3)
-    auto short_cert = cert;
-    short_cert.commit_votes.pop_back();
-    BOOST_CHECK(VerifyFinalityCertificate(short_cert, val_set, network_id) == FinalityVerificationError::INSUFFICIENT_VOTES);
-
-    // 4. Duplicate vote
-    auto dup_cert = cert;
-    dup_cert.commit_votes[2] = dup_cert.commit_votes[0];
-    BOOST_CHECK(VerifyFinalityCertificate(dup_cert, val_set, network_id) == FinalityVerificationError::DUPLICATE_VOTE);
-
-    // 5. Unknown validator
-    auto unknown_cert = cert;
-    unknown_cert.commit_votes[0].validator_id.begin()[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificate(unknown_cert, val_set, network_id) == FinalityVerificationError::UNKNOWN_VALIDATOR);
-
-    // 6. Invalid signature
-    auto bad_sig_cert = cert;
-    bad_sig_cert.commit_votes[0].signature.ed25519[0] ^= 1;
-    BOOST_CHECK(VerifyFinalityCertificate(bad_sig_cert, val_set, network_id) == FinalityVerificationError::INVALID_SIGNATURE);
 }
 
 BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
@@ -640,7 +508,7 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     params.name_commit_max_lifetime = 100;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.validator_set.validators.push_back(MakeTestValidator(55));
+
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
 
@@ -811,7 +679,6 @@ BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
     // Build unversioned CybouState
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus * 5;
-    state.validator_set.validators.push_back(MakeTestValidator(111));
 
     uint256 network_id{};
     network_id.begin()[0] = 0xAA;
@@ -873,7 +740,7 @@ BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
     // Execute block with parent state
     CybouState parent{};
     parent.onboarding_pool = params.onboarding_bonus * 5;
-    parent.validator_set.validators.push_back(MakeTestValidator(111));
+
     const auto block_res = ExecuteBlockOperations(parent, {*decoded_proto}, network_id, 0, params);
     BOOST_REQUIRE(block_res);
     BOOST_CHECK_EQUAL(block_res.state->accounts.at(account).system_balance, params.onboarding_bonus);
@@ -901,9 +768,9 @@ BOOST_AUTO_TEST_CASE(supply_conservation_invariant_check)
     // Total supply calculation
     BOOST_CHECK_EQUAL(TotalSupply(state), 1'000'000ULL + 2'000'000ULL + 500ULL + 3'000'000ULL + 500'000ULL);
 
-    // Over-supply check (with valid zero-account state and valid validator set)
+    // Over-supply check (with valid zero-account state and valid zero-account state)
     CybouState overflow_state{};
-    overflow_state.validator_set.validators.push_back(MakeTestValidator(1));
+
     overflow_state.onboarding_pool = 100'000'000'001ULL;
     BOOST_CHECK(ValidateCybouState(overflow_state) == StateValidationError::BALANCE_OVERFLOW);
 }

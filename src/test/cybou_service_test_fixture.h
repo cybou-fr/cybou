@@ -6,7 +6,6 @@
 
 #include <cybou/identity_service.h>
 #include <cybou/network_definition.h>
-#include <cybou/validator.h>
 #include <test/cybou_test_helpers.h>
 
 #include <array>
@@ -31,9 +30,7 @@ struct CybouServiceTestFixture {
             ("cybou-service-integration-" + std::to_string(sequence.fetch_add(1)));
         std::filesystem::create_directories(directory);
         validator_seed[0] = seed_byte;
-        const auto pair = cybou::GenerateValidatorKeyPair(validator_seed);
-        if (!pair) throw std::runtime_error("validator key generation failed");
-        genesis = cybou::CreateDevGenesisState(pair->public_key);
+        genesis = cybou::CreateDevGenesisState();
         definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(seed_byte));
         definition.protocol_parameters.account_creation_work_bits = 0;
         cybou::NodeRuntimeConfig config{

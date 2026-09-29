@@ -1,82 +1,28 @@
-# 56 — Owner / Operator model and decentralized resilience
+# 56 — Owner, operator, and network trust
 
-## Business model
+CYBOU is commercially owned and operated by CYBOU. User Identity, balances,
+names, and encrypted content remain protocol-owned under their respective
+authorization rules. Commercial ownership does not confer access to user
+private keys, plaintext content, or arbitrary account debits.
 
-CYBOU is a privately/commercially owned service.
+## Initial network operation
 
-It is not a DAO, foundation or community-owned protocol.
+The current target uses one genesis-bound hybrid-PQ PoA finalizer operated by
+CYBOU. The operator orders blocks and can censor transactions or stop progress.
+This is explicit centralized trust, not BFT. Full nodes independently verify
+finality signatures and deterministic state transitions, but cannot make the
+network progress without the operator.
 
-The open network can provide identity, native mail, verification and basic
-participation. Commercial services may include:
+The PoA finalizer key, Identity recovery/authorization keys, Release Signing
+key, and Treasury key are separate roles. The finalizer's private material is
+derived for the session, kept in memory, and protected by a durable
+anti-equivocation journal.
 
-- managed organization deployment;
-- managed validators;
-- support and administration;
-- local installation provisioning;
-- storage and backup capacity;
-- compliance tooling and SLA contracts.
+## Resilience boundary
 
-This separates the commercial owner/operator from user-owned protocol state.
-
-The owner/operator may own:
-
-- brand/domain;
-- software/IP;
-- official release infrastructure;
-- company treasury;
-- Operator Authority;
-- one or more operator-run validators.
-
-## Current authority model
-
-Validator admission is operator-controlled.
-
-A validator becomes active only through an explicit finalized operator-authorized protocol transition.
-
-## Key separation
-
-Operator Authority, Operator Validator, Release Signing and Treasury keys are separate security domains.
-
-Preferred Operator Authority operational protection:
-
-```text
-2-of-3
-```
-
-This is business key security, not decentralized governance.
-
-## Operational decentralization
-
-The mature network should continue processing already-valid protocol state if the owner's infrastructure is temporarily unavailable, provided enough active validators remain.
-
-## Important distinction
-
-```text
-operator-independent operation
-!=
-operator-independent governance
-```
-
-CYBOU aims for the first.
-
-Normal validator-set authority remains with the commercial operator.
-
-## Long-term outage risk
-
-If the Operator Authority disappears permanently, the active validator set cannot evolve forever under the normal model.
-
-Therefore mature production needs an explicitly documented emergency succession/recovery mechanism.
-
-That mechanism must not create hidden everyday community governance.
-
-## Sale of business
-
-A business transfer can move:
-
-- Operator Authority custody;
-- release-signing authority;
-- operator validator infrastructure;
-- domain/trademark/IP;
-- company treasury.
-
-User Balance and E2E mail remain cryptographically governed protocol/user state, not arbitrary company database assets.
+Mail and Files availability depends on independent storage providers, but
+provider diversity does not decentralize block finality. Operational reporting
+must state these trust domains separately. Any future change to block ordering
+authority is a new protocol design based on measured operating needs; no BFT,
+validator admission, staking, or validator-set state is part of the current
+architecture.

@@ -1,81 +1,24 @@
 # 68 — Operator key separation
 
-Commercial ownership does not justify one master key.
+Commercial ownership does not justify a shared master key. Production roles
+remain cryptographically separate:
 
-CYBOU must separate operator security domains.
+| Role | Authority |
+|---|---|
+| PoA finalizer | Signs the next canonical block under the genesis-bound key |
+| Release Signing | Authenticates software and update artifacts |
+| Treasury | Controls company-owned CYBOU funds |
+| Identity recovery/authorization | User-owned account recovery and operations |
 
-## Minimum key domains
+The current genesis definition contains the PoA finalizer public key. There is
+no Operator Authority key, validator set, validator admission/removal, or
+operator-signed ordinary-user onboarding in the active protocol.
 
-```text
-Operator Authority Key
-    validator admission/removal
-    protocol-defined operator governance actions
-    (MUST NOT participate in ordinary AccountID creation or onboarding)
+The PoA secret is derived from its dedicated operator recovery phrase, held
+only in memory, and cleansed at session end. Before signing, the finalizer
+checks and durably journals the exact next-height block intent. Journal
+conflict, rollback, or valid equivocation halts signing and requires explicit
+operator investigation.
 
-Operator Validator Key
-    BFT consensus votes
-
-Release Signing Key
-    official software/update authenticity
-
-Treasury Key
-    company-owned CYBOU Balance and operational treasury
-```
-
-These keys must not be interchangeable.
-
-## Operator Authority protection
-
-Even with a single owner/company, the Operator Authority should use multi-key protection.
-
-Preferred operational baseline:
-
-```text
-2-of-3 operator authority
-```
-
-using independent hardware/offline key custody.
-
-This is not a DAO.
-
-It is protection against:
-
-- one stolen laptop;
-- one lost key;
-- one compromised operator installation;
-- one accidental deletion.
-
-## No master powers
-
-Operator Authority cannot:
-
-- decrypt E2E Email;
-- forge user signatures;
-- arbitrarily debit user Balance;
-- bypass BFT validation.
-
-Its powers are explicitly enumerated by protocol rules.
-
-## Object-level signing domains
-
-Key separation does not replace per-object domain separation. Operator
-Authority operations must use distinct frozen signing domains, including at
-least:
-
-```text
-Validator Admission
-Validator Removal
-Protocol Parameter Action
-```
-
-The exact domain bytes are part of each canonical object specification. A
-signature valid for one authority operation must not be reusable as another.
-
-## Signature-suite status
-
-The primitive hybrid signature verifier (`OpenSslHybridSignatureVerifier` for `Ed25519 + ML-DSA-65`) is implemented in `src/cybou/signing.{h,cpp}` backed by OpenSSL >= 3.5. Consensus-operation wiring and typed boundary integration into block validation remain pending. Production consensus must receive a typed verified result from the Operator Authority verifier after canonical serialization and domain-separated verification.
-
-For rare Operator Authority operations, V1 freezes `Ed25519 + ML-DSA-65` with
-both signatures required. The signature bundle names an epoch-windowed keyset
-containing both public keys. MailTx, BFT votes and release signing remain
-separate performance/security profiles.
+Every production signature follows the key-role policy and requires both
+Ed25519 and ML-DSA-65 for PoA finality. No classical-only fallback is allowed.

@@ -9,7 +9,6 @@
 #include <cybou/name_registry.h>
 #include <cybou/root_publication.h>
 #include <cybou/protocol_params.h>
-#include <cybou/validator.h>
 
 #include <cstdint>
 #include <map>
@@ -19,7 +18,7 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_STATE_VERSION{5};
+inline constexpr uint8_t CYBOU_STATE_VERSION{6};
 
 struct AccountState {
     uint64_t balance{0};
@@ -36,7 +35,6 @@ struct CybouState {
     uint64_t pending_fee_pool{0};
     std::map<AccountId, AccountState> accounts;
     IdentityRegistry identities;
-    ValidatorSet validator_set;
     NameRegistry names;
 };
 
@@ -82,7 +80,6 @@ enum class StateValidationError : uint8_t {
     ACCOUNT_IDENTITY_COUNT_MISMATCH,
     MISSING_IDENTITY,
     DUPLICATE_RECOVERY_BINDING,
-    INVALID_VALIDATOR_SET,
     BALANCE_OVERFLOW,
     INVALID_NAME_REGISTRY,
 };

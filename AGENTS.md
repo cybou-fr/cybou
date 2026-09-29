@@ -21,7 +21,7 @@ Read active docs before coding.
 - Keep the PoA anti-equivocation journal durable and fail closed. Deterministic fork/conflicting-signature and journal-rollback handling are cutover gates.
 - Cut over DEV directly after all format, names, finality, state-execution, chunk-admission, and clean-machine recovery gates pass; discard obsolete DEV state and vaults. Do not build runtime compatibility, automatic import, or a dual operation decoder.
 - Keep one canonical implementation and unversioned source/API names for state, operations, and identity. Version bytes belong inside the wire and vault formats only.
-- Every production signature path, including user, validator, operator, release, and treasury operations, must follow the PQ key policy; no classical-only fallback.
+- Every production signature path, including user Identity, PoA, Release Signing, and Treasury operations, must follow the PQ key policy; no classical-only fallback.
 
 ## Hard rules
 

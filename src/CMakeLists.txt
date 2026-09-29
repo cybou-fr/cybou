@@ -157,8 +157,6 @@ target_link_libraries(bitcoin_common
 # inherited Bitcoin common library.
 add_library(cybou_core STATIC
   cybou/account_creation.cpp
-  cybou/bft.cpp
-  cybou/bft_engine.cpp
   cybou/block.cpp
   cybou/canonical_cbor.cpp
   cybou/chunk_id.cpp
@@ -188,7 +186,6 @@ add_library(cybou_core STATIC
   cybou/storage_crypto.cpp
   cybou/storage_key_ring.cpp
   cybou/state.cpp
-  cybou/validator.cpp
 )
 target_link_libraries(cybou_core
   PUBLIC

@@ -198,7 +198,7 @@ std::optional<std::vector<unsigned char>> SerializeFinalizedBlock(const Finalize
 {
     const auto serialized_block = SerializeBlock(finalized_block.block);
     if (!serialized_block) return std::nullopt;
-    const auto serialized_cert = SerializeFinalityCertificate(finalized_block.certificate);
+    const auto serialized_cert = SerializePoaFinalityCertificate(finalized_block.certificate);
     if (!serialized_cert) return std::nullopt;
 
     std::vector<unsigned char> out;
@@ -243,7 +243,7 @@ std::optional<FinalizedBlock> DeserializeFinalizedBlock(std::span<const unsigned
         return std::nullopt;
     }
 
-    const auto cert = DeserializeFinalityCertificate(bytes.subspan(offset, cert_len));
+    const auto cert = DeserializePoaFinalityCertificate(bytes.subspan(offset, cert_len));
     if (!cert) {
         return std::nullopt;
     }

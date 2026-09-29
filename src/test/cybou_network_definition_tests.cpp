@@ -2,7 +2,6 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/network_definition.h>
-#include <cybou/validator.h>
 #include <test/cybou_test_helpers.h>
 #include <test/util/setup_common.h>
 
@@ -18,9 +17,7 @@ BOOST_AUTO_TEST_CASE(network_definition_binds_poa_key_and_rejects_invalid_keys)
 {
     std::array<unsigned char, 32> seed{};
     seed[0] = 1;
-    const auto validator = cybou::GenerateValidatorKeyPair(seed);
-    BOOST_REQUIRE(validator);
-    const auto genesis = cybou::CreateDevGenesisState(validator->public_key);
+    const auto genesis = cybou::CreateDevGenesisState();
     const auto poa_key = cybou::TestPoaFinalizerPublicKey(0x31);
     const auto definition = cybou::CreateDevNetworkDefinition(genesis, poa_key);
     BOOST_CHECK(cybou::ValidateNetworkDefinition(definition) == cybou::NetworkDefinitionError::NONE);
@@ -43,9 +40,7 @@ BOOST_AUTO_TEST_CASE(network_definition_v5_commits_poa_key_and_root_publication_
 {
     std::array<unsigned char, 32> seed{};
     seed[0] = 7;
-    const auto key = cybou::GenerateValidatorKeyPair(seed);
-    BOOST_REQUIRE(key);
-    const auto genesis = cybou::CreateDevGenesisState(key->public_key);
+    const auto genesis = cybou::CreateDevGenesisState();
     auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey());
     const auto default_network_id = cybou::NetworkId(definition);
     BOOST_CHECK_EQUAL(definition.protocol_version, 5);

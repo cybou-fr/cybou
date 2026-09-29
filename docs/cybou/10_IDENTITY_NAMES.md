@@ -14,7 +14,7 @@ Status: canonical Identity and name protocol contract. Identity keys derive from
 | nonce | One account-wide Identity operation sequence | Incremented by every authorized operation and rotation |
 | Primary `.cybou` name | Human-facing alias bound to AccountID | No transfer or recycling initially |
 
-AccountID is independent of mnemonic and public keys. RecoveryKeyID indexes the current recovery key to AccountID. Rotating the phrase and all key roles preserves AccountID, balances, names, and finalized Mail history. A name is a pseudonymous alias, not a civil identity assertion.
+AccountID is independent of mnemonic and public keys. RecoveryKeyID indexes the current recovery key to AccountID. Rotating the phrase and all key roles preserves AccountID, balances, names, and access to content for which the new key set is authorized. A name is a pseudonymous alias, not a civil identity assertion.
 
 The 24-word phrase derives each key role with a separate domain label. Recovery signatures require Ed25519 and ML-DSA-65. Authorization signatures require Ed25519 and ML-DSA-44. The X-Wing seed is derived under its own domain and is never reused for signing. Failed, malformed, or missing signature components fail closed. No custom cryptographic primitive or classical-only production fallback is allowed.
 
@@ -30,7 +30,7 @@ User-authorized operations use the current authorization key, current key_epoch,
 
 ## Mail key capability
 
-Mail signing and encryption keys are separate derived roles. Identity publishes one X-Wing package per account/key_epoch; the commitment is bound to NetworkID, AccountID, key_epoch, and canonical package bytes. Initial Mail is one recipient, text-only, and uses one recipient capsule. Device activation semantics do not apply. The selected draft-05 X-Wing profile is DEV-only; Mail remains fail-closed until the HPKE backend, envelope, evidence verification, and UI path pass their integration gates.
+Mail encryption keys are separate derived roles. Identity publishes one X-Wing package per account/key_epoch; the commitment is bound to NetworkID, AccountID, key_epoch, and canonical package bytes. Initial Mail is one recipient, text-only, and uses one recipient capsule. The selected draft-05 X-Wing profile is DEV-only. Device registration and per-device key distribution are not protocol concepts.
 
 ## Names
 
@@ -38,4 +38,4 @@ The primary example is `stanislav.cybou`. A label is 5–32 lowercase ASCII byte
 
 ## Network cutover
 
-The canonical state joins monetary accounts, Identity registry, validator set, and name ownership under one state root. This Identity layout and its wire encodings require the coordinated direct DEV cutover described by the active network plan. Obsolete state and vaults are discarded at that gate; no compatibility decoder, automatic import, or dual operation path is built.
+The canonical state joins monetary accounts, the Identity registry, and name ownership under one state root. Block ordering authority is the single hybrid-PQ PoA key committed by the immutable genesis network definition; validator sets are not state. Identity layout and wire encodings are canonical and unversioned at the source/API level. Wire-format version bytes remain inside serialized formats. The protocol reset discards obsolete DEV state and vaults; no compatibility decoder, automatic import, or dual operation path is built.

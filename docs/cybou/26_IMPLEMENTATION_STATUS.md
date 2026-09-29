@@ -1,84 +1,54 @@
 # Implementation status
 
-## Active protocol target
+## Canonical architecture
 
-`main` defines genesis-bound hybrid-PQ PoA as the target and implements an
-experimental substrate for generic RootPublication and a streaming encrypted
-chunk tree. This target is not an active DEV protocol. The deployed DEV chain
-remains pre-cutover and must not be reset until all integration and clean-machine
-recovery gates pass together. See
-`AGENTS.md`, the authority documents in `docs/cybou/`, and
-`spec/poa_chunk_tree.yaml`.
+`main` targets one protocol: a genesis-bound hybrid-PQ PoA finalizer, full-node
+validation, Identity-authorized RootPublication, and one encrypted,
+content-addressed chunk tree for Mail and Files. Mail and Files are client-side
+views over encrypted publications; neither has a separate consensus object or
+indexed-object wire protocol. The chain does not implement BFT, ValidatorSet,
+MailTx, dual operation decoders, automatic import, or runtime compatibility.
 
-## Implemented in source
+The DEV network has not completed the coordinated reset to this format. Do not
+represent the architecture target as a deployed network feature. Git history
+is the record of the superseded implementation; it is not part of the runtime.
 
-- Full 256-bit ChunkID using pinned BLAKE3 C 1.8.1 and published known-answer
-  vectors.
-- Bounded RFC 8949 core-deterministic canonical CBOR codec.
-- Versioned bytes-based encrypted chunk envelope using HKDF-SHA256 and
-  ChaCha20-Poly1305, random per-chunk salts/nonces/padding, and network-bound
-  associated data.
-- Local streaming ROOT/INDEX/DATA tree builder and sink-based reader with bounded
-  chunk buffers, fan-out, depth, and caller-supplied output limits.
-- Canonical RootPublication CBOR body, strict resource limits, identity-bound
-  recipient capsules, and size-aware deterministic integer fees committed by
-  immutable network parameters.
-- BLAKE3 chunk authorization commitments in durable staging order, an O(log N)
-  Merkle accumulator, bounded inclusion-proof verification, and a compact
-  RootPublication that does not reveal the complete ChunkID set. The
-  disk-backed `ChunkAuthorizationProofIndex` stores ordered leaves and Merkle
-  levels and emits one proof on demand without materializing every proof.
-- Durable content-addressed provider admission by ChunkID with finalized-
-  publication lookup, per-publication proof association, provider capacity
-  enforcement, and idempotent deduplication. Persistent providers keep opaque
-  blobs in sharded hash-named files and admission metadata in LevelDB; startup
-  reconciliation reserves bytes for missing blobs and removes orphan files.
-  Provider capacity is local and is not published in RootPublication.
-- `AuthorizedRootPublication` as a typed Identity-authorized operation,
-  deterministic nonce/state execution, byte-and-chunk System Balance fee, and
-  lookup from verified canonical finalized block history.
-- A separate `POA_FINALIZER` Ed25519 + ML-DSA-65 key derivation purpose for the
-  dedicated operator recovery phrase, public-key identity hash, and fixed-format
-  PoA finality certificate signing and verification primitives. A durable
-  pre-sign journal enforces one next-height intent and checks recovered tip
-  consistency. `PoaFinalizer` verifies the recovery entropy, serializes the
-  candidate block, journals, then signs. `VerifyPoaCertificateForBlock`
-  binds verification to canonical block bytes. `PoaConflictDetector` stores
-  observations and halt evidence. Local fixed key-derivation, digest,
-  Ed25519, deterministic test-only ML-DSA, and certificate-encoding vectors are
-  in `POA_FINALITY_VECTORS.md` and have been reproduced with independent
-  implementations. `PoaConflictDetector::ReadSafetyEvidence` revalidates and
-  exposes both certificates after an equivocation halt. Runtime wiring,
-  finalized-block execution/acceptance, and operator recovery remain cutover
-  gates.
-- Version-5 network definitions commit the fixed-purpose PoA finalizer public
-  key, omit ValidatorSet commitments and Operator Authority, and derive the
-  genesis block ID from the genesis state root plus the PoA key ID. This is the
-  first architecture-cutover step only: canonical state and the active block
-  runtime still retain the legacy validator/BFT path until later steps.
+## Present in source
 
-These components are substrate code. Their integration with the canonical
-Identity operation path, state transition, block finality, and provider network
-is incomplete. Do not infer network readiness from the presence of local
-serialization or cryptography code.
+- Hybrid identity keys and authorization, Identity KEM publication, names,
+  recovery vault formats, and identity operation coordination.
+- Deterministic block and state execution, finalized block storage, and a
+  genesis-bound PoA certificate format and signer with durable anti-equivocation
+  intent handling.
+- Generic Identity-authorized RootPublication with canonical CBOR encoding,
+  bounded recipient capsules, network-bound deterministic fees, and finalized
+  history lookup.
+- Encrypted content-addressed chunks, a streaming ROOT/INDEX/DATA tree,
+  inclusion proofs, durable local provider admission, and local reconstruction
+  primitives.
+- CYP2 peer sessions for verified block sync and the existing storage transfer
+  path. The storage transfer path still needs to be aligned with the chunk-tree
+  admission model before it can be considered the canonical provider network.
 
-## Cutover gates still open
+These components do not yet establish a usable Mail or Drive product. The
+client still needs publication construction and scanning, recursive retrieval,
+recipient-facing Mail/Files views, and clean-machine recovery from Identity
+capabilities and published content.
 
-- Verify pinned BLAKE3 integration in Windows/vcpkg, Linux normal, and Linux
-  Depends builds.
-- Cross-implementation vectors for canonical CBOR, encrypted chunks/trees,
-  hybrid capsules, RootPublication authorization, and chunk admission.
-- RootPublication client construction/submission, publication scanning, and
-  clean-machine reconstruction of accessible roots.
-- Genesis-bound PoA signing, hybrid signature verification, anti-equivocation
-  journal durability, fork handling, and operator recovery.
-- Connecting provider admission to the PUT/GET peer wire; independent chunk
-  placement, durability, retry, retention, repair, and provider-loss handling.
-- Publication scanning, recursive retrieval, and clean-machine Identity,
-  Mail, and Files recovery without an existing client database.
-- Gmail-familiar Mail and Google Drive-familiar Files UI/UX acceptance.
+## Remaining integration work
 
-The protocol target is not active on DEV. A single coordinated cutover is
-permitted only after every format, finality, execution, storage, Identity/name,
-and recovery gate passes. Cutover discards obsolete DEV state and vaults; do not
-add runtime compatibility or automatic import.
+- Complete cross-platform builds and cross-implementation vectors for the
+  canonical wire formats and hybrid cryptographic paths.
+- Finish the single PoA runtime path: startup key validation, signing,
+  certificate verification, journal recovery, conflict halt, and state sync.
+- Replace the legacy indexed-manifest provider protocol with chunk-ID admission
+  and publication inclusion proofs, then implement placement, retrieval,
+  retry, retention, repair, and provider-loss handling.
+- Integrate publication creation, Mail and Files scanning, recipient capsule
+  opening, recursive chunk retrieval, local indexes, and clean-machine restore.
+- Finish Gmail-familiar Mail and Google Drive-familiar Files UI/UX acceptance.
+- Coordinate one DEV reset after the protocol, recovery, and product gates pass.
+
+Do not add a compatibility layer or preserve old chain state to make the reset
+appear incremental. Update this status from source and operational evidence as
+each gate closes.

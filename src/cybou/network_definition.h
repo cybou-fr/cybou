@@ -59,7 +59,7 @@ std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path
 
 uint256 ComputeGenesisBlockId(const uint256& state_root, const IdentityHybridPublicKey& poa_finalizer_public_key);
 
-CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public_key);
+CybouState CreateDevGenesisState();
 CybouNetworkDefinition CreateDevNetworkDefinition(
     const CybouState& genesis,
     const IdentityHybridPublicKey& poa_finalizer_public_key);

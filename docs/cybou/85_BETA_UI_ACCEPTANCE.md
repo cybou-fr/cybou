@@ -172,5 +172,5 @@ Stan opens Files
 ```
 
 The demonstration should feel like familiar productivity software. The
-protocol, PQ cryptography, BFT finality and distributed storage should improve
+protocol, PQ cryptography, PoA finality and distributed storage should improve
 trust and resilience without becoming mandatory UI concepts.

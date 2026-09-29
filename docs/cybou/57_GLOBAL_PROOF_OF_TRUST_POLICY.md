@@ -1,60 +1,23 @@
-# 57 — Global Proof of Trust policy
+# 57 — Proof of Trust policy
 
-## Purpose
+Proof of Trust is a deterministic anti-abuse and service-allocation signal based
+only on protocol history. It is not social scoring, identity verification, or
+consensus authority.
 
-PoT is a deterministic anti-abuse/resource-allocation mechanism for AccountID activity.
+## Inputs and time
 
-It is not social scoring and does not evaluate external personal behavior.
+PoT uses account age and valid protocol history. Epochs derive from finalized
+block height, and all arithmetic is deterministic integer arithmetic. Local
+wall clocks and time zones never affect consensus. System Balance pays for
+services but does not boost Beta PoT score.
 
-## Global account inputs
+## Service policy
 
-```text
-Account Age
-Clean Protocol History
-Valid Network Activity
-Protocol Violations
-(System Balance funds services but does not boost Beta PoT score)
-```
+Services may use protocol-defined account history to limit abuse. Generic
+RootPublication consensus does not inspect encrypted Mail or Files schemas and
+therefore cannot enforce Mail-specific quotas. Service limits belong to an
+explicitly reviewed, privacy-compatible service policy; there is no implicit
+MailTx/day counter.
 
-## Deterministic epoch
-
-All time-based PoT behavior uses a protocol epoch derived from finalized block height.
-
-## Services
-
-One PoT feeds service-specific policies:
-
-```text
-Mail
-Payments
-Identity operations
-future Storage
-future Backup
-Files
-```
-
-## Mail limits
-
-Example v1 baseline:
-
-```text
-25 outgoing MailTx / PoT epoch
-```
-
-## Payment limits
-
-PoT can restrict velocity, not ownership.
-
-Receiving funds is not blocked merely because PoT is low.
-
-## Penalties
-
-Objective protocol violations may reduce global PoT.
-
-Service-specific subjective reports should not automatically destroy unrelated privileges.
-
-## No consensus authority
-
-High PoT never turns an account into a validator.
-
-Validator admission is separately operator-controlled.
+Proof of Trust never grants block-finalization authority. The genesis-bound PoA
+key alone authorizes finality in the current protocol.

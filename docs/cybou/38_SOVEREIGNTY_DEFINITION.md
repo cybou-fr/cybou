@@ -1,32 +1,28 @@
 # 38 — CYBOU sovereignty definition
 
-CYBOU sovereignty means the product/network does not depend on a mandatory foreign or central SaaS control plane for its core protocol operation.
+CYBOU sovereignty means users retain control of Identity secrets, balances,
+decryption, and application state without a mandatory foreign SaaS control
+plane. It does not mean the initial network is decentralized: block ordering
+uses one CYBOU-operated genesis-bound PoA finalizer, and that operator can
+censor or stop progress.
 
 ## Required properties
 
 ```text
-user-controlled Balance
-user-controlled E2E mail decryption
-independent full-node verification
-BFT-finalized chain/state
-operator-approved but independently runnable validators
+user-authorized Balance operations
+user-held Identity recovery and decryption keys
+independent full-node validation
+transparent single-operator PoA trust boundary
 no mandatory central mailbox cloud
 no universal decryption key
 no arbitrary operator Balance debit
+encrypted content on independent storage providers
 ```
 
-## Email
+Mail and Files are product experiences over generic RootPublication and the
+shared encrypted chunk tree. Recipients can be offline; clients discover
+finalized publications and retrieve admitted encrypted chunks after reconnect.
 
-Native Email is registered through CYBOU consensus.
-
-Recipient online presence is not required.
-
-Before Store, active validators retain historical encrypted MailTx bodies under the pre-Store retention contract.
-
-After Store, encrypted mail objects live in distributed CYBOU Storage.
-
-## Commercial ownership
-
-CYBOU can have one commercial owner/operator while the network remains technically capable of continued operation across independent validators/nodes.
-
-Sovereignty does not require DAO or foundation ownership.
+Sovereignty does not require DAO or foundation ownership. The project must
+describe operator finality and storage-provider availability as separate trust
+domains.

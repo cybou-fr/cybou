@@ -52,13 +52,6 @@ CybouStateStore::CybouStateStore(
     }
 }
 
-std::optional<ValidatorSet> CybouStateStore::GetValidatorSet() const
-{
-    const auto loaded{LoadState()};
-    if (!loaded) return std::nullopt;
-    return loaded.state->validator_set;
-}
-
 std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
     const std::vector<ProtocolOperation>& operations,
     const uint64_t height) const
@@ -96,9 +89,6 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     const auto state_hash = CybouStateHash(genesis_state);
     if (!state_hash || *state_hash != m_network_definition.genesis_state_root) {
         return {GenesisInitError::GENESIS_STATE_MISMATCH};
-    }
-    if (ValidateValidatorSet(genesis_state.validator_set) != ValidatorSetValidationError::NONE) {
-        return {GenesisInitError::INVALID_GENESIS_VALIDATOR_SET};
     }
     const auto serialized_state = SerializeCybouState(genesis_state);
     if (!serialized_state) {
@@ -192,7 +182,6 @@ std::optional<uint256> CybouStateStore::GetStoredNetworkId() const
 
 BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     const FinalizedBlock& finalized_block,
-    const std::optional<ValidatorSet>& validator_set,
     const bool sync)
 {
     const auto loaded{LoadState()};
@@ -207,10 +196,6 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
             return {BlockTransitionError::CORRUPT_STATE};
         }
         return {BlockTransitionError::STATE_NOT_INITIALIZED};
-    }
-
-    if (validator_set.has_value() && *validator_set != loaded.state->validator_set) {
-        return {BlockTransitionError::VALIDATOR_SET_MISMATCH};
     }
 
     const auto& block = finalized_block.block;
@@ -230,13 +215,14 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         return {BlockTransitionError::INVALID_HEIGHT};
     }
 
-    if (cert.block_id != block_id || cert.height != block.height) {
+    if (cert.network_id != m_network_id || cert.block_id != block_id || cert.height != block.height ||
+        cert.parent_block_id != block.parent_block_id) {
         return {.error = BlockTransitionError::INVALID_CERTIFICATE};
     }
 
-    const auto cert_res = VerifyFinalityCertificate(cert, loaded.state->validator_set, m_network_id);
-    if (cert_res != FinalityVerificationError::NONE) {
-        return {.error = BlockTransitionError::INVALID_CERTIFICATE, .cert_error = cert_res};
+    if (!VerifyPoaCertificateForBlock(cert, m_network_definition.poa_finalizer_public_key,
+        m_network_id, block)) {
+        return {.error = BlockTransitionError::INVALID_CERTIFICATE};
     }
 
     const auto& params = m_network_definition.protocol_parameters;
