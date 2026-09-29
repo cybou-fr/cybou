@@ -4,607 +4,324 @@
 
 #include <qt/pages/walletpage.h>
 
-#include <cybou/wallet_service.h>
-#include <cybou/hex.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 
-#include <QBrush>
 #include <QClipboard>
-#include <QCoreApplication>
+#include <QCompleter>
 #include <QDialog>
 #include <QDialogButtonBox>
-#include <QFormLayout>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
-#include <QListWidget>
-#include <QMessageBox>
-#include <QMetaObject>
-#include <QPointer>
 #include <QPushButton>
-#include <QSpinBox>
+#include <QRegularExpressionValidator>
+#include <QStandardItemModel>
 #include <QVBoxLayout>
 
 using namespace CybouUi;
 
 namespace {
 
-QLabel* noteLabel(const QString& text, QWidget* parent)
-{
-    auto* label = new QLabel{text, parent};
-    label->setObjectName(QStringLiteral("mutedText"));
-    label->setWordWrap(true);
-    return label;
-}
+constexpr int kNameRole = Qt::UserRole + 1;
 
-/** One of the two balance cards (Available / System). */
-QWidget* balanceCard(Glyph glyph, Tint tint, const QString& pill_text, Tint pill_tint,
-    const QString& caption, const QString& info_tip, QLabel*& metric_out, QLabel*& caption_out, QWidget* parent)
+QString EntryTitle(const CybouWalletEntry& entry)
 {
-    auto* card = Card(parent);
-    auto* layout = new QVBoxLayout{card};
-    layout->setContentsMargins(24, 20, 24, 20);
-    layout->setSpacing(8);
-    auto* header = new QHBoxLayout;
-    header->addWidget(Chip(glyph, tint, card, 38, 19));
-    auto* title = new QLabel{caption, card};
-    title->setObjectName(QStringLiteral("serviceTitle"));
-    header->addWidget(title, 0, Qt::AlignVCenter);
-    if (!info_tip.isEmpty()) {
-        auto* info = new QLabel{card};
-        info->setPixmap(glyphPixmap(Glyph::Info, {14, 14}, CybouTheme::color(CybouTheme::DIM)));
-        info->setToolTip(info_tip);
-        header->addWidget(info, 0, Qt::AlignVCenter);
+    const QString who = entry.counterparty_name.endsWith(QStringLiteral(".cybou"))
+        ? entry.counterparty_name : CybouProduct::shortId(entry.counterparty_name);
+    switch (entry.kind) {
+    case CybouWalletEntryKind::Received: return WalletPage::tr("Received from %1").arg(who);
+    case CybouWalletEntryKind::Sent: return WalletPage::tr("Sent to %1").arg(who);
+    case CybouWalletEntryKind::NetworkServiceFee: return WalletPage::tr("Network service fee");
+    case CybouWalletEntryKind::OnboardingCredit: return WalletPage::tr("Onboarding credit");
+    case CybouWalletEntryKind::MovedToSystemBalance: return WalletPage::tr("Moved to System Balance");
     }
-    header->addStretch();
-    header->addWidget(Pill(pill_text, pill_tint, card), 0, Qt::AlignVCenter);
-    layout->addLayout(header);
-    auto* metric = new QLabel{card};
-    metric->setObjectName(QStringLiteral("metric"));
-    metric_out = metric;
-    layout->addWidget(metric);
-    auto* body = noteLabel({}, card);
-    caption_out = body;
-    layout->addWidget(body);
-    return card;
+    return {};
 }
 
-/** Clickable quick-action row (sketch: chevron rows that open the action). */
-QWidget* quickActionRow(Glyph glyph, Tint tint, const QString& name, const QString& sub,
-    std::function<void()> action, QWidget* parent)
+Glyph EntryGlyph(const CybouWalletEntry& entry)
 {
-    auto* button = new QPushButton{parent};
-    button->setFlat(true);
-    button->setStyleSheet(QStringLiteral(
-        "QPushButton { border: none; background: transparent; text-align: left; padding: 6px 0; }"
-        "QPushButton:hover { background: transparent; }"));
-    auto* row = new QHBoxLayout{button};
-    row->setContentsMargins(0, 2, 0, 2);
-    row->setSpacing(12);
-    auto* chip = Chip(glyph, tint, button, 36, 18);
-    chip->setAttribute(Qt::WA_TransparentForMouseEvents);
-    row->addWidget(chip, 0, Qt::AlignVCenter);
-    auto* text = new QVBoxLayout;
-    text->setSpacing(0);
-    auto* name_label = new QLabel{name, button};
-    name_label->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;")
-        .arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
-    name_label->setAttribute(Qt::WA_TransparentForMouseEvents);
-    auto* sub_label = new QLabel{sub, button};
-    sub_label->setObjectName(QStringLiteral("rowSub"));
-    sub_label->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
-    sub_label->setAttribute(Qt::WA_TransparentForMouseEvents);
-    text->addWidget(name_label);
-    text->addWidget(sub_label);
-    row->addLayout(text, 1);
-    auto* chevron = new QLabel{button};
-    chevron->setPixmap(glyphPixmap(Glyph::ChevronRight, {16, 16}, CybouTheme::color(CybouTheme::DIM)));
-    chevron->setAttribute(Qt::WA_TransparentForMouseEvents);
-    row->addWidget(chevron, 0, Qt::AlignVCenter);
-    QObject::connect(button, &QPushButton::clicked, button, [action = std::move(action)] { action(); });
-    return button;
+    switch (entry.kind) {
+    case CybouWalletEntryKind::Received: return Glyph::ArrowDownLeft;
+    case CybouWalletEntryKind::Sent: return Glyph::ArrowUpRight;
+    case CybouWalletEntryKind::NetworkServiceFee: return Glyph::Database;
+    case CybouWalletEntryKind::OnboardingCredit: return Glyph::Sparkles;
+    case CybouWalletEntryKind::MovedToSystemBalance: return Glyph::Lock;
+    }
+    return Glyph::Info;
+}
+
+QLabel* BigAmount(QWidget* parent)
+{
+    auto* label = new QLabel{parent};
+    label->setObjectName(QStringLiteral("heroTitleBig"));
+    label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    return label;
 }
 
 } // namespace
 
 WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
-    : QWidget{parent},
-      m_model{model}
+    : QWidget{parent}, m_model{model}
 {
+    setMinimumWidth(0);
     auto* root = new QVBoxLayout{this};
-    root->setContentsMargins(24, 22, 24, 22);
+    root->setContentsMargins(28, 24, 28, 28);
     root->setSpacing(16);
 
-    // ---- Hero ---------------------------------------------------------------
+    // Balances.
     auto* hero = new QFrame{this};
     hero->setObjectName(QStringLiteral("heroHeader"));
     auto* hero_layout = new QHBoxLayout{hero};
-    hero_layout->setContentsMargins(30, 26, 30, 26);
-    hero_layout->setSpacing(24);
-    auto* hero_text = new QVBoxLayout;
-    hero_text->setSpacing(8);
-    hero_text->addWidget(Eyebrow(tr("WALLET"), hero));
-    auto* hero_title = HeroTitle(tr("Your CYBOU wallet"), hero, true);
-    hero_text->addWidget(hero_title);
-    auto* hero_tag = new QLabel{tr("Two balances. One identity."), hero};
-    hero_tag->setStyleSheet(QStringLiteral("font-size: 18px; font-weight: 750; color: %1; background: transparent; border: none;")
-        .arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
-    hero_text->addWidget(hero_tag);
-    hero_text->addWidget(HeroSubtitle(tr("Use CYBOU for payments and transfers, and to fund your communication services. Both balances work together to keep your digital life running."), hero));
-    hero_text->addStretch();
-    hero_layout->addLayout(hero_text, 1);
-    auto* hero_art = new QLabel{hero};
-    hero_art->setFixedSize(96, 96);
-    hero_art->setAlignment(Qt::AlignCenter);
-    hero_art->setPixmap(glyphPixmap(Glyph::WalletCard, {72, 72}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
-    hero_layout->addWidget(hero_art, 0, Qt::AlignVCenter);
+    hero_layout->setContentsMargins(28, 22, 28, 22);
+    hero_layout->setSpacing(28);
+    auto* available = new QVBoxLayout;
+    available->setSpacing(2);
+    available->addWidget(Eyebrow(tr("AVAILABLE"), hero));
+    m_available = BigAmount(hero);
+    available->addWidget(m_available);
+    hero_layout->addLayout(available, 1);
+    auto* system = new QVBoxLayout;
+    system->setSpacing(2);
+    system->addWidget(Eyebrow(tr("SYSTEM BALANCE"), hero));
+    m_system = new QLabel{hero};
+    m_system->setObjectName(QStringLiteral("metric"));
+    system->addWidget(m_system);
+    system->addWidget(MutedText(tr("For CYBOU network services"), hero));
+    hero_layout->addLayout(system, 1);
+    auto* actions = new QVBoxLayout;
+    actions->setSpacing(8);
+    m_send_button = new QPushButton{tr("Send"), hero};
+    m_send_button->setObjectName(QStringLiteral("primaryButton"));
+    m_send_button->setProperty("cybouId", QStringLiteral("walletSend"));
+    m_send_button->setIcon(QIcon{glyphPixmap(Glyph::ArrowUpRight, {16, 16}, QColor{Qt::white})});
+    m_receive_button = new QPushButton{tr("Receive"), hero};
+    m_receive_button->setObjectName(QStringLiteral("secondaryButton"));
+    m_receive_button->setProperty("cybouId", QStringLiteral("walletReceive"));
+    m_receive_button->setIcon(QIcon{glyphPixmap(Glyph::ArrowDownLeft, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
+    actions->addWidget(m_send_button);
+    actions->addWidget(m_receive_button);
+    hero_layout->addLayout(actions);
     root->addWidget(hero);
 
-    // ---- Balance cards -------------------------------------------------------
-    auto* balances = new QHBoxLayout;
-    balances->setSpacing(14);
+    m_gate = MutedText({}, this);
+    root->addWidget(m_gate);
 
-    auto* available = balanceCard(Glyph::WalletCard, Tint::Mint, tr("For payments and transfers"), Tint::Mint,
-        tr("Available balance"),
-        tr("Your transferable Balance. Send payments to other accounts or lock CYBOU into System Balance to fund services."),
-        m_available_metric, m_available_caption, this);
-    auto* available_actions = new QHBoxLayout;
-    m_send = new QPushButton{tr("Send"), available};
-    m_send->setObjectName(QStringLiteral("primaryButton"));
-    m_send->setIcon(QIcon{glyphPixmap(Glyph::ArrowUpRight, {16, 16}, QColor{0xffffff})});
-    connect(m_send, &QPushButton::clicked, this, [this] { onSendClicked(); });
-    m_receive = new QPushButton{tr("Receive"), available};
-    m_receive->setObjectName(QStringLiteral("softButton"));
-    m_receive->setIcon(QIcon{glyphPixmap(Glyph::ArrowDownLeft, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
-    connect(m_receive, &QPushButton::clicked, this, [this] { onReceiveClicked(); });
-    m_lock = new QPushButton{tr("Transfer"), available};
-    m_lock->setObjectName(QStringLiteral("secondaryButton"));
-    m_lock->setIcon(QIcon{glyphPixmap(Glyph::Transfer, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
-    m_lock->setProperty("irreversible", true);
-    connect(m_lock, &QPushButton::clicked, this, [this] { onLockClicked(); });
-    available_actions->addWidget(m_send);
-    available_actions->addWidget(m_receive);
-    available_actions->addWidget(m_lock);
-    available_actions->addStretch();
-    qobject_cast<QVBoxLayout*>(available->layout())->addLayout(available_actions);
-    balances->addWidget(available, 1);
+    // Send panel.
+    m_send_panel = Card(this);
+    m_send_panel->setObjectName(QStringLiteral("card"));
+    auto* send = new QVBoxLayout{m_send_panel};
+    send->setContentsMargins(24, 18, 24, 18);
+    send->setSpacing(8);
+    send->addWidget(SectionTitle(tr("Send CYBOU"), m_send_panel));
+    auto* to_label = new QLabel{tr("To"), m_send_panel};
+    to_label->setObjectName(QStringLiteral("cardLabel"));
+    send->addWidget(to_label);
+    m_to = new QLineEdit{m_send_panel};
+    m_to->setObjectName(QStringLiteral("walletTo"));
+    m_to->setPlaceholderText(tr("name.cybou"));
+    m_to->setAccessibleName(tr("To"));
+    m_to->setMinimumHeight(38);
+    send->addWidget(m_to);
+    m_to_hint = MutedText({}, m_send_panel);
+    send->addWidget(m_to_hint);
+    m_completer = new QCompleter{this};
+    m_completer->setModel(new QStandardItemModel{m_completer});
+    m_completer->setCompletionRole(kNameRole);
+    m_completer->setFilterMode(Qt::MatchContains);
+    m_completer->setCaseSensitivity(Qt::CaseInsensitive);
+    m_to->setCompleter(m_completer);
+    connect(m_completer, qOverload<const QModelIndex&>(&QCompleter::activated), this,
+        [this](const QModelIndex& index) { m_to->setText(index.data(kNameRole).toString()); });
+    auto* amount_label = new QLabel{tr("Amount"), m_send_panel};
+    amount_label->setObjectName(QStringLiteral("cardLabel"));
+    send->addWidget(amount_label);
+    m_amount = new QLineEdit{m_send_panel};
+    m_amount->setObjectName(QStringLiteral("walletAmount"));
+    m_amount->setPlaceholderText(tr("Whole CYBOU"));
+    m_amount->setAccessibleName(tr("Amount in CYBOU"));
+    m_amount->setMinimumHeight(38);
+    m_amount->setValidator(new QRegularExpressionValidator{QRegularExpression{QStringLiteral("[0-9]{1,11}")}, m_amount});
+    send->addWidget(m_amount);
+    m_fee = MutedText({}, m_send_panel);
+    send->addWidget(m_fee);
+    m_send_status = MutedText({}, m_send_panel);
+    send->addWidget(m_send_status);
+    auto* send_buttons = new QHBoxLayout;
+    m_confirm = new QPushButton{tr("Send"), m_send_panel};
+    m_confirm->setObjectName(QStringLiteral("primaryButton"));
+    m_confirm->setProperty("cybouId", QStringLiteral("walletConfirm"));
+    auto* cancel = new QPushButton{tr("Cancel"), m_send_panel};
+    cancel->setObjectName(QStringLiteral("secondaryButton"));
+    send_buttons->addWidget(m_confirm);
+    send_buttons->addWidget(cancel);
+    send_buttons->addStretch();
+    send->addLayout(send_buttons);
+    m_send_panel->setVisible(false);
+    root->addWidget(m_send_panel);
 
-    auto* system = balanceCard(Glyph::Database, Tint::Indigo, tr("Funds services and protocol"), Tint::Indigo,
-        tr("System balance"),
-        tr("Service budget for Email, Storage and Backup fees plus protocol fees. Locked CYBOU cannot be transferred back."),
-        m_system_metric, m_system_caption, this);
-    auto* system_actions = new QHBoxLayout;
-    auto* fund = new QPushButton{tr("Fund services"), system};
-    fund->setObjectName(QStringLiteral("primaryButton"));
-    fund->setIcon(QIcon{glyphPixmap(Glyph::Database, {16, 16}, QColor{0xffffff})});
-    connect(fund, &QPushButton::clicked, this, [this] { onLockClicked(); });
-    auto* system_transfer = new QPushButton{tr("Transfer"), system};
-    system_transfer->setObjectName(QStringLiteral("secondaryButton"));
-    connect(system_transfer, &QPushButton::clicked, this, [this] { onLockClicked(); });
-    m_view_usage = new QPushButton{tr("View usage"), system};
-    m_view_usage->setObjectName(QStringLiteral("secondaryButton"));
-    connect(m_view_usage, &QPushButton::clicked, this, [this] {
-        QMessageBox::information(this, tr("Service usage"),
-            tr("A per-service usage breakdown (Email fees today, Storage and Backup in the future) arrives with the protocol fee feed."));
+    // Recent activity.
+    auto* activity = Card(this);
+    auto* activity_layout = new QVBoxLayout{activity};
+    activity_layout->setContentsMargins(22, 18, 22, 14);
+    activity_layout->setSpacing(4);
+    activity_layout->addWidget(SectionTitle(tr("Recent activity"), activity));
+    auto* rows = new QWidget{activity};
+    m_activity_rows = new QVBoxLayout{rows};
+    m_activity_rows->setContentsMargins(0, 6, 0, 0);
+    m_activity_rows->setSpacing(2);
+    activity_layout->addWidget(rows);
+    m_activity_empty = MutedText(tr("No activity yet."), activity);
+    activity_layout->addWidget(m_activity_empty);
+    root->addWidget(activity);
+    root->addStretch();
+
+    connect(m_send_button, &QPushButton::clicked, this, [this] { openSend(); });
+    connect(m_receive_button, &QPushButton::clicked, this, [this] { showReceive(); });
+    connect(cancel, &QPushButton::clicked, this, [this] {
+        m_send_panel->setVisible(false);
+        m_to->clear();
+        m_amount->clear();
     });
-    system_actions->addWidget(fund);
-    system_actions->addWidget(system_transfer);
-    system_actions->addWidget(m_view_usage);
-    system_actions->addStretch();
-    qobject_cast<QVBoxLayout*>(system->layout())->addLayout(system_actions);
-    balances->addWidget(system, 1);
-    root->addLayout(balances);
-
-    // ---- Transactions + quick actions ----------------------------------------
-    auto* bottom_row = new QHBoxLayout;
-    bottom_row->setSpacing(14);
-
-    auto* transactions = Card(this);
-    auto* transactions_layout = new QVBoxLayout{transactions};
-    transactions_layout->setContentsMargins(22, 18, 22, 18);
-    transactions_layout->setSpacing(8);
-    QLabel* link = nullptr;
-    transactions_layout->addLayout(SectionHeader(tr("Recent transactions"), {}, link, transactions));
-    m_activity = new QListWidget{transactions};
-    m_activity->setObjectName(QStringLiteral("messageList"));
-    m_activity->setFocusPolicy(Qt::NoFocus);
-    transactions_layout->addWidget(m_activity, 1);
-    bottom_row->addWidget(transactions, 3);
-
-    auto* quick = Card(this);
-    auto* quick_layout = new QVBoxLayout{quick};
-    quick_layout->setContentsMargins(22, 18, 22, 18);
-    quick_layout->setSpacing(4);
-    quick_layout->addWidget(SectionTitle(tr("Quick actions"), quick));
-    quick_layout->addWidget(quickActionRow(Glyph::ArrowUpRight, Tint::Mint,
-        tr("Send CYBOU"), tr("Pay another user"), [this] { onSendClicked(); }, quick));
-    quick_layout->addWidget(quickActionRow(Glyph::ArrowDownLeft, Tint::Blue,
-        tr("Receive CYBOU"), tr("Get paid by others"), [this] { onReceiveClicked(); }, quick));
-    quick_layout->addWidget(quickActionRow(Glyph::Database, Tint::Indigo,
-        tr("Fund services"), tr("Add to System Balance"), [this] { onLockClicked(); }, quick));
-    quick_layout->addWidget(quickActionRow(Glyph::Transfer, Tint::Violet,
-        tr("Transfer between balances"), tr("One-way lock, cannot be reversed"), [this] { onLockClicked(); }, quick));
-    bottom_row->addWidget(quick, 2);
-    root->addLayout(bottom_row, 1);
-
-    m_gate_hint = noteLabel({}, this);
-    root->addWidget(m_gate_hint);
-
-    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); refreshLedgerView(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); refreshLedgerView(); });
-
+    connect(m_confirm, &QPushButton::clicked, this, [this] { submit(); });
+    connect(m_to, &QLineEdit::textChanged, this, [this] { updateSendState(); });
+    connect(m_amount, &QLineEdit::textChanged, this, [this] { updateSendState(); });
+    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::walletChanged, this, [this] { rebuildActivity(); });
+    connect(m_model, &CybouDesktopModel::paymentFinished, this, [this](bool ok, const QString& error) {
+        if (ok) {
+            m_send_status->setText(tr("Sent. It appears in your activity."));
+            m_to->clear();
+            m_amount->clear();
+        } else {
+            m_send_status->setText(error.isEmpty() ? tr("The payment could not be sent.") : error);
+        }
+        updateSendState();
+    });
     refresh();
-    refreshLedgerView();
+    rebuildActivity();
 }
 
-QString WalletPage::kindText(EntryKind kind)
+void WalletPage::openSend(const QString& to)
 {
-    switch (kind) {
-    case EntryKind::OnboardingBonus: return tr("Onboarding bonus");
-    case EntryKind::MailFee: return tr("Email fee");
-    case EntryKind::Payment: return tr("Payment");
-    case EntryKind::LockToSystem: return tr("Lock to System Balance");
+    auto* model = static_cast<QStandardItemModel*>(m_completer->model());
+    model->clear();
+    for (const auto& contact : m_model->contacts()) {
+        auto* item = new QStandardItem{QStringLiteral("%1  ·  %2").arg(contact.display_name, contact.name)};
+        item->setData(contact.name, kNameRole);
+        model->appendRow(item);
     }
-    return {};
-}
-
-QString WalletPage::finalityText(EntryFinality finality)
-{
-    switch (finality) {
-    case EntryFinality::Pending: return tr("Pending BFT finality");
-    case EntryFinality::Final: return tr("Final");
-    }
-    return {};
+    m_send_panel->setVisible(true);
+    m_send_status->clear();
+    m_to->setText(to);
+    (to.isEmpty() ? m_to : m_amount)->setFocus();
+    updateSendState();
 }
 
 void WalletPage::refresh()
 {
     const auto& status = m_model->status();
-    m_available_metric->setText(cybouAmountText(status.balance));
-    m_system_metric->setText(cybouAmountText(status.system_balance));
-    m_available_caption->setText(tr("Use your available balance to send payments, receive funds and transfer to other people."));
-    m_system_caption->setText(tr("Used to pay for your CYBOU services (Email, Storage, Backup) and protocol fees. Locked CYBOU cannot be transferred back."));
+    const bool active = status.identity_state == CybouIdentityState::Active;
+    m_available->setText(cybouAmountText(status.balance));
+    m_system->setText(cybouAmountText(status.system_balance));
+    const bool payments = active && m_model->capabilities().payments;
+    m_send_button->setEnabled(payments);
+    m_receive_button->setEnabled(active);
+    m_gate->setText(!active ? tr("Wallet needs your CYBOU Identity. Create or restore it on Home.")
+        : !payments ? tr("Payments are not connected yet.") : QString{});
+    m_gate->setVisible(!m_gate->text().isEmpty());
+    if (!payments) m_send_panel->setVisible(false);
+    updateSendState();
+}
 
-    const bool usable = status.identity_state == CybouIdentityState::Active &&
-                        m_model->capabilities().payments;
-    for (auto* btn : findChildren<QPushButton*>()) {
-        btn->setEnabled(usable && !m_operation_pending);
+void WalletPage::updateSendState()
+{
+    const QString to = m_to->text().trimmed().toLower();
+    const quint64 amount = m_amount->text().toULongLong();
+    QString to_problem;
+    if (!to.isEmpty()) {
+        if (!to.endsWith(QStringLiteral(".cybou"))) to_problem = tr("Use a CYBOU name, for example alice.cybou.");
+        else if (to == m_model->status().primary_name) to_problem = tr("You cannot send CYBOU to yourself.");
+        else to_problem = m_model->nameLabelProblem(to.chopped(6));
     }
-    m_gate_hint->setText(status.identity_state != CybouIdentityState::Active
-        ? tr("Create an identity to receive the onboarding bonus and use your wallet.")
-        : usable ? QString{}
-                 : tr("Transfers become available once the node reports the payments capability."));
-    rebuildActivity();
+    QString hint = to_problem;
+    if (hint.isEmpty() && !to.isEmpty()) {
+        for (const auto& contact : m_model->contacts()) {
+            if (contact.name == to) hint = tr("%1  ·  Verified identity").arg(contact.display_name);
+        }
+    }
+    m_to_hint->setText(hint);
+    const auto fee = m_model->paymentFee();
+    m_fee->setText(fee ? tr("Network service fee: %1 (from System Balance)").arg(cybouAmountText(*fee))
+                       : tr("Network service fee: calculated when sending"));
+    const bool enough = amount <= m_model->status().balance;
+    if (amount > 0 && !enough) m_send_status->setText(tr("Not enough CYBOU available."));
+    m_confirm->setEnabled(!m_model->paymentPending() && !to.isEmpty() && to_problem.isEmpty() && amount > 0 &&
+        enough && m_model->capabilities().payments);
+    m_confirm->setText(m_model->paymentPending() ? tr("Sending…") : tr("Send"));
+}
+
+void WalletPage::submit()
+{
+    const QString to = m_to->text().trimmed().toLower();
+    const quint64 amount = m_amount->text().toULongLong();
+    if (m_model->requestPayment(to, amount)) {
+        m_send_status->setText(tr("Sending %1 to %2…").arg(cybouAmountText(amount), to));
+    } else {
+        m_send_status->setText(tr("The payment could not be started."));
+    }
+    updateSendState();
+}
+
+void WalletPage::showReceive()
+{
+    const auto& status = m_model->status();
+    QDialog dialog{this};
+    dialog.setWindowTitle(tr("Receive CYBOU"));
+    dialog.setMinimumWidth(460);
+    auto* layout = new QVBoxLayout{&dialog};
+    layout->setContentsMargins(24, 20, 24, 16);
+    layout->setSpacing(10);
+    layout->addWidget(SectionTitle(tr("Receive CYBOU"), &dialog));
+    layout->addWidget(MutedText(tr("Share your CYBOU name. Payments to it arrive in your Available balance."), &dialog));
+    auto* name = HeroTitle(status.primary_name.isEmpty() ? CybouProduct::shortId(status.account_id) : status.primary_name, &dialog);
+    name->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(name);
+    auto* copy = new QPushButton{tr("Copy"), &dialog};
+    copy->setObjectName(QStringLiteral("secondaryButton"));
+    const QString value = status.primary_name.isEmpty() ? status.account_id : status.primary_name;
+    connect(copy, &QPushButton::clicked, &dialog, [value] { QGuiApplication::clipboard()->setText(value); });
+    layout->addWidget(copy, 0, Qt::AlignLeft);
+    auto* buttons = new QDialogButtonBox{QDialogButtonBox::Close, &dialog};
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    dialog.exec();
 }
 
 void WalletPage::rebuildActivity()
 {
-    m_activity->clear();
-    for (const Entry& entry : m_entries) {
-        auto* row = new QFrame{m_activity};
-        auto* row_layout = new QHBoxLayout{row};
-        row_layout->setContentsMargins(10, 9, 10, 9);
-        row_layout->setSpacing(12);
-
-        Glyph glyph = Glyph::Transfer;
-        Tint tint = Tint::Neutral;
-        QString title = kindText(entry.kind);
-        QString subtitle;
-        switch (entry.kind) {
-        case EntryKind::Payment:
-            glyph = entry.amount >= 0 ? Glyph::ArrowDownLeft : Glyph::ArrowUpRight;
-            tint = entry.amount >= 0 ? Tint::Mint : Tint::Indigo;
-            title = entry.amount >= 0
-                ? tr("Received from %1").arg(entry.counterparty)
-                : tr("Sent to %1").arg(entry.counterparty);
-            break;
-        case EntryKind::OnboardingBonus:
-            glyph = Glyph::Sparkles;
-            tint = Tint::Amber;
-            subtitle = tr("Welcome to CYBOU");
-            break;
-        case EntryKind::MailFee:
-            glyph = Glyph::Envelope;
-            tint = Tint::Blue;
-            subtitle = tr("CYBOU Mail");
-            break;
-        case EntryKind::LockToSystem:
-            glyph = Glyph::Lock;
-            tint = Tint::Violet;
-            subtitle = tr("Funding services");
-            break;
+    while (QLayoutItem* item = m_activity_rows->takeAt(0)) {
+        if (QWidget* widget = item->widget()) {
+            widget->hide();
+            widget->deleteLater();
         }
-        if (subtitle.isEmpty() && !entry.counterparty.isEmpty()) subtitle = entry.counterparty;
-        subtitle = tr("%1 \u00b7 %2").arg(subtitle, QLocale{}.toString(entry.at, QLocale::ShortFormat));
-
-        row_layout->addWidget(Chip(glyph, tint, row, 36, 18), 0, Qt::AlignTop);
-        auto* main = new QVBoxLayout;
-        main->setSpacing(2);
-        auto* title_label = new QLabel{title, row};
-        title_label->setStyleSheet(QStringLiteral("font-weight: 700; color: %1; background: transparent; border: none;")
-            .arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
-        auto* sub = new QLabel{subtitle, row};
-        sub->setObjectName(QStringLiteral("rowSub"));
-        sub->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
-        main->addWidget(title_label);
-        main->addWidget(sub);
-        row_layout->addLayout(main, 1);
-
-        auto* side = new QVBoxLayout;
-        side->setSpacing(4);
-        auto* amount = new QLabel{(entry.amount >= 0 ? QStringLiteral("+") : QStringLiteral("\u2212")) +
-                                      cybouAmountText(static_cast<quint64>(qAbs<qint64>(entry.amount))),
-            row};
-        amount->setStyleSheet(QStringLiteral("font-weight: 800; background: transparent; border: none; color: %1;")
-            .arg(entry.amount >= 0 ? CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()
-                                   : CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
-        side->addWidget(amount, 0, Qt::AlignRight);
-        auto* badge = new QLabel{finalityText(entry.finality), row};
-        badge->setObjectName(entry.finality == EntryFinality::Final
-            ? QStringLiteral("pill")
-            : QStringLiteral("pill"));
-        badge->setProperty("tint", entry.finality == EntryFinality::Final ? "mint" : "neutral");
-        side->addWidget(badge, 0, Qt::AlignRight);
-        row_layout->addLayout(side);
-
-        auto* item = new QListWidgetItem{m_activity};
-        item->setSizeHint(row->sizeHint().expandedTo(QSize{0, 56}));
-        m_activity->setItemWidget(item, row);
+        delete item;
     }
-    if (m_activity->count() == 0) {
-        auto* item = new QListWidgetItem{m_activity};
-        item->setFlags(Qt::NoItemFlags);
-        item->setText(tr("No transactions yet.\nOnboarding bonus, Email fees and transfers will appear here once your account is active."));
-        item->setTextAlignment(Qt::AlignCenter);
-        item->setForeground(QBrush{CybouTheme::color(CybouTheme::TEXT_MUTED)});
-        item->setSizeHint(QSize{0, 120});
+    int shown = 0;
+    for (const auto& entry : m_model->walletEntries()) {
+        if (shown == 12) break;
+        const QString sign = entry.amount >= 0 ? QStringLiteral("+") : QStringLiteral("−");
+        const QString amount = sign + cybouAmountText(static_cast<quint64>(std::llabs(entry.amount)));
+        const QString subtitle = entry.pending ? tr("Waiting for confirmation")
+            : entry.system_side ? tr("System Balance") : tr("Available");
+        m_activity_rows->addWidget(ActivityRow(EntryGlyph(entry),
+            entry.amount >= 0 ? Tint::Mint : Tint::Indigo, EntryTitle(entry), subtitle,
+            amount + QStringLiteral("  ·  ") + relTime(entry.time), m_activity_rows->parentWidget()));
+        ++shown;
     }
-}
-
-void WalletPage::onSendClicked()
-{
-    auto* service = m_model->walletService();
-    if (!service) {
-        actionNotWired();
-        return;
-    }
-
-    QDialog dialog(this);
-    dialog.setWindowTitle(tr("Send CYBOU"));
-    dialog.setMinimumWidth(440);
-
-    auto* layout = new QVBoxLayout(&dialog);
-    layout->setSpacing(16);
-
-    auto* desc = noteLabel(tr("Enter the recipient Account ID (hex) and the amount of whole CYBOU to transfer. Debits user balance only; deterministic fee of 1 CYBOU is paid from System Balance."), &dialog);
-    layout->addWidget(desc);
-
-    auto* form = new QFormLayout;
-    form->setSpacing(12);
-
-    auto* recipient_edit = new QLineEdit(&dialog);
-    recipient_edit->setPlaceholderText(tr("Recipient Account ID (64-character hex)"));
-    form->addRow(tr("Recipient:"), recipient_edit);
-
-    auto* amount_spin = new QSpinBox(&dialog);
-    amount_spin->setRange(1, 1'000'000'000);
-    amount_spin->setValue(10);
-    amount_spin->setSuffix(QStringLiteral(" CYBOU"));
-    form->addRow(tr("Amount:"), amount_spin);
-
-    layout->addLayout(form);
-
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    layout->addWidget(buttons);
-
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-
-    if (dialog.exec() != QDialog::Accepted) {
-        return;
-    }
-
-    const QString to_str = recipient_edit->text().trimmed();
-    const auto rec_u256 = cybou::ParseUint256UserHex(to_str.toStdString());
-    if (!rec_u256 || rec_u256->IsNull()) {
-        QMessageBox::warning(this, tr("Invalid Recipient"), tr("Please enter a valid 64-character hex Account ID."));
-        return;
-    }
-
-    const cybou::AccountId recipient{*rec_u256};
-    const uint64_t amount = static_cast<uint64_t>(amount_spin->value());
-    m_operation_pending = true;
-    refresh();
-    const QPointer<WalletPage> guard{this};
-    service->SendPaymentAsync(recipient, amount, [guard, amount](cybou::WalletOperationResult result) {
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [guard, amount, result = std::move(result)] {
-            if (!guard) return;
-            auto* page = guard.data();
-            page->m_operation_pending = false;
-            page->refresh();
-            if (!result) {
-                QMessageBox::warning(page, page->tr("Payment Failed"),
-                    page->tr("Payment failed: %1").arg(QString::fromStdString(result.error_message)));
-            } else {
-                QMessageBox::information(page, page->tr("Payment Submitted"),
-                    page->tr("Payment of %1 submitted to the network. BFT finality will confirm it shortly.").arg(cybouAmountText(amount)));
-            }
-            page->refreshLedgerView();
-            page->refresh();
-        }, Qt::QueuedConnection);
-    });
-}
-
-void WalletPage::onLockClicked()
-{
-    auto* service = m_model->walletService();
-    if (!service) {
-        actionNotWired();
-        return;
-    }
-
-    QDialog dialog(this);
-    dialog.setWindowTitle(tr("Transfer to System Balance"));
-    dialog.setMinimumWidth(440);
-
-    auto* layout = new QVBoxLayout(&dialog);
-    layout->setSpacing(16);
-
-    auto* warning = new QLabel(tr("<b>One-way transfer.</b><br>Moving Balance into System Balance permanently assigns it to protocol services (such as Email fees). System Balance cannot be transferred, traded, or converted back to Balance."), &dialog);
-    warning->setWordWrap(true);
-    warning->setStyleSheet(QStringLiteral("color: #b45309;"));
-    layout->addWidget(warning);
-
-    auto* form = new QFormLayout;
-    form->setSpacing(12);
-
-    auto* amount_spin = new QSpinBox(&dialog);
-    amount_spin->setRange(1, 1'000'000'000);
-    amount_spin->setValue(50);
-    amount_spin->setSuffix(QStringLiteral(" CYBOU"));
-    form->addRow(tr("Amount to transfer:"), amount_spin);
-
-    layout->addLayout(form);
-
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    buttons->button(QDialogButtonBox::Ok)->setText(tr("Confirm one-way transfer"));
-    layout->addWidget(buttons);
-
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-
-    if (dialog.exec() != QDialog::Accepted) {
-        return;
-    }
-
-    const uint64_t amount = static_cast<uint64_t>(amount_spin->value());
-    m_operation_pending = true;
-    refresh();
-    const QPointer<WalletPage> guard{this};
-    service->LockToSystemBalanceAsync(amount, [guard, amount](cybou::WalletOperationResult result) {
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [guard, amount, result = std::move(result)] {
-            if (!guard) return;
-            auto* page = guard.data();
-            page->m_operation_pending = false;
-            page->refresh();
-            if (!result) {
-                QMessageBox::warning(page, page->tr("Transfer Failed"),
-                    page->tr("Transfer failed: %1").arg(QString::fromStdString(result.error_message)));
-            } else {
-                QMessageBox::information(page, page->tr("Transfer Submitted"),
-                    page->tr("Transfer of %1 submitted to the network. BFT finality will confirm it shortly.").arg(cybouAmountText(amount)));
-            }
-            page->refreshLedgerView();
-            page->refresh();
-        }, Qt::QueuedConnection);
-    });
-}
-
-void WalletPage::onReceiveClicked()
-{
-    const auto& status = m_model->status();
-    if (status.identity_state != CybouIdentityState::Active || status.account_id.isEmpty()) {
-        QMessageBox::information(this, tr("No Active Identity"), tr("Create an active CYBOU identity before receiving payments."));
-        return;
-    }
-
-    QDialog dialog(this);
-    dialog.setWindowTitle(tr("Receive CYBOU"));
-    dialog.setMinimumWidth(480);
-
-    auto* layout = new QVBoxLayout(&dialog);
-    layout->setSpacing(16);
-
-    auto* desc = noteLabel(tr("Give your Account ID to the sender. Anyone on the CYBOU network can transfer whole CYBOU to this account."), &dialog);
-    layout->addWidget(desc);
-
-    auto* acc_edit = new QLineEdit(status.account_id, &dialog);
-    acc_edit->setReadOnly(true);
-    acc_edit->selectAll();
-    layout->addWidget(acc_edit);
-
-    auto* btn_layout = new QHBoxLayout;
-    auto* copy_btn = new QPushButton(tr("Copy to Clipboard"), &dialog);
-    copy_btn->setObjectName(QStringLiteral("primaryButton"));
-    connect(copy_btn, &QPushButton::clicked, [&] {
-        QGuiApplication::clipboard()->setText(status.account_id);
-        copy_btn->setText(tr("Copied!"));
-    });
-    btn_layout->addWidget(copy_btn);
-
-    auto* close_btn = new QPushButton(tr("Close"), &dialog);
-    close_btn->setObjectName(QStringLiteral("secondaryButton"));
-    connect(close_btn, &QPushButton::clicked, &dialog, &QDialog::accept);
-    btn_layout->addWidget(close_btn);
-
-    layout->addLayout(btn_layout);
-    dialog.exec();
-}
-
-void WalletPage::refreshLedgerView()
-{
-    auto* service = m_model->walletService();
-    if (!service) {
-        return;
-    }
-
-    const auto [bal, sys] = service->GetBalances();
-    m_model->setBalances(bal, sys);
-
-    const auto entries = service->GetLedgerEntries();
-    QVector<Entry> loaded;
-    for (const auto& e : entries) {
-        Entry entry;
-        entry.id = QString::fromStdString(e.entry_id.GetHex());
-        entry.amount = e.amount;
-        entry.system_side = e.system_side;
-        entry.counterparty = e.counterparty.IsNull() ? QString{} : QString::fromStdString(e.counterparty.Value().GetHex());
-        entry.at = e.timestamp > 0 ? QDateTime::fromSecsSinceEpoch(static_cast<qint64>(e.timestamp)) : QDateTime::currentDateTime();
-        entry.finality = (e.finality == cybou::WalletEntryFinality::FINAL) ? EntryFinality::Final : EntryFinality::Pending;
-
-        switch (e.kind) {
-        case cybou::WalletEntryKind::ONBOARDING_BONUS:
-            entry.kind = EntryKind::OnboardingBonus;
-            break;
-        case cybou::WalletEntryKind::MAIL_FEE:
-            entry.kind = EntryKind::MailFee;
-            break;
-        case cybou::WalletEntryKind::PAYMENT:
-            entry.kind = EntryKind::Payment;
-            break;
-        case cybou::WalletEntryKind::LOCK_TO_SYSTEM:
-            entry.kind = EntryKind::LockToSystem;
-            break;
-        }
-        loaded.append(entry);
-    }
-
-    bool changed = (m_entries.size() != loaded.size());
-    if (!changed) {
-        for (int i = 0; i < m_entries.size(); ++i) {
-            if (m_entries[i].id != loaded[i].id ||
-                m_entries[i].finality != loaded[i].finality ||
-                m_entries[i].amount != loaded[i].amount) {
-                changed = true;
-                break;
-            }
-        }
-    }
-
-    if (changed) {
-        m_entries = std::move(loaded);
-        rebuildActivity();
-    }
-}
-
-void WalletPage::actionNotWired()
-{
-    // Reachable only when core reports payments; until the backend call
-    // exists, say so instead of pretending to transfer.
-    QMessageBox::information(this, tr("Not available yet"),
-        tr("Transfers are not wired to the node in this build. No operation was created."));
+    m_activity_empty->setVisible(shown == 0);
 }

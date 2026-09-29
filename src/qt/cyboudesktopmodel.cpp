@@ -9,6 +9,7 @@
 #include <cybou/recovery_phrase.h>
 #include <cybou/name_registry.h>
 #include <cybou/name_service.h>
+#include <cybou/node_runtime.h>
 #include <cybou/wallet_service.h>
 
 #include <support/cleanse.h>
@@ -40,6 +41,7 @@ CybouDesktopModel::~CybouDesktopModel()
     if (m_name_service) m_name_service->Cancel();
     if (m_name_worker.joinable()) m_name_worker.join();
     if (m_recovery_rotation_worker.joinable()) m_recovery_rotation_worker.join();
+    if (m_payment_worker.joinable()) m_payment_worker.join();
 }
 
 void CybouDesktopModel::setNodeStatus(bool running, int peer_count, bool online,
@@ -400,6 +402,59 @@ void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
 {
     m_wallet_entries = std::move(entries);
     Q_EMIT walletChanged();
+}
+
+bool CybouDesktopModel::requestPayment(const QString& to_name, quint64 amount)
+{
+    if (m_payment_pending || amount == 0 || m_status.identity_state != CybouIdentityState::Active) return false;
+    const QString name = to_name.trimmed().toLower();
+    if (!name.endsWith(QStringLiteral(".cybou")) || !nameLabelProblem(name.chopped(6)).isEmpty()) return false;
+    if (name == m_status.primary_name) return false;
+    m_payment_pending = true;
+    Q_EMIT statusChanged();
+    Q_EMIT paymentRequested(name, amount);
+    if (m_fixture_mode) return true; // the fixture driver answers
+    if (!m_wallet_service || !m_identity_service) {
+        setPaymentFinished(false, tr("Payments are not connected yet."));
+        return true;
+    }
+    if (m_payment_worker.joinable()) m_payment_worker.join();
+    m_payment_worker = std::jthread([this, label = name.chopped(6).toStdString(), amount] {
+        // Resolve the finalized name owner, then submit from Balance.
+        std::optional<cybou::AccountId> recipient;
+        {
+            const auto loaded = m_identity_service->GetNodeRuntime().GetStore().LoadState();
+            if (loaded && loaded.state) {
+                if (const auto* owner = loaded.state->names.Resolve(label)) recipient = *owner;
+            }
+        }
+        if (!recipient) {
+            QMetaObject::invokeMethod(this, [this] {
+                setPaymentFinished(false, tr("This name does not belong to a CYBOU Identity."));
+            }, Qt::QueuedConnection);
+            return;
+        }
+        const auto result = m_wallet_service->SendPayment(*recipient, amount);
+        const bool ok = static_cast<bool>(result);
+        QString error;
+        switch (result.error) {
+        case cybou::WalletOperationError::NONE: break;
+        case cybou::WalletOperationError::INSUFFICIENT_BALANCE: error = tr("Not enough CYBOU available."); break;
+        case cybou::WalletOperationError::INSUFFICIENT_SYSTEM_BALANCE: error = tr("Not enough System Balance for the network service fee."); break;
+        case cybou::WalletOperationError::SELF_PAYMENT: error = tr("You cannot send CYBOU to yourself."); break;
+        case cybou::WalletOperationError::SUBMIT_FAILED: error = tr("CYBOU could not reach the network. Try again."); break;
+        default: error = tr("The payment could not be sent."); break;
+        }
+        QMetaObject::invokeMethod(this, [this, ok, error] { setPaymentFinished(ok, error); }, Qt::QueuedConnection);
+    });
+    return true;
+}
+
+void CybouDesktopModel::setPaymentFinished(bool ok, const QString& error)
+{
+    m_payment_pending = false;
+    Q_EMIT statusChanged();
+    Q_EMIT paymentFinished(ok, error);
 }
 
 void CybouDesktopModel::setContacts(QVector<CybouContact> contacts)

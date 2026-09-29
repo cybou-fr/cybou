@@ -165,6 +165,18 @@ public:
 
     const QVector<CybouWalletEntry>& walletEntries() const { return m_wallet_entries; }
     void setWalletEntries(QVector<CybouWalletEntry> entries);
+    /** Deterministic network service fee for a payment, when known. */
+    std::optional<quint64> paymentFee() const { return m_payment_fee; }
+    void setPaymentFee(std::optional<quint64> fee) { m_payment_fee = fee; }
+    bool paymentPending() const { return m_payment_pending; }
+    /**
+     * Sends CYBOU to a .cybou name from Balance. Resolution and submission
+     * run off the GUI thread; the result arrives via paymentFinished.
+     * Returns false when a payment is already in flight or inputs are invalid.
+     */
+    bool requestPayment(const QString& to_name, quint64 amount);
+    /** Adapter entry: payment finished (ok) or failed with a reason. */
+    void setPaymentFinished(bool ok, const QString& error = {});
 
     const QVector<CybouContact>& contacts() const { return m_contacts; }
     void setContacts(QVector<CybouContact> contacts);
@@ -257,6 +269,8 @@ Q_SIGNALS:
     void fileUploadRequested(const QString& file_id, const QString& source_path);
     void fileDownloadRequested(const QString& file_id, const QString& destination);
     void mailSendRequested(const QString& id);
+    void paymentRequested(const QString& to_name, quint64 amount);
+    void paymentFinished(bool ok, const QString& error);
     void attachmentDownloadRequested(const QString& message_id, const QString& attachment_id,
         const QString& destination);
 
@@ -266,6 +280,9 @@ private:
     std::unique_ptr<cybou::CybouNameService> m_name_service;
     std::jthread m_name_worker;
     std::jthread m_recovery_rotation_worker;
+    std::jthread m_payment_worker;
+    bool m_payment_pending{false};
+    std::optional<quint64> m_payment_fee;
     bool m_recovery_rotation_pending{false};
     bool m_fixture_mode{false};
     CybouDesktopStatus m_status;

@@ -100,12 +100,13 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     caps.files = true;
     model.setCapabilities(caps);
 
+    model.setPaymentFee(1);
     model.setContacts({
         {QStringLiteral("Alice"), QStringLiteral("alice.cybou"), true},
         {QStringLiteral("Alina Petrova"), QStringLiteral("alina.cybou"), true},
-        {QStringLiteral("Bob"), QStringLiteral("bob.cybou"), true},
+        {QStringLiteral("Bob"), QStringLiteral("bobby.cybou"), true},
         {QStringLiteral("Carol Martin"), QStringLiteral("carol.cybou"), true},
-        {QStringLiteral("CYBOU"), QStringLiteral("team.cybou"), true},
+        {QStringLiteral("CYBOU"), QStringLiteral("cybou-team.cybou"), true},
     });
 }
 
@@ -122,7 +123,7 @@ void ApplyMail(CybouDesktopModel& model)
         Attachment(QStringLiteral("c-photo"), QStringLiteral("photo.jpg"), 8493466),
     };
     mail.append(project);
-    mail.append(Mail(QStringLiteral("m-dinner"), CybouMailFolder::Inbox, QStringLiteral("bob.cybou"),
+    mail.append(Mail(QStringLiteral("m-dinner"), CybouMailFolder::Inbox, QStringLiteral("bobby.cybou"),
         QStringLiteral("stan.cybou"), QStringLiteral("Dinner on Friday?"),
         QStringLiteral("Are you free on Friday evening? The new place near the station finally opened."),
         At(0, 9, 15), true));
@@ -135,7 +136,7 @@ void ApplyMail(CybouDesktopModel& model)
         QStringLiteral("stan.cybou"), QStringLiteral("Trip photos"),
         QStringLiteral("Uploading the rest tonight. The mountains came out beautifully."),
         At(2, 20, 31), true));
-    auto welcome = Mail(QStringLiteral("m-welcome"), CybouMailFolder::Inbox, QStringLiteral("team.cybou"),
+    auto welcome = Mail(QStringLiteral("m-welcome"), CybouMailFolder::Inbox, QStringLiteral("cybou-team.cybou"),
         QStringLiteral("stan.cybou"), QStringLiteral("Welcome to CYBOU"),
         QStringLiteral("Your Identity is ready. Mail and Files are protected end to end, and your "
                        "recovery phrase restores everything on a new computer."),
@@ -155,7 +156,7 @@ void ApplyMail(CybouDesktopModel& model)
     securing.attachments.first().progress_percent = 42;
     mail.append(securing);
     mail.append(Mail(QStringLiteral("m-draft-1"), CybouMailFolder::Drafts, QStringLiteral("stan.cybou"),
-        QStringLiteral("bob.cybou"), QStringLiteral("Weekend plans"),
+        QStringLiteral("bobby.cybou"), QStringLiteral("Weekend plans"),
         QStringLiteral("Hey Bob, about Saturday —"), At(0, 8, 2)));
     mail.append(Mail(QStringLiteral("m-archive-1"), CybouMailFolder::Archive, QStringLiteral("carol.cybou"),
         QStringLiteral("stan.cybou"), QStringLiteral("Meeting notes"),
@@ -189,7 +190,7 @@ void ApplyWallet(CybouDesktopModel& model)
 {
     QVector<CybouWalletEntry> entries;
     entries.append({QStringLiteral("w1"), CybouWalletEntryKind::Received, 250, false, QStringLiteral("alice.cybou"), At(0, 9, 30), false});
-    entries.append({QStringLiteral("w2"), CybouWalletEntryKind::Sent, -100, false, QStringLiteral("bob.cybou"), At(1, 17, 44), false});
+    entries.append({QStringLiteral("w2"), CybouWalletEntryKind::Sent, -100, false, QStringLiteral("bobby.cybou"), At(1, 17, 44), false});
     entries.append({QStringLiteral("w3"), CybouWalletEntryKind::NetworkServiceFee, -4, true, {}, At(1, 12, 20), false});
     entries.append({QStringLiteral("w4"), CybouWalletEntryKind::OnboardingCredit, 5000, true, {}, At(6, 10, 58), false});
     model.setWalletEntries(entries);
@@ -200,7 +201,7 @@ void ApplyActivity(CybouDesktopModel& model)
     model.setActivity({
         {CybouActivityKind::MailReceived, QStringLiteral("Message from alice.cybou"), QStringLiteral("Project files"), At(0, 10, 42)},
         {CybouActivityKind::FileUploaded, QStringLiteral("report.pdf uploaded"), QStringLiteral("Protected"), At(0, 10, 50)},
-        {CybouActivityKind::PaymentSent, QStringLiteral("100 CYBOU sent to bob.cybou"), QString{}, At(1, 17, 44)},
+        {CybouActivityKind::PaymentSent, QStringLiteral("100 CYBOU sent to bobby.cybou"), QString{}, At(1, 17, 44)},
         {CybouActivityKind::IdentitySynced, QStringLiteral("Identity synchronized"), QString{}, At(0, 8, 0)},
     });
 }
@@ -288,6 +289,26 @@ Driver::Driver(CybouDesktopModel* model, QObject* parent)
         later(2, [this, id] { m_model->setFileRetrieval(id, CybouRetrievalState::Decrypting); });
         later(3, [this, id] { m_model->setFileRetrieval(id, CybouRetrievalState::Ready); });
         later(6, [this, id] { m_model->setFileRetrieval(id, CybouRetrievalState::Idle); });
+    });
+    connect(m_model, &CybouDesktopModel::paymentRequested, this, [this](const QString& to, quint64 amount) {
+        later(2, [this, to, amount] {
+            const quint64 fee = m_model->paymentFee().value_or(0);
+            const auto& status = m_model->status();
+            if (amount > status.balance) {
+                m_model->setPaymentFinished(false, tr("Not enough CYBOU available."));
+                return;
+            }
+            m_model->setBalances(status.balance - amount, status.system_balance - qMin(fee, status.system_balance));
+            QVector<CybouWalletEntry> entries = m_model->walletEntries();
+            entries.prepend({QStringLiteral("w-fee-%1").arg(entries.size()), CybouWalletEntryKind::NetworkServiceFee,
+                -static_cast<qint64>(fee), true, {}, QDateTime::currentDateTime(), false});
+            entries.prepend({QStringLiteral("w-sent-%1").arg(entries.size()), CybouWalletEntryKind::Sent,
+                -static_cast<qint64>(amount), false, to, QDateTime::currentDateTime(), false});
+            m_model->setWalletEntries(entries);
+            m_model->addActivity({CybouActivityKind::PaymentSent, tr("%1 sent to %2").arg(cybouAmountText(amount), to),
+                QString{}, QDateTime::currentDateTime()});
+            m_model->setPaymentFinished(true);
+        });
     });
     connect(m_model, &CybouDesktopModel::mailSendRequested, this, [this](const QString& id) { runSend(id); });
     connect(m_model, &CybouDesktopModel::attachmentDownloadRequested, this,

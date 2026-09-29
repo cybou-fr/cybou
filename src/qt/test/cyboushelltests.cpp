@@ -289,7 +289,7 @@ void CybouShellTests::mailNavigationAndSearch()
     QCOMPARE(search->placeholderText(), QStringLiteral("Search mail"));
     search->setText(QStringLiteral("contract-signed"));
     QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-contract")});
-    search->setText(QStringLiteral("bob.cybou"));
+    search->setText(QStringLiteral("bobby.cybou"));
     QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-dinner")});
     search->clear();
 
@@ -321,7 +321,7 @@ void CybouShellTests::composeGatesAndSends()
     auto* to = mail->findChild<QLineEdit*>(QStringLiteral("recipientEdit"));
     auto* body = mail->findChild<QTextEdit*>(QStringLiteral("composeBody"));
     QVERIFY(send && to && body);
-    to->setText(QStringLiteral("alice.cybou, bob.cybou"));
+    to->setText(QStringLiteral("alice.cybou, bobby.cybou"));
     body->setPlainText(QStringLiteral("hello"));
     QVERIFY(!send->isEnabled()); // one recipient only
     to->setText(QStringLiteral("alice"));
@@ -415,22 +415,44 @@ void CybouShellTests::walletPageShowsBalances()
     auto window = makeWindow();
     auto* wallet = window->page(CybouPage::Wallet);
     QVERIFY(wallet);
+    const auto find_button = [wallet](const char* id) -> QPushButton* {
+        for (auto* button : wallet->findChildren<QPushButton*>()) {
+            if (button->property("cybouId").toString() == QLatin1String{id}) return button;
+        }
+        return nullptr;
+    };
+    // Without an Identity, Send and Receive are unavailable.
+    QVERIFY(!find_button("walletSend")->isEnabled());
+    QVERIFY(!find_button("walletReceive")->isEnabled());
 
-    // Amounts render as whole CYBOU (indivisible asset, decimals = 0).
-    const auto labels = wallet->findChildren<QLabel*>();
-    bool found_amount = false;
-    for (const auto* label : labels) {
-        if (label->text().contains(QStringLiteral("CYBOU"))) found_amount = true;
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    bool found_available = false;
+    for (const auto* label : wallet->findChildren<QLabel*>()) {
+        if (label->text() == cybouAmountText(5820)) found_available = true;
+        QVERIFY(!label->text().contains(QLatin1String{"Mail fee"}));
     }
-    QVERIFY(found_amount);
+    QVERIFY(found_available);
 
-    // Without an identity all transfer actions stay disabled: Balance
-    // debits require the user's authorization, and the UI offers none.
-    const auto buttons = wallet->findChildren<QPushButton*>();
-    QVERIFY(!buttons.isEmpty());
-    for (const auto* button : buttons) {
-        QVERIFY(!button->isEnabled());
-    }
+    // Send to a .cybou name; the fee is shown before sending.
+    find_button("walletSend")->click();
+    auto* to = wallet->findChild<QLineEdit*>(QStringLiteral("walletTo"));
+    auto* amount = wallet->findChild<QLineEdit*>(QStringLiteral("walletAmount"));
+    auto* confirm = find_button("walletConfirm");
+    to->setText(QStringLiteral("stan.cybou"));
+    amount->setText(QStringLiteral("100"));
+    QVERIFY(!confirm->isEnabled()); // not to yourself
+    to->setText(QStringLiteral("bobby.cybou"));
+    amount->setText(QStringLiteral("999999"));
+    QVERIFY(!confirm->isEnabled()); // more than available
+    amount->setText(QStringLiteral("100"));
+    QVERIFY(confirm->isEnabled());
+    QSignalSpy requested{model, &CybouDesktopModel::paymentRequested};
+    confirm->click();
+    QCOMPARE(requested.count(), 1);
+    QVERIFY(model->paymentPending());
+    model->setPaymentFinished(true);
+    QVERIFY(!model->paymentPending());
 }
 
 void CybouShellTests::filesGateActions()

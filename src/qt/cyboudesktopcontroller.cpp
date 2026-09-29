@@ -146,8 +146,37 @@ void CybouDesktopController::start()
                     if (m_wallet_service) {
                         m_wallet_service->SyncLedger();
                         const auto [balance, system_balance] = m_wallet_service->GetBalances();
-                        QMetaObject::invokeMethod(m_model, [model = m_model, balance, system_balance] {
+                        QVector<CybouWalletEntry> entries;
+                        for (const auto& entry : m_wallet_service->GetLedgerEntries()) {
+                            CybouWalletEntry item;
+                            item.id = QString::fromStdString(entry.entry_id.GetHex());
+                            item.amount = entry.amount;
+                            item.system_side = entry.system_side;
+                            item.time = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(entry.timestamp));
+                            item.pending = entry.finality == cybou::WalletEntryFinality::PENDING;
+                            if (!entry.counterparty.IsNull()) {
+                                item.counterparty_name = QString::fromStdString(entry.counterparty.Value().GetHex());
+                            }
+                            switch (entry.kind) {
+                            case cybou::WalletEntryKind::PAYMENT:
+                                item.kind = entry.amount >= 0 ? CybouWalletEntryKind::Received : CybouWalletEntryKind::Sent;
+                                break;
+                            case cybou::WalletEntryKind::ONBOARDING_BONUS:
+                                item.kind = CybouWalletEntryKind::OnboardingCredit;
+                                break;
+                            case cybou::WalletEntryKind::LOCK_TO_SYSTEM:
+                                item.kind = CybouWalletEntryKind::MovedToSystemBalance;
+                                break;
+                            case cybou::WalletEntryKind::MAIL_FEE:
+                            case cybou::WalletEntryKind::ROOT_PUBLICATION_FEE:
+                                item.kind = CybouWalletEntryKind::NetworkServiceFee;
+                                break;
+                            }
+                            entries.append(item);
+                        }
+                        QMetaObject::invokeMethod(m_model, [model = m_model, balance, system_balance, entries = std::move(entries)]() mutable {
                             model->setBalances(balance, system_balance);
+                            model->setWalletEntries(std::move(entries));
                         }, Qt::QueuedConnection);
                     }
                 } catch (const std::exception& e) {

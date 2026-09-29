@@ -161,6 +161,7 @@ enum class CybouWalletEntryKind {
     Sent,
     NetworkServiceFee,
     OnboardingCredit,
+    MovedToSystemBalance,
 };
 
 struct CybouWalletEntry {
