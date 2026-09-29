@@ -71,9 +71,17 @@ public:
     /**
      * Groups dependent writes (a record and its index, a block and its scan
      * checkpoint) so a crash can never persist only part of them. While a
-     * Batch is open, Put/Erase are staged and Get/Has read through them;
-     * Commit applies all of them atomically. Destroying an uncommitted Batch
-     * discards the staged changes. Batches nest; the outermost one commits.
+     * Batch is open, Put/Erase are staged and Get/Has read through them.
+     *
+     * Outermost Batch: Commit applies every staged change atomically (one
+     * synced write) or none; destroying it uncommitted discards everything.
+     *
+     * Nested Batch = savepoint of the enclosing one. Its Commit only keeps its
+     * changes in the enclosing batch (nothing is durable until the outermost
+     * Commit). Destroying it uncommitted, or committing after one of its own
+     * writes failed, rolls back exactly its changes and returns the enclosing
+     * batch to its state at the savepoint; the enclosing batch can still
+     * commit.
      */
     class Batch final {
     public:
@@ -84,9 +92,16 @@ public:
         bool Commit();
 
     private:
+        using Staged = std::map<std::string, std::optional<std::vector<unsigned char>>>;
+        void RollBack();
+        static void Cleanse(Staged& staged);
+
         PrivateApplicationStore& m_store;
         bool m_outermost{false};
         bool m_done{false};
+        /** Enclosing batch state at this savepoint (nested batches only). */
+        Staged m_savepoint;
+        bool m_savepoint_failed{false};
     };
 
     const AccountId& Account() const { return m_account; }

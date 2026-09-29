@@ -168,7 +168,16 @@ BOOST_AUTO_TEST_CASE(batches_persist_all_changes_or_none)
                 BOOST_REQUIRE(store.Put("index", Bytes("record")));
                 BOOST_REQUIRE(nested.Commit());
             }
+            {
+                // An abandoned savepoint rolls back only its own changes...
+                cybou::PrivateApplicationStore::Batch abandoned{store};
+                BOOST_REQUIRE(store.Put("record", Bytes("overwritten")));
+                BOOST_REQUIRE(store.Put("partial", Bytes("half done")));
+            }
+            BOOST_CHECK(store.Get("record") == Bytes("payload"));
+            BOOST_CHECK(!store.Has("partial"));
             BOOST_REQUIRE(store.Erase("old"));
+            // ...and the enclosing batch still commits everything else.
             BOOST_REQUIRE(batch.Commit());
         }
     }
@@ -177,6 +186,7 @@ BOOST_AUTO_TEST_CASE(batches_persist_all_changes_or_none)
     BOOST_CHECK(reopened.Get("record") == Bytes("payload"));
     BOOST_CHECK(reopened.Get("index") == Bytes("record"));
     BOOST_CHECK(!reopened.Has("old"));
+    BOOST_CHECK(!reopened.Has("partial"));
     const std::vector<cybou::PrivateApplicationStore::Change> changes{
         {"a", Bytes("1")}, {"b", Bytes("2")}, {"record", std::nullopt}};
     BOOST_REQUIRE(reopened.WriteBatch(changes));

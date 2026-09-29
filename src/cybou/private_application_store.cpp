@@ -287,18 +287,38 @@ PrivateApplicationStore::Batch::Batch(PrivateApplicationStore& store) : m_store{
         store.m_staged.emplace();
         store.m_staged_failed = false;
         m_outermost = true;
+    } else {
+        m_savepoint = *store.m_staged;
+        m_savepoint_failed = store.m_staged_failed;
     }
+}
+
+void PrivateApplicationStore::Batch::Cleanse(Staged& staged)
+{
+    for (auto& [_, value] : staged) {
+        if (value) crypto::CleanseMemory(value->data(), value->size());
+    }
+    staged.clear();
+}
+
+void PrivateApplicationStore::Batch::RollBack()
+{
+    Cleanse(*m_store.m_staged);
+    *m_store.m_staged = std::move(m_savepoint);
+    m_store.m_staged_failed = m_savepoint_failed;
+    m_savepoint.clear();
 }
 
 PrivateApplicationStore::Batch::~Batch()
 {
     if (m_outermost && m_store.m_staged) {
         // Uncommitted: nothing reaches disk. Wipe staged plaintext.
-        for (auto& [_, value] : *m_store.m_staged) {
-            if (value) crypto::CleanseMemory(value->data(), value->size());
-        }
+        Cleanse(*m_store.m_staged);
         m_store.m_staged.reset();
+    } else if (!m_outermost && !m_done && m_store.m_staged) {
+        RollBack(); // abandoned savepoint: only its own changes disappear
     }
+    Cleanse(m_savepoint);
     m_store.m_mutex.unlock();
 }
 
@@ -306,7 +326,12 @@ bool PrivateApplicationStore::Batch::Commit()
 {
     if (m_done) return false;
     m_done = true;
-    if (!m_outermost) return !m_store.m_staged_failed; // the outermost batch commits
+    if (!m_outermost) {
+        // Keep the changes in the enclosing batch, unless one of them failed.
+        if (!m_store.m_staged_failed) return true;
+        RollBack();
+        return false;
+    }
     auto staged = std::move(*m_store.m_staged);
     const bool failed = m_store.m_staged_failed;
     m_store.m_staged.reset();
