@@ -42,9 +42,13 @@ with SHA-256, then signs the 32-byte digest with both components. The fixed
 certificate encoding is `version_u8 || NetworkID || BlockID || height_u64le ||
 parent_block_id || Ed25519_signature || ML-DSA-65_signature`; signatures are
 64 and 3,309 bytes, respectively. Verification also compares every certificate
-field with the independently reconstructed canonical block. Cross-implementation
-key-derivation, digest, signature, and encoding vectors remain required before
-cutover.
+field with the independently reconstructed canonical block. Key-derivation,
+digest, Ed25519, and certificate-encoding vectors are recorded in
+`POA_FINALITY_VECTORS.md`. Cross-implementation confirmation and a fixed
+ML-DSA-65 signature vector remain required before cutover. The current OpenSSL
+integration uses randomized ML-DSA signatures, so fixed-output testing must
+use a separately specified test-vector signing mode and must not change
+production signing behavior.
 Use the existing consensus hash primitive for block/finality IDs; BLAKE3 is
 introduced only for content-addressed encrypted chunks and their proofs.
 
