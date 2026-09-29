@@ -29,11 +29,6 @@ std::string ChunkKey(const std::string& name_space, const ChunkId& id)
     return name_space + "/chunk/" + Hex(id);
 }
 
-std::string PublicationBytesKey(const std::string& name_space, const uint256& publication_id)
-{
-    return name_space + "/publication-bytes/" + publication_id.GetHex();
-}
-
 std::string PublicationChunkKey(const std::string& name_space, const uint256& publication_id, const ChunkId& id)
 {
     return name_space + "/publication-chunk/" + publication_id.GetHex() + "/" + Hex(id);
@@ -42,11 +37,10 @@ std::string PublicationChunkKey(const std::string& name_space, const uint256& pu
 std::vector<unsigned char> EncodeProofMetadata(const ChunkAuthorizationProof& proof)
 {
     std::vector<unsigned char> encoded;
-    encoded.reserve(20 + proof.siblings.size() * ChunkId{}.size());
+    encoded.reserve(12 + proof.siblings.size() * ChunkId{}.size());
     const auto append_u32 = [&encoded](const std::uint32_t value) {
         for (int shift = 24; shift >= 0; shift -= 8) encoded.push_back(static_cast<unsigned char>(value >> shift));
     };
-    for (int shift = 56; shift >= 0; shift -= 8) encoded.push_back(static_cast<unsigned char>(proof.stored_bytes >> shift));
     append_u32(proof.leaf_index);
     append_u32(proof.chunk_count);
     append_u32(static_cast<std::uint32_t>(proof.siblings.size()));
@@ -59,7 +53,7 @@ std::vector<unsigned char> EncodeProofMetadata(const ChunkAuthorizationProof& pr
 FinalizedChunkStore::FinalizedChunkStore(const std::filesystem::path& path,
     const std::span<const unsigned char, 32> network_id, const std::uint64_t capacity_bytes,
     const bool memory_only, const bool wipe_data)
-    : m_namespace{"chunk-store/v1/" + Hex(network_id)}, m_capacity_bytes{capacity_bytes}
+    : m_namespace{"chunk-store/v2/" + Hex(network_id)}, m_capacity_bytes{capacity_bytes}
 {
     if (capacity_bytes == 0 || std::all_of(network_id.begin(), network_id.end(), [](const auto byte) { return byte == 0; }) ||
         (!memory_only && path.empty())) {
@@ -74,7 +68,7 @@ FinalizedChunkStore::FinalizedChunkStore(const std::filesystem::path& path,
 
     // The path is operator-configured and can accidentally be reused across networks.
     // Refuse that configuration rather than mixing provider data or accounting.
-    const std::string network_key{"chunk-store/v1/network-id"};
+    const std::string network_key{"chunk-store/v2/network-id"};
     std::vector<unsigned char> saved_network_id;
     if (m_db->Read(network_key, saved_network_id)) {
         if (!std::equal(saved_network_id.begin(), saved_network_id.end(), network_id.begin(), network_id.end())) {
@@ -104,8 +98,7 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(
     const FinalizedPublicationLookup& lookup)
 {
     if (publication_operation_id.IsNull() || chunk_id == ChunkId{} || stored_bytes.empty() || !lookup ||
-        ComputeChunkId(stored_bytes) != chunk_id || proof.chunk_id != chunk_id ||
-        proof.stored_bytes != stored_bytes.size()) return {ChunkAdmissionStatus::INVALID};
+        ComputeChunkId(stored_bytes) != chunk_id || proof.chunk_id != chunk_id) return {ChunkAdmissionStatus::INVALID};
 
     std::optional<RootPublication> publication;
     try { publication = lookup(publication_operation_id); }
@@ -118,7 +111,6 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(
         const auto proof_metadata = EncodeProofMetadata(proof);
         const auto chunk_key = ChunkKey(m_namespace, chunk_id);
         const auto publication_chunk_key = PublicationChunkKey(m_namespace, publication_operation_id, chunk_id);
-        const auto publication_bytes_key = PublicationBytesKey(m_namespace, publication_operation_id);
         const auto provider_bytes_key = m_namespace + "/provider-bytes";
 
         std::lock_guard lock{m_mutex};
@@ -134,14 +126,8 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(
         }
         if (m_db->Exists(publication_chunk_key)) return {ChunkAdmissionStatus::STORAGE_ERROR};
 
-        const auto publication_bytes = ReadCounter(publication_bytes_key);
         const auto provider_bytes = ReadCounter(provider_bytes_key);
-        if (!publication_bytes || !provider_bytes) return {ChunkAdmissionStatus::STORAGE_ERROR};
-        if (*publication_bytes > publication->authorized_stored_bytes ||
-            stored_bytes.size() > publication->authorized_stored_bytes - *publication_bytes) {
-            return {ChunkAdmissionStatus::PUBLICATION_LIMIT_EXCEEDED};
-        }
-        const auto new_publication_bytes = *publication_bytes + stored_bytes.size();
+        if (!provider_bytes) return {ChunkAdmissionStatus::STORAGE_ERROR};
         auto new_provider_bytes = *provider_bytes;
         if (!chunk_exists) {
             if (*provider_bytes > m_capacity_bytes || stored_bytes.size() > m_capacity_bytes - *provider_bytes) {
@@ -153,7 +139,6 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(
         KVStore::Batch batch;
         if (!chunk_exists) batch.Write(chunk_key, stored_bytes_vector);
         batch.Write(publication_chunk_key, proof_metadata);
-        batch.Write(publication_bytes_key, new_publication_bytes);
         if (!chunk_exists) batch.Write(provider_bytes_key, new_provider_bytes);
         m_db->WriteBatch(batch, true);
         return {ChunkAdmissionStatus::STORED};

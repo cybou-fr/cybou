@@ -73,8 +73,8 @@ chunks:
     data_encoding: raw_application_bytes
     structure: ROOT_to_DATA_or_zero_or_more_INDEX_levels_to_DATA
     root_uses_index_only_when_child_list_exceeds_root_fanout: true
-    metadata_fields: [schema_version, kind, total_plaintext_bytes, ordered_children]
-    child_fields: [kind, ChunkID, declared_plaintext_bytes]
+    metadata_fields: [schema_version, kind, child_kind, ordered_ChunkIDs, root_private_metadata_for_ROOT]
+    child_fields: [ChunkID]
     kind_values: {root: 0, index: 1, data: 2}
     data_chunk_plaintext_bytes: {actual_min: 0, target_random_range: [163840, 327680], max: 524284}
     index_children_max: 128
@@ -82,15 +82,14 @@ chunks:
     root_private_metadata_max_bytes: 245760
     tree_depth_max_nodes: 32
     chunk_count_max: 4294967295
-    total_plaintext_bytes_counter: uint64
     per_file_256MiB_cap: absent
     chunk_boundaries: cryptographically_randomized
-    empty_payload_representation: one_empty_DATA_chunk
+    empty_payload_representation: ROOT_with_zero_children
     child_order: array_order
     cycles: rejected
   chunk_authorization:
     hash: BLAKE3-256
-    leaf_preimage: "CYBOU/CHUNK-AUTH/LEAF || ChunkID || stored_size_u64be"
+    leaf_preimage: "CYBOU/CHUNK-AUTH/LEAF || ChunkID"
     leaf_order: exact_durable_builder_staging_order_data_source_order_interleaved_with_generated_indexes_root_last
     node_preimage: "CYBOU/CHUNK-AUTH/NODE || left_hash || right_hash"
     odd_node_rule: duplicate_last
@@ -98,8 +97,8 @@ chunks:
     maximum_leaf_count: 4294967295
     inclusion_proof_sibling_order: leaf_to_root
     inclusion_proof_max_siblings: 32
-    authorized_stored_bytes_semantics: declared_per_publication_provider_ceiling_not_proven_leaf_sum
-    test_vector_root_3_chunks: "2117d08ee55b42e9b8aa63af00a2ec57cd862bf9cb7b6b08ab6c7cceb6941e19"
+
+    test_vector_root_3_chunks: "957fe7e324d7a8e3c69d84d20f1294ee6a406c8e3dc92b151607708cd6395c4e"
   open_gates:
     - encrypted_chunk_cross_implementation_vectors
     - encrypted_tree_cross_implementation_vectors_and_limits
@@ -109,18 +108,15 @@ chunks:
     - root_capsule_wrap_unwrap_vectors_and_recipient_recovery
     - root_publication_client_construction_and_history_scanner
 publication:
-  wire_profile: 2
+  wire_profile: 3
   canonical_encoding: RFC8949_core_deterministic_CBOR_map_integer_keys_ascending
-  fields: [wire_version, root_chunk_id, chunk_authorization_root, chunk_count, authorized_stored_bytes, recipient_capsules]
+  fields: [wire_version, root_chunk_id, chunk_authorization_root, chunk_count, recipient_capsules]
   body_max_bytes: 131072
   full_operation_max_bytes: 147456
   authorized_chunk_set_public: false
   authorized_chunk_set_encoding: absent
   chunk_count_min: 1
   chunk_count_max: 4294967295
-  authorized_stored_bytes_min_per_chunk: 1089
-  authorized_stored_bytes_max: 1125899906842624
-  authorized_stored_bytes_semantics: provider_enforced_declared_ceiling_not_exact_aggregate
   recipient_capsule_count_min: 1
   recipient_capsule_count_max: 32
   recipient_count_padding: none
@@ -134,7 +130,7 @@ publication:
   capsule_kdf_info: "CYBOU/ROOT-CAPSULE-KEY/v1 || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
   capsule_aead: ChaCha20-Poly1305
   capsule_aad: "CYBOU/ROOT-CAPSULE-AAD/v1 || NetworkID || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
-  operation_fee: "4 * ceil(full_canonical_operation_bytes / 1024)"
+  operation_fee: "4 * ceil(full_canonical_operation_bytes / 1024) + 4 * chunk_count"
   priority_fee: disabled
   fee_split: {security: 3, onboarding: 1}
   capsule_contains_public_recipient: false

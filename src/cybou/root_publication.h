@@ -22,12 +22,11 @@ namespace cybou {
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_BYTES{128 * 1024};
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_OPERATION_BYTES{144 * 1024};
 inline constexpr std::uint32_t ROOT_PUBLICATION_MAX_CHUNKS{std::numeric_limits<std::uint32_t>::max()};
-inline constexpr std::uint64_t ROOT_PUBLICATION_MAX_STORED_BYTES{1ULL << 50}; // 1 PiB declared per-publication ceiling
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_CAPSULES{32};
 inline constexpr std::size_t ROOT_CAPSULE_WRAPPED_KEY_BYTES{60};
 inline constexpr std::size_t ROOT_CAPSULE_NONCE_BYTES{12};
-inline constexpr std::size_t ROOT_PUBLICATION_MIN_CHUNK_STORED_BYTES{ENCRYPTED_CHUNK_MIN_STORED_BYTES};
 inline constexpr std::uint64_t ROOT_PUBLICATION_FEE_PER_STARTED_KIB{4};
+inline constexpr std::uint64_t ROOT_PUBLICATION_FEE_PER_CHUNK{4};
 
 struct RootRecipientCapsule {
     std::uint16_t kem_profile{IDENTITY_KEM_PROFILE_XWING};
@@ -42,7 +41,6 @@ struct RootPublication {
     ChunkId root_chunk_id{};
     ChunkId chunk_authorization_root{};
     std::uint32_t chunk_count{0};
-    std::uint64_t authorized_stored_bytes{0};
     std::vector<RootRecipientCapsule> recipient_capsules;
 
     friend bool operator==(const RootPublication&, const RootPublication&) = default;
@@ -58,7 +56,8 @@ struct AuthorizedRootPublication {
 /** Canonical CBOR body; Identity authorization is carried by the outer operation. */
 std::optional<std::vector<unsigned char>> SerializeRootPublication(const RootPublication& publication);
 std::optional<RootPublication> DeserializeRootPublication(std::span<const unsigned char> bytes);
-std::optional<std::uint64_t> ComputeRootPublicationFee(std::size_t canonical_operation_bytes);
+std::optional<std::uint64_t> ComputeRootPublicationFee(
+    std::size_t canonical_operation_bytes, std::uint32_t chunk_count);
 std::optional<IdentityKeyId> ComputeRootPublicationPayloadCommitment(const RootPublication& publication);
 
 std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(

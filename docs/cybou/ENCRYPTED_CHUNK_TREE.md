@@ -40,11 +40,13 @@ ROOT (private CBOR) -> DATA* (raw application bytes)
 ROOT (private CBOR) -> INDEX* (private CBOR) -> ... -> DATA*
 ```
 
-ROOT and INDEX contain ordered child kind, ChunkID, and declared plaintext
-size. DATA is the original byte range directly, with no CBOR byte-string
-wrapper. INDEX is introduced only when the ordered child list no longer fits
-inside ROOT's 128-child bound. Mail, Files catalog, attachment, and Backup
-schemas are private data inside the decrypted stream. ROOT can carry up to
+ROOT and INDEX contain one child kind and an ordered array of ChunkIDs. The
+encrypted tree schema has no per-child plaintext-size declarations. DATA is
+the original byte range directly, with no CBOR byte-string wrapper. INDEX is
+introduced only when the ordered child list no longer fits inside ROOT's
+128-child bound. An empty or metadata-only object is a ROOT with zero children.
+Mail, Files catalog, attachment, and Backup schemas are private data inside the
+decrypted stream. ROOT can carry up to
 240 KiB of opaque private canonical-CBOR application metadata, surfaced to the
 client after decryption.
 Generic protocol code validates its encoding but does not interpret its
@@ -68,14 +70,12 @@ sink and clears the temporary buffer. The caller supplies a disk-backed
 unique-ID visitor so duplicate references and cycles fail without retaining
 every visited ID in RAM. A caller-provided output/entitlement limit and local
 disk capacity bound the transfer. Sink output may be partial when a later
-chunk fails, so callers write to local staging and expose the result only
-after the full root-declared byte count verifies. The protocol has no
+chunk fails, so callers write to local staging and expose the result only after the complete tree traversal succeeds. The protocol has no
 artificial 256 MiB per-file limit; primitive chunk, tree depth, count, and
 uint64 byte-counter bounds remain enforced.
 
 Providers admit a chunk only after a finalized RootPublication and a valid
-Merkle inclusion proof for that ChunkID and stored size. RootPublication does
-not publish the complete chunk-ID list. Its `authorized_stored_bytes` is a
-per-publication ceiling enforced against the bytes a provider accepts; an
-individual inclusion proof does not prove the aggregate size of every leaf.
-Finality authorizes storage but does not prove durability.
+Merkle inclusion proof for that ChunkID. The leaf needs no separate size field:
+ChunkID commits to the complete stored encrypted bytes. RootPublication does
+not publish the complete chunk-ID list. Each provider enforces its own physical
+capacity limit. Finality authorizes storage but does not prove durability.

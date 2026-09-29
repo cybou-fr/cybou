@@ -17,14 +17,12 @@ namespace cybou {
 
 struct AuthorizedChunk {
     ChunkId id{};
-    std::uint64_t stored_bytes{0};
 
     friend bool operator==(const AuthorizedChunk&, const AuthorizedChunk&) = default;
 };
 
 struct ChunkAuthorizationProof {
     ChunkId chunk_id{};
-    std::uint64_t stored_bytes{0};
     std::uint32_t leaf_index{0};
     std::uint32_t chunk_count{0};
     std::vector<ChunkId> siblings;
@@ -33,14 +31,12 @@ struct ChunkAuthorizationProof {
 struct ChunkAuthorizationCommitment {
     ChunkId root{};
     std::uint32_t chunk_count{0};
-    std::uint64_t authorized_stored_bytes{0};
     std::vector<ChunkAuthorizationProof> proofs;
 };
 
 struct ChunkAuthorizationSummary {
     ChunkId root{};
     std::uint32_t chunk_count{0};
-    std::uint64_t authorized_stored_bytes{0};
 };
 
 /** Streaming Merkle accumulator; caller rejects duplicate IDs; memory is O(log N). */
@@ -52,7 +48,6 @@ public:
 private:
     std::array<std::optional<ChunkId>, 32> m_frontier{};
     std::uint32_t m_chunk_count{0};
-    std::uint64_t m_total_bytes{0};
     bool m_failed{false};
 };
 
@@ -66,7 +61,7 @@ bool VerifyChunkAuthorizationPath(
     std::uint32_t chunk_count,
     std::span<const ChunkId> siblings);
 
-/** Check the chunk inclusion path; publication byte count is a declared per-provider ceiling. */
+/** Check the chunk inclusion path against the finalized publication commitment. */
 bool VerifyChunkAuthorizationProof(
     const RootPublication& publication,
     const ChunkAuthorizationProof& proof);

@@ -19,7 +19,7 @@
 namespace cybou {
 namespace {
 
-constexpr std::uint64_t TREE_SCHEMA{1};
+constexpr std::uint64_t TREE_SCHEMA{2};
 constexpr std::uint64_t ROOT_KIND{0};
 constexpr std::uint64_t INDEX_KIND{1};
 constexpr std::uint64_t DATA_KIND{2};
@@ -38,7 +38,6 @@ private:
 
 struct ChildRef {
     ChunkId id{};
-    std::uint64_t bytes{0};
     std::uint64_t kind{DATA_KIND};
 };
 
@@ -62,26 +61,17 @@ CborValue EncodeChildren(const std::span<const ChildRef> children)
     CborValue::Array entries;
     entries.reserve(children.size());
     for (const auto& child : children) {
-        entries.push_back(CborValue::ArrayValue({
-            CborValue::Unsigned(child.kind),
-            CborValue::Bytes(CborValue::ByteString{child.id.begin(), child.id.end()}),
-            CborValue::Unsigned(child.bytes),
-        }));
+        entries.push_back(CborValue::Bytes(CborValue::ByteString{child.id.begin(), child.id.end()}));
     }
     return CborValue::ArrayValue(std::move(entries));
 }
 
 CborValue MakeTreeMetadata(const std::uint64_t kind, const std::span<const ChildRef> children)
 {
-    std::uint64_t total{0};
-    for (const auto& child : children) {
-        if (child.bytes > std::numeric_limits<std::uint64_t>::max() - total) throw std::overflow_error{"tree byte count overflow"};
-        total += child.bytes;
-    }
     return CborValue::MapValue({
         {CborValue::Unsigned(0), CborValue::Unsigned(TREE_SCHEMA)},
         {CborValue::Unsigned(1), CborValue::Unsigned(kind)},
-        {CborValue::Unsigned(2), CborValue::Unsigned(total)},
+        {CborValue::Unsigned(2), CborValue::Unsigned(children.empty() ? DATA_KIND : children.front().kind)},
         {CborValue::Unsigned(3), EncodeChildren(children)},
     });
 }
@@ -100,7 +90,7 @@ CborValue MakeRootMetadata(
 std::optional<std::vector<ChildRef>> ParseMetadata(
     const std::span<const unsigned char> bytes,
     const std::uint64_t expected_kind,
-    std::uint64_t& declared_total,
+    std::uint64_t& child_kind,
     std::vector<unsigned char>* root_private_metadata = nullptr)
 {
     try {
@@ -119,36 +109,24 @@ std::optional<std::vector<ChildRef>> ParseMetadata(
         }
         const auto schema = AsUnsigned((*fields)[0].second);
         const auto kind = AsUnsigned((*fields)[1].second);
-        const auto total = AsUnsigned((*fields)[2].second);
+        const auto parsed_child_kind = AsUnsigned((*fields)[2].second);
         const auto* entries = std::get_if<CborValue::Array>(&(*fields)[3].second.value);
-        if (!schema || *schema != TREE_SCHEMA || !kind || *kind != expected_kind || !total ||
-            entries == nullptr || entries->empty() || entries->size() > ENCRYPTED_TREE_MAX_CHILDREN) return std::nullopt;
+        if (!schema || *schema != TREE_SCHEMA || !kind || *kind != expected_kind || !parsed_child_kind ||
+            (*parsed_child_kind != INDEX_KIND && *parsed_child_kind != DATA_KIND) ||
+            entries == nullptr || (expected_kind == INDEX_KIND && entries->empty()) ||
+            entries->size() > ENCRYPTED_TREE_MAX_CHILDREN) return std::nullopt;
 
         std::vector<ChildRef> children;
         children.reserve(entries->size());
-        std::uint64_t sum{0};
-        std::optional<std::uint64_t> child_layer_kind;
         for (const auto& entry : *entries) {
-            const auto* tuple = std::get_if<CborValue::Array>(&entry.value);
-            if (tuple == nullptr || tuple->size() != 3) return std::nullopt;
-            const auto child_kind = AsUnsigned((*tuple)[0]);
-            const auto child_bytes = AsUnsigned((*tuple)[2]);
-            const auto* id_bytes = std::get_if<CborValue::ByteString>(&(*tuple)[1].value);
-            if (!child_kind || (*child_kind != INDEX_KIND && *child_kind != DATA_KIND) ||
-                !child_bytes ||
-                id_bytes == nullptr || id_bytes->size() != ChunkId{}.size() ||
-                *child_bytes > std::numeric_limits<std::uint64_t>::max() - sum) return std::nullopt;
-            if (child_layer_kind && *child_layer_kind != *child_kind) return std::nullopt;
-            child_layer_kind = *child_kind;
+            const auto* id_bytes = std::get_if<CborValue::ByteString>(&entry.value);
+            if (id_bytes == nullptr || id_bytes->size() != ChunkId{}.size()) return std::nullopt;
             ChildRef child;
-            child.kind = *child_kind;
-            child.bytes = *child_bytes;
+            child.kind = *parsed_child_kind;
             std::copy(id_bytes->begin(), id_bytes->end(), child.id.begin());
             children.push_back(child);
-            sum += *child_bytes;
         }
-        if (sum != *total) return std::nullopt;
-        declared_total = *total;
+        child_kind = *parsed_child_kind;
         return children;
     } catch (...) {
         return std::nullopt;
@@ -193,11 +171,23 @@ public:
     {
         const auto encrypted = EncryptChunk(m_network, m_key, plaintext);
         if (!encrypted || !Store(*encrypted)) return false;
-        return Push(0, ChildRef{encrypted->id, static_cast<std::uint64_t>(plaintext.size()), DATA_KIND});
+        return Push(0, ChildRef{encrypted->id, DATA_KIND});
     }
 
     bool Finish(ChunkId& root_id)
     {
+        const bool has_children = std::any_of(m_levels.begin(), m_levels.end(),
+            [](const auto& children) { return !children.empty(); });
+        if (!has_children) {
+            const auto root_bytes = EncodeCanonicalCbor(MakeRootMetadata({}, m_private_root_metadata));
+            const auto root = EncryptChunk(m_network, m_key, root_bytes);
+            if (!root || !Store(*root)) return false;
+            root_id = root->id;
+            const auto authorization = m_authorization.Finish();
+            if (!authorization || authorization->chunk_count != m_summary.chunk_count) return false;
+            m_summary.chunk_authorization_root = authorization->root;
+            return true;
+        }
         for (std::size_t level = 0; level < m_levels.size(); ++level) {
             auto& pending = m_levels[level];
             if (pending.empty()) continue;
@@ -214,8 +204,7 @@ public:
                 if (!root || !Store(*root)) return false;
                 root_id = root->id;
                 const auto authorization = m_authorization.Finish();
-                if (!authorization || authorization->chunk_count != m_summary.chunk_count ||
-                    authorization->authorized_stored_bytes != m_summary.authorized_stored_bytes) return false;
+                if (!authorization || authorization->chunk_count != m_summary.chunk_count) return false;
                 m_summary.chunk_authorization_root = authorization->root;
                 return true;
             }
@@ -229,9 +218,8 @@ private:
     {
         if (m_summary.chunk_count >= ENCRYPTED_TREE_MAX_CHUNKS ||
             !m_stage(static_cast<std::uint32_t>(m_summary.chunk_count), chunk) ||
-            !m_authorization.Add(AuthorizedChunk{chunk.id, chunk.stored_bytes.size()}) ||
-            !CheckedAdd(m_summary.chunk_count, 1) ||
-            !CheckedAdd(m_summary.authorized_stored_bytes, chunk.stored_bytes.size())) return false;
+            !m_authorization.Add(AuthorizedChunk{chunk.id}) ||
+            !CheckedAdd(m_summary.chunk_count, 1)) return false;
         return true;
     }
 
@@ -247,17 +235,12 @@ private:
     bool Flush(const std::size_t level)
     {
         if (level + 1 >= m_levels.size() || m_levels[level].empty()) return false;
-        std::uint64_t total{0};
-        for (const auto& child : m_levels[level]) {
-            if (child.bytes > std::numeric_limits<std::uint64_t>::max() - total) return false;
-            total += child.bytes;
-        }
         const auto metadata = EncodeCanonicalCbor(MakeTreeMetadata(INDEX_KIND, m_levels[level]));
         if (metadata.size() > ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES) return false;
         const auto encrypted = EncryptChunk(m_network, m_key, metadata);
         if (!encrypted || !Store(*encrypted)) return false;
         m_levels[level].clear();
-        return Push(level + 1, ChildRef{encrypted->id, total, INDEX_KIND});
+        return Push(level + 1, ChildRef{encrypted->id, INDEX_KIND});
     }
 
     std::span<const unsigned char, 32> m_network;
@@ -287,21 +270,22 @@ bool ReadTreeNode(
     auto plaintext = DecryptChunk(network, key, node.id, *stored);
     if (!plaintext) { path.erase(node.id); return false; }
     if (node.kind == DATA_KIND) {
-        const bool valid = output_bytes <= max_output && plaintext->size() == node.bytes && node.bytes <= max_output - output_bytes &&
-            sink(*plaintext);
-        if (valid) output_bytes += node.bytes;
+        const bool valid = output_bytes <= max_output && plaintext->size() <= max_output - output_bytes && sink(*plaintext);
+        if (valid) output_bytes += plaintext->size();
         if (!plaintext->empty()) OPENSSL_cleanse(plaintext->data(), plaintext->size());
         path.erase(node.id);
         return valid;
     }
-    std::uint64_t total{0};
-    const auto children = ParseMetadata(*plaintext, INDEX_KIND, total);
+    std::uint64_t child_kind{0};
+    const auto children = ParseMetadata(*plaintext, INDEX_KIND, child_kind);
     if (!plaintext->empty()) OPENSSL_cleanse(plaintext->data(), plaintext->size());
-    if (!children || total != node.bytes) { path.erase(node.id); return false; }
+    if (!children) { path.erase(node.id); return false; }
     for (const auto& child : *children) {
-        if (child.kind == INDEX_KIND && !ReadTreeNode(network, key, child, lookup, visit, sink,
+        ChildRef typed_child = child;
+        typed_child.kind = child_kind;
+        if (typed_child.kind == INDEX_KIND && !ReadTreeNode(network, key, typed_child, lookup, visit, sink,
                 max_output, depth + 1, path, output_bytes)) { path.erase(node.id); return false; }
-        if (child.kind == DATA_KIND && !ReadTreeNode(network, key, child, lookup, visit, sink,
+        if (typed_child.kind == DATA_KIND && !ReadTreeNode(network, key, typed_child, lookup, visit, sink,
                 max_output, depth + 1, path, output_bytes)) { path.erase(node.id); return false; }
     }
     path.erase(node.id);
@@ -344,7 +328,7 @@ std::optional<EncryptedTreeSummary> BuildEncryptedChunkTree(
                 if (filled > std::numeric_limits<std::uint64_t>::max() - summary.plaintext_bytes) return std::nullopt;
                 summary.plaintext_bytes += *read;
             }
-            if (filled != 0 || summary.chunk_count == 0) {
+            if (filled != 0) {
                 if (!builder.AddData(std::span<const unsigned char>{plaintext}.first(filled))) return std::nullopt;
             }
         }
@@ -371,11 +355,11 @@ std::optional<std::uint64_t> FetchEncryptedChunkTree(
         if (!stored_root) return std::nullopt;
         auto root_plaintext = DecryptChunk(network_id, content_key, root_chunk_id, *stored_root);
         if (!root_plaintext) return std::nullopt;
-        std::uint64_t declared_total{0};
+        std::uint64_t child_kind{0};
         std::vector<unsigned char> app_metadata;
-        const auto children = ParseMetadata(*root_plaintext, ROOT_KIND, declared_total, &app_metadata);
+        const auto children = ParseMetadata(*root_plaintext, ROOT_KIND, child_kind, &app_metadata);
         if (!root_plaintext->empty()) OPENSSL_cleanse(root_plaintext->data(), root_plaintext->size());
-        if (!children || declared_total > max_output_bytes) return std::nullopt;
+        if (!children) return std::nullopt;
         if (!app_metadata.empty()) {
             try { (void)DecodeCanonicalCbor(app_metadata); }
             catch (...) { return std::nullopt; }
@@ -392,10 +376,11 @@ std::optional<std::uint64_t> FetchEncryptedChunkTree(
         path.insert(root_chunk_id);
         std::uint64_t written{0};
         for (const auto& child : *children) {
-            if (!ReadTreeNode(network_id, content_key, child, lookup, visit, sink,
+            auto typed_child = child;
+            typed_child.kind = child_kind;
+            if (!ReadTreeNode(network_id, content_key, typed_child, lookup, visit, sink,
                     max_output_bytes, 1, path, written)) return std::nullopt;
         }
-        if (written != declared_total) return std::nullopt;
         return written;
     } catch (...) {
         return std::nullopt;

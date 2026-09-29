@@ -26,11 +26,11 @@ recovery gates pass together. See
   Merkle accumulator, bounded inclusion-proof generation/verification, and a
   compact RootPublication that does not reveal the complete ChunkID set.
 - Durable content-addressed provider admission by ChunkID with finalized-
-  publication lookup, per-publication proof/byte accounting, provider capacity
-  enforcement, and idempotent deduplication. The publication byte field is a
-  declared provider ceiling, not a consensus-verified aggregate sum.
+  publication lookup, per-publication proof association, provider capacity
+  enforcement, and idempotent deduplication. Provider capacity is local and is
+  not published in RootPublication.
 - `AuthorizedRootPublication` as a typed Identity-authorized operation,
-  deterministic nonce/state execution, size-derived System Balance fee, and
+  deterministic nonce/state execution, byte-and-chunk System Balance fee, and
   lookup from verified canonical finalized block history.
 
 These components are substrate code. Their integration with the canonical
@@ -40,8 +40,8 @@ serialization or cryptography code.
 
 ## Cutover gates still open
 
-- Correct mandatory BLAKE3 integration in Depends and verify Windows/vcpkg,
-  Linux normal, and Linux Depends builds.
+- Verify pinned BLAKE3 integration in Windows/vcpkg, Linux normal, and Linux
+  Depends builds.
 - Cross-implementation vectors for canonical CBOR, encrypted chunks/trees,
   hybrid capsules, RootPublication authorization, and chunk admission.
 - RootPublication client construction/submission, publication scanning, and

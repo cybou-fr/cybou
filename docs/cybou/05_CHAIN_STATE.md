@@ -33,9 +33,8 @@ fork handling are cutover requirements. See `POA_FINALITY.md`.
 
 RootPublication is the only operation that publishes application content. It
 commits to a root ChunkID, a chunk-authorization Merkle root, a chunk count,
-a provider byte ceiling, and recipient KEM capsules. Each provider verifies
-individual chunk inclusion and enforces its accepted-byte ceiling; consensus
-does not receive the full chunk list or verify an aggregate leaf-size sum.
+and recipient KEM capsules. Each provider verifies individual ChunkID inclusion
+and enforces its own capacity; consensus does not receive the full chunk list.
 State does not interpret Mail or Files schemas.
 
 Finalized blocks retain canonical operation history for proof and discovery.

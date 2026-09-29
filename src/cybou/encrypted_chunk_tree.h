@@ -28,7 +28,6 @@ struct EncryptedTreeSummary {
     ContentKey content_key{};
     std::uint64_t plaintext_bytes{0};
     std::uint64_t chunk_count{0};
-    std::uint64_t authorized_stored_bytes{0};
 };
 
 // A read returns nullopt on error, zero at EOF, or 1..output.size() bytes.

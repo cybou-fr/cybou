@@ -59,7 +59,6 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_only_finalized_root_publications)
     publication.root_chunk_id.fill(0x31);
     publication.chunk_authorization_root.fill(0x42);
     publication.chunk_count = 1;
-    publication.authorized_stored_bytes = cybou::ROOT_PUBLICATION_MIN_CHUNK_STORED_BYTES;
     cybou::RootRecipientCapsule capsule;
     capsule.encapsulation.fill(0x53);
     capsule.wrapped_content_key.fill(0x64);

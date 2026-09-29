@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_CHECK(replay_block.payment_error == PaymentError::INVALID_AUTHORIZATION);
 }
 
-BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_size_fee)
+BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_deterministic_fee)
 {
     using namespace cybou;
     std::array<unsigned char, 32> root_seed{}, authorization_seed{};
@@ -244,7 +244,6 @@ BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_size_fee)
     publication.root_chunk_id.fill(0x31);
     publication.chunk_authorization_root.fill(0x42);
     publication.chunk_count = 1;
-    publication.authorized_stored_bytes = ROOT_PUBLICATION_MIN_CHUNK_STORED_BYTES;
     RootRecipientCapsule capsule;
     capsule.encapsulation.fill(0x53);
     capsule.wrapped_content_key.fill(0x64);
@@ -262,7 +261,7 @@ BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_size_fee)
         IdentityKeyPurpose::AUTHORIZATION, *digest);
     const AuthorizedRootPublication operation{operation_auth, publication};
     const auto encoded = SerializeProtocolOperation(ProtocolOperation{operation});
-    const auto fee = encoded ? ComputeRootPublicationFee(encoded->size()) : std::nullopt;
+    const auto fee = encoded ? ComputeRootPublicationFee(encoded->size(), publication.chunk_count) : std::nullopt;
     BOOST_REQUIRE(fee);
     const auto starting_balance = state.accounts.at(account).system_balance;
 

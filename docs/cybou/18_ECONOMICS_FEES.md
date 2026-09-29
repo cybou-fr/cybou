@@ -35,14 +35,15 @@ Identity creation alone does not mint new tokens; bonuses are debited strictly f
 
 ## Publication fee
 
-Content uses generic RootPublication. The fee is deterministic and based on
-the full canonical operation size:
+Content uses generic RootPublication. The fee includes operation size and
+authorized chunk count:
 
 ```text
-RootPublicationFee = 4 * ceil(full_canonical_operation_bytes / 1024)
+RootPublicationFee = 4 * ceil(full_canonical_operation_bytes / 1024) + 4 * chunk_count
 ```
 
-The canonical wire profile has a strict maximum operation size. The same
+Each four-unit increment is split 3 to Security and 1 to Onboarding. The
+canonical wire profile has a strict maximum operation size. The same
 resource accounting applies to every encrypted application schema; consensus
 does not inspect Mail content or enforce Mail-specific quotas.
 

@@ -228,7 +228,6 @@ BOOST_AUTO_TEST_CASE(root_publication_is_a_typed_identity_authorized_operation)
     publication.root_chunk_id.fill(0x31);
     publication.chunk_authorization_root.fill(0x42);
     publication.chunk_count = 1;
-    publication.authorized_stored_bytes = cybou::ROOT_PUBLICATION_MIN_CHUNK_STORED_BYTES;
     cybou::RootRecipientCapsule capsule;
     capsule.key_epoch = 0;
     capsule.encapsulation.fill(0x53);

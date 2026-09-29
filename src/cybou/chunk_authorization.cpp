@@ -19,16 +19,10 @@ bool IsZero(const ChunkId& id)
     return std::all_of(id.begin(), id.end(), [](const auto byte) { return byte == 0; });
 }
 
-void AppendU64Be(std::vector<unsigned char>& bytes, const std::uint64_t value)
-{
-    for (int shift = 56; shift >= 0; shift -= 8) bytes.push_back(static_cast<unsigned char>(value >> shift));
-}
-
 ChunkId HashLeaf(const AuthorizedChunk& chunk)
 {
     std::vector<unsigned char> preimage(LEAF_DOMAIN.begin(), LEAF_DOMAIN.end());
     preimage.insert(preimage.end(), chunk.id.begin(), chunk.id.end());
-    AppendU64Be(preimage, chunk.stored_bytes);
     return ComputeBlake3Digest(preimage);
 }
 
@@ -40,27 +34,20 @@ ChunkId HashNode(const ChunkId& left, const ChunkId& right)
     return ComputeBlake3Digest(preimage);
 }
 
-bool ValidChunkSet(const std::span<const AuthorizedChunk> chunks, std::uint64_t& total_bytes)
+bool ValidChunkSet(const std::span<const AuthorizedChunk> chunks)
 {
     if (chunks.empty() || chunks.size() > ROOT_PUBLICATION_MAX_CHUNKS) return false;
-    total_bytes = 0;
     for (const auto& chunk : chunks) {
-        if (IsZero(chunk.id) || chunk.stored_bytes < ENCRYPTED_CHUNK_MIN_STORED_BYTES ||
-            chunk.stored_bytes > ENCRYPTED_CHUNK_MAX_STORED_BYTES ||
-            total_bytes > ROOT_PUBLICATION_MAX_STORED_BYTES - chunk.stored_bytes) return false;
-        total_bytes += chunk.stored_bytes;
+        if (IsZero(chunk.id)) return false;
     }
-    return total_bytes <= ROOT_PUBLICATION_MAX_STORED_BYTES;
+    return true;
 }
 
 } // namespace
 
 bool ChunkAuthorizationAccumulator::Add(const AuthorizedChunk& chunk)
 {
-    if (m_failed || m_chunk_count >= ROOT_PUBLICATION_MAX_CHUNKS || IsZero(chunk.id) ||
-        chunk.stored_bytes < ENCRYPTED_CHUNK_MIN_STORED_BYTES ||
-        chunk.stored_bytes > ENCRYPTED_CHUNK_MAX_STORED_BYTES ||
-        chunk.stored_bytes > ROOT_PUBLICATION_MAX_STORED_BYTES - m_total_bytes) {
+    if (m_failed || m_chunk_count >= ROOT_PUBLICATION_MAX_CHUNKS || IsZero(chunk.id)) {
         m_failed = true;
         return false;
     }
@@ -79,7 +66,6 @@ bool ChunkAuthorizationAccumulator::Add(const AuthorizedChunk& chunk)
         }
         m_frontier[level] = carry;
         ++m_chunk_count;
-        m_total_bytes += chunk.stored_bytes;
         return true;
     } catch (...) {
         m_failed = true;
@@ -108,7 +94,7 @@ std::optional<ChunkAuthorizationSummary> ChunkAuthorizationAccumulator::Finish()
             root_level = level + 1;
         }
         if (!root) return std::nullopt;
-        return ChunkAuthorizationSummary{*root, m_chunk_count, m_total_bytes};
+        return ChunkAuthorizationSummary{*root, m_chunk_count};
     } catch (...) {
         return std::nullopt;
     }
@@ -122,8 +108,7 @@ bool VerifyChunkAuthorizationPath(
     const std::span<const ChunkId> siblings)
 {
     if (chunk_count == 0 || leaf_index >= chunk_count ||
-        IsZero(chunk.id) || chunk.stored_bytes < ENCRYPTED_CHUNK_MIN_STORED_BYTES ||
-        chunk.stored_bytes > ENCRYPTED_CHUNK_MAX_STORED_BYTES || siblings.size() > 32) return false;
+        IsZero(chunk.id) || siblings.size() > 32) return false;
     try {
         ChunkId current = HashLeaf(chunk);
         auto index = static_cast<std::size_t>(leaf_index);
@@ -152,8 +137,7 @@ bool VerifyChunkAuthorizationPath(
 std::optional<ChunkAuthorizationCommitment> BuildChunkAuthorizationCommitment(
     const std::span<const AuthorizedChunk> chunks)
 {
-    std::uint64_t total_bytes{0};
-    if (!ValidChunkSet(chunks, total_bytes)) return std::nullopt;
+    if (!ValidChunkSet(chunks)) return std::nullopt;
     try {
         std::vector<AuthorizedChunk> ordered{chunks.begin(), chunks.end()};
         std::set<ChunkId> unique_ids;
@@ -177,12 +161,10 @@ std::optional<ChunkAuthorizationCommitment> BuildChunkAuthorizationCommitment(
         ChunkAuthorizationCommitment result;
         result.root = levels.back().front();
         result.chunk_count = static_cast<std::uint32_t>(ordered.size());
-        result.authorized_stored_bytes = total_bytes;
         result.proofs.reserve(ordered.size());
         for (std::size_t leaf = 0; leaf < ordered.size(); ++leaf) {
             ChunkAuthorizationProof proof;
             proof.chunk_id = ordered[leaf].id;
-            proof.stored_bytes = ordered[leaf].stored_bytes;
             proof.leaf_index = static_cast<std::uint32_t>(leaf);
             proof.chunk_count = result.chunk_count;
             auto index = leaf;
@@ -206,10 +188,9 @@ bool VerifyChunkAuthorizationProof(
     const ChunkAuthorizationProof& proof)
 {
     if (publication.chunk_count == 0 || publication.chunk_count != proof.chunk_count ||
-        proof.leaf_index >= proof.chunk_count || IsZero(proof.chunk_id) ||
-        proof.stored_bytes > publication.authorized_stored_bytes) return false;
+        proof.leaf_index >= proof.chunk_count || IsZero(proof.chunk_id)) return false;
     return VerifyChunkAuthorizationPath(publication.chunk_authorization_root,
-        {proof.chunk_id, proof.stored_bytes}, proof.leaf_index, proof.chunk_count, proof.siblings);
+        {proof.chunk_id}, proof.leaf_index, proof.chunk_count, proof.siblings);
 }
 
 } // namespace cybou

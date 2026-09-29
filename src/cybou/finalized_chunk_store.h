@@ -29,7 +29,6 @@ enum class ChunkAdmissionStatus {
     INVALID,
     NOT_AUTHORIZED,
     CONFLICT,
-    PUBLICATION_LIMIT_EXCEEDED,
     CAPACITY_EXCEEDED,
     STORAGE_ERROR,
 };

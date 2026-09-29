@@ -62,18 +62,17 @@ BOOST_AUTO_TEST_CASE(encrypted_chunk_tree_streams_empty_and_multichunk_payloads)
         const auto tree = cybou::BuildEncryptedChunkTree(network, Source(plaintext),
             [&stored, &authorization](const auto leaf_index, const auto& chunk) {
                 if (leaf_index != stored.size() || !stored.emplace(chunk.id, chunk.stored_bytes).second) return false;
-                return authorization.Add({chunk.id, chunk.stored_bytes.size()});
+                return authorization.Add({chunk.id});
             }, app_metadata);
         BOOST_REQUIRE(tree.has_value());
         const auto authorization_summary = authorization.Finish();
         BOOST_REQUIRE(authorization_summary.has_value());
         BOOST_CHECK(tree->chunk_authorization_root == authorization_summary->root);
         BOOST_CHECK(tree->chunk_count == authorization_summary->chunk_count);
-        BOOST_CHECK(tree->authorized_stored_bytes == authorization_summary->authorized_stored_bytes);
         BOOST_CHECK(tree->plaintext_bytes == plaintext.size());
         BOOST_CHECK(tree->chunk_count == stored.size());
-        BOOST_CHECK(tree->chunk_count >= 2); // DATA and ROOT; INDEX is omitted while it is unnecessary
-        if (size == 0) BOOST_CHECK(tree->chunk_count == 2);
+        BOOST_CHECK(tree->chunk_count >= 1); // ROOT is always staged, including empty objects
+        if (size == 0) BOOST_CHECK(tree->chunk_count == 1);
         const auto root_stored = stored.find(tree->root_chunk_id);
         BOOST_REQUIRE(root_stored != stored.end());
         const auto root_bytes = cybou::DecryptChunk(network, tree->content_key,
@@ -83,12 +82,17 @@ BOOST_AUTO_TEST_CASE(encrypted_chunk_tree_streams_empty_and_multichunk_payloads)
         const auto* root_fields = std::get_if<cybou::CborValue::Map>(&root_value.value);
         BOOST_REQUIRE(root_fields != nullptr);
         const auto* root_children = std::get_if<cybou::CborValue::Array>(&(*root_fields)[3].second.value);
-        BOOST_REQUIRE(root_children != nullptr && !root_children->empty());
-        const auto* first_child = std::get_if<cybou::CborValue::Array>(&root_children->front().value);
-        BOOST_REQUIRE(first_child != nullptr && first_child->size() == 3);
-        const auto* first_child_kind = std::get_if<std::uint64_t>(&(*first_child)[0].value);
-        BOOST_REQUIRE(first_child_kind != nullptr);
-        BOOST_CHECK(*first_child_kind == 2); // small object: ROOT points directly to DATA
+        BOOST_REQUIRE(root_children != nullptr);
+        if (size == 0) {
+            BOOST_CHECK(root_children->empty());
+        } else {
+            BOOST_REQUIRE(!root_children->empty());
+            const auto* first_child = std::get_if<cybou::CborValue::ByteString>(&root_children->front().value);
+            BOOST_REQUIRE(first_child != nullptr && first_child->size() == cybou::ChunkId{}.size());
+            const auto* root_child_kind = std::get_if<std::uint64_t>(&(*root_fields)[2].second.value);
+            BOOST_REQUIRE(root_child_kind != nullptr);
+            BOOST_CHECK(*root_child_kind == 2); // small object: ROOT points directly to DATA
+        }
 
         std::vector<unsigned char> recovered;
         const auto byte_count = cybou::FetchEncryptedChunkTree(
@@ -156,9 +160,9 @@ BOOST_AUTO_TEST_CASE(encrypted_chunk_tree_adds_index_after_root_fanout_is_exceed
     BOOST_REQUIRE(fields != nullptr);
     const auto* children = std::get_if<cybou::CborValue::Array>(&(*fields)[3].second.value);
     BOOST_REQUIRE(children != nullptr && !children->empty());
-    const auto* child = std::get_if<cybou::CborValue::Array>(&children->front().value);
-    BOOST_REQUIRE(child != nullptr && child->size() == 3);
-    const auto* kind = std::get_if<std::uint64_t>(&(*child)[0].value);
+    const auto* child = std::get_if<cybou::CborValue::ByteString>(&children->front().value);
+    BOOST_REQUIRE(child != nullptr && child->size() == cybou::ChunkId{}.size());
+    const auto* kind = std::get_if<std::uint64_t>(&(*fields)[2].second.value);
     BOOST_REQUIRE(kind != nullptr);
     BOOST_CHECK(*kind == 1); // ROOT now points to INDEX; DATA remains beneath it.
     BOOST_CHECK(tree->chunk_count > cybou::ENCRYPTED_TREE_MAX_CHILDREN);

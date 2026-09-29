@@ -13,7 +13,7 @@
 namespace cybou {
 namespace {
 
-constexpr std::uint64_t ROOT_PUBLICATION_WIRE_VERSION{2};
+constexpr std::uint64_t ROOT_PUBLICATION_WIRE_VERSION{3};
 
 bool IsZero(const std::span<const unsigned char> bytes)
 {
@@ -45,8 +45,7 @@ CborValue ToCbor(const RootPublication& publication)
         {CborValue::Unsigned(1), ByteString(publication.root_chunk_id)},
         {CborValue::Unsigned(2), ByteString(publication.chunk_authorization_root)},
         {CborValue::Unsigned(3), CborValue::Unsigned(publication.chunk_count)},
-        {CborValue::Unsigned(4), CborValue::Unsigned(publication.authorized_stored_bytes)},
-        {CborValue::Unsigned(5), CborValue::ArrayValue(std::move(capsules))},
+        {CborValue::Unsigned(4), CborValue::ArrayValue(std::move(capsules))},
     });
 }
 
@@ -68,9 +67,6 @@ bool IsValid(const RootPublication& publication)
 {
     if (IsZero(publication.root_chunk_id) || IsZero(publication.chunk_authorization_root) ||
         publication.chunk_count == 0 ||
-        publication.authorized_stored_bytes <
-            static_cast<std::uint64_t>(publication.chunk_count) * ROOT_PUBLICATION_MIN_CHUNK_STORED_BYTES ||
-        publication.authorized_stored_bytes > ROOT_PUBLICATION_MAX_STORED_BYTES ||
         publication.recipient_capsules.empty() ||
         publication.recipient_capsules.size() > ROOT_PUBLICATION_MAX_CAPSULES) return false;
 
@@ -100,24 +96,22 @@ std::optional<RootPublication> DeserializeRootPublication(const std::span<const 
     try {
         const auto decoded = DecodeCanonicalCbor(bytes);
         const auto* fields = std::get_if<CborValue::Map>(&decoded.value);
-        if (fields == nullptr || fields->size() != 6) return std::nullopt;
+        if (fields == nullptr || fields->size() != 5) return std::nullopt;
         for (std::size_t index = 0; index < fields->size(); ++index) {
             const auto key = GetUnsigned((*fields)[index].first);
             if (!key || *key != index) return std::nullopt;
         }
         const auto version = GetUnsigned((*fields)[0].second);
         const auto chunk_count = GetUnsigned((*fields)[3].second);
-        const auto stored_bytes = GetUnsigned((*fields)[4].second);
-        const auto* capsules = std::get_if<CborValue::Array>(&(*fields)[5].second.value);
+        const auto* capsules = std::get_if<CborValue::Array>(&(*fields)[4].second.value);
         if (!version || *version != ROOT_PUBLICATION_WIRE_VERSION || !chunk_count ||
-            *chunk_count > std::numeric_limits<std::uint32_t>::max() || !stored_bytes ||
+            *chunk_count > std::numeric_limits<std::uint32_t>::max() ||
             capsules == nullptr || capsules->size() > ROOT_PUBLICATION_MAX_CAPSULES) return std::nullopt;
 
         RootPublication publication;
         if (!ReadFixedBytes((*fields)[1].second, publication.root_chunk_id) ||
             !ReadFixedBytes((*fields)[2].second, publication.chunk_authorization_root)) return std::nullopt;
         publication.chunk_count = static_cast<std::uint32_t>(*chunk_count);
-        publication.authorized_stored_bytes = *stored_bytes;
         publication.recipient_capsules.reserve(capsules->size());
         for (const auto& capsule_value : *capsules) {
             const auto* capsule_fields = std::get_if<CborValue::Array>(&capsule_value.value);
@@ -141,17 +135,21 @@ std::optional<RootPublication> DeserializeRootPublication(const std::span<const 
     }
 }
 
-std::optional<std::uint64_t> ComputeRootPublicationFee(const std::size_t canonical_operation_bytes)
+std::optional<std::uint64_t> ComputeRootPublicationFee(
+    const std::size_t canonical_operation_bytes, const std::uint32_t chunk_count)
 {
-    if (canonical_operation_bytes == 0 || canonical_operation_bytes > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
+    if (canonical_operation_bytes == 0 || canonical_operation_bytes > ROOT_PUBLICATION_MAX_OPERATION_BYTES ||
+        chunk_count == 0 || chunk_count > ROOT_PUBLICATION_MAX_CHUNKS) return std::nullopt;
     const auto kib = (canonical_operation_bytes + 1023) / 1024;
-    if (kib > std::numeric_limits<std::uint64_t>::max() / ROOT_PUBLICATION_FEE_PER_STARTED_KIB) return std::nullopt;
-    return static_cast<std::uint64_t>(kib) * ROOT_PUBLICATION_FEE_PER_STARTED_KIB;
+    const auto byte_fee = static_cast<std::uint64_t>(kib) * ROOT_PUBLICATION_FEE_PER_STARTED_KIB;
+    const auto chunk_fee = static_cast<std::uint64_t>(chunk_count) * ROOT_PUBLICATION_FEE_PER_CHUNK;
+    if (chunk_fee > std::numeric_limits<std::uint64_t>::max() - byte_fee) return std::nullopt;
+    return byte_fee + chunk_fee;
 }
 
 std::optional<IdentityKeyId> ComputeRootPublicationPayloadCommitment(const RootPublication& publication)
 {
-    constexpr std::string_view domain{"CYBOU/ROOT-PUBLICATION/P2"};
+    constexpr std::string_view domain{"CYBOU/ROOT-PUBLICATION/P3"};
     const auto encoded = SerializeRootPublication(publication);
     if (!encoded) return std::nullopt;
     IdentityKeyId digest{};
