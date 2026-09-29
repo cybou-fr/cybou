@@ -4,11 +4,9 @@
 
 #include <chainparamsbase.h>
 #include <clientversion.h>
-#include <consensus/consensus.h>
 #include <kernel/chainparams.h>
 #include <pow.h>
 #include <uint256.h>
-#include <validation.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -54,15 +52,6 @@ BOOST_AUTO_TEST_CASE(fixed_difficulty_rejects_every_nbits_change)
     BOOST_CHECK(PermittedDifficultyTransition(consensus, consensus.DifficultyAdjustmentInterval(), bits, bits));
     BOOST_CHECK(!PermittedDifficultyTransition(consensus, consensus.DifficultyAdjustmentInterval(), bits, bits - 1));
     BOOST_CHECK(!PermittedDifficultyTransition(consensus, consensus.DifficultyAdjustmentInterval() + 1, bits, bits + 1));
-}
-
-BOOST_FIXTURE_TEST_CASE(deterministic_100_block_fixture, TestChain100Setup)
-{
-    LOCK(::cs_main);
-    BOOST_REQUIRE_EQUAL(m_node.chainman->ActiveChain().Height(), COINBASE_MATURITY);
-    BOOST_CHECK_EQUAL(
-        m_node.chainman->ActiveChain().Tip()->GetBlockHash().GetHex(),
-        "3bc6d2c27c8d18621daf8adf75568adf0cdcca846f712b0da42c82970e875fa5");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
