@@ -87,7 +87,7 @@ on the node, not when it is planned:
 ```text
 account_creation   node accepts AccountCreateOp + AccountCreationWorkV1
 payments           PaymentOpV1 processing wired
-email              MailOp/MailTx processing wired
+email              encrypted Object Storage delivery and local mailbox sync wired
 storage            Object Storage placement, retrieval and Beta durability path wired
 backup             Backup service wired (post-Beta)
 ```
@@ -105,11 +105,10 @@ when disabled.
 ## Service data
 
 - Wallet ledger entries come from finalized protocol operations
-  (onboarding bonus, MailTx fees, payments, LOCK_TO_SYSTEM).
-- Email messages arrive with their evidence bundle (doc 69: inclusion
-  proof, BFT finality certificate, sender-key authorization, salted
-  domain-separated content commitment); the local client owns Inbox/Sent/
-  read-state indexes.
+  (onboarding bonus, payments, LOCK_TO_SYSTEM).
+- Email payloads are encrypted objects delivered through Object Storage;
+  only local client indexes own Inbox/Sent/read state. Mail is not a
+  consensus operation and has no per-message consensus state.
 - Storage objects are opaque CIDs with size and retention; the GUI never
   sees plaintext names or paths.
 - Backup sets report size, time and verification state; restore is bound

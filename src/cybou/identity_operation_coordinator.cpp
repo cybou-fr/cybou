@@ -116,7 +116,7 @@ std::optional<IdentityOperationAuthorization> AuthorizationOf(const ProtocolOper
         using T = std::decay_t<decltype(value)>;
         if constexpr (std::is_same_v<T, AuthorizedPayment> || std::is_same_v<T, AuthorizedSystemLock> ||
             std::is_same_v<T, AuthorizedNameCommit> || std::is_same_v<T, AuthorizedNameReveal> ||
-            std::is_same_v<T, AuthorizedMail> || std::is_same_v<T, AuthorizedRootPublication>) return value.authorization;
+            std::is_same_v<T, AuthorizedRootPublication>) return value.authorization;
         return std::nullopt;
     }, operation);
 }

@@ -191,7 +191,7 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
 
 uint256 NetworkId(const CybouNetworkDefinition& definition)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V4"};
+    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V5"};
     const auto bytes = SerializeNetworkDefinition(definition);
     uint256 result;
     ::cybou::crypto::Sha256 hasher;
@@ -256,7 +256,7 @@ CybouState CreateDevGenesisState(const IdentityHybridPublicKey& validator_public
 
 uint256 ComputeGenesisBlockId(const uint256& state_root, const IdentityHybridPublicKey& poa_finalizer_public_key)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/GENESIS-BLOCK/V3"};
+    static constexpr std::string_view DOMAIN{"CYBOU/GENESIS-BLOCK/V4"};
     const auto key_id = ComputePoaFinalizerKeyId(poa_finalizer_public_key);
     if (!key_id) return {};
     ::cybou::crypto::Sha256 hasher;

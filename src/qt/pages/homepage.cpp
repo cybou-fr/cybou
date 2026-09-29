@@ -319,10 +319,6 @@ void HomePage::refresh()
                 activity->addWidget(ActivityRow(Glyph::Sparkles, Tint::Amber, tr("Onboarding bonus"),
                     cybouAmountText(static_cast<quint64>(entry.amount)), when, m_activity_rows));
                 break;
-            case cybou::WalletEntryKind::MAIL_FEE:
-                activity->addWidget(ActivityRow(Glyph::Envelope, Tint::Blue, tr("Mail service fee"),
-                    cybouAmountText(static_cast<quint64>(std::abs(entry.amount))), when, m_activity_rows));
-                break;
             case cybou::WalletEntryKind::LOCK_TO_SYSTEM:
                 activity->addWidget(ActivityRow(Glyph::Lock, Tint::Violet, tr("Locked to System Balance"),
                     cybouAmountText(static_cast<quint64>(entry.amount)), when, m_activity_rows));

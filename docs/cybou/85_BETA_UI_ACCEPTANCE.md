@@ -25,7 +25,7 @@ must satisfy both.
 [ ] recipient entered as alice.cybou
 [ ] unknown recipient produces a human error
 [ ] missing acceptable hybrid encryption key fails closed
-[ ] text Mail can be composed, submitted and finalized
+[ ] text Mail can be composed, encrypted, stored and delivered through Object Storage
 [ ] delivery_uncertain appears as Checking delivery status, not Rejected
 [ ] recipient can be offline during send and receive after later sync
 [ ] persisted mailbox plaintext/metadata indexes are encrypted at rest
@@ -38,7 +38,7 @@ must satisfy both.
 [ ] drag/drop PDF or photo into Compose
 [ ] UI shows Preparing / Uploading / Securing / Protected
 [ ] Send is not treated as ready while required attachment durability is missing
-[ ] attachment bytes never enter normal MailTx/consensus content
+[ ] attachment bytes are encrypted before Object Storage upload and never enter consensus content
 [ ] recipient offline during send can later retrieve/decrypt attachment
 [ ] corrupted ciphertext/integrity failure never opens plaintext
 [ ] Save to Files produces an independent-retention Files item without unnecessary re-upload when reusable

@@ -6,7 +6,6 @@
 #define CYBOU_STATE_H
 
 #include <cybou/identity_registry.h>
-#include <cybou/mail_tx.h>
 #include <cybou/name_registry.h>
 #include <cybou/root_publication.h>
 #include <cybou/protocol_params.h>
@@ -20,15 +19,13 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_STATE_VERSION{4};
+inline constexpr uint8_t CYBOU_STATE_VERSION{5};
 
 struct AccountState {
     uint64_t balance{0};
     uint64_t system_balance{0};
     uint64_t creation_height{0};
     uint64_t creation_epoch{0};
-    uint64_t last_mail_epoch{0};
-    uint32_t mail_count_in_epoch{0};
 
     friend bool operator==(const AccountState&, const AccountState&) = default;
 };
@@ -64,10 +61,6 @@ NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
     const CybouProtocolParameters& params, CybouState& state);
 
 NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
-    const uint256& network_id, uint64_t block_height,
-    const CybouProtocolParameters& params, CybouState& state);
-
-MailError ApplyMail(const AuthorizedMail& op,
     const uint256& network_id, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state);
 

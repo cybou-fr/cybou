@@ -30,11 +30,6 @@ inline std::string BlockHeightKey(const uint64_t height)
     return "cybou/block-height/" + std::to_string(height);
 }
 
-inline std::string MailFilterKey(const uint256& block_id)
-{
-    return "cybou/mail-filter/" + block_id.GetHex();
-}
-
 inline std::string OperationKey(const uint256& op_id)
 {
     return "cybou/operation/" + op_id.GetHex();
@@ -118,8 +113,6 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     batch.Write(HASH_KEY, *state_hash);
     batch.Write(HEAD_KEY, initial_head);
     batch.Write(NETWORK_ID_KEY, m_network_id);
-    const auto genesis_filter{BuildMailDiscoveryFilter(m_network_definition.genesis_block_id, {})};
-    batch.Write(MailFilterKey(m_network_definition.genesis_block_id), SerializeMailDiscoveryFilter(genesis_filter));
     m_db.WriteBatch(batch, sync);
     return {};
 }
@@ -297,8 +290,6 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         if (!op_id || op_id->IsNull()) return {BlockTransitionError::INVALID_OPERATION};
         batch.Write(OperationKey(*op_id), block_id);
     }
-    const auto mail_filter{BuildBlockMailDiscoveryFilter(block)};
-    batch.Write(MailFilterKey(block_id), SerializeMailDiscoveryFilter(mail_filter));
     m_db.WriteBatch(batch, sync);
     return {};
 }
@@ -357,17 +348,6 @@ std::optional<uint64_t> CybouStateStore::GetFinalizedOperationHeight(const uint2
         [&](const ProtocolOperation& operation) { return ComputeOperationId(operation) == op_id; });
     if (!found) return std::nullopt;
     return finalized->block.height;
-}
-
-std::optional<CybouMailDiscoveryFilter> CybouStateStore::GetBlockMailFilter(const uint256& block_id) const
-{
-    std::vector<unsigned char> bytes;
-    if (!m_db.Read(MailFilterKey(block_id), bytes)) {
-        return std::nullopt;
-    }
-    auto filter{DeserializeMailDiscoveryFilter(bytes)};
-    if (filter && filter->block_id != block_id) return std::nullopt;
-    return filter;
 }
 
 } // namespace cybou

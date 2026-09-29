@@ -24,22 +24,19 @@ class QTextEdit;
 class QToolButton;
 
 /**
- * Full Email UI shell, shaped by CYBOU protocol rules (AGENTS.md):
+ * Full Email UI shell, backed by local mailbox indexes and the planned
+ * encrypted Object Storage transport:
  *
- *  - MailTx is a first-class protocol operation: one recipient, text-only,
- *    no attachments. The composer enforces this — a second recipient is
- *    rejected inline, and there is no attachment control at all.
- *  - Strict maximum MailTx size: the composer meters payload bytes
- *    (subject + body, UTF-8) against kMaxMailTxBytes.
- *  - Deterministic size-aware fee, priority fee disabled: the fee line
- *    states the rule instead of inventing an amount; no priority options
- *    exist anywhere in the UI.
+ *  - Mail content is not a consensus operation. Delivery will use encrypted
+ *    objects and recipient mailbox indexes once Object Storage is integrated.
+ *  - The composer currently keeps a bounded text-only local draft; delivery
+ *    stays disabled until encrypted object upload and mailbox sync are wired.
  *  - Local client owns Inbox / Sent / read-state: folders and unread
  *    counters live here and never touch consensus state.
  *
- * The store is in-memory for now: the page renders real protocol states
- * (gated on identity + the email capability) and keeps drafts locally, but
- * nothing is transmitted until core wires MailTx. Send stays disabled and
+ * The store is in-memory for now: the page renders the actual capability
+ * state and keeps drafts locally, but nothing is transmitted until core wires
+ * encrypted Object Storage delivery. Send stays disabled and
  * says why — the UI never pretends to send.
  */
 class EmailPage : public QWidget
@@ -55,9 +52,8 @@ protected:
     void resizeEvent(QResizeEvent* event) override;
 
 private:
-    /** Strict MailTx ceiling in bytes. Placeholder until core exports the
-        canonical constant — the UI cap must never exceed the protocol cap. */
-    static constexpr qint64 kMaxMailTxBytes = 64 * 1024;
+    /** Temporary local draft ceiling until the encrypted object profile lands. */
+    static constexpr qint64 kMaxDraftBytes = 64 * 1024;
 
     enum Folder {
         FOLDER_INBOX = 0,
@@ -68,8 +64,8 @@ private:
 
     enum class Finality {
         Draft,           /**< Local only, not a protocol object yet. */
-        PendingFinality, /**< Broadcast, waiting for BFT finality. */
-        Final,           /**< BFT finality certificate attached. */
+        PendingFinality, /**< Waiting for encrypted Object Storage delivery. */
+        Final,           /**< Encrypted object reached its required storage state. */
     };
 
     struct Message {

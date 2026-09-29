@@ -170,7 +170,6 @@ add_library(cybou_core STATIC
   cybou/crypto/chacha20_poly1305.cpp
   cybou/crypto/hkdf_sha256.cpp
   cybou/crypto/sha256.cpp
-  cybou/evidence.cpp
   cybou/hex.cpp
   cybou/identity.cpp
   cybou/identity_authorization.cpp
@@ -224,7 +223,6 @@ add_library(cybou_node STATIC
   cybou/network_definition.cpp
   cybou/protocol_operation.cpp
   cybou/gcs_filter.cpp
-  cybou/mail_filter.cpp
   cybou/mail_envelope.cpp
   cybou/mail_service.cpp
   cybou/identity_operation_coordinator.cpp

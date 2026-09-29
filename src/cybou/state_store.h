@@ -8,7 +8,6 @@
 #include <cybou/bft.h>
 #include <cybou/block.h>
 #include <cybou/block_executor.h>
-#include <cybou/mail_filter.h>
 #include <cybou/kv_store.h>
 #include <cybou/network_definition.h>
 #include <cybou/protocol_operation.h>
@@ -166,8 +165,6 @@ public:
     /** Return the indexed finalized height for an operation, if present and valid. */
     std::optional<uint64_t> GetFinalizedOperationHeight(const uint256& op_id) const;
 
-    /** Retrieve a persisted compact mail discovery filter by block ID. */
-    std::optional<CybouMailDiscoveryFilter> GetBlockMailFilter(const uint256& block_id) const;
 
 private:
     KVStore& m_db;

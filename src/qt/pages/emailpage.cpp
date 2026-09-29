@@ -281,8 +281,8 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     auto* evidence_layout = new QVBoxLayout{m_evidence};
     evidence_layout->setContentsMargins(0, 0, 0, 0);
     evidence_layout->setSpacing(4);
-    for (const QString& field : {tr("Transaction inclusion proof"), tr("BFT finality certificate"),
-                                 tr("Historical sender-key authorization"), tr("Salted, domain-separated content commitment")}) {
+    for (const QString& field : {tr("Recipient-key envelope"), tr("Encrypted-object integrity"),
+                                 tr("Storage durability"), tr("Mailbox delivery")}) {
         auto* row = new QHBoxLayout;
         auto* name = new QLabel{field, m_evidence};
         name->setObjectName(QStringLiteral("mutedText"));
@@ -363,7 +363,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     auto* meter_row = new QHBoxLayout;
     m_size_meter = new QProgressBar{composer};
     m_size_meter->setObjectName(QStringLiteral("sizeMeter"));
-    m_size_meter->setRange(0, static_cast<int>(kMaxMailTxBytes));
+    m_size_meter->setRange(0, static_cast<int>(kMaxDraftBytes));
     m_size_meter->setValue(0);
     m_size_meter->setTextVisible(false);
     m_size_meter->setFixedHeight(10);
@@ -401,14 +401,14 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> identity_re
     // ---- Wiring -------------------------------------------------------------
     const auto refresh_meter = [this] {
         const qint64 bytes = payloadBytes();
-        m_size_meter->setValue(static_cast<int>(qMin<qint64>(bytes, kMaxMailTxBytes)));
-        m_size_meter->setProperty("overLimit", bytes > kMaxMailTxBytes);
+        m_size_meter->setValue(static_cast<int>(qMin<qint64>(bytes, kMaxDraftBytes)));
+        m_size_meter->setProperty("overLimit", bytes > kMaxDraftBytes);
         m_size_meter->style()->unpolish(m_size_meter);
         m_size_meter->style()->polish(m_size_meter);
         m_size_label->setText(tr("%1 / %2 bytes")
             .arg(QLocale{}.toString(bytes))
-            .arg(QLocale{}.toString(kMaxMailTxBytes)));
-        const bool too_long = bytes > kMaxMailTxBytes;
+            .arg(QLocale{}.toString(kMaxDraftBytes)));
+        const bool too_long = bytes > kMaxDraftBytes;
         m_size_label->setStyleSheet(too_long ? QStringLiteral("color: #dc2626;") : QString{});
         updateGates();
     };
@@ -463,7 +463,7 @@ void EmailPage::resizeEvent(QResizeEvent* event)
 
 qint64 EmailPage::payloadBytes() const
 {
-    // The strict MailTx size covers everything the protocol commits to:
+    // The strict draft size covers everything the protocol commits to:
     // subject and body, UTF-8 encoded. No attachments exist to count.
     return m_to->text().toUtf8().size() + m_subject->text().toUtf8().size() + m_body->toPlainText().toUtf8().size();
 }
@@ -478,7 +478,7 @@ QString EmailPage::finalityText(Finality finality)
 {
     switch (finality) {
     case Finality::Draft: return tr("Local draft");
-    case Finality::PendingFinality: return tr("Pending BFT finality");
+    case Finality::PendingFinality: return tr("Checking delivery");
     case Finality::Final: return tr("Final");
     }
     return {};
@@ -677,24 +677,22 @@ void EmailPage::showMessage(const Message& message)
     m_evidence->setVisible(false);
     m_security_details->setText(tr("Security details"));
     m_security_details->setVisible(true);
-    const bool verified = final && message.has_evidence;
     if (m_evidence_states.size() >= 4) {
-        // 0: Transaction inclusion proof
-        m_evidence_states[0]->setText(verified ? tr("verified") : tr("pending"));
-        m_evidence_states[0]->setObjectName(verified ? QStringLiteral("statusBadge") : QStringLiteral("neutralBadge"));
+        // Mail delivery is an encrypted Object Storage workflow, not a block operation.
+        m_evidence_states[0]->setText(tr("not connected"));
+        m_evidence_states[0]->setObjectName(QStringLiteral("neutralBadge"));
 
-        // 1: BFT finality certificate
-        m_evidence_states[1]->setText(verified ? tr("verified") : tr("pending"));
-        m_evidence_states[1]->setObjectName(verified ? QStringLiteral("statusBadge") : QStringLiteral("neutralBadge"));
+        // 1: Storage durability
+        m_evidence_states[1]->setText(tr("not connected"));
+        m_evidence_states[1]->setObjectName(QStringLiteral("neutralBadge"));
 
-        // 2: Historical sender-key authorization
-        // MailEvidenceBundle supplies current signing key but does not yet prove historical canonical state at block height
+        // 2: Encrypted-object integrity
         m_evidence_states[2]->setText(tr("not available yet"));
         m_evidence_states[2]->setObjectName(QStringLiteral("neutralBadge"));
 
-        // 3: Salted, domain-separated content commitment
-        m_evidence_states[3]->setText(verified ? tr("verified") : tr("pending"));
-        m_evidence_states[3]->setObjectName(verified ? QStringLiteral("statusBadge") : QStringLiteral("neutralBadge"));
+        // 3: Mailbox delivery
+        m_evidence_states[3]->setText(tr("not connected"));
+        m_evidence_states[3]->setObjectName(QStringLiteral("neutralBadge"));
 
         for (QLabel* state : m_evidence_states) {
             state->style()->unpolish(state);
@@ -720,8 +718,8 @@ void EmailPage::updateGates()
     QString gate_reason;
     if (!recipientWellFormed()) {
         gate_reason = tr("Enter exactly one recipient.");
-    } else if (payloadBytes() > kMaxMailTxBytes) {
-        gate_reason = tr("Message exceeds the strict MailTx size limit.");
+    } else if (payloadBytes() > kMaxDraftBytes) {
+        gate_reason = tr("Message exceeds the strict draft size limit.");
     } else if (m_body->toPlainText().trimmed().isEmpty()) {
         gate_reason = tr("Write a message first.");
     } else if (!identity_active) {
@@ -756,7 +754,7 @@ void EmailPage::closeComposer()
 void EmailPage::sendNow()
 {
     // Reachable only once core reports the email capability. The client
-    // hands the MailTx to the local node; finality arrives asynchronously.
+    // hands the mail transaction to the local node; finality arrives asynchronously.
     const QString to_str = m_to->text().trimmed();
     const QString subject_str = m_subject->text();
     const QString body_str = m_body->toPlainText();
@@ -848,7 +846,7 @@ void EmailPage::refreshMailboxView()
             msg.body = QString::fromStdString(item.body);
             msg.received = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(item.timestamp));
             msg.read = item.read;
-            msg.has_evidence = item.evidence_bundle.has_value();
+            msg.has_evidence = false;
 
             if (item.folder == cybou::MailFolder::INBOX) {
                 msg.folder = FOLDER_INBOX;
@@ -858,9 +856,9 @@ void EmailPage::refreshMailboxView()
                 msg.folder = FOLDER_DRAFTS;
             }
 
-            if (item.finality == cybou::MailFinalityStatus::FINAL) {
+            if (item.delivery == cybou::MailDeliveryStatus::DELIVERED) {
                 msg.finality = Finality::Final;
-            } else if (item.finality == cybou::MailFinalityStatus::PENDING_FINALITY) {
+            } else if (item.delivery == cybou::MailDeliveryStatus::PENDING) {
                 msg.finality = Finality::PendingFinality;
             } else {
                 msg.finality = Finality::Draft;

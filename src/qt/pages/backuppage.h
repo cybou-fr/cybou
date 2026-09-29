@@ -25,8 +25,8 @@ class QPushButton;
  *    never plaintext to storage peers.
  *  - Restore is bound to the same local identity keys — the UI shows the
  *    binding state instead of offering an anonymous restore.
- *  - Desktop nodes may prune pre-Store MailTx history; a backup is what
- *    protects local data against that, not the protocol.
+ *  - Mail and Files content live in encrypted Object Storage; backup preserves
+ *    recovery material and local indexes independently of consensus history.
  */
 class BackupPage : public QWidget
 {

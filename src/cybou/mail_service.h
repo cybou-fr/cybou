@@ -5,7 +5,6 @@
 #define CYBOU_MAIL_SERVICE_H
 
 #include <cybou/account_id.h>
-#include <cybou/evidence.h>
 #include <cybou/keystore.h>
 #include <cybou/node_runtime.h>
 #include <cybou/protocol_operation.h>
@@ -25,7 +24,7 @@
 namespace cybou {
 
 inline constexpr std::array<unsigned char, 5> MAILBOX_MAGIC{'C', 'Y', 'B', 'M', '1'};
-inline constexpr uint32_t MAILBOX_FILE_VERSION{1};
+inline constexpr uint32_t MAILBOX_FILE_VERSION{3};
 inline constexpr uint8_t PROTECTED_MAIL_VERSION{1};
 inline constexpr size_t MAX_PROTECTED_MAIL_SUBJECT_BYTES{256};
 inline constexpr size_t MAX_PROTECTED_MAIL_BODY_BYTES{48000};
@@ -36,15 +35,15 @@ enum class MailFolder : uint8_t {
     DRAFTS = 2,
 };
 
-enum class MailFinalityStatus : uint8_t {
+enum class MailDeliveryStatus : uint8_t {
     DRAFT = 0,
-    PENDING_FINALITY = 1,
-    FINAL = 2,
+    PENDING = 1,
+    DELIVERED = 2,
 };
 
 /**
  * Protected text email payload (doc 49).
- * E2E encrypted inside the MailTx ciphertext. Plaintext never touches consensus state.
+ * E2E-encrypted before storage or delivery. Plaintext never enters consensus.
  */
 struct ProtectedMail {
     uint8_t version{PROTECTED_MAIL_VERSION};
@@ -73,15 +72,9 @@ struct MailItem {
     std::string body;
     uint64_t timestamp{0};
     bool read{false};
-    MailFinalityStatus finality{MailFinalityStatus::DRAFT};
-    uint64_t block_height{0};
-    uint256 block_id{};
-    size_t operation_index{0};
+    MailDeliveryStatus delivery{MailDeliveryStatus::DRAFT};
     uint256 salt{};
     uint256 content_commitment{};
-    uint256 discovery_tag{};
-    uint64_t fee{0};
-    std::optional<MailEvidenceBundle> evidence_bundle{std::nullopt};
 
     friend bool operator==(const MailItem&, const MailItem&) = default;
 };
@@ -104,7 +97,6 @@ enum class SendMailError : uint8_t {
 struct SendMailResult {
     SendMailError error{SendMailError::NONE};
     uint256 mail_id{};
-    uint64_t fee{0};
     std::string error_message{};
 
     explicit operator bool() const { return error == SendMailError::NONE; }
@@ -113,9 +105,9 @@ struct SendMailResult {
 uint256 ComputeMailContentCommitment(const uint256& salt, std::span<const unsigned char> plaintext);
 
 /**
- * CybouMailService manages local mailbox indexes (Inbox, Sent, Drafts),
- * outbound MailTx construction, signing, and submission, and inbound
- * mailbox synchronization from finalized BFT blocks.
+ * CybouMailService manages local mailbox indexes (Inbox, Sent, Drafts).
+ * Encrypted Object Storage transport and mailbox
+ * synchronization are separate services and are not yet connected.
  */
 class CybouMailService {
 public:
@@ -152,31 +144,21 @@ public:
     /** Unread count in Inbox. */
     size_t GetUnreadCount() const;
 
-    /** Refuses submission until the frozen DEV envelope is backed by an integrated HPKE suite. */
+    /** Refuses submission until encrypted Object Storage delivery is integrated. */
     SendMailResult SendMail(
         const AccountId& recipient,
         const std::string& subject,
         const std::string& body);
 
-    /**
-     * Synchronize local Sent finality against newly finalized BFT blocks.
-     * Incoming decryption remains disabled until the envelope backend and
-     * historical sender authorization verification are integrated.
-     * Returns count of newly received messages (currently always zero).
-     */
+    /** Synchronize local indexes from Object Storage (not connected yet). */
     size_t SyncMailbox();
-
-    /** Last finalized block height scanned by mailbox sync. */
-    uint64_t GetLastScannedHeight() const;
 
 private:
     CybouNodeRuntime& m_runtime;
     CybouKeyStore& m_keystore;
     const std::filesystem::path m_mailbox_path;
     std::vector<MailItem> m_messages;
-    uint64_t m_last_scanned_height{0};
     mutable std::mutex m_mutex;
-    std::mutex m_sync_mutex;
 };
 
 } // namespace cybou

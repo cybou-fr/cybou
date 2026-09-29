@@ -25,10 +25,9 @@ namespace cybou {
 
 enum class WalletEntryKind : uint8_t {
     ONBOARDING_BONUS = 0,
-    MAIL_FEE = 1,
-    PAYMENT = 2,
-    LOCK_TO_SYSTEM = 3,
-    ROOT_PUBLICATION_FEE = 4,
+    PAYMENT = 1,
+    LOCK_TO_SYSTEM = 2,
+    ROOT_PUBLICATION_FEE = 3,
 };
 
 enum class WalletEntryFinality : uint8_t {

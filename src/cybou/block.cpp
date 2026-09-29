@@ -49,7 +49,7 @@ inline uint32_t ReadUint32LE(const std::span<const unsigned char>& bytes, size_t
 
 uint256 ComputeOperationsRootFromHashes(std::span<const uint256> hashes)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/OPS_ROOT/V2"};
+    static constexpr std::string_view DOMAIN{"CYBOU/OPS_ROOT/V3"};
     ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
 
@@ -84,7 +84,7 @@ uint256 ComputeOperationsRoot(const std::vector<ProtocolOperation>& operations)
 
 uint256 ComputeBlockHeaderId(const CybouBlockHeader& header)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/BLOCK/V2"};
+    static constexpr std::string_view DOMAIN{"CYBOU/BLOCK/V3"};
     ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(&header.version, 1);

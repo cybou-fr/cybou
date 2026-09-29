@@ -245,7 +245,6 @@ QString WalletPage::kindText(EntryKind kind)
 {
     switch (kind) {
     case EntryKind::OnboardingBonus: return tr("Onboarding bonus");
-    case EntryKind::MailFee: return tr("Email fee");
     case EntryKind::Payment: return tr("Payment");
     case EntryKind::LockToSystem: return tr("Lock to System Balance");
     }
@@ -307,11 +306,6 @@ void WalletPage::rebuildActivity()
             tint = Tint::Amber;
             subtitle = tr("Welcome to CYBOU");
             break;
-        case EntryKind::MailFee:
-            glyph = Glyph::Envelope;
-            tint = Tint::Blue;
-            subtitle = tr("CYBOU Mail");
-            break;
         case EntryKind::LockToSystem:
             glyph = Glyph::Lock;
             tint = Tint::Violet;
@@ -358,7 +352,7 @@ void WalletPage::rebuildActivity()
     if (m_activity->count() == 0) {
         auto* item = new QListWidgetItem{m_activity};
         item->setFlags(Qt::NoItemFlags);
-        item->setText(tr("No transactions yet.\nOnboarding bonus, Email fees and transfers will appear here once your account is active."));
+        item->setText(tr("No transactions yet.\nOnboarding bonus and transfers will appear here once your account is active."));
         item->setTextAlignment(Qt::AlignCenter);
         item->setForeground(QBrush{CybouTheme::color(CybouTheme::TEXT_MUTED)});
         item->setSizeHint(QSize{0, 120});
@@ -454,7 +448,7 @@ void WalletPage::onLockClicked()
     auto* layout = new QVBoxLayout(&dialog);
     layout->setSpacing(16);
 
-    auto* warning = new QLabel(tr("<b>One-way transfer.</b><br>Moving Balance into System Balance permanently assigns it to protocol services (such as Email fees). System Balance cannot be transferred, traded, or converted back to Balance."), &dialog);
+    auto* warning = new QLabel(tr("<b>One-way transfer.</b><br>Moving Balance into System Balance permanently assigns it to protocol services. System Balance cannot be transferred, traded, or converted back to Balance."), &dialog);
     warning->setWordWrap(true);
     warning->setStyleSheet(QStringLiteral("color: #b45309;"));
     layout->addWidget(warning);
@@ -569,9 +563,6 @@ void WalletPage::refreshLedgerView()
         switch (e.kind) {
         case cybou::WalletEntryKind::ONBOARDING_BONUS:
             entry.kind = EntryKind::OnboardingBonus;
-            break;
-        case cybou::WalletEntryKind::MAIL_FEE:
-            entry.kind = EntryKind::MailFee;
             break;
         case cybou::WalletEntryKind::PAYMENT:
             entry.kind = EntryKind::Payment;

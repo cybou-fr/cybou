@@ -21,7 +21,6 @@ enum class BlockExecutionError : uint8_t {
     INVALID_SYSTEM_LOCK,
     INVALID_NAME_COMMIT,
     INVALID_NAME_REVEAL,
-    INVALID_MAIL,
     INVALID_ROOT_PUBLICATION,
     FEE_ROUTING_OVERFLOW,
     INVALID_STATE,
@@ -36,7 +35,6 @@ struct BlockExecutionResult {
     SystemLockError lock_error{SystemLockError::NONE};
     NameCommitError name_commit_error{NameCommitError::NONE};
     NameRevealError name_reveal_error{NameRevealError::NONE};
-    MailError mail_error{MailError::NONE};
     RootPublicationError root_publication_error{RootPublicationError::NONE};
     std::optional<CybouState> state;
     std::optional<uint256> state_root;

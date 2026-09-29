@@ -4,7 +4,7 @@
 
 #include <cybou/state.h>
 #include <cybou/protocol_operation.h>
-#include <cybou/mail_tx.h>
+#include <cybou/validator.h>
 #include <cybou/crypto/sha256.h>
 
 #include <algorithm>
@@ -202,60 +202,6 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
     return NameRevealError::NONE;
 }
 
-MailError ApplyMail(const AuthorizedMail& op,
-    const uint256& network_id, uint64_t block_height,
-    const CybouProtocolParameters& params, CybouState& state)
-{
-    if (op.mail.version != MAIL_TX_VERSION ||
-        op.mail.recipient.IsNull() ||
-        op.mail.discovery_tag.IsNull() ||
-        op.mail.content_commitment.IsNull() ||
-        op.mail.ciphertext.empty() ||
-        op.mail.ciphertext.size() > MAX_MAIL_CIPHERTEXT_SIZE) {
-        return MailError::INVALID_PAYLOAD;
-    }
-    if (op.authorization.kind != IdentityOperationKind::MAIL) {
-        return MailError::INVALID_AUTHORIZATION;
-    }
-    const auto expected_payload_commitment = ComputeMailPayloadCommitment(op.mail);
-    if (!expected_payload_commitment || op.authorization.payload_commitment != *expected_payload_commitment) {
-        return MailError::INVALID_AUTHORIZATION;
-    }
-    auto sender_it = state.accounts.find(op.authorization.account_id);
-    if (sender_it == state.accounts.end()) {
-        return MailError::SENDER_NOT_FOUND;
-    }
-    if (!state.accounts.contains(op.mail.recipient)) {
-        return MailError::RECIPIENT_NOT_FOUND;
-    }
-    const uint64_t fee = MailFeeForSize(op.mail.ciphertext.size());
-    if (sender_it->second.system_balance < fee) {
-        return MailError::INSUFFICIENT_SYSTEM_BALANCE;
-    }
-    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - fee) {
-        return MailError::FEE_POOL_OVERFLOW;
-    }
-    const uint64_t current_epoch = EpochForHeight(block_height, params);
-    const uint32_t current_count = (sender_it->second.last_mail_epoch == current_epoch)
-        ? sender_it->second.mail_count_in_epoch
-        : 0;
-    if (current_count >= NEW_ACCOUNT_MAIL_LIMIT_PER_EPOCH) {
-        return MailError::MAIL_QUOTA_EXCEEDED;
-    }
-    if (state.identities.AuthorizeOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
-        return MailError::INVALID_AUTHORIZATION;
-    }
-    sender_it->second.system_balance -= fee;
-    state.pending_fee_pool += fee;
-    if (sender_it->second.last_mail_epoch == current_epoch) {
-        sender_it->second.mail_count_in_epoch += 1;
-    } else {
-        sender_it->second.last_mail_epoch = current_epoch;
-        sender_it->second.mail_count_in_epoch = 1;
-    }
-    return MailError::NONE;
-}
-
 RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
     const uint256& network_id, const CybouProtocolParameters& params, CybouState& state)
 {
@@ -360,8 +306,6 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
         Write64(out, account.system_balance);
         Write64(out, account.creation_height);
         Write64(out, account.creation_epoch);
-        Write64(out, account.last_mail_epoch);
-        Write32(out, account.mail_count_in_epoch);
     }
     Write32(out, static_cast<uint32_t>(identities->size()));
     out.insert(out.end(), identities->begin(), identities->end());
@@ -395,11 +339,9 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         const auto system = reader.U64();
         const auto height = reader.U64();
         const auto epoch = reader.U64();
-        const auto mail_epoch = reader.U64();
-        const auto mail_count = reader.U32();
-        if (!id || (prior && !(*prior < *id)) || !balance || !system || !height || !epoch || !mail_epoch || !mail_count) return std::nullopt;
+        if (!id || (prior && !(*prior < *id)) || !balance || !system || !height || !epoch) return std::nullopt;
         prior = *id;
-        state.accounts.emplace(*id, AccountState{*balance, *system, *height, *epoch, *mail_epoch, *mail_count});
+        state.accounts.emplace(*id, AccountState{*balance, *system, *height, *epoch});
     }
     const auto identity_size = reader.U32();
     if (!identity_size) return std::nullopt;
@@ -431,7 +373,7 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
 
 std::optional<uint256> CybouStateHash(const CybouState& state)
 {
-    constexpr std::string_view domain{"CYBOU/STATE/V2"};
+    constexpr std::string_view domain{"CYBOU/STATE/V3"};
     const auto bytes = SerializeCybouState(state);
     if (!bytes) return std::nullopt;
     uint256 hash;

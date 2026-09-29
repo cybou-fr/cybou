@@ -47,8 +47,8 @@ struct IdentityRotate {
 };
 
 enum class IdentityOperationKind : uint8_t {
-    PAYMENT = 1, MAIL = 2, SYSTEM_LOCK = 3, NAME_COMMIT = 4, NAME_REVEAL = 5,
-    ROOT_PUBLICATION = 6,
+    PAYMENT = 1, SYSTEM_LOCK = 2, NAME_COMMIT = 3, NAME_REVEAL = 4,
+    ROOT_PUBLICATION = 5,
 };
 
 struct IdentityOperationAuthorization {

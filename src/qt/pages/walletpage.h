@@ -42,7 +42,6 @@ public:
 private:
     enum class EntryKind {
         OnboardingBonus, /**< OnboardingPool -> System Balance at AccountCreate. */
-        MailFee,         /**< Deterministic size-aware fee, debited from System Balance. */
         Payment,         /**< User-authorized Balance transfer. */
         LockToSystem,    /**< Irreversible Balance -> System Balance lock. */
     };
@@ -54,7 +53,7 @@ private:
 
     struct Entry {
         QString id;
-        EntryKind kind{EntryKind::MailFee};
+        EntryKind kind{EntryKind::OnboardingBonus};
         qint64 amount{0};      /**< Signed: positive credits, negative debits. */
         bool system_side{true}; /**< true: moved System Balance; false: Balance. */
         QString counterparty;  /**< Peer account, service name, or empty. */

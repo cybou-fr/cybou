@@ -16,7 +16,7 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_BLOCK_VERSION{2};
+inline constexpr uint8_t CYBOU_BLOCK_VERSION{3};
 
 /**
  * Canonical CYBOU block format.

@@ -202,7 +202,6 @@ add_executable(cybou-core-test
   cybou_protocol_operation_tests.cpp
   cybou_signing_tests.cpp
   cybou_state_tests.cpp
-  cybou_evidence_tests.cpp
   cybou_canonical_cbor_tests.cpp
   cybou_chunk_id_tests.cpp
   cybou_chunk_authorization_tests.cpp
@@ -214,7 +213,6 @@ add_executable(cybou-core-test
   cybou_storage_crypto_tests.cpp
   cybou_storage_service_tests.cpp
   cybou_storage_key_ring_tests.cpp
-  cybou_mail_filter_tests.cpp
   cybou_bft_tests.cpp
   cybou_crypto_tests.cpp
   cybou_state_store_tests.cpp
