@@ -59,7 +59,6 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
             m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
             return false;
         }
-        m_announced_operations.erase(victim->first);
         m_announced_blocks.erase(victim->first);
         m_peers.erase(victim);
     }
@@ -90,7 +89,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
     if (m_runtime.HasStorageProvider()) caps |= (CAP_STORAGE | CAP_STORAGE_ABORT);
     if (status.is_authority) {
-        caps |= (CAP_ACCEPT_OPERATIONS | CAP_OP_INVENTORY);
+        caps |= CAP_ACCEPT_OPERATIONS;
     }
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip, .capabilities = caps, .nonce = *nonce};
@@ -107,7 +106,6 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         m_last_connect_status = PeerConnectStatus::HANDSHAKE_FAILED;
         return false;
     }
-    m_announced_operations.erase(endpoint);
     m_announced_blocks.erase(endpoint);
     // Seed the fanout frontier from the peer's handshake height. This
     // knowledge survives reconnects (a peer's chain only grows), so it is
@@ -135,7 +133,6 @@ size_t PeerManager::PingAll()
     for (auto it = m_peers.begin(); it != m_peers.end();) {
         const auto nonce = RandomNonce();
         if (!nonce || !it->second->Ping(*nonce)) {
-            m_announced_operations.erase(it->first);
             m_announced_blocks.erase(it->first);
             it = m_peers.erase(it);
         } else {
@@ -167,7 +164,6 @@ size_t PeerManager::PingSome(const size_t max_peers)
         if (peer == m_peers.end()) continue;
         const auto nonce = RandomNonce();
         if (!nonce || !peer->second->Ping(*nonce)) {
-            m_announced_operations.erase(endpoint);
             m_announced_blocks.erase(endpoint);
             m_peers.erase(peer);
         } else {
@@ -271,9 +267,7 @@ OperationSubmitResult PeerManager::SubmitOperation(const std::string& numeric_ad
     const Endpoint endpoint{address.to_string(), port};
     auto it = m_peers.find(endpoint);
     if (it == m_peers.end()) return failure;
-    const auto result = (it->second->Peer() &&
-        (it->second->Peer()->capabilities & CAP_OP_INVENTORY)) ?
-        it->second->AdvertiseOperation(operation) : it->second->SubmitOperation(operation);
+    const auto result = it->second->SubmitOperation(operation);
     if (!result) {
         m_peers.erase(it);
         return failure;
@@ -303,8 +297,7 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
         }
         if (it == m_peers.end() || !it->second->Peer() ||
             !(it->second->Peer()->capabilities & CAP_ACCEPT_OPERATIONS)) continue;
-        const auto acknowledgment = (it->second->Peer()->capabilities & CAP_OP_INVENTORY) ?
-            it->second->AdvertiseOperation(operation) : it->second->SubmitOperation(operation);
+        const auto acknowledgment = it->second->SubmitOperation(operation);
         if (!acknowledgment) {
             result.delivery_uncertain = true;
             m_peers.erase(it);
@@ -318,59 +311,6 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
         }
     }
     return result;
-}
-
-size_t PeerManager::FanoutRecentOperations(size_t max_per_peer)
-{
-    if (max_per_peer == 0 || max_per_peer > MAX_PENDING_OPERATIONS) return 0;
-    for (auto it = m_announced_operations.begin(); it != m_announced_operations.end();) {
-        if (!m_peers.contains(it->first)) it = m_announced_operations.erase(it);
-        else ++it;
-    }
-    const auto pending = m_runtime.RecentOperationsForGossip();
-    std::set<uint256> live_ids;
-    for (const auto& operation : pending) {
-        const auto id = ComputeOperationId(operation);
-        if (id) live_ids.insert(*id);
-    }
-    size_t delivered{0};
-    for (auto it = m_peers.begin(); it != m_peers.end();) {
-        auto& announced = m_announced_operations[it->first];
-        for (auto known = announced.begin(); known != announced.end();) {
-            if (!live_ids.contains(*known)) known = announced.erase(known);
-            else ++known;
-        }
-        if (!it->second->Peer() ||
-            !(it->second->Peer()->capabilities & CAP_ACCEPT_OPERATIONS) ||
-            !(it->second->Peer()->capabilities & CAP_OP_INVENTORY)) {
-            ++it;
-            continue;
-        }
-        bool disconnected{false};
-        size_t offered{0};
-        for (const auto& operation : pending) {
-            if (offered >= max_per_peer) break;
-            const auto id = ComputeOperationId(operation);
-            if (!id || announced.contains(*id)) continue;
-            ++offered;
-            const auto response = it->second->AdvertiseOperation(operation);
-            if (!response) {
-                disconnected = true;
-                break;
-            }
-            if (static_cast<bool>(*response)) {
-                announced.insert(*id);
-                ++delivered;
-            }
-        }
-        if (disconnected) {
-            m_announced_operations.erase(it->first);
-            it = m_peers.erase(it);
-        } else {
-            ++it;
-        }
-    }
-    return delivered;
 }
 
 size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
@@ -427,7 +367,6 @@ size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
         }
         if (disconnected) {
             m_announced_blocks.erase(it->first);
-            m_announced_operations.erase(it->first);
             it = m_peers.erase(it);
         } else {
             ++it;
@@ -482,8 +421,7 @@ std::optional<StorageWriteResult> PeerManager::PutStorageChunk(
     auto result = session->PutStorageChunk(object_id, chunk);
     if (!result) {
         m_peers.erase(endpoint);
-        m_announced_operations.erase(endpoint);
-        m_announced_blocks.erase(endpoint);
+            m_announced_blocks.erase(endpoint);
     }
     return result;
 }
@@ -497,8 +435,7 @@ std::optional<StorageWriteResult> PeerManager::CommitStorageManifest(
     auto result = session->CommitStorageManifest(manifest);
     if (!result) {
         m_peers.erase(endpoint);
-        m_announced_operations.erase(endpoint);
-        m_announced_blocks.erase(endpoint);
+            m_announced_blocks.erase(endpoint);
     }
     return result;
 }
@@ -520,8 +457,7 @@ std::optional<StorageWriteResult> PeerManager::AbortStorageObject(
     auto result = session->AbortStorageObject(object_id, chunk_count);
     if (!result) {
         m_peers.erase(endpoint);
-        m_announced_operations.erase(endpoint);
-        m_announced_blocks.erase(endpoint);
+            m_announced_blocks.erase(endpoint);
     }
     return result;
 }
@@ -550,8 +486,8 @@ std::optional<StorageEncryptedChunk> PeerManager::GetStorageChunk(
 void PeerManager::DisconnectAll()
 {
     m_peers.clear();
-    // Deliberately keep m_announced_blocks/m_announced_operations: a peer's
-    // store knowledge persists across sessions. Clearing them restarts fanout
+    // Deliberately keep m_announced_blocks: a peer's
+    // finalized-chain knowledge persists across sessions. Clearing it restarts fanout
     // from the oldest recent entries, and with the per-peer offer cap a peer
     // that is behind never receives the newer blocks it actually needs.
 }

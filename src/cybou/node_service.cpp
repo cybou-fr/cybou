@@ -212,7 +212,6 @@ int CybouNodeService::RunAuthority(const CybouAuthorityServiceConfig& config, st
             }
             if (!stopping) {
                 peers.FanoutRecentBlocks();
-                peers.FanoutRecentOperations();
                 peers.PingAll();
             }
 

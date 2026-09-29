@@ -227,17 +227,6 @@ OperationSubmitResult CybouNodeRuntime::SubmitPeerOperation(ProtocolOperation op
     return SubmitOperationInternal(std::move(op), std::move(source_peer));
 }
 
-std::optional<OperationSubmitStatus> CybouNodeRuntime::KnownOperationStatus(const uint256& op_id) const
-{
-    if (op_id.IsNull()) return std::nullopt;
-    std::lock_guard lock(m_mutex);
-    if (m_authority_node && m_authority_node->HasPendingOperation(op_id)) {
-        return OperationSubmitStatus::ALREADY_PENDING;
-    }
-    if (m_store.HasIndexedFinalizedOperation(op_id)) return OperationSubmitStatus::ALREADY_FINALIZED;
-    return std::nullopt;
-}
-
 OperationStatus CybouNodeRuntime::GetOperationStatus(const uint256& op_id) const
 {
     if (op_id.IsNull()) return {};
@@ -275,15 +264,6 @@ void CybouNodeRuntime::RememberOperationStatus(const uint256& id, OperationStatu
     }
 }
 
-std::vector<ProtocolOperation> CybouNodeRuntime::RecentOperationsForGossip() const
-{
-    std::lock_guard lock(m_mutex);
-    std::vector<ProtocolOperation> operations;
-    operations.reserve(m_recent_gossip_operations.size());
-    for (const auto& entry : m_recent_gossip_operations) operations.push_back(entry.operation);
-    return operations;
-}
-
 std::vector<FinalizedHead> CybouNodeRuntime::RecentFinalizedBlocksForGossip() const
 {
     std::lock_guard lock(m_mutex);
@@ -298,23 +278,6 @@ void CybouNodeRuntime::RememberFinalizedBlockForGossip(const FinalizedBlock& blo
         m_recent_finalized_blocks.back().height >= block.block.height) return;
     m_recent_finalized_blocks.push_back({id, block.block.height});
     if (m_recent_finalized_blocks.size() > 32) m_recent_finalized_blocks.pop_front();
-}
-
-void CybouNodeRuntime::RememberOperationForGossip(const ProtocolOperation& op, const uint256& id)
-{
-    if (id.IsNull() || m_recent_gossip_ids.contains(id)) return;
-    const auto encoded = SerializeProtocolOperation(op);
-    if (!encoded || encoded->empty() || encoded->size() > MAX_PENDING_OPERATION_BYTES) return;
-    while (!m_recent_gossip_operations.empty() &&
-        (m_recent_gossip_operations.size() >= MAX_PENDING_OPERATIONS ||
-         encoded->size() > MAX_PENDING_OPERATION_BYTES - m_recent_gossip_bytes)) {
-        m_recent_gossip_bytes -= m_recent_gossip_operations.front().bytes;
-        m_recent_gossip_ids.erase(m_recent_gossip_operations.front().id);
-        m_recent_gossip_operations.pop_front();
-    }
-    m_recent_gossip_operations.push_back({op, id, encoded->size()});
-    m_recent_gossip_ids.insert(id);
-    m_recent_gossip_bytes += encoded->size();
 }
 
 OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
@@ -335,7 +298,6 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         }
         if (m_authority_node) {
             const auto status = m_authority_node->SubmitOperationWithStatus(op, std::move(source_peer));
-            if (status == OperationSubmitStatus::ACCEPTED) RememberOperationForGossip(op, op_id);
             if (status == OperationSubmitStatus::ACCEPTED || status == OperationSubmitStatus::ALREADY_PENDING) {
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
             } else if (status == OperationSubmitStatus::ALREADY_FINALIZED) {

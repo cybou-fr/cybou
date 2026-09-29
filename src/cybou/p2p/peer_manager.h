@@ -75,8 +75,6 @@ public:
     PeerSubmitResult SubmitOperationToAny(
         const std::vector<std::pair<std::string, uint16_t>>& endpoints,
         const ProtocolOperation& operation);
-    /** Offer each recent admitted OperationID once per connected peer. */
-    size_t FanoutRecentOperations(size_t max_per_peer = 16);
     size_t FanoutRecentBlocks(size_t max_per_peer = 16);
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
@@ -108,7 +106,6 @@ private:
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;
     std::optional<Endpoint> m_ping_cursor;
     std::optional<Endpoint> m_discovery_cursor;
-    std::map<Endpoint, std::set<uint256>> m_announced_operations;
     std::map<Endpoint, std::set<uint256>> m_announced_blocks;
     // Last finalized height each peer reported in a BLOCK_RESULT ack, so the
     // fanout can skip (and mark announced) heads the peer already finalized

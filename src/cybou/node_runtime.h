@@ -140,10 +140,8 @@ public:
     /** Submit an operation to pending pool (producer) or direct execution */
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
     OperationSubmitResult SubmitPeerOperation(ProtocolOperation op, std::string source_peer);
-    std::optional<OperationSubmitStatus> KnownOperationStatus(const uint256& op_id) const;
     OperationStatus GetOperationStatus(const uint256& op_id) const;
     IdentityOperationCoordinator& GetIdentityOperationCoordinator(CybouKeyStore& keystore);
-    std::vector<ProtocolOperation> RecentOperationsForGossip() const;
     std::vector<FinalizedHead> RecentFinalizedBlocksForGossip() const;
 
     /** Produce a block if running in authority mode */
@@ -205,14 +203,8 @@ private:
     };
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
     void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
-    void RememberOperationForGossip(const ProtocolOperation& op, const uint256& id);
     void RememberOperationStatus(const uint256& id, OperationStatus status);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
-    struct GossipOperation {
-        ProtocolOperation operation;
-        uint256 id;
-        size_t bytes{0};
-    };
     NodeRuntimeConfig m_config;
     uint256 m_network_id;
     std::unique_ptr<KVStore> m_db;
@@ -229,9 +221,6 @@ private:
     std::chrono::steady_clock::time_point m_next_peer_ping{};
     std::chrono::steady_clock::time_point m_next_peer_discovery{};
     mutable std::mutex m_mutex;
-    std::deque<GossipOperation> m_recent_gossip_operations;
-    std::set<uint256> m_recent_gossip_ids;
-    size_t m_recent_gossip_bytes{0};
     std::deque<FinalizedHead> m_recent_finalized_blocks;
     using Endpoint = std::pair<std::string, uint16_t>;
     std::set<Endpoint> m_explicit_peer_endpoints;
