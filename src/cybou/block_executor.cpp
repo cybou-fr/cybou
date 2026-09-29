@@ -90,7 +90,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 return failure;
             }
         } else if (const auto* publication = std::get_if<AuthorizedRootPublication>(&operations[i])) {
-            const auto result = ApplyRootPublication(*publication, network_id, candidate);
+            const auto result = ApplyRootPublication(*publication, network_id, params, candidate);
             if (result != RootPublicationError::NONE) {
                 auto failure = fail(BlockExecutionError::INVALID_ROOT_PUBLICATION);
                 failure.failed_operation_index = i;

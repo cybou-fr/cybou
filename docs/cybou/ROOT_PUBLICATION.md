@@ -84,10 +84,13 @@ bytes. Its expected Merkle root is
 There are no `MAIL`, `FILE`, `BACKUP`, or `FILES_ROOT_UPDATE` operation kinds.
 Mail and Files schemas are discovered only after a recipient decrypts a root.
 Consensus has generic publication limits and deterministic fees; it cannot
-enforce a Mail/day quota while Mail type is hidden. The fee is four CYBOU per
-started KiB of full canonical operation bytes plus four CYBOU per authorized
-chunk. Each four-unit fee splits as three Security and one Onboarding. Priority
-fees are disabled.
+enforce a Mail/day quota while Mail type is hidden. The fee is computed from
+immutable genesis-bound protocol parameters:
+`root_publication_fee_per_started_kib` times the number of started KiB in the
+full canonical operation, plus `root_publication_fee_per_chunk` times the
+authorized chunk count. DEV currently sets both rates to four CYBOU; Beta and
+Mainnet freeze their own values in their network definitions. Each four-unit
+fee splits as three Security and one Onboarding. Priority fees are disabled.
 The fee is debited from the sender's System Balance and enters the ordinary
 pending fee pool. Authorization nonce advancement and fee accounting are part
 of the deterministic operation transition.

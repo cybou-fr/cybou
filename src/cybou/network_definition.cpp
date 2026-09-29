@@ -5,11 +5,13 @@
 #include <cybou/network_definition.h>
 #include <cybou/state.h>
 #include <cybou/validator.h>
+#include <cybou/root_publication.h>
 
 #include <cybou/crypto/sha256.h>
 
 #include <algorithm>
 #include <fstream>
+#include <limits>
 #include <string_view>
 
 namespace cybou {
@@ -32,6 +34,18 @@ NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& d
     }
     if (definition.protocol_parameters.epoch_blocks == 0) {
         return NetworkDefinitionError::ZERO_EPOCH_BLOCKS;
+    }
+    const auto max_fee_kib = (ROOT_PUBLICATION_MAX_OPERATION_BYTES + 1023) / 1024;
+    const auto per_kib = definition.protocol_parameters.root_publication_fee_per_started_kib;
+    const auto per_chunk = definition.protocol_parameters.root_publication_fee_per_chunk;
+    if ((per_kib != 0 && max_fee_kib > std::numeric_limits<uint64_t>::max() / per_kib) ||
+        (per_chunk != 0 && ROOT_PUBLICATION_MAX_CHUNKS > std::numeric_limits<uint64_t>::max() / per_chunk)) {
+        return NetworkDefinitionError::INVALID_ROOT_PUBLICATION_FEES;
+    }
+    const auto max_byte_fee = static_cast<uint64_t>(max_fee_kib) * per_kib;
+    const auto max_chunk_fee = static_cast<uint64_t>(ROOT_PUBLICATION_MAX_CHUNKS) * per_chunk;
+    if (max_chunk_fee > std::numeric_limits<uint64_t>::max() - max_byte_fee) {
+        return NetworkDefinitionError::INVALID_ROOT_PUBLICATION_FEES;
     }
     if (definition.protocol_parameters.name_claim_work_bits > uint256::size() * 8 ||
         definition.protocol_parameters.name_commit_min_depth == 0 ||
@@ -80,6 +94,8 @@ std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefiniti
     append_u64le(definition.protocol_parameters.onboarding_bonus);
     append_u64le(definition.protocol_parameters.epoch_blocks);
     append_u64le(definition.protocol_parameters.payment_fee);
+    append_u64le(definition.protocol_parameters.root_publication_fee_per_started_kib);
+    append_u64le(definition.protocol_parameters.root_publication_fee_per_chunk);
     append_u64le(definition.protocol_parameters.mail_base_fee);
     append_u64le(definition.protocol_parameters.mail_tier_bytes);
     append_u64le(definition.protocol_parameters.mail_tier_fee);
@@ -151,6 +167,8 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
     const auto onboarding_bonus = read_u64le();
     const auto epoch_blocks = read_u64le();
     const auto payment_fee = read_u64le();
+    const auto root_publication_fee_per_kib = read_u64le();
+    const auto root_publication_fee_per_chunk = read_u64le();
     const auto mail_base_fee = read_u64le();
     const auto mail_tier_bytes = read_u64le();
     const auto mail_tier_fee = read_u64le();
@@ -165,7 +183,8 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
     const auto has_operator = read_u8();
 
     if (!genesis_block_id || !genesis_state_root || !work_bits || !epoch_lag || !max_creates ||
-        !onboarding_bonus || !epoch_blocks || !payment_fee || !mail_base_fee || !mail_tier_bytes ||
+        !onboarding_bonus || !epoch_blocks || !payment_fee || !root_publication_fee_per_kib ||
+        !root_publication_fee_per_chunk || !mail_base_fee || !mail_tier_bytes ||
         !mail_tier_fee || !max_mail_size || !mail_limit || !name_work_bits || !name_min_depth ||
         !name_max_lifetime || !max_pending_names || !kem_enabled || *kem_enabled > 1 ||
         !validator_commitment || !has_operator) {
@@ -180,6 +199,8 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
     definition.protocol_parameters.onboarding_bonus = *onboarding_bonus;
     definition.protocol_parameters.epoch_blocks = *epoch_blocks;
     definition.protocol_parameters.payment_fee = *payment_fee;
+    definition.protocol_parameters.root_publication_fee_per_started_kib = *root_publication_fee_per_kib;
+    definition.protocol_parameters.root_publication_fee_per_chunk = *root_publication_fee_per_chunk;
     definition.protocol_parameters.mail_base_fee = *mail_base_fee;
     definition.protocol_parameters.mail_tier_bytes = *mail_tier_bytes;
     definition.protocol_parameters.mail_tier_fee = *mail_tier_fee;
@@ -230,7 +251,7 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
 
 uint256 NetworkId(const CybouNetworkDefinition& definition)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V2"};
+    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V3"};
     const auto bytes = SerializeNetworkDefinition(definition);
     uint256 result;
     ::cybou::crypto::Sha256 hasher;

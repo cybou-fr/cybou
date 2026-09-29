@@ -256,7 +256,7 @@ MailError ApplyMail(const AuthorizedMail& op,
 }
 
 RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
-    const uint256& network_id, CybouState& state)
+    const uint256& network_id, const CybouProtocolParameters& params, CybouState& state)
 {
     if (op.authorization.kind != IdentityOperationKind::ROOT_PUBLICATION) {
         return RootPublicationError::INVALID_AUTHORIZATION;
@@ -267,7 +267,7 @@ RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
     }
     const auto operation_bytes = SerializeProtocolOperation(ProtocolOperation{op});
     if (!operation_bytes) return RootPublicationError::INVALID_PAYLOAD;
-    const auto fee = ComputeRootPublicationFee(operation_bytes->size(), op.publication.chunk_count);
+    const auto fee = ComputeRootPublicationFee(params, operation_bytes->size(), op.publication.chunk_count);
     if (!fee) return RootPublicationError::INVALID_PAYLOAD;
     auto sender = state.accounts.find(op.authorization.account_id);
     if (sender == state.accounts.end() || !state.identities.Find(op.authorization.account_id)) {

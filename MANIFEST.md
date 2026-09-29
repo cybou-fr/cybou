@@ -31,7 +31,7 @@ editing an included file.
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
 | docs/cybou/22_ROADMAP.md | 76 | 63099cc4ae612aba |
 | docs/cybou/23_MANUAL_ACCEPTANCE.md | 130 | f920aa7287022759 |
-| docs/cybou/24_DECISIONS.md | 212 | eb21adfe825a2370 |
+| docs/cybou/24_DECISIONS.md | 212 | 35efbe9c3122b2b0 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 39 | a9154a19525304c4 |
 | docs/cybou/26_IMPLEMENTATION_STATUS.md | 75 | b10c97e7584c817e |
 | docs/cybou/27_ARCHITECTURE_AUDIT_V0_3.md | 175 | 34c65e3a9e47145b |
@@ -83,7 +83,7 @@ editing an included file.
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 85 | c35c8a7244250578 |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 27 | 8d7a331841060278 |
 | docs/cybou/POA_FINALITY.md | 87 | 50b21e05ea620e6f |
-| docs/cybou/ROOT_PUBLICATION.md | 115 | 5d60eb2a135d84a0 |
+| docs/cybou/ROOT_PUBLICATION.md | 118 | 7b0ab4d9fab64865 |
 | docs/cybou/STORAGE_ADMISSION.md | 66 | eebc8b9c820222c8 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |
 | spec/circulation_scenarios.csv | 74 | db240cf0d3280644 |

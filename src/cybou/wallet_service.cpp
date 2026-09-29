@@ -379,7 +379,7 @@ size_t CybouWalletService::SyncLedger()
                         });
                         if (it == working_entries.end()) {
                             const auto encoded = SerializeProtocolOperation(ProtocolOperation{op});
-                            const auto fee = encoded ? ComputeRootPublicationFee(
+                            const auto fee = encoded ? ComputeRootPublicationFee(params,
                                 encoded->size(), op.publication.chunk_count) : std::nullopt;
                             if (fee) {
                                 WalletLedgerEntry entry{

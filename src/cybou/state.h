@@ -9,6 +9,7 @@
 #include <cybou/mail_tx.h>
 #include <cybou/name_registry.h>
 #include <cybou/root_publication.h>
+#include <cybou/protocol_params.h>
 #include <cybou/validator.h>
 
 #include <cstdint>
@@ -80,7 +81,7 @@ enum class RootPublicationError : uint8_t {
 };
 
 RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
-    const uint256& network_id, CybouState& state);
+    const uint256& network_id, const CybouProtocolParameters& params, CybouState& state);
 
 enum class StateValidationError : uint8_t {
     NONE,

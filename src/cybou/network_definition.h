@@ -18,7 +18,7 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_NETWORK_DEFINITION_VERSION{3};
+inline constexpr uint8_t CYBOU_NETWORK_DEFINITION_VERSION{4};
 
 /** Immutable consensus identity for one DEV, Beta, or Mainnet network. */
 struct CybouNetworkDefinition {
@@ -41,6 +41,7 @@ enum class NetworkDefinitionError : uint8_t {
     INVALID_ACCOUNT_CREATION_WORK_BITS,
     ZERO_MAX_ACCOUNT_CREATES_PER_BLOCK,
     ZERO_EPOCH_BLOCKS,
+    INVALID_ROOT_PUBLICATION_FEES,
     INVALID_NAME_PARAMETERS,
     NULL_OPERATOR_AUTHORITY_KEYSET_ID,
     NULL_OPERATOR_AUTHORITY_KEY,

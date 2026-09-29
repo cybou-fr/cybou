@@ -8,6 +8,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <limits>
+
 namespace {
 
 cybou::RootPublication ValidPublication()
@@ -64,13 +66,21 @@ BOOST_AUTO_TEST_CASE(root_publication_rejects_unknown_version_and_invalid_fields
 
 BOOST_AUTO_TEST_CASE(root_publication_fee_is_integer_size_aware_and_has_no_priority_input)
 {
-    BOOST_CHECK(cybou::ComputeRootPublicationFee(1, 1) == 8);
-    BOOST_CHECK(cybou::ComputeRootPublicationFee(1024, 1) == 8);
-    BOOST_CHECK(cybou::ComputeRootPublicationFee(1025, 1) == 12);
-    BOOST_CHECK(cybou::ComputeRootPublicationFee(1, 2) == 12);
-    BOOST_CHECK(!cybou::ComputeRootPublicationFee(0, 1));
-    BOOST_CHECK(!cybou::ComputeRootPublicationFee(cybou::ROOT_PUBLICATION_MAX_OPERATION_BYTES + 1, 1));
-    BOOST_CHECK(!cybou::ComputeRootPublicationFee(1, 0));
+    auto params = cybou::DevProtocolParameters();
+    BOOST_CHECK(cybou::ComputeRootPublicationFee(params, 1, 1) == 8);
+    BOOST_CHECK(cybou::ComputeRootPublicationFee(params, 1024, 1) == 8);
+    BOOST_CHECK(cybou::ComputeRootPublicationFee(params, 1025, 1) == 12);
+    BOOST_CHECK(cybou::ComputeRootPublicationFee(params, 1, 2) == 12);
+    BOOST_CHECK(!cybou::ComputeRootPublicationFee(params, 0, 1));
+    BOOST_CHECK(!cybou::ComputeRootPublicationFee(params,
+        cybou::ROOT_PUBLICATION_MAX_OPERATION_BYTES + 1, 1));
+    BOOST_CHECK(!cybou::ComputeRootPublicationFee(params, 1, 0));
+
+    params.root_publication_fee_per_started_kib = 7;
+    params.root_publication_fee_per_chunk = 11;
+    BOOST_CHECK(cybou::ComputeRootPublicationFee(params, 1025, 2) == 36);
+    params.root_publication_fee_per_chunk = std::numeric_limits<uint64_t>::max();
+    BOOST_CHECK(!cybou::ComputeRootPublicationFee(params, 1, 2));
 }
 
 BOOST_AUTO_TEST_CASE(root_publication_maximum_profile_fits_the_frozen_body_limit)

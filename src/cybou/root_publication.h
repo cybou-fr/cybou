@@ -9,6 +9,7 @@
 #include <cybou/encrypted_chunk.h>
 #include <cybou/identity_kem.h>
 #include <cybou/identity_registry.h>
+#include <cybou/protocol_params.h>
 
 #include <array>
 #include <cstdint>
@@ -25,8 +26,6 @@ inline constexpr std::uint32_t ROOT_PUBLICATION_MAX_CHUNKS{std::numeric_limits<s
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_CAPSULES{32};
 inline constexpr std::size_t ROOT_CAPSULE_WRAPPED_KEY_BYTES{60};
 inline constexpr std::size_t ROOT_CAPSULE_NONCE_BYTES{12};
-inline constexpr std::uint64_t ROOT_PUBLICATION_FEE_PER_STARTED_KIB{4};
-inline constexpr std::uint64_t ROOT_PUBLICATION_FEE_PER_CHUNK{4};
 
 struct RootRecipientCapsule {
     std::uint16_t kem_profile{IDENTITY_KEM_PROFILE_XWING};
@@ -57,6 +56,7 @@ struct AuthorizedRootPublication {
 std::optional<std::vector<unsigned char>> SerializeRootPublication(const RootPublication& publication);
 std::optional<RootPublication> DeserializeRootPublication(std::span<const unsigned char> bytes);
 std::optional<std::uint64_t> ComputeRootPublicationFee(
+    const CybouProtocolParameters& params,
     std::size_t canonical_operation_bytes, std::uint32_t chunk_count);
 std::optional<IdentityKeyId> ComputeRootPublicationPayloadCommitment(const RootPublication& publication);
 

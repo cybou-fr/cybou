@@ -16,6 +16,8 @@ inline constexpr uint32_t DEFAULT_ACCOUNT_CREATION_WORK_BITS{16};
 inline constexpr uint64_t DEFAULT_ACCOUNT_CREATION_EPOCH_LAG{1};
 inline constexpr uint64_t DEFAULT_EPOCH_BLOCKS{1024};
 inline constexpr uint64_t DEFAULT_PAYMENT_FEE{1};
+inline constexpr uint64_t DEFAULT_ROOT_PUBLICATION_FEE_PER_STARTED_KIB{4};
+inline constexpr uint64_t DEFAULT_ROOT_PUBLICATION_FEE_PER_CHUNK{4};
 inline constexpr uint64_t DEFAULT_MAIL_BASE_FEE{4};
 inline constexpr uint64_t DEFAULT_MAIL_TIER_BYTES{1024};
 inline constexpr uint64_t DEFAULT_MAIL_TIER_FEE{1};
@@ -40,6 +42,8 @@ struct CybouProtocolParameters {
     uint64_t onboarding_bonus{DEV_ONBOARDING_BONUS};
     uint64_t epoch_blocks{DEFAULT_EPOCH_BLOCKS};
     uint64_t payment_fee{DEFAULT_PAYMENT_FEE};
+    uint64_t root_publication_fee_per_started_kib{DEFAULT_ROOT_PUBLICATION_FEE_PER_STARTED_KIB};
+    uint64_t root_publication_fee_per_chunk{DEFAULT_ROOT_PUBLICATION_FEE_PER_CHUNK};
     uint64_t mail_base_fee{DEFAULT_MAIL_BASE_FEE};
     uint64_t mail_tier_bytes{DEFAULT_MAIL_TIER_BYTES};
     uint64_t mail_tier_fee{DEFAULT_MAIL_TIER_FEE};

@@ -136,13 +136,22 @@ std::optional<RootPublication> DeserializeRootPublication(const std::span<const 
 }
 
 std::optional<std::uint64_t> ComputeRootPublicationFee(
+    const CybouProtocolParameters& params,
     const std::size_t canonical_operation_bytes, const std::uint32_t chunk_count)
 {
     if (canonical_operation_bytes == 0 || canonical_operation_bytes > ROOT_PUBLICATION_MAX_OPERATION_BYTES ||
         chunk_count == 0 || chunk_count > ROOT_PUBLICATION_MAX_CHUNKS) return std::nullopt;
     const auto kib = (canonical_operation_bytes + 1023) / 1024;
-    const auto byte_fee = static_cast<std::uint64_t>(kib) * ROOT_PUBLICATION_FEE_PER_STARTED_KIB;
-    const auto chunk_fee = static_cast<std::uint64_t>(chunk_count) * ROOT_PUBLICATION_FEE_PER_CHUNK;
+    if (params.root_publication_fee_per_started_kib != 0 &&
+        kib > std::numeric_limits<std::uint64_t>::max() / params.root_publication_fee_per_started_kib) {
+        return std::nullopt;
+    }
+    if (params.root_publication_fee_per_chunk != 0 &&
+        chunk_count > std::numeric_limits<std::uint64_t>::max() / params.root_publication_fee_per_chunk) {
+        return std::nullopt;
+    }
+    const auto byte_fee = static_cast<std::uint64_t>(kib) * params.root_publication_fee_per_started_kib;
+    const auto chunk_fee = static_cast<std::uint64_t>(chunk_count) * params.root_publication_fee_per_chunk;
     if (chunk_fee > std::numeric_limits<std::uint64_t>::max() - byte_fee) return std::nullopt;
     return byte_fee + chunk_fee;
 }

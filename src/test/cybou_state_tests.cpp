@@ -261,15 +261,15 @@ BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_determinis
         IdentityKeyPurpose::AUTHORIZATION, *digest);
     const AuthorizedRootPublication operation{operation_auth, publication};
     const auto encoded = SerializeProtocolOperation(ProtocolOperation{operation});
-    const auto fee = encoded ? ComputeRootPublicationFee(encoded->size(), publication.chunk_count) : std::nullopt;
+    const auto fee = encoded ? ComputeRootPublicationFee(params, encoded->size(), publication.chunk_count) : std::nullopt;
     BOOST_REQUIRE(fee);
     const auto starting_balance = state.accounts.at(account).system_balance;
 
-    BOOST_CHECK(ApplyRootPublication(operation, network_id, state) == RootPublicationError::NONE);
+    BOOST_CHECK(ApplyRootPublication(operation, network_id, params, state) == RootPublicationError::NONE);
     BOOST_CHECK(state.accounts.at(account).system_balance == starting_balance - *fee);
     BOOST_CHECK(state.pending_fee_pool == *fee);
     BOOST_CHECK(state.identities.Find(account)->nonce == 1);
-    BOOST_CHECK(ApplyRootPublication(operation, network_id, state) == RootPublicationError::INVALID_AUTHORIZATION);
+    BOOST_CHECK(ApplyRootPublication(operation, network_id, params, state) == RootPublicationError::INVALID_AUTHORIZATION);
 }
 
 BOOST_AUTO_TEST_CASE(insufficient_pool_does_not_register_identity)
