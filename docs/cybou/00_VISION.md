@@ -55,9 +55,9 @@ independent CYBOU full nodes
     -> private Mail and Files client indexes
 ```
 
-The target protocol and cutover gates are maintained in `AGENTS.md` and the
-active PoA, encrypted chunk-tree, RootPublication, storage-admission, and
-Identity-recovery documents.
+The active protocol and remaining integration gates are maintained in
+`AGENTS.md` and the active PoA, encrypted chunk-tree, RootPublication,
+storage-admission, and Identity-recovery documents.
 
 ## Security and economics
 

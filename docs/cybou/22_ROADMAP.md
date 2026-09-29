@@ -3,33 +3,26 @@
 This roadmap describes the single active target in `main`: generic encrypted
 content over RootPublication and a streaming ordered chunk tree, finalized by a
 genesis-bound single-operator PoA signer. The PoA trust model is centralized
-and does not provide Byzantine fault tolerance. The currently deployed DEV
-network remains untouched until all coordinated cutover gates pass.
+and does not provide Byzantine fault tolerance. DEV has completed the
+coordinated reset to this protocol; routine work continues on that network.
+Any later incompatible format requires a separate explicit cutover decision.
 
-## Protocol reset sequence
+## Protocol substrate delivered
 
 The authority is `POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`,
 `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`,
 `IDENTITY_DISCOVERY_AND_RECOVERY.md`, and `spec/poa_chunk_tree.yaml`.
 
-1. Pin vetted BLAKE3 and freeze the full 256-bit encrypted ChunkID.
-2. Implement bounded canonical CBOR and the encrypted chunk envelope.
-3. Build and read the encrypted ROOT/INDEX/DATA tree with streaming local I/O.
-4. Freeze compact RootPublication, hybrid recipient capsules, and
-   chunk-inclusion admission proofs.
-5. Integrate Identity authorization, state execution, and genesis-bound PoA
-   finality with a durable anti-equivocation journal.
-6. Implement finalized-publication admission into content-addressed ChunkStore.
-7. Implement local publication scanning, recursive retrieval, and clean-machine
-   recovery.
-8. Add Mail and Files private-schema adapters over the shared substrate.
-9. Pass the integration and recovery gates, then perform one coordinated DEV
-   cutover. Do not add runtime compatibility or a dual operation decoder.
+Canonical formats, Identity authorization, generic RootPublication, the
+streaming encrypted chunk tree, content-addressed provider admission, CYP2
+transport, and genesis-bound PoA finality are implemented on active DEV.
+Legacy `StorageObject`, the dedicated Mail envelope/service placeholder, and
+the separate storage key-ring modules are physically removed. Do not add
+runtime compatibility or a dual operation decoder.
 
-Implemented substrate work is tracked in `26_IMPLEMENTATION_STATUS.md`.
-PoA fork/equivocation handling, state integration, provider durability, and
-clean-machine recovery remain cutover gates. A finalized publication authorizes
-storage; it does not prove that providers retain the chunks.
+Remaining integration and Beta readiness work is tracked in
+`26_IMPLEMENTATION_STATUS.md`. PoA trust remains centralized. A finalized
+publication authorizes storage; it does not prove that providers retain chunks.
 
 ## Product direction
 
@@ -48,6 +41,8 @@ chunk storage and recovery path. Backup is post-Beta.
 - Rebuild local Mail indexes across restarts and verify sender authorization.
 - Independently verify finality and state on a full node.
 - Explain the single-operator PoA trust model clearly in product UX.
+- Build Mail publication/inbox scanning and Files catalog flows over the
+  shared encrypted chunk tree; reconstruct content without a prior local DB.
 
 ### Beta product gate
 

@@ -1,6 +1,8 @@
 # 76 — Identity vault and recovery
 
-Status: the current working protocol model uses one mnemonic-derived Identity key set. The new CVID5 payload and finalized key-epoch restore path are being integrated with the coordinated protocol cutover. Password change, vault lock, and the remaining desktop security controls are separate work.
+Status: the current Identity path uses one mnemonic-derived key set, the CVID5
+payload, and finalized key-epoch restore. Password change, vault lock, and
+remaining desktop security controls are separate product work.
 
 ## Recovery phrase and key derivation
 

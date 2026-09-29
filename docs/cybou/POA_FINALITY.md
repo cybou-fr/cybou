@@ -1,9 +1,8 @@
 # PoA finality target
 
-Status: frozen architecture target; not implemented and not active on DEV. This
-document supersedes the BFT consensus design for the next coordinated DEV
-protocol cutover. It does not authorize a partial transition or runtime
-compatibility decoder.
+Status: active DEV protocol. This document defines the genesis-bound PoA
+format implemented by `main`; it supersedes the former BFT target. DEV has
+completed its coordinated reset. It does not authorize a compatibility decoder.
 
 ## Trust model
 
@@ -88,10 +87,11 @@ and hybrid PoA public key. It contains no initial ValidatorSet commitment or
 Operator Authority key. `cybou.cybou` remains an ordinary Identity unrelated
 to the PoA signer.
 
-DEV cutover is one coordinated protocol reset after the canonical format,
-names integration, finality, state execution, storage admission, and clean-node
-recovery gates pass. Delete obsolete DEV chain state and vaults as part of the
-reset. The repository's Git history is sufficient record of the old protocol;
-runtime compatibility and old-state import are not required.
+DEV has completed the coordinated protocol reset to this network definition.
+Routine deployments preserve chain state and validator key. If a future
+incompatible protocol change requires a reset, make that a separate explicit
+cutover with its own genesis and operational procedure. The repository's Git
+history is sufficient record of superseded implementations; runtime
+compatibility and old-state import are not required.
 
 \n

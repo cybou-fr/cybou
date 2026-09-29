@@ -191,8 +191,6 @@ add_executable(cybou-core-test
   cybou_node_service_tests.cpp
   cybou_node_runtime_tests.cpp
   cybou_identity_operation_coordinator_tests.cpp
-  cybou_mail_service_tests.cpp
-  cybou_mail_envelope_tests.cpp
   cybou_wallet_service_tests.cpp
   cybou_identity_vault_tests.cpp
   cybou_recovery_phrase_tests.cpp
@@ -207,7 +205,6 @@ add_executable(cybou-core-test
   cybou_finalized_chunk_store_tests.cpp
   cybou_root_publication_tests.cpp
   cybou_root_publication_capsule_tests.cpp
-  cybou_storage_key_ring_tests.cpp
   cybou_crypto_tests.cpp
 )
 if(CYBOU_ENABLE_TEST_HOOKS)

@@ -1,9 +1,9 @@
 # Encrypted chunk tree
 
-Status: frozen architecture target; cross-implementation vectors and storage
-admission remain cutover gates. This is the shared encrypted payload format
-for Mail, Files, and later Backup. Application schemas exist only inside
-authenticated encryption.
+Status: active DEV content format. Cross-implementation vectors and tested
+storage durability remain Beta readiness gates. This is the shared encrypted
+payload format for Mail, Files, and later Backup. Application schemas exist
+only inside authenticated encryption.
 
 ## Addressing and privacy
 

@@ -2,7 +2,7 @@
 
 Status: Beta product acceptance checklist.
 
-This document converts the product contracts in docs 79, 81–84 into end-to-end
+This document converts the product contracts in docs 81–84 into end-to-end
 acceptance scenarios. It does not replace protocol/security tests; a Beta build
 must satisfy both.
 
@@ -68,7 +68,7 @@ must satisfy both.
 [ ] Send never blocks the Qt event loop
 [ ] pending/uncertain/finalized states remain distinct
 [ ] finalized ledger survives restart
-[ ] Service Balance language remains consistent with docs 52/72/79
+[ ] Service Balance language remains consistent with docs 52 and 72
 [ ] concurrent Name and Wallet requests serialize through the shared coordinator
 [ ] no second account operation is issued while Identity has an unresolved operation
 [ ] uncertain operations survive restart and reconcile/retry with the same bytes and OperationID

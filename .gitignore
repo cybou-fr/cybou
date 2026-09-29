@@ -17,6 +17,7 @@
 !depends/patches/**/*.patch
 
 /CMakeUserPresets.json
+/.vscode/
 
 # Previous releases
 /releases

@@ -1,10 +1,10 @@
 # Finalized chunk storage admission
 
-Status: frozen architecture target; a durable local provider admission store,
+Status: active DEV protocol substrate; a durable local provider admission store,
 proof encoding, typed Identity-authorized RootPublication operation, canonical
 finalized-history lookup, and CYP2 content-addressed PUT/GET messages are
 implemented. Client provider selection, retry, durability, retention, repair,
-and economics remain gates.
+and economics remain Beta readiness gates.
 
 ## Authorization commitment
 

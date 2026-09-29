@@ -29,8 +29,8 @@ The active protocol authority is `AGENTS.md`,
 A genesis-bound single-operator hybrid-PQ PoA signer finalizes blocks. Each
 full node independently verifies the finality proof, executes every operation,
 and compares the resulting state root. This is centralized finalization and
-does not provide Byzantine fault tolerance. A durable anti-equivocation journal
-and deterministic conflict/fork behavior are required before activation.
+does not provide Byzantine fault tolerance. The active runtime durably journals
+signing intent and halts on conflicting valid certificates or journal rollback.
 
 ## Content and privacy
 
@@ -69,9 +69,10 @@ The supply cap is 100,000,000,000 CYBOU with zero decimals. Deterministic fees
 route each four-unit fee as three to Security and one to Onboarding. System
 Balance pays protocol services; it does not alter PoA trust or account scores.
 
-## Cutover
+## Deployment status
 
-The target is not active on DEV. One coordinated cutover follows only after
-format, key, finality, state, storage, Identity/name, and clean-machine recovery
-gates pass together. Cutover discards the old DEV state and vaults. Do not add
-runtime compatibility, automatic import, or dual decoders.
+DEV has completed the coordinated reset and runs the active protocol formats.
+Routine deployments preserve its chain state and validator key. Product
+integration, cross-platform vectors, storage durability, and recovery remain
+readiness work; they do not imply another protocol cutover. Do not add runtime
+compatibility, automatic import, or dual decoders.

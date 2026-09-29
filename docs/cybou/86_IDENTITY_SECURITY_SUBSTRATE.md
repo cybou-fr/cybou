@@ -62,7 +62,8 @@ must be authenticated in their respective protocols.
 
 “Hybrid” does not mean every operation uses every key. Signatures authorize
 actions; KEM establishes or wraps content keys; a standard symmetric AEAD
-protects bulk content. Exact PQ/T profile details belong to `49` and `88`.
+protects bulk content. PQ signature profiles are defined in `09_CRYPTO_PQ.md`;
+the DEV KEM profile is defined in `89_IDENTITY_KEM_PUBLICATION.md`.
 
 ## Shared authorization lifecycle
 
@@ -110,6 +111,6 @@ a claim that Beta security is complete.
 - `87_IDENTITY_OPERATION_COORDINATOR.md` owns operation/nonce lifecycle.
 - `ENCRYPTED_CHUNK_TREE.md` and `ROOT_PUBLICATION.md` own encrypted content
   keys, publication, and chunk privacy.
-- `89_IDENTITY_KEM_PUBLICATION.md` owns the account KEM publication design and cutover gates.
+- `89_IDENTITY_KEM_PUBLICATION.md` owns the account KEM publication design and DEV profile.
 - `81_BETA_PRODUCT_SCOPE.md` owns Beta readiness.
 - `26_IMPLEMENTATION_STATUS.md` owns current implementation status.

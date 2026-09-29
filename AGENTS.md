@@ -15,11 +15,11 @@ Read active docs before coding.
 - Portable CYBV2/CVID5 vault stores stable AccountID plus recovery entropy; all Identity roles are derived from entropy. Durably save and reopen before AccountCreate. Clean-machine restore verifies every current key role and KEM commitment against finalized key_epoch and does not create a protocol authorization operation.
 - `.cybou` labels follow the 5–32 ASCII rule and finalized commit/work/reveal. No transfer, expiry, or recycling in the initial registry.
 - Keep mail encryption keys separate from Identity signing keys; no custom cryptographic primitives. IdentityRecord has recovery key, authorization key, current KEM commitment, one shared nonce, and key_epoch. IdentityRotate atomically replaces all roles; no device registry, activation, per-device nonce, DeviceAdd, or DeviceRevoke.
-- The deployed DEV predates the active `main` protocol target. Do not use its protocol formats as implementation authority or reset it before the coordinated cutover gate.
+- DEV has completed the coordinated reset to the active `main` protocol. Routine deployments preserve its state and validator key; another reset requires an explicit protocol cutover decision.
 - The target protocol is a genesis-bound single-operator PoA finalizer with independently validating full nodes. This is centralized PoA, not BFT and not Byzantine-fault-tolerant finality.
 - PoA signing is a separate mnemonic-derived role, held in memory only, and requires Ed25519 AND ML-DSA-65. Identity authorization/recovery, PoA, Release Signing, and Treasury keys remain separate; no classical-only production signature path.
-- Keep the PoA anti-equivocation journal durable and fail closed. Deterministic fork/conflicting-signature and journal-rollback handling are cutover gates.
-- Cut over DEV directly after all format, names, finality, state-execution, chunk-admission, and clean-machine recovery gates pass; discard obsolete DEV state and vaults. Do not build runtime compatibility, automatic import, or a dual operation decoder.
+- The PoA anti-equivocation journal and conflict safety halt are wired into block production and acceptance. Keep them durable and fail closed; expand cross-platform and operational recovery evidence before Beta.
+- Do not build runtime compatibility, automatic import, or a dual operation decoder. Git history is sufficient history for superseded implementations.
 - Keep one canonical implementation and unversioned source/API names for state, operations, and identity. Version bytes belong inside the wire and vault formats only.
 - Every production signature path, including user Identity, PoA, Release Signing, and Treasury operations, must follow the PQ key policy; no classical-only fallback.
 
@@ -27,7 +27,7 @@ Read active docs before coding.
 
 ### Protocol target: RootPublication + encrypted chunk tree
 - Read `POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, and `IDENTITY_DISCOVERY_AND_RECOVERY.md` before protocol implementation.
-- After coordinated cutover, generic RootPublication is the only application-content publication operation. Mail, Files, Backup, filenames, recipients, graph structure, and application schemas are encrypted payload data, not consensus operation types.
+- Generic RootPublication is the only application-content publication operation. Mail, Files, Backup, filenames, recipients, graph structure, and application schemas are encrypted payload data, not consensus operation types.
 - ChunkID is the full 256-bit BLAKE3 of stored encrypted bytes. Use a vetted BLAKE3 implementation; do not implement primitives locally. Payload nodes use a bounded canonical-CBOR profile and reviewed AEAD/KDF/KEM.
 - Unfinalized operations and chunks remain local. A finalized RootPublication authorizes chunk admission; it does not prove durability. The client retains ciphertext and reports availability only after the frozen durability threshold.
 - Providers accept only content-addressed chunks with a valid finalized-publication Merkle admission proof. They store opaque ciphertext and required proof/lease metadata.
@@ -38,7 +38,7 @@ Read active docs before coding.
 ### Cutover
 - `main` contains one active protocol authority: genesis-bound PoA, generic RootPublication, and encrypted ROOT/INDEX/DATA tree.
 - Do not add superseded BFT/MailTx/indexed-object protocol documents, runtime compatibility, automatic import, or dual decoders to `main`.
-- The existing DEV deployment is not a protocol specification. Discard its state and vaults only after the complete coordinated cutover gate.
+- DEV runs the active protocol target. Preserve state and the validator key during routine deployments; protocol changes that invalidate state require an explicit coordinated cutover decision.
 - Beta durability, pruning, retention, repair, and economics remain explicit readiness gates for the new ChunkStore.
 
 ### PoT

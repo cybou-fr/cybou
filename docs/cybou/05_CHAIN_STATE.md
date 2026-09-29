@@ -26,8 +26,10 @@ candidate state. It derives the state root and accepts the block only when the
 genesis-bound hybrid-PQ PoA finality proof is valid. Full nodes independently
 re-execute the block and compare the state root.
 
-The PoA trust model is centralized. Durable anti-equivocation and deterministic
-fork handling are cutover requirements. See `POA_FINALITY.md`.
+The PoA trust model is centralized. Runtime block production and acceptance
+use a durable anti-equivocation journal and a fail-closed conflict detector.
+Cross-platform vectors and operational recovery remain validation work. See
+`POA_FINALITY.md`.
 
 ## RootPublication
 

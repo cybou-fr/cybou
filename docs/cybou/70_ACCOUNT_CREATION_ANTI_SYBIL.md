@@ -1,6 +1,8 @@
 # 70 — Account creation and anti-Sybil work
 
-Status: the canonical consensus operation is implemented. Desktop vault creation and recovery remain to be integrated before the DEV cutover.
+Status: consensus operation and current desktop CVID5 identity path are
+implemented. End-to-end clean-machine and operational recovery remain product
+readiness work.
 
 Account creation is permissionless. No operator approval, voucher, or central activation is involved. A new AccountID is a random nonzero 256-bit identifier independent of the recovery phrase and signing keys.
 
@@ -18,6 +20,10 @@ A successful operation atomically registers the Identity, debits the network onb
 
 ## Local creation gate
 
-The portable CYBV2 vault must contain the random AccountID, recovery entropy, and independent mnemonic-derived Identity roles. It must be durably saved and authenticated by reopening before broadcast. The current desktop identity service still uses the older seed-based keystore; it does not yet satisfy this gate. Do not reset DEV or claim completed desktop onboarding until the vault, phrase confirmation, clean-machine restore, and finalized identity flow are integrated.
+The portable CYBV2 vault contains the random AccountID and recovery entropy;
+the current Identity roles derive from that entropy. It must be durably saved
+and authenticated by reopening before broadcast. Keep tests covering
+save-before-broadcast, phrase confirmation, and clean-machine restore. DEV
+already uses the current protocol.
 
 DEV, Beta, and Mainnet use separate economic parameters and genesis states. Beta balances do not carry to Mainnet.

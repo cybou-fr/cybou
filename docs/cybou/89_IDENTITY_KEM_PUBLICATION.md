@@ -16,10 +16,19 @@ DEV pins IETF `draft-ietf-hpke-pq-05` and its normative hybrid KEM/HPKE dependen
 
 ## Rotation and consuming services
 
-IdentityRotate replaces the KEM package commitment with Recovery and Authorization keys in one atomic transition and advances key_epoch. Mail envelope v1 contains exactly one recipient capsule bound to AccountID and key_epoch. Mail must fail closed unless the finalized package, recipient state snapshot, vetted HPKE implementation, sender authorization evidence, and client flow all verify. Files use separate reviewed wrapping rules and do not reuse signing keys.
+IdentityRotate replaces the KEM package commitment with Recovery and
+Authorization keys in one atomic transition and advances key_epoch.
+RootPublication carries bounded recipient capsules without a public recipient
+AccountID. Mail and Files consume the same DEV X-Wing capability through the
+shared encrypted chunk tree; application-specific schemas remain encrypted.
+Client construction, capsule scanning/opening, and recovery integration remain
+product work.
 
 No service keeps a parallel authoritative recipient-key registry. Historical operations remain necessary to prove which package and authorization key applied at a prior finalized height. Current-state lookup alone is not historical proof.
 
-## Cutover
+## Activation
 
-The Identity record, AccountCreate/IdentityRotate encodings, state version, coordinator journal, and vault payload change together at the coordinated DEV cutover. Obsolete state and vaults are discarded at that gate. There is no legacy decoder, import path, or dual operation decoder.
+The Identity record, AccountCreate/IdentityRotate encodings, RootPublication
+capsules, and CVID5 vault are active on DEV. There is no legacy decoder, import
+path, or dual operation decoder. A later suite change requires a new explicit
+protocol decision and coordinated network cutover.

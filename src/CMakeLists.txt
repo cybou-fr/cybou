@@ -183,7 +183,6 @@ add_library(cybou_core STATIC
   cybou/recovery_phrase.cpp
   cybou/signing.cpp
   cybou/signing_openssl.cpp
-  cybou/storage_key_ring.cpp
   cybou/state.cpp
 )
 target_link_libraries(cybou_core
@@ -217,8 +216,6 @@ add_library(cybou_node STATIC
   cybou/network_definition.cpp
   cybou/protocol_operation.cpp
   cybou/gcs_filter.cpp
-  cybou/mail_envelope.cpp
-  cybou/mail_service.cpp
   cybou/identity_operation_coordinator.cpp
   cybou/wallet_service.cpp
   cybou/node_runtime.cpp

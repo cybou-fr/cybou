@@ -91,24 +91,6 @@ BOOST_AUTO_TEST_CASE(keystore_uses_random_account_and_portable_vault)
     BOOST_CHECK(ks2.GetRecoveryWords() == words);
     BOOST_CHECK(!ks2.SaveToFile(key_path, "correct horse battery staple"));
 
-    const auto storage_keys_path = test_dir / "test_identity.storage-keys.cybou";
-    BOOST_REQUIRE(ks1.CreateStorageKeyRing(storage_keys_path, "correct horse battery staple"));
-    BOOST_CHECK_EQUAL(ks1.GetCurrentStorageKeyEpoch().value_or(99), 0U);
-    std::array<unsigned char, 32> first_storage_key{};
-    BOOST_CHECK(ks1.CopyStorageMasterKey(0, first_storage_key));
-    BOOST_REQUIRE(ks2.LoadStorageKeyRing(storage_keys_path, "correct horse battery staple"));
-    BOOST_CHECK_EQUAL(ks2.GetCurrentStorageKeyEpoch().value_or(99), 0U);
-    BOOST_REQUIRE(ks2.RotateStorageKeyRing(storage_keys_path, "correct horse battery staple"));
-    BOOST_CHECK_EQUAL(ks2.GetCurrentStorageKeyEpoch().value_or(99), 1U);
-
-    cybou::CybouKeyStore unrelated;
-    BOOST_REQUIRE(unrelated.GenerateNew());
-    const auto unrelated_ring_path = test_dir / "unrelated.storage-keys.cybou";
-    BOOST_REQUIRE(unrelated.CreateStorageKeyRing(unrelated_ring_path, "correct horse battery staple"));
-    BOOST_CHECK(!ks2.LoadStorageKeyRing(unrelated_ring_path, "correct horse battery staple"));
-    BOOST_CHECK(!ks2.GetCurrentStorageKeyEpoch());
-    first_storage_key.fill(0);
-
     const auto raw_path = test_dir / "raw.key";
     {
         std::ofstream out(raw_path, std::ios::binary);

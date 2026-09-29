@@ -1,8 +1,8 @@
 # Identity publication discovery and recovery
 
-Status: frozen architecture target; local index format and sync bounds remain
-open. This replaces service-specific network discovery filters after the
-coordinated protocol cutover.
+Status: active protocol design; local index format, sync bounds, and recovery
+availability policy remain open Beta integration work. This is the common
+discovery path for all private services.
 
 Every client scans finalized RootPublications from its saved height. For each
 recipient capsule it tries the account's current or explicitly recoverable
@@ -15,7 +15,7 @@ IDs/key envelopes, and application indexes. It is a rebuildable cache, not
 protocol identity or the only recovery source. Clean recovery can rescan from
 genesis or another authenticated history point and rediscover accessible roots.
 Re-scan policy after Identity rotation, old-epoch availability, bounds on
-per-block capsules, and denial-of-service controls are cutover gates.
+per-block capsules, and denial-of-service controls are Beta readiness gates.
 
 Clean-machine recovery acceptance starts from only the mnemonic and public
 network definition: restore Identity roles, sync and independently validate

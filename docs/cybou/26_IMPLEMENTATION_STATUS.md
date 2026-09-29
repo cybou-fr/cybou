@@ -9,9 +9,9 @@ views over encrypted publications; neither has a separate consensus object or
 indexed-object wire protocol. The chain does not implement BFT, ValidatorSet,
 MailTx, dual operation decoders, automatic import, or runtime compatibility.
 
-The DEV network has not completed the coordinated reset to this format. Do not
-represent the architecture target as a deployed network feature. Git history
-is the record of the superseded implementation; it is not part of the runtime.
+DEV has completed the coordinated reset and runs this protocol format. Git
+history is the record of superseded implementations; they are not part of the
+runtime. Routine deployment preserves active DEV state and validator keys.
 
 ## Present in source
 
@@ -28,8 +28,7 @@ is the record of the superseded implementation; it is not part of the runtime.
   primitives.
 - CYP2 peer sessions for verified block sync and content-addressed chunk PUT/GET
   with inclusion proofs. Legacy `StorageObject` runtime APIs, implementation,
-  and wire messages are removed; desktop provider selection and transfer calls
-  still need migration to the chunk API.
+  and wire messages have been physically removed; prior wire IDs are rejected.
 
 These components do not yet establish a usable Mail or Drive product. The
 client still needs publication construction and scanning, recursive retrieval,
@@ -40,16 +39,17 @@ capabilities and published content.
 
 - Complete cross-platform builds and cross-implementation vectors for the
   canonical wire formats and hybrid cryptographic paths.
-- Finish the single PoA runtime path: startup key validation, signing,
-  certificate verification, journal recovery, and state sync. Runtime block
-  acceptance and production now enforce the durable equivocation safety halt.
+- Exercise PoA journal recovery, conflict evidence and full-node state sync
+  across clean machines and restart/failure scenarios. Runtime block acceptance
+  and production already enforce the durable equivocation safety halt.
 - Migrate desktop storage calls to chunk-ID admission and publication inclusion
   proofs, then implement provider placement, durability thresholds, retry,
   retention, repair, and provider-loss handling.
 - Integrate publication creation, Mail and Files scanning, recipient capsule
   opening, recursive chunk retrieval, local indexes, and clean-machine restore.
 - Finish Gmail-familiar Mail and Google Drive-familiar Files UI/UX acceptance.
-- Coordinate one DEV reset after the protocol, recovery, and product gates pass.
+- Validate integrated Mail, Files and recovery paths on DEV without another
+  reset. Any future incompatible protocol change needs its own explicit cutover.
 
 Do not add a compatibility layer or preserve old chain state to make the reset
 appear incremental. Update this status from source and operational evidence as

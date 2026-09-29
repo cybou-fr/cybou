@@ -1,8 +1,8 @@
 # RootPublication operation
 
-Status: frozen architecture target, wire profile 3. RootPublication replaces
-Mail-specific network delivery and Files-specific consensus roots after the
-coordinated protocol cutover.
+Status: active DEV protocol, wire profile 3. RootPublication is the only
+application-content publication operation; Mail and Files payload schemas are
+private encrypted content.
 
 ## Public operation boundary
 
