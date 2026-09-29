@@ -705,32 +705,6 @@ std::vector<std::string> PublicationService::Jobs()
     return jobs;
 }
 
-std::vector<std::string> PublicationService::AuditDurability(StorageService& storage, const std::size_t max_chunks)
-{
-    std::vector<std::string> downgraded;
-    const auto jobs = Jobs();
-    for (std::size_t tried{0}; tried < jobs.size(); ++tried) {
-        const auto& id = jobs[m_audit_job_cursor++ % jobs.size()];
-        std::optional<Job> job;
-        {
-            std::lock_guard lock{m_mutex};
-            job = Load(id);
-        }
-        if (!job || job->phase != PublicationJobPhase::PROTECTED) continue;
-        const auto durability = storage.AuditSome(job->operation_id, max_chunks);
-        if (durability.state == DurabilityState::SECURING) {
-            std::lock_guard lock{m_mutex};
-            auto current = Load(id);
-            if (current && current->phase == PublicationJobPhase::PROTECTED) {
-                current->phase = PublicationJobPhase::SECURING;
-                if (Save(id, *current)) downgraded.push_back(id);
-            }
-        }
-        break; // one PROTECTED job per call keeps the work bounded
-    }
-    return downgraded;
-}
-
 std::vector<std::pair<std::string, PublicationJobResult>> PublicationService::ProcessDurability(StorageService& storage)
 {
     std::vector<std::pair<std::string, PublicationJobResult>> results;
@@ -752,7 +726,24 @@ std::vector<std::pair<std::string, PublicationJobResult>> PublicationService::Pr
                        m_runtime.GetOperationStatus(status->operation_id).kind == OperationStatusKind::REJECTED_KNOWN)) {
             status = Resume(id);
         }
-        if (status->phase == PublicationJobPhase::PROTECTED) status->durability_percent = 100;
+        if (status->phase == PublicationJobPhase::PROTECTED) {
+            // StorageService owns durability; a job never stays PROTECTED
+            // once its placement is not (audit loss, NEEDS_ATTENTION, ...).
+            storage.Track(status->operation_id);
+            const auto durability = storage.GetDurability(status->operation_id);
+            if (durability && durability->state != DurabilityState::PROTECTED) {
+                std::lock_guard lock{m_mutex};
+                if (auto job = Load(id); job && job->phase == PublicationJobPhase::PROTECTED) {
+                    job->phase = PublicationJobPhase::SECURING;
+                    if (Save(id, *job)) {
+                        status->phase = PublicationJobPhase::SECURING;
+                        status->durability_percent = durability->ProgressPercent(storage.RemoteReplicaTarget());
+                    }
+                }
+            } else {
+                status->durability_percent = 100;
+            }
+        }
         results.emplace_back(id, *status);
     }
     return results;

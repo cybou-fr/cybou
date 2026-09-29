@@ -117,12 +117,16 @@ public:
     /** Re-reads every recorded replica, drops missing/corrupt ones and repairs to target. */
     PublicationDurability Audit(const uint256& publication_operation_id);
     /**
-     * Bounded periodic health check: re-reads the replicas of at most
-     * max_chunks chunks (continuing where the previous call stopped), drops
-     * missing or BLAKE3-mismatching ones and reports the resulting state. It
-     * does not repair; a SECURING result is repaired by Secure/Resume.
+     * Periodic durability maintenance over every placement this Identity
+     * knows (published here, restored on a clean machine, or rebuilt after
+     * rotation), round-robin: re-reads the replicas of at most max_chunks
+     * chunks of the next placement, drops missing or BLAKE3-mismatching
+     * copies and, if the target is no longer met, repairs immediately.
+     * Returns the audited publication and its resulting durability.
      */
-    PublicationDurability AuditSome(const uint256& publication_operation_id, std::size_t max_chunks);
+    std::optional<std::pair<uint256, PublicationDurability>> AuditNextPlacement(std::size_t max_chunks);
+    /** Adds an existing placement to the maintained set (backfill for older databases). */
+    bool Track(const uint256& publication_operation_id);
     std::optional<PublicationDurability> GetDurability(const uint256& publication_operation_id);
     /** Read-only placement view for diagnostics and smoke tests. */
     struct PlacementView {
@@ -152,6 +156,8 @@ private:
     std::mutex m_mutex;
     /** Next chunk to audit per publication; restarting from 0 is harmless. */
     std::map<uint256, std::size_t> m_audit_cursor;
+    std::size_t m_audit_placement_cursor{0};
+    std::vector<uint256> PlacementIndex() const;
 };
 
 } // namespace cybou

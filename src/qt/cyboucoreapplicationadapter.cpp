@@ -263,7 +263,7 @@ struct CybouCoreApplicationAdapter::Session {
         }
         const auto progress = application->Scan();
         // Bounded durability audit every few ticks: Protected can fall back to Securing.
-        if (++ticks % AUDIT_EVERY_TICKS == 0) publication->AuditDurability(*storage, AUDIT_CHUNKS_PER_PASS);
+        if (++ticks % AUDIT_EVERY_TICKS == 0) storage->AuditNextPlacement(AUDIT_CHUNKS_PER_PASS);
         for (const auto& [id, status] : publication->ProcessDurability(*storage)) jobs[id] = status;
         AdvanceRotation();
         Snapshot(progress.Complete() ? CybouRestoreStepState::Done : CybouRestoreStepState::Running);

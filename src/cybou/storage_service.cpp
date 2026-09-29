@@ -22,6 +22,8 @@ constexpr std::array<unsigned char, 5> MAGIC{'C', 'Y', 'S', 'P', 1};
 constexpr std::uint32_t MAX_PLACEMENT_LEAVES{1U << 20};
 constexpr std::size_t MAX_REPLICAS_PER_CHUNK{16};
 
+constexpr std::string_view PLACEMENT_INDEX_KEY{"storage/placements"};
+
 std::string PlacementKey(const uint256& operation_id)
 {
     return "storage/placement/" + operation_id.GetHex();
@@ -195,7 +197,39 @@ bool StorageService::Save(const Placement& placement)
             Append16(out, replicas[r].port);
         }
     }
-    return m_application_db.Put(PlacementKey(placement.operation_id), out);
+    // The placement and its entry in the maintained set are written together.
+    PrivateApplicationStore::Batch batch{m_application_db};
+    if (!m_application_db.Put(PlacementKey(placement.operation_id), out)) return false;
+    auto index = PlacementIndex();
+    if (std::find(index.begin(), index.end(), placement.operation_id) == index.end()) {
+        std::vector<unsigned char> encoded;
+        for (const auto& id : index) encoded.insert(encoded.end(), id.begin(), id.end());
+        encoded.insert(encoded.end(), placement.operation_id.begin(), placement.operation_id.end());
+        if (!m_application_db.Put(PLACEMENT_INDEX_KEY, encoded)) return false;
+    }
+    return batch.Commit();
+}
+
+std::vector<uint256> StorageService::PlacementIndex() const
+{
+    std::vector<uint256> ids;
+    const auto encoded = m_application_db.Get(PLACEMENT_INDEX_KEY);
+    if (!encoded || encoded->size() % 32 != 0) return ids;
+    for (std::size_t offset{0}; offset < encoded->size(); offset += 32) {
+        uint256 id;
+        std::copy_n(encoded->begin() + static_cast<std::ptrdiff_t>(offset), 32, id.begin());
+        ids.push_back(id);
+    }
+    return ids;
+}
+
+bool StorageService::Track(const uint256& operation_id)
+{
+    std::lock_guard lock{m_mutex};
+    const auto index = PlacementIndex();
+    if (std::find(index.begin(), index.end(), operation_id) != index.end()) return true;
+    const auto placement = Load(operation_id);
+    return placement && Save(*placement);
 }
 
 PublicationDurability StorageService::Summarize(const Placement& placement) const
@@ -381,11 +415,14 @@ PublicationDurability StorageService::Place(Placement& placement)
     return result;
 }
 
-PublicationDurability StorageService::AuditSome(const uint256& operation_id, const std::size_t max_chunks)
+std::optional<std::pair<uint256, PublicationDurability>> StorageService::AuditNextPlacement(const std::size_t max_chunks)
 {
     std::lock_guard lock{m_mutex};
+    const auto index = PlacementIndex();
+    if (index.empty()) return std::nullopt;
+    const auto operation_id = index[m_audit_placement_cursor++ % index.size()];
     auto placement = Load(operation_id);
-    if (!placement) return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Unknown publication placement"};
+    if (!placement || placement->leaves.empty()) return std::nullopt;
     const std::size_t count = placement->leaves.size();
     auto& cursor = m_audit_cursor[operation_id];
     bool changed{false};
@@ -401,11 +438,15 @@ PublicationDurability StorageService::AuditSome(const uint256& operation_id, con
         changed = changed || replicas.size() != before;
     }
     if (changed && !Save(*placement)) {
-        return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save placement state"};
+        return std::pair{operation_id, PublicationDurability{.state = DurabilityState::NEEDS_ATTENTION,
+            .error = "Cannot save placement state"}};
     }
     auto result = Summarize(*placement);
-    if (result.state != DurabilityState::PROTECTED) result.error = "A remote copy is missing or damaged";
-    return result;
+    // Below target: repair now from any valid copy (local or remote).
+    if (result.state != DurabilityState::PROTECTED && m_runtime.FindFinalizedRootPublication(operation_id)) {
+        result = Place(*placement);
+    }
+    return std::pair{operation_id, result};
 }
 
 PublicationDurability StorageService::Audit(const uint256& operation_id)

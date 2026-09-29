@@ -135,10 +135,9 @@ int main(int argc, char* argv[])
         Step("HOLDER " + holder.address + " " + std::to_string(holder.port));
         WaitFor("the orchestrator to kill the holder", [&] { return std::filesystem::exists(work / "killed"); }, 120s);
 
-        // Audit detects the loss, Protected falls back to Securing, repair restores it elsewhere.
-        bool downgraded{false};
+        // StorageService audits every known placement, detects the lost copy and repairs elsewhere.
         WaitFor("audit to detect the lost replica and repair it", [&] {
-            if (!publication.AuditDurability(storage, 64).empty()) downgraded = true;
+            storage.AuditNextPlacement(64);
             publication.ProcessDurability(storage);
             const auto now = storage.DescribePlacement(operation);
             if (!now) return false;
@@ -147,7 +146,7 @@ int main(int argc, char* argv[])
                     if (endpoint == holder) return false;
                 }
             }
-            return downgraded && job_phase() == cybou::PublicationJobPhase::PROTECTED;
+            return job_phase() == cybou::PublicationJobPhase::PROTECTED;
         }, 180s);
         Step("REPAIRED");
 

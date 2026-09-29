@@ -569,24 +569,65 @@ BOOST_AUTO_TEST_CASE(protected_falls_back_to_securing_when_replicas_die)
     Finalize(fixture, network);
     BOOST_REQUIRE(owner.publication->ProcessDurability(*owner.storage).front().second.phase ==
         cybou::PublicationJobPhase::PROTECTED);
+    const auto operation = owner.publication->GetJob("mail-durable")->operation_id;
     // A healthy audit keeps it Protected.
-    BOOST_CHECK(owner.publication->AuditDurability(*owner.storage, 8).empty());
-    BOOST_CHECK(owner.publication->GetJob("mail-durable")->phase == cybou::PublicationJobPhase::PROTECTED);
+    const auto healthy = owner.storage->AuditNextPlacement(8);
+    BOOST_REQUIRE(healthy);
+    BOOST_CHECK(healthy->first == operation);
+    BOOST_CHECK(healthy->second.state == cybou::DurabilityState::PROTECTED);
 
     // Two providers die after acknowledging: Protected must not be one-way.
     network.SetAllOffline(true);
     network.offline.erase(network.Endpoints().front());
-    std::vector<std::string> downgraded;
-    for (int i = 0; i < 8 && downgraded.empty(); ++i) downgraded = owner.publication->AuditDurability(*owner.storage, 8);
-    BOOST_REQUIRE_EQUAL(downgraded.size(), 1U);
-    BOOST_CHECK(owner.publication->GetJob("mail-durable")->phase == cybou::PublicationJobPhase::SECURING);
-    // With only one reachable provider the target cannot be met yet.
+    for (int i = 0; i < 8; ++i) owner.storage->AuditNextPlacement(8);
+    BOOST_CHECK(owner.storage->GetDurability(operation)->state == cybou::DurabilityState::SECURING);
+    // The job follows StorageService: it cannot stay Protected.
     const auto waiting = owner.publication->ProcessDurability(*owner.storage);
     BOOST_CHECK(waiting.front().second.phase == cybou::PublicationJobPhase::SECURING);
-    // Providers return: the next pass repairs to the target and Protected is back.
+    BOOST_CHECK(owner.publication->GetJob("mail-durable")->phase == cybou::PublicationJobPhase::SECURING);
+    // Providers return: repair restores the target and Protected is back.
     network.SetAllOffline(false);
     const auto repaired = owner.publication->ProcessDurability(*owner.storage);
     BOOST_CHECK(repaired.front().second.phase == cybou::PublicationJobPhase::PROTECTED);
+}
+
+BOOST_AUTO_TEST_CASE(clean_restored_placements_are_audited_and_repaired)
+{
+    CybouServiceTestFixture fixture;
+    ProviderNetwork network{fixture, 4};
+    Party owner{fixture, network, "owner"};
+    network.Sync();
+    const auto message = Message(owner.Account(), "Restored", "must stay durable");
+    BOOST_REQUIRE(owner.publication->PublishMail("mail-restored", message).phase ==
+        cybou::PublicationJobPhase::WAITING_FINALITY);
+    Finalize(fixture, network);
+    BOOST_REQUIRE(owner.publication->ProcessDurability(*owner.storage).front().second.phase ==
+        cybou::PublicationJobPhase::PROTECTED);
+    const auto operation = owner.publication->GetJob("mail-restored")->operation_id;
+
+    // Clean restore: no publication job survives, placement comes from provider proofs.
+    owner.DestroyApplicationDb(fixture, network);
+    BOOST_CHECK(!owner.publication->GetJob("mail-restored"));
+    BOOST_REQUIRE(owner.application->Scan().Complete());
+    const auto restored = owner.storage->DescribePlacement(operation);
+    BOOST_REQUIRE(restored);
+    BOOST_REQUIRE(owner.storage->GetDurability(operation)->state == cybou::DurabilityState::PROTECTED);
+
+    // Every provider holding it dies: StorageService audit still finds it and repairs.
+    std::set<cybou::StorageEndpoint> holders;
+    for (const auto& replicas : restored->replicas) holders.insert(replicas.begin(), replicas.end());
+    for (const auto& endpoint : holders) network.offline.insert(endpoint);
+    std::optional<std::pair<uint256, cybou::PublicationDurability>> audited;
+    for (int i = 0; i < 8 && !(audited && audited->first == operation); ++i) {
+        audited = owner.storage->AuditNextPlacement(64);
+    }
+    BOOST_REQUIRE(audited && audited->first == operation);
+    const auto repaired = owner.storage->DescribePlacement(operation);
+    BOOST_REQUIRE(repaired);
+    for (const auto& replicas : repaired->replicas) {
+        for (const auto& endpoint : replicas) BOOST_CHECK(!holders.contains(endpoint));
+    }
+    BOOST_CHECK(owner.storage->GetDurability(operation)->state == cybou::DurabilityState::PROTECTED);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -499,7 +499,10 @@ void ApplicationService::RecoverOwnPublications(const std::uint32_t max_publicat
     if (!me) return;
     for (const auto& operation_id : ReadIds<uint256>(m_application_db, OWN_PUBLICATIONS_KEY)) {
         const auto durability = m_storage.GetDurability(operation_id);
-        if (durability && durability->state == DurabilityState::PROTECTED) continue;
+        if (durability && durability->state == DurabilityState::PROTECTED) {
+            m_storage.Track(operation_id); // keep restored placements under audit
+            continue;
+        }
         if (attempted >= max_publications) break;
         auto accessible = LoadAccessible(operation_id);
         if (!accessible || accessible->sender != *me) continue;
