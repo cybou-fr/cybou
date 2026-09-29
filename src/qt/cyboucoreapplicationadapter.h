@@ -59,6 +59,9 @@ public:
     void saveAttachmentToFiles(const QString& message_id, const QString& attachment_id,
         const QString& file_id) override;
 
+    void prepareIdentityRotation(const QStringList& new_words,
+        std::function<void(bool ok, const QString& error)> done) override;
+
     void uploadFile(const QString& file_id, const QString& source_path, const QString& parent_id) override;
     void downloadFile(const QString& file_id, const QString& destination) override;
     void createFolder(const QString& folder_id, const QString& name, const QString& parent_id) override;
@@ -87,6 +90,9 @@ private:
     void applySnapshot(QVector<CybouMailItem> items, bool ready, CybouRestoreStepState mail_restore);
     void setReady(bool ready);
     void notAvailable();
+    /** Pending "secure data before rotation" request, answered exactly once. */
+    std::function<void(bool, const QString&)> m_rotation_done;
+    void finishRotation(bool ok, const QString& error);
 };
 
 #endif // BITCOIN_QT_CYBOUCOREAPPLICATIONADAPTER_H

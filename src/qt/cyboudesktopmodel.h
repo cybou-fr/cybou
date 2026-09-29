@@ -7,6 +7,8 @@
 
 #include <qt/cybouproduct.h>
 
+#include <cybou/recovery_phrase.h>
+
 #include <QDateTime>
 #include <QLocale>
 #include <QObject>
@@ -319,6 +321,8 @@ private:
     std::jthread m_vault_worker;
 
     void finishUnlock();
+    /** Submits (or resumes) IdentityRotate once the backend secured the old keys. */
+    void startRecoveryRotation(cybou::RecoveryWords words, const QString& vault_password, bool resume_pending);
     bool m_payment_pending{false};
     std::optional<quint64> m_payment_fee;
     bool m_recovery_rotation_pending{false};

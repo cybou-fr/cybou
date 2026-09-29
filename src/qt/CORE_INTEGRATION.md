@@ -30,6 +30,11 @@ reach core.
 - **Capabilities:** `mail` turns on only once the adapter session has opened
   the core services. `files` stays off.
 - **Restore progress:** the Mail row follows the application scan.
+- **Recovery phrase rotation:** `CybouDesktopModel` asks the backend to
+  `prepareIdentityRotation` first. The adapter publishes the RecoveryBridge,
+  waits until it is PROTECTED, verifies it with the new phrase, and only then
+  lets `RotateIdentitySync` run. Locking or any failure keeps the current
+  phrase active. Without remote storage providers the rotation waits.
 
 ## Not connected yet
 
@@ -37,8 +42,6 @@ reach core.
   `ApplicationService::ListFiles` and `StorageService::Fetch` exist.
 - Mail attachments and Mail ↔ Files reuse — core supports both.
 - Drafts are device-local compose state held in memory by the adapter.
-- Rotation: the Identity page must call `PublishRecoveryBridge`, wait for
-  PROTECTED and `VerifyRecoveryBridge` before `RotateIdentitySync`.
 - Re-securing Sent/Files rebuilt from history after the Application DB was
   lost (their placement leaves are not reconstructed yet).
 - Authority (read-only) once core implements it.

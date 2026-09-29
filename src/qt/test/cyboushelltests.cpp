@@ -24,6 +24,8 @@
 #include <test/cybou_test_helpers.h>
 #include <test/cybou_service_test_fixture.h>
 
+#include <cybou/recovery_phrase.h>
+
 #include <QApplication>
 #include <QAbstractButton>
 #include <QMenu>
@@ -1416,8 +1418,35 @@ void CybouShellTests::liveMailThroughCoreAdapter()
     const QString failed = alice_model->requestSendMail(nobody);
     QTRY_COMPARE(alice_model->mailItem(failed)->state, CybouContentState::NeedsAttention);
 
-    // Locking drops private Mail and the session.
+    // Rotation never proceeds before the RecoveryBridge is durable: without
+    // storage providers it waits, and the Identity keys stay unchanged.
+    alice_model->setIdentityService(alice.get()); // a known vault starts Locked
+    alice_model->setIdentityState(CybouIdentityState::Active,
+        QString::fromStdString(alice->GetAccountId()->Value().GetHex()), 1);
+    QTRY_VERIFY(alice_model->capabilities().mail);
+    QSignalSpy rotated{alice_model.get(), &CybouDesktopModel::recoveryRotationFinished};
+    const auto entropy = cybou::GenerateRecoveryEntropy();
+    QVERIFY(entropy.has_value());
+    QStringList new_words;
+    for (const auto& word : cybou::EncodeRecoveryWords(*entropy)) new_words << QString::fromStdString(word);
+    QVERIFY(alice_model->requestRecoveryRootRotation(new_words, QStringLiteral("correct horse battery staple")));
+    QVERIFY2(alice_model->recoveryRotationPending(),
+        qPrintable(rotated.isEmpty() ? QStringLiteral("?") : rotated.first().at(1).toString()));
+    QVERIFY(fixture.runtime->ProduceBlock()); // the bridge itself finalizes
+    QTest::qWait(300);
+    QCOMPARE(rotated.count(), 0);
+    const auto key_epoch = [&] {
+        const auto loaded = fixture.runtime->GetStore().LoadState();
+        return loaded.state->identities.Find(*alice->GetAccountId())->key_epoch;
+    };
+    QCOMPARE(key_epoch(), std::uint64_t{0});
+
+    // Locking drops private Mail and the session, and cancels the rotation.
     alice_model->requestLockVault();
+    QCOMPARE(rotated.count(), 1);
+    QCOMPARE(rotated.first().at(0).value<CybouOperationOutcome>(), CybouOperationOutcome::Failed);
+    QVERIFY(!alice_model->recoveryRotationPending());
+    QCOMPARE(key_epoch(), std::uint64_t{0});
     QVERIFY(alice_model->mailItems().isEmpty());
     QVERIFY(!alice_model->capabilities().mail);
     alice_model->setApplicationBackend(nullptr);

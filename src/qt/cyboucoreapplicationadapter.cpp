@@ -5,11 +5,14 @@
 #include <qt/cyboucoreapplicationadapter.h>
 
 #include <cybou/application_service.h>
+#include <cybou/crypto/cleanse.h>
+#include <cybou/identity_kem.h>
 #include <cybou/identity_service.h>
 #include <cybou/kv_store.h>
 #include <cybou/node_runtime.h>
 #include <cybou/private_application_store.h>
 #include <cybou/publication_service.h>
+#include <cybou/recovery_phrase.h>
 #include <cybou/storage_service.h>
 
 #include <QMetaObject>
@@ -116,6 +119,13 @@ struct CybouCoreApplicationAdapter::Session {
     /** Messages sent from this device that the scanner has not indexed yet. */
     std::map<std::string, CybouMailItem> outbox;
     std::map<std::string, cybou::PublicationJobResult> jobs;
+    /** RecoveryBridge being secured before IdentityRotate. */
+    struct RotationPrep {
+        std::string job_id;
+        cybou::RecoveryEntropy entropy{};
+        ~RotationPrep() { cybou::crypto::CleanseMemory(entropy.data(), entropy.size()); }
+    };
+    std::unique_ptr<RotationPrep> rotation;
 
     std::mutex mutex;
     std::condition_variable_any wake;
@@ -195,6 +205,7 @@ struct CybouCoreApplicationAdapter::Session {
     {
         const auto progress = application->Scan();
         for (const auto& [id, status] : publication->ProcessDurability(*storage)) jobs[id] = status;
+        AdvanceRotation();
         Snapshot(progress.Complete() ? CybouRestoreStepState::Done : CybouRestoreStepState::Running);
     }
 
@@ -258,6 +269,27 @@ struct CybouCoreApplicationAdapter::Session {
         });
     }
 
+    /** Answers the rotation request once the bridge is durable and verified. */
+    void AdvanceRotation()
+    {
+        if (!rotation) return;
+        const auto job = jobs.find(rotation->job_id);
+        if (job == jobs.end()) return;
+        if (job->second.phase == cybou::PublicationJobPhase::PROTECTED) {
+            const bool ok = publication->VerifyRecoveryBridge(rotation->job_id,
+                std::span<const unsigned char, 32>{rotation->entropy.data(), 32}, *storage);
+            rotation.reset();
+            ToGui([owner = owner, ok] {
+                owner->finishRotation(ok, ok ? QString{} : tr("Your recovery data could not be verified."));
+            });
+        } else if (job->second.phase == cybou::PublicationJobPhase::NEEDS_ATTENTION) {
+            rotation.reset();
+            ToGui([owner = owner, error = QString::fromStdString(job->second.error)] {
+                owner->finishRotation(false, error.isEmpty() ? tr("Your recovery data could not be secured.") : error);
+            });
+        }
+    }
+
     std::optional<cybou::AccountId> ResolveRecipient(const QString& name) const
     {
         QString label = name.trimmed().toLower();
@@ -309,6 +341,7 @@ void CybouCoreApplicationAdapter::openIdentity()
 void CybouCoreApplicationAdapter::closeIdentity()
 {
     m_session.reset();
+    finishRotation(false, tr("CYBOU was locked before your data was secured. The current recovery phrase stays active."));
     m_drafts.clear();
     m_pending_sends.clear();
     setReady(false);
@@ -330,6 +363,62 @@ void CybouCoreApplicationAdapter::applySnapshot(QVector<CybouMailItem> items, bo
     setReady(ready);
     Q_EMIT mailSnapshot(items);
     Q_EMIT restoreProgressChanged(mail_restore, CybouRestoreStepState::Pending);
+}
+
+void CybouCoreApplicationAdapter::finishRotation(bool ok, const QString& error)
+{
+    if (!m_rotation_done) return;
+    auto done = std::move(m_rotation_done);
+    m_rotation_done = nullptr;
+    done(ok, error);
+}
+
+void CybouCoreApplicationAdapter::prepareIdentityRotation(const QStringList& new_words,
+    std::function<void(bool, const QString&)> done)
+{
+    if (!m_session || !m_mail_ready || m_rotation_done) {
+        done(false, tr("Your data cannot be secured for a new recovery phrase right now."));
+        return;
+    }
+    cybou::RecoveryWords words{};
+    if (new_words.size() != static_cast<int>(words.size())) {
+        done(false, tr("The new recovery phrase is invalid."));
+        return;
+    }
+    for (std::size_t i{0}; i < words.size(); ++i) words[i] = new_words.at(static_cast<int>(i)).toStdString();
+    m_rotation_done = std::move(done);
+    m_session->Post([words = std::move(words)](Session& s) mutable {
+        auto entropy = cybou::DecodeRecoveryWords(words);
+        for (auto& word : words) cybou::crypto::CleanseMemory(word.data(), word.size());
+        auto seed = entropy ? cybou::DeriveIdentityXWingSeed(*entropy) : std::nullopt;
+        const auto future = seed ? cybou::DeriveXWingPublicKey(*seed) : std::nullopt;
+        if (seed) cybou::crypto::CleanseMemory(seed->data(), seed->size());
+        if (!entropy || !future) {
+            if (entropy) cybou::crypto::CleanseMemory(entropy->data(), entropy->size());
+            s.ToGui([owner = s.owner] { owner->finishRotation(false, tr("The new recovery phrase is invalid.")); });
+            return;
+        }
+        // Stable per new phrase (public key fingerprint), so a retry resumes the same bridge.
+        std::string job_id{"bridge-"};
+        for (std::size_t i{0}; i < 16; ++i) {
+            job_id.push_back(HEX[(*future)[i] >> 4]);
+            job_id.push_back(HEX[(*future)[i] & 0x0f]);
+        }
+        auto prep = std::make_unique<Session::RotationPrep>();
+        prep->job_id = job_id;
+        prep->entropy = *entropy;
+        cybou::crypto::CleanseMemory(entropy->data(), entropy->size());
+        const auto result = s.publication->PublishRecoveryBridge(job_id,
+            std::span<const unsigned char, 32>{prep->entropy.data(), 32});
+        s.jobs[job_id] = result;
+        if (result.phase == cybou::PublicationJobPhase::NEEDS_ATTENTION) {
+            s.ToGui([owner = s.owner, error = QString::fromStdString(result.error)] {
+                owner->finishRotation(false, error.isEmpty() ? tr("Your recovery data could not be secured.") : error);
+            });
+            return;
+        }
+        s.rotation = std::move(prep);
+    });
 }
 
 void CybouCoreApplicationAdapter::notAvailable()

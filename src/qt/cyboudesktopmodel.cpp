@@ -691,6 +691,47 @@ bool CybouDesktopModel::requestRecoveryRootRotation(const QStringList& new_phras
     if (m_recovery_rotation_worker.joinable()) m_recovery_rotation_worker.join();
     m_recovery_rotation_pending = true;
     Q_EMIT statusChanged();
+    if (!resume_pending) {
+        // Content published under the current keys must stay readable with the
+        // new phrase: the backend secures that first, or the rotation stops here.
+        if (!m_backend) {
+            for (auto& word : words) cybou::crypto::CleanseMemory(word.data(), word.size());
+            m_recovery_rotation_pending = false;
+            Q_EMIT statusChanged();
+            Q_EMIT recoveryRotationFinished(CybouOperationOutcome::Failed,
+                tr("Your data cannot be secured for a new recovery phrase right now."));
+            return true;
+        }
+        notify(tr("Securing your data for the new recovery phrase. Keep CYBOU open and unlocked."));
+        auto phrase_words = std::make_shared<cybou::RecoveryWords>(std::move(words));
+        m_backend->prepareIdentityRotation(new_phrase,
+            [this, phrase_words, password = vault_password](bool ok, const QString& error) {
+                if (!ok) {
+                    for (auto& word : *phrase_words) cybou::crypto::CleanseMemory(word.data(), word.size());
+                    m_recovery_rotation_pending = false;
+                    Q_EMIT statusChanged();
+                    Q_EMIT recoveryRotationFinished(CybouOperationOutcome::Failed, error);
+                    return;
+                }
+                startRecoveryRotation(std::move(*phrase_words), password, false);
+            });
+        return true;
+    }
+    startRecoveryRotation(std::move(words), vault_password, true);
+    return true;
+}
+
+void CybouDesktopModel::startRecoveryRotation(cybou::RecoveryWords words, const QString& vault_password,
+    bool resume_pending)
+{
+    if (m_recovery_rotation_worker.joinable()) m_recovery_rotation_worker.join();
+    if (!m_identity_service) {
+        for (auto& word : words) cybou::crypto::CleanseMemory(word.data(), word.size());
+        m_recovery_rotation_pending = false;
+        Q_EMIT statusChanged();
+        Q_EMIT recoveryRotationFinished(CybouOperationOutcome::Failed, {});
+        return;
+    }
     auto password = vault_password.toStdString();
     m_recovery_rotation_worker = std::jthread([this, words = std::move(words), password = std::move(password), resume_pending]() mutable {
         auto result = resume_pending
@@ -709,7 +750,6 @@ bool CybouDesktopModel::requestRecoveryRootRotation(const QStringList& new_phras
             Q_EMIT recoveryRotationFinished(outcome, error);
         }, Qt::QueuedConnection);
     });
-    return true;
 }
 
 void CybouDesktopModel::finishUnlock()

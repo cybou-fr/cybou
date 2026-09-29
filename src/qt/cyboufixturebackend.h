@@ -53,6 +53,11 @@ public:
     void saveAttachmentToFiles(const QString& message_id, const QString& attachment_id,
         const QString& file_id) override;
 
+    void prepareIdentityRotation(const QStringList&, std::function<void(bool, const QString&)> done) override
+    {
+        done(true, {});
+    }
+
     void uploadFile(const QString& file_id, const QString& source_path, const QString& parent_id) override;
     void downloadFile(const QString& file_id, const QString& destination) override;
     void createFolder(const QString& folder_id, const QString& name, const QString& parent_id) override;

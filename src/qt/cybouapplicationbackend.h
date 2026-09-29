@@ -12,6 +12,8 @@
 #include <QStringList>
 #include <QVector>
 
+#include <functional>
+
 /**
  * The one Qt-side application backend contract for Mail and Files.
  *
@@ -65,6 +67,19 @@ public:
     /** Mail -> Files. The backend decides how protected content is reused. */
     virtual void saveAttachmentToFiles(const QString& message_id, const QString& attachment_id,
         const QString& file_id) = 0;
+
+    /**
+     * Must succeed before the recovery phrase is replaced: secures what is
+     * needed for content published under the current keys to stay readable
+     * with the new phrase. done(ok, error) runs on the GUI thread, possibly
+     * much later; ok=false means the current phrase must stay active.
+     */
+    virtual void prepareIdentityRotation(const QStringList& new_words,
+        std::function<void(bool ok, const QString& error)> done)
+    {
+        Q_UNUSED(new_words);
+        done(false, tr("Your data cannot be secured for a new recovery phrase right now."));
+    }
 
     /* ---- Files commands. ---- */
     virtual void uploadFile(const QString& file_id, const QString& source_path, const QString& parent_id) = 0;
