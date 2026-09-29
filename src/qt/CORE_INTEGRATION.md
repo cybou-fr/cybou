@@ -43,6 +43,10 @@ reach core.
   through StorageService, and "Save to Files" publishes a Files entry that
   references the same content. An attachment is shown as saved when a Files
   item references its content.
+- **Drafts:** device-local compose state stored in the encrypted Application
+  DB (`ApplicationService::SaveDraft/ListDrafts/DeleteDraft`), including local
+  attachment paths and Files references; never published and not rebuilt from
+  history. Commands issued just before locking still complete.
 - **Capabilities:** `mail` and `files` turn on only once the adapter session
   has opened the core services.
 - **Restore progress:** the Mail row follows the application scan.
@@ -54,7 +58,6 @@ reach core.
 
 ## Not connected yet
 
-- Drafts are device-local compose state held in memory by the adapter.
 - Re-securing Sent/Files rebuilt from history after the Application DB was
   lost (their placement leaves are not reconstructed yet).
 - Authority (read-only) once core implements it.

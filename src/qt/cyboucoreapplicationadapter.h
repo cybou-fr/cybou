@@ -82,8 +82,10 @@ private:
     std::unique_ptr<Session> m_session;
     bool m_mail_ready{false};
     int m_refresh_ms{3000};
-    /** Local drafts are compose state on this device; they are never published. */
-    QHash<QString, CybouMailItem> m_drafts;
+    /** Draft edits and deletes not yet reflected by a worker snapshot. Drafts
+        persist in the encrypted Application DB and are never published. */
+    QHash<QString, CybouMailItem> m_pending_drafts;
+    QSet<QString> m_deleted_drafts;
     /** Sends not yet taken over by the worker (or refused before publication). */
     QHash<QString, CybouMailItem> m_pending_sends;
     /** Model client IDs of created items -> private item IDs. */

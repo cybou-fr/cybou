@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <mutex>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace cybou {
@@ -62,6 +63,29 @@ enum class AccessibleRootState : std::uint8_t {
     INVALID = 4,
 };
 
+/** Device-local attachment of an unsent draft: a local file or a Files reference. */
+struct DraftAttachment {
+    std::string name;
+    std::uint64_t logical_size{0};
+    std::string source_path;   ///< local file chosen on this device
+    std::string reference_id;  ///< Files reference, e.g. "ref-<item>"
+    bool operator==(const DraftAttachment&) const = default;
+};
+
+/**
+ * Unsent Mail compose state. Drafts live only in the encrypted Application DB
+ * of this device; they are never published and are not rebuilt from history.
+ */
+struct MailDraft {
+    std::string draft_id; ///< [a-z0-9-], at most 64 characters
+    std::string to;
+    std::string subject;
+    std::string body;
+    std::uint64_t updated_ms{0};
+    std::vector<DraftAttachment> attachments;
+    bool operator==(const MailDraft&) const = default;
+};
+
 struct ApplicationScanProgress {
     std::uint64_t scanned_height{0};
     std::uint64_t finalized_height{0};
@@ -101,6 +125,11 @@ public:
     /** Current Files catalog (deleted items excluded). */
     std::vector<FileRecord> ListFiles();
     std::optional<FileRecord> GetFile(const PrivateItemId& item_id);
+
+    /** Device-local drafts, newest first. */
+    bool SaveDraft(const MailDraft& draft);
+    std::vector<MailDraft> ListDrafts();
+    bool DeleteDraft(std::string_view draft_id);
 
     /** Own RecoveryBridges in canonical order (for historical KEM recovery). */
     std::vector<IdentityRecoveryBridge> RecoveryBridges();

@@ -46,6 +46,7 @@ struct Party {
         application.reset();
         publication.reset();
         storage.reset();
+        db.reset(); // release the LevelDB lock before reopening
         db = std::make_unique<cybou::PrivateApplicationStore>(identity->GetKeyStore(), root / "app");
         storage = std::make_unique<cybou::StorageService>(*fixture.runtime, network, *db);
         publication = std::make_unique<cybou::PublicationService>(*fixture.runtime, identity->GetKeyStore(),
@@ -447,6 +448,40 @@ BOOST_AUTO_TEST_CASE(rotation_bridge_restores_pre_rotation_content_on_clean_mach
     const auto downloaded = Download(fixture, storage, *file->item.root_chunk_id, *file->item.content_key);
     BOOST_REQUIRE(downloaded);
     BOOST_CHECK(*downloaded == original);
+}
+
+BOOST_AUTO_TEST_CASE(drafts_persist_locally_and_are_never_published)
+{
+    CybouServiceTestFixture fixture;
+    ProviderNetwork network{fixture};
+    Party owner{fixture, network, "owner"};
+    cybou::MailDraft draft{.draft_id = "draft-1", .to = "alice.cybou", .subject = "Plans",
+        .body = "Half-written message", .updated_ms = 10,
+        .attachments = {{.name = "notes.txt", .logical_size = 12, .source_path = "C:/tmp/notes.txt"},
+            {.name = "report.pdf", .logical_size = 99, .reference_id = "ref-abc"}}};
+    BOOST_REQUIRE(owner.application->SaveDraft(draft));
+    cybou::MailDraft newer{.draft_id = "draft-2", .body = "Newer", .updated_ms = 20};
+    BOOST_REQUIRE(owner.application->SaveDraft(newer));
+    BOOST_CHECK(!owner.application->SaveDraft({.draft_id = "Bad/Id"}));
+    const auto height = fixture.runtime->GetFinalizedHeight();
+
+    // Survives reopening the Application DB (a restart).
+    owner.Open(fixture, network);
+    auto drafts = owner.application->ListDrafts();
+    BOOST_REQUIRE_EQUAL(drafts.size(), 2U);
+    BOOST_CHECK(drafts[0] == newer); // newest first
+    BOOST_CHECK(drafts[1] == draft);
+    draft.body = "Edited";
+    BOOST_REQUIRE(owner.application->SaveDraft(draft));
+    BOOST_CHECK_EQUAL(owner.application->ListDrafts().size(), 2U);
+    BOOST_REQUIRE(owner.application->DeleteDraft("draft-2"));
+    drafts = owner.application->ListDrafts();
+    BOOST_REQUIRE_EQUAL(drafts.size(), 1U);
+    BOOST_CHECK_EQUAL(drafts[0].body, "Edited");
+    // Never published: no operation was submitted and no chunk left the device.
+    BOOST_CHECK(fixture.runtime->GetFinalizedHeight() == height);
+    BOOST_CHECK(!fixture.runtime->ProduceBlock() || fixture.runtime->GetBlockAtHeight(*height + 1)->block.operations.empty());
+    BOOST_CHECK_EQUAL(network.puts, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

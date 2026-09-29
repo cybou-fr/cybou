@@ -30,6 +30,19 @@ constexpr std::string_view MAIL_INDEX_KEY{"mail/index"};
 constexpr std::string_view FILES_INDEX_KEY{"files/index"};
 constexpr std::string_view BRIDGE_INDEX_KEY{"recovery/index"};
 constexpr std::string_view RECOVERED_EPOCHS_KEY{"recovery/recovered-epochs"};
+constexpr std::string_view DRAFT_INDEX_KEY{"mail/drafts"};
+constexpr std::array<unsigned char, 5> DRAFT_MAGIC{'C', 'Y', 'D', 'R', 1};
+constexpr std::size_t MAX_DRAFT_TEXT{1U << 20};
+constexpr std::size_t MAX_DRAFT_ATTACHMENTS{64};
+
+bool ValidDraftId(std::string_view id)
+{
+    return !id.empty() && id.size() <= 64 && std::all_of(id.begin(), id.end(), [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
+    });
+}
+
+std::string DraftKey(std::string_view id) { return "mail/draft/" + std::string{id}; }
 /** Private metadata roots only; application content lives in child trees. */
 constexpr std::uint64_t MAX_ROOT_PLAINTEXT_BYTES{0};
 
@@ -587,6 +600,125 @@ bool ApplicationService::ImportBridgeSeeds(const AccountId& me, const std::uint6
     }
     if (newly_recovered) m_application_db.Put(RECOVERED_EPOCHS_KEY, recovered);
     return newly_recovered;
+}
+
+/* ---- drafts (device-local, never published) ---- */
+
+namespace {
+void PutString(Writer& out, std::string_view text)
+{
+    out.U32(static_cast<std::uint32_t>(text.size()));
+    out.Bytes(std::span{reinterpret_cast<const unsigned char*>(text.data()), text.size()});
+}
+
+std::optional<std::string> GetString(Reader& in, std::size_t max)
+{
+    const auto size = in.U32();
+    if (!size || *size > max) return std::nullopt;
+    std::string text(*size, '\0');
+    if (!in.Bytes(std::span{reinterpret_cast<unsigned char*>(text.data()), text.size()})) return std::nullopt;
+    return text;
+}
+
+std::vector<std::string> ReadNames(const PrivateApplicationStore& db, std::string_view key)
+{
+    std::vector<std::string> names;
+    const auto encoded = db.Get(key);
+    if (!encoded) return names;
+    std::string current;
+    for (const unsigned char c : *encoded) {
+        if (c == '\n') {
+            if (!current.empty()) names.push_back(current);
+            current.clear();
+        } else {
+            current.push_back(static_cast<char>(c));
+        }
+    }
+    return names;
+}
+
+bool WriteNames(PrivateApplicationStore& db, std::string_view key, const std::vector<std::string>& names)
+{
+    std::vector<unsigned char> out;
+    for (const auto& name : names) {
+        out.insert(out.end(), name.begin(), name.end());
+        out.push_back('\n');
+    }
+    return db.Put(key, out);
+}
+} // namespace
+
+bool ApplicationService::SaveDraft(const MailDraft& draft)
+{
+    std::lock_guard lock{m_mutex};
+    if (!ValidDraftId(draft.draft_id) || draft.to.size() > MAX_DRAFT_TEXT || draft.subject.size() > MAX_DRAFT_TEXT ||
+        draft.body.size() > MAX_DRAFT_TEXT || draft.attachments.size() > MAX_DRAFT_ATTACHMENTS) return false;
+    Writer out;
+    out.Bytes(DRAFT_MAGIC);
+    PutString(out, draft.draft_id);
+    PutString(out, draft.to);
+    PutString(out, draft.subject);
+    PutString(out, draft.body);
+    out.U64(draft.updated_ms);
+    out.U32(static_cast<std::uint32_t>(draft.attachments.size()));
+    for (const auto& attachment : draft.attachments) {
+        PutString(out, attachment.name);
+        out.U64(attachment.logical_size);
+        PutString(out, attachment.source_path);
+        PutString(out, attachment.reference_id);
+    }
+    if (!m_application_db.Put(DraftKey(draft.draft_id), out.Out())) return false;
+    auto names = ReadNames(m_application_db, DRAFT_INDEX_KEY);
+    if (std::find(names.begin(), names.end(), draft.draft_id) != names.end()) return true;
+    names.push_back(draft.draft_id);
+    return WriteNames(m_application_db, DRAFT_INDEX_KEY, names);
+}
+
+std::vector<MailDraft> ApplicationService::ListDrafts()
+{
+    std::lock_guard lock{m_mutex};
+    std::vector<MailDraft> drafts;
+    for (const auto& id : ReadNames(m_application_db, DRAFT_INDEX_KEY)) {
+        const auto encoded = m_application_db.Get(DraftKey(id));
+        if (!encoded) continue;
+        Reader in{*encoded};
+        MailDraft draft;
+        auto draft_id = Magic(in, DRAFT_MAGIC) ? GetString(in, 64) : std::nullopt;
+        auto to = GetString(in, MAX_DRAFT_TEXT);
+        auto subject = GetString(in, MAX_DRAFT_TEXT);
+        auto body = GetString(in, MAX_DRAFT_TEXT);
+        const auto updated = in.U64();
+        const auto count = in.U32();
+        if (!draft_id || *draft_id != id || !to || !subject || !body || !updated || !count ||
+            *count > MAX_DRAFT_ATTACHMENTS) continue;
+        bool valid{true};
+        for (std::uint32_t i{0}; i < *count && valid; ++i) {
+            auto name = GetString(in, 4096);
+            const auto size = in.U64();
+            auto path = GetString(in, 32768);
+            auto reference = GetString(in, 256);
+            valid = name && size && path && reference;
+            if (valid) draft.attachments.push_back({std::move(*name), *size, std::move(*path), std::move(*reference)});
+        }
+        if (!valid || !in.Done()) continue;
+        draft.draft_id = std::move(*draft_id);
+        draft.to = std::move(*to);
+        draft.subject = std::move(*subject);
+        draft.body = std::move(*body);
+        draft.updated_ms = *updated;
+        drafts.push_back(std::move(draft));
+    }
+    std::sort(drafts.begin(), drafts.end(), [](const MailDraft& a, const MailDraft& b) { return a.updated_ms > b.updated_ms; });
+    return drafts;
+}
+
+bool ApplicationService::DeleteDraft(std::string_view draft_id)
+{
+    std::lock_guard lock{m_mutex};
+    if (!ValidDraftId(draft_id)) return false;
+    auto names = ReadNames(m_application_db, DRAFT_INDEX_KEY);
+    std::erase(names, std::string{draft_id});
+    return m_application_db.Erase(DraftKey(draft_id)) && WriteNames(m_application_db, DRAFT_INDEX_KEY, names);
 }
 
 /* ---- queries and local state ---- */

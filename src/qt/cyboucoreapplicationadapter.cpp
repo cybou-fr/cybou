@@ -220,13 +220,22 @@ struct CybouCoreApplicationAdapter::Session {
                 wake.wait_for(lock, stop, std::chrono::milliseconds{refresh_ms}, [this] { return !tasks.empty(); });
                 pending.swap(tasks);
             }
-            if (stop.stop_requested()) break;
             try {
                 for (auto& task : pending) task(*this);
-                Refresh();
+                if (!stop.stop_requested()) Refresh();
             } catch (const std::exception&) {
                 // A failed refresh leaves the last snapshot in place; the next tick retries.
             }
+        }
+        // Commands issued just before locking (a saved draft, a send) still run.
+        std::deque<std::function<void(Session&)>> remaining;
+        {
+            std::lock_guard lock{mutex};
+            remaining.swap(tasks);
+        }
+        try {
+            for (auto& task : remaining) task(*this);
+        } catch (const std::exception&) {
         }
     }
 
@@ -289,6 +298,30 @@ struct CybouCoreApplicationAdapter::Session {
                     a.saved_file_id = QString::fromStdString(saved->second);
                 }
                 item.attachments.append(a);
+            }
+            items.append(item);
+        }
+        for (const auto& draft : application->ListDrafts()) {
+            CybouMailItem item;
+            item.id = QString::fromStdString(draft.draft_id);
+            item.folder = CybouMailFolder::Drafts;
+            item.draft = true;
+            item.state = CybouContentState::Local;
+            item.to_name = QString::fromStdString(draft.to);
+            item.subject = QString::fromStdString(draft.subject);
+            item.body = QString::fromStdString(draft.body);
+            item.preview = item.body.simplified().left(90);
+            item.time = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(draft.updated_ms));
+            for (std::size_t i{0}; i < draft.attachments.size(); ++i) {
+                const auto& stored = draft.attachments[i];
+                CybouAttachmentItem attachment;
+                attachment.name = QString::fromStdString(stored.name);
+                attachment.logical_size = stored.logical_size;
+                attachment.source_path = QString::fromStdString(stored.source_path);
+                attachment.id = stored.reference_id.empty()
+                    ? QStringLiteral("att-draft-%1").arg(i) : QString::fromStdString(stored.reference_id);
+                attachment.state = stored.reference_id.empty() ? CybouContentState::Local : CybouContentState::Protected;
+                item.attachments.append(attachment);
             }
             items.append(item);
         }
@@ -543,7 +576,8 @@ void CybouCoreApplicationAdapter::closeIdentity()
 {
     m_session.reset();
     finishRotation(false, tr("CYBOU was locked before your data was secured. The current recovery phrase stays active."));
-    m_drafts.clear();
+    m_pending_drafts.clear();
+    m_deleted_drafts.clear();
     m_pending_sends.clear();
     m_client_ids.clear();
     m_last_files.clear();
@@ -562,7 +596,31 @@ void CybouCoreApplicationAdapter::applySnapshot(QVector<CybouMailItem> items, QV
     bool ready, CybouRestoreStepState restore)
 {
     if (!m_session) return;
-    for (const auto& draft : std::as_const(m_drafts)) items.append(draft);
+    // Drafts: the latest local edit wins until the worker has stored it; a
+    // deleted draft stays hidden until the stored copy is gone.
+    QSet<QString> present;
+    for (auto it = items.begin(); it != items.end();) {
+        if (!it->draft) {
+            ++it;
+            continue;
+        }
+        present.insert(it->id);
+        if (m_deleted_drafts.contains(it->id)) {
+            it = items.erase(it);
+            continue;
+        }
+        if (const auto pending = m_pending_drafts.find(it->id); pending != m_pending_drafts.end()) {
+            if (pending->time == it->time) m_pending_drafts.erase(pending);
+            else *it = *pending;
+        }
+        ++it;
+    }
+    for (auto it = m_deleted_drafts.begin(); it != m_deleted_drafts.end();) {
+        it = present.contains(*it) ? std::next(it) : m_deleted_drafts.erase(it);
+    }
+    for (const auto& pending : std::as_const(m_pending_drafts)) {
+        if (!present.contains(pending.id)) items.append(pending);
+    }
     for (const auto& pending : std::as_const(m_pending_sends)) items.append(pending);
     setReady(ready);
     Q_EMIT mailSnapshot(items);
@@ -652,8 +710,22 @@ void CybouCoreApplicationAdapter::notAvailable()
 void CybouCoreApplicationAdapter::saveMailDraft(const CybouMailItem& draft)
 {
     if (!m_session) return;
-    m_drafts.insert(draft.id, draft);
+    m_pending_drafts.insert(draft.id, draft);
+    m_deleted_drafts.remove(draft.id);
     Q_EMIT mailItemChanged(draft);
+    cybou::MailDraft stored{.draft_id = draft.id.toStdString(), .to = draft.to_name.toStdString(),
+        .subject = draft.subject.toStdString(), .body = draft.body.toStdString(),
+        .updated_ms = static_cast<std::uint64_t>(std::max<qint64>(0, draft.time.toMSecsSinceEpoch()))};
+    for (const auto& attachment : draft.attachments) {
+        stored.attachments.push_back({.name = attachment.name.toStdString(), .logical_size = attachment.logical_size,
+            .source_path = attachment.source_path.toStdString(),
+            .reference_id = attachment.source_path.isEmpty() ? attachment.id.toStdString() : std::string{}});
+    }
+    m_session->Post([stored = std::move(stored)](Session& s) {
+        if (!s.application->SaveDraft(stored)) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The draft could not be saved.")); });
+        }
+    });
 }
 
 void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message)
@@ -791,8 +863,15 @@ void CybouCoreApplicationAdapter::moveMail(const QString& id, CybouMailFolder fo
 void CybouCoreApplicationAdapter::deleteMail(const QString& id)
 {
     if (!m_session) return;
-    if (m_drafts.remove(id) > 0 || m_pending_sends.remove(id) > 0) {
+    if (m_pending_sends.remove(id) > 0) {
         Q_EMIT mailItemRemoved(id);
+        return;
+    }
+    if (id.startsWith(QStringLiteral("draft-"))) {
+        m_pending_drafts.remove(id);
+        m_deleted_drafts.insert(id);
+        Q_EMIT mailItemRemoved(id);
+        m_session->Post([draft_id = id.toStdString()](Session& s) { s.application->DeleteDraft(draft_id); });
         return;
     }
     // Delivered mail is part of finalized history and rebuilds from it; it stays in Trash.

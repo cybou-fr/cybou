@@ -1509,6 +1509,31 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
         QCOMPARE(in.readAll(), contract);
     }
 
+    // Drafts persist in the encrypted Application DB across a lock/unlock and
+    // are deleted locally; they are never published.
+    CybouMailItem draft;
+    draft.to_name = QStringLiteral("alice.cybou");
+    draft.subject = QStringLiteral("Unfinished");
+    draft.body = QStringLiteral("Half a thought");
+    const QString draft_id = bob_model->requestSaveMailDraft(draft);
+    QVERIFY(!draft_id.isEmpty());
+    QVERIFY(bob_model->mailItem(draft_id) && bob_model->mailItem(draft_id)->draft);
+    const auto bob_account = QString::fromStdString(bob->GetAccountId()->Value().GetHex());
+    bob_model->setIdentityState(CybouIdentityState::Locked, bob_account, 1);
+    QVERIFY(!bob_model->mailItem(draft_id));
+    bob_model->setIdentityState(CybouIdentityState::Active, bob_account, 1);
+    QTRY_VERIFY(bob_model->mailItem(draft_id) != nullptr);
+    QCOMPARE(bob_model->mailItem(draft_id)->body, QStringLiteral("Half a thought"));
+    QCOMPARE(bob_model->mailItem(draft_id)->folder, CybouMailFolder::Drafts);
+    bob_model->requestDeleteMail(draft_id);
+    QVERIFY(!bob_model->mailItem(draft_id));
+    QTest::qWait(150); // later snapshots must not resurrect it
+    QVERIFY(!bob_model->mailItem(draft_id));
+    bob_model->setIdentityState(CybouIdentityState::Locked, bob_account, 1);
+    bob_model->setIdentityState(CybouIdentityState::Active, bob_account, 1);
+    QTRY_VERIFY(bob_model->capabilities().mail && !bob_model->mailItems().isEmpty());
+    QVERIFY(!bob_model->mailItem(draft_id));
+
     // An unknown recipient needs attention instead of pretending to send.
     CybouMailItem nobody;
     nobody.to_name = QStringLiteral("nobody-here.cybou");
