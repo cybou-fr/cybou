@@ -345,20 +345,23 @@ void IdentityPage::copyAccountId()
 
 void IdentityPage::revealRecoveryPhrase()
 {
-    RevealDialog dialog{this};
-    while (dialog.exec() == QDialog::Accepted) {
-        QString password = dialog.takePassword();
-        auto words = m_model->revealRecoveryWords(password);
+    auto* dialog = new RevealDialog{this};
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &QDialog::accepted, this, [this, dialog] {
+        QString password = dialog->takePassword();
+        m_model->revealRecoveryWordsAsync(password, [this](std::optional<QStringList> words) {
+            if (!words) {
+                QMessageBox::warning(this, tr("Recovery phrase not shown"),
+                    tr("The password is incorrect, or this vault does not store the recovery words."));
+                return;
+            }
+            RecoveryPhraseDialog phrase{RecoveryPhraseDialog::Mode::View, *words, this};
+            for (auto& word : *words) word.fill(QChar{0});
+            phrase.exec();
+        });
         password.fill(QChar{0});
-        if (!words) {
-            dialog.setError(tr("The password is incorrect, or this vault does not store the recovery words."));
-            continue;
-        }
-        RecoveryPhraseDialog phrase{RecoveryPhraseDialog::Mode::View, *words, this};
-        for (auto& word : *words) word.fill(QChar{0});
-        phrase.exec();
-        return;
-    }
+    });
+    dialog->open();
 }
 
 void IdentityPage::replaceRecoveryPhrase()

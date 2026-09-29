@@ -21,6 +21,27 @@
 #include <filesystem>
 #include <utility>
 
+namespace {
+QStringList ToQStringList(const cybou::RecoveryWords& words)
+{
+    QStringList list;
+    for (const auto& word : words) list << QString::fromStdString(word);
+    return list;
+}
+
+/** Deterministic, clearly fake words used only by UI fixtures. */
+QStringList FixtureWords()
+{
+    return QStringList{QStringLiteral("ocean"), QStringLiteral("lamp"), QStringLiteral("river"),
+        QStringLiteral("stone"), QStringLiteral("cloud"), QStringLiteral("maple"), QStringLiteral("orbit"),
+        QStringLiteral("violet"), QStringLiteral("anchor"), QStringLiteral("harbor"), QStringLiteral("pilot"),
+        QStringLiteral("garden"), QStringLiteral("silver"), QStringLiteral("canyon"), QStringLiteral("ember"),
+        QStringLiteral("meadow"), QStringLiteral("quartz"), QStringLiteral("lantern"), QStringLiteral("summit"),
+        QStringLiteral("willow"), QStringLiteral("falcon"), QStringLiteral("copper"), QStringLiteral("island"),
+        QStringLiteral("breeze")};
+}
+} // namespace
+
 QString cybouConnectionText(const CybouDesktopStatus& status)
 {
     if (!status.sync_error.isEmpty()) return CybouDesktopModel::tr("Needs attention");
@@ -42,6 +63,7 @@ CybouDesktopModel::~CybouDesktopModel()
     if (m_name_worker.joinable()) m_name_worker.join();
     if (m_recovery_rotation_worker.joinable()) m_recovery_rotation_worker.join();
     if (m_payment_worker.joinable()) m_payment_worker.join();
+    if (m_vault_worker.joinable()) m_vault_worker.join();
 }
 
 void CybouDesktopModel::setNodeStatus(bool running, int peer_count, bool online,
@@ -589,6 +611,62 @@ bool CybouDesktopModel::requestRecoveryRootRotation(const QStringList& new_phras
     return true;
 }
 
+void CybouDesktopModel::finishUnlock()
+{
+    const auto account_id = m_identity_service->GetAccountId();
+    if (m_identity_service->GetPhase() == cybou::IdentityCreationPhase::ACTIVE && account_id) {
+        const auto state = m_identity_service->GetFinalizedAccountState();
+        setIdentityState(CybouIdentityState::Active,
+            QString::fromStdString(account_id->Value().GetHex()),
+            state ? state->creation_height : 0);
+        if (state) setBalances(state->balance, state->system_balance);
+    }
+    Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::requestUnlockIdentityAsync(const QString& vault_password, std::function<void(bool)> done)
+{
+    if (m_fixture_mode) {
+        const bool ok = !vault_password.isEmpty();
+        QMetaObject::invokeMethod(this, [this, ok, done = std::move(done)] {
+            if (ok && m_status.identity_state == CybouIdentityState::Locked)
+                setIdentityState(CybouIdentityState::Active, m_status.account_id, m_status.creation_height);
+            if (done) done(ok);
+        }, Qt::QueuedConnection);
+        return;
+    }
+    if (!m_identity_service) {
+        QMetaObject::invokeMethod(this, [done = std::move(done)] { if (done) done(false); }, Qt::QueuedConnection);
+        return;
+    }
+    if (m_vault_worker.joinable()) m_vault_worker.join();
+    m_vault_worker = std::jthread([this, password = vault_password.toStdString(), done = std::move(done)]() mutable {
+        const bool ok = m_identity_service->LoadVault(password);
+        memory_cleanse(password.data(), password.size());
+        QMetaObject::invokeMethod(this, [this, ok, done = std::move(done)] {
+            if (ok) finishUnlock();
+            if (done) done(ok);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void CybouDesktopModel::revealRecoveryWordsAsync(const QString& vault_password,
+    std::function<void(std::optional<QStringList>)> done)
+{
+    requestUnlockIdentityAsync(vault_password, [this, done = std::move(done)](bool ok) {
+        if (!ok) {
+            done(std::nullopt);
+            return;
+        }
+        if (m_fixture_mode) {
+            done(FixtureWords());
+            return;
+        }
+        const auto words = m_identity_service->GetKeyStore().GetRecoveryWords();
+        done(words ? std::optional<QStringList>{ToQStringList(*words)} : std::nullopt);
+    });
+}
+
 bool CybouDesktopModel::requestUnlockIdentity(const QString& vault_password)
 {
     if (!m_identity_service || !m_identity_service->LoadVault(vault_password.toStdString())) return false;
@@ -611,26 +689,6 @@ bool CybouDesktopModel::hasLocalVault() const
     return path && std::filesystem::exists(*path);
 }
 
-namespace {
-QStringList ToQStringList(const cybou::RecoveryWords& words)
-{
-    QStringList list;
-    for (const auto& word : words) list << QString::fromStdString(word);
-    return list;
-}
-
-/** Deterministic, clearly fake words used only by UI fixtures. */
-QStringList FixtureWords()
-{
-    return QStringList{QStringLiteral("ocean"), QStringLiteral("lamp"), QStringLiteral("river"),
-        QStringLiteral("stone"), QStringLiteral("cloud"), QStringLiteral("maple"), QStringLiteral("orbit"),
-        QStringLiteral("violet"), QStringLiteral("anchor"), QStringLiteral("harbor"), QStringLiteral("pilot"),
-        QStringLiteral("garden"), QStringLiteral("silver"), QStringLiteral("canyon"), QStringLiteral("ember"),
-        QStringLiteral("meadow"), QStringLiteral("quartz"), QStringLiteral("lantern"), QStringLiteral("summit"),
-        QStringLiteral("willow"), QStringLiteral("falcon"), QStringLiteral("copper"), QStringLiteral("island"),
-        QStringLiteral("breeze")};
-}
-} // namespace
 
 std::optional<QStringList> CybouDesktopModel::prepareNewIdentityWords()
 {

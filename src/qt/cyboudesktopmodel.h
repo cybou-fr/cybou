@@ -14,6 +14,7 @@
 #include <QStringList>
 #include <QVector>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <thread>
@@ -218,6 +219,14 @@ public:
     void requestCreateIdentity(const QString& vault_password);
     bool requestRestoreIdentity(const QString& recovery_phrase, const QString& vault_password);
     bool requestUnlockIdentity(const QString& vault_password);
+    /**
+     * Opens the vault off the GUI thread (password KDF) and calls done on
+     * the GUI thread. Identity state updates happen before done runs.
+     */
+    void requestUnlockIdentityAsync(const QString& vault_password, std::function<void(bool ok)> done);
+    /** Re-authenticates off the GUI thread, then returns the words. */
+    void revealRecoveryWordsAsync(const QString& vault_password,
+        std::function<void(std::optional<QStringList> words)> done);
     void requestLockVault();
     bool requestClaimName(const QString& label, const QString& vault_password);
     bool requestRecoveryRootRotation(const QStringList& new_phrase, const QString& vault_password,
@@ -281,6 +290,9 @@ private:
     std::jthread m_name_worker;
     std::jthread m_recovery_rotation_worker;
     std::jthread m_payment_worker;
+    std::jthread m_vault_worker;
+
+    void finishUnlock();
     bool m_payment_pending{false};
     std::optional<quint64> m_payment_fee;
     bool m_recovery_rotation_pending{false};

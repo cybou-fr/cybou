@@ -10,6 +10,7 @@
 #include <qt/pages/mailcompose.h>
 #include <qt/pages/mailreader.h>
 
+#include <QApplication>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -18,6 +19,7 @@
 #include <QLocale>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QShortcut>
 #include <QShowEvent>
 #include <QStackedWidget>
 #include <QVBoxLayout>
@@ -254,6 +256,35 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshBanner(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refreshBanner(); });
+
+    // Familiar mail shortcuts; each has a visible button equivalent.
+    const auto shortcut = [this](const QKeySequence& keys, auto&& action) {
+        auto* sc = new QShortcut{keys, this};
+        sc->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(sc, &QShortcut::activated, this, std::forward<decltype(action)>(action));
+    };
+    const auto typing = [this] {
+        const QWidget* focus = QApplication::focusWidget();
+        return focus && (focus->inherits("QLineEdit") || focus->inherits("QTextEdit"));
+    };
+    shortcut(QKeySequence{QStringLiteral("Ctrl+N")}, [this] { openCompose(); });
+    shortcut(QKeySequence{Qt::Key_C}, [this, typing] { if (!typing()) openCompose(); });
+    shortcut(QKeySequence{Qt::Key_Slash}, [this, typing] { if (!typing()) m_search->setFocus(); });
+    shortcut(QKeySequence{QStringLiteral("Ctrl+K")}, [this] { m_search->setFocus(); });
+    shortcut(QKeySequence{Qt::Key_R}, [this, typing] {
+        if (!typing() && m_detail->currentWidget() == m_reader) openCompose(replyTo(m_reader->messageId()));
+    });
+    shortcut(QKeySequence{Qt::Key_F}, [this, typing] {
+        if (!typing() && m_detail->currentWidget() == m_reader) openCompose(forwardOf(m_reader->messageId()));
+    });
+    shortcut(QKeySequence::Delete, [this, typing] {
+        if (typing() || m_detail->currentWidget() != m_reader) return;
+        m_model->moveMail(m_reader->messageId(), CybouMailFolder::Trash);
+        closeDetail();
+    });
+    shortcut(QKeySequence{Qt::Key_Escape}, [this] {
+        if (m_detail->currentWidget() == m_reader) closeDetail();
+    });
 
     rebuildFolders();
     m_folders->setCurrentRow(0);

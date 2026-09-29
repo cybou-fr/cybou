@@ -1,12 +1,11 @@
 # 83 — CYBOU Files UI/UX
 
 Status: canonical Beta Files/Storage product UX contract. The Qt Files page
-now has a provisional single-installation path for upload, local encrypted
-filename indexing, search, details, and integrity-checked download. It does
-not implement the Beta catalog described here: the encrypted Files catalog,
-finalized RootPublication of that catalog, and the Beta durability contract
-remain unimplemented. The page must not describe local indexing or peer
-acknowledgments as a finalized Files catalog or as `Protected`.
+implements this UX over the desktop product model and is fully usable with
+deterministic UI fixtures (`CYBOU_UI_FIXTURE`). The encrypted Files catalog,
+its finalized RootPublication and the Beta durability contract are not
+connected yet; in live mode the page says so and never shows local-only
+content as `Protected`.
 
 This document defines how CYBOU exposes encrypted file storage to ordinary
 users. Google Drive is the interaction reference for familiar file

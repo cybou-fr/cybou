@@ -612,24 +612,23 @@ void OnboardingView::submitUnlock()
     QString password = m_unlock_password->text();
     m_unlock_password->clear();
     if (password.isEmpty()) return;
-    if (m_model->fixtureMode()) {
-        password.fill(QChar{0});
-        m_model->setIdentityState(CybouIdentityState::Active, m_model->status().account_id,
-            m_model->status().creation_height);
-        return;
-    }
-    const bool unlocked = m_model->requestUnlockIdentity(password);
-    if (!unlocked) {
-        password.fill(QChar{0});
-        m_unlock_hint->setText(tr("The password is incorrect."));
-        return;
-    }
-    m_unlock_hint->clear();
-    // A vault whose Identity was not confirmed yet resumes creation.
-    if (m_model->status().identity_state != CybouIdentityState::Active) {
-        showScreen(Screen::Creating);
-        m_model->requestCreateIdentity({});
-    }
+    m_unlock_password->setEnabled(false);
+    m_unlock_hint->setText(tr("Unlocking…"));
+    // The vault KDF runs off the GUI thread.
+    m_model->requestUnlockIdentityAsync(password, [this](bool ok) {
+        m_unlock_password->setEnabled(true);
+        if (!ok) {
+            m_unlock_hint->setText(tr("The password is incorrect."));
+            m_unlock_password->setFocus();
+            return;
+        }
+        m_unlock_hint->clear();
+        // A vault whose Identity was not confirmed yet resumes creation.
+        if (m_model->status().identity_state != CybouIdentityState::Active) {
+            showScreen(Screen::Creating);
+            m_model->requestCreateIdentity({});
+        }
+    });
     password.fill(QChar{0});
 }
 

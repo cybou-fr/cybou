@@ -299,6 +299,12 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
         const auto ids = selectedIds();
         if (ids.size() == 1) promptRename(ids.first());
     });
+    auto* search_key = new QShortcut{QKeySequence{QStringLiteral("Ctrl+K")}, this};
+    search_key->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(search_key, &QShortcut::activated, m_search, [this] { m_search->setFocus(); });
+    auto* close_key = new QShortcut{QKeySequence{Qt::Key_Escape}, this};
+    close_key->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(close_key, &QShortcut::activated, this, [this] { showDetails({}); });
     setAcceptDrops(true);
 
     connect(m_nav, &QListWidget::currentRowChanged, this, [this](int row) {

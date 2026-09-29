@@ -153,6 +153,9 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     actions->addWidget(discard_button);
     root->addLayout(actions);
 
+    setTabOrder(m_to, m_subject);
+    setTabOrder(m_subject, m_body);
+    setTabOrder(m_body, m_send);
     connect(m_to, &QLineEdit::textChanged, this, [this] { updateGates(); });
     connect(m_subject, &QLineEdit::textChanged, this, [this] { updateGates(); });
     connect(m_body, &QTextEdit::textChanged, this, [this] { updateGates(); });

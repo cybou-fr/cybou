@@ -45,6 +45,7 @@ private Q_SLOTS:
     void fixturesLoadDeterministically();
     void normalUiAvoidsProtocolVocabulary();
     void layoutsFitWithoutHorizontalScroll();
+    void keyboardAndAsyncUnlock();
     void themeResolvesAllTokens();
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();

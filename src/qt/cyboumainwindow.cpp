@@ -404,6 +404,7 @@ void CybouMainWindow::refreshHeader()
     const QString connection = cybouConnectionText(status);
     const bool healthy = status.sync_error.isEmpty() && status.node_running && status.online;
     m_status_text->setText(healthy ? tr("Online • %1").arg(connection) : connection);
+    m_status_text->setAccessibleName(tr("Connection status: %1").arg(m_status_text->text()));
     m_status_dot->setProperty("tint", healthy && !status.syncing ? "mint"
         : !status.sync_error.isEmpty() ? "rose" : "amber");
     Restyle(m_status_dot);

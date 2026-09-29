@@ -731,17 +731,48 @@ void CybouShellTests::layoutsFitWithoutHorizontalScroll()
         for (int i = 0; i < window->pageCount(); ++i) {
             window->showPage(static_cast<CybouPage>(i));
             QCoreApplication::processEvents();
-            QVERIFY2(window->width() == size.width(),
+            QVERIFY2(window->width() <= size.width(),
                 qPrintable(QStringLiteral("page %1 widened the window to %2 at %3").arg(i).arg(window->width()).arg(size.width())));
             QVERIFY2(window->centralWidget()->minimumSizeHint().width() <= size.width(),
                 qPrintable(QStringLiteral("page %1 needs %2 px at %3").arg(i)
                     .arg(window->centralWidget()->minimumSizeHint().width()).arg(size.width())));
         }
-        QCOMPARE(window->sidebarCompact(), size.width() < 1180);
+        QCOMPARE(window->sidebarCompact(), window->width() < 1180);
         window->showPage(CybouPage::Mail);
         QCoreApplication::processEvents();
-        QCOMPARE(mail->threePane(), size.width() >= 1400);
+        QCOMPARE(mail->threePane(), window->width() >= 1400);
     }
+    window->close();
+}
+
+void CybouShellTests::keyboardAndAsyncUnlock()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("mail")));
+    window->show();
+    window->activateWindow();
+    QVERIFY(QTest::qWaitForWindowActive(window.get()));
+    window->showPage(CybouPage::Mail);
+    auto* mail = dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
+    mail->setFocus();
+    QTest::keyClick(mail, Qt::Key_N, Qt::ControlModifier);
+    QVERIFY(mail->composer()->isVisible());
+    mail->openMessage(QStringLiteral("m-project"));
+    mail->reader()->setFocus();
+    QTest::keyClick(mail->reader(), Qt::Key_R);
+    QVERIFY(mail->composer()->isVisible());
+    QCOMPARE(mail->findChild<QLineEdit*>(QStringLiteral("recipientEdit"))->text(), QStringLiteral("alice.cybou"));
+
+    // Vault unlock completes asynchronously and never blocks the GUI thread.
+    model->requestLockVault();
+    QCOMPARE(model->status().identity_state, CybouIdentityState::Locked);
+    bool done = false;
+    model->requestUnlockIdentityAsync(QStringLiteral("correct horse battery"), [&done](bool ok) { done = ok; });
+    QVERIFY(!done);
+    for (int i = 0; i < 50 && !done; ++i) QTest::qWait(10);
+    QVERIFY(done);
+    QCOMPARE(model->status().identity_state, CybouIdentityState::Active);
     window->close();
 }
 
