@@ -18,7 +18,7 @@ editing an included file.
 | docs/cybou/02_ARCHITECTURE.md | 109 | e02e5d928d4ec2f5 |
 | docs/cybou/05_CHAIN_STATE.md | 84 | 2b2be7bf69689f96 |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 43 | fbe559efaba33637 |
-| docs/cybou/08_P2P.md | 109 | f6a485f5a3dfd656 |
+| docs/cybou/08_P2P.md | 135 | 2a684923767ab905 |
 | docs/cybou/09_CRYPTO_PQ.md | 16 | 721054f0708a8051 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | a76de60933486847 |
 | docs/cybou/18_ECONOMICS_FEES.md | 90 | c73eb172b272966c |
@@ -26,9 +26,9 @@ editing an included file.
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 36 | 43cdf31bb132eda8 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
 | docs/cybou/22_ROADMAP.md | 68 | 5283090bbb3dfdb8 |
-| docs/cybou/24_DECISIONS.md | 58 | c0f7458817b86b79 |
+| docs/cybou/24_DECISIONS.md | 59 | 5e2a0816c8402899 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 73 | 5d0993926643a598 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 107 | fbb6ad2534e380bc |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 108 | 5b188be3279b71bf |
 | docs/cybou/37_FRANCE_EU_GLOBAL_STRATEGY.md | 96 | 99058ca64593188d |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 28 | ee4d307774069584 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
@@ -61,7 +61,7 @@ editing an included file.
 | docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 116 | 524004c58d7d8732 |
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 35 | 870d2d08b963af58 |
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 34 | feaf7a136cba1025 |
-| docs/cybou/APPLICATION_DATA_PLANE.md | 419 | a0ab68c48e3ef7fd |
+| docs/cybou/APPLICATION_DATA_PLANE.md | 422 | b0fff776b483a3f4 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 85 | f32d4f33bab42f19 |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/POA_FINALITY_VECTORS.md | 106 | 6bcebb272715c313 |
@@ -72,7 +72,7 @@ editing an included file.
 | spec/circulation_scenarios.csv | 74 | db240cf0d3280644 |
 | spec/fee_router_test_vectors.csv | 9 | db9274d10b0a3dfa |
 | spec/fee_router.yaml | 18 | ccebf298d9eb9ec0 |
-| spec/mail_files_architecture.yaml | 103 | 703c31f4f833f866 |
+| spec/mail_files_architecture.yaml | 104 | 467a28f5905c76ab |
 | spec/market_strategy.yaml | 51 | 542c848877114c0f |
 | spec/monetary_model.yaml | 62 | 6dbc549d969223bd |
 | spec/onboarding.yaml | 30 | 4a12ead846d1a692 |

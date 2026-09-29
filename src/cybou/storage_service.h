@@ -30,11 +30,19 @@ class CybouNodeRuntime;
 inline constexpr std::uint8_t DEVELOPMENT_REMOTE_REPLICA_TARGET{1};
 inline constexpr std::uint8_t BETA_REMOTE_REPLICA_TARGET{2};
 
+/**
+ * A storage provider: its stable ProviderID (BLAKE3 of the provider key it
+ * proved in the CYP2 handshake) plus the last endpoint it was reached at.
+ * Replicas are counted per ProviderID, never per address:port.
+ */
 struct StorageEndpoint {
+    std::array<unsigned char, 32> provider_id{};
     std::string address;
     std::uint16_t port{0};
     auto operator<=>(const StorageEndpoint&) const = default;
 };
+
+inline bool SameProvider(const StorageEndpoint& a, const StorageEndpoint& b) { return a.provider_id == b.provider_id; }
 
 /** Remote encrypted-chunk transport. Implementations never interpret content. */
 class StorageTransport {

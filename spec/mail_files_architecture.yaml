@@ -91,6 +91,7 @@ storage:
   beta_remote_full_replicas: 2
   erasure_coding_beta: false
   placement_granularity: chunk_id
+  replica_identity: provider_id  # BLAKE3 of the CYP2-proven provider key
   deterministic_provider_ranking_frozen: false
   provider_discovery_initial: peer_fanout_by_chunk_id
   repair_required: true

@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/p2p/session.h>
+
+#include <cybou/chunk_id.h>
+#include <cybou/identity_crypto.h>
 #include <cybou/block_feed.h>
 #include <cybou/encrypted_chunk.h>
 #include <cybou/node_runtime.h>
@@ -52,6 +55,7 @@ bool IsSupportedMessageType(const uint8_t type)
 {
     switch (static_cast<MessageType>(type)) {
     case MessageType::HELLO:
+    case MessageType::PROVIDER_PROOF:
     case MessageType::PING:
     case MessageType::PONG:
     case MessageType::GET_BLOCK:
@@ -303,7 +307,45 @@ std::optional<Frame> PeerSession::Read()
     return Read(std::chrono::steady_clock::now() + std::chrono::seconds(5));
 }
 
-bool PeerSession::Handshake(const Hello& local)
+std::vector<unsigned char> ProviderProofMessage(const uint256& network_id, const uint64_t signer_nonce,
+    const uint64_t verifier_nonce)
+{
+    constexpr std::string_view DOMAIN{"CYBOU/CYP2/PROVIDER-PROOF/v1"};
+    std::vector<unsigned char> message(DOMAIN.begin(), DOMAIN.end());
+    message.insert(message.end(), network_id.begin(), network_id.end());
+    Put64(message, signer_nonce);
+    Put64(message, verifier_nonce);
+    return message;
+}
+
+namespace {
+constexpr std::size_t PROVIDER_ED25519_KEY{32};
+constexpr std::size_t PROVIDER_MLDSA_KEY{1312};
+constexpr std::size_t PROVIDER_ED25519_SIG{64};
+constexpr std::size_t PROVIDER_MLDSA_SIG{2420};
+constexpr std::size_t PROVIDER_PROOF_SIZE{PROVIDER_ED25519_KEY + PROVIDER_MLDSA_KEY + PROVIDER_ED25519_SIG + PROVIDER_MLDSA_SIG};
+} // namespace
+
+std::optional<ProviderId> VerifyProviderProof(const std::span<const unsigned char> payload,
+    const std::span<const unsigned char> message)
+{
+    if (payload.size() != PROVIDER_PROOF_SIZE) return std::nullopt;
+    IdentityHybridPublicKey key{.purpose = IdentityKeyPurpose::STORAGE_PROVIDER};
+    std::copy_n(payload.begin(), PROVIDER_ED25519_KEY, key.ed25519.begin());
+    key.ml_dsa.assign(payload.begin() + PROVIDER_ED25519_KEY, payload.begin() + PROVIDER_ED25519_KEY + PROVIDER_MLDSA_KEY);
+    IdentityHybridSignature signature;
+    const auto sig = payload.subspan(PROVIDER_ED25519_KEY + PROVIDER_MLDSA_KEY);
+    std::copy_n(sig.begin(), PROVIDER_ED25519_SIG, signature.ed25519.begin());
+    signature.ml_dsa.assign(sig.begin() + PROVIDER_ED25519_SIG, sig.end());
+    if (!VerifyIdentityMessage(key, signature, message)) return std::nullopt;
+    // ProviderID commits to both public keys under a provider domain.
+    constexpr std::string_view DOMAIN{"CYBOU/PROVIDER-ID/v1"};
+    std::vector<unsigned char> id_input(DOMAIN.begin(), DOMAIN.end());
+    id_input.insert(id_input.end(), payload.begin(), payload.begin() + PROVIDER_ED25519_KEY + PROVIDER_MLDSA_KEY);
+    return ComputeBlake3Digest(id_input);
+}
+
+bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provider_signer)
 {
     m_handshake_status = HandshakeStatus::INVALID_LOCAL;
     if (local.network_id.IsNull() || local.finalized_tip.IsNull() || local.nonce == 0) return false;
@@ -321,6 +363,26 @@ bool PeerSession::Handshake(const Hello& local)
     if (peer->network_id != local.network_id) {
         m_handshake_status = HandshakeStatus::WRONG_NETWORK;
         return false;
+    }
+    // Storage peers prove their provider key over both session nonces.
+    if (local.capabilities & CAP_STORAGE) {
+        if (!provider_signer) {
+            m_handshake_status = HandshakeStatus::INVALID_LOCAL;
+            return false;
+        }
+        const auto proof = provider_signer(ProviderProofMessage(local.network_id, local.nonce, peer->nonce));
+        if (!proof || !Write(Frame{MessageType::PROVIDER_PROOF, *proof})) {
+            m_handshake_status = HandshakeStatus::UNAVAILABLE;
+            return false;
+        }
+    }
+    m_peer_provider_id.reset();
+    if (peer->capabilities & CAP_STORAGE) {
+        const auto proof_frame = Read();
+        if (!proof_frame || proof_frame->type != MessageType::PROVIDER_PROOF) return false;
+        m_peer_provider_id = VerifyProviderProof(proof_frame->payload,
+            ProviderProofMessage(peer->network_id, peer->nonce, local.nonce));
+        if (!m_peer_provider_id) return false;
     }
     m_peer = *peer;
     m_local_capabilities = local.capabilities;

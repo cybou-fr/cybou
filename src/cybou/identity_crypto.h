@@ -19,6 +19,8 @@ enum class IdentityKeyPurpose : uint8_t {
     RELEASE_SIGNING = 5,
     TREASURY = 6,
     POA_FINALIZER = 7,
+    /** CYP2 storage provider identity (ProviderID = hash of this key). */
+    STORAGE_PROVIDER = 8,
 };
 
 struct IdentityHybridPublicKey {

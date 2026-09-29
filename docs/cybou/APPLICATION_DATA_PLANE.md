@@ -80,8 +80,11 @@ No separate user-visible provider layer exists.
 The implemented `StorageService` places only finalized publications: the
 ordered chunk list must reproduce the publication's chunk-authorization root,
 and per-chunk proofs are rebuilt from it. Each chunk goes to distinct
-CSPRNG-selected CYP2 storage peers until the remote target is met (1 in
+CSPRNG-selected CYP2 storage providers until the remote target is met (1 in
 development, 2 in Beta); STORED and ALREADY_STORED both count, the local copy never does.
+Providers are distinct by ProviderID (the hash of the provider key proven in
+the CYP2 handshake), not by address:port, so one key answering on several
+endpoints is one replica.
 Placement records live in the Identity's encrypted Application DB as an
 operational cache. `Audit` re-reads every recorded replica, drops missing or
 BLAKE3-mismatching ones and repairs from any valid copy. `Fetch` returns the

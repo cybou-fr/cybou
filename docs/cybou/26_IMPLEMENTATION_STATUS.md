@@ -26,7 +26,8 @@ Current `main` implements the canonical low-level substrate:
   content, queued publication while another Identity operation is unresolved,
   and PROTECTED only after StorageService reports remote durability;
 - StorageService: post-finality placement on distinct CSPRNG-selected CYP2
-  storage peers to the remote replica target (development 1, Beta 2; local
+  storage providers, distinct by handshake-proven ProviderID (not
+  address:port), to the remote replica target (development 1, Beta 2; local
   copy excluded), GET/BLAKE3 audit, repair and verified remote retrieval;
 - placement recovery: rebuilds the ordered authorized-chunk set from
   provider-held verified proofs after Application DB loss, including private

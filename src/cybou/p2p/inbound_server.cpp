@@ -65,7 +65,10 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
         m_workers.push_back(Worker{done, std::jthread{[this, &stopping, done, socket = std::move(socket)]() mutable {
             PeerSession session{std::move(socket)};
             const auto hello = LocalHello(m_runtime);
-            if (hello && session.Handshake(*hello) &&
+            const auto signer = [this](std::span<const unsigned char> message) {
+                return m_runtime.SignProviderProof(message);
+            };
+            if (hello && session.Handshake(*hello, signer) &&
                 MatchesKnownFinalizedChain(m_runtime, *session.Peer())) {
                 while (!stopping && session.ServeNext(m_runtime)) {}
             }

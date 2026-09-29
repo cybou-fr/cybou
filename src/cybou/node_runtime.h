@@ -179,13 +179,23 @@ public:
     std::optional<ChunkAuthorizationProof> GetFinalizedChunkAuthorizationProof(
         const uint256& publication_operation_id, const ChunkId& chunk_id) const;
     bool HasFinalizedChunk(const ChunkId& chunk_id) const;
-    /** Connected CYP2 peers that advertise the ciphertext storage service. */
-    std::vector<std::pair<std::string, uint16_t>> StoragePeerEndpoints() const;
+    /** A connected CYP2 storage peer and the ProviderID it proved in the handshake. */
+    struct StoragePeer {
+        std::string address;
+        uint16_t port{0};
+        std::array<unsigned char, 32> provider_id{};
+    };
+    std::vector<StoragePeer> StoragePeerEndpoints() const;
+    /** Storage calls go only to a session that proved the expected ProviderID. */
     std::optional<ChunkAdmissionResult> PutChunkToStoragePeer(const std::string& address, uint16_t port,
-        const uint256& publication_operation_id, const ChunkId& chunk_id,
-        std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof);
+        const std::array<unsigned char, 32>& provider_id, const uint256& publication_operation_id,
+        const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetChunkFromStoragePeer(const std::string& address,
-        uint16_t port, const ChunkId& chunk_id);
+        uint16_t port, const std::array<unsigned char, 32>& provider_id, const ChunkId& chunk_id);
+    /** This node's storage provider identity; nullopt unless storage is enabled. */
+    std::optional<std::array<unsigned char, 32>> LocalProviderId() const;
+    /** Encoded PROVIDER_PROOF for a handshake message; nullopt unless storage is enabled. */
+    std::optional<std::vector<unsigned char>> SignProviderProof(std::span<const unsigned char> message) const;
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStoragePeer(
         const std::string& address, uint16_t port, const uint256& publication_operation_id,
         const ChunkId& chunk_id);
@@ -227,6 +237,9 @@ private:
     std::unique_ptr<KVStore> m_db;
     std::unique_ptr<ChunkBlobStore> m_chunk_blob_store;
     std::unique_ptr<FinalizedChunkStore> m_finalized_chunk_store;
+    /** Storage provider key secret (persisted beside provider data). */
+    std::optional<std::array<unsigned char, 32>> m_provider_secret;
+    std::optional<std::array<unsigned char, 32>> m_provider_id;
     CybouStateStore m_store;
     std::unique_ptr<CybouAuthorityNode> m_authority_node;
     std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;

@@ -94,7 +94,8 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip, .capabilities = caps, .nonce = *nonce};
     auto peer = std::make_unique<PeerSession>(std::move(socket));
-    if (!peer->Handshake(local)) {
+    const auto signer = [this](std::span<const unsigned char> message) { return m_runtime.SignProviderProof(message); };
+    if (!peer->Handshake(local, signer)) {
         switch (peer->LastHandshakeStatus()) {
         case HandshakeStatus::UNAVAILABLE: m_last_connect_status = PeerConnectStatus::UNAVAILABLE; break;
         case HandshakeStatus::WRONG_NETWORK: m_last_connect_status = PeerConnectStatus::WRONG_NETWORK; break;
@@ -380,7 +381,9 @@ std::vector<PeerInfo> PeerManager::Peers() const
     std::vector<PeerInfo> peers;
     peers.reserve(m_peers.size());
     for (const auto& [endpoint, session] : m_peers) {
-        if (session->Peer()) peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer()});
+        if (session->Peer()) {
+            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId()});
+        }
     }
     return peers;
 }
@@ -389,20 +392,20 @@ std::vector<PeerInfo> PeerManager::StoragePeers() const
 {
     std::vector<PeerInfo> peers;
     for (const auto& [endpoint, session] : m_peers) {
-        if (session->Peer() && (session->Peer()->capabilities & CAP_STORAGE)) {
-            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer()});
+        if (session->Peer() && (session->Peer()->capabilities & CAP_STORAGE) && session->PeerProviderId()) {
+            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId()});
         }
     }
     return peers;
 }
 
 std::optional<ChunkAdmissionResult> PeerManager::PutAuthorizedChunk(
-    const std::string& address, const uint16_t port, const uint256& publication_operation_id,
-    const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes,
+    const std::string& address, const uint16_t port, const ProviderId& provider_id,
+    const uint256& publication_operation_id, const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes,
     const ChunkAuthorizationProof& proof)
 {
     Endpoint endpoint;
-    auto* session = FindStorageSession(address, port, &endpoint);
+    auto* session = FindStorageSession(address, port, provider_id, &endpoint);
     if (!session) return std::nullopt;
     auto result = session->PutAuthorizedChunk(publication_operation_id, chunk_id, stored_bytes, proof);
     if (!result) {
@@ -413,9 +416,9 @@ std::optional<ChunkAdmissionResult> PeerManager::PutAuthorizedChunk(
 }
 
 std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
-    const std::string& address, const uint16_t port, const ChunkId& chunk_id)
+    const std::string& address, const uint16_t port, const ProviderId& provider_id, const ChunkId& chunk_id)
 {
-    auto* session = FindStorageSession(address, port);
+    auto* session = FindStorageSession(address, port, provider_id);
     if (!session) return std::nullopt;
     return session->GetChunkById(chunk_id);
 }
@@ -424,13 +427,13 @@ std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
     const std::string& address, const uint16_t port, const uint256& publication_operation_id,
     const ChunkId& chunk_id)
 {
-    auto* session = FindStorageSession(address, port);
+    auto* session = FindStorageSession(address, port, std::nullopt);
     if (!session) return std::nullopt;
     return session->GetChunkAuthorizationProof(publication_operation_id, chunk_id);
 }
 
 PeerSession* PeerManager::FindStorageSession(
-    const std::string& address, const uint16_t port, Endpoint* endpoint)
+    const std::string& address, const uint16_t port, const std::optional<ProviderId>& provider_id, Endpoint* endpoint)
 {
     if (port == 0) return nullptr;
     boost::system::error_code ec;
@@ -439,7 +442,9 @@ PeerSession* PeerManager::FindStorageSession(
     const Endpoint key{parsed.to_string(), port};
     const auto it = m_peers.find(key);
     if (it == m_peers.end() || !it->second->Peer() ||
-        !(it->second->Peer()->capabilities & CAP_STORAGE)) return nullptr;
+        !(it->second->Peer()->capabilities & CAP_STORAGE) || !it->second->PeerProviderId()) return nullptr;
+    // A different provider now answering at this endpoint is not the recorded replica.
+    if (provider_id && *it->second->PeerProviderId() != *provider_id) return nullptr;
     if (endpoint) *endpoint = key;
     return it->second.get();
 }

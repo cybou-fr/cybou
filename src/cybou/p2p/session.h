@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <chrono>
+#include <functional>
 #include <optional>
 #include <span>
 #include <vector>
@@ -60,8 +61,24 @@ enum class MessageType : uint8_t {
     CHUNK_DATA = 33,
     GET_CHUNK_AUTHORIZATION_PROOF = 34,
     CHUNK_AUTHORIZATION_PROOF = 35,
+    PROVIDER_PROOF = 36,
 };
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::CHUNK_AUTHORIZATION_PROOF)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::PROVIDER_PROOF)};
+
+/** Stable identity of a storage provider: BLAKE3 of its STORAGE_PROVIDER public key. */
+using ProviderId = std::array<unsigned char, 32>;
+/**
+ * Signs a PROVIDER_PROOF message with the local provider key and returns the
+ * encoded proof payload (public key + hybrid signature), or nullopt.
+ */
+using ProviderProofSigner = std::function<std::optional<std::vector<unsigned char>>(
+    std::span<const unsigned char> message)>;
+
+/** Message a provider signs to prove its key in this session (both nonces, network). */
+std::vector<unsigned char> ProviderProofMessage(const uint256& network_id, uint64_t signer_nonce, uint64_t verifier_nonce);
+/** Verifies a PROVIDER_PROOF payload and returns the proven ProviderID. */
+std::optional<ProviderId> VerifyProviderProof(std::span<const unsigned char> payload,
+    std::span<const unsigned char> message);
 
 struct Frame {
     MessageType type;
@@ -120,7 +137,13 @@ bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& pe
 class PeerSession {
 public:
     explicit PeerSession(boost::asio::ip::tcp::socket socket);
-    bool Handshake(const Hello& local);
+    /**
+     * A peer advertising CAP_STORAGE must prove its provider key; a local
+     * CAP_STORAGE hello needs provider_signer to do the same.
+     */
+    bool Handshake(const Hello& local, const ProviderProofSigner& provider_signer = {});
+    /** Proven ProviderID of a storage peer. */
+    const std::optional<ProviderId>& PeerProviderId() const { return m_peer_provider_id; }
     HandshakeStatus LastHandshakeStatus() const { return m_handshake_status; }
     bool Ping(uint64_t nonce);
     bool AnswerPing();
@@ -157,6 +180,7 @@ private:
     ReadStatus m_last_read_status{ReadStatus::UNAVAILABLE};
     boost::asio::ip::tcp::socket m_socket;
     std::optional<Hello> m_peer;
+    std::optional<ProviderId> m_peer_provider_id;
     uint64_t m_local_capabilities{0};
     HandshakeStatus m_handshake_status{HandshakeStatus::NOT_ATTEMPTED};
 };

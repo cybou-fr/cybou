@@ -143,7 +143,7 @@ int main(int argc, char* argv[])
             if (!now) return false;
             for (const auto& replicas : now->replicas) {
                 for (const auto& endpoint : replicas) {
-                    if (endpoint == holder) return false;
+                    if (cybou::SameProvider(endpoint, holder)) return false;
                 }
             }
             return job_phase() == cybou::PublicationJobPhase::PROTECTED;

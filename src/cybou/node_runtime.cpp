@@ -4,11 +4,16 @@
 #include <cybou/node_runtime.h>
 #include <cybou/identity_operation_coordinator.h>
 #include <cybou/keystore.h>
+#include <cybou/p2p/session.h>
+#include <cybou/identity_crypto.h>
+#include <cybou/crypto/cleanse.h>
 #include <cybou/p2p/peer_manager.h>
 
 #include <boost/asio/ip/address.hpp>
+#include <openssl/rand.h>
 
 #include <algorithm>
+#include <fstream>
 #include <limits>
 
 namespace cybou {
@@ -74,6 +79,32 @@ bool IsConnectableDiscoveredAddress(
 
 } // namespace
 
+namespace {
+/** 32 random bytes kept beside provider data (0600); in memory for memory-only runtimes. */
+std::optional<std::array<unsigned char, 32>> LoadOrCreateProviderSecret(const std::filesystem::path& path)
+{
+    std::array<unsigned char, 32> secret{};
+    if (!path.empty() && std::filesystem::exists(path)) {
+        std::ifstream in(path, std::ios::binary);
+        in.read(reinterpret_cast<char*>(secret.data()), secret.size());
+        if (!in || in.peek() != std::char_traits<char>::eof()) return std::nullopt;
+        return secret;
+    }
+    if (RAND_bytes(secret.data(), static_cast<int>(secret.size())) != 1) return std::nullopt;
+    if (path.empty()) return secret;
+    std::filesystem::create_directories(path.parent_path());
+    const auto temp = path.string() + ".tmp";
+    {
+        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char*>(secret.data()), secret.size());
+        if (!out) return std::nullopt;
+    }
+    std::filesystem::permissions(temp, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+    std::filesystem::rename(temp, path);
+    return secret;
+}
+} // namespace
+
 CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     : m_config{std::move(config)},
       m_network_id{NetworkId(m_config.network_definition)},
@@ -100,6 +131,14 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
         m_finalized_chunk_store = std::make_unique<FinalizedChunkStore>(*m_chunk_blob_store, storage_path,
             std::span<const unsigned char, 32>{m_network_id.begin(), 32},
             m_config.storage_capacity_bytes, m_config.wipe_data);
+        // The provider key is this node's stable storage identity across restarts.
+        m_provider_secret = LoadOrCreateProviderSecret(m_config.memory_only ? std::filesystem::path{} :
+            storage_path / "provider.key");
+        if (!m_provider_secret) throw std::runtime_error("cannot load or create the storage provider key");
+        const auto proof = SignProviderProof(p2p::ProviderProofMessage(m_network_id, 1, 2));
+        m_provider_id = proof ? p2p::VerifyProviderProof(*proof, p2p::ProviderProofMessage(m_network_id, 1, 2))
+                              : std::nullopt;
+        if (!m_provider_id) throw std::runtime_error("storage provider key is invalid");
     }
     if (m_config.validator_private_key.has_value()) {
         m_authority_node = std::make_unique<CybouAuthorityNode>(
@@ -108,7 +147,26 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     if (m_config.p2p_endpoint) m_peer_manager = std::make_unique<p2p::PeerManager>(*this);
 }
 
-CybouNodeRuntime::~CybouNodeRuntime() = default;
+CybouNodeRuntime::~CybouNodeRuntime()
+{
+    if (m_provider_secret) crypto::CleanseMemory(m_provider_secret->data(), m_provider_secret->size());
+}
+
+std::optional<std::array<unsigned char, 32>> CybouNodeRuntime::LocalProviderId() const { return m_provider_id; }
+
+std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignProviderProof(
+    const std::span<const unsigned char> message) const
+{
+    if (!m_provider_secret) return std::nullopt;
+    const auto key = DeriveIdentityPublicKey(*m_provider_secret, IdentityKeyPurpose::STORAGE_PROVIDER);
+    const auto signature = SignIdentityMessage(*m_provider_secret, IdentityKeyPurpose::STORAGE_PROVIDER, message);
+    if (!key || !signature) return std::nullopt;
+    std::vector<unsigned char> proof(key->ed25519.begin(), key->ed25519.end());
+    proof.insert(proof.end(), key->ml_dsa.begin(), key->ml_dsa.end());
+    proof.insert(proof.end(), signature->ed25519.begin(), signature->ed25519.end());
+    proof.insert(proof.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
+    return proof;
+}
 
 ChunkAdmissionResult CybouNodeRuntime::PutFinalizedChunk(
     const uint256& publication_operation_id, const ChunkId& chunk_id,
@@ -137,30 +195,33 @@ bool CybouNodeRuntime::HasFinalizedChunk(const ChunkId& chunk_id) const
     return m_finalized_chunk_store && m_finalized_chunk_store->HasChunk(chunk_id);
 }
 
-std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::StoragePeerEndpoints() const
+std::vector<CybouNodeRuntime::StoragePeer> CybouNodeRuntime::StoragePeerEndpoints() const
 {
     std::lock_guard p2p_lock(m_p2p_mutex);
-    std::vector<std::pair<std::string, uint16_t>> endpoints;
+    std::vector<StoragePeer> endpoints;
     if (!m_peer_manager) return endpoints;
-    for (const auto& peer : m_peer_manager->StoragePeers()) endpoints.emplace_back(peer.address, peer.port);
+    for (const auto& peer : m_peer_manager->StoragePeers()) {
+        if (peer.provider_id) endpoints.push_back({peer.address, peer.port, *peer.provider_id});
+    }
     return endpoints;
 }
 
 std::optional<ChunkAdmissionResult> CybouNodeRuntime::PutChunkToStoragePeer(const std::string& address,
-    const uint16_t port, const uint256& publication_operation_id, const ChunkId& chunk_id,
-    const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
+    const uint16_t port, const std::array<unsigned char, 32>& provider_id, const uint256& publication_operation_id,
+    const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
     std::lock_guard p2p_lock(m_p2p_mutex);
     if (!m_peer_manager) return std::nullopt;
-    return m_peer_manager->PutAuthorizedChunk(address, port, publication_operation_id, chunk_id, stored_bytes, proof);
+    return m_peer_manager->PutAuthorizedChunk(address, port, provider_id, publication_operation_id, chunk_id,
+        stored_bytes, proof);
 }
 
 std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetChunkFromStoragePeer(const std::string& address,
-    const uint16_t port, const ChunkId& chunk_id)
+    const uint16_t port, const std::array<unsigned char, 32>& provider_id, const ChunkId& chunk_id)
 {
     std::lock_guard p2p_lock(m_p2p_mutex);
     if (!m_peer_manager) return std::nullopt;
-    return m_peer_manager->GetChunkById(address, port, chunk_id);
+    return m_peer_manager->GetChunkById(address, port, provider_id, chunk_id);
 }
 
 std::optional<ChunkAuthorizationProof> CybouNodeRuntime::GetChunkAuthorizationProofFromStoragePeer(

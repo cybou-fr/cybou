@@ -36,15 +36,28 @@ public:
             };
             auto provider = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
             if (!provider->InitializeGenesis(fixture.genesis)) throw std::runtime_error{"provider genesis failed"};
-            m_providers.emplace(cybou::StorageEndpoint{"10.0.0." + std::to_string(i + 1), 7070}, std::move(provider));
+            const auto id = provider->LocalProviderId();
+            if (!id) throw std::runtime_error{"provider has no ProviderID"};
+            m_runtimes.push_back(std::move(provider));
+            m_providers.emplace(cybou::StorageEndpoint{*id, "10.0.0." + std::to_string(i + 1), 7070},
+                m_runtimes.back().get());
         }
+    }
+
+    /** A second endpoint served by the same provider key (a Sybil-style alias). */
+    cybou::StorageEndpoint AddAlias(const cybou::StorageEndpoint& of, std::string address)
+    {
+        cybou::StorageEndpoint alias{of.provider_id, std::move(address), of.port};
+        m_providers.emplace(alias, m_providers.at(of));
+        return alias;
     }
 
     void Sync()
     {
         const auto height = m_fixture.runtime->GetFinalizedHeight().value_or(0);
-        for (auto& [endpoint, provider] : m_providers) {
-            if (lagging.contains(endpoint)) continue;
+        for (auto& provider : m_runtimes) {
+            if (std::any_of(lagging.begin(), lagging.end(),
+                    [&](const auto& e) { return m_providers.at(e) == provider.get(); })) continue;
             for (auto h = provider->GetFinalizedHeight().value_or(0) + 1; h <= height; ++h) {
                 const auto block = m_fixture.runtime->GetBlockAtHeight(h);
                 if (!block || !provider->CommitBlock(*block)) throw std::runtime_error{"provider sync failed"};
@@ -113,7 +126,8 @@ public:
 
 private:
     CybouServiceTestFixture& m_fixture;
-    std::map<cybou::StorageEndpoint, std::unique_ptr<cybou::CybouNodeRuntime>> m_providers;
+    std::vector<std::unique_ptr<cybou::CybouNodeRuntime>> m_runtimes;
+    std::map<cybou::StorageEndpoint, cybou::CybouNodeRuntime*> m_providers;
 };
 
 #endif // CYBOU_STORAGE_TEST_NETWORK_H

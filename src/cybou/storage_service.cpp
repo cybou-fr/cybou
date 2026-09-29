@@ -17,7 +17,13 @@
 namespace cybou {
 namespace {
 
-constexpr std::array<unsigned char, 5> MAGIC{'C', 'Y', 'S', 'P', 1};
+constexpr std::array<unsigned char, 5> MAGIC{'C', 'Y', 'S', 'P', 2};
+
+bool HasProvider(std::span<const StorageEndpoint> replicas, const StorageEndpoint& provider)
+{
+    return std::any_of(replicas.begin(), replicas.end(),
+        [&](const StorageEndpoint& r) { return SameProvider(r, provider); });
+}
 /** Bound on a single placement record: the largest publication chunk count. */
 constexpr std::uint32_t MAX_PLACEMENT_LEAVES{1U << 20};
 constexpr std::size_t MAX_REPLICAS_PER_CHUNK{16};
@@ -106,7 +112,10 @@ int PublicationDurability::ProgressPercent(const std::uint8_t target) const
 std::vector<StorageEndpoint> RuntimeStorageTransport::Providers()
 {
     std::vector<StorageEndpoint> providers;
-    for (auto& [address, port] : m_runtime.StoragePeerEndpoints()) providers.push_back({address, port});
+    for (auto& peer : m_runtime.StoragePeerEndpoints()) {
+        StorageEndpoint endpoint{peer.provider_id, peer.address, peer.port};
+        if (!HasProvider(providers, endpoint)) providers.push_back(std::move(endpoint));
+    }
     return providers;
 }
 
@@ -114,14 +123,14 @@ std::optional<ChunkAdmissionResult> RuntimeStorageTransport::Put(const StorageEn
     const uint256& publication_operation_id, const ChunkId& chunk_id,
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
-    return m_runtime.PutChunkToStoragePeer(provider.address, provider.port, publication_operation_id,
+    return m_runtime.PutChunkToStoragePeer(provider.address, provider.port, provider.provider_id, publication_operation_id,
         chunk_id, stored_bytes, proof);
 }
 
 std::optional<std::vector<unsigned char>> RuntimeStorageTransport::Get(const StorageEndpoint& provider,
     const ChunkId& chunk_id)
 {
-    return m_runtime.GetChunkFromStoragePeer(provider.address, provider.port, chunk_id);
+    return m_runtime.GetChunkFromStoragePeer(provider.address, provider.port, provider.provider_id, chunk_id);
 }
 
 std::optional<ChunkAuthorizationProof> RuntimeStorageTransport::GetProof(const StorageEndpoint& provider,
@@ -165,6 +174,8 @@ std::optional<StorageService::Placement> StorageService::Load(const uint256& ope
         const auto replicas = in.U8();
         if (!replicas || *replicas > MAX_REPLICAS_PER_CHUNK) return std::nullopt;
         for (std::uint32_t r{0}; r < *replicas; ++r) {
+            StorageEndpoint endpoint;
+            if (!in.Take(endpoint.provider_id)) return std::nullopt;
             const auto length = in.U8();
             if (!length || *length == 0) return std::nullopt;
             std::string address(*length, '\0');
@@ -173,7 +184,10 @@ std::optional<StorageService::Placement> StorageService::Load(const uint256& ope
             }
             const auto port = in.U16();
             if (!port || *port == 0) return std::nullopt;
-            placement.replicas[i].push_back({std::move(address), static_cast<std::uint16_t>(*port)});
+            endpoint.address = std::move(address);
+            endpoint.port = static_cast<std::uint16_t>(*port);
+            if (HasProvider(placement.replicas[i], endpoint)) return std::nullopt;
+            placement.replicas[i].push_back(std::move(endpoint));
         }
     }
     if (!in.Done()) return std::nullopt;
@@ -192,6 +206,7 @@ bool StorageService::Save(const Placement& placement)
         for (std::size_t r{0}; r < replicas.size() && r < MAX_REPLICAS_PER_CHUNK; ++r) {
             const auto& address = replicas[r].address;
             if (address.empty() || address.size() > 255) return false;
+            out.insert(out.end(), replicas[r].provider_id.begin(), replicas[r].provider_id.end());
             out.push_back(static_cast<unsigned char>(address.size()));
             out.insert(out.end(), address.begin(), address.end());
             Append16(out, replicas[r].port);
@@ -238,7 +253,9 @@ PublicationDurability StorageService::Summarize(const Placement& placement) cons
     result.chunk_count = static_cast<std::uint32_t>(placement.leaves.size());
     result.min_replicas = std::numeric_limits<std::uint32_t>::max();
     for (const auto& replicas : placement.replicas) {
-        const auto count = static_cast<std::uint32_t>(replicas.size());
+        std::set<std::array<unsigned char, 32>> unique;
+        for (const auto& r : replicas) unique.insert(r.provider_id);
+        const auto count = static_cast<std::uint32_t>(unique.size());
         result.min_replicas = std::min(result.min_replicas, count);
         if (count >= m_target) ++result.chunks_at_target;
     }
@@ -329,10 +346,7 @@ PublicationDurability StorageService::Rebuild(const uint256& operation_id,
             }
             placement.leaves[index] = chunk_id;
             found[index] = true;
-            if (std::find(placement.replicas[index].begin(), placement.replicas[index].end(), provider) ==
-                placement.replicas[index].end()) {
-                placement.replicas[index].push_back(provider);
-            }
+            if (!HasProvider(placement.replicas[index], provider)) placement.replicas[index].push_back(provider);
         }
     }
     if (std::find(found.begin(), found.end(), false) != found.end()) {
@@ -394,7 +408,8 @@ PublicationDurability StorageService::Place(Placement& placement)
         }
         for (const auto& provider : providers) {
             if (replicas.size() >= m_target) break;
-            if (std::find(replicas.begin(), replicas.end(), provider) != replicas.end()) continue;
+            // One provider key is one replica, whatever endpoints it answers on.
+            if (HasProvider(replicas, provider)) continue;
             const auto admitted = m_transport.Put(provider, placement.operation_id, placement.leaves[i],
                 *bytes, commitment->proofs[i]);
             // STORED and ALREADY_STORED both mean the provider now retains the chunk.
@@ -503,7 +518,7 @@ std::optional<std::vector<unsigned char>> StorageService::FetchLocked(const Chun
     auto others = m_transport.Providers();
     if (!Shuffle(others)) return std::nullopt;
     for (auto& provider : others) {
-        if (std::find(candidates.begin(), candidates.end(), provider) == candidates.end()) {
+        if (!HasProvider(candidates, provider)) {
             candidates.push_back(std::move(provider));
         }
     }
