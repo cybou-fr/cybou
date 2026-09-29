@@ -172,7 +172,7 @@ int Main(const int argc, char* argv[])
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE POA_FINALIZER_SEED_FILE | bootstrap | serve NETWORK_FILE DB_DIR POA_FINALIZER_SEED_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT [PEERS_FILE [STORAGE_CAPACITY_BYTES]]]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE POA_FINALIZER_SEED_FILE | bootstrap | serve NETWORK_FILE DB_DIR POA_FINALIZER_SEED_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT [PEERS_FILE [STORAGE_CAPACITY_BYTES]]]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID | provide NETWORK_FILE DB_DIR PEER_IP P2P_PORT BIND_IP LISTEN_PORT STORAGE_CAPACITY_BYTES");
     const auto network = cybou::LoadCybouNetworkFile(argv[2]);
     if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
@@ -438,6 +438,47 @@ int Main(const int argc, char* argv[])
             .block_interval_ms = interval_ms,
             .peers = gossip_endpoints,
         }, stopping);
+    }
+    if (std::string_view{argv[1]} == "provide" && argc == 9) {
+        // Non-authority full node that verifies every finalized block from its
+        // peer and retains authorized encrypted chunks for other Identities.
+        const std::string peer_host{argv[4]};
+        const auto peer_port = Port(argv[5]);
+        const auto bind_address = boost::asio::ip::make_address(argv[6]);
+        const auto listen_port = Port(argv[7]);
+        const auto capacity = PositiveCount(argv[8]);
+        const auto listen = std::make_pair(bind_address.to_string(), listen_port);
+        cybou::NodeRuntimeConfig config{
+            .network_definition = network->definition,
+            .data_dir = argv[3],
+            .p2p_endpoint = std::make_pair(peer_host, peer_port),
+            .local_p2p_endpoint = listen,
+            .db_cache_bytes = 8 << 20,
+            .storage_enabled = true,
+            .storage_capacity_bytes = capacity,
+        };
+        cybou::CybouNodeService node_service{{
+            .runtime = std::move(config),
+            .genesis = network->genesis,
+        }};
+        node_service.Start();
+        std::atomic<std::uint64_t> last_height{0};
+        node_service.StartNetwork({peer_host, peer_port},
+            cybou::CybouNetworkServiceConfig{.listen_endpoint = listen},
+            [&last_height](const cybou::SyncPeerResult&, const cybou::NodeRuntimeStatus& status, size_t peers) {
+                if (status.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH ||
+                    status.runtime_state == cybou::NodeRuntimeState::CORRUPT) {
+                    std::cerr << "provider state unavailable" << std::endl;
+                    return false;
+                }
+                if (status.finalized_height != last_height.exchange(status.finalized_height)) {
+                    std::cout << "height=" << status.finalized_height << " peers=" << peers << std::endl;
+                }
+                return true;
+            });
+        while (!stopping.load()) std::this_thread::sleep_for(std::chrono::milliseconds{250});
+        node_service.StopNetwork();
+        return 0;
     }
     throw std::runtime_error("invalid command or arguments");
 }
