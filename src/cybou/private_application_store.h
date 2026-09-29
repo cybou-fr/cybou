@@ -41,9 +41,16 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+/**
+ * Local directory of one Identity under a CYBOU data directory:
+ * <data_dir>/identities/<AccountID hex>. It holds app.db and staging.
+ */
+std::filesystem::path IdentityDataDirectory(const std::filesystem::path& data_dir, const AccountId& account);
+
 class PrivateApplicationStore final {
 public:
-    PrivateApplicationStore(CybouKeyStore& identity, const std::filesystem::path& data_dir);
+    /** Opens <identity_dir>/app.db (see IdentityDataDirectory). */
+    PrivateApplicationStore(CybouKeyStore& identity, const std::filesystem::path& identity_dir);
     ~PrivateApplicationStore();
 
     PrivateApplicationStore(const PrivateApplicationStore&) = delete;

@@ -68,10 +68,15 @@ std::vector<unsigned char> AssociatedData(const AccountId& account, const std::s
 
 } // namespace
 
-PrivateApplicationStore::PrivateApplicationStore(CybouKeyStore& identity, const std::filesystem::path& data_dir)
+std::filesystem::path IdentityDataDirectory(const std::filesystem::path& data_dir, const AccountId& account)
+{
+    return data_dir / "identities" / Hex(std::span<const unsigned char>{account.Value().begin(), AccountId::SIZE});
+}
+
+PrivateApplicationStore::PrivateApplicationStore(CybouKeyStore& identity, const std::filesystem::path& identity_dir)
     : m_identity{identity}, m_account{identity.GetAccountId().value_or(AccountId{})}
 {
-    if (m_account.IsNull() || data_dir.empty()) {
+    if (m_account.IsNull() || identity_dir.empty()) {
         throw std::invalid_argument{"private application store needs an unlocked Identity and data directory"};
     }
     auto key = m_identity.DeriveApplicationStoreKey();
@@ -79,8 +84,7 @@ PrivateApplicationStore::PrivateApplicationStore(CybouKeyStore& identity, const 
     if (!key || !Mac(*key, Bytes(KEY_CHECK_DOMAIN), m_key_check)) {
         throw std::runtime_error{"cannot derive private application store key"};
     }
-    m_path = data_dir / "identities" /
-        Hex(std::span<const unsigned char>{m_account.Value().begin(), AccountId::SIZE}) / "app.db";
+    m_path = identity_dir / "app.db";
     m_db = std::make_unique<KVStore>(KVStoreOptions{.path = m_path, .cache_bytes = 4 << 20});
 
     std::vector<unsigned char> check;

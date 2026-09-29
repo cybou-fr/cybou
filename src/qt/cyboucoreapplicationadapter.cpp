@@ -216,12 +216,12 @@ struct CybouCoreApplicationAdapter::Session {
         try {
             std::filesystem::create_directories(root);
             try {
-                db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root / "app");
+                db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root);
             } catch (const cybou::PrivateApplicationStoreKeyMismatch&) {
                 // Encrypted under keys replaced by IdentityRotate: the projection
                 // is rebuilt from finalized history (RecoveryBridge included).
-                std::filesystem::remove_all(root / "app");
-                db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root / "app");
+                std::filesystem::remove_all(root / "app.db");
+                db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root);
             }
             staging = std::make_unique<cybou::KVStore>(cybou::KVStoreOptions{.path = root / "staging"});
             transport = std::make_unique<cybou::RuntimeStorageTransport>(runtime);
@@ -607,7 +607,7 @@ void CybouCoreApplicationAdapter::openIdentity()
     const auto account = m_identity.GetAccountId();
     if (!account) return;
     // One encrypted, rebuildable Application DB per Identity.
-    const auto root = m_data_directory / "identities" / account->Value().GetHex();
+    const auto root = cybou::IdentityDataDirectory(m_data_directory, *account);
     ++m_session_generation;
     m_session = std::make_unique<Session>(this, m_runtime, m_identity.GetKeyStore(), root, m_refresh_ms,
         m_transport_override);

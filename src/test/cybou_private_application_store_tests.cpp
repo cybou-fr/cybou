@@ -64,6 +64,27 @@ BOOST_AUTO_TEST_CASE(encrypted_projection_survives_restart_and_does_not_contain_
     BOOST_CHECK(rebuilt.Put("files/item/1", Bytes("file")));
 }
 
+BOOST_AUTO_TEST_CASE(identity_directory_layout_is_flat)
+{
+    TemporaryStore temporary;
+    cybou::CybouKeyStore identity;
+    BOOST_REQUIRE(identity.GenerateNew());
+    const auto account = *identity.GetAccountId();
+    const auto dir = cybou::IdentityDataDirectory(temporary.path, account);
+    // <data>/identities/<AccountID hex, canonical byte order>/app.db
+    BOOST_CHECK(dir.parent_path() == temporary.path / "identities");
+    std::string hex;
+    for (const auto byte : std::span{account.Value().begin(), cybou::AccountId::SIZE}) {
+        static constexpr char DIGITS[]{"0123456789abcdef"};
+        hex += DIGITS[byte >> 4];
+        hex += DIGITS[byte & 0x0f];
+    }
+    BOOST_CHECK_EQUAL(dir.filename().string(), hex);
+    cybou::PrivateApplicationStore store{identity, dir};
+    BOOST_CHECK(store.Path() == dir / "app.db");
+    BOOST_CHECK(std::filesystem::is_directory(dir / "app.db"));
+}
+
 BOOST_AUTO_TEST_CASE(lock_and_identity_switch_deny_access)
 {
     TemporaryStore temporary;
@@ -87,7 +108,7 @@ BOOST_AUTO_TEST_CASE(lock_and_identity_switch_deny_access)
     BOOST_CHECK(!store.IsUnlocked());
     BOOST_CHECK(!store.Get("mail/sent/1"));
     {
-        cybou::PrivateApplicationStore other{identity, temporary.path};
+        cybou::PrivateApplicationStore other{identity, cybou::IdentityDataDirectory(temporary.path, *identity.GetAccountId())};
         BOOST_CHECK(!other.Get("mail/sent/1"));
     }
 
