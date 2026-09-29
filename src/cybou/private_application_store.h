@@ -10,6 +10,9 @@
 #include <cybou/kv_store.h>
 
 #include <array>
+#include <map>
+#include <string>
+#include <utility>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -41,6 +44,32 @@ public:
     bool Erase(std::string_view name);
     bool IsUnlocked() const;
 
+    /** One change of an atomic batch: a value to store, or nullopt to erase. */
+    using Change = std::pair<std::string, std::optional<std::vector<unsigned char>>>;
+    /** Applies every change atomically (one synced LevelDB batch) or none. */
+    bool WriteBatch(std::span<const Change> changes);
+
+    /**
+     * Groups dependent writes (a record and its index, a block and its scan
+     * checkpoint) so a crash can never persist only part of them. While a
+     * Batch is open, Put/Erase are staged and Get/Has read through them;
+     * Commit applies all of them atomically. Destroying an uncommitted Batch
+     * discards the staged changes. Batches nest; the outermost one commits.
+     */
+    class Batch final {
+    public:
+        explicit Batch(PrivateApplicationStore& store);
+        ~Batch();
+        Batch(const Batch&) = delete;
+        Batch& operator=(const Batch&) = delete;
+        bool Commit();
+
+    private:
+        PrivateApplicationStore& m_store;
+        bool m_outermost{false};
+        bool m_done{false};
+    };
+
     const AccountId& Account() const { return m_account; }
     const std::filesystem::path& Path() const { return m_path; }
 
@@ -57,7 +86,10 @@ private:
     std::filesystem::path m_path;
     std::array<unsigned char, 32> m_key_check{};
     std::unique_ptr<KVStore> m_db;
-    mutable std::mutex m_mutex;
+    mutable std::recursive_mutex m_mutex;
+    /** Staged changes of the open Batch, keyed by record name. */
+    std::optional<std::map<std::string, std::optional<std::vector<unsigned char>>>> m_staged;
+    bool m_staged_failed{false};
 };
 
 } // namespace cybou

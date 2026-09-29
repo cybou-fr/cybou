@@ -162,6 +162,8 @@ private:
     PrivateApplicationStore& m_application_db;
     StorageService& m_storage;
     std::mutex m_mutex;
+    /** Set during the one-time repair pass after an index-version upgrade. */
+    bool m_repairing{false};
 };
 
 } // namespace cybou

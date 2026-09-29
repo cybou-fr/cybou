@@ -508,4 +508,48 @@ BOOST_AUTO_TEST_CASE(drafts_persist_locally_and_are_never_published)
     BOOST_CHECK_EQUAL(network.puts, 0);
 }
 
+BOOST_AUTO_TEST_CASE(interrupted_indexing_is_repaired_on_the_next_scan)
+{
+    CybouServiceTestFixture fixture;
+    ProviderNetwork network{fixture};
+    Party alice{fixture, network, "alice"};
+    Party bob{fixture, network, "bob"};
+    network.Sync();
+    const auto hello = Message(bob.Account(), "Hello", "Survives crashes");
+    BOOST_REQUIRE(alice.publication->PublishMail("mail-crash", hello).phase ==
+        cybou::PublicationJobPhase::WAITING_FINALITY);
+    Finalize(fixture, network);
+    alice.publication->ProcessDurability(*alice.storage);
+    BOOST_REQUIRE(bob.application->Scan().Complete());
+    BOOST_REQUIRE_EQUAL(bob.application->ListMail().size(), 1U);
+
+    // Simulate the old non-atomic crash windows: the record exists but its
+    // index entry and the retry bookkeeping were lost, and the scan restarts.
+    BOOST_REQUIRE(bob.db->Erase("mail/index"));
+    BOOST_REQUIRE(bob.db->Erase("app/scan-height"));
+    BOOST_REQUIRE(bob.db->Erase("storage/recovery-index-version")); // a pre-batch database
+    BOOST_CHECK(bob.application->ListMail().empty());
+    BOOST_REQUIRE(bob.application->Scan().Complete());
+    BOOST_REQUIRE_EQUAL(bob.application->ListMail().size(), 1U);
+    BOOST_CHECK_EQUAL(bob.application->ListMail().front().message.subject, "Hello");
+
+    // A publication recorded as unavailable whose retry list was lost is
+    // retried by the next scan instead of being skipped forever.
+    const auto second = Message(bob.Account(), "Second", "was unavailable");
+    BOOST_REQUIRE(alice.publication->PublishMail("mail-crash-2", second).phase ==
+        cybou::PublicationJobPhase::WAITING_FINALITY);
+    Finalize(fixture, network);
+    alice.publication->ProcessDurability(*alice.storage);
+    const auto root = fixture.runtime->FindFinalizedRootPublication(
+        alice.publication->GetJob("mail-crash-2")->operation_id)->root_chunk_id;
+    EvictLocal(fixture, {root});
+    network.SetAllOffline(true);
+    BOOST_CHECK_EQUAL(bob.application->Scan().unavailable_roots, 1U);
+    BOOST_REQUIRE(bob.db->Erase("app/unavailable"));
+    network.SetAllOffline(false);
+    BOOST_REQUIRE(bob.db->Erase("app/scan-height"));
+    BOOST_REQUIRE(bob.application->Scan().Complete());
+    BOOST_CHECK_EQUAL(bob.application->ListMail().size(), 2U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

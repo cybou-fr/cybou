@@ -118,4 +118,49 @@ BOOST_AUTO_TEST_CASE(same_account_with_wrong_entropy_cannot_open_or_use_store)
     BOOST_CHECK(!store.Get("scan/checkpoint"));
 }
 
+BOOST_AUTO_TEST_CASE(batches_persist_all_changes_or_none)
+{
+    TemporaryStore temporary;
+    cybou::CybouKeyStore identity;
+    BOOST_REQUIRE(identity.GenerateNew());
+    {
+        cybou::PrivateApplicationStore store{identity, temporary.path};
+        BOOST_REQUIRE(store.Put("old", Bytes("remove me")));
+        {
+            // A "crash" before Commit: nothing staged may reach disk.
+            cybou::PrivateApplicationStore::Batch batch{store};
+            BOOST_REQUIRE(store.Put("record", Bytes("payload")));
+            BOOST_REQUIRE(store.Put("index", Bytes("record")));
+            BOOST_REQUIRE(store.Erase("old"));
+            // Reads inside the batch see the staged state.
+            BOOST_CHECK(store.Get("record") == Bytes("payload"));
+            BOOST_CHECK(!store.Has("old"));
+        }
+        BOOST_CHECK(!store.Get("record"));
+        BOOST_CHECK(!store.Get("index"));
+        BOOST_CHECK(store.Get("old") == Bytes("remove me"));
+        {
+            cybou::PrivateApplicationStore::Batch batch{store};
+            BOOST_REQUIRE(store.Put("record", Bytes("payload")));
+            {
+                cybou::PrivateApplicationStore::Batch nested{store}; // joins the outer batch
+                BOOST_REQUIRE(store.Put("index", Bytes("record")));
+                BOOST_REQUIRE(nested.Commit());
+            }
+            BOOST_REQUIRE(store.Erase("old"));
+            BOOST_REQUIRE(batch.Commit());
+        }
+    }
+    // After reopening (a restart) both writes and the erase are present together.
+    cybou::PrivateApplicationStore reopened{identity, temporary.path};
+    BOOST_CHECK(reopened.Get("record") == Bytes("payload"));
+    BOOST_CHECK(reopened.Get("index") == Bytes("record"));
+    BOOST_CHECK(!reopened.Has("old"));
+    const std::vector<cybou::PrivateApplicationStore::Change> changes{
+        {"a", Bytes("1")}, {"b", Bytes("2")}, {"record", std::nullopt}};
+    BOOST_REQUIRE(reopened.WriteBatch(changes));
+    BOOST_CHECK(reopened.Get("a") == Bytes("1"));
+    BOOST_CHECK(!reopened.Has("record"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

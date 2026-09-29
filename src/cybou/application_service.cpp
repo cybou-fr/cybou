@@ -32,7 +32,8 @@ constexpr std::string_view BRIDGE_INDEX_KEY{"recovery/index"};
 constexpr std::string_view RECOVERED_EPOCHS_KEY{"recovery/recovered-epochs"};
 constexpr std::string_view OWN_PUBLICATIONS_KEY{"storage/owned-publications"};
 constexpr std::string_view STORAGE_RECOVERY_INDEX_VERSION_KEY{"storage/recovery-index-version"};
-constexpr std::uint8_t STORAGE_RECOVERY_INDEX_VERSION{1};
+/** 2: one full re-index repairs records written without atomic batches. */
+constexpr std::uint8_t STORAGE_RECOVERY_INDEX_VERSION{2};
 constexpr std::string_view DRAFT_INDEX_KEY{"mail/drafts"};
 constexpr std::array<unsigned char, 5> DRAFT_MAGIC{'C', 'Y', 'D', 'R', 1};
 constexpr std::size_t MAX_DRAFT_TEXT{1U << 20};
@@ -369,26 +370,27 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
     std::uint64_t height = Checkpoint();
     const auto index_version = m_application_db.Get(STORAGE_RECOVERY_INDEX_VERSION_KEY);
     if (!index_version || *index_version != std::vector<unsigned char>{STORAGE_RECOVERY_INDEX_VERSION}) {
-        // Backfill the own-publication index for databases created before
-        // placement reconstruction was introduced. Processing is idempotent.
+        // Backfill the own-publication index and repair records whose index
+        // entries were lost before writes became atomic. Idempotent.
         Writer version;
         version.U8(STORAGE_RECOVERY_INDEX_VERSION);
         Writer checkpoint;
         checkpoint.U64(0);
+        PrivateApplicationStore::Batch batch{m_application_db};
         if (!m_application_db.Put(SCAN_KEY, checkpoint.Out()) ||
-            !m_application_db.Put(STORAGE_RECOVERY_INDEX_VERSION_KEY, version.Out())) return progress;
+            !m_application_db.Put(STORAGE_RECOVERY_INDEX_VERSION_KEY, version.Out()) || !batch.Commit()) return progress;
         height = 0;
+        m_repairing = true;
     }
     // Retry roots that were unavailable earlier; later blocks never wait for them.
     for (const auto& operation_id : ReadIds<uint256>(m_application_db, UNAVAILABLE_KEY)) {
+        // The indexed records, the new state and the retry list change together.
+        PrivateApplicationStore::Batch batch{m_application_db};
         auto accessible = LoadAccessible(operation_id);
-        if (!accessible) {
-            RemoveId(m_application_db, UNAVAILABLE_KEY, operation_id);
-            continue;
-        }
-        if (Index(operation_id, *accessible) != AccessibleRootState::TEMPORARILY_UNAVAILABLE) {
+        if (!accessible || Index(operation_id, *accessible) != AccessibleRootState::TEMPORARILY_UNAVAILABLE) {
             RemoveId(m_application_db, UNAVAILABLE_KEY, operation_id);
         }
+        batch.Commit();
     }
     // The current KEM epoch comes from canonical state, never from local data.
     const auto me = m_identity.GetAccountId();
@@ -403,11 +405,13 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
     if (ImportBridgeSeeds(*me, my_key_epoch)) height = 0;
     for (int pass{0}; pass < 2; ++pass) {
         for (std::uint64_t scanned{0}; scanned < max_blocks && height < progress.finalized_height; ++scanned) {
+            // A block's records, indexes and the checkpoint past it persist atomically.
+            PrivateApplicationStore::Batch batch{m_application_db};
             if (!ProcessBlock(height + 1, my_key_epoch)) break;
-            ++height;
             Writer out;
-            out.U64(height);
-            if (!m_application_db.Put(SCAN_KEY, out.Out())) break;
+            out.U64(height + 1);
+            if (!m_application_db.Put(SCAN_KEY, out.Out()) || !batch.Commit()) break;
+            ++height;
         }
         // A bridge found during this scan may open older publications: rescan once.
         if (height < progress.finalized_height || !ImportBridgeSeeds(*me, my_key_epoch)) break;
@@ -419,6 +423,7 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
         m_application_db.Put(SCAN_KEY, out.Out());
     }
     progress.scanned_height = Checkpoint();
+    if (progress.scanned_height >= progress.finalized_height) m_repairing = false;
     RecoverOwnPublications(4);
     progress.unavailable_roots = static_cast<std::uint32_t>(ReadIds<uint256>(m_application_db, UNAVAILABLE_KEY).size());
     return progress;
@@ -450,13 +455,22 @@ bool ApplicationService::ProcessBlock(const std::uint64_t height, const std::uin
 bool ApplicationService::ProcessPublication(const std::uint64_t height, const std::uint32_t index,
     const uint256& operation_id, const AuthorizedRootPublication& publication, const std::uint64_t my_key_epoch)
 {
-    // Idempotent: an already recorded publication is never processed twice.
-    // Also backfill the owner index for Application DBs from earlier versions.
+    // Idempotent: a recorded publication is not reopened. One that was
+    // recorded but never indexed (older databases, or an unavailable root) is
+    // indexed again, and the owner index is repaired.
     if (m_application_db.Has(AccessibleKey(operation_id))) {
-        const auto accessible = LoadAccessible(operation_id);
+        auto accessible = LoadAccessible(operation_id);
+        if (!accessible) return true;
         const auto me = m_identity.GetAccountId();
-        return !accessible || !me || accessible->sender != *me ||
-            AddId(m_application_db, OWN_PUBLICATIONS_KEY, operation_id);
+        if (me && accessible->sender == *me && !AddId(m_application_db, OWN_PUBLICATIONS_KEY, operation_id)) return false;
+        if (accessible->state == AccessibleRootState::DISCOVERED ||
+            accessible->state == AccessibleRootState::TEMPORARILY_UNAVAILABLE) {
+            Index(operation_id, *accessible);
+        } else if (m_repairing && accessible->state == AccessibleRootState::INDEXED) {
+            accessible->state = AccessibleRootState::DISCOVERED;
+            Index(operation_id, *accessible);
+        }
+        return true;
     }
     const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32};
     const auto& authorization = publication.authorization;
@@ -474,7 +488,7 @@ bool ApplicationService::ProcessPublication(const std::uint64_t height, const st
         accessible.root_chunk_id = publication.publication.root_chunk_id;
         accessible.content_key = *key;
         crypto::CleanseMemory(key->data(), key->size());
-        // Positive record first, so a crash before indexing resumes as a retry.
+        // Recorded and indexed in the enclosing block batch: all or nothing.
         if (!SaveAccessible(operation_id, accessible)) return false;
         if (accessible.sender == *m_identity.GetAccountId() &&
             !AddId(m_application_db, OWN_PUBLICATIONS_KEY, operation_id)) return false;
@@ -616,7 +630,8 @@ bool ApplicationService::ApplyMail(const uint256& operation_id, const Accessible
     const bool outgoing = accessible.sender == *me;
     // A message opened by this Identity must be addressed to it unless it sent it.
     if (!outgoing && message.recipient_account_id != *me) return false;
-    if (LoadMail(message.message_id)) return true;
+    // Already recorded: make sure it is listed (repairs pre-batch databases).
+    if (LoadMail(message.message_id)) return AddId(m_application_db, MAIL_INDEX_KEY, message.message_id);
     MailRecord record;
     record.operation_id = operation_id;
     record.finalized_height = accessible.height;
@@ -639,7 +654,10 @@ bool ApplicationService::ApplyFiles(const uint256& operation_id, const Accessibl
         const auto& mutation = batch.mutations[i];
         const PrivateOrder order{accessible.height, accessible.operation_index, i};
         // Last canonical mutation wins, even when roots are indexed out of order.
-        if (const auto existing = LoadFile(mutation.item_id); existing && existing->order >= order) continue;
+        if (const auto existing = LoadFile(mutation.item_id); existing && existing->order >= order) {
+            if (!AddId(m_application_db, FILES_INDEX_KEY, mutation.item_id)) return false;
+            continue;
+        }
         FileRecord record;
         record.operation_id = operation_id;
         record.order = order;
@@ -773,11 +791,14 @@ bool ApplicationService::SaveDraft(const MailDraft& draft)
         PutString(out, attachment.source_path);
         PutString(out, attachment.reference_id);
     }
+    PrivateApplicationStore::Batch batch{m_application_db};
     if (!m_application_db.Put(DraftKey(draft.draft_id), out.Out())) return false;
     auto names = ReadNames(m_application_db, DRAFT_INDEX_KEY);
-    if (std::find(names.begin(), names.end(), draft.draft_id) != names.end()) return true;
-    names.push_back(draft.draft_id);
-    return WriteNames(m_application_db, DRAFT_INDEX_KEY, names);
+    if (std::find(names.begin(), names.end(), draft.draft_id) == names.end()) {
+        names.push_back(draft.draft_id);
+        if (!WriteNames(m_application_db, DRAFT_INDEX_KEY, names)) return false;
+    }
+    return batch.Commit();
 }
 
 std::vector<MailDraft> ApplicationService::ListDrafts()
@@ -822,9 +843,11 @@ bool ApplicationService::DeleteDraft(std::string_view draft_id)
 {
     std::lock_guard lock{m_mutex};
     if (!ValidDraftId(draft_id)) return false;
+    PrivateApplicationStore::Batch batch{m_application_db};
     auto names = ReadNames(m_application_db, DRAFT_INDEX_KEY);
     std::erase(names, std::string{draft_id});
-    return m_application_db.Erase(DraftKey(draft_id)) && WriteNames(m_application_db, DRAFT_INDEX_KEY, names);
+    return m_application_db.Erase(DraftKey(draft_id)) && WriteNames(m_application_db, DRAFT_INDEX_KEY, names) &&
+        batch.Commit();
 }
 
 /* ---- queries and local state ---- */
@@ -854,7 +877,8 @@ bool ApplicationService::SetMailRead(const PrivateItemId& id, const bool read)
     auto record = LoadMail(id);
     if (!record) return false;
     record->read = read;
-    return SaveMail(*record);
+    PrivateApplicationStore::Batch batch{m_application_db};
+    return SaveMail(*record) && batch.Commit();
 }
 
 bool ApplicationService::SetMailStarred(const PrivateItemId& id, const bool starred)
@@ -863,7 +887,8 @@ bool ApplicationService::SetMailStarred(const PrivateItemId& id, const bool star
     auto record = LoadMail(id);
     if (!record) return false;
     record->starred = starred;
-    return SaveMail(*record);
+    PrivateApplicationStore::Batch batch{m_application_db};
+    return SaveMail(*record) && batch.Commit();
 }
 
 bool ApplicationService::MoveMail(const PrivateItemId& id, const MailFolder folder)
@@ -875,7 +900,8 @@ bool ApplicationService::MoveMail(const PrivateItemId& id, const MailFolder fold
     if ((folder == MailFolder::SENT && !record->outgoing) || (folder == MailFolder::INBOX && record->outgoing &&
             record->message.recipient_account_id != record->sender)) return false;
     record->folder = folder;
-    return SaveMail(*record);
+    PrivateApplicationStore::Batch batch{m_application_db};
+    return SaveMail(*record) && batch.Commit();
 }
 
 std::vector<FileRecord> ApplicationService::ListFiles()

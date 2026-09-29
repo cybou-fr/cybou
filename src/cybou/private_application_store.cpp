@@ -170,6 +170,15 @@ std::optional<std::vector<unsigned char>> PrivateApplicationStore::Decrypt(
 bool PrivateApplicationStore::Put(const std::string_view name, const std::span<const unsigned char> plaintext)
 {
     std::lock_guard lock{m_mutex};
+    if (m_staged) {
+        if (name.empty() || name.size() > MAX_NAME_BYTES || name == CHECK_NAME || plaintext.size() > MAX_VALUE_BYTES ||
+            !IsUnlocked()) {
+            m_staged_failed = true;
+            return false;
+        }
+        (*m_staged)[std::string{name}] = std::vector<unsigned char>{plaintext.begin(), plaintext.end()};
+        return true;
+    }
     auto key = AccessKey();
     KeyCleaner cleanse{key};
     if (!key) return false;
@@ -187,6 +196,9 @@ bool PrivateApplicationStore::Put(const std::string_view name, const std::span<c
 std::optional<std::vector<unsigned char>> PrivateApplicationStore::Get(const std::string_view name) const
 {
     std::lock_guard lock{m_mutex};
+    if (m_staged) {
+        if (const auto staged = m_staged->find(std::string{name}); staged != m_staged->end()) return staged->second;
+    }
     auto key = AccessKey();
     KeyCleaner cleanse{key};
     if (!key) return std::nullopt;
@@ -204,6 +216,11 @@ std::optional<std::vector<unsigned char>> PrivateApplicationStore::Get(const std
 bool PrivateApplicationStore::Has(const std::string_view name) const
 {
     std::lock_guard lock{m_mutex};
+    if (m_staged) {
+        if (const auto staged = m_staged->find(std::string{name}); staged != m_staged->end()) {
+            return staged->second.has_value();
+        }
+    }
     auto key = AccessKey();
     KeyCleaner cleanse{key};
     if (!key) return false;
@@ -216,6 +233,10 @@ bool PrivateApplicationStore::Has(const std::string_view name) const
 bool PrivateApplicationStore::Erase(const std::string_view name)
 {
     std::lock_guard lock{m_mutex};
+    if (m_staged) {
+        (*m_staged)[std::string{name}] = std::nullopt;
+        return true;
+    }
     auto key = AccessKey();
     KeyCleaner cleanse{key};
     if (!key) return false;
@@ -227,6 +248,72 @@ bool PrivateApplicationStore::Erase(const std::string_view name)
     } catch (...) {
         return false;
     }
+}
+
+bool PrivateApplicationStore::WriteBatch(const std::span<const Change> changes)
+{
+    std::lock_guard lock{m_mutex};
+    auto key = AccessKey();
+    KeyCleaner cleanse{key};
+    if (!key) return false;
+    KVStore::Batch batch;
+    for (const auto& [name, value] : changes) {
+        const auto record_key = RecordKey(*key, name);
+        if (!record_key) return false;
+        if (!value) {
+            batch.Erase(*record_key);
+            continue;
+        }
+        const auto encoded = Encrypt(*key, name, *value);
+        if (!encoded) return false;
+        batch.Write(*record_key, *encoded);
+    }
+    try {
+        m_db->WriteBatch(batch, true);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+PrivateApplicationStore::Batch::Batch(PrivateApplicationStore& store) : m_store{store}
+{
+    store.m_mutex.lock();
+    if (!store.m_staged) {
+        store.m_staged.emplace();
+        store.m_staged_failed = false;
+        m_outermost = true;
+    }
+}
+
+PrivateApplicationStore::Batch::~Batch()
+{
+    if (m_outermost && m_store.m_staged) {
+        // Uncommitted: nothing reaches disk. Wipe staged plaintext.
+        for (auto& [_, value] : *m_store.m_staged) {
+            if (value) crypto::CleanseMemory(value->data(), value->size());
+        }
+        m_store.m_staged.reset();
+    }
+    m_store.m_mutex.unlock();
+}
+
+bool PrivateApplicationStore::Batch::Commit()
+{
+    if (m_done) return false;
+    m_done = true;
+    if (!m_outermost) return !m_store.m_staged_failed; // the outermost batch commits
+    auto staged = std::move(*m_store.m_staged);
+    const bool failed = m_store.m_staged_failed;
+    m_store.m_staged.reset();
+    std::vector<Change> changes;
+    changes.reserve(staged.size());
+    for (auto& [name, value] : staged) changes.emplace_back(name, std::move(value));
+    const bool ok = !failed && m_store.WriteBatch(changes);
+    for (auto& [_, value] : changes) {
+        if (value) crypto::CleanseMemory(value->data(), value->size());
+    }
+    return ok;
 }
 
 bool PrivateApplicationStore::IsUnlocked() const
