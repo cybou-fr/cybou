@@ -205,7 +205,16 @@ void CybouShellTests::mainWindowStarts()
     QVERIFY(window);
     QVERIFY(window->centralWidget());
     QVERIFY(window->windowTitle().contains(QStringLiteral("CYBOU")));
-    QCOMPARE(window->pageCount(), 7);
+    QCOMPARE(window->pageCount(), 8);
+    // The Network Authority entry exists only for the genesis-proven authority.
+    auto* authority_nav = window->findChild<QAbstractButton*>(
+        QStringLiteral("navButton%1").arg(static_cast<int>(CybouPage::NetworkAuthority)));
+    QVERIFY(authority_nav);
+    QVERIFY(authority_nav->isHidden());
+    window->desktopModel()->setNetworkAuthority(CybouNetworkAuthorityStatus{.proven = true, .finalized_height = 5});
+    QVERIFY(!authority_nav->isHidden());
+    window->desktopModel()->setNetworkAuthority({});
+    QVERIFY(authority_nav->isHidden());
     // Backup is not part of the Beta shell.
     for (auto* button : window->findChildren<QToolButton*>()) {
         QVERIFY(!button->text().contains(QStringLiteral("Backup")));
@@ -828,6 +837,8 @@ void CybouShellTests::normalUiAvoidsProtocolVocabulary()
         auto window = makeWindow();
         QVERIFY(CybouUiFixtures::apply(*window->desktopModel(), fixture));
         for (int i = 0; i < window->pageCount(); ++i) {
+            // Operator-only page, reachable solely by the genesis-proven authority.
+            if (i == static_cast<int>(CybouPage::NetworkAuthority)) continue;
             QStringList texts;
             for (const auto* label : window->pageAt(i)->findChildren<QLabel*>()) texts << label->text();
             for (const auto* button : window->pageAt(i)->findChildren<QAbstractButton*>()) texts << button->text();
@@ -978,7 +989,7 @@ void CybouShellTests::darkAppearanceResolvesTokens()
     window->showPage(CybouPage::Files);
     window->reloadAppearance();
     QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Files));
-    QCOMPARE(window->pageCount(), 7);
+    QCOMPARE(window->pageCount(), 8);
     window.reset();
     qunsetenv("CYBOU_APPEARANCE");
     CybouTheme::setAppearance(CybouTheme::Appearance::Light);
