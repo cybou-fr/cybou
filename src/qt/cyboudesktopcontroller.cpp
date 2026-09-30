@@ -46,21 +46,33 @@ void CybouDesktopController::start()
         const auto explicit_network = qEnvironmentVariable("CYBOU_NETWORK_FILE");
         const auto network_path = explicit_network.isEmpty() ? m_data_directory / "network.bin"
             : std::filesystem::path{explicit_network.toStdU16String()};
-        // A desktop release pins the network in its bundled public manifest.
-        // Experimental networks require an explicit LAB override; never archive user state automatically.
+        // The desktop runs on the bundled public DEV network (genesis and PoA
+        // public key; no secrets). Data left from an older DEV network (a reset
+        // or an old file format) cannot sync with today's finalizer, so it is
+        // moved aside, never deleted, and the current network is installed.
+        // CYBOU_DEV_KEEP_NETWORK=1 keeps a deliberately different network.bin.
         QFile bundled{QStringLiteral(":/network/cybou-dev-network.bin")};
         if (!bundled.open(QIODevice::ReadOnly)) throw std::runtime_error("the bundled CYBOU network is missing");
         const QByteArray current = bundled.readAll();
-        const auto path_text = [](const std::filesystem::path& path) { return QString::fromStdU16String(path.u16string()); };
-        const bool lab_override = !explicit_network.isEmpty() || qEnvironmentVariableIsSet("CYBOU_DEV_KEEP_NETWORK");
-        if (!lab_override) {
-            const auto pinned = cybou::DeserializeCybouNetworkFile(std::span<const unsigned char>{
-                reinterpret_cast<const unsigned char*>(current.constData()), static_cast<size_t>(current.size())});
-            if (!pinned) throw std::runtime_error("bundled DEV protocol differs from this binary; explicit tested network cutover is required");
-            if (std::filesystem::exists(network_path)) {
-                const auto selected = cybou::LoadCybouNetworkFile(network_path);
-                if (!selected || cybou::NetworkId(selected->definition) != cybou::NetworkId(pinned->definition))
-                    throw std::runtime_error("network differs from the pinned release; existing Identity and state are preserved");
+        const auto path_text = [](const std::filesystem::path& path) {
+            return QString::fromStdU16String(path.u16string());
+        };
+        if (explicit_network.isEmpty() && std::filesystem::exists(network_path) && !qEnvironmentVariableIsSet("CYBOU_DEV_KEEP_NETWORK")) {
+            QFile existing{path_text(network_path)};
+            const QByteArray bytes = existing.open(QIODevice::ReadOnly) ? existing.readAll() : QByteArray{};
+            existing.close();
+            if (bytes != current) {
+                const auto archive = m_data_directory / "archived-networks" /
+                    QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmss")).toStdString();
+                std::filesystem::create_directories(archive);
+                // Everything bound to that network: chain state, the Identity
+                // registered on it, and its local projections.
+                for (const char* name : {"network.bin", "cybou_state", "identity.cybou", "identity.cybou.nameclaim",
+                         "mailbox.dat", "identities", "authority-index.bin", "identity-operation.cyiop"}) {
+                    const auto from = m_data_directory / name;
+                    if (std::filesystem::exists(from)) std::filesystem::rename(from, archive / name);
+                }
+                m_archived_network = path_text(archive);
             }
         }
         if (explicit_network.isEmpty() && !std::filesystem::exists(network_path)) {
@@ -75,7 +87,7 @@ void CybouDesktopController::start()
         const auto& genesis = network_file->genesis;
         const auto& definition = network_file->definition;
         m_model->setNetworkInfo(
-            lab_override ? QStringLiteral("CYBOU LAB") : QStringLiteral("CYBOU DEV"),
+            explicit_network.isEmpty() ? QStringLiteral("CYBOU DEV") : QStringLiteral("CYBOU LAB"),
             QString::fromStdString(cybou::NetworkId(definition).GetHex()));
         if (!m_archived_network.isEmpty()) {
             qWarning() << "CYBOU: data of an older DEV network moved to" << m_archived_network;
@@ -142,7 +154,7 @@ void CybouDesktopController::start()
             runtime, m_identity_service->GetKeyStore());
         m_model->setWalletService(m_wallet_service.get());
         // Read-only, rebuildable Authority preview over finalized history.
-        m_authority_index = std::make_unique<cybou::AuthorityIndex>(runtime);
+        m_authority_index = std::make_unique<cybou::AuthorityIndex>(runtime, m_data_directory / "authority-index.bin");
 
         const auto status = runtime.GetStatus();
         m_model->setFinalizedHeight(status.finalized_height);

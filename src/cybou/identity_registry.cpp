@@ -58,7 +58,7 @@ std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
     const uint256& network_id, const IdentityOperationAuthorization& request)
 {
     const auto kind = static_cast<uint8_t>(request.kind);
-    if (kind < 1 || kind > static_cast<uint8_t>(IdentityOperationKind::RESOURCE_RELEASE) || !Nonzero(request.payload_commitment) ||
+    if (kind < 1 || kind > 5 || !Nonzero(request.payload_commitment) ||
         network_id.IsNull() || request.account_id.IsNull()) return std::nullopt;
     std::vector<unsigned char> preimage;
     constexpr std::string_view domain{"CYBOU/IDENTITY-OP/V2"};

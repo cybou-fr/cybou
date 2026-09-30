@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(tier_is_integer_log2_and_saturates)
     BOOST_CHECK_EQUAL(cybou::AuthorityTier(3, 16), 2U);
     BOOST_CHECK_EQUAL(cybou::AuthorityTier(1023, 16), 10U);
     BOOST_CHECK_EQUAL(cybou::AuthorityTier(UINT64_MAX, 16), 16U);
-    BOOST_CHECK_EQUAL(cybou::AuthorityTier(UINT64_MAX, 100), 64U);
+    BOOST_CHECK_EQUAL(cybou::AuthorityTier(UINT64_MAX, 100), 63U);
     BOOST_CHECK_EQUAL(cybou::SaturatingAdd(UINT64_MAX, 1), UINT64_MAX);
     BOOST_CHECK_EQUAL(cybou::SaturatingMul(UINT64_MAX, 2), UINT64_MAX);
 }
@@ -106,8 +106,9 @@ BOOST_AUTO_TEST_CASE(age_and_capped_activity_come_from_finalized_history)
     ShortEpochNetwork net;
     auto identity = net.CreateIdentity("authority.vault");
     const auto account = *identity->GetAccountId();
-    const auto& policy = net.definition.protocol_parameters.authority;
-    cybou::AuthorityIndex index{*net.runtime};
+    cybou::AuthorityPolicy policy;
+    policy.activity_cap_per_epoch = 2;
+    cybou::AuthorityIndex index{*net.runtime, policy};
     index.Sync();
 
     // A fresh Identity: onboarding credit gives no Authority.
@@ -115,7 +116,7 @@ BOOST_AUTO_TEST_CASE(age_and_capped_activity_come_from_finalized_history)
     BOOST_REQUIRE(fresh);
     BOOST_CHECK_EQUAL(fresh->activity, 0U);
     BOOST_CHECK_EQUAL(fresh->system_contribution, 0U);
-    BOOST_CHECK(fresh->enforced);
+    BOOST_CHECK(!fresh->enforced);
     BOOST_CHECK(fresh->budgets == cybou::AuthorityBudgetsForTier(fresh->tier, policy));
 
     cybou::KVStore staging{cybou::KVStoreOptions{.memory_only = true}};
@@ -133,7 +134,7 @@ BOOST_AUTO_TEST_CASE(age_and_capped_activity_come_from_finalized_history)
     BOOST_CHECK_EQUAL(later->tier, cybou::AuthorityTier(later->effective, policy.max_tier));
 
     // Deterministic: a fresh index over the same history agrees exactly.
-    cybou::AuthorityIndex rebuilt{*net.runtime};
+    cybou::AuthorityIndex rebuilt{*net.runtime, policy};
     rebuilt.Sync();
     const auto again = rebuilt.Get(account);
     BOOST_REQUIRE(again);
@@ -145,30 +146,59 @@ BOOST_AUTO_TEST_CASE(age_and_capped_activity_come_from_finalized_history)
     BOOST_CHECK(!index.Get(cybou::AccountId{uint256::ONE}));
 }
 
-BOOST_AUTO_TEST_CASE(canonical_authority_preserves_debt_and_round_trips)
+BOOST_AUTO_TEST_CASE(checkpoint_resumes_scan_and_is_only_a_rebuildable_cache)
 {
     ShortEpochNetwork net;
-    auto identity = net.CreateIdentity("state.vault");
+    auto identity = net.CreateIdentity("checkpoint.vault");
     const auto account = *identity->GetAccountId();
-    auto state = *net.runtime->GetStore().LoadState().state;
-    auto& owner = state.accounts.at(account);
-    owner.authority.activity = 2;
-    owner.authority.penalty_debt = 100;
-    const auto record = cybou::ComputeAuthorityRecord(account, owner, owner.creation_epoch + 1, {});
-    BOOST_CHECK_EQUAL(record.earned, 3U);
-    BOOST_CHECK_EQUAL(record.effective, 0U);
-    BOOST_CHECK_EQUAL(record.penalty_debt, 100U);
-    const auto bytes = cybou::SerializeCybouState(state);
-    BOOST_REQUIRE(bytes);
-    const auto restored = cybou::DeserializeCybouState(*bytes);
-    BOOST_REQUIRE(restored);
-    BOOST_CHECK(restored->accounts.at(account) == owner);
-    auto changed = state;
-    ++changed.accounts.at(account).authority.penalty_debt;
-    BOOST_CHECK(cybou::CybouStateHash(changed) != cybou::CybouStateHash(state));
-    auto network = net.definition;
-    ++network.protocol_parameters.authority.protocol_base;
-    BOOST_CHECK(cybou::NetworkId(network) != cybou::NetworkId(net.definition));
-    BOOST_CHECK(cybou::DeserializeNetworkDefinition(cybou::SerializeNetworkDefinition(network)) == network);
+    cybou::KVStore staging{cybou::KVStoreOptions{.memory_only = true}};
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), net.directory / "app"};
+    for (int i = 0; i < 3; ++i) Publish(net, *identity, staging, db, "cp-" + std::to_string(i));
+    const auto checkpoint = net.directory / "authority-index.bin";
+    const auto height = net.runtime->GetFinalizedHeight().value_or(0);
+
+    std::optional<cybou::AuthorityRecord> scanned;
+    {
+        cybou::AuthorityIndex index{*net.runtime, checkpoint};
+        BOOST_CHECK_EQUAL(index.ScannedHeight(), 0U);
+        BOOST_CHECK_EQUAL(index.Sync(), height);
+        scanned = index.Get(account);
+        BOOST_REQUIRE(scanned);
+    }
+    BOOST_REQUIRE(std::filesystem::exists(checkpoint));
+
+    // Restart: resumes at the saved height with identical tallies, no rescan.
+    {
+        cybou::AuthorityIndex resumed{*net.runtime, checkpoint};
+        BOOST_CHECK_EQUAL(resumed.ScannedHeight(), height);
+        const auto again = resumed.Get(account);
+        BOOST_REQUIRE(again);
+        BOOST_CHECK_EQUAL(again->activity, scanned->activity);
+        BOOST_CHECK_EQUAL(again->effective, scanned->effective);
+        // New finalized history continues from the checkpoint.
+        Publish(net, *identity, staging, db, "cp-after");
+        BOOST_CHECK_EQUAL(resumed.Sync(), height + 1);
+        cybou::AuthorityIndex full{*net.runtime};
+        full.Sync();
+        BOOST_CHECK_EQUAL(resumed.Get(account)->activity, full.Get(account)->activity);
+    }
+
+    // A different policy never reuses the tallies: rescan from 0.
+    {
+        cybou::AuthorityPolicy other;
+        other.activity_cap_per_epoch = 1;
+        cybou::AuthorityIndex different{*net.runtime, checkpoint, other};
+        BOOST_CHECK_EQUAL(different.ScannedHeight(), 0U);
+    }
+
+    // A corrupt or truncated file is ignored, never trusted.
+    {
+        std::ofstream corrupt{checkpoint, std::ios::binary | std::ios::trunc};
+        corrupt << "not an authority checkpoint";
+    }
+    cybou::AuthorityIndex recovered{*net.runtime, checkpoint};
+    BOOST_CHECK_EQUAL(recovered.ScannedHeight(), 0U);
+    BOOST_CHECK_EQUAL(recovered.Sync(), height + 1);
 }
+
 BOOST_AUTO_TEST_SUITE_END()

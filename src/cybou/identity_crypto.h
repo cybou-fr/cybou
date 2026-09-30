@@ -21,8 +21,6 @@ enum class IdentityKeyPurpose : uint8_t {
     POA_FINALIZER = 7,
     /** CYP2 storage provider identity (ProviderID = hash of this key). */
     STORAGE_PROVIDER = 8,
-    /** Dedicated service key: never an Identity authorization credential. */
-    VALIDATION_NODE = 9,
 };
 
 struct IdentityHybridPublicKey {

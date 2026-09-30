@@ -17,7 +17,6 @@ namespace cybou {
 
 NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& definition)
 {
-    if (!ValidAuthorityPolicy(definition.protocol_parameters.authority)) return NetworkDefinitionError::INVALID_AUTHORITY_POLICY;
     if (definition.protocol_version != CYBOU_NETWORK_DEFINITION_VERSION) {
         return NetworkDefinitionError::UNSUPPORTED_VERSION;
     }
@@ -40,7 +39,7 @@ NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& d
     if (definition.protocol_parameters.max_account_creates_per_block == 0) {
         return NetworkDefinitionError::ZERO_MAX_ACCOUNT_CREATES_PER_BLOCK;
     }
-    if (definition.protocol_parameters.epoch_blocks == 0 || definition.protocol_parameters.epoch_blocks > 65536) {
+    if (definition.protocol_parameters.epoch_blocks == 0) {
         return NetworkDefinitionError::ZERO_EPOCH_BLOCKS;
     }
     const auto max_fee_kib = (ROOT_PUBLICATION_MAX_OPERATION_BYTES + 1023) / 1024;
@@ -98,10 +97,6 @@ std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefiniti
     append_u64le(definition.protocol_parameters.name_commit_max_lifetime);
     append_u32le(definition.protocol_parameters.max_pending_name_commits);
     out.push_back(definition.protocol_parameters.identity_kem_xwing_enabled ? 1 : 0);
-    const auto& a = definition.protocol_parameters.authority;
-    for (uint64_t value : {a.activity_cap_per_epoch, uint64_t{a.max_tier}, a.protocol_base, a.protocol_per_tier,
-             a.protocol_ceiling, a.storage_base, a.storage_per_tier, a.storage_ceiling,
-             a.bandwidth_base, a.bandwidth_per_tier, a.bandwidth_ceiling}) append_u64le(value);
     return out;
 }
 
@@ -167,15 +162,6 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
     const auto name_max_lifetime = read_u64le();
     const auto max_pending_names = read_u32le();
     const auto kem_enabled = read_u8();
-    auto& a = definition.protocol_parameters.authority;
-    uint64_t tier{0};
-    for (auto* field : {&a.activity_cap_per_epoch, &tier, &a.protocol_base, &a.protocol_per_tier,
-             &a.protocol_ceiling, &a.storage_base, &a.storage_per_tier, &a.storage_ceiling,
-             &a.bandwidth_base, &a.bandwidth_per_tier, &a.bandwidth_ceiling}) {
-        const auto value = read_u64le(); if (!value) return std::nullopt; *field = *value;
-    }
-    if (tier > UINT32_MAX) return std::nullopt;
-    a.max_tier = static_cast<uint32_t>(tier);
     if (!genesis_block_id || !genesis_state_root || !work_bits || !epoch_lag || !max_creates ||
         !onboarding_bonus || !epoch_blocks || !payment_fee || !root_publication_fee_per_kib ||
         !root_publication_fee_per_chunk || !name_work_bits || !name_min_depth ||
@@ -204,7 +190,7 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
 
 uint256 NetworkId(const CybouNetworkDefinition& definition)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V7"};
+    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V5"};
     const auto bytes = SerializeNetworkDefinition(definition);
     uint256 result;
     ::cybou::crypto::Sha256 hasher;
@@ -221,13 +207,8 @@ std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path
     if (ec || size < 12 || size > 16 * 1024 * 1024) return std::nullopt;
     std::vector<unsigned char> bytes(size);
     std::ifstream file(path, std::ios::binary);
-    if (!file || !file.read(reinterpret_cast<char*>(bytes.data()), bytes.size())) return std::nullopt;
-    return DeserializeCybouNetworkFile(bytes);
-}
-
-std::optional<CybouNetworkFile> DeserializeCybouNetworkFile(std::span<const unsigned char> bytes)
-{
-    if(bytes.size()<12 || bytes.size()>16*1024*1024 || !std::equal(bytes.begin(),bytes.begin()+4,"CYN1"))return std::nullopt;
+    if (!file || !file.read(reinterpret_cast<char*>(bytes.data()), bytes.size()) ||
+        !std::equal(bytes.begin(), bytes.begin() + 4, "CYN1")) return std::nullopt;
     const auto read_u32 = [&bytes](size_t offset) {
         uint32_t value{0};
         for (unsigned i{0}; i < 4; ++i) value |= uint32_t{bytes[offset + i]} << (8 * i);

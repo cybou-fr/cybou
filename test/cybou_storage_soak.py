@@ -36,7 +36,6 @@ def main() -> int:
     work = Path(tempfile.mkdtemp(prefix="cybou-storage-soak-"))
     key = work / "finalizer.key"
     key.write_bytes(os.urandom(32))
-    key.chmod(0o600)
     network = work / "network.bin"
     subprocess.run([node, "network", "init-dev", "--network", str(network), "--key-file", str(key)], check=True)
     peers = work / "peers.txt"

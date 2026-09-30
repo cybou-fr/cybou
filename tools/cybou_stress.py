@@ -20,31 +20,9 @@ import sys
 import time
 import tomllib
 import uuid
-import secrets
-import stat
 import cybou_lab_network as lab_network
 
 DEV_PORTS = {29461, 29471, 29481}
-
-
-def write_private_new(path, content):
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags, 0o600)
-    with os.fdopen(descriptor, "w") as stream:
-        stream.write(content)
-        stream.flush()
-        os.fsync(stream.fileno())
-
-
-def read_private(path):
-    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    with os.fdopen(descriptor, "r") as stream:
-        info = os.fstat(stream.fileno())
-        if not stat.S_ISREG(info.st_mode) or info.st_size > 256:
-            raise ValueError("invalid LAB ownership capability file")
-        if os.name == "posix" and (info.st_uid != os.geteuid() or info.st_mode & 0o077):
-            raise ValueError("LAB capability must be owned by the worker and private (0600)")
-        return stream.read()
 
 
 def inside(root, path):
@@ -92,16 +70,16 @@ def worker(req):
     action = req["action"]
     if action == "prepare":
         root.mkdir(parents=True, exist_ok=True)
-        if marker.exists() and read_private(marker) != req["token"]:
+        if marker.exists() and marker.read_text() != req["token"]:
             raise ValueError("LAB belongs to another run")
         if not marker.exists():
             if any(root.iterdir()):
                 raise ValueError("refusing to adopt non-empty directory")
-            write_private_new(marker, req["token"])
+            marker.write_text(req["token"])
         if req.get("namespace"):
             lab_network.namespace(root,req["namespace"],prepare=True)
         return {"prepared": True}
-    if not marker.exists() or read_private(marker) != req["token"]:
+    if not marker.exists() or marker.read_text() != req["token"]:
         raise ValueError("missing LAB ownership marker")
     if action in {"network_fault","network_reset","namespace_cleanup"}:
         name=req.get("namespace")
@@ -263,8 +241,8 @@ class Lab:
         self.dir.mkdir(parents=True, exist_ok=True)
         tokenfile = self.dir / "owner.token"
         if not tokenfile.exists():
-            write_private_new(tokenfile, secrets.token_hex(32))
-        self.token = read_private(tokenfile)
+            tokenfile.write_text(str(uuid.uuid4()))
+        self.token = tokenfile.read_text()
         self.offsets = {}
         self.latest = {}
         self.sequence = {}
@@ -350,7 +328,7 @@ class Lab:
                 args += ["--capacity", node.get("capacity", "20GiB")]
         args += ["--peers", join(node["name"] + ".peers.txt")]
         if not doctor:
-            args += ["--event-log", join(node["name"] + ".events.jsonl"),"--event-log-mode","lab"]
+            args += ["--event-log", join(node["name"] + ".events.jsonl")]
         return args
 
     def init(self):

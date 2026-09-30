@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(network_definition_v6_commits_poa_key_and_root_publication_
     const auto genesis = cybou::CreateDevGenesisState();
     auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey());
     const auto default_network_id = cybou::NetworkId(definition);
-    BOOST_CHECK_EQUAL(definition.protocol_version, cybou::CYBOU_NETWORK_DEFINITION_VERSION);
+    BOOST_CHECK_EQUAL(definition.protocol_version, 6);
     BOOST_CHECK(cybou::ValidateNetworkDefinition(definition) == cybou::NetworkDefinitionError::NONE);
 
     definition.protocol_parameters.root_publication_fee_per_started_kib = 9;

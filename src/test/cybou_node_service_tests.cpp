@@ -30,7 +30,7 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
     tcp::acceptor second{io, tcp::endpoint{loopback, 0}};
     std::jthread first_server{[&] {
         tcp::socket socket{io}; first.accept(socket);
-        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+        cybou::p2p::PeerSession session{std::move(socket)};
         if (session.Handshake({.network_id=primary.runtime->GetNetworkId(),
                 .finalized_height=0,.finalized_tip=primary.definition.genesis_block_id,
                 .capabilities=cybou::p2p::CAP_SERVE_BLOCKS,.nonce=30001})) {
@@ -54,7 +54,7 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
     BOOST_REQUIRE(static_cast<bool>(configured_source.runtime->CommitBlock(*second_block)));
     second_server.emplace([&] {
         tcp::socket socket{io}; second.accept(socket);
-        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+        cybou::p2p::PeerSession session{std::move(socket)};
         if (session.Handshake({.network_id=secondary.runtime->GetNetworkId(),
                 .finalized_height=1,.finalized_tip=cybou::ComputeBlockId(block->block),
                 .capabilities=cybou::p2p::CAP_SERVE_BLOCKS,.nonce=30002})) {
@@ -105,7 +105,7 @@ BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
     std::jthread bad_peer{[&] {
         tcp::socket socket{io};
         acceptor.accept(socket);
-        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+        cybou::p2p::PeerSession session{std::move(socket)};
         const auto foreign_block = foreign.runtime->GetBlockAtHeight(1);
         if (foreign_block && session.Handshake({
                 .network_id = local.runtime->GetNetworkId(),
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
     std::jthread recovery_peer{[&] {
         tcp::socket socket{io};
         recovery_acceptor.accept(socket);
-        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+        cybou::p2p::PeerSession session{std::move(socket)};
         const auto valid_block = local.runtime->GetBlockAtHeight(1);
         if (valid_block && session.Handshake({
                 .network_id = local.runtime->GetNetworkId(),

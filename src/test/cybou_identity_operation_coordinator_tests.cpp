@@ -72,12 +72,11 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             acceptor.accept(socket);
             // Model a lost acknowledgment: handshake as an operation-accepting
             // finalizer, then drop the session without answering.
-            cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+            cybou::p2p::PeerSession session{std::move(socket)};
             (void)session.Handshake({.network_id = network_id, .finalized_height = 1,
                 .finalized_tip = cybou::ComputeBlockId(account_block->block),
                 .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_ACCEPT_OPERATIONS,
-                .nonce = static_cast<std::uint64_t>(4100 + attempt)}, {},
-                TestFinalizerProofSigner(validator_seed), &definition.poa_finalizer_public_key);
+                .nonce = static_cast<std::uint64_t>(4100 + attempt)});
             std::this_thread::sleep_for(std::chrono::milliseconds{200});
         }
     });
@@ -92,7 +91,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     };
     uint256 operation_id;
     {
-        cybou::CybouNodeRuntime client{cybou::NodeRuntimeConfig{.network_definition=definition,.data_dir=client_data,.p2p_endpoint=std::pair<std::string,uint16_t>{"127.0.0.1",port},.wipe_data=true}};
+        cybou::CybouNodeRuntime client{client_config};
         BOOST_REQUIRE(client.InitializeGenesis(genesis));
         BOOST_REQUIRE(client.CommitBlock(*account_block));
 
@@ -115,7 +114,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
 
     client_config.wipe_data = false;
     {
-        cybou::CybouNodeRuntime restarted{cybou::NodeRuntimeConfig{.network_definition=definition,.data_dir=client_data,.p2p_endpoint=std::pair<std::string,uint16_t>{"127.0.0.1",port}}};
+        cybou::CybouNodeRuntime restarted{client_config};
         BOOST_REQUIRE(restarted.InitializeGenesis(genesis));
         auto& coordinator = restarted.GetIdentityOperationCoordinator(identity.GetKeyStore());
         const auto commitment = cybou::ComputeNameCommitment(
@@ -186,7 +185,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             std::ofstream output{journal_path, std::ios::binary | std::ios::trunc};
             output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
         }
-        cybou::CybouNodeRuntime damaged_runtime{cybou::NodeRuntimeConfig{.network_definition=definition,.data_dir=client_data,.p2p_endpoint=std::pair<std::string,uint16_t>{"127.0.0.1",port}}};
+        cybou::CybouNodeRuntime damaged_runtime{client_config};
         BOOST_REQUIRE(damaged_runtime.InitializeGenesis(genesis));
         auto& coordinator = damaged_runtime.GetIdentityOperationCoordinator(identity.GetKeyStore());
         std::array<unsigned char, 32> salt{};

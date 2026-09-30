@@ -4,7 +4,6 @@
 
 #include <cybou/state.h>
 #include <cybou/protocol_operation.h>
-#include <cybou/validation_service.h>
 #include <cybou/crypto/sha256.h>
 
 #include <algorithm>
@@ -295,46 +294,6 @@ StateValidationError ValidateCybouState(const CybouState& state)
         if (!committing_accounts.insert(record.account_id).second) return StateValidationError::INVALID_NAME_REGISTRY;
     }
     if (state.names.pending_commits.size() > DEFAULT_MAX_PENDING_NAME_COMMITS) return StateValidationError::INVALID_NAME_REGISTRY;
-    std::map<AccountId, size_t> node_counts;
-    std::set<std::array<unsigned char,32>> provider_ids;
-    for (const auto& [id, node] : state.bound_nodes) {
-        const auto* owner = state.identities.Find(node.account);
-        if (!owner || owner->key_epoch != node.owner_key_epoch || ValidationNodeId(node.key) != id || ++node_counts[node.account] > 8)
-            return StateValidationError::INVALID_NODE_BINDING;
-        if (node.provider_key) {
-            const auto provider = StorageProviderId(*node.provider_key);
-            if (!provider || !provider_ids.insert(*provider).second) return StateValidationError::INVALID_NODE_BINDING;
-        }
-    }
-    if (state.bound_nodes.size() > MAX_IDENTITY_REGISTRY_ACCOUNTS) return StateValidationError::INVALID_NODE_BINDING;
-    for (const auto& [id, account] : state.accounts) {
-        const auto& a = account.authority;
-        if (a.activity_this_epoch > 2048 || a.activity_this_epoch > a.activity || a.protocol_used > 65536 ||
-            a.validation_this_epoch > 16 || a.validation_this_epoch > a.validation || a.liveness_observations > 65536 ||
-            a.storage_remainder >= AUTHORITY_STORAGE_BYTE_EPOCH_UNIT ||
-            a.system_contribution > 100'000'000'000ULL || account.bandwidth_reserved > (256ULL<<30)) return StateValidationError::INVALID_AUTHORITY_STATE;
-    }
-    if (state.storage_pledges.size() > MAX_IDENTITY_REGISTRY_ACCOUNTS) return StateValidationError::INVALID_AUTHORITY_STATE;
-    std::map<AccountId, uint32_t> pledge_counts;
-    for (const auto& [key, pledge] : state.storage_pledges) {
-        const auto bound = state.bound_nodes.find(pledge.node_id);
-        if (key.second == ChunkId{} || bound == state.bound_nodes.end() || bound->second.account != key.first || !bound->second.provider_key || pledge.publication_id.IsNull() ||
-            pledge.stored_bytes < ENCRYPTED_CHUNK_MIN_STORED_BYTES || pledge.stored_bytes > ENCRYPTED_CHUNK_MAX_STORED_BYTES || pledge.response_mask > 65535 ||
-            ++pledge_counts[key.first] > MAX_STORAGE_PLEDGES_PER_IDENTITY) return StateValidationError::INVALID_AUTHORITY_STATE;
-    }
-    if (state.resources.size()>MAX_IDENTITY_REGISTRY_ACCOUNTS) return StateValidationError::INVALID_AUTHORITY_STATE;
-    std::map<AccountId,size_t> resource_counts;
-    std::map<AccountId,uint64_t> storage_bytes, bandwidth_bytes;
-    std::set<std::pair<AccountId,uint256>> resource_uses;
-    for (const auto& [id,r]:state.resources) {
-        if(id.IsNull()||!state.accounts.contains(r.account)||!SerializeResourceReservation({{r.grant}})||
-            ++resource_counts[r.account]>MAX_RESOURCE_GRANTS_PER_ACCOUNT || r.epoch>state.accounts.at(r.account).authority.epoch ||
-            !resource_uses.emplace(r.account,r.grant.use_commitment).second) return StateValidationError::INVALID_AUTHORITY_STATE;
-        auto& total = r.grant.domain==ResourceDomain::STORAGE ? storage_bytes[r.account] : bandwidth_bytes[r.account];
-        const auto ceiling = r.grant.domain==ResourceDomain::STORAGE ? (64ULL<<30) : state.accounts.at(r.account).bandwidth_reserved;
-        if(total>ceiling || r.grant.bytes>ceiling-total)return StateValidationError::INVALID_AUTHORITY_STATE;
-        total+=r.grant.bytes;
-    }
     constexpr uint64_t MAX_SUPPLY{100'000'000'000};
     const uint64_t total = TotalSupply(state);
     if (total > MAX_SUPPLY) return StateValidationError::BALANCE_OVERFLOW;
@@ -385,11 +344,6 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
         Write64(out, account.system_balance);
         Write64(out, account.creation_height);
         Write64(out, account.creation_epoch);
-        const auto& a = account.authority;
-        for (uint64_t value : {a.activity, a.system_contribution, a.penalty_debt, a.epoch, a.activity_this_epoch, a.protocol_used,
-                 a.liveness, a.storage, a.storage_remainder}) Write64(out, value);
-        Write64(out, a.liveness_epoch); Write64(out, a.liveness_observations); Write64(out, a.last_liveness_height);
-        Write64(out, a.validation); Write64(out, a.validation_this_epoch); Write64(out, account.bandwidth_reserved);
     }
     Write32(out, static_cast<uint32_t>(identities->size()));
     out.insert(out.end(), identities->begin(), identities->end());
@@ -405,32 +359,6 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
         if (allocation.claimed_by) {
             out.insert(out.end(), allocation.claimed_by->Value().begin(), allocation.claimed_by->Value().end());
         }
-    }
-    Write32(out, static_cast<uint32_t>(state.bound_nodes.size()));
-    for (const auto& [id, node] : state.bound_nodes) {
-        out.insert(out.end(), id.begin(), id.end());
-        out.insert(out.end(), node.account.Value().begin(), node.account.Value().end());
-        Write64(out, node.owner_key_epoch);
-        out.insert(out.end(), node.key.ed25519.begin(), node.key.ed25519.end());
-        out.insert(out.end(), node.key.ml_dsa.begin(), node.key.ml_dsa.end());
-        out.push_back(node.provider_key ? 1 : 0);
-        if (node.provider_key) {
-            out.insert(out.end(),node.provider_key->ed25519.begin(),node.provider_key->ed25519.end());
-            out.insert(out.end(),node.provider_key->ml_dsa.begin(),node.provider_key->ml_dsa.end());
-        }
-    }
-    Write32(out, static_cast<uint32_t>(state.storage_pledges.size()));
-    for (const auto& [key, pledge] : state.storage_pledges) {
-        out.insert(out.end(), key.first.Value().begin(), key.first.Value().end()); out.insert(out.end(), key.second.begin(), key.second.end());
-        out.insert(out.end(), pledge.publication_id.begin(), pledge.publication_id.end()); out.insert(out.end(), pledge.node_id.begin(), pledge.node_id.end());
-        Write64(out, pledge.stored_bytes); Write64(out, pledge.start_epoch); Write64(out, pledge.epoch);
-        Write32(out, pledge.response_mask); out.push_back(pledge.false_claim ? 1 : 0);
-    }
-    Write32(out, static_cast<uint32_t>(state.resources.size()));
-    for (const auto& [id, resource] : state.resources) {
-        out.insert(out.end(),id.begin(),id.end()); out.insert(out.end(),resource.account.Value().begin(),resource.account.Value().end());
-        out.push_back(static_cast<uint8_t>(resource.grant.domain)); Write64(out,resource.grant.bytes);
-        out.insert(out.end(),resource.grant.use_commitment.begin(),resource.grant.use_commitment.end()); Write64(out,resource.epoch);
     }
     return out;
 }
@@ -461,17 +389,6 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         if (!id || (prior && !(*prior < *id)) || !balance || !system || !height || !epoch) return std::nullopt;
         prior = *id;
         state.accounts.emplace(*id, AccountState{*balance, *system, *height, *epoch});
-        auto& a = state.accounts.at(*id).authority;
-        for (auto* field : {&a.activity, &a.system_contribution, &a.penalty_debt, &a.epoch, &a.activity_this_epoch, &a.protocol_used,
-                 &a.liveness, &a.storage, &a.storage_remainder}) {
-            const auto value = reader.U64(); if (!value) return std::nullopt; *field = *value;
-        }
-        for (auto* field : {&a.liveness_epoch, &a.liveness_observations, &a.last_liveness_height}) {
-            const auto value = reader.U64(); if (!value) return std::nullopt; *field = *value;
-        }
-        for (auto* field : {&a.validation, &a.validation_this_epoch, &state.accounts.at(*id).bandwidth_reserved}) {
-            const auto value = reader.U64(); if (!value) return std::nullopt; *field = *value;
-        }
     }
     const auto identity_size = reader.U32();
     if (!identity_size) return std::nullopt;
@@ -514,53 +431,6 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         }
         state.genesis_allocations.emplace(recovery_id, std::move(allocation));
     }
-    const auto nodes = reader.U32();
-    if (!nodes || *nodes > MAX_IDENTITY_REGISTRY_ACCOUNTS || *nodes > reader.Remaining() / (32 + 32 + 8 + 32 + 1312)) return std::nullopt;
-    std::optional<uint256> prior_node;
-    for (uint32_t i{0}; i < *nodes; ++i) {
-        const auto id_bytes = reader.Bytes(32); const auto account_bytes = reader.Bytes(32);
-        const auto epoch = reader.U64(); const auto ed = reader.Bytes(32); const auto pq = reader.Bytes(1312);
-        if (!id_bytes || !account_bytes || !epoch || !ed || !pq) return std::nullopt;
-        uint256 id; std::copy_n(id_bytes->begin(), 32, id.begin());
-        const auto account = AccountId::FromBytes(*account_bytes);
-        if (!account || id.IsNull() || (prior_node && !(*prior_node < id))) return std::nullopt;
-        BoundNode node{*account, {IdentityKeyPurpose::VALIDATION_NODE, {}, {}}, *epoch};
-        std::copy_n(ed->begin(), 32, node.key.ed25519.begin()); node.key.ml_dsa.assign(pq->begin(), pq->end());
-        const auto provider = reader.U8(); if (!provider || *provider > 1) return std::nullopt;
-        if (*provider) {
-            const auto provider_ed = reader.Bytes(32); const auto provider_pq = reader.Bytes(1312);
-            if (!provider_ed || !provider_pq) return std::nullopt;
-            node.provider_key.emplace(IdentityHybridPublicKey{IdentityKeyPurpose::STORAGE_PROVIDER,{}, {}});
-            std::copy_n(provider_ed->begin(),32,node.provider_key->ed25519.begin()); node.provider_key->ml_dsa.assign(provider_pq->begin(),provider_pq->end());
-        }
-        state.bound_nodes.emplace(id, node); prior_node = id;
-    }
-    const auto pledges = reader.U32();
-    if (!pledges || *pledges > MAX_IDENTITY_REGISTRY_ACCOUNTS || *pledges > reader.Remaining() / 157) return std::nullopt;
-    std::optional<std::pair<AccountId, ChunkId>> previous_pledge;
-    for (uint32_t i{0}; i < *pledges; ++i) {
-        const auto account_bytes = reader.Bytes(32); const auto chunk = reader.Bytes(32); const auto publication = reader.Bytes(32); const auto node = reader.Bytes(32);
-        const auto size = reader.U64(); const auto start = reader.U64(); const auto epoch = reader.U64(); const auto mask = reader.U32(); const auto false_claim = reader.U8();
-        if (!account_bytes || !chunk || !publication || !node || !size || !start || !epoch || !mask || !false_claim || *false_claim > 1) return std::nullopt;
-        const auto account = AccountId::FromBytes(*account_bytes); if (!account) return std::nullopt;
-        ChunkId id{}; std::copy_n(chunk->begin(), 32, id.begin()); const auto key = std::pair{*account, id};
-        if (previous_pledge && !(key > *previous_pledge)) return std::nullopt;
-        StoragePledge p; std::copy_n(publication->begin(), 32, p.publication_id.begin()); std::copy_n(node->begin(), 32, p.node_id.begin());
-        p.stored_bytes = *size; p.start_epoch = *start; p.epoch = *epoch; p.response_mask = *mask; p.false_claim = *false_claim;
-        state.storage_pledges.emplace(key, p); previous_pledge = key;
-    }
-    const auto resources = reader.U32();
-    if (!resources || *resources > MAX_IDENTITY_REGISTRY_ACCOUNTS || *resources > reader.Remaining()/113) return std::nullopt;
-    std::optional<uint256> previous_resource;
-    for (uint32_t i=0;i<*resources;++i) {
-        const auto id_bytes=reader.Bytes(32); const auto owner_bytes=reader.Bytes(32); const auto domain=reader.U8();
-        const auto size=reader.U64(); const auto commitment=reader.Bytes(32); const auto epoch=reader.U64();
-        if(!id_bytes||!owner_bytes||!domain||!size||!commitment||!epoch) return std::nullopt;
-        uint256 id; std::copy_n(id_bytes->begin(),32,id.begin()); const auto owner=AccountId::FromBytes(*owner_bytes);
-        if(!owner||id.IsNull()||(previous_resource&&!(*previous_resource<id))) return std::nullopt;
-        ReservedResource resource{*owner,{static_cast<ResourceDomain>(*domain),*size,{}},*epoch};
-        std::copy_n(commitment->begin(),32,resource.grant.use_commitment.begin()); state.resources.emplace(id,resource); previous_resource=id;
-    }
     if (reader.Remaining()) return std::nullopt;
     if (ValidateCybouState(state) != StateValidationError::NONE) return std::nullopt;
     return state;
@@ -568,7 +438,7 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
 
 std::optional<uint256> CybouStateHash(const CybouState& state)
 {
-    constexpr std::string_view domain{"CYBOU/STATE/V8"};
+    constexpr std::string_view domain{"CYBOU/STATE/V5"};
     const auto bytes = SerializeCybouState(state);
     if (!bytes) return std::nullopt;
     uint256 hash;

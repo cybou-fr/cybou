@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license.
 #include <cybou/event_record.h>
-#include <cybou/secret_file.h>
 #include <chrono>
 #include <set>
 #include <sstream>
@@ -30,10 +29,10 @@ constexpr const char* NAMES[] = {
     "storage_audit_failed","storage_audit_repaired",
 };
 }
-EventWriter::EventWriter(const std::filesystem::path& path,EventLogMode mode) : m_file{OpenPrivateAppendFile(path)},m_mode{mode} {
+EventWriter::EventWriter(const std::filesystem::path& path) : m_file{path, std::ios::app} {
     if (!m_file) throw std::runtime_error("cannot open event log");
     unsigned char random[16];
-    if (RAND_bytes(random, sizeof random) != 1) { std::fclose(m_file);m_file=nullptr;throw std::runtime_error("event run id unavailable"); }
+    if (RAND_bytes(random, sizeof random) != 1) throw std::runtime_error("event run id unavailable");
     static constexpr char HEX[] = "0123456789abcdef";
     for (auto b : random) { m_run += HEX[b >> 4]; m_run += HEX[b & 15]; }
 }
@@ -58,8 +57,7 @@ void EventWriter::Observe(const NodeDiagnosticsSnapshot& d) {
         {"storage_used",d.storage_used},{"storage_capacity",d.storage_capacity},{"safety_halted",d.safety_halted}});
     if (d.safety_halted) Write(NodeEvent::poa_safety_halt);
 }
-EventWriter::~EventWriter() { if(m_file)std::fclose(m_file); }
-bool EventWriter::Good() const { std::lock_guard lock{m_mutex}; return m_file && std::ferror(m_file)==0; }
+bool EventWriter::Good() const { std::lock_guard lock{m_mutex}; return m_file.good(); }
 void EventWriter::Write(NodeEvent event, const EventFields& fields) {
     static const std::set<std::string> ALLOWED{
         "network_id","role","height","tip","state_root","peers","storage_used",
@@ -74,20 +72,17 @@ void EventWriter::Write(NodeEvent event, const EventFields& fields) {
     std::lock_guard lock{m_mutex};
     const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
-    std::ostringstream record;
-    record << "{\"v\":1,\"run_id\":" << Escape(m_run) << ",\"seq\":" << ++m_sequence
+    m_file << "{\"v\":1,\"run_id\":" << Escape(m_run) << ",\"seq\":" << ++m_sequence
            << ",\"time_ms\":" << time << ",\"event\":" << Escape(NAMES[static_cast<size_t>(event)]);
     for (const auto& [key,value] : fields) {
-        if(m_mode==EventLogMode::MINIMAL && (key=="account_id"||key=="nonce"||key=="peer"||key=="provider_id"||key=="chunk_id"||key=="operation_id"))continue;
-        record << ',' << Escape(key) << ':';
+        m_file << ',' << Escape(key) << ':';
         std::visit([&](const auto& item) {
             using T = std::decay_t<decltype(item)>;
-            if constexpr (std::is_same_v<T,std::string>) record << Escape(item);
-            else if constexpr (std::is_same_v<T,bool>) record << (item ? "true" : "false");
-            else record << item;
+            if constexpr (std::is_same_v<T,std::string>) m_file << Escape(item);
+            else if constexpr (std::is_same_v<T,bool>) m_file << (item ? "true" : "false");
+            else m_file << item;
         },value);
     }
-    record << "}\n";const auto bytes=record.str();
-    if(std::fwrite(bytes.data(),1,bytes.size(),m_file)!=bytes.size()||std::fflush(m_file)!=0)throw std::runtime_error("event log write failed");
+    m_file << "}\n"; m_file.flush();
 }
 } // namespace cybou

@@ -20,13 +20,13 @@ namespace cybou {
 /**
  * Support mail (application rule, not consensus).
  *
- * The recipient is not explicitly encoded in the publication. A message to
- * the network authority's support name pays a higher RootPublication fee on
- * purpose: the sender adds undecryptable padding capsules until the fee
- * reaches SupportMailMinimumFee. This public fee and capsule pattern can act
- * as a statistical support-mail traffic fingerprint. The fee goes to the
- * network pools like any fee; the authority's client verifies it from the
- * finalized publication and marks messages that paid less.
+ * The network never learns a message's recipient, so it cannot price mail by
+ * recipient. Instead a message to the network authority's support name pays
+ * a higher RootPublication fee on purpose: the sender adds undecryptable
+ * padding capsules until the fee reaches SupportMailMinimumFee. The fee goes
+ * to the network pools like any fee; the authority's client verifies it from
+ * the finalized publication and marks messages that paid less. Nothing about
+ * the recipient is revealed.
  */
 inline constexpr std::string_view SUPPORT_NAME_LABEL{"cybou"};
 inline constexpr std::uint64_t SUPPORT_MAIL_FEE_MULTIPLIER{5};

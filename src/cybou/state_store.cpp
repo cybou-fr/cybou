@@ -78,14 +78,10 @@ std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
             return params.name_commit_max_lifetime > 0 && height > item.second.commit_height &&
                 height - item.second.commit_height > params.name_commit_max_lifetime;
         });
-    const bool settles_authority = std::any_of(loaded.state->accounts.begin(), loaded.state->accounts.end(),
-        [&](const auto& item) { return item.second.authority.epoch != EpochForHeight(height, params) ||
-            item.second.authority.liveness_epoch != EpochForHeight(height - 1, params); });
-    if (operations.empty() && loaded.state->pending_fee_pool == 0 && !expires_name && !settles_authority) {
+    if (operations.empty() && loaded.state->pending_fee_pool == 0 && !expires_name) {
         return GetStateRoot();
     }
-    const auto execution = ExecuteBlockOperations(*loaded.state, operations, m_network_id, height, m_network_definition.protocol_parameters,
-        head->block_id, [this](const auto& id) { return GetFinalizedRootPublication(id); });
+    const auto execution = ExecuteBlockOperations(*loaded.state, operations, m_network_id, height, m_network_definition.protocol_parameters);
     return execution ? execution.state_root : std::nullopt;
 }
 
@@ -259,10 +255,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
             return params.name_commit_max_lifetime > 0 && block.height > item.second.commit_height &&
                 block.height - item.second.commit_height > params.name_commit_max_lifetime;
         });
-    const bool settles_authority = std::any_of(loaded.state->accounts.begin(), loaded.state->accounts.end(),
-        [&](const auto& item) { return item.second.authority.epoch != EpochForHeight(block.height, params) ||
-            item.second.authority.liveness_epoch != EpochForHeight(block.height - 1, params); });
-    const bool is_empty_noop_block = block.operations.empty() && loaded.state->pending_fee_pool == 0 && !expires_name && !settles_authority;
+    const bool is_empty_noop_block = block.operations.empty() && loaded.state->pending_fee_pool == 0 && !expires_name;
     uint256 candidate_root;
     std::optional<CybouState> next_state;
 
@@ -271,8 +264,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         if (!current_root) return {BlockTransitionError::CORRUPT_STATE};
         candidate_root = *current_root;
     } else {
-        auto execution = ExecuteBlockOperations(*loaded.state, block.operations, m_network_id, block.height, params,
-            block.parent_block_id, [this](const auto& id) { return GetFinalizedRootPublication(id); });
+        auto execution = ExecuteBlockOperations(*loaded.state, block.operations, m_network_id, block.height, params);
         if (!execution) {
             if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
             if (execution.error == BlockExecutionError::FEE_ROUTING_OVERFLOW) return {BlockTransitionError::FEE_ROUTING_FAILED};
@@ -366,18 +358,6 @@ std::optional<uint64_t> CybouStateStore::GetFinalizedOperationHeight(const uint2
         [&](const ProtocolOperation& operation) { return ComputeOperationId(operation) == op_id; });
     if (!found) return std::nullopt;
     return finalized->block.height;
-}
-
-std::optional<RootPublication> CybouStateStore::GetFinalizedRootPublication(const uint256& id) const
-{
-    const auto height = GetFinalizedOperationHeight(id);
-    if (!height) return std::nullopt;
-    const auto block = GetBlockAtHeight(*height); if (!block) return std::nullopt;
-    for (const auto& op : block->block.operations) {
-        if (const auto* publication = std::get_if<AuthorizedRootPublication>(&op); publication && ComputeOperationId(op) == id)
-            return publication->publication;
-    }
-    return std::nullopt;
 }
 
 } // namespace cybou

@@ -212,7 +212,6 @@ add_executable(cybou-core-test
   cybou_storage_service_tests.cpp
   cybou_application_service_tests.cpp
   cybou_authority_tests.cpp
-  cybou_validation_tests.cpp
   cybou_root_publication_tests.cpp
   cybou_root_publication_capsule_tests.cpp
   cybou_crypto_tests.cpp
@@ -240,14 +239,6 @@ target_link_libraries(cybou-storage-smoke
 
 add_executable(cybou-storage-soak cybou_storage_soak.cpp)
 target_link_libraries(cybou-storage-soak
-  cybou_node
-  core_interface
-  Boost::headers
-)
-
-# Opt-in consensus hot-path benchmark; kept outside the default test suite.
-add_executable(cybou-consensus-benchmark cybou_consensus_benchmark.cpp)
-target_link_libraries(cybou-consensus-benchmark
   cybou_node
   core_interface
   Boost::headers

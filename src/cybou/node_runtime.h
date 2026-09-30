@@ -3,8 +3,6 @@
 
 #ifndef CYBOU_NODE_RUNTIME_H
 #define CYBOU_NODE_RUNTIME_H
-#include <cybou/secret32.h>
-#include <cybou/p2p/ingress_budget.h>
 
 #include <cybou/finalizer_node.h>
 #include <cybou/diagnostics.h>
@@ -13,7 +11,6 @@
 #include <cybou/sync_result.h>
 #include <cybou/network_definition.h>
 #include <cybou/state_store.h>
-#include <cybou/validation_service.h>
 #include <cybou/chunk_retention.h>
 #include <cybou/finalized_chunk_store.h>
 
@@ -39,7 +36,7 @@ class IdentityOperationCoordinator;
 struct NodeRuntimeConfig {
     CybouNetworkDefinition network_definition;
     std::filesystem::path data_dir;
-    std::optional<Secret32> poa_finalizer_recovery_entropy{std::nullopt};
+    std::optional<std::array<unsigned char, 32>> poa_finalizer_recovery_entropy{std::nullopt};
     std::optional<std::pair<std::string, uint16_t>> p2p_endpoint{std::nullopt};
     /** This node's own CYP2 listener; used to filter self-addresses out of discovery. */
     std::optional<std::pair<std::string, uint16_t>> local_p2p_endpoint{std::nullopt};
@@ -124,7 +121,6 @@ class CybouNodeRuntime {
 public:
     explicit CybouNodeRuntime(NodeRuntimeConfig config);
     ~CybouNodeRuntime();
-    bool AdmitIngress(const std::string& address, p2p::IngressBudget::Work work, size_t bytes = 0) { return m_ingress.Admit(address,work,bytes); }
 
     CybouNodeRuntime(const CybouNodeRuntime&) = delete;
     CybouNodeRuntime& operator=(const CybouNodeRuntime&) = delete;
@@ -134,14 +130,6 @@ public:
 
     /** Current runtime status */
     NodeRuntimeStatus GetStatus() const;
-    /** Atomically captures finalized state; holds the lock through the callback.
-     * Callback must never re-enter this runtime. No pending pool is exposed. */
-    bool ReadFinalizedValidationSnapshot(const std::function<void(const FinalizedValidationSnapshot&)>& callback) const;
-    void ConfigureValidation(std::span<const unsigned char, 32> node_secret);
-    bool HasValidationService() const { return m_validation_service != nullptr; }
-    ValidationResult CheckOperationForValidation(const ProtocolOperation& operation);
-    /** Sends only timely node-signed evidence built from local verified bytes. */
-    size_t SubmitContributionEvidence();
     NodeDiagnosticsSnapshot GetDiagnostics() const;
     void SetServicePeerDiagnostics(std::vector<PeerDiagnostics> peers);
     std::shared_ptr<EventWriter> EventLog() const { return m_config.event_writer; }
@@ -204,8 +192,6 @@ public:
     std::optional<ChunkAuthorizationProof> GetFinalizedChunkAuthorizationProof(
         const uint256& publication_operation_id, const ChunkId& chunk_id) const;
     bool HasFinalizedChunk(const ChunkId& chunk_id) const;
-    /** Consumes a finalized provider-bound one-use grant before any remote transfer. */
-    bool ConsumeResourceTicket(const ResourceTicket& ticket,const ChunkId& chunk,uint64_t bytes,ResourceUse use);
     /** A connected CYP2 storage peer and the ProviderID it proved in the handshake. */
     struct StoragePeer {
         std::string address;
@@ -223,8 +209,6 @@ public:
     std::optional<std::array<unsigned char, 32>> LocalProviderId() const;
     /** Encoded PROVIDER_PROOF for a handshake message; nullopt unless storage is enabled. */
     std::optional<std::vector<unsigned char>> SignProviderProof(std::span<const unsigned char> message) const;
-    std::optional<std::vector<unsigned char>> SignFinalizerTransportProof(
-        std::span<const unsigned char> message) const;
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStoragePeer(
         const std::string& address, uint16_t port, const std::array<unsigned char, 32>& provider_id,
         const uint256& publication_operation_id, const ChunkId& chunk_id);
@@ -260,7 +244,6 @@ private:
     void RememberOperationStatus(const uint256& id, OperationStatus status);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
     void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
-    p2p::IngressBudget m_ingress;
     NodeRuntimeConfig m_config;
     uint256 m_network_id;
     std::unique_ptr<KVStore> m_db;
@@ -271,12 +254,6 @@ private:
     std::optional<std::array<unsigned char, 32>> m_provider_secret;
     std::optional<std::array<unsigned char, 32>> m_provider_id;
     CybouStateStore m_store;
-    std::optional<std::array<unsigned char, 32>> m_validation_secret;
-    std::unique_ptr<KVStore> m_resource_journal;
-    std::unique_ptr<KVStore> m_validation_db;
-    std::unique_ptr<ValidationState> m_validation_state;
-    std::unique_ptr<ValidationService> m_validation_service;
-    std::optional<uint256> m_last_contribution_base;
     std::unique_ptr<CybouFinalizerNode> m_finalizer_node;
     std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;
     std::map<uint256, OperationStatus> m_recent_operation_status;

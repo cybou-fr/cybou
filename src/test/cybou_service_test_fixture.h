@@ -6,30 +6,14 @@
 
 #include <cybou/identity_service.h>
 #include <cybou/network_definition.h>
-#include <cybou/p2p/session.h>
 #include <test/cybou_test_helpers.h>
 
 #include <array>
 #include <atomic>
 #include <filesystem>
-#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <vector>
-
-inline cybou::p2p::FinalizerProofSigner TestFinalizerProofSigner(
-    std::array<unsigned char, 32> recovery_entropy)
-{
-    return [recovery_entropy](const std::span<const unsigned char> message)
-        -> std::optional<std::vector<unsigned char>> {
-        const auto signature = cybou::SignIdentityMessage(recovery_entropy,
-            cybou::IdentityKeyPurpose::POA_FINALIZER, message);
-        if (!signature || signature->ml_dsa.size() != 3309) return std::nullopt;
-        std::vector<unsigned char> proof(signature->ed25519.begin(), signature->ed25519.end());
-        proof.insert(proof.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
-        return proof;
-    };
-}
 
 struct CybouServiceTestFixture {
     std::array<unsigned char, 32> validator_seed{};
@@ -39,7 +23,7 @@ struct CybouServiceTestFixture {
     std::filesystem::path directory;
     std::vector<std::filesystem::path> vaults;
 
-    explicit CybouServiceTestFixture(unsigned char seed_byte = 0x72, uint64_t epoch_blocks = cybou::DEFAULT_EPOCH_BLOCKS)
+    explicit CybouServiceTestFixture(unsigned char seed_byte = 0x72)
     {
         static std::atomic<unsigned> sequence{0};
         directory = std::filesystem::temp_directory_path() /
@@ -50,7 +34,6 @@ struct CybouServiceTestFixture {
         genesis = cybou::CreateDevGenesisState();
         definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(seed_byte));
         definition.protocol_parameters.account_creation_work_bits = 0;
-        definition.protocol_parameters.epoch_blocks = epoch_blocks;
         cybou::NodeRuntimeConfig config{
             .network_definition = definition,
             .data_dir = directory / "runtime",

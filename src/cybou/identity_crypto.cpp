@@ -27,8 +27,7 @@ const char* Algorithm(IdentityKeyPurpose purpose)
     switch (purpose) {
     case IdentityKeyPurpose::RECOVERY_ROOT: return "ML-DSA-65";
     case IdentityKeyPurpose::AUTHORIZATION:
-    case IdentityKeyPurpose::STORAGE_PROVIDER:
-    case IdentityKeyPurpose::VALIDATION_NODE: return "ML-DSA-44";
+    case IdentityKeyPurpose::STORAGE_PROVIDER: return "ML-DSA-44";
     case IdentityKeyPurpose::RELEASE_SIGNING:
     case IdentityKeyPurpose::TREASURY:
     case IdentityKeyPurpose::POA_FINALIZER: return "ML-DSA-65";
@@ -38,12 +37,12 @@ const char* Algorithm(IdentityKeyPurpose purpose)
 
 size_t PublicSize(IdentityKeyPurpose purpose)
 {
-    return purpose == IdentityKeyPurpose::AUTHORIZATION || purpose == IdentityKeyPurpose::STORAGE_PROVIDER || purpose == IdentityKeyPurpose::VALIDATION_NODE ? 1312 : 1952;
+    return purpose == IdentityKeyPurpose::AUTHORIZATION || purpose == IdentityKeyPurpose::STORAGE_PROVIDER ? 1312 : 1952;
 }
 
 size_t SignatureSize(IdentityKeyPurpose purpose)
 {
-    return purpose == IdentityKeyPurpose::AUTHORIZATION || purpose == IdentityKeyPurpose::STORAGE_PROVIDER || purpose == IdentityKeyPurpose::VALIDATION_NODE ? 2420 : 3309;
+    return purpose == IdentityKeyPurpose::AUTHORIZATION || purpose == IdentityKeyPurpose::STORAGE_PROVIDER ? 2420 : 3309;
 }
 
 std::optional<std::array<unsigned char, 32>> DeriveSeed(
@@ -60,7 +59,6 @@ std::optional<std::array<unsigned char, 32>> DeriveSeed(
     case IdentityKeyPurpose::TREASURY: purpose_label = "TREASURY"; break;
     case IdentityKeyPurpose::POA_FINALIZER: purpose_label = "POA_FINALIZER"; break;
     case IdentityKeyPurpose::STORAGE_PROVIDER: purpose_label = "STORAGE_PROVIDER"; break;
-    case IdentityKeyPurpose::VALIDATION_NODE: purpose_label = "VALIDATION_NODE"; break;
     }
     const std::string info = std::string{"CYBOU/IDENTITY-V2/"} + std::string{purpose_label} + "/" +
         (component == "ED25519" ? "ED25519" : Algorithm(purpose));
@@ -83,7 +81,7 @@ Key MakeKey(std::span<const unsigned char, 32> secret, IdentityKeyPurpose purpos
         KeyCtx ctx{EVP_PKEY_CTX_new_from_name(nullptr, Algorithm(purpose), nullptr), EVP_PKEY_CTX_free};
         if (ctx && EVP_PKEY_keygen_init(ctx.get()) == 1) {
             OSSL_PARAM params[] = {
-                OSSL_PARAM_construct_octet_string("seed", seed->data(), seed->size()),
+                OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_ML_DSA_SEED, seed->data(), seed->size()),
                 OSSL_PARAM_construct_end(),
             };
             EVP_PKEY* raw{nullptr};

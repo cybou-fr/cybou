@@ -1239,20 +1239,40 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
     QCOMPARE(failures.count(), 1);
     QVERIFY(model.status().node_running);
 
-    // A different network never moves or replaces the user's Identity automatically.
-    QTemporaryDir stale;
-    QVERIFY(WriteNetworkFile(stale.filePath(QStringLiteral("network.bin")), 0x34));
-    { QFile vault{stale.filePath(QStringLiteral("identity.cybou"))}; QVERIFY(vault.open(QIODevice::WriteOnly)); vault.write("old-network identity"); }
-    ScopedUnsetEnvironment dont_keep{"CYBOU_DEV_KEEP_NETWORK"};
-    CybouDesktopModel stale_model{QStringLiteral("CYBOU-DEV")};
-    CybouDesktopController stale_controller{&stale_model, stale.path().toStdString()};
-    QSignalSpy stale_failures{&stale_controller, &CybouDesktopController::startupFailed};
-    stale_controller.start();
-    QCOMPARE(stale_failures.count(), 1);
-    QVERIFY(!stale_model.status().node_running);
-    QVERIFY(QFile::exists(stale.filePath(QStringLiteral("identity.cybou"))));
-    QVERIFY(QFile::exists(stale.filePath(QStringLiteral("network.bin"))));
-    QVERIFY(!QDir{stale.filePath(QStringLiteral("archived-networks"))}.exists());
+    // Data of an older DEV network is moved aside (never deleted), then the
+    // current bundled network starts.
+    {
+        QTemporaryDir stale;
+        QVERIFY(WriteNetworkFile(stale.filePath(QStringLiteral("network.bin")), 0x34));
+        {
+            QFile vault{stale.filePath(QStringLiteral("identity.cybou"))};
+            QVERIFY(vault.open(QIODevice::WriteOnly));
+            vault.write("old-network identity");
+        }
+        ScopedUnsetEnvironment dont_keep{"CYBOU_DEV_KEEP_NETWORK"};
+        CybouDesktopModel stale_model{QStringLiteral("CYBOU-DEV")};
+        CybouDesktopController stale_controller{&stale_model, stale.path().toStdString()};
+        QSignalSpy stale_failures{&stale_controller, &CybouDesktopController::startupFailed};
+        stale_controller.start();
+        QCOMPARE(stale_failures.count(), 0);
+        QVERIFY(stale_model.status().node_running);
+        const QDir archive{stale.filePath(QStringLiteral("archived-networks"))};
+        const auto moved = archive.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+        QCOMPARE(moved.size(), 1);
+        QVERIFY(QFile::exists(archive.filePath(moved.first() + QStringLiteral("/network.bin"))));
+        QVERIFY(QFile::exists(archive.filePath(moved.first() + QStringLiteral("/identity.cybou"))));
+        QVERIFY(!QFile::exists(stale.filePath(QStringLiteral("identity.cybou"))));
+    }
+
+    // A fresh data directory starts on the bundled public DEV network.
+    QTemporaryDir fresh;
+    CybouDesktopModel fresh_model{QStringLiteral("CYBOU-DEV")};
+    CybouDesktopController fresh_controller{&fresh_model, fresh.path().toStdString()};
+    QSignalSpy fresh_failures{&fresh_controller, &CybouDesktopController::startupFailed};
+    fresh_controller.start();
+    QCOMPARE(fresh_failures.count(), 0);
+    QVERIFY(fresh_model.status().node_running);
+    QVERIFY(QFile::exists(fresh.filePath(QStringLiteral("network.bin"))));
 }
 
 void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()

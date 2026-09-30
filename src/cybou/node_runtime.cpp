@@ -4,7 +4,6 @@
 #include <cybou/node_runtime.h>
 #include <cybou/identity_operation_coordinator.h>
 #include <cybou/keystore.h>
-#include <cybou/secret_file.h>
 #include <cybou/p2p/session.h>
 #include <cybou/identity_crypto.h>
 #include <cybou/crypto/cleanse.h>
@@ -95,14 +94,22 @@ std::optional<std::array<unsigned char, 32>> LoadOrCreateProviderSecret(const st
 {
     std::array<unsigned char, 32> secret{};
     if (!path.empty() && std::filesystem::exists(path)) {
-        auto bytes=ReadSecretFile(path,32);
-        if(!bytes||bytes->size()!=32)return std::nullopt;
-        std::copy(bytes->begin(),bytes->end(),secret.begin());crypto::CleanseMemory(bytes->data(),bytes->size());return secret;
+        std::ifstream in(path, std::ios::binary);
+        in.read(reinterpret_cast<char*>(secret.data()), secret.size());
+        if (!in || in.peek() != std::char_traits<char>::eof()) return std::nullopt;
+        return secret;
     }
-    if(RAND_bytes(secret.data(),secret.size())!=1)return std::nullopt;
-    if(path.empty())return secret;
+    if (RAND_bytes(secret.data(), static_cast<int>(secret.size())) != 1) return std::nullopt;
+    if (path.empty()) return secret;
     std::filesystem::create_directories(path.parent_path());
-    if(!CreateSecretFile(path,secret)) {crypto::CleanseMemory(secret.data(),secret.size());return std::nullopt;}
+    const auto temp = path.string() + ".tmp";
+    {
+        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char*>(secret.data()), secret.size());
+        if (!out) return std::nullopt;
+    }
+    std::filesystem::permissions(temp, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+    std::filesystem::rename(temp, path);
     return secret;
 }
 } // namespace
@@ -139,91 +146,21 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
         m_provider_secret = LoadOrCreateProviderSecret(m_config.memory_only ? std::filesystem::path{} :
             storage_path / "provider.key");
         if (!m_provider_secret) throw std::runtime_error("cannot load or create the storage provider key");
-        const auto provider_key=DeriveIdentityPublicKey(*m_provider_secret,IdentityKeyPurpose::STORAGE_PROVIDER);
-        m_provider_id=provider_key?StorageProviderId(*provider_key):std::nullopt;
+        const auto proof = SignProviderProof(p2p::ProviderProofMessage(m_network_id, 1, 2));
+        m_provider_id = proof ? p2p::VerifyProviderProof(*proof, p2p::ProviderProofMessage(m_network_id, 1, 2))
+                              : std::nullopt;
         if (!m_provider_id) throw std::runtime_error("storage provider key is invalid");
-    }
-    if (m_config.storage_enabled) {
-        m_resource_journal=std::make_unique<KVStore>(KVStoreOptions{
-            .path=m_config.memory_only?std::filesystem::path{}:std::filesystem::path{m_config.data_dir.string()+".resource-journal"},
-            .memory_only=m_config.memory_only});
     }
     if (m_config.poa_finalizer_recovery_entropy.has_value()) {
         m_finalizer_node = std::make_unique<CybouFinalizerNode>(
-            m_store, m_config.poa_finalizer_recovery_entropy->Get());
-        crypto::CleanseMemory(m_config.poa_finalizer_recovery_entropy->data(), m_config.poa_finalizer_recovery_entropy->size());
-        m_config.poa_finalizer_recovery_entropy.reset();
+            m_store, *m_config.poa_finalizer_recovery_entropy);
     }
     if (m_config.p2p_endpoint) m_peer_manager = std::make_unique<p2p::PeerManager>(*this);
 }
 
 CybouNodeRuntime::~CybouNodeRuntime()
 {
-    if (m_config.poa_finalizer_recovery_entropy) crypto::CleanseMemory(m_config.poa_finalizer_recovery_entropy->data(), m_config.poa_finalizer_recovery_entropy->size());
-    if (m_validation_secret) crypto::CleanseMemory(m_validation_secret->data(), m_validation_secret->size());
     if (m_provider_secret) crypto::CleanseMemory(m_provider_secret->data(), m_provider_secret->size());
-}
-
-void CybouNodeRuntime::ConfigureValidation(std::span<const unsigned char, 32> secret)
-{
-    // Configure once, before starting inbound workers. The journal cannot be wiped by routine runtime options.
-    if (m_validation_service) throw std::logic_error{"validation already configured"};
-    const auto key = DeriveIdentityPublicKey(secret, IdentityKeyPurpose::VALIDATION_NODE);
-    if (!key || !ValidationNodeId(*key)) throw std::invalid_argument{"invalid validation key"};
-    m_validation_secret.emplace(); std::copy(secret.begin(), secret.end(), m_validation_secret->begin());
-    m_validation_db = std::make_unique<KVStore>(KVStoreOptions{
-        .path = m_config.memory_only ? std::filesystem::path{} : std::filesystem::path{m_config.data_dir.string() + ".validation"},
-        .memory_only = m_config.memory_only});
-    m_validation_state = std::make_unique<ValidationState>(*m_validation_db, m_network_id, *ValidationNodeId(*key));
-    m_validation_service = std::make_unique<ValidationService>(*m_validation_state, *key,
-        [this](auto digest) { return SignIdentityMessage(*m_validation_secret, IdentityKeyPurpose::VALIDATION_NODE, digest); },
-        [this](const auto& callback) { return ReadFinalizedValidationSnapshot(callback); });
-}
-ValidationResult CybouNodeRuntime::CheckOperationForValidation(const ProtocolOperation& operation)
-{
-    return m_validation_service ? m_validation_service->CheckReserveAndAttest(operation) : ValidationResult{};
-}
-size_t CybouNodeRuntime::SubmitContributionEvidence()
-{
-    if (!m_validation_secret) return 0;
-    const auto key = DeriveIdentityPublicKey(*m_validation_secret, IdentityKeyPurpose::VALIDATION_NODE);
-    if (!key) return 0;
-    const auto node_id = *ValidationNodeId(*key);
-    std::optional<FinalizedValidationSnapshot> snapshot;
-    ReadFinalizedValidationSnapshot([&](const auto& value) { snapshot = value; });
-    if (!snapshot || snapshot->base.height == UINT64_MAX || m_last_contribution_base == snapshot->base.block_id) return 0;
-    const auto bound = snapshot->state.bound_nodes.find(node_id);
-    if (bound == snapshot->state.bound_nodes.end()) return 0;
-    m_last_contribution_base = snapshot->base.block_id;
-    const auto& owner = bound->second.account;
-    const auto epoch = EpochForHeight(snapshot->base.height, snapshot->parameters);
-    const auto sign_and_submit = [&](ServiceEvidence evidence) {
-        const auto digest = ServiceEvidenceDigest(m_network_id, evidence);
-        const auto signature = digest ? SignIdentityMessage(*m_validation_secret, IdentityKeyPurpose::VALIDATION_NODE, *digest) : std::nullopt;
-        if (!signature) return false;
-        evidence.signature = *signature;
-        return static_cast<bool>(SubmitOperation(std::move(evidence)));
-    };
-    ServiceEvidence heartbeat;
-    heartbeat.account_id = owner; heartbeat.node_id = node_id;
-    heartbeat.base_height = snapshot->base.height; heartbeat.base_block_id = snapshot->base.block_id;
-    size_t submitted = sign_and_submit(heartbeat) ? 1 : 0;
-    const auto slot = ContributionSlot(snapshot->base.height, snapshot->parameters.epoch_blocks);
-    if (!slot || !bound->second.provider_key || StorageProviderId(*bound->second.provider_key) != m_provider_id ||
-        EpochForHeight(snapshot->base.height + 1, snapshot->parameters) != epoch) return submitted;
-    size_t checked{0};
-    for (const auto& [pledge_key, pledge] : snapshot->state.storage_pledges) {
-        if (pledge_key.first != owner || pledge.node_id != node_id || pledge.start_epoch > epoch) continue;
-        if (++checked > MAX_STORAGE_PLEDGES_PER_IDENTITY) break;
-        const auto bytes = m_chunk_blob_store->Get(pledge_key.second);
-        if (!bytes || bytes->size() != pledge.stored_bytes) continue;
-        auto response = heartbeat; response.kind = ServiceEvidenceKind::STORAGE_RESPONSE;
-        response.publication_id = pledge.publication_id; response.chunk_id = pledge_key.second;
-        response.possession = BuildChunkPossessionProof(*bytes, StorageChallengeLeaf(m_network_id, snapshot->base.block_id, owner,
-            pledge_key.second, pledge.stored_bytes));
-        if (response.possession && sign_and_submit(std::move(response))) ++submitted;
-    }
-    return submitted;
 }
 
 std::optional<std::array<unsigned char, 32>> CybouNodeRuntime::LocalProviderId() const { return m_provider_id; }
@@ -252,39 +189,6 @@ std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignProviderProof(
     proof.insert(proof.end(), signature->ed25519.begin(), signature->ed25519.end());
     proof.insert(proof.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
     return proof;
-}
-
-std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignFinalizerTransportProof(
-    const std::span<const unsigned char> message) const
-{
-    if (!m_finalizer_node) return std::nullopt;
-    const auto signature = m_finalizer_node->SignTransportProof(message);
-    if (!signature || signature->ml_dsa.size() != 3309) return std::nullopt;
-    std::vector<unsigned char> proof(signature->ed25519.begin(), signature->ed25519.end());
-    proof.insert(proof.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
-    return proof;
-}
-
-bool CybouNodeRuntime::ConsumeResourceTicket(const ResourceTicket& ticket,const ChunkId& chunk,uint64_t bytes,ResourceUse use)
-{
-    std::lock_guard lock(m_mutex);
-    if(!m_provider_id||!m_resource_journal||(use!=ResourceUse::PUT&&use!=ResourceUse::GET)||ticket.request_nonce.IsNull())return false;
-    const auto loaded=m_store.LoadState();const auto height=m_store.GetFinalizedHeight();
-    if(!loaded||!loaded.state||!height||m_store.PoaSafetyHalted())return false;
-    const auto& resources=loaded.state->resources;
-    const auto storage=resources.find(ticket.storage_grant),bandwidth=resources.find(ticket.bandwidth_grant);
-    if(storage==resources.end()||bandwidth==resources.end()||storage->second.account!=bandwidth->second.account||
-        storage->second.grant.domain!=ResourceDomain::STORAGE||
-        bandwidth->second.grant.domain!=ResourceDomain::BANDWIDTH||storage->second.grant.bytes!=bytes||bandwidth->second.grant.bytes!=bytes||
-        bandwidth->second.epoch!=EpochForHeight(*height,m_config.network_definition.protocol_parameters))return false;
-    if(storage->second.grant.use_commitment!=ResourceUseCommitment(m_network_id,storage->second.account,*m_provider_id,ResourceUse::STORE,ticket.publication_id,chunk,bytes)||
-        bandwidth->second.grant.use_commitment!=ResourceUseCommitment(m_network_id,bandwidth->second.account,*m_provider_id,use,ticket.publication_id,chunk,bytes,ticket.request_nonce))return false;
-    if(!m_store.GetFinalizedRootPublication(ticket.publication_id))return false;
-    const auto key=std::string{"resource-used/"}+ticket.bandwidth_grant.GetHex();
-    try {
-        if(m_resource_journal->Exists(key))return false;
-        m_resource_journal->Write(key,SerializeResourceTicket(ticket),true); return true;
-    } catch(...) {return false;}
 }
 
 ChunkAdmissionResult CybouNodeRuntime::PutFinalizedChunk(
@@ -372,19 +276,6 @@ bool CybouNodeRuntime::InitializeGenesis(const CybouState& genesis, const bool s
     }
     const auto result = m_store.InitializeGenesis(genesis, sync);
     return result.error == GenesisInitError::NONE;
-}
-
-bool CybouNodeRuntime::ReadFinalizedValidationSnapshot(const std::function<void(const FinalizedValidationSnapshot&)>& callback) const
-{
-    std::lock_guard lock{m_mutex};
-    if (!callback || m_store.PoaSafetyHalted() || (m_finalizer_node && m_finalizer_node->SafetyHalted())) return false;
-    const auto loaded = m_store.LoadState();
-    const auto head = m_store.GetFinalizedHead();
-    const auto root = m_store.GetStateRoot();
-    if (!loaded || !loaded.state || !head || !root || CybouStateHash(*loaded.state) != root) return false;
-    callback(FinalizedValidationSnapshot{{m_network_id, head->height, head->block_id, *root},
-        *loaded.state, m_config.network_definition.protocol_parameters});
-    return true;
 }
 
 NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
@@ -583,21 +474,16 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         // operation invalid, so the exact bytes are retained for retry.
         auto result = submitted.acknowledgment.value_or(
             OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id});
-        // CYP2 acknowledgments are unsigned hints, never evidence to discard exact bytes.
-        result.delivery_uncertain = submitted.delivery_uncertain || !submitted.acknowledgment ||
-            (result.status != OperationSubmitStatus::ACCEPTED && result.status != OperationSubmitStatus::ALREADY_PENDING);
+        result.delivery_uncertain = submitted.delivery_uncertain || !submitted.acknowledgment;
         {
             std::lock_guard lock(m_mutex);
             if (result.status == OperationSubmitStatus::ACCEPTED ||
                 result.status == OperationSubmitStatus::ALREADY_PENDING) {
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::ACCEPTED_REMOTE});
-            } else if (const auto finalized = m_store.GetFinalizedOperationHeight(op_id)) {
+            } else if (result.status == OperationSubmitStatus::ALREADY_FINALIZED) {
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::FINALIZED,
-                    .finalized_height = *finalized});
-                result.status = OperationSubmitStatus::ALREADY_FINALIZED;
-                result.delivery_uncertain = false;
+                    .finalized_height = m_store.GetFinalizedOperationHeight(op_id).value_or(0)});
             } else if (result.delivery_uncertain) {
-                if (result.status == OperationSubmitStatus::ALREADY_FINALIZED) result.status = OperationSubmitStatus::REJECTED;
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::UNKNOWN});
             } else {
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::REJECTED_KNOWN});

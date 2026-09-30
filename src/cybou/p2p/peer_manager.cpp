@@ -88,18 +88,14 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     }
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
     if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
-    // This outbound session does not accept operations from the remote peer.
-    // The inbound listener advertises CAP_ACCEPT_OPERATIONS and proves the
-    // genesis-bound finalizer key on sessions where it serves that role.
+    if (status.is_finalizer) {
+        caps |= CAP_ACCEPT_OPERATIONS;
+    }
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip, .capabilities = caps, .nonce = *nonce};
-    auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT);
+    auto peer = std::make_unique<PeerSession>(std::move(socket));
     const auto signer = [this](std::span<const unsigned char> message) { return m_runtime.SignProviderProof(message); };
-    const auto finalizer_signer = [this](std::span<const unsigned char> message) {
-        return m_runtime.SignFinalizerTransportProof(message);
-    };
-    if (!peer->Handshake(local, signer, finalizer_signer,
-            &m_runtime.GetNetworkDefinition().poa_finalizer_public_key)) {
+    if (!peer->Handshake(local, signer)) {
         switch (peer->LastHandshakeStatus()) {
         case HandshakeStatus::UNAVAILABLE: m_last_connect_status = PeerConnectStatus::UNAVAILABLE; break;
         case HandshakeStatus::WRONG_NETWORK: m_last_connect_status = PeerConnectStatus::WRONG_NETWORK; break;
@@ -224,7 +220,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
                     if (height <= it->second->Peer()->finalized_height) {
                         result.status = SyncPeerStatus::CONNECTION_FAILED;
                         m_peers.erase(it);
-                    } else result.reached_peer_tip = true;
+                    }
                     break;
                 }
                 if (announced.status != BlockRequestStatus::OK) {
@@ -258,7 +254,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
             if (use_inventory || height <= it->second->Peer()->finalized_height) {
                 result.status = SyncPeerStatus::CONNECTION_FAILED;
                 m_peers.erase(it);
-            } else result.reached_peer_tip = true;
+            }
             break;
         }
         const auto block = DeserializeFinalizedBlock(response.bytes);
@@ -278,14 +274,6 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
         result.status = SyncPeerStatus::BLOCKS_APPLIED;
     }
     return result;
-}
-
-std::optional<ValidationResult> PeerManager::RequestValidation(const std::string& address, uint16_t port, const ProtocolOperation& operation)
-{
-    boost::system::error_code ec; const auto parsed = boost::asio::ip::make_address(address, ec);
-    if (ec || port == 0) return std::nullopt;
-    const auto peer = m_peers.find({parsed.to_string(), port});
-    return peer == m_peers.end() ? std::nullopt : peer->second->RequestValidation(operation);
 }
 
 OperationSubmitResult PeerManager::SubmitOperation(const std::string& numeric_address, uint16_t port,

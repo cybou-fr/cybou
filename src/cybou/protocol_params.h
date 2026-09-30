@@ -7,7 +7,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cybou/authority_policy.h>
 
 namespace cybou {
 
@@ -45,7 +44,6 @@ struct CybouProtocolParameters {
     uint64_t name_commit_max_lifetime{DEFAULT_NAME_COMMIT_MAX_LIFETIME};
     uint32_t max_pending_name_commits{DEFAULT_MAX_PENDING_NAME_COMMITS};
     bool identity_kem_xwing_enabled{false};
-    AuthorityPolicy authority;
 
     friend bool operator==(const CybouProtocolParameters&, const CybouProtocolParameters&) = default;
 };
@@ -58,7 +56,7 @@ constexpr CybouProtocolParameters DevProtocolParameters()
 }
 
 /**
- * Canonical Identity Authority epoch derivation. Consensus code must never accept an epoch
+ * Canonical PoT epoch derivation. Consensus code must never accept an epoch
  * from a caller: the epoch is always a pure function of the finalized block
  * height and the immutable network parameters.
  */

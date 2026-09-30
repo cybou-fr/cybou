@@ -4,8 +4,6 @@
 #include <cybou/finalizer_node.h>
 #include <cybou/cli/command_line.h>
 #include <cybou/identity_service.h>
-#include <cybou/authority.h>
-#include <cybou/identity_operation_coordinator.h>
 #include <cybou/private_application_store.h>
 #include <cybou/storage_service.h>
 #include <cybou/protocol_limits.h>
@@ -17,7 +15,6 @@
 #include <cybou/node_service.h>
 #include <cybou/p2p/peer_manager.h>
 #include <cybou/signing.h>
-#include <cybou/secret_file.h>
 
 #include <boost/asio.hpp>
 
@@ -45,7 +42,6 @@ std::atomic_bool stopping{false};
 std::shared_ptr<cybou::EventWriter> events;
 std::vector<std::pair<std::string,uint16_t>> explicit_peers;
 std::optional<std::pair<std::string,uint16_t>> advertised_endpoint;
-std::string validation_key_path;
 
 void Stop(int) { stopping.store(true); }
 
@@ -59,22 +55,6 @@ std::vector<unsigned char> ReadFile(const std::filesystem::path& path, const siz
         throw std::runtime_error("cannot read file");
     }
     return bytes;
-}
-
-std::vector<unsigned char> ReadSecret(const std::filesystem::path& path,size_t limit)
-{
-    auto bytes=cybou::ReadSecretFile(path,limit);
-    if(!bytes)throw std::runtime_error("secret file must be private, owned, regular, and within its size bound");
-    return std::move(*bytes);
-}
-
-cybou::Secret32 ReadEntropy(const std::filesystem::path& path)
-{
-    auto bytes=ReadSecret(path,32);
-    if(bytes.size()!=32) {cybou::crypto::CleanseMemory(bytes.data(),bytes.size());throw std::runtime_error("entropy file must contain exactly 32 bytes");}
-    std::array<unsigned char,32> value{};std::copy(bytes.begin(),bytes.end(),value.begin());
-    cybou::crypto::CleanseMemory(bytes.data(),bytes.size());cybou::Secret32 secret{value};
-    cybou::crypto::CleanseMemory(value.data(),value.size());return secret;
 }
 
 void WriteNewFile(const std::filesystem::path& path, const std::vector<unsigned char>& bytes)
@@ -188,11 +168,15 @@ int Execute(const int argc, char* argv[])
         return 0;
     }
     if ((argc == 4 || argc == 6) && std::string_view{argv[1]} == "network-init") {
-        auto poa_seed = ReadEntropy(argv[3]);
-        const auto poa_finalizer_key = cybou::DeriveIdentityPublicKey(poa_seed.Get(), cybou::IdentityKeyPurpose::POA_FINALIZER);
+        auto poa_seed_bytes = ReadFile(argv[3], 32);
+        if (poa_seed_bytes.size() != 32) throw std::runtime_error("PoA finalizer key file must contain exactly 32 raw bytes");
+        std::array<unsigned char, 32> poa_seed{};
+        std::copy(poa_seed_bytes.begin(), poa_seed_bytes.end(), poa_seed.begin());
+        cybou::crypto::CleanseMemory(poa_seed_bytes.data(), poa_seed_bytes.size());
+        const auto poa_finalizer_key = cybou::DeriveIdentityPublicKey(poa_seed, cybou::IdentityKeyPurpose::POA_FINALIZER);
         // The operator recovery phrase is also the authority Identity: its
         // AccountCreate later claims the genesis allocation (Balance + name).
-        const auto authority_recovery_key = cybou::DeriveIdentityPublicKey(poa_seed.Get(), cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+        const auto authority_recovery_key = cybou::DeriveIdentityPublicKey(poa_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
         cybou::crypto::CleanseMemory(poa_seed.data(), poa_seed.size());
         if (!poa_finalizer_key) throw std::runtime_error("cannot derive PoA finalizer public key");
 
@@ -417,7 +401,11 @@ int Execute(const int argc, char* argv[])
         return PrintPeerSubmitResult(peers.SubmitOperationToAny({{argv[4], port}}, *operation));
     }
     if (std::string_view{argv[1]} == "finalizer-run" && argc >= 7 && argc <= 10) {
-        auto key = ReadEntropy(argv[4]);
+        auto key_bytes = ReadFile(argv[4], 32);
+        if (key_bytes.size() != 32) throw std::runtime_error("PoA finalizer recovery entropy must contain exactly 32 raw bytes");
+        std::array<unsigned char, 32> key{};
+        std::copy(key_bytes.begin(), key_bytes.end(), key.begin());
+        cybou::crypto::CleanseMemory(key_bytes.data(), key_bytes.size());
 
         const auto p2p_port = Port(argv[6]);
         const auto interval_ms = argc >= 8 ? PositiveCount(argv[7]) : 1000;
@@ -427,7 +415,7 @@ int Execute(const int argc, char* argv[])
         cybou::NodeRuntimeConfig config{
             .network_definition = network->definition,
             .data_dir = argv[3],
-            .poa_finalizer_recovery_entropy = std::move(key),
+            .poa_finalizer_recovery_entropy = key,
             .db_cache_bytes = 8 << 20,
         };
         if (argc == 10) {
@@ -485,14 +473,8 @@ int Execute(const int argc, char* argv[])
         }};
         node_service.Start();
         if (argc == 9 && explicit_peers.size()) node_service.Runtime().SetExplicitPeerEndpoints(explicit_peers);
-        if (!validation_key_path.empty()) {
-            auto bytes = ReadSecret(validation_key_path, 32);
-            if (bytes.size() != 32) throw std::runtime_error("validation key must contain exactly 32 bytes");
-            node_service.Runtime().ConfigureValidation(std::span<const unsigned char, 32>{bytes.data(), 32});
-            cybou::crypto::CleanseMemory(bytes.data(), bytes.size());
-        }
         std::atomic<std::uint64_t> last_height{0};
-        node_service.StartNetwork(cybou::CybouNetworkServiceConfig{.sync_interval = std::chrono::milliseconds{validation_key_path.empty() ? 1000 : 100}, .listen_endpoint = listen_port ? std::optional{listen} : std::nullopt},
+        node_service.StartNetwork(cybou::CybouNetworkServiceConfig{.sync_interval = std::chrono::milliseconds{1000}, .listen_endpoint = listen_port ? std::optional{listen} : std::nullopt},
             [&last_height, &node_service](const cybou::SyncPeerResult& sync, const cybou::NodeRuntimeStatus& status, size_t peers) {
                 if (status.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH ||
                     status.runtime_state == cybou::NodeRuntimeState::CORRUPT ||
@@ -503,7 +485,6 @@ int Execute(const int argc, char* argv[])
                 }
                 if (status.finalized_height != last_height.exchange(status.finalized_height)) {
                     std::cout << "height=" << status.finalized_height << " peers=" << peers << std::endl;
-                    if (!validation_key_path.empty()) node_service.Runtime().SubmitContributionEvidence();
                 }
                 if (events) {
                     const auto d = node_service.Runtime().GetDiagnostics();
@@ -538,20 +519,6 @@ const char* Help = R"(CYBOU operator CLI (CYP2 only)
                 --capacity 20GiB [--peers FILE] [--event-log FILE]
   observer run  --network FILE --data-dir DIR --peer IP:PORT
                 [--listen IP:PORT] [--peers FILE] [--event-log FILE]
-  validator run --network FILE --data-dir DIR --key-file FILE
-                --peer IP:PORT --listen IP:PORT [--capacity BYTES]
-  authority status --network FILE --data-dir DIR --account-id HEX [--peer IP:PORT]
-  validation bind --network FILE --data-dir DIR --vault FILE
-                --password-file FILE --key-file FILE [--provider-key-file FILE]
-  validation revoke --network FILE --data-dir DIR --vault FILE
-                --password-file FILE --node-id HEX
-                [--peer IP:PORT]
-  validation request --network FILE --data-dir DIR --peer IP:PORT
-                --operation-file FILE --attestation-file FILE
-  validation verify --network FILE --data-dir DIR --operation-file FILE
-                --attestation-file FILE [--peer IP:PORT]
-  validation record --network FILE --data-dir DIR --operation-file FILE
-                --attestation-file FILE --key-file FILE [--peer IP:PORT]
   network info --network FILE
   network init-dev --network FILE --key-file FILE
          [--authority-balance CYBOU --authority-name LABEL]
@@ -571,7 +538,6 @@ const char* Help = R"(CYBOU operator CLI (CYP2 only)
                     --operation-id HEX [--replicas 1|2] (offline Identity projection)
 No positional arguments or legacy command aliases. Secrets are file inputs.
 Event JSONL is output only. Peer advertised heights are not canonical evidence.
-Version 7 commands require a separate network and must not run on version 6 DEV.
 )";
 int Doctor(const cybou::cli::Options& opts)
 {
@@ -688,7 +654,7 @@ int StorageCommand(const std::string& action, const cybou::cli::Options& opts)
     }
     if (action!="placement") throw std::invalid_argument("unknown storage command");
     cybou::CybouIdentityService identity{runtime,opts.Require("vault")};
-    auto password_bytes=ReadSecret(opts.Require("password-file"),1024);
+    auto password_bytes=ReadFile(opts.Require("password-file"),1024);
     std::string password(password_bytes.begin(),password_bytes.end());
     cybou::crypto::CleanseMemory(password_bytes.data(),password_bytes.size());
     const bool unlocked=identity.LoadVault(password);
@@ -706,125 +672,6 @@ int StorageCommand(const std::string& action, const cybou::cli::Options& opts)
         << " min_remote_replicas=" << durability->min_replicas << " target=" << unsigned(storage.RemoteReplicaTarget()) << '\n';
     return 0;
 }
-int AuthorityValidationCommand(const std::string& group, const std::string& action, const cybou::cli::Options& opts)
-{
-    opts.Allow({"network","data-dir","peer","account-id","operation-file","attestation-file","vault","password-file","key-file","provider-key-file","node-id"});
-    const auto net = cybou::LoadCybouNetworkFile(opts.Require("network"));
-    if (!net) throw std::runtime_error("invalid network");
-    cybou::NodeRuntimeConfig config{.network_definition = net->definition, .data_dir = opts.Require("data-dir")};
-    if (opts.Has("peer")) config.p2p_endpoint = Endpoint(opts.Get("peer"));
-    cybou::CybouNodeService node{{.runtime = std::move(config), .genesis = net->genesis}};
-    node.Start(); auto& runtime = node.Runtime();
-    if (opts.Has("peer")) {
-        const auto sync = runtime.SyncFromConfiguredPeer(1000000);
-        if (!sync.IsConnected()) throw std::runtime_error("cannot sync finalized validation base");
-    }
-    if (group == "authority" && action == "status") {
-        const auto id = cybou::ParseUint256UserHex(opts.Require("account-id"));
-        if (!id) throw std::runtime_error("invalid AccountID");
-        const auto value = cybou::AuthorityIndex{runtime}.Get(cybou::AccountId{*id});
-        if (!value) throw std::runtime_error("Identity not finalized");
-        std::cout << "authority=" << value->effective << " earned=" << value->earned << " penalty_debt=" << value->penalty_debt
-            << " age=" << value->age << " activity=" << value->activity << " system_contribution=" << value->system_contribution
-            << " tier=" << value->tier << " protocol_budget=" << value->budgets.protocol_operations_per_epoch
-            << " storage_budget_bytes=" << value->budgets.storage_bytes << " bandwidth_budget_bytes=" << value->budgets.bandwidth_bytes_per_epoch << '\n';
-        return 0;
-    }
-    if (group != "validation") throw std::invalid_argument("unknown authority command");
-    if (action == "bind" || action == "revoke") {
-        std::vector<unsigned char> secret;
-        std::optional<cybou::IdentityHybridPublicKey> key;
-        auto password_bytes = ReadSecret(opts.Require("password-file"), 4096);
-        std::string password(password_bytes.begin(), password_bytes.end());
-        cybou::crypto::CleanseMemory(password_bytes.data(), password_bytes.size());
-        while (!password.empty() && (password.back() == '\n' || password.back() == '\r')) password.pop_back();
-        cybou::CybouIdentityService identity{runtime, opts.Require("vault")};
-        const bool unlocked = identity.LoadVault(password); cybou::crypto::CleanseMemory(password.data(), password.size());
-        if (!unlocked) throw std::runtime_error("cannot unlock Identity vault");
-        cybou::NodeBindingPayload payload;
-        payload.revoke = action == "revoke";
-        if (payload.revoke) {
-            const auto id = cybou::ParseUint256UserHex(opts.Require("node-id"));
-            if (!id || id->IsNull()) throw std::runtime_error("invalid validation NodeID");
-            if (opts.Has("key-file") || opts.Has("provider-key-file")) throw std::runtime_error("revoke uses --node-id and does not need service keys");
-            payload.revoke_node_id = *id;
-        } else {
-            if (!opts.Has("key-file") || opts.Has("node-id")) throw std::runtime_error("bind requires --key-file and does not accept --node-id");
-            secret = ReadSecret(opts.Require("key-file"), 32);
-            if (secret.size() != 32) throw std::runtime_error("validation key must contain exactly 32 bytes");
-            key = cybou::DeriveIdentityPublicKey(std::span<const unsigned char, 32>{secret.data(), 32}, cybou::IdentityKeyPurpose::VALIDATION_NODE);
-            if (!key) throw std::runtime_error("invalid validation key");
-            payload.key = *key;
-        }
-        std::vector<unsigned char> provider_secret;
-        if (opts.Has("provider-key-file")) {
-            provider_secret = ReadSecret(opts.Get("provider-key-file"), 32);
-            if (provider_secret.size() != 32) throw std::runtime_error("provider key must contain exactly 32 bytes");
-            payload.provider_key = cybou::DeriveIdentityPublicKey(std::span<const unsigned char,32>{provider_secret.data(),32}, cybou::IdentityKeyPurpose::STORAGE_PROVIDER);
-            if (!payload.provider_key) throw std::runtime_error("invalid provider key");
-        }
-        const auto result = runtime.GetIdentityOperationCoordinator(identity.GetKeyStore()).Execute(cybou::IdentityOperationKind::NODE_BINDING,
-            *cybou::ComputeNodeBindingCommitment(payload), [&](const auto& authorization) -> std::optional<cybou::ProtocolOperation> {
-                if (payload.revoke) return cybou::AuthorizedNodeBinding{authorization, payload, {}};
-                const auto digest = cybou::ComputeIdentityOperationDigest(runtime.GetNetworkId(), authorization);
-                const auto proof = digest ? cybou::SignIdentityMessage(std::span<const unsigned char, 32>{secret.data(), 32}, cybou::IdentityKeyPurpose::VALIDATION_NODE, *digest) : std::nullopt;
-                if (!proof) return std::nullopt;
-                cybou::AuthorizedNodeBinding binding{authorization, payload, *proof};
-                if (payload.provider_key) {
-                    binding.provider_proof = cybou::SignIdentityMessage(std::span<const unsigned char,32>{provider_secret.data(),32}, cybou::IdentityKeyPurpose::STORAGE_PROVIDER, *digest);
-                    if (!binding.provider_proof) return std::nullopt;
-                }
-                return binding;
-            });
-        cybou::crypto::CleanseMemory(secret.data(), secret.size());
-        cybou::crypto::CleanseMemory(provider_secret.data(), provider_secret.size());
-        std::cout << "operation=" << result.op_id.GetHex() << " phase=" << unsigned(result.phase) << '\n';
-        return result ? 0 : 2;
-    }
-    const auto operation = cybou::DeserializeProtocolOperation(ReadFile(opts.Require("operation-file"), cybou::MAX_OPERATION_PAYLOAD_BYTES));
-    if (!operation) throw std::runtime_error("invalid canonical operation file");
-    std::optional<cybou::ValidationAttestation> attestation;
-    if (action == "request") {
-        const auto endpoint = Endpoint(opts.Require("peer"));
-        cybou::p2p::PeerManager peers{runtime};
-        if (!peers.Connect(endpoint.first, endpoint.second)) throw std::runtime_error("validation peer unavailable");
-        const auto response = peers.RequestValidation(endpoint.first, endpoint.second, *operation);
-        if (!response || !response->attestation) throw std::runtime_error("operation received no positive validation attestation");
-        attestation = response->attestation;
-    } else if ((action == "verify" || action == "record")) attestation = cybou::DeserializeValidationAttestation(ReadFile(opts.Require("attestation-file"), 4096));
-    else throw std::invalid_argument("unknown validation command");
-    bool valid{false};
-    std::optional<cybou::AccountId> validator_account;
-    runtime.ReadFinalizedValidationSnapshot([&](const auto& snapshot) {
-        if (!attestation) return;
-        const auto bound = snapshot.state.bound_nodes.find(attestation->node_id);
-        valid = bound != snapshot.state.bound_nodes.end() && cybou::VerifyValidationAttestation(*attestation, *operation, snapshot, bound->second.key);
-        if(valid)validator_account=bound->second.account;
-    });
-    if (!valid) throw std::runtime_error("attestation does not validate against current finalized base");
-    if (action == "record") {
-        auto signing_key = ReadEntropy(opts.Require("key-file"));
-        const auto public_key = cybou::DeriveIdentityPublicKey(signing_key.Get(), cybou::IdentityKeyPurpose::VALIDATION_NODE);
-        if (!public_key || cybou::ValidationNodeId(*public_key) != attestation->node_id)
-            throw std::runtime_error("validation key does not match the attesting NodeID");
-        cybou::ServiceEvidence receipt;
-        receipt.account_id=*validator_account; receipt.node_id=attestation->node_id;
-        receipt.base_height=attestation->base.height;receipt.base_block_id=attestation->base.block_id;
-        receipt.base_state_root=attestation->base.state_root;receipt.kind=cybou::ServiceEvidenceKind::VALIDATION_RECEIPT;
-        receipt.publication_id=attestation->operation_id;receipt.validated_operation=*cybou::SerializeProtocolOperation(*operation);
-        const auto digest = cybou::ServiceEvidenceDigest(runtime.GetNetworkId(), receipt);
-        const auto signature = digest ? cybou::SignIdentityMessage(signing_key.Get(), cybou::IdentityKeyPurpose::VALIDATION_NODE, *digest) : std::nullopt;
-        if (!signature) throw std::runtime_error("cannot sign validation contribution receipt");
-        receipt.signature=*signature;
-        const auto result=runtime.SubmitOperation(receipt);
-        std::cout << "receipt_operation=" << result.op_id.GetHex() << " finalized=false\n";
-        return result?0:2;
-    }
-    if (action == "request") WriteNewFile(opts.Require("attestation-file"), *cybou::SerializeValidationAttestation(*attestation));
-    std::cout << "validation=verified operation=" << attestation->operation_id.GetHex() << " base_height=" << attestation->base.height << " finalized=false\n";
-    return 0;
-}
-
 int Main(int argc, char* argv[])
 {
     if (argc == 1 || std::any_of(argv+1,argv+argc,[](const char* arg){ return std::string_view{arg}=="--help"; })) {
@@ -835,21 +682,6 @@ int Main(int argc, char* argv[])
     if (argc<3) throw std::invalid_argument("missing command; use --help");
     const std::string action = argv[2];
     const cybou::cli::Options opts{argc,argv,3};
-    if(opts.Has("event-log-mode") && opts.Get("event-log-mode")!="minimal" && opts.Get("event-log-mode")!="lab")
-        throw std::invalid_argument("event log mode must be minimal or lab");
-    if (group == "authority" || group == "validation") return AuthorityValidationCommand(group, action, opts);
-    if (group == "validator" && action == "run") {
-        opts.Allow({"network","data-dir","peer","listen","key-file","peers","advertise","event-log","event-log-mode","capacity"});
-        validation_key_path = opts.Require("key-file");
-        const auto peer = Endpoint(opts.Require("peer")); const auto listen = Endpoint(opts.Require("listen"));
-        if (opts.Has("peers")) explicit_peers = ReadPeerEndpoints(opts.Get("peers"));
-        if (opts.Has("advertise")) advertised_endpoint = Endpoint(opts.Get("advertise"));
-        if (opts.Has("event-log")) events = std::make_shared<cybou::EventWriter>(opts.Get("event-log"),opts.Get("event-log-mode","minimal")=="lab"?cybou::EventLogMode::LAB:cybou::EventLogMode::MINIMAL);
-        std::vector<std::string> args{"cybou-node", opts.Has("capacity")?"provider-run":"observer-run", opts.Require("network"), opts.Require("data-dir"),
-            peer.first, std::to_string(peer.second), listen.first, std::to_string(listen.second), opts.Has("capacity")?std::to_string(CapacityBytes(opts.Get("capacity").c_str())):"0"};
-        std::vector<char*> pointers; for (auto& arg : args) pointers.push_back(arg.data());
-        return Execute(static_cast<int>(pointers.size()), pointers.data());
-    }
     if (group=="storage") return StorageCommand(action,opts);
     std::string event_path;
     std::vector<std::string> args{"cybou-node"};
@@ -866,8 +698,8 @@ int Main(int argc, char* argv[])
             args.insert(args.end(),{opts.Require("authority-balance"),opts.Require("authority-name")});
         }
     } else if ((group=="finalizer" || group=="provider" || group=="observer") && action=="run") {
-        if (group=="finalizer") opts.Allow({"network","data-dir","key-file","listen","block-interval","peers","event-log","event-log-mode","capacity","advertise"});
-        else opts.Allow({"network","data-dir","peer","listen","peers","capacity","event-log","event-log-mode","advertise"});
+        if (group=="finalizer") opts.Allow({"network","data-dir","key-file","listen","block-interval","peers","event-log","capacity","advertise"});
+        else opts.Allow({"network","data-dir","peer","listen","peers","capacity","event-log","advertise"});
         if (group=="observer" && opts.Has("capacity")) throw std::invalid_argument("observer has no storage role");
         if (opts.Has("event-log")) event_path = opts.Get("event-log");
         args.insert(args.end(),{group+"-run",opts.Require("network"),opts.Require("data-dir")});
@@ -910,7 +742,7 @@ int Main(int argc, char* argv[])
         if (action=="follow" && opts.Has("until-height")) args.push_back(opts.Get("until-height"));
         if (action=="submit") args.push_back(opts.Require("operation-file"));
     } else throw std::invalid_argument("unknown command; use --help");
-    if (!event_path.empty()) events = std::make_shared<cybou::EventWriter>(event_path,opts.Get("event-log-mode","minimal")=="lab"?cybou::EventLogMode::LAB:cybou::EventLogMode::MINIMAL);
+    if (!event_path.empty()) events = std::make_shared<cybou::EventWriter>(event_path);
     std::vector<char*> pointers; for (auto& arg : args) pointers.push_back(arg.data());
     if (events) events->Write(cybou::NodeEvent::node_started,{{"role",group}});
     const auto result=Execute(static_cast<int>(pointers.size()),pointers.data());

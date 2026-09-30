@@ -20,7 +20,7 @@ namespace cybou {
 inline constexpr std::uint32_t MAX_PUBLICATION_CHUNKS{1U << 20};
 
 /** Largest serialized ProtocolOperation accepted anywhere (pool, CYP2, CLI). */
-inline constexpr std::uint32_t MAX_OPERATION_PAYLOAD_BYTES{256U * 1024U};
+inline constexpr std::uint32_t MAX_OPERATION_PAYLOAD_BYTES{128U * 1024U};
 /** Largest serialized finalized block transferred over CYP2. */
 inline constexpr std::uint32_t MAX_FINALIZED_BLOCK_BYTES{32U * 1024U * 1024U};
 

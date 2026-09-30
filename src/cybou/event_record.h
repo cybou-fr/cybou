@@ -5,7 +5,7 @@
 #include <cybou/diagnostics.h>
 #include <cstdint>
 #include <filesystem>
-#include <cstdio>
+#include <fstream>
 #include <map>
 #include <mutex>
 #include <string>
@@ -23,19 +23,16 @@ enum class NodeEvent {
 };
 using EventValue = std::variant<std::string, std::uint64_t, bool>;
 using EventFields = std::map<std::string, EventValue>;
-enum class EventLogMode { MINIMAL, LAB };
 /** Output only; bounded records and allowlisted public fields, no free-form errors. */
 class EventWriter final {
     mutable std::mutex m_mutex;
-    std::FILE* m_file{nullptr};
-    EventLogMode m_mode;
+    std::ofstream m_file;
     std::string m_run;
     std::uint64_t m_sequence{0};
     std::mutex m_snapshot_mutex;
     std::map<std::string, PeerDiagnostics> m_peers;
 public:
-    explicit EventWriter(const std::filesystem::path& path, EventLogMode mode=EventLogMode::MINIMAL);
-    ~EventWriter();
+    explicit EventWriter(const std::filesystem::path& path);
     void Write(NodeEvent event, const EventFields& fields = {});
     bool Good() const;
     void Observe(const NodeDiagnosticsSnapshot& snapshot);

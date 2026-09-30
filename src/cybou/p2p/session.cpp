@@ -11,164 +11,16 @@
 
 #include <boost/asio/ip/address.hpp>
 
-#include <openssl/evp.h>
-#include <openssl/x509.h>
-
 #include <algorithm>
 #include <array>
 #include <limits>
-#include <memory>
-#include <string_view>
 #include <thread>
-#include <utility>
 
 namespace cybou::p2p {
 namespace {
 constexpr size_t HEADER_SIZE{10};
 constexpr size_t HELLO_SIZE{88};
 constexpr auto BLOCK_TRANSFER_TIMEOUT{std::chrono::seconds{30}};
-constexpr auto TLS_HANDSHAKE_TIMEOUT{std::chrono::seconds{10}};
-constexpr std::string_view TLS_EXPORTER_LABEL{"EXPORTER-CYBOU-CYP2-V3"};
-
-struct TlsContexts {
-    SSL_CTX* client{nullptr};
-    SSL_CTX* server{nullptr};
-    TlsContexts() = default;
-    TlsContexts(const TlsContexts&) = delete;
-    TlsContexts& operator=(const TlsContexts&) = delete;
-    TlsContexts(TlsContexts&& other) noexcept
-        : client{std::exchange(other.client, nullptr)}, server{std::exchange(other.server, nullptr)} {}
-    ~TlsContexts()
-    {
-        SSL_CTX_free(client);
-        SSL_CTX_free(server);
-    }
-};
-
-std::optional<TlsContexts> CreateTlsContexts()
-{
-    TlsContexts contexts;
-    contexts.client = SSL_CTX_new(TLS_method());
-    contexts.server = SSL_CTX_new(TLS_method());
-    if (!contexts.client || !contexts.server) return std::nullopt;
-    for (SSL_CTX* ctx : {contexts.client, contexts.server}) {
-        if (SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION) != 1 ||
-            SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION) != 1 ||
-            SSL_CTX_set1_groups_list(ctx, "X25519MLKEM768") != 1) return std::nullopt;
-        SSL_CTX_set_options(ctx, SSL_OP_NO_COMPRESSION | SSL_OP_NO_RENEGOTIATION);
-        SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
-    }
-
-    std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)> key_context{
-        EVP_PKEY_CTX_new_from_name(nullptr, "EC", nullptr), EVP_PKEY_CTX_free};
-    if (!key_context || EVP_PKEY_keygen_init(key_context.get()) <= 0 ||
-        EVP_PKEY_CTX_set_group_name(key_context.get(), "prime256v1") <= 0) return std::nullopt;
-    EVP_PKEY* raw_key{nullptr};
-    if (EVP_PKEY_generate(key_context.get(), &raw_key) <= 0) return std::nullopt;
-    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> key{raw_key, EVP_PKEY_free};
-    std::unique_ptr<X509, decltype(&X509_free)> certificate{X509_new(), X509_free};
-    if (!certificate || X509_set_version(certificate.get(), 2) != 1 ||
-        ASN1_INTEGER_set(X509_get_serialNumber(certificate.get()), 1) != 1 ||
-        !X509_gmtime_adj(X509_getm_notBefore(certificate.get()), 0) ||
-        !X509_gmtime_adj(X509_getm_notAfter(certificate.get()), 24 * 60 * 60) ||
-        X509_set_pubkey(certificate.get(), key.get()) != 1) return std::nullopt;
-    X509_NAME* subject = X509_get_subject_name(certificate.get());
-    constexpr unsigned char common_name[]{'C','Y','B','O','U',' ','C','Y','P','2'};
-    if (!subject || X509_NAME_add_entry_by_txt(subject, "CN", MBSTRING_ASC, common_name,
-            sizeof(common_name), -1, 0) != 1 || X509_set_issuer_name(certificate.get(), subject) != 1 ||
-        X509_sign(certificate.get(), key.get(), EVP_sha256()) <= 0 ||
-        SSL_CTX_use_certificate(contexts.server, certificate.get()) != 1 ||
-        SSL_CTX_use_PrivateKey(contexts.server, key.get()) != 1 ||
-        SSL_CTX_check_private_key(contexts.server) != 1) return std::nullopt;
-
-    return std::optional<TlsContexts>{std::move(contexts)};
-}
-
-SSL_CTX* TlsContext(const bool server)
-{
-    static const auto contexts = CreateTlsContexts();
-    if (!contexts) return nullptr;
-    return server ? contexts->server : contexts->client;
-}
-
-int TlsBioCreate(BIO* bio)
-{
-    BIO_set_init(bio, 1);
-    BIO_set_shutdown(bio, BIO_NOCLOSE);
-    return 1;
-}
-
-int TlsBioDestroy(BIO* bio)
-{
-    if (!bio) return 0;
-    BIO_set_init(bio, 0);
-    BIO_set_data(bio, nullptr);
-    return 1;
-}
-
-int TlsBioRead(BIO* bio, char* out, const size_t length, size_t* read_bytes)
-{
-    BIO_clear_retry_flags(bio);
-    *read_bytes = 0;
-    if (!BIO_get_init(bio) || !out || length == 0) return 0;
-    auto* socket = static_cast<boost::asio::ip::tcp::socket*>(BIO_get_data(bio));
-    if (!socket) return 0;
-    boost::system::error_code error;
-    const auto count = socket->read_some(boost::asio::buffer(out, length), error);
-    if (!error) { *read_bytes = count; return 1; }
-    if (error == boost::asio::error::would_block || error == boost::asio::error::try_again) {
-        BIO_set_retry_read(bio);
-    }
-    return 0;
-}
-
-int TlsBioWrite(BIO* bio, const char* input, const size_t length, size_t* written_bytes)
-{
-    BIO_clear_retry_flags(bio);
-    *written_bytes = 0;
-    if (!BIO_get_init(bio) || !input || length == 0) return 0;
-    auto* socket = static_cast<boost::asio::ip::tcp::socket*>(BIO_get_data(bio));
-    if (!socket) return 0;
-    boost::system::error_code error;
-    const auto count = socket->write_some(boost::asio::buffer(input, length), error);
-    if (!error) { *written_bytes = count; return 1; }
-    if (error == boost::asio::error::would_block || error == boost::asio::error::try_again) {
-        BIO_set_retry_write(bio);
-    }
-    return 0;
-}
-
-long TlsBioControl(BIO* bio, const int command, const long argument, void*)
-{
-    switch (command) {
-    case BIO_CTRL_FLUSH: return 1;
-    case BIO_CTRL_GET_CLOSE: return BIO_get_shutdown(bio);
-    case BIO_CTRL_SET_CLOSE: BIO_set_shutdown(bio, static_cast<int>(argument)); return 1;
-    case BIO_CTRL_PENDING:
-    case BIO_CTRL_WPENDING:
-    case BIO_CTRL_EOF:
-        return 0;
-    default:
-        return 0;
-    }
-}
-
-BIO_METHOD* TlsBioMethod()
-{
-    static BIO_METHOD* method = [] {
-        BIO_METHOD* value = BIO_meth_new(BIO_TYPE_SOURCE_SINK | BIO_get_new_index(), "CYBOU Asio socket");
-        if (!value || BIO_meth_set_create(value, TlsBioCreate) != 1 ||
-            BIO_meth_set_destroy(value, TlsBioDestroy) != 1 ||
-            BIO_meth_set_read_ex(value, TlsBioRead) != 1 ||
-            BIO_meth_set_write_ex(value, TlsBioWrite) != 1 ||
-            BIO_meth_set_ctrl(value, TlsBioControl) != 1) {
-            BIO_meth_free(value);
-            return static_cast<BIO_METHOD*>(nullptr);
-        }
-        return value;
-    }();
-    return method;
-}
 
 void Put64(std::vector<unsigned char>& out, uint64_t value)
 {
@@ -204,10 +56,6 @@ bool IsSupportedMessageType(const uint8_t type)
     switch (static_cast<MessageType>(type)) {
     case MessageType::HELLO:
     case MessageType::PROVIDER_PROOF:
-    case MessageType::FINALIZER_PROOF:
-    case MessageType::VALIDATION_META:
-    case MessageType::VALIDATION_CHUNK:
-    case MessageType::VALIDATION_RESULT:
     case MessageType::PING:
     case MessageType::PONG:
     case MessageType::GET_BLOCK:
@@ -368,84 +216,29 @@ bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& pe
     return !known || ComputeBlockId(known->block) == peer.finalized_tip;
 }
 
-PeerSession::PeerSession(boost::asio::ip::tcp::socket socket, const TransportRole transport_role)
-    : m_socket{std::move(socket)}, m_transport_role{transport_role}
+PeerSession::PeerSession(boost::asio::ip::tcp::socket socket) : m_socket{std::move(socket)}
 {
     boost::system::error_code ec;
     m_socket.non_blocking(true, ec);
     if (ec) m_socket.close();
 }
 
-PeerSession::~PeerSession()
-{
-    SSL_free(m_ssl);
-}
-
-bool PeerSession::AdvanceTlsOperation(const int result,
-    const std::chrono::steady_clock::time_point deadline)
-{
-    const int error = SSL_get_error(m_ssl, result);
-    if (error != SSL_ERROR_WANT_READ && error != SSL_ERROR_WANT_WRITE) return false;
-    if (std::chrono::steady_clock::now() >= deadline) return false;
-    std::this_thread::sleep_for(std::chrono::milliseconds{1});
-    return true;
-}
-
-bool PeerSession::EstablishSecureTransport(const std::chrono::steady_clock::time_point deadline)
-{
-    if (!m_socket.is_open() || m_ssl) return false;
-    // The caller must provide the actual transport role. Inferring roles from
-    // socket endpoints is unreliable across NAT and IPv4/IPv6 mappings.
-    const bool server = m_transport_role == TransportRole::SERVER;
-    SSL_CTX* context = TlsContext(server);
-    if (!context) return false;
-    m_ssl = SSL_new(context);
-    BIO_METHOD* bio_method = TlsBioMethod();
-    BIO* bio = bio_method ? BIO_new(bio_method) : nullptr;
-    if (!m_ssl || !bio) {
-        BIO_free(bio);
-        SSL_free(std::exchange(m_ssl, nullptr));
-        return false;
-    }
-    BIO_set_data(bio, &m_socket);
-    SSL_set_bio(m_ssl, bio, bio);
-    if (server) SSL_set_accept_state(m_ssl);
-    else SSL_set_connect_state(m_ssl);
-    while (std::chrono::steady_clock::now() < deadline) {
-        const int result = SSL_do_handshake(m_ssl);
-        if (result == 1) {
-            const char* negotiated_group = SSL_get0_group_name(m_ssl);
-            if (SSL_version(m_ssl) != TLS1_3_VERSION || !negotiated_group ||
-                std::string_view{negotiated_group} != "X25519MLKEM768" ||
-                SSL_export_keying_material(m_ssl, m_tls_exporter.data(), m_tls_exporter.size(),
-                    TLS_EXPORTER_LABEL.data(), TLS_EXPORTER_LABEL.size(), nullptr, 0, 0) != 1) break;
-            return true;
-        }
-        if (!AdvanceTlsOperation(result, deadline)) break;
-    }
-    SSL_free(std::exchange(m_ssl, nullptr));
-    boost::system::error_code ignored;
-    m_socket.close(ignored);
-    return false;
-}
-
 bool PeerSession::ReadExact(unsigned char* out, size_t length, std::chrono::steady_clock::time_point deadline)
 {
-    if (!m_ssl) return false;
     size_t done{0};
     while (done < length && std::chrono::steady_clock::now() < deadline) {
-        size_t count{0};
-        const int result = SSL_read_ex(m_ssl, out + done, length - done, &count);
-        if (result == 1 && count != 0) {
-            done += count;
+        boost::system::error_code ec;
+        const auto count = m_socket.read_some(boost::asio::buffer(out + done, length - done), ec);
+        if (ec == boost::asio::error::would_block || ec == boost::asio::error::try_again) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
-        if (result != 1 && AdvanceTlsOperation(result, deadline)) continue;
-        {
+        if (ec || count == 0) {
             boost::system::error_code close_ec;
             m_socket.close(close_ec);
             return false;
         }
+        done += count;
     }
     return done == length;
 }
@@ -453,21 +246,20 @@ bool PeerSession::ReadExact(unsigned char* out, size_t length, std::chrono::stea
 bool PeerSession::WriteExact(const unsigned char* bytes, size_t length,
     std::chrono::steady_clock::time_point deadline)
 {
-    if (!m_ssl) return false;
     size_t done{0};
     while (done < length && std::chrono::steady_clock::now() < deadline) {
-        size_t count{0};
-        const int result = SSL_write_ex(m_ssl, bytes + done, length - done, &count);
-        if (result == 1 && count != 0) {
-            done += count;
+        boost::system::error_code ec;
+        const auto count = m_socket.write_some(boost::asio::buffer(bytes + done, length - done), ec);
+        if (ec == boost::asio::error::would_block || ec == boost::asio::error::try_again) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
-        if (result != 1 && AdvanceTlsOperation(result, deadline)) continue;
-        {
+        if (ec || count == 0) {
             boost::system::error_code close_ec;
             m_socket.close(close_ec);
             return false;
         }
+        done += count;
     }
     return done == length;
 }
@@ -515,26 +307,14 @@ std::optional<Frame> PeerSession::Read()
     return Read(std::chrono::steady_clock::now() + std::chrono::seconds(5));
 }
 
-bool PeerSession::SendFrame(const Frame& frame, const std::chrono::steady_clock::time_point deadline)
+std::vector<unsigned char> ProviderProofMessage(const uint256& network_id, const uint64_t signer_nonce,
+    const uint64_t verifier_nonce)
 {
-    return Write(frame, deadline);
-}
-
-std::optional<Frame> PeerSession::ReceiveFrame(const std::chrono::steady_clock::time_point deadline)
-{
-    return Read(deadline);
-}
-
-std::vector<unsigned char> ProviderProofMessage(const Hello& signer,const Hello& verifier,
-    const std::span<const unsigned char> tls_exporter)
-{
-    if (tls_exporter.size() != 32) return {};
-    constexpr std::string_view DOMAIN{"CYBOU/CYP2/PROVIDER-PROOF/v3"};
-    std::vector<unsigned char> message(DOMAIN.begin(),DOMAIN.end());
-    message.insert(message.end(), tls_exporter.begin(), tls_exporter.end());
-    const auto signer_bytes=EncodeHello(signer),verifier_bytes=EncodeHello(verifier);
-    message.insert(message.end(),signer_bytes.begin(),signer_bytes.end());
-    message.insert(message.end(),verifier_bytes.begin(),verifier_bytes.end());
+    constexpr std::string_view DOMAIN{"CYBOU/CYP2/PROVIDER-PROOF/v1"};
+    std::vector<unsigned char> message(DOMAIN.begin(), DOMAIN.end());
+    message.insert(message.end(), network_id.begin(), network_id.end());
+    Put64(message, signer_nonce);
+    Put64(message, verifier_nonce);
     return message;
 }
 
@@ -565,37 +345,11 @@ std::optional<ProviderId> VerifyProviderProof(const std::span<const unsigned cha
     return ComputeBlake3Digest(id_input);
 }
 
-std::vector<unsigned char> FinalizerProofMessage(const Hello& signer, const Hello& verifier,
-    const std::span<const unsigned char> tls_exporter)
-{
-    if (tls_exporter.size() != 32) return {};
-    constexpr std::string_view DOMAIN{"CYBOU/CYP2/FINALIZER-PROOF/v1"};
-    std::vector<unsigned char> message(DOMAIN.begin(), DOMAIN.end());
-    message.insert(message.end(), tls_exporter.begin(), tls_exporter.end());
-    const auto signer_bytes = EncodeHello(signer), verifier_bytes = EncodeHello(verifier);
-    message.insert(message.end(), signer_bytes.begin(), signer_bytes.end());
-    message.insert(message.end(), verifier_bytes.begin(), verifier_bytes.end());
-    return message;
-}
-
-bool VerifyFinalizerProof(const std::span<const unsigned char> payload,
-    const std::span<const unsigned char> message, const IdentityHybridPublicKey& genesis_finalizer_key)
-{
-    if (payload.size() != 64 + 3309 || genesis_finalizer_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||
-        genesis_finalizer_key.ml_dsa.size() != 1952) return false;
-    IdentityHybridSignature signature;
-    std::copy_n(payload.begin(), signature.ed25519.size(), signature.ed25519.begin());
-    signature.ml_dsa.assign(payload.begin() + signature.ed25519.size(), payload.end());
-    return VerifyIdentityMessage(genesis_finalizer_key, signature, message);
-}
-
-bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provider_signer,
-    const FinalizerProofSigner& finalizer_signer, const IdentityHybridPublicKey* genesis_finalizer_key)
+bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provider_signer)
 {
     m_handshake_status = HandshakeStatus::INVALID_LOCAL;
     if (local.network_id.IsNull() || local.finalized_tip.IsNull() || local.nonce == 0) return false;
     m_handshake_status = HandshakeStatus::UNAVAILABLE;
-    if (!EstablishSecureTransport(std::chrono::steady_clock::now() + TLS_HANDSHAKE_TIMEOUT)) return false;
     if (!Write(Frame{MessageType::HELLO, EncodeHello(local)})) return false;
     const auto frame = Read();
     if (!frame) {
@@ -616,19 +370,8 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
             m_handshake_status = HandshakeStatus::INVALID_LOCAL;
             return false;
         }
-        const auto proof = provider_signer(ProviderProofMessage(local, *peer, m_tls_exporter));
+        const auto proof = provider_signer(ProviderProofMessage(local.network_id, local.nonce, peer->nonce));
         if (!proof || !Write(Frame{MessageType::PROVIDER_PROOF, *proof})) {
-            m_handshake_status = HandshakeStatus::UNAVAILABLE;
-            return false;
-        }
-    }
-    if (local.capabilities & CAP_ACCEPT_OPERATIONS) {
-        if (!finalizer_signer) {
-            m_handshake_status = HandshakeStatus::INVALID_LOCAL;
-            return false;
-        }
-        const auto proof = finalizer_signer(FinalizerProofMessage(local, *peer, m_tls_exporter));
-        if (!proof || !Write(Frame{MessageType::FINALIZER_PROOF, *proof})) {
             m_handshake_status = HandshakeStatus::UNAVAILABLE;
             return false;
         }
@@ -638,18 +381,8 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
         const auto proof_frame = Read();
         if (!proof_frame || proof_frame->type != MessageType::PROVIDER_PROOF) return false;
         m_peer_provider_id = VerifyProviderProof(proof_frame->payload,
-            ProviderProofMessage(*peer, local, m_tls_exporter));
+            ProviderProofMessage(peer->network_id, peer->nonce, local.nonce));
         if (!m_peer_provider_id) return false;
-    }
-    if (peer->capabilities & CAP_ACCEPT_OPERATIONS) {
-        if (!genesis_finalizer_key || genesis_finalizer_key->purpose != IdentityKeyPurpose::POA_FINALIZER) {
-            m_handshake_status = HandshakeStatus::INVALID_LOCAL;
-            return false;
-        }
-        const auto proof_frame = Read();
-        if (!proof_frame || proof_frame->type != MessageType::FINALIZER_PROOF ||
-            !VerifyFinalizerProof(proof_frame->payload,
-                FinalizerProofMessage(*peer, local, m_tls_exporter), *genesis_finalizer_key)) return false;
     }
     m_peer = *peer;
     m_local_capabilities = local.capabilities;
@@ -795,31 +528,6 @@ std::optional<BlockAnnounceResult> PeerSession::AdvertiseBlock(
         !std::equal(announcement.block_id.begin(), announcement.block_id.end(), result->payload.begin() + 9)) return std::nullopt;
     if (result->payload.size() == 49) peer_finalized_height = Read64(result->payload.data() + 41);
     return static_cast<BlockAnnounceResult>(result->payload[0]);
-}
-
-std::optional<ValidationResult> PeerSession::RequestValidation(const ProtocolOperation& operation)
-{
-    if (!m_peer || !(m_peer->capabilities & CAP_VALIDATION)) return std::nullopt;
-    const auto bytes = SerializeProtocolOperation(operation);
-    if (!bytes || bytes->empty() || bytes->size() > MAX_OPERATION_PAYLOAD_BYTES) return std::nullopt;
-    std::vector<unsigned char> meta; Put32(meta, static_cast<uint32_t>(bytes->size()));
-    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-    if (!Write(Frame{MessageType::VALIDATION_META, meta}, deadline)) return std::nullopt;
-    for (size_t offset{0}; offset < bytes->size(); offset += MAX_FRAME_PAYLOAD) {
-        const auto size = std::min<size_t>(MAX_FRAME_PAYLOAD, bytes->size() - offset);
-        if (!Write(Frame{MessageType::VALIDATION_CHUNK, {bytes->begin() + offset, bytes->begin() + offset + size}}, deadline)) return std::nullopt;
-    }
-    const auto response = Read(deadline);
-    if (!response || response->type != MessageType::VALIDATION_RESULT || response->payload.empty() ||
-        response->payload[0] > static_cast<uint8_t>(ValidationCheck::UNSUPPORTED)) return std::nullopt;
-    ValidationResult result{static_cast<ValidationCheck>(response->payload[0]), {}};
-    if (result.check == ValidationCheck::VALID) {
-        result.attestation = DeserializeValidationAttestation(std::span{response->payload}.subspan(1));
-        if (!result.attestation || ComputeOperationId(operation) != result.attestation->operation_id ||
-            result.attestation->base.network_id != m_peer->network_id) return std::nullopt;
-    } else if (response->payload.size() != 1) return std::nullopt;
-    // This is untrusted evidence until the caller independently verifies it against its own snapshot.
-    return result;
 }
 
 std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const ProtocolOperation& operation)
@@ -1021,37 +729,11 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     if (request->type == MessageType::PING) {
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});
     }
-    if (request->type == MessageType::VALIDATION_META) {
-        if (!(m_local_capabilities & CAP_VALIDATION) || request->payload.size() != 4) return false;
-        const auto size = Read32(request->payload.data());
-        if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return false;
-        boost::system::error_code budget_error;
-        const auto remote=m_socket.remote_endpoint(budget_error);
-        if (budget_error || !runtime.AdmitIngress(remote.address().to_string(),IngressBudget::Work::OPERATION,size)) return false;
-        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-        std::vector<unsigned char> bytes; bytes.reserve(size);
-        while (bytes.size() < size) {
-            const auto chunk = Read(deadline);
-            if (!chunk || chunk->type != MessageType::VALIDATION_CHUNK || chunk->payload.empty() || chunk->payload.size() > size - bytes.size()) return false;
-            bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
-        }
-        const auto operation = DeserializeProtocolOperation(bytes); if (!operation) return false;
-        const auto result = runtime.CheckOperationForValidation(*operation);
-        std::vector<unsigned char> response{static_cast<uint8_t>(result.check)};
-        if (result.attestation) {
-            const auto encoded = SerializeValidationAttestation(*result.attestation); if (!encoded) return false;
-            response.insert(response.end(), encoded->begin(), encoded->end());
-        }
-        return Write(Frame{MessageType::VALIDATION_RESULT, response}, deadline);
-    }
     if (request->type == MessageType::OP_META) {
         if (!(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) return false;
         if (request->payload.size() != 4) return false;
         const uint32_t size = Read32(request->payload.data());
         if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return false;
-        boost::system::error_code budget_error;
-        const auto remote=m_socket.remote_endpoint(budget_error);
-        if (budget_error || !runtime.AdmitIngress(remote.address().to_string(),IngressBudget::Work::OPERATION,size)) return false;
         const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
         std::vector<unsigned char> bytes;
         bytes.reserve(size);
