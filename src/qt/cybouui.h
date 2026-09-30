@@ -195,6 +195,29 @@ inline QPixmap glyphPixmap(Glyph glyph, const QSize& size, const QColor& stroke)
     return pixmap;
 }
 
+/**
+ * Item icon with a small lock in the bottom-right corner: everything CYBOU
+ * stores (on this computer and on the network) is encrypted, so no item
+ * should look like an ordinary file.
+ */
+inline QPixmap withLockBadge(const QPixmap& base, const QColor& lock)
+{
+    const QSize size = base.deviceIndependentSize().toSize();
+    QPixmap pixmap{size * 2};
+    pixmap.setDevicePixelRatio(2);
+    pixmap.fill(Qt::transparent);
+    QPainter painter{&pixmap};
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.drawPixmap(QPoint{0, 0}, base);
+    const int badge = qMax(9, size.width() * 9 / 20);
+    const QRect area{size.width() - badge, size.height() - badge, badge, badge};
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(CybouTheme::color(CybouTheme::CARD));
+    painter.drawEllipse(area.adjusted(-1, -1, 1, 1));
+    painter.drawPixmap(area.topLeft(), glyphPixmap(Glyph::Lock, area.size(), lock));
+    return pixmap;
+}
+
 /** Glyph rendered with a red numeric badge in the top-right corner. */
 inline QPixmap glyphWithBadge(Glyph glyph, const QSize& size, const QColor& stroke, int badge)
 {
@@ -504,9 +527,33 @@ inline QLabel* StateChip(CybouContentState state, const QString& text, QWidget* 
     auto* label = new QLabel{parent};
     label->setObjectName(QStringLiteral("stateChip"));
     label->setTextFormat(Qt::RichText);
-    label->setText(stateChipHtml(state, text, operation));
     label->setAccessibleName(text);
     label->setStyleSheet(QStringLiteral("background: transparent; border: none; font-size: 12px;"));
+    const bool settled = !CybouProduct::itemPending(state, operation) &&
+        (state == CybouContentState::Protected || state == CybouContentState::Received);
+    if (!settled) {
+        label->setText(stateChipHtml(state, text, operation));
+        return label;
+    }
+    // Modest lock: encrypted here and on the network (Protected) or end to end (Received).
+    // The chip becomes a container: [lock][text], its own text stays empty.
+    label->setToolTip(state == CybouContentState::Protected
+        ? QCoreApplication::translate("CybouUi", "Encrypted on this computer and stored encrypted on the network")
+        : QCoreApplication::translate("CybouUi", "End-to-end encrypted; stored encrypted on this computer"));
+    auto* lock = new QLabel{label};
+    lock->setObjectName(QStringLiteral("stateLock"));
+    lock->setPixmap(glyphPixmap(Glyph::Lock, {12, 12}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
+    lock->setStyleSheet(QStringLiteral("background: transparent; border: none;"));
+    auto* caption = new QLabel{text, label};
+    caption->setObjectName(QStringLiteral("stateText"));
+    caption->setStyleSheet(QStringLiteral("background: transparent; border: none; font-size: 12px; color: %1;")
+        .arg(CybouTheme::color(CybouTheme::TEXT_SECONDARY).name()));
+    auto* row = new QHBoxLayout{label};
+    row->setContentsMargins(0, 0, 0, 0);
+    row->setSpacing(5);
+    row->addWidget(lock, 0, Qt::AlignVCenter);
+    row->addWidget(caption, 0, Qt::AlignVCenter);
+    row->addStretch();
     return label;
 }
 

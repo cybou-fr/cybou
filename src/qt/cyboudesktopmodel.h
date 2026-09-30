@@ -48,6 +48,8 @@ struct CybouCapabilities {
  * Identity-centric desktop status. Pages render product state only;
  * finalized_height is shown in Diagnostics and Security Details.
  */
+enum class CybouSyncFreshness { Unknown, CatchingUp, Current, Error };
+
 struct CybouDesktopStatus {
     QString network_name{"CYBOU DEV"};
     /** Canonical network identifier once core exposes it; empty until then. */
@@ -56,6 +58,7 @@ struct CybouDesktopStatus {
     bool node_running{false};
     bool online{false};
     bool syncing{false};
+    CybouSyncFreshness sync_freshness{CybouSyncFreshness::Unknown};
     int peer_count{0};
     quint64 finalized_height{0};
     bool finality_known{false};
@@ -123,6 +126,8 @@ public:
 
     /** True when the desktop is fed by a deterministic UI fixture, not core. */
     bool fixtureMode() const { return m_fixture_mode; }
+    /** Last finalized .cybou name seen for this data folder (public; shown while locked). */
+    QString rememberedName() const;
     void setFixtureMode(bool fixture) { m_fixture_mode = fixture; }
 
     /** True once the user requested identity creation and core has not
@@ -142,6 +147,7 @@ public:
     bool isNetworkAuthority() const { return m_network_authority.proven; }
     void setNetworkAuthority(const CybouNetworkAuthorityStatus& status);
     void setSyncing(bool syncing);
+    void setSyncFreshness(CybouSyncFreshness freshness);
     void setSyncError(const QString& error);
     void setLastSync(const QDateTime& when);
     QDateTime lastSync() const { return m_last_sync; }
@@ -151,6 +157,8 @@ public:
     void setPrimaryName(const QString& name);
     void setBalances(quint64 balance, quint64 system_balance);
     void setStorageUsage(quint64 used, quint64 quota);
+    /** Recomputes storage_used from the Identity's files (live mode only). */
+    void refreshStorageUsed();
 
     /**
      * Connects the Mail/Files application backend (not owned). Every
@@ -349,6 +357,8 @@ Q_SIGNALS:
     void capabilitiesChanged();
     void namesChanged();
     void mailChanged();
+    /** Views showing `old_id` switch to `new_id` (temporary send id became permanent). */
+    void mailIdReplaced(const QString& old_id, const QString& new_id);
     void filesChanged();
     void activityChanged();
     void walletChanged();
@@ -391,6 +401,10 @@ private:
     QVector<CybouMailItem> m_mail;
     QVector<CybouFileItem> m_files;
     QVector<CybouActivityItem> m_activity;
+    /** Events with no semantic record of their own (e.g. attachment saved to Files). */
+    QVector<CybouActivityItem> m_extra_activity;
+    /** Live mode: Recent activity is derived from Mail, Files and Wallet state. */
+    void rebuildActivity();
     QVector<CybouWalletEntry> m_wallet_entries;
     QVector<CybouContact> m_contacts;
     CybouRestoreProgress m_restore_progress;

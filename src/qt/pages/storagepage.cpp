@@ -265,6 +265,8 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_table->setColumnCount(ColumnCount);
     m_table->setHeaderLabels({tr("Name"), tr("Size"), tr("Modified"), tr("Status")});
     m_table->setRootIsDecorated(false);
+    // Rename is an explicit action (F2 / context menu), never an inline editor on click.
+    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_table->setUniformRowHeights(true);
     m_table->setFrameShape(QFrame::NoFrame);
     m_table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -277,7 +279,7 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_table->header()->setSectionResizeMode(StatusColumn, QHeaderView::Fixed);
     m_table->header()->resizeSection(SizeColumn, 100);
     m_table->header()->resizeSection(ModifiedColumn, 120);
-    m_table->header()->resizeSection(StatusColumn, 170);
+    m_table->header()->resizeSection(StatusColumn, 220);
     m_table->setStyleSheet(QStringLiteral("QTreeWidget::item { height: 40px; }"));
     m_table->header()->setSectionsClickable(true);
     m_table->header()->setSortIndicatorShown(true);
@@ -287,11 +289,14 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
         sortBy(column, column == m_sort_column ? !m_sort_descending : column == ModifiedColumn);
     });
     m_views->addWidget(m_table);
+    // Column visibility follows the list's own width (the page may be resized while hidden).
+    m_views->installEventFilter(this);
 
     m_tiles = new QListWidget{m_views};
     m_tiles->setObjectName(QStringLiteral("filesGrid"));
     m_tiles->setAccessibleName(tr("Files"));
     m_tiles->setViewMode(QListView::IconMode);
+    m_tiles->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tiles->setResizeMode(QListView::Adjust);
     m_tiles->setMovement(QListView::Static);
     m_tiles->setWrapping(true);
@@ -514,6 +519,11 @@ bool StoragePage::handleItemDrag(QWidget* viewport, QEvent* event)
 
 bool StoragePage::eventFilter(QObject* watched, QEvent* event)
 {
+    if (watched == m_views) {
+        // Only watched for its size; it also sees ChildAdded while its views are built.
+        if (event->type() == QEvent::Resize || event->type() == QEvent::Show) updateColumns();
+        return QWidget::eventFilter(watched, event);
+    }
     if (watched == m_table->viewport() || watched == m_tiles->viewport()) {
         if (handleItemDrag(static_cast<QWidget*>(watched), event)) return true;
         return QWidget::eventFilter(watched, event);
@@ -649,8 +659,10 @@ void StoragePage::rebuild()
     m_tiles->clear();
     for (const auto& file : items) {
         m_visible << file.id;
-        const QIcon icon{glyphPixmap(FileGlyph(file), {20, 20},
-            CybouTheme::color(file.folder ? CybouTheme::BLUE : CybouTheme::TEXT_SECONDARY))};
+        // Every stored item is encrypted: a small lock marks it (folders included).
+        const QColor lock = CybouTheme::color(CybouTheme::BRAND_TEAL_DARK);
+        const QIcon icon{withLockBadge(glyphPixmap(FileGlyph(file), {20, 20},
+            CybouTheme::color(file.folder ? CybouTheme::BLUE : CybouTheme::TEXT_SECONDARY)), lock)};
         const QString status = CybouProduct::fileStatusText(file, online,
             m_model->displayedOperationState(file.operation_id, file.operation_state));
 
@@ -677,8 +689,8 @@ void StoragePage::rebuild()
         row->setForeground(SizeColumn, CybouTheme::color(CybouTheme::TEXT_SECONDARY));
         row->setForeground(ModifiedColumn, CybouTheme::color(CybouTheme::TEXT_SECONDARY));
 
-        auto* tile = new QListWidgetItem{QIcon{glyphPixmap(FileGlyph(file), {48, 48},
-            CybouTheme::color(file.folder ? CybouTheme::BLUE : CybouTheme::TEXT_SECONDARY))},
+        auto* tile = new QListWidgetItem{QIcon{withLockBadge(glyphPixmap(FileGlyph(file), {48, 48},
+            CybouTheme::color(file.folder ? CybouTheme::BLUE : CybouTheme::TEXT_SECONDARY)), lock)},
             status.isEmpty() ? file.name : QStringLiteral("%1\n%2").arg(file.name, status), m_tiles};
         tile->setData(kIdRole, file.id);
         tile->setToolTip(file.name);
@@ -818,10 +830,11 @@ void StoragePage::activate(const QString& id)
 
 void StoragePage::updateColumns()
 {
+    if (!m_table) return;
     // Hide secondary columns before any horizontal scrolling can appear.
     const int width = m_views->width();
-    m_table->setColumnHidden(ModifiedColumn, width < 700);
-    m_table->setColumnHidden(SizeColumn, width < 560);
+    m_table->setColumnHidden(ModifiedColumn, width < 750);
+    m_table->setColumnHidden(SizeColumn, width < 610);
 }
 
 void StoragePage::resizeEvent(QResizeEvent* event)

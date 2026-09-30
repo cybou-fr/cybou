@@ -968,6 +968,7 @@ void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message)
             owner->m_pending_sends.remove(client_id);
             Q_EMIT owner->mailItemRemoved(client_id);
             Q_EMIT owner->mailItemChanged(outgoing);
+            Q_EMIT owner->mailItemReplaced(client_id, outgoing.id);
         });
         s.jobs[job_id] = s.publication->PublishMail(job_id, std::move(mail), std::move(new_content));
         if (s.jobs[job_id].phase == cybou::PublicationJobPhase::NEEDS_ATTENTION) {

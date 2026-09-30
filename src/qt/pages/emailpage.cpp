@@ -340,6 +340,11 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshBanner(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refreshBanner(); });
+    connect(m_model, &CybouDesktopModel::mailIdReplaced, this, [this](const QString& old_id, const QString& new_id) {
+        if (m_current_id != old_id) return;
+        m_current_id = new_id;
+        rebuildList();
+    });
 
     // Familiar mail shortcuts; each has a visible button equivalent.
     const auto shortcut = [this](const QKeySequence& keys, auto&& action) {

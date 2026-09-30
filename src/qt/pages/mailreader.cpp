@@ -263,6 +263,11 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     connect(m_forward, &QPushButton::clicked, this, [this] { if (onForward) onForward(m_id); });
 
     connect(m_model, &CybouDesktopModel::mailChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::mailIdReplaced, this, [this](const QString& old_id, const QString& new_id) {
+        if (m_id != old_id) return;
+        m_id = new_id;
+        refresh();
+    });
 }
 
 void MailReader::setBackVisible(bool visible)

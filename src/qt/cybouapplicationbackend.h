@@ -108,6 +108,8 @@ Q_SIGNALS:
     void mailSnapshot(const QVector<CybouMailItem>& items);
     void mailItemChanged(const CybouMailItem& item);
     void mailItemRemoved(const QString& id);
+    /** A temporary local id (e.g. an outgoing message) now has its permanent id. */
+    void mailItemReplaced(const QString& old_id, const QString& new_id);
     void mailStateChanged(const QString& id, CybouContentState state);
     void attachmentStateChanged(const QString& message_id, const QString& attachment_id,
         CybouContentState state, int progress_percent);

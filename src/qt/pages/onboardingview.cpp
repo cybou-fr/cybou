@@ -884,11 +884,12 @@ void OnboardingView::refresh()
             !status.account_id.isEmpty());
         break;
     }
-    case CybouIdentityState::Locked:
-        m_unlock_title->setText(status.primary_name.isEmpty() ? tr("Welcome back")
-            : tr("Welcome back, %1").arg(status.primary_name));
+    case CybouIdentityState::Locked: {
+        const QString name = status.primary_name.isEmpty() ? m_model->rememberedName() : status.primary_name;
+        m_unlock_title->setText(name.isEmpty() ? tr("Welcome back") : tr("Welcome back, %1").arg(name));
         if (screen() != Screen::Restore && screen() != Screen::Restoring) showScreen(Screen::Unlock);
         break;
+    }
     case CybouIdentityState::None:
         if (screen() == Screen::Creating && m_model->identityCreationRequestPending()) {
             for (int i = 0; i < m_create_steps.size(); ++i) SetStep(m_create_steps.at(i), i == 0 ? 1 : 0);

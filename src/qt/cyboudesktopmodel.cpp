@@ -16,7 +16,9 @@
 
 #include <cybou/crypto/cleanse.h>
 
+#include <QCryptographicHash>
 #include <QFileInfo>
+#include <QSettings>
 #include <QRegularExpression>
 
 #include <algorithm>
@@ -53,10 +55,58 @@ QString cybouConnectionText(const CybouDesktopStatus& status)
     return CybouDesktopModel::tr("Synced");
 }
 
+namespace {
+QString RememberedNameKey(const QString& data_directory)
+{
+    const auto digest = QCryptographicHash::hash(data_directory.toUtf8(), QCryptographicHash::Sha256).toHex().left(16);
+    return QStringLiteral("identity/last_name/") + QString::fromLatin1(digest);
+}
+} // namespace
+
 CybouDesktopModel::CybouDesktopModel(QString network_name, QObject* parent)
     : QObject{parent}
 {
     m_status.network_name = std::move(network_name);
+    connect(this, &CybouDesktopModel::filesChanged, this, &CybouDesktopModel::refreshStorageUsed);
+    connect(this, &CybouDesktopModel::filesChanged, this, &CybouDesktopModel::rebuildActivity);
+    connect(this, &CybouDesktopModel::mailChanged, this, &CybouDesktopModel::rebuildActivity);
+    connect(this, &CybouDesktopModel::walletChanged, this, &CybouDesktopModel::rebuildActivity);
+}
+
+void CybouDesktopModel::rebuildActivity()
+{
+    if (fixtureMode()) return;
+    const auto timed = [](const QDateTime& time) { return time.isValid() && time.toSecsSinceEpoch() > 0; };
+    QVector<CybouActivityItem> items = m_extra_activity;
+    for (const auto& mail : m_mail) {
+        if (mail.draft || !timed(mail.time)) continue;
+        const QString subject = mail.subject.isEmpty() ? tr("(no subject)") : mail.subject;
+        if (mail.folder == CybouMailFolder::Sent) {
+            items.append({CybouActivityKind::MailSent, tr("Mail to %1").arg(mail.to_name), subject, mail.time});
+        } else if (mail.folder == CybouMailFolder::Inbox || mail.folder == CybouMailFolder::Archive) {
+            items.append({CybouActivityKind::MailReceived, tr("Mail from %1").arg(mail.from_name), subject, mail.time});
+        }
+    }
+    for (const auto& file : m_files) {
+        if (file.folder || file.trashed || !timed(file.modified)) continue;
+        items.append({CybouActivityKind::FileUploaded, tr("%1 added to Files").arg(file.name),
+            CybouProduct::sizeText(file.logical_size), file.modified});
+    }
+    for (const auto& entry : m_wallet_entries) {
+        if (!timed(entry.time)) continue;
+        const QString amount = cybouAmountText(static_cast<quint64>(std::llabs(entry.amount)));
+        if (entry.kind == CybouWalletEntryKind::Sent) {
+            items.append({CybouActivityKind::PaymentSent, tr("%1 sent").arg(amount), entry.counterparty_name, entry.time});
+        } else if (entry.kind == CybouWalletEntryKind::Received) {
+            items.append({CybouActivityKind::PaymentReceived, tr("%1 received").arg(amount), entry.counterparty_name,
+                entry.time});
+        }
+    }
+    std::stable_sort(items.begin(), items.end(),
+        [](const CybouActivityItem& a, const CybouActivityItem& b) { return a.time > b.time; });
+    if (items.size() > 20) items.resize(20);
+    m_activity = std::move(items);
+    Q_EMIT activityChanged();
 }
 
 CybouDesktopModel::~CybouDesktopModel()
@@ -93,7 +143,7 @@ CybouCapabilities CybouDesktopModel::honest(CybouCapabilities capabilities) cons
     capabilities.files = capabilities.files && m_backend && m_backend->filesAvailable();
     // Identity operations need the current network tip: an Identity created
     // from a stale view carries expired work and the network rejects it.
-    capabilities.account_creation = capabilities.account_creation && !m_status.syncing;
+    capabilities.account_creation = capabilities.account_creation && !m_status.syncing && (m_fixture_mode || m_status.sync_freshness == CybouSyncFreshness::Current);
     return capabilities;
 }
 
@@ -137,6 +187,15 @@ void CybouDesktopModel::setPeerCount(int peer_count)
     if (m_status.peer_count == peer_count) return;
     m_status.peer_count = peer_count;
     Q_EMIT statusChanged();
+}
+
+void CybouDesktopModel::setSyncFreshness(CybouSyncFreshness freshness)
+{
+    if (m_status.sync_freshness == freshness) return;
+    m_status.sync_freshness = freshness;
+    m_status.syncing = freshness == CybouSyncFreshness::CatchingUp;
+    Q_EMIT statusChanged();
+    setCapabilities(m_requested_capabilities);
 }
 
 void CybouDesktopModel::setSyncing(bool syncing)
@@ -231,6 +290,7 @@ void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
             if (m_session_open) upsertMailItem(item);
         });
         connect(m_backend, &B::mailItemRemoved, this, &CybouDesktopModel::removeMailItem);
+        connect(m_backend, &B::mailItemReplaced, this, &CybouDesktopModel::mailIdReplaced);
         connect(m_backend, &B::mailStateChanged, this, &CybouDesktopModel::setMailState);
         connect(m_backend, &B::attachmentStateChanged, this, &CybouDesktopModel::setAttachmentState);
         connect(m_backend, &B::attachmentRetrievalChanged, this, &CybouDesktopModel::setAttachmentRetrieval);
@@ -505,6 +565,18 @@ void CybouDesktopModel::setFileItems(QVector<CybouFileItem> items)
     Q_EMIT filesChanged();
 }
 
+void CybouDesktopModel::refreshStorageUsed()
+{
+    // Live mode: "used" is this Identity's own files (Trash included until
+    // emptied), never provider topology. Fixtures set their own figures.
+    if (fixtureMode()) return;
+    quint64 used{0};
+    for (const auto& file : m_files) {
+        if (!file.folder) used += file.logical_size;
+    }
+    setStorageUsage(used, m_status.storage_quota);
+}
+
 void CybouDesktopModel::upsertFileItem(const CybouFileItem& item)
 {
     const auto it = std::find_if(m_files.begin(), m_files.end(),
@@ -528,8 +600,14 @@ void CybouDesktopModel::setActivity(QVector<CybouActivityItem> items)
 
 void CybouDesktopModel::addActivity(const CybouActivityItem& item)
 {
-    m_activity.prepend(item);
-    Q_EMIT activityChanged();
+    if (fixtureMode()) {
+        m_activity.prepend(item);
+        Q_EMIT activityChanged();
+        return;
+    }
+    m_extra_activity.prepend(item);
+    if (m_extra_activity.size() > 20) m_extra_activity.resize(20);
+    rebuildActivity();
 }
 
 void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
@@ -572,6 +650,19 @@ void CybouDesktopModel::setOperationStatus(const CybouOperationStatus& status)
     if (stored.state == CybouOperationState::Finalized && status.state != CybouOperationState::Finalized) return;
     if (stored.state == CybouOperationState::Failed && status.state != CybouOperationState::Failed &&
         status.state != CybouOperationState::Finalized) return;
+    // Explicit phase transitions prevent delayed asynchronous events from regressing validation.
+    const auto allowed = [&] {
+        if (status.state == stored.state || status.state == CybouOperationState::Finalized) return true;
+        if (status.state == CybouOperationState::Failed) return stored.state != CybouOperationState::Finalized;
+        switch (stored.state) {
+        case CybouOperationState::Local: return status.state == CybouOperationState::Preparing || status.state == CybouOperationState::Submitted || status.state == CybouOperationState::Validated;
+        case CybouOperationState::Preparing: return status.state == CybouOperationState::Submitted || status.state == CybouOperationState::Validated;
+        case CybouOperationState::Submitted: return status.state == CybouOperationState::Validated;
+        case CybouOperationState::Validated: case CybouOperationState::Finalized: case CybouOperationState::Failed: return false;
+        }
+        return false;
+    };
+    if (!allowed()) return;
     stored = status;
     Q_EMIT operationStatusChanged(status.operation_id);
     // Items reference operations by id; let their views re-render.
@@ -1283,6 +1374,11 @@ void CybouDesktopModel::setFileRetrieval(const QString& id, CybouRetrievalState 
     if (MutateFile(m_files, id, [&](CybouFileItem& item) { item.retrieval = retrieval; })) Q_EMIT filesChanged();
 }
 
+QString CybouDesktopModel::rememberedName() const
+{
+    return QSettings{}.value(RememberedNameKey(m_status.data_directory)).toString();
+}
+
 void CybouDesktopModel::refreshFinalizedName()
 {
     if (m_fixture_mode) return;
@@ -1291,6 +1387,9 @@ void CybouDesktopModel::refreshFinalizedName()
     const QString finalized = name ? QString::fromStdString(*name) + QStringLiteral(".cybou") : QString{};
     if (m_status.primary_name == finalized) return;
     m_status.primary_name = finalized;
+    // Names are public: remember the last one so the unlock screen can greet
+    // a returning user before the vault is open.
+    if (!finalized.isEmpty()) QSettings{}.setValue(RememberedNameKey(m_status.data_directory), finalized);
     QVector<CybouNameItem> names;
     if (!finalized.isEmpty()) names.append({finalized, true});
     m_names = names;
