@@ -151,6 +151,9 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     send->addWidget(m_to);
     m_to_hint = MutedText({}, m_send_panel);
     send->addWidget(m_to_hint);
+    m_recent = new QHBoxLayout;
+    m_recent->setSpacing(6);
+    send->addLayout(m_recent);
     m_completer = new QCompleter{this};
     m_completer->setModel(new QStandardItemModel{m_completer});
     m_completer->setCompletionRole(kNameRole);
@@ -255,6 +258,23 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
 
 void WalletPage::openSend(const QString& to)
 {
+    while (QLayoutItem* item = m_recent->takeAt(0)) {
+        if (QWidget* widget = item->widget()) widget->deleteLater();
+        delete item;
+    }
+    const auto& contacts = m_model->contacts();
+    for (qsizetype i = 0; i < contacts.size() && i < 4; ++i) {
+        auto* chip = new QPushButton{contacts.at(i).name, m_send_panel};
+        chip->setObjectName(QStringLiteral("secondaryButton"));
+        chip->setProperty("cybouId", QStringLiteral("walletRecentContact"));
+        chip->setCursor(Qt::PointingHandCursor);
+        connect(chip, &QPushButton::clicked, this, [this, name = contacts.at(i).name] {
+            m_to->setText(name);
+            m_amount->setFocus();
+        });
+        m_recent->addWidget(chip);
+    }
+    m_recent->addStretch();
     auto* model = static_cast<QStandardItemModel*>(m_completer->model());
     model->clear();
     for (const auto& contact : m_model->contacts()) {

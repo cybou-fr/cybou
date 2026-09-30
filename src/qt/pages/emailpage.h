@@ -20,6 +20,7 @@ class QMenu;
 class QListWidget;
 class QPushButton;
 class QStackedWidget;
+class QVBoxLayout;
 class MailCompose;
 class MailReader;
 
@@ -77,6 +78,9 @@ private:
     QFrame* m_rail{nullptr};
     QPushButton* m_compose_button{nullptr};
     QListWidget* m_folders{nullptr};
+    /** Rail list of recent contacts; a click starts a message to them. */
+    QVBoxLayout* m_contact_rows{nullptr};
+    void rebuildContacts();
     QWidget* m_list_pane{nullptr};
     QLineEdit* m_search{nullptr};
     QFrame* m_banner{nullptr};

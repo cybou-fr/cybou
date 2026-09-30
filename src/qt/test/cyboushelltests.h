@@ -38,6 +38,7 @@ private Q_SLOTS:
     void mailFilesCrossProduct();
     void walletPageShowsBalances();
     void walletLocksBalanceIntoSystemBalance();
+    void contactsComeFromMailAndPayments();
     void filesGateActions();
     void filesNavigationAndViews();
     void networkPageReflectsModel();

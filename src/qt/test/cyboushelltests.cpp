@@ -505,6 +505,45 @@ void CybouShellTests::mailFilesCrossProduct()
     QVERIFY(!model->attachmentFromFile(QStringLiteral("f-archive")).has_value());
 }
 
+void CybouShellTests::contactsComeFromMailAndPayments()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    model.setPrimaryName(QStringLiteral("me.cybou"));
+    QSignalSpy changed{&model, &CybouDesktopModel::contactsChanged};
+    const auto now = QDateTime::currentDateTime();
+    CybouMailItem received;
+    received.id = QStringLiteral("m1");
+    received.from_name = QStringLiteral("alice.cybou");
+    received.to_name = QStringLiteral("me.cybou");
+    received.time = now.addDays(-2);
+    CybouMailItem sent;
+    sent.id = QStringLiteral("m2");
+    sent.folder = CybouMailFolder::Sent;
+    sent.from_name = QStringLiteral("me.cybou");
+    sent.to_name = QStringLiteral("bobby.cybou");
+    sent.time = now.addDays(-1);
+    CybouMailItem draft;
+    draft.id = QStringLiteral("d1");
+    draft.draft = true;
+    draft.folder = CybouMailFolder::Drafts;
+    draft.to_name = QStringLiteral("never.cybou");
+    draft.time = now;
+    model.setMailItems({received, sent, draft});
+    CybouWalletEntry paid;
+    paid.id = QStringLiteral("w1");
+    paid.kind = CybouWalletEntryKind::Sent;
+    paid.counterparty_name = QStringLiteral("carol.cybou");
+    paid.time = now;
+    model.setWalletEntries({paid});
+
+    // Most recent first; never yourself, never an unsent draft's recipient.
+    QVERIFY(changed.count() > 0);
+    QStringList names;
+    for (const auto& contact : model.contacts()) names << contact.name;
+    QCOMPARE(names, (QStringList{QStringLiteral("carol.cybou"), QStringLiteral("bobby.cybou"),
+                                 QStringLiteral("alice.cybou")}));
+}
+
 void CybouShellTests::walletLocksBalanceIntoSystemBalance()
 {
     auto window = makeWindow();

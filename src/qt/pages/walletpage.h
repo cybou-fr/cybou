@@ -12,6 +12,7 @@
 class CybouDesktopModel;
 class QCompleter;
 class QFrame;
+class QHBoxLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -46,6 +47,8 @@ private:
     QFrame* m_send_panel{nullptr};
     QLineEdit* m_to{nullptr};
     QLabel* m_to_hint{nullptr};
+    /** One-click recipients: the most recent contacts. */
+    QHBoxLayout* m_recent{nullptr};
     QCompleter* m_completer{nullptr};
     QLineEdit* m_amount{nullptr};
     QLabel* m_fee{nullptr};

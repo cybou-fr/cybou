@@ -27,6 +27,7 @@
 #include <QShortcut>
 #include <QShowEvent>
 #include <QStackedWidget>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -223,11 +224,16 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     m_folders->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_folders->setFixedHeight(6 * 40 + 4);
     rail->addWidget(m_folders);
-    auto* labels_title = new QLabel{tr("Labels"), m_rail};
-    labels_title->setObjectName(QStringLiteral("eyebrow"));
+    auto* contacts_title = new QLabel{tr("Contacts"), m_rail};
+    contacts_title->setObjectName(QStringLiteral("eyebrow"));
     rail->addSpacing(6);
-    rail->addWidget(labels_title);
-    rail->addWidget(MutedText(tr("No labels yet"), m_rail));
+    rail->addWidget(contacts_title);
+    auto* contacts_host = new QWidget{m_rail};
+    contacts_host->setObjectName(QStringLiteral("mailContacts"));
+    m_contact_rows = new QVBoxLayout{contacts_host};
+    m_contact_rows->setContentsMargins(0, 0, 0, 0);
+    m_contact_rows->setSpacing(2);
+    rail->addWidget(contacts_host);
     rail->addStretch();
     root->addWidget(m_rail);
 
@@ -346,6 +352,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshBanner(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refreshBanner(); });
+    connect(m_model, &CybouDesktopModel::contactsChanged, this, [this] { rebuildContacts(); });
     connect(m_model, &CybouDesktopModel::mailIdReplaced, this, [this](const QString& old_id, const QString& new_id) {
         if (m_current_id != old_id) return;
         m_current_id = new_id;
@@ -381,6 +388,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     });
 
     rebuildFolders();
+    rebuildContacts();
     m_folders->setCurrentRow(0);
     rebuildList();
     refreshBanner();
@@ -742,6 +750,43 @@ CybouMailItem EmailPage::forwardOf(const QString& id) const
     // Forwarding reuses the already protected attachment content.
     forward.attachments = item->attachments;
     return forward;
+}
+
+void EmailPage::rebuildContacts()
+{
+    while (QLayoutItem* item = m_contact_rows->takeAt(0)) {
+        if (QWidget* widget = item->widget()) {
+            widget->hide();
+            widget->deleteLater();
+        }
+        delete item;
+    }
+    QWidget* parent = m_contact_rows->parentWidget();
+    const auto& contacts = m_model->contacts();
+    if (contacts.isEmpty()) {
+        m_contact_rows->addWidget(MutedText(tr("People you mail or pay appear here."), parent));
+        return;
+    }
+    for (qsizetype i = 0; i < contacts.size() && i < 8; ++i) {
+        const auto& contact = contacts.at(i);
+        auto* button = new QToolButton{parent};
+        button->setObjectName(QStringLiteral("mailContact"));
+        button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        button->setIcon(QIcon{avatarPixmap(contact.name.left(1).toUpper(), PeerColor(contact.name), 22)});
+        button->setIconSize({22, 22});
+        button->setText(contact.name);
+        button->setToolTip(tr("Write to %1").arg(contact.name));
+        button->setAutoRaise(true);
+        button->setCursor(Qt::PointingHandCursor);
+        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        button->setStyleSheet(QStringLiteral("QToolButton { text-align: left; padding: 4px 6px; border: none; }"));
+        connect(button, &QToolButton::clicked, this, [this, name = contact.name] {
+            CybouMailItem draft;
+            draft.to_name = name;
+            openCompose(draft);
+        });
+        m_contact_rows->addWidget(button);
+    }
 }
 
 void EmailPage::closeDetail()

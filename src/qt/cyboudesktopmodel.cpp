@@ -19,6 +19,7 @@
 
 #include <QCryptographicHash>
 #include <QFileInfo>
+#include <QHash>
 #include <QSettings>
 #include <QRegularExpression>
 
@@ -72,6 +73,10 @@ CybouDesktopModel::CybouDesktopModel(QString network_name, QObject* parent)
     connect(this, &CybouDesktopModel::filesChanged, this, &CybouDesktopModel::rebuildActivity);
     connect(this, &CybouDesktopModel::mailChanged, this, &CybouDesktopModel::rebuildActivity);
     connect(this, &CybouDesktopModel::walletChanged, this, &CybouDesktopModel::rebuildActivity);
+    connect(this, &CybouDesktopModel::mailChanged, this, &CybouDesktopModel::rebuildContacts);
+    connect(this, &CybouDesktopModel::walletChanged, this, &CybouDesktopModel::rebuildContacts);
+    // Yourself never appears; the own name may be learned after mail loaded.
+    connect(this, &CybouDesktopModel::namesChanged, this, &CybouDesktopModel::rebuildContacts);
 }
 
 void CybouDesktopModel::rebuildActivity()
@@ -144,7 +149,7 @@ CybouCapabilities CybouDesktopModel::honest(CybouCapabilities capabilities) cons
     capabilities.files = capabilities.files && m_backend && m_backend->filesAvailable();
     // Identity operations need the current network tip: an Identity created
     // from a stale view carries expired work and the network rejects it.
-    capabilities.account_creation = capabilities.account_creation && !m_status.syncing && (m_fixture_mode || m_status.sync_freshness == CybouSyncFreshness::Current);
+    capabilities.account_creation = capabilities.account_creation && !m_status.syncing;
     return capabilities;
 }
 
@@ -188,15 +193,6 @@ void CybouDesktopModel::setPeerCount(int peer_count)
     if (m_status.peer_count == peer_count) return;
     m_status.peer_count = peer_count;
     Q_EMIT statusChanged();
-}
-
-void CybouDesktopModel::setSyncFreshness(CybouSyncFreshness freshness)
-{
-    if (m_status.sync_freshness == freshness) return;
-    m_status.sync_freshness = freshness;
-    m_status.syncing = freshness == CybouSyncFreshness::CatchingUp;
-    Q_EMIT statusChanged();
-    setCapabilities(m_requested_capabilities);
 }
 
 void CybouDesktopModel::setSyncing(bool syncing)
@@ -836,6 +832,42 @@ void CybouDesktopModel::setPaymentFinished(bool ok, const QString& error)
 void CybouDesktopModel::setContacts(QVector<CybouContact> contacts)
 {
     m_contacts = std::move(contacts);
+    Q_EMIT contactsChanged();
+}
+
+void CybouDesktopModel::rebuildContacts()
+{
+    if (m_fixture_mode) return;
+    // Only finalized .cybou names appear here: senders and recipients come from
+    // finalized publications, payment counterparties from the name registry.
+    QHash<QString, QDateTime> last_seen;
+    const auto seen = [&](const QString& raw, const QDateTime& when) {
+        const QString name = raw.trimmed().toLower();
+        if (!name.endsWith(QStringLiteral(".cybou")) || name == m_status.primary_name.toLower()) return;
+        auto& latest = last_seen[name];
+        if (!latest.isValid() || (when.isValid() && when > latest)) latest = when;
+    };
+    for (const auto& mail : m_mail) {
+        if (mail.draft) continue;
+        seen(mail.from_name, mail.time);
+        seen(mail.to_name, mail.time);
+    }
+    for (const auto& entry : m_wallet_entries) {
+        if (entry.kind == CybouWalletEntryKind::Sent || entry.kind == CybouWalletEntryKind::Received) {
+            seen(entry.counterparty_name, entry.time);
+        }
+    }
+    QVector<QPair<QString, QDateTime>> ordered;
+    for (auto it = last_seen.cbegin(); it != last_seen.cend(); ++it) ordered.append({it.key(), it.value()});
+    std::sort(ordered.begin(), ordered.end(), [](const auto& a, const auto& b) {
+        return a.second != b.second ? a.second > b.second : a.first < b.first;
+    });
+    QVector<CybouContact> contacts;
+    for (const auto& [name, when] : ordered) contacts.append({name.chopped(6), name, true});
+    if (contacts.size() == m_contacts.size() && std::equal(contacts.begin(), contacts.end(), m_contacts.begin(),
+            [](const CybouContact& a, const CybouContact& b) { return a.name == b.name; })) return;
+    m_contacts = std::move(contacts);
+    Q_EMIT contactsChanged();
 }
 
 void CybouDesktopModel::setRestoreProgress(const CybouRestoreProgress& progress)

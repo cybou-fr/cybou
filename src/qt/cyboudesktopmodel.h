@@ -48,8 +48,6 @@ struct CybouCapabilities {
  * Identity-centric desktop status. Pages render product state only;
  * finalized_height is shown in Diagnostics and Security Details.
  */
-enum class CybouSyncFreshness { Unknown, CatchingUp, Current, Error };
-
 struct CybouDesktopStatus {
     QString network_name{"CYBOU DEV"};
     /** Canonical network identifier once core exposes it; empty until then. */
@@ -58,7 +56,6 @@ struct CybouDesktopStatus {
     bool node_running{false};
     bool online{false};
     bool syncing{false};
-    CybouSyncFreshness sync_freshness{CybouSyncFreshness::Unknown};
     int peer_count{0};
     quint64 finalized_height{0};
     bool finality_known{false};
@@ -147,7 +144,6 @@ public:
     bool isNetworkAuthority() const { return m_network_authority.proven; }
     void setNetworkAuthority(const CybouNetworkAuthorityStatus& status);
     void setSyncing(bool syncing);
-    void setSyncFreshness(CybouSyncFreshness freshness);
     void setSyncError(const QString& error);
     void setLastSync(const QDateTime& when);
     QDateTime lastSync() const { return m_last_sync; }
@@ -266,6 +262,8 @@ public:
 
     const QVector<CybouContact>& contacts() const { return m_contacts; }
     void setContacts(QVector<CybouContact> contacts);
+    /** Live mode: people this Identity mailed, heard from or paid, most recent first. */
+    void rebuildContacts();
 
     const CybouRestoreProgress& restoreProgress() const { return m_restore_progress; }
     void setRestoreProgress(const CybouRestoreProgress& progress);
@@ -365,6 +363,7 @@ Q_SIGNALS:
     void capabilitiesChanged();
     void namesChanged();
     void mailChanged();
+    void contactsChanged();
     /** Views showing `old_id` switch to `new_id` (temporary send id became permanent). */
     void mailIdReplaced(const QString& old_id, const QString& new_id);
     void filesChanged();
