@@ -671,7 +671,8 @@ void StoragePage::rebuild()
         row->setText(ModifiedColumn, ModifiedText(file.modified));
         // Protected is the norm; only other states draw attention.
         if (!status.isEmpty() && (file.state != CybouContentState::Protected || file.retrieval != CybouRetrievalState::Idle))
-            m_table->setItemWidget(row, StatusColumn, StateChip(file.state, status, m_table));
+            m_table->setItemWidget(row, StatusColumn, StateChip(file.state, status, m_table,
+                m_model->displayedOperationState(file.operation_id, file.operation_state)));
         row->setData(StatusColumn, Qt::AccessibleTextRole, status);
         row->setForeground(SizeColumn, CybouTheme::color(CybouTheme::TEXT_SECONDARY));
         row->setForeground(ModifiedColumn, CybouTheme::color(CybouTheme::TEXT_SECONDARY));

@@ -421,7 +421,7 @@ void CybouShellTests::composeGatesAndSends()
     const auto& sent = model->mailItems().first();
     QCOMPARE(sent.folder, CybouMailFolder::Sent);
     // Finality-first: a new message starts local, never as Sent.
-    QCOMPARE(sent.state, CybouContentState::Preparing);
+    QCOMPARE(sent.state, CybouContentState::Local);
     QCOMPARE(CybouProduct::mailStateText(sent), QStringLiteral("Preparing…"));
 
     // Attachments stay local until Send, then follow the message lifecycle.
@@ -438,12 +438,12 @@ void CybouShellTests::composeGatesAndSends()
     send->click();
     const auto& with_attachment = model->mailItems().first();
     QCOMPARE(with_attachment.attachments.size(), 1);
-    QCOMPARE(with_attachment.attachments.first().state, CybouContentState::Preparing);
+    QCOMPARE(with_attachment.attachments.first().state, CybouContentState::Local);
     model->setMailState(with_attachment.id, CybouContentState::NeedsAttention);
     QCOMPARE(model->mailItems().first().state, CybouContentState::NeedsAttention);
     model->requestRetryMail(model->mailItems().first().id);
-    QCOMPARE(model->mailItems().first().state, CybouContentState::Preparing);
-    QCOMPARE(CybouProduct::contentStateText(CybouContentState::WaitingForConfirmation, false),
+    QCOMPARE(model->mailItems().first().state, CybouContentState::Local);
+    QCOMPARE(CybouProduct::contentWithOperationText(CybouContentState::Local, CybouOperationState::Submitted, false),
         QStringLiteral("Waiting for network"));
 
     // Without a connected Mail backend, Send stays disabled and says why.
@@ -623,7 +623,7 @@ void CybouShellTests::filesNavigationAndViews()
     const QString uploaded = model->fileItems().last().id;
     QCOMPARE(model->fileItem(uploaded)->name, QStringLiteral("notes.txt"));
     QVERIFY(model->fileItem(uploaded)->available_offline); // the uploading device keeps its copy
-    QCOMPARE(model->fileItem(uploaded)->state, CybouContentState::Preparing);
+    QCOMPARE(model->fileItem(uploaded)->state, CybouContentState::Local);
     QCOMPARE(model->fileItem(uploaded)->logical_size, quint64{5});
 }
 
@@ -1179,7 +1179,7 @@ void CybouShellTests::backendCommandsDriveProjection()
     const QString id = model.requestSendMail(message);
     QVERIFY(!id.isEmpty());
     QCOMPARE(backend.commands.filter(QStringLiteral("send:")), QStringList{QStringLiteral("send:") + id});
-    QCOMPARE(model.mailItem(id)->state, CybouContentState::Preparing);
+    QCOMPARE(model.mailItem(id)->state, CybouContentState::Local);
     QCOMPARE(model.mailItem(id)->folder, CybouMailFolder::Sent);
     Q_EMIT backend.mailStateChanged(id, CybouContentState::Securing);
     QVERIFY(CybouProduct::mailStateText(*model.mailItem(id)) != QStringLiteral("Sent"));
@@ -1187,7 +1187,7 @@ void CybouShellTests::backendCommandsDriveProjection()
     backend.commands.clear();
     model.requestRetryMail(id);
     QCOMPARE(backend.commands, QStringList{QStringLiteral("retry:") + id});
-    QCOMPARE(model.mailItem(id)->state, CybouContentState::Preparing);
+    QCOMPARE(model.mailItem(id)->state, CybouContentState::Local);
     Q_EMIT backend.mailStateChanged(id, CybouContentState::Protected);
     QCOMPARE(CybouProduct::mailStateText(*model.mailItem(id)), QStringLiteral("Sent"));
 
@@ -1247,15 +1247,21 @@ void CybouShellTests::fixtureLifecycleFollowsBackend()
     message.to_name = QStringLiteral("alice.cybou");
     message.body = QStringLiteral("hello");
     const QString id = model.requestSendMail(message);
-    QCOMPARE(model.mailItem(id)->state, CybouContentState::Preparing);
-    QList<CybouContentState> seen;
+    QCOMPARE(model.mailItem(id)->state, CybouContentState::Local);
+    QCOMPARE(model.mailItem(id)->operation_state, CybouOperationState::Preparing);
+    using Step = std::pair<CybouContentState, CybouOperationState>;
+    QList<Step> seen;
     QObject::connect(&model, &CybouDesktopModel::mailChanged, &model, [&] {
-        if (const auto* item = model.mailItem(id); item && (seen.isEmpty() || seen.last() != item->state))
-            seen << item->state;
+        const auto* item = model.mailItem(id);
+        if (!item) return;
+        const Step step{item->state, item->operation_state};
+        if (seen.isEmpty() || seen.last() != step) seen << step;
     });
     QTRY_COMPARE(model.mailItem(id)->state, CybouContentState::Protected);
-    QCOMPARE(seen, (QList<CybouContentState>{CybouContentState::WaitingForConfirmation,
-        CybouContentState::Securing, CybouContentState::Protected}));
+    // Operation first (Submitted, then Finalized), then storage: Securing -> Protected.
+    QCOMPARE(seen, (QList<Step>{{CybouContentState::Local, CybouOperationState::Submitted},
+        {CybouContentState::Securing, CybouOperationState::Finalized},
+        {CybouContentState::Protected, CybouOperationState::Finalized}}));
     QCOMPARE(CybouProduct::mailStateText(*model.mailItem(id)), QStringLiteral("Sent"));
 
     // Upload runs the same lifecycle; retrieval is separate from protection.
@@ -1266,8 +1272,10 @@ void CybouShellTests::fixtureLifecycleFollowsBackend()
     file.write("hello");
     file.close();
     const QString uploaded = model.requestFileUpload(path);
-    QCOMPARE(model.fileItem(uploaded)->state, CybouContentState::Preparing);
+    QCOMPARE(model.fileItem(uploaded)->state, CybouContentState::Local);
+    QCOMPARE(model.fileItem(uploaded)->operation_state, CybouOperationState::Preparing);
     QTRY_COMPARE(model.fileItem(uploaded)->state, CybouContentState::Protected);
+    QCOMPARE(model.fileItem(uploaded)->operation_state, CybouOperationState::Finalized);
     model.requestFileDownload(QStringLiteral("f-mountain"), dir.filePath(QStringLiteral("m.jpg")));
     QCOMPARE(model.fileItem(QStringLiteral("f-mountain"))->retrieval, CybouRetrievalState::Downloading);
     QCOMPARE(model.fileItem(QStringLiteral("f-mountain"))->state, CybouContentState::Protected);
@@ -1280,8 +1288,9 @@ void CybouShellTests::fixtureLifecycleFollowsBackend()
     model.setNodeStatus(true, 0, false);
     const QString waiting = model.requestSendMail(message);
     QTest::qWait(20);
-    QCOMPARE(model.mailItem(waiting)->state, CybouContentState::Preparing);
-    QCOMPARE(CybouProduct::contentStateText(model.mailItem(waiting)->state, false), QStringLiteral("Waiting for network"));
+    QCOMPARE(model.mailItem(waiting)->state, CybouContentState::Local);
+    QCOMPARE(CybouProduct::contentWithOperationText(model.mailItem(waiting)->state,
+        model.mailItem(waiting)->operation_state, false), QStringLiteral("Waiting for network"));
 }
 
 void CybouShellTests::filesShowLocalAvailability()
@@ -1413,7 +1422,8 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QTRY_VERIFY(!alice_model->mailItem(client_id) && !alice_model->mailItems().isEmpty());
     const QString sent_id = alice_model->mailItems().first().id;
     QCOMPARE(sent_id.size(), 64);
-    QTRY_COMPARE(alice_model->mailItem(sent_id)->state, CybouContentState::WaitingForConfirmation);
+    QTRY_COMPARE(alice_model->mailItem(sent_id)->operation_state, CybouOperationState::Submitted);
+    QCOMPARE(alice_model->mailItem(sent_id)->state, CybouContentState::Local);
 
     QVERIFY(fixture.runtime->ProduceBlock());
     // Finalized is not Sent: with no storage providers the message keeps Securing.
@@ -1732,16 +1742,16 @@ void CybouShellTests::operationValidationNeverActsAsFinality()
         CybouProduct::contentStateText(CybouContentState::Protected));
     QCOMPARE(CybouProduct::contentWithOperationText(CybouContentState::Securing, CybouOperationState::Validated),
         CybouProduct::contentStateText(CybouContentState::Securing));
-    QCOMPARE(CybouProduct::contentWithOperationText(CybouContentState::WaitingForConfirmation,
+    QCOMPARE(CybouProduct::contentWithOperationText(CybouContentState::Local,
         CybouOperationState::Validated), CybouProduct::operationStateText(CybouOperationState::Validated));
 
-    // Fixture: a validated outgoing message stays WaitingForConfirmation content.
+    // Fixture: a validated outgoing message stays Local content (no storage before finality).
     auto window = makeWindow();
     auto* fixture_model = window->desktopModel();
     QVERIFY(CybouUiFixtures::apply(*fixture_model, QStringLiteral("active")));
     const auto* validated = fixture_model->mailItem(QStringLiteral("m-sent-validated"));
     QVERIFY(validated);
-    QCOMPARE(validated->state, CybouContentState::WaitingForConfirmation);
+    QCOMPARE(validated->state, CybouContentState::Local); // no storage before finality
     QCOMPARE(fixture_model->displayedOperationState(validated->operation_id, validated->operation_state),
         CybouOperationState::Validated);
     // Wallet rows: one each of waiting, validated and finalized; balance unchanged.

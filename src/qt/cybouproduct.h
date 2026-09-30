@@ -42,9 +42,9 @@ enum class CybouIdentityStep {
  * Securing between PoA finality and the durability threshold.
  */
 enum class CybouContentState {
+    /** Only on this computer: a draft, or outgoing content before PoA finality
+        (its progress is the operation axis: Preparing / Submitted / Validated). */
     Local,
-    Preparing,
-    WaitingForConfirmation,
     Securing,
     /** This Identity's own content reached its remote durability target. */
     Protected,
@@ -268,8 +268,6 @@ inline QString contentStateText(CybouContentState state)
 {
     switch (state) {
     case CybouContentState::Local: return QCoreApplication::translate("CybouProduct", "Local");
-    case CybouContentState::Preparing: return QCoreApplication::translate("CybouProduct", "Preparing…");
-    case CybouContentState::WaitingForConfirmation: return QCoreApplication::translate("CybouProduct", "Waiting for confirmation…");
     case CybouContentState::Securing: return QCoreApplication::translate("CybouProduct", "Securing…");
     case CybouContentState::Protected: return QCoreApplication::translate("CybouProduct", "Protected");
     case CybouContentState::Received: return QCoreApplication::translate("CybouProduct", "Received");
@@ -277,34 +275,6 @@ inline QString contentStateText(CybouContentState state)
     case CybouContentState::NeedsAttention: return QCoreApplication::translate("CybouProduct", "Needs attention");
     }
     return {};
-}
-
-/**
- * State text that accounts for connectivity: pending content that cannot
- * progress while offline reads "Waiting for network".
- */
-inline QString contentStateText(CybouContentState state, bool online)
-{
-    if (!online && (state == CybouContentState::Preparing || state == CybouContentState::WaitingForConfirmation))
-        return QCoreApplication::translate("CybouProduct", "Waiting for network");
-    return contentStateText(state);
-}
-
-/** Attachment/file progress text, e.g. "Securing 42%". */
-inline QString progressText(CybouContentState state, int percent, bool online = true)
-{
-    if (state == CybouContentState::Securing && percent >= 0)
-        return QCoreApplication::translate("CybouProduct", "Securing %1%").arg(percent);
-    return contentStateText(state, online);
-}
-
-/** Mail send wording: a Protected outgoing message reads as Sent. */
-inline QString mailStateText(const CybouMailItem& item)
-{
-    if (item.draft) return QCoreApplication::translate("CybouProduct", "Draft");
-    if (item.folder == CybouMailFolder::Sent && item.state == CybouContentState::Protected)
-        return QCoreApplication::translate("CybouProduct", "Sent");
-    return contentStateText(item.state);
 }
 
 /** Content already on the network: this Identity's Protected content or Received content. */
@@ -341,17 +311,39 @@ inline bool operationPending(CybouOperationState state)
  */
 inline QString contentWithOperationText(CybouContentState content, CybouOperationState operation, bool online = true)
 {
-    const bool before_finality = content == CybouContentState::Local || content == CybouContentState::Preparing ||
-        content == CybouContentState::WaitingForConfirmation;
-    if (before_finality && operation == CybouOperationState::Validated) return operationStateText(operation);
-    return contentStateText(content, online);
+    // Before finality, Local content in flight shows its operation; offline it waits.
+    const bool in_flight = content == CybouContentState::Local && operationPending(operation) &&
+        operation != CybouOperationState::Local;
+    if (in_flight) {
+        return online ? operationStateText(operation)
+                      : QCoreApplication::translate("CybouProduct", "Waiting for network");
+    }
+    return contentStateText(content);
 }
 
-inline bool contentPending(CybouContentState state)
+/** Attachment/file progress text, e.g. "Securing 42%". */
+inline QString progressText(CybouContentState state, int percent, bool online = true,
+    CybouOperationState operation = CybouOperationState::Finalized)
 {
-    return state == CybouContentState::Preparing ||
-        state == CybouContentState::WaitingForConfirmation ||
-        state == CybouContentState::Securing;
+    if (state == CybouContentState::Securing && percent >= 0)
+        return QCoreApplication::translate("CybouProduct", "Securing %1%").arg(percent);
+    return contentWithOperationText(state, operation, online);
+}
+
+/** Mail send wording: a Protected outgoing message reads as Sent. */
+inline QString mailStateText(const CybouMailItem& item)
+{
+    if (item.draft) return QCoreApplication::translate("CybouProduct", "Draft");
+    if (item.folder == CybouMailFolder::Sent && item.state == CybouContentState::Protected)
+        return QCoreApplication::translate("CybouProduct", "Sent");
+    return contentWithOperationText(item.state, item.operation_state);
+}
+
+/** Still moving toward Protected: in flight before finality, or Securing after it. */
+inline bool itemPending(CybouContentState content, CybouOperationState operation)
+{
+    return content == CybouContentState::Securing ||
+        (content == CybouContentState::Local && operationPending(operation) && operation != CybouOperationState::Local);
 }
 
 inline QString retrievalText(CybouRetrievalState state)

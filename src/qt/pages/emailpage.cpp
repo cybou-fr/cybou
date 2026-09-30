@@ -159,11 +159,13 @@ QWidget* MailRow(const CybouMailItem& item, CybouOperationState operation, bool 
         star->setPixmap(glyphPixmap(Glyph::Star, {14, 14}, CybouTheme::color(CybouTheme::AMBER)));
         top->addWidget(star);
     }
-    const bool pending = CybouProduct::contentPending(item.state) || item.state == CybouContentState::NeedsAttention;
+    const bool pending = CybouProduct::itemPending(item.state, operation) || item.state == CybouContentState::NeedsAttention;
     QLabel* when{nullptr};
     if (pending && !item.draft) {
         // Incoming mail is always Finalized, so only outgoing mail can read "Validated".
-        when = StateChip(item.state, CybouProduct::contentWithOperationText(item.state, operation, online), row);
+        when = StateChip(item.state, item.state == CybouContentState::Securing
+            ? CybouProduct::contentStateText(item.state)
+            : CybouProduct::contentWithOperationText(item.state, operation, online), row, operation);
     } else {
         when = new QLabel{shortTime(item.time), row};
         when->setObjectName(QStringLiteral("rowMeta"));

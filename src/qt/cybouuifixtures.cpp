@@ -177,7 +177,7 @@ QVector<CybouMailItem> FixtureMail()
     auto validated = Mail(QStringLiteral("m-sent-validated"), CybouMailFolder::Sent, QStringLiteral("stan.cybou"),
         QStringLiteral("carol.cybou"), QStringLiteral("Contract questions"),
         QStringLiteral("Two small questions about section 3 before I sign."), At(0, 10, 38));
-    validated.state = CybouContentState::WaitingForConfirmation;
+    validated.state = CybouContentState::Local;
     validated.operation_state = CybouOperationState::Submitted;
     validated.operation_id = QStringLiteral("op-m-sent-validated");
     validated.finalized_height = 0;
@@ -334,9 +334,10 @@ bool apply(CybouDesktopModel& model, const QString& name)
         auto outgoing = Mail(QStringLiteral("m-outgoing"), CybouMailFolder::Sent, QStringLiteral("stan.cybou"),
             QStringLiteral("carol.cybou"), QStringLiteral("Invoice for September"),
             QStringLiteral("Please find the invoice attached."), At(0, 10, 30));
-        outgoing.state = CybouContentState::WaitingForConfirmation;
+        outgoing.state = CybouContentState::Local;
+        outgoing.operation_state = CybouOperationState::Submitted;
         outgoing.attachments = {Attachment(QStringLiteral("c-invoice"), QStringLiteral("invoice-09.pdf"), 310272,
-            CybouContentState::WaitingForConfirmation)};
+            CybouContentState::Local)};
         mail.prepend(outgoing);
     }
     backend->seed(mail, FixtureFiles());

@@ -308,18 +308,19 @@ void MailReader::refresh()
     m_delivery->setVisible(pending);
     if (pending) {
         QString text;
+        const auto operation = m_model->displayedOperationState(item->operation_id, item->operation_state);
         switch (item->state) {
         case CybouContentState::Local:
-        case CybouContentState::Preparing:
-            text = online ? tr("Preparing… Your message is being encrypted on this computer.")
-                          : tr("Waiting for network. Your message is saved and will be sent when CYBOU reconnects.");
-            break;
-        case CybouContentState::WaitingForConfirmation:
-            text = !online ? tr("Waiting for network. Your message is saved and will be sent when CYBOU reconnects.")
-                : m_model->displayedOperationState(item->operation_id, item->operation_state) == CybouOperationState::Validated
-                ? tr("Validated. The network has checked your message; it becomes final once confirmed.")
-                : online ? tr("Waiting for confirmation… The network is confirming your message.")
-                          : tr("Waiting for network. Your message is saved and will be sent when CYBOU reconnects.");
+            // Before finality the operation tells where the message is.
+            if (!online) {
+                text = tr("Waiting for network. Your message is saved and will be sent when CYBOU reconnects.");
+            } else if (operation == CybouOperationState::Validated) {
+                text = tr("Validated. The network has checked your message; it becomes final once confirmed.");
+            } else if (operation == CybouOperationState::Submitted) {
+                text = tr("Waiting for confirmation… The network is confirming your message.");
+            } else {
+                text = tr("Preparing… Your message is being encrypted on this computer.");
+            }
             break;
         case CybouContentState::Securing:
             text = tr("Securing… Confirmed by the network. Keep CYBOU open until your message is stored securely.");
@@ -367,7 +368,8 @@ void MailReader::refresh()
         const QString retrieval = CybouProduct::retrievalText(attachment.retrieval);
         auto* meta = new QLabel{QStringLiteral("%1  ·  %2").arg(CybouProduct::sizeText(attachment.logical_size),
             !retrieval.isEmpty() ? retrieval : !attachment.saved_file_id.isEmpty() ? tr("Saved to Files")
-                : CybouProduct::progressText(attachment.state, attachment.progress_percent, online)), chip};
+                : CybouProduct::progressText(attachment.state, attachment.progress_percent, online,
+                    m_model->displayedOperationState(item->operation_id, item->operation_state))), chip};
         meta->setObjectName(QStringLiteral("rowSub"));
         text->addWidget(meta);
         layout->addLayout(text, 1);

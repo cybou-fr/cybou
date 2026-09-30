@@ -473,13 +473,12 @@ inline QVBoxLayout* StatColumn(const QString& caption, const QString& value, QWi
 }
 
 /** Colour of the shared content lifecycle states (docs 82/83 §0). */
-inline QRgb stateColor(CybouContentState state)
+inline QRgb stateColor(CybouContentState state, CybouOperationState operation = CybouOperationState::Finalized)
 {
+    if (CybouProduct::itemPending(state, operation)) return CybouTheme::AMBER;
     switch (state) {
     case CybouContentState::Protected:
     case CybouContentState::Received: return CybouTheme::MINT;
-    case CybouContentState::Preparing:
-    case CybouContentState::WaitingForConfirmation:
     case CybouContentState::Securing: return CybouTheme::AMBER;
     case CybouContentState::TemporarilyUnavailable:
     case CybouContentState::NeedsAttention: return CybouTheme::ROSE;
@@ -489,21 +488,23 @@ inline QRgb stateColor(CybouContentState state)
 }
 
 /** Rich text "● text" in the state's colour; used by every state chip. */
-inline QString stateChipHtml(CybouContentState state, const QString& text)
+inline QString stateChipHtml(CybouContentState state, const QString& text,
+    CybouOperationState operation = CybouOperationState::Finalized)
 {
     return QStringLiteral("<span style=\"color:%1;\">&#9679;</span>&nbsp;<span style=\"color:%2;\">%3</span>")
-        .arg(CybouTheme::color(stateColor(state)).name(),
+        .arg(CybouTheme::color(stateColor(state, operation)).name(),
             CybouTheme::color(state == CybouContentState::NeedsAttention ? CybouTheme::ROSE : CybouTheme::TEXT_SECONDARY).name(),
             text.toHtmlEscaped());
 }
 
 /** Compact state chip label ("● Securing 42%"). */
-inline QLabel* StateChip(CybouContentState state, const QString& text, QWidget* parent)
+inline QLabel* StateChip(CybouContentState state, const QString& text, QWidget* parent,
+    CybouOperationState operation = CybouOperationState::Finalized)
 {
     auto* label = new QLabel{parent};
     label->setObjectName(QStringLiteral("stateChip"));
     label->setTextFormat(Qt::RichText);
-    label->setText(stateChipHtml(state, text));
+    label->setText(stateChipHtml(state, text, operation));
     label->setAccessibleName(text);
     label->setStyleSheet(QStringLiteral("background: transparent; border: none; font-size: 12px;"));
     return label;

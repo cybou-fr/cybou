@@ -128,9 +128,10 @@ void CybouFixtureApplicationBackend::retryMail(const QString& id)
 {
     auto* item = mail(id);
     if (!m_open || !item) return;
-    item->state = CybouContentState::Preparing;
+    item->state = CybouContentState::Local;
+    item->operation_state = CybouOperationState::Preparing;
     for (auto& attachment : item->attachments) {
-        if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = CybouContentState::Preparing;
+        if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = CybouContentState::Local;
     }
     changed(*item);
     runSend(id);
@@ -215,10 +216,11 @@ void CybouFixtureApplicationBackend::runSend(const QString& id)
     // storage admission of authorized chunks -> durability. Offline, the
     // message waits for the network and does not advance.
     if (!m_auto_advance || (m_online && !m_online())) return;
-    const auto set = [this, id](CybouContentState state, int percent) {
+    const auto set = [this, id](CybouContentState state, CybouOperationState operation, int percent) {
         auto* item = mail(id);
         if (!item) return;
         item->state = state;
+        item->operation_state = operation;
         for (auto& attachment : item->attachments) {
             if (CybouProduct::contentOnNetwork(attachment.state) && state != CybouContentState::Protected) continue;
             attachment.state = state;
@@ -226,10 +228,10 @@ void CybouFixtureApplicationBackend::runSend(const QString& id)
         }
         changed(*item);
     };
-    later(1, [set] { set(CybouContentState::WaitingForConfirmation, -1); });
-    later(3, [set] { set(CybouContentState::Securing, 35); });
-    later(4, [set] { set(CybouContentState::Securing, 80); });
-    later(5, [set] { set(CybouContentState::Protected, -1); });
+    later(1, [set] { set(CybouContentState::Local, CybouOperationState::Submitted, -1); });
+    later(3, [set] { set(CybouContentState::Securing, CybouOperationState::Finalized, 35); });
+    later(4, [set] { set(CybouContentState::Securing, CybouOperationState::Finalized, 80); });
+    later(5, [set] { set(CybouContentState::Protected, CybouOperationState::Finalized, -1); });
 }
 
 /* ---- Files ---- */
@@ -245,7 +247,8 @@ void CybouFixtureApplicationBackend::uploadFile(const QString& file_id, const QS
     item.parent_id = parent_id;
     item.logical_size = static_cast<quint64>(qMax<qint64>(0, info.size()));
     item.modified = QDateTime::currentDateTime();
-    item.state = CybouContentState::Preparing;
+    item.state = CybouContentState::Local;
+    item.operation_state = CybouOperationState::Preparing;
     // The uploading device keeps its local copy.
     item.available_offline = true;
     m_files.append(item);
@@ -257,17 +260,18 @@ void CybouFixtureApplicationBackend::runUpload(const QString& id)
 {
     // Same finality-first lifecycle as Mail; offline uploads wait.
     if (!m_auto_advance || (m_online && !m_online())) return;
-    const auto set = [this, id](CybouContentState state, int percent) {
+    const auto set = [this, id](CybouContentState state, CybouOperationState operation, int percent) {
         auto* item = file(id);
         if (!item) return;
         item->state = state;
+        item->operation_state = operation;
         item->progress_percent = percent;
         changed(*item);
     };
-    later(1, [set] { set(CybouContentState::WaitingForConfirmation, -1); });
-    later(3, [set] { set(CybouContentState::Securing, 20); });
-    later(4, [set] { set(CybouContentState::Securing, 65); });
-    later(5, [set] { set(CybouContentState::Protected, -1); });
+    later(1, [set] { set(CybouContentState::Local, CybouOperationState::Submitted, -1); });
+    later(3, [set] { set(CybouContentState::Securing, CybouOperationState::Finalized, 20); });
+    later(4, [set] { set(CybouContentState::Securing, CybouOperationState::Finalized, 65); });
+    later(5, [set] { set(CybouContentState::Protected, CybouOperationState::Finalized, -1); });
 }
 
 void CybouFixtureApplicationBackend::downloadFile(const QString& file_id, const QString&)

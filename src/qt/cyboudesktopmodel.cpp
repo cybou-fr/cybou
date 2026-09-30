@@ -397,9 +397,10 @@ QString CybouDesktopModel::requestSendMail(CybouMailItem message)
     message.from_name = m_status.primary_name;
     message.time = QDateTime::currentDateTime();
     message.preview = PreviewOf(message.body);
-    message.state = CybouContentState::Preparing;
+    message.state = CybouContentState::Local;
+    message.operation_state = CybouOperationState::Preparing;
     for (auto& attachment : message.attachments) {
-        if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = CybouContentState::Preparing;
+        if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = CybouContentState::Local;
     }
     // Optimistic Preparing; the backend is the authority from here on and
     // never reports Sent before the content is Protected.
@@ -413,6 +414,11 @@ void CybouDesktopModel::setMailState(const QString& id, CybouContentState state)
     for (auto& item : m_mail) {
         if (item.id != id) continue;
         item.state = state;
+        // Storage durability exists only after PoA finality.
+        if (state == CybouContentState::Securing || state == CybouContentState::Protected ||
+            state == CybouContentState::Received) {
+            item.operation_state = CybouOperationState::Finalized;
+        }
         // Reused, already protected content keeps its state.
         for (auto& attachment : item.attachments) {
             if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = state;
@@ -460,10 +466,10 @@ void CybouDesktopModel::requestRetryMail(const QString& id)
     const auto* item = mailItem(id);
     if (!mailReady() || !item || item->state != CybouContentState::NeedsAttention) return;
     CybouMailItem pending = *item;
-    pending.state = CybouContentState::Preparing;
+    pending.state = CybouContentState::Local;
     pending.operation_state = CybouOperationState::Preparing;
     for (auto& attachment : pending.attachments) {
-        if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = CybouContentState::Preparing;
+        if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = CybouContentState::Local;
     }
     upsertMailItem(pending);
     m_backend->retryMail(id);
@@ -1236,7 +1242,14 @@ std::optional<CybouAttachmentItem> CybouDesktopModel::attachmentFromFile(const Q
 
 void CybouDesktopModel::setFileState(const QString& id, CybouContentState state, int progress_percent)
 {
-    if (MutateFile(m_files, id, [&](CybouFileItem& item) { item.state = state; item.progress_percent = progress_percent; }))
+    if (MutateFile(m_files, id, [&](CybouFileItem& item) {
+            item.state = state;
+            item.progress_percent = progress_percent;
+            // Storage durability exists only after PoA finality.
+            if (state == CybouContentState::Securing || state == CybouContentState::Protected) {
+                item.operation_state = CybouOperationState::Finalized;
+            }
+        }))
         Q_EMIT filesChanged();
 }
 

@@ -75,7 +75,7 @@ CybouContentState StateOf(const cybou::PublicationJobResult& job)
 {
     switch (job.phase) {
     case cybou::PublicationJobPhase::QUEUED:
-    case cybou::PublicationJobPhase::WAITING_FINALITY: return CybouContentState::WaitingForConfirmation;
+    case cybou::PublicationJobPhase::WAITING_FINALITY: return CybouContentState::Local; // see OperationOf
     case cybou::PublicationJobPhase::SECURING: return CybouContentState::Securing;
     case cybou::PublicationJobPhase::PROTECTED: return CybouContentState::Protected;
     case cybou::PublicationJobPhase::NEEDS_ATTENTION: return CybouContentState::NeedsAttention;
@@ -409,6 +409,7 @@ struct CybouCoreApplicationAdapter::Session {
         for (auto& [id, item] : outbox) {
             if (const auto job = jobs.find(id); job != jobs.end()) {
                 item.state = StateOf(job->second);
+                item.operation_state = OperationOf(job->second);
                 if (!job->second.operation_id.IsNull()) {
                     item.operation_id = QString::fromStdString(job->second.operation_id.GetHex());
                 }
@@ -938,12 +939,13 @@ void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message)
         const auto job_id = ToHex(*message_id);
         CybouMailItem outgoing = message;
         outgoing.id = QString::fromStdString(job_id);
-        outgoing.state = CybouContentState::Preparing;
+        outgoing.state = CybouContentState::Local;
+        outgoing.operation_state = CybouOperationState::Preparing;
         for (int i = 0; i < outgoing.attachments.size(); ++i) {
             auto& shown = outgoing.attachments[i];
             shown.id = QString::fromStdString(ToHex(mail.attachments[static_cast<std::size_t>(i)].attachment_id));
             shown.source_path.clear();
-            if (shown.state != CybouContentState::Protected) shown.state = CybouContentState::Preparing;
+            if (!CybouProduct::contentOnNetwork(shown.state)) shown.state = CybouContentState::Local;
         }
         s.outbox[job_id] = outgoing;
         s.ToGui([owner = s.owner, client_id, outgoing] {
@@ -1093,7 +1095,7 @@ void CybouCoreApplicationAdapter::uploadFile(const QString& file_id, const QStri
     shown.parent_id = resolveFileId(parent_id);
     shown.logical_size = static_cast<quint64>(std::max<qint64>(0, info.size()));
     shown.modified = QDateTime::currentDateTime();
-    shown.state = CybouContentState::Preparing;
+    shown.state = CybouContentState::Local;
     shown.operation_state = CybouOperationState::Preparing;
     shown.available_offline = true;
     showPendingFile(shown);
@@ -1172,7 +1174,7 @@ void CybouCoreApplicationAdapter::createFolder(const QString& folder_id, const Q
     shown.parent_id = resolveFileId(parent_id);
     shown.folder = true;
     shown.modified = QDateTime::currentDateTime();
-    shown.state = CybouContentState::Preparing;
+    shown.state = CybouContentState::Local;
     shown.operation_state = CybouOperationState::Preparing;
     showPendingFile(shown);
     m_session->Post([item_id = *item_id, name = name.toStdString(), parent = ParentId(shown.parent_id)](Session& s) {

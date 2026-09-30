@@ -128,8 +128,11 @@ The desktop keeps two separate axes:
 - Operation (`CybouOperationState`): Local → Preparing → Submitted →
   Validated → Finalized, or Failed. It applies to payments, name claims,
   rotation and Mail/Files publications.
-- Content (`CybouContentState`): Securing, Protected, Received and the
-  retrieval states. They describe durability after finality.
+- Content (`CybouContentState`): Local, Securing, Protected, Received,
+  Temporarily unavailable, Needs attention. Outgoing content stays Local until
+  PoA finality; its progress before that is the operation axis (Preparing,
+  Waiting for confirmation, Validated). There is no pre-finality content
+  state.
 
 `Validated` means pre-finalized. It is never canonical: it does not change
 balances, does not start remote storage and is never `Protected`. PoA
