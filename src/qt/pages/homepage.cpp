@@ -117,6 +117,7 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> /*diagnostics
     outer->addWidget(m_stack);
     m_onboarding = new OnboardingView{m_model, m_stack};
     m_stack->addWidget(m_onboarding);
+    m_onboarding->onFinished = [this] { refresh(); };
     m_dashboard = buildDashboard();
     m_stack->addWidget(m_dashboard);
 
@@ -269,8 +270,9 @@ void HomePage::refresh()
     const auto& status = m_model->status();
     const bool active = status.identity_state == CybouIdentityState::Active ||
         status.identity_state == CybouIdentityState::Syncing;
-    m_stack->setCurrentWidget(active ? m_dashboard : static_cast<QWidget*>(m_onboarding));
-    if (!active) return;
+    const bool show_dashboard = active && !m_onboarding->holdsActiveIdentity();
+    m_stack->setCurrentWidget(show_dashboard ? m_dashboard : static_cast<QWidget*>(m_onboarding));
+    if (!show_dashboard) return;
 
     m_identity_name->setText(status.primary_name.isEmpty()
         ? CybouProduct::shortId(status.account_id) : status.primary_name);

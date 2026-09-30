@@ -10,6 +10,8 @@
 #include <QVector>
 #include <QWidget>
 
+#include <functional>
+
 class CybouDesktopModel;
 class QLabel;
 class QLineEdit;
@@ -39,6 +41,8 @@ public:
         Restore,
         Restoring,
         Unlock,
+        /** Right after a new Identity is finalized: claim name.cybou (or skip). */
+        ChooseName,
     };
 
     explicit OnboardingView(CybouDesktopModel* model, QWidget* parent = nullptr);
@@ -50,6 +54,10 @@ public:
     void beginCreate() { startCreate(); }
     /** Opens the recovery-phrase restore form exactly like the Welcome screen's button. */
     void beginRestore();
+    /** Onboarding still has a step to show although the Identity is active. */
+    bool holdsActiveIdentity() const { return screen() == Screen::ChooseName || m_offer_name; }
+    /** Called when onboarding hands over to the normal app. */
+    std::function<void()> onFinished;
 
 private:
     CybouDesktopModel* const m_model;
@@ -96,6 +104,16 @@ private:
     QWidget* buildRestore();
     QWidget* buildRestoring();
     QWidget* buildUnlock();
+    QWidget* buildChooseName();
+    void submitName();
+    void finishNameStep();
+
+    // Name step: offered once, right after this session created an Identity.
+    bool m_offer_name{false};
+    QString m_name_password;
+    QLineEdit* m_name_input{nullptr};
+    QLabel* m_name_hint{nullptr};
+    QPushButton* m_name_claim{nullptr};
 
     void startCreate();
     void acceptPassword();

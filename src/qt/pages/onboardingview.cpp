@@ -131,10 +131,14 @@ OnboardingView::OnboardingView(CybouDesktopModel* model, QWidget* parent)
     m_stack->addWidget(buildRestore());
     m_stack->addWidget(buildRestoring());
     m_stack->addWidget(buildUnlock());
+    m_stack->addWidget(buildChooseName());
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::identityCreationFailed, this, [this](const QString& reason) {
+        m_offer_name = false;
+        m_name_password.fill(QChar{0});
+        m_name_password.clear();
         showScreen(Screen::Creating);
         m_create_error->setText(reason.isEmpty() ? tr("Your Identity could not be created. Please try again.") : reason);
         m_create_error->setVisible(true);
@@ -476,6 +480,77 @@ QWidget* OnboardingView::buildRestoring()
     return page;
 }
 
+QWidget* OnboardingView::buildChooseName()
+{
+    QVBoxLayout* layout{nullptr};
+    auto* page = CenteredCard(this, layout, 520);
+    auto* title = HeroTitle(tr("Your Identity is ready"), page, true);
+    title->setAlignment(Qt::AlignHCenter);
+    layout->addWidget(title);
+    auto* subtitle = MutedText(tr("Now choose your CYBOU name. People send you mail and payments at "
+                                  "name.cybou instead of a long ID."), page);
+    subtitle->setAlignment(Qt::AlignHCenter);
+    layout->addWidget(subtitle);
+    layout->addSpacing(6);
+    auto* row = new QHBoxLayout;
+    m_name_input = new QLineEdit{page};
+    m_name_input->setObjectName(QStringLiteral("onboardingName"));
+    m_name_input->setPlaceholderText(tr("yourname"));
+    m_name_input->setMaxLength(32);
+    auto* suffix = new QLabel{QStringLiteral(".cybou"), page};
+    suffix->setObjectName(QStringLiteral("rowTitle"));
+    row->addWidget(m_name_input, 1);
+    row->addWidget(suffix);
+    layout->addLayout(row);
+    m_name_hint = MutedText(tr("5–32 characters: lowercase letters, digits and hyphens."), page);
+    layout->addWidget(m_name_hint);
+    m_name_claim = Button(tr("Claim name"), true, page);
+    m_name_claim->setObjectName(QStringLiteral("primaryButton"));
+    m_name_claim->setProperty("cybouId", QStringLiteral("onboardingClaimName"));
+    m_name_claim->setEnabled(false);
+    layout->addWidget(m_name_claim);
+    auto* skip = Button(tr("Skip for now"), false, page);
+    skip->setProperty("cybouId", QStringLiteral("onboardingSkipName"));
+    layout->addWidget(skip);
+    auto* later = MutedText(tr("You can also claim a name later in Identity & Security."), page);
+    later->setAlignment(Qt::AlignHCenter);
+    layout->addWidget(later);
+
+    connect(m_name_input, &QLineEdit::textChanged, this, [this] {
+        const QString label = m_name_input->text().trimmed().toLower();
+        const QString problem = label.isEmpty() ? QString{} : m_model->nameLabelProblem(label);
+        m_name_hint->setText(label.isEmpty() ? tr("5–32 characters: lowercase letters, digits and hyphens.")
+                             : problem.isEmpty() ? tr("You will be reachable as %1.cybou").arg(label) : problem);
+        m_name_claim->setEnabled(!label.isEmpty() && problem.isEmpty());
+    });
+    connect(m_name_input, &QLineEdit::returnPressed, this, [this] { if (m_name_claim->isEnabled()) submitName(); });
+    connect(m_name_claim, &QPushButton::clicked, this, [this] { submitName(); });
+    connect(skip, &QPushButton::clicked, this, [this] { finishNameStep(); });
+    return page;
+}
+
+void OnboardingView::submitName()
+{
+    const QString label = m_name_input->text().trimmed().toLower();
+    if (!m_model->nameLabelProblem(label).isEmpty()) return;
+    if (!m_model->requestClaimName(label, m_name_password)) {
+        m_name_hint->setText(tr("A name claim is already in progress."));
+        return;
+    }
+    m_model->notify(tr("Claiming %1.cybou. It becomes yours once the network confirms it.").arg(label));
+    finishNameStep();
+}
+
+void OnboardingView::finishNameStep()
+{
+    m_offer_name = false;
+    m_name_password.fill(QChar{0});
+    m_name_password.clear();
+    m_name_input->clear();
+    showScreen(Screen::Welcome);
+    if (onFinished) onFinished();
+}
+
 QWidget* OnboardingView::buildUnlock()
 {
     QVBoxLayout* layout{nullptr};
@@ -651,6 +726,9 @@ void OnboardingView::acceptConfirmation()
     }
     for (auto* input : m_confirm_inputs) input->clear();
     const QString password = m_pending_password;
+    // The same vault password authorizes the name claim offered right after.
+    m_name_password = password;
+    m_offer_name = true;
     for (auto& word : m_words) word.fill(QChar{0});
     m_words.clear();
     m_pending_password.fill(QChar{0});
@@ -776,6 +854,9 @@ void OnboardingView::clearSecrets()
     m_words.clear();
     m_pending_password.fill(QChar{0});
     m_pending_password.clear();
+    m_name_password.fill(QChar{0});
+    m_name_password.clear();
+    m_offer_name = false;
     if (m_words_grid) populateWords();
 }
 
@@ -822,6 +903,16 @@ void OnboardingView::refresh()
     case CybouIdentityState::Active:
     case CybouIdentityState::NeedsAttention:
         for (auto* row : m_create_steps) SetStep(row, 2);
+        // Creation is finalized: continue straight into choosing a name,
+        // unless the Identity already has one or a claim is running.
+        if (m_offer_name && screen() != Screen::ChooseName) {
+            if (status.primary_name.isEmpty() && !status.name_claim_pending) {
+                showScreen(Screen::ChooseName);
+                m_name_input->setFocus();
+            } else {
+                finishNameStep();
+            }
+        }
         break;
     }
     updateRestoreState();
