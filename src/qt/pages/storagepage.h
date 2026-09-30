@@ -97,6 +97,8 @@ private:
     QWidget* m_empty_box{nullptr};
     QWidget* m_empty_actions{nullptr};
     QWidget* m_crumbs{nullptr};
+    /** What the crumbs currently show; unchanged crumbs are not rebuilt (a rebuild mid-drag drops the target). */
+    QString m_crumbs_key;
     QFrame* m_selection_bar{nullptr};
     QLabel* m_selection_text{nullptr};
     int m_sort_column{0};

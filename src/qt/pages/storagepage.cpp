@@ -705,6 +705,15 @@ void StoragePage::rebuild()
 
 void StoragePage::rebuildCrumbs()
 {
+    QString key = QString::number(static_cast<int>(m_view)) + QLatin1Char('|') + m_search->text().trimmed();
+    for (QString id = m_folder; !id.isEmpty();) {
+        const auto* item = m_model->fileItem(id);
+        if (!item) break;
+        key += QLatin1Char('|') + item->id + QLatin1Char('/') + item->name;
+        id = item->parent_id;
+    }
+    if (key == m_crumbs_key) return;
+    m_crumbs_key = key;
     auto* layout = static_cast<QHBoxLayout*>(m_crumbs->layout());
     while (QLayoutItem* item = layout->takeAt(0)) {
         if (QWidget* widget = item->widget()) {
