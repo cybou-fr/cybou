@@ -343,6 +343,10 @@ public:
     void requestTrashFile(const QString& id);
     void requestRestoreFile(const QString& id);
     void requestDeleteFile(const QString& id);
+    /** Permanently deletes everything in Trash as one change (one network fee). */
+    void requestEmptyTrash();
+    void requestRetryFile(const QString& id);
+    void requestDiscardFile(const QString& id);
     const CybouFileItem* fileItem(const QString& id) const;
     /**
      * Mail attachment -> Files: asks the backend for an independent Files

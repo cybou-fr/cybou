@@ -80,6 +80,8 @@ private:
     QStringList m_visible;
 
     QPushButton* m_new{nullptr};
+    /** Visible in Trash only: permanently deletes everything there as one change. */
+    QPushButton* m_empty_trash{nullptr};
     QListWidget* m_nav{nullptr};
     QLabel* m_usage_text{nullptr};
     QProgressBar* m_usage_bar{nullptr};

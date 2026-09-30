@@ -1415,6 +1415,29 @@ void CybouDesktopModel::requestDeleteFile(const QString& id)
     if (filesReady() && fileItem(id)) m_backend->deleteFile(id);
 }
 
+void CybouDesktopModel::requestEmptyTrash()
+{
+    if (!filesReady()) return;
+    // Only top-level trashed items: deleting a folder takes its contents with it.
+    QStringList ids;
+    for (const auto& file : m_files) {
+        if (!file.trashed) continue;
+        const auto* parent = file.parent_id.isEmpty() ? nullptr : fileItem(file.parent_id);
+        if (!parent || !parent->trashed) ids << file.id;
+    }
+    if (!ids.isEmpty()) m_backend->deleteFiles(ids);
+}
+
+void CybouDesktopModel::requestRetryFile(const QString& id)
+{
+    if (filesReady() && fileItem(id)) m_backend->retryFile(id);
+}
+
+void CybouDesktopModel::requestDiscardFile(const QString& id)
+{
+    if (filesReady() && fileItem(id)) m_backend->discardFile(id);
+}
+
 QString CybouDesktopModel::requestSaveAttachmentToFiles(const QString& message_id, const QString& attachment_id)
 {
     if (!filesReady() || !m_backend->mailAvailable()) return {};

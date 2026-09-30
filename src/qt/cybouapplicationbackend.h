@@ -100,6 +100,12 @@ public:
     virtual void trashFile(const QString& id) = 0;
     virtual void restoreFile(const QString& id) = 0;
     virtual void deleteFile(const QString& id) = 0;
+    /** Deletes several items permanently; a backend may publish them as one change (one fee). */
+    virtual void deleteFiles(const QStringList& ids) { for (const auto& id : ids) deleteFile(id); }
+    /** Resubmits a file change that needs attention. */
+    virtual void retryFile(const QString& id) { Q_UNUSED(id); }
+    /** Drops a file change that was never submitted or was rejected; in-flight work is kept. */
+    virtual void discardFile(const QString& id) { Q_UNUSED(id); }
 
 Q_SIGNALS:
     void availabilityChanged();

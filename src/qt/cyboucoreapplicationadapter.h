@@ -78,6 +78,9 @@ public:
     void trashFile(const QString& id) override;
     void restoreFile(const QString& id) override;
     void deleteFile(const QString& id) override;
+    void deleteFiles(const QStringList& ids) override;
+    void retryFile(const QString& id) override;
+    void discardFile(const QString& id) override;
 
 private:
     struct Session;

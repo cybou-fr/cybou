@@ -1312,6 +1312,80 @@ void CybouCoreApplicationAdapter::restoreFile(const QString& id)
     });
 }
 
+void CybouCoreApplicationAdapter::deleteFiles(const QStringList& ids)
+{
+    if (!m_session || ids.isEmpty()) return;
+    std::vector<std::string> roots;
+    for (const auto& id : ids) roots.push_back(resolveFileId(id).toStdString());
+    // One publication for the whole set: Empty Trash costs one network fee.
+    m_session->Post([roots = std::move(roots)](Session& s) {
+        const auto catalog = s.Catalog();
+        std::vector<cybou::PrivateItemId> doomed;
+        for (const auto& hex : roots) {
+            const auto root = FromHex(QString::fromStdString(hex));
+            if (root && s.CurrentFile(hex)) doomed.push_back(*root);
+        }
+        for (std::size_t i{0}; i < doomed.size(); ++i) {
+            for (const auto& [child_hex, item] : catalog) {
+                if (item.parent_id == doomed[i] &&
+                    std::find(doomed.begin(), doomed.end(), item.item_id) == doomed.end()) doomed.push_back(item.item_id);
+            }
+        }
+        if (doomed.empty()) return;
+        cybou::FilesMutationBatch batch;
+        for (const auto& item_id : doomed) {
+            batch.mutations.push_back({cybou::FileMutationKind::DELETE_ITEM, item_id, std::nullopt});
+        }
+        if (!s.PublishFileChange(std::move(batch), std::nullopt)) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The items could not be deleted.")); });
+        }
+    });
+}
+
+void CybouCoreApplicationAdapter::retryFile(const QString& id)
+{
+    if (!m_session) return;
+    m_session->Post([hex = resolveFileId(id).toStdString()](Session& s) {
+        const auto job = s.item_jobs.find(hex);
+        if (job == s.item_jobs.end()) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("This change cannot be retried; upload the file again.")); });
+            return;
+        }
+        s.jobs[job->second] = s.publication->Resume(job->second);
+        if (s.jobs[job->second].phase == cybou::PublicationJobPhase::NEEDS_ATTENTION) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The change still could not be sent. Try again later.")); });
+        }
+        s.Refresh();
+    });
+}
+
+void CybouCoreApplicationAdapter::discardFile(const QString& id)
+{
+    if (!m_session) return;
+    const QString hex = resolveFileId(id);
+    // A file that never reached a publication (e.g. unreadable) exists only here.
+    if (m_pending_files.remove(hex) > 0) {
+        Q_EMIT fileItemsRemoved({hex});
+        return;
+    }
+    m_session->Post([hex = hex.toStdString()](Session& s) {
+        const auto job = s.item_jobs.find(hex);
+        const std::string job_id = job == s.item_jobs.end() ? std::string{} : job->second;
+        // Only never-submitted or rejected work can be cancelled; in-flight work stays.
+        if (job_id.empty() || !s.publication->CancelPublication(job_id)) {
+            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("This change is already on its way and cannot be discarded.")); });
+            return;
+        }
+        for (auto it = s.file_overlay.begin(); it != s.file_overlay.end();) {
+            if (it->second.job_id != job_id) { ++it; continue; }
+            s.item_jobs.erase(it->first);
+            it = s.file_overlay.erase(it);
+        }
+        s.jobs.erase(job_id);
+        s.Refresh();
+    });
+}
+
 void CybouCoreApplicationAdapter::deleteFile(const QString& id)
 {
     if (!m_session) return;

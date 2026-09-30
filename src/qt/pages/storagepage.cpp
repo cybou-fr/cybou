@@ -203,6 +203,18 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_search->setMaximumWidth(340);
     m_search->setMinimumWidth(260);
     toolbar->addWidget(m_search, 0);
+    m_empty_trash = new QPushButton{tr("Empty Trash"), main};
+    m_empty_trash->setObjectName(QStringLiteral("secondaryButton"));
+    m_empty_trash->setProperty("cybouId", QStringLiteral("filesEmptyTrash"));
+    m_empty_trash->setIcon(QIcon{glyphPixmap(Glyph::Trash, {16, 16}, CybouTheme::color(CybouTheme::ROSE))});
+    m_empty_trash->hide();
+    connect(m_empty_trash, &QPushButton::clicked, this, [this] {
+        if (QMessageBox::question(this, tr("Empty Trash"),
+                tr("Permanently delete everything in Trash? This cannot be undone.")) != QMessageBox::Yes) return;
+        m_model->requestEmptyTrash();
+        m_model->notify(tr("Emptying Trash. It is done once the network confirms it."));
+    });
+    toolbar->addWidget(m_empty_trash);
     m_list_toggle = ToggleButton(Glyph::ListView, tr("List view"), main);
     m_grid_toggle = ToggleButton(Glyph::GridView, tr("Grid view"), main);
     m_list_toggle->setChecked(true);
@@ -708,6 +720,7 @@ void StoragePage::rebuild()
     m_empty_box->setVisible(!empty.isEmpty());
     m_empty_actions->setVisible(m_view == View::MyFiles && m_search->text().trimmed().isEmpty() && m_new->isEnabled());
     m_views->setVisible(!items.isEmpty());
+    m_empty_trash->setVisible(m_view == View::Trash && !items.isEmpty() && m_new->isEnabled());
     m_title->setText(!m_search->text().trimmed().isEmpty() ? tr("Search results") : ViewName(m_view));
     rebuildCrumbs();
     refreshSelectionBar();
@@ -1063,10 +1076,52 @@ void StoragePage::rebuildDetails()
                     m_model->displayedOperationState(item->operation_id, item->operation_state), online))
             : retrieval, m_details);
         DetailPair(layout, tr("On this computer"), CybouProduct::localAvailabilityText(*item), m_details);
+        DetailPair(layout, tr("On the network"), item->min_remote_replicas < 0
+            ? tr("Not stored on the network yet")
+            : item->remote_replica_target > 0
+                ? tr("%1 of %2 encrypted copies").arg(item->min_remote_replicas).arg(item->remote_replica_target)
+                : tr("%1 encrypted copies").arg(item->min_remote_replicas), m_details);
     }
+    DetailPair(layout, tr("Encryption"), tr("End-to-end, post-quantum; only you hold the keys"), m_details);
     const auto& status = m_model->status();
     DetailPair(layout, tr("Owner"), status.primary_name.isEmpty() ? tr("You") : status.primary_name, m_details);
     layout->addSpacing(8);
+    if (!item->folder && !item->trashed && item->state == CybouContentState::NeedsAttention) {
+        // A change the network did not take: resubmit it or drop it.
+        auto* retry = new QPushButton{tr("Try again"), m_details};
+        retry->setObjectName(QStringLiteral("primaryButton"));
+        retry->setProperty("cybouId", QStringLiteral("fileRetry"));
+        connect(retry, &QPushButton::clicked, this, [this, id = item->id] { m_model->requestRetryFile(id); });
+        layout->addWidget(retry);
+        auto* discard = new QPushButton{tr("Discard"), m_details};
+        discard->setObjectName(QStringLiteral("secondaryButton"));
+        discard->setProperty("cybouId", QStringLiteral("fileDiscard"));
+        connect(discard, &QPushButton::clicked, this, [this, id = item->id] {
+            m_model->requestDiscardFile(id);
+            showDetails({});
+        });
+        layout->addWidget(discard);
+    }
+    if (item->trashed) {
+        auto* restore = new QPushButton{tr("Restore"), m_details};
+        restore->setObjectName(QStringLiteral("primaryButton"));
+        restore->setProperty("cybouId", QStringLiteral("fileRestore"));
+        connect(restore, &QPushButton::clicked, this, [this, id = item->id] {
+            m_model->requestRestoreFile(id);
+            showDetails({});
+        });
+        layout->addWidget(restore);
+        auto* forever = new QPushButton{tr("Delete forever"), m_details};
+        forever->setObjectName(QStringLiteral("secondaryButton"));
+        forever->setProperty("cybouId", QStringLiteral("fileDeleteForever"));
+        connect(forever, &QPushButton::clicked, this, [this, id = item->id] {
+            if (QMessageBox::question(this, tr("Delete forever"),
+                    tr("Permanently delete this item? This cannot be undone.")) != QMessageBox::Yes) return;
+            m_model->requestDeleteFile(id);
+            showDetails({});
+        });
+        layout->addWidget(forever);
+    }
     if (!item->folder && !item->trashed) {
         auto* dl = new QPushButton{tr("Download"), m_details};
         dl->setObjectName(QStringLiteral("primaryButton"));
