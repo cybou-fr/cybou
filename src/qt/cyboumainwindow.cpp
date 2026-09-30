@@ -12,6 +12,7 @@
 #include <qt/cybouui.h>
 #include <qt/pages/diagnosticspage.h>
 #include <qt/pages/networkauthoritypage.h>
+#include <qt/cybouactivity.h>
 #include <qt/pages/emailpage.h>
 #include <qt/pages/homepage.h>
 #include <qt/pages/identitypage.h>
@@ -330,6 +331,11 @@ QFrame* CybouMainWindow::buildHeader(QWidget* parent)
     layout->addWidget(m_global_search, 1);
     layout->addStretch(0);
 
+    // One place for everything in flight or failed; hidden when idle.
+    m_activity = new CybouActivityButton{m_desktop_model, header};
+    layout->addWidget(m_activity, 0, Qt::AlignVCenter);
+    layout->addSpacing(6);
+
     m_status_dot = CybouUi::Dot(CybouUi::Tint::Mint, header, 8);
     m_status_text = new QLabel{header};
     m_status_text->setObjectName(QStringLiteral("stripValue"));
@@ -453,6 +459,16 @@ void CybouMainWindow::buildShell()
     addPage(identity, true);
     addPage(diagnostics, true);
     addPage(settings, true);
+    m_activity->onOpenFile = [this, files](const QString& id) {
+        showPage(CybouPage::Files);
+        files->showDetails(id);
+    };
+    m_activity->onOpenMail = [this, mail](const QString& id) {
+        showPage(CybouPage::Mail);
+        mail->openMessage(id);
+    };
+    m_activity->onOpenWallet = [this] { showPage(CybouPage::Wallet); };
+    m_activity->onOpenIdentity = [this] { showPage(CybouPage::Identity); };
     addPage(new NetworkAuthorityPage{m_desktop_model, nullptr}, true);
     connect(m_desktop_model, &CybouDesktopModel::networkAuthorityChanged, this, [this] {
         const bool authority = m_desktop_model->isNetworkAuthority();

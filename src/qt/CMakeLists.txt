@@ -64,6 +64,8 @@ add_library(cybou_qt STATIC
   cyboufixturebackend.cpp
   cyboufixturebackend.h
   cyboumainwindow.cpp
+  cybouactivity.cpp
+  cybouactivity.h
   cyboumainwindow.h
   cybounotifier.h
   cyboutheme.cpp

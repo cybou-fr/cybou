@@ -9,6 +9,7 @@
 #include <qt/cyboudesktopcontroller.h>
 #include <qt/cyboufixturebackend.h>
 #include <qt/cyboudesktopmodel.h>
+#include <qt/cybouactivity.h>
 #include <qt/cyboumainwindow.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
@@ -503,6 +504,39 @@ void CybouShellTests::mailFilesCrossProduct()
     QCOMPARE(attachments.first().state, CybouContentState::Protected);
     // Unfinished uploads cannot be sent by Mail yet.
     QVERIFY(!model->attachmentFromFile(QStringLiteral("f-archive")).has_value());
+}
+
+void CybouShellTests::activityListsRunningAndFailedOperations()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    QVERIFY(CybouActivityOperations(model).isEmpty());
+    CybouFileItem uploading;
+    uploading.id = QStringLiteral("f1");
+    uploading.name = QStringLiteral("report.pdf");
+    uploading.state = CybouContentState::Local;
+    uploading.operation_state = CybouOperationState::Submitted;
+    CybouFileItem failed;
+    failed.id = QStringLiteral("f2");
+    failed.name = QStringLiteral("photo.jpg");
+    failed.state = CybouContentState::NeedsAttention;
+    CybouFileItem done;
+    done.id = QStringLiteral("f3");
+    done.name = QStringLiteral("done.txt");
+    done.state = CybouContentState::Protected;
+    model.setFileItems({uploading, failed, done});
+
+    // Failed work comes first; settled items never appear.
+    const auto operations = CybouActivityOperations(model);
+    QCOMPARE(operations.size(), 2);
+    QVERIFY(operations.at(0).attention);
+    QCOMPARE(operations.at(0).id, QStringLiteral("f2"));
+    QCOMPARE(operations.at(1).id, QStringLiteral("f1"));
+
+    CybouActivityButton button{&model};
+    QCOMPARE(button.text(), QStringLiteral("1 needs attention"));
+    model.setFileItems({done});
+    QCOMPARE(button.text(), QStringLiteral("0 in progress"));
+    QVERIFY(button.isHidden());
 }
 
 void CybouShellTests::contactsComeFromMailAndPayments()

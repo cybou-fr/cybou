@@ -78,6 +78,7 @@ private:
     CybouDesktopModel* m_desktop_model;
     std::unique_ptr<CybouDesktopController> m_controller;
     QStackedWidget* m_pages;
+    class CybouActivityButton* m_activity{nullptr};
     QVector<QWidget*> m_page_widgets;
     QButtonGroup* m_navigation;
     QFrame* m_sidebar{nullptr};
