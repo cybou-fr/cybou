@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QDrag>
 #include <QMimeData>
+#include <QUrl>
 #include <QFocusEvent>
 #include <QStyle>
 
@@ -609,11 +610,17 @@ inline QStringList dragIds(const QMimeData* data, const QString& mime)
     return QString::fromUtf8(data->data(mime)).split(QLatin1Char{'\n'}, Qt::SkipEmptyParts);
 }
 
-/** Starts a move drag of item ids with a small "N items" badge. */
-inline void startIdDrag(QWidget* source, const QString& mime, const QStringList& ids, const QString& label)
+/**
+ * Starts a drag of item ids with a small "N items" badge. `external` are
+ * local files other applications may copy (e.g. Explorer); with them the drag
+ * only ever copies, so a drop elsewhere never takes the user's file away.
+ */
+inline void startIdDrag(QWidget* source, const QString& mime, const QStringList& ids, const QString& label,
+    const QList<QUrl>& external = {})
 {
     auto* data = new QMimeData;
     data->setData(mime, ids.join(QLatin1Char{'\n'}).toUtf8());
+    if (!external.isEmpty()) data->setUrls(external);
     auto* drag = new QDrag{source};
     drag->setMimeData(data);
     QLabel badge{label};
@@ -626,7 +633,7 @@ inline void startIdDrag(QWidget* source, const QString& mime, const QStringList&
     badge.render(&pixmap, QPoint{}, QRegion{}, QWidget::DrawChildren);
     drag->setPixmap(pixmap);
     drag->setHotSpot(QPoint{-12, -12});
-    drag->exec(Qt::MoveAction);
+    drag->exec(external.isEmpty() ? Qt::MoveAction : Qt::CopyAction);
 }
 
 /** Single-line label that elides with "…" instead of widening its parent. */

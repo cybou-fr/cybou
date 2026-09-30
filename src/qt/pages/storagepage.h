@@ -118,6 +118,8 @@ private:
     void showContextMenu(const QPoint& global_pos);
     void promptNewFolder();
     void promptUploadFolder();
+    /** Where the user saved this file with Download, if that copy is still complete; else empty. */
+    QString downloadedPath(const QString& id) const;
     /** Uploads files and whole folders (recursively, as encrypted folders) under `parent`. */
     void uploadPaths(const QStringList& paths, const QString& parent);
     void promptRename(const QString& id);

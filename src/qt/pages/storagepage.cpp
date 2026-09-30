@@ -14,6 +14,7 @@
 #include <QDropEvent>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QSettings>
 #include <QFrame>
 #include <QMouseEvent>
 #include <QInputDialog>
@@ -482,7 +483,15 @@ bool StoragePage::handleItemDrag(QWidget* viewport, QEvent* event)
         QStringList ids = selectedIds();
         const QString pressed = std::exchange(m_press_id, {});
         if (!ids.contains(pressed)) ids = QStringList{pressed};
-        startIdDrag(viewport, fileIdsMime(), ids, ids.size() == 1 ? folderName(ids.first()) : tr("%1 items").arg(ids.size()));
+        // Only files already downloaded can leave CYBOU by drag: their plaintext copy
+        // exists where the user saved it. Nothing is decrypted for a drag.
+        QList<QUrl> external;
+        for (const auto& id : ids) {
+            const QString path = downloadedPath(id);
+            if (!path.isEmpty()) external << QUrl::fromLocalFile(path);
+        }
+        startIdDrag(viewport, fileIdsMime(), ids, ids.size() == 1 ? folderName(ids.first()) : tr("%1 items").arg(ids.size()),
+            external);
         return true;
     }
     case QEvent::DragEnter:
@@ -937,7 +946,22 @@ void StoragePage::download(const QString& id)
     const auto* item = m_model->fileItem(id);
     if (!item || item->folder) return;
     const QString destination = QFileDialog::getSaveFileName(this, tr("Download"), item->name);
-    if (!destination.isEmpty()) m_model->requestFileDownload(id, destination);
+    if (destination.isEmpty()) return;
+    QSettings{}.setValue(QStringLiteral("files/downloaded/") + id, destination);
+    m_model->requestFileDownload(id, destination);
+}
+
+QString StoragePage::downloadedPath(const QString& id) const
+{
+    const auto* item = m_model->fileItem(id);
+    if (!item || item->folder) return {};
+    const QString path = QSettings{}.value(QStringLiteral("files/downloaded/") + id).toString();
+    const QFileInfo info{path};
+    // The saved copy must still be there, complete, and not currently being written.
+    if (path.isEmpty() || !info.isFile() ||
+        (item->retrieval != CybouRetrievalState::Idle && item->retrieval != CybouRetrievalState::Ready)) return {};
+    if (item->logical_size > 0 && static_cast<quint64>(info.size()) != item->logical_size) return {};
+    return info.absoluteFilePath();
 }
 
 void StoragePage::showContextMenu(const QPoint& global_pos)
@@ -1076,6 +1100,15 @@ void StoragePage::rebuildDetails()
                     m_model->displayedOperationState(item->operation_id, item->operation_state), online))
             : retrieval, m_details);
         DetailPair(layout, tr("On this computer"), CybouProduct::localAvailabilityText(*item), m_details);
+        if (const QString saved = downloadedPath(item->id); !saved.isEmpty()) {
+            // Short form (full path in the tooltip); this copy can be dragged out of CYBOU.
+            const QFileInfo info{saved};
+            DetailPair(layout, tr("Downloaded to"), tr("%1 in %2").arg(info.fileName(), info.dir().dirName()), m_details);
+            m_details->setToolTip(tr("Downloaded copy: %1 — drag the file out of CYBOU to copy it")
+                .arg(QDir::toNativeSeparators(saved)));
+        } else {
+            m_details->setToolTip({});
+        }
         DetailPair(layout, tr("On the network"), item->min_remote_replicas < 0
             ? tr("Not stored on the network yet")
             : item->remote_replica_target > 0
