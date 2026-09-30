@@ -359,6 +359,7 @@ struct CybouCoreApplicationAdapter::Session {
             item.starred = record.starred;
             item.operation_id = QString::fromStdString(record.operation_id.GetHex());
             item.finalized_height = record.finalized_height;
+            item.outgoing = record.outgoing;
             if (const auto publication_record = runtime.FindFinalizedRootPublication(record.operation_id)) {
                 item.root_chunk_id = ChunkHex(publication_record->root_chunk_id);
             }

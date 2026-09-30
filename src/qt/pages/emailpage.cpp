@@ -167,6 +167,17 @@ QWidget* MailRow(const CybouMailItem& item, CybouOperationState operation, bool 
             ? CybouProduct::contentStateText(item.state)
             : CybouProduct::contentWithOperationText(item.state, operation, online), row, operation);
     } else {
+        if (!item.draft && (item.state == CybouContentState::Protected || item.state == CybouContentState::Received)) {
+            // Settled mail: a tiny lock beside the time; the tooltip says what it means.
+            auto* lock = new QLabel{row};
+            lock->setObjectName(QStringLiteral("stateLock"));
+            lock->setPixmap(glyphPixmap(Glyph::Lock, {12, 12}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
+            lock->setToolTip(item.state == CybouContentState::Protected
+                ? EmailPage::tr("Protected: encrypted here and stored encrypted on the network")
+                : EmailPage::tr("Received: end-to-end encrypted"));
+            lock->setAccessibleName(CybouProduct::contentStateText(item.state));
+            top->addWidget(lock);
+        }
         when = new QLabel{shortTime(item.time), row};
         when->setObjectName(QStringLiteral("rowMeta"));
         if (item.unread) when->setStyleSheet(QStringLiteral("color: %1; font-weight: 700;").arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
@@ -175,11 +186,6 @@ QWidget* MailRow(const CybouMailItem& item, CybouOperationState operation, bool 
     text->addLayout(top);
     text->addWidget(new SubjectPreview{item.subject.isEmpty() ? EmailPage::tr("(no subject)") : item.subject,
         item.preview, item.unread, row});
-    if (!pending && !item.draft) {
-        // Settled messages still say where they stand: Protected (own) or Received.
-        auto* settled = StateChip(item.state, CybouProduct::contentStateText(item.state), row, operation);
-        text->addWidget(settled);
-    }
     layout->addLayout(text, 1);
     return row;
 }
@@ -580,7 +586,9 @@ bool EmailPage::inView(const CybouMailItem& item) const
     switch (m_view) {
     case View::Inbox: return item.folder == CybouMailFolder::Inbox;
     case View::Starred: return item.starred && item.folder != CybouMailFolder::Trash;
-    case View::Sent: return item.folder == CybouMailFolder::Sent;
+    // Mail to yourself is one message filed in Inbox; Sent lists it too.
+    case View::Sent: return item.folder == CybouMailFolder::Sent ||
+        (item.outgoing && item.folder == CybouMailFolder::Inbox);
     case View::Drafts: return item.folder == CybouMailFolder::Drafts;
     case View::Archive: return item.folder == CybouMailFolder::Archive;
     case View::Trash: return item.folder == CybouMailFolder::Trash;

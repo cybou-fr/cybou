@@ -9,7 +9,7 @@
 #include <qt/cybouui.h>
 
 #include <QAction>
-#include <QDirIterator>
+#include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
@@ -505,9 +505,7 @@ bool StoragePage::handleItemDrag(QWidget* viewport, QEvent* event)
             }
             // Files dropped on a folder go into it; elsewhere into the current folder.
             const QString parent = folder && folder->folder ? target : (m_view == View::MyFiles ? m_folder : QString{});
-            for (const auto& path : paths) {
-                if (QFileInfo{path}.isFile()) m_model->requestFileUpload(path, parent);
-            }
+            uploadPaths(paths, parent);
         }
         drop->acceptProposedAction();
         return true;
@@ -858,9 +856,7 @@ QStringList StoragePage::selectedIds() const
 void StoragePage::uploadFiles(const QStringList& paths)
 {
     const QString parent = m_view == View::MyFiles ? m_folder : QString{};
-    for (const auto& path : paths) {
-        if (!path.isEmpty() && QFileInfo{path}.isFile()) m_model->requestFileUpload(path, parent);
-    }
+    uploadPaths(paths, parent);
 }
 
 void StoragePage::promptNewFolder()
@@ -876,11 +872,27 @@ void StoragePage::promptUploadFolder()
 {
     const QString directory = QFileDialog::getExistingDirectory(this, tr("Upload folder"));
     if (directory.isEmpty()) return;
-    const QString root_id = m_model->requestCreateFolder(QFileInfo{directory}.fileName(),
-        m_view == View::MyFiles ? m_folder : QString{});
-    if (root_id.isEmpty()) return;
-    QDirIterator it{directory, QDir::Files, QDirIterator::NoIteratorFlags};
-    while (it.hasNext()) m_model->requestFileUpload(it.next(), root_id);
+    uploadPaths({directory}, m_view == View::MyFiles ? m_folder : QString{});
+}
+
+void StoragePage::uploadPaths(const QStringList& paths, const QString& parent)
+{
+    for (const auto& path : paths) {
+        const QFileInfo info{path};
+        if (info.isFile()) {
+            m_model->requestFileUpload(path, parent);
+        } else if (info.isDir() && !info.isSymLink()) {
+            // A folder keeps its structure: an encrypted folder per directory.
+            const QString folder_id = m_model->requestCreateFolder(info.fileName(), parent);
+            if (folder_id.isEmpty()) continue;
+            QStringList children;
+            const QDir dir{path};
+            for (const auto& entry : dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
+                children << entry.absoluteFilePath();
+            }
+            uploadPaths(children, folder_id);
+        }
+    }
 }
 
 void StoragePage::promptRename(const QString& id)

@@ -116,6 +116,8 @@ private:
     void showContextMenu(const QPoint& global_pos);
     void promptNewFolder();
     void promptUploadFolder();
+    /** Uploads files and whole folders (recursively, as encrypted folders) under `parent`. */
+    void uploadPaths(const QStringList& paths, const QString& parent);
     void promptRename(const QString& id);
     void promptMove(const QString& id);
     void download(const QString& id);

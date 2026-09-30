@@ -456,6 +456,7 @@ QString CybouDesktopModel::requestSendMail(CybouMailItem message)
     if (!message.id.isEmpty() && mailItem(message.id)) m_backend->deleteMail(message.id);
     message.id = NewLocalId("out");
     message.folder = CybouMailFolder::Sent;
+    message.outgoing = true;
     message.draft = false;
     message.unread = false;
     message.from_name = m_status.primary_name;
