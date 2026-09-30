@@ -175,6 +175,11 @@ QWidget* MailRow(const CybouMailItem& item, CybouOperationState operation, bool 
     text->addLayout(top);
     text->addWidget(new SubjectPreview{item.subject.isEmpty() ? EmailPage::tr("(no subject)") : item.subject,
         item.preview, item.unread, row});
+    if (!pending && !item.draft) {
+        // Settled messages still say where they stand: Protected (own) or Received.
+        auto* settled = StateChip(item.state, CybouProduct::contentStateText(item.state), row, operation);
+        text->addWidget(settled);
+    }
     layout->addLayout(text, 1);
     return row;
 }

@@ -371,9 +371,17 @@ void HomePage::rebuildFirstSteps()
         layout->addWidget(button);
         m_first_steps_rows->addWidget(row);
     };
-    if (open.contains(QStringLiteral("name")))
-        step(tr("Claim your .cybou name"), tr("People reach you as name.cybou instead of a long ID."), tr("Claim"),
-            [this] { m_identity_requested(); });
+    if (open.contains(QStringLiteral("name"))) {
+        const auto& status = m_model->status();
+        if (status.name_claim_pending) {
+            step(tr("Claiming your .cybou name"), status.name_claim_status.isEmpty()
+                    ? tr("Waiting for the network to confirm it.") : status.name_claim_status, tr("Details"),
+                [this] { m_identity_requested(); });
+        } else {
+            step(tr("Claim your .cybou name"), tr("People reach you as name.cybou instead of a long ID."), tr("Claim"),
+                [this] { m_identity_requested(); });
+        }
+    }
     if (open.contains(QStringLiteral("mail")))
         step(tr("Send your first message"), tr("Mail is end-to-end encrypted and post-quantum protected."), tr("Compose"),
             [this] { if (onCompose) onCompose(); });

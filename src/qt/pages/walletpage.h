@@ -53,6 +53,9 @@ private:
 
     void refresh();
     void rebuildActivity();
+    /** Modal with every fact about one ledger entry (status, block, OperationID). */
+    void showEntryDetails(const QString& entry_id);
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void updateSendState();
     void submit();
     void setReviewing(bool reviewing);

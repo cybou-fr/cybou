@@ -12,6 +12,9 @@
 #include <QCompleter>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QEvent>
+#include <QLocale>
+#include <QMouseEvent>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -27,6 +30,19 @@ using namespace CybouUi;
 namespace {
 
 constexpr int kNameRole = Qt::UserRole + 1;
+
+/** Ledger entries rebuilt from finalized history carry no wall-clock time (blocks have none). */
+bool HasTime(const CybouWalletEntry& entry)
+{
+    return entry.time.isValid() && entry.time.toSecsSinceEpoch() > 0;
+}
+
+QString EntryWhen(const CybouWalletEntry& entry)
+{
+    if (HasTime(entry)) return relTime(entry.time);
+    if (entry.finalized_height > 0) return WalletPage::tr("block %1").arg(QLocale{}.toString(entry.finalized_height));
+    return {};
+}
 
 QString EntryTitle(const CybouWalletEntry& entry)
 {
@@ -339,6 +355,78 @@ void WalletPage::showReceive()
     dialog.exec();
 }
 
+bool WalletPage::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonRelease &&
+        static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+        const QString id = watched->property("walletEntryId").toString();
+        if (!id.isEmpty()) {
+            showEntryDetails(id);
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+void WalletPage::showEntryDetails(const QString& entry_id)
+{
+    const auto& entries = m_model->walletEntries();
+    const auto it = std::find_if(entries.begin(), entries.end(),
+        [&](const CybouWalletEntry& entry) { return entry.id == entry_id; });
+    if (it == entries.end()) return;
+    const CybouWalletEntry entry = *it;
+    const auto operation = m_model->displayedOperationState(entry.operation_id, entry.operation_state);
+
+    QDialog dialog{this};
+    dialog.setObjectName(QStringLiteral("walletEntryDetails"));
+    dialog.setWindowTitle(EntryTitle(entry));
+    dialog.setMinimumWidth(460);
+    auto* layout = new QVBoxLayout{&dialog};
+    layout->setContentsMargins(24, 20, 24, 20);
+    layout->setSpacing(10);
+    auto* title = new QLabel{EntryTitle(entry), &dialog};
+    title->setObjectName(QStringLiteral("sectionTitle"));
+    layout->addWidget(title);
+    const QString sign = entry.amount >= 0 ? QStringLiteral("+") : QStringLiteral("−");
+    auto* amount = new QLabel{sign + cybouAmountText(static_cast<quint64>(std::llabs(entry.amount))), &dialog};
+    amount->setObjectName(QStringLiteral("metric"));
+    layout->addWidget(amount);
+
+    const auto row = [&](const QString& key, const QString& value) {
+        auto* line = new QHBoxLayout;
+        auto* k = new QLabel{key, &dialog};
+        k->setObjectName(QStringLiteral("rowSub"));
+        k->setFixedWidth(140);
+        auto* v = new QLabel{value, &dialog};
+        v->setObjectName(QStringLiteral("rowTitle"));
+        v->setWordWrap(true);
+        v->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        line->addWidget(k, 0, Qt::AlignTop);
+        line->addWidget(v, 1);
+        layout->addLayout(line);
+    };
+    row(tr("Status"), CybouProduct::operationStateText(operation));
+    row(tr("Balance"), entry.system_side ? tr("System Balance (network service budget)") : tr("Available (spendable)"));
+    if (!entry.counterparty_name.isEmpty()) {
+        row(entry.amount >= 0 ? tr("From") : tr("To"), entry.counterparty_name);
+    }
+    if (HasTime(entry)) row(tr("Time"), QLocale{}.toString(entry.time, QLocale::LongFormat));
+    row(tr("Confirmed in block"), entry.finalized_height > 0 && !CybouProduct::operationPending(operation)
+        ? QLocale{}.toString(entry.finalized_height) : tr("Not yet"));
+    if (!entry.operation_id.isEmpty()) row(tr("Operation ID"), entry.operation_id);
+
+    auto* buttons = new QDialogButtonBox{&dialog};
+    if (!entry.operation_id.isEmpty()) {
+        auto* copy = buttons->addButton(tr("Copy operation ID"), QDialogButtonBox::ActionRole);
+        connect(copy, &QPushButton::clicked, &dialog,
+            [id = entry.operation_id] { QGuiApplication::clipboard()->setText(id); });
+    }
+    buttons->addButton(QDialogButtonBox::Close);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    dialog.exec();
+}
+
 void WalletPage::rebuildActivity()
 {
     while (QLayoutItem* item = m_activity_rows->takeAt(0)) {
@@ -359,9 +447,14 @@ void WalletPage::rebuildActivity()
         const QString subtitle = CybouProduct::operationPending(operation) || operation == CybouOperationState::Failed
             ? CybouProduct::operationStateText(operation)
             : entry.system_side ? tr("System Balance") : tr("Available");
+        const QString when = EntryWhen(entry);
         auto* row = ActivityRow(EntryGlyph(entry),
             entry.amount >= 0 ? Tint::Mint : Tint::Indigo, EntryTitle(entry), subtitle,
-            amount + QStringLiteral("  ·  ") + relTime(entry.time), m_activity_rows->parentWidget());
+            when.isEmpty() ? amount : amount + QStringLiteral("  ·  ") + when, m_activity_rows->parentWidget());
+        row->setProperty("walletEntryId", entry.id);
+        row->setCursor(Qt::PointingHandCursor);
+        row->setToolTip(tr("Show details"));
+        row->installEventFilter(this);
         if (auto* meta = row->findChild<QLabel*>(QStringLiteral("rowMeta")); meta && entry.amount > 0) {
             meta->setStyleSheet(QStringLiteral("background: transparent; border: none; color: %1; font-weight: 700;")
                 .arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));

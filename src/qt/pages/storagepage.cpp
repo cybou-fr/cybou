@@ -669,8 +669,8 @@ void StoragePage::rebuild()
             row->setText(SizeColumn, CybouProduct::sizeText(file.logical_size));
         }
         row->setText(ModifiedColumn, ModifiedText(file.modified));
-        // Protected is the norm; only other states draw attention.
-        if (!status.isEmpty() && (file.state != CybouContentState::Protected || file.retrieval != CybouRetrievalState::Idle))
+        // Every file shows where it stands (Protected included); folders have no state.
+        if (!status.isEmpty())
             m_table->setItemWidget(row, StatusColumn, StateChip(file.state, status, m_table,
                 m_model->displayedOperationState(file.operation_id, file.operation_state)));
         row->setData(StatusColumn, Qt::AccessibleTextRole, status);
