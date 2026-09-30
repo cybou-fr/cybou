@@ -168,7 +168,6 @@ add_library(cybou_core STATIC
   cybou/crypto/hkdf_sha256.cpp
   cybou/crypto/sha256.cpp
   cybou/hex.cpp
-  cybou/identity.cpp
   cybou/identity_authorization.cpp
   cybou/identity_crypto.cpp
   cybou/identity_kem.cpp
@@ -181,7 +180,6 @@ add_library(cybou_core STATIC
   cybou/payment.cpp
   cybou/poa_finality.cpp
   cybou/recovery_phrase.cpp
-  cybou/signing.cpp
   cybou/signing_openssl.cpp
   cybou/state.cpp
 )

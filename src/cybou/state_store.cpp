@@ -39,17 +39,12 @@ inline std::string OperationKey(const uint256& op_id)
 
 CybouStateStore::CybouStateStore(
     KVStore& db,
-    CybouNetworkDefinition network_definition,
-    std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier)
+    CybouNetworkDefinition network_definition)
     : m_db{db},
       m_network_definition{std::move(network_definition)},
       m_network_definition_error{ValidateNetworkDefinition(m_network_definition)},
-      m_network_id{NetworkId(m_network_definition)},
-      m_operator_verifier{std::move(operator_verifier)}
+      m_network_id{NetworkId(m_network_definition)}
 {
-    if (!m_operator_verifier) {
-        m_operator_verifier = std::make_shared<OpenSslOperatorAuthoritySignatureVerifier>();
-    }
     if (m_network_definition_error == NetworkDefinitionError::NONE) {
         m_poa_conflict_detector = std::make_unique<PoaConflictDetector>(m_db, m_network_id,
             m_network_definition.poa_finalizer_public_key);

@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#include <cybou/identity.h>
+#include <cybou/account_id.h>
 #include <cybou/identity_authorization.h>
 #include <cybou/keystore.h>
 
@@ -16,21 +16,6 @@
 #include <string>
 
 BOOST_AUTO_TEST_SUITE(cybou_identity_tests)
-
-BOOST_AUTO_TEST_CASE(operator_key_domains_are_distinct)
-{
-    using cybou::OperatorKeyDomain;
-    constexpr std::array domains{
-        OperatorKeyDomain::AUTHORITY,
-        OperatorKeyDomain::VALIDATOR,
-        OperatorKeyDomain::RELEASE_SIGNING,
-        OperatorKeyDomain::TREASURY,
-    };
-
-    std::set<std::string> tags;
-    for (const auto domain : domains) tags.emplace(cybou::KeyDomainTag(domain));
-    BOOST_CHECK_EQUAL(tags.size(), domains.size());
-}
 
 BOOST_AUTO_TEST_CASE(account_id_has_one_canonical_fixed_width_encoding)
 {

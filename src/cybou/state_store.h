@@ -118,8 +118,7 @@ class CybouStateStore
 public:
     CybouStateStore(
         KVStore& db,
-        CybouNetworkDefinition network_definition,
-        std::shared_ptr<OperatorAuthoritySignatureVerifier> operator_verifier = nullptr);
+        CybouNetworkDefinition network_definition);
 
     /** Persist genesis state at height 0. Fails if already initialized. */
     GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true);
@@ -184,7 +183,6 @@ private:
     const CybouNetworkDefinition m_network_definition;
     const NetworkDefinitionError m_network_definition_error;
     const uint256 m_network_id;
-    std::shared_ptr<OperatorAuthoritySignatureVerifier> m_operator_verifier;
     std::unique_ptr<PoaConflictDetector> m_poa_conflict_detector;
 };
 
