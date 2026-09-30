@@ -379,7 +379,10 @@ inline std::optional<NameRegistry> DeserializeNameRegistry(std::span<const unsig
         }
         std::string label(reinterpret_cast<const char*>(bytes.data() + offset), label_len);
         offset += label_len;
-        if (ValidateNameLabel(label) != NameValidationError::NONE) return std::nullopt;
+        // Reserved labels pass syntax here; ValidateCybouState admits them
+        // only with a matching claimed genesis allocation.
+        if (const auto validity = ValidateNameLabel(label);
+            validity != NameValidationError::NONE && validity != NameValidationError::RESERVED_NAME) return std::nullopt;
 
         const auto acc = AccountId::FromBytes(bytes.subspan(offset, 32));
         offset += 32;

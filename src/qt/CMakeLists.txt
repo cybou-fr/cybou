@@ -74,6 +74,8 @@ add_library(cybou_qt STATIC
   cybouuifixtures.h
   pages/diagnosticspage.cpp
   pages/diagnosticspage.h
+  pages/networkauthoritypage.cpp
+  pages/networkauthoritypage.h
   pages/emailpage.cpp
   pages/emailpage.h
   pages/homepage.cpp

@@ -167,17 +167,29 @@ int Execute(const int argc, char* argv[])
         }
         return 0;
     }
-    if (argc == 4 && std::string_view{argv[1]} == "network-init") {
+    if ((argc == 4 || argc == 6) && std::string_view{argv[1]} == "network-init") {
         auto poa_seed_bytes = ReadFile(argv[3], 32);
         if (poa_seed_bytes.size() != 32) throw std::runtime_error("PoA finalizer key file must contain exactly 32 raw bytes");
         std::array<unsigned char, 32> poa_seed{};
         std::copy(poa_seed_bytes.begin(), poa_seed_bytes.end(), poa_seed.begin());
         cybou::crypto::CleanseMemory(poa_seed_bytes.data(), poa_seed_bytes.size());
         const auto poa_finalizer_key = cybou::DeriveIdentityPublicKey(poa_seed, cybou::IdentityKeyPurpose::POA_FINALIZER);
+        // The operator recovery phrase is also the authority Identity: its
+        // AccountCreate later claims the genesis allocation (Balance + name).
+        const auto authority_recovery_key = cybou::DeriveIdentityPublicKey(poa_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
         cybou::crypto::CleanseMemory(poa_seed.data(), poa_seed.size());
         if (!poa_finalizer_key) throw std::runtime_error("cannot derive PoA finalizer public key");
 
         auto genesis = cybou::CreateDevGenesisState();
+        if (argc == 6) {
+            const auto recovery_id = authority_recovery_key ? cybou::ComputeRecoveryKeyId(*authority_recovery_key) : std::nullopt;
+            if (!recovery_id) throw std::runtime_error("cannot derive authority recovery key");
+            const auto balance = std::stoull(argv[4]);
+            genesis.genesis_allocations.emplace(*recovery_id, cybou::GenesisAllocation{.balance = balance, .label = argv[5]});
+            if (cybou::ValidateCybouState(genesis) != cybou::StateValidationError::NONE) {
+                throw std::runtime_error("invalid authority genesis allocation (balance or name)");
+            }
+        }
         const auto definition = cybou::CreateDevNetworkDefinition(genesis, *poa_finalizer_key);
         auto definition_bytes = cybou::SerializeNetworkDefinition(definition);
         auto state_bytes = cybou::SerializeCybouState(genesis);
@@ -509,6 +521,7 @@ const char* Help = R"(CYBOU operator CLI (CYP2 only)
                 [--listen IP:PORT] [--peers FILE] [--event-log FILE]
   network info --network FILE
   network init-dev --network FILE --key-file FILE
+         [--authority-balance CYBOU --authority-name LABEL]
   network bootstrap
   network probe --network FILE --data-dir DIR --peer IP:PORT
   network sync --network FILE --data-dir DIR --peer IP:PORT [--count 100]
@@ -679,7 +692,11 @@ int Main(int argc, char* argv[])
         std::cout << "network_id=" << cybou::NetworkId(net->definition).GetHex()
             << " genesis=" << net->definition.genesis_block_id.GetHex() << '\n'; return 0;
     } else if (group=="network" && action=="init-dev") {
-        opts.Allow({"network","key-file"}); args.insert(args.end(),{"network-init",opts.Require("network"),opts.Require("key-file")});
+        opts.Allow({"network","key-file","authority-balance","authority-name"});
+        args.insert(args.end(),{"network-init",opts.Require("network"),opts.Require("key-file")});
+        if (opts.Has("authority-balance") || opts.Has("authority-name")) {
+            args.insert(args.end(),{opts.Require("authority-balance"),opts.Require("authority-name")});
+        }
     } else if ((group=="finalizer" || group=="provider" || group=="observer") && action=="run") {
         if (group=="finalizer") opts.Allow({"network","data-dir","key-file","listen","block-interval","peers","event-log","capacity","advertise"});
         else opts.Allow({"network","data-dir","peer","listen","peers","capacity","event-log","advertise"});

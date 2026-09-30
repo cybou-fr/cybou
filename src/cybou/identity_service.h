@@ -74,6 +74,12 @@ public:
     void DiscardPreparedIdentity();
     /** Unlock an existing portable vault; no raw-seed or automatic import path. */
     bool LoadVault(std::string_view password);
+    /**
+     * The unlocked Identity's recovery phrase derives this network's genesis
+     * PoA finalizer key: it is the network's central authority. Proven from
+     * genesis alone; grants no signing or finality power to this process.
+     */
+    bool IsNetworkAuthority() const;
 
     /** Access underlying keystore */
     CybouKeyStore& GetKeyStore() { return m_keystore; }

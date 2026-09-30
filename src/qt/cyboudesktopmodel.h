@@ -79,6 +79,24 @@ struct CybouDesktopStatus {
 };
 
 /**
+ * Canonical network totals shown only to the proven network authority: the
+ * unlocked Identity's recovery phrase derives the genesis PoA finalizer key.
+ * Every value is read from this node's own validated finalized state.
+ */
+struct CybouNetworkAuthorityStatus {
+    bool proven{false};
+    quint64 finalized_height{0};
+    quint64 identities{0};
+    quint64 names{0};
+    quint64 pending_name_commits{0};
+    quint64 total_balance{0};
+    quint64 total_system_balance{0};
+    quint64 onboarding_pool{0};
+    quint64 security_reward_pool{0};
+    quint64 pending_fee_pool{0};
+};
+
+/**
  * Canonical CYBOU amount rendering.
  *
  * CYBOU is indivisible (decimals = 0, 1 CYBOU = minimum unit), so the
@@ -119,6 +137,10 @@ public:
     void setPeerCount(int peer_count);
     const cybou::NodeDiagnosticsSnapshot& networkDiagnostics() const { return m_network_diagnostics; }
     void setNetworkDiagnostics(cybou::NodeDiagnosticsSnapshot snapshot);
+    /** Authority-only view; `proven` is false for every other Identity. */
+    const CybouNetworkAuthorityStatus& networkAuthority() const { return m_network_authority; }
+    bool isNetworkAuthority() const { return m_network_authority.proven; }
+    void setNetworkAuthority(const CybouNetworkAuthorityStatus& status);
     void setSyncing(bool syncing);
     void setSyncError(const QString& error);
     void setLastSync(const QDateTime& when);
@@ -322,6 +344,7 @@ public:
 
 Q_SIGNALS:
     void statusChanged();
+    void networkAuthorityChanged();
     void notificationRequested(const QString& text, const QString& action_label, std::function<void()> action);
     void capabilitiesChanged();
     void namesChanged();
@@ -374,6 +397,7 @@ private:
     CybouAuthoritySummary m_authority;
     QHash<QString, CybouOperationStatus> m_operations;
     cybou::NodeDiagnosticsSnapshot m_network_diagnostics;
+    CybouNetworkAuthorityStatus m_network_authority;
     bool m_validation_shown{true};
 
     void refreshFinalizedName();

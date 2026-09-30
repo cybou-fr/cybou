@@ -103,6 +103,13 @@ std::optional<RecoveryWords> CybouKeyStore::GetRecoveryWords() const
     return EncodeRecoveryWords(m_impl->material->recovery_entropy);
 }
 
+bool CybouKeyStore::DerivesPublicKey(IdentityKeyPurpose purpose, const IdentityHybridPublicKey& key) const
+{
+    if (!m_impl->material) return false;
+    const auto derived = DeriveIdentityPublicKey(m_impl->material->recovery_entropy, purpose);
+    return derived && *derived == key;
+}
+
 void CybouKeyStore::Clear() { m_impl->Clear(); }
 bool CybouKeyStore::HasKey() const { return m_impl->material.has_value(); }
 std::optional<XWingPublicKey> CybouKeyStore::GetIdentityXWingPublicKey() const { return m_impl->identity_xwing_public_key; }

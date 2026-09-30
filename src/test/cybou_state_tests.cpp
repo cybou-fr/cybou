@@ -41,6 +41,60 @@ BOOST_AUTO_TEST_CASE(network_id_commits_to_name_rules)
     BOOST_CHECK(NetworkId(changed) != NetworkId(definition));
 }
 
+BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
+{
+    using namespace cybou;
+    std::array<unsigned char, 32> root_seed{}, device_seed{};
+    root_seed[0] = 7;
+    device_seed[0] = 8;
+    uint256 raw_account{}, network_id{};
+    raw_account.begin()[0] = 9;
+    network_id.begin()[0] = 4;
+    const AccountId account{raw_account};
+    const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::AUTHORIZATION);
+    BOOST_REQUIRE(root && device);
+    const auto recovery_id = ComputeRecoveryKeyId(*root);
+    BOOST_REQUIRE(recovery_id);
+    const IdentityAuthorization auth{*root, *device};
+    const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
+    const auto root_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+    const auto authorization_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
+    BOOST_REQUIRE(root_pop && authorization_pop);
+    const AccountCreateOp create{account, auth, binding.package,
+        {.network_id = network_id, .account_id = account, .authorization_commitment = binding.authorization_commitment},
+        *root_pop, *authorization_pop};
+    auto params = DevProtocolParameters();
+    params.account_creation_work_bits = 0;
+    CybouState state{};
+    state.onboarding_pool = params.onboarding_bonus;
+    state.genesis_allocations.emplace(*recovery_id, GenesisAllocation{.balance = 100'000'000, .label = "cybou"});
+    BOOST_REQUIRE(ValidateCybouState(state) == StateValidationError::NONE);
+    const uint64_t supply = TotalSupply(state);
+    const auto genesis_bytes = SerializeCybouState(state);
+    BOOST_REQUIRE(genesis_bytes);
+    const auto genesis_restored = DeserializeCybouState(*genesis_bytes);
+    BOOST_REQUIRE(genesis_restored && genesis_restored->genesis_allocations == state.genesis_allocations);
+
+    BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 1, params, state) == AccountCreateStateError::NONE);
+    BOOST_CHECK_EQUAL(state.accounts.at(account).balance, 100'000'000u);
+    BOOST_CHECK(state.genesis_allocations.at(*recovery_id).claimed_by == account);
+    BOOST_REQUIRE(state.names.PrimaryName(account));
+    BOOST_CHECK_EQUAL(*state.names.PrimaryName(account), "cybou");
+    BOOST_CHECK_EQUAL(TotalSupply(state), supply);
+    BOOST_REQUIRE(ValidateCybouState(state) == StateValidationError::NONE);
+    const auto bytes = SerializeCybouState(state);
+    BOOST_REQUIRE(bytes);
+    const auto restored = DeserializeCybouState(*bytes);
+    BOOST_REQUIRE(restored);
+    BOOST_CHECK(SerializeCybouState(*restored) == bytes);
+
+    // A reserved label never validates without its genesis grant.
+    auto forged = state;
+    forged.genesis_allocations.clear();
+    BOOST_CHECK(ValidateCybouState(forged) == StateValidationError::INVALID_NAME_REGISTRY);
+}
+
 BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
 {
     using namespace cybou;

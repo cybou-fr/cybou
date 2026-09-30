@@ -556,6 +556,13 @@ void CybouDesktopModel::setNetworkDiagnostics(cybou::NodeDiagnosticsSnapshot sna
     Q_EMIT statusChanged();
 }
 
+void CybouDesktopModel::setNetworkAuthority(const CybouNetworkAuthorityStatus& status)
+{
+    const bool changed_role = status.proven != m_network_authority.proven;
+    m_network_authority = status.proven ? status : CybouNetworkAuthorityStatus{};
+    if (changed_role || status.proven) Q_EMIT networkAuthorityChanged();
+}
+
 void CybouDesktopModel::setOperationStatus(const CybouOperationStatus& status)
 {
     if (status.operation_id.isEmpty()) return;

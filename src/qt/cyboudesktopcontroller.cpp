@@ -236,6 +236,11 @@ void CybouDesktopController::start()
                 } catch (const std::exception& e) {
                     qWarning() << "cybou authority refresh error:" << e.what();
                 }
+                try {
+                    publishNetworkAuthority();
+                } catch (const std::exception& e) {
+                    qWarning() << "cybou network authority refresh error:" << e.what();
+                }
                 const auto diagnostics = m_node_service->Runtime().GetDiagnostics();
                 QMetaObject::invokeMethod(m_model, [model = m_model, diagnostics, runtime_status, bootstrap_reachable, connected_peer_count, sync_error] {
                     model->setNetworkDiagnostics(diagnostics);
@@ -262,6 +267,31 @@ void CybouDesktopController::start()
         m_model->setSyncError(reason);
         Q_EMIT startupFailed(reason);
     }
+}
+
+void CybouDesktopController::publishNetworkAuthority()
+{
+    CybouNetworkAuthorityStatus status;
+    if (m_identity_service && m_node_service && m_identity_service->IsNetworkAuthority()) {
+        const auto loaded = m_node_service->Runtime().GetStore().LoadState();
+        if (loaded && loaded.state) {
+            const auto& state = *loaded.state;
+            status.proven = true;
+            status.finalized_height = m_node_service->Runtime().GetFinalizedHeight().value_or(0);
+            status.identities = state.accounts.size();
+            status.names = state.names.names.size();
+            status.pending_name_commits = state.names.pending_commits.size();
+            for (const auto& [id, account] : state.accounts) {
+                status.total_balance += account.balance;
+                status.total_system_balance += account.system_balance;
+            }
+            status.onboarding_pool = state.onboarding_pool;
+            status.security_reward_pool = state.security_reward_pool;
+            status.pending_fee_pool = state.pending_fee_pool;
+        }
+    }
+    QMetaObject::invokeMethod(m_model, [model = m_model, status] { model->setNetworkAuthority(status); },
+        Qt::QueuedConnection);
 }
 
 void CybouDesktopController::publishAuthority()

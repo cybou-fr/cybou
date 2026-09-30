@@ -47,6 +47,8 @@ public:
     std::optional<IdentityMaterial> CreateIdentityRotationMaterial(
         std::span<const unsigned char, 32> new_recovery_entropy) const;
     std::optional<RecoveryWords> GetRecoveryWords() const;
+    /** True when the loaded recovery entropy derives exactly `key` for `purpose`; the entropy never leaves the store. */
+    bool DerivesPublicKey(IdentityKeyPurpose purpose, const IdentityHybridPublicKey& key) const;
 
     /** Securely wipe the in-memory key */
     void Clear();

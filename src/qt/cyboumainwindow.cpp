@@ -11,6 +11,7 @@
 #include <qt/cybouuifixtures.h>
 #include <qt/cybouui.h>
 #include <qt/pages/diagnosticspage.h>
+#include <qt/pages/networkauthoritypage.h>
 #include <qt/pages/emailpage.h>
 #include <qt/pages/homepage.h>
 #include <qt/pages/identitypage.h>
@@ -88,6 +89,7 @@ QString PageTitle(CybouPage page)
     case CybouPage::Identity: return CybouMainWindow::tr("Identity & Security");
     case CybouPage::Diagnostics: return CybouMainWindow::tr("Diagnostics");
     case CybouPage::Settings: return CybouMainWindow::tr("Settings");
+    case CybouPage::NetworkAuthority: return CybouMainWindow::tr("Network Authority");
     }
     return {};
 }
@@ -278,6 +280,9 @@ QFrame* CybouMainWindow::buildSidebar(QWidget* parent)
     add_button(CybouPage::Identity, CybouTheme::NavIcon::Identity);
     add_button(CybouPage::Diagnostics, CybouTheme::NavIcon::Diagnostics);
     add_button(CybouPage::Settings, CybouTheme::NavIcon::Settings);
+    add_button(CybouPage::NetworkAuthority, CybouTheme::NavIcon::Diagnostics);
+    // Hidden unless the unlocked Identity is proven to be the genesis authority.
+    m_navigation->button(static_cast<int>(CybouPage::NetworkAuthority))->setVisible(false);
     layout->addStretch();
     return sidebar;
 }
@@ -448,6 +453,12 @@ void CybouMainWindow::buildShell()
     addPage(identity, true);
     addPage(diagnostics, true);
     addPage(settings, true);
+    addPage(new NetworkAuthorityPage{m_desktop_model, nullptr}, true);
+    connect(m_desktop_model, &CybouDesktopModel::networkAuthorityChanged, this, [this] {
+        const bool authority = m_desktop_model->isNetworkAuthority();
+        m_navigation->button(static_cast<int>(CybouPage::NetworkAuthority))->setVisible(authority);
+        if (!authority && m_pages->currentIndex() == static_cast<int>(CybouPage::NetworkAuthority)) showPage(CybouPage::Home);
+    });
 
     connect(m_navigation, &QButtonGroup::idClicked, this, [this](int id) { showPage(static_cast<CybouPage>(id)); });
     m_navigation->button(0)->setChecked(true);

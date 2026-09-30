@@ -48,6 +48,8 @@ private:
     QString m_archived_network;
     void stop();
     void publishAuthority();
+    /** Canonical network totals, published only when the unlocked Identity is the genesis authority. */
+    void publishNetworkAuthority();
 };
 
 #endif // BITCOIN_QT_CYBOUDESKTOPCONTROLLER_H

@@ -14,11 +14,12 @@
 #include <map>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_STATE_VERSION{6};
+inline constexpr uint8_t CYBOU_STATE_VERSION{7};
 
 struct AccountState {
     uint64_t balance{0};
@@ -29,6 +30,23 @@ struct AccountState {
     friend bool operator==(const AccountState&, const AccountState&) = default;
 };
 
+/**
+ * Genesis-fixed Balance and name for the Identity whose recovery phrase has
+ * this recovery key. Claimed exactly once by that Identity's AccountCreate,
+ * which receives `balance` as spendable Balance and `label` as its .cybou
+ * name (reserved labels are allowed only here). The record stays after the
+ * claim so the reserved-name grant remains verifiable.
+ */
+struct GenesisAllocation {
+    uint64_t balance{0};
+    std::string label;
+    std::optional<AccountId> claimed_by;
+
+    friend bool operator==(const GenesisAllocation&, const GenesisAllocation&) = default;
+};
+
+inline constexpr size_t MAX_GENESIS_ALLOCATIONS{16};
+
 struct CybouState {
     uint64_t onboarding_pool{0};
     uint64_t security_reward_pool{0};
@@ -36,6 +54,8 @@ struct CybouState {
     std::map<AccountId, AccountState> accounts;
     IdentityRegistry identities;
     NameRegistry names;
+    /** Keyed by recovery key id; immutable except for the one-time claim. */
+    std::map<IdentityKeyId, GenesisAllocation> genesis_allocations;
 };
 
 enum class AccountCreateStateError : uint8_t {

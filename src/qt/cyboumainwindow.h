@@ -39,6 +39,8 @@ enum class CybouPage {
     Identity,
     Diagnostics,
     Settings,
+    /** Only for the Identity proven from genesis to hold the PoA finalizer key. */
+    NetworkAuthority,
 };
 
 class CybouMainWindow final : public QMainWindow

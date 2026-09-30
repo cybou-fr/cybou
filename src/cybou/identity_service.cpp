@@ -83,6 +83,13 @@ void CybouIdentityService::DiscardPreparedIdentity()
         m_phase.load() == IdentityCreationPhase::FAILED)) m_keystore.Clear();
 }
 
+bool CybouIdentityService::IsNetworkAuthority() const
+{
+    std::lock_guard lock(m_mutex);
+    return m_keystore.DerivesPublicKey(IdentityKeyPurpose::POA_FINALIZER,
+        m_runtime.GetNetworkDefinition().poa_finalizer_public_key);
+}
+
 bool CybouIdentityService::LoadVault(std::string_view password)
 {
     std::lock_guard lock(m_mutex);
@@ -406,6 +413,28 @@ IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
     }
     const auto loaded = m_runtime.GetStore().LoadState();
     const auto account = loaded && loaded.state ? loaded.state->identities.FindByRecoveryKeyId(*recovery_id) : std::nullopt;
+    if (!account && loaded && loaded.state) {
+        // A genesis allocation names this recovery key but no Identity claimed
+        // it yet: create that Identity from these words (fresh random
+        // AccountID); its finalized AccountCreate claims the allocation.
+        const auto allocation = loaded.state->genesis_allocations.find(*recovery_id);
+        if (allocation != loaded.state->genesis_allocations.end() && !allocation->second.claimed_by) {
+            {
+                std::lock_guard lock(m_mutex);
+                auto material = GenerateIdentityMaterial();
+                if (!m_storage_path || std::filesystem::exists(*m_storage_path) || m_vault_saved || !material) {
+                    m_phase.store(IdentityCreationPhase::FAILED);
+                    return Failure(IdentityCreationPhase::FAILED, "Cannot prepare the genesis Identity on this computer");
+                }
+                material->recovery_entropy = *entropy;
+                if (!m_keystore.LoadMaterial(std::move(*material))) {
+                    m_phase.store(IdentityCreationPhase::FAILED);
+                    return Failure(IdentityCreationPhase::FAILED, "Cannot derive Identity key roles");
+                }
+            }
+            return CreateIdentitySync(std::move(password), on_phase, timeout);
+        }
+    }
     if (!account || !loaded || !loaded.state) {
         m_phase.store(IdentityCreationPhase::FAILED);
         return Failure(IdentityCreationPhase::FAILED, "Recovery phrase is not in verified state; finish synchronization first");

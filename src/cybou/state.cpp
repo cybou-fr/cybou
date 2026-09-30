@@ -87,8 +87,21 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     default: return AccountCreateStateError::INVALID_CREATE;
     }
     state.onboarding_pool -= params.onboarding_bonus;
+    uint64_t genesis_balance{0};
+    if (const auto recovery_id = ComputeRecoveryKeyId(op.authorization.recovery_root)) {
+        if (auto it = state.genesis_allocations.find(*recovery_id);
+            it != state.genesis_allocations.end() && !it->second.claimed_by) {
+            // Registration above rejects a reused recovery key, so a claim happens once.
+            genesis_balance = it->second.balance;
+            it->second.claimed_by = op.account_id;
+            if (!it->second.label.empty()) {
+                state.names.names.emplace(it->second.label, op.account_id);
+                state.names.account_names.emplace(op.account_id, it->second.label);
+            }
+        }
+    }
     state.accounts.emplace(op.account_id, AccountState{
-        .balance = 0,
+        .balance = genesis_balance,
         .system_balance = params.onboarding_bonus,
         .creation_height = block_height,
         .creation_epoch = EpochForHeight(block_height, params),
@@ -158,7 +171,9 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
     if (state.names.account_names.contains(op.authorization.account_id)) {
         return NameRevealError::ACCOUNT_ALREADY_HAS_NAME;
     }
-    if (state.names.names.contains(op.reveal.label)) {
+    if (state.names.names.contains(op.reveal.label) ||
+        std::ranges::any_of(state.genesis_allocations,
+            [&](const auto& entry) { return entry.second.label == op.reveal.label; })) {
         return NameRevealError::NAME_ALREADY_TAKEN;
     }
     const auto expected_commitment = ComputeNameCommitment(network_id, op.authorization.account_id, op.reveal.label, op.reveal.salt);
@@ -245,8 +260,30 @@ StateValidationError ValidateCybouState(const CybouState& state)
         if (!mapped_acc || *mapped_acc != id) return StateValidationError::DUPLICATE_RECOVERY_BINDING;
     }
     if (state.names.names.size() != state.names.account_names.size()) return StateValidationError::INVALID_NAME_REGISTRY;
+    if (state.genesis_allocations.size() > MAX_GENESIS_ALLOCATIONS) return StateValidationError::INVALID_NAME_REGISTRY;
+    std::set<std::string> allocation_labels;
+    for (const auto& [recovery_id, allocation] : state.genesis_allocations) {
+        const auto validity = ValidateNameLabel(allocation.label);
+        if (!allocation.label.empty() && validity != NameValidationError::NONE &&
+            validity != NameValidationError::RESERVED_NAME) return StateValidationError::INVALID_NAME_REGISTRY;
+        if (!allocation.label.empty() && !allocation_labels.insert(allocation.label).second) {
+            return StateValidationError::INVALID_NAME_REGISTRY;
+        }
+        if (allocation.claimed_by && !state.accounts.contains(*allocation.claimed_by)) {
+            return StateValidationError::INVALID_NAME_REGISTRY;
+        }
+    }
+    const auto genesis_granted = [&](const std::string& label, const AccountId& acc) {
+        return std::ranges::any_of(state.genesis_allocations, [&](const auto& entry) {
+            return entry.second.label == label && entry.second.claimed_by == acc;
+        });
+    };
     for (const auto& [label, acc] : state.names.names) {
-        if (ValidateNameLabel(label) != NameValidationError::NONE) return StateValidationError::INVALID_NAME_REGISTRY;
+        const auto validity = ValidateNameLabel(label);
+        if (validity != NameValidationError::NONE &&
+            !(validity == NameValidationError::RESERVED_NAME && genesis_granted(label, acc))) {
+            return StateValidationError::INVALID_NAME_REGISTRY;
+        }
         auto it = state.names.account_names.find(acc);
         if (it == state.names.account_names.end() || it->second != label) return StateValidationError::INVALID_NAME_REGISTRY;
         if (!state.accounts.contains(acc)) return StateValidationError::INVALID_NAME_REGISTRY;
@@ -273,6 +310,11 @@ uint64_t TotalSupply(const CybouState& state)
     total += state.security_reward_pool;
     if (state.pending_fee_pool > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
     total += state.pending_fee_pool;
+    for (const auto& [id, allocation] : state.genesis_allocations) {
+        if (allocation.claimed_by) continue; // counted in the claimant Balance
+        if (allocation.balance > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
+        total += allocation.balance;
+    }
     for (const auto& [id, account] : state.accounts) {
         if (account.balance > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
         total += account.balance;
@@ -307,6 +349,17 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
     out.insert(out.end(), identities->begin(), identities->end());
     Write32(out, static_cast<uint32_t>(names.size()));
     out.insert(out.end(), names.begin(), names.end());
+    Write32(out, static_cast<uint32_t>(state.genesis_allocations.size()));
+    for (const auto& [recovery_id, allocation] : state.genesis_allocations) {
+        out.insert(out.end(), recovery_id.begin(), recovery_id.end());
+        Write64(out, allocation.balance);
+        Write32(out, static_cast<uint32_t>(allocation.label.size()));
+        out.insert(out.end(), allocation.label.begin(), allocation.label.end());
+        out.push_back(allocation.claimed_by ? 1 : 0);
+        if (allocation.claimed_by) {
+            out.insert(out.end(), allocation.claimed_by->Value().begin(), allocation.claimed_by->Value().end());
+        }
+    }
     return out;
 }
 
@@ -350,17 +403,42 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
     const auto names_size = reader.U32();
     if (!names_size) return std::nullopt;
     const auto names_bytes = reader.Bytes(*names_size);
-    if (!names_bytes || reader.Remaining()) return std::nullopt;
+    if (!names_bytes) return std::nullopt;
     const auto names = DeserializeNameRegistry(*names_bytes);
     if (!names) return std::nullopt;
     state.names = *names;
+    const auto allocations = reader.U32();
+    if (!allocations || *allocations > MAX_GENESIS_ALLOCATIONS) return std::nullopt;
+    std::optional<IdentityKeyId> prior_allocation;
+    for (uint32_t i{0}; i < *allocations; ++i) {
+        const auto id_bytes = reader.Bytes(IdentityKeyId{}.size());
+        const auto balance = reader.U64();
+        const auto label_size = reader.U32();
+        if (!id_bytes || !balance || !label_size || *label_size > NAME_MAX_LABEL_LENGTH) return std::nullopt;
+        const auto label = reader.Bytes(*label_size);
+        const auto claimed = reader.U8();
+        if (!label || !claimed || *claimed > 1) return std::nullopt;
+        IdentityKeyId recovery_id{};
+        std::copy(id_bytes->begin(), id_bytes->end(), recovery_id.begin());
+        if (prior_allocation && !(*prior_allocation < recovery_id)) return std::nullopt;
+        prior_allocation = recovery_id;
+        GenesisAllocation allocation{.balance = *balance, .label = std::string(label->begin(), label->end())};
+        if (*claimed) {
+            const auto claimant = reader.Bytes(AccountId::SIZE);
+            const auto account = claimant ? AccountId::FromBytes(*claimant) : std::nullopt;
+            if (!account) return std::nullopt;
+            allocation.claimed_by = *account;
+        }
+        state.genesis_allocations.emplace(recovery_id, std::move(allocation));
+    }
+    if (reader.Remaining()) return std::nullopt;
     if (ValidateCybouState(state) != StateValidationError::NONE) return std::nullopt;
     return state;
 }
 
 std::optional<uint256> CybouStateHash(const CybouState& state)
 {
-    constexpr std::string_view domain{"CYBOU/STATE/V4"};
+    constexpr std::string_view domain{"CYBOU/STATE/V5"};
     const auto bytes = SerializeCybouState(state);
     if (!bytes) return std::nullopt;
     uint256 hash;
