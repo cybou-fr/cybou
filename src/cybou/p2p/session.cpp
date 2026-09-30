@@ -56,6 +56,9 @@ bool IsSupportedMessageType(const uint8_t type)
     switch (static_cast<MessageType>(type)) {
     case MessageType::HELLO:
     case MessageType::PROVIDER_PROOF:
+    case MessageType::VALIDATION_META:
+    case MessageType::VALIDATION_CHUNK:
+    case MessageType::VALIDATION_RESULT:
     case MessageType::PING:
     case MessageType::PONG:
     case MessageType::GET_BLOCK:
@@ -307,14 +310,13 @@ std::optional<Frame> PeerSession::Read()
     return Read(std::chrono::steady_clock::now() + std::chrono::seconds(5));
 }
 
-std::vector<unsigned char> ProviderProofMessage(const uint256& network_id, const uint64_t signer_nonce,
-    const uint64_t verifier_nonce)
+std::vector<unsigned char> ProviderProofMessage(const Hello& signer,const Hello& verifier)
 {
-    constexpr std::string_view DOMAIN{"CYBOU/CYP2/PROVIDER-PROOF/v1"};
-    std::vector<unsigned char> message(DOMAIN.begin(), DOMAIN.end());
-    message.insert(message.end(), network_id.begin(), network_id.end());
-    Put64(message, signer_nonce);
-    Put64(message, verifier_nonce);
+    constexpr std::string_view DOMAIN{"CYBOU/CYP2/PROVIDER-PROOF/v2"};
+    std::vector<unsigned char> message(DOMAIN.begin(),DOMAIN.end());
+    const auto signer_bytes=EncodeHello(signer),verifier_bytes=EncodeHello(verifier);
+    message.insert(message.end(),signer_bytes.begin(),signer_bytes.end());
+    message.insert(message.end(),verifier_bytes.begin(),verifier_bytes.end());
     return message;
 }
 
@@ -370,7 +372,7 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
             m_handshake_status = HandshakeStatus::INVALID_LOCAL;
             return false;
         }
-        const auto proof = provider_signer(ProviderProofMessage(local.network_id, local.nonce, peer->nonce));
+        const auto proof = provider_signer(ProviderProofMessage(local,*peer));
         if (!proof || !Write(Frame{MessageType::PROVIDER_PROOF, *proof})) {
             m_handshake_status = HandshakeStatus::UNAVAILABLE;
             return false;
@@ -381,7 +383,7 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
         const auto proof_frame = Read();
         if (!proof_frame || proof_frame->type != MessageType::PROVIDER_PROOF) return false;
         m_peer_provider_id = VerifyProviderProof(proof_frame->payload,
-            ProviderProofMessage(peer->network_id, peer->nonce, local.nonce));
+            ProviderProofMessage(*peer,local));
         if (!m_peer_provider_id) return false;
     }
     m_peer = *peer;
@@ -528,6 +530,31 @@ std::optional<BlockAnnounceResult> PeerSession::AdvertiseBlock(
         !std::equal(announcement.block_id.begin(), announcement.block_id.end(), result->payload.begin() + 9)) return std::nullopt;
     if (result->payload.size() == 49) peer_finalized_height = Read64(result->payload.data() + 41);
     return static_cast<BlockAnnounceResult>(result->payload[0]);
+}
+
+std::optional<ValidationResult> PeerSession::RequestValidation(const ProtocolOperation& operation)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_VALIDATION)) return std::nullopt;
+    const auto bytes = SerializeProtocolOperation(operation);
+    if (!bytes || bytes->empty() || bytes->size() > MAX_OPERATION_PAYLOAD_BYTES) return std::nullopt;
+    std::vector<unsigned char> meta; Put32(meta, static_cast<uint32_t>(bytes->size()));
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!Write(Frame{MessageType::VALIDATION_META, meta}, deadline)) return std::nullopt;
+    for (size_t offset{0}; offset < bytes->size(); offset += MAX_FRAME_PAYLOAD) {
+        const auto size = std::min<size_t>(MAX_FRAME_PAYLOAD, bytes->size() - offset);
+        if (!Write(Frame{MessageType::VALIDATION_CHUNK, {bytes->begin() + offset, bytes->begin() + offset + size}}, deadline)) return std::nullopt;
+    }
+    const auto response = Read(deadline);
+    if (!response || response->type != MessageType::VALIDATION_RESULT || response->payload.empty() ||
+        response->payload[0] > static_cast<uint8_t>(ValidationCheck::UNSUPPORTED)) return std::nullopt;
+    ValidationResult result{static_cast<ValidationCheck>(response->payload[0]), {}};
+    if (result.check == ValidationCheck::VALID) {
+        result.attestation = DeserializeValidationAttestation(std::span{response->payload}.subspan(1));
+        if (!result.attestation || ComputeOperationId(operation) != result.attestation->operation_id ||
+            result.attestation->base.network_id != m_peer->network_id) return std::nullopt;
+    } else if (response->payload.size() != 1) return std::nullopt;
+    // This is untrusted evidence until the caller independently verifies it against its own snapshot.
+    return result;
 }
 
 std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const ProtocolOperation& operation)
@@ -729,11 +756,37 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     if (request->type == MessageType::PING) {
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});
     }
+    if (request->type == MessageType::VALIDATION_META) {
+        if (!(m_local_capabilities & CAP_VALIDATION) || request->payload.size() != 4) return false;
+        const auto size = Read32(request->payload.data());
+        if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return false;
+        boost::system::error_code budget_error;
+        const auto remote=m_socket.remote_endpoint(budget_error);
+        if (budget_error || !runtime.AdmitIngress(remote.address().to_string(),IngressBudget::Work::OPERATION,size)) return false;
+        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        std::vector<unsigned char> bytes; bytes.reserve(size);
+        while (bytes.size() < size) {
+            const auto chunk = Read(deadline);
+            if (!chunk || chunk->type != MessageType::VALIDATION_CHUNK || chunk->payload.empty() || chunk->payload.size() > size - bytes.size()) return false;
+            bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
+        }
+        const auto operation = DeserializeProtocolOperation(bytes); if (!operation) return false;
+        const auto result = runtime.CheckOperationForValidation(*operation);
+        std::vector<unsigned char> response{static_cast<uint8_t>(result.check)};
+        if (result.attestation) {
+            const auto encoded = SerializeValidationAttestation(*result.attestation); if (!encoded) return false;
+            response.insert(response.end(), encoded->begin(), encoded->end());
+        }
+        return Write(Frame{MessageType::VALIDATION_RESULT, response}, deadline);
+    }
     if (request->type == MessageType::OP_META) {
         if (!(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) return false;
         if (request->payload.size() != 4) return false;
         const uint32_t size = Read32(request->payload.data());
         if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return false;
+        boost::system::error_code budget_error;
+        const auto remote=m_socket.remote_endpoint(budget_error);
+        if (budget_error || !runtime.AdmitIngress(remote.address().to_string(),IngressBudget::Work::OPERATION,size)) return false;
         const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
         std::vector<unsigned char> bytes;
         bytes.reserve(size);

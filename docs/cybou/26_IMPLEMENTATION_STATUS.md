@@ -133,3 +133,22 @@ the exact bytes retained. The soak takes about 45 seconds.
 
 Do not claim designed features are live merely because UI fixtures expose their
 target states.
+
+## Separate Identity Authority network version
+
+Version 7 development is independent of the running DEV network. The profile
+and unfinished acceptance gates are in [IDENTITY_AUTHORITY_NETWORK_V7.md](IDENTITY_AUTHORITY_NETWORK_V7.md).
+Canonical Authority accumulators, immutable budget parameters, bound service
+keys, signed validation with durable conflicts, contribution receipts, ciphertext
+possession proofs, and canonical resource reservation/release operations exist.
+Remote provider ticket enforcement and asynchronous client resource scheduling
+must be completed before claiming a fully enforced global storage/bandwidth limit.
+
+Security hardening in this work includes retaining journals after unsigned remote
+negative/finalization acknowledgments, move-only PoA secret configuration, private
+secret-file creation/reads, bounded pre-verification ingress work, explicit desktop
+sync freshness, monotonic operation transitions, provider HELLO transcript proofs,
+release network pinning without automatic Identity archival, minimal telemetry,
+private LAB capabilities, and pinned/checksummed CI inputs. CYP2 frame encryption,
+privileged LAB helper separation and signed release evidence remain separate gates;
+provider HELLO signatures alone are not an authenticated encrypted session.

@@ -43,7 +43,7 @@ struct Client {
     Client(const cybou::CybouNetworkFile& net, const std::filesystem::path& dir,
            const std::pair<std::string,uint16_t>& peer, const std::string& password, unsigned target) {
         std::filesystem::create_directories(dir);
-        events=std::make_shared<cybou::EventWriter>(dir/"client.events.jsonl");
+        events=std::make_shared<cybou::EventWriter>(dir/"client.events.jsonl",cybou::EventLogMode::LAB);
         node=std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
             .runtime={.network_definition=net.definition,.data_dir=dir/"node",.p2p_endpoint=peer,.event_writer=events},.genesis=net.genesis});
         node->Start();

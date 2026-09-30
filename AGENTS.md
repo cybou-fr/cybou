@@ -4,6 +4,16 @@ Read the active CYBOU documents before coding. Git history is the record of
 superseded architecture; do not keep obsolete runtime paths alive for
 compatibility.
 
+## Separate network version under development
+
+The user approved a new network version for canonical Identity Authority,
+signed Validation, liveness/storage evidence, and global resource reservations.
+Its implementation profile is `docs/cybou/IDENTITY_AUTHORITY_NETWORK_V7.md`.
+Do not interpret new-version development as permission to reset DEV, replace
+its PoA key, or deploy an incompatible executable over the current network.
+The user explicitly requires DEV cutover agreement after acceptance tests.
+Current-network rules below remain immutable until that transition.
+
 ## DEV VPS deployment
 
 - After changing CYBOU core or `cybou-node`, rebuild `cybou-node` on the DEV VPS

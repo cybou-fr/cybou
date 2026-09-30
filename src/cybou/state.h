@@ -9,6 +9,9 @@
 #include <cybou/name_registry.h>
 #include <cybou/root_publication.h>
 #include <cybou/protocol_params.h>
+#include <cybou/node_binding.h>
+#include <cybou/service_evidence.h>
+#include <cybou/resource_reservation.h>
 
 #include <cstdint>
 #include <map>
@@ -19,13 +22,15 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_STATE_VERSION{7};
+inline constexpr uint8_t CYBOU_STATE_VERSION{8};
 
 struct AccountState {
     uint64_t balance{0};
     uint64_t system_balance{0};
     uint64_t creation_height{0};
     uint64_t creation_epoch{0};
+    AuthorityAccumulator authority;
+    uint64_t bandwidth_reserved{0};
 
     friend bool operator==(const AccountState&, const AccountState&) = default;
 };
@@ -56,6 +61,10 @@ struct CybouState {
     NameRegistry names;
     /** Keyed by recovery key id; immutable except for the one-time claim. */
     std::map<IdentityKeyId, GenesisAllocation> genesis_allocations;
+    std::map<uint256, BoundNode> bound_nodes;
+    std::map<uint256, ReservedResource> resources;
+    /** Service evidence only: no filename, folder, message or application schema. */
+    std::map<std::pair<AccountId, ChunkId>, StoragePledge> storage_pledges;
 };
 
 enum class AccountCreateStateError : uint8_t {
@@ -102,6 +111,8 @@ enum class StateValidationError : uint8_t {
     DUPLICATE_RECOVERY_BINDING,
     BALANCE_OVERFLOW,
     INVALID_NAME_REGISTRY,
+    INVALID_AUTHORITY_STATE,
+    INVALID_NODE_BINDING,
 };
 
 StateValidationError ValidateCybouState(const CybouState& state);

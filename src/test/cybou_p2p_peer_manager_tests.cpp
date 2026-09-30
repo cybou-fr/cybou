@@ -818,6 +818,41 @@ BOOST_AUTO_TEST_CASE(manager_distinguishes_rejection_from_missing_operation_ackn
     BOOST_CHECK(unconfirmed.delivery_uncertain);
 }
 
+BOOST_AUTO_TEST_CASE(unsigned_remote_rejection_and_finalization_never_become_canonical_status) {
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("unsigned-ack.vault");
+    const auto block = fixture.runtime->GetBlockAtHeight(1); BOOST_REQUIRE(block);
+    const auto operation = block->block.operations.front();
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    for (const auto claimed : {cybou::OperationSubmitStatus::REJECTED,cybou::OperationSubmitStatus::ALREADY_FINALIZED}) {
+        tcp::acceptor acceptor{io,{boost::asio::ip::address_v4::loopback(),0}};
+        std::jthread server{[&] {
+            tcp::socket socket{io}; acceptor.accept(socket);
+            cybou::p2p::PeerSession session{std::move(socket)};
+            if (!session.Handshake({.network_id=fixture.runtime->GetNetworkId(),.finalized_height=0,
+                .finalized_tip=fixture.definition.genesis_block_id,.capabilities=cybou::p2p::CAP_ACCEPT_OPERATIONS,.nonce=901})) return;
+            // Both responses are genuine unsigned hints; the observer has not verified the block.
+            cybou::NodeRuntimeConfig config{.network_definition=fixture.definition,.memory_only=true};
+            cybou::CybouNodeRuntime receiver{std::move(config)};
+            receiver.InitializeGenesis(fixture.genesis);
+            if (claimed == cybou::OperationSubmitStatus::ALREADY_FINALIZED) {
+                const auto imported = receiver.CommitBlock(*block);
+                (void)imported;
+            }
+            session.ServeNext(receiver);
+        }};
+        cybou::NodeRuntimeConfig config{.network_definition=fixture.definition,
+            .p2p_endpoint=std::pair{std::string{"127.0.0.1"},acceptor.local_endpoint().port()},.memory_only=true};
+        cybou::CybouNodeRuntime observer{std::move(config)};
+        BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
+        const auto result = observer.SubmitOperation(operation); server.join();
+        BOOST_CHECK(result.delivery_uncertain);
+        BOOST_CHECK(result.status == cybou::OperationSubmitStatus::REJECTED);
+        BOOST_CHECK(observer.GetOperationStatus(*cybou::ComputeOperationId(operation)).kind == cybou::OperationStatusKind::UNKNOWN);
+        BOOST_CHECK(!observer.FindFinalizedOperation(*cybou::ComputeOperationId(operation)).height);
+    }
+}
 BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured_peer)
 {
     CybouServiceTestFixture fixture;

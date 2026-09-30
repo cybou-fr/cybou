@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install build dependencies
         run: |
@@ -41,15 +41,16 @@ jobs:
 
       - name: Cache OpenSSL 3.5
         id: cache-openssl
-        uses: actions/cache@v4
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: /opt/openssl-3.5
-          key: openssl-3.5.0-ubuntu-24.04
+          key: openssl-3.5.0-verified-344d0a79-ubuntu-24.04
 
       - name: Build and install OpenSSL 3.5
         if: steps.cache-openssl.outputs.cache-hit != 'true'
         run: |
-          curl -sSL https://github.com/openssl/openssl/releases/download/openssl-3.5.0/openssl-3.5.0.tar.gz -o openssl-3.5.0.tar.gz
+          curl --fail --location --proto =https --tlsv1.2 https://github.com/openssl/openssl/releases/download/openssl-3.5.0/openssl-3.5.0.tar.gz -o openssl-3.5.0.tar.gz
+          echo "344d0a79f1a9b08029b0744e2cc401a43f9c90acd1044d09a530b4885a8e9fc0  openssl-3.5.0.tar.gz" | sha256sum --check --strict
           tar -xzf openssl-3.5.0.tar.gz
           cd openssl-3.5.0
           ./config --prefix=/opt/openssl-3.5 --openssldir=/opt/openssl-3.5 no-tests no-docs
@@ -58,7 +59,10 @@ jobs:
 
       - name: Build and install pinned BLAKE3
         run: |
-          git clone --depth 1 --branch 1.8.1 https://github.com/BLAKE3-team/BLAKE3.git /tmp/blake3
+          curl --fail --location --proto =https --tlsv1.2 https://codeload.github.com/BLAKE3-team/BLAKE3/tar.gz/ad639b126ef9b5f3b131093363cc3bb6bba4c3bf -o /tmp/blake3.tar.gz
+          echo "9ad9df1d2a9c6914f2401fd1ff85a34c4d46d35c5a62f0588a8ad6bf44d7c706  /tmp/blake3.tar.gz" | sha256sum --check --strict
+          mkdir /tmp/blake3
+          tar -xzf /tmp/blake3.tar.gz --strip-components=1 -C /tmp/blake3
           cmake -S /tmp/blake3/c -B /tmp/blake3-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
             -DCMAKE_INSTALL_PREFIX=/opt/blake3-1.8.1

@@ -21,6 +21,8 @@ enum class SyncPeerStatus : uint8_t {
 struct SyncPeerResult {
     SyncPeerStatus status{SyncPeerStatus::CONNECTION_FAILED};
     uint64_t blocks_applied{0};
+    /** A bounded sync pass explicitly observed no next block; never inferred from batch size. */
+    bool reached_peer_tip{false};
 
     operator uint64_t() const { return blocks_applied; }
     bool IsConnected() const {

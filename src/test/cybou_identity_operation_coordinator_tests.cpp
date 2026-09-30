@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     };
     uint256 operation_id;
     {
-        cybou::CybouNodeRuntime client{client_config};
+        cybou::CybouNodeRuntime client{cybou::NodeRuntimeConfig{.network_definition=definition,.data_dir=client_data,.p2p_endpoint=std::pair<std::string,uint16_t>{"127.0.0.1",port},.wipe_data=true}};
         BOOST_REQUIRE(client.InitializeGenesis(genesis));
         BOOST_REQUIRE(client.CommitBlock(*account_block));
 
@@ -114,7 +114,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
 
     client_config.wipe_data = false;
     {
-        cybou::CybouNodeRuntime restarted{client_config};
+        cybou::CybouNodeRuntime restarted{cybou::NodeRuntimeConfig{.network_definition=definition,.data_dir=client_data,.p2p_endpoint=std::pair<std::string,uint16_t>{"127.0.0.1",port}}};
         BOOST_REQUIRE(restarted.InitializeGenesis(genesis));
         auto& coordinator = restarted.GetIdentityOperationCoordinator(identity.GetKeyStore());
         const auto commitment = cybou::ComputeNameCommitment(
@@ -185,7 +185,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             std::ofstream output{journal_path, std::ios::binary | std::ios::trunc};
             output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
         }
-        cybou::CybouNodeRuntime damaged_runtime{client_config};
+        cybou::CybouNodeRuntime damaged_runtime{cybou::NodeRuntimeConfig{.network_definition=definition,.data_dir=client_data,.p2p_endpoint=std::pair<std::string,uint16_t>{"127.0.0.1",port}}};
         BOOST_REQUIRE(damaged_runtime.InitializeGenesis(genesis));
         auto& coordinator = damaged_runtime.GetIdentityOperationCoordinator(identity.GetKeyStore());
         std::array<unsigned char, 32> salt{};

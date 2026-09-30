@@ -220,7 +220,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
                     if (height <= it->second->Peer()->finalized_height) {
                         result.status = SyncPeerStatus::CONNECTION_FAILED;
                         m_peers.erase(it);
-                    }
+                    } else result.reached_peer_tip = true;
                     break;
                 }
                 if (announced.status != BlockRequestStatus::OK) {
@@ -254,7 +254,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
             if (use_inventory || height <= it->second->Peer()->finalized_height) {
                 result.status = SyncPeerStatus::CONNECTION_FAILED;
                 m_peers.erase(it);
-            }
+            } else result.reached_peer_tip = true;
             break;
         }
         const auto block = DeserializeFinalizedBlock(response.bytes);
@@ -274,6 +274,14 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
         result.status = SyncPeerStatus::BLOCKS_APPLIED;
     }
     return result;
+}
+
+std::optional<ValidationResult> PeerManager::RequestValidation(const std::string& address, uint16_t port, const ProtocolOperation& operation)
+{
+    boost::system::error_code ec; const auto parsed = boost::asio::ip::make_address(address, ec);
+    if (ec || port == 0) return std::nullopt;
+    const auto peer = m_peers.find({parsed.to_string(), port});
+    return peer == m_peers.end() ? std::nullopt : peer->second->RequestValidation(operation);
 }
 
 OperationSubmitResult PeerManager::SubmitOperation(const std::string& numeric_address, uint16_t port,

@@ -18,7 +18,7 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_NETWORK_DEFINITION_VERSION{6};
+inline constexpr uint8_t CYBOU_NETWORK_DEFINITION_VERSION{7};
 
 /** Immutable consensus identity for one DEV, Beta, or Mainnet network. */
 struct CybouNetworkDefinition {
@@ -43,6 +43,7 @@ enum class NetworkDefinitionError : uint8_t {
     ZERO_EPOCH_BLOCKS,
     INVALID_ROOT_PUBLICATION_FEES,
     INVALID_NAME_PARAMETERS,
+    INVALID_AUTHORITY_POLICY,
 };
 
 NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& definition);
@@ -55,6 +56,7 @@ struct CybouNetworkFile {
     CybouState genesis;
 };
 
+std::optional<CybouNetworkFile> DeserializeCybouNetworkFile(std::span<const unsigned char> bytes);
 std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path& path);
 
 uint256 ComputeGenesisBlockId(const uint256& state_root, const IdentityHybridPublicKey& poa_finalizer_public_key);

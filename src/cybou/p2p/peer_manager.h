@@ -69,6 +69,7 @@ public:
      */
     void SetExplicitEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
     size_t PingAll();
+    std::optional<ValidationResult> RequestValidation(const std::string& numeric_address, uint16_t port, const ProtocolOperation& operation);
     /** Ping at most max_peers, rotating the starting peer on each call. */
     size_t PingSome(size_t max_peers);
     SyncPeerResult SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks);

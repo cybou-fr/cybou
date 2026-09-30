@@ -1,0 +1,30 @@
+# Security review implementation tracking
+
+Review baseline: f15e33e41d4356d148f1182f998fa9c5b65aa51e. This working change
+also implements the separately approved Identity Authority network version.
+Running DEV retains its existing network and keys until explicit tested cutover.
+
+| Finding | Current implementation state |
+| --- | --- |
+| Unsigned OP_RESULT discards journal | Remote rejection is delivery-uncertain. Claimed remote finalization cannot set Finalized without local verified inclusion. TCP regression tests cover both. |
+| PoA entropy copies | Runtime config uses move-only cleansing Secret32; its buffer is cleared after finalizer construction. CLI finalizer entropy is held in the same RAII type. |
+| OpenSSL 3.5 headers fail PQ tests | Use OpenSSL's documented seed/deterministic parameter names. Linux/CI verification still required; do not claim a green remote workflow without a run. |
+| Secret files | Private creation, durable writes, bounded owned regular-file reads, symlink/reparse rejection, Windows owner ACL. Provider and finalizer/password readers use the primitive. Remaining auxiliary secret callers must be audited. |
+| Generic root LAB worker | Helper separation remains to implement. Existing unrestricted sudo mode must never be granted as a narrow NOPASSWD capability. |
+| LAB owner token | New tokens use 256 random bits, exclusive 0600 creation, regular-file/owner/mode checks on Unix, symlink refusal. Windows Python token ACL hardening remains. |
+| Event correlation/privacy | Minimal mode excludes account, nonce, operation/chunk/provider identifiers and peer endpoint. LAB mode is explicit. Native event files use private owned append handles. |
+| Ingress CPU DoS | Bounded per-IP connection and operation admission, before allocation/parsing/PQ verification. All attempts consume budget, including rejected operations. No global Authority penalty from local failure. |
+| Desktop freshness | Unknown by default; account creation requires Current. Current comes from an explicit end-of-sync response, not batch size. It means current relative to the observed peer, not a wall-clock guarantee against eclipsing. |
+| Operation status regression | Explicit transition cases reject Validated-to-Submitted and other backwards phases; canonical Finalized may override Failed. |
+| Expected NetworkID | Signed release bundled manifest pins default desktop network. Explicit LAB selection remains available. Existing network/Identity files are never automatically archived or replaced. |
+| Provider HELLO tampering | Hybrid proof v2 covers both complete HELLO byte strings with signer/verifier ordering. |
+| Secure CYP2 session | Frame AEAD and genesis-authenticated finalizer transport still require implementation with a vetted secure transport. No custom CYBOU cryptography. |
+| Replica independence | Distinct keys prove cryptographic identities; deployment must ensure independent hosts/disks/operators/failure domains. |
+| Supply chain | Exact Actions commits, exact BLAKE3 commit+archive digest, and official OpenSSL tar checksum before build. Signed/reproducible release provenance remains to implement. |
+| Report signatures | SHA companion is integrity only. Separate test/release evidence signing remains to implement; never reuse PoA key. |
+| Authority checkpoint | Preview checkpoint path was removed. Authority derives from canonical state with NetworkID-bound policy in the new network. |
+| Security documents | Vault AES-256-GCM, application ChaCha20-Poly1305, plaintext transport metadata boundary, current DEV PoA reality and new-version transition are distinguished. |
+
+Passing tests are evidence for the tested paths only. The complete Authority,
+provider resource admission, Linux LAB and security acceptance matrix is still
+being built; this document must not be used as a deployment approval.

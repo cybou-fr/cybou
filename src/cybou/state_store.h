@@ -171,6 +171,7 @@ public:
 
     /** Retrieve a finalized non-genesis block by canonical height. */
     std::optional<FinalizedBlock> GetBlockAtHeight(uint64_t height) const;
+    std::optional<RootPublication> GetFinalizedRootPublication(const uint256& operation_id) const;
 
     /** Check the local index of operations committed with finalized blocks. */
     bool HasIndexedFinalizedOperation(const uint256& op_id) const;

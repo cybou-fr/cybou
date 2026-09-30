@@ -9,6 +9,7 @@
 #include <test/cybou_test_setup.h>
 
 #include <boost/test/unit_test.hpp>
+#include <fstream>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_runtime_tests, CybouTestSetup)
 
@@ -21,6 +22,9 @@ BOOST_AUTO_TEST_CASE(public_event_writer_rejects_secret_fields)
     BOOST_CHECK_THROW(writer.Write(cybou::NodeEvent::node_started, {{"role", std::string(257, 'x')}}), std::invalid_argument);
     writer.Write(cybou::NodeEvent::node_status, {{"network_id", fixture.runtime->GetNetworkId().GetHex()},{"height",std::uint64_t{1}}});
     BOOST_CHECK(writer.Good());
+    writer.Write(cybou::NodeEvent::operation_received,{{"account_id",std::string{"correlatable-account"}},{"nonce",uint64_t{37}},{"operation_id",std::string{"correlatable-operation"}}});
+    std::ifstream recorded{path};const std::string text{std::istreambuf_iterator<char>{recorded},std::istreambuf_iterator<char>{}};
+    BOOST_CHECK(text.find("correlatable")==std::string::npos);
     const auto snapshot=fixture.runtime->GetDiagnostics();
     BOOST_CHECK(snapshot.initialized);
     BOOST_CHECK_EQUAL(snapshot.role, "finalizer");

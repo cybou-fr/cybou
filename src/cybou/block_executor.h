@@ -9,6 +9,7 @@
 
 #include <optional>
 #include <vector>
+#include <functional>
 
 namespace cybou {
 
@@ -24,6 +25,9 @@ enum class BlockExecutionError : uint8_t {
     INVALID_ROOT_PUBLICATION,
     FEE_ROUTING_OVERFLOW,
     INVALID_STATE,
+    AUTHORITY_BUDGET_EXHAUSTED,
+    INVALID_NODE_BINDING,
+    INVALID_SERVICE_EVIDENCE, INVALID_RESOURCE_RESERVATION,
 };
 
 struct BlockExecutionResult {
@@ -45,7 +49,8 @@ struct BlockExecutionResult {
 BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
     const uint256& network_id, uint64_t block_height,
-    const CybouProtocolParameters& params);
+    const CybouProtocolParameters& params, const uint256& parent_block_id = {},
+    const std::function<std::optional<RootPublication>(const uint256&)>& finalized_publication = {});
 
 } // namespace cybou
 #endif // CYBOU_BLOCK_EXECUTOR_H

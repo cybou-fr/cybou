@@ -159,6 +159,7 @@ add_library(cybou_core STATIC
   cybou/block.cpp
   cybou/canonical_cbor.cpp
   cybou/chunk_id.cpp
+  cybou/chunk_possession.cpp
   cybou/chunk_authorization.cpp
   cybou/encrypted_chunk.cpp
   cybou/encrypted_chunk_tree.cpp
@@ -174,6 +175,7 @@ add_library(cybou_core STATIC
   cybou/identity_material.cpp
   cybou/identity_registry.cpp
   cybou/identity_registry_codec.cpp
+  cybou/secret_file.cpp
   cybou/identity_vault.cpp
   cybou/keystore.cpp
   cybou/private_application_schema.cpp
@@ -191,6 +193,9 @@ target_link_libraries(cybou_core
     OpenSSL::Crypto
     BLAKE3::blake3
 )
+if(WIN32)
+  target_link_libraries(cybou_core PRIVATE advapi32)
+endif()
 if(CYBOU_ENABLE_TEST_HOOKS)
   target_compile_definitions(cybou_core PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
 endif()
@@ -211,6 +216,10 @@ add_library(cybou_node STATIC
   cybou/storage_service.cpp
   cybou/application_service.cpp
   cybou/authority.cpp
+  cybou/validation_service.cpp
+  cybou/resource_reservation.cpp
+  cybou/node_binding.cpp
+  cybou/service_evidence.cpp
   cybou/poa_conflict_detector.cpp
   cybou/poa_finalizer.cpp
   cybou/poa_signing_journal.cpp

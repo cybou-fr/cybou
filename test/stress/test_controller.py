@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import json
 import sys
+import os
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).parents[2]/"tools"))
@@ -79,6 +80,19 @@ class ControllerTests(unittest.TestCase):
             self.assertEqual(stress.Lab(manifest).report()["result"],"FAIL")
             (root/"failure.json").write_text(json.dumps(["native client failed"]))
             self.assertEqual(stress.Lab(manifest).report()["result"],"FAIL")
+
+    def test_private_token_refuses_links_and_world_readable_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/"owner.token"
+            stress.write_private_new(path,"f"*64)
+            self.assertEqual(stress.read_private(path),"f"*64)
+            with self.assertRaises(FileExistsError):stress.write_private_new(path,"other")
+            if os.name=="posix":
+                path.chmod(0o644)
+                with self.assertRaises(ValueError):stress.read_private(path)
+                path.chmod(0o600)
+                link=Path(directory)/"linked.token";link.symlink_to(path)
+                with self.assertRaises(OSError):stress.read_private(link)
 
     def test_owned_root_boundary(self):
         with tempfile.TemporaryDirectory() as directory:

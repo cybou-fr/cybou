@@ -23,7 +23,7 @@ struct CybouServiceTestFixture {
     std::filesystem::path directory;
     std::vector<std::filesystem::path> vaults;
 
-    explicit CybouServiceTestFixture(unsigned char seed_byte = 0x72)
+    explicit CybouServiceTestFixture(unsigned char seed_byte = 0x72, uint64_t epoch_blocks = cybou::DEFAULT_EPOCH_BLOCKS)
     {
         static std::atomic<unsigned> sequence{0};
         directory = std::filesystem::temp_directory_path() /
@@ -34,6 +34,7 @@ struct CybouServiceTestFixture {
         genesis = cybou::CreateDevGenesisState();
         definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(seed_byte));
         definition.protocol_parameters.account_creation_work_bits = 0;
+        definition.protocol_parameters.epoch_blocks = epoch_blocks;
         cybou::NodeRuntimeConfig config{
             .network_definition = definition,
             .data_dir = directory / "runtime",

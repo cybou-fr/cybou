@@ -362,13 +362,15 @@ BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
     cybou::CybouNodeRuntime provider{std::move(config)};
     BOOST_REQUIRE(provider.InitializeGenesis(fixture.genesis));
     const auto network_id = provider.GetNetworkId();
-    const auto message = cybou::p2p::ProviderProofMessage(network_id, 11, 22);
+    const auto message = cybou::p2p::ProviderProofMessage({.network_id=network_id,.finalized_height=7,.finalized_tip=uint256::ONE,.capabilities=cybou::p2p::CAP_STORAGE,.nonce=11},{.network_id=network_id,.finalized_height=5,.finalized_tip=uint256::ONE,.nonce=22});
     auto proof = provider.SignProviderProof(message);
     BOOST_REQUIRE(proof);
     BOOST_CHECK(cybou::p2p::VerifyProviderProof(*proof, message) == provider.LocalProviderId());
     // Replayed into another session or network, or tampered with, it proves nothing.
-    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage(network_id, 11, 23)));
-    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage(uint256{}, 11, 22)));
+    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage({.network_id=network_id,.nonce=11},{.network_id=network_id,.nonce=23})));
+    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage({.nonce=11},{.network_id=network_id,.nonce=22})));
+    auto altered=message; altered.back()^=1; BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof,altered));
+    altered=message; altered[std::string_view{"CYBOU/CYP2/PROVIDER-PROOF/v2"}.size()+32]^=1; BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof,altered));
     (*proof)[5] ^= 0x01;
     BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, message));
     // A node without storage has no provider identity.

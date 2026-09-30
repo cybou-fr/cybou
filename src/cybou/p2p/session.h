@@ -7,6 +7,7 @@
 #include <uint256.h>
 #include <cybou/finalizer_node.h>
 #include <cybou/finalized_chunk_store.h>
+#include <cybou/validation_service.h>
 
 #include <boost/asio/ip/tcp.hpp>
 
@@ -29,6 +30,7 @@ inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
 inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
 inline constexpr uint64_t CAP_STORAGE{1ULL << 7};
 inline constexpr uint64_t CAP_STORAGE_PROOFS{1ULL << 8};
+inline constexpr uint64_t CAP_VALIDATION{1ULL << 9};
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder
 // must enforce it so a malicious peer cannot stuff a PEERS frame with more
@@ -62,8 +64,9 @@ enum class MessageType : uint8_t {
     GET_CHUNK_AUTHORIZATION_PROOF = 34,
     CHUNK_AUTHORIZATION_PROOF = 35,
     PROVIDER_PROOF = 36,
+    VALIDATION_META = 37, VALIDATION_CHUNK = 38, VALIDATION_RESULT = 39,
 };
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::PROVIDER_PROOF)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::VALIDATION_RESULT)};
 
 /** Stable identity of a storage provider: BLAKE3 of its STORAGE_PROVIDER public key. */
 using ProviderId = std::array<unsigned char, 32>;
@@ -75,7 +78,8 @@ using ProviderProofSigner = std::function<std::optional<std::vector<unsigned cha
     std::span<const unsigned char> message)>;
 
 /** Message a provider signs to prove its key in this session (both nonces, network). */
-std::vector<unsigned char> ProviderProofMessage(const uint256& network_id, uint64_t signer_nonce, uint64_t verifier_nonce);
+struct Hello;
+std::vector<unsigned char> ProviderProofMessage(const Hello& signer, const Hello& verifier);
 /** Verifies a PROVIDER_PROOF payload and returns the proven ProviderID. */
 std::optional<ProviderId> VerifyProviderProof(std::span<const unsigned char> payload,
     std::span<const unsigned char> message);
@@ -137,6 +141,7 @@ bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& pe
 class PeerSession {
 public:
     explicit PeerSession(boost::asio::ip::tcp::socket socket);
+    std::optional<ValidationResult> RequestValidation(const ProtocolOperation& operation);
     /**
      * A peer advertising CAP_STORAGE must prove its provider key; a local
      * CAP_STORAGE hello needs provider_signer to do the same.

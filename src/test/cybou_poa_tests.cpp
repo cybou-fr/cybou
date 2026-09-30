@@ -90,7 +90,7 @@ std::optional<std::vector<unsigned char>> DeterministicMldsa65Signature(
         return std::nullopt;
     }
     OSSL_PARAM key_params[] = {
-        OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_ML_DSA_SEED, seed.data(), seed.size()),
+        OSSL_PARAM_construct_octet_string("seed", seed.data(), seed.size()),
         OSSL_PARAM_construct_end(),
     };
     EVP_PKEY* raw_key{nullptr};
@@ -105,7 +105,7 @@ std::optional<std::vector<unsigned char>> DeterministicMldsa65Signature(
         key.get(), nullptr) != 1) return std::nullopt;
     int deterministic{1}; // OpenSSL test-vector mode: ML-DSA per-message randomness is zero.
     OSSL_PARAM sign_params[] = {
-        OSSL_PARAM_construct_int(OSSL_SIGNATURE_PARAM_DETERMINISTIC, &deterministic),
+        OSSL_PARAM_construct_int("deterministic", &deterministic),
         OSSL_PARAM_construct_end(),
     };
     auto* sign_context = EVP_MD_CTX_get_pkey_ctx(signing.get());
