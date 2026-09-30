@@ -98,6 +98,10 @@ void CybouNodeService::StartNetwork(
                 // remains owned by this worker and can be retried next cycle.
             }
 
+            // Far behind the network: fetch the next batch at once instead of
+            // pausing, so a fresh node catches up in minutes, not an hour.
+            if (result.blocks_applied >= config.sync_batch_size) continue;
+
             auto remaining = config.sync_interval;
             constexpr auto SLEEP_SLICE = std::chrono::milliseconds{200};
             while (remaining > std::chrono::milliseconds::zero() && !m_stop_network.load()) {

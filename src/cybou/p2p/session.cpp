@@ -412,11 +412,21 @@ BlockRequestResult PeerSession::RequestBlock(uint64_t height)
 {
     if (!m_peer || !(m_peer->capabilities & CAP_SERVE_BLOCKS) || height == 0)
         return {.status = BlockRequestStatus::INVALID_REQUEST, .bytes = {}};
+    if (!SendBlockRequest(height)) return {.status = BlockRequestStatus::UNAVAILABLE, .bytes = {}};
+    return ReadBlockResponse();
+}
+
+bool PeerSession::SendBlockRequest(uint64_t height)
+{
+    if (!m_peer || !(m_peer->capabilities & CAP_SERVE_BLOCKS) || height == 0) return false;
     std::vector<unsigned char> request;
     Put64(request, height);
+    return Write(Frame{MessageType::GET_BLOCK, request}, std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT);
+}
+
+BlockRequestResult PeerSession::ReadBlockResponse()
+{
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-    if (!Write(Frame{MessageType::GET_BLOCK, request}, deadline))
-        return {.status = BlockRequestStatus::UNAVAILABLE, .bytes = {}};
     const auto meta = Read(deadline);
     if (!meta) return {.status = m_last_read_status == ReadStatus::INVALID_FRAME ?
         BlockRequestStatus::INVALID_RESPONSE : BlockRequestStatus::UNAVAILABLE, .bytes = {}};

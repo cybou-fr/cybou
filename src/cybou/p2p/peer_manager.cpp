@@ -191,6 +191,8 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
     result.status = SyncPeerStatus::UP_TO_DATE;
     std::vector<BlockAnnouncement> inventory;
     size_t inventory_cursor{0};
+    // Responses already requested (pipelined) for inventory entries from the cursor on.
+    size_t in_flight{0};
     while (result.blocks_applied < max_blocks) {
         const auto status = m_runtime.GetStatus();
         if (!status.is_initialized || status.finalized_height == std::numeric_limits<uint64_t>::max()) {
@@ -201,6 +203,13 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
         const bool use_inventory = (it->second->Peer()->capabilities & CAP_BLOCK_INVENTORY) != 0;
         if (use_inventory) {
             if (inventory_cursor < inventory.size() && inventory[inventory_cursor].height != height) {
+                // Our height moved underneath the batch (e.g. a gossiped block): pipelined
+                // responses no longer line up, so drop the session and resync cleanly.
+                if (in_flight > 0) {
+                    result.status = SyncPeerStatus::CONNECTION_FAILED;
+                    m_peers.erase(it);
+                    break;
+                }
                 inventory.clear();
                 inventory_cursor = 0;
             }
@@ -222,9 +231,19 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
                 }
                 inventory = announced.blocks;
                 inventory_cursor = 0;
+                // Ask for the whole announced batch in one round trip.
+                for (const auto& entry : inventory) {
+                    if (!it->second->SendBlockRequest(entry.height)) {
+                        result.status = SyncPeerStatus::CONNECTION_FAILED;
+                        m_peers.erase(it);
+                        return result;
+                    }
+                }
+                in_flight = inventory.size();
             }
         }
-        const auto response = it->second->RequestBlock(height);
+        const auto response = in_flight > 0 ? it->second->ReadBlockResponse() : it->second->RequestBlock(height);
+        if (in_flight > 0) --in_flight;
         if (response.status != BlockRequestStatus::OK && response.status != BlockRequestStatus::NOT_FOUND) {
             result.status = response.status == BlockRequestStatus::UNAVAILABLE ?
                 SyncPeerStatus::CONNECTION_FAILED : SyncPeerStatus::PROTOCOL_ERROR;

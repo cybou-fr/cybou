@@ -91,6 +91,9 @@ CybouCapabilities CybouDesktopModel::honest(CybouCapabilities capabilities) cons
     // Never claim Mail or Files without a backend that can carry them out.
     capabilities.mail = capabilities.mail && m_backend && m_backend->mailAvailable();
     capabilities.files = capabilities.files && m_backend && m_backend->filesAvailable();
+    // Identity operations need the current network tip: an Identity created
+    // from a stale view carries expired work and the network rejects it.
+    capabilities.account_creation = capabilities.account_creation && !m_status.syncing;
     return capabilities;
 }
 
@@ -141,6 +144,7 @@ void CybouDesktopModel::setSyncing(bool syncing)
     if (m_status.syncing == syncing) return;
     m_status.syncing = syncing;
     Q_EMIT statusChanged();
+    setCapabilities(m_requested_capabilities);
 }
 
 void CybouDesktopModel::setSyncError(const QString& error)

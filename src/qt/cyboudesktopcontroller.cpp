@@ -160,7 +160,7 @@ void CybouDesktopController::start()
 
         m_node_service->StartNetwork(
             network_config,
-            [this](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status,
+            [this, batch = network_config.sync_batch_size](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status,
                 const size_t connected_peer_count) {
                 const bool bootstrap_reachable = sync_result.IsConnected();
                 const bool local_state_unavailable =
@@ -234,7 +234,10 @@ void CybouDesktopController::start()
                 } catch (const std::exception& e) {
                     qWarning() << "cybou authority refresh error:" << e.what();
                 }
-                QMetaObject::invokeMethod(m_model, [model = m_model, runtime_status, bootstrap_reachable, connected_peer_count, sync_error] {
+                // A full batch means more finalized blocks are waiting: still catching up.
+                const bool behind = sync_result.blocks_applied >= batch;
+                QMetaObject::invokeMethod(m_model, [model = m_model, runtime_status, bootstrap_reachable, connected_peer_count, sync_error, behind] {
+                    model->setSyncing(behind);
                     model->setSyncError(sync_error);
                     model->setFinalizedHeight(runtime_status.finalized_height);
                     model->setNodeStatus(true, static_cast<int>(connected_peer_count), bootstrap_reachable);

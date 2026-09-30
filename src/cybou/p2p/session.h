@@ -149,6 +149,13 @@ public:
     bool AnswerPing();
     // Callers must verify returned blocks before commit.
     BlockRequestResult RequestBlock(uint64_t height);
+    /**
+     * Pipelined block transfer: send several GET_BLOCK requests at once, then
+     * read their responses in the same order. The peer answers requests in
+     * order, so one round trip covers a whole batch instead of one per block.
+     */
+    bool SendBlockRequest(uint64_t height);
+    BlockRequestResult ReadBlockResponse();
     BlockInventoryResult RequestBlockInventory(uint64_t first_height, uint8_t max_blocks);
     // On success, peer_finalized_height receives the peer's finalized height
     // as reported in the BLOCK_RESULT acknowledgement (0 if not present).

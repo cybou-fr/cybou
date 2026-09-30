@@ -2,6 +2,10 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/identity_service.h>
+#include <cybou/block_executor.h>
+#include <cybou/account_creation.h>
+
+#include <string>
 #include <cybou/identity_operation_coordinator.h>
 #include <cybou/identity_vault.h>
 #include <cybou/crypto/cleanse.h>
@@ -281,9 +285,42 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
         .authorization_pop = *authorization_pop,
     };
 
-    if (!m_runtime.SubmitOperation(ProtocolOperation{op})) {
+    if (const auto submitted = m_runtime.SubmitOperation(ProtocolOperation{op}); !submitted) {
         m_phase.store(IdentityCreationPhase::FAILED);
-        return Failure(IdentityCreationPhase::FAILED, "Failed to submit AccountCreateOp to node runtime", account_id);
+        // Say why: the difference decides what the user should do next.
+        std::string reason;
+        if (submitted.delivery_uncertain) {
+            reason = "The CYBOU network did not answer. Check your connection and try again.";
+        } else {
+            switch (submitted.status) {
+            case OperationSubmitStatus::NETWORK_MISMATCH:
+                reason = "This app and the network it reached are on different CYBOU networks.";
+                break;
+            case OperationSubmitStatus::INVALID_PAYLOAD:
+                reason = "The network could not read the new Identity (invalid payload).";
+                break;
+            default: {
+                // The finalizer does not say why; replay the exact operation
+                // against this node's own verified finalized state.
+                reason = "The network rejected the new Identity";
+                const auto next_height = m_runtime.GetFinalizedHeight().value_or(0) + 1;
+                const auto check = ValidateAccountCreateOp(op, network_id, next_height, params);
+                const auto loaded = m_runtime.GetStore().LoadState();
+                if (check != AccountCreateError::NONE) {
+                    reason += " (operation check " + std::to_string(static_cast<int>(check)) + ")";
+                } else if (loaded && loaded.state) {
+                    const auto replay = ExecuteBlockOperations(*loaded.state, {ProtocolOperation{op}}, network_id,
+                        next_height, params);
+                    reason += replay ? ". This computer may still be catching up with the network: wait until CYBOU shows Synced and try again"
+                        : " (block error " + std::to_string(static_cast<int>(replay.error)) + ", create error " +
+                            std::to_string(static_cast<int>(replay.create_error)) + ")";
+                }
+                reason += ".";
+                break;
+            }
+            }
+        }
+        return Failure(IdentityCreationPhase::FAILED, reason, account_id);
     }
 
     // Phase 4: WAITING_FOR_FINALITY
