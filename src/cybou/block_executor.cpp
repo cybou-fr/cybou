@@ -197,13 +197,17 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 candidate.resources.erase(grant);
             }
         } else if (const auto* binding = std::get_if<AuthorizedNodeBinding>(&operations[i])) {
-            const auto id = ValidationNodeId(binding->binding.key);
+            const auto id = binding->binding.revoke
+                ? (binding->binding.revoke_node_id.IsNull() ? std::optional<uint256>{} : std::optional{binding->binding.revoke_node_id})
+                : ValidationNodeId(binding->binding.key);
             const auto commitment = ComputeNodeBindingCommitment(binding->binding);
             const auto digest = ComputeIdentityOperationDigest(network_id, binding->authorization);
             if (!id || !commitment || binding->authorization.kind != IdentityOperationKind::NODE_BINDING ||
-                *commitment != binding->authorization.payload_commitment || !digest ||
-                !VerifyIdentityMessage(binding->binding.key, binding->node_proof, *digest)) return fail(BlockExecutionError::INVALID_NODE_BINDING);
-            if (binding->binding.provider_key && (!binding->provider_proof || !VerifyIdentityMessage(*binding->binding.provider_key, *binding->provider_proof, *digest)))
+                *commitment != binding->authorization.payload_commitment || !digest) return fail(BlockExecutionError::INVALID_NODE_BINDING);
+            if (!binding->binding.revoke && !VerifyIdentityMessage(binding->binding.key, binding->node_proof, *digest))
+                return fail(BlockExecutionError::INVALID_NODE_BINDING);
+            if (!binding->binding.revoke && binding->binding.provider_key &&
+                (!binding->provider_proof || !VerifyIdentityMessage(*binding->binding.provider_key, *binding->provider_proof, *digest)))
                 return fail(BlockExecutionError::INVALID_NODE_BINDING);
             const auto existing = candidate.bound_nodes.find(*id);
             if (binding->binding.revoke) {

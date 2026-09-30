@@ -568,7 +568,7 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
 
 std::optional<uint256> CybouStateHash(const CybouState& state)
 {
-    constexpr std::string_view domain{"CYBOU/STATE/V6"};
+    constexpr std::string_view domain{"CYBOU/STATE/V8"};
     const auto bytes = SerializeCybouState(state);
     if (!bytes) return std::nullopt;
     uint256 hash;

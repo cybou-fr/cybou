@@ -541,8 +541,10 @@ const char* Help = R"(CYBOU operator CLI (CYP2 only)
   validator run --network FILE --data-dir DIR --key-file FILE
                 --peer IP:PORT --listen IP:PORT [--capacity BYTES]
   authority status --network FILE --data-dir DIR --account-id HEX [--peer IP:PORT]
-  validation bind|revoke --network FILE --data-dir DIR --vault FILE
+  validation bind --network FILE --data-dir DIR --vault FILE
                 --password-file FILE --key-file FILE [--provider-key-file FILE]
+  validation revoke --network FILE --data-dir DIR --vault FILE
+                --password-file FILE --node-id HEX
                 [--peer IP:PORT]
   validation request --network FILE --data-dir DIR --peer IP:PORT
                 --operation-file FILE --attestation-file FILE
@@ -706,7 +708,7 @@ int StorageCommand(const std::string& action, const cybou::cli::Options& opts)
 }
 int AuthorityValidationCommand(const std::string& group, const std::string& action, const cybou::cli::Options& opts)
 {
-    opts.Allow({"network","data-dir","peer","account-id","operation-file","attestation-file","vault","password-file","key-file","provider-key-file"});
+    opts.Allow({"network","data-dir","peer","account-id","operation-file","attestation-file","vault","password-file","key-file","provider-key-file","node-id"});
     const auto net = cybou::LoadCybouNetworkFile(opts.Require("network"));
     if (!net) throw std::runtime_error("invalid network");
     cybou::NodeRuntimeConfig config{.network_definition = net->definition, .data_dir = opts.Require("data-dir")};
@@ -730,10 +732,8 @@ int AuthorityValidationCommand(const std::string& group, const std::string& acti
     }
     if (group != "validation") throw std::invalid_argument("unknown authority command");
     if (action == "bind" || action == "revoke") {
-        auto secret = ReadSecret(opts.Require("key-file"), 32);
-        if (secret.size() != 32) throw std::runtime_error("validation key must contain exactly 32 bytes");
-        const auto key = cybou::DeriveIdentityPublicKey(std::span<const unsigned char, 32>{secret.data(), 32}, cybou::IdentityKeyPurpose::VALIDATION_NODE);
-        if (!key) throw std::runtime_error("invalid validation key");
+        std::vector<unsigned char> secret;
+        std::optional<cybou::IdentityHybridPublicKey> key;
         auto password_bytes = ReadSecret(opts.Require("password-file"), 4096);
         std::string password(password_bytes.begin(), password_bytes.end());
         cybou::crypto::CleanseMemory(password_bytes.data(), password_bytes.size());
@@ -741,7 +741,21 @@ int AuthorityValidationCommand(const std::string& group, const std::string& acti
         cybou::CybouIdentityService identity{runtime, opts.Require("vault")};
         const bool unlocked = identity.LoadVault(password); cybou::crypto::CleanseMemory(password.data(), password.size());
         if (!unlocked) throw std::runtime_error("cannot unlock Identity vault");
-        cybou::NodeBindingPayload payload{*key, action == "revoke"};
+        cybou::NodeBindingPayload payload;
+        payload.revoke = action == "revoke";
+        if (payload.revoke) {
+            const auto id = cybou::ParseUint256UserHex(opts.Require("node-id"));
+            if (!id || id->IsNull()) throw std::runtime_error("invalid validation NodeID");
+            if (opts.Has("key-file") || opts.Has("provider-key-file")) throw std::runtime_error("revoke uses --node-id and does not need service keys");
+            payload.revoke_node_id = *id;
+        } else {
+            if (!opts.Has("key-file") || opts.Has("node-id")) throw std::runtime_error("bind requires --key-file and does not accept --node-id");
+            secret = ReadSecret(opts.Require("key-file"), 32);
+            if (secret.size() != 32) throw std::runtime_error("validation key must contain exactly 32 bytes");
+            key = cybou::DeriveIdentityPublicKey(std::span<const unsigned char, 32>{secret.data(), 32}, cybou::IdentityKeyPurpose::VALIDATION_NODE);
+            if (!key) throw std::runtime_error("invalid validation key");
+            payload.key = *key;
+        }
         std::vector<unsigned char> provider_secret;
         if (opts.Has("provider-key-file")) {
             provider_secret = ReadSecret(opts.Get("provider-key-file"), 32);
@@ -751,6 +765,7 @@ int AuthorityValidationCommand(const std::string& group, const std::string& acti
         }
         const auto result = runtime.GetIdentityOperationCoordinator(identity.GetKeyStore()).Execute(cybou::IdentityOperationKind::NODE_BINDING,
             *cybou::ComputeNodeBindingCommitment(payload), [&](const auto& authorization) -> std::optional<cybou::ProtocolOperation> {
+                if (payload.revoke) return cybou::AuthorizedNodeBinding{authorization, payload, {}};
                 const auto digest = cybou::ComputeIdentityOperationDigest(runtime.GetNetworkId(), authorization);
                 const auto proof = digest ? cybou::SignIdentityMessage(std::span<const unsigned char, 32>{secret.data(), 32}, cybou::IdentityKeyPurpose::VALIDATION_NODE, *digest) : std::nullopt;
                 if (!proof) return std::nullopt;

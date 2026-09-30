@@ -273,11 +273,16 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const Proto
     } else if (const auto* binding = std::get_if<AuthorizedNodeBinding>(&operation)) {
         const auto body = SerializeAuthorizedPayload(binding->authorization, IdentityOperationKind::NODE_BINDING,
             binding->binding, ComputeNodeBindingCommitment, SerializeNodeBindingPayload);
-        if (!body || binding->node_proof.ml_dsa.size() != 2420) return std::nullopt;
+        if (!body || (!binding->binding.revoke && binding->node_proof.ml_dsa.size() != 2420) ||
+            (binding->binding.revoke && (!binding->node_proof.ml_dsa.empty() ||
+                std::any_of(binding->node_proof.ed25519.begin(), binding->node_proof.ed25519.end(), [](auto b) { return b != 0; }) ||
+                binding->provider_proof))) return std::nullopt;
         out.push_back(static_cast<unsigned char>(ProtocolOperationKind::NODE_BINDING));
         out.insert(out.end(), body->begin(), body->end());
-        out.insert(out.end(), binding->node_proof.ed25519.begin(), binding->node_proof.ed25519.end());
-        out.insert(out.end(), binding->node_proof.ml_dsa.begin(), binding->node_proof.ml_dsa.end());
+        if (!binding->binding.revoke) {
+            out.insert(out.end(), binding->node_proof.ed25519.begin(), binding->node_proof.ed25519.end());
+            out.insert(out.end(), binding->node_proof.ml_dsa.begin(), binding->node_proof.ml_dsa.end());
+        }
         if (binding->binding.provider_key != std::nullopt) {
             if (!binding->provider_proof || binding->provider_proof->ml_dsa.size() != 2420) return std::nullopt;
             out.insert(out.end(), binding->provider_proof->ed25519.begin(), binding->provider_proof->ed25519.end());
@@ -326,17 +331,20 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
     }
     case ProtocolOperationKind::NODE_BINDING: {
         const auto start = 2 + IDENTITY_OPERATION_AUTH_SIZE;
-        if (bytes.size() < start + 1347 + 2484 || bytes[start + 1346] > 1) return std::nullopt;
-        const bool provider = bytes[start + 1346] == 1;
-        const auto payload_size = 1347 + (provider ? 1344 : 0);
-        if (bytes.size() != start + payload_size + 2484 + (provider ? 2484 : 0)) return std::nullopt;
+        if (bytes.size() < start + 34 || bytes[start] != 1 || bytes[start + 1] > 1) return std::nullopt;
+        const bool revoke = bytes[start + 1] == 1;
+        const auto payload_size = revoke ? size_t{34} : (bytes.size() >= start + 1347 && bytes[start + 1346] <= 1 ? size_t{1347} + (bytes[start + 1346] ? 1344 : 0) : size_t{0});
+        if (!payload_size || bytes.size() != start + payload_size + (revoke ? 0 : 2484 + (bytes[start + 1346] ? 2484 : 0))) return std::nullopt;
         const auto auth = DeserializeIdentityOperationAuthorization(bytes.subspan(2, IDENTITY_OPERATION_AUTH_SIZE), IdentityOperationKind::NODE_BINDING);
         const auto payload = DeserializeNodeBindingPayload(bytes.subspan(start, payload_size));
         if (!auth || !payload || ComputeNodeBindingCommitment(*payload) != auth->payload_commitment) return std::nullopt;
         AuthorizedNodeBinding op{*auth, *payload, {}};
         const auto offset = start + payload_size;
-        std::copy_n(bytes.begin() + offset, 64, op.node_proof.ed25519.begin());
-        op.node_proof.ml_dsa.assign(bytes.begin() + offset + 64, bytes.begin() + offset + 2484);
+        if (!revoke) {
+            std::copy_n(bytes.begin() + offset, 64, op.node_proof.ed25519.begin());
+            op.node_proof.ml_dsa.assign(bytes.begin() + offset + 64, bytes.begin() + offset + 2484);
+        }
+        const bool provider = !revoke && bytes[start + 1346] == 1;
         if (provider) {
             op.provider_proof.emplace();
             std::copy_n(bytes.begin() + offset + 2484, 64, op.provider_proof->ed25519.begin());
@@ -385,7 +393,7 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
 
 std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation)
 {
-    constexpr std::string_view domain{"CYBOU/OP-ID/V6"};
+    constexpr std::string_view domain{"CYBOU/OP-ID/V7"};
     const auto bytes = SerializeProtocolOperation(operation);
     if (!bytes) return std::nullopt;
     uint256 id;

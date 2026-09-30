@@ -204,7 +204,7 @@ std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::sp
 
 uint256 NetworkId(const CybouNetworkDefinition& definition)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V6"};
+    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V7"};
     const auto bytes = SerializeNetworkDefinition(definition);
     uint256 result;
     ::cybou::crypto::Sha256 hasher;

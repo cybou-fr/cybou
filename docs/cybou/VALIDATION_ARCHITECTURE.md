@@ -33,7 +33,10 @@ reservation and signing, so finality cannot advance between those steps.
 ## Binding, transport and verification
 
 NodeBinding canonically binds a dedicated Ed25519 + ML-DSA-44 service key to
-an AccountID. It does not delegate Identity spending or PoA finality. At most
+an AccountID. Binding proves possession of the service key and, when supplied,
+the separate STORAGE_PROVIDER key. Revocation is authorized by the Identity
+owner and names only the NodeID, so a stolen service key cannot block its own
+revocation. It does not delegate Identity spending or PoA finality. At most
 eight nodes may be bound per Identity, and IdentityRotate revokes all bindings.
 An optional, separately proven STORAGE_PROVIDER key remains a distinct role.
 

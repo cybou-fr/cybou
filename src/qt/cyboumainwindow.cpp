@@ -686,8 +686,9 @@ void CybouMainWindow::setupNotificationsAndLock()
             const QString key = QStringLiteral("pay:") + entry.id;
             if (m_notified.contains(key)) continue;
             m_notified.insert(key);
-            fresh.append({key, {tr("You received %1").arg(cybouAmountText(static_cast<quint64>(std::llabs(entry.amount)))),
-                tr("From %1").arg(entry.counterparty_name)}});
+            // Payment details can appear on the operating system lock screen.
+            // Keep OS notifications generic so they do not disclose them.
+            fresh.append({key, {tr("New CYBOU payment"), tr("Open CYBOU to view details.")}});
         }
         if (!m_notify_primed) {
             m_notify_primed = true; // what existed at unlock is not news

@@ -99,7 +99,8 @@ jobs:
 
       - name: Smoke test cybou-node
         run: |
-          python3 -c "import os; open('/tmp/val.key', 'wb').write(os.urandom(32))"
+          umask 077
+          python3 -c "import os; fd = os.open('/tmp/val.key', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600); os.write(fd, os.urandom(32)); os.close(fd)"
           build-ci/bin/cybou-node network init-dev --network /tmp/net.def --key-file /tmp/val.key
           test -f /tmp/net.def
           build-ci/bin/cybou-node finalizer run --network /tmp/net.def --data-dir /tmp/cybou-producer --key-file /tmp/val.key --listen 127.0.0.1:29461 --block-interval 100ms &

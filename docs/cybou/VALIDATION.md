@@ -55,7 +55,11 @@ Alice / nonce 10 -> Charlie  CONFLICT, no positive attestation
 
 This reservation is local validator state, not consensus state. It must be
 durable enough to survive validator restart and fail closed if its state is
-unavailable or corrupt. When a newer PoA block finalizes, reservations against
+unavailable or corrupt. Its checksum detects corruption, not restoration of
+an older valid journal: this provides crash consistency, not rollback
+resistance. A validator with a rolled-back journal can forget prior
+reservations; a validator operator controlling the signing key can also
+equivocate intentionally. When a newer PoA block finalizes, reservations against
 the old base become historical and cannot affect canonical state or attestations
 against the new base. The journal retains one latest finalized base and at most 4096 reservations. A newer verified base atomically replaces the old reservation set; rollback or a changed root at the same height fails closed.
 
@@ -89,10 +93,14 @@ authorize remote chunk admission.
 The version 7 NodeBinding operation binds a dedicated hybrid signing key and
 NodeID to an AccountID. It is a service role, not a device or delegated Identity
 credential. A binding may also prove a separate STORAGE_PROVIDER key. The
-registry permits at most eight bound nodes per Identity; IdentityRotate revokes
-its bindings. The node never receives Recovery, Authorization, or KEM secrets.
-Binding does not grant PoA power. The optional local validation trust policy
-selects trusted bound accounts; no canonical Authority threshold is required.
+registry permits at most eight bound nodes per Identity. Binding requires
+Identity authorization and proof of possession for the service key, plus
+provider proof when a provider key is included. Revocation names only the
+NodeID and requires the owner's Identity authorization; it never needs the
+service or provider private key. IdentityRotate also revokes all bindings. The
+node never receives Recovery, Authorization, or KEM secrets. Binding does not
+grant PoA power. The optional local validation trust policy selects trusted
+bound accounts; no canonical Authority threshold is required.
 
 ## 5. Signed attestation profile
 

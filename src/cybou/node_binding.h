@@ -8,6 +8,8 @@ namespace cybou {
 struct NodeBindingPayload {
     IdentityHybridPublicKey key{IdentityKeyPurpose::VALIDATION_NODE, {}, {}};
     bool revoke{false};
+    /** Revocations identify the bound node directly and need no service key. */
+    uint256 revoke_node_id;
     std::optional<IdentityHybridPublicKey> provider_key;
     friend bool operator==(const NodeBindingPayload&, const NodeBindingPayload&) = default;
 };

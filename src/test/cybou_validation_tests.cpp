@@ -5,6 +5,7 @@
 #include <test/cybou_service_test_fixture.h>
 #include <boost/test/unit_test.hpp>
 #include <thread>
+#include <set>
 #include <cybou/p2p/session.h>
 #include <cybou/chunk_authorization.h>
 #include <cybou/secret_file.h>
@@ -54,6 +55,27 @@ BOOST_AUTO_TEST_CASE(secret_files_are_exclusive_private_bounded_and_not_replacea
     std::filesystem::create_symlink(path,link,ec);
     if(!ec)BOOST_CHECK(!ReadSecretFile(link,32));
 }
+BOOST_AUTO_TEST_CASE(owner_can_revoke_stolen_node_without_service_key_proofs) {
+    BoundFixture net;
+    const auto snapshot = Snapshot(*net.runtime);
+    const auto account = *net.owner->GetAccountId();
+    const auto* identity = snapshot.state.identities.Find(account);
+    AuthorizedNodeBinding revoke;
+    revoke.binding.revoke = true;
+    revoke.binding.revoke_node_id = *ValidationNodeId(net.key);
+    revoke.authorization = {account, identity->nonce, identity->key_epoch, IdentityOperationKind::NODE_BINDING,
+        *ComputeNodeBindingCommitment(revoke.binding), {}};
+    revoke.authorization.signature = *net.owner->GetKeyStore().SignAuthorization(
+        *ComputeIdentityOperationDigest(snapshot.base.network_id, revoke.authorization));
+    const auto encoded = SerializeProtocolOperation(revoke);
+    BOOST_REQUIRE(encoded);
+    BOOST_CHECK_EQUAL(encoded->size(), 2 + IDENTITY_OPERATION_AUTH_SIZE + 34);
+    BOOST_CHECK(DeserializeProtocolOperation(*encoded) == std::optional<ProtocolOperation>{revoke});
+    const auto result = ExecuteBlockOperations(snapshot.state, {revoke}, snapshot.base.network_id,
+        snapshot.base.height + 1, snapshot.parameters, snapshot.base.block_id);
+    BOOST_REQUIRE(result);
+    BOOST_CHECK(!result.state->bound_nodes.contains(revoke.binding.revoke_node_id));
+}
 BOOST_AUTO_TEST_CASE(ingress_budget_counts_rejected_work_before_verification_and_bounds_bursts) {
     p2p::IngressBudget budget; const auto now=std::chrono::steady_clock::now();
     for(unsigned i=0;i<8;++i) BOOST_CHECK(budget.Admit("198.51.100.1",p2p::IngressBudget::Work::OPERATION,100,now));
@@ -79,6 +101,45 @@ BOOST_AUTO_TEST_CASE(possession_proofs_match_native_blake3_for_unbalanced_trees_
             auto wrong = *proof; wrong.leaf_bytes[0] ^= 1; BOOST_CHECK(!VerifyChunkPossessionProof(id, wrong));
             if (leaf == leaves - 1) { wrong = *proof; ++wrong.stored_bytes; BOOST_CHECK(!VerifyChunkPossessionProof(id, wrong)); }
             if (!proof->siblings.empty()) { wrong = *proof; wrong.siblings[0][0] ^= 1; BOOST_CHECK(!VerifyChunkPossessionProof(id, wrong)); }
+        }
+    }
+}
+BOOST_AUTO_TEST_CASE(possession_proofs_match_native_blake3_at_block_boundaries_and_random_inputs) {
+    std::set<size_t> sizes;
+    for (size_t boundary = 1024; boundary <= 8192; boundary += 1024) {
+        for (const auto delta : {-65, -64, -1, 0, 1, 63, 64, 65}) {
+            const auto size = static_cast<int64_t>(boundary) + delta;
+            if (size >= static_cast<int64_t>(ENCRYPTED_CHUNK_MIN_STORED_BYTES)) sizes.insert(static_cast<size_t>(size));
+        }
+    }
+    uint32_t random = 0x6d2b79f5;
+    const auto next = [&] { random ^= random << 13; random ^= random >> 17; random ^= random << 5; return random; };
+    for (unsigned sample = 0; sample < 64; ++sample) sizes.insert(1089 + next() % 30000);
+    for (const auto size : sizes) {
+        std::vector<unsigned char> bytes(size);
+        for (auto& byte : bytes) byte = static_cast<unsigned char>(next());
+        const auto expected = ComputeChunkId(bytes); // vetted native BLAKE3 implementation
+        const auto leaves = (size + 1023) / 1024;
+        const bool boundary_case = size <= 8192;
+        const auto check_leaf = [&](uint32_t leaf) {
+            const auto proof = BuildChunkPossessionProof(bytes, leaf);
+            BOOST_REQUIRE(proof);
+            BOOST_CHECK(VerifyChunkPossessionProof(expected, *proof));
+            auto encoded = SerializeChunkPossessionProof(*proof);
+            BOOST_REQUIRE(encoded);
+            BOOST_CHECK(DeserializeChunkPossessionProof(*encoded) == proof);
+            encoded->pop_back();
+            BOOST_CHECK(!DeserializeChunkPossessionProof(*encoded));
+            auto extra = *proof;
+            extra.siblings.push_back({});
+            BOOST_CHECK(!VerifyChunkPossessionProof(expected, extra));
+        };
+        if (boundary_case) {
+            for (uint32_t leaf = 0; leaf < leaves; ++leaf) check_leaf(leaf);
+        } else {
+            check_leaf(0);
+            check_leaf(static_cast<uint32_t>(next() % leaves));
+            check_leaf(static_cast<uint32_t>(leaves - 1));
         }
     }
 }
