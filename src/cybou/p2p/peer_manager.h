@@ -5,7 +5,7 @@
 #define CYBOU_P2P_PEER_MANAGER_H
 
 #include <cybou/p2p/session.h>
-#include <cybou/block_feed.h>
+#include <cybou/sync_result.h>
 
 #include <boost/asio/io_context.hpp>
 

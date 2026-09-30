@@ -27,8 +27,7 @@ struct CybouNodeServiceConfig {
 
 struct CybouFinalizerServiceConfig {
     std::string bind_address;
-    uint16_t block_feed_port{0};
-    std::optional<uint16_t> p2p_port;
+    uint16_t p2p_port{0};
     uint64_t block_interval_ms{1000};
     std::vector<std::pair<std::string, uint16_t>> peers;
 };
@@ -52,13 +51,12 @@ public:
 
     /** Open or initialize the local state, rejecting corrupt and foreign state. */
     void Start();
-    /** Start shared observer P2P maintenance, verified sync, and optional inbound CYP2. */
+    /** Start CYP2 peer maintenance, verified sync and optional inbound CYP2 (needs runtime p2p_endpoint). */
     void StartNetwork(
-        std::pair<std::string, uint16_t> fallback_peer,
         CybouNetworkServiceConfig config,
         NetworkUpdate update);
     void StopNetwork();
-    /** Run the finalizer block-feed, consensus, inbound CYP2, and gossip loops. */
+    /** Run the finalizer block production, inbound CYP2 and gossip loops. */
     int RunFinalizer(const CybouFinalizerServiceConfig& config, std::atomic_bool& stopping);
 
     CybouNodeRuntime& Runtime() { return *m_runtime; }

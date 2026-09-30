@@ -65,10 +65,7 @@ void CybouDesktopController::start()
         const QString p2p_host = qEnvironmentVariable("CYBOU_DEV_P2P_HOST");
         const auto selected_p2p_port = p2p_port_ok ? static_cast<uint16_t>(p2p_port) : endpoint.p2p_port;
         const auto selected_p2p_host = p2p_host.isEmpty() ? std::string{endpoint.host} : p2p_host.toStdString();
-        const bool use_legacy_block_feed = qEnvironmentVariable("CYBOU_DEV_LEGACY_BLOCK_FEED") == "1";
-        const auto configured_p2p = use_legacy_block_feed ? std::nullopt :
-            std::optional<std::pair<std::string, uint16_t>>{
-                std::make_pair(selected_p2p_host, selected_p2p_port)};
+        const auto configured_p2p = std::make_pair(selected_p2p_host, selected_p2p_port);
         cybou::CybouNetworkServiceConfig network_config;
         bool listen_port_ok{false};
         const int listen_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_LISTEN_PORT", &listen_port_ok);
@@ -86,8 +83,6 @@ void CybouDesktopController::start()
             .network_definition = definition,
             .data_dir = data_dir,
             .poa_finalizer_recovery_entropy = std::nullopt,
-            .submit_endpoint = !use_legacy_block_feed ? std::nullopt :
-                std::optional<std::pair<std::string, uint16_t>>{std::make_pair(std::string{endpoint.host}, endpoint.port)},
             .p2p_endpoint = configured_p2p,
             .local_p2p_endpoint = network_config.listen_endpoint,
             .db_cache_bytes = 8 << 20,
@@ -119,7 +114,6 @@ void CybouDesktopController::start()
         m_model->setPeerCount(0);
 
         m_node_service->StartNetwork(
-            {std::string{endpoint.host}, endpoint.port},
             network_config,
             [this](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status,
                 const size_t connected_peer_count) {

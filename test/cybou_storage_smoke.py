@@ -22,7 +22,6 @@ import threading
 import time
 from pathlib import Path
 
-FINALIZER_FEED = 29560
 FINALIZER_P2P = 29561
 PROVIDERS = {"a": 29571, "b": 29581}
 CAPACITY = str(64 * 1024 * 1024)
@@ -48,7 +47,7 @@ def main() -> int:
         processes[name] = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT)
 
     start("finalizer", [node, "serve", str(network), str(work / "finalizer-db"), str(key),
-                        "127.0.0.1", str(FINALIZER_FEED), "200", str(FINALIZER_P2P), str(peers)])
+                        "127.0.0.1", str(FINALIZER_P2P), "200", str(peers)])
     time.sleep(2)
     for name, port in PROVIDERS.items():
         start(f"provider-{name}", [node, "provide", str(network), str(work / f"provider-{name}-db"),

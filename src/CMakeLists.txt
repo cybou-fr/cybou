@@ -220,7 +220,6 @@ add_library(cybou_node STATIC
   cybou/block_executor.cpp
   cybou/finalizer_node.cpp
   cybou/operation_pool.cpp
-  cybou/block_feed.cpp
   cybou/network_definition.cpp
   cybou/protocol_operation.cpp
   cybou/identity_operation_coordinator.cpp

@@ -3,7 +3,7 @@
 
 #include <cybou/operation_pool.h>
 
-#include <cybou/block_feed.h>
+#include <cybou/protocol_limits.h>
 
 #include <limits>
 

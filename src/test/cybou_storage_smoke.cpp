@@ -74,8 +74,7 @@ int main(int argc, char* argv[])
             .genesis = network->genesis,
         }};
         node.Start();
-        node.StartNetwork({finalizer_ip, finalizer_port},
-            cybou::CybouNetworkServiceConfig{.sync_interval = 500ms},
+        node.StartNetwork(cybou::CybouNetworkServiceConfig{.sync_interval = 500ms},
             [](const cybou::SyncPeerResult&, const cybou::NodeRuntimeStatus&, std::size_t) { return true; });
         auto& runtime = node.Runtime();
         WaitFor("verified sync from the finalizer",

@@ -18,7 +18,7 @@ editing an included file.
 | docs/cybou/02_ARCHITECTURE.md | 115 | 49e778c2d64c69ce |
 | docs/cybou/05_CHAIN_STATE.md | 84 | 2b2be7bf69689f96 |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 43 | fbe559efaba33637 |
-| docs/cybou/08_P2P.md | 146 | 795ce7420f3221dd |
+| docs/cybou/08_P2P.md | 150 | e4c7fb79c21536bb |
 | docs/cybou/09_CRYPTO_PQ.md | 16 | 721054f0708a8051 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | a76de60933486847 |
 | docs/cybou/18_ECONOMICS_FEES.md | 90 | c73eb172b272966c |

@@ -81,7 +81,6 @@ BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
     bool malformed_peer_result_was_retryable{false};
     bool recovered{false};
     service.StartNetwork(
-        {loopback.to_string(), acceptor.local_endpoint().port()},
         {.sync_interval = std::chrono::milliseconds{25}, .sync_batch_size = 1, .listen_endpoint = std::nullopt},
         [&](const cybou::SyncPeerResult& result, const cybou::NodeRuntimeStatus& runtime_status, size_t) {
             {

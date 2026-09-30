@@ -5,7 +5,8 @@
 #define CYBOU_NODE_RUNTIME_H
 
 #include <cybou/finalizer_node.h>
-#include <cybou/block_feed.h>
+#include <cybou/protocol_limits.h>
+#include <cybou/sync_result.h>
 #include <cybou/network_definition.h>
 #include <cybou/state_store.h>
 #include <cybou/chunk_retention.h>
@@ -34,7 +35,6 @@ struct NodeRuntimeConfig {
     CybouNetworkDefinition network_definition;
     std::filesystem::path data_dir;
     std::optional<std::array<unsigned char, 32>> poa_finalizer_recovery_entropy{std::nullopt};
-    std::optional<std::pair<std::string, uint16_t>> submit_endpoint{std::nullopt};
     std::optional<std::pair<std::string, uint16_t>> p2p_endpoint{std::nullopt};
     /** This node's own CYP2 listener; used to filter self-addresses out of discovery. */
     std::optional<std::pair<std::string, uint16_t>> local_p2p_endpoint{std::nullopt};
@@ -163,8 +163,6 @@ public:
     IdentityKemPackageLookupResult FindIdentityKemPackage(
         const AccountId& account_id, uint64_t key_epoch) const;
 
-    /** Sync up to max_blocks from a remote peer block feed */
-    SyncPeerResult SyncFromPeer(const std::string& host, uint16_t port, uint64_t max_blocks = 100);
     /** Maintain discovered CYP2 sessions, fail over across peers, and sync verified blocks. */
     SyncPeerResult SyncFromConfiguredPeer(uint64_t max_blocks = 100);
     size_t ConnectedPeerCount() const;
@@ -209,10 +207,8 @@ public:
         const std::string& address, uint16_t port, const uint256& publication_operation_id,
         const ChunkId& chunk_id);
 
-    /** Remote operation submit endpoint */
-    void SetSubmitEndpoint(const std::string& host, uint16_t port);
-    bool HasSubmitEndpoint() const;
-    std::optional<std::pair<std::string, uint16_t>> GetSubmitEndpoint() const;
+    /** True for the PoA finalizer or a node with a configured CYP2 finalizer peer. */
+    bool CanSubmitOperations() const;
 
     /** Peer discovery endpoints */
     std::vector<std::pair<std::string, uint16_t>> GetPeerEndpointsForGossip() const;
@@ -255,7 +251,6 @@ private:
     std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;
     std::map<uint256, OperationStatus> m_recent_operation_status;
     std::deque<uint256> m_recent_operation_status_order;
-    std::optional<std::pair<std::string, uint16_t>> m_submit_endpoint;
     std::unique_ptr<p2p::PeerManager> m_peer_manager;
     mutable std::mutex m_p2p_mutex;
     std::map<std::pair<std::string, uint16_t>, PeerRetryState> m_peer_retry_after;

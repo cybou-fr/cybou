@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/finalizer_node.h>
-#include <cybou/block_feed.h>
+#include <cybou/protocol_limits.h>
 #include <cybou/bootstrap_nodes.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/hex.h>
@@ -156,7 +156,7 @@ int Main(const int argc, char* argv[])
         // DEV bootstrap seed list (doc 75). Transport metadata only — trust
         // always comes from the network definition file, never from seeds.
         for (const auto& endpoint : cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES) {
-            std::cout << endpoint.host << ':' << endpoint.port << '\n';
+            std::cout << endpoint.host << ':' << endpoint.p2p_port << '\n';
         }
         return 0;
     }
@@ -184,7 +184,7 @@ int Main(const int argc, char* argv[])
         std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
         return 0;
     }
-    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE POA_FINALIZER_SEED_FILE | bootstrap | serve NETWORK_FILE DB_DIR POA_FINALIZER_SEED_FILE BIND_IP PORT [BLOCK_MS [P2P_PORT [PEERS_FILE [STORAGE_CAPACITY_BYTES]]]] | sync NETWORK_FILE DB_DIR [PEER_HOST PORT] COUNT | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID | provide NETWORK_FILE DB_DIR PEER_IP P2P_PORT BIND_IP LISTEN_PORT STORAGE_CAPACITY_BYTES");
+    if (argc < 5) throw std::runtime_error("usage: cybou-node init-dev NETWORK_FILE POA_FINALIZER_SEED_FILE | bootstrap | serve NETWORK_FILE DB_DIR POA_FINALIZER_SEED_FILE BIND_IP P2P_PORT [BLOCK_MS [PEERS_FILE [STORAGE_CAPACITY_BYTES]]] | p2p-probe NETWORK_FILE DB_DIR PEER_IP P2P_PORT | p2p-sync NETWORK_FILE DB_DIR PEER_IP P2P_PORT COUNT | p2p-follow NETWORK_FILE DB_DIR PEERS_FILE [UNTIL_HEIGHT] | p2p-submit NETWORK_FILE DB_DIR PEER_IP P2P_PORT OP_FILE | p2p-submit-peers NETWORK_FILE DB_DIR PEERS_FILE OP_FILE | operation-status NETWORK_FILE DB_DIR OP_ID | provide NETWORK_FILE DB_DIR PEER_IP P2P_PORT BIND_IP LISTEN_PORT STORAGE_CAPACITY_BYTES");
     const auto network = cybou::LoadCybouNetworkFile(argv[2]);
     if (!network) throw std::runtime_error("invalid CYBOU network file");
     std::signal(SIGINT, Stop);
@@ -371,55 +371,16 @@ int Main(const int argc, char* argv[])
         const auto port = Port(argv[5]);
         return PrintPeerSubmitResult(peers.SubmitOperationToAny({{argv[4], port}}, *operation));
     }
-    // Without explicit PEER_HOST PORT, sync follows the DEV bootstrap list
-    // (doc 75). The bootstrap endpoint is transport metadata — every block
-    // is still verified against the network definition file.
-    if (std::string_view{argv[1]} == "sync" && (argc == 5 || argc == 7)) {
-        const std::string sync_host =
-            argc == 5 ? std::string{cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front().host} : std::string{argv[4]};
-        const uint16_t sync_port =
-            argc == 5 ? cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front().port : Port(argv[5]);
-        cybou::NodeRuntimeConfig config{
-            .network_definition = network->definition,
-            .data_dir = argv[3],
-            .db_cache_bytes = 8 << 20,
-        };
-        cybou::CybouNodeService node_service{{
-            .runtime = std::move(config),
-            .genesis = network->genesis,
-        }};
-        node_service.Start();
-        auto& runtime = node_service.Runtime();
-        const auto count = PositiveCount(argc == 5 ? argv[4] : argv[6]);
-        uint64_t synced{0};
-        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
-        while (!stopping && synced < count) {
-            if (runtime.SyncFromPeer(sync_host, sync_port, 1).blocks_applied > 0) {
-                ++synced;
-                std::cout << "height=" << *runtime.GetFinalizedHeight() << std::endl;
-                deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
-            } else {
-                if (std::chrono::steady_clock::now() >= deadline) {
-                    std::cerr << "sync timed out waiting for next verified block\n";
-                    return 1;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(250));
-            }
-        }
-        return synced == count ? 0 : 1;
-    }
-    if (std::string_view{argv[1]} == "serve" && (argc == 7 || argc == 8 || argc == 9 || argc == 10 || argc == 11)) {
+    if (std::string_view{argv[1]} == "serve" && argc >= 7 && argc <= 10) {
         auto key_bytes = ReadFile(argv[4], 32);
         if (key_bytes.size() != 32) throw std::runtime_error("PoA finalizer recovery entropy must contain exactly 32 raw bytes");
         std::array<unsigned char, 32> key{};
         std::copy(key_bytes.begin(), key_bytes.end(), key.begin());
         cybou::crypto::CleanseMemory(key_bytes.data(), key_bytes.size());
 
-        const auto port = Port(argv[6]);
+        const auto p2p_port = Port(argv[6]);
         const auto interval_ms = argc >= 8 ? PositiveCount(argv[7]) : 1000;
         if (interval_ms > 60000) throw std::runtime_error("block interval exceeds 60 seconds");
-        const auto p2p_port = argc >= 9 ? std::optional<uint16_t>{Port(argv[8])} : std::nullopt;
-        if (p2p_port && *p2p_port == port) throw std::runtime_error("P2P port must differ from block feed port");
         const auto bind_address = boost::asio::ip::make_address(argv[5]);
 
         cybou::NodeRuntimeConfig config{
@@ -428,24 +389,21 @@ int Main(const int argc, char* argv[])
             .poa_finalizer_recovery_entropy = key,
             .db_cache_bytes = 8 << 20,
         };
-        if (argc == 11) {
+        if (argc == 10) {
             config.storage_enabled = true;
-            config.storage_capacity_bytes = CapacityBytes(argv[10]);
+            config.storage_capacity_bytes = CapacityBytes(argv[9]);
         }
-        if (p2p_port) {
-            config.local_p2p_endpoint = std::make_pair(bind_address.to_string(), *p2p_port);
-        }
+        config.local_p2p_endpoint = std::make_pair(bind_address.to_string(), p2p_port);
         cybou::crypto::CleanseMemory(key.data(), key.size());
         cybou::CybouNodeService node_service{{
             .runtime = std::move(config),
             .genesis = network->genesis,
         }};
         node_service.Start();
-        const auto gossip_endpoints = argc >= 10 ? ReadPeerEndpoints(argv[9]) :
+        const auto gossip_endpoints = argc >= 9 ? ReadPeerEndpoints(argv[8]) :
             std::vector<std::pair<std::string, uint16_t>>{};
         return node_service.RunFinalizer(cybou::CybouFinalizerServiceConfig{
             .bind_address = bind_address.to_string(),
-            .block_feed_port = port,
             .p2p_port = p2p_port,
             .block_interval_ms = interval_ms,
             .peers = gossip_endpoints,
@@ -475,8 +433,7 @@ int Main(const int argc, char* argv[])
         }};
         node_service.Start();
         std::atomic<std::uint64_t> last_height{0};
-        node_service.StartNetwork({peer_host, peer_port},
-            cybou::CybouNetworkServiceConfig{.listen_endpoint = listen},
+        node_service.StartNetwork(cybou::CybouNetworkServiceConfig{.listen_endpoint = listen},
             [&last_height](const cybou::SyncPeerResult&, const cybou::NodeRuntimeStatus& status, size_t peers) {
                 if (status.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH ||
                     status.runtime_state == cybou::NodeRuntimeState::CORRUPT) {

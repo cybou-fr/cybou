@@ -114,8 +114,7 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
           .memory_only = m_config.memory_only,
           .wipe_data = m_config.wipe_data,
       })},
-      m_store{*m_db, m_config.network_definition},
-      m_submit_endpoint{m_config.submit_endpoint}
+      m_store{*m_db, m_config.network_definition}
 {
     std::filesystem::path storage_path;
     if (!m_config.memory_only) {
@@ -402,7 +401,6 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
     ProtocolOperation op, std::optional<std::string> source_peer)
 {
     const uint256 op_id = ComputeOperationId(op).value_or(uint256{});
-    std::optional<std::pair<std::string, uint16_t>> endpoint;
     std::optional<std::pair<std::string, uint16_t>> p2p_endpoint;
     uint256 net_id{};
     {
@@ -429,7 +427,6 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
             }
             return OperationSubmitResult{.status = status, .op_id = op_id};
         }
-        endpoint = m_submit_endpoint;
         p2p_endpoint = m_config.p2p_endpoint;
         net_id = m_network_id;
     }
@@ -462,20 +459,6 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
             } else if (!result.delivery_uncertain) {
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::REJECTED_KNOWN});
             }
-        }
-        return result;
-    }
-    if (endpoint.has_value()) {
-        auto result = SubmitOperationRemote(endpoint->first, endpoint->second, net_id, op);
-        std::lock_guard lock(m_mutex);
-        if (result.status == OperationSubmitStatus::ACCEPTED ||
-            result.status == OperationSubmitStatus::ALREADY_PENDING) {
-            RememberOperationStatus(op_id, {.kind = OperationStatusKind::ACCEPTED_REMOTE});
-        } else if (result.status == OperationSubmitStatus::ALREADY_FINALIZED) {
-            RememberOperationStatus(op_id, {.kind = OperationStatusKind::FINALIZED,
-                .finalized_height = m_store.GetFinalizedOperationHeight(op_id).value_or(0)});
-        } else if (!result.delivery_uncertain) {
-            RememberOperationStatus(op_id, {.kind = OperationStatusKind::REJECTED_KNOWN});
         }
         return result;
     }
@@ -647,70 +630,6 @@ IdentityKemPackageLookupResult CybouNodeRuntime::FindIdentityKemPackage(
     return result;
 }
 
-SyncPeerResult CybouNodeRuntime::SyncFromPeer(const std::string& host, const uint16_t port, const uint64_t max_blocks)
-{
-    SyncPeerResult result;
-    {
-        std::lock_guard lock(m_mutex);
-        const auto loaded = m_store.LoadState();
-        if (loaded.error == StateLoadError::NETWORK_MISMATCH) {
-            result.status = SyncPeerStatus::NETWORK_MISMATCH;
-            return result;
-        }
-        if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) {
-            result.status = SyncPeerStatus::PROTOCOL_ERROR;
-            return result;
-        }
-    }
-    while (result.blocks_applied < max_blocks) {
-        uint64_t next_height{0};
-        uint256 net_id{};
-        {
-            std::lock_guard lock(m_mutex);
-            const auto height = m_store.GetFinalizedHeight();
-            if (!height || *height == std::numeric_limits<uint64_t>::max()) {
-                result.status = SyncPeerStatus::PROTOCOL_ERROR;
-                break;
-            }
-            next_height = *height + 1;
-            net_id = m_network_id;
-        }
-
-        const auto fetch_res = FetchFinalizedBlock(host, port, net_id, next_height);
-        if (fetch_res.status == FetchBlockStatus::NOT_FOUND) {
-            if (result.blocks_applied == 0) {
-                result.status = SyncPeerStatus::UP_TO_DATE;
-            }
-            break;
-        }
-        if (fetch_res.status == FetchBlockStatus::CONNECTION_FAILED) {
-            result.status = SyncPeerStatus::CONNECTION_FAILED;
-            break;
-        }
-        if (fetch_res.status == FetchBlockStatus::NETWORK_MISMATCH) {
-            result.status = SyncPeerStatus::NETWORK_MISMATCH;
-            break;
-        }
-        if (fetch_res.status == FetchBlockStatus::CORRUPT_BLOCK || !fetch_res.block.has_value()) {
-            result.status = SyncPeerStatus::PROTOCOL_ERROR;
-            break;
-        }
-
-        {
-            std::lock_guard lock(m_mutex);
-            if (!m_store.CommitFinalizedBlock(*fetch_res.block)) {
-                result.status = SyncPeerStatus::PROTOCOL_ERROR;
-                break;
-            }
-            RememberFinalizedBlockForGossip(*fetch_res.block);
-            if (m_finalizer_node) m_finalizer_node->RevalidatePending();
-        }
-        ++result.blocks_applied;
-        result.status = SyncPeerStatus::BLOCKS_APPLIED;
-    }
-    return result;
-}
-
 void CybouNodeRuntime::SchedulePeerRetry(
     const std::pair<std::string, uint16_t>& endpoint, const PeerFailureClass failure)
 {
@@ -847,22 +766,10 @@ size_t CybouNodeRuntime::ConnectedPeerCount() const
     return m_peer_manager ? m_peer_manager->ConnectedCount() : 0;
 }
 
-void CybouNodeRuntime::SetSubmitEndpoint(const std::string& host, const uint16_t port)
+bool CybouNodeRuntime::CanSubmitOperations() const
 {
     std::lock_guard lock(m_mutex);
-    m_submit_endpoint = std::make_pair(host, port);
-}
-
-bool CybouNodeRuntime::HasSubmitEndpoint() const
-{
-    std::lock_guard lock(m_mutex);
-    return m_finalizer_node != nullptr || m_submit_endpoint.has_value() || m_config.p2p_endpoint.has_value();
-}
-
-std::optional<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetSubmitEndpoint() const
-{
-    std::lock_guard lock(m_mutex);
-    return m_submit_endpoint;
+    return m_finalizer_node != nullptr || m_config.p2p_endpoint.has_value();
 }
 
 std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetPeerEndpointsForGossip() const

@@ -81,10 +81,10 @@ jobs:
           python3 -c "import os; open('/tmp/val.key', 'wb').write(os.urandom(32))"
           build-ci/bin/cybou-node init-dev /tmp/net.def /tmp/val.key
           test -f /tmp/net.def
-          build-ci/bin/cybou-node serve /tmp/net.def /tmp/cybou-producer /tmp/val.key 127.0.0.1 29460 100 &
+          build-ci/bin/cybou-node serve /tmp/net.def /tmp/cybou-producer /tmp/val.key 127.0.0.1 29461 100 &
           producer_pid=$!
           trap 'kill "$producer_pid" 2>/dev/null || true' EXIT
-          build-ci/bin/cybou-node sync /tmp/net.def /tmp/cybou-observer 127.0.0.1 29460 1
+          build-ci/bin/cybou-node p2p-sync /tmp/net.def /tmp/cybou-observer 127.0.0.1 29461 1
 
       - name: PoA finalizer + storage provider multi-process smoke
         run: |

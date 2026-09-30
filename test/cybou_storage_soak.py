@@ -25,7 +25,6 @@ import threading
 import time
 from pathlib import Path
 
-FINALIZER_FEED = 29660
 FINALIZER_P2P = 29661
 PROVIDERS = {"a": 29671, "b": 29681, "c": 29691}
 CAPACITY = str(64 * 1024 * 1024)
@@ -61,7 +60,7 @@ def main() -> int:
             process.wait()
 
     finalizer_args = [node, "serve", str(network), str(work / "finalizer-db"), str(key),
-                      "127.0.0.1", str(FINALIZER_FEED), "200", str(FINALIZER_P2P), str(peers)]
+                      "127.0.0.1", str(FINALIZER_P2P), "200", str(peers)]
 
     def provider_args(name):
         return [node, "provide", str(network), str(work / f"provider-{name}-db"),

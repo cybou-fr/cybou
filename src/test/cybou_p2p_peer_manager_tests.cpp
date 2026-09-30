@@ -779,7 +779,7 @@ BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured
         .memory_only = true, .wipe_data = true};
     cybou::CybouNodeRuntime observer{std::move(observer_config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
-    BOOST_CHECK(observer.HasSubmitEndpoint());
+    BOOST_CHECK(observer.CanSubmitOperations());
     const auto submitted = observer.SubmitOperation(operation);
     BOOST_CHECK(submitted.status == cybou::OperationSubmitStatus::ACCEPTED);
     BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(99), 0U);

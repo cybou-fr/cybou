@@ -5,7 +5,7 @@
 
 #include <cybou/chunk_id.h>
 #include <cybou/identity_crypto.h>
-#include <cybou/block_feed.h>
+#include <cybou/protocol_limits.h>
 #include <cybou/encrypted_chunk.h>
 #include <cybou/node_runtime.h>
 
@@ -423,7 +423,7 @@ BlockRequestResult PeerSession::RequestBlock(uint64_t height)
     if (meta->type != MessageType::BLOCK_META || meta->payload.size() != 4)
         return {.status = BlockRequestStatus::INVALID_RESPONSE, .bytes = {}};
     const uint32_t size = Read32(meta->payload.data());
-    if (size > MAX_FINALIZED_BLOCK_FEED_BYTES) return {.status = BlockRequestStatus::INVALID_RESPONSE, .bytes = {}};
+    if (size > MAX_FINALIZED_BLOCK_BYTES) return {.status = BlockRequestStatus::INVALID_RESPONSE, .bytes = {}};
     if (size == 0) return {.status = BlockRequestStatus::NOT_FOUND, .bytes = {}};
     std::vector<unsigned char> bytes;
     bytes.reserve(size);
@@ -496,7 +496,7 @@ std::optional<BlockAnnounceResult> PeerSession::AdvertiseBlock(
     if (answer->type == MessageType::GET_BLOCK && answer->payload.size() == 8 &&
         Read64(answer->payload.data()) == announcement.height) {
         const auto encoded = SerializeFinalizedBlock(block);
-        if (!encoded || encoded->empty() || encoded->size() > MAX_FINALIZED_BLOCK_FEED_BYTES) return std::nullopt;
+        if (!encoded || encoded->empty() || encoded->size() > MAX_FINALIZED_BLOCK_BYTES) return std::nullopt;
         std::vector<unsigned char> meta;
         Put32(meta, static_cast<uint32_t>(encoded->size()));
         if (!Write(Frame{MessageType::BLOCK_META, meta}, deadline)) return std::nullopt;
@@ -781,7 +781,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             if (size == 0) {
                 return BlockAnnounceResult::GAP; // peer does not have this height
             }
-            if (size > MAX_FINALIZED_BLOCK_FEED_BYTES) return std::nullopt;
+            if (size > MAX_FINALIZED_BLOCK_BYTES) return std::nullopt;
             std::vector<unsigned char> bytes;
             bytes.reserve(size);
             while (bytes.size() < size) {
@@ -817,7 +817,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             // client session that never reads (only the accepted side runs
             // ServeNext), so an unsolicited GET_BLOCK here would deadlock and
             // kill the session. Historical catch-up is instead driven by the
-            // gossip worker through the client-side SyncFromPeer path.
+            // gossip worker through the client-side PeerManager::SyncFromPeer path.
             return acknowledge(BlockAnnounceResult::GAP);
         }
         const auto applied = fetch_and_commit(height, id);
@@ -853,7 +853,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     if (block && !encoded) return false;
     const std::vector<unsigned char> empty;
     const auto& bytes = encoded ? *encoded : empty;
-    if (bytes.size() > MAX_FINALIZED_BLOCK_FEED_BYTES) return false;
+    if (bytes.size() > MAX_FINALIZED_BLOCK_BYTES) return false;
     std::vector<unsigned char> meta;
     Put32(meta, static_cast<uint32_t>(bytes.size()));
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;

@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/identity_operation_coordinator.h>
+#include <cybou/p2p/session.h>
 #include <cybou/private_application_store.h>
 #include <cybou/recovery_phrase.h>
 #include <cybou/publication_service.h>
@@ -65,24 +66,18 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     asio::io_context server_io;
     tcp::acceptor acceptor{server_io, tcp::endpoint{asio::ip::address_v4::loopback(), 0}};
     const uint16_t port = acceptor.local_endpoint().port();
-    std::array<std::vector<unsigned char>, 2> received_frames;
     std::thread remote([&] {
-        for (auto& frame : received_frames) {
+        for (int attempt{0}; attempt < 2; ++attempt) {
             tcp::socket socket{server_io};
             acceptor.accept(socket);
-            std::array<unsigned char, 40> header{};
-            asio::read(socket, asio::buffer(header));
-            const uint32_t payload_size = uint32_t{header[36]} |
-                (uint32_t{header[37]} << 8) | (uint32_t{header[38]} << 16) |
-                (uint32_t{header[39]} << 24);
-            frame.assign(header.begin(), header.end());
-            const size_t offset = frame.size();
-            frame.resize(offset + payload_size);
-            asio::read(socket, asio::buffer(frame.data() + offset, payload_size));
-            // Reset after consuming the full request to model a lost acknowledgment
-            // after delivery, without leaving the synchronous client read hanging.
-            socket.set_option(tcp::socket::linger{true, 0});
-            socket.close();
+            // Model a lost acknowledgment: handshake as an operation-accepting
+            // finalizer, then drop the session without answering.
+            cybou::p2p::PeerSession session{std::move(socket)};
+            (void)session.Handshake({.network_id = network_id, .finalized_height = 1,
+                .finalized_tip = cybou::ComputeBlockId(account_block->block),
+                .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_ACCEPT_OPERATIONS,
+                .nonce = static_cast<std::uint64_t>(4100 + attempt)});
+            std::this_thread::sleep_for(std::chrono::milliseconds{200});
         }
     });
 
@@ -90,7 +85,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     cybou::NodeRuntimeConfig client_config{
         .network_definition = definition,
         .data_dir = client_data,
-        .submit_endpoint = std::pair<std::string, uint16_t>{"127.0.0.1", port},
+        .p2p_endpoint = std::pair<std::string, uint16_t>{"127.0.0.1", port},
         .memory_only = false,
         .wipe_data = true,
     };
@@ -142,7 +137,6 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             });
         BOOST_CHECK(wallet_attempt.phase == cybou::IdentityOperationPhase::CONFLICT);
         BOOST_CHECK(wallet_attempt.op_id == operation_id);
-        BOOST_CHECK(received_frames[0] == received_frames[1]);
         const auto status = coordinator.GetStatus(operation_id);
         BOOST_CHECK(status.phase == cybou::IdentityOperationPhase::UNCERTAIN);
         const auto loaded = restarted.GetStore().LoadState();

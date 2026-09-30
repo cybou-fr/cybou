@@ -60,7 +60,6 @@ void CybouNodeService::Start()
 }
 
 void CybouNodeService::StartNetwork(
-    std::pair<std::string, uint16_t> fallback_peer,
     CybouNetworkServiceConfig config,
     NetworkUpdate update)
 {
@@ -69,10 +68,7 @@ void CybouNodeService::StartNetwork(
     if (m_sync_thread.joinable() || m_listener_thread.joinable()) throw std::logic_error("observer network service is already running");
     if (config.sync_interval <= std::chrono::milliseconds::zero()) throw std::invalid_argument("network sync interval must be positive");
     if (config.sync_batch_size == 0 || config.sync_batch_size > 128) throw std::invalid_argument("invalid network sync batch size");
-    if (config.listen_endpoint && !m_runtime->HasP2pEndpoint()) {
-        throw std::invalid_argument("inbound CYP2 requires a configured outbound CYP2 peer");
-    }
-    if (fallback_peer.second == 0) throw std::invalid_argument("fallback peer port must be nonzero");
+    if (!m_runtime->HasP2pEndpoint()) throw std::invalid_argument("network service requires a configured CYP2 peer");
 
     m_stop_network.store(false);
     try {
@@ -83,19 +79,17 @@ void CybouNodeService::StartNetwork(
                 boost::asio::ip::tcp::endpoint{address, config.listen_endpoint->second});
             m_listener_thread = std::thread{[this] { m_observer_listener->server.Run(m_stop_network); }};
         }
-        m_sync_thread = std::thread{[this, peer = std::move(fallback_peer), config, update = std::move(update)] {
+        m_sync_thread = std::thread{[this, config, update = std::move(update)] {
         while (!m_stop_network.load()) {
             SyncPeerResult result;
             try {
-                result = m_runtime->HasP2pEndpoint() ? m_runtime->SyncFromConfiguredPeer(config.sync_batch_size) :
-                    m_runtime->SyncFromPeer(peer.first, peer.second, 100);
+                result = m_runtime->SyncFromConfiguredPeer(config.sync_batch_size);
             } catch (...) {
                 result.status = SyncPeerStatus::PROTOCOL_ERROR;
             }
 
             try {
-                const auto connected = m_runtime->HasP2pEndpoint() ? m_runtime->ConnectedPeerCount() :
-                    static_cast<size_t>(result.IsConnected() ? 1 : 0);
+                const auto connected = m_runtime->ConnectedPeerCount();
                 if (!update(result, m_runtime->GetStatus(), connected)) {
                     m_stop_network.store(true);
                 }
@@ -131,34 +125,20 @@ int CybouNodeService::RunFinalizer(const CybouFinalizerServiceConfig& config, st
 {
     if (!m_started) throw std::logic_error("CYBOU node service must be started before finalizer service");
     if (!m_runtime->GetStatus().is_finalizer) throw std::logic_error("finalizer service requires a PoA finalizer runtime");
-    if (config.block_feed_port == 0 || config.block_interval_ms == 0 || config.block_interval_ms > 60000) {
-        throw std::invalid_argument("invalid finalizer listener or block interval");
+    if (config.p2p_port == 0 || config.block_interval_ms == 0 || config.block_interval_ms > 60000) {
+        throw std::invalid_argument("invalid finalizer CYP2 port or block interval");
     }
 
     const auto bind_address = boost::asio::ip::make_address(config.bind_address);
-    if (config.p2p_port && *config.p2p_port == config.block_feed_port) {
-        throw std::invalid_argument("P2P port must differ from block feed port");
-    }
-    if (config.p2p_port) {
-        for (const auto& [address, peer_port] : config.peers) {
-            if (address == bind_address.to_string() && peer_port == *config.p2p_port) {
-                throw std::runtime_error("P2P peer list contains this listener");
-            }
+    for (const auto& [address, peer_port] : config.peers) {
+        if (address == bind_address.to_string() && peer_port == config.p2p_port) {
+            throw std::runtime_error("P2P peer list contains this listener");
         }
     }
 
     boost::asio::io_context io;
     std::optional<p2p::InboundPeerServer> p2p_server;
-    if (config.p2p_port) {
-        p2p_server.emplace(*m_runtime, io,
-            boost::asio::ip::tcp::endpoint{bind_address, *config.p2p_port});
-    }
-
-    boost::asio::ip::tcp::acceptor acceptor(io, {
-        bind_address,
-        config.block_feed_port,
-    });
-    acceptor.non_blocking(true);
+    p2p_server.emplace(*m_runtime, io, boost::asio::ip::tcp::endpoint{bind_address, config.p2p_port});
 
     std::jthread block_worker;
     std::optional<std::jthread> p2p_listener;
@@ -238,20 +218,7 @@ int CybouNodeService::RunFinalizer(const CybouFinalizerServiceConfig& config, st
         }
     });
 
-    while (!stopping) {
-        boost::asio::ip::tcp::socket socket(io);
-        boost::system::error_code ec;
-        acceptor.accept(socket, ec);
-        if (ec == boost::asio::error::would_block || ec == boost::asio::error::try_again) {
-            std::this_thread::sleep_for(std::chrono::milliseconds{25});
-            continue;
-        }
-        if (ec) {
-            stopping = true;
-            throw boost::system::system_error(ec);
-        }
-        ServeCybouConnection(*m_runtime, socket);
-    }
+    while (!stopping) std::this_thread::sleep_for(std::chrono::milliseconds{100});
     return 0;
 }
 
