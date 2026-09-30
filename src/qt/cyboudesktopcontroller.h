@@ -44,6 +44,8 @@ private:
     std::unique_ptr<CybouCoreApplicationAdapter> m_application;
     /** Derived Identity Authority preview; used only on the network refresh thread. */
     std::unique_ptr<cybou::AuthorityIndex> m_authority_index;
+    /** Where data of an older DEV network was moved at startup, if it was. */
+    QString m_archived_network;
     void stop();
     void publishAuthority();
 };

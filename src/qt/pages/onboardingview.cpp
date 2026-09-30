@@ -195,12 +195,7 @@ QWidget* OnboardingView::buildWelcome()
 
     connect(create, &QPushButton::clicked, this, [this] { startCreate(); });
     connect(restore, &QPushButton::clicked, this, [this] {
-        clearPhrase();
-        m_restore_password->clear();
-        m_restore_confirm->clear();
-        updateRestoreState();
-        showScreen(Screen::Restore);
-        m_word_fields.first()->setFocus();
+        beginRestore();
     });
     // Buttons follow the account-creation capability from the model.
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, create, [this, create, restore] {
@@ -499,6 +494,16 @@ QWidget* OnboardingView::buildUnlock()
     connect(m_unlock_password, &QLineEdit::returnPressed, this, [this] { submitUnlock(); });
     connect(restore, &QPushButton::clicked, this, [this] { showScreen(Screen::Restore); });
     return page;
+}
+
+void OnboardingView::beginRestore()
+{
+    clearPhrase();
+    m_restore_password->clear();
+    m_restore_confirm->clear();
+    updateRestoreState();
+    showScreen(Screen::Restore);
+    m_word_fields.first()->setFocus();
 }
 
 void OnboardingView::startCreate()

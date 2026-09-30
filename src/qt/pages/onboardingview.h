@@ -46,6 +46,10 @@ public:
 
     Screen screen() const;
     void showScreen(Screen screen);
+    /** Starts Identity creation exactly like the Welcome screen's button. */
+    void beginCreate() { startCreate(); }
+    /** Opens the recovery-phrase restore form exactly like the Welcome screen's button. */
+    void beginRestore();
 
 private:
     CybouDesktopModel* const m_model;

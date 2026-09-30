@@ -46,6 +46,7 @@ if(WIN32 AND CYBOU_WINDEPLOYQT_EXECUTABLE)
       --force
       --compiler-runtime
       --no-translations
+      --include-plugins qoffscreen
       "$<TARGET_FILE:test_cybou-native-qt>"
     COMMENT "Deploying the Qt runtime for the desktop tests"
     VERBATIM

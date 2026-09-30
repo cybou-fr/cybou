@@ -44,14 +44,38 @@ void CybouDesktopController::start()
     if (m_node_service) return;
     try {
         const auto network_path = m_data_directory / "network.bin";
-        // A fresh install uses the bundled public DEV network (genesis and
-        // PoA public key; no secrets). An existing network.bin is kept, so a
-        // DEV operator can still point the desktop at another network.
+        // The desktop runs on the bundled public DEV network (genesis and PoA
+        // public key; no secrets). Data left from an older DEV network (a reset
+        // or an old file format) cannot sync with today's finalizer, so it is
+        // moved aside, never deleted, and the current network is installed.
+        // CYBOU_DEV_KEEP_NETWORK=1 keeps a deliberately different network.bin.
+        QFile bundled{QStringLiteral(":/network/cybou-dev-network.bin")};
+        if (!bundled.open(QIODevice::ReadOnly)) throw std::runtime_error("the bundled CYBOU network is missing");
+        const QByteArray current = bundled.readAll();
+        const auto path_text = [](const std::filesystem::path& path) {
+            return QString::fromStdU16String(path.u16string());
+        };
+        if (std::filesystem::exists(network_path) && !qEnvironmentVariableIsSet("CYBOU_DEV_KEEP_NETWORK")) {
+            QFile existing{path_text(network_path)};
+            const QByteArray bytes = existing.open(QIODevice::ReadOnly) ? existing.readAll() : QByteArray{};
+            existing.close();
+            if (bytes != current) {
+                const auto archive = m_data_directory / "archived-networks" /
+                    QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmss")).toStdString();
+                std::filesystem::create_directories(archive);
+                // Everything bound to that network: chain state, the Identity
+                // registered on it, and its local projections.
+                for (const char* name : {"network.bin", "cybou_state", "identity.cybou", "identity.cybou.nameclaim",
+                         "mailbox.dat", "identities", "authority-index.bin", "identity-operation.cyiop"}) {
+                    const auto from = m_data_directory / name;
+                    if (std::filesystem::exists(from)) std::filesystem::rename(from, archive / name);
+                }
+                m_archived_network = path_text(archive);
+            }
+        }
         if (!std::filesystem::exists(network_path)) {
-            QFile bundled{QStringLiteral(":/network/cybou-dev-network.bin")};
-            QFile installed{QString::fromStdU16String(network_path.u16string())};
-            if (!bundled.open(QIODevice::ReadOnly) || !installed.open(QIODevice::WriteOnly) ||
-                installed.write(bundled.readAll()) != bundled.size()) {
+            QFile installed{path_text(network_path)};
+            if (!installed.open(QIODevice::WriteOnly) || installed.write(current) != current.size()) {
                 installed.remove();
                 throw std::runtime_error("cannot install the CYBOU network file");
             }
@@ -63,6 +87,11 @@ void CybouDesktopController::start()
         m_model->setNetworkInfo(
             QStringLiteral("CYBOU DEV"),
             QString::fromStdString(cybou::NetworkId(definition).GetHex()));
+        if (!m_archived_network.isEmpty()) {
+            qWarning() << "CYBOU: data of an older DEV network moved to" << m_archived_network;
+            m_model->notify(tr("This computer had data from an older CYBOU DEV network. It was moved to %1. "
+                               "Create or restore your Identity on the current network.").arg(m_archived_network));
+        }
         const std::filesystem::path data_dir = m_data_directory / "cybou_state";
         if (qEnvironmentVariableIsSet("CYBOU_DEV_VALIDATOR")) {
             throw std::runtime_error(
@@ -123,7 +152,7 @@ void CybouDesktopController::start()
             runtime, m_identity_service->GetKeyStore());
         m_model->setWalletService(m_wallet_service.get());
         // Read-only, rebuildable Authority preview over finalized history.
-        m_authority_index = std::make_unique<cybou::AuthorityIndex>(runtime);
+        m_authority_index = std::make_unique<cybou::AuthorityIndex>(runtime, m_data_directory / "authority-index.bin");
 
         const auto status = runtime.GetStatus();
         m_model->setFinalizedHeight(status.finalized_height);

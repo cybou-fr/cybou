@@ -1068,6 +1068,7 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
+    ScopedEnvironment keep_network{"CYBOU_DEV_KEEP_NETWORK", "1"};
     ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
     ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
     ScopedUnsetEnvironment validator_mode{"CYBOU_DEV_VALIDATOR"};
@@ -1090,6 +1091,31 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
     QCOMPARE(failures.count(), 1);
     QVERIFY(model.status().node_running);
 
+    // Data of an older DEV network is moved aside (never deleted), then the
+    // current bundled network starts.
+    {
+        QTemporaryDir stale;
+        QVERIFY(WriteNetworkFile(stale.filePath(QStringLiteral("network.bin")), 0x34));
+        {
+            QFile vault{stale.filePath(QStringLiteral("identity.cybou"))};
+            QVERIFY(vault.open(QIODevice::WriteOnly));
+            vault.write("old-network identity");
+        }
+        ScopedUnsetEnvironment dont_keep{"CYBOU_DEV_KEEP_NETWORK"};
+        CybouDesktopModel stale_model{QStringLiteral("CYBOU-DEV")};
+        CybouDesktopController stale_controller{&stale_model, stale.path().toStdString()};
+        QSignalSpy stale_failures{&stale_controller, &CybouDesktopController::startupFailed};
+        stale_controller.start();
+        QCOMPARE(stale_failures.count(), 0);
+        QVERIFY(stale_model.status().node_running);
+        const QDir archive{stale.filePath(QStringLiteral("archived-networks"))};
+        const auto moved = archive.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+        QCOMPARE(moved.size(), 1);
+        QVERIFY(QFile::exists(archive.filePath(moved.first() + QStringLiteral("/network.bin"))));
+        QVERIFY(QFile::exists(archive.filePath(moved.first() + QStringLiteral("/identity.cybou"))));
+        QVERIFY(!QFile::exists(stale.filePath(QStringLiteral("identity.cybou"))));
+    }
+
     // A fresh data directory starts on the bundled public DEV network.
     QTemporaryDir fresh;
     CybouDesktopModel fresh_model{QStringLiteral("CYBOU-DEV")};
@@ -1105,6 +1131,7 @@ void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
+    ScopedEnvironment keep_network{"CYBOU_DEV_KEEP_NETWORK", "1"};
     ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
     ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
     ScopedUnsetEnvironment validator_mode{"CYBOU_DEV_VALIDATOR"};

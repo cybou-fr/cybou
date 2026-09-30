@@ -14,6 +14,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <filesystem>
+#include <fstream>
 #include <memory>
 
 namespace {
@@ -143,6 +144,61 @@ BOOST_AUTO_TEST_CASE(age_and_capped_activity_come_from_finalized_history)
 
     // Unknown Identities have no Authority record.
     BOOST_CHECK(!index.Get(cybou::AccountId{uint256::ONE}));
+}
+
+BOOST_AUTO_TEST_CASE(checkpoint_resumes_scan_and_is_only_a_rebuildable_cache)
+{
+    ShortEpochNetwork net;
+    auto identity = net.CreateIdentity("checkpoint.vault");
+    const auto account = *identity->GetAccountId();
+    cybou::KVStore staging{cybou::KVStoreOptions{.memory_only = true}};
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), net.directory / "app"};
+    for (int i = 0; i < 3; ++i) Publish(net, *identity, staging, db, "cp-" + std::to_string(i));
+    const auto checkpoint = net.directory / "authority-index.bin";
+    const auto height = net.runtime->GetFinalizedHeight().value_or(0);
+
+    std::optional<cybou::AuthorityRecord> scanned;
+    {
+        cybou::AuthorityIndex index{*net.runtime, checkpoint};
+        BOOST_CHECK_EQUAL(index.ScannedHeight(), 0U);
+        BOOST_CHECK_EQUAL(index.Sync(), height);
+        scanned = index.Get(account);
+        BOOST_REQUIRE(scanned);
+    }
+    BOOST_REQUIRE(std::filesystem::exists(checkpoint));
+
+    // Restart: resumes at the saved height with identical tallies, no rescan.
+    {
+        cybou::AuthorityIndex resumed{*net.runtime, checkpoint};
+        BOOST_CHECK_EQUAL(resumed.ScannedHeight(), height);
+        const auto again = resumed.Get(account);
+        BOOST_REQUIRE(again);
+        BOOST_CHECK_EQUAL(again->activity, scanned->activity);
+        BOOST_CHECK_EQUAL(again->effective, scanned->effective);
+        // New finalized history continues from the checkpoint.
+        Publish(net, *identity, staging, db, "cp-after");
+        BOOST_CHECK_EQUAL(resumed.Sync(), height + 1);
+        cybou::AuthorityIndex full{*net.runtime};
+        full.Sync();
+        BOOST_CHECK_EQUAL(resumed.Get(account)->activity, full.Get(account)->activity);
+    }
+
+    // A different policy never reuses the tallies: rescan from 0.
+    {
+        cybou::AuthorityPolicy other;
+        other.activity_cap_per_epoch = 1;
+        cybou::AuthorityIndex different{*net.runtime, checkpoint, other};
+        BOOST_CHECK_EQUAL(different.ScannedHeight(), 0U);
+    }
+
+    // A corrupt or truncated file is ignored, never trusted.
+    {
+        std::ofstream corrupt{checkpoint, std::ios::binary | std::ios::trunc};
+        corrupt << "not an authority checkpoint";
+    }
+    cybou::AuthorityIndex recovered{*net.runtime, checkpoint};
+    BOOST_CHECK_EQUAL(recovered.ScannedHeight(), 0U);
+    BOOST_CHECK_EQUAL(recovered.Sync(), height + 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

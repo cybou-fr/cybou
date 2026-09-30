@@ -30,6 +30,8 @@ class IdentityPage : public QWidget
 public:
     explicit IdentityPage(CybouDesktopModel* model, std::function<void()> home_requested = {},
         QWidget* parent = nullptr);
+    /** Opens Identity creation (false) or restore (true) on Home. */
+    std::function<void(bool restore)> onSetupRequested;
     /** Expands the Identity Authority breakdown (screenshots and tests). */
     void showAuthorityDetails(bool open);
 
@@ -46,6 +48,8 @@ private:
     QLabel* m_pq_state{nullptr};
     QVBoxLayout* m_names_rows{nullptr};
     QPushButton* m_claim{nullptr};
+    QPushButton* m_setup_create{nullptr};
+    QPushButton* m_setup_restore{nullptr};
     QLabel* m_claim_status{nullptr};
     QPushButton* m_lock{nullptr};
     /* Identity Authority: a derived network-capability preview, not trust. */

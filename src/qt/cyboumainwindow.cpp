@@ -415,6 +415,11 @@ void CybouMainWindow::buildShell()
     auto* diagnostics = new DiagnosticsPage{m_desktop_model, [this] { showDebugWindow(); }, nullptr};
     auto* settings = new SettingsPage{m_desktop_model, [this] { showPage(CybouPage::Diagnostics); }, nullptr};
     settings->onAppearanceChanged = [this] { reloadAppearance(); };
+    identity->onSetupRequested = [this, home](bool restore) {
+        showPage(CybouPage::Home);
+        if (restore) home->onboarding()->beginRestore();
+        else home->onboarding()->beginCreate();
+    };
     home->onCompose = [this, mail] {
         showPage(CybouPage::Mail);
         mail->openCompose();

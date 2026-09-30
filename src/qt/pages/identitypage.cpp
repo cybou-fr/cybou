@@ -156,7 +156,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, std::function<void()> home_
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::namesChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::authorityChanged, this, [this] { refreshAuthority(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refreshAuthority(); });
+    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::nameClaimFailed, this, [this](const QString& reason) {
         QMessageBox::warning(this, tr("Name not claimed"),
             reason.isEmpty() ? tr("The name could not be claimed.") : reason);
@@ -188,10 +188,19 @@ QWidget* IdentityPage::buildSetupPrompt()
     card_layout->setContentsMargins(28, 24, 28, 24);
     card_layout->setSpacing(10);
     card_layout->addWidget(SectionTitle(tr("No Identity on this computer yet"), card));
-    card_layout->addWidget(MutedText(tr("Create a new Identity or restore one from your recovery phrase on Home."), card));
-    auto* go = Button(tr("Go to Home"), true, card);
-    connect(go, &QPushButton::clicked, this, [this] { if (m_home_requested) m_home_requested(); });
-    card_layout->addWidget(go, 0, Qt::AlignLeft);
+    card_layout->addWidget(MutedText(tr("Create a new Identity, or restore yours with its 24-word recovery phrase."), card));
+    auto* buttons = new QHBoxLayout;
+    buttons->setSpacing(10);
+    m_setup_create = Button(tr("Create Identity"), true, card);
+    m_setup_create->setProperty("cybouId", QStringLiteral("identitySetupCreate"));
+    m_setup_restore = Button(tr("Restore from recovery phrase"), false, card);
+    m_setup_restore->setProperty("cybouId", QStringLiteral("identitySetupRestore"));
+    connect(m_setup_create, &QPushButton::clicked, this, [this] { if (onSetupRequested) onSetupRequested(false); });
+    connect(m_setup_restore, &QPushButton::clicked, this, [this] { if (onSetupRequested) onSetupRequested(true); });
+    buttons->addWidget(m_setup_create);
+    buttons->addWidget(m_setup_restore);
+    buttons->addStretch();
+    card_layout->addLayout(buttons);
     layout->addWidget(card, 0, Qt::AlignHCenter);
     layout->addStretch();
     return page;
@@ -343,7 +352,13 @@ void IdentityPage::refresh()
     const bool active = status.identity_state == CybouIdentityState::Active ||
         status.identity_state == CybouIdentityState::Syncing;
     static_cast<QStackedLayout*>(layout())->setCurrentWidget(active ? m_content : m_setup);
-    if (!active) return;
+    if (!active) {
+        // Same availability as Home: the local node must be able to create Identities.
+        const bool can = m_model->capabilities().account_creation;
+        m_setup_create->setEnabled(can);
+        m_setup_restore->setEnabled(can);
+        return;
+    }
 
     m_name->setText(status.primary_name.isEmpty() ? tr("Your CYBOU Identity") : status.primary_name);
     m_name_caption->setText(status.primary_name.isEmpty() ? tr("No CYBOU name yet") : tr("Verified CYBOU name"));

@@ -10,6 +10,8 @@
 
 #include <cstdint>
 #include <map>
+#include <filesystem>
+#include <array>
 #include <mutex>
 #include <optional>
 
@@ -100,6 +102,13 @@ std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation);
 class AuthorityIndex final {
 public:
     explicit AuthorityIndex(CybouNodeRuntime& runtime, AuthorityPolicy policy = {});
+    /**
+     * With a checkpoint file the scan resumes where it stopped instead of
+     * starting at height 1. The file is a derived, rebuildable cache: it is
+     * trusted only for the same network and policy and while its block id
+     * still matches finalized history; otherwise the index rescans from 0.
+     */
+    AuthorityIndex(CybouNodeRuntime& runtime, std::filesystem::path checkpoint, AuthorityPolicy policy = {});
 
     /** Processes up to max_blocks newly finalized blocks; returns the scanned height. */
     std::uint64_t Sync(std::uint64_t max_blocks = 4096);
@@ -115,8 +124,13 @@ private:
         std::uint64_t epoch_count{0};
         std::uint64_t system_contribution{0};
     };
+    bool LoadCheckpoint();
+    bool SaveCheckpoint() const;
+    std::array<unsigned char, 32> PolicyFingerprint() const;
+
     CybouNodeRuntime& m_runtime;
     const AuthorityPolicy m_policy;
+    const std::filesystem::path m_checkpoint;
     mutable std::mutex m_mutex;
     std::uint64_t m_height{0};
     std::map<AccountId, Tally> m_tallies;
