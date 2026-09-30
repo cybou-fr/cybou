@@ -4,14 +4,24 @@
 
 #include <cybou/publication_service.h>
 #include <cybou/canonical_cbor.h>
+#include <cybou/chunk_retention.h>
 #include <cybou/node_runtime.h>
 #include <test/cybou_service_test_fixture.h>
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <memory>
 
 namespace {
+
+cybou::RetentionKey JobKey(const cybou::AccountId& account, std::string_view id)
+{
+    const auto& value = account.Value();
+    return {.holder = cybou::RetentionTag("CYBOU/RETENTION/IDENTITY/v1", std::span{value.begin(), value.size()}),
+        .reference = cybou::RetentionTag("CYBOU/RETENTION/PUBLICATION-JOB/v1",
+            std::span{reinterpret_cast<const unsigned char*>(id.data()), id.size()})};
+}
 
 cybou::PreparedPublicationBundle Prepare(cybou::CybouNodeRuntime& runtime,
     cybou::KVStore& proof_db, const std::string& index_id)
@@ -115,6 +125,77 @@ BOOST_AUTO_TEST_CASE(corrupt_private_job_is_not_overwritten)
     BOOST_CHECK(!publication.GetJob("corrupt-job"));
     const std::vector<unsigned char> original{1, 2, 3};
     BOOST_CHECK(application_db.Get("publication/job/corrupt-job") == original);
+}
+
+BOOST_AUTO_TEST_CASE(stage_releases_pin_when_private_leaf_index_write_fails)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("owner.cybou");
+    const auto account = identity->GetAccountId();
+    BOOST_REQUIRE(account);
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    auto& coordinator = fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore());
+    cybou::KVStore staging_db{cybou::KVStoreOptions{.memory_only = true}};
+    cybou::PublicationService publication{*fixture.runtime, identity->GetKeyStore(),
+        application_db, coordinator, staging_db};
+    cybou::MailMessage message;
+    message.message_id = *cybou::NewPrivateItemId();
+    message.recipient_account_id = *account;
+    message.client_timestamp_ms = 1;
+    cybou::MailAttachment attachment;
+    attachment.attachment_id = *cybou::NewPrivateItemId();
+    attachment.filename = "payload.bin";
+    message.attachments.push_back(attachment);
+    size_t offset{0};
+    const auto result = publication.PublishMail("write-failure", std::move(message), {{0,
+        cybou::NewContent{.source = [&](std::span<unsigned char> out) -> std::optional<std::size_t> {
+            if (offset == 0) { out[0] = 0x5a; ++offset; return 1; }
+            identity->GetKeyStore().Clear();
+            return 0;
+        }}}});
+    BOOST_CHECK_EQUAL(result.error, "Cannot save staged chunk order");
+    BOOST_CHECK(fixture.runtime->GetChunkRetention().Pinned(JobKey(*account, "write-failure")).empty());
+}
+
+BOOST_AUTO_TEST_CASE(cancel_queued_publication_releases_its_retention_pin)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("owner.cybou");
+    const auto account = identity->GetAccountId();
+    BOOST_REQUIRE(account);
+    cybou::KVStore staging_db{cybou::KVStoreOptions{.memory_only = true}};
+    const auto prepared = Prepare(*fixture.runtime, staging_db, "blocker");
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    auto& coordinator = fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore());
+    cybou::PublicationService publication{*fixture.runtime, identity->GetKeyStore(),
+        application_db, coordinator, staging_db};
+    BOOST_CHECK(publication.SubmitPrepared("blocker-job", prepared).phase ==
+        cybou::PublicationJobPhase::WAITING_FINALITY);
+
+    cybou::MailMessage message;
+    message.message_id = *cybou::NewPrivateItemId();
+    message.recipient_account_id = *account;
+    message.client_timestamp_ms = 1;
+    cybou::MailAttachment attachment;
+    attachment.attachment_id = *cybou::NewPrivateItemId();
+    attachment.filename = "queued.bin";
+    message.attachments.push_back(attachment);
+    size_t offset{0};
+    const auto queued = publication.PublishMail("abandoned-job", std::move(message), {{0,
+        cybou::NewContent{.source = [&](std::span<unsigned char> out) -> std::optional<std::size_t> {
+            if (offset++ == 0) { out[0] = 0x33; return 1; }
+            return 0;
+        }}}});
+    BOOST_CHECK(queued.phase == cybou::PublicationJobPhase::QUEUED);
+    BOOST_CHECK(!fixture.runtime->GetChunkRetention().Pinned(JobKey(*account, "abandoned-job")).empty());
+    BOOST_CHECK(!publication.CancelPublication("blocker-job"));
+    BOOST_REQUIRE(publication.CancelPublication("abandoned-job"));
+    BOOST_CHECK(fixture.runtime->GetChunkRetention().Pinned(JobKey(*account, "abandoned-job")).empty());
+    BOOST_CHECK(!application_db.Has("publication/job/abandoned-job"));
+    BOOST_CHECK(!application_db.Has("publication/intent/abandoned-job"));
+    BOOST_CHECK(!application_db.Has("publication/leaves/abandoned-job"));
+    const auto jobs = publication.Jobs();
+    BOOST_CHECK(std::find(jobs.begin(), jobs.end(), "abandoned-job") == jobs.end());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

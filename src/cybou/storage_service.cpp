@@ -137,7 +137,7 @@ std::optional<ChunkAuthorizationProof> RuntimeStorageTransport::GetProof(const S
     const uint256& publication_operation_id, const ChunkId& chunk_id)
 {
     return m_runtime.GetChunkAuthorizationProofFromStoragePeer(provider.address, provider.port,
-        publication_operation_id, chunk_id);
+        provider.provider_id, publication_operation_id, chunk_id);
 }
 
 /* ---- StorageService ---- */

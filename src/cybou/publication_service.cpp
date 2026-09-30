@@ -69,6 +69,11 @@ std::string JobKey(const std::string_view id)
     return "publication/job/" + std::string{id};
 }
 
+std::string CancelKey(const std::string_view id)
+{
+    return "publication/cancel/" + std::string{id};
+}
+
 void Append64(std::vector<unsigned char>& out, const std::uint64_t value)
 {
     for (unsigned i{0}; i < 8; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
@@ -202,6 +207,7 @@ PublicationJobResult PublicationService::SubmitPreparedLocked(const std::string_
     const std::optional<std::pair<XWingPublicKey, std::uint64_t>> future_self)
 {
     if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked()) return Failure("Application DB is locked or job ID invalid");
+    if (IsCancellationPending(local_job_id)) return Failure("Publication cancellation is pending cleanup");
     if (auto existing = Load(local_job_id)) return ResumeLocked(local_job_id, *existing);
     if (m_application_db.Has(JobKey(local_job_id))) return Failure("Existing publication job is corrupt");
     const auto account = m_identity.GetAccountId();
@@ -283,6 +289,7 @@ PublicationJobResult PublicationService::BuildAndSubmit(const std::string_view l
 
 PublicationJobResult PublicationService::ResumeLocked(const std::string_view local_job_id, Job& job)
 {
+    if (IsCancellationPending(local_job_id)) return Failure("Publication cancellation is pending cleanup");
     if (job.phase == PublicationJobPhase::QUEUED) {
         // Never signed: rebuild capsules against the current nonce.
         const auto intent = LoadIntent(local_job_id);
@@ -413,6 +420,56 @@ PublicationJobResult PublicationService::Resume(const std::string_view local_job
     return ResumeLocked(local_job_id, *job);
 }
 
+bool PublicationService::IsCancellationPending(const std::string_view local_job_id) const
+{
+    return ValidJobId(local_job_id) && m_application_db.Has(CancelKey(local_job_id));
+}
+
+bool PublicationService::FinishCancellation(const std::string_view local_job_id)
+{
+    if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked() ||
+        !IsCancellationPending(local_job_id)) return false;
+    if (!m_runtime.GetChunkRetention().Release(JobRetention(m_application_db.Account(), local_job_id), NowMs())) {
+        return false;
+    }
+    auto index = m_application_db.Get(JOB_INDEX_KEY).value_or(std::vector<unsigned char>{});
+    std::vector<unsigned char> kept;
+    const std::string_view listed{reinterpret_cast<const char*>(index.data()), index.size()};
+    for (std::size_t start{0}; start < listed.size();) {
+        const auto end = std::min(listed.find('\n', start), listed.size());
+        if (end > start && listed.substr(start, end - start) != local_job_id) {
+            kept.insert(kept.end(), listed.begin() + start, listed.begin() + end);
+            kept.push_back('\n');
+        }
+        start = end + 1;
+    }
+    PrivateApplicationStore::Batch batch{m_application_db};
+    const bool staged = m_application_db.Erase(JobKey(local_job_id)) &&
+        m_application_db.Erase(IntentKey(local_job_id)) &&
+        m_application_db.Erase(LeavesKey(local_job_id)) &&
+        m_application_db.Put(JOB_INDEX_KEY, kept) &&
+        m_application_db.Erase(CancelKey(local_job_id));
+    return staged && batch.Commit();
+}
+
+bool PublicationService::CancelPublication(const std::string_view local_job_id)
+{
+    std::lock_guard lock{m_mutex};
+    if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked()) return false;
+    if (IsCancellationPending(local_job_id)) return FinishCancellation(local_job_id);
+    auto job = Load(local_job_id);
+    if (!job) return false;
+    bool safe_to_cancel = job->phase == PublicationJobPhase::QUEUED && job->operation_id.IsNull();
+    if (!safe_to_cancel && job->phase == PublicationJobPhase::NEEDS_ATTENTION &&
+        !job->operation_id.IsNull()) {
+        safe_to_cancel = m_coordinator.GetStatus(job->operation_id).phase == IdentityOperationPhase::REJECTED;
+    }
+    if (!safe_to_cancel) return false;
+    const std::array<unsigned char, 1> marker{1};
+    if (!m_application_db.Put(CancelKey(local_job_id), marker)) return false;
+    return FinishCancellation(local_job_id);
+}
+
 std::optional<PublicationJobResult> PublicationService::GetJob(const std::string_view local_job_id)
 {
     std::lock_guard lock{m_mutex};
@@ -461,6 +518,8 @@ std::optional<PublicationService::Staged> PublicationService::Stage(const std::s
     const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32};
     // Job IDs already satisfy the proof-index namespace rules.
     const std::string index_id{local_job_id};
+    bool pinned{false};
+    const auto retention = JobRetention(m_application_db.Account(), local_job_id);
     try {
         // An interrupted earlier attempt leaves a fail-closed index; start clean.
         {
@@ -510,13 +569,15 @@ std::optional<PublicationService::Staged> PublicationService::Stage(const std::s
             encoded.insert(encoded.end(), leaf->begin(), leaf->end());
         }
         // Until remote durability the local copy is the only one: pin it.
-        if (!m_runtime.GetChunkRetention().Pin(JobRetention(m_application_db.Account(), local_job_id), staged.leaves)) {
+        if (!m_runtime.GetChunkRetention().Pin(retention, staged.leaves)) {
             stager.Discard();
             error = "Cannot pin staged content";
             return std::nullopt;
         }
+        pinned = true;
         // StorageService needs the exact ordered chunk set after finality.
         if (!m_application_db.Put(LeavesKey(local_job_id), encoded)) {
+            (void)m_runtime.GetChunkRetention().Release(retention, NowMs());
             stager.Discard();
             error = "Cannot save staged chunk order";
             return std::nullopt;
@@ -524,6 +585,7 @@ std::optional<PublicationService::Staged> PublicationService::Stage(const std::s
         stager.Discard();
         return staged;
     } catch (const std::exception&) {
+        if (pinned) (void)m_runtime.GetChunkRetention().Release(retention, NowMs());
         error = "Local staging failed";
         return std::nullopt;
     }
@@ -543,6 +605,7 @@ PublicationJobResult PublicationService::PublishMail(const std::string_view loca
 {
     std::lock_guard lock{m_mutex};
     if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked()) return Failure("Application DB is locked or job ID invalid");
+    if (IsCancellationPending(local_job_id)) return Failure("Publication cancellation is pending cleanup");
     if (auto existing = Load(local_job_id)) return ResumeLocked(local_job_id, *existing);
     const auto me = m_identity.GetAccountId();
     if (!me) return Failure("Identity is locked");
@@ -586,6 +649,7 @@ PublicationJobResult PublicationService::PublishFiles(const std::string_view loc
 {
     std::lock_guard lock{m_mutex};
     if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked()) return Failure("Application DB is locked or job ID invalid");
+    if (IsCancellationPending(local_job_id)) return Failure("Publication cancellation is pending cleanup");
     if (auto existing = Load(local_job_id)) return ResumeLocked(local_job_id, *existing);
     if (batch.mutations.empty()) return Failure("Empty Files change");
     // Items without an explicit modification time get the publishing time.
@@ -630,6 +694,7 @@ PublicationJobResult PublicationService::PublishRecoveryBridge(const std::string
 {
     std::lock_guard lock{m_mutex};
     if (!ValidJobId(local_job_id) || !m_application_db.IsUnlocked()) return Failure("Application DB is locked or job ID invalid");
+    if (IsCancellationPending(local_job_id)) return Failure("Publication cancellation is pending cleanup");
     if (auto existing = Load(local_job_id)) return ResumeLocked(local_job_id, *existing);
     const auto me = m_identity.GetAccountId();
     const auto loaded = m_runtime.GetStore().LoadState();

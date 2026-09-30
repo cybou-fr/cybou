@@ -14,6 +14,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -130,6 +131,79 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_network_peer)
     BOOST_CHECK(manager.LastConnectStatus() == cybou::p2p::PeerConnectStatus::WRONG_NETWORK);
     server.join();
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
+{
+    CybouServiceTestFixture fixture;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    boost::asio::io_context io;
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    auto make_provider = [&](const std::string& name) {
+        cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
+            .data_dir = fixture.directory / name, .memory_only = true, .wipe_data = true,
+            .storage_enabled = true, .storage_capacity_bytes = 64ULL << 20};
+        auto runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
+        if (!runtime->InitializeGenesis(fixture.genesis)) throw std::runtime_error{"provider genesis failed"};
+        return runtime;
+    };
+    auto first = make_provider("proof-provider-1");
+    auto second = make_provider("proof-provider-2");
+    const auto first_id = first->LocalProviderId();
+    const auto second_id = second->LocalProviderId();
+    BOOST_REQUIRE(first_id && second_id);
+    BOOST_REQUIRE(*first_id != *second_id);
+    const auto network = fixture.runtime->GetNetworkId();
+    const auto address = loopback.to_string();
+    const auto port = acceptor.local_endpoint().port();
+    std::atomic_bool first_handshake{false};
+    std::jthread first_server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        first_handshake = session.Handshake({.network_id = network,
+            .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
+            .capabilities = cybou::p2p::CAP_STORAGE | cybou::p2p::CAP_STORAGE_PROOFS,
+            .nonce = 0x3101}, [provider = first.get()](auto message) {
+                return provider->SignProviderProof(message);
+            });
+    }};
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    BOOST_REQUIRE(manager.Connect(address, port));
+    first_server.join();
+    BOOST_REQUIRE(first_handshake.load());
+    const auto discovered = manager.StoragePeers();
+    BOOST_REQUIRE_EQUAL(discovered.size(), 1U);
+    BOOST_CHECK(discovered.front().provider_id == first_id);
+    manager.DisconnectAll();
+
+    std::atomic_bool second_handshake{false};
+    std::atomic_bool request_served{false};
+    std::jthread second_server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        second_handshake = session.Handshake({.network_id = network,
+            .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
+            .capabilities = cybou::p2p::CAP_STORAGE | cybou::p2p::CAP_STORAGE_PROOFS,
+            .nonce = 0x3102}, [provider = second.get()](auto message) {
+                return provider->SignProviderProof(message);
+            });
+        if (second_handshake) request_served = session.ServeNext(*second);
+    }};
+    BOOST_REQUIRE(manager.Connect(address, port));
+    const auto current = manager.StoragePeers();
+    BOOST_REQUIRE_EQUAL(current.size(), 1U);
+    BOOST_CHECK(current.front().provider_id == second_id);
+    cybou::ChunkId chunk{};
+    chunk[0] = 1;
+    const auto operation = uint256::ONE;
+    BOOST_CHECK(!manager.GetChunkAuthorizationProof(address, port, *first_id, operation, chunk));
+    manager.DisconnectAll();
+    second_server.join();
+    BOOST_CHECK(second_handshake.load());
+    BOOST_CHECK(!request_served.load());
 }
 
 BOOST_AUTO_TEST_CASE(explicit_validator_peer_evicts_discovered_peer_at_capacity)

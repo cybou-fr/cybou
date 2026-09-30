@@ -204,8 +204,8 @@ public:
     /** Encoded PROVIDER_PROOF for a handshake message; nullopt unless storage is enabled. */
     std::optional<std::vector<unsigned char>> SignProviderProof(std::span<const unsigned char> message) const;
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStoragePeer(
-        const std::string& address, uint16_t port, const uint256& publication_operation_id,
-        const ChunkId& chunk_id);
+        const std::string& address, uint16_t port, const std::array<unsigned char, 32>& provider_id,
+        const uint256& publication_operation_id, const ChunkId& chunk_id);
 
     /** True for the PoA finalizer or a node with a configured CYP2 finalizer peer. */
     bool CanSubmitOperations() const;

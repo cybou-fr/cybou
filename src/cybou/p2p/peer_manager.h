@@ -90,8 +90,8 @@ public:
     std::optional<std::vector<unsigned char>> GetChunkById(
         const std::string& address, uint16_t port, const ProviderId& provider_id, const ChunkId& chunk_id);
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
-        const std::string& address, uint16_t port, const uint256& publication_operation_id,
-        const ChunkId& chunk_id);
+        const std::string& address, uint16_t port, const ProviderId& provider_id,
+        const uint256& publication_operation_id, const ChunkId& chunk_id);
     void DisconnectAll();
 
     /** Dynamic peer auto-discovery */

@@ -90,7 +90,7 @@ canonical attributable evidence.
 
 Future provisional validation, if implemented, must be signed and attributable
 and is only a claim about a named operation and finalized base. See
-[`PROVISIONAL_VALIDATION.md`](PROVISIONAL_VALIDATION.md). A signature does not
+[`VALIDATION.md`](VALIDATION.md). A signature does not
 make a claim true; PoA independently validates all finalized operations.
 Conflicting or stale operations and transport failures are not proof of fraud.
 An attestation alone does not create an Authority reward or penalty; any later

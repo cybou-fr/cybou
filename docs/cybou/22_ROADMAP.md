@@ -60,8 +60,8 @@ Beta requires:
 
 ## Future research
 
-- signed provisional validation as a strictly non-final sidecar, scoped by
-  [`PROVISIONAL_VALIDATION.md`](PROVISIONAL_VALIDATION.md);
+- signed validation as local-policy pre-finalized evidence, scoped by
+  [`VALIDATION.md`](VALIDATION.md);
 - validation contribution to Authority only if later justified;
 - erasure coding only after measured replication cost warrants it;
 - more scalable provider discovery if simple peer fan-out stops being adequate.

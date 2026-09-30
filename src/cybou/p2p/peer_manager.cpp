@@ -424,10 +424,10 @@ std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
 }
 
 std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
-    const std::string& address, const uint16_t port, const uint256& publication_operation_id,
-    const ChunkId& chunk_id)
+    const std::string& address, const uint16_t port, const ProviderId& provider_id,
+    const uint256& publication_operation_id, const ChunkId& chunk_id)
 {
-    auto* session = FindStorageSession(address, port, std::nullopt);
+    auto* session = FindStorageSession(address, port, provider_id);
     if (!session) return std::nullopt;
     return session->GetChunkAuthorizationProof(publication_operation_id, chunk_id);
 }

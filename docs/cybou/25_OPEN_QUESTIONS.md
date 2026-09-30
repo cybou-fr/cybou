@@ -68,10 +68,10 @@ remain zero.
 
 ## Future research
 
-- [`PROVISIONAL_VALIDATION.md`](PROVISIONAL_VALIDATION.md) defines the current
-  research scope; unresolved items include NodeID binding/eligibility, the
-  attestation profile and transport limits, evidence thresholds for display,
-  local overlay conflict/rebase behavior, and any canonical basis for future
+- [`VALIDATION.md`](VALIDATION.md) defines the research scope; unresolved
+  items include NodeID binding/eligibility, durable per-validator nonce
+  conflict exclusion, the attestation profile and transport limits, local
+  trust policy, optional overlay behavior, and any canonical basis for future
   Authority effects;
 - whether signed provisional validation delivers enough value to justify the
   added pre-finality complexity;

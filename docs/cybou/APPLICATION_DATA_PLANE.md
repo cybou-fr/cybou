@@ -135,6 +135,10 @@ admission records.
 
 - Staged publication chunks are pinned before the job records its leaves:
   until remote durability the local copy is the only copy.
+- If the private leaf-order write fails after pinning, staging releases the
+  pin before returning the error. A caller may cancel an abandoned queued job
+  that has never been signed; an operation with pending or uncertain finality
+  cannot be cancelled. Explicitly rejected work may be forgotten safely.
 - When the job becomes PROTECTED the pin is released and the chunks become
   cache entries.
 - Blobs fetched from providers, or read locally, are cache entries.

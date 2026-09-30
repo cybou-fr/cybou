@@ -105,11 +105,11 @@ immutable network parameters and bounded integer arithmetic.
 
 ## Future provisional validation
 
-The signed provisional validation research target is described in
-[`PROVISIONAL_VALIDATION.md`](PROVISIONAL_VALIDATION.md). It is a future,
-non-canonical sidecar for claims about operations against a finalized base;
-it does not add a consensus phase or gate PoA finality. Any validator
-eligibility derived from NodeID and Authority still depends on future binding
-and immutable network parameters.
+The future validation research target is described in
+[`VALIDATION.md`](VALIDATION.md). `VALIDATED` would be a local-policy
+pre-finalized assessment with per-validator same-nonce conflict exclusion;
+only PoA yields `FINALIZED`. No validation implementation or consensus phase
+is active. NodeID eligibility still depends on future binding and immutable
+network parameters.
 
 Only PoA finality advances canonical state and authorizes remote storage.

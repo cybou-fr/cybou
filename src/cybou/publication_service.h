@@ -69,6 +69,9 @@ public:
         const PreparedPublicationBundle& bundle,
         std::optional<AccountId> recipient = std::nullopt);
     PublicationJobResult Resume(std::string_view local_job_id);
+    /** Cancels a never-submitted queued job, or a job whose operation is
+     * explicitly known rejected. Pending/uncertain/finalized work is retained. */
+    bool CancelPublication(std::string_view local_job_id);
     std::optional<PublicationJobResult> GetJob(std::string_view local_job_id);
     /** Records StorageService's report that remote durability is met. Only a
      * finalized (SECURING) job can become PROTECTED. */
@@ -130,6 +133,8 @@ private:
     using BuildMetadata = std::function<std::optional<std::vector<unsigned char>>(
         std::span<const EncryptedTreeSummary> children)>;
     std::optional<Job> Load(std::string_view local_job_id) const;
+    bool IsCancellationPending(std::string_view local_job_id) const;
+    bool FinishCancellation(std::string_view local_job_id);
     bool Save(std::string_view local_job_id, const Job& job);
     PublicationJobResult ResumeLocked(std::string_view local_job_id, Job& job);
     PublicationJobResult SubmitPreparedLocked(std::string_view local_job_id,

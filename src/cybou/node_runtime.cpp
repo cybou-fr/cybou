@@ -239,12 +239,13 @@ std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetChunkFromStorageP
 }
 
 std::optional<ChunkAuthorizationProof> CybouNodeRuntime::GetChunkAuthorizationProofFromStoragePeer(
-    const std::string& address, const uint16_t port, const uint256& publication_operation_id,
-    const ChunkId& chunk_id)
+    const std::string& address, const uint16_t port, const std::array<unsigned char, 32>& provider_id,
+    const uint256& publication_operation_id, const ChunkId& chunk_id)
 {
     std::lock_guard p2p_lock(m_p2p_mutex);
     if (!m_peer_manager) return std::nullopt;
-    return m_peer_manager->GetChunkAuthorizationProof(address, port, publication_operation_id, chunk_id);
+    return m_peer_manager->GetChunkAuthorizationProof(address, port, provider_id,
+        publication_operation_id, chunk_id);
 }
 
 bool CybouNodeRuntime::InitializeGenesis(const CybouState& genesis, const bool sync)
