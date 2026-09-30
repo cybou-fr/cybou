@@ -824,9 +824,10 @@ void OnboardingView::submitUnlock()
     m_unlock_password->setEnabled(false);
     m_unlock_hint->setText(tr("Unlocking…"));
     // The vault KDF runs off the GUI thread.
-    m_model->requestUnlockIdentityAsync(password, [this](bool ok) {
+    m_model->requestUnlockIdentityAsync(password, [this, password](bool ok) mutable {
         m_unlock_password->setEnabled(true);
         if (!ok) {
+            password.fill(QChar{0});
             m_unlock_hint->setText(tr("The password is incorrect."));
             m_unlock_password->setFocus();
             return;
@@ -834,9 +835,13 @@ void OnboardingView::submitUnlock()
         m_unlock_hint->clear();
         // A vault whose Identity was not confirmed yet resumes creation.
         if (m_model->status().identity_state != CybouIdentityState::Active) {
+            // Like a first creation, a resumed one continues into choosing a name.
+            m_name_password = password;
+            m_offer_name = true;
             showScreen(Screen::Creating);
             m_model->requestCreateIdentity({});
         }
+        password.fill(QChar{0});
     });
     password.fill(QChar{0});
 }
