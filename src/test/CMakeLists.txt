@@ -245,6 +245,14 @@ target_link_libraries(cybou-storage-soak
   Boost::headers
 )
 
+# Opt-in consensus hot-path benchmark; kept outside the default test suite.
+add_executable(cybou-consensus-benchmark cybou_consensus_benchmark.cpp)
+target_link_libraries(cybou-consensus-benchmark
+  cybou_node
+  core_interface
+  Boost::headers
+)
+
 if(ENABLE_IPC)
   add_subdirectory(${PROJECT_SOURCE_DIR}/src/ipc/test ipc)
 endif()
