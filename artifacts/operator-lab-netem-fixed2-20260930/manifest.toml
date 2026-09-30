@@ -1,0 +1,82 @@
+[lab]
+name = "isolated-netem"
+duration_seconds = 1800
+run_dir = "C:/Users/cybou/Desktop/cybou/artifacts/operator-lab-netem-fixed2-20260930"
+
+[hosts.wsl]
+type = "wsl"
+distro = "Ubuntu-26.04"
+user = "root"
+namespace = "cybou-lab-netem-fixed2-20260930"
+root = "/tmp/cybou-lab-netem-fixed2-20260930"
+worker = "/mnt/c/Users/cybou/Desktop/cybou/tools/cybou_stress.py"
+binary = "/home/cybou/cybou-lab-operator-bin/cybou-node"
+loadgen_binary = "/home/cybou/cybou-lab-operator-bin/cybou-loadgen"
+python = "python3"
+
+[[nodes]]
+name = "finalizer"
+host = "wsl"
+role = "finalizer"
+listen = "127.0.0.1:33461"
+block_interval = "500ms"
+
+[[nodes]]
+name = "provider-a"
+host = "wsl"
+role = "provider"
+listen = "127.0.0.1:33471"
+peer = "127.0.0.1:33461"
+capacity = "128MiB"
+
+[[nodes]]
+name = "provider-b"
+host = "wsl"
+role = "provider"
+listen = "127.0.0.1:33481"
+peer = "127.0.0.1:33461"
+capacity = "128MiB"
+
+[[nodes]]
+name = "provider-c"
+host = "wsl"
+role = "provider"
+listen = "127.0.0.1:33482"
+peer = "127.0.0.1:33461"
+capacity = "128MiB"
+
+[[nodes]]
+name = "observer"
+host = "wsl"
+role = "observer"
+peer = "127.0.0.1:33461"
+
+[loadgen]
+host = "wsl"
+peer = "127.0.0.1:33461"
+profile = "files"
+identities = 2
+file_size = "64KiB"
+operations_per_second = 1
+max_operations = 16
+replicas = 2
+
+[[chaos]]
+at_seconds = 30
+scenario = "latency"
+node = "provider-a"
+delay_ms = 100
+duration_seconds = 10
+
+[[chaos]]
+at_seconds = 60
+scenario = "packet-loss"
+node = "provider-b"
+loss_percent = 10
+duration_seconds = 10
+
+[[chaos]]
+at_seconds = 90
+scenario = "partition"
+node = "provider-c"
+duration_seconds = 10

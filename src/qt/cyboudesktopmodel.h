@@ -8,6 +8,7 @@
 #include <qt/cybouproduct.h>
 
 #include <cybou/recovery_phrase.h>
+#include <cybou/diagnostics.h>
 
 #include <QDateTime>
 #include <QHash>
@@ -116,6 +117,8 @@ public:
     void setNetworkInfo(const QString& network_name, const QString& network_id);
     void setFinalizedHeight(quint64 finalized_height);
     void setPeerCount(int peer_count);
+    const cybou::NodeDiagnosticsSnapshot& networkDiagnostics() const { return m_network_diagnostics; }
+    void setNetworkDiagnostics(cybou::NodeDiagnosticsSnapshot snapshot);
     void setSyncing(bool syncing);
     void setSyncError(const QString& error);
     void setLastSync(const QDateTime& when);
@@ -370,6 +373,7 @@ private:
     CybouRestoreProgress m_restore_progress;
     CybouAuthoritySummary m_authority;
     QHash<QString, CybouOperationStatus> m_operations;
+    cybou::NodeDiagnosticsSnapshot m_network_diagnostics;
     bool m_validation_shown{true};
 
     void refreshFinalizedName();

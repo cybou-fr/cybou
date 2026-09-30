@@ -5,6 +5,8 @@
 #define CYBOU_NODE_RUNTIME_H
 
 #include <cybou/finalizer_node.h>
+#include <cybou/diagnostics.h>
+#include <cybou/event_record.h>
 #include <cybou/protocol_limits.h>
 #include <cybou/sync_result.h>
 #include <cybou/network_definition.h>
@@ -43,6 +45,7 @@ struct NodeRuntimeConfig {
     bool wipe_data{false};
     bool storage_enabled{false};
     uint64_t storage_capacity_bytes{0};
+    std::shared_ptr<EventWriter> event_writer;
 };
 
 enum class NodeRuntimeState : uint8_t {
@@ -127,6 +130,9 @@ public:
 
     /** Current runtime status */
     NodeRuntimeStatus GetStatus() const;
+    NodeDiagnosticsSnapshot GetDiagnostics() const;
+    void SetServicePeerDiagnostics(std::vector<PeerDiagnostics> peers);
+    std::shared_ptr<EventWriter> EventLog() const { return m_config.event_writer; }
     PoaEvidenceReadResult ReadPoaSafetyEvidence() const;
 
     /** Network definition and identifier */
@@ -237,6 +243,7 @@ private:
     void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
     void RememberOperationStatus(const uint256& id, OperationStatus status);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
+    void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
     NodeRuntimeConfig m_config;
     uint256 m_network_id;
     std::unique_ptr<KVStore> m_db;
@@ -258,6 +265,7 @@ private:
     std::chrono::steady_clock::time_point m_next_peer_discovery{};
     mutable std::mutex m_mutex;
     std::deque<FinalizedHead> m_recent_finalized_blocks;
+    std::vector<PeerDiagnostics> m_service_peers;
     using Endpoint = std::pair<std::string, uint16_t>;
     std::set<Endpoint> m_explicit_peer_endpoints;
     std::set<Endpoint> m_discovered_peer_endpoints;

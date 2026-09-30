@@ -67,7 +67,7 @@ Current `main` implements the canonical low-level substrate:
 
 ## Current phase: soak, hardening and Beta preparation
 
-- multi-process durability soak with real `cybou-node provide` daemons:
+- multi-process durability soak with real `cybou-node provider run` daemons:
   provider loss after ACK, restarts, audit, repair, lost placement and
   Application DB, long-running operation;
 - reproducible build + core + Qt tests after every vertical batch (CI);
@@ -80,7 +80,7 @@ Current `main` implements the canonical low-level substrate:
 ### Multi-process failure soak (CI, 2026-09-30)
 
 `test/cybou_storage_soak.py` runs a real PoA finalizer, three real
-`cybou-node provide` processes and a light client under the Beta target
+`cybou-node provider run` processes and a light client under the Beta target
 (2 remote replicas), all over CYP2. Every run passes this sequence:
 
 1. A replica holder is killed; audit detects the loss and repairs elsewhere.
@@ -103,8 +103,8 @@ the exact bytes retained. The soak takes about 45 seconds.
 
 ### Bounded DEV canary evidence (2026-09-29 to 2026-09-30)
 
-- A finalized private Files RootPublication reached the development target of
-  two remote replicas. Removing its provider-1 root blob while the provider
+- A finalized private Files RootPublication reached two remote replicas in this canary test
+  (the current development target is one; Beta requires two). Removing its provider-1 root blob while the provider
   stayed online caused `StorageService::Audit` to detect and repair the missing
   copy from provider-2; verified retrieval still matched the original content
   after the local root was evicted.

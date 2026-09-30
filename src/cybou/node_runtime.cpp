@@ -20,6 +20,15 @@ namespace cybou {
 
 namespace {
 
+std::string ChunkIdHex(const ChunkId& id)
+{
+    static constexpr char digits[]="0123456789abcdef";
+    std::string out;
+    out.reserve(id.size()*2);
+    for (auto byte : id) { out+=digits[byte>>4]; out+=digits[byte&15]; }
+    return out;
+}
+
 // Discovered routing hints are untrusted. Reject address scopes this node has
 // no business dialing: unspecified, multicast, and (unless the local CYP2
 // listener lives in the same scope) loopback and link-local targets. Without a
@@ -187,13 +196,20 @@ ChunkAdmissionResult CybouNodeRuntime::PutFinalizedChunk(
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
     if (!m_finalized_chunk_store) return {ChunkAdmissionStatus::STORAGE_ERROR};
-    return m_finalized_chunk_store->PutChunk(publication_operation_id, chunk_id, stored_bytes, proof,
+    const auto result = m_finalized_chunk_store->PutChunk(publication_operation_id, chunk_id, stored_bytes, proof,
         [this](const uint256& operation_id) { return FindFinalizedRootPublication(operation_id); });
+    if (m_config.event_writer) m_config.event_writer->Write(result ? NodeEvent::chunk_put : NodeEvent::chunk_verify_failed,
+        {{"operation_id",publication_operation_id.GetHex()},{"chunk_id",ChunkIdHex(chunk_id)},{"bytes",std::uint64_t{stored_bytes.size()}},
+         {"error_code",std::uint64_t{static_cast<unsigned>(result.status)}}});
+    return result;
 }
 
 std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetFinalizedChunk(const ChunkId& chunk_id) const
 {
-    return m_finalized_chunk_store ? m_finalized_chunk_store->GetChunk(chunk_id) : std::nullopt;
+    auto bytes = m_finalized_chunk_store ? m_finalized_chunk_store->GetChunk(chunk_id) : std::nullopt;
+    if (m_config.event_writer) m_config.event_writer->Write(bytes ? NodeEvent::chunk_get : NodeEvent::chunk_verify_failed,
+        {{"chunk_id",ChunkIdHex(chunk_id)},{"bytes",std::uint64_t{bytes ? bytes->size() : 0}}});
+    return bytes;
 }
 
 std::optional<ChunkAuthorizationProof> CybouNodeRuntime::GetFinalizedChunkAuthorizationProof(
@@ -375,7 +391,17 @@ void CybouNodeRuntime::RememberOperationStatus(const uint256& id, OperationStatu
 {
     if (id.IsNull()) return;
     if (!m_recent_operation_status.contains(id)) m_recent_operation_status_order.push_back(id);
+    const auto previous = m_recent_operation_status.find(id);
+    const bool changed = previous == m_recent_operation_status.end() || previous->second.kind != status.kind ||
+        previous->second.finalized_height != status.finalized_height;
     m_recent_operation_status[id] = status;
+    if (m_config.event_writer && changed) {
+        auto event = status.kind == OperationStatusKind::FINALIZED ? NodeEvent::operation_finalized
+            : status.kind == OperationStatusKind::REJECTED_KNOWN ? NodeEvent::operation_rejected
+            : status.kind == OperationStatusKind::UNKNOWN ? NodeEvent::operation_uncertain
+            : NodeEvent::operation_accepted;
+        m_config.event_writer->Write(event, {{"operation_id",id.GetHex()},{"height",status.finalized_height}});
+    }
     while (m_recent_operation_status_order.size() > 256) {
         m_recent_operation_status.erase(m_recent_operation_status_order.front());
         m_recent_operation_status_order.pop_front();
@@ -457,13 +483,39 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
             } else if (result.status == OperationSubmitStatus::ALREADY_FINALIZED) {
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::FINALIZED,
                     .finalized_height = m_store.GetFinalizedOperationHeight(op_id).value_or(0)});
-            } else if (!result.delivery_uncertain) {
+            } else if (result.delivery_uncertain) {
+                RememberOperationStatus(op_id, {.kind = OperationStatusKind::UNKNOWN});
+            } else {
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::REJECTED_KNOWN});
             }
         }
         return result;
     }
     return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
+}
+
+void CybouNodeRuntime::EmitFinalizedEvents(const FinalizedBlock& block, bool produced)
+{
+    EventFields fields{{"height",block.block.height},{"block_id",ComputeBlockId(block.block).GetHex()},
+        {"state_root",block.block.resulting_state_root.GetHex()}};
+    if (m_config.event_writer) {
+        m_config.event_writer->Write(produced ? NodeEvent::block_produced : NodeEvent::block_verified, fields);
+        m_config.event_writer->Write(NodeEvent::block_finalized, fields);
+    }
+    for (const auto& op : block.block.operations) if (const auto id = ComputeOperationId(op)) {
+        RememberOperationStatus(*id, {.kind = OperationStatusKind::FINALIZED, .finalized_height = block.block.height});
+          if (m_config.event_writer) std::visit([&](const auto& value) {
+              EventFields operation{{"operation_id",id->GetHex()},{"height",block.block.height}};
+              if constexpr (requires { value.authorization.account_id; value.authorization.nonce; }) {
+                  operation.emplace("account_id",value.authorization.account_id.Value().GetHex());
+                  operation.emplace("nonce",value.authorization.nonce);
+              } else if constexpr (requires { value.account_id; value.nonce; }) {
+                  operation.emplace("account_id",value.account_id.Value().GetHex());
+                  operation.emplace("nonce",value.nonce);
+              }
+              m_config.event_writer->Write(NodeEvent::operation_finalized,operation);
+          },op);
+    }
 }
 
 std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
@@ -475,7 +527,7 @@ std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
     if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
     const auto result = m_finalizer_node->ProduceNextBlock(sync);
     if (!result) return std::nullopt;
-    if (result.finalized_block) RememberFinalizedBlockForGossip(*result.finalized_block);
+    if (result.finalized_block) { RememberFinalizedBlockForGossip(*result.finalized_block); EmitFinalizedEvents(*result.finalized_block, true); }
     return result.finalized_block;
 }
 
@@ -492,6 +544,7 @@ BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block,
     const auto result = m_store.CommitFinalizedBlock(block, sync);
     if (result) {
         RememberFinalizedBlockForGossip(block);
+        EmitFinalizedEvents(block, false);
         if (m_finalizer_node) m_finalizer_node->RevalidatePending();
     }
     return result;
@@ -724,7 +777,16 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     if (peers.empty()) {
         return SyncPeerResult{.status = SyncPeerStatus::CONNECTION_FAILED};
     }
-    std::sort(peers.begin(), peers.end(), [](const p2p::PeerInfo& left, const p2p::PeerInfo& right) {
+    const auto route_rank = [&](const p2p::PeerInfo& peer) {
+        const auto endpoint = std::make_pair(peer.address, peer.port);
+        if (m_config.p2p_endpoint == endpoint) return 0;
+        return std::find(explicit_endpoints.begin(), explicit_endpoints.end(), endpoint) != explicit_endpoints.end() ? 1 : 2;
+    };
+    // HELLO heights are connection-time snapshots. Prefer configured routes so
+    // mutually lagging discovered providers cannot eclipse the bootstrap peer.
+    // An unavailable or up-to-date configured peer still falls through below.
+    std::sort(peers.begin(), peers.end(), [&](const p2p::PeerInfo& left, const p2p::PeerInfo& right) {
+        if (route_rank(left) != route_rank(right)) return route_rank(left) < route_rank(right);
         if (left.hello.finalized_height != right.hello.finalized_height) {
             return left.hello.finalized_height > right.hello.finalized_height;
         }
@@ -735,10 +797,13 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     SyncPeerResult result{.status = SyncPeerStatus::CONNECTION_FAILED};
     bool any_peer_up_to_date{false};
     for (const auto& peer : peers) {
-        const auto attempt = m_peer_manager->SyncFromPeer(peer.address, peer.port, max_blocks);
+        const auto attempt = m_peer_manager->SyncFromPeer(peer.address, peer.port, max_blocks-result.blocks_applied);
         if (attempt.status == SyncPeerStatus::BLOCKS_APPLIED) {
-            result = attempt;
-            break;
+            result.status=SyncPeerStatus::BLOCKS_APPLIED;
+            result.blocks_applied+=attempt.blocks_applied;
+            if (result.blocks_applied>=max_blocks) break;
+            // Partial progress from a slow route must not hide a fresher peer.
+            continue;
         }
         // HELLO height is only a snapshot from connection time. A peer that
         // reports UP_TO_DATE may have stopped advancing while another
@@ -756,9 +821,53 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
             SchedulePeerRetry({peer.address, peer.port}, PeerFailureClass::PROTOCOL);
         }
     }
-    if (any_peer_up_to_date) result.status = SyncPeerStatus::UP_TO_DATE;
+    if (result.blocks_applied==0 && any_peer_up_to_date) result.status = SyncPeerStatus::UP_TO_DATE;
     m_peer_manager->FanoutRecentBlocks();
     return result;
+}
+
+void CybouNodeRuntime::SetServicePeerDiagnostics(std::vector<PeerDiagnostics> peers)
+{
+    if (peers.size() > p2p::MAX_OUTBOUND_PEERS) peers.resize(p2p::MAX_OUTBOUND_PEERS);
+    std::lock_guard lock{m_mutex};
+    m_service_peers = std::move(peers);
+}
+
+NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
+{
+    const auto status = GetStatus();
+    NodeDiagnosticsSnapshot snapshot;
+    snapshot.network_id = status.network_id.GetHex();
+    snapshot.role = status.is_finalizer ? "finalizer" : (HasStorageProvider() ? "provider" : "observer");
+    snapshot.height = status.finalized_height;
+    snapshot.tip = status.finalized_tip.GetHex();
+    snapshot.state_root = status.state_root.GetHex();
+    snapshot.initialized = status.is_initialized;
+    snapshot.safety_halted = status.poa_safety_halted;
+    // Never hold state and peer locks together (peer I/O can call state methods).
+    {
+        std::lock_guard lock{m_mutex};
+        snapshot.peers = m_service_peers;
+        for (const auto& id : m_recent_operation_status_order) {
+            const auto& op = m_recent_operation_status.at(id);
+            snapshot.operations.push_back({id.GetHex(), static_cast<std::uint32_t>(op.kind), op.finalized_height});
+        }
+    }
+    {
+        std::lock_guard lock{m_p2p_mutex};
+        if (m_peer_manager) for (const auto& peer : m_peer_manager->Peers()) {
+            std::string provider;
+            if (peer.provider_id) { static constexpr char HEX[] = "0123456789abcdef";
+                for (auto b : *peer.provider_id) { provider += HEX[b >> 4]; provider += HEX[b & 15]; } }
+            snapshot.peers.push_back({peer.address + ":" + std::to_string(peer.port),
+                peer.hello.finalized_height, peer.hello.capabilities, provider});
+        }
+    }
+    if (m_finalized_chunk_store) {
+        snapshot.storage_used = m_finalized_chunk_store->UsedBytes();
+        snapshot.storage_capacity = m_finalized_chunk_store->CapacityBytes();
+    }
+    return snapshot;
 }
 
 size_t CybouNodeRuntime::ConnectedPeerCount() const

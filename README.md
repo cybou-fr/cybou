@@ -1,5 +1,8 @@
 # CYBOU
 
+Operator commands and disposable network testing are documented in
+[Operator CLI and Network Lab](docs/cybou/OPERATOR_LAB.md).
+
 **One identity. Private communication. Your data under your control.**
 
 CYBOU is an open-source project building an identity-centered platform for
@@ -38,7 +41,7 @@ value.
 - **Proof-based provider admission.** A provider accepts a chunk only when a
   valid inclusion proof ties it to a finalized publication. Finality authorizes
   storage; it does not prove availability or durability.
-- **Client-owned views.** Clients are expected to scan finalized publications
+- **Client-owned views.** Clients scan finalized publications
   and rebuild local Mail/Files indexes. Local databases are caches, not the
   source of protocol identity.
 
@@ -53,16 +56,19 @@ finalized `.cybou` name claims, genesis-bound PoA with a durable equivocation
 safety halt, `RootPublication`, the encrypted chunk tree, local provider
 admission, and CYP2 block/chunk transport.
 
-The main product work is to connect these pieces into complete flows:
+Mail and Files now use the encrypted per-Identity Application DB through
+ApplicationService, PublicationService and StorageService. The desktop supports
+publication, attachments, retrieval and rebuilding private views. Storage uses
+verified ProviderIDs, post-finality replication, periodic audit and repair.
+RecoveryBridge supports recovery rotation and clean-machine content restore.
+Development requires one remote replica; Beta requires two. Local cache does
+not count toward durability.
 
-1. Build and submit encrypted Mail and Files publications from the desktop.
-2. Scan publications, open recipient capsules, retrieve chunks, and rebuild
-   Inbox, Sent, and Files views after restart or clean-machine recovery.
-3. Complete provider selection, retry, durability measurement, retention,
-   repair, and provider-loss handling.
-4. Finish Gmail-familiar Mail and Google Drive-familiar Files UX, then validate
-   the integrated experience on DEV.
-5. Establish Beta operating costs and security evidence. Backup is post-Beta.
+Remaining work is sustained failure/restart soak, clean-install desktop Beta
+acceptance, operating-cost measurement and security review. Authority remains
+a derived preview until immutable network policy and canonical accounting are
+specified. Optional Validation is future research; PoA alone finalizes.
+Backup remains post-Beta.
 
 Read [the implementation status](docs/cybou/26_IMPLEMENTATION_STATUS.md) for
 the maintained list of implemented components and open gates.

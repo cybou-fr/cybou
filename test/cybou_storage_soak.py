@@ -37,7 +37,7 @@ def main() -> int:
     key = work / "finalizer.key"
     key.write_bytes(os.urandom(32))
     network = work / "network.bin"
-    subprocess.run([node, "init-dev", str(network), str(key)], check=True)
+    subprocess.run([node, "network", "init-dev", "--network", str(network), "--key-file", str(key)], check=True)
     peers = work / "peers.txt"
     peers.write_text("".join(f"127.0.0.1 {port}\n" for port in PROVIDERS.values()))
 
@@ -59,12 +59,12 @@ def main() -> int:
             process.kill()
             process.wait()
 
-    finalizer_args = [node, "serve", str(network), str(work / "finalizer-db"), str(key),
-                      "127.0.0.1", str(FINALIZER_P2P), "200", str(peers)]
+    finalizer_args = [node, "finalizer", "run", "--network", str(network), "--data-dir", str(work / "finalizer-db"),
+                      "--key-file", str(key), "--listen", f"127.0.0.1:{FINALIZER_P2P}", "--block-interval", "200ms", "--peers", str(peers)]
 
     def provider_args(name):
-        return [node, "provide", str(network), str(work / f"provider-{name}-db"),
-                "127.0.0.1", str(FINALIZER_P2P), "127.0.0.1", str(PROVIDERS[name]), CAPACITY]
+        return [node, "provider", "run", "--network", str(network), "--data-dir", str(work / f"provider-{name}-db"),
+                "--peer", f"127.0.0.1:{FINALIZER_P2P}", "--listen", f"127.0.0.1:{PROVIDERS[name]}", "--capacity", CAPACITY]
 
     def provider_by_port(port):
         return next(name for name, p in PROVIDERS.items() if p == port)

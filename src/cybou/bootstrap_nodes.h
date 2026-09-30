@@ -12,7 +12,7 @@
 namespace cybou {
 
 /**
- * DEV bootstrap authority endpoints.
+ * DEV bootstrap node endpoints.
  *
  * Static seed list for the disposable CYBOU-DEV network only. Beta and
  * Mainnet must derive their bootstrap sets from the operator-approved
@@ -23,12 +23,12 @@ namespace cybou {
  * and carries no trust — the genesis file remains the root of trust for every
  * synced block.
  */
-struct BootstrapAuthorityEndpoint {
+struct BootstrapEndpoint {
     std::string_view host;
     uint16_t p2p_port; // CYP2 peer session
 };
 
-inline constexpr std::array<BootstrapAuthorityEndpoint, 1> CYBOU_DEV_BOOTSTRAP_AUTHORITIES{{
+inline constexpr std::array<BootstrapEndpoint, 1> CYBOU_DEV_BOOTSTRAP_NODES{{
     {"51.255.46.58", 29461}, // OVH DEV PoA finalizer node (vps-d0669a91)
 }};
 

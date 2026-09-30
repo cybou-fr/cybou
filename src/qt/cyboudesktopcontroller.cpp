@@ -43,7 +43,9 @@ void CybouDesktopController::start()
 {
     if (m_node_service) return;
     try {
-        const auto network_path = m_data_directory / "network.bin";
+        const auto explicit_network = qEnvironmentVariable("CYBOU_NETWORK_FILE");
+        const auto network_path = explicit_network.isEmpty() ? m_data_directory / "network.bin"
+            : std::filesystem::path{explicit_network.toStdU16String()};
         // The desktop runs on the bundled public DEV network (genesis and PoA
         // public key; no secrets). Data left from an older DEV network (a reset
         // or an old file format) cannot sync with today's finalizer, so it is
@@ -55,7 +57,7 @@ void CybouDesktopController::start()
         const auto path_text = [](const std::filesystem::path& path) {
             return QString::fromStdU16String(path.u16string());
         };
-        if (std::filesystem::exists(network_path) && !qEnvironmentVariableIsSet("CYBOU_DEV_KEEP_NETWORK")) {
+        if (explicit_network.isEmpty() && std::filesystem::exists(network_path) && !qEnvironmentVariableIsSet("CYBOU_DEV_KEEP_NETWORK")) {
             QFile existing{path_text(network_path)};
             const QByteArray bytes = existing.open(QIODevice::ReadOnly) ? existing.readAll() : QByteArray{};
             existing.close();
@@ -73,7 +75,7 @@ void CybouDesktopController::start()
                 m_archived_network = path_text(archive);
             }
         }
-        if (!std::filesystem::exists(network_path)) {
+        if (explicit_network.isEmpty() && !std::filesystem::exists(network_path)) {
             QFile installed{path_text(network_path)};
             if (!installed.open(QIODevice::WriteOnly) || installed.write(current) != current.size()) {
                 installed.remove();
@@ -85,7 +87,7 @@ void CybouDesktopController::start()
         const auto& genesis = network_file->genesis;
         const auto& definition = network_file->definition;
         m_model->setNetworkInfo(
-            QStringLiteral("CYBOU DEV"),
+            explicit_network.isEmpty() ? QStringLiteral("CYBOU DEV") : QStringLiteral("CYBOU LAB"),
             QString::fromStdString(cybou::NetworkId(definition).GetHex()));
         if (!m_archived_network.isEmpty()) {
             qWarning() << "CYBOU: data of an older DEV network moved to" << m_archived_network;
@@ -93,12 +95,12 @@ void CybouDesktopController::start()
                                "Create or restore your Identity on the current network.").arg(m_archived_network));
         }
         const std::filesystem::path data_dir = m_data_directory / "cybou_state";
-        if (qEnvironmentVariableIsSet("CYBOU_DEV_VALIDATOR")) {
+        if (qEnvironmentVariableIsSet("CYBOU_DEV_FINALIZER")) {
             throw std::runtime_error(
-                "desktop validator mode is disabled; run cybou-node serve for DEV validation");
+                "desktop finalizer mode is disabled; run cybou-node finalizer run for DEV PoA finalization");
         }
 
-        const auto& endpoint = cybou::CYBOU_DEV_BOOTSTRAP_AUTHORITIES.front();
+        const auto& endpoint = cybou::CYBOU_DEV_BOOTSTRAP_NODES.front();
         bool p2p_port_ok{false};
         const int p2p_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_PORT", &p2p_port_ok);
         if (qEnvironmentVariableIsSet("CYBOU_DEV_P2P_PORT") &&
@@ -160,7 +162,7 @@ void CybouDesktopController::start()
 
         m_node_service->StartNetwork(
             network_config,
-            [this, batch = network_config.sync_batch_size](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status,
+            [this](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status,
                 const size_t connected_peer_count) {
                 const bool bootstrap_reachable = sync_result.IsConnected();
                 const bool local_state_unavailable =
@@ -234,10 +236,9 @@ void CybouDesktopController::start()
                 } catch (const std::exception& e) {
                     qWarning() << "cybou authority refresh error:" << e.what();
                 }
-                // A full batch means more finalized blocks are waiting: still catching up.
-                const bool behind = sync_result.blocks_applied >= batch;
-                QMetaObject::invokeMethod(m_model, [model = m_model, runtime_status, bootstrap_reachable, connected_peer_count, sync_error, behind] {
-                    model->setSyncing(behind);
+                const auto diagnostics = m_node_service->Runtime().GetDiagnostics();
+                QMetaObject::invokeMethod(m_model, [model = m_model, diagnostics, runtime_status, bootstrap_reachable, connected_peer_count, sync_error] {
+                    model->setNetworkDiagnostics(diagnostics);
                     model->setSyncError(sync_error);
                     model->setFinalizedHeight(runtime_status.finalized_height);
                     model->setNodeStatus(true, static_cast<int>(connected_peer_count), bootstrap_reachable);

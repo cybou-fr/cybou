@@ -1,0 +1,95 @@
+[lab]
+name = "cross-host"
+duration_seconds = 1800
+run_dir = "C:/Users/cybou/AppData/Local/Temp/cybou-lab-cross-controller"
+
+[hosts.vps]
+type = "ssh"
+target = "debian@vps-d0669a91.vps.ovh.net"
+root = "/home/debian/cybou-lab-cross"
+worker = "/home/debian/cybou/tools/cybou_stress.py"
+binary = "/home/debian/cybou/build/bin/cybou-node"
+python = "python3"
+
+[hosts.wsl]
+type = "wsl"
+distro = "Ubuntu-26.04"
+root = "/home/cybou/cybou-lab-cross"
+worker = "/mnt/c/Users/cybou/Desktop/cybou/tools/cybou_stress.py"
+binary = "/home/cybou/cybou-lab-operator-bin/cybou-node"
+loadgen_binary = "/home/cybou/cybou-lab-operator-bin/cybou-loadgen"
+python = "python3"
+
+[hosts.windows]
+type = "windows"
+root = "C:/Users/cybou/AppData/Local/Temp/cybou-lab-cross"
+binary = "C:/Users/cybou/Desktop/cybou/build_cybou_qt_mingw/bin/cybou-node.exe"
+python = "C:/Python314/python.exe"
+
+[[nodes]]
+name = "finalizer"
+host = "vps"
+role = "finalizer"
+listen = "0.0.0.0:31461"
+advertise = "51.255.46.58:31461"
+block_interval = "500ms"
+
+[[nodes]]
+name = "provider-a"
+host = "vps"
+role = "provider"
+listen = "0.0.0.0:31471"
+advertise = "51.255.46.58:31471"
+peer = "51.255.46.58:31461"
+capacity = "512MiB"
+
+[[nodes]]
+name = "provider-b"
+host = "vps"
+role = "provider"
+listen = "0.0.0.0:31481"
+advertise = "51.255.46.58:31481"
+peer = "51.255.46.58:31461"
+capacity = "512MiB"
+
+[[nodes]]
+name = "provider-c"
+host = "vps"
+role = "provider"
+listen = "0.0.0.0:31482"
+advertise = "51.255.46.58:31482"
+peer = "51.255.46.58:31461"
+capacity = "512MiB"
+
+[[nodes]]
+name = "observer-wsl"
+host = "wsl"
+role = "observer"
+peer = "51.255.46.58:31461"
+
+[[nodes]]
+name = "observer-windows"
+host = "windows"
+role = "observer"
+peer = "51.255.46.58:31461"
+
+[loadgen]
+host = "wsl"
+peer = "51.255.46.58:31461"
+profile = "files"
+identities = 2
+file_size = "64KiB"
+operations_per_second = 1
+max_operations = 32
+replicas = 2
+
+[[chaos]]
+at_seconds = 30
+scenario = "provider-loss"
+node = "provider-a"
+duration_seconds = 10
+
+[[chaos]]
+at_seconds = 60
+scenario = "finalizer-restart"
+node = "finalizer"

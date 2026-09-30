@@ -156,6 +156,7 @@ int CybouNodeService::RunFinalizer(const CybouFinalizerServiceConfig& config, st
             const auto block = m_runtime->ProduceBlock();
             if (!block) {
                 if (m_runtime->GetStatus().poa_safety_halted) {
+                    if (auto log=m_runtime->EventLog()) log->Write(NodeEvent::poa_safety_halt);
                     std::cerr << "PoA safety halt: block production and operation admission stopped\n";
                 } else {
                     std::cerr << "PoA block production stopped\n";
@@ -201,6 +202,14 @@ int CybouNodeService::RunFinalizer(const CybouFinalizerServiceConfig& config, st
             if (!stopping) {
                 peers.FanoutRecentBlocks();
                 peers.PingAll();
+                std::vector<PeerDiagnostics> diagnostics;
+                for (const auto& peer : peers.Peers()) {
+                    std::string provider;
+                    if (peer.provider_id) { static constexpr char HEX[]="0123456789abcdef";
+                        for (auto b : *peer.provider_id) { provider+=HEX[b>>4]; provider+=HEX[b&15]; } }
+                    diagnostics.push_back({peer.address+":"+std::to_string(peer.port),peer.hello.finalized_height,peer.hello.capabilities,provider});
+                }
+                m_runtime->SetServicePeerDiagnostics(std::move(diagnostics));
             }
 
             if (!stopping) {

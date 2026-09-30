@@ -27,7 +27,7 @@ connected to the desktop.
 
 No large new features. In order:
 
-1. multi-process soak with real `cybou-node provide` providers (loss, restart,
+1. multi-process soak with real `cybou-node provider run` providers (loss, restart,
    repair, lost local state, long runs);
 2. reproducible build + core + Qt tests after every vertical batch;
 3. Beta desktop acceptance on clean installations;

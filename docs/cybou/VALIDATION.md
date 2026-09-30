@@ -183,3 +183,6 @@ must not block Beta.
   exposing provisional data as canonical wallet state?
 - What canonical evidence could justify any future Authority effect for
   validation behavior?
+
+Implementation boundary proposal: [VALIDATION_ARCHITECTURE.md](VALIDATION_ARCHITECTURE.md).
+ValidationService must never reuse the OperationPool candidate overlay.

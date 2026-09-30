@@ -60,17 +60,10 @@ Merkle proofs or select providers.
 
 ## Content states
 
-The desktop model may expose:
-
-```text
-Local
-Preparing
-WaitingForConfirmation
-Securing
-Protected
-TemporarilyUnavailable
-NeedsAttention
-```
+The content axis exposes Local, Securing, Protected, Received,
+TemporarilyUnavailable and NeedsAttention. Preparing and Submitted belong to
+the separate operation axis; Submitted is displayed as Waiting for confirmation.
+Outgoing content stays Local until PoA finality.
 
 Mail maps `Protected` durability to user-facing `Sent`.
 Incoming Mail and its attachments are `Received`: finalized, end-to-end
@@ -78,7 +71,7 @@ encrypted and opened by this Identity. The recipient has not proved the
 sender's remote durability, so incoming content is never shown as
 `Protected`; the reader says "Network confirmed", not "Stored on the network".
 
-`WaitingForConfirmation` means RootPublication is not yet PoA-finalized.
+Waiting for confirmation means the operation is Submitted and not yet PoA-finalized.
 
 `Securing` means finalized content is being placed/repaired toward the remote
 durability target.
@@ -148,3 +141,9 @@ metric, not social trust. The controller syncs the read-only `AuthorityIndex`
 on each network refresh. It is shown only on the Identity page (marked
 Preview while not enforced) and in Diagnostics, never on contacts or Mail.
 
+
+`Failed` is terminal for the exact OperationID: informational updates cannot
+return it to Preparing, Submitted or Validated. Retryable or uncertain delivery
+remains Submitted. Independently verified PoA finality may supersede a local
+failure; Finalized can never regress. CybouOperationStatus is a UI projection,
+not an attestation or evidence store.

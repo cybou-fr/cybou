@@ -141,6 +141,8 @@ struct CybouCoreApplicationAdapter::Session {
     cybou::CybouKeyStore& keystore;
     std::filesystem::path root;
     int refresh_ms;
+    /** The private index is still behind finalized history. */
+    bool catching_up{false};
 
     std::unique_ptr<cybou::PrivateApplicationStore> db;
     std::unique_ptr<cybou::KVStore> staging;
@@ -283,14 +285,19 @@ struct CybouCoreApplicationAdapter::Session {
             std::deque<std::function<void(Session&)>> pending;
             {
                 std::unique_lock lock{mutex};
-                wake.wait_for(lock, stop, std::chrono::milliseconds{refresh_ms}, [this] { return !tasks.empty(); });
+                // While the private index is behind finalized history, keep scanning
+                // back to back; once caught up, refresh on the normal interval.
+                wake.wait_for(lock, stop, std::chrono::milliseconds{catching_up ? 0 : refresh_ms},
+                    [this] { return !tasks.empty(); });
                 pending.swap(tasks);
             }
             try {
                 for (auto& task : pending) task(*this);
                 if (!stop.stop_requested()) Refresh();
-            } catch (const std::exception&) {
+            } catch (const std::exception& e) {
                 // A failed refresh leaves the last snapshot in place; the next tick retries.
+                // Never silently: a refresh that always fails freezes Mail and Files.
+                qWarning() << "CYBOU application refresh failed:" << e.what();
             }
         }
         // Commands issued just before locking (a saved draft, a send) still run.
@@ -314,6 +321,7 @@ struct CybouCoreApplicationAdapter::Session {
             return;
         }
         const auto progress = application->Scan();
+        catching_up = !progress.Complete();
         // Bounded durability audit every few ticks: Protected can fall back to Securing.
         if (++ticks % AUDIT_EVERY_TICKS == 0) storage->AuditNextPlacement(AUDIT_CHUNKS_PER_PASS);
         if (ticks % GC_EVERY_TICKS == 0) {
@@ -357,7 +365,11 @@ struct CybouCoreApplicationAdapter::Session {
             if (record.outgoing) {
                 // Sent means remotely durable, never merely finalized.
                 const auto job = jobs.find(id);
-                const auto durability = job == jobs.end() ? storage->GetDurability(record.operation_id) : std::nullopt;
+                const auto durability = storage->GetDurability(record.operation_id);
+                if (durability) {
+                    item.min_remote_replicas = static_cast<int>(durability->min_replicas);
+                    item.remote_replica_target = storage->RemoteReplicaTarget();
+                }
                 item.state = job != jobs.end() ? StateOf(job->second)
                     : durability && durability->state == cybou::DurabilityState::PROTECTED
                         ? CybouContentState::Protected : CybouContentState::Securing;
@@ -583,6 +595,10 @@ struct CybouCoreApplicationAdapter::Session {
             } else if (const auto op = operations.find(hex); op != operations.end()) {
                 // Protected only when remote durability is known, never merely finalized.
                 const auto durability = storage->GetDurability(op->second);
+                if (durability) {
+                    out.min_remote_replicas = static_cast<int>(durability->min_replicas);
+                    out.remote_replica_target = storage->RemoteReplicaTarget();
+                }
                 out.state = durability && durability->state == cybou::DurabilityState::PROTECTED
                     ? CybouContentState::Protected : CybouContentState::Securing;
                 out.finalized_height = runtime.FindFinalizedOperation(op->second).height;

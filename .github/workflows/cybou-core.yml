@@ -31,6 +31,7 @@ jobs:
             cmake \
             libboost-dev \
             libevent-dev \
+            iproute2 \
             ninja-build \
             pkgconf \
             python3
@@ -55,12 +56,22 @@ jobs:
           make -j$(nproc)
           make install_sw
 
+      - name: Build and install pinned BLAKE3
+        run: |
+          git clone --depth 1 --branch 1.8.1 https://github.com/BLAKE3-team/BLAKE3.git /tmp/blake3
+          cmake -S /tmp/blake3/c -B /tmp/blake3-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+            -DCMAKE_INSTALL_PREFIX=/opt/blake3-1.8.1
+          cmake --build /tmp/blake3-build --parallel 2
+          sudo cmake --install /tmp/blake3-build
+
       - name: Configure headless unit build
         run: |
           cmake -S . -B build-ci -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O2 -g0" \
             -DOPENSSL_ROOT_DIR=/opt/openssl-3.5 \
+            -DCMAKE_PREFIX_PATH=/opt/blake3-1.8.1 \
             -DBUILD_GUI=OFF \
             -DBUILD_TESTS=ON \
             -DCYBOU_ENABLE_TEST_HOOKS=ON \
@@ -70,21 +81,27 @@ jobs:
             -DWITH_ZMQ=OFF
 
       - name: Build CYBOU core test, node and smoke binaries
-        run: cmake --build build-ci --target cybou-core-test cybou-node cybou-storage-smoke cybou-storage-soak --parallel 2
+        run: cmake --build build-ci --target cybou-core-test cybou-node cybou-loadgen cybou-storage-smoke cybou-storage-soak --parallel 2
 
       - name: Run CYBOU protocol tests
         run: |
           build-ci/bin/cybou-core-test --log_level=error
 
+      - name: Operator CLI and LAB controller acceptance
+        run: |
+          python3 test/cybou_operator_cli.py build-ci/bin/cybou-node
+          python3 test/stress/test_controller.py
+          sudo python3 test/stress/test_network_namespace.py
+
       - name: Smoke test cybou-node
         run: |
           python3 -c "import os; open('/tmp/val.key', 'wb').write(os.urandom(32))"
-          build-ci/bin/cybou-node init-dev /tmp/net.def /tmp/val.key
+          build-ci/bin/cybou-node network init-dev --network /tmp/net.def --key-file /tmp/val.key
           test -f /tmp/net.def
-          build-ci/bin/cybou-node serve /tmp/net.def /tmp/cybou-producer /tmp/val.key 127.0.0.1 29461 100 &
+          build-ci/bin/cybou-node finalizer run --network /tmp/net.def --data-dir /tmp/cybou-producer --key-file /tmp/val.key --listen 127.0.0.1:29461 --block-interval 100ms &
           producer_pid=$!
           trap 'kill "$producer_pid" 2>/dev/null || true' EXIT
-          build-ci/bin/cybou-node p2p-sync /tmp/net.def /tmp/cybou-observer 127.0.0.1 29461 1
+          build-ci/bin/cybou-node network sync --network /tmp/net.def --data-dir /tmp/cybou-observer --peer 127.0.0.1:29461 --count 1
 
       - name: PoA finalizer + storage provider multi-process smoke
         run: |

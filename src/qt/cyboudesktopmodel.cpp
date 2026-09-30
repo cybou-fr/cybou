@@ -550,12 +550,21 @@ void CybouDesktopModel::setAuthority(const CybouAuthoritySummary& authority)
     }
 }
 
+void CybouDesktopModel::setNetworkDiagnostics(cybou::NodeDiagnosticsSnapshot snapshot)
+{
+    m_network_diagnostics = std::move(snapshot);
+    Q_EMIT statusChanged();
+}
+
 void CybouDesktopModel::setOperationStatus(const CybouOperationStatus& status)
 {
     if (status.operation_id.isEmpty()) return;
     auto& stored = m_operations[status.operation_id];
-    // Finality is canonical: nothing moves an operation back from it.
+    // Finality is canonical. Failed is terminal for this exact operation;
+    // retryable delivery stays Submitted and a new attempt needs a new id.
     if (stored.state == CybouOperationState::Finalized && status.state != CybouOperationState::Finalized) return;
+    if (stored.state == CybouOperationState::Failed && status.state != CybouOperationState::Failed &&
+        status.state != CybouOperationState::Finalized) return;
     stored = status;
     Q_EMIT operationStatusChanged(status.operation_id);
     // Items reference operations by id; let their views re-render.
@@ -574,12 +583,13 @@ std::optional<CybouOperationStatus> CybouDesktopModel::operationStatus(const QSt
 CybouOperationState CybouDesktopModel::displayedOperationState(const QString& operation_id,
     CybouOperationState own) const
 {
-    if (own == CybouOperationState::Finalized || own == CybouOperationState::Failed) return own;
+    if (own == CybouOperationState::Finalized) return own;
     auto state = own;
     if (const auto status = operationStatus(operation_id)) {
         if (status->state == CybouOperationState::Finalized || status->state == CybouOperationState::Failed) {
             return status->state;
         }
+        if (own == CybouOperationState::Failed) return own;
         if (static_cast<int>(status->state) > static_cast<int>(state)) state = status->state;
     }
     if (state == CybouOperationState::Validated && !(m_capabilities.validation && m_validation_shown)) {
@@ -689,6 +699,10 @@ void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity
             // A vault exists but is not opened in this session yet.
             setIdentityState(CybouIdentityState::Locked,
                 QString::fromStdString(m_identity_service->GetAccountId()->Value().GetHex()));
+        } else if (hasLocalVault() && m_status.identity_state == CybouIdentityState::None) {
+            // An encrypted vault on disk is a returning user: ask for the
+            // password (Unlock), never offer to create a second Identity.
+            setIdentityState(CybouIdentityState::Locked);
         }
         refreshFinalizedName();
     }

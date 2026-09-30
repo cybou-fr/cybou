@@ -34,3 +34,10 @@ target/
 /ci/scratch/
 
 /vcpkg_installed/
+
+# LAB controller authorization and raw run telemetry stay local.
+/artifacts/**/owner.token
+/artifacts/**/timeline.jsonl
+/artifacts/**/resources.jsonl
+/artifacts/**/offsets.json
+/artifacts/**/offsets.tmp

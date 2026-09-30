@@ -9,6 +9,9 @@
 #include <qt/cybouui.h>
 
 #include <QFrame>
+#include <QDialog>
+#include <QTableWidget>
+#include <QHeaderView>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -119,6 +122,62 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
     m_services->setSpacing(8);
     services_layout->addWidget(service_rows);
     root->addWidget(services);
+
+    auto* monitor = new QPushButton{tr("Open Network Monitor"), this};
+    monitor->setObjectName(QStringLiteral("networkMonitorButton"));
+    connect(monitor, &QPushButton::clicked, this, [this] {
+        auto* dialog = new QDialog{this};
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->setWindowTitle(tr("CYBOU Network Monitor"));
+        dialog->resize(1000, 700);
+        auto* layout = new QVBoxLayout{dialog};
+        auto* head = new QLabel{dialog}; head->setWordWrap(true);
+        head->setTextFormat(Qt::PlainText);
+        head->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        layout->addWidget(head);
+        auto table = [dialog,layout](const QStringList& headings) {
+            auto* widget = new QTableWidget{0,headings.size(),dialog};
+            widget->setHorizontalHeaderLabels(headings);
+            widget->setEditTriggers(QAbstractItemView::NoEditTriggers);
+            widget->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+            layout->addWidget(widget); return widget;
+        };
+        auto* peers = table({tr("Peer endpoint"),tr("Advertised role"),tr("Advertised height"),tr("Lag"),tr("ProviderID")});
+        auto* operations = table({tr("OperationID"),tr("Local assessment"),tr("Finalized height")});
+        auto* storage = table({tr("Application object ID"),tr("Content state"),tr("Remote replicas"),tr("Target"),tr("OperationID")});
+        peers->setObjectName(QStringLiteral("networkMonitorPeers"));
+        operations->setObjectName(QStringLiteral("networkMonitorOperations"));
+        storage->setObjectName(QStringLiteral("networkMonitorContent"));
+        auto refresh = [this,head,peers,operations,storage] {
+            const auto& d = m_model->networkDiagnostics();
+            head->setText(tr("%1 | %2 | Height %3 | Safety halt %4\nNetworkID %5\nTip %6\nState root %7")
+                .arg(m_model->status().network_name, m_model->status().online ? tr("Online") : tr("Offline"))
+                .arg(d.height).arg(d.safety_halted ? tr("YES") : tr("No"))
+                .arg(QString::fromStdString(d.network_id),QString::fromStdString(d.tip),QString::fromStdString(d.state_root)));
+            auto row = [](QTableWidget* table, const QStringList& values) {
+                int r=table->rowCount(); table->insertRow(r);
+                for (int c=0;c<values.size();++c) table->setItem(r,c,new QTableWidgetItem{values[c]});
+            };
+            peers->setRowCount(0);
+            for (const auto& peer : d.peers) row(peers,{QString::fromStdString(peer.endpoint),
+                peer.provider_id.empty() ? tr("Block peer") : tr("Storage"),QString::number(peer.advertised_height),
+                QString::number(d.height > peer.advertised_height ? d.height-peer.advertised_height : 0),QString::fromStdString(peer.provider_id)});
+            operations->setRowCount(0);
+            const QStringList states{tr("Unknown"),tr("Local pending"),tr("Accepted remotely"),tr("Finalized"),tr("Rejected"),tr("History unavailable")};
+            for (const auto& op : d.operations) row(operations,{QString::fromStdString(op.operation_id),
+                op.state < static_cast<unsigned>(states.size()) ? states[op.state] : tr("Unknown"),QString::number(op.finalized_height)});
+            storage->setRowCount(0);
+            for (const auto& file : m_model->fileItems()) if (!file.folder && storage->rowCount()<256)
+                row(storage,{file.id,CybouProduct::contentStateText(file.state),file.min_remote_replicas < 0 ? tr("Unknown") : QString::number(file.min_remote_replicas),file.remote_replica_target < 0 ? tr("Unknown") : QString::number(file.remote_replica_target),file.operation_id});
+            for (const auto& mail : m_model->mailItems()) if (!mail.draft && storage->rowCount()<256)
+                row(storage,{mail.id,CybouProduct::contentStateText(mail.state),mail.min_remote_replicas < 0 ? tr("Unknown") : QString::number(mail.min_remote_replicas),mail.remote_replica_target < 0 ? tr("Unknown") : QString::number(mail.remote_replica_target),mail.operation_id});
+        };
+        connect(m_model,&CybouDesktopModel::statusChanged,dialog,refresh);
+        connect(m_model,&CybouDesktopModel::filesChanged,dialog,refresh);
+        connect(m_model,&CybouDesktopModel::mailChanged,dialog,refresh);
+        refresh(); dialog->show();
+    });
+    root->addWidget(monitor, 0, Qt::AlignLeft);
 
     auto* open = new QPushButton{tr("Open diagnostics window"), this};
     open->setObjectName(QStringLiteral("secondaryButton"));

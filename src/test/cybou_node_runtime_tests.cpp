@@ -12,6 +12,21 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_runtime_tests, CybouTestSetup)
 
+BOOST_AUTO_TEST_CASE(public_event_writer_rejects_secret_fields)
+{
+    CybouServiceTestFixture fixture;
+    const auto path = fixture.directory / "events.jsonl";
+    cybou::EventWriter writer{path};
+    BOOST_CHECK_THROW(writer.Write(cybou::NodeEvent::node_started, {{"mnemonic", std::string{"secret"}}}), std::invalid_argument);
+    BOOST_CHECK_THROW(writer.Write(cybou::NodeEvent::node_started, {{"role", std::string(257, 'x')}}), std::invalid_argument);
+    writer.Write(cybou::NodeEvent::node_status, {{"network_id", fixture.runtime->GetNetworkId().GetHex()},{"height",std::uint64_t{1}}});
+    BOOST_CHECK(writer.Good());
+    const auto snapshot=fixture.runtime->GetDiagnostics();
+    BOOST_CHECK(snapshot.initialized);
+    BOOST_CHECK_EQUAL(snapshot.role, "finalizer");
+    BOOST_CHECK_EQUAL(snapshot.height,fixture.runtime->GetStatus().finalized_height);
+}
+
 BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
 {
     CybouServiceTestFixture fixture;

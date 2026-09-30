@@ -225,6 +225,7 @@ add_library(cybou_node STATIC
   cybou/node_runtime.cpp
   cybou/node_service.h
   cybou/node_service.cpp
+  cybou/event_record.cpp
   cybou/identity_service.cpp
   cybou/name_service.cpp
   cybou/p2p/session.cpp
@@ -364,6 +365,8 @@ endif()
 # CYBOU node daemon executable.
 add_executable(cybou-node cybou_node.cpp)
 target_link_libraries(cybou-node PRIVATE cybou_node)
+add_executable(cybou-loadgen cybou_loadgen.cpp)
+target_link_libraries(cybou-loadgen PRIVATE cybou_node)
 add_windows_application_manifest(cybou-node)
 
 

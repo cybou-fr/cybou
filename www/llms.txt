@@ -14,8 +14,10 @@ experimental software, not a public mail or cloud-storage service.
   `RootPublication`, an encrypted ROOT/INDEX/DATA chunk tree, finalized chunk
   admission proofs, and CYP2 block/chunk transport.
 - Mail and Files are not complete public services. Publication construction,
-  client discovery/indexing, content retrieval, clean-machine content recovery,
-  provider selection, and measured storage durability remain integration work.
+  discovery/indexing, retrieval, clean-machine restore, provider selection,
+  measured replication, audit and repair are integrated. Sustained soak and
+  clean-install desktop Beta acceptance remain open. DEV requires one remote
+  replica; Beta requires two independent remote replicas; local cache is excluded.
 - DEV pins the X-Wing / HPKE IETF draft-05 profile. This is DEV-only and is not
   an external security audit or production guarantee.
 
@@ -33,20 +35,21 @@ experimental software, not a public mail or cloud-storage service.
 
 ## Product direction
 
-- Mail aims for familiar Gmail workflows; the first profile is one recipient
-  and text only.
+- Mail aims for familiar Gmail workflows with private publications and
+  attachments through the shared application substrate.
 - Files aims for familiar Google Drive workflows on the same encrypted content
   substrate.
 - Attachments depend on measured storage durability and recovery.
 - Backup is post-Beta.
-- Multi-operator BFT is future resilience work; DEV currently has one operator.
+- Optional Validation is future pre-finalization research, with no canonical
+  effects. Only PoA finalizes; the active protocol has no BFT path.
 
 ## Documentation
 
 - `README.md` is the project overview and build entry point.
 - `AGENTS.md` is the implementation authority.
 - `docs/cybou/26_IMPLEMENTATION_STATUS.md` records code status and remaining
-  integration gates.
+  Beta acceptance and hardening gates.
 - `docs/cybou/POA_FINALITY.md`, `ROOT_PUBLICATION.md`,
   `ENCRYPTED_CHUNK_TREE.md`, `STORAGE_ADMISSION.md`, and
   `IDENTITY_DISCOVERY_AND_RECOVERY.md` define active protocol behavior.

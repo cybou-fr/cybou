@@ -396,8 +396,17 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
         return progress;
     }
     const std::uint64_t my_key_epoch = identity->key_epoch;
+    // Nothing can exist for this Identity before the block that created it:
+    // no own publication and no capsule for its keys. Scanning starts there
+    // (canonical account state), not at genesis.
+    std::uint64_t first_height{0};
+    if (const auto account = loaded.state->accounts.find(*me); account != loaded.state->accounts.end() &&
+        account->second.creation_height > 0) {
+        first_height = account->second.creation_height - 1;
+    }
     // Historical KEM keys live only in memory; bring them back before scanning.
     if (ImportBridgeSeeds(*me, my_key_epoch)) height = 0;
+    height = std::max(height, first_height);
     for (int pass{0}; pass < 2; ++pass) {
         for (std::uint64_t scanned{0}; scanned < max_blocks && height < progress.finalized_height; ++scanned) {
             // A block's records, indexes and the checkpoint past it persist atomically.
@@ -410,7 +419,7 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
         }
         // A bridge found during this scan may open older publications: rescan once.
         if (height < progress.finalized_height || !ImportBridgeSeeds(*me, my_key_epoch)) break;
-        height = 0;
+        height = first_height;
     }
     if (height == 0) {
         Writer out;

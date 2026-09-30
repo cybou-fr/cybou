@@ -40,6 +40,7 @@ private Q_SLOTS:
     void filesGateActions();
     void filesNavigationAndViews();
     void networkPageReflectsModel();
+    void networkMonitorUsesCoreSnapshot();
     void adapterSettersDrivePages();
     void productCollectionsDriveModel();
     void fixturesLoadDeterministically();

@@ -242,6 +242,12 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
     std::vector<std::unique_ptr<cybou::p2p::InboundPeerServer>> servers;
     std::atomic_bool stopping{false};
     std::vector<std::jthread> listeners;
+    // Fatal assertions must stop listeners before jthread joins during unwind.
+    struct StopListeners {
+        std::atomic_bool& stopping;
+        std::vector<std::jthread>& listeners;
+        ~StopListeners() { stopping = true; listeners.clear(); }
+    } stop_listeners{stopping, listeners};
     std::vector<std::pair<std::string, uint16_t>> endpoints;
     for (int i{0}; i < 2; ++i) {
         cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
@@ -282,8 +288,8 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
             BOOST_CHECK(providers[0]->HasFinalizedChunk(leaf));
             BOOST_CHECK(providers[1]->HasFinalizedChunk(leaf));
             std::optional<cybou::ChunkAuthorizationProof> proof;
-            for (const auto& endpoint : endpoints) {
-                proof = transport.GetProof({{}, endpoint.first, endpoint.second}, content.operation_id, leaf);
+            for (const auto& peer : client.StoragePeerEndpoints()) {
+                proof = transport.GetProof({peer.provider_id, peer.address, peer.port}, content.operation_id, leaf);
                 if (proof) break;
             }
             BOOST_REQUIRE(proof);

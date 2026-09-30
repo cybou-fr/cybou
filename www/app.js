@@ -27,7 +27,7 @@ const translations = {
     heroPillSlogan: "Une identité protégée avec des services privés — sans promesse de service public prématurée.",
 
     statusCalloutTitle: "Le protocole DEV fonctionne. Le produit reste en construction.",
-    statusCalloutBody: "CYBOU n'est pas un service public ni un produit de production. DEV utilise une finalité PoA à un seul validateur exploité par CYBOU ; les nœuds complets vérifient indépendamment les blocs et l'état. Ce modèle est centralisé et n'offre pas de tolérance aux fautes byzantines. Le socle Identity et publication est en place, mais les flux Mail/Files et la durabilité du stockage ne sont pas encore prêts.",
+    statusCalloutBody: "CYBOU reste expérimental et non prêt pour la production. DEV utilise un finaliseur PoA unique ; les nœuds vérifient les blocs et l’état. Mail/Files, restauration, réplication, audit et réparation sont intégrés ; les tests prolongés et l’acceptation Beta restent à compléter.",
 
     heroBtnServices: "Découvrir les services",
     heroBtnStatus: "Consulter l'état réel d'avancement",
@@ -39,18 +39,18 @@ const translations = {
 
     srvIdentityTag: "Fondation",
     srvIdentityTitle: "Identité souveraine",
-    srvIdentityDesc: "Identité de compte, coffre portable CYBV2 et noms .cybou. La phrase de 24 mots restaure l'identité ; la récupération des contenus Mail et Files dépendra des flux de synchronisation et de stockage encore à intégrer.",
+    srvIdentityDesc: "Identité de compte, coffre CYBV2 et noms .cybou. La phrase restaure les clés ; l’historique finalisé, les capsules et les chunks disponibles permettent de reconstruire les contenus, y compris après rotation via RecoveryBridge.",
     srvIdentityStatus: "Identité et coffre intégrés au protocole DEV",
 
     srvMailTag: "Communication",
     srvMailTitle: "Messagerie privée (Mail)",
-    srvMailDesc: "Mail sera une vue locale de publications chiffrées : un destinataire et texte seul pour le premier profil. La construction, l'envoi, la découverte et les vues Inbox/Sent restent à intégrer.",
-    srvMailStatus: "Produit Mail non livré — intégration en cours",
+    srvMailDesc: "Publications privées avec pièces jointes, découverte des capsules, récupération vérifiée et vues Inbox/Sent dans une base applicative chiffrée par Identity.",
+    srvMailStatus: "Flux intégrés — acceptation Beta en cours",
 
     srvFilesTag: "Données",
     srvFilesTitle: "Stockage chiffré (Files)",
-    srvFilesDesc: "Files utilisera le même arbre de contenu chiffré que Mail. Le socle de chunks existe ; le catalogue, les transferts depuis l'interface et la disponibilité durable restent à construire.",
-    srvFilesStatus: "Interface et stockage durable à intégrer",
+    srvFilesDesc: "Catalogue privé, transferts et reconstruction via le même socle que Mail. Le stockage distant est audité et réparé ; une finalisation seule ne signifie pas Protected.",
+    srvFilesStatus: "Flux intégrés — tests prolongés en cours",
 
     srvBackupTag: "Continuité",
     srvBackupTitle: "Sauvegarde souveraine",
@@ -64,7 +64,7 @@ const translations = {
 
     matrixLabel: "Transparence technique",
     matrixTitle: "Matrice d'implémentation.",
-    matrixDesc: "État du code et du produit : le protocole de base est actif sur DEV, tandis que les parcours Mail/Files et la disponibilité du contenu restent à réaliser.",
+    matrixDesc: "Mail/Files et le stockage sont intégrés sur DEV. Les tests prolongés, installations propres, critères UX et revue de sécurité restent les étapes Beta.",
 
     col1Title: "Socle implémenté sur DEV",
     badgeDone: "IMPLÉMENTÉ",
@@ -75,17 +75,17 @@ const translations = {
     col1Item5: "<strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et messages CYP2 PUT/GET.",
     col1Item6: "<strong>Économie déterministe :</strong> frais et transitions de solde validés par le state machine ; DEV, Beta et Mainnet ont des paramètres distincts.",
 
-    col2Title: "Produit et validation en cours",
+    col2Title: "Durcissement et préparation Beta",
     badgeWip: "EN COURS",
-    col2Item1: "<strong>Mail :</strong> création de publications, capsules destinataire, scan des publications finalisées et reconstruction locale Inbox/Sent.",
-    col2Item2: "<strong>Files :</strong> catalogue chiffré, navigation, transfert depuis l’interface et récupération récursive des fichiers.",
-    col2Item3: "<strong>Disponibilité :</strong> sélection de fournisseurs, reprises, seuils de durabilité mesurés, rétention, réparation et perte de fournisseur.",
-    col2Item4: "<strong>Preuves de bout en bout :</strong> vecteurs interopérables, synchronisation d’un nœud propre et restauration du contenu sans base locale antérieure.",
+    col2Item1: "<strong>Mail intégré :</strong> publications, pièces jointes et reconstruction Inbox/Sent ; acceptation desktop à compléter.",
+    col2Item2: "<strong>Files intégré :</strong> catalogue privé, transferts et restauration ; installations propres et UX à vérifier.",
+    col2Item3: "<strong>Durabilité :</strong> réplication, audit et réparation intégrés. DEV : 1 copie distante ; Beta : 2 indépendantes. Le cache local ne compte pas.",
+    col2Item4: "<strong>Preuves :</strong> tests de restauration propre et de panne multiprocessus ; soak prolongé et acceptation Beta à compléter.",
 
     col3Title: "Étapes ultérieures",
     badgePlanned: "PLUS TARD",
-    col3Item1: "<strong>Résilience multi-opérateur :</strong> BFT seulement après une étape dédiée de gouvernance et d’exploitation ; le DEV actuel reste un PoA à opérateur unique.",
-    col3Item2: "<strong>Pièces jointes et montée en charge :</strong> à valider après les transferts Files et la durabilité du stockage partagé.",
+    col3Item1: "<strong>Validation optionnelle :</strong> recherche pré-finalisation, sans état canonique ni pouvoir PoA. Aucun BFT prévu dans le protocole actif.",
+    col3Item2: "<strong>Montée en charge :</strong> tests prolongés des pièces jointes et du stockage partagé déjà intégrés.",
     col3Item3: "<strong>Sauvegarde :</strong> application post-Beta du même graphe chiffré, avec restauration vérifiable.",
     col3Item4: "<strong>Beta puis service public :</strong> coûts opérationnels mesurés, revue de sécurité, critères UX et exploitation documentée avant ouverture.",
 
@@ -112,7 +112,7 @@ const translations = {
 
     flowLabel: "Cycle de publication privée",
     flowTitle: "Du contenu chiffré à sa disponibilité.",
-    flowDesc: "Le protocole fournit l'autorisation, la finalité et l'admission des chunks. Le client doit encore connecter ces étapes aux parcours Mail et Files.",
+    flowDesc: "Les services applicatifs relient chiffrement, publication PoA et stockage distant. La durabilité est mesurée séparément de la finalité.",
 
     step1Title: "Préparer le contenu privé",
     step1Desc: "Le client transforme le contenu en arbre ROOT/INDEX/DATA chiffré et conserve localement les éléments nécessaires. Les schémas Mail/Files restent à l'intérieur du chiffrement.",
@@ -162,7 +162,7 @@ const translations = {
     faqA2: "L'objectif produit est de proposer des parcours familiers de messagerie et de fichiers tout en chiffrant les contenus côté client et en laissant les vues Inbox/Files au client. Ces parcours ne sont pas encore intégrés de bout en bout ; CYBOU ne remplace pas aujourd'hui Gmail ni Google Drive.",
 
     faqQ3: "À quoi servent un nom .cybou et la phrase de récupération ?",
-    faqA3: "Un nom .cybou est un alias de compte enregistré par des opérations finalisées ; les libellés suivent une règle ASCII de 5 à 32 caractères. La phrase de 24 mots restaure l'Identity. La récupération des contenus nécessite aussi l'historique public et le stockage des chunks, et reste un objectif d'intégration.",
+    faqA3: "Un nom .cybou est un alias de compte enregistré par opérations finalisées (5–32 caractères ASCII). La phrase restaure Identity ; les contenus nécessitent aussi l’historique et les chunks disponibles. La restauration et RecoveryBridge sont implémentés.",
 
     faqQ4: "Pourquoi un wallet dans un produit de communication ?",
     faqA4: "Le protocole distingue le solde dépensable <code>Balance</code> du budget de services <code>SystemBalance</code>. Les frais et le bonus de création sont déterministes et propres au réseau. Les soldes DEV sont expérimentaux, sans valeur de production.",
@@ -174,7 +174,7 @@ const translations = {
     faqA6: "Elle restaure les clés et l'Identity si les vérifications réseau réussissent. La reconstruction de Mail et Files doit également retrouver les publications finalisées, ouvrir les capsules et récupérer les chunks. Ce parcours complet n'est pas encore livré.",
 
     faqQ7: "Puis-je utiliser CYBOU aujourd’hui ?",
-    faqA7: "Non comme service public de messagerie ou de stockage. Le réseau DEV et le client de bureau sont expérimentaux. Le dépôt contient le protocole PoA, Identity et le socle de publications/chunks ; les applications Mail/Files et leur disponibilité durable restent en développement. Consultez l'état détaillé dans le dépôt GitHub.",
+    faqA7: "Le client et DEV restent expérimentaux. Mail/Files, réplication, audit, réparation et restauration sont intégrés ; soak prolongé, acceptation Beta et revue de sécurité restent ouverts. Consultez le statut dans le dépôt.",
 
     footBrand: "Projet open source en développement.<br>Protocole DEV expérimental. Mail et Files ne sont pas encore des services publics.",
     footNav: "Navigation",
@@ -197,7 +197,7 @@ const translations = {
     heroPillSlogan: "One protected identity with private services — without premature public-service claims.",
 
     statusCalloutTitle: "The DEV protocol runs. The product is still being built.",
-    statusCalloutBody: "CYBOU is not a public or production service. DEV uses single-validator Proof of Authority (PoA) finality operated by CYBOU; full nodes independently verify blocks and state. This is a centralized trust model, not Byzantine fault tolerance. The Identity and publication substrate is in place, but usable Mail/Files flows and durable storage are not ready.",
+    statusCalloutBody: "CYBOU remains experimental and unready for production. DEV uses one PoA finalizer; full nodes verify blocks and state. Mail/Files, restore, replication, audit and repair are integrated; sustained soak and Beta acceptance remain open.",
 
     heroBtnServices: "Explore Services",
     heroBtnStatus: "View Implementation Status",
@@ -209,18 +209,18 @@ const translations = {
 
     srvIdentityTag: "Foundation",
     srvIdentityTitle: "Sovereign Identity",
-    srvIdentityDesc: "Account-level Identity, a portable CYBV2 vault, and .cybou names. The 24-word phrase restores Identity; Mail and Files content recovery also depends on sync and storage flows that still need integration.",
+    srvIdentityDesc: "Account-level Identity, CYBV2 vault and .cybou names. The phrase restores keys; finalized history, capsules and available chunks rebuild content, including after rotation through RecoveryBridge.",
     srvIdentityStatus: "Identity and vault path integrated on DEV",
 
     srvMailTag: "Communication",
     srvMailTitle: "Private Messaging (Mail)",
-    srvMailDesc: "Mail is designed as a local view over encrypted publications: one recipient and text only for the first profile. Message construction, sending, discovery, and Inbox/Sent views remain to be integrated.",
-    srvMailStatus: "Mail product not shipped — integration in progress",
+    srvMailDesc: "Private publications with attachments, capsule discovery, verified retrieval and Inbox/Sent views in an encrypted per-Identity Application DB.",
+    srvMailStatus: "Integrated flows — Beta acceptance pending",
 
     srvFilesTag: "Data",
     srvFilesTitle: "Encrypted Files & Storage",
-    srvFilesDesc: "Files will use the same encrypted content tree as Mail. The chunk substrate exists; the catalog, UI transfers, and durable availability still need to be built.",
-    srvFilesStatus: "UI and durable storage integration in progress",
+    srvFilesDesc: "Private catalog, transfers and rebuild use the same substrate as Mail. Remote storage is audited and repaired; finalization alone does not mean Protected.",
+    srvFilesStatus: "Integrated flows — sustained soak pending",
 
     srvBackupTag: "Continuity",
     srvBackupTitle: "Resilient Backup",
@@ -234,7 +234,7 @@ const translations = {
 
     matrixLabel: "Technical Transparency",
     matrixTitle: "Implementation Matrix.",
-    matrixDesc: "Code and product status: the protocol substrate is active on DEV, while Mail/Files user flows and content availability still need to be delivered.",
+    matrixDesc: "Mail/Files and storage are integrated on DEV. Sustained soak, clean installations, UX acceptance and security review remain Beta gates.",
 
     col1Title: "Protocol substrate on DEV",
     badgeDone: "IMPLEMENTED",
@@ -245,17 +245,17 @@ const translations = {
     col1Item5: "<strong>Admission and transport:</strong> local chunk store, inclusion proofs tied to finalized publications, and CYP2 PUT/GET messages.",
     col1Item6: "<strong>Deterministic economics:</strong> fee and balance transitions validated by the state machine; DEV, Beta, and Mainnet use separate parameters.",
 
-    col2Title: "Product and validation in progress",
+    col2Title: "Hardening and Beta preparation",
     badgeWip: "IN PROGRESS",
-    col2Item1: "<strong>Mail:</strong> publication creation, recipient capsules, finalized-publication scanning, and local Inbox/Sent reconstruction.",
-    col2Item2: "<strong>Files:</strong> encrypted catalog, browsing, UI transfers, and recursive file retrieval.",
-    col2Item3: "<strong>Availability:</strong> provider selection, retries, measured durability thresholds, retention, repair, and provider-loss handling.",
-    col2Item4: "<strong>End-to-end evidence:</strong> interoperable vectors, clean-node synchronization, and content recovery without a prior local database.",
+    col2Item1: "<strong>Integrated Mail:</strong> publications, attachments and Inbox/Sent rebuild; desktop acceptance remains open.",
+    col2Item2: "<strong>Integrated Files:</strong> private catalog, transfers and restore; clean-install and UX acceptance remain open.",
+    col2Item3: "<strong>Durability:</strong> replication, audit and repair are integrated. DEV: 1 remote copy; Beta: 2 independent copies. Local cache does not count.",
+    col2Item4: "<strong>Evidence:</strong> clean-restore and multi-process failure tests; sustained soak and Beta acceptance remain open.",
 
     col3Title: "Later stages",
     badgePlanned: "LATER",
-    col3Item1: "<strong>Multi-operator resilience:</strong> BFT belongs to a later governance and operations phase; current DEV remains single-operator PoA.",
-    col3Item2: "<strong>Attachments and scale:</strong> follow Files transfers and proven shared-storage durability.",
+    col3Item1: "<strong>Optional Validation:</strong> pre-finalization research with no canonical effects or PoA power. The active protocol has no BFT path.",
+    col3Item2: "<strong>Scale:</strong> sustained testing of integrated attachments and shared storage.",
     col3Item3: "<strong>Backup:</strong> post-Beta application of the same encrypted graph, with verifiable restore.",
     col3Item4: "<strong>Beta, then public service:</strong> measured operating costs, security review, UX acceptance, and documented operations before opening.",
 
@@ -282,7 +282,7 @@ const translations = {
 
     flowLabel: "Private publication flow",
     flowTitle: "From encrypted content to availability.",
-    flowDesc: "The protocol provides authorization, finality, and chunk admission. The client still needs to connect these steps to Mail and Files workflows.",
+    flowDesc: "Application services connect encryption, PoA publication and remote storage. Durability is measured separately from finality.",
 
     step1Title: "Prepare private content",
     step1Desc: "The client turns content into an encrypted ROOT/INDEX/DATA tree and keeps the required local material. Mail/Files schemas remain inside encryption.",
@@ -332,7 +332,7 @@ const translations = {
     faqA2: "The product goal is familiar mail and file workflows with client-side content encryption and client-owned Inbox/Files views. Those workflows are not yet integrated end to end; CYBOU does not replace Gmail or Google Drive today.",
 
     faqQ3: "What do .cybou names and the recovery phrase do?",
-    faqA3: "A .cybou name is an account alias registered through finalized operations; labels follow a 5–32 character ASCII rule. The 24-word phrase restores Identity. Content recovery also requires public history and stored chunks, and remains an integration goal.",
+    faqA3: "A .cybou name is an account alias registered through finalized operations (5–32 ASCII characters). The phrase restores Identity; content also needs history and available chunks. Restore and RecoveryBridge are implemented.",
 
     faqQ4: "Why does a communication product have a wallet?",
     faqA4: "The protocol separates spendable <code>Balance</code> from the service budget <code>SystemBalance</code>. Fees and the account-creation bonus are deterministic and network-specific. DEV balances are experimental and have no production value.",
@@ -344,7 +344,7 @@ const translations = {
     faqA6: "It restores Identity keys if network checks pass. Rebuilding Mail and Files also requires finding finalized publications, opening capsules, and retrieving chunks. That complete flow has not shipped yet.",
 
     faqQ7: "Can I use CYBOU today?",
-    faqA7: "Not as a public mail or storage service. The DEV network and desktop client are experimental. The repository contains the PoA, Identity, publication, and chunk substrate; Mail/Files applications and durable content availability remain in development. See the implementation status in GitHub.",
+    faqA7: "The desktop and DEV remain experimental. Mail/Files, replication, audit, repair and restore are integrated; sustained soak, Beta acceptance and security review remain open. See the repository status.",
 
     footBrand: "Open-source project in active development.<br>Experimental DEV protocol. Mail and Files are not yet public services.",
     footNav: "Navigation",

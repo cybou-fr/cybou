@@ -20,6 +20,8 @@
 #include <qt/pages/mailcompose.h>
 #include <qt/pages/mailreader.h>
 #include <qt/pages/storagepage.h>
+#include <qt/pages/diagnosticspage.h>
+#include <QTableWidget>
 
 #include <cybou/network_definition.h>
 #include <test/cybou_test_helpers.h>
@@ -627,6 +629,31 @@ void CybouShellTests::filesNavigationAndViews()
     QCOMPARE(model->fileItem(uploaded)->logical_size, quint64{5});
 }
 
+void CybouShellTests::networkMonitorUsesCoreSnapshot()
+{
+    CybouDesktopModel model{QStringLiteral("LAB")};
+    cybou::NodeDiagnosticsSnapshot snapshot;
+    snapshot.network_id="lab"; snapshot.height=12; snapshot.tip="tip"; snapshot.state_root="root";
+    snapshot.peers.push_back({"127.0.0.1:30471",9,0,"provider"});
+    snapshot.operations.push_back({"operation",3,12});
+    model.setNetworkDiagnostics(snapshot);
+    DiagnosticsPage page{&model,[]{}};
+    QPushButton* monitor=nullptr;
+    for (auto* button : page.findChildren<QPushButton*>()) if (button->text().contains(QStringLiteral("Network Monitor"))) monitor=button;
+    QVERIFY(monitor);
+    monitor->click();
+    auto* peers=page.findChild<QTableWidget*>(QStringLiteral("networkMonitorPeers"));
+    auto* operations=page.findChild<QTableWidget*>(QStringLiteral("networkMonitorOperations"));
+    QVERIFY(peers); QVERIFY(operations);
+    QCOMPARE(peers->rowCount(),1);
+    QCOMPARE(peers->item(0,3)->text(),QStringLiteral("3"));
+    QCOMPARE(operations->item(0,1)->text(),QStringLiteral("Finalized"));
+    snapshot.peers.clear(); snapshot.operations.clear();
+    model.setNetworkDiagnostics(snapshot);
+    QCOMPARE(peers->rowCount(),0);
+    QCOMPARE(operations->rowCount(),0);
+}
+
 void CybouShellTests::networkPageReflectsModel()
 {
     auto window = makeWindow();
@@ -1071,7 +1098,7 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
     ScopedEnvironment keep_network{"CYBOU_DEV_KEEP_NETWORK", "1"};
     ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
     ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
-    ScopedUnsetEnvironment validator_mode{"CYBOU_DEV_VALIDATOR"};
+    ScopedUnsetEnvironment finalizer_mode{"CYBOU_DEV_FINALIZER"};
 
     // A present but invalid network file is never replaced: startup fails.
     {
@@ -1134,7 +1161,7 @@ void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()
     ScopedEnvironment keep_network{"CYBOU_DEV_KEEP_NETWORK", "1"};
     ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
     ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
-    ScopedUnsetEnvironment validator_mode{"CYBOU_DEV_VALIDATOR"};
+    ScopedUnsetEnvironment finalizer_mode{"CYBOU_DEV_FINALIZER"};
     QVERIFY(WriteNetworkFile(directory.filePath(QStringLiteral("network.bin")), 0x32));
 
     {
@@ -1753,6 +1780,19 @@ void CybouShellTests::operationValidationNeverActsAsFinality()
     model.setOperationStatus({.operation_id = op, .state = CybouOperationState::Validated});
     QCOMPARE(model.operationStatus(op)->state, CybouOperationState::Finalized);
     QCOMPARE(model.displayedOperationState(op, CybouOperationState::Submitted), CybouOperationState::Finalized);
+
+    const auto failed_op = QStringLiteral("op-failed");
+    model.setOperationStatus({.operation_id = failed_op, .state = CybouOperationState::Failed});
+    for (const auto state : {CybouOperationState::Preparing, CybouOperationState::Submitted,
+                            CybouOperationState::Validated}) {
+        model.setOperationStatus({.operation_id = failed_op, .state = state});
+        QCOMPARE(model.operationStatus(failed_op)->state, CybouOperationState::Failed);
+    }
+    // Verified canonical inclusion supersedes a local failure.
+    model.setOperationStatus({.operation_id = failed_op, .state = CybouOperationState::Finalized});
+    model.setOperationStatus({.operation_id = failed_op, .state = CybouOperationState::Failed});
+    QCOMPARE(model.operationStatus(failed_op)->state, CybouOperationState::Finalized);
+    QCOMPARE(model.displayedOperationState(failed_op, CybouOperationState::Failed), CybouOperationState::Finalized);
 
     // Incoming mail was discovered after finality: it never shows Validated.
     model.setOperationStatus({.operation_id = QStringLiteral("op-in"), .state = CybouOperationState::Validated});

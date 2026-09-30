@@ -13,9 +13,80 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <optional>
 #include <thread>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_service_tests, CybouTestSetup)
+
+BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
+{
+    CybouServiceTestFixture primary;
+    CybouServiceTestFixture secondary;
+    CybouServiceTestFixture configured_source;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor first{io, tcp::endpoint{loopback, 0}};
+    tcp::acceptor second{io, tcp::endpoint{loopback, 0}};
+    std::jthread first_server{[&] {
+        tcp::socket socket{io}; first.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        if (session.Handshake({.network_id=primary.runtime->GetNetworkId(),
+                .finalized_height=0,.finalized_tip=primary.definition.genesis_block_id,
+                .capabilities=cybou::p2p::CAP_SERVE_BLOCKS,.nonce=30001})) {
+            while (session.ServeNext(*configured_source.runtime)) {}
+        }
+    }};
+    std::optional<std::jthread> second_server;
+    auto observer=std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
+        .network_definition=primary.definition,.data_dir=primary.directory/"route-observer",
+        .p2p_endpoint=std::make_pair(loopback.to_string(),first.local_endpoint().port()),
+        .memory_only=true,.wipe_data=true});
+    BOOST_REQUIRE(observer->InitializeGenesis(primary.genesis));
+    BOOST_CHECK(observer->SyncFromConfiguredPeer(2).status==cybou::SyncPeerStatus::UP_TO_DATE);
+    // The original route advances, but its stored HELLO remains at height zero.
+    const auto block=primary.runtime->ProduceBlock();
+    BOOST_REQUIRE(block);
+    BOOST_REQUIRE(static_cast<bool>(configured_source.runtime->CommitBlock(*block)));
+    BOOST_REQUIRE(static_cast<bool>(secondary.runtime->CommitBlock(*block)));
+    const auto second_block=primary.runtime->ProduceBlock();
+    BOOST_REQUIRE(second_block);
+    BOOST_REQUIRE(static_cast<bool>(configured_source.runtime->CommitBlock(*second_block)));
+    second_server.emplace([&] {
+        tcp::socket socket{io}; second.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket)};
+        if (session.Handshake({.network_id=secondary.runtime->GetNetworkId(),
+                .finalized_height=1,.finalized_tip=cybou::ComputeBlockId(block->block),
+                .capabilities=cybou::p2p::CAP_SERVE_BLOCKS,.nonce=30002})) {
+            while (session.ServeNext(*secondary.runtime)) {}
+        }
+    });
+    observer->SetExplicitPeerEndpoints({{loopback.to_string(),second.local_endpoint().port()}});
+    observer->SyncFromConfiguredPeer(2);
+    // Choosing the later, higher HELLO would return only its one stale block.
+    BOOST_CHECK_EQUAL(observer->GetFinalizedHeight().value_or(99),2U);
+    // A configured peer that stops advancing must not prevent failover.
+    BOOST_REQUIRE(static_cast<bool>(secondary.runtime->CommitBlock(*second_block)));
+    const auto third_block=primary.runtime->ProduceBlock();
+    BOOST_REQUIRE(third_block);
+    BOOST_REQUIRE(static_cast<bool>(secondary.runtime->CommitBlock(*third_block)));
+    observer->SyncFromConfiguredPeer(2);
+    BOOST_CHECK_EQUAL(observer->GetFinalizedHeight().value_or(99),3U);
+    // Partial progress from the preferred route must not starve a fresher one.
+    BOOST_REQUIRE(static_cast<bool>(configured_source.runtime->CommitBlock(*third_block)));
+    const auto fourth_block=primary.runtime->ProduceBlock();
+    BOOST_REQUIRE(fourth_block);
+    BOOST_REQUIRE(static_cast<bool>(configured_source.runtime->CommitBlock(*fourth_block)));
+    BOOST_REQUIRE(static_cast<bool>(secondary.runtime->CommitBlock(*fourth_block)));
+    const auto fifth_block=primary.runtime->ProduceBlock();
+    BOOST_REQUIRE(fifth_block);
+    BOOST_REQUIRE(static_cast<bool>(secondary.runtime->CommitBlock(*fifth_block)));
+    const auto progress=observer->SyncFromConfiguredPeer(2);
+    BOOST_CHECK_EQUAL(progress.blocks_applied,2U);
+    BOOST_CHECK_EQUAL(observer->GetFinalizedHeight().value_or(99),5U);
+    observer.reset();
+    first_server.join(); second_server->join();
+}
 
 BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
 {

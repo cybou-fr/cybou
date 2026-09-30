@@ -296,6 +296,7 @@ PublicationDurability StorageService::Secure(const uint256& operation_id, const 
         if (!Save(*placement)) {
             return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save placement state"};
         }
+        if (auto log = m_runtime.EventLog()) log->Write(NodeEvent::placement_created,{{"operation_id",operation_id.GetHex()}});
     }
     return Place(*placement);
 }
@@ -427,6 +428,8 @@ PublicationDurability StorageService::Place(Placement& placement)
             : providers.size() < m_target ? "Not enough storage providers are reachable"
             : "Storage providers did not accept every chunk yet";
     }
+    if (auto log = m_runtime.EventLog()) log->Write(result.state == DurabilityState::PROTECTED ? NodeEvent::content_protected : NodeEvent::content_securing,
+        {{"operation_id",placement.operation_id.GetHex()},{"replicas",std::uint64_t{result.min_replicas}},{"target",std::uint64_t{m_target}}});
     return result;
 }
 
@@ -436,6 +439,7 @@ std::optional<std::pair<uint256, PublicationDurability>> StorageService::AuditNe
     const auto index = PlacementIndex();
     if (index.empty()) return std::nullopt;
     const auto operation_id = index[m_audit_placement_cursor++ % index.size()];
+    if (auto log = m_runtime.EventLog()) log->Write(NodeEvent::storage_audit_started,{{"operation_id",operation_id.GetHex()}});
     auto placement = Load(operation_id);
     if (!placement || placement->leaves.empty()) return std::nullopt;
     const std::size_t count = placement->leaves.size();
@@ -457,10 +461,15 @@ std::optional<std::pair<uint256, PublicationDurability>> StorageService::AuditNe
             .error = "Cannot save placement state"}};
     }
     auto result = Summarize(*placement);
+    const bool degraded = result.state != DurabilityState::PROTECTED;
+    if (degraded) if (auto log = m_runtime.EventLog()) log->Write(NodeEvent::placement_degraded,
+        {{"operation_id",operation_id.GetHex()},{"replicas",std::uint64_t{result.min_replicas}},{"target",std::uint64_t{m_target}}});
     // Below target: repair now from any valid copy (local or remote).
     if (result.state != DurabilityState::PROTECTED && m_runtime.FindFinalizedRootPublication(operation_id)) {
         result = Place(*placement);
     }
+    if (degraded) if (auto log = m_runtime.EventLog()) log->Write(result.state == DurabilityState::PROTECTED ? NodeEvent::placement_repaired : NodeEvent::storage_audit_failed,
+        {{"operation_id",operation_id.GetHex()},{"replicas",std::uint64_t{result.min_replicas}},{"target",std::uint64_t{m_target}}});
     return std::pair{operation_id, result};
 }
 

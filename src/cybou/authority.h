@@ -24,7 +24,9 @@ class CybouNodeRuntime;
  *
  * DERIVED PREVIEW: these values are computed deterministically from finalized
  * history but are not part of consensus and are not enforced. Enforcement
- * requires binding the policy to the network definition.
+ * requires immutable policy bound to NetworkID and canonical accumulators
+ * (or an equivalently consensus-deterministic accounting specification).
+ * Persisting this rebuildable preview does not make it enforcement-ready.
  */
 struct AuthorityPolicy {
     /** Most Activity credited per Identity per epoch. */

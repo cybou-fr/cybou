@@ -67,7 +67,7 @@ enum class CybouContentState {
  *   Submitted   handed to the network
  *   Validated   validation happened: PRE-FINALIZED, not canonical
  *   Finalized   included in a PoA-finalized block: canonical
- *   Failed      cannot continue
+ *   Failed      terminal local failure for exact OperationID; verified finality wins
  *
  * Validated never changes balances, never starts remote storage and is
  * never Protected; Protected and Securing are content durability, which
@@ -182,6 +182,8 @@ struct CybouMailItem {
     QVector<CybouAttachmentItem> attachments;
     /** Evidence for Security Details → Advanced; empty until reported. */
     QString operation_id;
+    int min_remote_replicas{-1};
+    int remote_replica_target{-1};
     quint64 finalized_height{0};
     QString root_chunk_id;
     /** Operation axis of an outgoing message; incoming mail is always Finalized. */
@@ -205,6 +207,8 @@ struct CybouFileItem {
     bool available_offline{false};
     /** Advanced details only; empty until the backend reports them. */
     QString content_root_id;
+    int min_remote_replicas{-1};
+    int remote_replica_target{-1};
     quint64 finalized_height{0};
     /** Operation that produced this item's latest state; empty when unknown. */
     QString operation_id;
