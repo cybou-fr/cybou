@@ -1072,6 +1072,12 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
     ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
     ScopedUnsetEnvironment validator_mode{"CYBOU_DEV_VALIDATOR"};
 
+    // A present but invalid network file is never replaced: startup fails.
+    {
+        QFile corrupt{directory.filePath(QStringLiteral("network.bin"))};
+        QVERIFY(corrupt.open(QIODevice::WriteOnly));
+        corrupt.write("not a CYBOU network");
+    }
     CybouDesktopModel model{QStringLiteral("CYBOU-DEV")};
     CybouDesktopController controller{&model, directory.path().toStdString()};
     QSignalSpy failures{&controller, &CybouDesktopController::startupFailed};
@@ -1083,6 +1089,16 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
     controller.start();
     QCOMPARE(failures.count(), 1);
     QVERIFY(model.status().node_running);
+
+    // A fresh data directory starts on the bundled public DEV network.
+    QTemporaryDir fresh;
+    CybouDesktopModel fresh_model{QStringLiteral("CYBOU-DEV")};
+    CybouDesktopController fresh_controller{&fresh_model, fresh.path().toStdString()};
+    QSignalSpy fresh_failures{&fresh_controller, &CybouDesktopController::startupFailed};
+    fresh_controller.start();
+    QCOMPARE(fresh_failures.count(), 0);
+    QVERIFY(fresh_model.status().node_running);
+    QVERIFY(QFile::exists(fresh.filePath(QStringLiteral("network.bin"))));
 }
 
 void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()

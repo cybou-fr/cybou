@@ -123,9 +123,13 @@ if(WIN32)
     HINTS "${Qt6_DIR}/../../../bin"
     REQUIRED
   )
+  # --force: always install the Qt the binary was linked against. Without it
+  # windeployqt keeps any DLL that looks newer, e.g. from another Qt build,
+  # and cybou.exe fails with "entry point not found".
   add_custom_command(TARGET cybou POST_BUILD
     COMMAND "${CYBOU_WINDEPLOYQT_EXECUTABLE}"
       --release
+      --force
       --compiler-runtime
       --no-translations
       "$<TARGET_FILE:cybou>"

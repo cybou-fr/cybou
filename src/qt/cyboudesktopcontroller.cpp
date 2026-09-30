@@ -15,6 +15,7 @@
 #include <cybou/wallet_service.h>
 
 #include <QDateTime>
+#include <QFile>
 #include <QMetaObject>
 
 #include <boost/asio/ip/address.hpp>
@@ -43,6 +44,18 @@ void CybouDesktopController::start()
     if (m_node_service) return;
     try {
         const auto network_path = m_data_directory / "network.bin";
+        // A fresh install uses the bundled public DEV network (genesis and
+        // PoA public key; no secrets). An existing network.bin is kept, so a
+        // DEV operator can still point the desktop at another network.
+        if (!std::filesystem::exists(network_path)) {
+            QFile bundled{QStringLiteral(":/network/cybou-dev-network.bin")};
+            QFile installed{QString::fromStdU16String(network_path.u16string())};
+            if (!bundled.open(QIODevice::ReadOnly) || !installed.open(QIODevice::WriteOnly) ||
+                installed.write(bundled.readAll()) != bundled.size()) {
+                installed.remove();
+                throw std::runtime_error("cannot install the CYBOU network file");
+            }
+        }
         const auto network_file = cybou::LoadCybouNetworkFile(network_path);
         if (!network_file) throw std::runtime_error("missing or invalid CYBOU network.bin");
         const auto& genesis = network_file->genesis;

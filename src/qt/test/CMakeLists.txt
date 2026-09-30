@@ -37,3 +37,17 @@ if(WIN32 AND VCPKG_TARGET_TRIPLET)
 endif()
 
 install_binary_component(test_cybou-native-qt INTERNAL)
+
+if(WIN32 AND CYBOU_WINDEPLOYQT_EXECUTABLE)
+  # Same Qt runtime as the linked Qt (including Qt6Test); see src/qt/CMakeLists.txt.
+  add_custom_command(TARGET test_cybou-native-qt POST_BUILD
+    COMMAND "${CYBOU_WINDEPLOYQT_EXECUTABLE}"
+      --release
+      --force
+      --compiler-runtime
+      --no-translations
+      "$<TARGET_FILE:test_cybou-native-qt>"
+    COMMENT "Deploying the Qt runtime for the desktop tests"
+    VERBATIM
+  )
+endif()

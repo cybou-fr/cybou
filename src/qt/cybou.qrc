@@ -1,4 +1,7 @@
 <RCC>
+    <qresource prefix="/network">
+        <file alias="cybou-dev-network.bin">res/network/cybou-dev-network.bin</file>
+    </qresource>
     <qresource prefix="/icons">
         <file alias="logo">res/icons/cybou.png</file>
     </qresource>
