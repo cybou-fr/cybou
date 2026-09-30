@@ -101,7 +101,22 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     caps.payments = true;
     caps.mail = true;
     caps.files = true;
+    // Fixture-only: live validation does not exist in core yet (capability false there).
+    caps.validation = true;
     model.setCapabilities(caps);
+
+    // Derived Authority preview: Age 284 + Activity 198 + System contribution 1,000.
+    CybouAuthoritySummary authority;
+    authority.available = true;
+    authority.enforced = false;
+    authority.age = 284;
+    authority.activity = 198;
+    authority.system_contribution = 1000;
+    authority.earned = 1482;
+    authority.effective = 1482;
+    authority.tier = 10; // floor(log2(1482 + 1))
+    authority.scanned_height = 1242;
+    model.setAuthority(authority);
 
     model.setPaymentFee(1);
     model.setContacts({
@@ -158,6 +173,15 @@ QVector<CybouMailItem> FixtureMail()
         CybouContentState::Securing)};
     securing.attachments.first().progress_percent = 42;
     mail.append(securing);
+    // Outgoing message validated by the network but not yet PoA-finalized.
+    auto validated = Mail(QStringLiteral("m-sent-validated"), CybouMailFolder::Sent, QStringLiteral("stan.cybou"),
+        QStringLiteral("carol.cybou"), QStringLiteral("Contract questions"),
+        QStringLiteral("Two small questions about section 3 before I sign."), At(0, 10, 38));
+    validated.state = CybouContentState::WaitingForConfirmation;
+    validated.operation_state = CybouOperationState::Submitted;
+    validated.operation_id = QStringLiteral("op-m-sent-validated");
+    validated.finalized_height = 0;
+    mail.append(validated);
     mail.append(Mail(QStringLiteral("m-draft-1"), CybouMailFolder::Drafts, QStringLiteral("stan.cybou"),
         QStringLiteral("bobby.cybou"), QStringLiteral("Weekend plans"),
         QStringLiteral("Hey Bob, about Saturday —"), At(0, 8, 2)));
@@ -214,11 +238,33 @@ CybouFixtureApplicationBackend* Backend(CybouDesktopModel& model)
 void ApplyWallet(CybouDesktopModel& model)
 {
     QVector<CybouWalletEntry> entries;
-    entries.append({QStringLiteral("w1"), CybouWalletEntryKind::Received, 250, false, QStringLiteral("alice.cybou"), At(0, 9, 30), false});
-    entries.append({QStringLiteral("w2"), CybouWalletEntryKind::Sent, -100, false, QStringLiteral("bobby.cybou"), At(1, 17, 44), false});
-    entries.append({QStringLiteral("w3"), CybouWalletEntryKind::NetworkServiceFee, -4, true, {}, At(1, 12, 20), false});
-    entries.append({QStringLiteral("w4"), CybouWalletEntryKind::OnboardingCredit, 5000, true, {}, At(6, 10, 58), false});
+    const auto entry = [](QString id, CybouWalletEntryKind kind, qint64 amount, bool system_side, QString counterparty,
+                           QDateTime time, CybouOperationState state = CybouOperationState::Finalized) {
+        CybouWalletEntry item;
+        item.id = id;
+        item.kind = kind;
+        item.amount = amount;
+        item.system_side = system_side;
+        item.counterparty_name = std::move(counterparty);
+        item.time = std::move(time);
+        item.operation_state = state;
+        item.operation_id = QStringLiteral("op-") + id;
+        item.finalized_height = state == CybouOperationState::Finalized ? 1180 + static_cast<quint64>(qHash(id) % 60) : 0;
+        return item;
+    };
+    // One payment of each operation state: Submitted, Validated, Finalized.
+    entries.append(entry(QStringLiteral("w-submitted"), CybouWalletEntryKind::Sent, -40, false, QStringLiteral("carol.cybou"),
+        At(0, 10, 40), CybouOperationState::Submitted));
+    entries.append(entry(QStringLiteral("w-validated"), CybouWalletEntryKind::Sent, -75, false, QStringLiteral("alice.cybou"),
+        At(0, 10, 35), CybouOperationState::Submitted));
+    entries.append(entry(QStringLiteral("w1"), CybouWalletEntryKind::Received, 250, false, QStringLiteral("alice.cybou"), At(0, 9, 30)));
+    entries.append(entry(QStringLiteral("w2"), CybouWalletEntryKind::Sent, -100, false, QStringLiteral("bobby.cybou"), At(1, 17, 44)));
+    entries.append(entry(QStringLiteral("w3"), CybouWalletEntryKind::NetworkServiceFee, -4, true, {}, At(1, 12, 20)));
+    entries.append(entry(QStringLiteral("w4"), CybouWalletEntryKind::OnboardingCredit, 5000, true, {}, At(6, 10, 58)));
     model.setWalletEntries(entries);
+    // Simulated network validation for the fixture only; balances stay finalized-only.
+    model.setOperationStatus({.operation_id = QStringLiteral("op-w-validated"), .state = CybouOperationState::Validated,
+        .validation_confirmations = 3});
 }
 
 void ApplyActivity(CybouDesktopModel& model)
@@ -294,6 +340,9 @@ bool apply(CybouDesktopModel& model, const QString& name)
         mail.prepend(outgoing);
     }
     backend->seed(mail, FixtureFiles());
+    // Fixture-only validation of the outgoing message above: informational, not final.
+    model.setOperationStatus({.operation_id = QStringLiteral("op-m-sent-validated"),
+        .state = CybouOperationState::Validated, .validation_confirmations = 3});
     return true;
 }
 
@@ -321,9 +370,9 @@ Driver::Driver(CybouDesktopModel* model, QObject* parent)
             m_model->setBalances(status.balance - amount, status.system_balance - qMin(fee, status.system_balance));
             QVector<CybouWalletEntry> entries = m_model->walletEntries();
             entries.prepend({QStringLiteral("w-fee-%1").arg(entries.size()), CybouWalletEntryKind::NetworkServiceFee,
-                -static_cast<qint64>(fee), true, {}, QDateTime::currentDateTime(), false});
+                -static_cast<qint64>(fee), true, {}, QDateTime::currentDateTime()});
             entries.prepend({QStringLiteral("w-sent-%1").arg(entries.size()), CybouWalletEntryKind::Sent,
-                -static_cast<qint64>(amount), false, to, QDateTime::currentDateTime(), false});
+                -static_cast<qint64>(amount), false, to, QDateTime::currentDateTime()});
             m_model->setWalletEntries(entries);
             m_model->addActivity({CybouActivityKind::PaymentSent, tr("%1 sent to %2").arg(cybouAmountText(amount), to),
                 QString{}, QDateTime::currentDateTime()});
@@ -363,7 +412,7 @@ void Driver::runCreate()
         m_model->setNames({});
         m_model->setBalances(0, 5000);
         m_model->setWalletEntries({{QStringLiteral("w-onboard"), CybouWalletEntryKind::OnboardingCredit,
-            5000, true, {}, referenceTime(), false}});
+            5000, true, {}, referenceTime()}});
         m_model->setActivity({{CybouActivityKind::OnboardingCredit, QStringLiteral("Identity created"),
             QStringLiteral("5,000 CYBOU onboarding credit"), referenceTime()}});
     });

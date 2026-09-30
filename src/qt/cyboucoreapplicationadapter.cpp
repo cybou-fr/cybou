@@ -83,6 +83,20 @@ CybouContentState StateOf(const cybou::PublicationJobResult& job)
     return CybouContentState::NeedsAttention;
 }
 
+/** Operation axis of a publication job; content durability is StateOf. */
+CybouOperationState OperationOf(const cybou::PublicationJobResult& job)
+{
+    switch (job.phase) {
+    case cybou::PublicationJobPhase::QUEUED: return CybouOperationState::Preparing;
+    case cybou::PublicationJobPhase::WAITING_FINALITY: return CybouOperationState::Submitted;
+    case cybou::PublicationJobPhase::SECURING:
+    case cybou::PublicationJobPhase::PROTECTED: return CybouOperationState::Finalized;
+    case cybou::PublicationJobPhase::NEEDS_ATTENTION:
+        return job.finalized_height > 0 ? CybouOperationState::Finalized : CybouOperationState::Failed;
+    }
+    return CybouOperationState::Failed;
+}
+
 CybouMailFolder FolderOf(cybou::MailFolder folder)
 {
     switch (folder) {
@@ -347,6 +361,7 @@ struct CybouCoreApplicationAdapter::Session {
                 item.state = job != jobs.end() ? StateOf(job->second)
                     : durability && durability->state == cybou::DurabilityState::PROTECTED
                         ? CybouContentState::Protected : CybouContentState::Securing;
+                item.operation_state = job != jobs.end() ? OperationOf(job->second) : CybouOperationState::Finalized;
             } else {
                 // Incoming: finalized and decrypted here, but the sender's
                 // remote durability is not something this Identity has proved.
@@ -559,6 +574,8 @@ struct CybouCoreApplicationAdapter::Session {
             out.available_offline = AvailableOffline(item);
             if (status != jobs.end()) {
                 out.state = StateOf(status->second);
+                out.operation_state = OperationOf(status->second);
+                if (!status->second.operation_id.IsNull()) out.operation_id = QString::fromStdString(status->second.operation_id.GetHex());
                 out.progress_percent = status->second.phase == cybou::PublicationJobPhase::SECURING
                     ? status->second.durability_percent : -1;
                 out.finalized_height = status->second.finalized_height;
@@ -568,6 +585,8 @@ struct CybouCoreApplicationAdapter::Session {
                 out.state = durability && durability->state == cybou::DurabilityState::PROTECTED
                     ? CybouContentState::Protected : CybouContentState::Securing;
                 out.finalized_height = runtime.FindFinalizedOperation(op->second).height;
+                out.operation_id = QString::fromStdString(op->second.GetHex());
+                out.operation_state = CybouOperationState::Finalized;
             }
             files.append(out);
         }
@@ -1075,6 +1094,7 @@ void CybouCoreApplicationAdapter::uploadFile(const QString& file_id, const QStri
     shown.logical_size = static_cast<quint64>(std::max<qint64>(0, info.size()));
     shown.modified = QDateTime::currentDateTime();
     shown.state = CybouContentState::Preparing;
+    shown.operation_state = CybouOperationState::Preparing;
     shown.available_offline = true;
     showPendingFile(shown);
     m_session->Post([item_id = *item_id, name = shown.name.toStdString(), parent = ParentId(shown.parent_id),
@@ -1153,6 +1173,7 @@ void CybouCoreApplicationAdapter::createFolder(const QString& folder_id, const Q
     shown.folder = true;
     shown.modified = QDateTime::currentDateTime();
     shown.state = CybouContentState::Preparing;
+    shown.operation_state = CybouOperationState::Preparing;
     showPendingFile(shown);
     m_session->Post([item_id = *item_id, name = name.toStdString(), parent = ParentId(shown.parent_id)](Session& s) {
         cybou::FilesMutationBatch batch;

@@ -651,7 +651,8 @@ void StoragePage::rebuild()
         m_visible << file.id;
         const QIcon icon{glyphPixmap(FileGlyph(file), {20, 20},
             CybouTheme::color(file.folder ? CybouTheme::BLUE : CybouTheme::TEXT_SECONDARY))};
-        const QString status = CybouProduct::fileStatusText(file, online);
+        const QString status = CybouProduct::fileStatusText(file, online,
+            m_model->displayedOperationState(file.operation_id, file.operation_state));
 
         auto* row = new QTreeWidgetItem{m_table};
         row->setIcon(NameColumn, icon);
@@ -1021,7 +1022,11 @@ void StoragePage::rebuildDetails()
         const bool online = m_model->status().online;
         const QString retrieval = CybouProduct::retrievalText(item->retrieval);
         DetailPair(layout, tr("Status"), retrieval.isEmpty()
-            ? CybouProduct::progressText(item->state, item->progress_percent, online) : retrieval, m_details);
+            ? (item->state == CybouContentState::Securing
+                ? CybouProduct::progressText(item->state, item->progress_percent, online)
+                : CybouProduct::contentWithOperationText(item->state,
+                    m_model->displayedOperationState(item->operation_id, item->operation_state), online))
+            : retrieval, m_details);
         DetailPair(layout, tr("On this computer"), CybouProduct::localAvailabilityText(*item), m_details);
     }
     const auto& status = m_model->status();

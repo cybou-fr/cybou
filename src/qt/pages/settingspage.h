@@ -31,6 +31,8 @@ public:
     static QString runInBackgroundKey() { return QStringLiteral("desktop/run_in_background"); }
     static QString mailPreviewsKey() { return QStringLiteral("privacy/mail_previews"); }
     static QString downloadFolderKey() { return QStringLiteral("files/download_folder"); }
+    /** Show "Validated" on operations (informational; only finality is canonical). */
+    static QString showValidationKey() { return QStringLiteral("network/show_validation"); }
 
 private:
     CybouDesktopModel* const m_model;
@@ -38,6 +40,8 @@ private:
     QCheckBox* m_start_with_windows{nullptr};
     QCheckBox* m_run_in_background{nullptr};
     QCheckBox* m_mail_previews{nullptr};
+    QWidget* m_validation_section{nullptr};
+    QCheckBox* m_show_validation{nullptr};
     QLabel* m_download_folder{nullptr};
     QLabel* m_data_directory{nullptr};
 

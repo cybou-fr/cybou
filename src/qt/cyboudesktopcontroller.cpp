@@ -7,6 +7,7 @@
 #include <qt/cyboucoreapplicationadapter.h>
 #include <qt/cyboudesktopmodel.h>
 
+#include <cybou/authority.h>
 #include <cybou/bootstrap_nodes.h>
 #include <cybou/identity_service.h>
 #include <cybou/network_definition.h>
@@ -108,6 +109,8 @@ void CybouDesktopController::start()
         m_wallet_service = std::make_unique<cybou::CybouWalletService>(
             runtime, m_identity_service->GetKeyStore());
         m_model->setWalletService(m_wallet_service.get());
+        // Read-only, rebuildable Authority preview over finalized history.
+        m_authority_index = std::make_unique<cybou::AuthorityIndex>(runtime);
 
         const auto status = runtime.GetStatus();
         m_model->setFinalizedHeight(status.finalized_height);
@@ -151,7 +154,12 @@ void CybouDesktopController::start()
                             item.amount = entry.amount;
                             item.system_side = entry.system_side;
                             item.time = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(entry.timestamp));
-                            item.pending = entry.finality == cybou::WalletEntryFinality::PENDING;
+                            // The ledger knows only pending/final; validation (when it
+                            // exists) is joined in by the model via operation_id.
+                            item.operation_state = entry.finality == cybou::WalletEntryFinality::PENDING
+                                ? CybouOperationState::Submitted : CybouOperationState::Finalized;
+                            item.operation_id = QString::fromStdString(entry.entry_id.GetHex());
+                            item.finalized_height = entry.height;
                             if (!entry.counterparty.IsNull()) {
                                 item.counterparty_name = QString::fromStdString(entry.counterparty.Value().GetHex());
                             }
@@ -179,6 +187,11 @@ void CybouDesktopController::start()
                 } catch (const std::exception& e) {
                     qWarning() << "cybou desktop service refresh error:" << e.what();
                 }
+                try {
+                    publishAuthority();
+                } catch (const std::exception& e) {
+                    qWarning() << "cybou authority refresh error:" << e.what();
+                }
                 QMetaObject::invokeMethod(m_model, [model = m_model, runtime_status, bootstrap_reachable, connected_peer_count, sync_error] {
                     model->setSyncError(sync_error);
                     model->setFinalizedHeight(runtime_status.finalized_height);
@@ -195,6 +208,7 @@ void CybouDesktopController::start()
         m_application.reset();
         m_model->setIdentityService(nullptr);
         m_model->setWalletService(nullptr);
+        m_authority_index.reset();
         m_wallet_service.reset();
         m_identity_service.reset();
         m_node_service.reset();
@@ -204,9 +218,35 @@ void CybouDesktopController::start()
     }
 }
 
+void CybouDesktopController::publishAuthority()
+{
+    if (!m_authority_index || !m_identity_service) return;
+    m_authority_index->Sync();
+    CybouAuthoritySummary summary;
+    summary.scanned_height = m_authority_index->ScannedHeight();
+    if (const auto account = m_identity_service->GetAccountId()) {
+        if (const auto record = m_authority_index->Get(*account)) {
+            summary.available = true;
+            summary.enforced = record->enforced;
+            summary.age = record->age;
+            summary.activity = record->activity;
+            summary.system_contribution = record->system_contribution;
+            summary.liveness = record->liveness;
+            summary.storage = record->storage;
+            summary.penalty_debt = record->penalty_debt;
+            summary.earned = record->earned;
+            summary.effective = record->effective;
+            summary.tier = record->tier;
+        }
+    }
+    QMetaObject::invokeMethod(m_model, [model = m_model, summary] { model->setAuthority(summary); },
+        Qt::QueuedConnection);
+}
+
 void CybouDesktopController::stop()
 {
     if (m_node_service) m_node_service->StopNetwork();
+    m_authority_index.reset();
     // Joins the application worker before the runtime goes away.
     if (m_model) m_model->setApplicationBackend(nullptr);
     m_application.reset();

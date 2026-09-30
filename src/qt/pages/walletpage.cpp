@@ -203,10 +203,12 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::walletChanged, this, [this] { rebuildActivity(); });
+    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { rebuildActivity(); });
     connect(m_model, &CybouDesktopModel::paymentFinished, this, [this](bool ok, const QString& error) {
         if (ok) {
-            m_model->notify(tr("Payment sent"));
-            m_send_status->setText(tr("Sent. It appears in your activity."));
+            // Submitted is not final: the activity row follows the operation to finality.
+            m_model->notify(tr("Payment submitted"));
+            m_send_status->setText(tr("Submitted. Your balance changes once the network confirms it."));
             m_to->clear();
             m_amount->clear();
         } else {
@@ -351,7 +353,11 @@ void WalletPage::rebuildActivity()
         if (shown == 12) break;
         const QString sign = entry.amount >= 0 ? QStringLiteral("+") : QStringLiteral("−");
         const QString amount = sign + cybouAmountText(static_cast<quint64>(std::llabs(entry.amount)));
-        const QString subtitle = entry.pending ? tr("Waiting for confirmation")
+        // Until PoA finality the row shows the operation (Waiting for
+        // confirmation / Validated); balances never include it.
+        const auto operation = m_model->displayedOperationState(entry.operation_id, entry.operation_state);
+        const QString subtitle = CybouProduct::operationPending(operation) || operation == CybouOperationState::Failed
+            ? CybouProduct::operationStateText(operation)
             : entry.system_side ? tr("System Balance") : tr("Available");
         auto* row = ActivityRow(EntryGlyph(entry),
             entry.amount >= 0 ? Tint::Mint : Tint::Indigo, EntryTitle(entry), subtitle,

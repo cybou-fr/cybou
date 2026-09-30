@@ -58,6 +58,62 @@ enum class CybouContentState {
     NeedsAttention,
 };
 
+/**
+ * Lifecycle of one protocol operation (payment, name claim, rotation,
+ * Mail or Files publication). A separate axis from CybouContentState:
+ *
+ *   Local       exists only on this computer
+ *   Preparing   being built and signed
+ *   Submitted   handed to the network
+ *   Validated   validation happened: PRE-FINALIZED, not canonical
+ *   Finalized   included in a PoA-finalized block: canonical
+ *   Failed      cannot continue
+ *
+ * Validated never changes balances, never starts remote storage and is
+ * never Protected; Protected and Securing are content durability, which
+ * begins only after Finalized.
+ */
+enum class CybouOperationState {
+    Local,
+    Preparing,
+    Submitted,
+    Validated,
+    Finalized,
+    Failed,
+};
+
+/** Continuous status of one operation, keyed by its operation id. */
+struct CybouOperationStatus {
+    QString operation_id;
+    CybouOperationState state{CybouOperationState::Local};
+    /** Network validation confirmations; 0 until live validation exists. */
+    quint32 validation_confirmations{0};
+    quint64 finalized_height{0};
+    QString error;
+};
+
+/**
+ * Identity Authority: a derived network-capability metric, not social trust
+ * or reputation. While enforced is false it is an informational preview and
+ * no network limit comes from it.
+ */
+struct CybouAuthoritySummary {
+    bool available{false};
+    bool enforced{false};
+    quint64 age{0};
+    quint64 activity{0};
+    quint64 system_contribution{0};
+    quint64 liveness{0};
+    quint64 storage{0};
+    quint64 penalty_debt{0};
+    quint64 earned{0};
+    quint64 effective{0};
+    quint32 tier{0};
+    /** Finalized height the Authority index has scanned up to. */
+    quint64 scanned_height{0};
+    bool operator==(const CybouAuthoritySummary&) const = default;
+};
+
 /** Download/retrieval progress for protected content. */
 enum class CybouRetrievalState {
     Idle,
@@ -128,6 +184,8 @@ struct CybouMailItem {
     QString operation_id;
     quint64 finalized_height{0};
     QString root_chunk_id;
+    /** Operation axis of an outgoing message; incoming mail is always Finalized. */
+    CybouOperationState operation_state{CybouOperationState::Finalized};
 };
 
 struct CybouFileItem {
@@ -148,6 +206,9 @@ struct CybouFileItem {
     /** Advanced details only; empty until the backend reports them. */
     QString content_root_id;
     quint64 finalized_height{0};
+    /** Operation that produced this item's latest state; empty when unknown. */
+    QString operation_id;
+    CybouOperationState operation_state{CybouOperationState::Finalized};
 };
 
 enum class CybouActivityKind {
@@ -183,7 +244,10 @@ struct CybouWalletEntry {
     bool system_side{false};
     QString counterparty_name;
     QDateTime time;
-    bool pending{false};
+    /** Balances always come from PoA-finalized state, whatever this says. */
+    CybouOperationState operation_state{CybouOperationState::Finalized};
+    QString operation_id;
+    quint64 finalized_height{0};
 };
 
 struct CybouNameItem {
@@ -249,6 +313,40 @@ inline bool contentOnNetwork(CybouContentState state)
     return state == CybouContentState::Protected || state == CybouContentState::Received;
 }
 
+/** Operation wording; Validated is informational (pre-finalized). */
+inline QString operationStateText(CybouOperationState state)
+{
+    switch (state) {
+    case CybouOperationState::Local: return QCoreApplication::translate("CybouProduct", "On this device");
+    case CybouOperationState::Preparing: return QCoreApplication::translate("CybouProduct", "Preparing…");
+    case CybouOperationState::Submitted: return QCoreApplication::translate("CybouProduct", "Waiting for confirmation");
+    case CybouOperationState::Validated: return QCoreApplication::translate("CybouProduct", "Validated");
+    case CybouOperationState::Finalized: return QCoreApplication::translate("CybouProduct", "Finalized");
+    case CybouOperationState::Failed: return QCoreApplication::translate("CybouProduct", "Failed");
+    }
+    return {};
+}
+
+/** True before PoA finality (the operation can still change or fail). */
+inline bool operationPending(CybouOperationState state)
+{
+    return state == CybouOperationState::Local || state == CybouOperationState::Preparing ||
+        state == CybouOperationState::Submitted || state == CybouOperationState::Validated;
+}
+
+/**
+ * Content text with the operation axis applied: only while content is still
+ * waiting for finality can a Validated operation show as "Validated". Once
+ * content is Securing, Protected or Received, the content axis speaks.
+ */
+inline QString contentWithOperationText(CybouContentState content, CybouOperationState operation, bool online = true)
+{
+    const bool before_finality = content == CybouContentState::Local || content == CybouContentState::Preparing ||
+        content == CybouContentState::WaitingForConfirmation;
+    if (before_finality && operation == CybouOperationState::Validated) return operationStateText(operation);
+    return contentStateText(content, online);
+}
+
 inline bool contentPending(CybouContentState state)
 {
     return state == CybouContentState::Preparing ||
@@ -280,12 +378,15 @@ inline QString localAvailabilityText(const CybouFileItem& item)
 }
 
 /** List status: protection state, plus "Available offline" once Protected. */
-inline QString fileStatusText(const CybouFileItem& item, bool online)
+inline QString fileStatusText(const CybouFileItem& item, bool online,
+    CybouOperationState operation = CybouOperationState::Finalized)
 {
     if (item.folder) return {};
     if (item.retrieval != CybouRetrievalState::Idle && item.retrieval != CybouRetrievalState::Ready)
         return retrievalText(item.retrieval);
-    const QString state = progressText(item.state, item.progress_percent, online);
+    const QString state = item.state == CybouContentState::Securing
+        ? progressText(item.state, item.progress_percent, online)
+        : contentWithOperationText(item.state, operation, online);
     if (item.state == CybouContentState::Protected && item.available_offline)
         return state + QStringLiteral("  ·  ") + localAvailabilityText(item);
     return state;

@@ -18,6 +18,7 @@ namespace cybou {
 class CybouNodeService;
 class CybouIdentityService;
 class CybouWalletService;
+class AuthorityIndex;
 }
 
 /** Owns the native CYBOU runtime and its services for one desktop session. */
@@ -41,7 +42,10 @@ private:
     std::unique_ptr<cybou::CybouIdentityService> m_identity_service;
     std::unique_ptr<cybou::CybouWalletService> m_wallet_service;
     std::unique_ptr<CybouCoreApplicationAdapter> m_application;
+    /** Derived Identity Authority preview; used only on the network refresh thread. */
+    std::unique_ptr<cybou::AuthorityIndex> m_authority_index;
     void stop();
+    void publishAuthority();
 };
 
 #endif // BITCOIN_QT_CYBOUDESKTOPCONTROLLER_H

@@ -30,6 +30,8 @@ class IdentityPage : public QWidget
 public:
     explicit IdentityPage(CybouDesktopModel* model, std::function<void()> home_requested = {},
         QWidget* parent = nullptr);
+    /** Expands the Identity Authority breakdown (screenshots and tests). */
+    void showAuthorityDetails(bool open);
 
 private:
     CybouDesktopModel* const m_model;
@@ -46,6 +48,13 @@ private:
     QPushButton* m_claim{nullptr};
     QLabel* m_claim_status{nullptr};
     QPushButton* m_lock{nullptr};
+    /* Identity Authority: a derived network-capability preview, not trust. */
+    QFrame* m_authority_card{nullptr};
+    QLabel* m_authority_value{nullptr};
+    QLabel* m_authority_level{nullptr};
+    QToolButton* m_authority_toggle{nullptr};
+    QWidget* m_authority_details{nullptr};
+    QVBoxLayout* m_authority_rows{nullptr};
     QToolButton* m_advanced_toggle{nullptr};
     QFrame* m_advanced{nullptr};
     QVBoxLayout* m_advanced_rows{nullptr};
@@ -53,6 +62,7 @@ private:
     QWidget* buildSetupPrompt();
     QWidget* buildContent();
     void refresh();
+    void refreshAuthority();
     void copyAccountId();
     void revealRecoveryPhrase();
     void replaceRecoveryPhrase();

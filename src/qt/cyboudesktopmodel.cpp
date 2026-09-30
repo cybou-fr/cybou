@@ -103,7 +103,9 @@ void CybouDesktopModel::setCapabilities(const CybouCapabilities& requested)
         m_capabilities.mail == capabilities.mail &&
         m_capabilities.files == capabilities.files &&
         m_capabilities.sharing == capabilities.sharing &&
-        m_capabilities.version_history == capabilities.version_history) {
+        m_capabilities.version_history == capabilities.version_history &&
+        m_capabilities.authority == capabilities.authority &&
+        m_capabilities.validation == capabilities.validation) {
         return;
     }
     m_capabilities = capabilities;
@@ -459,6 +461,7 @@ void CybouDesktopModel::requestRetryMail(const QString& id)
     if (!mailReady() || !item || item->state != CybouContentState::NeedsAttention) return;
     CybouMailItem pending = *item;
     pending.state = CybouContentState::Preparing;
+    pending.operation_state = CybouOperationState::Preparing;
     for (auto& attachment : pending.attachments) {
         if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = CybouContentState::Preparing;
     }
@@ -523,6 +526,65 @@ void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
 {
     m_wallet_entries = std::move(entries);
     Q_EMIT walletChanged();
+}
+
+void CybouDesktopModel::setAuthority(const CybouAuthoritySummary& authority)
+{
+    if (m_authority == authority) return;
+    m_authority = authority;
+    Q_EMIT authorityChanged();
+    // The Authority view exists only while a real summary does.
+    if (m_requested_capabilities.authority != authority.available) {
+        m_requested_capabilities.authority = authority.available;
+        setCapabilities(m_requested_capabilities);
+    }
+}
+
+void CybouDesktopModel::setOperationStatus(const CybouOperationStatus& status)
+{
+    if (status.operation_id.isEmpty()) return;
+    auto& stored = m_operations[status.operation_id];
+    // Finality is canonical: nothing moves an operation back from it.
+    if (stored.state == CybouOperationState::Finalized && status.state != CybouOperationState::Finalized) return;
+    stored = status;
+    Q_EMIT operationStatusChanged(status.operation_id);
+    // Items reference operations by id; let their views re-render.
+    Q_EMIT walletChanged();
+    Q_EMIT mailChanged();
+    Q_EMIT filesChanged();
+}
+
+std::optional<CybouOperationStatus> CybouDesktopModel::operationStatus(const QString& operation_id) const
+{
+    const auto it = m_operations.constFind(operation_id);
+    if (it == m_operations.constEnd()) return std::nullopt;
+    return *it;
+}
+
+CybouOperationState CybouDesktopModel::displayedOperationState(const QString& operation_id,
+    CybouOperationState own) const
+{
+    if (own == CybouOperationState::Finalized || own == CybouOperationState::Failed) return own;
+    auto state = own;
+    if (const auto status = operationStatus(operation_id)) {
+        if (status->state == CybouOperationState::Finalized || status->state == CybouOperationState::Failed) {
+            return status->state;
+        }
+        if (static_cast<int>(status->state) > static_cast<int>(state)) state = status->state;
+    }
+    if (state == CybouOperationState::Validated && !(m_capabilities.validation && m_validation_shown)) {
+        return CybouOperationState::Submitted;
+    }
+    return state;
+}
+
+void CybouDesktopModel::setValidationStatusShown(bool shown)
+{
+    if (m_validation_shown == shown) return;
+    m_validation_shown = shown;
+    Q_EMIT walletChanged();
+    Q_EMIT mailChanged();
+    Q_EMIT filesChanged();
 }
 
 bool CybouDesktopModel::requestPayment(const QString& to_name, quint64 amount)

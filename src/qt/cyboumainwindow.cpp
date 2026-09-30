@@ -653,6 +653,10 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         save(QStringLiteral("home-active"));
         showPage(CybouPage::Identity);
         save(QStringLiteral("identity-active"));
+        auto* identity = static_cast<IdentityPage*>(page(CybouPage::Identity));
+        identity->showAuthorityDetails(true);
+        save(QStringLiteral("identity-authority"));
+        identity->showAuthorityDetails(false);
 
         showPage(CybouPage::Mail);
         mail->setView(EmailPage::View::Inbox);
@@ -662,6 +666,8 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         mail->setView(EmailPage::View::Sent);
         mail->openMessage(QStringLiteral("m-sent-securing"));
         save(QStringLiteral("mail-attachment-progress"));
+        mail->openMessage(QStringLiteral("m-sent-validated"));
+        save(QStringLiteral("mail-validated"));
         mail->setView(EmailPage::View::Inbox);
         CybouMailItem draft;
         draft.to_name = QStringLiteral("alice.cybou");
@@ -693,6 +699,7 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
 
         showPage(CybouPage::Wallet);
         save(QStringLiteral("wallet"));
+        save(QStringLiteral("wallet-validated")); // fixture activity: Waiting / Validated / Finalized
         showPage(CybouPage::Diagnostics);
         save(QStringLiteral("diagnostics"));
         showPage(CybouPage::Settings);

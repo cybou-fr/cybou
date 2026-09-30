@@ -128,6 +128,7 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::authorityChanged, this, [this] { refresh(); });
     auto* ticker = new QTimer{this};
     connect(ticker, &QTimer::timeout, this, [this] { refresh(); });
     ticker->start(30000);
@@ -152,6 +153,18 @@ void DiagnosticsPage::refresh()
     Row(m_rows, tr("Network ID"), status.network_id.isEmpty() ? tr("Available after node startup") : status.network_id, parent);
     Row(m_rows, tr("Data directory"), status.data_directory.isEmpty() ? tr("Available after node startup") : status.data_directory, parent);
     Row(m_rows, tr("Finality model"), tr("Single-operator proof of authority (not Byzantine fault tolerant)"), parent);
+    // Identity Authority index: a derived, read-only preview over finalized history.
+    const auto& authority = m_model->authority();
+    const bool indexed = m_model->capabilities().authority && authority.scanned_height > 0;
+    Row(m_rows, tr("Identity Authority index"), indexed
+        ? tr("Scanned to height %1  ·  %2").arg(QLocale{}.toString(authority.scanned_height),
+              status.finality_known && authority.scanned_height >= status.finalized_height ? tr("Up to date") : tr("Catching up"))
+        : tr("Not available"), parent);
+    Row(m_rows, tr("Identity Authority enforcement"), tr("Not enforced (preview)"), parent);
+    // Validation (pre-finalization) is informational and never canonical.
+    Row(m_rows, tr("Validation"), m_model->capabilities().validation
+        ? (m_model->validationStatusShown() ? tr("Observing (informational, not final)") : tr("Hidden by settings"))
+        : tr("Not available"), parent);
 
     ClearLayout(m_services);
     const auto& caps = m_model->capabilities();
@@ -160,6 +173,7 @@ void DiagnosticsPage::refresh()
         {tr("Wallet"), caps.payments},
         {tr("Mail"), caps.mail},
         {tr("Files"), caps.files},
+        {tr("Identity Authority"), caps.authority},
     };
     for (const auto& [name, on] : services) {
         Row(m_services, name, on ? tr("Connected") : tr("Not connected yet"), m_services->parentWidget());

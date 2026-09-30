@@ -121,7 +121,7 @@ private:
     bool m_unread;
 };
 
-QWidget* MailRow(const CybouMailItem& item, bool online, QWidget* parent)
+QWidget* MailRow(const CybouMailItem& item, CybouOperationState operation, bool online, QWidget* parent)
 {
     auto* row = new QWidget{parent};
     row->setObjectName(QStringLiteral("mailRow"));
@@ -162,7 +162,8 @@ QWidget* MailRow(const CybouMailItem& item, bool online, QWidget* parent)
     const bool pending = CybouProduct::contentPending(item.state) || item.state == CybouContentState::NeedsAttention;
     QLabel* when{nullptr};
     if (pending && !item.draft) {
-        when = StateChip(item.state, CybouProduct::contentStateText(item.state, online), row);
+        // Incoming mail is always Finalized, so only outgoing mail can read "Validated".
+        when = StateChip(item.state, CybouProduct::contentWithOperationText(item.state, operation, online), row);
     } else {
         when = new QLabel{shortTime(item.time), row};
         when->setObjectName(QStringLiteral("rowMeta"));
@@ -645,7 +646,8 @@ void EmailPage::rebuildList()
         item->setData(Qt::UserRole, mail.id);
         item->setData(Qt::AccessibleTextRole, tr("%1, %2").arg(RowPeer(mail), mail.subject));
         item->setSizeHint(QSize{0, 62});
-        m_list->setItemWidget(item, MailRow(mail, m_model->status().online, m_list));
+        m_list->setItemWidget(item, MailRow(mail, m_model->displayedOperationState(mail.operation_id, mail.operation_state),
+            m_model->status().online, m_list));
         if (mail.id == m_current_id) m_list->setCurrentItem(item);
     }
     const bool identity = m_model->status().identity_state == CybouIdentityState::Active;

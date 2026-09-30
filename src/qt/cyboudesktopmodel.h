@@ -10,6 +10,7 @@
 #include <cybou/recovery_phrase.h>
 
 #include <QDateTime>
+#include <QHash>
 #include <QLocale>
 #include <QObject>
 #include <QString>
@@ -36,6 +37,10 @@ struct CybouCapabilities {
     bool files{false};
     bool sharing{false};
     bool version_history{false};
+    /** Identity Authority preview is computed from finalized history. */
+    bool authority{false};
+    /** Live network validation (pre-finalization) exists. False until core provides it. */
+    bool validation{false};
 };
 
 /**
@@ -196,6 +201,28 @@ public:
     /** Adapter entry: payment finished (ok) or failed with a reason. */
     void setPaymentFinished(bool ok, const QString& error = {});
 
+    /* ---- Identity Authority (derived preview; never social trust). ---- */
+    const CybouAuthoritySummary& authority() const { return m_authority; }
+    void setAuthority(const CybouAuthoritySummary& authority);
+
+    /*
+     * ---- Operation lifecycle, shared by Wallet, Mail, Files and Identity. ----
+     * Product items carry an operation_id; the continuous status lives here
+     * once, not copied into every item.
+     */
+    void setOperationStatus(const CybouOperationStatus& status);
+    std::optional<CybouOperationStatus> operationStatus(const QString& operation_id) const;
+    /**
+     * The operation state to show for an item whose own state is `own`.
+     * PoA finality and failure always win. Validated appears only while
+     * validation is available and shown; otherwise it reads as Submitted.
+     * It never affects balances or content durability.
+     */
+    CybouOperationState displayedOperationState(const QString& operation_id, CybouOperationState own) const;
+    /** User preference: show "Validated" for operations (informational only). */
+    bool validationStatusShown() const { return m_validation_shown; }
+    void setValidationStatusShown(bool shown);
+
     const QVector<CybouContact>& contacts() const { return m_contacts; }
     void setContacts(QVector<CybouContact> contacts);
 
@@ -308,7 +335,10 @@ Q_SIGNALS:
     void lockVaultRequested();
     void restoreIdentityRequested();
     void paymentRequested(const QString& to_name, quint64 amount);
+    /** ok means submitted to the network, not finalized: finality shows in activity. */
     void paymentFinished(bool ok, const QString& error);
+    void authorityChanged();
+    void operationStatusChanged(const QString& operation_id);
 
 private:
     cybou::CybouIdentityService* m_identity_service{nullptr};
@@ -338,6 +368,9 @@ private:
     QVector<CybouWalletEntry> m_wallet_entries;
     QVector<CybouContact> m_contacts;
     CybouRestoreProgress m_restore_progress;
+    CybouAuthoritySummary m_authority;
+    QHash<QString, CybouOperationStatus> m_operations;
+    bool m_validation_shown{true};
 
     void refreshFinalizedName();
     /** True when private Mail/Files commands may be issued. */

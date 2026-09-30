@@ -15,6 +15,7 @@
 #include <qt/cybounotifier.h>
 #include <qt/cybouuifixtures.h>
 #include <qt/pages/emailpage.h>
+#include <qt/pages/identitypage.h>
 #include <qt/pages/homepage.h>
 #include <qt/pages/mailcompose.h>
 #include <qt/pages/mailreader.h>
@@ -378,7 +379,8 @@ void CybouShellTests::mailNavigationAndSearch()
     search->clear();
 
     mail->setView(EmailPage::View::Sent);
-    QCOMPARE(mail->visibleMessageIds(), (QStringList{QStringLiteral("m-sent-securing"), QStringLiteral("m-sent-1")}));
+    QCOMPARE(mail->visibleMessageIds(), (QStringList{QStringLiteral("m-sent-validated"),
+        QStringLiteral("m-sent-securing"), QStringLiteral("m-sent-1")}));
     mail->setView(EmailPage::View::Starred);
     QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-welcome")});
 
@@ -792,7 +794,9 @@ void CybouShellTests::normalUiAvoidsProtocolVocabulary()
         QStringLiteral("ObjectID"), QStringLiteral("Object ID"), QStringLiteral("Merkle"), QStringLiteral("ChunkID"),
         QStringLiteral("RootPublication"), QStringLiteral("nonce"), QStringLiteral("block hash"),
         QStringLiteral("provider"), QStringLiteral("KEM capsule"), QStringLiteral("Backup"), QStringLiteral("shard"),
-        QStringLiteral("Mail fee")};
+        QStringLiteral("Mail fee"),
+        // Identity Authority is a network-capability metric, never social trust.
+        QStringLiteral("reputation"), QStringLiteral("trust score"), QStringLiteral("trusted user")};
     for (const auto& fixture : {QStringLiteral("empty"), QStringLiteral("active"), QStringLiteral("offline")}) {
         auto window = makeWindow();
         QVERIFY(CybouUiFixtures::apply(*window->desktopModel(), fixture));
@@ -1662,6 +1666,108 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QVERIFY(alice_model->fileItems().isEmpty());
     alice_model->setApplicationBackend(nullptr);
     bob_model->setApplicationBackend(nullptr);
+}
+
+
+void CybouShellTests::operationValidationNeverActsAsFinality()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    CybouCapabilities caps;
+    caps.payments = true;
+    model.setCapabilities(caps);
+    model.setBalances(1000, 50);
+    const QString op = QStringLiteral("op-pay");
+
+    // Without live validation, a validated report reads as still waiting.
+    model.setOperationStatus({.operation_id = op, .state = CybouOperationState::Validated, .validation_confirmations = 3});
+    QCOMPARE(model.displayedOperationState(op, CybouOperationState::Submitted), CybouOperationState::Submitted);
+    caps.validation = true;
+    model.setCapabilities(caps);
+    QCOMPARE(model.displayedOperationState(op, CybouOperationState::Submitted), CybouOperationState::Validated);
+    QVERIFY(CybouProduct::operationPending(CybouOperationState::Validated)); // Validated != Finalized
+    // The user can hide it; nothing else changes.
+    model.setValidationStatusShown(false);
+    QCOMPARE(model.displayedOperationState(op, CybouOperationState::Submitted), CybouOperationState::Submitted);
+    model.setValidationStatusShown(true);
+
+    // Balances come only from finalized state: validation never moves them.
+    QCOMPARE(model.status().balance, quint64{1000});
+    QCOMPARE(model.status().system_balance, quint64{50});
+
+    // PoA finality wins and is never undone by a later validation report.
+    QCOMPARE(model.displayedOperationState(op, CybouOperationState::Finalized), CybouOperationState::Finalized);
+    model.setOperationStatus({.operation_id = op, .state = CybouOperationState::Finalized, .finalized_height = 9});
+    model.setOperationStatus({.operation_id = op, .state = CybouOperationState::Validated});
+    QCOMPARE(model.operationStatus(op)->state, CybouOperationState::Finalized);
+    QCOMPARE(model.displayedOperationState(op, CybouOperationState::Submitted), CybouOperationState::Finalized);
+
+    // Incoming mail was discovered after finality: it never shows Validated.
+    model.setOperationStatus({.operation_id = QStringLiteral("op-in"), .state = CybouOperationState::Validated});
+    CybouMailItem incoming;
+    incoming.operation_id = QStringLiteral("op-in");
+    incoming.state = CybouContentState::Received;
+    QCOMPARE(model.displayedOperationState(incoming.operation_id, incoming.operation_state), CybouOperationState::Finalized);
+    QCOMPARE(CybouProduct::contentWithOperationText(incoming.state, CybouOperationState::Validated),
+        CybouProduct::contentStateText(CybouContentState::Received));
+
+    // Protected and Securing are post-finality storage: validation never replaces them,
+    // and validation never starts storage (the content axis is untouched).
+    QCOMPARE(CybouProduct::contentWithOperationText(CybouContentState::Protected, CybouOperationState::Validated),
+        CybouProduct::contentStateText(CybouContentState::Protected));
+    QCOMPARE(CybouProduct::contentWithOperationText(CybouContentState::Securing, CybouOperationState::Validated),
+        CybouProduct::contentStateText(CybouContentState::Securing));
+    QCOMPARE(CybouProduct::contentWithOperationText(CybouContentState::WaitingForConfirmation,
+        CybouOperationState::Validated), CybouProduct::operationStateText(CybouOperationState::Validated));
+
+    // Fixture: a validated outgoing message stays WaitingForConfirmation content.
+    auto window = makeWindow();
+    auto* fixture_model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*fixture_model, QStringLiteral("active")));
+    const auto* validated = fixture_model->mailItem(QStringLiteral("m-sent-validated"));
+    QVERIFY(validated);
+    QCOMPARE(validated->state, CybouContentState::WaitingForConfirmation);
+    QCOMPARE(fixture_model->displayedOperationState(validated->operation_id, validated->operation_state),
+        CybouOperationState::Validated);
+    // Wallet rows: one each of waiting, validated and finalized; balance unchanged.
+    QStringList subtitles;
+    for (const auto* label : window->page(CybouPage::Wallet)->findChildren<QLabel*>()) subtitles << label->text();
+    QVERIFY(subtitles.contains(CybouProduct::operationStateText(CybouOperationState::Submitted)));
+    QVERIFY(subtitles.contains(CybouProduct::operationStateText(CybouOperationState::Validated)));
+    QCOMPARE(fixture_model->status().balance, quint64{5820});
+}
+
+void CybouShellTests::identityAuthorityIsAnHonestPreview()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    auto* page = window->page(CybouPage::Identity);
+    const auto card = [page]() -> QWidget* {
+        for (auto* widget : page->findChildren<QWidget*>()) {
+            if (widget->property("cybouId").toString() == QLatin1String{"identityAuthority"}) return widget;
+        }
+        return nullptr;
+    };
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    QVERIFY(model->capabilities().authority);
+    QVERIFY(card());
+    QVERIFY(!card()->isHidden());
+    static_cast<IdentityPage*>(page)->showAuthorityDetails(true);
+    QStringList texts;
+    for (const auto* label : card()->findChildren<QLabel*>()) texts << label->text();
+    QVERIFY(texts.contains(QStringLiteral("Preview")));
+    QVERIFY(texts.contains(QLocale{}.toString(1482)));
+    QVERIFY(texts.contains(QStringLiteral("10")));
+    for (const auto& text : texts) {
+        QVERIFY2(!text.contains(QLatin1String{"trust"}, Qt::CaseInsensitive), qPrintable(text));
+        QVERIFY2(!text.contains(QLatin1String{"reputation"}, Qt::CaseInsensitive), qPrintable(text));
+    }
+    QVERIFY(std::any_of(texts.begin(), texts.end(),
+        [](const QString& t) { return t.contains(QLatin1String{"informational"}); }));
+
+    // Without a real summary there is no Authority view at all.
+    model->setAuthority({});
+    QVERIFY(!model->capabilities().authority);
+    QVERIFY(card()->isHidden());
 }
 
 void CybouShellTests::rotationKeepsLiveSessionWorking()

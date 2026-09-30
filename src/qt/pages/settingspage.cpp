@@ -150,6 +150,26 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
     folder_row->addWidget(choose);
     files->addLayout(folder_row);
 
+    // Validation: only when the network offers it. Informational only — the
+    // app never treats validated operations as final (no trust mode).
+    auto* validation_card = Card(this);
+    m_validation_section = validation_card;
+    auto* validation = new QVBoxLayout{validation_card};
+    validation->setContentsMargins(22, 18, 22, 18);
+    validation->setSpacing(10);
+    validation->addWidget(SectionTitle(tr("Validation"), validation_card));
+    validation->addWidget(MutedText(tr("Only network-finalized results change your balances, Mail and Files. "
+                                       "Validation status is shown for information."), validation_card));
+    m_show_validation = new QCheckBox{tr("Show validation status"), validation_card};
+    m_show_validation->setObjectName(QStringLiteral("showValidation"));
+    connect(m_show_validation, &QCheckBox::toggled, this, [this](bool on) {
+        QSettings{}.setValue(showValidationKey(), on);
+        m_model->setValidationStatusShown(on);
+    });
+    validation->addWidget(m_show_validation);
+    root->addWidget(validation_card);
+    m_model->setValidationStatusShown(QSettings{}.value(showValidationKey(), true).toBool());
+
     auto* contribution = Section(root, tr("Storage contribution"),
         tr("Contribute disk space to the CYBOU network. This advanced option arrives in a later release."), this);
     auto* later = new QCheckBox{tr("Contribute storage"), this};
@@ -175,6 +195,7 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
     root->addStretch();
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
     refresh();
 }
 
@@ -184,6 +205,9 @@ void SettingsPage::refresh()
     const QSignalBlocker b2{m_run_in_background};
     const QSignalBlocker b3{m_mail_previews};
     const QSignalBlocker b4{m_appearance};
+    const QSignalBlocker b5{m_show_validation};
+    m_validation_section->setVisible(m_model->capabilities().validation);
+    m_show_validation->setChecked(m_model->validationStatusShown());
     m_appearance->setCurrentIndex(m_appearance->findData(static_cast<int>(CybouTheme::savedAppearance())));
     m_start_with_windows->setChecked(StartsWithWindows());
     m_run_in_background->setChecked(QSettings{}.value(runInBackgroundKey(), false).toBool());

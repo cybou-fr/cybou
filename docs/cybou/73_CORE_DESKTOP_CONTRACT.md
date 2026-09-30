@@ -120,3 +120,28 @@ Do not present Authority as a social score or PoA voting power.
 
 Network, crypto, block scanning, chunk transfer, recovery and storage health
 work must stay off the Qt event loop.
+
+## Operation state, validation and Identity Authority
+
+The desktop keeps two separate axes:
+
+- Operation (`CybouOperationState`): Local → Preparing → Submitted →
+  Validated → Finalized, or Failed. It applies to payments, name claims,
+  rotation and Mail/Files publications.
+- Content (`CybouContentState`): Securing, Protected, Received and the
+  retrieval states. They describe durability after finality.
+
+`Validated` means pre-finalized. It is never canonical: it does not change
+balances, does not start remote storage and is never `Protected`. PoA
+`Finalized` is the only canonical truth. Incoming Mail is discovered after
+finality, so it never shows `Validated`. Items carry an `operation_id`; the
+model keeps one `CybouOperationStatus` per operation, and
+`displayedOperationState()` applies the rules above. `Validated` is shown only
+while `capabilities.validation` is true (false until core validation exists)
+and the user keeps "Show validation status" on. There is no trust mode.
+
+Identity Authority (`CybouAuthoritySummary`) is a derived network-capability
+metric, not social trust. The controller syncs the read-only `AuthorityIndex`
+on each network refresh. It is shown only on the Identity page (marked
+Preview while not enforced) and in Diagnostics, never on contacts or Mail.
+
