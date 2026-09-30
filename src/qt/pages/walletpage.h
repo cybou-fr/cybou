@@ -6,6 +6,7 @@
 #define BITCOIN_QT_PAGES_WALLETPAGE_H
 
 #include <QCoreApplication>
+#include <QSet>
 #include <QWidget>
 
 class CybouDesktopModel;
@@ -38,6 +39,10 @@ private:
     QLabel* m_gate{nullptr};
     QPushButton* m_send_button{nullptr};
     QPushButton* m_receive_button{nullptr};
+    QPushButton* m_lock_button{nullptr};
+    QLabel* m_system_hint{nullptr};
+    /** Fee groups the user expanded (keyed by the group's first entry id). */
+    QSet<QString> m_expanded_fees;
     QFrame* m_send_panel{nullptr};
     QLineEdit* m_to{nullptr};
     QLabel* m_to_hint{nullptr};
@@ -60,6 +65,8 @@ private:
     void submit();
     void setReviewing(bool reviewing);
     void showReceive();
+    /** Balance -> System Balance, with an explicit irreversible review. */
+    void showLockDialog();
 };
 
 #endif // BITCOIN_QT_PAGES_WALLETPAGE_H

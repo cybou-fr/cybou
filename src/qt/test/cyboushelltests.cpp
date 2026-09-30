@@ -505,6 +505,43 @@ void CybouShellTests::mailFilesCrossProduct()
     QVERIFY(!model->attachmentFromFile(QStringLiteral("f-archive")).has_value());
 }
 
+void CybouShellTests::walletLocksBalanceIntoSystemBalance()
+{
+    auto window = makeWindow();
+    auto* wallet = window->page(CybouPage::Wallet);
+    const auto find_button = [wallet](const char* id) -> QPushButton* {
+        for (auto* button : wallet->findChildren<QPushButton*>()) {
+            if (button->property("cybouId").toString() == QLatin1String{id}) return button;
+        }
+        return nullptr;
+    };
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    QVERIFY(find_button("walletLock")->isEnabled());
+
+    // Balance -> System Balance is irreversible and never more than available.
+    QVERIFY(!model->requestLockToSystemBalance(0));
+    QVERIFY(!model->requestLockToSystemBalance(model->status().balance + 1));
+    const quint64 balance = model->status().balance;
+    const quint64 system = model->status().system_balance;
+    QSignalSpy finished{model, &CybouDesktopModel::systemLockFinished};
+    QVERIFY(model->requestLockToSystemBalance(100));
+    QCOMPARE(finished.count(), 1);
+    QVERIFY(finished.at(0).at(0).toBool());
+    QCOMPARE(model->status().balance, balance - 100);
+    QCOMPARE(model->status().system_balance, system + 100);
+
+    // Nothing spendable: Send and Add from Balance are unavailable, with guidance.
+    model->setBalances(0, 5000);
+    QVERIFY(!find_button("walletSend")->isEnabled());
+    QVERIFY(!find_button("walletLock")->isEnabled());
+    bool guidance = false;
+    for (const auto* label : wallet->findChildren<QLabel*>()) {
+        if (label->text().contains(QLatin1String{"no spendable CYBOU"})) guidance = true;
+    }
+    QVERIFY(guidance);
+}
+
 void CybouShellTests::walletPageShowsBalances()
 {
     auto window = makeWindow();

@@ -106,7 +106,14 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     m_system = new QLabel{hero};
     m_system->setObjectName(QStringLiteral("metric"));
     system->addWidget(m_system);
-    system->addWidget(MutedText(tr("For CYBOU network services"), hero));
+    m_system_hint = MutedText(tr("Pays network fees for Mail, Files and payments"), hero);
+    m_system_hint->setObjectName(QStringLiteral("walletSystemHint"));
+    system->addWidget(m_system_hint);
+    m_lock_button = new QPushButton{tr("Add from Balance"), hero};
+    m_lock_button->setObjectName(QStringLiteral("secondaryButton"));
+    m_lock_button->setProperty("cybouId", QStringLiteral("walletLock"));
+    m_lock_button->setIcon(QIcon{glyphPixmap(Glyph::Lock, {14, 14}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
+    system->addWidget(m_lock_button, 0, Qt::AlignLeft);
     hero_layout->addLayout(system, 1);
     auto* actions = new QVBoxLayout;
     actions->setSpacing(8);
@@ -204,6 +211,13 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
 
     connect(m_send_button, &QPushButton::clicked, this, [this] { openSend(); });
     connect(m_receive_button, &QPushButton::clicked, this, [this] { showReceive(); });
+    connect(m_lock_button, &QPushButton::clicked, this, [this] { showLockDialog(); });
+    connect(m_model, &CybouDesktopModel::systemLockFinished, this, [this](bool ok, const QString& error) {
+        m_model->notify(ok ? tr("Moving CYBOU to System Balance. It updates once the network confirms it.")
+                           : (error.isEmpty() ? tr("CYBOU could not be moved to System Balance.") : error));
+    });
+    connect(m_model, &CybouDesktopModel::mailChanged, this, [this] { rebuildActivity(); });
+    connect(m_model, &CybouDesktopModel::filesChanged, this, [this] { rebuildActivity(); });
     connect(cancel, &QPushButton::clicked, this, [this] {
         if (m_reviewing) {
             setReviewing(false);
@@ -218,7 +232,10 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     connect(m_amount, &QLineEdit::textChanged, this, [this] { updateSendState(); });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::walletChanged, this, [this] { rebuildActivity(); });
+    connect(m_model, &CybouDesktopModel::walletChanged, this, [this] {
+        rebuildActivity();
+        refresh();
+    });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { rebuildActivity(); });
     connect(m_model, &CybouDesktopModel::paymentFinished, this, [this](bool ok, const QString& error) {
         if (ok) {
@@ -259,10 +276,30 @@ void WalletPage::refresh()
     m_available->setText(cybouAmountText(status.balance));
     m_system->setText(cybouAmountText(status.system_balance));
     const bool payments = active && m_model->capabilities().payments;
-    m_send_button->setEnabled(payments);
+    const bool funded = status.balance > 0;
+    m_send_button->setEnabled(payments && funded);
+    m_send_button->setToolTip(payments && !funded ? tr("You have no spendable CYBOU yet.") : QString{});
     m_receive_button->setEnabled(active);
+    m_lock_button->setEnabled(payments && funded && !m_model->paymentPending());
+    m_lock_button->setToolTip(funded ? tr("Move spendable CYBOU into System Balance (cannot be undone)")
+                                     : tr("You have no spendable CYBOU to move."));
+    // Estimate from the payment fee, else from the latest network fee actually paid.
+    auto fee = m_model->paymentFee();
+    if (!fee || *fee == 0) {
+        for (const auto& entry : m_model->walletEntries()) {
+            if (entry.kind != CybouWalletEntryKind::NetworkServiceFee || entry.amount == 0) continue;
+            fee = static_cast<quint64>(std::llabs(entry.amount));
+            break;
+        }
+    }
+    m_system_hint->setText(fee && *fee > 0
+        ? tr("Pays network fees: about %1 more operations").arg(QLocale{}.toString(status.system_balance / *fee))
+        : tr("Pays network fees for Mail, Files and payments"));
     m_gate->setText(!active ? tr("Wallet needs your CYBOU Identity. Create or restore it on Home.")
-        : !payments ? tr("Payments are not connected yet.") : QString{});
+        : !payments ? tr("Payments are not connected yet.")
+        : !funded ? tr("You have no spendable CYBOU yet. Use Receive to share your name so others can pay you. "
+                       "Mail and Files keep working: their fees come from System Balance.")
+        : QString{});
     m_gate->setVisible(!m_gate->text().isEmpty());
     if (!payments) m_send_panel->setVisible(false);
     updateSendState();
@@ -364,6 +401,12 @@ bool WalletPage::eventFilter(QObject* watched, QEvent* event)
             showEntryDetails(id);
             return true;
         }
+        const QStringList group = watched->property("walletFeeGroup").toStringList();
+        if (!group.isEmpty()) {
+            for (const auto& id : group) m_expanded_fees.insert(id);
+            QMetaObject::invokeMethod(this, [this] { rebuildActivity(); }, Qt::QueuedConnection);
+            return true;
+        }
     }
     return QWidget::eventFilter(watched, event);
 }
@@ -407,6 +450,7 @@ void WalletPage::showEntryDetails(const QString& entry_id)
     };
     row(tr("Status"), CybouProduct::operationStateText(operation));
     row(tr("Balance"), entry.system_side ? tr("System Balance (network service budget)") : tr("Available (spendable)"));
+    if (entry.kind == CybouWalletEntryKind::NetworkServiceFee) row(tr("Paid for"), m_model->feePurpose(entry.operation_id));
     if (!entry.counterparty_name.isEmpty()) {
         row(entry.amount >= 0 ? tr("From") : tr("To"), entry.counterparty_name);
     }
@@ -427,6 +471,53 @@ void WalletPage::showEntryDetails(const QString& entry_id)
     dialog.exec();
 }
 
+void WalletPage::showLockDialog()
+{
+    const quint64 available = m_model->status().balance;
+    if (available == 0) return;
+    QDialog dialog{this};
+    dialog.setObjectName(QStringLiteral("walletLockDialog"));
+    dialog.setWindowTitle(tr("Add to System Balance"));
+    dialog.setMinimumWidth(460);
+    auto* layout = new QVBoxLayout{&dialog};
+    layout->setContentsMargins(24, 20, 24, 20);
+    layout->setSpacing(10);
+    layout->addWidget(SectionTitle(tr("Add to System Balance"), &dialog));
+    auto* explain = MutedText(tr("System Balance pays CYBOU network fees for your Mail, Files and payments. "
+                                 "Moving CYBOU there also counts once toward your Identity Authority."), &dialog);
+    layout->addWidget(explain);
+    auto* amount_label = new QLabel{tr("Amount (available: %1)").arg(cybouAmountText(available)), &dialog};
+    amount_label->setObjectName(QStringLiteral("cardLabel"));
+    layout->addWidget(amount_label);
+    auto* amount = new QLineEdit{&dialog};
+    amount->setObjectName(QStringLiteral("walletLockAmount"));
+    amount->setPlaceholderText(tr("Whole CYBOU"));
+    amount->setMinimumHeight(38);
+    amount->setValidator(new QRegularExpressionValidator{QRegularExpression{QStringLiteral("[0-9]{1,11}")}, amount});
+    layout->addWidget(amount);
+    auto* warning = new QLabel{tr("<b>This cannot be undone.</b> System Balance can never be sent or moved back."), &dialog};
+    warning->setWordWrap(true);
+    warning->setStyleSheet(QStringLiteral("background: %1; border-radius: 10px; padding: 10px; color: %2;")
+        .arg(CybouTheme::color(CybouTheme::MINT_GHOST).name(), CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
+    layout->addWidget(warning);
+    auto* buttons = new QDialogButtonBox{&dialog};
+    auto* confirm = buttons->addButton(tr("Move to System Balance"), QDialogButtonBox::AcceptRole);
+    confirm->setObjectName(QStringLiteral("primaryButton"));
+    confirm->setEnabled(false);
+    buttons->addButton(QDialogButtonBox::Cancel);
+    layout->addWidget(buttons);
+    connect(amount, &QLineEdit::textChanged, &dialog, [amount, confirm, available] {
+        const quint64 value = amount->text().toULongLong();
+        confirm->setEnabled(value > 0 && value <= available);
+    });
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() != QDialog::Accepted) return;
+    if (!m_model->requestLockToSystemBalance(amount->text().toULongLong())) {
+        m_model->notify(tr("CYBOU could not be moved to System Balance."));
+    }
+}
+
 void WalletPage::rebuildActivity()
 {
     while (QLayoutItem* item = m_activity_rows->takeAt(0)) {
@@ -437,8 +528,35 @@ void WalletPage::rebuildActivity()
         delete item;
     }
     int shown = 0;
-    for (const auto& entry : m_model->walletEntries()) {
-        if (shown == 12) break;
+    const auto& entries = m_model->walletEntries();
+    for (qsizetype i = 0; i < entries.size() && shown < 12; ++i) {
+        const auto& entry = entries.at(i);
+        // A run of settled network fees folds into one expandable row.
+        qsizetype run_end = i;
+        const auto settled_fee = [this](const CybouWalletEntry& e) {
+            return e.kind == CybouWalletEntryKind::NetworkServiceFee && !m_expanded_fees.contains(e.id) &&
+                !CybouProduct::operationPending(m_model->displayedOperationState(e.operation_id, e.operation_state));
+        };
+        while (settled_fee(entry) && run_end + 1 < entries.size() && settled_fee(entries.at(run_end + 1))) ++run_end;
+        if (run_end > i) {
+            qint64 total = 0;
+            for (qsizetype k = i; k <= run_end; ++k) total += entries.at(k).amount;
+            const qsizetype count = run_end - i + 1;
+            auto* row = ActivityRow(Glyph::Database, Tint::Indigo, tr("Network service fees  ·  %1").arg(count),
+                tr("System Balance  ·  latest: %1").arg(m_model->feePurpose(entry.operation_id)),
+                QStringLiteral("−") + cybouAmountText(static_cast<quint64>(std::llabs(total))),
+                m_activity_rows->parentWidget());
+            QStringList run_ids;
+            for (qsizetype k = i; k <= run_end; ++k) run_ids << entries.at(k).id;
+            row->setProperty("walletFeeGroup", run_ids);
+            row->setCursor(Qt::PointingHandCursor);
+            row->setToolTip(tr("Show each fee"));
+            row->installEventFilter(this);
+            m_activity_rows->addWidget(row);
+            ++shown;
+            i = run_end;
+            continue;
+        }
         const QString sign = entry.amount >= 0 ? QStringLiteral("+") : QStringLiteral("−");
         const QString amount = sign + cybouAmountText(static_cast<quint64>(std::llabs(entry.amount)));
         // Until PoA finality the row shows the operation (Waiting for
@@ -446,6 +564,8 @@ void WalletPage::rebuildActivity()
         const auto operation = m_model->displayedOperationState(entry.operation_id, entry.operation_state);
         const QString subtitle = CybouProduct::operationPending(operation) || operation == CybouOperationState::Failed
             ? CybouProduct::operationStateText(operation)
+            : entry.kind == CybouWalletEntryKind::NetworkServiceFee
+                ? tr("System Balance  ·  %1").arg(m_model->feePurpose(entry.operation_id))
             : entry.system_side ? tr("System Balance") : tr("Available");
         const QString when = EntryWhen(entry);
         auto* row = ActivityRow(EntryGlyph(entry),

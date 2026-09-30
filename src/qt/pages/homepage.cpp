@@ -219,7 +219,11 @@ QWidget* HomePage::buildDashboard()
     summary->addWidget(buildSummaryCard(tr("Files"), Glyph::Folder, Tint::Blue, m_files_value, m_files_caption,
         [this] { m_files_requested(); }, tr("Upload"), [this] { if (onUpload) onUpload(); }), 1);
     summary->addWidget(buildSummaryCard(tr("Wallet"), Glyph::WalletCard, Tint::Indigo, m_wallet_value,
-        m_wallet_caption, [this] { m_wallet_requested(); }, tr("Send"), [this] { if (onSendPayment) onSendPayment(); }), 1);
+        m_wallet_caption, [this] { m_wallet_requested(); }, tr("Send"), [this] {
+            // Nothing to send yet: the Wallet page explains how to get CYBOU.
+            if (m_model->status().balance == 0) m_wallet_requested();
+            else if (onSendPayment) onSendPayment();
+        }), 1);
     root->addLayout(summary);
 
     // First steps for a new Identity (hidden once done or dismissed).
@@ -306,7 +310,9 @@ void HomePage::refresh()
     m_files_caption->setText(tr("%1 used").arg(CybouProduct::sizeText(status.storage_used)));
 
     m_wallet_value->setText(cybouAmountText(status.balance));
-    m_wallet_caption->setText(tr("Available"));
+    m_wallet_caption->setText(status.system_balance > 0
+        ? tr("Available  ·  %1 in System Balance").arg(cybouAmountText(status.system_balance))
+        : tr("Available"));
 
     ClearLayout(m_activity_rows);
     auto items = m_model->activity();

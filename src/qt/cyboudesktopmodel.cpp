@@ -12,6 +12,7 @@
 #include <cybou/name_registry.h>
 #include <cybou/name_service.h>
 #include <cybou/node_runtime.h>
+#include <cybou/hex.h>
 #include <cybou/wallet_service.h>
 
 #include <cybou/crypto/cleanse.h>
@@ -613,6 +614,25 @@ void CybouDesktopModel::addActivity(const CybouActivityItem& item)
 
 void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
 {
+    // Counterparties arrive as AccountIDs; show their finalized .cybou name when they have one.
+    if (m_identity_service && !m_fixture_mode) {
+        std::optional<cybou::CybouState> state;
+        for (auto& entry : entries) {
+            if (entry.counterparty_name.size() != 64) continue;
+            const auto raw = cybou::ParseUint256UserHex(entry.counterparty_name.toStdString());
+            if (!raw) continue;
+            if (!state) {
+                const auto loaded = m_identity_service->GetNodeRuntime().GetStore().LoadState();
+                if (!loaded || !loaded.state) break;
+                state = *loaded.state;
+            }
+            if (const auto* name = state->names.PrimaryName(cybou::AccountId{*raw})) {
+                entry.counterparty_name = QString::fromStdString(*name) + QStringLiteral(".cybou");
+            } else {
+                entry.counterparty_name = CybouProduct::shortId(entry.counterparty_name);
+            }
+        }
+    }
     m_wallet_entries = std::move(entries);
     Q_EMIT walletChanged();
 }
@@ -750,6 +770,60 @@ bool CybouDesktopModel::requestPayment(const QString& to_name, quint64 amount)
         QMetaObject::invokeMethod(this, [this, ok, error] { setPaymentFinished(ok, error); }, Qt::QueuedConnection);
     });
     return true;
+}
+
+bool CybouDesktopModel::requestLockToSystemBalance(quint64 amount)
+{
+    if (m_payment_pending || amount == 0 || amount > m_status.balance ||
+        m_status.identity_state != CybouIdentityState::Active) return false;
+    m_payment_pending = true;
+    Q_EMIT statusChanged();
+    const auto finish = [this](bool ok, const QString& error) {
+        m_payment_pending = false;
+        Q_EMIT statusChanged();
+        Q_EMIT systemLockFinished(ok, error);
+    };
+    if (m_fixture_mode) {
+        m_status.balance -= amount;
+        m_status.system_balance += amount;
+        finish(true, {});
+        return true;
+    }
+    if (!m_wallet_service) {
+        finish(false, tr("The wallet is not connected yet."));
+        return true;
+    }
+    if (m_payment_worker.joinable()) m_payment_worker.join();
+    m_payment_worker = std::jthread([this, amount, finish] {
+        const auto result = m_wallet_service->LockToSystemBalance(amount);
+        QString error;
+        switch (result.error) {
+        case cybou::WalletOperationError::NONE: break;
+        case cybou::WalletOperationError::INSUFFICIENT_BALANCE: error = tr("Not enough CYBOU available."); break;
+        case cybou::WalletOperationError::SUBMIT_FAILED: error = tr("CYBOU could not reach the network. Try again."); break;
+        default: error = tr("CYBOU could not be moved to System Balance."); break;
+        }
+        QMetaObject::invokeMethod(this, [finish, ok = static_cast<bool>(result), error] { finish(ok, error); },
+            Qt::QueuedConnection);
+    });
+    return true;
+}
+
+QString CybouDesktopModel::feePurpose(const QString& operation_id) const
+{
+    if (operation_id.isEmpty()) return {};
+    for (const auto& mail : m_mail) {
+        if (mail.operation_id == operation_id) {
+            return tr("Mail: %1").arg(mail.subject.isEmpty() ? tr("(no subject)") : mail.subject);
+        }
+    }
+    for (const auto& file : m_files) {
+        if (file.operation_id == operation_id) {
+            return file.folder ? tr("Folder: %1").arg(file.name) : tr("File: %1").arg(file.name);
+        }
+    }
+    // Renames, moves and deletions republish the Files tree without a single owner item.
+    return tr("Files and folders update");
 }
 
 void CybouDesktopModel::setPaymentFinished(bool ok, const QString& error)

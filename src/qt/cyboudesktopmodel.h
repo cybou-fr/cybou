@@ -226,6 +226,14 @@ public:
     void setPaymentFee(std::optional<quint64> fee) { m_payment_fee = fee; }
     bool paymentPending() const { return m_payment_pending; }
     /**
+     * Irreversibly moves `amount` from Balance to System Balance (network
+     * service budget; one-time Identity Authority contribution). Runs off the
+     * GUI thread; the result arrives via systemLockFinished.
+     */
+    bool requestLockToSystemBalance(quint64 amount);
+    /** What a network service fee paid for ("Mail: subject", "File: name"), from its OperationID. */
+    QString feePurpose(const QString& operation_id) const;
+    /**
      * Sends CYBOU to a .cybou name from Balance. Resolution and submission
      * run off the GUI thread; the result arrives via paymentFinished.
      * Returns false when a payment is already in flight or inputs are invalid.
@@ -373,6 +381,7 @@ Q_SIGNALS:
     void paymentRequested(const QString& to_name, quint64 amount);
     /** ok means submitted to the network, not finalized: finality shows in activity. */
     void paymentFinished(bool ok, const QString& error);
+    void systemLockFinished(bool ok, const QString& error);
     void authorityChanged();
     void operationStatusChanged(const QString& operation_id);
 
