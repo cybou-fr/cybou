@@ -168,6 +168,13 @@ QWidget* MailRow(const CybouMailItem& item, CybouOperationState operation, bool 
             ? CybouProduct::contentStateText(item.state)
             : CybouProduct::contentWithOperationText(item.state, operation, online), row, operation);
     } else {
+        if (item.below_support_rate) {
+            auto* below = new QLabel{EmailPage::tr("Below support rate"), row};
+            below->setObjectName(QStringLiteral("rowMeta"));
+            below->setToolTip(EmailPage::tr("This message paid less than the support rate; it may be sent by a modified client or be spam."));
+            below->setStyleSheet(QStringLiteral("color: %1; font-weight: 600;").arg(CybouTheme::color(CybouTheme::ROSE).name()));
+            top->addWidget(below);
+        }
         if (!item.draft && (item.state == CybouContentState::Protected || item.state == CybouContentState::Received)) {
             // Settled mail: a tiny lock beside the time; the tooltip says what it means.
             auto* lock = new QLabel{row};

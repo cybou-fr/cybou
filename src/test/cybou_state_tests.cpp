@@ -4,6 +4,7 @@
 
 #include <cybou/block_executor.h>
 #include <cybou/network_definition.h>
+#include <cybou/support_mail.h>
 #include <test/cybou_test_helpers.h>
 #include "cybou_test_identity_helpers.h"
 
@@ -39,6 +40,44 @@ BOOST_AUTO_TEST_CASE(network_id_commits_to_name_rules)
     changed = definition;
     --changed.protocol_parameters.max_pending_name_commits;
     BOOST_CHECK(NetworkId(changed) != NetworkId(definition));
+}
+
+BOOST_AUTO_TEST_CASE(support_mail_pads_to_the_support_rate)
+{
+    using namespace cybou;
+    const auto params = DevProtocolParameters();
+    RootPublication publication;
+    publication.root_chunk_id[0] = 1;
+    publication.chunk_authorization_root[0] = 2;
+    publication.chunk_count = 1;
+    publication.recipient_capsules.resize(2); // recipient + owner
+    const auto base = RootPublicationOperationFee(params, publication);
+    const auto minimum = SupportMailMinimumFee(params);
+    BOOST_REQUIRE(base);
+    BOOST_CHECK(*base < minimum);
+    BOOST_CHECK_EQUAL(minimum, SUPPORT_MAIL_FEE_MULTIPLIER * (5 * params.root_publication_fee_per_started_kib +
+                                                               params.root_publication_fee_per_chunk));
+    BOOST_REQUIRE(PadPublicationToFee(params, publication, minimum));
+    const auto padded = RootPublicationOperationFee(params, publication);
+    BOOST_REQUIRE(padded);
+    BOOST_CHECK(*padded >= minimum);
+    BOOST_CHECK(publication.recipient_capsules.size() <= ROOT_PUBLICATION_MAX_CAPSULES);
+    // The first two capsules are untouched; padding never exceeds what the rate needs.
+    publication.recipient_capsules.pop_back();
+    BOOST_CHECK(*RootPublicationOperationFee(params, publication) < minimum);
+
+    // The support account is whoever claimed the genesis 'cybou' allocation.
+    CybouState state{};
+    BOOST_CHECK(!SupportAccount(state));
+    uint256 raw{};
+    raw.begin()[0] = 42;
+    IdentityKeyId recovery_id{};
+    recovery_id[0] = 7;
+    state.genesis_allocations.emplace(recovery_id, GenesisAllocation{.balance = 1, .label = "cybou"});
+    BOOST_CHECK(!SupportAccount(state));
+    state.genesis_allocations.at(recovery_id).claimed_by = AccountId{raw};
+    BOOST_REQUIRE(SupportAccount(state));
+    BOOST_CHECK(*SupportAccount(state) == AccountId{raw});
 }
 
 BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)

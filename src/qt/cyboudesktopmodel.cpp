@@ -13,6 +13,7 @@
 #include <cybou/name_service.h>
 #include <cybou/node_runtime.h>
 #include <cybou/hex.h>
+#include <cybou/support_mail.h>
 #include <cybou/wallet_service.h>
 
 #include <cybou/crypto/cleanse.h>
@@ -835,6 +836,17 @@ void CybouDesktopModel::setContacts(QVector<CybouContact> contacts)
     Q_EMIT contactsChanged();
 }
 
+QString CybouDesktopModel::supportName()
+{
+    return QString::fromLatin1(cybou::SUPPORT_NAME_LABEL.data(), cybou::SUPPORT_NAME_LABEL.size()) + QStringLiteral(".cybou");
+}
+
+std::optional<quint64> CybouDesktopModel::supportMailFee() const
+{
+    if (!m_identity_service) return std::nullopt;
+    return cybou::SupportMailMinimumFee(m_identity_service->GetNodeRuntime().GetNetworkDefinition().protocol_parameters);
+}
+
 void CybouDesktopModel::rebuildContacts()
 {
     if (m_fixture_mode) return;
@@ -863,7 +875,19 @@ void CybouDesktopModel::rebuildContacts()
         return a.second != b.second ? a.second > b.second : a.first < b.first;
     });
     QVector<CybouContact> contacts;
-    for (const auto& [name, when] : ordered) contacts.append({name.chopped(6), name, true});
+    // Everyone can reach support by default, once the authority claimed the name.
+    bool support_available = false;
+    if (m_identity_service) {
+        const auto loaded = m_identity_service->GetNodeRuntime().GetStore().LoadState();
+        support_available = loaded && loaded.state && cybou::SupportAccount(*loaded.state).has_value();
+    }
+    const QString support = supportName();
+    if (support_available && m_status.primary_name.toLower() != support) {
+        contacts.append({tr("CYBOU Support"), support, true});
+    }
+    for (const auto& [name, when] : ordered) {
+        if (name != support) contacts.append({name.chopped(6), name, true});
+    }
     if (contacts.size() == m_contacts.size() && std::equal(contacts.begin(), contacts.end(), m_contacts.begin(),
             [](const CybouContact& a, const CybouContact& b) { return a.name == b.name; })) return;
     m_contacts = std::move(contacts);

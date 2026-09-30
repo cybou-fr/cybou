@@ -5,6 +5,7 @@
 #include <qt/cyboucoreapplicationadapter.h>
 
 #include <cybou/application_service.h>
+#include <cybou/support_mail.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/encrypted_chunk_tree.h>
 #include <cybou/identity_kem.h>
@@ -362,6 +363,12 @@ struct CybouCoreApplicationAdapter::Session {
             item.outgoing = record.outgoing;
             if (const auto publication_record = runtime.FindFinalizedRootPublication(record.operation_id)) {
                 item.root_chunk_id = ChunkHex(publication_record->root_chunk_id);
+                // The support Identity checks each incoming message paid the support rate.
+                if (!record.outgoing && state && cybou::SupportAccount(*state) == keystore.GetAccountId()) {
+                    const auto& params = runtime.GetNetworkDefinition().protocol_parameters;
+                    const auto fee = cybou::RootPublicationOperationFee(params, *publication_record);
+                    item.below_support_rate = !fee || *fee < cybou::SupportMailMinimumFee(params);
+                }
             }
             if (record.outgoing) {
                 // Sent means remotely durable, never merely finalized.

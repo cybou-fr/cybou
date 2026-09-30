@@ -180,6 +180,8 @@ struct CybouMailItem {
     bool draft{false};
     /** Sent by this Identity; a note to self is outgoing yet filed in Inbox. */
     bool outgoing{false};
+    /** Only for the support Identity: this incoming message paid less than the support rate. */
+    bool below_support_rate{false};
     CybouContentState state{CybouContentState::Protected};
     QVector<CybouAttachmentItem> attachments;
     /** Evidence for Security Details → Advanced; empty until reported. */

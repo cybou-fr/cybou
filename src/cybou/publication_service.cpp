@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/publication_service.h>
+#include <cybou/support_mail.h>
 
 #include <cybou/chunk_retention.h>
 #include <cybou/crypto/cleanse.h>
@@ -275,6 +276,14 @@ PublicationJobResult PublicationService::BuildAndSubmit(const std::string_view l
             future_self->second, bundle.content_key);
         if (!future_capsule) return Failure("Cannot create future recovery capsule");
         publication.recipient_capsules.push_back(*future_capsule);
+    }
+    if (const auto support = SupportAccount(*loaded.state); recipient && support && *recipient == *support &&
+        *recipient != *account) {
+        // Support mail pays the support rate; the network still sees no recipient.
+        const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
+        if (!PadPublicationToFee(params, publication, SupportMailMinimumFee(params))) {
+            return Failure("Cannot pay the support rate for this message");
+        }
     }
     if (!ComputeRootPublicationPayloadCommitment(publication)) {
         return Failure("Cannot commit RootPublication payload");

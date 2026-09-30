@@ -264,6 +264,10 @@ public:
     void setContacts(QVector<CybouContact> contacts);
     /** Live mode: people this Identity mailed, heard from or paid, most recent first. */
     void rebuildContacts();
+    /** The network's support name (genesis-granted to the authority), e.g. "cybou.cybou". */
+    static QString supportName();
+    /** Fee a message to support pays (about 5x a short message); empty when unknown. */
+    std::optional<quint64> supportMailFee() const;
 
     const CybouRestoreProgress& restoreProgress() const { return m_restore_progress; }
     void setRestoreProgress(const CybouRestoreProgress& progress);
