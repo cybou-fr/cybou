@@ -397,7 +397,7 @@ QString CybouDesktopModel::requestSendMail(CybouMailItem message)
     message.preview = PreviewOf(message.body);
     message.state = CybouContentState::Preparing;
     for (auto& attachment : message.attachments) {
-        if (attachment.state != CybouContentState::Protected) attachment.state = CybouContentState::Preparing;
+        if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = CybouContentState::Preparing;
     }
     // Optimistic Preparing; the backend is the authority from here on and
     // never reports Sent before the content is Protected.
@@ -413,7 +413,7 @@ void CybouDesktopModel::setMailState(const QString& id, CybouContentState state)
         item.state = state;
         // Reused, already protected content keeps its state.
         for (auto& attachment : item.attachments) {
-            if (attachment.state != CybouContentState::Protected) attachment.state = state;
+            if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = state;
         }
         Q_EMIT mailChanged();
         return;
@@ -460,7 +460,7 @@ void CybouDesktopModel::requestRetryMail(const QString& id)
     CybouMailItem pending = *item;
     pending.state = CybouContentState::Preparing;
     for (auto& attachment : pending.attachments) {
-        if (attachment.state != CybouContentState::Protected) attachment.state = CybouContentState::Preparing;
+        if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = CybouContentState::Preparing;
     }
     upsertMailItem(pending);
     m_backend->retryMail(id);
@@ -1131,7 +1131,7 @@ QString CybouDesktopModel::requestSaveAttachmentToFiles(const QString& message_i
     if (!message) return {};
     for (const auto& attachment : message->attachments) {
         if (attachment.id != attachment_id) continue;
-        if (attachment.state != CybouContentState::Protected) return {};
+        if (!CybouProduct::contentOnNetwork(attachment.state)) return {};
         if (!attachment.saved_file_id.isEmpty() && fileItem(attachment.saved_file_id)) return attachment.saved_file_id;
         const QString id = NewLocalId("saved");
         const QString name = attachment.name;

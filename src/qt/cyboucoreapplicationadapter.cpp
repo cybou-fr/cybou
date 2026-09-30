@@ -348,7 +348,9 @@ struct CybouCoreApplicationAdapter::Session {
                     : durability && durability->state == cybou::DurabilityState::PROTECTED
                         ? CybouContentState::Protected : CybouContentState::Securing;
             } else {
-                item.state = CybouContentState::Protected;
+                // Incoming: finalized and decrypted here, but the sender's
+                // remote durability is not something this Identity has proved.
+                item.state = CybouContentState::Received;
             }
             for (const auto& attachment : record.message.attachments) {
                 CybouAttachmentItem a;
@@ -356,7 +358,7 @@ struct CybouCoreApplicationAdapter::Session {
                 a.name = QString::fromStdString(attachment.filename);
                 a.logical_size = attachment.logical_size;
                 // Sent content shares its message's durability; received content is the sender's.
-                a.state = record.outgoing ? item.state : CybouContentState::Protected;
+                a.state = record.outgoing ? item.state : CybouContentState::Received;
                 // "Saved to Files" is a Files entry referencing the same protected content.
                 if (const auto saved = saved_roots.find(attachment.root_chunk_id); saved != saved_roots.end()) {
                     a.saved_file_id = QString::fromStdString(saved->second);

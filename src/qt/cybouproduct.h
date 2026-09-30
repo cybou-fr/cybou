@@ -46,7 +46,14 @@ enum class CybouContentState {
     Preparing,
     WaitingForConfirmation,
     Securing,
+    /** This Identity's own content reached its remote durability target. */
     Protected,
+    /**
+     * Incoming content: finalized, end-to-end encrypted and opened here. The
+     * sender's remote durability is not known to the recipient, so this is
+     * never shown as Protected.
+     */
+    Received,
     TemporarilyUnavailable,
     NeedsAttention,
 };
@@ -201,6 +208,7 @@ inline QString contentStateText(CybouContentState state)
     case CybouContentState::WaitingForConfirmation: return QCoreApplication::translate("CybouProduct", "Waiting for confirmation…");
     case CybouContentState::Securing: return QCoreApplication::translate("CybouProduct", "Securing…");
     case CybouContentState::Protected: return QCoreApplication::translate("CybouProduct", "Protected");
+    case CybouContentState::Received: return QCoreApplication::translate("CybouProduct", "Received");
     case CybouContentState::TemporarilyUnavailable: return QCoreApplication::translate("CybouProduct", "Temporarily unavailable");
     case CybouContentState::NeedsAttention: return QCoreApplication::translate("CybouProduct", "Needs attention");
     }
@@ -233,6 +241,12 @@ inline QString mailStateText(const CybouMailItem& item)
     if (item.folder == CybouMailFolder::Sent && item.state == CybouContentState::Protected)
         return QCoreApplication::translate("CybouProduct", "Sent");
     return contentStateText(item.state);
+}
+
+/** Content already on the network: this Identity's Protected content or Received content. */
+inline bool contentOnNetwork(CybouContentState state)
+{
+    return state == CybouContentState::Protected || state == CybouContentState::Received;
 }
 
 inline bool contentPending(CybouContentState state)

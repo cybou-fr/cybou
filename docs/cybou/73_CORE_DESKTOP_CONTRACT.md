@@ -73,6 +73,10 @@ NeedsAttention
 ```
 
 Mail maps `Protected` durability to user-facing `Sent`.
+Incoming Mail and its attachments are `Received`: finalized, end-to-end
+encrypted and opened by this Identity. The recipient has not proved the
+sender's remote durability, so incoming content is never shown as
+`Protected`; the reader says "Network confirmed", not "Stored on the network".
 
 `WaitingForConfirmation` means RootPublication is not yet PoA-finalized.
 

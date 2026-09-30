@@ -476,7 +476,8 @@ inline QVBoxLayout* StatColumn(const QString& caption, const QString& value, QWi
 inline QRgb stateColor(CybouContentState state)
 {
     switch (state) {
-    case CybouContentState::Protected: return CybouTheme::MINT;
+    case CybouContentState::Protected:
+    case CybouContentState::Received: return CybouTheme::MINT;
     case CybouContentState::Preparing:
     case CybouContentState::WaitingForConfirmation:
     case CybouContentState::Securing: return CybouTheme::AMBER;

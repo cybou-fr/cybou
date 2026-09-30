@@ -46,7 +46,9 @@ CybouMailItem Mail(const QString& id, CybouMailFolder folder, const QString& fro
     item.time = time;
     item.unread = unread;
     item.draft = folder == CybouMailFolder::Drafts;
-    item.state = folder == CybouMailFolder::Drafts ? CybouContentState::Local : CybouContentState::Protected;
+    // Own sent mail is Protected (remote durability); incoming mail is Received.
+    item.state = folder == CybouMailFolder::Drafts ? CybouContentState::Local
+        : folder == CybouMailFolder::Sent ? CybouContentState::Protected : CybouContentState::Received;
     if (!item.draft) {
         item.operation_id = QStringLiteral("9c41e7a0b3d25f86e1c07a4d92b3f5e8c6a1d0e7f2b4a9c3d8e5f1a0b7c26d4e");
         item.finalized_height = 1180 + static_cast<quint64>(qHash(id) % 60);
@@ -162,6 +164,12 @@ QVector<CybouMailItem> FixtureMail()
     mail.append(Mail(QStringLiteral("m-archive-1"), CybouMailFolder::Archive, QStringLiteral("carol.cybou"),
         QStringLiteral("stan.cybou"), QStringLiteral("Meeting notes"),
         QStringLiteral("Notes from the planning session are below."), At(12, 15, 0)));
+    for (auto& item : mail) {
+        if (item.state != CybouContentState::Received) continue;
+        for (auto& attachment : item.attachments) {
+            if (attachment.state == CybouContentState::Protected) attachment.state = CybouContentState::Received;
+        }
+    }
     return mail;
 }
 

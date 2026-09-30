@@ -130,7 +130,7 @@ void CybouFixtureApplicationBackend::retryMail(const QString& id)
     if (!m_open || !item) return;
     item->state = CybouContentState::Preparing;
     for (auto& attachment : item->attachments) {
-        if (attachment.state != CybouContentState::Protected) attachment.state = CybouContentState::Preparing;
+        if (!CybouProduct::contentOnNetwork(attachment.state)) attachment.state = CybouContentState::Preparing;
     }
     changed(*item);
     runSend(id);
@@ -190,7 +190,7 @@ void CybouFixtureApplicationBackend::saveAttachmentToFiles(const QString& messag
     if (!m_open || !message) return;
     for (auto& attachment : message->attachments) {
         if (attachment.id != attachment_id) continue;
-        if (attachment.state != CybouContentState::Protected) {
+        if (!CybouProduct::contentOnNetwork(attachment.state)) {
             Q_EMIT commandFailed(tr("This attachment is not protected yet."));
             return;
         }
@@ -220,7 +220,7 @@ void CybouFixtureApplicationBackend::runSend(const QString& id)
         if (!item) return;
         item->state = state;
         for (auto& attachment : item->attachments) {
-            if (attachment.state == CybouContentState::Protected && state != CybouContentState::Protected) continue;
+            if (CybouProduct::contentOnNetwork(attachment.state) && state != CybouContentState::Protected) continue;
             attachment.state = state;
             attachment.progress_percent = percent;
         }

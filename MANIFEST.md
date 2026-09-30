@@ -48,7 +48,7 @@ editing an included file.
 | docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 29 | fe819af3c46337f7 |
 | docs/cybou/71_WINDOWS_MINGW_BUILD.md | 147 | 347f5cd755e85843 |
 | docs/cybou/72_DESKTOP_WALLET_UI.md | 81 | d58fb6c8a3ad9144 |
-| docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 118 | 46e80fba2e2682be |
+| docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 122 | 7430725cd767e97e |
 | docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 62 | 5fd4730a222232f8 |
 | docs/cybou/77_CYBOU_NAME_REGISTRY.md | 38 | 7d9fce7db6ff4f92 |
 | docs/cybou/78_IDENTITY_DESKTOP_UX.md | 23 | f0e426ca60241ed2 |

@@ -255,7 +255,8 @@ void MailCompose::rebuildAttachments()
         layout->addWidget(size);
         // Before Send an attachment exists only on this device (or is
         // already protected content being reused from Files).
-        auto* state = new QLabel{attachment.state == CybouContentState::Protected ? tr("Protected") : tr("On this device"), chip};
+        auto* state = new QLabel{attachment.state == CybouContentState::Protected ? tr("Protected")
+            : attachment.state == CybouContentState::Received ? tr("Received") : tr("On this device"), chip};
         state->setObjectName(QStringLiteral("rowMeta"));
         layout->addWidget(state);
         auto* remove = IconButton(Glyph::Trash, chip, tr("Remove %1").arg(attachment.name));

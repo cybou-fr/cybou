@@ -1447,7 +1447,7 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     const auto received_attachment = bob_contract()->attachments.first();
     QCOMPARE(received_attachment.name, QStringLiteral("contract.pdf"));
     QCOMPARE(received_attachment.logical_size, quint64(contract.size()));
-    QCOMPARE(received_attachment.state, CybouContentState::Protected);
+    QCOMPARE(received_attachment.state, CybouContentState::Received); // the sender's durability is not claimed
     QVERIFY(received_attachment.source_path.isEmpty());
     const QString contract_message = bob_contract()->id;
     const QString bob_download = attach_dir.filePath(QStringLiteral("bob-contract.pdf"));

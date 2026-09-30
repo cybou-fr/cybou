@@ -291,8 +291,11 @@ void MailReader::refresh()
     m_star->setIcon(QIcon{glyphPixmap(Glyph::Star, {18, 18}, CybouTheme::color(item->starred ? CybouTheme::AMBER : CybouTheme::TEXT_SECONDARY))});
     m_archive->setToolTip(item->folder == CybouMailFolder::Archive ? tr("Move to Inbox") : tr("Archive"));
 
-    if (item->state == CybouContentState::Protected) {
+    if (item->state == CybouContentState::Received) {
+        // Finalized and opened here; the sender's storage durability is not claimed.
         m_security->setText(tr("Protected end to end  •  Post-quantum protected  •  Network confirmed"));
+    } else if (item->state == CybouContentState::Protected) {
+        m_security->setText(tr("Protected end to end  •  Post-quantum protected  •  Stored on the network"));
     } else if (outgoing) {
         m_security->setText(tr("Protected end to end  •  %1").arg(item->draft ? CybouProduct::mailStateText(*item)
             : CybouProduct::contentStateText(item->state, m_model->status().online)));
@@ -324,6 +327,7 @@ void MailReader::refresh()
             text = tr("Temporarily unavailable — retrying.");
             break;
         case CybouContentState::Protected:
+        case CybouContentState::Received:
             break;
         }
         m_delivery_text->setText(text);
@@ -363,7 +367,8 @@ void MailReader::refresh()
         meta->setObjectName(QStringLiteral("rowSub"));
         text->addWidget(meta);
         layout->addLayout(text, 1);
-        const bool available = attachment.state == CybouContentState::Protected;
+        const bool available = attachment.state == CybouContentState::Protected ||
+            attachment.state == CybouContentState::Received;
         const bool saved = !attachment.saved_file_id.isEmpty();
         auto* download = new QPushButton{tr("Download"), chip};
         download->setObjectName(QStringLiteral("secondaryButton"));
@@ -417,7 +422,8 @@ void MailReader::showSecurityDetails()
     layout->setContentsMargins(24, 20, 24, 16);
     layout->setSpacing(8);
     layout->addWidget(SectionTitle(tr("Security details"), &dialog));
-    const bool confirmed = item->state == CybouContentState::Protected || item->state == CybouContentState::Securing;
+    const bool confirmed = item->state == CybouContentState::Protected || item->state == CybouContentState::Received ||
+        item->state == CybouContentState::Securing;
     AddDetailRow(layout, tr("Sender identity"), tr("Verified"), &dialog);
     AddDetailRow(layout, tr("Identity authorization"), tr("Valid"), &dialog);
     AddDetailRow(layout, tr("Network confirmation"), confirmed ? tr("Finalized") : tr("Waiting"), &dialog);
