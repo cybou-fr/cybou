@@ -88,14 +88,18 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     }
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
     if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
-    if (status.is_finalizer) {
-        caps |= CAP_ACCEPT_OPERATIONS;
-    }
+    // This outbound session does not accept operations from the remote peer.
+    // The inbound listener advertises CAP_ACCEPT_OPERATIONS and proves the
+    // genesis-bound finalizer key on sessions where it serves that role.
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip, .capabilities = caps, .nonce = *nonce};
-    auto peer = std::make_unique<PeerSession>(std::move(socket));
+    auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT);
     const auto signer = [this](std::span<const unsigned char> message) { return m_runtime.SignProviderProof(message); };
-    if (!peer->Handshake(local, signer)) {
+    const auto finalizer_signer = [this](std::span<const unsigned char> message) {
+        return m_runtime.SignFinalizerTransportProof(message);
+    };
+    if (!peer->Handshake(local, signer, finalizer_signer,
+            &m_runtime.GetNetworkDefinition().poa_finalizer_public_key)) {
         switch (peer->LastHandshakeStatus()) {
         case HandshakeStatus::UNAVAILABLE: m_last_connect_status = PeerConnectStatus::UNAVAILABLE; break;
         case HandshakeStatus::WRONG_NETWORK: m_last_connect_status = PeerConnectStatus::WRONG_NETWORK; break;

@@ -6,14 +6,30 @@
 
 #include <cybou/identity_service.h>
 #include <cybou/network_definition.h>
+#include <cybou/p2p/session.h>
 #include <test/cybou_test_helpers.h>
 
 #include <array>
 #include <atomic>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <vector>
+
+inline cybou::p2p::FinalizerProofSigner TestFinalizerProofSigner(
+    std::array<unsigned char, 32> recovery_entropy)
+{
+    return [recovery_entropy](const std::span<const unsigned char> message)
+        -> std::optional<std::vector<unsigned char>> {
+        const auto signature = cybou::SignIdentityMessage(recovery_entropy,
+            cybou::IdentityKeyPurpose::POA_FINALIZER, message);
+        if (!signature || signature->ml_dsa.size() != 3309) return std::nullopt;
+        std::vector<unsigned char> proof(signature->ed25519.begin(), signature->ed25519.end());
+        proof.insert(proof.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
+        return proof;
+    };
+}
 
 struct CybouServiceTestFixture {
     std::array<unsigned char, 32> validator_seed{};

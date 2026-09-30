@@ -254,6 +254,17 @@ std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignProviderProof(
     return proof;
 }
 
+std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignFinalizerTransportProof(
+    const std::span<const unsigned char> message) const
+{
+    if (!m_finalizer_node) return std::nullopt;
+    const auto signature = m_finalizer_node->SignTransportProof(message);
+    if (!signature || signature->ml_dsa.size() != 3309) return std::nullopt;
+    std::vector<unsigned char> proof(signature->ed25519.begin(), signature->ed25519.end());
+    proof.insert(proof.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
+    return proof;
+}
+
 bool CybouNodeRuntime::ConsumeResourceTicket(const ResourceTicket& ticket,const ChunkId& chunk,uint64_t bytes,ResourceUse use)
 {
     std::lock_guard lock(m_mutex);

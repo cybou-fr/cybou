@@ -362,19 +362,48 @@ BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
     cybou::CybouNodeRuntime provider{std::move(config)};
     BOOST_REQUIRE(provider.InitializeGenesis(fixture.genesis));
     const auto network_id = provider.GetNetworkId();
-    const auto message = cybou::p2p::ProviderProofMessage({.network_id=network_id,.finalized_height=7,.finalized_tip=uint256::ONE,.capabilities=cybou::p2p::CAP_STORAGE,.nonce=11},{.network_id=network_id,.finalized_height=5,.finalized_tip=uint256::ONE,.nonce=22});
+    std::array<unsigned char, 32> tls_exporter{};
+    tls_exporter.fill(0xA5);
+    const auto message = cybou::p2p::ProviderProofMessage({.network_id=network_id,.finalized_height=7,.finalized_tip=uint256::ONE,.capabilities=cybou::p2p::CAP_STORAGE,.nonce=11},{.network_id=network_id,.finalized_height=5,.finalized_tip=uint256::ONE,.nonce=22}, tls_exporter);
     auto proof = provider.SignProviderProof(message);
     BOOST_REQUIRE(proof);
     BOOST_CHECK(cybou::p2p::VerifyProviderProof(*proof, message) == provider.LocalProviderId());
     // Replayed into another session or network, or tampered with, it proves nothing.
-    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage({.network_id=network_id,.nonce=11},{.network_id=network_id,.nonce=23})));
-    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage({.nonce=11},{.network_id=network_id,.nonce=22})));
+    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage({.network_id=network_id,.nonce=11},{.network_id=network_id,.nonce=23}, tls_exporter)));
+    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage({.nonce=11},{.network_id=network_id,.nonce=22}, tls_exporter)));
+    tls_exporter[0] ^= 1;
+    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage({.network_id=network_id,.finalized_height=7,.finalized_tip=uint256::ONE,.capabilities=cybou::p2p::CAP_STORAGE,.nonce=11},{.network_id=network_id,.finalized_height=5,.finalized_tip=uint256::ONE,.nonce=22}, tls_exporter)));
+    BOOST_CHECK(cybou::p2p::ProviderProofMessage({.network_id=network_id,.nonce=11},{.network_id=network_id,.nonce=22}, std::array<unsigned char, 31>{}).empty());
     auto altered=message; altered.back()^=1; BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof,altered));
-    altered=message; altered[std::string_view{"CYBOU/CYP2/PROVIDER-PROOF/v2"}.size()+32]^=1; BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof,altered));
+    altered=message; altered[std::string_view{"CYBOU/CYP2/PROVIDER-PROOF/v3"}.size()+32]^=1; BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof,altered));
     (*proof)[5] ^= 0x01;
     BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, message));
     // A node without storage has no provider identity.
     BOOST_CHECK(!fixture.runtime->LocalProviderId());
+}
+
+BOOST_AUTO_TEST_CASE(finalizer_transport_proof_is_genesis_key_and_tls_session_bound)
+{
+    CybouServiceTestFixture fixture;
+    std::array<unsigned char, 32> exporter{};
+    exporter.fill(0x36);
+    const cybou::p2p::Hello signer{.network_id = fixture.runtime->GetNetworkId(),
+        .finalized_height = 3, .finalized_tip = uint256::ONE,
+        .capabilities = cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 99};
+    const cybou::p2p::Hello verifier{.network_id = fixture.runtime->GetNetworkId(),
+        .finalized_height = 2, .finalized_tip = uint256::ONE, .nonce = 100};
+    const auto message = cybou::p2p::FinalizerProofMessage(signer, verifier, exporter);
+    const auto proof = fixture.runtime->SignFinalizerTransportProof(message);
+    BOOST_REQUIRE(proof);
+    BOOST_CHECK(cybou::p2p::VerifyFinalizerProof(*proof, message,
+        fixture.definition.poa_finalizer_public_key));
+
+    exporter[0] ^= 1;
+    const auto other_session = cybou::p2p::FinalizerProofMessage(signer, verifier, exporter);
+    BOOST_CHECK(!cybou::p2p::VerifyFinalizerProof(*proof, other_session,
+        fixture.definition.poa_finalizer_public_key));
+    BOOST_CHECK(!cybou::p2p::VerifyFinalizerProof(*proof, message,
+        cybou::TestPoaFinalizerPublicKey(0x21)));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

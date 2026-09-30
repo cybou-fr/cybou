@@ -11,7 +11,10 @@
 
 #include <boost/asio/ip/tcp.hpp>
 
+#include <openssl/ssl.h>
+
 #include <cstdint>
+#include <array>
 #include <chrono>
 #include <functional>
 #include <optional>
@@ -22,7 +25,7 @@ namespace cybou { class CybouNodeRuntime; }
 namespace cybou::p2p {
 
 inline constexpr uint32_t MAX_FRAME_PAYLOAD{4096};
-inline constexpr uint8_t WIRE_VERSION{2};
+inline constexpr uint8_t WIRE_VERSION{3};
 inline constexpr uint64_t CAP_SERVE_BLOCKS{1ULL << 0};
 inline constexpr uint64_t CAP_ACCEPT_OPERATIONS{1ULL << 1};
 inline constexpr uint64_t CAP_BLOCK_INVENTORY{1ULL << 3};
@@ -65,8 +68,9 @@ enum class MessageType : uint8_t {
     CHUNK_AUTHORIZATION_PROOF = 35,
     PROVIDER_PROOF = 36,
     VALIDATION_META = 37, VALIDATION_CHUNK = 38, VALIDATION_RESULT = 39,
+    FINALIZER_PROOF = 40,
 };
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::VALIDATION_RESULT)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::FINALIZER_PROOF)};
 
 /** Stable identity of a storage provider: BLAKE3 of its STORAGE_PROVIDER public key. */
 using ProviderId = std::array<unsigned char, 32>;
@@ -76,13 +80,20 @@ using ProviderId = std::array<unsigned char, 32>;
  */
 using ProviderProofSigner = std::function<std::optional<std::vector<unsigned char>>(
     std::span<const unsigned char> message)>;
+using FinalizerProofSigner = ProviderProofSigner;
 
-/** Message a provider signs to prove its key in this session (both nonces, network). */
+/** Message a provider signs to prove its key in this TLS session. */
 struct Hello;
-std::vector<unsigned char> ProviderProofMessage(const Hello& signer, const Hello& verifier);
+std::vector<unsigned char> ProviderProofMessage(const Hello& signer, const Hello& verifier,
+    std::span<const unsigned char> tls_exporter);
 /** Verifies a PROVIDER_PROOF payload and returns the proven ProviderID. */
 std::optional<ProviderId> VerifyProviderProof(std::span<const unsigned char> payload,
     std::span<const unsigned char> message);
+/** Channel-bound challenge a genesis-key finalizer signs for transport authentication. */
+std::vector<unsigned char> FinalizerProofMessage(const Hello& signer, const Hello& verifier,
+    std::span<const unsigned char> tls_exporter);
+bool VerifyFinalizerProof(std::span<const unsigned char> payload, std::span<const unsigned char> message,
+    const IdentityHybridPublicKey& genesis_finalizer_key);
 
 struct Frame {
     MessageType type;
@@ -98,6 +109,8 @@ struct Hello {
 
     friend bool operator==(const Hello&, const Hello&) = default;
 };
+
+enum class TransportRole : uint8_t { CLIENT, SERVER };
 
 enum class HandshakeStatus : uint8_t {
     NOT_ATTEMPTED,
@@ -140,13 +153,18 @@ bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& pe
 // One persistent TCP socket. The caller owns connection setup and deadlines.
 class PeerSession {
 public:
-    explicit PeerSession(boost::asio::ip::tcp::socket socket);
+    explicit PeerSession(boost::asio::ip::tcp::socket socket, TransportRole transport_role);
+    ~PeerSession();
+    PeerSession(const PeerSession&) = delete;
+    PeerSession& operator=(const PeerSession&) = delete;
     std::optional<ValidationResult> RequestValidation(const ProtocolOperation& operation);
     /**
      * A peer advertising CAP_STORAGE must prove its provider key; a local
      * CAP_STORAGE hello needs provider_signer to do the same.
      */
-    bool Handshake(const Hello& local, const ProviderProofSigner& provider_signer = {});
+    bool Handshake(const Hello& local, const ProviderProofSigner& provider_signer = {},
+        const FinalizerProofSigner& finalizer_signer = {},
+        const IdentityHybridPublicKey* genesis_finalizer_key = nullptr);
     /** Proven ProviderID of a storage peer. */
     const std::optional<ProviderId>& PeerProviderId() const { return m_peer_provider_id; }
     HandshakeStatus LastHandshakeStatus() const { return m_handshake_status; }
@@ -179,9 +197,16 @@ public:
         const uint256& publication_operation_id, const ChunkId& chunk_id);
     bool ServeNext(CybouNodeRuntime& runtime);
     const std::optional<Hello>& Peer() const { return m_peer; }
+    /** One authenticated CYP2 frame for bounded peer extensions and protocol tests. */
+    bool SendFrame(const Frame& frame,
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
+    std::optional<Frame> ReceiveFrame(
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     boost::asio::ip::tcp::socket& Socket() { return m_socket; }
 
 private:
+    bool EstablishSecureTransport(std::chrono::steady_clock::time_point deadline);
+    bool AdvanceTlsOperation(int result, std::chrono::steady_clock::time_point deadline);
     bool ReadExact(unsigned char* out, size_t length, std::chrono::steady_clock::time_point deadline);
     bool WriteExact(const unsigned char* bytes, size_t length, std::chrono::steady_clock::time_point deadline);
     bool Write(const Frame& frame);
@@ -191,6 +216,9 @@ private:
     enum class ReadStatus : uint8_t { OK, UNAVAILABLE, INVALID_FRAME };
     ReadStatus m_last_read_status{ReadStatus::UNAVAILABLE};
     boost::asio::ip::tcp::socket m_socket;
+    TransportRole m_transport_role;
+    SSL* m_ssl{nullptr};
+    std::array<unsigned char, 32> m_tls_exporter{};
     std::optional<Hello> m_peer;
     std::optional<ProviderId> m_peer_provider_id;
     uint64_t m_local_capabilities{0};

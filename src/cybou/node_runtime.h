@@ -223,6 +223,8 @@ public:
     std::optional<std::array<unsigned char, 32>> LocalProviderId() const;
     /** Encoded PROVIDER_PROOF for a handshake message; nullopt unless storage is enabled. */
     std::optional<std::vector<unsigned char>> SignProviderProof(std::span<const unsigned char> message) const;
+    std::optional<std::vector<unsigned char>> SignFinalizerTransportProof(
+        std::span<const unsigned char> message) const;
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStoragePeer(
         const std::string& address, uint16_t port, const std::array<unsigned char, 32>& provider_id,
         const uint256& publication_operation_id, const ChunkId& chunk_id);

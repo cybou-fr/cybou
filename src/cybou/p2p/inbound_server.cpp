@@ -68,12 +68,16 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
         }
         auto done = std::make_shared<std::atomic_bool>(false);
         m_workers.push_back(Worker{done, std::jthread{[this, &stopping, done, socket = std::move(socket)]() mutable {
-            PeerSession session{std::move(socket)};
+            PeerSession session{std::move(socket), TransportRole::SERVER};
             const auto hello = LocalHello(m_runtime);
             const auto signer = [this](std::span<const unsigned char> message) {
                 return m_runtime.SignProviderProof(message);
             };
-            if (hello && session.Handshake(*hello, signer) &&
+            const auto finalizer_signer = [this](std::span<const unsigned char> message) {
+                return m_runtime.SignFinalizerTransportProof(message);
+            };
+            if (hello && session.Handshake(*hello, signer, finalizer_signer,
+                    &m_runtime.GetNetworkDefinition().poa_finalizer_public_key) &&
                 MatchesKnownFinalizedChain(m_runtime, *session.Peer())) {
                 while (!stopping && session.ServeNext(m_runtime)) {}
             }

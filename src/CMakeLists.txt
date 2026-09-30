@@ -250,6 +250,7 @@ target_link_libraries(cybou_node
     $<TARGET_NAME_IF_EXISTS:libevent::core>
     $<TARGET_NAME_IF_EXISTS:libevent::extra>
     OpenSSL::Crypto
+    OpenSSL::SSL
     $<$<PLATFORM_ID:Windows>:crypt32>
 )
 

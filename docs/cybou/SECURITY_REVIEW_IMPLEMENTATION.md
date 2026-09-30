@@ -7,7 +7,7 @@ Running DEV retains its existing network and keys until explicit tested cutover.
 | Finding | Current implementation state |
 | --- | --- |
 | NodeBinding emergency revocation | Owner-authorized revoke names the NodeID only and needs no service-node or provider proof-of-possession. Bind still requires both applicable proofs. |
-| Remote resource enforcement | Canonical tickets are verified and durably consumed by the provider runtime, but CYP2 PUT/GET do not carry them yet. Do not connect bearer tickets to plaintext CYP2; secure authenticated/encrypted CYP2 and provider-side PUT/GET enforcement remain V7 cutover blockers. |
+| Remote resource enforcement | Canonical tickets are verified and durably consumed by the provider runtime. CYP2 now has encrypted TLS sessions and provider proofs are bound to the TLS exporter, but PUT/GET still do not carry tickets or invoke durable consumption. Client reservation/ticket creation and provider-side admission remain V7 cutover blockers. |
 | Storage possession proof | Native BLAKE3 differential tests cover block boundaries, all leaves for small trees, random inputs and malformed proofs. This is useful regression coverage, not a substitute for an independent cryptographic audit or sustained fuzz campaign. |
 | Validation journal rollback | Crash consistency and corruption detection are implemented. Restoring an older valid journal is not detectable; the threat model now says so. |
 | Smoke secret fixture | CI and both multi-process storage scenarios create temporary PoA secrets with mode 0600. Local operator CLI acceptance, 2-provider repair smoke and 3-provider failure soak pass; the remote workflow still needs a successful run. |
@@ -27,7 +27,7 @@ Running DEV retains its existing network and keys until explicit tested cutover.
 | Operation status regression | Explicit transition cases reject Validated-to-Submitted and other backwards phases; canonical Finalized may override Failed. |
 | Expected NetworkID | Signed release bundled manifest pins default desktop network. Explicit LAB selection remains available. Existing network/Identity files are never automatically archived or replaced. |
 | Provider HELLO tampering | Hybrid proof v2 covers both complete HELLO byte strings with signer/verifier ordering. |
-| Secure CYP2 session | Frame AEAD and genesis-authenticated finalizer transport still require implementation with a vetted secure transport. No custom CYBOU cryptography. |
+| Secure CYP2 session | CYP2 v3 now requires TLS 1.3 with OpenSSL's `X25519MLKEM768` hybrid key exchange; no plaintext fallback is accepted. Provider and genesis-key finalizer proofs bind both HELLOs and the TLS exporter, preventing proof relay across separately terminated TLS sessions. TLS uses a per-process ephemeral self-signed certificate only to complete the handshake; it is not a peer identity. Bound validation-node authentication and authenticated ticketed PUT/GET remain V7 cutover blockers. See [CYP2_TRANSPORT_V3.md](CYP2_TRANSPORT_V3.md). |
 | Replica independence | Distinct keys prove cryptographic identities; deployment must ensure independent hosts/disks/operators/failure domains. |
 | Supply chain | Exact Actions commits, exact BLAKE3 commit+archive digest, and official OpenSSL tar checksum before build. Signed/reproducible release provenance remains to implement. |
 | Report signatures | SHA companion is integrity only. Separate test/release evidence signing remains to implement; never reuse PoA key. |

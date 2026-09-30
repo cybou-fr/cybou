@@ -72,11 +72,12 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             acceptor.accept(socket);
             // Model a lost acknowledgment: handshake as an operation-accepting
             // finalizer, then drop the session without answering.
-            cybou::p2p::PeerSession session{std::move(socket)};
+            cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
             (void)session.Handshake({.network_id = network_id, .finalized_height = 1,
                 .finalized_tip = cybou::ComputeBlockId(account_block->block),
                 .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_ACCEPT_OPERATIONS,
-                .nonce = static_cast<std::uint64_t>(4100 + attempt)});
+                .nonce = static_cast<std::uint64_t>(4100 + attempt)}, {},
+                TestFinalizerProofSigner(validator_seed), &definition.poa_finalizer_public_key);
             std::this_thread::sleep_for(std::chrono::milliseconds{200});
         }
     });

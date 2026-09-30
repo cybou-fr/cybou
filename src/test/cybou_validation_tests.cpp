@@ -202,11 +202,12 @@ BOOST_AUTO_TEST_CASE(real_tcp_validation_never_submits_to_poa) {
     tcp::acceptor acceptor{io, {boost::asio::ip::address_v4::loopback(), 0}};
     std::jthread server{[&] {
         tcp::socket socket{io}; acceptor.accept(socket);
-        cybou::p2p::PeerSession session{std::move(socket)};
+        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         if (session.Handshake({.network_id = snapshot.base.network_id, .finalized_height = snapshot.base.height,
             .finalized_tip = snapshot.base.block_id, .capabilities = cybou::p2p::CAP_VALIDATION, .nonce = 70001})) session.ServeNext(*net.runtime);
     }};
-    tcp::socket socket{io}; socket.connect(acceptor.local_endpoint()); cybou::p2p::PeerSession session{std::move(socket)};
+    tcp::socket socket{io}; socket.connect(acceptor.local_endpoint());
+    cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::CLIENT};
     BOOST_REQUIRE(session.Handshake({.network_id = snapshot.base.network_id, .finalized_height = snapshot.base.height,
         .finalized_tip = snapshot.base.block_id, .nonce = 70002}));
     const auto response = session.RequestValidation(operation); BOOST_REQUIRE(response); BOOST_REQUIRE(response->attestation);
