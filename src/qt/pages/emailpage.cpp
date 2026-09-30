@@ -15,6 +15,7 @@
 #include <QDropEvent>
 #include <QFrame>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QHBoxLayout>
@@ -260,6 +261,19 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
         QLineEdit::LeadingPosition);
     m_search->setMinimumHeight(38);
     list_layout->addWidget(m_search);
+    m_empty_trash = new QPushButton{tr("Empty Trash"), m_list_pane};
+    m_empty_trash->setObjectName(QStringLiteral("secondaryButton"));
+    m_empty_trash->setProperty("cybouId", QStringLiteral("mailEmptyTrash"));
+    m_empty_trash->setIcon(QIcon{glyphPixmap(Glyph::Trash, {16, 16}, CybouTheme::color(CybouTheme::ROSE))});
+    m_empty_trash->hide();
+    connect(m_empty_trash, &QPushButton::clicked, this, [this] {
+        QStringList ids;
+        for (const auto& item : m_model->mailItems()) {
+            if (item.folder == CybouMailFolder::Trash && !item.draft) ids << item.id;
+        }
+        deleteForever(ids);
+    });
+    list_layout->addWidget(m_empty_trash, 0, Qt::AlignRight);
 
     m_banner = new QFrame{m_list_pane};
     m_banner->setObjectName(QStringLiteral("identityBanner"));
@@ -463,6 +477,18 @@ void EmailPage::moveMessagesTo(const QStringList& ids, View target)
     });
 }
 
+void EmailPage::deleteForever(const QStringList& ids)
+{
+    if (ids.isEmpty()) return;
+    const QString question = ids.size() == 1
+        ? tr("Delete this message forever? It is removed from this mailbox and cannot be restored here.")
+        : tr("Delete %1 messages forever? They are removed from this mailbox and cannot be restored here.").arg(ids.size());
+    if (QMessageBox::question(this, tr("Delete forever"), question) != QMessageBox::Yes) return;
+    if (ids.contains(m_current_id)) closeDetail();
+    m_model->requestDeleteMailForever(ids);
+    m_model->notify(ids.size() == 1 ? tr("Message deleted") : tr("%1 messages deleted").arg(ids.size()));
+}
+
 QMenu* EmailPage::buildContextMenu(const QStringList& ids, QWidget* parent)
 {
     auto* menu = new QMenu{parent};
@@ -509,6 +535,8 @@ QMenu* EmailPage::buildContextMenu(const QStringList& ids, QWidget* parent)
         }
         if (first->folder != CybouMailFolder::Trash) {
             add(tr("Move to Trash"), "mailTrash", [this, ids] { moveMessagesTo(ids, View::Trash); });
+        } else {
+            add(tr("Delete forever"), "mailDeleteForever", [this, ids] { deleteForever(ids); });
         }
     } else {
         menu->addSeparator();
@@ -674,6 +702,7 @@ void EmailPage::rebuildList()
         if (inView(item) && matches(item, needle)) items.append(item);
     }
     std::sort(items.begin(), items.end(), [](const CybouMailItem& a, const CybouMailItem& b) { return a.time > b.time; });
+    m_empty_trash->setVisible(m_view == View::Trash && !items.isEmpty() && needle.isEmpty());
 
     m_list->clear();
     for (const auto& mail : items) {

@@ -45,6 +45,9 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QSettings>
+#include <QSystemTrayIcon>
+
+#include <cstdlib>
 #include <QStackedWidget>
 #include <QStyle>
 #include <QSystemTrayIcon>
@@ -135,6 +138,7 @@ CybouMainWindow::CybouMainWindow(std::filesystem::path data_directory, QWidget* 
     buildShell();
     buildMenus();
     buildTrayMenu();
+    setupNotificationsAndLock();
 
     if (m_desktop_model->fixtureMode()) {
         const QString initial = CybouUiFixtures::initialPage(fixture);
@@ -637,8 +641,12 @@ void CybouMainWindow::buildTrayMenu()
     });
     m_tray_menu->addSeparator();
     m_tray_menu->addAction(tr("Quit CYBOU"), this, [this] { Q_EMIT quitRequested(); });
-    m_tray_icon = new QSystemTrayIcon{windowIcon(), this};
+    // An explicit icon: windowIcon() can still be empty here ("No Icon set").
+    const QIcon tray_icon = windowIcon().isNull()
+        ? QIcon{CybouTheme::logoTile({32, 32}, 8, {22, 22})} : windowIcon();
+    m_tray_icon = new QSystemTrayIcon{tray_icon, this};
     m_tray_icon->setToolTip(tr("CYBOU"));
+    connect(m_tray_icon, &QSystemTrayIcon::messageClicked, this, [this] { openNotificationTarget(); });
     m_tray_icon->setContextMenu(m_tray_menu);
     connect(m_tray_icon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
         if (reason == QSystemTrayIcon::Trigger) {
@@ -648,6 +656,103 @@ void CybouMainWindow::buildTrayMenu()
         }
     });
     m_tray_icon->show();
+}
+
+void CybouMainWindow::setupNotificationsAndLock()
+{
+    // New mail and received payments: only items that arrive after the first
+    // snapshot of an unlocked Identity (never a burst at startup).
+    const auto notify_new = [this] {
+        const auto& status = m_desktop_model->status();
+        if (status.identity_state != CybouIdentityState::Active || m_desktop_model->fixtureMode()) {
+            m_notify_primed = false;
+            m_notified.clear();
+            return;
+        }
+        QVector<QPair<QString, QPair<QString, QString>>> fresh; // id -> (title, body)
+        const bool previews = QSettings{}.value(SettingsPage::mailPreviewsKey(), false).toBool();
+        for (const auto& mail : m_desktop_model->mailItems()) {
+            if (mail.outgoing || mail.draft || !mail.unread || mail.folder != CybouMailFolder::Inbox) continue;
+            const QString key = QStringLiteral("mail:") + mail.id;
+            if (m_notified.contains(key)) continue;
+            m_notified.insert(key);
+            fresh.append({key, previews
+                ? QPair<QString, QString>{tr("New message from %1").arg(mail.from_name),
+                      mail.subject.isEmpty() ? tr("(no subject)") : mail.subject}
+                : QPair<QString, QString>{tr("New CYBOU Mail"), tr("Open CYBOU to read it.")}});
+        }
+        for (const auto& entry : m_desktop_model->walletEntries()) {
+            if (entry.kind != CybouWalletEntryKind::Received || entry.operation_state != CybouOperationState::Finalized) continue;
+            const QString key = QStringLiteral("pay:") + entry.id;
+            if (m_notified.contains(key)) continue;
+            m_notified.insert(key);
+            fresh.append({key, {tr("You received %1").arg(cybouAmountText(static_cast<quint64>(std::llabs(entry.amount)))),
+                tr("From %1").arg(entry.counterparty_name)}});
+        }
+        if (!m_notify_primed) {
+            m_notify_primed = true; // what existed at unlock is not news
+            return;
+        }
+        if (fresh.isEmpty() || !m_tray_icon || !QSettings{}.value(SettingsPage::notificationsKey(), true).toBool()) return;
+        const auto& [key, text] = fresh.last();
+        m_notification_target = key;
+        m_tray_icon->showMessage(fresh.size() == 1 ? text.first : tr("%1 new items in CYBOU").arg(fresh.size()),
+            fresh.size() == 1 ? text.second : text.first, QSystemTrayIcon::Information, 6000);
+    };
+    connect(m_desktop_model, &CybouDesktopModel::mailChanged, this, notify_new);
+    connect(m_desktop_model, &CybouDesktopModel::walletChanged, this, notify_new);
+    connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, notify_new);
+    // Problems (failed sends, rejected operations) while the window is not in front.
+    connect(m_desktop_model, &CybouDesktopModel::paymentFinished, this, [this](bool ok, const QString& error) {
+        if (ok || !m_tray_icon || isActiveWindow() ||
+            !QSettings{}.value(SettingsPage::notificationsKey(), true).toBool()) return;
+        m_notification_target = QStringLiteral("wallet");
+        m_tray_icon->showMessage(tr("Payment not sent"), error, QSystemTrayIcon::Warning, 8000);
+    });
+
+    // Lock after inactivity: any input restarts the clock.
+    m_last_input.start();
+    qApp->installEventFilter(this);
+    auto* lock_timer = new QTimer{this};
+    lock_timer->setInterval(30'000);
+    connect(lock_timer, &QTimer::timeout, this, [this] {
+        const int minutes = QSettings{}.value(SettingsPage::autoLockMinutesKey(),
+            SettingsPage::DEFAULT_AUTO_LOCK_MINUTES).toInt();
+        if (minutes <= 0 || m_desktop_model->fixtureMode() ||
+            m_desktop_model->status().identity_state != CybouIdentityState::Active) return;
+        if (m_last_input.elapsed() < static_cast<qint64>(minutes) * 60'000) return;
+        m_desktop_model->requestLockVault();
+        m_desktop_model->notify(tr("CYBOU locked after %1 minutes of inactivity.").arg(minutes));
+    });
+    lock_timer->start();
+}
+
+bool CybouMainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    switch (event->type()) {
+    case QEvent::KeyPress:
+    case QEvent::MouseButtonPress:
+    case QEvent::MouseMove:
+    case QEvent::Wheel:
+        m_last_input.restart();
+        break;
+    default:
+        break;
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void CybouMainWindow::openNotificationTarget()
+{
+    showNormal();
+    raise();
+    activateWindow();
+    if (m_notification_target.startsWith(QStringLiteral("mail:"))) {
+        showPage(CybouPage::Mail);
+        static_cast<EmailPage*>(page(CybouPage::Mail))->openMessage(m_notification_target.mid(5));
+    } else if (m_notification_target.startsWith(QStringLiteral("pay:")) || m_notification_target == QLatin1String{"wallet"}) {
+        showPage(CybouPage::Wallet);
+    }
 }
 
 void CybouMainWindow::runScreenshotHarness(const QString& directory)

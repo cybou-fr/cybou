@@ -79,6 +79,7 @@ public:
     void restoreFile(const QString& id) override;
     void deleteFile(const QString& id) override;
     void deleteFiles(const QStringList& ids) override;
+    void deleteMailForever(const QStringList& ids) override;
     void retryFile(const QString& id) override;
     void discardFile(const QString& id) override;
 
@@ -100,6 +101,8 @@ private:
         persist in the encrypted Application DB and are never published. */
     QHash<QString, CybouMailItem> m_pending_drafts;
     QSet<QString> m_deleted_drafts;
+    /** Messages deleted forever that a stale snapshot may still carry. */
+    QSet<QString> m_deleted_mail;
     /** Sends not yet taken over by the worker (or refused before publication). */
     QHash<QString, CybouMailItem> m_pending_sends;
     /** Model client IDs of created items -> private item IDs. */

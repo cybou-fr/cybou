@@ -38,6 +38,8 @@ public:
     enum class Mode {
         Create,
         View,
+        /** New words replacing the current phrase (IdentityRotate). */
+        Rotate,
     };
 
     RecoveryPhraseDialog(Mode mode, const QStringList& words, QWidget* parent = nullptr);

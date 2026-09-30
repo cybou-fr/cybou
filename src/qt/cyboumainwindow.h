@@ -5,7 +5,9 @@
 #ifndef BITCOIN_QT_CYBOUMAINWINDOW_H
 #define BITCOIN_QT_CYBOUMAINWINDOW_H
 
+#include <QElapsedTimer>
 #include <QMainWindow>
+#include <QSet>
 #include <QVector>
 
 #include <filesystem>
@@ -73,6 +75,8 @@ Q_SIGNALS:
 protected:
     void closeEvent(QCloseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    /** Application-wide input watcher for the inactivity lock. */
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     CybouDesktopModel* m_desktop_model;
@@ -96,8 +100,16 @@ private:
     QDialog* m_diagnostics{nullptr};
     bool m_sidebar_compact{false};
     CybouUi::Notifier* m_notifier{nullptr};
+    /** Notified items ("mail:<id>", "pay:<id>"); primed with what exists at unlock. */
+    QSet<QString> m_notified;
+    bool m_notify_primed{false};
+    QString m_notification_target;
+    QElapsedTimer m_last_input;
 
     void buildShell();
+    /** System notifications for new mail/payments/problems, and the inactivity lock. */
+    void setupNotificationsAndLock();
+    void openNotificationTarget();
     QFrame* buildSidebar(QWidget* parent);
     QFrame* buildHeader(QWidget* parent);
     void buildMenus();

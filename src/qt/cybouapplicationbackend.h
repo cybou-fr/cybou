@@ -62,6 +62,8 @@ public:
     virtual void setMailStarred(const QString& id, bool starred) = 0;
     virtual void moveMail(const QString& id, CybouMailFolder folder) = 0;
     virtual void deleteMail(const QString& id) = 0;
+    /** Removes messages that are in Trash from this mailbox for good (local; history is not erased). */
+    virtual void deleteMailForever(const QStringList& ids) { Q_UNUSED(ids); }
     virtual void downloadAttachment(const QString& message_id, const QString& attachment_id,
         const QString& destination) = 0;
     /** Mail -> Files. The backend decides how protected content is reused. */

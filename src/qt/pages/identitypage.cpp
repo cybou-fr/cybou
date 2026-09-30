@@ -491,7 +491,7 @@ void IdentityPage::replaceRecoveryPhrase()
         QMessageBox::warning(this, tr("Cannot create a recovery phrase"), tr("Secure randomness is unavailable."));
         return;
     }
-    RecoveryPhraseDialog phrase{RecoveryPhraseDialog::Mode::Create, *words, this};
+    RecoveryPhraseDialog phrase{RecoveryPhraseDialog::Mode::Rotate, *words, this};
     if (phrase.exec() == QDialog::Accepted) m_model->requestRecoveryRootRotation(*words, password);
     for (auto& word : *words) word.fill(QChar{0});
     password.fill(QChar{0});

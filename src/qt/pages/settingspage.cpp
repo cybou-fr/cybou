@@ -122,12 +122,35 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
         QTimer::singleShot(0, this, [fn = onAppearanceChanged] { if (fn) fn(); });
     });
 
-    auto* privacy = Section(root, tr("Privacy"), {}, this);
+    auto* privacy = Section(root, tr("Privacy and security"), {}, this);
+    m_notifications = new QCheckBox{tr("Notify me about new mail, received payments and problems"), this};
+    m_notifications->setObjectName(QStringLiteral("notifications"));
+    connect(m_notifications, &QCheckBox::toggled, this, [this](bool on) {
+        QSettings{}.setValue(notificationsKey(), on);
+        m_mail_previews->setEnabled(on);
+    });
+    privacy->addWidget(m_notifications);
     m_mail_previews = new QCheckBox{tr("Show Mail previews in notifications"), this};
     m_mail_previews->setObjectName(QStringLiteral("mailPreviews"));
     m_mail_previews->setToolTip(tr("When off, notifications only say “New CYBOU Mail”."));
     connect(m_mail_previews, &QCheckBox::toggled, this, [](bool on) { QSettings{}.setValue(mailPreviewsKey(), on); });
     privacy->addWidget(m_mail_previews);
+    auto* lock_row = new QHBoxLayout;
+    auto* lock_caption = new QLabel{tr("Lock CYBOU after inactivity"), this};
+    lock_caption->setObjectName(QStringLiteral("rowSub"));
+    lock_row->addWidget(lock_caption);
+    m_auto_lock = new QComboBox{this};
+    m_auto_lock->setObjectName(QStringLiteral("autoLock"));
+    m_auto_lock->setAccessibleName(tr("Lock CYBOU after inactivity"));
+    for (const int minutes : {5, 15, 30, 60}) m_auto_lock->addItem(tr("%1 minutes").arg(minutes), minutes);
+    m_auto_lock->addItem(tr("Never"), 0);
+    m_auto_lock->setMinimumWidth(200);
+    lock_row->addWidget(m_auto_lock);
+    lock_row->addStretch();
+    privacy->addLayout(lock_row);
+    connect(m_auto_lock, &QComboBox::activated, this, [this](int index) {
+        QSettings{}.setValue(autoLockMinutesKey(), m_auto_lock->itemData(index).toInt());
+    });
 
     auto* files = Section(root, tr("Files"), {}, this);
     auto* folder_row = new QHBoxLayout;
@@ -212,6 +235,13 @@ void SettingsPage::refresh()
     m_start_with_windows->setChecked(StartsWithWindows());
     m_run_in_background->setChecked(QSettings{}.value(runInBackgroundKey(), false).toBool());
     m_mail_previews->setChecked(QSettings{}.value(mailPreviewsKey(), false).toBool());
+    const QSignalBlocker b6{m_notifications};
+    const QSignalBlocker b7{m_auto_lock};
+    const bool notify = QSettings{}.value(notificationsKey(), true).toBool();
+    m_notifications->setChecked(notify);
+    m_mail_previews->setEnabled(notify);
+    const int lock = QSettings{}.value(autoLockMinutesKey(), DEFAULT_AUTO_LOCK_MINUTES).toInt();
+    m_auto_lock->setCurrentIndex(std::max(0, m_auto_lock->findData(lock)));
     m_download_folder->setText(QDir::toNativeSeparators(DownloadFolder()));
     const QString data_dir = m_model->status().data_directory;
     m_data_directory->setText(data_dir.isEmpty() ? tr("Available after node startup") : QDir::toNativeSeparators(data_dir));

@@ -182,6 +182,14 @@ BOOST_AUTO_TEST_CASE(text_mail_reaches_offline_recipient_and_rebuilds_sent)
     BOOST_CHECK(bob.application->SetMailRead(hello.message_id, true));
     BOOST_CHECK(bob.application->GetMail(hello.message_id)->read);
     BOOST_CHECK(!bob.application->MoveMail(hello.message_id, cybou::MailFolder::SENT));
+    // Delete forever: only from Trash, final, and it survives a rescan.
+    BOOST_CHECK(!bob.application->MoveMail(hello.message_id, cybou::MailFolder::DELETED));
+    BOOST_REQUIRE(bob.application->MoveMail(hello.message_id, cybou::MailFolder::TRASH));
+    BOOST_REQUIRE(bob.application->MoveMail(hello.message_id, cybou::MailFolder::DELETED));
+    BOOST_CHECK(bob.application->ListMail().empty());
+    BOOST_CHECK(!bob.application->MoveMail(hello.message_id, cybou::MailFolder::INBOX));
+    bob.application->Scan();
+    BOOST_CHECK(bob.application->ListMail().empty());
 
     // Alice's Sent comes from her self capsule, even after deleting her DB.
     alice.application->Scan();

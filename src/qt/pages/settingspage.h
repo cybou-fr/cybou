@@ -30,6 +30,11 @@ public:
     /** QSettings keys shared with the shell. */
     static QString runInBackgroundKey() { return QStringLiteral("desktop/run_in_background"); }
     static QString mailPreviewsKey() { return QStringLiteral("privacy/mail_previews"); }
+    /** System notifications for new mail, received payments and failures. */
+    static QString notificationsKey() { return QStringLiteral("privacy/notifications"); }
+    /** Minutes without input before the vault locks; 0 = never. */
+    static QString autoLockMinutesKey() { return QStringLiteral("security/auto_lock_minutes"); }
+    static constexpr int DEFAULT_AUTO_LOCK_MINUTES{15};
     static QString downloadFolderKey() { return QStringLiteral("files/download_folder"); }
     /** Show "Validated" on operations (informational; only finality is canonical). */
     static QString showValidationKey() { return QStringLiteral("network/show_validation"); }
@@ -40,6 +45,8 @@ private:
     QCheckBox* m_start_with_windows{nullptr};
     QCheckBox* m_run_in_background{nullptr};
     QCheckBox* m_mail_previews{nullptr};
+    QCheckBox* m_notifications{nullptr};
+    QComboBox* m_auto_lock{nullptr};
     QWidget* m_validation_section{nullptr};
     QCheckBox* m_show_validation{nullptr};
     QLabel* m_download_folder{nullptr};

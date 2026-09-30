@@ -24,7 +24,12 @@ class CybouNodeRuntime;
 class StorageService;
 
 /** Local mailbox placement. Archive and Trash are local, not published. */
-enum class MailFolder : std::uint8_t { INBOX = 1, SENT = 2, ARCHIVE = 3, TRASH = 4 };
+/**
+ * DELETED is a local tombstone ("Delete forever" from Trash): delivered mail
+ * is part of finalized history, so it is hidden from this mailbox rather
+ * than erased. Only a Trash message can become DELETED; ListMail omits it.
+ */
+enum class MailFolder : std::uint8_t { INBOX = 1, SENT = 2, ARCHIVE = 3, TRASH = 4, DELETED = 5 };
 
 struct MailRecord {
     uint256 operation_id;

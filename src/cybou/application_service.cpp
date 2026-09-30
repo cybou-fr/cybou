@@ -260,7 +260,8 @@ std::optional<MailRecord> ApplicationService::LoadMail(const PrivateItemId& id) 
     const auto folder = in.U8();
     const auto read = in.U8();
     const auto starred = in.U8();
-    if (!height || !index || !sender || !outgoing || !folder || *folder < 1 || *folder > 4 || !read || !starred) {
+    if (!height || !index || !sender || !outgoing || !folder || *folder < 1 ||
+        *folder > static_cast<std::uint8_t>(MailFolder::DELETED) || !read || !starred) {
         return std::nullopt;
     }
     const auto document = DecodePrivateApplicationDocument(in.Rest());
@@ -864,7 +865,7 @@ std::vector<MailRecord> ApplicationService::ListMail()
     std::lock_guard lock{m_mutex};
     std::vector<MailRecord> records;
     for (const auto& id : ReadIds<PrivateItemId>(m_application_db, MAIL_INDEX_KEY)) {
-        if (auto record = LoadMail(id)) records.push_back(std::move(*record));
+        if (auto record = LoadMail(id); record && record->folder != MailFolder::DELETED) records.push_back(std::move(*record));
     }
     std::sort(records.begin(), records.end(), [](const MailRecord& a, const MailRecord& b) {
         return std::tie(a.finalized_height, a.operation_index) > std::tie(b.finalized_height, b.operation_index);
@@ -915,6 +916,9 @@ bool ApplicationService::MoveMail(const PrivateItemId& id, const MailFolder fold
     // Sent mail never becomes Inbox mail and vice versa.
     if ((folder == MailFolder::SENT && !record->outgoing) || (folder == MailFolder::INBOX && record->outgoing &&
             record->message.recipient_account_id != record->sender)) return false;
+    // Delete forever only from Trash; a deleted message never comes back.
+    if (record->folder == MailFolder::DELETED ||
+        (folder == MailFolder::DELETED && record->folder != MailFolder::TRASH)) return false;
     record->folder = folder;
     PrivateApplicationStore::Batch batch{m_application_db};
     return SaveMail(*record) && batch.Commit();

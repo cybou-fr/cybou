@@ -54,6 +54,8 @@ public:
     void setSearchText(const QString& text);
     /** Moves messages the way a drop on a folder does (Undo offered). */
     void moveMessagesTo(const QStringList& ids, View target);
+    /** Trash only: removes the messages from this mailbox for good, after confirmation. */
+    void deleteForever(const QStringList& ids);
     /** Builds the context menu for the given messages (exposed for tests). */
     QMenu* buildContextMenu(const QStringList& ids, QWidget* parent);
     /** Opens the composer; draft may prefill it (reply, forward, draft). */
@@ -83,6 +85,7 @@ private:
     void rebuildContacts();
     QWidget* m_list_pane{nullptr};
     QLineEdit* m_search{nullptr};
+    QPushButton* m_empty_trash{nullptr};
     QFrame* m_banner{nullptr};
     QLabel* m_banner_text{nullptr};
     QPushButton* m_banner_action{nullptr};

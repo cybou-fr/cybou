@@ -57,8 +57,8 @@ QLabel* boldLabel(const QString& text, QWidget* parent)
 RecoveryPhraseDialog::RecoveryPhraseDialog(Mode mode, const QStringList& words, QWidget* parent)
     : QDialog{parent}, m_mode{mode}, m_words{words}
 {
-    setWindowTitle(mode == Mode::Create
-        ? tr("Save your recovery words")
+    setWindowTitle(mode == Mode::Create ? tr("Save your recovery words")
+        : mode == Mode::Rotate ? tr("Save your new recovery words")
         : tr("Your recovery words"));
     setMinimumWidth(520);
     // Never grow past the usable screen — the action buttons at the bottom
@@ -72,13 +72,17 @@ RecoveryPhraseDialog::RecoveryPhraseDialog(Mode mode, const QStringList& words, 
     layout->setSpacing(12);
 
     layout->addWidget(boldLabel(
-        mode == Mode::Create
-            ? tr("Write down these 24 words in order")
-            : tr("Your 24 recovery words in order"), this));
+        mode == Mode::Create ? tr("Write down these 24 words in order")
+        : mode == Mode::Rotate ? tr("Write down these 24 new words in order")
+        : tr("Your 24 recovery words in order"), this));
     layout->addWidget(warningLabel(
         mode == Mode::Create
             ? tr("These 24 words are the only way to restore your identity on a new installation. "
                  "Anyone who sees them controls your identity. Write them down on paper and store them offline.")
+        : mode == Mode::Rotate
+            ? tr("These words replace your current recovery phrase. Once the network confirms the change, only "
+                 "the new words restore your Identity and the old words stop working. Your AccountID, name, Mail, "
+                 "Files and Wallet stay the same.")
             : tr("Anyone who sees these words can take over your identity. Keep them private."), this));
 
     // Selectable and copyable: a read-only plain text edit, never a message box.
@@ -126,7 +130,7 @@ RecoveryPhraseDialog::RecoveryPhraseDialog(Mode mode, const QStringList& words, 
     m_feedback->setVisible(true);
     layout->addWidget(m_feedback);
 
-    if (mode == Mode::Create) {
+    if (mode != Mode::View) {
         // Two distinct random words must be retyped before creation continues.
         m_first_index = QRandomGenerator::global()->bounded(m_words.size());
         do {
@@ -156,7 +160,7 @@ RecoveryPhraseDialog::RecoveryPhraseDialog(Mode mode, const QStringList& words, 
         connect(m_second_edit, &QLineEdit::textChanged, this, [this] { updateAcceptState(); });
 
         auto* actions = new QHBoxLayout;
-        m_accept_button = new QPushButton{tr("Create identity"), this};
+        m_accept_button = new QPushButton{mode == Mode::Rotate ? tr("Change recovery phrase") : tr("Create identity"), this};
         m_accept_button->setObjectName(QStringLiteral("primaryButton"));
         m_accept_button->setEnabled(false);
         connect(m_accept_button, &QPushButton::clicked, this, [this] { accept(); });
@@ -168,8 +172,9 @@ RecoveryPhraseDialog::RecoveryPhraseDialog(Mode mode, const QStringList& words, 
         actions->addStretch();
         layout->addLayout(actions);
 
-        layout->addWidget(noteLabel(
-            tr("Canceling discards this identity — nothing is created and nothing is sent to the network."), this));
+        layout->addWidget(noteLabel(mode == Mode::Rotate
+            ? tr("Canceling keeps your current recovery phrase — nothing is sent to the network.")
+            : tr("Canceling discards this identity — nothing is created and nothing is sent to the network."), this));
     } else {
         auto* actions = new QHBoxLayout;
         auto* close_button = new QPushButton{tr("Close"), this};
@@ -302,7 +307,7 @@ bool RecoveryPhraseDialog::saveWordsToFile()
 
 void RecoveryPhraseDialog::updateAcceptState()
 {
-    if (m_mode != Mode::Create) return;
+    if (m_mode == Mode::View) return;
     const auto matches = [this](QLineEdit* edit, int index) {
         return edit && edit->text().trimmed().compare(m_words.at(index), Qt::CaseInsensitive) == 0;
     };

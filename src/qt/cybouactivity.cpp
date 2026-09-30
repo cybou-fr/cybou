@@ -69,6 +69,10 @@ QVector<CybouActivityOperation> CybouActivityOperations(const CybouDesktopModel&
         add({Kind::Payment, entry.id, title, CybouProduct::operationStateText(operation), failed});
     }
     const auto& status = model.status();
+    if (model.recoveryRotationPending() || (!model.fixtureMode() && model.hasPendingRecoveryRotation())) {
+        add({Kind::Recovery, {}, tr("Changing your recovery phrase"),
+            tr("Waiting for confirmation. Keep both the old and the new words until it is done."), false});
+    }
     if (status.name_claim_pending) {
         add({Kind::Name, {}, tr("Claiming your .cybou name"),
             status.name_claim_status.isEmpty() ? tr("Waiting for confirmation") : status.name_claim_status, false});
@@ -89,6 +93,7 @@ CybouActivityButton::CybouActivityButton(CybouDesktopModel* model, QWidget* pare
              &CybouDesktopModel::walletChanged, &CybouDesktopModel::statusChanged}) {
         connect(m_model, signal, this, [this] { refresh(); });
     }
+    connect(m_model, &CybouDesktopModel::recoveryRotationFinished, this, [this] { refresh(); });
     refresh();
 }
 
@@ -164,6 +169,7 @@ void CybouActivityButton::rebuildRows()
         case CybouActivityOperation::Kind::Mail: glyph = Glyph::Envelope; break;
         case CybouActivityOperation::Kind::Payment: glyph = Glyph::WalletCard; break;
         case CybouActivityOperation::Kind::Name: glyph = Glyph::User; break;
+        case CybouActivityOperation::Kind::Recovery: glyph = Glyph::Key; break;
         }
         row->addWidget(Chip(glyph, operation.attention ? Tint::Rose : Tint::Mint, parent, 32, 16), 0, Qt::AlignTop);
         auto* text = new QVBoxLayout;
@@ -214,6 +220,7 @@ void CybouActivityButton::open(const CybouActivityOperation& operation)
         if (onOpenWallet) onOpenWallet();
         break;
     case CybouActivityOperation::Kind::Name:
+    case CybouActivityOperation::Kind::Recovery:
         if (onOpenIdentity) onOpenIdentity();
         break;
     }

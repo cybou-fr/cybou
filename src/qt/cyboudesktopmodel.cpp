@@ -1434,6 +1434,21 @@ void CybouDesktopModel::requestRestoreFile(const QString& id)
     if (filesReady() && fileItem(id)) m_backend->restoreFile(id);
 }
 
+void CybouDesktopModel::requestDeleteMailForever(const QStringList& ids)
+{
+    QStringList trashed;
+    for (const auto& id : ids) {
+        const auto* item = mailItem(id);
+        if (item && item->folder == CybouMailFolder::Trash && !item->draft) trashed << id;
+    }
+    if (trashed.isEmpty()) return;
+    if (m_fixture_mode || !m_backend) {
+        for (const auto& id : trashed) removeMailItem(id);
+        return;
+    }
+    m_backend->deleteMailForever(trashed);
+}
+
 void CybouDesktopModel::requestDeleteFile(const QString& id)
 {
     if (filesReady() && fileItem(id)) m_backend->deleteFile(id);

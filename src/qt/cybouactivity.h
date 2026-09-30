@@ -18,7 +18,7 @@ class QVBoxLayout;
 
 /** One operation still on its way, or one that needs the user. */
 struct CybouActivityOperation {
-    enum class Kind { File, Download, Mail, Payment, Name } kind{Kind::File};
+    enum class Kind { File, Download, Mail, Payment, Name, Recovery } kind{Kind::File};
     QString id;      ///< item id for File/Download/Mail; empty otherwise
     QString title;   ///< "Uploading report.pdf"
     QString status;  ///< "Waiting for confirmation", "Securing 42%"

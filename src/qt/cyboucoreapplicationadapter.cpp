@@ -105,6 +105,7 @@ CybouMailFolder FolderOf(cybou::MailFolder folder)
     case cybou::MailFolder::SENT: return CybouMailFolder::Sent;
     case cybou::MailFolder::ARCHIVE: return CybouMailFolder::Archive;
     case cybou::MailFolder::TRASH: return CybouMailFolder::Trash;
+    case cybou::MailFolder::DELETED: return CybouMailFolder::Trash; // never listed
     }
     return CybouMailFolder::Inbox;
 }
@@ -712,6 +713,7 @@ void CybouCoreApplicationAdapter::closeIdentity()
     m_pending_drafts.clear();
     m_known_drafts.clear();
     m_deleted_drafts.clear();
+    m_deleted_mail.clear();
     m_pending_sends.clear();
     m_client_ids.clear();
     m_last_files.clear();
@@ -734,8 +736,15 @@ void CybouCoreApplicationAdapter::applySnapshot(QVector<CybouMailItem> items, QV
     // Drafts: the latest local edit wins until the worker has stored it; a
     // deleted draft stays hidden until the stored copy is gone.
     QSet<QString> present;
+    QSet<QString> present_deleted;
     for (auto it = items.begin(); it != items.end();) {
         if (!it->draft) {
+            // Deleted forever: hidden until the worker's copy is gone too.
+            if (m_deleted_mail.contains(it->id)) {
+                present_deleted.insert(it->id);
+                it = items.erase(it);
+                continue;
+            }
             ++it;
             continue;
         }
@@ -752,6 +761,9 @@ void CybouCoreApplicationAdapter::applySnapshot(QVector<CybouMailItem> items, QV
     }
     for (auto it = m_deleted_drafts.begin(); it != m_deleted_drafts.end();) {
         it = present.contains(*it) ? std::next(it) : m_deleted_drafts.erase(it);
+    }
+    for (auto it = m_deleted_mail.begin(); it != m_deleted_mail.end();) {
+        it = present_deleted.contains(*it) ? std::next(it) : m_deleted_mail.erase(it);
     }
     for (const auto& pending : std::as_const(m_pending_drafts)) {
         if (!present.contains(pending.id)) items.append(pending);
@@ -1020,6 +1032,25 @@ void CybouCoreApplicationAdapter::moveMail(const QString& id, CybouMailFolder fo
         if (!s.application->MoveMail(message_id, target)) {
             s.ToGui([owner] { Q_EMIT owner->commandFailed(tr("This message cannot be moved there.")); });
         }
+    });
+}
+
+void CybouCoreApplicationAdapter::deleteMailForever(const QStringList& ids)
+{
+    if (!m_session) return;
+    std::vector<cybou::PrivateItemId> messages;
+    for (const auto& id : ids) {
+        const auto message_id = FromHex(id);
+        if (!message_id) continue;
+        messages.push_back(*message_id);
+        m_deleted_mail.insert(id);
+        Q_EMIT mailItemRemoved(id);
+    }
+    m_session->Post([owner = this, messages = std::move(messages)](Session& s) {
+        bool all{true};
+        for (const auto& message : messages) all = s.application->MoveMail(message, cybou::MailFolder::DELETED) && all;
+        if (!all) s.ToGui([owner] { Q_EMIT owner->commandFailed(tr("Some messages could not be deleted.")); });
+        s.Refresh();
     });
 }
 

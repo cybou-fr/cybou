@@ -200,6 +200,8 @@ public:
         CybouRetrievalState retrieval);
     /** Retries a message in Needs attention. */
     void requestRetryMail(const QString& id);
+    /** Trash only: removes messages from this mailbox for good (local tombstone; history is not erased). */
+    void requestDeleteMailForever(const QStringList& ids);
     void requestAttachmentDownload(const QString& message_id, const QString& attachment_id,
         const QString& destination);
     /** Local attachment for Compose: read metadata only; content is
