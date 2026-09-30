@@ -25,6 +25,8 @@
 #include <QStandardItemModel>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 using namespace CybouUi;
 
 namespace {
@@ -303,13 +305,19 @@ void WalletPage::refresh()
     m_lock_button->setEnabled(payments && funded && !m_model->paymentPending());
     m_lock_button->setToolTip(funded ? tr("Move spendable CYBOU into System Balance (cannot be undone)")
                                      : tr("You have no spendable CYBOU to move."));
-    // Estimate from the payment fee, else from the latest network fee actually paid.
+    // Estimate from the payment fee, else from the typical (median of the
+    // latest ten) network fee actually paid, so one large file does not skew it.
     auto fee = m_model->paymentFee();
     if (!fee || *fee == 0) {
+        QList<quint64> fees;
         for (const auto& entry : m_model->walletEntries()) {
             if (entry.kind != CybouWalletEntryKind::NetworkServiceFee || entry.amount == 0) continue;
-            fee = static_cast<quint64>(std::llabs(entry.amount));
-            break;
+            fees << static_cast<quint64>(std::llabs(entry.amount));
+            if (fees.size() == 10) break;
+        }
+        if (!fees.isEmpty()) {
+            std::sort(fees.begin(), fees.end());
+            fee = fees.at(fees.size() / 2);
         }
     }
     m_system_hint->setText(fee && *fee > 0

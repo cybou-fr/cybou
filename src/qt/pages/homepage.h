@@ -42,6 +42,14 @@ public:
     std::function<void()> onSendPayment;
     /** Items in the first-steps checklist that are still open. */
     QStringList openFirstSteps() const;
+    /**
+     * Reminders that stay until acted on, even when first steps are hidden:
+     * "phrase" (never checked, or not in 90 days) and "system" (System
+     * Balance covers few network operations).
+     */
+    QStringList reminders() const;
+    /** Asks for three of the 24 words (never shows them) and records the check. */
+    void checkRecoveryPhrase();
 
 private:
     CybouDesktopModel* const m_model;

@@ -8,7 +8,14 @@
 #include <qt/cyboutheme.h>
 #include <qt/pages/onboardingview.h>
 
+#include <QCryptographicHash>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFrame>
+#include <QLineEdit>
+#include <QLocale>
+#include <QPointer>
+#include <QRandomGenerator>
 #include <QSettings>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -20,6 +27,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cstdlib>
 #include <utility>
 
 using namespace CybouUi;
@@ -233,14 +241,15 @@ QWidget* HomePage::buildDashboard()
     steps_layout->setContentsMargins(22, 16, 22, 16);
     steps_layout->setSpacing(6);
     auto* steps_head = new QHBoxLayout;
-    steps_head->addWidget(SectionTitle(tr("Get started"), m_first_steps), 1);
+    steps_head->addWidget(SectionTitle(tr("Next steps"), m_first_steps), 1);
     auto* hide_steps = new QPushButton{tr("Hide"), m_first_steps};
     hide_steps->setFlat(true);
     hide_steps->setStyleSheet(QStringLiteral("QPushButton { border: none; background: transparent; color: %1; min-height: 0; }")
         .arg(CybouTheme::color(CybouTheme::TEXT_MUTED).name()));
     connect(hide_steps, &QPushButton::clicked, this, [this] {
+        // Hides the first steps; protective reminders stay until acted on.
         QSettings{}.setValue(QStringLiteral("home/first_steps_hidden"), true);
-        m_first_steps->hide();
+        rebuildFirstSteps();
     });
     steps_head->addWidget(hide_steps);
     steps_layout->addLayout(steps_head);
@@ -338,12 +347,125 @@ void HomePage::refresh()
     rebuildFirstSteps();
 }
 
+namespace {
+QString PhraseCheckKey(const CybouDesktopStatus& status)
+{
+    const auto digest = QCryptographicHash::hash((status.data_directory + QLatin1Char('|') + status.account_id).toUtf8(),
+        QCryptographicHash::Sha256).toHex().left(16);
+    return QStringLiteral("identity/phrase_checked/") + QString::fromLatin1(digest);
+}
+
+/** Typical network fee: median of the latest ten paid (one large file must not skew it); 0 when none yet. */
+quint64 LatestFee(const CybouDesktopModel& model)
+{
+    QList<quint64> fees;
+    for (const auto& entry : model.walletEntries()) {
+        if (entry.kind != CybouWalletEntryKind::NetworkServiceFee || entry.amount == 0) continue;
+        fees << static_cast<quint64>(std::llabs(entry.amount));
+        if (fees.size() == 10) break;
+    }
+    if (fees.isEmpty()) return 0;
+    std::sort(fees.begin(), fees.end());
+    return fees.at(fees.size() / 2);
+}
+
+constexpr int kPhraseCheckDays{90};
+constexpr quint64 kLowSystemOperations{25};
+} // namespace
+
+QStringList HomePage::reminders() const
+{
+    QStringList open;
+    const auto& status = m_model->status();
+    if (m_model->fixtureMode() || status.account_id.isEmpty()) return open;
+    const QDateTime checked = QSettings{}.value(PhraseCheckKey(status)).toDateTime();
+    if (!checked.isValid() || checked.daysTo(QDateTime::currentDateTime()) > kPhraseCheckDays) open << QStringLiteral("phrase");
+    const quint64 fee = LatestFee(*m_model);
+    if (fee > 0 && status.system_balance < fee * kLowSystemOperations) open << QStringLiteral("system");
+    return open;
+}
+
+void HomePage::checkRecoveryPhrase()
+{
+    QDialog dialog{this};
+    dialog.setObjectName(QStringLiteral("phraseCheckDialog"));
+    dialog.setWindowTitle(tr("Check your recovery phrase"));
+    dialog.setMinimumWidth(440);
+    auto* layout = new QVBoxLayout{&dialog};
+    layout->setContentsMargins(24, 20, 24, 20);
+    layout->setSpacing(8);
+    layout->addWidget(SectionTitle(tr("Check your recovery phrase"), &dialog));
+    layout->addWidget(MutedText(tr("Take out your written 24 words. CYBOU asks for three of them to confirm your copy "
+                                   "still restores this Identity. The words are never shown here."), &dialog));
+    auto* password = new QLineEdit{&dialog};
+    password->setEchoMode(QLineEdit::Password);
+    password->setPlaceholderText(tr("Vault password"));
+    password->setMinimumHeight(36);
+    layout->addWidget(password);
+    // Three distinct positions, different each time.
+    QList<int> positions;
+    while (positions.size() < 3) {
+        const int position = static_cast<int>(QRandomGenerator::global()->bounded(24));
+        if (!positions.contains(position)) positions << position;
+    }
+    std::sort(positions.begin(), positions.end());
+    QList<QLineEdit*> inputs;
+    for (const int position : positions) {
+        auto* input = new QLineEdit{&dialog};
+        input->setPlaceholderText(tr("Word #%1").arg(position + 1));
+        input->setMinimumHeight(36);
+        layout->addWidget(input);
+        inputs << input;
+    }
+    auto* result = MutedText({}, &dialog);
+    layout->addWidget(result);
+    auto* buttons = new QDialogButtonBox{&dialog};
+    auto* check = buttons->addButton(tr("Check"), QDialogButtonBox::AcceptRole);
+    check->setObjectName(QStringLiteral("primaryButton"));
+    buttons->addButton(QDialogButtonBox::Cancel);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(check, &QPushButton::clicked, &dialog, [this, &dialog, password, inputs, positions, result, check] {
+        check->setEnabled(false);
+        result->setText(tr("Checking…"));
+        QStringList typed;
+        for (auto* input : inputs) typed << input->text().trimmed().toLower();
+        QPointer<QDialog> guard{&dialog};
+        m_model->revealRecoveryWordsAsync(password->text(), [this, guard, typed, positions, result, check](
+                                                               std::optional<QStringList> words) mutable {
+            if (!guard) {
+                if (words) for (auto& word : *words) word.fill(QChar{0});
+                return;
+            }
+            check->setEnabled(true);
+            if (!words) {
+                result->setText(tr("The vault password is incorrect."));
+                return;
+            }
+            bool match = words->size() == 24;
+            for (int i = 0; match && i < positions.size(); ++i) match = words->at(positions.at(i)) == typed.at(i);
+            for (auto& word : *words) word.fill(QChar{0});
+            if (!match) {
+                result->setText(tr("These words do not match. Check your written copy; if it is lost, "
+                                   "show the phrase in Identity & Security and write it down again."));
+                return;
+            }
+            QSettings{}.setValue(PhraseCheckKey(m_model->status()), QDateTime::currentDateTime());
+            m_model->notify(tr("Recovery phrase checked. Keep your copy safe."));
+            guard->accept();
+        });
+        password->clear();
+    });
+    dialog.exec();
+    rebuildFirstSteps();
+}
+
 QStringList HomePage::openFirstSteps() const
 {
     QStringList open;
     if (m_model->names().isEmpty()) open << QStringLiteral("name");
     const bool sent = std::any_of(m_model->mailItems().begin(), m_model->mailItems().end(),
-        [](const CybouMailItem& item) { return item.folder == CybouMailFolder::Sent; });
+        [](const CybouMailItem& item) { return item.folder == CybouMailFolder::Sent || (item.outgoing && !item.draft); });
     if (!sent) open << QStringLiteral("mail");
     const bool file = std::any_of(m_model->fileItems().begin(), m_model->fileItems().end(),
         [](const CybouFileItem& item) { return !item.folder; });
@@ -354,9 +476,10 @@ QStringList HomePage::openFirstSteps() const
 void HomePage::rebuildFirstSteps()
 {
     ClearLayout(m_first_steps_rows);
-    const auto open = openFirstSteps();
     const bool hidden = QSettings{}.value(QStringLiteral("home/first_steps_hidden"), false).toBool();
-    m_first_steps->setVisible(!hidden && !open.isEmpty());
+    const auto open = hidden ? QStringList{} : openFirstSteps();
+    const auto reminders = this->reminders();
+    m_first_steps->setVisible(!open.isEmpty() || !reminders.isEmpty());
     if (!m_first_steps->isVisible()) return;
     const auto step = [this](const QString& title, const QString& subtitle, const QString& action, std::function<void()> fn) {
         auto* row = new QWidget{m_first_steps_rows->parentWidget()};
@@ -377,6 +500,19 @@ void HomePage::rebuildFirstSteps()
         layout->addWidget(button);
         m_first_steps_rows->addWidget(row);
     };
+    // Reminders first: they protect what the user already has.
+    if (reminders.contains(QStringLiteral("phrase"))) {
+        step(tr("Check your recovery phrase"),
+            tr("Your 24 words are the only way back if this computer is lost. Confirm your copy."), tr("Check"),
+            [this] { checkRecoveryPhrase(); });
+    }
+    if (reminders.contains(QStringLiteral("system"))) {
+        const quint64 fee = LatestFee(*m_model);
+        step(tr("System Balance is running low"),
+            tr("It covers about %1 more network operations for Mail, Files and payments.")
+                .arg(QLocale{}.toString(fee > 0 ? m_model->status().system_balance / fee : 0)),
+            tr("Wallet"), [this] { m_wallet_requested(); });
+    }
     if (open.contains(QStringLiteral("name"))) {
         const auto& status = m_model->status();
         if (status.name_claim_pending) {
