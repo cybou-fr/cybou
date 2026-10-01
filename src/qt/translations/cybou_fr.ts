@@ -2802,6 +2802,7 @@ Objet : %3
     </message>
     <message>
         <location filename="../pages/networkauthoritypage.cpp" line="106" />
+        <location filename="../pages/networkauthoritypage.cpp" line="112" />
         <source>Connected peers</source>
         <translation>Pairs connectés</translation>
     </message>
@@ -2814,11 +2815,6 @@ Objet : %3
         <location filename="../pages/networkauthoritypage.cpp" line="111" />
         <source>Supply and pools</source>
         <translation>Offre et réserves</translation>
-    </message>
-    <message>
-        <location filename="../pages/networkauthoritypage.cpp" line="112" />
-        <source>Peers and storage providers</source>
-        <translation>Pairs et fournisseurs de stockage</translation>
     </message>
     <message>
         <location filename="../pages/networkauthoritypage.cpp" line="135" />
@@ -2932,13 +2928,13 @@ Objet : %3
     </message>
     <message>
         <location filename="../pages/networkauthoritypage.cpp" line="165" />
-        <source>Block peer</source>
-        <translation>Pair de blocs</translation>
+        <source>No ProviderID verified</source>
+        <translation>Aucun ProviderID vérifié</translation>
     </message>
     <message>
         <location filename="../pages/networkauthoritypage.cpp" line="166" />
-        <source>Storage provider %1</source>
-        <translation>Fournisseur de stockage %1</translation>
+        <source>ProviderID verified: %1</source>
+        <translation>ProviderID vérifié : %1</translation>
     </message>
     <message>
         <location filename="../pages/networkauthoritypage.cpp" line="168" />

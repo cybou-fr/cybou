@@ -109,7 +109,7 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
 
     m_finality = Section(root, tr("Finality"), this);
     m_economy = Section(root, tr("Supply and pools"), this);
-    m_providers = Section(root, tr("Peers and storage providers"), this);
+    m_providers = Section(root, tr("Connected peers"), this);
     root->addStretch();
 
     connect(m_model, &CybouDesktopModel::networkAuthorityChanged, this, [this] { refresh(); });
@@ -173,11 +173,11 @@ void NetworkAuthorityPage::refresh()
     if (d.peers.empty()) Row(m_providers, tr("Peers"), tr("None connected"));
     for (const auto& peer : d.peers) {
         const quint64 lag = d.height > peer.advertised_height ? d.height - peer.advertised_height : 0;
-        const QString role = peer.provider_id.empty()
-            ? tr("Block peer")
-            : tr("Storage provider %1").arg(QString::fromStdString(peer.provider_id));
+        const QString provider = peer.provider_id.empty()
+            ? tr("No ProviderID verified")
+            : tr("ProviderID verified: %1").arg(QString::fromStdString(peer.provider_id));
         Row(m_providers, QString::fromStdString(peer.endpoint),
-            tr("%1  ·  height %2  ·  lag %3").arg(role, locale.toString(static_cast<quint64>(peer.advertised_height)))
+            tr("%1  ·  height %2  ·  lag %3").arg(provider, locale.toString(static_cast<quint64>(peer.advertised_height)))
                 .arg(lag));
     }
 }
