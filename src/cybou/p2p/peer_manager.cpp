@@ -94,6 +94,11 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
     const auto local_bootstrap_account = m_runtime.LocalBootstrapAccountId();
     if (local_bootstrap_account) caps |= CAP_BOOTSTRAP;
+    // Only the configured bootstrap route needs the Central Authority's
+    // session proof; discovered peers remain ordinary outbound sessions.
+    if (m_runtime.IsPoaFinalizerEnabled() && m_runtime.IsConfiguredP2pEndpoint(endpoint.first, port)) {
+        caps |= CAP_ACCEPT_OPERATIONS;
+    }
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip, .capabilities = caps, .nonce = *nonce};
     auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT);
@@ -333,7 +338,7 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
             it = m_peers.find(endpoint);
         }
         if (it == m_peers.end() || !it->second->Peer() ||
-            !(it->second->Peer()->capabilities & CAP_ACCEPT_OPERATIONS)) continue;
+            !(it->second->Peer()->capabilities & (CAP_ACCEPT_OPERATIONS | CAP_OPERATION_RELAY))) continue;
         const auto acknowledgment = it->second->SubmitOperation(operation);
         if (!acknowledgment) {
             result.delivery_uncertain = true;

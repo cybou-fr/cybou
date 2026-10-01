@@ -31,6 +31,7 @@
 #include <set>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace cybou {
@@ -173,6 +174,7 @@ public:
     /** Stop signing while preserving the node's pending operation pool and journal. */
     void DisablePoaFinalizer();
     bool IsPoaFinalizerEnabled() const;
+    bool IsConfiguredP2pEndpoint(std::string_view address, uint16_t port) const;
 
     /** Attach only after a live CYP2 session has verified the genesis finalizer proof. */
     std::optional<BootstrapOperationRelay::FinalizerSession> AttachAuthenticatedFinalizerRelay();

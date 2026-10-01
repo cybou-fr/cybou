@@ -647,6 +647,12 @@ bool CybouNodeRuntime::IsPoaFinalizerEnabled() const
     return m_finalizer_node && m_finalizer_node->SignerEnabled();
 }
 
+bool CybouNodeRuntime::IsConfiguredP2pEndpoint(const std::string_view address, const uint16_t port) const
+{
+    return m_config.p2p_endpoint && m_config.p2p_endpoint->first == address &&
+        m_config.p2p_endpoint->second == port;
+}
+
 BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block, const bool sync)
 {
     std::lock_guard lock(m_mutex);

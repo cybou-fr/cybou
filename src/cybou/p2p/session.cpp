@@ -1306,7 +1306,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});
     }
     if (request->type == MessageType::OP_META) {
-        if (!(m_local_capabilities & CAP_ACCEPT_OPERATIONS) && !relay_session) return false;
+        if ((m_local_capabilities & (CAP_ACCEPT_OPERATIONS | CAP_OPERATION_RELAY)) == 0 && !relay_session) return false;
         if (request->payload.size() != 4) return false;
         const uint32_t size = Read32(request->payload.data());
         if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return false;
