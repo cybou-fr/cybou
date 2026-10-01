@@ -8,6 +8,8 @@
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 
+#include <cybou/p2p/session.h>
+
 #include <QFrame>
 #include <QDialog>
 #include <QTableWidget>
@@ -70,6 +72,22 @@ void Row(QVBoxLayout* layout, const QString& key, const QString& value, QWidget*
     row->addWidget(k, 0, Qt::AlignTop);
     row->addWidget(v, 1);
     layout->addLayout(row);
+}
+
+QString AdvertisedCapabilities(const std::uint64_t capabilities)
+{
+    QStringList result;
+    const auto translate = [](const char* source) { return QCoreApplication::translate("DiagnosticsPage", source); };
+    if (capabilities & cybou::p2p::CAP_SERVE_BLOCKS) result << translate("Serve blocks");
+    if (capabilities & cybou::p2p::CAP_ACCEPT_OPERATIONS) result << translate("Accept operations");
+    if (capabilities & cybou::p2p::CAP_BLOCK_INVENTORY) result << translate("Block inventory");
+    if (capabilities & cybou::p2p::CAP_BLOCK_ANNOUNCEMENTS) result << translate("Block announcements");
+    if (capabilities & cybou::p2p::CAP_PEER_DISCOVERY) result << translate("Peer discovery");
+    if (capabilities & cybou::p2p::CAP_STORAGE) result << translate("Storage");
+    if (capabilities & cybou::p2p::CAP_STORAGE_PROOFS) result << translate("Storage proofs");
+    if (capabilities & cybou::p2p::CAP_BOOTSTRAP) result << translate("Bootstrap");
+    if (capabilities & cybou::p2p::CAP_OPERATION_RELAY) result << translate("Operation relay");
+    return result.isEmpty() ? translate("None advertised") : result.join(QStringLiteral(", "));
 }
 
 } // namespace
@@ -142,7 +160,7 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
             widget->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
             layout->addWidget(widget); return widget;
         };
-        auto* peers = table({tr("Peer endpoint"),tr("Advertised role"),tr("Advertised height"),tr("Lag"),tr("ProviderID")});
+        auto* peers = table({tr("Peer endpoint"),tr("Advertised capabilities"),tr("Advertised height"),tr("Lag"),tr("ProviderID")});
         auto* operations = table({tr("OperationID"),tr("Local assessment"),tr("Finalized height")});
         auto* storage = table({tr("Application object ID"),tr("Content state"),tr("Remote replicas"),tr("Target"),tr("OperationID")});
         peers->setObjectName(QStringLiteral("networkMonitorPeers"));
@@ -160,7 +178,7 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
             };
             peers->setRowCount(0);
             for (const auto& peer : d.peers) row(peers,{QString::fromStdString(peer.endpoint),
-                peer.provider_id.empty() ? tr("Block peer") : tr("Storage"),QString::number(peer.advertised_height),
+                AdvertisedCapabilities(peer.capabilities),QString::number(peer.advertised_height),
                 QString::number(d.height > peer.advertised_height ? d.height-peer.advertised_height : 0),QString::fromStdString(peer.provider_id)});
             operations->setRowCount(0);
             const QStringList states{tr("Unknown"),tr("Local pending"),tr("Accepted remotely"),tr("Finalized"),tr("Rejected"),tr("History unavailable")};

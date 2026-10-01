@@ -26,6 +26,7 @@
 #include <QTableWidget>
 
 #include <cybou/network_definition.h>
+#include <cybou/p2p/session.h>
 #include <test/cybou_test_helpers.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_storage_test_network.h>
@@ -756,7 +757,8 @@ void CybouShellTests::networkMonitorUsesCoreSnapshot()
     CybouDesktopModel model{QStringLiteral("LAB")};
     cybou::NodeDiagnosticsSnapshot snapshot;
     snapshot.network_id="lab"; snapshot.height=12; snapshot.tip="tip"; snapshot.state_root="root";
-    snapshot.peers.push_back({"127.0.0.1:30471",9,0,"provider"});
+    snapshot.peers.push_back({"127.0.0.1:30471",9,
+        cybou::p2p::CAP_BOOTSTRAP | cybou::p2p::CAP_OPERATION_RELAY | cybou::p2p::CAP_STORAGE,"provider"});
     snapshot.operations.push_back({"operation",3,12});
     model.setNetworkDiagnostics(snapshot);
     DiagnosticsPage page{&model,[]{}};
@@ -768,6 +770,9 @@ void CybouShellTests::networkMonitorUsesCoreSnapshot()
     auto* operations=page.findChild<QTableWidget*>(QStringLiteral("networkMonitorOperations"));
     QVERIFY(peers); QVERIFY(operations);
     QCOMPARE(peers->rowCount(),1);
+    QVERIFY(peers->item(0,1)->text().contains(QStringLiteral("Bootstrap")));
+    QVERIFY(peers->item(0,1)->text().contains(QStringLiteral("Operation relay")));
+    QVERIFY(peers->item(0,1)->text().contains(QStringLiteral("Storage")));
     QCOMPARE(peers->item(0,3)->text(),QStringLiteral("3"));
     QCOMPARE(operations->item(0,1)->text(),QStringLiteral("Finalized"));
     snapshot.peers.clear(); snapshot.operations.clear();

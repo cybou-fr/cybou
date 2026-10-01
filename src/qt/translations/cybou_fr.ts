@@ -970,8 +970,8 @@ Stan</translation>
     </message>
     <message>
         <location filename="../pages/diagnosticspage.cpp" line="145" />
-        <source>Advertised role</source>
-        <translation>Rôle annoncé</translation>
+        <source>Advertised capabilities</source>
+        <translation>Capacités annoncées</translation>
     </message>
     <message>
         <location filename="../pages/diagnosticspage.cpp" line="145" />
@@ -987,6 +987,42 @@ Stan</translation>
         <location filename="../pages/diagnosticspage.cpp" line="145" />
         <source>ProviderID</source>
         <translation>ID du fournisseur</translation>
+    </message>
+    <message>
+        <source>Serve blocks</source>
+        <translation>Servir les blocs</translation>
+    </message>
+    <message>
+        <source>Accept operations</source>
+        <translation>Accepter les opérations</translation>
+    </message>
+    <message>
+        <source>Block inventory</source>
+        <translation>Inventaire des blocs</translation>
+    </message>
+    <message>
+        <source>Block announcements</source>
+        <translation>Annonce des blocs</translation>
+    </message>
+    <message>
+        <source>Peer discovery</source>
+        <translation>Découverte de pairs</translation>
+    </message>
+    <message>
+        <source>Storage proofs</source>
+        <translation>Preuves de stockage</translation>
+    </message>
+    <message>
+        <source>Bootstrap</source>
+        <translation>Bootstrap</translation>
+    </message>
+    <message>
+        <source>Operation relay</source>
+        <translation>Relais d’opérations</translation>
+    </message>
+    <message>
+        <source>None advertised</source>
+        <translation>Aucune capacité annoncée</translation>
     </message>
     <message>
         <location filename="../pages/diagnosticspage.cpp" line="146" />
