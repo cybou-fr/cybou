@@ -83,6 +83,7 @@ public:
         const std::vector<std::pair<std::string, uint16_t>>& endpoints,
         const ProtocolOperation& operation);
     size_t FanoutRecentBlocks(size_t max_per_peer = 16);
+    size_t PollBootstrapRelays();
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
     /** Live finalizer-authenticated sessions; endpoints are transient routes only. */

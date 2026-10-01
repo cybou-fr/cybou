@@ -1029,7 +1029,7 @@ std::optional<BlockAnnounceResult> PeerSession::AdvertiseBlock(
 
 std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const ProtocolOperation& operation)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_ACCEPT_OPERATIONS)) return std::nullopt;
+    if (!m_peer || !(m_peer->capabilities & (CAP_ACCEPT_OPERATIONS | CAP_OPERATION_RELAY))) return std::nullopt;
     const auto bytes = SerializeProtocolOperation(operation);
     const auto op_id = ComputeOperationId(operation);
     if (!bytes || !op_id || bytes->empty() || bytes->size() > MAX_OPERATION_PAYLOAD_BYTES) return std::nullopt;
@@ -1044,10 +1044,53 @@ std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const Protocol
     }
     const auto response = Read(deadline);
     if (!response || response->type != MessageType::OP_RESULT || response->payload.size() != 33 ||
-        response->payload[0] > static_cast<uint8_t>(OperationSubmitStatus::NETWORK_MISMATCH) ||
+        response->payload[0] > static_cast<uint8_t>(OperationSubmitStatus::RELAY_QUEUE_FULL) ||
         !std::equal(op_id->begin(), op_id->end(), response->payload.begin() + 1)) return std::nullopt;
-    return OperationSubmitResult{.status = static_cast<OperationSubmitStatus>(response->payload[0]),
-        .op_id = *op_id};
+    const auto status = static_cast<OperationSubmitStatus>(response->payload[0]);
+    return OperationSubmitResult{.status = status, .op_id = *op_id,
+        .delivery_uncertain = status == OperationSubmitStatus::FINALIZER_UNAVAILABLE ||
+            status == OperationSubmitStatus::RELAY_QUEUE_FULL};
+}
+
+bool PeerSession::PollBootstrapRelay(CybouNodeRuntime& runtime)
+{
+    if (!m_peer || !PeerBootstrapAuthenticated() || !(m_peer->capabilities & CAP_OPERATION_RELAY)) return false;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!Write(Frame{MessageType::BOOTSTRAP_RELAY_POLL, {}}, deadline)) return false;
+    const auto meta = Read(deadline);
+    if (!meta || meta->type != MessageType::BOOTSTRAP_RELAY_OPERATION_META ||
+        (meta->payload.size() != 1 && meta->payload.size() != 37) || meta->payload[0] > 1) return false;
+    if (meta->payload[0] == 0) return meta->payload.size() == 1;
+    uint256 operation_id;
+    std::copy_n(meta->payload.begin() + 1, 32, operation_id.begin());
+    const uint32_t size = Read32(meta->payload.data() + 33);
+    if (operation_id.IsNull() || size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return false;
+    std::vector<unsigned char> bytes;
+    bytes.reserve(size);
+    while (bytes.size() < size) {
+        const auto chunk = Read(deadline);
+        if (!chunk || chunk->type != MessageType::BOOTSTRAP_RELAY_OPERATION_CHUNK || chunk->payload.empty() ||
+            chunk->payload.size() > size - bytes.size()) return false;
+        bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
+    }
+    const auto operation = DeserializeProtocolOperation(bytes);
+    if (!operation || ComputeOperationId(*operation) != operation_id) return false;
+    boost::system::error_code endpoint_error;
+    const auto endpoint = m_socket.remote_endpoint(endpoint_error);
+    if (endpoint_error) return false;
+    // A local rejection is still an admission decision; ACK it so invalid or
+    // already finalized operations cannot wedge the relay FIFO.
+    const auto admitted = runtime.SubmitPeerOperation(*operation, endpoint.address().to_string());
+    if (admitted.status != OperationSubmitStatus::ACCEPTED &&
+        admitted.status != OperationSubmitStatus::ALREADY_PENDING &&
+        admitted.status != OperationSubmitStatus::ALREADY_FINALIZED &&
+        admitted.status != OperationSubmitStatus::INVALID_PAYLOAD &&
+        admitted.status != OperationSubmitStatus::NETWORK_MISMATCH) return false;
+    if (!Write(Frame{MessageType::BOOTSTRAP_RELAY_ACK,
+            std::vector<unsigned char>(operation_id.begin(), operation_id.end())}, deadline)) return false;
+    const auto ack = Read(deadline);
+    return ack && ack->type == MessageType::BOOTSTRAP_RELAY_ACK_RESULT &&
+        ack->payload.size() == 1 && ack->payload[0] == 1;
 }
 
 std::vector<std::pair<std::string, uint16_t>> PeerSession::RequestPeers(std::chrono::steady_clock::time_point deadline)
@@ -1157,7 +1200,8 @@ std::optional<ChunkAuthorizationProof> PeerSession::GetChunkAuthorizationProof(
     return proof;
 }
 
-bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
+bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
+    const std::optional<BootstrapOperationRelay::FinalizerSession> relay_session)
 {
     if (!m_peer) return false;
     const auto request = Read();
@@ -1233,11 +1277,36 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         const auto endpoints = runtime.GetPeerEndpointsForGossip();
         return SendPeers(endpoints);
     }
+    if (request->type == MessageType::BOOTSTRAP_RELAY_POLL) {
+        if (!relay_session || !request->payload.empty()) return false;
+        const auto item = runtime.PeekRelayedOperation(*relay_session);
+        std::vector<unsigned char> meta{static_cast<unsigned char>(item.has_value())};
+        if (item) {
+            meta.insert(meta.end(), item->operation_id.begin(), item->operation_id.end());
+            Put32(meta, static_cast<uint32_t>(item->exact_bytes.size()));
+        }
+        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        if (!Write(Frame{MessageType::BOOTSTRAP_RELAY_OPERATION_META, meta}, deadline)) return false;
+        if (!item) return true;
+        for (size_t offset = 0; offset < item->exact_bytes.size(); offset += MAX_FRAME_PAYLOAD) {
+            const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, item->exact_bytes.size() - offset);
+            if (!Write(Frame{MessageType::BOOTSTRAP_RELAY_OPERATION_CHUNK,
+                    std::vector<unsigned char>{item->exact_bytes.begin() + offset,
+                        item->exact_bytes.begin() + offset + count}}, deadline)) return false;
+        }
+        const auto ack = Read(deadline);
+        if (!ack || ack->type != MessageType::BOOTSTRAP_RELAY_ACK || ack->payload.size() != 32) return false;
+        uint256 operation_id;
+        std::copy_n(ack->payload.begin(), 32, operation_id.begin());
+        const bool acknowledged = runtime.AcknowledgeRelayedOperation(*relay_session, operation_id);
+        return Write(Frame{MessageType::BOOTSTRAP_RELAY_ACK_RESULT,
+            {static_cast<unsigned char>(acknowledged)}}, deadline);
+    }
     if (request->type == MessageType::PING) {
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});
     }
     if (request->type == MessageType::OP_META) {
-        if (!(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) return false;
+        if (!(m_local_capabilities & CAP_ACCEPT_OPERATIONS) && !relay_session) return false;
         if (request->payload.size() != 4) return false;
         const uint32_t size = Read32(request->payload.data());
         if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return false;
@@ -1255,10 +1324,34 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         }
         const auto operation = DeserializeProtocolOperation(bytes);
         if (!operation) return false;
+        const auto operation_id = ComputeOperationId(*operation);
+        if (!operation_id) return false;
         boost::system::error_code endpoint_error;
         const auto endpoint = m_socket.remote_endpoint(endpoint_error);
         if (endpoint_error) return false;
-        const auto result = runtime.SubmitPeerOperation(*operation, endpoint.address().to_string());
+        OperationSubmitResult result;
+        if (relay_session) {
+            switch (runtime.EnqueueRelayedOperation(bytes)) {
+            case BootstrapRelayEnqueueStatus::QUEUED:
+            case BootstrapRelayEnqueueStatus::DUPLICATE:
+                result = {.status = OperationSubmitStatus::RELAY_QUEUED, .op_id = *operation_id};
+                break;
+            case BootstrapRelayEnqueueStatus::FINALIZER_UNAVAILABLE:
+                result = {.status = OperationSubmitStatus::FINALIZER_UNAVAILABLE, .op_id = *operation_id, .delivery_uncertain = true};
+                break;
+            case BootstrapRelayEnqueueStatus::QUEUE_FULL:
+                result = {.status = OperationSubmitStatus::RELAY_QUEUE_FULL, .op_id = *operation_id, .delivery_uncertain = true};
+                break;
+            case BootstrapRelayEnqueueStatus::INVALID_OPERATION:
+                result = {.status = OperationSubmitStatus::INVALID_PAYLOAD, .op_id = *operation_id};
+                break;
+            }
+        } else if (runtime.LocalBootstrapAccountId()) {
+            result = {.status = OperationSubmitStatus::FINALIZER_UNAVAILABLE,
+                .op_id = *operation_id, .delivery_uncertain = true};
+        } else {
+            result = runtime.SubmitPeerOperation(*operation, endpoint.address().to_string());
+        }
         std::vector<unsigned char> response{static_cast<unsigned char>(result.status)};
         response.insert(response.end(), result.op_id.begin(), result.op_id.end());
         return Write(Frame{MessageType::OP_RESULT, response});

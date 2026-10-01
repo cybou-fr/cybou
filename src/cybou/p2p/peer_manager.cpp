@@ -94,9 +94,6 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
     const auto local_bootstrap_account = m_runtime.LocalBootstrapAccountId();
     if (local_bootstrap_account) caps |= CAP_BOOTSTRAP;
-    // This outbound session does not accept operations from the remote peer.
-    // The inbound listener advertises CAP_ACCEPT_OPERATIONS and proves the
-    // genesis-bound finalizer key on sessions where it serves that role.
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip, .capabilities = caps, .nonce = *nonce};
     auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT);
@@ -411,6 +408,19 @@ size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
         } else {
             ++it;
         }
+    }
+    return delivered;
+}
+
+size_t PeerManager::PollBootstrapRelays()
+{
+    if (!m_runtime.IsPoaFinalizerEnabled()) return 0;
+    size_t delivered{0};
+    for (auto& [endpoint, session] : m_peers) {
+        (void)endpoint;
+        if (!session->PeerBootstrapAuthenticated() || !session->Peer() ||
+            !(session->Peer()->capabilities & CAP_OPERATION_RELAY)) continue;
+        if (session->PollBootstrapRelay(m_runtime)) ++delivered;
     }
     return delivered;
 }

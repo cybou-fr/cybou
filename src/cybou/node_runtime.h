@@ -15,6 +15,7 @@
 #include <cybou/state_store.h>
 #include <cybou/chunk_retention.h>
 #include <cybou/finalized_chunk_store.h>
+#include <cybou/bootstrap_operation_relay.h>
 #include <cybou/secret32.h>
 
 #include <array>
@@ -173,6 +174,16 @@ public:
     void DisablePoaFinalizer();
     bool IsPoaFinalizerEnabled() const;
 
+    /** Attach only after a live CYP2 session has verified the genesis finalizer proof. */
+    std::optional<BootstrapOperationRelay::FinalizerSession> AttachAuthenticatedFinalizerRelay();
+    void DetachAuthenticatedFinalizerRelay(BootstrapOperationRelay::FinalizerSession session);
+    bool CanAcceptOperations() const;
+    BootstrapRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes);
+    std::optional<BootstrapRelayOperation> PeekRelayedOperation(
+        BootstrapOperationRelay::FinalizerSession session) const;
+    bool AcknowledgeRelayedOperation(BootstrapOperationRelay::FinalizerSession session,
+        const uint256& operation_id);
+
     /** Commit a finalized block */
     BlockTransitionResult CommitBlock(const FinalizedBlock& block, bool sync = true);
 
@@ -280,6 +291,7 @@ private:
     std::optional<std::array<unsigned char, 32>> m_provider_id;
     CybouStateStore m_store;
     std::unique_ptr<CybouFinalizerNode> m_finalizer_node;
+    BootstrapOperationRelay m_bootstrap_operation_relay;
     std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;
     std::map<uint256, OperationStatus> m_recent_operation_status;
     std::deque<uint256> m_recent_operation_status_order;

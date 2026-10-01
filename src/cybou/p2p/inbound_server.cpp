@@ -31,6 +31,7 @@ std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
         .capabilities = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY |
             (runtime.HasStorageProvider() ? CAP_STORAGE | CAP_STORAGE_PROOFS : 0) |
             (runtime.LocalBootstrapAccountId() ? CAP_BOOTSTRAP : 0) |
+            (runtime.LocalBootstrapAccountId() ? CAP_OPERATION_RELAY : 0) |
             (status.is_finalizer ? CAP_ACCEPT_OPERATIONS : 0),
         .nonce = nonce};
 }
@@ -92,7 +93,10 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
                     &m_runtime.GetNetworkDefinition().poa_finalizer_public_key,
                     bootstrap_identity ? &*bootstrap_identity : nullptr, bootstrap_resolver) &&
                 MatchesKnownFinalizedChain(m_runtime, *session.Peer())) {
-                while (!stopping && session.ServeNext(m_runtime)) {}
+                auto relay_session = session.PeerFinalizerAuthenticated()
+                    ? m_runtime.AttachAuthenticatedFinalizerRelay() : std::nullopt;
+                while (!stopping && session.ServeNext(m_runtime, relay_session)) {}
+                if (relay_session) m_runtime.DetachAuthenticatedFinalizerRelay(*relay_session);
             }
             done->store(true);
         }}});

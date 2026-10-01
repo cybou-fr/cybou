@@ -410,6 +410,42 @@ OperationSubmitResult CybouNodeRuntime::SubmitPeerOperation(ProtocolOperation op
     return SubmitOperationInternal(std::move(op), std::move(source_peer));
 }
 
+std::optional<BootstrapOperationRelay::FinalizerSession> CybouNodeRuntime::AttachAuthenticatedFinalizerRelay()
+{
+    if (!LocalBootstrapAccountId()) return std::nullopt;
+    return m_bootstrap_operation_relay.AttachAuthenticatedFinalizer();
+}
+
+void CybouNodeRuntime::DetachAuthenticatedFinalizerRelay(const BootstrapOperationRelay::FinalizerSession session)
+{
+    m_bootstrap_operation_relay.DetachFinalizer(session);
+}
+
+bool CybouNodeRuntime::CanAcceptOperations() const
+{
+    return IsPoaFinalizerEnabled() || (LocalBootstrapAccountId().has_value() &&
+        m_bootstrap_operation_relay.HasAuthenticatedFinalizer());
+}
+
+BootstrapRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
+    const std::span<const unsigned char> exact_bytes)
+{
+    if (!LocalBootstrapAccountId()) return BootstrapRelayEnqueueStatus::FINALIZER_UNAVAILABLE;
+    return m_bootstrap_operation_relay.Enqueue(exact_bytes);
+}
+
+std::optional<BootstrapRelayOperation> CybouNodeRuntime::PeekRelayedOperation(
+    const BootstrapOperationRelay::FinalizerSession session) const
+{
+    return m_bootstrap_operation_relay.Peek(session);
+}
+
+bool CybouNodeRuntime::AcknowledgeRelayedOperation(
+    const BootstrapOperationRelay::FinalizerSession session, const uint256& operation_id)
+{
+    return m_bootstrap_operation_relay.Acknowledge(session, operation_id);
+}
+
 OperationStatus CybouNodeRuntime::GetOperationStatus(const uint256& op_id) const
 {
     if (op_id.IsNull()) return {};
@@ -529,11 +565,13 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         auto result = submitted.acknowledgment.value_or(
             OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id});
         result.delivery_uncertain = submitted.delivery_uncertain || !submitted.acknowledgment ||
-            (result.status != OperationSubmitStatus::ACCEPTED && result.status != OperationSubmitStatus::ALREADY_PENDING);
+            (result.status != OperationSubmitStatus::ACCEPTED && result.status != OperationSubmitStatus::ALREADY_PENDING &&
+                result.status != OperationSubmitStatus::RELAY_QUEUED);
         {
             std::lock_guard lock(m_mutex);
             if (result.status == OperationSubmitStatus::ACCEPTED ||
-                result.status == OperationSubmitStatus::ALREADY_PENDING) {
+                result.status == OperationSubmitStatus::ALREADY_PENDING ||
+                result.status == OperationSubmitStatus::RELAY_QUEUED) {
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::ACCEPTED_REMOTE});
             } else if (const auto finalized = m_store.GetFinalizedOperationHeight(op_id)) {
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::FINALIZED,
@@ -908,6 +946,7 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
         }
     }
     if (result.blocks_applied==0 && any_peer_up_to_date) result.status = SyncPeerStatus::UP_TO_DATE;
+    m_peer_manager->PollBootstrapRelays();
     m_peer_manager->FanoutRecentBlocks();
     return result;
 }
