@@ -41,8 +41,12 @@ experimental software, not a public mail or cloud-storage service.
   substrate.
 - Attachments depend on measured storage durability and recovery.
 - Backup is post-Beta.
-- Optional Validation is future pre-finalization research, with no canonical
-  effects. Only PoA finalizes; the active protocol has no BFT path.
+- Optional Validation is signed advisory evidence any full node may provide.
+  Recipients verify and trust it locally; it has no canonical effects. A local
+  Authority threshold of 1,000,000 may label an opinion validator-qualified,
+  but never admits a node or changes finality. Only PoA finalizes.
+- CYP2 v3 uses TLS 1.3; provider and finalizer role proofs are bound to the TLS
+  session. Ordinary peers do not have global authenticated identities.
 
 ## Documentation
 

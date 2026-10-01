@@ -64,10 +64,14 @@ RecoveryBridge supports recovery rotation and clean-machine content restore.
 Development requires one remote replica; Beta requires two. Local cache does
 not count toward durability.
 
+CYP2 v3 protects node traffic with TLS 1.3 and binds provider/finalizer role
+proofs to the TLS session. Ordinary peers do not have a global authenticated
+identity.
+
 Remaining work is sustained failure/restart soak, clean-install desktop Beta
 acceptance, operating-cost measurement and security review. Authority remains
-a derived preview until immutable network policy and canonical accounting are
-specified. Optional Validation is future research; PoA alone finalizes.
+an informational derived metric. Optional signed Validation is advisory and
+recipients decide locally whether to trust it; PoA alone finalizes.
 Backup remains post-Beta.
 
 Read [the implementation status](docs/cybou/26_IMPLEMENTATION_STATUS.md) for

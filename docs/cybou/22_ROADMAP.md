@@ -1,69 +1,60 @@
 # CYBOU protocol and product roadmap
 
-The active protocol substrate is genesis-bound hybrid-PQ PoA, generic
-RootPublication and one encrypted content-addressed chunk tree.
+The active protocol is genesis-bound hybrid-PQ PoA, generic RootPublication,
+and one encrypted content-addressed chunk store.
 
 ## Delivered substrate
 
-- stable AccountID / Identity authorization and recovery;
-- `.cybou` names and balances;
+- stable AccountID, Identity authorization, recovery, names, and balances;
 - PoA finality with durable signing journal and conflict halt;
 - generic RootPublication and recipient capsules;
-- streaming encrypted ROOT/INDEX/DATA trees;
-- BLAKE3 ChunkID;
+- encrypted ROOT/INDEX/DATA trees and BLAKE3 ChunkID;
 - finalized-publication Merkle chunk admission;
-- CYP2 finalized block sync and content-addressed PUT/GET;
-- removal of legacy BFT, MailTx and indexed StorageObject paths.
+- CYP2 v3 over TLS 1.3, finalized block sync, and content-addressed PUT/GET;
+- removal of legacy BFT, MailTx, and indexed StorageObject paths.
 
-## Application integration (delivered)
+## Application integration
 
 The encrypted per-Identity Application DB, ApplicationService,
 PublicationService, StorageService, private Mail and Files backends,
-clean-machine recovery with RecoveryBridge, development durability with a
-remote replica target, audit/repair and placement recovery are implemented and
-connected to the desktop.
+clean-machine RecoveryBridge flow, one-remote-replica development target,
+audit/repair, and placement recovery are integrated with the desktop.
 
 ## Current phase: soak, hardening, Beta preparation
 
-No large new features. In order:
+1. Run multi-process provider soak tests covering loss, restart, repair, and
+   lost local state.
+2. Run reproducible core and Qt builds and tests after each implementation
+   batch.
+3. Complete clean-install desktop acceptance.
+4. Measure two independent remote full replicas for Beta.
+5. Keep Authority informational and Validation advisory unless a concrete
+   product need justifies a separately reviewed change.
 
-1. multi-process soak with real `cybou-node provider run` providers (loss, restart,
-   repair, lost local state, long runs);
-2. reproducible build + core + Qt tests after every vertical batch;
-3. Beta desktop acceptance on clean installations;
-4. 2 independent remote replicas (Beta target);
-5. only then move Authority from preview towards enforcement.
+## Authority and Validation
 
-## Identity Authority
+Authority is a read-only metric derived from finalized account history. A
+recipient may use Authority >= 1,000,000 to label a signed opinion as
+validator-qualified. That local label does not affect admission, state,
+finality, or resources. Any full node may provide an optional Validation
+opinion; the recipient verifies and trusts it locally. PoA remains the sole
+source of finality.
 
-After the basic Mail/Files/storage path is operational:
-
-1. implement Age + capped Activity + SystemContribution Authority;
-2. add generic Authority tiers and Protocol/Storage/Bandwidth budgets;
-3. design canonical NodeID binding/evidence;
-4. enable Liveness Authority only after canonical uptime evidence exists;
-5. enable Storage Authority only after canonical storage contribution evidence
-   exists;
-6. validate penalty evidence and anti-farming behavior.
+There is no canonical NodeID binding, validator registry, liveness/storage
+evidence, resource budget, reservation, ticket, reward, or penalty subsystem.
 
 ## Beta
 
 Beta requires:
 
 - Gmail-familiar Mail and Google-Drive-familiar Files UX;
-- clean-machine recovery without old Application DB;
-- 2 independent remote full replicas per required chunk (plus the local copy);
-- measured provider loss/repair behavior;
-- honest `Protected`/`Sent` states;
-- operational cost and anti-abuse measurements;
-- no Reed-Solomon/erasure coding requirement.
+- clean-machine recovery without the old Application DB;
+- two independent remote full replicas per required chunk;
+- measured provider loss and repair behavior;
+- honest `Protected` and `Sent` states;
+- operational cost and local abuse-policy measurements;
+- no Reed-Solomon/erasure-coding requirement.
 
-## Future research
-
-- signed validation as local-policy pre-finalized evidence, scoped by
-  [`VALIDATION.md`](VALIDATION.md);
-- validation contribution to Authority only if later justified;
-- erasure coding only after measured replication cost warrants it;
-- more scalable provider discovery if simple peer fan-out stops being adequate.
-
-Do not block Mail/Files Beta on future provisional validation.
+Do not block Mail/Files Beta on optional Validation. Do not freeze a
+deterministic provider-placement algorithm before provider independence can be
+measured reliably.

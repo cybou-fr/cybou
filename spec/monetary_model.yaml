@@ -46,6 +46,9 @@ authority:
   transferable: false
   voluntary_balance_to_system_lock_one_time_points_per_cybou: 1
   current_system_balance_recurring_points: false
+  informational_only: true
+  resource_allocation: false
+  poa_power: false
 
 fees:
   pending_pool: PendingFeePool

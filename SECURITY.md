@@ -29,13 +29,19 @@ maintainers time to investigate and prepare a fix before public disclosure.
   not prove durability.
 - The client retains encrypted content and must distinguish finalized,
   available, and retrievable states.
+- CYP2 v3 uses TLS 1.3 with the configured `X25519MLKEM768` key exchange and
+  no plaintext fallback. Provider and genesis-key finalizer proofs bind the
+  role to the TLS exporter and both HELLOs. The ephemeral TLS certificate is
+  not itself a peer identity; ordinary peers are not globally authenticated.
+- Secret files require private owner-only permissions and reject links or
+  reparse points. Event logs are private and omit sensitive identifiers by
+  default; LAB mode is explicitly verbose.
 - Use vetted BLAKE3, HKDF-SHA256, ChaCha20-Poly1305, and the frozen hybrid KEM
   profile. Do not create custom cryptographic primitives.
 
 ## Current limits
 
-The protocol target is not yet active on DEV. Do not treat experimental DEV
-identities, balances, ciphertext, or keys as production assets. Do not perform
-the coordinated DEV reset until the PoA, RootPublication, state-execution,
-storage-admission, Identity/name, and clean-machine recovery gates pass
-together. See `AGENTS.md` and `docs/cybou/26_IMPLEMENTATION_STATUS.md`.
+DEV is an experimental network. Do not treat its identities, balances,
+ciphertext, or keys as production assets, and do not reset its state or replace
+its PoA key during routine deployments. See `AGENTS.md` and
+`docs/cybou/26_IMPLEMENTATION_STATUS.md`.

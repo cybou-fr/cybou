@@ -42,11 +42,15 @@ Git history.
 | DEC-206 | Placement, provider health, audit and repair are StorageService policy, not consensus state. | Frozen |
 | DEC-213 | Local blob retention is a generic node-local pin/cache registry keyed by opaque (holder, reference) tags; GC evicts only unpinned, non-admitted cache entries past a grace period. ChunkStore stays free of application semantics. | Frozen |
 | DEC-212 | A storage provider is identified by `ProviderID = BLAKE3(provider public key)`, proven per CYP2 session; placement stores ProviderID plus last endpoint and the replica target counts distinct ProviderIDs. | Frozen |
-| DEC-207 | Identity Authority supersedes the earlier Proof-of-Trust design and never grants PoA finalization power. | Frozen target |
-| DEC-208 | Authority uses immutable rules; initial canonical sources are Age, capped finalized Activity and voluntary System Balance contribution. Liveness/Storage activate only with canonical evidence. | Frozen target |
-| DEC-209 | A future service NodeID may bind to AccountID for contribution accounting but is not an Identity device credential. | Frozen target |
-| DEC-210 | Anti-abuse policy uses generic Authority-derived Protocol, Storage and Bandwidth budgets rather than Mail/File-specific consensus quotas. | Frozen target |
-| DEC-211 | Provisional validation remains future research: signed claims about operations against a finalized base may be distributed as non-canonical evidence, but never substitute for PoA finality or authorize remote storage. | Future |
+| DEC-207 | Authority is a read-only metric derived from finalized account history; it grants no PoA or resource power. | Frozen |
+| DEC-208 | Canonical Age/activity/lock accumulators, liveness/storage evidence, and penalty debt. | Superseded / rejected |
+| DEC-209 | Canonical NodeID binding and per-Account service-node registry. | Superseded / rejected |
+| DEC-210 | Authority-derived Protocol/Storage/Bandwidth budgets, reservations, and tickets. | Superseded / rejected |
+| DEC-211 | Optional signed Validation is advisory evidence verified and trusted locally; PoA alone establishes finality. | Frozen |
+| DEC-214 | Any full node may issue a Validation opinion. There is no ValidatorSet, registry, protocol role, or admission operation. | Frozen |
+| DEC-215 | A recipient may label a signer with locally derived Authority >= 1,000,000 as validator-qualified. This is local presentation policy only. | Frozen |
+| DEC-216 | Validation does not alter canonical state, PoA admission, finality, resource allocation, or remote storage authorization. | Frozen |
+| DEC-217 | Authority creates no canonical reservations, tickets, grants, rewards, or penalties. Provider limits are local policy. | Frozen |
 
 ## Fixed economics
 

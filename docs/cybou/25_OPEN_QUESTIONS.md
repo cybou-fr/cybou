@@ -35,44 +35,27 @@ Still open:
 - retention/lease/GC semantics;
 - repair cadence and retry/backoff;
 - scalable discovery after small-network fan-out;
-- canonical storage contribution evidence for Authority;
-- physical/canonical accounting for active replicated-byte budgets.
+- measured provider independence for the two-replica Beta target.
 
-Do not freeze a grindable deterministic provider-placement algorithm before a
-mature anti-Sybil provider registry/evidence model exists.
+Provider placement remains local StorageService policy. Do not freeze a
+deterministic provider-ranking algorithm before provider independence can be
+measured reliably.
 
-## Identity Authority
+## Authority and Validation
 
-Decided:
+Authority is informational and read-only. It allocates no resources and creates
+no rewards or penalties. Recipients may label a signed Validation as
+validator-qualified when its signer has Authority >= 1,000,000 in their local
+view. This is not protocol admission.
 
-- immutable per-network rules;
-- +1 Age per completed protocol epoch;
-- capped finalized Activity;
-- one-time voluntary Balance->SystemBalance contribution;
-- penalty debt preserved separately;
-- generic Protocol/Storage/Bandwidth budgets;
-- no PoA power.
-
-Still open:
-
-- exact Authority numeric caps/constants;
-- exact Authority tier hard maximum;
-- exact Protocol/Storage/Bandwidth base/per-tier/hard-ceiling values;
-- NodeID binding format and bounded registry;
-- canonical liveness evidence and slot profile;
-- canonical storage byte×epoch evidence;
-- exact false-claim penalty constants beyond the architecture principle.
-
-Until canonical liveness/storage evidence exists, those Authority components
-remain zero.
+No canonical NodeID binding, validator registry, liveness/storage evidence,
+resource budget, reservation, grant, ticket, reward, or penalty mechanism is
+planned. The remaining product question is how much optional Validation
+evidence recipients want to display or trust before PoA finality.
 
 ## Future research
 
-- [`VALIDATION.md`](VALIDATION.md) defines the research scope; unresolved
-  items include NodeID binding/eligibility, durable per-validator nonce
-  conflict exclusion, the attestation profile and transport limits, local
-  trust policy, optional overlay behavior, and any canonical basis for future
-  Authority effects;
-- whether signed provisional validation delivers enough value to justify the
-  added pre-finality complexity;
+- [`VALIDATION.md`](VALIDATION.md) defines optional advisory evidence; the
+  future question is whether users need it before finality and how to present
+  local trust choices;
 - erasure coding after Beta measurements.

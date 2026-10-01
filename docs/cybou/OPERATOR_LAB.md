@@ -65,7 +65,7 @@ System Balance, not spendable Balance.
 The rate is an upper scheduling target, not a promised achieved throughput.
 `--max-operations` (manifest `max_operations`) caps submissions while audits
 continue for the remaining duration. Example manifests cap at 32 operations
-to respect onboarding service funds and the canonical base ProtocolBudget.
+to respect onboarding service funds and local workload limits.
 Increase workload only with sufficient real LAB budgets. Use one canonical
 endpoint per daemon: duplicate loopback/public aliases consume bounded peer
 slots and can prevent new clients from connecting.

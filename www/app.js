@@ -84,7 +84,7 @@ const translations = {
 
     col3Title: "Étapes ultérieures",
     badgePlanned: "PLUS TARD",
-    col3Item1: "<strong>Validation optionnelle :</strong> recherche pré-finalisation, sans état canonique ni pouvoir PoA. Aucun BFT prévu dans le protocole actif.",
+    col3Item1: "<strong>Validation facultative :</strong> avis signé, vérifié et évalué localement. Aucun effet canonique ni pouvoir PoA.",
     col3Item2: "<strong>Montée en charge :</strong> tests prolongés des pièces jointes et du stockage partagé déjà intégrés.",
     col3Item3: "<strong>Sauvegarde :</strong> application post-Beta du même graphe chiffré, avec restauration vérifiable.",
     col3Item4: "<strong>Beta puis service public :</strong> coûts opérationnels mesurés, revue de sécurité, critères UX et exploitation documentée avant ouverture.",
@@ -254,7 +254,7 @@ const translations = {
 
     col3Title: "Later stages",
     badgePlanned: "LATER",
-    col3Item1: "<strong>Optional Validation:</strong> pre-finalization research with no canonical effects or PoA power. The active protocol has no BFT path.",
+    col3Item1: "<strong>Optional Validation:</strong> signed advisory evidence that each recipient verifies and assesses locally. It has no canonical effects or PoA power.",
     col3Item2: "<strong>Scale:</strong> sustained testing of integrated attachments and shared storage.",
     col3Item3: "<strong>Backup:</strong> post-Beta application of the same encrypted graph, with verifiable restore.",
     col3Item4: "<strong>Beta, then public service:</strong> measured operating costs, security review, UX acceptance, and documented operations before opening.",

@@ -2,103 +2,57 @@
 
 ## Trust boundaries
 
-- PoA operator controls canonical ordering/finality and can censor or stop
-  finality, but cannot forge Identity authorization or decrypt private content.
-- Full nodes independently execute and verify canonical state.
-- Providers store opaque encrypted chunks and required admission/accounting
-  metadata.
-- The desktop private Application DB is an Identity-local encrypted projection,
-  not network storage truth.
+- The single genesis-bound PoA operator controls ordering and can censor or
+  stop finality; it cannot forge Identity authorization or decrypt private
+  content.
+- Full nodes independently execute operations, verify blocks, and recompute
+  state roots.
+- Providers store encrypted chunks and apply local capacity and admission
+  policy. Provider IDs prove keys, not independent hosts or operators.
+- The desktop's encrypted Application DB is a local projection, not network
+  storage truth.
 
-## Content confidentiality
+## Transport and service identity
 
-ChunkStore contains encrypted stored bytes only.
+CYP2 v3 requires TLS 1.3 with the configured hybrid X25519+ML-KEM-768 group.
+Finalizer and provider role proofs are tied to both HELLOs and the TLS exporter.
+The ephemeral TLS certificate alone is not a peer identity. Ordinary peers do
+not have globally authenticated identities; discovered addresses are hints.
+IP addresses, timing, and traffic sizes remain observable.
 
-Provider/network metadata must not intentionally reveal:
+## Content and local data
 
-```text
-plaintext filenames
-folder paths
-Mail subjects/bodies
-recipient contact graph
-content keys
-```
+ChunkStore stores ciphertext only. Provider and network metadata must not
+intentionally reveal filenames, folder paths, Mail content, recipient graphs,
+or content keys. The GUI never enumerates arbitrary provider chunks.
 
-The GUI never enumerates arbitrary provider chunks.
+IdentityOperationCoordinator serializes nonces, durably retains exact signed
+bytes, and reconciles uncertain outcomes. Unsigned remote acknowledgments are
+hints: a remote rejection or claimed finalization does not erase the journal.
+Finalized status requires locally verified inclusion.
 
-## Key substitution
+## Publication and storage
 
-Recipient KEM capability must come from verified finalized Identity history and
-capsules remain bound to network, publication root, sender authorization context
-and recipient key epoch.
+- Verify full BLAKE3 ChunkID before using fetched bytes.
+- Verify content capsules and encrypted ROOT/INDEX/DATA structures.
+- Keep finality, availability, and durability as separate states.
+- Admit remote chunks only after finalized RootPublication authorization.
+- Repair degraded replicas through StorageService policy.
 
-## Local disk disclosure
+Development targets one remote full replica; Beta targets two independent
+remote full replicas. A local cache does not count as a remote replica.
 
-- common ChunkStore: ciphertext only;
-- Identity Application DB: encrypted at rest;
-- plaintext only in bounded memory or explicit user output;
-- locking Identity removes normal access to private application data.
+## Authority and Validation
 
-## Publication/replay
+Authority is an informational derived metric. It cannot grant PoA power,
+resource allocation, rewards, or penalties. Optional Validation is a signed
+claim that a recipient verifies and assesses locally. A signed claim is not
+proof of correctness; the PoA finalizer independently validates every
+finalized operation. Neither mechanism changes canonical state or storage
+admission.
 
-IdentityOperationCoordinator owns nonce serialization, durable exact-operation
-retry and uncertain-outcome reconciliation.
+## Recovery
 
-## Storage corruption/loss
-
-- verify BLAKE3 before using a chunk;
-- authenticate/decrypt ROOT/INDEX/DATA tree;
-- distinguish finality from durability;
-- maintain remote replica target;
-- audit/health-check and repair degraded protection.
-
-Development target: 1 remote replica.
-Beta target: 2 independent remote replicas.
-Local cache is not a remote replica.
-
-## Authority farming
-
-### Self-spam
-
-Activity credit is capped per epoch. Additional valid operations may still run
-subject to resource budgets but stop increasing activity Authority.
-
-### Chunk fragmentation
-
-Storage Authority is based on verified byte×epoch contribution, never raw chunk
-count.
-
-### Node-count farming
-
-Liveness credit is at most +1 per Identity per epoch, based on union uptime of
-bound nodes, not number of nodes.
-
-### Wealth dominance
-
-Raw Authority may include one-time System Balance contribution, but network
-privileges use a saturating/logarithmic tier with immutable ceilings.
-
-## False storage claims
-
-Temporary timeout is not automatically fraud.
-
-A provably false signed storage claim receives no positive credit and incurs
-the immutable penalty defined by Authority policy. Global penalty requires
-canonical attributable evidence.
-
-## Invalid future validation
-
-Future provisional validation, if implemented, must be signed and attributable
-and is only a claim about a named operation and finalized base. See
-[`VALIDATION.md`](VALIDATION.md). A signature does not
-make a claim true; PoA independently validates all finalized operations.
-Conflicting or stale operations and transport failures are not proof of fraud.
-An attestation alone does not create an Authority reward or penalty; any later
-global effect requires immutable policy and canonical attributable evidence.
-Provisional validation never becomes PoA power.
-
-## Recovery after key rotation
-
-Before rotating to a new Identity KEM epoch, historical decryption capability
-required for clean recovery must be protected through the private
-RecoveryBridge flow.
+Before rotating to a new Identity KEM epoch, protect historical decryption
+capability required for clean recovery through the private RecoveryBridge
+flow.

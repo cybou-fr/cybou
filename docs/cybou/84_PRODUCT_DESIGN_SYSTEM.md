@@ -488,10 +488,10 @@ AccountID
 NetworkID
 OperationID
 finalized height
-validator set
-peer information
+PoA finality status
+peer connection health
 crypto suites
-Storage object/placement diagnostics
+application publication status
 logs
 ```
 

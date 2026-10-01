@@ -115,9 +115,9 @@ A DHT/global provider index is not required for the first Beta-scale network.
 Initial durability may rely on successful PUT acknowledgments plus periodic
 health/retrieval verification.
 
-Signed receipts become necessary when canonical provider contribution/Authority
-accounting is introduced, but are not a prerequisite for the first working
-replication path.
+The current protocol has no canonical provider-contribution accounting, so
+provider receipts are not a consensus requirement. Local StorageService may
+keep operational acknowledgments for placement and repair.
 
 When healthy remote copies drop below target:
 

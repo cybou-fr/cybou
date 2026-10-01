@@ -30,9 +30,9 @@ native CYBOU NodeRuntime
 One AccountID is the stable Identity. Mnemonic-derived Recovery, Authorization
 and KEM roles are separate. Device is not a protocol entity.
 
-A future service node may bind a dedicated NodeID to an AccountID for
-contribution accounting. NodeID is not an Identity credential and does not
-gain access to the mnemonic, private Mail or Files.
+Service nodes use their own service keys where the transport requires a
+provider or finalizer identity. There is no canonical service-node registry or
+binding to an AccountID.
 
 ## Finality
 
@@ -82,34 +82,16 @@ cryptographically open.
 The GUI renders this private projection and canonical Wallet/Names/Authority;
 it never browses the provider ChunkStore.
 
-## Identity Authority
+## Authority and Validation
 
-Identity Authority supersedes the earlier Proof-of-Trust concept.
+Authority is a read-only metric derived from finalized account history. It is
+separate from CYBOU and System Balance, non-transferable, and grants no
+protocol, resource-allocation, or PoA power. See
+[`57_GLOBAL_PROOF_OF_TRUST_POLICY.md`](57_GLOBAL_PROOF_OF_TRUST_POLICY.md).
 
-Authority is non-transferable, deterministic and separate from CYBOU and System
-Balance. It never grants PoA finalization power.
-
-The target sources are:
-
-```text
-Age
-bounded finalized Activity
-voluntary System Balance contribution
-verified bound-node Liveness when canonical evidence exists
-verified Storage contribution when canonical evidence exists
-minus durable penalties
-```
-
-Authority derives generic Protocol, Storage and Bandwidth budgets using
-immutable network parameters and bounded integer arithmetic.
-
-## Future provisional validation
-
-The future validation research target is described in
-[`VALIDATION.md`](VALIDATION.md). `VALIDATED` would be a local-policy
-pre-finalized assessment with per-validator same-nonce conflict exclusion;
-only PoA yields `FINALIZED`. No validation implementation or consensus phase
-is active. NodeID eligibility still depends on future binding and immutable
-network parameters.
-
-Only PoA finality advances canonical state and authorizes remote storage.
+Any full node may produce optional advisory Validation. Recipients verify it
+and decide locally whether to trust it. A local Authority threshold of
+1,000,000 may label an opinion as validator-qualified; it is not an admission
+rule. Validation never affects state transitions, finality, or provider
+authorization. Only PoA finality advances canonical state and authorizes
+remote storage.

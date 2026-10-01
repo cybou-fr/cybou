@@ -102,8 +102,8 @@ reconstruction.
 
 ## Authority
 
-Identity Authority is an anti-abuse/resource-allocation mechanism separate from
-money and PoA power.
-
-Beta should expose Authority/service allowances only when backed by real core
-state; it must not be gamified as social reputation.
+Authority is an informational, read-only metric derived from finalized history.
+It does not allocate resources or grant PoA power. A recipient may use
+Authority >= 1,000,000 as a local label for validator-qualified advisory
+Validation. It is not a protocol admission rule and is not a gamified social
+score.

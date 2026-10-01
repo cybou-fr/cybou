@@ -1,25 +1,26 @@
-version: '0.1'
+version: '0.2'
 status: current_architecture
 
-poa:
+protocol_rewards:
   validator_set_rewards: false
-  stake_weighting: false
-  current_finality_model: single_genesis_bound_operator
+  validator_admission: false
+  provider_monetary_rewards: false
+  authority_rewards_or_penalties: false
 
-identity_authority:
-  monetary_reward: false
-  contribution_signal: true
-  active_sources_initial:
-    - age
-    - capped_finalized_activity
-    - voluntary_system_balance_contribution
-  evidence_gated_sources:
-    - node_liveness
-    - verified_storage
-  future_sources:
-    - provisional_validation_if_ever_adopted
+authority:
+  role: informational_derived_metric
+  resource_allocation: false
+  poa_power: false
 
-storage_provider:
-  cybou_monetary_reward_protocol_live: false
-  authority_credit_live_before_canonical_evidence: false
-  future_economics_require_measured_beta_costs: true
+validation:
+  optional_advisory_evidence: true
+  canonical: false
+  recipient_decides_trust_locally: true
+
+finality:
+  model: single_genesis_bound_operator_poa
+  independently_verified_by_full_nodes: true
+
+storage:
+  placement_and_admission: local_storage_service_and_provider_policy
+  canonical_reservations_or_tickets: false
