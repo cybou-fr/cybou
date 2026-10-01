@@ -866,24 +866,29 @@ std::optional<ChunkAdmissionResult> PeerSession::PutAuthorizedChunk(
 std::optional<std::vector<unsigned char>> PeerSession::GetChunkById(const ChunkId& chunk_id)
 {
     if (!m_peer || !(m_peer->capabilities & CAP_STORAGE) || IsZeroChunkId(chunk_id)) return std::nullopt;
+    const auto unavailable = [this]() -> std::optional<std::vector<unsigned char>> {
+        m_peer.reset();
+        m_peer_provider_id.reset();
+        return std::nullopt;
+    };
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
     if (!Write(Frame{MessageType::GET_CHUNK_BY_ID,
-            std::vector<unsigned char>{chunk_id.begin(), chunk_id.end()}}, deadline)) return std::nullopt;
+            std::vector<unsigned char>{chunk_id.begin(), chunk_id.end()}}, deadline)) return unavailable();
     const auto meta = Read(deadline);
     if (!meta || meta->type != MessageType::CHUNK_ADMISSION_RESULT || meta->payload.size() != 5 ||
-        meta->payload[0] > 1) return std::nullopt;
+        meta->payload[0] > 1) return unavailable();
     const uint32_t size = Read32(meta->payload.data() + 1);
     if (meta->payload[0] == 0) return size == 0 ? std::optional<std::vector<unsigned char>>{} : std::nullopt;
-    if (size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES) return std::nullopt;
+    if (size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES) return unavailable();
     std::vector<unsigned char> bytes;
     bytes.reserve(size);
     while (bytes.size() < size) {
         const auto data = Read(deadline);
         if (!data || data->type != MessageType::CHUNK_DATA || data->payload.empty() ||
-            data->payload.size() > size - bytes.size()) return std::nullopt;
+            data->payload.size() > size - bytes.size()) return unavailable();
         bytes.insert(bytes.end(), data->payload.begin(), data->payload.end());
     }
-    return ComputeChunkId(bytes) == chunk_id ? std::optional<std::vector<unsigned char>>{std::move(bytes)} : std::nullopt;
+    return ComputeChunkId(bytes) == chunk_id ? std::optional<std::vector<unsigned char>>{std::move(bytes)} : unavailable();
 }
 
 std::optional<ChunkAuthorizationProof> PeerSession::GetChunkAuthorizationProof(
@@ -891,20 +896,25 @@ std::optional<ChunkAuthorizationProof> PeerSession::GetChunkAuthorizationProof(
 {
     if (!m_peer || !(m_peer->capabilities & CAP_STORAGE_PROOFS) || publication_operation_id.IsNull() ||
         IsZeroChunkId(chunk_id)) return std::nullopt;
+    const auto unavailable = [this]() -> std::optional<ChunkAuthorizationProof> {
+        m_peer.reset();
+        m_peer_provider_id.reset();
+        return std::nullopt;
+    };
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
     std::vector<unsigned char> payload;
     payload.insert(payload.end(), publication_operation_id.begin(), publication_operation_id.end());
     payload.insert(payload.end(), chunk_id.begin(), chunk_id.end());
-    if (!Write(Frame{MessageType::GET_CHUNK_AUTHORIZATION_PROOF, payload}, deadline)) return std::nullopt;
+    if (!Write(Frame{MessageType::GET_CHUNK_AUTHORIZATION_PROOF, payload}, deadline)) return unavailable();
     const auto response = Read(deadline);
     if (!response || response->type != MessageType::CHUNK_AUTHORIZATION_PROOF || response->payload.empty()) {
-        return std::nullopt;
+        return unavailable();
     }
     if (response->payload[0] == 0) return response->payload.size() == 1
-        ? std::optional<ChunkAuthorizationProof>{} : std::nullopt;
-    if (response->payload[0] != 1 || response->payload.size() < 6) return std::nullopt;
+        ? std::optional<ChunkAuthorizationProof>{} : unavailable();
+    if (response->payload[0] != 1 || response->payload.size() < 6) return unavailable();
     const auto sibling_count = response->payload[5];
-    if (sibling_count > 32 || response->payload.size() != 6 + size_t{sibling_count} * 32) return std::nullopt;
+    if (sibling_count > 32 || response->payload.size() != 6 + size_t{sibling_count} * 32) return unavailable();
     ChunkAuthorizationProof proof;
     proof.leaf_index = Read32(response->payload.data() + 1);
     proof.siblings.resize(sibling_count);

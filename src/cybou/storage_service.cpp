@@ -398,6 +398,7 @@ PublicationDurability StorageService::Place(Placement& placement)
 
     bool changed{false};
     bool content_missing{false};
+    std::string admission_error;
     for (std::size_t i{0}; i < placement.leaves.size(); ++i) {
         auto& replicas = placement.replicas[i];
         if (replicas.size() >= m_target) continue;
@@ -414,7 +415,12 @@ PublicationDurability StorageService::Place(Placement& placement)
             const auto admitted = m_transport.Put(provider, placement.operation_id, placement.leaves[i],
                 *bytes, commitment->proofs[i]);
             // STORED and ALREADY_STORED both mean the provider now retains the chunk.
-            if (!admitted || !*admitted) continue;
+            if (!admitted || !*admitted) {
+                admission_error = "Provider " + provider.address + ':' + std::to_string(provider.port) +
+                    (admitted ? " rejected chunk with status " + std::to_string(static_cast<unsigned>(admitted->status))
+                              : " did not acknowledge chunk admission");
+                continue;
+            }
             replicas.push_back(provider);
             changed = true;
         }
@@ -426,7 +432,7 @@ PublicationDurability StorageService::Place(Placement& placement)
     if (result.state != DurabilityState::PROTECTED) {
         result.error = content_missing ? "Some encrypted content is temporarily unavailable"
             : providers.size() < m_target ? "Not enough storage providers are reachable"
-            : "Storage providers did not accept every chunk yet";
+            : admission_error.empty() ? "Storage providers did not accept every chunk yet" : admission_error;
     }
     if (auto log = m_runtime.EventLog()) log->Write(result.state == DurabilityState::PROTECTED ? NodeEvent::content_protected : NodeEvent::content_securing,
         {{"operation_id",placement.operation_id.GetHex()},{"replicas",std::uint64_t{result.min_replicas}},{"target",std::uint64_t{m_target}}});

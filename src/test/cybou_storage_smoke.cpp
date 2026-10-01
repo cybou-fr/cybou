@@ -134,6 +134,13 @@ int main(int argc, char* argv[])
         Step("HOLDER " + holder.address + " " + std::to_string(holder.port));
         WaitFor("the orchestrator to kill the holder", [&] { return std::filesystem::exists(work / "killed"); }, 120s);
 
+        const auto first_audit = storage.AuditNextPlacement(64);
+        if (!first_audit || first_audit->first != operation ||
+            first_audit->second.state != cybou::DurabilityState::PROTECTED) {
+            Fail("first audit did not repair the lost replica: " +
+                (first_audit ? first_audit->second.error : std::string{"placement not found"}));
+        }
+
         // StorageService audits every known placement, detects the lost copy and repairs elsewhere.
         WaitFor("audit to detect the lost replica and repair it", [&] {
             storage.AuditNextPlacement(64);

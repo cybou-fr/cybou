@@ -442,18 +442,30 @@ std::optional<ChunkAdmissionResult> PeerManager::PutAuthorizedChunk(
 std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
     const std::string& address, const uint16_t port, const ProviderId& provider_id, const ChunkId& chunk_id)
 {
-    auto* session = FindStorageSession(address, port, provider_id);
+    Endpoint endpoint;
+    auto* session = FindStorageSession(address, port, provider_id, &endpoint);
     if (!session) return std::nullopt;
-    return session->GetChunkById(chunk_id);
+    auto result = session->GetChunkById(chunk_id);
+    if (!session->Peer()) {
+        m_peers.erase(endpoint);
+        m_announced_blocks.erase(endpoint);
+    }
+    return result;
 }
 
 std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
     const std::string& address, const uint16_t port, const ProviderId& provider_id,
     const uint256& publication_operation_id, const ChunkId& chunk_id)
 {
-    auto* session = FindStorageSession(address, port, provider_id);
+    Endpoint endpoint;
+    auto* session = FindStorageSession(address, port, provider_id, &endpoint);
     if (!session) return std::nullopt;
-    return session->GetChunkAuthorizationProof(publication_operation_id, chunk_id);
+    auto result = session->GetChunkAuthorizationProof(publication_operation_id, chunk_id);
+    if (!session->Peer()) {
+        m_peers.erase(endpoint);
+        m_announced_blocks.erase(endpoint);
+    }
+    return result;
 }
 
 PeerSession* PeerManager::FindStorageSession(
