@@ -16,8 +16,10 @@ namespace cybou {
 namespace {
 
 constexpr std::array<unsigned char, 5> MAGIC{'C', 'Y', 'B', 'B', '1'};
+constexpr std::array<unsigned char, 5> REPLACEMENT_MAGIC{'C', 'Y', 'B', 'R', '1'};
 constexpr size_t MLDSA65_SIGNATURE_SIZE{3309};
 constexpr std::string_view SIGNING_DOMAIN{"CYBOU/BOOTSTRAP/NETWORK-BINDING/v1"};
+constexpr std::string_view REPLACEMENT_DOMAIN{"CYBOU/BOOTSTRAP/NETWORK-REPLACEMENT/v1"};
 
 void AppendU16(std::vector<unsigned char>& out, const uint16_t value)
 {
@@ -89,6 +91,36 @@ std::vector<unsigned char> SigningMessage(const BootstrapNetworkBinding& binding
     message.insert(message.end(), finalizer_key.ed25519.begin(), finalizer_key.ed25519.end());
     AppendU16(message, static_cast<uint16_t>(finalizer_key.ml_dsa.size()));
     message.insert(message.end(), finalizer_key.ml_dsa.begin(), finalizer_key.ml_dsa.end());
+    return message;
+}
+
+std::optional<IdentityHybridPublicKey> BindingAuthorityKey(const BootstrapNetworkBinding& binding)
+{
+    const auto network = DeserializeCybouNetworkFile(binding.network_file);
+    if (!network) return std::nullopt;
+    return network->definition.poa_finalizer_public_key;
+}
+
+std::optional<std::array<unsigned char, 32>> BindingDigest(const BootstrapNetworkBinding& binding)
+{
+    const auto encoded = EncodeBootstrapNetworkBinding(binding);
+    if (!encoded) return std::nullopt;
+    std::array<unsigned char, 32> digest{};
+    if (!crypto::ComputeSha256({*encoded}, digest.data())) return std::nullopt;
+    return digest;
+}
+
+std::optional<std::vector<unsigned char>> ReplacementMessage(
+    const BootstrapNetworkBinding& previous_binding, const BootstrapNetworkBinding& new_binding)
+{
+    const auto previous_digest = BindingDigest(previous_binding);
+    const auto new_digest = BindingDigest(new_binding);
+    if (!previous_digest || !new_digest) return std::nullopt;
+    std::vector<unsigned char> message(REPLACEMENT_DOMAIN.begin(), REPLACEMENT_DOMAIN.end());
+    AppendU64(message, previous_binding.generation);
+    message.insert(message.end(), previous_digest->begin(), previous_digest->end());
+    AppendU64(message, new_binding.generation);
+    message.insert(message.end(), new_digest->begin(), new_digest->end());
     return message;
 }
 
@@ -187,6 +219,84 @@ std::optional<BootstrapNetworkBinding> DecodeBootstrapNetworkBinding(const std::
     binding.authority_signature.ml_dsa.assign(bytes.begin() + offset, bytes.end());
     if (!VerifyBootstrapNetworkBinding(binding)) return std::nullopt;
     return binding;
+}
+
+std::optional<BootstrapNetworkReplacement> CreateBootstrapNetworkReplacement(
+    const BootstrapNetworkBinding& previous_binding, BootstrapNetworkBinding new_binding,
+    const RecoveryEntropy& previous_authority_entropy)
+{
+    if (!VerifyBootstrapNetworkBinding(previous_binding) || !VerifyBootstrapNetworkBinding(new_binding) ||
+        previous_binding.generation == std::numeric_limits<uint64_t>::max() ||
+        new_binding.generation != previous_binding.generation + 1) return std::nullopt;
+    const auto previous_key = BindingAuthorityKey(previous_binding);
+    const auto signing_key = DeriveIdentityPublicKey(previous_authority_entropy, IdentityKeyPurpose::POA_FINALIZER);
+    const auto message = ReplacementMessage(previous_binding, new_binding);
+    if (!previous_key || !signing_key || *previous_key != *signing_key || !message) return std::nullopt;
+    const auto signature = SignIdentityMessage(previous_authority_entropy,
+        IdentityKeyPurpose::POA_FINALIZER, *message);
+    if (!signature) return std::nullopt;
+    BootstrapNetworkReplacement replacement{
+        .new_binding = std::move(new_binding),
+        .previous_authority_signature = *signature,
+    };
+    return replacement;
+}
+
+bool VerifyBootstrapNetworkReplacement(const BootstrapNetworkBinding& previous_binding,
+    const BootstrapNetworkReplacement& replacement)
+{
+    if (!VerifyBootstrapNetworkBinding(previous_binding) ||
+        !VerifyBootstrapNetworkBinding(replacement.new_binding) ||
+        previous_binding.generation == std::numeric_limits<uint64_t>::max() ||
+        replacement.new_binding.generation != previous_binding.generation + 1 ||
+        replacement.previous_authority_signature.ml_dsa.size() != MLDSA65_SIGNATURE_SIZE) return false;
+    const auto previous_key = BindingAuthorityKey(previous_binding);
+    const auto message = ReplacementMessage(previous_binding, replacement.new_binding);
+    return previous_key && message && VerifyIdentityMessage(*previous_key,
+        replacement.previous_authority_signature, *message);
+}
+
+std::optional<std::vector<unsigned char>> EncodeBootstrapNetworkReplacement(
+    const BootstrapNetworkBinding& previous_binding, const BootstrapNetworkReplacement& replacement)
+{
+    const auto new_binding = EncodeBootstrapNetworkBinding(replacement.new_binding);
+    if (!new_binding || !VerifyBootstrapNetworkReplacement(previous_binding, replacement) ||
+        new_binding->size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
+    std::vector<unsigned char> bytes(REPLACEMENT_MAGIC.begin(), REPLACEMENT_MAGIC.end());
+    AppendU32(bytes, static_cast<uint32_t>(new_binding->size()));
+    bytes.insert(bytes.end(), new_binding->begin(), new_binding->end());
+    bytes.insert(bytes.end(), replacement.previous_authority_signature.ed25519.begin(),
+        replacement.previous_authority_signature.ed25519.end());
+    AppendU16(bytes, static_cast<uint16_t>(replacement.previous_authority_signature.ml_dsa.size()));
+    bytes.insert(bytes.end(), replacement.previous_authority_signature.ml_dsa.begin(),
+        replacement.previous_authority_signature.ml_dsa.end());
+    return bytes;
+}
+
+std::optional<BootstrapNetworkReplacement> DecodeBootstrapNetworkReplacement(
+    const std::span<const unsigned char> bytes, const BootstrapNetworkBinding& previous_binding)
+{
+    if (bytes.size() < REPLACEMENT_MAGIC.size() + 4 + 64 + 2 + MLDSA65_SIGNATURE_SIZE ||
+        !std::equal(REPLACEMENT_MAGIC.begin(), REPLACEMENT_MAGIC.end(), bytes.begin())) return std::nullopt;
+    size_t offset{REPLACEMENT_MAGIC.size()};
+    uint32_t binding_size{0};
+    if (!ReadU32(bytes, offset, binding_size) || binding_size == 0 || binding_size > bytes.size() - offset) {
+        return std::nullopt;
+    }
+    const auto new_binding = DecodeBootstrapNetworkBinding(bytes.subspan(offset, binding_size));
+    if (!new_binding) return std::nullopt;
+    offset += binding_size;
+    BootstrapNetworkReplacement replacement{.new_binding = *new_binding};
+    if (bytes.size() - offset < replacement.previous_authority_signature.ed25519.size()) return std::nullopt;
+    std::copy_n(bytes.begin() + offset, replacement.previous_authority_signature.ed25519.size(),
+        replacement.previous_authority_signature.ed25519.begin());
+    offset += replacement.previous_authority_signature.ed25519.size();
+    uint16_t signature_size{0};
+    if (!ReadU16(bytes, offset, signature_size) || signature_size != MLDSA65_SIGNATURE_SIZE ||
+        signature_size != bytes.size() - offset) return std::nullopt;
+    replacement.previous_authority_signature.ml_dsa.assign(bytes.begin() + offset, bytes.end());
+    if (!VerifyBootstrapNetworkReplacement(previous_binding, replacement)) return std::nullopt;
+    return replacement;
 }
 
 } // namespace cybou

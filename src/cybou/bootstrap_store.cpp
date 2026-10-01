@@ -25,6 +25,12 @@ constexpr std::string_view VERSION_KEY{"bootstrap/store-version"};
 constexpr std::string_view STATE_KEY{"bootstrap/state"};
 constexpr std::string_view ACTIVATION_HASH_KEY{"bootstrap/activation-sha256"};
 constexpr std::string_view BINDING_KEY{"bootstrap/current-binding"};
+constexpr std::string_view ARCHIVE_PREFIX{"bootstrap/archive/"};
+
+std::string ArchiveKey(const uint64_t generation)
+{
+    return std::string{ARCHIVE_PREFIX} + std::to_string(generation);
+}
 
 std::optional<std::array<unsigned char, 32>> HashActivationCode(const std::string_view code)
 {
@@ -143,6 +149,17 @@ std::optional<BootstrapNetworkBinding> BootstrapStore::CurrentBinding() const
     return m_binding;
 }
 
+std::optional<BootstrapNetworkBinding> BootstrapStore::ArchivedBinding(const uint64_t generation) const
+{
+    std::lock_guard lock{m_mutex};
+    if (m_state != BootstrapStoreState::BOUND || !m_database->Exists(ArchiveKey(generation))) return std::nullopt;
+    std::vector<unsigned char> encoded;
+    if (!m_database->Read(ArchiveKey(generation), encoded)) return std::nullopt;
+    auto binding = DecodeBootstrapNetworkBinding(encoded);
+    if (!binding || binding->generation != generation) return std::nullopt;
+    return binding;
+}
+
 BootstrapClaimStatus BootstrapStore::ClaimInitialNetwork(const std::string_view activation_code,
     const BootstrapNetworkBinding& binding)
 {
@@ -170,6 +187,32 @@ BootstrapClaimStatus BootstrapStore::ClaimInitialNetwork(const std::string_view 
     m_binding = binding;
     OPENSSL_cleanse(m_activation_code_hash.data(), m_activation_code_hash.size());
     return BootstrapClaimStatus::CLAIMED;
+}
+
+BootstrapReplacementStatus BootstrapStore::ReplaceNetwork(
+    const BootstrapNetworkReplacement& replacement)
+{
+    std::lock_guard lock{m_mutex};
+    if (m_state != BootstrapStoreState::BOUND || !m_binding) return BootstrapReplacementStatus::NOT_BOUND;
+    if (!VerifyBootstrapNetworkReplacement(*m_binding, replacement)) {
+        return BootstrapReplacementStatus::INVALID_REPLACEMENT;
+    }
+    const auto encoded_current = EncodeBootstrapNetworkBinding(*m_binding);
+    const auto encoded_next = EncodeBootstrapNetworkBinding(replacement.new_binding);
+    if (!encoded_current || !encoded_next) return BootstrapReplacementStatus::INVALID_REPLACEMENT;
+    const auto archive_key = ArchiveKey(m_binding->generation);
+    if (m_database->Exists(archive_key)) return BootstrapReplacementStatus::ARCHIVE_CONFLICT;
+
+    try {
+        KVStore::Batch batch;
+        batch.Write(archive_key, *encoded_current);
+        batch.Write(std::string{BINDING_KEY}, *encoded_next);
+        m_database->WriteBatch(batch, true);
+    } catch (...) {
+        return BootstrapReplacementStatus::STORAGE_ERROR;
+    }
+    m_binding = replacement.new_binding;
+    return BootstrapReplacementStatus::REPLACED;
 }
 
 } // namespace cybou

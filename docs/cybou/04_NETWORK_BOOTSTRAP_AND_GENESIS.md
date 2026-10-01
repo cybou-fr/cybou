@@ -179,7 +179,11 @@ and transport identity pinning remain unimplemented. A client-side durable
 binding pin is also implemented: first acceptance requires an explicit trust
 write, later generations must increase, same-generation responses must be
 byte-identical, and a changed genesis finalizer key is rejected. Signed key
-replacement and bootstrap rollback/recovery remain unimplemented.
+replacement now has a signed data format and durable-store primitive: the
+current key authorizes the exact next binding, the new key signs that binding,
+and one synchronous batch archives the prior binding and advances current
+state. The bootstrap request handler, client acceptance of replacement, and
+database rollback/recovery remain unimplemented.
 
 Until that cutover is accepted, do not describe the deployed legacy DEV as the
 new bootstrap architecture, and do not point a new executable at it as if it

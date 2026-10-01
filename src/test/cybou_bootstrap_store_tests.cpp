@@ -21,17 +21,18 @@ std::filesystem::path UniqueStorePath()
         ("cybou-bootstrap-store-" + std::to_string(sequence.fetch_add(1)));
 }
 
-std::optional<cybou::BootstrapNetworkBinding> TestBinding()
+std::optional<cybou::BootstrapNetworkBinding> TestBinding(
+    const unsigned char seed = 0x42, const uint64_t generation = 1)
 {
     cybou::RecoveryEntropy entropy{};
-    entropy[0] = 0x42;
+    entropy[0] = seed;
     const auto key = cybou::DeriveIdentityPublicKey(entropy, cybou::IdentityKeyPurpose::POA_FINALIZER);
     if (!key) return std::nullopt;
     const auto genesis = cybou::CreateDevGenesisState();
     const auto definition = cybou::CreateDevNetworkDefinition(genesis, *key);
     const auto file = cybou::SerializeCybouNetworkFile({definition, genesis});
     if (!file) return std::nullopt;
-    return cybou::CreateBootstrapNetworkBinding(1, "CYBOU DEV", *file, entropy);
+    return cybou::CreateBootstrapNetworkBinding(generation, "CYBOU DEV", *file, entropy);
 }
 
 } // namespace
@@ -108,6 +109,56 @@ BOOST_AUTO_TEST_CASE(open_fails_closed_for_missing_or_corrupt_store)
         database.Write(std::string{"bootstrap/state"}, uint8_t{7}, true);
     }
     BOOST_CHECK(!cybou::BootstrapStore::Open(path));
+    std::filesystem::remove_all(path);
+}
+
+BOOST_AUTO_TEST_CASE(replacement_requires_old_authority_and_archives_atomically)
+{
+    const auto path = UniqueStorePath();
+    std::filesystem::remove_all(path);
+    cybou::RecoveryEntropy old_entropy{};
+    old_entropy[0] = 0x42;
+    const auto initial = TestBinding(0x42, 1);
+    const auto next = TestBinding(0x43, 2);
+    BOOST_REQUIRE(initial && next);
+
+    auto provision = cybou::BootstrapStore::Provision(path);
+    BOOST_REQUIRE(provision);
+    BOOST_CHECK(provision->store->ClaimInitialNetwork(provision->activation_code, *initial) ==
+        cybou::BootstrapClaimStatus::CLAIMED);
+
+    const auto replacement = cybou::CreateBootstrapNetworkReplacement(*initial, *next, old_entropy);
+    BOOST_REQUIRE(replacement);
+    BOOST_CHECK(cybou::VerifyBootstrapNetworkReplacement(*initial, *replacement));
+    const auto encoded = cybou::EncodeBootstrapNetworkReplacement(*initial, *replacement);
+    BOOST_REQUIRE(encoded);
+    const auto decoded = cybou::DecodeBootstrapNetworkReplacement(*encoded, *initial);
+    BOOST_REQUIRE(decoded);
+
+    cybou::RecoveryEntropy wrong_entropy{};
+    wrong_entropy[0] = 0x44;
+    BOOST_CHECK(!cybou::CreateBootstrapNetworkReplacement(*initial, *next, wrong_entropy));
+    auto altered = *replacement;
+    altered.new_binding.display_name = "ALTERED";
+    BOOST_CHECK(!cybou::VerifyBootstrapNetworkReplacement(*initial, altered));
+
+    BOOST_CHECK(provision->store->ReplaceNetwork(*decoded) == cybou::BootstrapReplacementStatus::REPLACED);
+    BOOST_CHECK(provision->store->CurrentBinding()->generation == 2);
+    BOOST_CHECK(provision->store->ArchivedBinding(1)->network_id == initial->network_id);
+    BOOST_CHECK(provision->store->ReplaceNetwork(*decoded) ==
+        cybou::BootstrapReplacementStatus::INVALID_REPLACEMENT);
+    const auto archived = provision->store->ArchivedBinding(1);
+    BOOST_REQUIRE(archived);
+    BOOST_CHECK(archived->network_id == initial->network_id);
+    provision.reset();
+
+    auto reopened = cybou::BootstrapStore::Open(path);
+    BOOST_REQUIRE(reopened);
+    BOOST_CHECK(reopened->CurrentBinding()->generation == 2);
+    const auto persisted_archive = reopened->ArchivedBinding(1);
+    BOOST_REQUIRE(persisted_archive);
+    BOOST_CHECK(persisted_archive->generation == 1);
+    reopened.reset();
     std::filesystem::remove_all(path);
 }
 

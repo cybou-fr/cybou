@@ -30,6 +30,12 @@ struct BootstrapNetworkBinding {
     IdentityHybridSignature authority_signature;
 };
 
+/** A new binding authorized by the current Authority; the new Authority signs the binding itself. */
+struct BootstrapNetworkReplacement {
+    BootstrapNetworkBinding new_binding;
+    IdentityHybridSignature previous_authority_signature;
+};
+
 std::optional<BootstrapNetworkBinding> CreateBootstrapNetworkBinding(
     uint64_t generation, std::string display_name, std::span<const unsigned char> exact_network_file,
     const RecoveryEntropy& poa_recovery_entropy);
@@ -38,6 +44,16 @@ std::optional<std::vector<unsigned char>> EncodeBootstrapNetworkBinding(
     const BootstrapNetworkBinding& binding);
 std::optional<BootstrapNetworkBinding> DecodeBootstrapNetworkBinding(
     std::span<const unsigned char> bytes);
+std::optional<BootstrapNetworkReplacement> CreateBootstrapNetworkReplacement(
+    const BootstrapNetworkBinding& previous_binding, BootstrapNetworkBinding new_binding,
+    const RecoveryEntropy& previous_authority_entropy);
+bool VerifyBootstrapNetworkReplacement(const BootstrapNetworkBinding& previous_binding,
+    const BootstrapNetworkReplacement& replacement);
+std::optional<std::vector<unsigned char>> EncodeBootstrapNetworkReplacement(
+    const BootstrapNetworkBinding& previous_binding,
+    const BootstrapNetworkReplacement& replacement);
+std::optional<BootstrapNetworkReplacement> DecodeBootstrapNetworkReplacement(
+    std::span<const unsigned char> bytes, const BootstrapNetworkBinding& previous_binding);
 
 } // namespace cybou
 

@@ -27,6 +27,13 @@ enum class BootstrapClaimStatus : uint8_t {
     INVALID_BINDING,
     STORAGE_ERROR,
 };
+enum class BootstrapReplacementStatus : uint8_t {
+    REPLACED,
+    NOT_BOUND,
+    INVALID_REPLACEMENT,
+    ARCHIVE_CONFLICT,
+    STORAGE_ERROR,
+};
 
 class BootstrapStore;
 
@@ -47,8 +54,10 @@ public:
 
     BootstrapStoreState State() const;
     std::optional<BootstrapNetworkBinding> CurrentBinding() const;
+    std::optional<BootstrapNetworkBinding> ArchivedBinding(uint64_t generation) const;
     BootstrapClaimStatus ClaimInitialNetwork(std::string_view activation_code,
         const BootstrapNetworkBinding& binding);
+    BootstrapReplacementStatus ReplaceNetwork(const BootstrapNetworkReplacement& replacement);
 
 private:
     BootstrapStore(std::unique_ptr<KVStore> database, BootstrapStoreState state,
