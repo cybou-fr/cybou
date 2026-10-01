@@ -2,12 +2,16 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/bootstrap_protocol.h>
+#include <cybou/p2p/peer_admission.h>
 
 #include <boost/asio.hpp>
 
+#include <array>
 #include <atomic>
 #include <csignal>
 #include <iostream>
+#include <memory>
+#include <stdexcept>
 #include <thread>
 #include <limits>
 #include <string_view>
@@ -20,8 +24,25 @@ int Usage()
 {
     std::cerr << "Usage:\n"
         << "  cybou-bootstrap provision <data-dir>\n"
-        << "  cybou-bootstrap serve <data-dir> <numeric-bind-address> <port> <certificate-chain.pem> <private-key.pem>\n";
+        << "  cybou-bootstrap serve <data-dir> <numeric-bind-address> <port> <certificate-chain.pem> <private-key.pem>"
+        << " --geo-country-csv <file> --geo-sha256 <hex>\n";
     return 2;
+}
+
+std::array<unsigned char, 32> Sha256Pin(std::string_view text)
+{
+    if (text.size() != 64) throw std::invalid_argument("Geo data SHA-256 must contain 64 hex characters");
+    std::array<unsigned char, 32> digest{};
+    auto nibble = [](const char c) -> unsigned {
+        if (c >= '0' && c <= '9') return static_cast<unsigned>(c - '0');
+        if (c >= 'a' && c <= 'f') return static_cast<unsigned>(c - 'a' + 10);
+        if (c >= 'A' && c <= 'F') return static_cast<unsigned>(c - 'A' + 10);
+        throw std::invalid_argument("Geo data SHA-256 is not hexadecimal");
+    };
+    for (size_t i = 0; i < digest.size(); ++i) {
+        digest[i] = static_cast<unsigned char>((nibble(text[2 * i]) << 4) | nibble(text[2 * i + 1]));
+    }
+    return digest;
 }
 }
 
@@ -37,7 +58,17 @@ int main(int argc, char** argv)
                   << provision->activation_code << '\n';
         return 0;
     }
-    if (argc != 7 || std::string_view{argv[1]} != "serve") return Usage();
+    if (argc != 11 || std::string_view{argv[1]} != "serve" ||
+        std::string_view{argv[7]} != "--geo-country-csv" || std::string_view{argv[9]} != "--geo-sha256") {
+        return Usage();
+    }
+
+    const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(argv[8], Sha256Pin(argv[10]));
+    if (!dataset) {
+        std::cerr << "Could not load integrity-pinned DB-IP country CSV.\n";
+        return 1;
+    }
+    const auto admission = cybou::p2p::PeerAdmissionPolicy::Public(dataset);
 
     unsigned port_value{0};
     try {
@@ -81,6 +112,12 @@ int main(int argc, char** argv)
         }
         if (error) {
             if (running.load()) std::cerr << "Accept failed: " << error.message() << '\n';
+            error.clear();
+            continue;
+        }
+        const auto remote = socket.remote_endpoint(error);
+        if (error || !admission.Allows(remote.address().to_string())) {
+            socket.close(error);
             error.clear();
             continue;
         }
