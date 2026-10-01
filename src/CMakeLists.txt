@@ -111,6 +111,7 @@ add_library(cybou_node STATIC
   cybou/identity_service.cpp
   cybou/name_service.cpp
   cybou/p2p/session.cpp
+  cybou/p2p/geo_database_updater.cpp
   cybou/p2p/peer_admission.cpp
   cybou/p2p/inbound_server.cpp
   cybou/p2p/peer_manager.cpp
@@ -125,6 +126,7 @@ target_link_libraries(cybou_node
     $<TARGET_NAME_IF_EXISTS:libevent::extra>
     OpenSSL::Crypto
     OpenSSL::SSL
+    ZLIB::ZLIB
     $<$<PLATFORM_ID:Windows>:crypt32>
 )
 

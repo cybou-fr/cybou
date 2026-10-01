@@ -13,6 +13,7 @@
 #include <cybou/application_service.h>
 #include <cybou/encrypted_chunk_tree.h>
 #include <cybou/identity_service.h>
+#include <test/cybou_service_test_fixture.h>
 #include <cybou/kv_store.h>
 #include <cybou/network_definition.h>
 #include <cybou/node_service.h>
@@ -70,7 +71,7 @@ int main(int argc, char* argv[])
 
         cybou::CybouNodeService node{{
             .runtime = cybou::NodeRuntimeConfig{.network_definition = network->definition,
-                .data_dir = work / "client-db", .p2p_endpoint = std::make_pair(finalizer_ip, finalizer_port)},
+                .data_dir = work / "client-db", .p2p_endpoint = std::make_pair(finalizer_ip, finalizer_port), .peer_admission_policy = TestLabAdmissionPolicy()},
             .genesis = network->genesis,
         }};
         node.Start();

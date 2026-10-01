@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/bootstrap_protocol.h>
+#include <cybou/p2p/geo_database_updater.h>
 #include <cybou/p2p/peer_admission.h>
 
 #include <boost/asio.hpp>
@@ -15,6 +16,7 @@
 #include <thread>
 #include <limits>
 #include <string_view>
+#include <filesystem>
 
 namespace {
 std::atomic_bool running{true};
@@ -24,8 +26,8 @@ int Usage()
 {
     std::cerr << "Usage:\n"
         << "  cybou-bootstrap provision <data-dir>\n"
-        << "  cybou-bootstrap serve <data-dir> <numeric-bind-address> <port> <certificate-chain.pem> <private-key.pem>"
-        << " --geo-country-csv <file> --geo-sha256 <hex>\n";
+        << "  cybou-bootstrap serve <data-dir> <numeric-bind-address> <port> <certificate-chain.pem> <private-key.pem>\n"
+        << "  Optional offline override: --geo-country-csv <file> --geo-sha256 <hex> --geo-issued-month YYYY-MM\n";
     return 2;
 }
 
@@ -58,18 +60,36 @@ int main(int argc, char** argv)
                   << provision->activation_code << '\n';
         return 0;
     }
-    if (argc != 11 || std::string_view{argv[1]} != "serve" ||
-        std::string_view{argv[7]} != "--geo-country-csv" || std::string_view{argv[9]} != "--geo-sha256") {
+    if ((argc != 7 && argc != 13) || std::string_view{argv[1]} != "serve") {
         return Usage();
     }
 
-    const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(argv[8], Sha256Pin(argv[10]));
-    if (!dataset) {
-        std::cerr << "Could not load integrity-pinned DB-IP country CSV.\n";
-        return 1;
+    std::shared_ptr<cybou::p2p::GeoDatabaseUpdater> geo_updater;
+    cybou::p2p::PeerAdmissionPolicy admission = cybou::p2p::PeerAdmissionPolicy::Public(
+        std::shared_ptr<const cybou::p2p::FrenchIpDataset>{});
+    if (argc == 7) {
+        geo_updater = cybou::p2p::GeoDatabaseUpdater::Start(std::filesystem::path{argv[2]} / "geo");
+        admission = cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(geo_updater);
+    } else {
+        if (std::string_view{argv[7]} != "--geo-country-csv" || std::string_view{argv[9]} != "--geo-sha256" ||
+            std::string_view{argv[11]} != "--geo-issued-month") return Usage();
+        const auto issued_month = cybou::p2p::FrenchIpDataset::ParseIssuedMonth(argv[12]);
+        if (!issued_month) {
+            std::cerr << "Geo issued month must use YYYY-MM.\n";
+            return 1;
+        }
+        const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(
+            argv[8], Sha256Pin(argv[10]), *issued_month);
+        if (!dataset) {
+            std::cerr << "Could not load fresh, integrity-pinned DB-IP country CSV.\n";
+            return 1;
+        }
+        admission = cybou::p2p::PeerAdmissionPolicy::Public(dataset);
     }
     std::cerr << "Peer Geo data: DB-IP Lite IP to Country; attribution: DB-IP.com (CC BY 4.0)\n";
-    const auto admission = cybou::p2p::PeerAdmissionPolicy::Public(dataset);
+    if (!admission.Ready()) {
+        std::cerr << "No fresh DB-IP country database is cached; peer admission stays closed while CYBOU updates it.\n";
+    }
 
     unsigned port_value{0};
     try {

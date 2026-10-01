@@ -4,11 +4,14 @@
   "builtin-baseline": "120deac3062162151622ca4860575a33844ba10b",
   "dependencies": [
     "boost-asio",
+    "boost-beast",
     "boost-multi-index",
     "boost-signals2",
     "blake3",
     "libevent",
-    "openssl"
+    "openssl",
+    "zlib"
+    ,"zlib"
   ],
   "default-features": [
     "qt",

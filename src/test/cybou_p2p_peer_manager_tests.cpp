@@ -4,6 +4,7 @@
 #include <cybou/hex.h>
 #include <cybou/p2p/peer_manager.h>
 #include <cybou/p2p/peer_admission.h>
+#include <cybou/p2p/inbound_server.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_test_setup.h>
 
@@ -76,6 +77,19 @@ BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, CybouTestSetup)
 BOOST_AUTO_TEST_CASE(public_peer_policy_rejects_before_opening_socket)
 {
     CybouServiceTestFixture fixture;
+    auto no_policy_config = cybou::NodeRuntimeConfig{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "missing-admission-policy",
+        .memory_only = true,
+        .wipe_data = true,
+    };
+    cybou::CybouNodeRuntime no_policy_runtime{std::move(no_policy_config)};
+    BOOST_REQUIRE(no_policy_runtime.InitializeGenesis(fixture.genesis));
+    BOOST_CHECK(!no_policy_runtime.AdmitPeerAddress("127.0.0.1"));
+    cybou::p2p::PeerManager no_policy_peers{no_policy_runtime};
+    BOOST_CHECK(!no_policy_peers.Connect("127.0.0.1", 1));
+    BOOST_CHECK(no_policy_peers.LastConnectStatus() == cybou::p2p::PeerConnectStatus::ADMISSION_REJECTED);
+
     auto config = cybou::NodeRuntimeConfig{
         .network_definition = fixture.definition,
         .data_dir = fixture.directory / "public-admission-observer",
@@ -90,6 +104,38 @@ BOOST_AUTO_TEST_CASE(public_peer_policy_rejects_before_opening_socket)
     BOOST_CHECK(!peers.Connect("127.0.0.1", 1));
     BOOST_CHECK(peers.LastConnectStatus() == cybou::p2p::PeerConnectStatus::ADMISSION_REJECTED);
     BOOST_CHECK_EQUAL(peers.ConnectedCount(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(inbound_listener_closes_routes_when_policy_is_missing)
+{
+    CybouServiceTestFixture fixture;
+    cybou::CybouNodeRuntime runtime{{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "inbound-missing-admission-policy",
+        .memory_only = true,
+        .wipe_data = true,
+    }};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    cybou::p2p::InboundPeerServer server{runtime, io, tcp::endpoint{tcp::v4(), 0}};
+    std::atomic_bool stopping{false};
+    std::jthread listener{[&] { server.Run(stopping); }};
+
+    tcp::socket client{io};
+    client.connect(tcp::endpoint{boost::asio::ip::address_v4::loopback(), server.Port()});
+    client.non_blocking(true);
+    std::array<unsigned char, 1> byte{};
+    boost::system::error_code read_error;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+    while (std::chrono::steady_clock::now() < deadline) {
+        client.read_some(boost::asio::buffer(byte), read_error);
+        if (read_error != boost::asio::error::would_block && read_error != boost::asio::error::try_again) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds{5});
+    }
+    stopping = true;
+    listener.join();
+    BOOST_CHECK(read_error == boost::asio::error::eof || read_error == boost::asio::error::connection_reset);
 }
 
 BOOST_AUTO_TEST_CASE(removed_storage_wire_ids_are_rejected)
@@ -412,7 +458,7 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
     auto make_provider = [&](const std::string& name) {
         cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
             .data_dir = fixture.directory / name, .memory_only = true, .wipe_data = true,
-            .storage_enabled = true, .storage_capacity_bytes = 64ULL << 20};
+            .storage_enabled = true, .storage_capacity_bytes = 64ULL << 20, .peer_admission_policy = TestLabAdmissionPolicy()};
         auto runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
         if (!runtime->InitializeGenesis(fixture.genesis)) throw std::runtime_error{"provider genesis failed"};
         return runtime;
@@ -730,7 +776,7 @@ BOOST_AUTO_TEST_CASE(manager_syncs_two_verified_blocks_on_one_session)
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
     cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
-        .data_dir = fixture.directory / "observer", .memory_only = true, .wipe_data = true};
+        .data_dir = fixture.directory / "observer", .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime observer{std::move(config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
 
@@ -769,7 +815,7 @@ BOOST_AUTO_TEST_CASE(manager_fans_out_finalized_block_without_duplicate_payload)
     BOOST_REQUIRE(produced);
     const auto block_id = cybou::ComputeBlockId(produced->block);
     cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
-        .data_dir = fixture.directory / "block-gossip-observer", .memory_only = true, .wipe_data = true};
+        .data_dir = fixture.directory / "block-gossip-observer", .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime observer{std::move(config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
     boost::asio::io_context io;
@@ -801,7 +847,7 @@ BOOST_AUTO_TEST_CASE(manager_rejects_block_that_disagrees_with_inventory)
     CybouServiceTestFixture fixture;
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
     cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
-        .data_dir = fixture.directory / "inventory-observer", .memory_only = true, .wipe_data = true};
+        .data_dir = fixture.directory / "inventory-observer", .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime observer{std::move(config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
 
@@ -852,7 +898,7 @@ BOOST_AUTO_TEST_CASE(manager_rejects_block_conflicting_with_announced_finalized_
     CybouServiceTestFixture fixture;
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
     cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
-        .data_dir = fixture.directory / "tip-observer", .memory_only = true, .wipe_data = true};
+        .data_dir = fixture.directory / "tip-observer", .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime observer{std::move(config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
 
@@ -896,7 +942,7 @@ BOOST_AUTO_TEST_CASE(manager_submits_canonical_operation_with_separate_acknowled
 
     cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "other-producer", .poa_finalizer_recovery_entropy = fixture.validator_seed,
-        .memory_only = true, .wipe_data = true};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime receiver{std::move(config)};
     BOOST_REQUIRE(receiver.InitializeGenesis(fixture.genesis));
     boost::asio::io_context io;
@@ -944,7 +990,7 @@ BOOST_AUTO_TEST_CASE(manager_submits_to_next_peer_when_first_cannot_accept_opera
     BOOST_REQUIRE(op_id);
     cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "failover-producer",
-        .poa_finalizer_recovery_entropy = fixture.validator_seed, .memory_only = true, .wipe_data = true};
+        .poa_finalizer_recovery_entropy = fixture.validator_seed, .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime receiver{std::move(config)};
     BOOST_REQUIRE(receiver.InitializeGenesis(fixture.genesis));
 
@@ -1005,7 +1051,7 @@ BOOST_AUTO_TEST_CASE(manager_distinguishes_rejection_from_missing_operation_ackn
     const auto loopback = boost::asio::ip::address_v4::loopback();
 
     cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
-        .data_dir = fixture.directory / "rejecting-observer", .memory_only = true, .wipe_data = true};
+        .data_dir = fixture.directory / "rejecting-observer", .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime rejecting{std::move(config)};
     BOOST_REQUIRE(rejecting.InitializeGenesis(fixture.genesis));
     tcp::acceptor reject_acceptor{io, tcp::endpoint{loopback, 0}};
@@ -1042,7 +1088,7 @@ BOOST_AUTO_TEST_CASE(manager_distinguishes_rejection_from_missing_operation_ackn
     cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "unconfirmed-observer",
         .p2p_endpoint = std::make_pair(address, dropped_acceptor.local_endpoint().port()),
-        .memory_only = true, .wipe_data = true};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime observer{std::move(observer_config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
     const auto unconfirmed = observer.SubmitOperation(operation);
@@ -1062,7 +1108,7 @@ BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured
 
     cybou::NodeRuntimeConfig producer_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "route-producer", .poa_finalizer_recovery_entropy = fixture.validator_seed,
-        .memory_only = true, .wipe_data = true};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime producer{std::move(producer_config)};
     BOOST_REQUIRE(producer.InitializeGenesis(fixture.genesis));
     boost::asio::io_context io;
@@ -1084,7 +1130,7 @@ BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured
     cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "route-observer",
         .p2p_endpoint = std::make_pair(loopback.to_string(), acceptor.local_endpoint().port()),
-        .memory_only = true, .wipe_data = true};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime observer{std::move(observer_config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
     BOOST_CHECK(observer.CanSubmitOperations());
@@ -1121,7 +1167,7 @@ BOOST_AUTO_TEST_CASE(runtime_discovers_and_syncs_from_a_second_peer)
     const auto source_endpoint = std::make_pair(loopback.to_string(), source_listener->local_endpoint().port());
 
     cybou::NodeRuntimeConfig seed_config{.network_definition = fixture.definition,
-        .data_dir = fixture.directory / "multi-peer-seed", .memory_only = true, .wipe_data = true};
+        .data_dir = fixture.directory / "multi-peer-seed", .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime seed{std::move(seed_config)};
     BOOST_REQUIRE(seed.InitializeGenesis(fixture.genesis));
     seed.SetExplicitPeerEndpoints({source_endpoint});
@@ -1153,7 +1199,7 @@ BOOST_AUTO_TEST_CASE(runtime_discovers_and_syncs_from_a_second_peer)
 
     cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "multi-peer-observer", .p2p_endpoint = seed_endpoint,
-        .memory_only = true, .wipe_data = true};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     auto observer = std::make_unique<cybou::CybouNodeRuntime>(std::move(observer_config));
     BOOST_REQUIRE(observer->InitializeGenesis(fixture.genesis));
 
@@ -1190,7 +1236,7 @@ BOOST_AUTO_TEST_CASE(manager_discovers_peers_from_connected_peer)
     cybou::NodeRuntimeConfig remote_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "remote-discovery-node",
         .p2p_endpoint = std::make_pair("192.168.1.49", uint16_t{29460}),
-        .memory_only = true, .wipe_data = true};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime remote_runtime{std::move(remote_config)};
     BOOST_REQUIRE(remote_runtime.InitializeGenesis(fixture.genesis));
     remote_runtime.AddDiscoveredPeerEndpoints(seed_peers);

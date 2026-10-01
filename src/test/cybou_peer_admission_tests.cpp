@@ -7,6 +7,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <fstream>
 #include <span>
 
@@ -43,7 +44,10 @@ BOOST_AUTO_TEST_CASE(dataset_integrity_and_prefix_matching_are_fail_closed)
     const std::string bytes{"192.0.2.0,192.0.2.255,FR\n2001:db8::,2001:db8::ffff,FR\n"
         "198.51.100.0,198.51.100.255,US\n"};
     Write(path, bytes);
-    const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, Hash(bytes));
+    const auto issued = cybou::p2p::FrenchIpDataset::ParseIssuedMonth("2026-10");
+    BOOST_REQUIRE(issued);
+    const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, Hash(bytes), *issued,
+        std::chrono::sys_days{std::chrono::year{2026}/10/15});
     BOOST_REQUIRE(dataset);
     BOOST_CHECK(dataset->IsFrench("192.0.2.1"));
     BOOST_CHECK(dataset->IsFrench("::ffff:192.0.2.1"));
@@ -53,11 +57,13 @@ BOOST_AUTO_TEST_CASE(dataset_integrity_and_prefix_matching_are_fail_closed)
 
     auto wrong_digest = Hash(bytes);
     wrong_digest[0] ^= 1;
-    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, wrong_digest));
+    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, wrong_digest, *issued,
+        std::chrono::sys_days{std::chrono::year{2026}/10/15}));
 
     const std::string malformed{"192.0.2.0,192.0.2.255,FRA\n"};
     Write(path, malformed);
-    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, Hash(malformed)));
+    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, Hash(malformed), *issued,
+        std::chrono::sys_days{std::chrono::year{2026}/10/15}));
     std::filesystem::remove(path);
 }
 
@@ -67,7 +73,10 @@ BOOST_AUTO_TEST_CASE(public_policy_fails_closed_and_lab_only_allows_private_rout
     std::filesystem::remove_all(path);
     const std::string bytes{"198.51.100.0,198.51.100.255,FR\n"};
     Write(path, bytes);
-    const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, Hash(bytes));
+    const auto issued = cybou::p2p::FrenchIpDataset::ParseIssuedMonth("2026-10");
+    BOOST_REQUIRE(issued);
+    const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, Hash(bytes), *issued,
+        std::chrono::sys_days{std::chrono::year{2026}/10/15});
     BOOST_REQUIRE(dataset);
 
     const auto public_policy = cybou::p2p::PeerAdmissionPolicy::Public(dataset);
@@ -85,6 +94,29 @@ BOOST_AUTO_TEST_CASE(public_policy_fails_closed_and_lab_only_allows_private_rout
     BOOST_CHECK(lab_policy.Allows("10.0.0.1"));
     BOOST_CHECK(lab_policy.Allows("fc00::1"));
     BOOST_CHECK(!lab_policy.Allows("198.51.100.42"));
+    std::filesystem::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(geo_data_expiry_fails_closed_after_45_days)
+{
+    const auto path = UniquePath();
+    std::filesystem::remove_all(path);
+    const std::string bytes{"198.51.100.0,198.51.100.255,FR\n"};
+    Write(path, bytes);
+    const auto pin = Hash(bytes);
+    const auto issued = cybou::p2p::FrenchIpDataset::ParseIssuedMonth("2026-08");
+    BOOST_REQUIRE(issued);
+    BOOST_CHECK(cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, pin, *issued,
+        std::chrono::sys_days{std::chrono::year{2026}/9/15}));
+    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, pin, *issued,
+        std::chrono::sys_days{std::chrono::year{2026}/9/16}));
+    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, pin, *issued,
+        std::chrono::sys_days{std::chrono::year{2026}/10/1}));
+    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, pin, *issued,
+        std::chrono::sys_days{std::chrono::year{2026}/7/31}));
+    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::ParseIssuedMonth("2026-13"));
+    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::ParseIssuedMonth("2026-1"));
+    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::ParseIssuedMonth("2026-1x"));
     std::filesystem::remove(path);
 }
 

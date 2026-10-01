@@ -125,11 +125,6 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
       })},
       m_store{*m_db, m_config.network_definition}
 {
-    if (!m_config.peer_admission_policy && m_config.memory_only) {
-        // Memory-only runtimes are isolated LAB/test instances.
-        const auto policy = p2p::PeerAdmissionPolicy::Lab();
-        m_config.peer_admission_policy = std::make_shared<const p2p::PeerAdmissionPolicy>(policy);
-    }
     std::filesystem::path storage_path;
     if (!m_config.memory_only) {
         storage_path = std::filesystem::path{m_config.data_dir.string() + ".chunks"};
@@ -171,10 +166,8 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
 
 bool CybouNodeRuntime::AdmitPeerAddress(const std::string& numeric_address) const
 {
-    // CLI-launched network services require an explicit policy. Existing
-    // embedded runtimes (including the desktop GUI) retain their configured
-    // peer behavior until they provide the local Geo dataset themselves.
-    return !m_config.peer_admission_policy || m_config.peer_admission_policy->Allows(numeric_address);
+    return m_config.peer_admission_policy && m_config.peer_admission_policy->Ready() &&
+        m_config.peer_admission_policy->Allows(numeric_address);
 }
 
 CybouNodeRuntime::~CybouNodeRuntime()

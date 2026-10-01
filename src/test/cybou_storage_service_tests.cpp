@@ -254,7 +254,8 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
         cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
             .data_dir = fixture.directory / ("socket-provider-" + std::to_string(i)),
             .memory_only = true, .wipe_data = true, .storage_enabled = true,
-            .storage_capacity_bytes = 64ULL << 20};
+            .storage_capacity_bytes = 64ULL << 20,
+            .peer_admission_policy = TestLabAdmissionPolicy()};
         auto provider = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
         BOOST_REQUIRE(provider->InitializeGenesis(fixture.genesis));
         for (std::uint64_t h{1}; h <= height; ++h) BOOST_REQUIRE(provider->CommitBlock(*fixture.runtime->GetBlockAtHeight(h)));
@@ -268,7 +269,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
         // A light client whose runtime reaches providers only through CYP2.
         cybou::NodeRuntimeConfig client_config{.network_definition = fixture.definition,
             .data_dir = fixture.directory / "socket-client", .p2p_endpoint = endpoints.front(),
-            .memory_only = true, .wipe_data = true};
+            .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
         cybou::CybouNodeRuntime client{std::move(client_config)};
         BOOST_REQUIRE(client.InitializeGenesis(fixture.genesis));
         client.SetExplicitPeerEndpoints(endpoints);

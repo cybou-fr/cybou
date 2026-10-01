@@ -86,6 +86,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(OpenSSL 3.5 REQUIRED COMPONENTS Crypto SSL)
+find_package(ZLIB REQUIRED)
 find_package(blake3 1.8.1 EXACT CONFIG REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/module)
@@ -128,7 +129,6 @@ if(BUILD_GUI)
   unset(qt_components)
 endif()
 
-option(INSTALL_MAN "Install man pages." OFF)
 
 set(APPEND_CPPFLAGS "" CACHE STRING "Preprocessor flags that are appended to the command line after all other flags added by the build system. This variable is intended for debugging and special builds.")
 set(APPEND_CFLAGS "" CACHE STRING "C compiler flags that are appended to the command line after all other flags added by the build system. This variable is intended for debugging and special builds.")
@@ -272,23 +272,10 @@ target_link_libraries(core_interface INTERFACE
 add_library(sanitize_interface INTERFACE)
 target_link_libraries(core_interface INTERFACE sanitize_interface)
 if(SANITIZERS)
-  # Transform list of sanitizers into -fsanitize flags, replacing "fuzzer" with
-  # "fuzzer-no-link" in sanitize_interface flags, and moving "fuzzer" to
-  # fuzzer_interface flags. If -DSANITIZERS=fuzzer is specified, the fuzz test
-  # binary should be built with -fsanitize=fuzzer (so it can use libFuzzer's
-  # main function), but libraries should be built with -fsanitize=fuzzer-no-link
-  # (so they can be linked into other executables that have their own main
-  # functions).
-  string(REGEX REPLACE "(^|,)fuzzer($|,)" "\\1fuzzer-no-link\\2" sanitize_opts "${SANITIZERS}")
-  set(fuzz_flag "")
-  if(NOT sanitize_opts STREQUAL SANITIZERS)
-    set(fuzz_flag "-fsanitize=fuzzer")
-  endif()
-
   # First check if the compiler accepts flags. If an incompatible pair like
   # -fsanitize=address,thread is used here, this check will fail. This will also
   # fail if a bad argument is passed, e.g. -fsanitize=undfeined
-  try_append_cxx_flags("-fsanitize=${sanitize_opts}" TARGET sanitize_interface
+  try_append_cxx_flags("-fsanitize=${SANITIZERS}" TARGET sanitize_interface
     RESULT_VAR cxx_supports_sanitizers
     SKIP_LINK
   )
@@ -301,13 +288,7 @@ if(SANITIZERS)
   # flag. This is a separate check so we can give a better error message when
   # the sanitize flags are supported by the compiler but the actual sanitizer
   # libs are missing.
-  try_append_linker_flag("-fsanitize=${sanitize_opts}" VAR SANITIZER_LDFLAGS
-    SOURCE "
-      #include <cstdint>
-      #include <cstddef>
-      extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) { return 0; }
-      int main() { return 0; }
-    "
+  try_append_linker_flag("-fsanitize=${SANITIZERS}" VAR SANITIZER_LDFLAGS
     RESULT_VAR linker_supports_sanitizers
     NO_CACHE_IF_FAILED
   )
@@ -317,29 +298,10 @@ if(SANITIZERS)
 endif()
 target_link_options(sanitize_interface INTERFACE ${SANITIZER_LDFLAGS})
 
-# Define fuzzer_interface with flags intended to apply to the fuzz test binary,
-# and perform a test compilation to determine correct value of
-# FUZZ_BINARY_LINKS_WITHOUT_MAIN_FUNCTION.
-if(BUILD_FUZZ_BINARY)
-  include(CheckSourceCompilesWithFlags)
-  check_cxx_source_compiles_with_flags("
-      #include <cstdint>
-      #include <cstddef>
-      extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) { return 0; }
-      // No main() function.
-    " FUZZ_BINARY_LINKS_WITHOUT_MAIN_FUNCTION
-    LDFLAGS ${SANITIZER_LDFLAGS} ${fuzz_flag}
-    LINK_LIBRARIES ${FUZZ_LIBS}
-  )
-  add_library(fuzzer_interface INTERFACE)
-  target_link_options(fuzzer_interface INTERFACE ${fuzz_flag})
-  target_link_libraries(fuzzer_interface INTERFACE ${FUZZ_LIBS})
-endif()
-
 include(AddBoostIfNeeded)
 add_boost_if_needed()
 
-if(BUILD_GUI OR BUILD_TESTS OR BUILD_BENCH OR BUILD_FUZZ_BINARY)
+if(BUILD_GUI OR BUILD_TESTS)
   find_package(Libevent 2.1.8 MODULE REQUIRED)
 endif()
 
@@ -501,12 +463,8 @@ if(NOT TARGET Python3::Interpreter)
   )
 endif()
 
-target_compile_definitions(core_interface INTERFACE ${DEPENDS_COMPILE_DEFINITIONS})
-target_compile_definitions(core_interface_relwithdebinfo INTERFACE ${DEPENDS_COMPILE_DEFINITIONS_RELWITHDEBINFO})
-target_compile_definitions(core_interface_debug INTERFACE ${DEPENDS_COMPILE_DEFINITIONS_DEBUG})
-
-# If the {CXX,LD}FLAGS environment variables are defined during building depends
-# and configuring this build system, their content might be duplicated.
+# Avoid duplicate flags when users provide them through both the environment and
+# CMake cache variables.
 if(DEFINED ENV{CXXFLAGS})
   deduplicate_flags(CMAKE_CXX_FLAGS)
 endif()

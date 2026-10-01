@@ -5,20 +5,26 @@
 #define CYBOU_P2P_PEER_ADMISSION_H
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
 
 namespace cybou::p2p {
 
+class GeoDatabaseUpdater;
+
 /** Integrity-checked local DB-IP country CSV reduced to French IP ranges. */
 class FrenchIpDataset final {
 public:
+    static std::optional<std::chrono::year_month> ParseIssuedMonth(std::string_view text);
     static std::shared_ptr<const FrenchIpDataset> LoadDbIpCountryCsv(const std::filesystem::path& path,
-        const std::array<unsigned char, 32>& expected_sha256);
+        const std::array<unsigned char, 32>& expected_sha256, std::chrono::year_month issued_month,
+        std::chrono::sys_days today = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now()));
 
     bool IsFrench(std::string_view numeric_address) const;
 
@@ -37,16 +43,18 @@ private:
 class PeerAdmissionPolicy final {
 public:
     static PeerAdmissionPolicy Public(std::shared_ptr<const FrenchIpDataset> dataset);
+    static PeerAdmissionPolicy PublicWithUpdater(std::shared_ptr<GeoDatabaseUpdater> updater);
     static PeerAdmissionPolicy Lab();
 
     bool Allows(std::string_view numeric_address) const;
-    bool Ready() const { return m_lab || static_cast<bool>(m_dataset); }
+    bool Ready() const;
 
 private:
     PeerAdmissionPolicy(std::shared_ptr<const FrenchIpDataset> dataset, bool lab)
         : m_dataset{std::move(dataset)}, m_lab{lab} {}
 
     std::shared_ptr<const FrenchIpDataset> m_dataset;
+    std::shared_ptr<GeoDatabaseUpdater> m_updater;
     bool m_lab{false};
 };
 

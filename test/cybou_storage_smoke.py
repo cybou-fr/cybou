@@ -34,6 +34,9 @@ def main() -> int:
     key = work / "finalizer.key"
     key.write_bytes(os.urandom(32))
     key.chmod(0o600)
+    if os.name == "nt":
+        subprocess.run(["icacls", str(key), "/inheritance:r", "/grant:r",
+                        f"{os.getlogin()}:(F)", "SYSTEM:(F)"], check=True, capture_output=True)
     network = work / "network.bin"
     subprocess.run([node, "network", "init-dev", "--network", str(network), "--key-file", str(key)], check=True)
     peers = work / "peers.txt"
@@ -48,11 +51,13 @@ def main() -> int:
         processes[name] = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT)
 
     start("finalizer", [node, "finalizer", "run", "--network", str(network), "--data-dir", str(work / "finalizer-db"),
-                        "--key-file", str(key), "--listen", f"127.0.0.1:{FINALIZER_P2P}", "--block-interval", "200ms", "--peers", str(peers)])
+                        "--key-file", str(key), "--listen", f"127.0.0.1:{FINALIZER_P2P}", "--block-interval", "200ms", "--peers", str(peers),
+                        "--peer-admission", "lab"])
     time.sleep(2)
     for name, port in PROVIDERS.items():
         start(f"provider-{name}", [node, "provider", "run", "--network", str(network), "--data-dir", str(work / f"provider-{name}-db"),
-                                   "--peer", f"127.0.0.1:{FINALIZER_P2P}", "--listen", f"127.0.0.1:{port}", "--capacity", CAPACITY])
+                                   "--peer", f"127.0.0.1:{FINALIZER_P2P}", "--listen", f"127.0.0.1:{port}", "--capacity", CAPACITY,
+                                   "--peer-admission", "lab"])
 
     client_work = work / "client"
     smoke = subprocess.Popen([client, str(network), str(client_work), "127.0.0.1", str(FINALIZER_P2P)],

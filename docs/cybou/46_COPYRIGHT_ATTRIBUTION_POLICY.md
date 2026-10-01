@@ -73,7 +73,7 @@ univalue
 minisketch
 crc32c
 Qt
-depends/vendor components
+vcpkg source dependencies
 ```
 
 ## Generated files

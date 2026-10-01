@@ -11,7 +11,7 @@ editing an included file.
 | AGENTS.md | 176 | 686b94ea00f2d1ac |
 | CONTRIBUTING.md | 49 | bf30b703d800d63c |
 | INSTALL.md | 37 | 999e1208b3440350 |
-| README.md | 138 | 42cba454681879a6 |
+| README.md | 111 | 65e9eb0a16f8d3f5 |
 | SECURITY.md | 57 | 96f65f343afaa06e |
 | docs/cybou/00_VISION.md | 72 | 2cba76b0edaf59a4 |
 | docs/cybou/02_ARCHITECTURE.md | 136 | 646d075f54a18b52 |
@@ -25,10 +25,10 @@ editing an included file.
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 70 | e68f08daa70cf76f |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 36 | 43cdf31bb132eda8 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 79 | 36233e70f7bddedd |
+| docs/cybou/22_ROADMAP.md | 83 | acbfb5a49e11c6fc |
 | docs/cybou/24_DECISIONS.md | 99 | 8e93752795f5e8bb |
 | docs/cybou/25_OPEN_QUESTIONS.md | 61 | 3b5d56ca23ea6988 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 178 | a4de556284721618 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 191 | 69e08d839524c762 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 63 | 26b2c874464ce804 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 28 | ee4d307774069584 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
@@ -36,7 +36,7 @@ editing an included file.
 | docs/cybou/41_PUBLIC_SUPPORT_AND_FUNDING.md | 113 | cbd6d5215e01bb38 |
 | docs/cybou/42_COMPETITIVE_POSITIONING.md | 33 | 408818177dc10a14 |
 | docs/cybou/43_STRATEGIC_SOURCE_REGISTER.md | 116 | b2c9dc42f9ddbae2 |
-| docs/cybou/46_COPYRIGHT_ATTRIBUTION_POLICY.md | 109 | fa5b2d02ab475a42 |
+| docs/cybou/46_COPYRIGHT_ATTRIBUTION_POLICY.md | 109 | 46d6006a02067fc5 |
 | docs/cybou/50_EMAIL_SECURITY_MODEL.md | 92 | d00a892605db794f |
 | docs/cybou/52_BALANCE_AND_SYSTEM_BALANCE.md | 60 | cab29a0de0d2092a |
 | docs/cybou/56_OWNER_OPERATOR_AND_RESILIENCE.md | 35 | 373b57ed4a230323 |

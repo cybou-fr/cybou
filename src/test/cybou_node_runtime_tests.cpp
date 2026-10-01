@@ -420,7 +420,7 @@ BOOST_AUTO_TEST_CASE(sync_tip_confirmation_requires_the_configured_genesis_final
     cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "finalizer-tip-observer",
         .p2p_endpoint = std::make_pair(loopback.to_string(), finalizer_port),
-        .memory_only = true, .wipe_data = true};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime observer{std::move(observer_config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
     const auto finalizer_sync = observer.SyncFromConfiguredPeer(10);
@@ -445,7 +445,7 @@ BOOST_AUTO_TEST_CASE(sync_tip_confirmation_requires_the_configured_genesis_final
     cybou::NodeRuntimeConfig provider_observer_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "provider-tip-observer",
         .p2p_endpoint = std::make_pair(loopback.to_string(), provider_port),
-        .memory_only = true, .wipe_data = true};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime provider_observer{std::move(provider_observer_config)};
     BOOST_REQUIRE(provider_observer.InitializeGenesis(fixture.genesis));
     const auto provider_sync = provider_observer.SyncFromConfiguredPeer(10);

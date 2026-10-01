@@ -35,7 +35,7 @@
         "CYBOU_CONSUMER_BUILD": "ON",
         "BUILD_TESTS": "ON",
         "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
-        "VCPKG_HOST_TRIPLET": "x64-windows",
+        "VCPKG_HOST_TRIPLET": "x64-mingw-dynamic",
         "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "ON",
         "VCPKG_MANIFEST_FEATURES": "tests"
       }

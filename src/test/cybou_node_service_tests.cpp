@@ -41,7 +41,8 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
     auto observer=std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
         .network_definition=primary.definition,.data_dir=primary.directory/"route-observer",
         .p2p_endpoint=std::make_pair(loopback.to_string(),first.local_endpoint().port()),
-        .memory_only=true,.wipe_data=true});
+        .memory_only=true,.wipe_data=true,
+        .peer_admission_policy = TestLabAdmissionPolicy()});
     BOOST_REQUIRE(observer->InitializeGenesis(primary.genesis));
     BOOST_CHECK(observer->SyncFromConfiguredPeer(2).status==cybou::SyncPeerStatus::UP_TO_DATE);
     // The original route advances, but its stored HELLO remains at height zero.
@@ -138,6 +139,7 @@ BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
             .p2p_endpoint = std::make_pair(loopback.to_string(), acceptor.local_endpoint().port()),
             .memory_only = true,
             .wipe_data = true,
+            .peer_admission_policy = TestLabAdmissionPolicy(),
         },
         .genesis = local.genesis,
     }};

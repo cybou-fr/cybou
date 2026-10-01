@@ -22,6 +22,7 @@ add_executable(cybou-core-test
   cybou_poa_tests.cpp
   cybou_p2p_peer_manager_tests.cpp
   cybou_peer_admission_tests.cpp
+  cybou_geo_database_updater_tests.cpp
   cybou_node_service_tests.cpp
   cybou_node_runtime_tests.cpp
   cybou_identity_operation_coordinator_tests.cpp

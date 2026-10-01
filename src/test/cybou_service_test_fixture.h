@@ -6,6 +6,7 @@
 
 #include <cybou/identity_service.h>
 #include <cybou/network_definition.h>
+#include <cybou/p2p/peer_admission.h>
 #include <cybou/p2p/session.h>
 #include <test/cybou_test_helpers.h>
 
@@ -15,6 +16,11 @@
 #include <memory>
 #include <stdexcept>
 #include <vector>
+
+inline std::shared_ptr<const cybou::p2p::PeerAdmissionPolicy> TestLabAdmissionPolicy()
+{
+    return std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(cybou::p2p::PeerAdmissionPolicy::Lab());
+}
 
 struct CybouServiceTestFixture {
     std::array<unsigned char, 32> validator_seed{};
@@ -41,6 +47,7 @@ struct CybouServiceTestFixture {
             .poa_finalizer_recovery_entropy = validator_seed,
             .memory_only = true,
             .wipe_data = true,
+            .peer_admission_policy = TestLabAdmissionPolicy(),
         };
         runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
         if (!runtime->InitializeGenesis(genesis)) throw std::runtime_error("genesis initialization failed");

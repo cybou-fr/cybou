@@ -12,6 +12,8 @@
 #include <cybou/identity_service.h>
 #include <cybou/network_definition.h>
 #include <cybou/node_service.h>
+#include <cybou/p2p/geo_database_updater.h>
+#include <cybou/p2p/peer_admission.h>
 #include <cybou/wallet_service.h>
 
 #include <QFile>
@@ -20,12 +22,65 @@
 #include <boost/asio/ip/address.hpp>
 
 #include <chrono>
+#include <array>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <utility>
 
 #include <QDebug>
+
+namespace {
+std::array<unsigned char, 32> GeoSha256Pin(const QString& text)
+{
+    const auto bytes = text.toLatin1();
+    if (bytes.size() != 64) throw std::runtime_error("CYBOU_GEO_SHA256 must contain 64 hex characters");
+    std::array<unsigned char, 32> result{};
+    const auto nibble = [](const char c) -> unsigned {
+        if (c >= '0' && c <= '9') return static_cast<unsigned>(c - '0');
+        if (c >= 'a' && c <= 'f') return static_cast<unsigned>(c - 'a' + 10);
+        if (c >= 'A' && c <= 'F') return static_cast<unsigned>(c - 'A' + 10);
+        throw std::runtime_error("CYBOU_GEO_SHA256 is not hexadecimal");
+    };
+    for (size_t i = 0; i < result.size(); ++i) {
+        result[i] = static_cast<unsigned char>((nibble(bytes[2 * i]) << 4) | nibble(bytes[2 * i + 1]));
+    }
+    return result;
+}
+
+std::shared_ptr<const cybou::p2p::PeerAdmissionPolicy> DesktopPeerAdmissionPolicy(
+    const std::filesystem::path& data_directory)
+{
+    const auto mode = qEnvironmentVariable("CYBOU_DEV_PEER_ADMISSION");
+    if (mode == QStringLiteral("lab")) {
+        return std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(cybou::p2p::PeerAdmissionPolicy::Lab());
+    }
+    if (!mode.isEmpty() && mode != QStringLiteral("france")) {
+        throw std::runtime_error("CYBOU_DEV_PEER_ADMISSION must be france or lab");
+    }
+    const auto csv = qEnvironmentVariable("CYBOU_GEO_COUNTRY_CSV");
+    const auto sha = qEnvironmentVariable("CYBOU_GEO_SHA256");
+    const auto month = qEnvironmentVariable("CYBOU_GEO_ISSUED_MONTH");
+    if (csv.isEmpty() && sha.isEmpty() && month.isEmpty()) {
+        auto updater = cybou::p2p::GeoDatabaseUpdater::Start(data_directory / "geo");
+        return std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
+            cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(std::move(updater)));
+    }
+    if (sha.isEmpty() || month.isEmpty()) {
+        throw std::runtime_error("set CYBOU_GEO_SHA256 and CYBOU_GEO_ISSUED_MONTH together");
+    }
+    const auto issued = cybou::p2p::FrenchIpDataset::ParseIssuedMonth(month.toStdString());
+    if (!issued) throw std::runtime_error("CYBOU_GEO_ISSUED_MONTH must use YYYY-MM");
+    const auto csv_path = csv.isEmpty() ? data_directory / "geo" / "dbip-country-lite.csv"
+        : std::filesystem::path{csv.toStdU16String()};
+    const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(
+        csv_path, GeoSha256Pin(sha), *issued);
+    if (!dataset) throw std::runtime_error("France Geo CSV is missing, corrupt, expired, future-dated, or has the wrong SHA-256");
+    return std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
+        cybou::p2p::PeerAdmissionPolicy::Public(dataset));
+}
+} // namespace
 
 CybouDesktopController::CybouDesktopController(CybouDesktopModel* model,
     std::filesystem::path data_directory, QObject* parent)
@@ -120,6 +175,7 @@ void CybouDesktopController::start()
             .p2p_endpoint = configured_p2p,
             .local_p2p_endpoint = network_config.listen_endpoint,
             .db_cache_bytes = 8 << 20,
+            .peer_admission_policy = DesktopPeerAdmissionPolicy(m_data_directory),
         };
         m_node_service = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
             .runtime = std::move(config),

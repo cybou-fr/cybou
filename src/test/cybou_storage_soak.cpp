@@ -25,6 +25,7 @@
 #include <cybou/crypto/cleanse.h>
 #include <cybou/encrypted_chunk_tree.h>
 #include <cybou/identity_service.h>
+#include <test/cybou_service_test_fixture.h>
 #include <cybou/kv_store.h>
 #include <cybou/network_definition.h>
 #include <cybou/node_service.h>
@@ -232,7 +233,7 @@ std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::CybouNetworkFile
 {
     auto node = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
         .runtime = cybou::NodeRuntimeConfig{.network_definition = network.definition,
-            .data_dir = data_dir, .p2p_endpoint = std::make_pair(ip, port)},
+            .data_dir = data_dir, .p2p_endpoint = std::make_pair(ip, port), .peer_admission_policy = TestLabAdmissionPolicy()},
         .genesis = network.genesis,
     });
     node->Start();

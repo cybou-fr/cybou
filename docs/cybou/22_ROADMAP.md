@@ -37,18 +37,22 @@ The revised target is specified in
 [`04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](04_NETWORK_BOOTSTRAP_AND_GENESIS.md):
 all participants run the same full-node software with optional capabilities;
 genesis authorizes one to four bootstrap Identities; and production/DEV public
-P2P admission is France-only. The current DEV executable and services still
-use the legacy arrangement. Before cutover, implement the AccountID plus
+P2P admission is France-only. Node, bootstrap, and desktop automatically check
+DB-IP Lite for updates at startup and every 12 hours, verify the vendor's
+published archive digest and the CSV contents, and atomically activate a fresh
+cache. A cached release older than 45 days fails closed. Acceptance tests for
+the desktop/bootstrap boundaries remain. DEV currently runs one
+bootstrap-only VPS service with an empty bootstrap store and no finalizer or
+storage providers. The bootstrap executable remains a prototype. Before the
+target architecture is complete, implement the AccountID plus
 RecoveryKeyID genesis roster, pre-genesis pinned Identity proof, current-key
-per-session bootstrap proof, unified node capabilities, local Geo admission,
-network creation across selected bootstrap seeds, generation-safe replacement
-history, and optional anonymizer filtering. Pass the multi-bootstrap,
+per-session bootstrap proof, unified node capabilities, network creation
+across selected bootstrap seeds, generation-safe replacement history, and
+optional anonymizer filtering. Pass the multi-bootstrap,
 clean-install, compromise, rollback, restart, France-admission, LAB-bypass,
 Authority-mobility, offline-authority, and replacement acceptance tests, then
-replace the development-only DEV testnet through an explicit coordinated
-new-genesis cutover. No production/Beta network is being migrated. Routine
-code deployments continue to preserve the running test state and key until
-that procedure is ready.
+complete the coordinated DEV bootstrap setup and desktop-finalizer acceptance.
+No production/Beta network is being migrated.
 
 ## Authority and Validation
 

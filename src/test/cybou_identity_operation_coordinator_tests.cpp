@@ -98,6 +98,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             .p2p_endpoint = std::pair<std::string, uint16_t>{"127.0.0.1", port},
             .memory_only = false,
             .wipe_data = wipe_data,
+            .peer_admission_policy = TestLabAdmissionPolicy(),
         };
     };
     uint256 operation_id;

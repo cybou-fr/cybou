@@ -10,6 +10,7 @@
 #include <cybou/secret_file.h>
 #include <cybou/secret32.h>
 #include <cybou/bootstrap_nodes.h>
+#include <cybou/p2p/geo_database_updater.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/hex.h>
 #include <cybou/network_definition.h>
@@ -162,11 +163,11 @@ std::array<unsigned char, 32> Sha256Pin(std::string_view text)
     return digest;
 }
 
-void ConfigurePeerAdmission(const cybou::cli::Options& opts)
+void ConfigurePeerAdmission(const cybou::cli::Options& opts, const std::filesystem::path& data_directory)
 {
     const auto mode = opts.Require("peer-admission");
     if (mode == "lab") {
-        if (opts.Has("geo-country-csv") || opts.Has("geo-sha256")) {
+        if (opts.Has("geo-country-csv") || opts.Has("geo-sha256") || opts.Has("geo-issued-month")) {
             throw std::invalid_argument("LAB admission cannot be combined with Geo data pins");
         }
         active_peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
@@ -174,12 +175,23 @@ void ConfigurePeerAdmission(const cybou::cli::Options& opts)
         return;
     }
     if (mode != "france") throw std::invalid_argument("peer admission must be france or lab");
-    if (!opts.Has("geo-country-csv") || !opts.Has("geo-sha256")) {
-        throw std::invalid_argument("France admission requires --geo-country-csv and --geo-sha256");
+    const bool has_csv = opts.Has("geo-country-csv");
+    const bool has_sha256 = opts.Has("geo-sha256");
+    const bool has_month = opts.Has("geo-issued-month");
+    if (!has_csv && !has_sha256 && !has_month) {
+        auto updater = cybou::p2p::GeoDatabaseUpdater::Start(data_directory / "geo");
+        active_peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
+            cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(std::move(updater)));
+        return;
     }
+    if (!has_csv || !has_sha256 || !has_month) {
+        throw std::invalid_argument("offline Geo override requires --geo-country-csv, --geo-sha256, and --geo-issued-month");
+    }
+    const auto issued_month = cybou::p2p::FrenchIpDataset::ParseIssuedMonth(opts.Require("geo-issued-month"));
+    if (!issued_month) throw std::invalid_argument("Geo issued month must use YYYY-MM");
     const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(
-        opts.Require("geo-country-csv"), Sha256Pin(opts.Require("geo-sha256")));
-    if (!dataset) throw std::invalid_argument("France Geo CSV is missing, corrupt, or has the wrong SHA-256");
+        opts.Require("geo-country-csv"), Sha256Pin(opts.Require("geo-sha256")), *issued_month);
+    if (!dataset) throw std::invalid_argument("France Geo CSV is missing, corrupt, expired, future-dated, or has the wrong SHA-256");
     active_peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
         cybou::p2p::PeerAdmissionPolicy::Public(dataset));
     std::cerr << "Peer Geo data: DB-IP Lite IP to Country; attribution: DB-IP.com (CC BY 4.0)\n";
@@ -591,8 +603,9 @@ const char* Help = R"(CYBOU operator CLI (CYP2 only)
                     --operation-id HEX [--replicas 1|2] (offline Identity projection)
 No positional arguments or legacy command aliases. Secrets are file inputs.
 Event JSONL is output only. Peer advertised heights are not canonical evidence.
-Network-facing commands require --peer-admission france --geo-country-csv FILE
-and --geo-sha256 HEX. Use --peer-admission lab only for loopback/private LAB peers.
+Network-facing commands require --peer-admission france; CYBOU downloads and validates the current DB-IP Lite
+country database automatically. Optional offline overrides: --geo-country-csv FILE --geo-sha256 HEX
+--geo-issued-month YYYY-MM. Use --peer-admission lab only for loopback/private LAB peers.
 )";
 int Doctor(const cybou::cli::Options& opts)
 {
@@ -679,8 +692,8 @@ int StorageCommand(const std::string& action, const cybou::cli::Options& opts)
         std::cout << last << '\n'; return 0;
     }
     opts.Allow({"network","data-dir","peer","chunk-id","vault","password-file","operation-id","replicas",
-        "peer-admission","geo-country-csv","geo-sha256"});
-    if (opts.Has("peer")) ConfigurePeerAdmission(opts);
+        "peer-admission","geo-country-csv","geo-sha256","geo-issued-month"});
+    if (opts.Has("peer")) ConfigurePeerAdmission(opts, opts.Require("data-dir"));
     auto net=cybou::LoadCybouNetworkFile(opts.Require("network"));
     if (!net) throw std::runtime_error("invalid network");
     cybou::NodeRuntimeConfig config{.network_definition=net->definition,.data_dir=opts.Require("data-dir")};
@@ -759,10 +772,10 @@ int Main(int argc, char* argv[])
         }
     } else if ((group=="finalizer" || group=="provider" || group=="observer") && action=="run") {
         if (group=="finalizer") opts.Allow({"network","data-dir","key-file","listen","block-interval","peers","event-log","event-log-mode","capacity","advertise",
-            "peer-admission","geo-country-csv","geo-sha256"});
+            "peer-admission","geo-country-csv","geo-sha256","geo-issued-month"});
         else opts.Allow({"network","data-dir","peer","listen","peers","capacity","event-log","event-log-mode","advertise",
-            "peer-admission","geo-country-csv","geo-sha256"});
-        ConfigurePeerAdmission(opts);
+            "peer-admission","geo-country-csv","geo-sha256","geo-issued-month"});
+        ConfigurePeerAdmission(opts, opts.Require("data-dir"));
         if (opts.Has("event-log-mode") && opts.Get("event-log-mode")!="minimal" && opts.Get("event-log-mode")!="lab")
             throw std::invalid_argument("event log mode must be minimal or lab");
         if (group=="observer" && opts.Has("capacity")) throw std::invalid_argument("observer has no storage role");
@@ -793,11 +806,11 @@ int Main(int argc, char* argv[])
         opts.Allow({"network","data-dir","operation-id"});
         args.insert(args.end(),{"operation-status",opts.Require("network"),opts.Require("data-dir"),opts.Require("operation-id")});
     } else if ((group=="network" && (action=="probe" || action=="sync" || action=="follow")) || (group=="operation" && action=="submit")) {
-        if (action=="probe") opts.Allow({"network","data-dir","peer","peer-admission","geo-country-csv","geo-sha256"});
-        else if (action=="sync") opts.Allow({"network","data-dir","peer","count","peer-admission","geo-country-csv","geo-sha256"});
-        else if (action=="follow") opts.Allow({"network","data-dir","peer","peers","until-height","peer-admission","geo-country-csv","geo-sha256"});
-        else opts.Allow({"network","data-dir","peer","peers","operation-file","peer-admission","geo-country-csv","geo-sha256"});
-        ConfigurePeerAdmission(opts);
+        if (action=="probe") opts.Allow({"network","data-dir","peer","peer-admission","geo-country-csv","geo-sha256","geo-issued-month"});
+        else if (action=="sync") opts.Allow({"network","data-dir","peer","count","peer-admission","geo-country-csv","geo-sha256","geo-issued-month"});
+        else if (action=="follow") opts.Allow({"network","data-dir","peer","peers","until-height","peer-admission","geo-country-csv","geo-sha256","geo-issued-month"});
+        else opts.Allow({"network","data-dir","peer","peers","operation-file","peer-admission","geo-country-csv","geo-sha256","geo-issued-month"});
+        ConfigurePeerAdmission(opts, opts.Require("data-dir"));
         if (opts.Has("peer") == opts.Has("peers")) throw std::invalid_argument("specify exactly one of --peer or --peers");
         const bool peer_list = opts.Has("peers");
         if (peer_list && (action=="probe" || action=="sync")) throw std::invalid_argument("command requires --peer");

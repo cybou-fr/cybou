@@ -18,6 +18,9 @@ def main():
         key = root / "key"
         key.write_bytes(os.urandom(32))
         key.chmod(0o600)
+        if os.name == "nt":
+            subprocess.run(["icacls", str(key), "/inheritance:r", "/grant:r",
+                            f"{os.getlogin()}:(F)", "SYSTEM:(F)"], check=True, capture_output=True)
         network = root / "network.bin"
         def run(*args, ok=True):
             result = subprocess.run([binary, *map(str,args)], capture_output=True, text=True, timeout=90)
@@ -30,7 +33,13 @@ def main():
         run("serve", ok=False)
         run("network", "init-dev", "--network", network, "--key-file", key)
         run("network", "info", "--network", network)
-        run("observer", "run", "--network", network, "--data-dir", root/"bad", "--peer", "127.0.0.1:31001", "--capacity", "1GiB", ok=False)
+        run("observer", "run", "--network", network, "--data-dir", root/"no-policy", "--peer", "127.0.0.1:31001", ok=False)
+        assert not (root/"no-policy").exists()
+        run("observer", "run", "--network", network, "--data-dir", root/"bad-geo", "--peer", "127.0.0.1:31001",
+            "--peer-admission", "france", "--geo-country-csv", root/"missing.csv", "--geo-sha256", "0"*64,
+            "--geo-issued-month", "2026-10", ok=False)
+        assert not (root/"bad-geo").exists()
+        run("observer", "run", "--network", network, "--data-dir", root/"bad", "--peer", "127.0.0.1:31001", "--capacity", "1GiB", "--peer-admission", "lab", ok=False)
         assert not (root/"bad").exists()
         run("network", "info", "--network", network, "--network", network, ok=False)
         with socket.socket() as port:
@@ -43,7 +52,7 @@ def main():
         run("doctor", "--network", network, "--data-dir", root/"finalizer", "--key-file", wrong, ok=False)
         processes=[]
         def start(role, name, extra):
-            args=[binary,role,"run","--network",str(network),"--data-dir",str(root/name),"--event-log",str(root/(name+".jsonl")),*extra]
+            args=[binary,role,"run","--network",str(network),"--data-dir",str(root/name),"--event-log",str(root/(name+".jsonl")),"--peer-admission","lab",*extra]
             process=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             processes.append(process); return process
         def stop(process):

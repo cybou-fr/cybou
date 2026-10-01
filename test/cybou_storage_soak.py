@@ -37,6 +37,9 @@ def main() -> int:
     key = work / "finalizer.key"
     key.write_bytes(os.urandom(32))
     key.chmod(0o600)
+    if os.name == "nt":
+        subprocess.run(["icacls", str(key), "/inheritance:r", "/grant:r",
+                        f"{os.getlogin()}:(F)", "SYSTEM:(F)"], check=True, capture_output=True)
     network = work / "network.bin"
     subprocess.run([node, "network", "init-dev", "--network", str(network), "--key-file", str(key)], check=True)
     peers = work / "peers.txt"
@@ -61,11 +64,13 @@ def main() -> int:
             process.wait()
 
     finalizer_args = [node, "finalizer", "run", "--network", str(network), "--data-dir", str(work / "finalizer-db"),
-                      "--key-file", str(key), "--listen", f"127.0.0.1:{FINALIZER_P2P}", "--block-interval", "200ms", "--peers", str(peers)]
+                      "--key-file", str(key), "--listen", f"127.0.0.1:{FINALIZER_P2P}", "--block-interval", "200ms", "--peers", str(peers),
+                      "--peer-admission", "lab"]
 
     def provider_args(name):
         return [node, "provider", "run", "--network", str(network), "--data-dir", str(work / f"provider-{name}-db"),
-                "--peer", f"127.0.0.1:{FINALIZER_P2P}", "--listen", f"127.0.0.1:{PROVIDERS[name]}", "--capacity", CAPACITY]
+                "--peer", f"127.0.0.1:{FINALIZER_P2P}", "--listen", f"127.0.0.1:{PROVIDERS[name]}", "--capacity", CAPACITY,
+                "--peer-admission", "lab"]
 
     def provider_by_port(port):
         return next(name for name, p in PROVIDERS.items() if p == port)

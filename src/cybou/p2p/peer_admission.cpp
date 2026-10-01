@@ -2,12 +2,14 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/p2p/peer_admission.h>
+#include <cybou/p2p/geo_database_updater.h>
 
 #include <cybou/crypto/sha256.h>
 
 #include <boost/asio/ip/address.hpp>
 
 #include <algorithm>
+#include <charconv>
 #include <fstream>
 #include <limits>
 #include <optional>
@@ -20,6 +22,7 @@ namespace {
 
 constexpr uintmax_t MAX_DATASET_BYTES{64 * 1024 * 1024};
 constexpr size_t MAX_RECORDS{1'000'000};
+constexpr std::chrono::days MAX_DATASET_AGE{45};
 
 std::optional<std::pair<std::array<unsigned char, 16>, bool>> AddressBytes(std::string_view text)
 {
@@ -66,10 +69,28 @@ bool IsLabAddress(const boost::asio::ip::address& address)
 
 } // namespace
 
+std::optional<std::chrono::year_month> FrenchIpDataset::ParseIssuedMonth(const std::string_view text)
+{
+    if (text.size() != 7 || text[4] != '-') return std::nullopt;
+    unsigned year_value{0};
+    unsigned month_value{0};
+    const auto year_parse = std::from_chars(text.data(), text.data() + 4, year_value);
+    const auto month_parse = std::from_chars(text.data() + 5, text.data() + 7, month_value);
+    if (year_parse.ec != std::errc{} || year_parse.ptr != text.data() + 4 ||
+        month_parse.ec != std::errc{} || month_parse.ptr != text.data() + 7 || year_value < 1970 ||
+        year_value > 9999 || month_value < 1 || month_value > 12) return std::nullopt;
+    const auto result = std::chrono::year{static_cast<int>(year_value)} / month_value;
+    return result.ok() ? std::optional{result} : std::nullopt;
+}
+
 std::shared_ptr<const FrenchIpDataset> FrenchIpDataset::LoadDbIpCountryCsv(const std::filesystem::path& path,
-    const std::array<unsigned char, 32>& expected_sha256)
+    const std::array<unsigned char, 32>& expected_sha256, const std::chrono::year_month issued_month,
+    const std::chrono::sys_days today)
 {
     try {
+        if (!issued_month.ok()) return nullptr;
+        const auto issued = std::chrono::sys_days{issued_month / 1};
+        if (today < issued || today - issued > MAX_DATASET_AGE) return nullptr;
         std::error_code ec;
         const auto size = std::filesystem::file_size(path, ec);
         if (ec || size == 0 || size > MAX_DATASET_BYTES) return nullptr;
@@ -136,6 +157,13 @@ PeerAdmissionPolicy PeerAdmissionPolicy::Public(std::shared_ptr<const FrenchIpDa
     return PeerAdmissionPolicy{std::move(dataset), false};
 }
 
+PeerAdmissionPolicy PeerAdmissionPolicy::PublicWithUpdater(std::shared_ptr<GeoDatabaseUpdater> updater)
+{
+    PeerAdmissionPolicy policy{nullptr, false};
+    policy.m_updater = std::move(updater);
+    return policy;
+}
+
 PeerAdmissionPolicy PeerAdmissionPolicy::Lab()
 {
     return PeerAdmissionPolicy{nullptr, true};
@@ -147,7 +175,13 @@ bool PeerAdmissionPolicy::Allows(const std::string_view numeric_address) const
     const auto address = boost::asio::ip::make_address(std::string{numeric_address}, ec);
     if (ec) return false;
     if (m_lab) return IsLabAddress(address);
-    return m_dataset && m_dataset->IsFrench(numeric_address);
+    const auto dataset = m_dataset ? m_dataset : (m_updater ? m_updater->CurrentDataset() : nullptr);
+    return dataset && dataset->IsFrench(numeric_address);
+}
+
+bool PeerAdmissionPolicy::Ready() const
+{
+    return m_lab || static_cast<bool>(m_dataset) || (m_updater && m_updater->Ready());
 }
 
 } // namespace cybou::p2p

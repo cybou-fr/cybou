@@ -4,12 +4,13 @@
 
 - **Target architecture**: Every participant runs the same full-node software (`CybouNode`). Bootstrap, storage, advisory Validation, and PoA finalization are optional local capabilities, not protocol node classes. Genesis authorizes 1–4 bootstrap Identities (by stable `AccountID` and expected `RecoveryKeyID`). Public P2P admission is France-only (fails closed). The Central Authority desktop runs PoA finalization; bootstrap never finalizes. State v9 schema.
 - **Current implementation prototype**: Temporary standalone utility `cybou-bootstrap provision|serve`, bounded STATUS/CLAIM/REPLACE protocol handler, LevelDB `EMPTY`/`BOUND` store with generation numbering, and v8 prototype state (grants keyed by RecoveryKeyID).
-- **Legacy DEV deployment**: Operational legacy testnet topology (VPS PoA finalizer on port 29461 + two storage providers on ports 29471/29481). Retained for routine development until specified acceptance tests and coordinated new-genesis DEV cutover replace it.
+- **Current DEV deployment**: One bootstrap service on the VPS, with only SSH and the bootstrap port exposed. The previous finalizer/provider services, databases, and DEV signing key were removed by explicit operator instruction. The bootstrap store is empty and does not finalize; the genesis-key holder must finalize from the desktop when that implementation is ready.
 
 ## Bootstrap prototype and target gap
 
 The current branch contains a bootstrap prototype, not the revised target
-genesis roster or France-only peer admission:
+genesis roster. France-only peer admission is implemented as local transport
+policy and does not change consensus:
 
 - grant-bearing state currently uses v8 and keys grants by RecoveryKeyID with
   optional claimed AccountID; grant-free legacy state retains the exact v7
@@ -31,9 +32,21 @@ genesis roster or France-only peer admission:
   endpoint and SPKI pin;
 - the pre-genesis proof is not yet wired into the running bootstrap CLI/vault
   flow or desktop network-creation wizard;
-- France-only `PeerAdmissionPolicy`, local Geo dataset integrity/update,
-  outbound/inbound integration, LAB bypass, and optional anonymizer filtering
-  are not implemented.
+- `PeerAdmissionPolicy` checks the SHA-256 pin and a declared DB-IP release
+  month before admitting public peers; data older than 45 days is rejected.
+  Node, bootstrap, and desktop use the built-in updater to check the official
+  DB-IP Lite release page over verified HTTPS at startup and every 12 hours,
+  verify the published archive SHA-1, validate the decompressed CSV, calculate
+  its local SHA-256, and atomically activate it. They reuse a validated cache
+  during network outages; if no fresh dataset is available, P2P admission
+  stays closed. The `CYBOU_GEO_COUNTRY_CSV`, `CYBOU_GEO_SHA256`, and
+  `CYBOU_GEO_ISSUED_MONTH` desktop settings and matching CLI flags remain
+  available for explicit offline overrides. `CYBOU_DEV_PEER_ADMISSION=lab`
+  is the explicit private-address-only developer override.
+- Inbound and outbound policy checks, explicit LAB-only private-address policy,
+  pre-TLS bootstrap filtering, and automatic Geo database refresh are
+  implemented. Optional anonymizer filtering, a visible desktop Geo update
+  status, and full desktop/bootstrap boundary acceptance coverage remain open.
 
 The revised target requires a new canonical state version (v9) with one to
 four grants keyed by stable AccountID and storing expected RecoveryKeyID plus
