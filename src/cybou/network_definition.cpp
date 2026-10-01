@@ -225,6 +225,27 @@ std::optional<CybouNetworkFile> DeserializeCybouNetworkFile(const std::span<cons
     return CybouNetworkFile{*definition, *genesis};
 }
 
+std::optional<std::vector<unsigned char>> SerializeCybouNetworkFile(const CybouNetworkFile& file)
+{
+    if (ValidateNetworkDefinition(file.definition) != NetworkDefinitionError::NONE ||
+        CybouStateHash(file.genesis) != file.definition.genesis_state_root) return std::nullopt;
+    const auto definition = SerializeNetworkDefinition(file.definition);
+    const auto state = SerializeCybouState(file.genesis);
+    if (!state || definition.size() > std::numeric_limits<uint32_t>::max() ||
+        state->size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
+
+    std::vector<unsigned char> bytes{'C', 'Y', 'N', '1'};
+    const auto append_u32 = [&bytes](const uint32_t value) {
+        for (unsigned i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(value >> (8 * i)));
+    };
+    append_u32(static_cast<uint32_t>(definition.size()));
+    bytes.insert(bytes.end(), definition.begin(), definition.end());
+    append_u32(static_cast<uint32_t>(state->size()));
+    bytes.insert(bytes.end(), state->begin(), state->end());
+    if (bytes.size() > 16 * 1024 * 1024) return std::nullopt;
+    return bytes;
+}
+
 std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path& path)
 {
     std::error_code ec;

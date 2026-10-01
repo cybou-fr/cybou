@@ -226,6 +226,7 @@ add_library(cybou_node STATIC
   cybou/node_runtime.cpp
   cybou/node_service.h
   cybou/node_service.cpp
+  cybou/bootstrap_binding.cpp
   cybou/event_record.cpp
   cybou/identity_service.cpp
   cybou/name_service.cpp

@@ -56,6 +56,7 @@ struct CybouNetworkFile {
     CybouState genesis;
 };
 
+std::optional<std::vector<unsigned char>> SerializeCybouNetworkFile(const CybouNetworkFile& file);
 std::optional<CybouNetworkFile> DeserializeCybouNetworkFile(std::span<const unsigned char> bytes);
 std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path& path);
 
