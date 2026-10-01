@@ -25,6 +25,5 @@ account_creation:
 anti_sybil:
   account_creation_work: true
   account_id_uniqueness: true
-  proof_of_trust: true
   new_account_rate_limits: true
   max_account_creates_per_block: protocol_parameter

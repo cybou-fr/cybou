@@ -9,9 +9,9 @@ ownership:
   operational_decentralization: true
 rollout:
 - phase: France
-  purpose: R&D, native Email pilot, operational proof
+  purpose: R&D, native Email pilot, France-first sovereign P2P network, operational proof
 - phase: European Union
-  purpose: multi-country approved-validator operation and cross-border pilots
+  purpose: cross-border expansion and European pilots under sovereign P2P architecture
 - phase: Global
   purpose: later commercial expansion after EU maturity
 go_to_market:

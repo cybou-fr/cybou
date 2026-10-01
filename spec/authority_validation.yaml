@@ -22,11 +22,14 @@ validation:
 excluded_protocol_mechanisms:
   validator_set: false
   validator_registry: false
+  validator_rewards: false
+  provider_monetary_rewards: false
   node_id_binding: false
   liveness_or_storage_evidence: false
   resource_budgets_or_reservations: false
   tickets_or_per_io_accounting: false
   rewards_or_penalties: false
+  canonical_reservations_or_tickets: false
 
 finality:
   current_model: single_genesis_bound_operator_poa

@@ -1,9 +1,8 @@
 version: '0.0.1'
-status: frozen_architecture_target_protocol_parameters_open
-activation: coordinated_DEV_cutover_after_all_gates
+status: active_protocol_architecture
 consensus:
   mode: genesis_bound_single_operator_PoA
-  bft: removed_at_cutover
+  bft: false
   validator_set: absent
   unfinalized_operations: local_origin_and_finalizer_only
   full_nodes_recompute_state: true
@@ -145,7 +144,7 @@ storage:
   admission_requires_finalized_publication: true
   proof: domain_separated_Merkle_inclusion
   operations: [PUT_CHUNK, GET_CHUNK, optional_HAS_CHUNK]
-  manifest_commit_staging_abort_protocol: absent_after_cutover
+  manifest_commit_staging_abort_protocol: absent
   chunk_placement: independent_per_chunk
   open_gates:
     - provider_chunk_wire_serialization_and_admission_integration
