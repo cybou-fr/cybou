@@ -136,6 +136,7 @@
           <li><a href="#services" data-i18n="navProducts">Produits</a></li>
           <li><a href="#showcase" data-i18n="navShowcase">Aperçu</a></li>
           <li><a href="#security" data-i18n="navSecurity">Sécurité &amp; TLS</a></li>
+          <li><a href="#conformite" data-i18n="navCompliance">Conformité</a></li>
           <li><a href="#comparatif" data-i18n="navComparison">Comparatif</a></li>
           <li><a href="#architecture" data-i18n="navArch">Sous le capot</a></li>
           <li><a href="#faq" data-i18n="navFaq">FAQ</a></li>
@@ -156,6 +157,7 @@
       <a href="#services" data-i18n="navProducts">Produits</a>
       <a href="#showcase" data-i18n="navShowcase">Aperçu</a>
       <a href="#security" data-i18n="navSecurity">Sécurité &amp; TLS</a>
+      <a href="#conformite" data-i18n="navCompliance">Conformité</a>
       <a href="#comparatif" data-i18n="navComparison">Comparatif</a>
       <a href="#architecture" data-i18n="navArch">Sous le capot</a>
       <a href="#faq" data-i18n="navFaq">FAQ</a>
@@ -614,6 +616,67 @@
         <h3 data-i18n="secFranceTitle">Souveraineté Territoriale France &amp; UE</h3>
         <p data-i18n="secFranceDesc">Zéro serveur aux États-Unis, zéro dépendance aux géants de la Silicon Valley. L'admission P2P publique est strictement limitée à la France avec contrôle géographique rigoureux (fail-closed). Vos données échappent totalement au US Cloud Act et à la FISA 702.</p>
       </article>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Section: Regulatory Compliance & Standards Preview
+       ========================================================================== -->
+  <section class="section" id="conformite">
+    <div class="section-header">
+      <div class="section-label" data-i18n="compSecLabel">Réglementation &amp; Normes</div>
+      <h2 class="section-title" data-i18n="compSecTitle">Conformité rigoureuse aux standards européens et français.</h2>
+      <p class="section-description" data-i18n="compSecDesc">Découvrez comment l'architecture Zero-Knowledge, la cryptographie OpenSSL v3.5.2+ et le réseau souverain France répondent point par point aux cadres légaux les plus exigeants.</p>
+    </div>
+
+    <div class="compliance-preview-grid">
+      <!-- 1. RGPD / GDPR -->
+      <article class="compliance-card">
+        <div class="compliance-badge-row">
+          <span class="compliance-pill" data-i18n="compCardRgpdPill">Règlement UE 2016/679</span>
+          <span class="compliance-status-good" data-i18n="compCardRgpdStatus">Privacy by Design</span>
+        </div>
+        <h3 data-i18n="compCardRgpdTitle">RGPD — Données personnelles sous protection absolue</h3>
+        <p data-i18n="compCardRgpdDesc">Chiffrement client systématique (Art. 25). Zéro métadonnée personnelle dans le consensus. Droit à l'oubli cryptographique garanti et absence totale de transfert de données vers des pays tiers (Schrems II).</p>
+      </article>
+
+      <!-- 2. NIS 2 -->
+      <article class="compliance-card">
+        <div class="compliance-badge-row">
+          <span class="compliance-pill" data-i18n="compCardNis2Pill">Directive UE 2022/2555</span>
+          <span class="compliance-status-good" data-i18n="compCardNis2Status">Mesures Art. 21</span>
+        </div>
+        <h3 data-i18n="compCardNis2Title">Directive NIS 2 — Résilience &amp; Chaîne d'Approvisionnement</h3>
+        <p data-i18n="compCardNis2Desc">Moteur cryptographique audité OpenSSL v3.5.2+ (sécurité de la supply chain logicielle). Résilience opérationnelle sans point unique de panne, auto-réparation du stockage et politique stricte de divulgation des vulnérabilités.</p>
+      </article>
+
+      <!-- 3. HDS Santé -->
+      <article class="compliance-card">
+        <div class="compliance-badge-row">
+          <span class="compliance-pill" data-i18n="compCardHdsPill">CSP Art. L.1111-8</span>
+          <span class="compliance-status-good" data-i18n="compCardHdsStatus">Secret Médical &amp; HDS</span>
+        </div>
+        <h3 data-i18n="compCardHdsTitle">Secteur Médical — Secret Médical &amp; Données de Santé</h3>
+        <p data-i18n="compCardHdsDesc">Garantie mathématique d'inviolabilité pour le secret professionnel (Art. 226-13 CP). En cas d'externalisation chez un tiers commercial, exigence stricte de conformité des centres d'hébergement à la certification HDS et SecNumCloud.</p>
+      </article>
+
+      <!-- 4. ISO 27001 & CIA -->
+      <article class="compliance-card">
+        <div class="compliance-badge-row">
+          <span class="compliance-pill" data-i18n="compCardIsoPill">ISO/IEC 27001:2022</span>
+          <span class="compliance-status-good" data-i18n="compCardIsoStatus">DIC / CIA Triad</span>
+        </div>
+        <h3 data-i18n="compCardIsoTitle">ISO 27001 &amp; Triade DIC — Sécurité de l'Information</h3>
+        <p data-i18n="compCardIsoDesc">Couverture des contrôles clés de l'Annexe A (A.5.15, A.8.2, A.8.12, A.8.20, A.8.24). Respect sans compromis de la triade Disponibilité, Intégrité (BLAKE3 / Merkle) et Confidentialité (ML-KEM-768 / Zero-Knowledge).</p>
+      </article>
+    </div>
+
+    <div class="compliance-cta-box">
+      <div>
+        <div class="compliance-cta-title" data-i18n="compCtaTitle">Consulter l'analyse technique et juridique exhaustive</div>
+        <div class="compliance-cta-desc" data-i18n="compCtaDesc">Articles détaillés, tableaux de correspondance ISO 27001, analyse d'impact RGPD et cadre réglementaire ANSSI.</div>
+      </div>
+      <a href="conformite.html" class="btn btn-primary" style="white-space: nowrap;" data-i18n="compCtaBtn">Accéder au dossier de conformité</a>
     </div>
   </section>
 
@@ -1140,6 +1203,7 @@
           <ul class="footer-links">
             <li><a href="#security" data-i18n="footSecTls">Transport TLS 1.3 Post-Quantique</a></li>
             <li><a href="#security" data-i18n="footSecE2ee">Chiffrement client intégral</a></li>
+            <li><a href="conformite.html" data-i18n="footSecCompliance">Conformité RGPD / NIS 2</a></li>
             <li><a href="#security" data-i18n="footSecFrance">Réseau souverain France</a></li>
             <li><a href="#security" data-i18n="footSecPq">Résistance Post-Quantique</a></li>
           </ul>

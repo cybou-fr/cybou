@@ -1691,3 +1691,261 @@ a {
   .trust-badge-item { font-size: 0.76rem; padding: 6px 12px; }
 }
 
+/* ==========================================================================
+   Compliance Preview Section (Homepage)
+   ========================================================================== */
+
+.compliance-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-top: 36px;
+}
+
+.compliance-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: 30px 28px;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--transition-smooth), border-color var(--transition-smooth);
+}
+
+.compliance-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-mint);
+}
+
+.compliance-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.compliance-pill {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--brand-teal-dark);
+  background: rgba(5, 150, 105, 0.08);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.compliance-status-good {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #065f46;
+  background: #d1fae5;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.compliance-card h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  letter-spacing: -0.015em;
+}
+
+.compliance-card p {
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.compliance-cta-box {
+  margin-top: 32px;
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.04), rgba(52, 211, 153, 0.08));
+  border: 1px solid rgba(5, 150, 105, 0.25);
+  border-radius: var(--radius-xl);
+  padding: 28px 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.compliance-cta-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.compliance-cta-desc {
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   Compliance Detail Page (conformite.html)
+   ========================================================================== */
+
+.compliance-page-hero {
+  position: relative;
+  padding: 130px 24px 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: radial-gradient(ellipse 85% 50% at 50% -5%, rgba(5, 150, 105, 0.12), rgba(243, 244, 246, 0.5) 45%, transparent 75%);
+}
+
+.compliance-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+}
+
+.compliance-breadcrumb a {
+  color: var(--brand-teal-dark);
+  font-weight: 500;
+}
+
+.compliance-breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.compliance-nav-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 36px 0 20px;
+  max-width: 960px;
+}
+
+.nav-pill-btn {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.nav-pill-btn:hover {
+  color: var(--brand-teal-dark);
+  border-color: var(--brand-teal);
+  transform: translateY(-1px);
+}
+
+.compliance-container {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 20px 24px 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.compliance-article {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: 38px 36px;
+  box-shadow: var(--shadow-card);
+  scroll-margin-top: 90px;
+}
+
+.compliance-article-header {
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+}
+
+.compliance-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.compliance-article-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.compliance-article-sub {
+  font-size: 1.05rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.compliance-prose {
+  font-size: 0.96rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.compliance-prose strong {
+  color: var(--text-primary);
+}
+
+.compliance-prose ul {
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compliance-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  font-size: 0.88rem;
+}
+
+.compliance-detail-table th {
+  text-align: left;
+  padding: 12px 14px;
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-medium);
+}
+
+.compliance-detail-table td {
+  padding: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.compliance-callout-box {
+  background: #f8fafc;
+  border-left: 4px solid var(--brand-teal);
+  padding: 16px 20px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 18px 0;
+}
+
+.compliance-callout-box.amber {
+  border-left-color: var(--status-amber);
+  background: #fffbeb;
+}
+
+@media (max-width: 820px) {
+  .compliance-preview-grid { grid-template-columns: 1fr; }
+  .compliance-cta-box { flex-direction: column; align-items: flex-start; }
+  .compliance-article { padding: 26px 20px; }
+  .compliance-article-title { font-size: 1.35rem; }
+}
+
