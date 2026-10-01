@@ -14,6 +14,7 @@
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/rand.h>
 #include <openssl/x509.h>
 
 #include <algorithm>
@@ -258,6 +259,7 @@ bool IsSupportedMessageType(const uint8_t type)
     case MessageType::FINALIZER_PROOF:
     case MessageType::BOOTSTRAP_REQUEST:
     case MessageType::BOOTSTRAP_RESPONSE:
+    case MessageType::BOOTSTRAP_PROOF:
     case MessageType::PING:
     case MessageType::PONG:
     case MessageType::GET_BLOCK:
@@ -619,6 +621,50 @@ std::optional<Frame> PeerSession::RequestBootstrap(const Frame& request)
     return response;
 }
 
+std::optional<BootstrapIdentityClaim> PeerSession::RequestBootstrapIdentityClaim()
+{
+    if (m_transport_role != TransportRole::CLIENT || !m_tls_config.expected_server_spki_sha256 ||
+        !EstablishSecureTransport(std::chrono::steady_clock::now() + TLS_HANDSHAKE_TIMEOUT)) return std::nullopt;
+    std::array<unsigned char, 32> challenge{};
+    if (RAND_bytes(challenge.data(), static_cast<int>(challenge.size())) != 1) return std::nullopt;
+    std::vector<unsigned char> request{'C','Y','B','I','Q','1'};
+    request.insert(request.end(), challenge.begin(), challenge.end());
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+    if (!Write(Frame{MessageType::BOOTSTRAP_REQUEST, std::move(request)}, deadline)) return std::nullopt;
+    const auto response = Read(deadline);
+    if (!response || response->type != MessageType::BOOTSTRAP_RESPONSE) return std::nullopt;
+    auto claim = DecodeBootstrapIdentityClaim(response->payload);
+    if (!claim || claim->challenge != challenge || !VerifyBootstrapIdentityClaim(*claim, m_tls_exporter)) return std::nullopt;
+    return claim;
+}
+
+bool PeerSession::ServeBootstrapIdentityClaim(const IdentityHybridPublicKey& recovery_key,
+    const ProviderProofSigner& recovery_signer)
+{
+    if (m_transport_role != TransportRole::SERVER || !recovery_signer ||
+        recovery_key.purpose != IdentityKeyPurpose::RECOVERY_ROOT || !ComputeRecoveryKeyId(recovery_key) ||
+        m_tls_config.certificate_chain_file.empty() || m_tls_config.private_key_file.empty() ||
+        !EstablishSecureTransport(std::chrono::steady_clock::now() + TLS_HANDSHAKE_TIMEOUT)) return false;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+    const auto request = Read(deadline);
+    if (!request || request->type != MessageType::BOOTSTRAP_REQUEST || request->payload.size() != 38 ||
+        !std::equal(request->payload.begin(), request->payload.begin() + 6,
+            std::array<unsigned char, 6>{'C','Y','B','I','Q','1'}.begin())) return false;
+    std::array<unsigned char, 32> challenge{};
+    std::copy_n(request->payload.begin() + 6, challenge.size(), challenge.begin());
+    if (std::ranges::all_of(challenge, [](unsigned char byte) { return byte == 0; })) return false;
+    const auto message = BootstrapIdentityClaimMessage(m_tls_exporter, challenge, recovery_key);
+    const auto encoded_signature = recovery_signer(message);
+    if (message.empty() || !encoded_signature || encoded_signature->size() != 64 + 3309) return false;
+    BootstrapIdentityClaim claim;
+    claim.challenge = challenge;
+    claim.recovery_key = recovery_key;
+    std::copy_n(encoded_signature->begin(), claim.proof.ed25519.size(), claim.proof.ed25519.begin());
+    claim.proof.ml_dsa.assign(encoded_signature->begin() + claim.proof.ed25519.size(), encoded_signature->end());
+    const auto payload = EncodeBootstrapIdentityClaim(claim);
+    return payload && Write(Frame{MessageType::BOOTSTRAP_RESPONSE, *payload}, deadline);
+}
+
 bool PeerSession::ServeBootstrapRequest(
     const std::function<std::optional<Frame>(const Frame&)>& handler)
 {
@@ -696,12 +742,48 @@ bool VerifyFinalizerProof(const std::span<const unsigned char> payload,
     return VerifyIdentityMessage(genesis_finalizer_key, signature, message);
 }
 
+std::vector<unsigned char> BootstrapProofMessage(const Hello& signer, const Hello& verifier,
+    const std::span<const unsigned char> tls_exporter, const AccountId& account_id)
+{
+    if (tls_exporter.size() != 32 || signer.network_id.IsNull() ||
+        signer.network_id != verifier.network_id || account_id.IsNull()) return {};
+    constexpr std::string_view DOMAIN{"CYBOU/CYP2/BOOTSTRAP-PROOF/v1"};
+    std::vector<unsigned char> message(DOMAIN.begin(), DOMAIN.end());
+    message.insert(message.end(), signer.network_id.begin(), signer.network_id.end());
+    message.insert(message.end(), tls_exporter.begin(), tls_exporter.end());
+    const auto signer_bytes = EncodeHello(signer), verifier_bytes = EncodeHello(verifier);
+    message.insert(message.end(), signer_bytes.begin(), signer_bytes.end());
+    message.insert(message.end(), verifier_bytes.begin(), verifier_bytes.end());
+    const auto account = account_id.Value();
+    message.insert(message.end(), account.begin(), account.end());
+    return message;
+}
+
+std::optional<AccountId> VerifyBootstrapProof(const std::span<const unsigned char> payload,
+    const std::span<const unsigned char> message, const IdentityHybridPublicKey& authorization_key)
+{
+    constexpr size_t SIGNATURE_SIZE{64 + 2420};
+    if (payload.size() != AccountId::SIZE + SIGNATURE_SIZE ||
+        authorization_key.purpose != IdentityKeyPurpose::AUTHORIZATION || authorization_key.ml_dsa.size() != 1312) {
+        return std::nullopt;
+    }
+    const auto account_id = AccountId::FromBytes(payload.first(AccountId::SIZE));
+    if (!account_id) return std::nullopt;
+    IdentityHybridSignature signature;
+    std::copy_n(payload.begin() + AccountId::SIZE, signature.ed25519.size(), signature.ed25519.begin());
+    signature.ml_dsa.assign(payload.begin() + AccountId::SIZE + signature.ed25519.size(), payload.end());
+    return VerifyIdentityMessage(authorization_key, signature, message) ? account_id : std::nullopt;
+}
+
 bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provider_signer,
-    const FinalizerProofSigner& finalizer_signer, const IdentityHybridPublicKey* genesis_finalizer_key)
+    const FinalizerProofSigner& finalizer_signer, const IdentityHybridPublicKey* genesis_finalizer_key,
+    const BootstrapProofIdentity* local_bootstrap_identity,
+    const BootstrapIdentityResolver& bootstrap_identity_resolver)
 {
     m_peer.reset();
     m_peer_provider_id.reset();
     m_peer_finalizer_authenticated = false;
+    m_peer_bootstrap_account.reset();
     m_handshake_status = HandshakeStatus::INVALID_LOCAL;
     if (local.network_id.IsNull() || local.finalized_tip.IsNull() || local.nonce == 0) return false;
     m_handshake_status = HandshakeStatus::UNAVAILABLE;
@@ -743,6 +825,25 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
             return false;
         }
     }
+    if (local.capabilities & CAP_BOOTSTRAP) {
+        if (!local_bootstrap_identity || local_bootstrap_identity->account_id.IsNull() ||
+            !local_bootstrap_identity->signer) {
+            m_handshake_status = HandshakeStatus::INVALID_LOCAL;
+            return false;
+        }
+        const auto message = BootstrapProofMessage(local, *peer, m_tls_exporter,
+            local_bootstrap_identity->account_id);
+        const auto signature = local_bootstrap_identity->signer(message);
+        if (message.empty() || !signature || signature->size() != 64 + 2420) {
+            m_handshake_status = HandshakeStatus::INVALID_LOCAL;
+            return false;
+        }
+        std::vector<unsigned char> payload;
+        const auto account = local_bootstrap_identity->account_id.Value();
+        payload.insert(payload.end(), account.begin(), account.end());
+        payload.insert(payload.end(), signature->begin(), signature->end());
+        if (!Write(Frame{MessageType::BOOTSTRAP_PROOF, std::move(payload)})) return false;
+    }
     if (peer->capabilities & CAP_STORAGE) {
         const auto proof_frame = Read();
         if (!proof_frame || proof_frame->type != MessageType::PROVIDER_PROOF) return false;
@@ -760,6 +861,23 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
             !VerifyFinalizerProof(proof_frame->payload,
                 FinalizerProofMessage(*peer, local, m_tls_exporter), *genesis_finalizer_key)) return false;
         m_peer_finalizer_authenticated = true;
+    }
+    if (peer->capabilities & CAP_BOOTSTRAP) {
+        if (!bootstrap_identity_resolver) {
+            m_handshake_status = HandshakeStatus::INVALID_LOCAL;
+            return false;
+        }
+        const auto proof_frame = Read();
+        if (!proof_frame || proof_frame->type != MessageType::BOOTSTRAP_PROOF ||
+            proof_frame->payload.size() < AccountId::SIZE) return false;
+        const auto account_id = AccountId::FromBytes(
+            std::span<const unsigned char>{proof_frame->payload}.first(AccountId::SIZE));
+        const auto key = account_id ? bootstrap_identity_resolver(*account_id) : std::nullopt;
+        if (!account_id || !key) return false;
+        const auto message = BootstrapProofMessage(*peer, local, m_tls_exporter, *account_id);
+        const auto verified_account = VerifyBootstrapProof(proof_frame->payload, message, *key);
+        if (!verified_account || *verified_account != *account_id) return false;
+        m_peer_bootstrap_account = *account_id;
     }
     m_peer = *peer;
     m_local_capabilities = local.capabilities;

@@ -4,6 +4,19 @@
 
 Current `main` implements the canonical low-level substrate:
 
+- optional genesis bootstrap grants keyed by RecoveryKeyID, one-time
+  AccountCreate claim into stable AccountID, and current Authorization-key
+  lookup that survives IdentityRotate; grant-free states retain the exact v7
+  serialization/state root while grant-bearing states use v8;
+- CYP2 `CAP_BOOTSTRAP` proof bound to NetworkID, TLS exporter, both HELLOs and
+  AccountID, with remote Authorization keys resolved only from finalized
+  genesis grants and caller-supplied unlocked-Identity signing;
+- pinned-TLS pre-genesis Recovery-key challenge/response bound to a fresh
+  challenge and that TLS exporter;
+- explicit distinction between the legacy DEV P2P seed and a future
+  pre-genesis address/SPKI locator; the latter remains unconfigured until the
+  official endpoint and pin are approved;
+
 - Identity keys/authorization/recovery and current KEM publication;
 - names, balances and deterministic state execution;
 - genesis-bound hybrid-PQ PoA finality;

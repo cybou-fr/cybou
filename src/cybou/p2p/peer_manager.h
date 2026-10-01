@@ -44,6 +44,8 @@ struct PeerInfo {
     std::optional<ProviderId> provider_id;
     /** Session-only proof of the genesis PoA key; cleared when the session drops. */
     bool finalizer_authenticated{false};
+    /** Session-only proof of a genesis-granted bootstrap AccountID. */
+    std::optional<AccountId> bootstrap_account_id;
 };
 
 struct PeerSubmitResult {
@@ -84,6 +86,8 @@ public:
     std::vector<PeerInfo> Peers() const;
     /** Live finalizer-authenticated sessions; endpoints are transient routes only. */
     std::vector<PeerInfo> AuthenticatedFinalizerSessions() const;
+    /** Live genesis-granted bootstrap sessions; endpoint data is transient only. */
+    std::vector<PeerInfo> AuthenticatedBootstrapSessions() const;
     /** Connected peers that advertised the optional ciphertext storage service. */
     std::vector<PeerInfo> StoragePeers() const;
     std::optional<ChunkAdmissionResult> PutAuthorizedChunk(

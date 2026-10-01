@@ -38,7 +38,8 @@ The approved target is specified in
 one non-finalizing/non-provider bootstrap service on the official VPS and the
 genesis-key holder finalizing from its Central Authority desktop. The current
 DEV executable and services still use the legacy arrangement. Before cutover,
-implement bootstrap identity pinning, EMPTY/BOUND state, one-use initial claim,
+implement the initial locator pin and genesis-granted bootstrap Identity,
+EMPTY/BOUND state, one-use initial claim,
 generation-safe replacement, desktop genesis creation/finalizer lifecycle,
 per-session genesis-key proof with no persistent Authority address, and
 authenticated relay. Pass clean-install, compromise, rollback, restart,

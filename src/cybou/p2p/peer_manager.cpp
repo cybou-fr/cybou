@@ -88,6 +88,8 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     }
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
     if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
+    const auto local_bootstrap_account = m_runtime.LocalBootstrapAccountId();
+    if (local_bootstrap_account) caps |= CAP_BOOTSTRAP;
     // This outbound session does not accept operations from the remote peer.
     // The inbound listener advertises CAP_ACCEPT_OPERATIONS and proves the
     // genesis-bound finalizer key on sessions where it serves that role.
@@ -98,8 +100,17 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     const auto finalizer_signer = [this](std::span<const unsigned char> message) {
         return m_runtime.SignFinalizerTransportProof(message);
     };
+    std::optional<BootstrapProofIdentity> bootstrap_identity;
+    if (local_bootstrap_account) {
+        bootstrap_identity = BootstrapProofIdentity{*local_bootstrap_account,
+            [this](std::span<const unsigned char> message) { return m_runtime.SignBootstrapTransportProof(message); }};
+    }
+    const BootstrapIdentityResolver bootstrap_resolver = [this](const AccountId& account_id) {
+        return m_runtime.BootstrapAuthorizationKey(account_id);
+    };
     if (!peer->Handshake(local, signer, finalizer_signer,
-            &m_runtime.GetNetworkDefinition().poa_finalizer_public_key)) {
+            &m_runtime.GetNetworkDefinition().poa_finalizer_public_key,
+            bootstrap_identity ? &*bootstrap_identity : nullptr, bootstrap_resolver)) {
         switch (peer->LastHandshakeStatus()) {
         case HandshakeStatus::UNAVAILABLE: m_last_connect_status = PeerConnectStatus::UNAVAILABLE; break;
         case HandshakeStatus::WRONG_NETWORK: m_last_connect_status = PeerConnectStatus::WRONG_NETWORK; break;
@@ -407,7 +418,7 @@ std::vector<PeerInfo> PeerManager::Peers() const
     for (const auto& [endpoint, session] : m_peers) {
         if (session->Peer()) {
             peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId(),
-                session->PeerFinalizerAuthenticated()});
+                session->PeerFinalizerAuthenticated(), session->PeerBootstrapAccountId()});
         }
     }
     return peers;
@@ -419,7 +430,20 @@ std::vector<PeerInfo> PeerManager::AuthenticatedFinalizerSessions() const
     for (const auto& [endpoint, session] : m_peers) {
         if (session->Peer() && session->PeerFinalizerAuthenticated()) {
             sessions.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(),
-                session->PeerProviderId(), true});
+                session->PeerProviderId(), true, session->PeerBootstrapAccountId()});
+        }
+    }
+    return sessions;
+}
+
+std::vector<PeerInfo> PeerManager::AuthenticatedBootstrapSessions() const
+{
+    std::vector<PeerInfo> sessions;
+    for (const auto& [endpoint, session] : m_peers) {
+        if (session->Peer() && session->PeerBootstrapAuthenticated()) {
+            sessions.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(),
+                session->PeerProviderId(), session->PeerFinalizerAuthenticated(),
+                session->PeerBootstrapAccountId()});
         }
     }
     return sessions;
@@ -431,7 +455,7 @@ std::vector<PeerInfo> PeerManager::StoragePeers() const
     for (const auto& [endpoint, session] : m_peers) {
         if (session->Peer() && (session->Peer()->capabilities & CAP_STORAGE) && session->PeerProviderId()) {
             peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId(),
-                session->PeerFinalizerAuthenticated()});
+                session->PeerFinalizerAuthenticated(), session->PeerBootstrapAccountId()});
         }
     }
     return peers;

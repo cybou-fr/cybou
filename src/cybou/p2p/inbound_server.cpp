@@ -30,6 +30,7 @@ std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
         .finalized_tip = status.finalized_tip,
         .capabilities = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY |
             (runtime.HasStorageProvider() ? CAP_STORAGE | CAP_STORAGE_PROOFS : 0) |
+            (runtime.LocalBootstrapAccountId() ? CAP_BOOTSTRAP : 0) |
             (status.is_finalizer ? CAP_ACCEPT_OPERATIONS : 0),
         .nonce = nonce};
 }
@@ -75,8 +76,20 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
             const auto finalizer_signer = [this](std::span<const unsigned char> message) {
                 return m_runtime.SignFinalizerTransportProof(message);
             };
+            const auto bootstrap_account = m_runtime.LocalBootstrapAccountId();
+            std::optional<BootstrapProofIdentity> bootstrap_identity;
+            if (bootstrap_account) {
+                bootstrap_identity = BootstrapProofIdentity{*bootstrap_account,
+                    [this](std::span<const unsigned char> message) {
+                        return m_runtime.SignBootstrapTransportProof(message);
+                    }};
+            }
+            const BootstrapIdentityResolver bootstrap_resolver = [this](const AccountId& account_id) {
+                return m_runtime.BootstrapAuthorizationKey(account_id);
+            };
             if (hello && session.Handshake(*hello, signer, finalizer_signer,
-                    &m_runtime.GetNetworkDefinition().poa_finalizer_public_key) &&
+                    &m_runtime.GetNetworkDefinition().poa_finalizer_public_key,
+                    bootstrap_identity ? &*bootstrap_identity : nullptr, bootstrap_resolver) &&
                 MatchesKnownFinalizedChain(m_runtime, *session.Peer())) {
                 while (!stopping && session.ServeNext(m_runtime)) {}
             }

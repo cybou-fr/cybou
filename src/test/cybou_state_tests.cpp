@@ -134,6 +134,83 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
     BOOST_CHECK(ValidateCybouState(forged) == StateValidationError::INVALID_NAME_REGISTRY);
 }
 
+BOOST_AUTO_TEST_CASE(genesis_bootstrap_grant_is_claimed_by_recovery_and_tracks_stable_account)
+{
+    using namespace cybou;
+    std::array<unsigned char, 32> root_seed{}, device_seed{};
+    root_seed[0] = 0x31;
+    device_seed[0] = 0x32;
+    uint256 raw_account{}, network_id{};
+    raw_account.begin()[0] = 0x33;
+    network_id.begin()[0] = 0x34;
+    const AccountId account{raw_account};
+    const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::AUTHORIZATION);
+    BOOST_REQUIRE(root && device);
+    const auto recovery_id = ComputeRecoveryKeyId(*root);
+    BOOST_REQUIRE(recovery_id);
+    const IdentityAuthorization auth{*root, *device};
+    const auto binding = test::MakeIdentityKemBinding(network_id, account, auth);
+    const auto recovery_pop = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+    const auto authorization_pop = SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
+    BOOST_REQUIRE(recovery_pop && authorization_pop);
+    const AccountCreateOp create{account, auth, binding.package,
+        {.network_id = network_id, .account_id = account, .authorization_commitment = binding.authorization_commitment},
+        *recovery_pop, *authorization_pop};
+    auto params = DevProtocolParameters();
+    params.account_creation_work_bits = 0;
+    CybouState state{};
+    state.onboarding_pool = params.onboarding_bonus;
+    state.genesis_bootstrap_grants.emplace(*recovery_id, GenesisBootstrapGrant{});
+    BOOST_CHECK(!state.HasBootstrapGrant(account));
+    const auto genesis_bytes = SerializeCybouState(state);
+    BOOST_REQUIRE(genesis_bytes);
+    BOOST_CHECK_EQUAL(genesis_bytes->front(), CYBOU_STATE_VERSION);
+    const auto decoded = DeserializeCybouState(*genesis_bytes);
+    BOOST_REQUIRE(decoded);
+    BOOST_CHECK_EQUAL(decoded->genesis_bootstrap_grants.size(), 1U);
+
+    BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 1, params, state) == AccountCreateStateError::NONE);
+    BOOST_CHECK(state.genesis_bootstrap_grants.at(*recovery_id).claimed_by == account);
+    BOOST_CHECK(state.HasBootstrapGrant(account));
+    const auto claimed_bytes = SerializeCybouState(state);
+    BOOST_REQUIRE(claimed_bytes);
+    const auto claimed = DeserializeCybouState(*claimed_bytes);
+    BOOST_REQUIRE(claimed);
+    BOOST_CHECK(claimed->HasBootstrapGrant(account));
+
+    std::array<unsigned char, 32> next_root_seed{}, next_device_seed{};
+    next_root_seed[0] = 0x35;
+    next_device_seed[0] = 0x36;
+    const auto next_root = DeriveIdentityPublicKey(next_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto next_device = DeriveIdentityPublicKey(next_device_seed, IdentityKeyPurpose::AUTHORIZATION);
+    BOOST_REQUIRE(next_root && next_device);
+    const auto next_auth = IdentityAuthorization{*next_root, *next_device};
+    const auto next_binding = test::MakeIdentityKemBinding(network_id, account, next_auth, 1);
+    IdentityRotate rotate{.account_id = account, .new_recovery_key = *next_root,
+        .new_authorization_key = *next_device, .new_kem_package = next_binding.package,
+        .nonce = 0, .key_epoch = 1};
+    const auto rotate_digest = ComputeIdentityRotateDigest(network_id, rotate);
+    BOOST_REQUIRE(rotate_digest);
+    const auto old_signature = SignIdentityMessage(root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
+    const auto new_recovery_pop = SignIdentityMessage(next_root_seed, IdentityKeyPurpose::RECOVERY_ROOT, *rotate_digest);
+    const auto new_authorization_pop = SignIdentityMessage(next_device_seed, IdentityKeyPurpose::AUTHORIZATION, *rotate_digest);
+    BOOST_REQUIRE(old_signature && new_recovery_pop && new_authorization_pop);
+    rotate.old_recovery_signature = *old_signature;
+    rotate.new_recovery_pop = *new_recovery_pop;
+    rotate.new_authorization_pop = *new_authorization_pop;
+    BOOST_CHECK(state.identities.RotateIdentity(rotate, network_id) == IdentityRegistryError::NONE);
+    BOOST_CHECK(state.BootstrapAuthorizationKey(account) == next_device);
+    BOOST_CHECK(state.HasBootstrapGrant(account));
+
+    // A state without grants retains its exact legacy v7 bytes for existing networks.
+    CybouState legacy{};
+    const auto legacy_bytes = SerializeCybouState(legacy);
+    BOOST_REQUIRE(legacy_bytes);
+    BOOST_CHECK_EQUAL(legacy_bytes->front(), CYBOU_STATE_LEGACY_VERSION);
+    BOOST_CHECK(DeserializeCybouState(*legacy_bytes));
+}
+
 BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
 {
     using namespace cybou;

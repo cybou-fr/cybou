@@ -207,6 +207,36 @@ std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignFinalizerTranspo
     return proof;
 }
 
+std::optional<AccountId> CybouNodeRuntime::LocalBootstrapAccountId() const
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_config.bootstrap_identity_account || !m_config.bootstrap_proof_signer) return std::nullopt;
+    const auto loaded = m_store.LoadState();
+    if (loaded.error != StateLoadError::NONE || !loaded.state ||
+        !loaded.state->HasBootstrapGrant(*m_config.bootstrap_identity_account) ||
+        !loaded.state->identities.Find(*m_config.bootstrap_identity_account)) return std::nullopt;
+    return m_config.bootstrap_identity_account;
+}
+
+std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignBootstrapTransportProof(
+    const std::span<const unsigned char> message) const
+{
+    if (message.empty()) return std::nullopt;
+    const auto account_id = LocalBootstrapAccountId();
+    if (!account_id || !m_config.bootstrap_proof_signer) return std::nullopt;
+    return m_config.bootstrap_proof_signer(message);
+}
+
+std::optional<IdentityHybridPublicKey> CybouNodeRuntime::BootstrapAuthorizationKey(
+    const AccountId& account_id) const
+{
+    std::lock_guard lock(m_mutex);
+    if (account_id.IsNull()) return std::nullopt;
+    const auto loaded = m_store.LoadState();
+    if (loaded.error != StateLoadError::NONE || !loaded.state) return std::nullopt;
+    return loaded.state->BootstrapAuthorizationKey(account_id);
+}
+
 ChunkAdmissionResult CybouNodeRuntime::PutFinalizedChunk(
     const uint256& publication_operation_id, const ChunkId& chunk_id,
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)

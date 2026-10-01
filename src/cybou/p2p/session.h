@@ -5,6 +5,8 @@
 #define CYBOU_P2P_SESSION_H
 
 #include <uint256.h>
+#include <cybou/account_id.h>
+#include <cybou/bootstrap_identity.h>
 #include <cybou/finalizer_node.h>
 #include <cybou/finalized_chunk_store.h>
 
@@ -35,6 +37,7 @@ inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
 inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
 inline constexpr uint64_t CAP_STORAGE{1ULL << 7};
 inline constexpr uint64_t CAP_STORAGE_PROOFS{1ULL << 8};
+inline constexpr uint64_t CAP_BOOTSTRAP{1ULL << 9};
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder
 // must enforce it so a malicious peer cannot stuff a PEERS frame with more
@@ -72,8 +75,9 @@ enum class MessageType : uint8_t {
     FINALIZER_PROOF = 40,
     BOOTSTRAP_REQUEST = 41,
     BOOTSTRAP_RESPONSE = 42,
+    BOOTSTRAP_PROOF = 43,
 };
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::BOOTSTRAP_RESPONSE)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::BOOTSTRAP_PROOF)};
 
 /** Stable identity of a storage provider: BLAKE3 of its STORAGE_PROVIDER public key. */
 using ProviderId = std::array<unsigned char, 32>;
@@ -84,6 +88,13 @@ using ProviderId = std::array<unsigned char, 32>;
 using ProviderProofSigner = std::function<std::optional<std::vector<unsigned char>>(
     std::span<const unsigned char> message)>;
 using FinalizerProofSigner = ProviderProofSigner;
+using BootstrapProofSigner = ProviderProofSigner;
+using BootstrapIdentityResolver = std::function<std::optional<IdentityHybridPublicKey>(const AccountId&)>;
+
+struct BootstrapProofIdentity {
+    AccountId account_id;
+    BootstrapProofSigner signer;
+};
 
 /** Message a provider signs to prove its key in this TLS session. */
 struct Hello;
@@ -97,6 +108,11 @@ std::vector<unsigned char> FinalizerProofMessage(const Hello& signer, const Hell
     std::span<const unsigned char> tls_exporter);
 bool VerifyFinalizerProof(std::span<const unsigned char> payload, std::span<const unsigned char> message,
     const IdentityHybridPublicKey& genesis_finalizer_key);
+/** Session-bound proof for a genesis-granted bootstrap AccountID. */
+std::vector<unsigned char> BootstrapProofMessage(const Hello& signer, const Hello& verifier,
+    std::span<const unsigned char> tls_exporter, const AccountId& account_id);
+std::optional<AccountId> VerifyBootstrapProof(std::span<const unsigned char> payload,
+    std::span<const unsigned char> message, const IdentityHybridPublicKey& authorization_key);
 
 struct Frame {
     MessageType type;
@@ -178,11 +194,15 @@ public:
      */
     bool Handshake(const Hello& local, const ProviderProofSigner& provider_signer = {},
         const FinalizerProofSigner& finalizer_signer = {},
-        const IdentityHybridPublicKey* genesis_finalizer_key = nullptr);
+        const IdentityHybridPublicKey* genesis_finalizer_key = nullptr,
+        const BootstrapProofIdentity* local_bootstrap_identity = nullptr,
+        const BootstrapIdentityResolver& bootstrap_identity_resolver = {});
     /** Proven ProviderID of a storage peer. */
     const std::optional<ProviderId>& PeerProviderId() const { return m_peer_provider_id; }
     /** True only while this live session has verified the peer's genesis PoA proof. */
     bool PeerFinalizerAuthenticated() const { return m_peer_finalizer_authenticated; }
+    bool PeerBootstrapAuthenticated() const { return m_peer_bootstrap_account.has_value(); }
+    const std::optional<AccountId>& PeerBootstrapAccountId() const { return m_peer_bootstrap_account; }
     HandshakeStatus LastHandshakeStatus() const { return m_handshake_status; }
     bool Ping(uint64_t nonce);
     bool AnswerPing();
@@ -220,6 +240,10 @@ public:
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     /** One pinned bootstrap protocol exchange without a network-bound HELLO. */
     std::optional<Frame> RequestBootstrap(const Frame& request);
+    /** Pinned pre-genesis endpoint proves a Recovery Identity on this TLS session. */
+    std::optional<BootstrapIdentityClaim> RequestBootstrapIdentityClaim();
+    bool ServeBootstrapIdentityClaim(const IdentityHybridPublicKey& recovery_key,
+        const ProviderProofSigner& recovery_signer);
     /** Serve one bootstrap request over a persistent-identity TLS session. */
     bool ServeBootstrapRequest(const std::function<std::optional<Frame>(const Frame&)>& handler);
     boost::asio::ip::tcp::socket& Socket() { return m_socket; }
@@ -246,6 +270,7 @@ private:
     // Ephemeral session fact. Never serialize or persist an Authority address
     // or map this role to a durable node identity.
     bool m_peer_finalizer_authenticated{false};
+    std::optional<AccountId> m_peer_bootstrap_account;
     uint64_t m_local_capabilities{0};
     HandshakeStatus m_handshake_status{HandshakeStatus::NOT_ATTEMPTED};
 };

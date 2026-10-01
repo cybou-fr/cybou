@@ -19,7 +19,8 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_STATE_VERSION{7};
+inline constexpr uint8_t CYBOU_STATE_VERSION{8};
+inline constexpr uint8_t CYBOU_STATE_LEGACY_VERSION{7};
 
 struct AccountState {
     uint64_t balance{0};
@@ -45,7 +46,17 @@ struct GenesisAllocation {
     friend bool operator==(const GenesisAllocation&, const GenesisAllocation&) = default;
 };
 
+/** Genesis grant that lets one recovery Identity claim a bootstrap role once.
+ * After claim, the role follows the stable AccountID across IdentityRotate.
+ */
+struct GenesisBootstrapGrant {
+    std::optional<AccountId> claimed_by;
+
+    friend bool operator==(const GenesisBootstrapGrant&, const GenesisBootstrapGrant&) = default;
+};
+
 inline constexpr size_t MAX_GENESIS_ALLOCATIONS{16};
+inline constexpr size_t MAX_GENESIS_BOOTSTRAP_GRANTS{16};
 
 struct CybouState {
     uint64_t onboarding_pool{0};
@@ -56,6 +67,11 @@ struct CybouState {
     NameRegistry names;
     /** Keyed by recovery key id; immutable except for the one-time claim. */
     std::map<IdentityKeyId, GenesisAllocation> genesis_allocations;
+    /** Keyed by recovery key id; role follows claimed AccountID after claim. */
+    std::map<IdentityKeyId, GenesisBootstrapGrant> genesis_bootstrap_grants;
+
+    bool HasBootstrapGrant(const AccountId& account_id) const;
+    std::optional<IdentityHybridPublicKey> BootstrapAuthorizationKey(const AccountId& account_id) const;
 };
 
 enum class AccountCreateStateError : uint8_t {
@@ -102,6 +118,7 @@ enum class StateValidationError : uint8_t {
     DUPLICATE_RECOVERY_BINDING,
     BALANCE_OVERFLOW,
     INVALID_NAME_REGISTRY,
+    INVALID_BOOTSTRAP_GRANTS,
 };
 
 StateValidationError ValidateCybouState(const CybouState& state);

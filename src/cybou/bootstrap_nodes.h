@@ -12,16 +12,14 @@
 namespace cybou {
 
 /**
- * DEV bootstrap node endpoints.
+ * Legacy DEV P2P seed endpoints.
  *
- * Static seed list for the disposable CYBOU-DEV network only. Beta and
- * Mainnet must derive their bootstrap sets from the operator-approved
- * operator-configured peer discovery flow, not from a compiled-in list (docs 04, 08).
+ * These endpoints feed the existing DEV peer-sync path, which currently
+ * connects to the legacy VPS finalizer. They are not initial locators for the
+ * future bootstrap service and grant no bootstrap role.
  *
  * CYP2 is the only transport. The list is
- * transport metadata: it is never part of the serialized network definition
- * and carries no trust — the genesis file remains the root of trust for every
- * synced block.
+ * transport metadata only. It is never part of consensus state.
  */
 struct BootstrapEndpoint {
     std::string_view host;
@@ -31,6 +29,17 @@ struct BootstrapEndpoint {
 inline constexpr std::array<BootstrapEndpoint, 1> CYBOU_DEV_BOOTSTRAP_NODES{{
     {"51.255.46.58", 29461}, // OVH DEV PoA finalizer node (vps-d0669a91)
 }};
+
+/** Pre-genesis discovery hint. SPKI pin authenticates first contact only. */
+struct InitialBootstrapLocator {
+    std::string_view host;
+    uint16_t port;
+    std::array<unsigned char, 32> tls_spki_sha256;
+};
+
+// No future-service locator is compiled in until its endpoint and SPKI pin
+// are approved. Never reuse the DEV finalizer above as that locator.
+inline constexpr std::array<InitialBootstrapLocator, 0> CYBOU_INITIAL_BOOTSTRAP_LOCATORS{};
 
 } // namespace cybou
 
