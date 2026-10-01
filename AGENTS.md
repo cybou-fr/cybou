@@ -12,6 +12,10 @@ of the official VPS target. The target is one bootstrap service on the VPS and
 the genesis-key holder finalizing from its desktop. The migration is not
 implemented yet; keep the current network operational until the specified
 acceptance tests and coordinated DEV cutover are complete.
+- Central Authority is identified only by possession of the genesis PoA key.
+  Never add a persistent Authority IP, host, endpoint, or NodeID to bootstrap
+  state or consensus. Authenticate its current route per live session and
+  discard that route on disconnect.
 
 - After changing CYBOU core or `cybou-node`, run relevant tests, rebuild
   `cybou-node` on the DEV VPS, and restart `cybou-node.service` in the same

@@ -40,10 +40,11 @@ genesis-key holder finalizing from its Central Authority desktop. The current
 DEV executable and services still use the legacy arrangement. Before cutover,
 implement bootstrap identity pinning, EMPTY/BOUND state, one-use initial claim,
 generation-safe replacement, desktop genesis creation/finalizer lifecycle,
-and authenticated relay. Pass clean-install, compromise, rollback, restart,
-offline-authority, and replacement acceptance tests, then perform an explicit
-DEV reset/cutover. Routine deployments continue to preserve the existing DEV
-network and key until that procedure is ready.
+per-session genesis-key proof with no persistent Authority address, and
+authenticated relay. Pass clean-install, compromise, rollback, restart,
+Authority mobility, offline-authority, and replacement acceptance tests, then
+perform an explicit DEV reset/cutover. Routine deployments continue to
+preserve the existing DEV network and key until that procedure is ready.
 
 ## Authority and Validation
 

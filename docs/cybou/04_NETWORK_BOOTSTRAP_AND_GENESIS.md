@@ -48,10 +48,27 @@ unpinned key is not proof that a server is the official bootstrap.
 
 The signed binding contains at least the generation, display name, NetworkID,
 hash of the exact network file, and genesis-bound finalizer public key. The
-Central Authority signs each binding. Bootstrap authentication protects the
-service connection; it does not replace the Authority signature. Clients that
-have previously accepted a binding persist the highest generation and reject
-rollback or a different binding at that generation.
+Central Authority signs each binding. It contains no Authority IP address,
+hostname, endpoint, or persistent node identifier. Bootstrap authentication
+protects the service connection; it does not replace the Authority signature.
+Clients that have previously accepted a binding persist the highest generation
+and reject rollback or a different binding at that generation.
+
+Central Authority identity is possession of the genesis-bound PoA private key;
+its network location is irrelevant. Any full node may connect from any address
+and request the finalizer role for a network. After the ordinary bootstrap
+service is authenticated, the candidate proves possession by signing a fresh
+bootstrap challenge bound to that CYP2 session (including the TLS exporter and
+both HELLO transcripts). Bootstrap verifies against the finalizer public key
+in the already-bound network definition. Success marks only that live session
+as finalizer-authenticated; it does not create a durable Authority record or
+address mapping. On disconnect, bootstrap drops the route. A later session
+from a new address must prove possession again. IP, DNS name, and source
+address are routing data only and never authorize a role.
+
+Direct node-to-node connections follow the same cryptographic rule: a peer
+that claims the finalizer role proves the genesis key for that session. A
+bootstrap relay is a convenient route, not the identity anchor.
 
 A first claim requires all of:
 
@@ -105,15 +122,23 @@ anti-equivocation, and must never send signing material to bootstrap.
 
 ## Relay and validation boundaries
 
-The desktop Central Authority maintains an authenticated outbound session to
+The Central Authority full node maintains an authenticated outbound session to
 bootstrap, allowing nodes behind NAT to submit operations and receive finalized
-history. Bootstrap relays exact operation bytes only while the Authority is
-reachable; it has no durable shared pending-operation pool. It relays/caches
-finalized blocks but does not decide validity or finality. The Authority full
-node performs consensus checks and signs; receiving full nodes independently
-verify every block, operation, certificate, and state root. If the Authority
-is offline, clients retain exact signed operations and report finalizer
-unavailability for retry.
+history without publishing the Authority's address. Bootstrap relays exact
+operation bytes only while an authenticated finalizer session is live; it may
+use a bounded in-memory queue for transient delivery, but has no durable shared
+pending-operation pool. If no such session is live, clients retain exact
+signed operations and report `FINALIZER_UNAVAILABLE` for retry. Bootstrap
+relays/caches finalized blocks but does not decide validity or finality. The
+Authority full node performs consensus checks and signs; receiving full nodes
+independently verify every block, operation, certificate, and state root.
+
+Bootstrap's finalizer-authenticated session route is ephemeral memory state,
+not part of the durable NetworkBinding. Session teardown removes that route.
+The transport/session design does not make it safe to run independent
+simultaneous finalizers with the same private key. One active signer and the
+existing durable anti-equivocation journal remain required; key replication
+and signer failover need a separately specified safety mechanism.
 
 Bootstrap relay/cache data is not canonical merely because it came from the
 official service. Only a verified PoA-finalized block advances local canonical

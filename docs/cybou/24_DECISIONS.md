@@ -62,6 +62,9 @@ Git history.
 | DEC-221 | Replacing a bound network requires authorization by the current Authority key, proof by the new key, and both signatures when the key changes; clients reject generation rollback. | Frozen target; implementation/cutover pending |
 | DEC-222 | A bootstrap transport identity is separate from PoA/Identity keys and must be pinned through a trusted release or approved out-of-band source. A self-asserted network key from bootstrap is not a trust anchor. | Frozen target; implementation/cutover pending |
 | DEC-223 | Headless finalizer/provider processes are LAB/test topology only; the official DEV VPS target is not a finalizer or provider. | Frozen target; implementation/cutover pending |
+| DEC-224 | Central Authority identity is possession of the genesis PoA key, not an IP, hostname, endpoint, or persistent NodeID. Bootstrap authenticates its current route per fresh live CYP2 session and forgets it at disconnect. | Frozen target; implementation/cutover pending |
+| DEC-225 | Bootstrap may relay to a live authenticated finalizer session and use bounded transient memory buffering, but keeps no durable shared pending-operation pool or Authority location record. | Frozen target; implementation/cutover pending |
+| DEC-226 | Authority mobility does not permit concurrent independent signers sharing one PoA key; one active signer and durable anti-equivocation safety remain required. | Frozen target; implementation/cutover pending |
 
 ## Fixed economics
 
