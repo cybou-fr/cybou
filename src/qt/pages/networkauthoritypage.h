@@ -14,10 +14,9 @@ class QLabel;
 class QVBoxLayout;
 
 /**
- * Network Authority: visible only when the unlocked Identity's recovery
- * phrase derives this network's genesis PoA finalizer key. A read-only
- * monitor over this node's own validated finalized state. The desktop never
- * signs blocks: a second signer would trip the equivocation halt.
+ * Central Authority: visible only when the unlocked Identity derives this
+ * network's genesis PoA finalizer key. Reports this node's independently
+ * validated finalized state and the local finalizer's operating model.
  */
 class NetworkAuthorityPage : public QWidget
 {

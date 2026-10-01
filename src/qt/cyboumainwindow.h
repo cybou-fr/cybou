@@ -7,6 +7,8 @@
 
 #include <QElapsedTimer>
 #include <QMainWindow>
+#include <QMetaObject>
+#include <QTranslator>
 #include <QSet>
 #include <QVector>
 
@@ -58,6 +60,7 @@ public:
     void showPage(CybouPage page);
     /** Rebuilds the shell so every page picks up a new appearance. */
     void reloadAppearance();
+    void setLanguage(const QString& language);
 
     /** Page access used by desktop shell smoke tests. */
     CybouDesktopModel* desktopModel() const { return m_desktop_model; }
@@ -102,7 +105,10 @@ private:
     CybouUi::Notifier* m_notifier{nullptr};
     /** Notified items ("mail:<id>", "pay:<id>"); primed with what exists at unlock. */
     QSet<QString> m_notified;
+    QTranslator m_french_translator;
+    QVector<QMetaObject::Connection> m_shell_connections;
     bool m_notify_primed{false};
+    bool m_constructed{false};
     QString m_notification_target;
     QElapsedTimer m_last_input;
 
@@ -114,6 +120,7 @@ private:
     QFrame* buildHeader(QWidget* parent);
     void buildMenus();
     void buildTrayMenu();
+    void rebuildTrayMenu();
     void applyStyle();
     void addPage(QWidget* page, bool scrolls);
     void refreshHeader();

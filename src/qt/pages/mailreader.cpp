@@ -291,7 +291,7 @@ void MailReader::refresh()
     m_sender_name->setText(DisplayName(*m_model, item->from_name));
     m_sender->setText(item->from_name);
     m_recipient->setText(tr("To: %1").arg(item->to_name));
-    m_time->setText(QLocale{QLocale::English}.toString(item->time, QStringLiteral("MMM d, HH:mm")));
+    m_time->setText(QLocale{}.toString(item->time, QStringLiteral("MMM d, HH:mm")));
     m_star->setChecked(item->starred);
     m_star->setIcon(QIcon{glyphPixmap(Glyph::Star, {18, 18}, CybouTheme::color(item->starred ? CybouTheme::AMBER : CybouTheme::TEXT_SECONDARY))});
     m_archive->setToolTip(item->folder == CybouMailFolder::Archive ? tr("Move to Inbox") : tr("Archive"));

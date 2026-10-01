@@ -26,6 +26,7 @@ public:
 
     /** Set by the shell: re-renders the app after an appearance change. */
     std::function<void()> onAppearanceChanged;
+    std::function<void(const QString&)> onLanguageChanged;
 
     /** QSettings keys shared with the shell. */
     static QString runInBackgroundKey() { return QStringLiteral("desktop/run_in_background"); }
@@ -38,10 +39,12 @@ public:
     static QString downloadFolderKey() { return QStringLiteral("files/download_folder"); }
     /** Show "Validated" on operations (informational; only finality is canonical). */
     static QString showValidationKey() { return QStringLiteral("network/show_validation"); }
+    static QString languageKey() { return QStringLiteral("desktop/language"); }
 
 private:
     CybouDesktopModel* const m_model;
     QComboBox* m_appearance{nullptr};
+    QComboBox* m_language{nullptr};
     QCheckBox* m_start_with_windows{nullptr};
     QCheckBox* m_run_in_background{nullptr};
     QCheckBox* m_mail_previews{nullptr};

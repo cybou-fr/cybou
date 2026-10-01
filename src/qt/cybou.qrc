@@ -1,4 +1,7 @@
 <RCC>
+    <qresource prefix="/i18n">
+        <file alias="cybou_fr.qm">translations/cybou_fr.qm</file>
+    </qresource>
     <qresource prefix="/network">
         <file alias="cybou-dev-network.bin">res/network/cybou-dev-network.bin</file>
     </qresource>

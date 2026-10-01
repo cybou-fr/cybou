@@ -90,10 +90,9 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     auto* root = new QVBoxLayout{this};
     root->setContentsMargins(28, 24, 28, 28);
     root->setSpacing(16);
-    auto* proof = MutedText(tr("This Identity's recovery phrase derives the genesis PoA finalizer key of this network: "
-                               "it is the network's PoA finalizer. This page is a read-only view of the finalized "
-                               "state this computer validated itself. Blocks are signed only by the PoA finalizer; "
-                               "this app never signs."), this);
+    auto* proof = MutedText(tr("This Identity derives this network's genesis PoA key. When its vault is unlocked, "
+                               "this desktop can operate the PoA finalizer through a vault-backed signer. "
+                               "This page reports finalized state independently validated by this node."), this);
     proof->setObjectName(QStringLiteral("networkAuthorityProof"));
     root->addWidget(proof);
 
@@ -140,6 +139,7 @@ void NetworkAuthorityPage::refresh()
     m_peers->setText(QString::number(d.peers.size()));
 
     ClearLayout(m_finality);
+    Row(m_finality, tr("Local PoA signer"), a.signer_enabled ? tr("Enabled in the unlocked vault") : tr("Not enabled"));
     Row(m_finality, tr("Model"), tr("Genesis-bound single-operator hybrid-PQ PoA (centralized finality, not BFT)"));
     Row(m_finality, tr("Finalizer key"), tr("Matches this Identity's recovery phrase (proven from genesis)"));
     Row(m_finality, tr("Liveness"), age > 120

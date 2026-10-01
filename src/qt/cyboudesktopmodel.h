@@ -85,6 +85,8 @@ struct CybouDesktopStatus {
  */
 struct CybouNetworkAuthorityStatus {
     bool proven{false};
+    /** Local runtime signer state; this is not a canonical network property. */
+    bool signer_enabled{false};
     quint64 finalized_height{0};
     quint64 identities{0};
     quint64 names{0};

@@ -326,6 +326,7 @@ void CybouDesktopController::publishNetworkAuthority()
     CybouNetworkAuthorityStatus status;
     std::lock_guard identity_access{m_identity_access_mutex};
     if (m_identity_service && m_node_service && m_identity_service->IsNetworkAuthority()) {
+        status.signer_enabled = m_node_service->Runtime().IsPoaFinalizerEnabled();
         const auto loaded = m_node_service->Runtime().GetStore().LoadState();
         if (loaded && loaded.state) {
             const auto& state = *loaded.state;

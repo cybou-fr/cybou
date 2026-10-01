@@ -770,7 +770,7 @@ CybouMailItem EmailPage::replyTo(const QString& id) const
     reply.subject = item->subject.startsWith(QStringLiteral("Re:")) ? item->subject : tr("Re: %1").arg(item->subject);
     QString quoted;
     for (const auto& line : item->body.split(QLatin1Char{'\n'})) quoted += QStringLiteral("> %1\n").arg(line);
-    reply.body = tr("\n\nOn %1, %2 wrote:\n%3").arg(QLocale{QLocale::English}.toString(item->time, QStringLiteral("MMM d, HH:mm")),
+    reply.body = tr("\n\nOn %1, %2 wrote:\n%3").arg(QLocale{}.toString(item->time, QStringLiteral("MMM d, HH:mm")),
         item->from_name, quoted);
     return reply;
 }

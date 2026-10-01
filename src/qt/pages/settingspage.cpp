@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QStandardPaths>
 #include <QVBoxLayout>
 
@@ -100,6 +101,25 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
     connect(m_run_in_background, &QCheckBox::toggled, this,
         [](bool on) { QSettings{}.setValue(runInBackgroundKey(), on); });
     general->addWidget(m_run_in_background);
+
+    auto* language_row = new QHBoxLayout;
+    auto* language_caption = new QLabel{tr("Language"), this};
+    language_caption->setObjectName(QStringLiteral("rowSub"));
+    language_row->addWidget(language_caption);
+    m_language = new QComboBox{this};
+    m_language->setObjectName(QStringLiteral("language"));
+    m_language->setAccessibleName(tr("Language"));
+    m_language->addItem(QStringLiteral("Français"), QStringLiteral("fr"));
+    m_language->addItem(QStringLiteral("English"), QStringLiteral("en"));
+    m_language->setMinimumWidth(200);
+    language_row->addWidget(m_language);
+    language_row->addStretch();
+    general->addLayout(language_row);
+    connect(m_language, &QComboBox::activated, this, [this](int index) {
+        const QString language = m_language->itemData(index).toString();
+        QSettings{}.setValue(languageKey(), language);
+        QTimer::singleShot(0, this, [fn = onLanguageChanged, language] { if (fn) fn(language); });
+    });
 
     auto* appearance = Section(root, tr("Appearance"), {}, this);
     auto* appearance_row = new QHBoxLayout;
@@ -228,10 +248,13 @@ void SettingsPage::refresh()
     const QSignalBlocker b2{m_run_in_background};
     const QSignalBlocker b3{m_mail_previews};
     const QSignalBlocker b4{m_appearance};
+    const QSignalBlocker b_language{m_language};
     const QSignalBlocker b5{m_show_validation};
     m_validation_section->setVisible(m_model->capabilities().validation);
     m_show_validation->setChecked(m_model->validationStatusShown());
     m_appearance->setCurrentIndex(m_appearance->findData(static_cast<int>(CybouTheme::savedAppearance())));
+    m_language->setCurrentIndex(std::max(0, m_language->findData(
+        QSettings{}.value(languageKey(), QStringLiteral("fr")).toString())));
     m_start_with_windows->setChecked(StartsWithWindows());
     m_run_in_background->setChecked(QSettings{}.value(runInBackgroundKey(), false).toBool());
     m_mail_previews->setChecked(QSettings{}.value(mailPreviewsKey(), false).toBool());

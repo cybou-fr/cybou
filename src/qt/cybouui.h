@@ -674,8 +674,8 @@ inline QString shortTime(const QDateTime& when, const QDateTime& now = QDateTime
 {
     if (!when.isValid()) return {};
     if (when.date() == now.date()) return when.toString(QStringLiteral("HH:mm"));
-    if (when.daysTo(now) < 7) return QLocale{QLocale::English}.toString(when, QStringLiteral("ddd"));
-    return QLocale{QLocale::English}.toString(when, QStringLiteral("MMM d"));
+    if (when.daysTo(now) < 7) return QLocale{}.toString(when, QStringLiteral("ddd"));
+    return QLocale{}.toString(when, QStringLiteral("MMM d"));
 }
 
 inline QString relTime(const QDateTime& when, const QDateTime& now = QDateTime::currentDateTime())

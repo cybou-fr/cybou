@@ -43,6 +43,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QSettings>
 #include <QStackedWidget>
 #include <QTextEdit>
 #include <QPlainTextEdit>
@@ -197,6 +198,7 @@ std::unique_ptr<CybouMainWindow> CybouShellTests::makeWindow()
 {
     // Tests render the light appearance unless a test forces another.
     if (!qEnvironmentVariableIsSet("CYBOU_APPEARANCE")) qputenv("CYBOU_APPEARANCE", "light");
+    QSettings{}.setValue(QStringLiteral("desktop/language"), QStringLiteral("en"));
     return std::make_unique<CybouMainWindow>(std::filesystem::path{});
 }
 
@@ -1125,6 +1127,39 @@ void CybouShellTests::darkAppearanceResolvesTokens()
     CybouTheme::setAppearance(CybouTheme::Appearance::Light);
     CybouTheme::applyTo(*qApp);
     QVERIFY(!CybouTheme::isDark());
+}
+
+void CybouShellTests::languageSwitchRebuildsShell()
+{
+    const QString saved_language = QSettings{}.value(QStringLiteral("desktop/language"), QStringLiteral("fr")).toString();
+    auto window = makeWindow();
+    window->showPage(CybouPage::Files);
+    window->setLanguage(QStringLiteral("fr"));
+    auto* home = window->findChild<QToolButton*>(QStringLiteral("navButton0"));
+    QVERIFY(home);
+    QCOMPARE(home->accessibleName(), QStringLiteral("Accueil"));
+    window->desktopModel()->setNetworkAuthority(CybouNetworkAuthorityStatus{.proven = true});
+    auto* authority_nav = window->findChild<QToolButton*>(QStringLiteral("navButton7"));
+    QVERIFY(authority_nav);
+    QVERIFY(!authority_nav->isHidden());
+    QCOMPARE(authority_nav->accessibleName(), QStringLiteral("Autorité centrale"));
+    auto* authority_proof = window->findChild<QLabel*>(QStringLiteral("networkAuthorityProof"));
+    QVERIFY(authority_proof);
+    QVERIFY(authority_proof->text().contains(QStringLiteral("signataire")));
+    QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Files));
+
+    const auto* old_page = window->page(CybouPage::Files);
+    window->setLanguage(QStringLiteral("en"));
+    home = window->findChild<QToolButton*>(QStringLiteral("navButton0"));
+    QVERIFY(home);
+    QCOMPARE(home->accessibleName(), QStringLiteral("Home"));
+    authority_nav = window->findChild<QToolButton*>(QStringLiteral("navButton7"));
+    QVERIFY(authority_nav);
+    QVERIFY(!authority_nav->isHidden());
+    QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Files));
+    QVERIFY(window->page(CybouPage::Files) != old_page);
+
+    window->setLanguage(saved_language);
 }
 
 void CybouShellTests::mailContextMenuAndMoves()

@@ -46,6 +46,7 @@
 #include <QScrollArea>
 #include <QSettings>
 #include <QSystemTrayIcon>
+#include <QLocale>
 
 #include <cstdlib>
 #include <QStackedWidget>
@@ -93,7 +94,7 @@ QString PageTitle(CybouPage page)
     case CybouPage::Identity: return CybouMainWindow::tr("Identity & Security");
     case CybouPage::Diagnostics: return CybouMainWindow::tr("Diagnostics");
     case CybouPage::Settings: return CybouMainWindow::tr("Settings");
-    case CybouPage::NetworkAuthority: return CybouMainWindow::tr("Network Authority");
+    case CybouPage::NetworkAuthority: return CybouMainWindow::tr("Central Authority");
     }
     return {};
 }
@@ -113,6 +114,7 @@ CybouMainWindow::CybouMainWindow(std::filesystem::path data_directory, QWidget* 
       m_pages{new QStackedWidget{this}},
       m_navigation{new QButtonGroup{this}}
 {
+    setLanguage(QSettings{}.value(QStringLiteral("desktop/language"), QStringLiteral("fr")).toString());
     connect(m_controller.get(), &CybouDesktopController::startupFailed, this,
         [this](const QString& reason) {
             QTimer::singleShot(0, this, [this, reason] {
@@ -151,9 +153,14 @@ CybouMainWindow::CybouMainWindow(std::filesystem::path data_directory, QWidget* 
         const int delay_ms = qEnvironmentVariableIntValue("CYBOU_SCREENSHOT_DELAY_MS");
         QTimer::singleShot(delay_ms > 0 ? delay_ms : 1500, this, [this, shot_dir] { runScreenshotHarness(shot_dir); });
     }
+    m_constructed = true;
 }
 
-CybouMainWindow::~CybouMainWindow() = default;
+CybouMainWindow::~CybouMainWindow()
+{
+    if (auto* app = qobject_cast<QApplication*>(QApplication::instance()))
+        app->removeTranslator(&m_french_translator);
+}
 
 void CybouMainWindow::startRuntime()
 {
@@ -430,6 +437,7 @@ void CybouMainWindow::buildShell()
     auto* diagnostics = new DiagnosticsPage{m_desktop_model, [this] { showDebugWindow(); }, nullptr};
     auto* settings = new SettingsPage{m_desktop_model, [this] { showPage(CybouPage::Diagnostics); }, nullptr};
     settings->onAppearanceChanged = [this] { reloadAppearance(); };
+    settings->onLanguageChanged = [this](const QString& language) { setLanguage(language); };
     identity->onSetupRequested = [this, home](bool restore) {
         showPage(CybouPage::Home);
         if (restore) home->onboarding()->beginRestore();
@@ -474,11 +482,13 @@ void CybouMainWindow::buildShell()
     m_activity->onOpenWallet = [this] { showPage(CybouPage::Wallet); };
     m_activity->onOpenIdentity = [this] { showPage(CybouPage::Identity); };
     addPage(new NetworkAuthorityPage{m_desktop_model, nullptr}, true);
-    connect(m_desktop_model, &CybouDesktopModel::networkAuthorityChanged, this, [this] {
+    m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::networkAuthorityChanged, this, [this] {
         const bool authority = m_desktop_model->isNetworkAuthority();
         m_navigation->button(static_cast<int>(CybouPage::NetworkAuthority))->setVisible(authority);
         if (!authority && m_pages->currentIndex() == static_cast<int>(CybouPage::NetworkAuthority)) showPage(CybouPage::Home);
-    });
+    }));
+    m_navigation->button(static_cast<int>(CybouPage::NetworkAuthority))
+        ->setVisible(m_desktop_model->isNetworkAuthority());
 
     connect(m_navigation, &QButtonGroup::idClicked, this, [this](int id) { showPage(static_cast<CybouPage>(id)); });
     m_navigation->button(0)->setChecked(true);
@@ -487,17 +497,17 @@ void CybouMainWindow::buildShell()
     shell_layout->addWidget(main_column, 1);
     setCentralWidget(shell);
 
-    connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, [this] { refreshHeader(); });
-    connect(m_desktop_model, &CybouDesktopModel::mailChanged, this, [this] { rebuildSearchIndex(); });
-    connect(m_desktop_model, &CybouDesktopModel::filesChanged, this, [this] { rebuildSearchIndex(); });
+    m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, [this] { refreshHeader(); }));
+    m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::mailChanged, this, [this] { rebuildSearchIndex(); }));
+    m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::filesChanged, this, [this] { rebuildSearchIndex(); }));
     refreshHeader();
     rebuildSearchIndex();
 
     m_notifier = new CybouUi::Notifier{main_column};
-    connect(m_desktop_model, &CybouDesktopModel::notificationRequested, this,
+    m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::notificationRequested, this,
         [this](const QString& text, const QString& action_label, std::function<void()> action) {
             m_notifier->show(text, action_label, std::move(action));
-        });
+        }));
 }
 
 void CybouMainWindow::refreshHeader()
@@ -629,6 +639,29 @@ void CybouMainWindow::submitSearch(const QString& text)
 void CybouMainWindow::buildTrayMenu()
 {
     if (!QSystemTrayIcon::isSystemTrayAvailable()) return;
+    // An explicit icon: windowIcon() can still be empty here ("No Icon set").
+    const QIcon tray_icon = windowIcon().isNull()
+        ? QIcon{CybouTheme::logoTile({32, 32}, 8, {22, 22})} : windowIcon();
+    m_tray_icon = new QSystemTrayIcon{tray_icon, this};
+    m_tray_icon->setToolTip(tr("CYBOU"));
+    connect(m_tray_icon, &QSystemTrayIcon::messageClicked, this, [this] { openNotificationTarget(); });
+    connect(m_tray_icon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::Trigger) {
+            showNormal();
+            raise();
+            activateWindow();
+        }
+    });
+    rebuildTrayMenu();
+}
+
+void CybouMainWindow::rebuildTrayMenu()
+{
+    if (!m_tray_icon) return;
+    if (m_tray_menu) {
+        m_tray_icon->setContextMenu(nullptr);
+        m_tray_menu->deleteLater();
+    }
     m_tray_menu = new QMenu{this};
     m_tray_menu->addAction(tr("Open CYBOU"), this, [this] {
         showNormal();
@@ -641,20 +674,7 @@ void CybouMainWindow::buildTrayMenu()
     });
     m_tray_menu->addSeparator();
     m_tray_menu->addAction(tr("Quit CYBOU"), this, [this] { Q_EMIT quitRequested(); });
-    // An explicit icon: windowIcon() can still be empty here ("No Icon set").
-    const QIcon tray_icon = windowIcon().isNull()
-        ? QIcon{CybouTheme::logoTile({32, 32}, 8, {22, 22})} : windowIcon();
-    m_tray_icon = new QSystemTrayIcon{tray_icon, this};
-    m_tray_icon->setToolTip(tr("CYBOU"));
-    connect(m_tray_icon, &QSystemTrayIcon::messageClicked, this, [this] { openNotificationTarget(); });
     m_tray_icon->setContextMenu(m_tray_menu);
-    connect(m_tray_icon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
-        if (reason == QSystemTrayIcon::Trigger) {
-            showNormal();
-            raise();
-            activateWindow();
-        }
-    });
     m_tray_icon->show();
 }
 
@@ -870,6 +890,8 @@ void CybouMainWindow::reloadAppearance()
     // Pages bake colors into pixmaps and inline styles: rebuild them. All
     // product state lives in the model, so nothing is lost.
     if (QWidget* old = takeCentralWidget()) old->deleteLater();
+    for (const auto& connection : m_shell_connections) disconnect(connection);
+    m_shell_connections.clear();
     for (auto* button : m_navigation->buttons()) m_navigation->removeButton(button);
     m_page_widgets.clear();
     m_pages = new QStackedWidget{this};
@@ -877,6 +899,23 @@ void CybouMainWindow::reloadAppearance()
     buildShell();
     setSidebarCompact(width() < 1180);
     showPage(current);
+}
+
+void CybouMainWindow::setLanguage(const QString& language)
+{
+    const bool french = language.compare(QStringLiteral("fr"), Qt::CaseInsensitive) == 0;
+    auto* app = qobject_cast<QApplication*>(QApplication::instance());
+    if (!app) return;
+    app->removeTranslator(&m_french_translator);
+    QLocale::setDefault(QLocale{french ? QLocale::French : QLocale::English});
+    if (french && m_french_translator.load(QStringLiteral(":/i18n/cybou_fr.qm")))
+        app->installTranslator(&m_french_translator);
+    QSettings{}.setValue(QStringLiteral("desktop/language"), french ? QStringLiteral("fr") : QStringLiteral("en"));
+    if (m_constructed) {
+        reloadAppearance();
+        rebuildTrayMenu();
+        if (m_tray_icon) m_tray_icon->setToolTip(tr("CYBOU"));
+    }
 }
 
 void CybouMainWindow::applyStyle()

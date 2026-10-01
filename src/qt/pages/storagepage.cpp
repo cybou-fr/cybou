@@ -86,7 +86,7 @@ QString ModifiedText(const QDateTime& when)
     if (!when.isValid()) return {};
     if (when.date() == now.date()) return StoragePage::tr("Today");
     if (when.date() == now.date().addDays(-1)) return StoragePage::tr("Yesterday");
-    return QLocale{QLocale::English}.toString(when, QStringLiteral("MMM d"));
+    return QLocale{}.toString(when, QStringLiteral("MMM d"));
 }
 
 QToolButton* ToggleButton(Glyph glyph, const QString& tooltip, QWidget* parent)
