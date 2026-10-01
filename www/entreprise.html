@@ -122,7 +122,7 @@
     <nav class="compliance-nav-pills" aria-label="Sommaire Entreprise">
       <a href="#avantages" class="nav-pill-btn" data-i18n="ePillAdv">Avantages Clés</a>
       <a href="#architecture-privee" class="nav-pill-btn" data-i18n="ePillArch">Isolation &amp; Genèse</a>
-      <a href="#modes-deploiement" class="nav-pill-btn" data-i18n="ePillModes">Modes de Déploiement</a>
+      <a href="#modes-deploiement" class="nav-pill-btn" data-i18n="ePillModes">Réseau dédié</a>
       <a href="#gouvernance" class="nav-pill-btn" data-i18n="ePillGov">Gouvernance DSI</a>
       <a href="#cas-usage" class="nav-pill-btn" data-i18n="ePillUse">Cas d'Usage</a>
       <a href="#tarifs" class="nav-pill-btn" data-i18n="ePillPricing">Tarifs &amp; Budget</a>
@@ -277,80 +277,25 @@
       </div>
     </article>
 
-    <!-- 3. Topologies de Déploiement -->
+    <!-- 3. Réseau dédié -->
     <article class="compliance-article" id="modes-deploiement">
       <div class="compliance-article-header">
         <div class="compliance-tag-row">
-          <span class="compliance-pill" data-i18n="eArt3Pill">Flexibilité Industrielle</span>
-          <span class="compliance-status-good" data-i18n="eArt3Status">3 Topologies Recommandées</span>
+          <span class="compliance-pill" data-i18n="eArt3Pill">Réseau d'entreprise dédié</span>
+          <span class="compliance-status-good" data-i18n="eArt3Status">Clés sous votre contrôle</span>
         </div>
-        <h2 class="compliance-article-title" data-i18n="eArt3Title">Trois modes de déploiement selon votre criticité</h2>
-        <div class="compliance-article-sub" data-i18n="eArt3Sub">CYBOU s'adapte à tous les niveaux d'exigence, du réseau étanche sans Internet aux infrastructures multi-sites réparties.</div>
+        <h2 class="compliance-article-title" data-i18n="eArt3Title">Une instance CYBOU, gouvernée par votre organisation</h2>
+        <div class="compliance-article-sub" data-i18n="eArt3Sub">Nous créons un réseau privé distinct, cryptographiquement séparé des autres réseaux CYBOU et contrôlé par l'administration de votre entreprise.</div>
       </div>
 
-      <div class="deploy-modes-grid">
-        <!-- Mode 1: Air-Gap -->
-        <div class="deploy-mode-card">
-          <div class="deploy-mode-tag" data-i18n="eMode1Tag">Défense &amp; R&amp;D Critique</div>
-          <h3 data-i18n="eMode1Title">1. Déploiement Air-Gap (Enclave Fermée)</h3>
-          <p data-i18n="eMode1Desc">Réseau 100% autonome et déconnecté d'Internet. Tout le trafic P2P, le stockage et les signatures circulent exclusivement sur votre réseau local sécurisé ou fibre dédiée.</p>
-          <ul class="deploy-features-list">
-            <li>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-              <span data-i18n="eMode1F1">Zéro connexion externe</span>
-            </li>
-            <li>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-              <span data-i18n="eMode1F2">Secret de fabrication et brevets</span>
-            </li>
-            <li>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-              <span data-i18n="eMode1F3">Protection contre toute exfiltration</span>
-            </li>
-          </ul>
-        </div>
-
-        <!-- Mode 2: Multi-Sites Intranet -->
-        <div class="deploy-mode-card">
-          <div class="deploy-mode-tag" data-i18n="eMode2Tag">Groupes &amp; ETI</div>
-          <h3 data-i18n="eMode2Title">2. Intranet &amp; VPN Multi-Sites</h3>
-          <p data-i18n="eMode2Desc">Interconnexion sécurisée entre vos sièges, bureaux d'études et usines distantes via vos liens MPLS, SD-WAN ou tunnels VPN chiffrés (IPsec / WireGuard).</p>
-          <ul class="deploy-features-list">
-            <li>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-              <span data-i18n="eMode2F1">Réplication multi-datacenters</span>
-            </li>
-            <li>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-              <span data-i18n="eMode2F2">Continuité en cas de rupture de site</span>
-            </li>
-            <li>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-              <span data-i18n="eMode2F3">Gestion centralisée par la DSI</span>
-            </li>
-          </ul>
-        </div>
-
-        <!-- Mode 3: Cloud Souverain Dédié -->
-        <div class="deploy-mode-card">
-          <div class="deploy-mode-tag" data-i18n="eMode3Tag">Secteur Public &amp; Santé</div>
-          <h3 data-i18n="eMode3Title">3. Cloud Souverain Privé (SecNumCloud / HDS)</h3>
-          <p data-i18n="eMode3Desc">Vos serveurs de stockage et nœuds bootstrap sont déployés sur des instances dédiées chez un fournisseur de cloud souverain français qualifié (OVHcloud, Scaleway, 3DS Outscale).</p>
-          <ul class="deploy-features-list">
-            <li>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-              <span data-i18n="eMode3F1">Conformité HDS &amp; SecNumCloud</span>
-            </li>
-            <li>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-              <span data-i18n="eMode3F2">Zéro investissement matériel lourd</span>
-            </li>
-            <li>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-              <span data-i18n="eMode3F3">Chiffrement client inviolable</span>
-            </li>
-          </ul>
-        </div>
+      <div class="compliance-prose">
+        <p data-i18n="eArt3P1">Le réseau utilise le logiciel CYBOU, avec sa propre définition de genèse, ses clés d'autorité et ses paramètres réseau. La clé de finalité PoA est détenue par votre organisation ; CYBOU Central Authority n'administre pas et ne finalise pas votre réseau.</p>
+        <ul>
+          <li data-i18n="eArt3F1">Votre administration définit les nœuds bootstrap et leurs adresses IP.</li>
+          <li data-i18n="eArt3F2">Les règles d'admission des pairs par IP sont configurées pour votre réseau.</li>
+          <li data-i18n="eArt3F3">Votre organisation choisit l'infrastructure sur laquelle les nœuds fonctionnent.</li>
+        </ul>
+        <p data-i18n="eArt3P2">Internet, intranet ou autre infrastructure d'accès ne sont pas des offres réseau différentes : votre entreprise choisit où et comment exploiter son réseau privé CYBOU.</p>
       </div>
     </article>
 
