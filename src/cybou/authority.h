@@ -18,43 +18,18 @@
 namespace cybou {
 
 class CybouNodeRuntime;
+inline constexpr std::uint64_t AUTHORITY_VALIDATOR_QUALIFICATION{1'000'000};
 
 /**
- * Identity Authority v1 policy (docs/cybou/57, 67).
- *
- * DERIVED PREVIEW: these values are computed deterministically from finalized
- * history but are not part of consensus and are not enforced. Enforcement
- * requires immutable policy bound to NetworkID and canonical accumulators
- * (or an equivalently consensus-deterministic accounting specification).
- * Persisting this rebuildable preview does not make it enforcement-ready.
+ * Local indexing policy for the informational Authority metric. It has no
+ * protocol, resource-allocation, or PoA effect.
  */
 struct AuthorityPolicy {
     /** Most Activity credited per Identity per epoch. */
     std::uint64_t activity_cap_per_epoch{16};
-    std::uint32_t max_tier{16};
-
-    /** ProtocolBudget: canonical operations per epoch. */
-    std::uint64_t protocol_base{64};
-    std::uint64_t protocol_per_tier{32};
-    std::uint64_t protocol_ceiling{2048};
-    /** StorageBudget: active remote replicated bytes. */
-    std::uint64_t storage_base{256ULL << 20};
-    std::uint64_t storage_per_tier{512ULL << 20};
-    std::uint64_t storage_ceiling{64ULL << 30};
-    /** BandwidthBudget: PUT/GET bytes per epoch. */
-    std::uint64_t bandwidth_base{2ULL << 30};
-    std::uint64_t bandwidth_per_tier{2ULL << 30};
-    std::uint64_t bandwidth_ceiling{256ULL << 30};
 };
 
-struct AuthorityBudgets {
-    std::uint64_t protocol_operations_per_epoch{0};
-    std::uint64_t storage_bytes{0};
-    std::uint64_t bandwidth_bytes_per_epoch{0};
-    bool operator==(const AuthorityBudgets&) const = default;
-};
-
-/** Earnings and penalties are accumulated separately. */
+/** Read-only values derived from finalized history and current finalized state. */
 struct AuthorityRecord {
     AccountId account_id;
     std::uint64_t creation_epoch{0};
@@ -62,18 +37,7 @@ struct AuthorityRecord {
     std::uint64_t age{0};
     std::uint64_t activity{0};
     std::uint64_t system_contribution{0};
-    /** Zero until canonical NodeID binding and uptime evidence exist. */
-    std::uint64_t liveness{0};
-    /** Zero until canonical verified-storage evidence exists. */
-    std::uint64_t storage{0};
-    /** Zero until canonical attributable misbehaviour evidence exists. */
-    std::uint64_t penalty_debt{0};
-    std::uint64_t earned{0};
-    std::uint64_t effective{0};
-    std::uint32_t tier{0};
-    AuthorityBudgets budgets;
-    /** Always false for v1: the values are a derived preview. */
-    bool enforced{false};
+    std::uint64_t value{0};
 };
 
 /** Saturating integer arithmetic used by every Authority computation. */
@@ -81,15 +45,6 @@ constexpr std::uint64_t SaturatingAdd(std::uint64_t a, std::uint64_t b)
 {
     return a > UINT64_MAX - b ? UINT64_MAX : a + b;
 }
-
-constexpr std::uint64_t SaturatingMul(std::uint64_t a, std::uint64_t b)
-{
-    return a != 0 && b > UINT64_MAX / a ? UINT64_MAX : a * b;
-}
-
-/** tier = min(max_tier, floor(log2(effective + 1))), with integer bit operations. */
-std::uint32_t AuthorityTier(std::uint64_t effective, std::uint32_t max_tier);
-AuthorityBudgets AuthorityBudgetsForTier(std::uint32_t tier, const AuthorityPolicy& policy);
 
 /** The Identity whose authorization a finalized operation carries, if any. */
 std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation);

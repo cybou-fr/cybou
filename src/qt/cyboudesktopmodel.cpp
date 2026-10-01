@@ -1279,6 +1279,10 @@ CybouIdentityStep StepForPhase(cybou::IdentityCreationPhase phase)
 
 void CybouDesktopModel::requestCreateIdentity(const QString& vault_password)
 {
+    if (m_status.syncing) {
+        Q_EMIT identityCreationFailed(tr("Wait for the network to finish syncing before creating an Identity."));
+        return;
+    }
     // The UI boundary ends here: anti-Sybil work, operation construction and
     // finality handling belong to core. The flag is request bookkeeping only.
     m_identity_request_pending = true;
@@ -1314,6 +1318,7 @@ void CybouDesktopModel::requestCreateIdentity(const QString& vault_password)
 
 bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, const QString& vault_password)
 {
+    if (m_status.syncing) return false;
     if (!recoveryPhraseValid(recovery_phrase)) return false;
     if (!m_identity_service) {
         // Fixture mode: hand the request to the fixture driver.

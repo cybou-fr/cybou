@@ -26,8 +26,11 @@ trust choice, not network admission or consensus eligibility. A recipient can
 choose any number of opinions and can ignore them all.
 
 Validation never means `FINALIZED`. Only a locally verified PoA block makes an
-operation final. Validation cannot authorize a provider PUT or promise
-durability.
+operation final. A Validation claim does not satisfy the finality and Merkle
+proof required by the current chunk-admission protocol. A provider may in the
+future make a separate local decision to offer a provisional resource based
+on Validation or other evidence, entirely at its own risk; that choice creates
+no canonical right or durability guarantee and is not implemented.
 
 ## Scope
 

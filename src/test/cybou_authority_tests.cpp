@@ -73,32 +73,9 @@ void Publish(ShortEpochNetwork& net, cybou::CybouIdentityService& identity, cybo
 
 BOOST_AUTO_TEST_SUITE(cybou_authority_tests)
 
-BOOST_AUTO_TEST_CASE(tier_is_integer_log2_and_saturates)
+BOOST_AUTO_TEST_CASE(authority_arithmetic_saturates)
 {
-    BOOST_CHECK_EQUAL(cybou::AuthorityTier(0, 16), 0U);
-    BOOST_CHECK_EQUAL(cybou::AuthorityTier(1, 16), 1U);
-    BOOST_CHECK_EQUAL(cybou::AuthorityTier(2, 16), 1U);
-    BOOST_CHECK_EQUAL(cybou::AuthorityTier(3, 16), 2U);
-    BOOST_CHECK_EQUAL(cybou::AuthorityTier(1023, 16), 10U);
-    BOOST_CHECK_EQUAL(cybou::AuthorityTier(UINT64_MAX, 16), 16U);
-    BOOST_CHECK_EQUAL(cybou::AuthorityTier(UINT64_MAX, 100), 63U);
     BOOST_CHECK_EQUAL(cybou::SaturatingAdd(UINT64_MAX, 1), UINT64_MAX);
-    BOOST_CHECK_EQUAL(cybou::SaturatingMul(UINT64_MAX, 2), UINT64_MAX);
-}
-
-BOOST_AUTO_TEST_CASE(budgets_have_nonzero_base_and_hard_ceilings)
-{
-    const cybou::AuthorityPolicy policy;
-    const auto base = cybou::AuthorityBudgetsForTier(0, policy);
-    BOOST_CHECK_EQUAL(base.protocol_operations_per_epoch, policy.protocol_base);
-    BOOST_CHECK_GT(base.storage_bytes, 0U);
-    BOOST_CHECK_GT(base.bandwidth_bytes_per_epoch, 0U);
-    const auto higher = cybou::AuthorityBudgetsForTier(3, policy);
-    BOOST_CHECK_GT(higher.protocol_operations_per_epoch, base.protocol_operations_per_epoch);
-    const auto top = cybou::AuthorityBudgetsForTier(UINT32_MAX, policy);
-    BOOST_CHECK_EQUAL(top.protocol_operations_per_epoch, policy.protocol_ceiling);
-    BOOST_CHECK_EQUAL(top.storage_bytes, policy.storage_ceiling);
-    BOOST_CHECK_EQUAL(top.bandwidth_bytes_per_epoch, policy.bandwidth_ceiling);
 }
 
 BOOST_AUTO_TEST_CASE(age_and_capped_activity_come_from_finalized_history)
@@ -116,8 +93,7 @@ BOOST_AUTO_TEST_CASE(age_and_capped_activity_come_from_finalized_history)
     BOOST_REQUIRE(fresh);
     BOOST_CHECK_EQUAL(fresh->activity, 0U);
     BOOST_CHECK_EQUAL(fresh->system_contribution, 0U);
-    BOOST_CHECK(!fresh->enforced);
-    BOOST_CHECK(fresh->budgets == cybou::AuthorityBudgetsForTier(fresh->tier, policy));
+    BOOST_CHECK_EQUAL(fresh->value, fresh->age + fresh->activity + fresh->system_contribution);
 
     cybou::KVStore staging{cybou::KVStoreOptions{.memory_only = true}};
     cybou::PrivateApplicationStore db{identity->GetKeyStore(), net.directory / "app"};
@@ -129,9 +105,7 @@ BOOST_AUTO_TEST_CASE(age_and_capped_activity_come_from_finalized_history)
     BOOST_CHECK_GE(later->activity, 2U);
     BOOST_CHECK_LE(later->activity, 4U);
     BOOST_CHECK_GT(later->age, fresh->age);
-    BOOST_CHECK_EQUAL(later->earned, later->age + later->activity);
-    BOOST_CHECK_EQUAL(later->effective, later->earned); // no penalty evidence exists
-    BOOST_CHECK_EQUAL(later->tier, cybou::AuthorityTier(later->effective, policy.max_tier));
+    BOOST_CHECK_EQUAL(later->value, later->age + later->activity + later->system_contribution);
 
     // Deterministic: a fresh index over the same history agrees exactly.
     cybou::AuthorityIndex rebuilt{*net.runtime, policy};
@@ -140,7 +114,7 @@ BOOST_AUTO_TEST_CASE(age_and_capped_activity_come_from_finalized_history)
     BOOST_REQUIRE(again);
     BOOST_CHECK_EQUAL(again->activity, later->activity);
     BOOST_CHECK_EQUAL(again->age, later->age);
-    BOOST_CHECK_EQUAL(again->effective, later->effective);
+    BOOST_CHECK_EQUAL(again->value, later->value);
 
     // Unknown Identities have no Authority record.
     BOOST_CHECK(!index.Get(cybou::AccountId{uint256::ONE}));
@@ -174,10 +148,13 @@ BOOST_AUTO_TEST_CASE(checkpoint_resumes_scan_and_is_only_a_rebuildable_cache)
         const auto again = resumed.Get(account);
         BOOST_REQUIRE(again);
         BOOST_CHECK_EQUAL(again->activity, scanned->activity);
-        BOOST_CHECK_EQUAL(again->effective, scanned->effective);
+        BOOST_CHECK_EQUAL(again->value, scanned->value);
         // New finalized history continues from the checkpoint.
         Publish(net, *identity, staging, db, "cp-after");
         BOOST_CHECK_EQUAL(resumed.Sync(), height + 1);
+        // Replacing an existing checkpoint must advance it atomically.
+        cybou::AuthorityIndex reloaded{*net.runtime, checkpoint};
+        BOOST_CHECK_EQUAL(reloaded.ScannedHeight(), height + 1);
         cybou::AuthorityIndex full{*net.runtime};
         full.Sync();
         BOOST_CHECK_EQUAL(resumed.Get(account)->activity, full.Get(account)->activity);

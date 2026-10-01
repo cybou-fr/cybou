@@ -129,6 +129,7 @@ void CybouDesktopController::start()
         auto& runtime = m_node_service->Runtime();
         // Starting the local node is not proof of network connectivity.
         m_model->setNodeStatus(true, 0, false, QString::fromStdString(m_data_directory.string()));
+        m_model->setSyncing(true);
 
         const auto identity_path = m_data_directory / "identity.cybou";
         m_identity_service = std::make_unique<cybou::CybouIdentityService>(runtime, identity_path);
@@ -164,6 +165,7 @@ void CybouDesktopController::start()
                     qWarning() << message;
                     QMetaObject::invokeMethod(m_model, [model = m_model, message] {
                         model->setNodeStatus(true, 0, false);
+                        model->setSyncing(true);
                         model->setSyncError(message);
                     }, Qt::QueuedConnection);
                     return false;
@@ -231,8 +233,10 @@ void CybouDesktopController::start()
                     qWarning() << "cybou network authority refresh error:" << e.what();
                 }
                 const auto diagnostics = m_node_service->Runtime().GetDiagnostics();
-                QMetaObject::invokeMethod(m_model, [model = m_model, diagnostics, runtime_status, bootstrap_reachable, connected_peer_count, sync_error] {
+                const bool syncing = !sync_result.reached_peer_tip;
+                QMetaObject::invokeMethod(m_model, [model = m_model, diagnostics, runtime_status, bootstrap_reachable, connected_peer_count, sync_error, syncing] {
                     model->setNetworkDiagnostics(diagnostics);
+                    model->setSyncing(syncing);
                     model->setSyncError(sync_error);
                     model->setFinalizedHeight(runtime_status.finalized_height);
                     model->setNodeStatus(true, static_cast<int>(connected_peer_count), bootstrap_reachable);
@@ -292,16 +296,11 @@ void CybouDesktopController::publishAuthority()
     if (const auto account = m_identity_service->GetAccountId()) {
         if (const auto record = m_authority_index->Get(*account)) {
             summary.available = true;
-            summary.enforced = record->enforced;
             summary.age = record->age;
             summary.activity = record->activity;
             summary.system_contribution = record->system_contribution;
-            summary.liveness = record->liveness;
-            summary.storage = record->storage;
-            summary.penalty_debt = record->penalty_debt;
-            summary.earned = record->earned;
-            summary.effective = record->effective;
-            summary.tier = record->tier;
+            summary.value = record->value;
+            summary.validator_qualified = record->value >= cybou::AUTHORITY_VALIDATOR_QUALIFICATION;
         }
     }
     QMetaObject::invokeMethod(m_model, [model = m_model, summary] { model->setAuthority(summary); },

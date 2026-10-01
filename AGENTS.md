@@ -48,8 +48,9 @@ architecture; do not keep obsolete runtime paths alive for compatibility.
 - Mail, Files, filenames, folders, recipients, and application schemas remain
   encrypted application data.
 - ChunkID is full BLAKE3-256 of exact stored encrypted bytes.
-- Unfinalized operations/chunks remain local. Remote providers accept chunks
-  only after a finalized RootPublication authorizes them by Merkle proof.
+- The current storage protocol admits chunks remotely only after a finalized
+  RootPublication authorizes them by Merkle proof. Application publication
+  remains local until finality.
 - A RootPublication may locally bundle multiple encrypted content trees under
   one authorization root; this is an application implementation pattern, not
   a new wire entity.
@@ -79,8 +80,12 @@ architecture; do not keep obsolete runtime paths alive for compatibility.
   remote durability. Beta uses full replication; erasure coding is disabled.
 - Placement, provider selection, health, audit, and repair are StorageService
   concerns, not consensus state.
-- Provider admission is finality-first and locally enforced. Do not introduce
-  canonical per-I/O accounting or resource tickets.
+- The current/default provider policy is finality-first. A future provider may
+  independently choose to offer provisional resources under local trust policy
+  (including optional advisory Validation), at its own risk. Such resources
+  create no canonical right or durability guarantee and are not Protected.
+  This provisional path is not implemented. Do not add canonical per-I/O
+  accounting or resource tickets.
 - A file/message is not `Protected`/`Sent` merely because its RootPublication
   is finalized.
 

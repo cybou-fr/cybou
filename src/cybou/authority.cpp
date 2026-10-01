@@ -10,33 +10,18 @@
 #include <cybou/protocol_params.h>
 
 #include <algorithm>
-#include <bit>
 #include <fstream>
 #include <iterator>
 #include <type_traits>
 #include <variant>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace cybou {
-
-std::uint32_t AuthorityTier(const std::uint64_t effective, const std::uint32_t max_tier)
-{
-    // floor(log2(effective + 1)); saturates so effective == UINT64_MAX stays defined.
-    const std::uint64_t value = SaturatingAdd(effective, 1);
-    const auto tier = static_cast<std::uint32_t>(63 - std::countl_zero(value));
-    return std::min(tier, max_tier);
-}
-
-AuthorityBudgets AuthorityBudgetsForTier(const std::uint32_t tier, const AuthorityPolicy& policy)
-{
-    const auto budget = [tier](std::uint64_t base, std::uint64_t per_tier, std::uint64_t ceiling) {
-        return std::min(SaturatingAdd(base, SaturatingMul(per_tier, tier)), ceiling);
-    };
-    return {
-        .protocol_operations_per_epoch = budget(policy.protocol_base, policy.protocol_per_tier, policy.protocol_ceiling),
-        .storage_bytes = budget(policy.storage_base, policy.storage_per_tier, policy.storage_ceiling),
-        .bandwidth_bytes_per_epoch = budget(policy.bandwidth_base, policy.bandwidth_per_tier, policy.bandwidth_ceiling),
-    };
-}
 
 std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation)
 {
@@ -104,13 +89,8 @@ AuthorityIndex::AuthorityIndex(CybouNodeRuntime& runtime, std::filesystem::path 
 std::array<unsigned char, 32> AuthorityIndex::PolicyFingerprint() const
 {
     // A different policy means different tallies: never reuse them.
-    std::vector<unsigned char> bytes{'C', 'Y', 'A', 'P', 1};
-    for (const auto value : {m_policy.activity_cap_per_epoch, std::uint64_t{m_policy.max_tier},
-             m_policy.protocol_base, m_policy.protocol_per_tier, m_policy.protocol_ceiling,
-             m_policy.storage_base, m_policy.storage_per_tier, m_policy.storage_ceiling,
-             m_policy.bandwidth_base, m_policy.bandwidth_per_tier, m_policy.bandwidth_ceiling}) {
-        Put64(bytes, value);
-    }
+    std::vector<unsigned char> bytes{'C', 'Y', 'A', 'P', 2};
+    Put64(bytes, m_policy.activity_cap_per_epoch);
     return ComputeBlake3Digest(bytes);
 }
 
@@ -195,8 +175,22 @@ bool AuthorityIndex::SaveCheckpoint() const
         file.write(reinterpret_cast<const char*>(out.data()), static_cast<std::streamsize>(out.size()));
         if (!file) return false;
     }
+#ifdef _WIN32
+    if (!MoveFileExW(temp.c_str(), m_checkpoint.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        std::error_code ignored;
+        std::filesystem::remove(temp, ignored);
+        return false;
+    }
+    return true;
+#else
     std::filesystem::rename(temp, m_checkpoint, ec);
-    return !ec;
+    if (ec) {
+        std::error_code ignored;
+        std::filesystem::remove(temp, ignored);
+        return false;
+    }
+    return true;
+#endif
 }
 
 std::uint64_t AuthorityIndex::ScannedHeight() const
@@ -256,12 +250,7 @@ std::optional<AuthorityRecord> AuthorityIndex::Get(const AccountId& account)
         record.activity = tally->second.activity;
         record.system_contribution = tally->second.system_contribution;
     }
-    record.earned = SaturatingAdd(SaturatingAdd(SaturatingAdd(record.age, record.activity),
-        SaturatingAdd(record.system_contribution, record.liveness)), record.storage);
-    record.effective = record.earned > record.penalty_debt ? record.earned - record.penalty_debt : 0;
-    record.tier = AuthorityTier(record.effective, m_policy.max_tier);
-    record.budgets = AuthorityBudgetsForTier(record.tier, m_policy);
-    record.enforced = false;
+    record.value = SaturatingAdd(SaturatingAdd(record.age, record.activity), record.system_contribution);
     return record;
 }
 

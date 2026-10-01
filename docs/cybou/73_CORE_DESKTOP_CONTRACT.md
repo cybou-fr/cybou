@@ -96,13 +96,15 @@ durability.
 
 ## Authority UI
 
-When Authority is implemented, the GUI may show read-only:
+The GUI may show the read-only Authority value and its finalized-history
+inputs:
 
 ```text
 Authority
-Authority tier
-current generic service allowances
-network contribution status
+Age
+qualifying Identity activity
+System Balance contribution
+optional validator-qualification label
 ```
 
 Qt never computes or edits Authority.
@@ -136,10 +138,10 @@ model keeps one `CybouOperationStatus` per operation, and
 while `capabilities.validation` is true (false until core validation exists)
 and the user keeps "Show validation status" on. There is no trust mode.
 
-Identity Authority (`CybouAuthoritySummary`) is a derived network-capability
-metric, not social trust. The controller syncs the read-only `AuthorityIndex`
-on each network refresh. It is shown only on the Identity page (marked
-Preview while not enforced) and in Diagnostics, never on contacts or Mail.
+Identity Authority (`CybouAuthoritySummary`) is an informational metric, not
+social trust, a resource tier, or PoA power. The controller syncs the
+read-only `AuthorityIndex` on each network refresh. It is shown only on the
+Identity page and in Diagnostics, never on contacts or Mail.
 
 
 `Failed` is terminal for the exact OperationID: informational updates cannot

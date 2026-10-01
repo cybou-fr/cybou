@@ -50,7 +50,15 @@ present and its proof verifies against canonical finalized history. Clients
 use verified leaf indices to reconstruct publication order; provider proof
 metadata remains operational and is not consensus state.
 
-Unfinalized chunks are rejected remotely.
+The current provider protocol admits remote chunks only after finality and a
+valid publication proof. This is the current/default finality-first policy.
+
+A provider could in the future choose locally to offer a provisional resource
+before finality, based on its own trust policy and optional advisory
+Validation. That choice would be entirely at the provider's risk: it creates
+no canonical right, PoA obligation, publication authorization, or durability
+guarantee, and must never be reported as `Protected`. This local provisional
+path is not implemented.
 
 ## Durability targets
 

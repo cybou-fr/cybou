@@ -807,7 +807,9 @@ void OnboardingView::submitRestore()
     phrase.fill(QChar{0});
     password.fill(QChar{0});
     if (!started) {
-        m_restore_hint->setText(tr("Restore could not start. Check the phrase and try again."));
+        m_restore_hint->setText(m_model->status().syncing
+            ? tr("Wait for the network to finish syncing before restoring an Identity.")
+            : tr("Restore could not start. Check the phrase and try again."));
         return;
     }
     clearPhrase();

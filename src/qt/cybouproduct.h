@@ -92,23 +92,14 @@ struct CybouOperationStatus {
     QString error;
 };
 
-/**
- * Identity Authority: a derived network-capability metric, not social trust
- * or reputation. While enforced is false it is an informational preview and
- * no network limit comes from it.
- */
+/** Identity Authority is informational and has no protocol or resource power. */
 struct CybouAuthoritySummary {
     bool available{false};
-    bool enforced{false};
     quint64 age{0};
     quint64 activity{0};
     quint64 system_contribution{0};
-    quint64 liveness{0};
-    quint64 storage{0};
-    quint64 penalty_debt{0};
-    quint64 earned{0};
-    quint64 effective{0};
-    quint32 tier{0};
+    quint64 value{0};
+    bool validator_qualified{false};
     /** Finalized height the Authority index has scanned up to. */
     quint64 scanned_height{0};
     bool operator==(const CybouAuthoritySummary&) const = default;

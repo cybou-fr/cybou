@@ -91,8 +91,8 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     root->setContentsMargins(28, 24, 28, 28);
     root->setSpacing(16);
     auto* proof = MutedText(tr("This Identity's recovery phrase derives the genesis PoA finalizer key of this network: "
-                               "it is the network's central authority. This page is a read-only view of the finalized "
-                               "state this computer validated itself. Blocks are signed only by the authority node; "
+                               "it is the network's PoA finalizer. This page is a read-only view of the finalized "
+                               "state this computer validated itself. Blocks are signed only by the PoA finalizer; "
                                "this app never signs."), this);
     proof->setObjectName(QStringLiteral("networkAuthorityProof"));
     root->addWidget(proof);
@@ -143,7 +143,7 @@ void NetworkAuthorityPage::refresh()
     Row(m_finality, tr("Model"), tr("Genesis-bound single-operator hybrid-PQ PoA (centralized finality, not BFT)"));
     Row(m_finality, tr("Finalizer key"), tr("Matches this Identity's recovery phrase (proven from genesis)"));
     Row(m_finality, tr("Liveness"), age > 120
-        ? tr("No new finalized block seen for %1 s: check the authority node").arg(age)
+        ? tr("No new finalized block seen for %1 s: check the PoA finalizer").arg(age)
         : tr("Advancing"));
     Row(m_finality, tr("Tip"), QString::fromStdString(d.tip));
     Row(m_finality, tr("State root"), QString::fromStdString(d.state_root));

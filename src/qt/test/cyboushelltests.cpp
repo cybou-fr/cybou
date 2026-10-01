@@ -925,6 +925,26 @@ void CybouShellTests::fixturesLoadDeterministically()
     // The fixture driver answers UI requests with UI-only transitions.
     CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
     QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("empty")));
+    QSignalSpy create_failed{&model, &CybouDesktopModel::identityCreationFailed};
+    QSignalSpy create_requested{&model, &CybouDesktopModel::createIdentityRequested};
+    model.setSyncing(true);
+    QVERIFY(!model.capabilities().account_creation);
+    model.requestCreateIdentity(QStringLiteral("correct horse battery"));
+    QCOMPARE(create_requested.count(), 0);
+    QCOMPARE(create_failed.count(), 1);
+    QCOMPARE(model.status().identity_state, CybouIdentityState::None);
+
+    std::array<unsigned char, 32> recovery_entropy{};
+    recovery_entropy[0] = 0x42;
+    QStringList recovery_words;
+    for (const auto& word : cybou::EncodeRecoveryWords(recovery_entropy)) {
+        recovery_words << QString::fromStdString(word);
+    }
+    QVERIFY(!model.requestRestoreIdentity(recovery_words.join(QLatin1Char{' '}),
+        QStringLiteral("correct horse battery")));
+
+    model.setSyncing(false);
+    QVERIFY(model.capabilities().account_creation);
     CybouUiFixtures::Driver driver{&model};
     driver.setStepDelay(0);
     model.requestCreateIdentity(QStringLiteral("correct horse battery"));
@@ -1964,9 +1984,14 @@ void CybouShellTests::identityAuthorityIsAnHonestPreview()
     static_cast<IdentityPage*>(page)->showAuthorityDetails(true);
     QStringList texts;
     for (const auto* label : card()->findChildren<QLabel*>()) texts << label->text();
-    QVERIFY(texts.contains(QStringLiteral("Preview")));
     QVERIFY(texts.contains(QLocale{}.toString(1482)));
-    QVERIFY(texts.contains(QStringLiteral("10")));
+    QVERIFY(std::any_of(texts.begin(), texts.end(),
+        [](const QString& t) { return t.contains(QLatin1String{"Validation qualification"}); }));
+    QVERIFY(std::any_of(texts.begin(), texts.end(),
+        [](const QString& t) { return t.startsWith(QLatin1String{"Below "}); }));
+    QVERIFY(std::none_of(texts.begin(), texts.end(),
+        [](const QString& t) { return t.contains(QLatin1String{"Level"}) ||
+            t.contains(QLatin1String{"Liveness"}) || t.contains(QLatin1String{"Penalties"}); }));
     for (const auto& text : texts) {
         QVERIFY2(!text.contains(QLatin1String{"trust"}, Qt::CaseInsensitive), qPrintable(text));
         QVERIFY2(!text.contains(QLatin1String{"reputation"}, Qt::CaseInsensitive), qPrintable(text));

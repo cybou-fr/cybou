@@ -14,6 +14,7 @@
 #include <cybou/state_store.h>
 #include <cybou/chunk_retention.h>
 #include <cybou/finalized_chunk_store.h>
+#include <cybou/secret32.h>
 
 #include <array>
 #include <chrono>
@@ -37,7 +38,7 @@ class IdentityOperationCoordinator;
 struct NodeRuntimeConfig {
     CybouNetworkDefinition network_definition;
     std::filesystem::path data_dir;
-    std::optional<std::array<unsigned char, 32>> poa_finalizer_recovery_entropy{std::nullopt};
+    std::optional<Secret32> poa_finalizer_recovery_entropy{std::nullopt};
     std::optional<std::pair<std::string, uint16_t>> p2p_endpoint{std::nullopt};
     /** This node's own CYP2 listener; used to filter self-addresses out of discovery. */
     std::optional<std::pair<std::string, uint16_t>> local_p2p_endpoint{std::nullopt};

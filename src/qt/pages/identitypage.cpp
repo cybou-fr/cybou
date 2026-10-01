@@ -5,6 +5,7 @@
 #include <qt/pages/identitypage.h>
 
 #include <qt/cyboudesktopmodel.h>
+#include <cybou/authority.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 #include <qt/recoveryphrasedialog.h>
@@ -273,16 +274,15 @@ QWidget* IdentityPage::buildContent()
     auto* security = Section(root, tr("Security"), page);
     m_pq_state = DetailRow(security, tr("Post-quantum protection"), page);
 
-    // Identity Authority: derived from finalized history; informational while not enforced.
+    // Identity Authority: derived from finalized history; informational only.
     auto* authority = Section(root, tr("Identity Authority"), page, &m_authority_card);
     m_authority_card->setProperty("cybouId", QStringLiteral("identityAuthority"));
     auto* authority_header = new QHBoxLayout;
-    authority_header->addWidget(MutedText(tr("Built from your finalized CYBOU activity and contributions."), page), 1);
-    authority_header->addWidget(Pill(tr("Preview"), Tint::Amber, page));
+    authority_header->addWidget(MutedText(tr("Derived from finalized history."), page), 1);
     authority->addLayout(authority_header);
     m_authority_value = DetailRow(authority, tr("Authority"), page);
-    m_authority_level = DetailRow(authority, tr("Level"), page);
-    authority->addWidget(MutedText(tr("Authority is informational for now. Network limits are not based on it yet."), page));
+    m_authority_qualification = DetailRow(authority, tr("Validation qualification"), page);
+    authority->addWidget(MutedText(tr("Authority is informational. It does not control network limits or PoA finality."), page));
     m_authority_toggle = new QToolButton{page};
     m_authority_toggle->setObjectName(QStringLiteral("sectionLink"));
     m_authority_toggle->setText(tr("View details"));
@@ -422,8 +422,9 @@ void IdentityPage::refreshAuthority()
     m_authority_card->setVisible(shown);
     if (!shown) return;
     const QLocale locale;
-    m_authority_value->setText(locale.toString(authority.effective));
-    m_authority_level->setText(QString::number(authority.tier));
+    m_authority_value->setText(locale.toString(authority.value));
+    m_authority_qualification->setText(authority.validator_qualified
+        ? tr("Validator-qualified") : tr("Below %1").arg(locale.toString(cybou::AUTHORITY_VALIDATOR_QUALIFICATION)));
     ClearLayout(m_authority_rows);
     const auto add = [this, &locale](const QString& key, quint64 value) {
         DetailRow(m_authority_rows, key, m_authority_details)->setText(locale.toString(value));
@@ -431,11 +432,9 @@ void IdentityPage::refreshAuthority()
     add(tr("Age"), authority.age);
     add(tr("Activity"), authority.activity);
     add(tr("System contribution"), authority.system_contribution);
-    add(tr("Liveness"), authority.liveness);
-    add(tr("Storage"), authority.storage);
-    add(tr("Penalties"), authority.penalty_debt);
-    add(tr("Effective Authority"), authority.effective);
-    DetailRow(m_authority_rows, tr("Level"), m_authority_details)->setText(QString::number(authority.tier));
+    add(tr("Authority age"), authority.age);
+    add(tr("Qualifying activity"), authority.activity);
+    add(tr("System Balance contribution"), authority.system_contribution);
 }
 
 void IdentityPage::copyAccountId()

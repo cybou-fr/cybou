@@ -124,13 +124,6 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
       })},
       m_store{*m_db, m_config.network_definition}
 {
-    struct FinalizerEntropyCleanup {
-        std::optional<std::array<unsigned char, 32>>& entropy;
-        ~FinalizerEntropyCleanup()
-        {
-            if (entropy) crypto::CleanseMemory(entropy->data(), entropy->size());
-        }
-    } finalizer_entropy_cleanup{m_config.poa_finalizer_recovery_entropy};
     std::filesystem::path storage_path;
     if (!m_config.memory_only) {
         storage_path = std::filesystem::path{m_config.data_dir.string() + ".chunks"};
@@ -164,8 +157,7 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     }
     if (m_config.poa_finalizer_recovery_entropy.has_value()) {
         m_finalizer_node = std::make_unique<CybouFinalizerNode>(
-            m_store, *m_config.poa_finalizer_recovery_entropy);
-        crypto::CleanseMemory(m_config.poa_finalizer_recovery_entropy->data(), m_config.poa_finalizer_recovery_entropy->size());
+            m_store, m_config.poa_finalizer_recovery_entropy->Get());
         m_config.poa_finalizer_recovery_entropy.reset();
     }
     if (m_config.p2p_endpoint) m_peer_manager = std::make_unique<p2p::PeerManager>(*this);

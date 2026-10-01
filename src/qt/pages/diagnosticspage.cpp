@@ -219,7 +219,7 @@ void DiagnosticsPage::refresh()
         ? tr("Scanned to height %1  ·  %2").arg(QLocale{}.toString(authority.scanned_height),
               status.finality_known && authority.scanned_height >= status.finalized_height ? tr("Up to date") : tr("Catching up"))
         : tr("Not available"), parent);
-    Row(m_rows, tr("Identity Authority enforcement"), tr("Not enforced (preview)"), parent);
+    Row(m_rows, tr("Identity Authority"), tr("Informational only"), parent);
     // Validation (pre-finalization) is informational and never canonical.
     Row(m_rows, tr("Validation"), m_model->capabilities().validation
         ? (m_model->validationStatusShown() ? tr("Observing (informational, not final)") : tr("Hidden by settings"))

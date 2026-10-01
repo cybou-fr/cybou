@@ -878,7 +878,7 @@ std::optional<std::vector<unsigned char>> PeerSession::GetChunkById(const ChunkI
     if (!meta || meta->type != MessageType::CHUNK_ADMISSION_RESULT || meta->payload.size() != 5 ||
         meta->payload[0] > 1) return unavailable();
     const uint32_t size = Read32(meta->payload.data() + 1);
-    if (meta->payload[0] == 0) return size == 0 ? std::optional<std::vector<unsigned char>>{} : std::nullopt;
+    if (meta->payload[0] == 0) return size == 0 ? std::optional<std::vector<unsigned char>>{} : unavailable();
     if (size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES) return unavailable();
     std::vector<unsigned char> bytes;
     bytes.reserve(size);

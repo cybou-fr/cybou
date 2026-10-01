@@ -7,9 +7,9 @@
 #include <cybou/crypto/cleanse.h>
 #include <cybou/crypto/sha256.h>
 
-#include <openssl/core_names.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
+#include <openssl/params.h>
 
 #include <algorithm>
 #include <memory>
@@ -81,7 +81,10 @@ Key MakeKey(std::span<const unsigned char, 32> secret, IdentityKeyPurpose purpos
         KeyCtx ctx{EVP_PKEY_CTX_new_from_name(nullptr, Algorithm(purpose), nullptr), EVP_PKEY_CTX_free};
         if (ctx && EVP_PKEY_keygen_init(ctx.get()) == 1) {
             OSSL_PARAM params[] = {
-                OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_ML_DSA_SEED, seed->data(), seed->size()),
+                // Use the provider parameter name directly. The symbolic
+                // macro is absent from some OpenSSL 3.x headers even though
+                // the ML-DSA provider supports deterministic seed import.
+                OSSL_PARAM_construct_octet_string("seed", seed->data(), seed->size()),
                 OSSL_PARAM_construct_end(),
             };
             EVP_PKEY* raw{nullptr};

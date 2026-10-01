@@ -55,7 +55,7 @@ private:
     /* Identity Authority: a derived network-capability preview, not trust. */
     QFrame* m_authority_card{nullptr};
     QLabel* m_authority_value{nullptr};
-    QLabel* m_authority_level{nullptr};
+    QLabel* m_authority_qualification{nullptr};
     QToolButton* m_authority_toggle{nullptr};
     QWidget* m_authority_details{nullptr};
     QVBoxLayout* m_authority_rows{nullptr};

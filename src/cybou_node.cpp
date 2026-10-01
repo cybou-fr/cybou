@@ -419,7 +419,7 @@ int Execute(const int argc, char* argv[])
         cybou::NodeRuntimeConfig config{
             .network_definition = network->definition,
             .data_dir = argv[3],
-            .poa_finalizer_recovery_entropy = finalizer_key.Get(),
+            .poa_finalizer_recovery_entropy = std::move(finalizer_key),
             .db_cache_bytes = 8 << 20,
         };
         if (argc == 10) {

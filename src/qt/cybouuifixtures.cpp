@@ -108,13 +108,11 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     // Derived Authority preview: Age 284 + Activity 198 + System contribution 1,000.
     CybouAuthoritySummary authority;
     authority.available = true;
-    authority.enforced = false;
     authority.age = 284;
     authority.activity = 198;
     authority.system_contribution = 1000;
-    authority.earned = 1482;
-    authority.effective = 1482;
-    authority.tier = 10; // floor(log2(1482 + 1))
+    authority.value = 1482;
+    authority.validator_qualified = false;
     authority.scanned_height = 1242;
     model.setAuthority(authority);
 
