@@ -174,11 +174,13 @@ display name, and generation. The core now also has a durable LevelDB
 code, stores only its domain-separated hash, and an initial claim atomically
 stores generation 1 while consuming the code. Reopening validates the stored
 binding and state, and concurrent claims serialize through the store lock.
-This is a storage primitive only; the authenticated bootstrap protocol and
-request handler remain unimplemented. CYP2 sessions now support a persistent
-server TLS identity and client verification of its SPKI SHA-256 pin before
-HELLO. Configuring the service and distributing its pin through a trusted
-release or approved out-of-band path remain deployment work. A client-side
+The core now has a bounded STATUS/CLAIM/REPLACE protocol handler and a
+`cybou-bootstrap provision|serve` executable. Bootstrap exchanges use a
+persistent server TLS identity and require the client's SPKI SHA-256 pin
+before the first bootstrap frame; they deliberately do not send HELLO because
+an empty network has no NetworkID to put in HELLO. Configuring the endpoint
+and distributing its pin through a trusted release or approved out-of-band
+path remain deployment work. A client-side
 durable binding pin is also implemented: first acceptance requires an
 explicit trust write, later generations must increase, same-generation
 responses must be byte-identical, and a changed genesis finalizer key is
@@ -186,8 +188,15 @@ rejected. Signed key
 replacement now has a signed data format and durable-store primitive: the
 current key authorizes the exact next binding, the new key signs that binding,
 and one synchronous batch archives the prior binding and advances current
-state. The bootstrap request handler, client acceptance of replacement, and
-database rollback/recovery remain unimplemented.
+state. The service accepts that dual-signed replacement and returns the new
+binding. Durable client-side acceptance in the bootstrap exchange and database
+rollback/recovery remain unimplemented.
+
+This endpoint is an implementation milestone only. Authority outbound
+sessions, relays/history, client application flows, pin distribution, and the
+acceptance tests and coordinated DEV cutover remain incomplete. The DEV VPS
+continues to run its existing legacy finalizer and two providers until those
+gates are completed.
 
 Until that cutover is accepted, do not describe the deployed legacy DEV as the
 new bootstrap architecture, and do not point a new executable at it as if it

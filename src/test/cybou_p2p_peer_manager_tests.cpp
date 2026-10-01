@@ -90,14 +90,6 @@ BOOST_AUTO_TEST_CASE(stable_tls_identity_accepts_matching_spki_pin_and_rejects_m
     boost::asio::io_context io;
     using boost::asio::ip::tcp;
     const auto loopback = boost::asio::ip::address_v4::loopback();
-    const auto network = fixture.runtime->GetNetworkId();
-    const auto server_hello = cybou::p2p::Hello{.network_id = network,
-        .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-        .capabilities = 0, .nonce = 801};
-    const auto client_hello = cybou::p2p::Hello{.network_id = network,
-        .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-        .capabilities = 0, .nonce = 802};
-
     auto run_session = [&](const std::array<unsigned char, 32>& expected_pin) {
         tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
         bool server_handshake{false};
@@ -109,7 +101,10 @@ BOOST_AUTO_TEST_CASE(stable_tls_identity_accepts_matching_spki_pin_and_rejects_m
             tls.private_key_file = identity->private_key;
             cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER,
                 std::move(tls)};
-            server_handshake = session.Handshake(server_hello);
+            server_handshake = session.ServeBootstrapRequest([](const cybou::p2p::Frame& request) ->
+                std::optional<cybou::p2p::Frame> {
+                return cybou::p2p::Frame{cybou::p2p::MessageType::BOOTSTRAP_RESPONSE, request.payload};
+            });
         }};
         tcp::socket socket{io};
         socket.connect(tcp::endpoint{loopback, acceptor.local_endpoint().port()});
@@ -117,9 +112,9 @@ BOOST_AUTO_TEST_CASE(stable_tls_identity_accepts_matching_spki_pin_and_rejects_m
         tls.expected_server_spki_sha256 = expected_pin;
         cybou::p2p::PeerSession client{std::move(socket), cybou::p2p::TransportRole::CLIENT,
             std::move(tls)};
-        const bool client_handshake = client.Handshake(client_hello);
+        const auto response = client.RequestBootstrap({cybou::p2p::MessageType::BOOTSTRAP_REQUEST, {1, 2, 3}});
         server.join();
-        return std::pair{client_handshake, server_handshake};
+        return std::pair{response && response->payload == std::vector<unsigned char>{1, 2, 3}, server_handshake};
     };
 
     const auto accepted = run_session(identity->pin);

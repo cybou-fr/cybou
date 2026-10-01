@@ -6,7 +6,9 @@ chunk transfer over TCP protected by TLS 1.3.
 ## Connection protection
 
 - TLS 1.3 is required before CYP2 HELLO or any application frame; plaintext
-  fallback is rejected.
+  fallback is rejected. The bootstrap exchange is the explicit exception to
+  HELLO: it sends its bootstrap request only after pinned TLS, since an empty
+  network has no NetworkID for HELLO.
 - The configured key exchange is `X25519MLKEM768`; a build that cannot provide
   it fails the handshake.
 - TLS protects record confidentiality, integrity, and ordering. Endpoint
@@ -17,9 +19,12 @@ chunk transfer over TCP protected by TLS 1.3.
   Bootstrap clients must pin the SHA-256 digest of the certificate's DER
   SubjectPublicKeyInfo from a trusted CYBOU release or another approved
   out-of-band source, and verify it immediately after TLS completes and before
-  sending CYP2 HELLO. A pin learned from the same unauthenticated connection
+  sending the first bootstrap frame. A pin learned from the same unauthenticated connection
   is not a trust anchor. Ordinary peer sessions continue to use ephemeral
   certificates.
+- Bootstrap request/response frames have a 16 MiB plus 16 KiB payload bound
+  for the signed network definition. All ordinary CYP2 frames retain the 4096
+  byte limit.
 
 A storage peer advertising `CAP_STORAGE` proves its stable hybrid
 `STORAGE_PROVIDER` key. Peers verify the proof and derive its ProviderID. A
