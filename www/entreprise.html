@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CYBOU Entreprise — Réseaux Privés Cryptographiquement Isolés &amp; Dédiés</title>
+  <meta name="description" content="Déployez votre propre réseau souverain d'entreprise avec CYBOU : isolation cryptographique totale (genèse dédiée), gouvernance par votre DSI, chiffrement post-quantique OpenSSL v3.5.2+ et stockage On-Premise ou Air-Gap.">
+  <meta name="author" content="CYBOU">
+  <meta name="robots" content="index, follow">
+
+  <link rel="canonical" href="https://cybou.fr/entreprise.html">
+  <link rel="alternate" hreflang="fr" href="https://cybou.fr/entreprise.html">
+  <link rel="alternate" hreflang="en" href="https://cybou.fr/entreprise.html?lang=en">
+
+  <meta property="og:title" content="CYBOU Entreprise — Réseaux Privés Dédiés &amp; Isolés">
+  <meta property="og:description" content="Infrastructure souveraine dédiée pour entreprises : custom genesis, contrôle DSI, chiffrement post-quantique, stockage sur site ou en enclave fermée (air-gap).">
+  <meta property="og:url" content="https://cybou.fr/entreprise.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="CYBOU">
+  <meta property="og:image" content="https://cybou.fr/assets/cybou.png">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CYBOU Entreprise — Réseaux Privés Dédiés &amp; Isolés">
+  <meta name="twitter:description" content="Infrastructure souveraine dédiée pour entreprises : custom genesis, contrôle DSI, chiffrement post-quantique et stockage On-Premise.">
+  <meta name="twitter:image" content="https://cybou.fr/assets/cybou.png">
+
+  <link rel="icon" type="image/png" href="assets/cybou.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=20261001-5">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "CYBOU Entreprise & Réseaux Dédiés",
+    "description": "Infrastructure de réseau privé et décentralisé cryptographiquement étanche, administrée par l'organisation cliente, reposant sur le protocole post-quantique CYBOU.",
+    "brand": {
+      "@type": "Brand",
+      "name": "CYBOU"
+    },
+    "url": "https://cybou.fr/entreprise.html"
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ==========================================================================
+       Navigation Bar
+       ========================================================================== -->
+  <header class="nav-header">
+    <div class="nav-container">
+      <div class="nav-brand-group">
+        <a href="index.html" class="nav-brand" aria-label="Accueil CYBOU">
+          <div class="logo-tile">
+            <img src="assets/cybou.png" alt="CYBOU Logo" width="26" height="26">
+          </div>
+          <span>CYBOU</span>
+        </a>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="mobile-menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+
+      <nav class="desktop-nav" aria-label="Navigation principale">
+        <ul class="nav-links">
+          <li><a href="index.html#services" data-i18n="navProducts">Produits</a></li>
+          <li><a href="index.html#showcase" data-i18n="navShowcase">Aperçu</a></li>
+          <li><a href="entreprise.html" class="active" style="color: var(--brand-teal-dark); font-weight: 700;" data-i18n="navEnterprise">Entreprise</a></li>
+          <li><a href="index.html#security" data-i18n="navSecurity">Sécurité &amp; TLS</a></li>
+          <li><a href="conformite.html" data-i18n="navCompliance">Conformité</a></li>
+          <li><a href="index.html#comparatif" data-i18n="navComparison">Comparatif</a></li>
+          <li><a href="index.html#architecture" data-i18n="navArch">Sous le capot</a></li>
+          <li><a href="index.html#faq" data-i18n="navFaq">FAQ</a></li>
+        </ul>
+      </nav>
+
+      <div class="nav-actions">
+        <div class="lang-switch" role="group" aria-label="Choix de la langue">
+          <button id="lang-fr" class="lang-btn active" type="button">FR</button>
+          <button id="lang-en" class="lang-btn" type="button">EN</button>
+        </div>
+        <a href="https://github.com/cybou-fr/cybou" target="_blank" rel="noopener noreferrer" class="github-link" aria-label="Dépôt GitHub CYBOU" title="GitHub">
+          <img src="https://github.com/favicon.ico" alt="" width="22" height="22">
+        </a>
+      </div>
+    </div>
+    <nav class="mobile-menu" id="mobile-menu" aria-label="Navigation mobile" hidden>
+      <a href="index.html#services" data-i18n="navProducts">Produits</a>
+      <a href="index.html#showcase" data-i18n="navShowcase">Aperçu</a>
+      <a href="entreprise.html" data-i18n="navEnterprise">Entreprise</a>
+      <a href="index.html#security" data-i18n="navSecurity">Sécurité &amp; TLS</a>
+      <a href="conformite.html" data-i18n="navCompliance">Conformité</a>
+      <a href="index.html#comparatif" data-i18n="navComparison">Comparatif</a>
+      <a href="index.html#architecture" data-i18n="navArch">Sous le capot</a>
+      <a href="index.html#faq" data-i18n="navFaq">FAQ</a>
+    </nav>
+  </header>
+
+  <!-- ==========================================================================
+       Hero Section
+       ========================================================================== -->
+  <header class="compliance-page-hero">
+    <div class="compliance-breadcrumb">
+      <a href="index.html" data-i18n="eBreadHome">Accueil</a>
+      <span>/</span>
+      <span data-i18n="eBreadCurrent">Solutions Entreprise &amp; Réseaux Dédiés</span>
+    </div>
+
+    <div class="enterprise-hero-badge" data-i18n="eHeroBadge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>
+      <span data-i18n="eHeroBadgeText">Isolation Cryptographique &amp; Gouvernance Dédiée</span>
+    </div>
+
+    <h1 class="hero-title" style="max-width: 940px; margin-top: 10px;" data-i18n="eHeroTitle">Créez votre Réseau Privé d'Entreprise Sécurisé &amp; Dédié</h1>
+    <p class="hero-subtitle" style="max-width: 860px;" data-i18n="eHeroDesc">
+      Déployez une infrastructure CYBOU 100% autonome, cryptographiquement étanche et administrée exclusivement par votre organisation. Chiffrement post-quantique standard, stockage sur vos serveurs ou cloud souverain, zéro fuite de données et immunité extraterritoriale absolue.
+    </p>
+
+    <!-- Anchor Pills Navigation -->
+    <nav class="compliance-nav-pills" aria-label="Sommaire Entreprise">
+      <a href="#avantages" class="nav-pill-btn" data-i18n="ePillAdv">Avantages Clés</a>
+      <a href="#architecture-privee" class="nav-pill-btn" data-i18n="ePillArch">Isolation &amp; Genèse</a>
+      <a href="#modes-deploiement" class="nav-pill-btn" data-i18n="ePillModes">Modes de Déploiement</a>
+      <a href="#gouvernance" class="nav-pill-btn" data-i18n="ePillGov">Gouvernance DSI</a>
+      <a href="#cas-usage" class="nav-pill-btn" data-i18n="ePillUse">Cas d'Usage</a>
+      <a href="#contact" class="nav-pill-btn" data-i18n="ePillContact">Déploiement &amp; PoC</a>
+    </nav>
+  </header>
+
+  <!-- ==========================================================================
+       Main Content Container
+       ========================================================================== -->
+  <main class="compliance-container">
+
+    <!-- 1. Avantages Clés -->
+    <article class="compliance-article" id="avantages">
+      <div class="compliance-article-header">
+        <div class="compliance-tag-row">
+          <span class="compliance-pill" data-i18n="eArt1Pill">Souveraineté Maximale</span>
+          <span class="compliance-status-good" data-i18n="eArt1Status">Autonomie Totale</span>
+        </div>
+        <h2 class="compliance-article-title" data-i18n="eArt1Title">Pourquoi déployer un réseau CYBOU dédié pour votre organisation ?</h2>
+        <div class="compliance-article-sub" data-i18n="eArt1Sub">Les réseaux publics partagés ne conviennent pas toujours aux exigences des industries sensibles, des armées ou des groupes critiques. CYBOU permet de créer une bulle réseau totalement privée.</div>
+      </div>
+
+      <div class="compliance-preview-grid" style="margin-top: 20px;">
+        <!-- Card 1 -->
+        <div class="compliance-card">
+          <div class="compliance-badge-row">
+            <span class="compliance-pill" data-i18n="eCard1Pill">Custom Genesis</span>
+            <span class="compliance-status-good" data-i18n="eCard1Badge">Étanche</span>
+          </div>
+          <h3 data-i18n="eCard1Title">Isolation Cryptographique Absolue</h3>
+          <p data-i18n="eCard1Desc">Votre réseau d'entreprise possède son propre bloc de genèse unique, ses clés racines et ses empreintes SPKI TLS. Tout paquet réseau ou tentative de connexion étrangère à votre domaine est rejeté immédiatement au niveau mathématique (fail-closed).</p>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="compliance-card">
+          <div class="compliance-badge-row">
+            <span class="compliance-pill" data-i18n="eCard2Pill">Contrôle DSI / RSSI</span>
+            <span class="compliance-status-good" data-i18n="eCard2Badge">Gouvernance</span>
+          </div>
+          <h3 data-i18n="eCard2Title">Clé d'Autorité Détenue par Votre Organisation</h3>
+          <p data-i18n="eCard2Desc">La finalité PoA (Proof-of-Authority) est opérée par un poste de confiance sous le contrôle exclusif de votre direction informatique. Zéro intermédiaire externe, aucun tiers de confiance n'a le pouvoir de modifier vos règles ou valider vos blocs.</p>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="compliance-card">
+          <div class="compliance-badge-row">
+            <span class="compliance-pill" data-i18n="eCard3Pill">Zero-Knowledge</span>
+            <span class="compliance-status-good" data-i18n="eCard3Badge">Zéro Backdoor</span>
+          </div>
+          <h3 data-i18n="eCard3Title">Confidentialité Maximale Entre Collaborateurs</h3>
+          <p data-i18n="eCard3Desc">Tous les échanges sont chiffrés de bout en bout sur les terminaux des employés via OpenSSL v3.5.2+ (ML-KEM-768 et ML-DSA). Même vos administrateurs système ne peuvent pas lire les correspondances confidentielles des comités de direction sans clé de capsule légitime.</p>
+        </div>
+
+        <!-- Card 4 -->
+        <div class="compliance-card">
+          <div class="compliance-badge-row">
+            <span class="compliance-pill" data-i18n="eCard4Pill">Résilience P2P</span>
+            <span class="compliance-status-good" data-i18n="eCard4Badge">Zéro SPOF</span>
+          </div>
+          <h3 data-i18n="eCard4Title">Stockage Distribué sans Point Unique de Panne</h3>
+          <p data-i18n="eCard4Desc">Vos fichiers et messages sont fragmentés (BLAKE3-256) et répliqués sur vos serveurs internes ou vos datacenters distants. La panne d'un serveur ou la rupture d'un lien WAN n'interrompt pas le service : le réseau s'auto-répare automatiquement.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- 2. Architecture & Isolation -->
+    <article class="compliance-article" id="architecture-privee">
+      <div class="compliance-article-header">
+        <div class="compliance-tag-row">
+          <span class="compliance-pill" data-i18n="eArt2Pill">Sous le Capot</span>
+          <span class="compliance-status-good" data-i18n="eArt2Status">Spécifications Ouvertes</span>
+        </div>
+        <h2 class="compliance-article-title" data-i18n="eArt2Title">Comment fonctionne l'isolation d'un réseau dédié ?</h2>
+        <div class="compliance-article-sub" data-i18n="eArt2Sub">Tous les participants exécutent le même logiciel robuste standard, mais l'espace cryptographique est strictement circonscrit à votre entreprise.</div>
+      </div>
+
+      <div class="compliance-prose">
+        <p data-i18n="eArt2P1">
+          L'architecture unifiée de CYBOU permet d'instancier un réseau d'entreprise indépendant en quelques minutes, sans modifier une seule ligne de code source. Le protocole sépare hermétiquement les réseaux par leur <strong>définition de genèse</strong> et leurs <strong>certificats de transport</strong> :
+        </p>
+
+        <!-- Process Steps Flow -->
+        <div class="enterprise-flow-box">
+          <div class="enterprise-flow-steps">
+            <div class="enterprise-step-card">
+              <div class="enterprise-step-num">1</div>
+              <div class="enterprise-step-title" data-i18n="eStep1Title">Définition de Genèse</div>
+              <div class="enterprise-step-desc" data-i18n="eStep1Desc">Génération d'un fichier <code>genesis.json</code> avec un identifiant de réseau propre à l'entreprise et les comptes racines autorisés.</div>
+            </div>
+            <div class="enterprise-step-card">
+              <div class="enterprise-step-num">2</div>
+              <div class="enterprise-step-title" data-i18n="eStep2Title">Autorité Centrale PoA</div>
+              <div class="enterprise-step-desc" data-i18n="eStep2Desc">La DSI génère la clé de finalisation PoA sur un poste sécurisé (SecOps) pour sceller les blocs d'entreprise.</div>
+            </div>
+            <div class="enterprise-step-card">
+              <div class="enterprise-step-num">3</div>
+              <div class="enterprise-step-title" data-i18n="eStep3Title">Nœuds Bootstrap (1 à 4)</div>
+              <div class="enterprise-step-desc" data-i18n="eStep3Desc">Déploiement de 1 à 4 serveurs d'amorçage sur votre intranet pour l'aiguillage des pairs et la synchronisation.</div>
+            </div>
+            <div class="enterprise-step-card">
+              <div class="enterprise-step-num">4</div>
+              <div class="enterprise-step-title" data-i18n="eStep4Title">Grappe de Stockage</div>
+              <div class="enterprise-step-desc" data-i18n="eStep4Desc">Activation du rôle stockage (<code>cybou-node provider run</code>) sur vos serveurs internes pour héberger les fragments chiffrés.</div>
+            </div>
+          </div>
+        </div>
+
+        <h4 style="font-size: 1.1rem; color: var(--text-primary); margin-top: 24px;" data-i18n="eCompTableTitle">Tableau Comparatif : Réseau Public vs. Réseau Privé d'Entreprise</h4>
+
+        <table class="compliance-detail-table">
+          <thead>
+            <tr>
+              <th style="width: 25%;" data-i18n="eThParam">Caractéristique</th>
+              <th style="width: 35%;" data-i18n="eThPublic">Réseau Public CYBOU</th>
+              <th style="width: 40%;" data-i18n="eThPrivate">Réseau Privé Dédié d'Entreprise</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong data-i18n="eRowGen">Bloc de Genèse</strong></td>
+              <td data-i18n="eRowGenPub">Genèse publique souveraine (France)</td>
+              <td data-i18n="eRowGenPriv"><strong>Genèse privée dédiée</strong> (Identifiant réseau unique à l'organisation)</td>
+            </tr>
+            <tr>
+              <td><strong data-i18n="eRowPoa">Opérateur de Finalité (PoA)</strong></td>
+              <td data-i18n="eRowPoaPub">Autorité de référence CYBOU</td>
+              <td data-i18n="eRowPoaPriv"><strong>Poste sécurisé de votre DSI / RSSI</strong> (Contrôle souverain exclusif)</td>
+            </tr>
+            <tr>
+              <td><strong data-i18n="eRowBoot">Nœuds d'Amorçage (Bootstrap)</strong></td>
+              <td data-i18n="eRowBootPub">Nœuds publics géolocalisés en France</td>
+              <td data-i18n="eRowBootPriv"><strong>1 à 4 serveurs d'amorçage internes</strong> (Sur votre LAN / Intranet / VPN)</td>
+            </tr>
+            <tr>
+              <td><strong data-i18n="eRowStorage">Infrastructure de Stockage</strong></td>
+              <td data-i18n="eRowStoragePub">Fournisseurs de stockage qualifiés en France</td>
+              <td data-i18n="eRowStoragePriv"><strong>Serveurs d'entreprise sur site (On-Premise)</strong> ou cloud privé qualifié</td>
+            </tr>
+            <tr>
+              <td><strong data-i18n="eRowPerim">Périmètre Réseau &amp; Accès</strong></td>
+              <td data-i18n="eRowPerimPub">Internet (Adresses IP françaises uniquement)</td>
+              <td data-i18n="eRowPerimPriv"><strong>Intranet d'entreprise, VPN privé ou Enclave Air-Gap fermée</strong></td>
+            </tr>
+            <tr>
+              <td><strong data-i18n="eRowCrypto">Transport &amp; Cryptographie</strong></td>
+              <td data-i18n="eRowCryptoPub">TLS 1.3 hybride post-quantique OpenSSL 3.5.2+</td>
+              <td data-i18n="eRowCryptoPriv"><strong>Identique : TLS 1.3 PQ + SPKI Pinning d'entreprise strict</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <!-- 3. Topologies de Déploiement -->
+    <article class="compliance-article" id="modes-deploiement">
+      <div class="compliance-article-header">
+        <div class="compliance-tag-row">
+          <span class="compliance-pill" data-i18n="eArt3Pill">Flexibilité Industrielle</span>
+          <span class="compliance-status-good" data-i18n="eArt3Status">3 Topologies Recommandées</span>
+        </div>
+        <h2 class="compliance-article-title" data-i18n="eArt3Title">Trois modes de déploiement selon votre criticité</h2>
+        <div class="compliance-article-sub" data-i18n="eArt3Sub">CYBOU s'adapte à tous les niveaux d'exigence, du réseau étanche sans Internet aux infrastructures multi-sites réparties.</div>
+      </div>
+
+      <div class="deploy-modes-grid">
+        <!-- Mode 1: Air-Gap -->
+        <div class="deploy-mode-card">
+          <div class="deploy-mode-tag" data-i18n="eMode1Tag">Défense &amp; R&amp;D Critique</div>
+          <h3 data-i18n="eMode1Title">1. Déploiement Air-Gap (Enclave Fermée)</h3>
+          <p data-i18n="eMode1Desc">Réseau 100% autonome et déconnecté d'Internet. Tout le trafic P2P, le stockage et les signatures circulent exclusivement sur votre réseau local sécurisé ou fibre dédiée.</p>
+          <ul class="deploy-features-list">
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              <span data-i18n="eMode1F1">Zéro connexion externe</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              <span data-i18n="eMode1F2">Secret de fabrication et brevets</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              <span data-i18n="eMode1F3">Protection contre toute exfiltration</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Mode 2: Multi-Sites Intranet -->
+        <div class="deploy-mode-card">
+          <div class="deploy-mode-tag" data-i18n="eMode2Tag">Groupes &amp; ETI</div>
+          <h3 data-i18n="eMode2Title">2. Intranet &amp; VPN Multi-Sites</h3>
+          <p data-i18n="eMode2Desc">Interconnexion sécurisée entre vos sièges, bureaux d'études et usines distantes via vos liens MPLS, SD-WAN ou tunnels VPN chiffrés (IPsec / WireGuard).</p>
+          <ul class="deploy-features-list">
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              <span data-i18n="eMode2F1">Réplication multi-datacenters</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              <span data-i18n="eMode2F2">Continuité en cas de rupture de site</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              <span data-i18n="eMode2F3">Gestion centralisée par la DSI</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Mode 3: Cloud Souverain Dédié -->
+        <div class="deploy-mode-card">
+          <div class="deploy-mode-tag" data-i18n="eMode3Tag">Secteur Public &amp; Santé</div>
+          <h3 data-i18n="eMode3Title">3. Cloud Souverain Privé (SecNumCloud / HDS)</h3>
+          <p data-i18n="eMode3Desc">Vos serveurs de stockage et nœuds bootstrap sont déployés sur des instances dédiées chez un fournisseur de cloud souverain français qualifié (OVHcloud, Scaleway, 3DS Outscale).</p>
+          <ul class="deploy-features-list">
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              <span data-i18n="eMode3F1">Conformité HDS &amp; SecNumCloud</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              <span data-i18n="eMode3F2">Zéro investissement matériel lourd</span>
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+              <span data-i18n="eMode3F3">Chiffrement client inviolable</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <!-- 4. Gouvernance DSI & Sécurité -->
+    <article class="compliance-article" id="gouvernance">
+      <div class="compliance-article-header">
+        <div class="compliance-tag-row">
+          <span class="compliance-pill" data-i18n="eArt4Pill">Gestion Opérationnelle</span>
+          <span class="compliance-status-good" data-i18n="eArt4Status">Prêt pour la Production</span>
+        </div>
+        <h2 class="compliance-article-title" data-i18n="eArt4Title">Gouvernance, Administration &amp; Simplicité Opérationnelle</h2>
+        <div class="compliance-article-sub" data-i18n="eArt4Sub">Des outils industriels pour administrer votre flotte de postes et serveurs sans complexité inutile.</div>
+      </div>
+
+      <div class="compliance-prose">
+        <p data-i18n="eArt4P1">
+          Contrairement aux solutions propriétaires lourdes nécessitant des serveurs d'annuaire fragiles et des dizaines de composants hétérogènes, CYBOU repose sur une architecture épurée :
+        </p>
+
+        <ul>
+          <li>
+            <strong data-i18n="eGovItem1Title">Un binaire unique pour toute l'infrastructure :</strong><br>
+            <span data-i18n="eGovItem1Desc">Le même exécutable unifié <code>cybou-node</code> sert de nœud complet, de serveur d'amorçage (bootstrap) et de serveur de stockage (provider). Il tourne en tâche de fond sous Linux avec un service systemd standard, consomme peu de mémoire et s'intègre naturellement à vos outils de déploiement Ansible, Puppet ou Terraform.</span>
+          </li>
+          <li>
+            <strong data-i18n="eGovItem2Title">Application de bureau intuitive pour les collaborateurs :</strong><br>
+            <span data-i18n="eGovItem2Desc">Les équipes utilisent <code>CYBOU Desktop</code> sur leurs postes de travail (Windows, Linux, macOS). Une interface soignée unifiant messagerie chiffrée, espace de fichiers et identité souveraine sans formation technique préalable.</span>
+          </li>
+          <li>
+            <strong data-i18n="eGovItem3Title">Élimination des mots de passe et bases d'identifiants compromises :</strong><br>
+            <span data-i18n="eGovItem3Desc">Finis les annuaires LDAP ou Active Directory exposés aux attaques de type Golden Ticket ou credential stuffing. Chaque collaborateur possède sa propre phrase secrète de 24 mots et ses paires de clés asymétriques scellées localement.</span>
+          </li>
+          <li>
+            <strong data-i18n="eGovItem4Title">Cycle de vie et rotation des clés (IdentityRotate) :</strong><br>
+            <span data-i18n="eGovItem4Desc">En cas de changement d'ordinateur ou de suspicion de compromission, l'opération atomique <code>IdentityRotate</code> permet de révoquer et renouveler instantanément les clés de signature et de chiffrement sans perdre l'historique ni l'identifiant du collaborateur.</span>
+          </li>
+          <li>
+            <strong data-i18n="eGovItem5Title">Sauvegarde de sinistre et PCA/PRA déterministe :</strong><br>
+            <span data-i18n="eGovItem5Desc">En cas de sinistre physique majeur détruisant vos locaux, la simple possession de la clé de genèse et des 24 mots permet de réinstancier l'autorité et de restaurer les données d'entreprise de manière mathématiquement vérifiée.</span>
+          </li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- 5. Cas d'Usage Sectoriels -->
+    <article class="compliance-article" id="cas-usage">
+      <div class="compliance-article-header">
+        <div class="compliance-tag-row">
+          <span class="compliance-pill" data-i18n="eArt5Pill">Applications Métier</span>
+          <span class="compliance-status-good" data-i18n="eArt5Status">Secteurs Sensibles</span>
+        </div>
+        <h2 class="compliance-article-title" data-i18n="eArt5Title">Cas d'usage stratégiques pour les organisations exigeantes</h2>
+        <div class="compliance-article-sub" data-i18n="eArt5Sub">Conçu pour protéger ce que votre organisation a de plus précieux : son savoir-faire, ses secrets et sa souveraineté d'action.</div>
+      </div>
+
+      <div class="compliance-preview-grid" style="margin-top: 20px;">
+        <div class="compliance-card">
+          <div class="compliance-badge-row">
+            <span class="compliance-pill" data-i18n="eUse1Pill">Industrie de Pointe</span>
+            <span class="compliance-status-good" data-i18n="eUse1Badge">Secret des Affaires</span>
+          </div>
+          <h3 data-i18n="eUse1Title">R&amp;D, Propriété Intellectuelle &amp; Brevets</h3>
+          <p data-i18n="eUse1Desc">Protection absolue des plans de fabrication, formulations chimiques, codes sources et stratégies de mise sur le marché contre l'espionnage industriel étranger et les attaques par rançongiciel.</p>
+        </div>
+
+        <div class="compliance-card">
+          <div class="compliance-badge-row">
+            <span class="compliance-pill" data-i18n="eUse2Pill">Défense &amp; OIV</span>
+            <span class="compliance-status-good" data-i18n="eUse2Badge">Directive NIS 2</span>
+          </div>
+          <h3 data-i18n="eUse2Title">Infrastructures Critiques &amp; OSE</h3>
+          <p data-i18n="eUse2Desc">Réseau de communication tactique et de sauvegarde décentralisé pour les Opérateurs d'Importance Vitale devant satisfaire aux normes NIS 2 et aux impératifs de résilience en situation de crise.</p>
+        </div>
+
+        <div class="compliance-card">
+          <div class="compliance-badge-row">
+            <span class="compliance-pill" data-i18n="eUse3Pill">Professions Réglementées</span>
+            <span class="compliance-status-good" data-i18n="eUse3Badge">Secret Professionnel</span>
+          </div>
+          <h3 data-i18n="eUse3Title">Cabinets d'Avocats, Notaires &amp; Audit</h3>
+          <p data-i18n="eUse3Desc">Data room virtuelle inviolable pour les opérations de fusions-acquisitions (M&amp;A), contentieux stratégiques et échanges d'actes authentiques à l'abri de toute curiosité étatique ou concurrente.</p>
+        </div>
+
+        <div class="compliance-card">
+          <div class="compliance-badge-row">
+            <span class="compliance-pill" data-i18n="eUse4Pill">Consortiums Médicaux</span>
+            <span class="compliance-status-good" data-i18n="eUse4Badge">Données de Santé</span>
+          </div>
+          <h3 data-i18n="eUse4Title">Cliniques, Laboratoires &amp; CHU</h3>
+          <p data-i18n="eUse4Desc">Échange sécurisé de dossiers patients, imageries DICOM lourdes et télé-expertise entre établissements hospitaliers, avec stockage hébergé en interne ou chez des tiers certifiés HDS.</p>
+        </div>
+      </div>
+    </article>
+
+    <!-- 6. Contact & PoC -->
+    <article class="compliance-article" id="contact">
+      <div class="compliance-article-header">
+        <div class="compliance-tag-row">
+          <span class="compliance-pill" data-i18n="eArt6Pill">Passez à l'Action</span>
+          <span class="compliance-status-good" data-i18n="eArt6Status">Pilote &amp; Déploiement</span>
+        </div>
+        <h2 class="compliance-article-title" data-i18n="eArt6Title">Déployez votre premier réseau pilote CYBOU</h2>
+        <div class="compliance-article-sub" data-i18n="eArt6Sub">Notre architecture est entièrement documentée, transparente et vérifiable. Mettez en place un banc d'essai interne ou échangez avec l'équipe de conception.</div>
+      </div>
+
+      <div class="compliance-prose">
+        <p data-i18n="eContactP1">
+          Vous souhaitez évaluer CYBOU dans votre environnement de test ou concevoir une enclave sécurisée pour vos équipes stratégiques ? Vous disposez de plusieurs points d'entrée :
+        </p>
+
+        <div class="compliance-cta-box" style="margin-top: 18px;">
+          <div>
+            <div class="compliance-cta-title" data-i18n="eCtaTitle">Échanger avec l'équipe CYBOU pour un réseau dédié</div>
+            <div class="compliance-cta-desc" data-i18n="eCtaDesc">Assistance pour la génération de genèse d'entreprise, conseils de dimensionnement infrastructure et audit de conformité.</div>
+          </div>
+          <a href="https://github.com/cybou-fr/cybou/issues" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="white-space: nowrap;" data-i18n="eCtaBtn">Contacter l'équipe d'ingénierie</a>
+        </div>
+      </div>
+    </article>
+
+  </main>
+
+  <!-- ==========================================================================
+       Footer
+       ========================================================================== -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-grid">
+        <div class="footer-col-brand">
+          <div class="footer-brand-title">
+            <div class="logo-tile" style="width: 28px; height: 28px; border-radius: 7px;">
+              <img src="assets/cybou.png" alt="CYBOU Logo" width="20" height="20">
+            </div>
+            <span>CYBOU</span>
+          </div>
+          <p data-i18n="footBrand">L'alternative souveraine pour vos communications et fichiers privés.<br>Conçu et développé en France.</p>
+        </div>
+
+        <div class="footer-col">
+          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footProd">Produit</h4>
+          <ul class="footer-links">
+            <li><a href="index.html#showcase" data-i18n="footProdDesktop">CYBOU Desktop</a></li>
+            <li><a href="entreprise.html" data-i18n="navEnterprise">CYBOU Entreprise</a></li>
+            <li><a href="index.html#services" data-i18n="footProdMail">CYBOU Mail</a></li>
+            <li><a href="index.html#services" data-i18n="footProdFiles">CYBOU Files</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footSec">Sécurité &amp; Souveraineté</h4>
+          <ul class="footer-links">
+            <li><a href="index.html#security" data-i18n="footSecTls">Transport TLS 1.3 Post-Quantique</a></li>
+            <li><a href="index.html#security" data-i18n="footSecE2ee">Chiffrement client intégral</a></li>
+            <li><a href="conformite.html" data-i18n="navCompliance">Conformité RGPD / NIS 2</a></li>
+            <li><a href="entreprise.html" data-i18n="footSecEnterprise">Réseaux privés dédiés</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footRes">Ressources</h4>
+          <ul class="footer-links">
+            <li><a href="https://github.com/cybou-fr/cybou" target="_blank" rel="noopener noreferrer" data-i18n="footResGithub">Code source GitHub</a></li>
+            <li><a href="index.html#architecture" data-i18n="footResTech">Sous le capot (Technique)</a></li>
+            <li><a href="index.html#faq" data-i18n="footResFaq">Foire aux questions</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/COPYING" target="_blank" rel="noopener noreferrer" data-i18n="footResLicense">Licence open source</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>
+          © 2026 Stanislav Saveliev. CYBOU, conçu en France. Tous droits réservés.
+          <span style="margin: 0 8px; color: var(--border-medium);">•</span>
+          <a href="/robots.txt" style="color: var(--text-muted);">robots.txt</a>
+          <span style="margin: 0 6px; color: var(--border-medium);">•</span>
+          <a href="/sitemap.xml" style="color: var(--text-muted);">sitemap.xml</a>
+          <span style="margin: 0 6px; color: var(--border-medium);">•</span>
+          <a href="/llms.txt" style="color: var(--text-muted);">llms.txt</a>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--brand-teal-dark);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+          <span data-i18n="footBottomBadge">Recherche &amp; Souveraineté Numérique Européenne</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js?v=20261001-5"></script>
+</body>
+</html>
