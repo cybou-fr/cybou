@@ -24,6 +24,17 @@ bool GetU32(std::span<const unsigned char> bytes, size_t& offset, uint32_t& valu
     for (unsigned i = 0; i < 4; ++i) value |= uint32_t{bytes[offset++]} << (i * 8);
     return true;
 }
+void PutU64(std::vector<unsigned char>& out, uint64_t value)
+{
+    for (unsigned i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(value >> (i * 8)));
+}
+bool GetU64(std::span<const unsigned char> bytes, size_t& offset, uint64_t& value)
+{
+    if (offset > bytes.size() || bytes.size() - offset < 8) return false;
+    value = 0;
+    for (unsigned i = 0; i < 8; ++i) value |= uint64_t{bytes[offset++]} << (i * 8);
+    return true;
+}
 bool ReadBlob(std::span<const unsigned char> bytes, size_t& offset, std::vector<unsigned char>& out,
     size_t maximum)
 {
@@ -48,11 +59,12 @@ std::optional<std::vector<unsigned char>> EncodeBootstrapRequest(const Bootstrap
     out.push_back(static_cast<unsigned char>(request.kind));
     switch (request.kind) {
     case BootstrapRequestKind::STATUS:
-        if (!request.activation_code.empty() || request.binding || request.previous_binding || request.replacement) return std::nullopt;
+        if (!request.activation_code.empty() || request.binding || request.previous_binding || request.replacement ||
+            request.transition_from_generation != 0) return std::nullopt;
         break;
     case BootstrapRequestKind::CLAIM: {
         if (request.activation_code.empty() || request.activation_code.size() > MAX_ACTIVATION_CODE ||
-            !request.binding || request.previous_binding || request.replacement) return std::nullopt;
+            !request.binding || request.previous_binding || request.replacement || request.transition_from_generation != 0) return std::nullopt;
         const auto binding = EncodeBootstrapNetworkBinding(*request.binding);
         if (!binding) return std::nullopt;
         PutBlob(out, std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(request.activation_code.data()), request.activation_code.size()});
@@ -60,12 +72,18 @@ std::optional<std::vector<unsigned char>> EncodeBootstrapRequest(const Bootstrap
         break;
     }
     case BootstrapRequestKind::REPLACE: {
-        if (!request.replacement || !request.previous_binding || request.binding || !request.activation_code.empty()) return std::nullopt;
+        if (!request.replacement || !request.previous_binding || request.binding || !request.activation_code.empty() ||
+            request.transition_from_generation != 0) return std::nullopt;
         const auto replacement = EncodeBootstrapNetworkReplacement(*request.previous_binding, *request.replacement);
         if (!replacement) return std::nullopt;
         PutBlob(out, *replacement);
         break;
     }
+    case BootstrapRequestKind::GET_TRANSITION:
+        if (request.transition_from_generation == 0 || !request.activation_code.empty() || request.binding ||
+            request.previous_binding || request.replacement) return std::nullopt;
+        PutU64(out, request.transition_from_generation);
+        break;
     default: return std::nullopt;
     }
     if (out.size() > p2p::MAX_BOOTSTRAP_FRAME_PAYLOAD) return std::nullopt;
@@ -82,6 +100,11 @@ std::optional<BootstrapRequest> DecodeBootstrapRequest(const std::span<const uns
     size_t offset = REQUEST_MAGIC.size() + 1;
     if (request.kind == BootstrapRequestKind::STATUS)
         return offset == bytes.size() ? std::optional<BootstrapRequest>{request} : std::nullopt;
+    if (request.kind == BootstrapRequestKind::GET_TRANSITION) {
+        if (!GetU64(bytes, offset, request.transition_from_generation) || request.transition_from_generation == 0 ||
+            offset != bytes.size()) return std::nullopt;
+        return request;
+    }
     std::vector<unsigned char> blob;
     if (request.kind == BootstrapRequestKind::CLAIM) {
         if (!ReadBlob(bytes, offset, blob, MAX_ACTIVATION_CODE) || blob.empty()) return std::nullopt;
@@ -103,11 +126,18 @@ std::optional<std::vector<unsigned char>> EncodeBootstrapResponse(const Bootstra
 {
     std::vector<unsigned char> out{RESPONSE_MAGIC.begin(), RESPONSE_MAGIC.end()};
     out.push_back(static_cast<unsigned char>(response.status));
-    if (response.binding) {
+    if (response.status == BootstrapResponseStatus::TRANSITION) {
+        if (response.binding || response.transition.empty()) return std::nullopt;
+        PutBlob(out, response.transition);
+    } else if (response.binding) {
+        if (!response.transition.empty()) return std::nullopt;
         const auto binding = EncodeBootstrapNetworkBinding(*response.binding);
         if (!binding) return std::nullopt;
         PutBlob(out, *binding);
-    } else PutU32(out, 0);
+    } else {
+        if (!response.transition.empty()) return std::nullopt;
+        PutU32(out, 0);
+    }
     if (out.size() > p2p::MAX_BOOTSTRAP_FRAME_PAYLOAD) return std::nullopt;
     return out;
 }
@@ -115,15 +145,19 @@ std::optional<std::vector<unsigned char>> EncodeBootstrapResponse(const Bootstra
 std::optional<BootstrapResponse> DecodeBootstrapResponse(const std::span<const unsigned char> bytes)
 {
     if (bytes.size() < 10 || bytes.size() > p2p::MAX_BOOTSTRAP_FRAME_PAYLOAD ||
-        !std::equal(RESPONSE_MAGIC.begin(), RESPONSE_MAGIC.end(), bytes.begin()) || bytes[5] > 9) return std::nullopt;
+        !std::equal(RESPONSE_MAGIC.begin(), RESPONSE_MAGIC.end(), bytes.begin()) || bytes[5] > 10) return std::nullopt;
     size_t offset{6};
     std::vector<unsigned char> blob;
     if (!ReadBlob(bytes, offset, blob, p2p::MAX_BOOTSTRAP_FRAME_PAYLOAD) || offset != bytes.size()) return std::nullopt;
-    BootstrapResponse response{static_cast<BootstrapResponseStatus>(bytes[5]), std::nullopt};
+    BootstrapResponse response{static_cast<BootstrapResponseStatus>(bytes[5]), std::nullopt, {}};
     if (!blob.empty()) {
-        response.binding = DecodeBootstrapNetworkBinding(blob);
-        if (!response.binding) return std::nullopt;
+        if (response.status == BootstrapResponseStatus::TRANSITION) response.transition = std::move(blob);
+        else {
+            response.binding = DecodeBootstrapNetworkBinding(blob);
+            if (!response.binding) return std::nullopt;
+        }
     }
+    if (response.status == BootstrapResponseStatus::TRANSITION && response.transition.empty()) return std::nullopt;
     if (response.status == BootstrapResponseStatus::EMPTY && response.binding) return std::nullopt;
     if ((response.status == BootstrapResponseStatus::BOUND || response.status == BootstrapResponseStatus::CLAIMED ||
          response.status == BootstrapResponseStatus::REPLACED || response.status == BootstrapResponseStatus::ALREADY_BOUND) &&
@@ -154,6 +188,20 @@ std::optional<p2p::Frame> BootstrapProtocolHandler::Handle(const p2p::Frame& fra
         default: response.status = BootstrapResponseStatus::STORAGE_ERROR; break;
         }
         response.binding = m_store.CurrentBinding();
+    } else if (request->kind == BootstrapRequestKind::GET_TRANSITION) {
+        const auto transition = m_store.ArchivedTransition(request->transition_from_generation);
+        if (transition) {
+            const auto previous = m_store.ArchivedBinding(request->transition_from_generation);
+            if (previous) {
+                const auto encoded = EncodeBootstrapNetworkReplacement(*previous, *transition);
+                if (encoded) {
+                    response.status = BootstrapResponseStatus::TRANSITION;
+                    response.transition = *encoded;
+                }
+            }
+        } else {
+            response.status = BootstrapResponseStatus::INVALID_REQUEST;
+        }
     } else {
         const auto status = request->replacement ? m_store.ReplaceNetwork(*request->replacement) :
             BootstrapReplacementStatus::INVALID_REPLACEMENT;

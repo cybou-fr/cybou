@@ -39,6 +39,7 @@ public:
 
     BootstrapNetworkBinding Current() const;
     BootstrapBindingAcceptStatus AcceptNext(const BootstrapNetworkBinding& binding);
+    BootstrapBindingAcceptStatus AcceptReplacement(const BootstrapNetworkReplacement& replacement);
 
 private:
     BootstrapBindingStore(std::unique_ptr<KVStore> database, BootstrapNetworkBinding binding);

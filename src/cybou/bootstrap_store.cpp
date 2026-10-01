@@ -26,10 +26,16 @@ constexpr std::string_view STATE_KEY{"bootstrap/state"};
 constexpr std::string_view ACTIVATION_HASH_KEY{"bootstrap/activation-sha256"};
 constexpr std::string_view BINDING_KEY{"bootstrap/current-binding"};
 constexpr std::string_view ARCHIVE_PREFIX{"bootstrap/archive/"};
+constexpr std::string_view TRANSITION_PREFIX{"bootstrap/transition/"};
 
 std::string ArchiveKey(const uint64_t generation)
 {
     return std::string{ARCHIVE_PREFIX} + std::to_string(generation);
+}
+
+std::string TransitionKey(const uint64_t from_generation)
+{
+    return std::string{TRANSITION_PREFIX} + std::to_string(from_generation);
 }
 
 std::optional<std::array<unsigned char, 32>> HashActivationCode(const std::string_view code)
@@ -121,7 +127,22 @@ std::unique_ptr<BootstrapStore> BootstrapStore::Open(const std::filesystem::path
         std::vector<unsigned char> binding_bytes;
         if (!database->Read(std::string{BINDING_KEY}, binding_bytes)) return nullptr;
         auto binding = DecodeBootstrapNetworkBinding(binding_bytes);
-        if (!binding) return nullptr;
+        if (!binding || binding->generation == 0) return nullptr;
+        auto expected_previous = *binding;
+        for (uint64_t generation = binding->generation; generation > 1; --generation) {
+            std::vector<unsigned char> archived_bytes;
+            std::vector<unsigned char> transition_bytes;
+            if (!database->Read(ArchiveKey(generation - 1), archived_bytes) ||
+                !database->Read(TransitionKey(generation - 1), transition_bytes)) return nullptr;
+            const auto archived = DecodeBootstrapNetworkBinding(archived_bytes);
+            if (!archived || archived->generation != generation - 1) return nullptr;
+            const auto transition = DecodeBootstrapNetworkReplacement(transition_bytes, *archived);
+            if (!transition || transition->new_binding.generation != generation) return nullptr;
+            const auto expected_bytes = EncodeBootstrapNetworkBinding(expected_previous);
+            const auto transitioned_bytes = EncodeBootstrapNetworkBinding(transition->new_binding);
+            if (!expected_bytes || !transitioned_bytes || *expected_bytes != *transitioned_bytes) return nullptr;
+            expected_previous = *archived;
+        }
         std::array<unsigned char, 32> empty_hash{};
         return std::unique_ptr<BootstrapStore>{new BootstrapStore{std::move(database),
             BootstrapStoreState::BOUND, empty_hash, std::move(binding)}};
@@ -158,6 +179,22 @@ std::optional<BootstrapNetworkBinding> BootstrapStore::ArchivedBinding(const uin
     auto binding = DecodeBootstrapNetworkBinding(encoded);
     if (!binding || binding->generation != generation) return std::nullopt;
     return binding;
+}
+
+std::optional<BootstrapNetworkReplacement> BootstrapStore::ArchivedTransition(
+    const uint64_t from_generation) const
+{
+    std::lock_guard lock{m_mutex};
+    if (m_state != BootstrapStoreState::BOUND || !m_binding || from_generation == 0 ||
+        from_generation >= m_binding->generation) return std::nullopt;
+    std::vector<unsigned char> binding_bytes, transition_bytes;
+    if (!m_database->Read(ArchiveKey(from_generation), binding_bytes) ||
+        !m_database->Read(TransitionKey(from_generation), transition_bytes)) return std::nullopt;
+    const auto previous = DecodeBootstrapNetworkBinding(binding_bytes);
+    if (!previous || previous->generation != from_generation) return std::nullopt;
+    auto replacement = DecodeBootstrapNetworkReplacement(transition_bytes, *previous);
+    if (!replacement || replacement->new_binding.generation != from_generation + 1) return std::nullopt;
+    return replacement;
 }
 
 BootstrapClaimStatus BootstrapStore::ClaimInitialNetwork(const std::string_view activation_code,
@@ -199,13 +236,18 @@ BootstrapReplacementStatus BootstrapStore::ReplaceNetwork(
     }
     const auto encoded_current = EncodeBootstrapNetworkBinding(*m_binding);
     const auto encoded_next = EncodeBootstrapNetworkBinding(replacement.new_binding);
-    if (!encoded_current || !encoded_next) return BootstrapReplacementStatus::INVALID_REPLACEMENT;
+    const auto encoded_transition = EncodeBootstrapNetworkReplacement(*m_binding, replacement);
+    if (!encoded_current || !encoded_next || !encoded_transition) return BootstrapReplacementStatus::INVALID_REPLACEMENT;
     const auto archive_key = ArchiveKey(m_binding->generation);
-    if (m_database->Exists(archive_key)) return BootstrapReplacementStatus::ARCHIVE_CONFLICT;
+    const auto transition_key = TransitionKey(m_binding->generation);
+    if (m_database->Exists(archive_key) || m_database->Exists(transition_key)) {
+        return BootstrapReplacementStatus::ARCHIVE_CONFLICT;
+    }
 
     try {
         KVStore::Batch batch;
         batch.Write(archive_key, *encoded_current);
+        batch.Write(transition_key, *encoded_transition);
         batch.Write(std::string{BINDING_KEY}, *encoded_next);
         m_database->WriteBatch(batch, true);
     } catch (...) {

@@ -100,4 +100,26 @@ BootstrapBindingAcceptStatus BootstrapBindingStore::AcceptNext(const BootstrapNe
     return BootstrapBindingAcceptStatus::ACCEPTED;
 }
 
+BootstrapBindingAcceptStatus BootstrapBindingStore::AcceptReplacement(
+    const BootstrapNetworkReplacement& replacement)
+{
+    std::lock_guard lock{m_mutex};
+    if (!VerifyBootstrapNetworkReplacement(m_binding, replacement)) {
+        if (replacement.new_binding.generation <= m_binding.generation)
+            return replacement.new_binding.generation < m_binding.generation ?
+                BootstrapBindingAcceptStatus::GENERATION_ROLLBACK :
+                BootstrapBindingAcceptStatus::GENERATION_CONFLICT;
+        return BootstrapBindingAcceptStatus::INVALID_BINDING;
+    }
+    const auto encoded = EncodeBootstrapNetworkBinding(replacement.new_binding);
+    if (!encoded) return BootstrapBindingAcceptStatus::INVALID_BINDING;
+    try {
+        m_database->Write(std::string{BINDING_KEY}, *encoded, true);
+    } catch (...) {
+        return BootstrapBindingAcceptStatus::STORAGE_ERROR;
+    }
+    m_binding = replacement.new_binding;
+    return BootstrapBindingAcceptStatus::ACCEPTED;
+}
+
 } // namespace cybou

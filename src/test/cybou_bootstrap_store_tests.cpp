@@ -120,7 +120,8 @@ BOOST_AUTO_TEST_CASE(replacement_requires_old_authority_and_archives_atomically)
     old_entropy[0] = 0x42;
     const auto initial = TestBinding(0x42, 1);
     const auto next = TestBinding(0x43, 2);
-    BOOST_REQUIRE(initial && next);
+    const auto third = TestBinding(0x44, 3);
+    BOOST_REQUIRE(initial && next && third);
 
     auto provision = cybou::BootstrapStore::Provision(path);
     BOOST_REQUIRE(provision);
@@ -147,6 +148,17 @@ BOOST_AUTO_TEST_CASE(replacement_requires_old_authority_and_archives_atomically)
     BOOST_CHECK(provision->store->ArchivedBinding(1)->network_id == initial->network_id);
     BOOST_CHECK(provision->store->ReplaceNetwork(*decoded) ==
         cybou::BootstrapReplacementStatus::INVALID_REPLACEMENT);
+    cybou::RecoveryEntropy next_entropy{};
+    next_entropy[0] = 0x43;
+    const auto second_replacement = cybou::CreateBootstrapNetworkReplacement(*next, *third, next_entropy);
+    BOOST_REQUIRE(second_replacement);
+    BOOST_CHECK(provision->store->ReplaceNetwork(*second_replacement) ==
+        cybou::BootstrapReplacementStatus::REPLACED);
+    const auto first_transition = provision->store->ArchivedTransition(1);
+    const auto second_transition = provision->store->ArchivedTransition(2);
+    BOOST_REQUIRE(first_transition && second_transition);
+    BOOST_CHECK(first_transition->new_binding.network_id == next->network_id);
+    BOOST_CHECK(second_transition->new_binding.network_id == third->network_id);
     const auto archived = provision->store->ArchivedBinding(1);
     BOOST_REQUIRE(archived);
     BOOST_CHECK(archived->network_id == initial->network_id);
@@ -154,11 +166,27 @@ BOOST_AUTO_TEST_CASE(replacement_requires_old_authority_and_archives_atomically)
 
     auto reopened = cybou::BootstrapStore::Open(path);
     BOOST_REQUIRE(reopened);
-    BOOST_CHECK(reopened->CurrentBinding()->generation == 2);
+    BOOST_CHECK(reopened->CurrentBinding()->generation == 3);
     const auto persisted_archive = reopened->ArchivedBinding(1);
     BOOST_REQUIRE(persisted_archive);
     BOOST_CHECK(persisted_archive->generation == 1);
+    const auto persisted_first_transition = reopened->ArchivedTransition(1);
+    const auto persisted_second_transition = reopened->ArchivedTransition(2);
+    BOOST_REQUIRE(persisted_first_transition && persisted_second_transition);
+    BOOST_CHECK(cybou::VerifyBootstrapNetworkReplacement(*persisted_archive, *persisted_first_transition));
+    const auto generation_two = reopened->ArchivedBinding(2);
+    BOOST_REQUIRE(generation_two);
+    BOOST_CHECK(cybou::VerifyBootstrapNetworkReplacement(*generation_two, *persisted_second_transition));
     reopened.reset();
+    {
+        cybou::KVStore database{cybou::KVStoreOptions{.path = path}};
+        std::vector<unsigned char> transition_bytes;
+        BOOST_REQUIRE(database.Read(std::string{"bootstrap/transition/1"}, transition_bytes));
+        BOOST_REQUIRE(!transition_bytes.empty());
+        transition_bytes.front() ^= 0x01;
+        database.Write(std::string{"bootstrap/transition/1"}, transition_bytes, true);
+    }
+    BOOST_CHECK(!cybou::BootstrapStore::Open(path)); // corrupted catch-up history fails closed
     std::filesystem::remove_all(path);
 }
 

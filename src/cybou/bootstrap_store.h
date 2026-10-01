@@ -55,6 +55,7 @@ public:
     BootstrapStoreState State() const;
     std::optional<BootstrapNetworkBinding> CurrentBinding() const;
     std::optional<BootstrapNetworkBinding> ArchivedBinding(uint64_t generation) const;
+    std::optional<BootstrapNetworkReplacement> ArchivedTransition(uint64_t from_generation) const;
     BootstrapClaimStatus ClaimInitialNetwork(std::string_view activation_code,
         const BootstrapNetworkBinding& binding);
     BootstrapReplacementStatus ReplaceNetwork(const BootstrapNetworkReplacement& replacement);

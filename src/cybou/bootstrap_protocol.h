@@ -14,11 +14,11 @@
 
 namespace cybou {
 
-enum class BootstrapRequestKind : uint8_t { STATUS = 1, CLAIM = 2, REPLACE = 3 };
+enum class BootstrapRequestKind : uint8_t { STATUS = 1, CLAIM = 2, REPLACE = 3, GET_TRANSITION = 4 };
 enum class BootstrapResponseStatus : uint8_t {
     EMPTY = 0, BOUND = 1, CLAIMED = 2, REPLACED = 3, ALREADY_BOUND = 4,
     INVALID_ACTIVATION_CODE = 5, INVALID_BINDING = 6, INVALID_REPLACEMENT = 7,
-    STORAGE_ERROR = 8, INVALID_REQUEST = 9,
+    STORAGE_ERROR = 8, INVALID_REQUEST = 9, TRANSITION = 10,
 };
 
 struct BootstrapRequest {
@@ -27,11 +27,13 @@ struct BootstrapRequest {
     std::optional<BootstrapNetworkBinding> binding;
     std::optional<BootstrapNetworkBinding> previous_binding;
     std::optional<BootstrapNetworkReplacement> replacement;
+    uint64_t transition_from_generation{0};
 };
 
 struct BootstrapResponse {
     BootstrapResponseStatus status{BootstrapResponseStatus::INVALID_REQUEST};
     std::optional<BootstrapNetworkBinding> binding;
+    std::vector<unsigned char> transition;
 };
 
 std::optional<std::vector<unsigned char>> EncodeBootstrapRequest(const BootstrapRequest& request);

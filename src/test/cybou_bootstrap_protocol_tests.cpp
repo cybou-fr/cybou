@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/bootstrap_protocol.h>
+#include <cybou/bootstrap_binding_store.h>
 #include <test/cybou_test_helpers.h>
 
 #include <boost/test/unit_test.hpp>
@@ -56,7 +57,8 @@ BOOST_AUTO_TEST_CASE(status_claim_and_replacement_round_trip)
 
     const auto first = Binding(0x42, 1);
     const auto next = Binding(0x43, 2);
-    BOOST_REQUIRE(first && next);
+    const auto third = Binding(0x44, 3);
+    BOOST_REQUIRE(first && next && third);
     cybou::BootstrapRequest claim;
     claim.kind = cybou::BootstrapRequestKind::CLAIM;
     claim.activation_code = "incorrect";
@@ -93,6 +95,41 @@ BOOST_AUTO_TEST_CASE(status_claim_and_replacement_round_trip)
     BOOST_REQUIRE(replaced->binding);
     BOOST_CHECK_EQUAL(replaced->binding->generation, 2);
     BOOST_CHECK(provision->store->ArchivedBinding(1)->network_id == first->network_id);
+
+    cybou::RecoveryEntropy next_entropy{};
+    next_entropy[0] = 0x43;
+    const auto second_replacement = cybou::CreateBootstrapNetworkReplacement(*next, *third, next_entropy);
+    BOOST_REQUIRE(second_replacement);
+    BOOST_CHECK(provision->store->ReplaceNetwork(*second_replacement) ==
+        cybou::BootstrapReplacementStatus::REPLACED);
+
+    const auto client_path = UniquePath();
+    std::filesystem::remove_all(client_path);
+    auto client = cybou::BootstrapBindingStore::TrustInitial(client_path, *first);
+    BOOST_REQUIRE(client);
+    for (const uint64_t generation : {uint64_t{1}, uint64_t{2}}) {
+        cybou::BootstrapRequest get_transition;
+        get_transition.kind = cybou::BootstrapRequestKind::GET_TRANSITION;
+        get_transition.transition_from_generation = generation;
+        const auto transition_response = Exchange(handler, get_transition);
+        BOOST_REQUIRE(transition_response);
+        BOOST_REQUIRE(transition_response->status == cybou::BootstrapResponseStatus::TRANSITION);
+        const auto decoded_transition = cybou::DecodeBootstrapNetworkReplacement(
+            transition_response->transition, client->Current());
+        BOOST_REQUIRE(decoded_transition);
+        BOOST_CHECK(client->AcceptReplacement(*decoded_transition) ==
+            cybou::BootstrapBindingAcceptStatus::ACCEPTED);
+    }
+    BOOST_CHECK_EQUAL(client->Current().generation, 3);
+    BOOST_CHECK(client->Current().network_id == third->network_id);
+    cybou::BootstrapRequest unavailable_transition;
+    unavailable_transition.kind = cybou::BootstrapRequestKind::GET_TRANSITION;
+    unavailable_transition.transition_from_generation = 3;
+    const auto unavailable = Exchange(handler, unavailable_transition);
+    BOOST_REQUIRE(unavailable);
+    BOOST_CHECK(unavailable->status == cybou::BootstrapResponseStatus::INVALID_REQUEST);
+    client.reset();
+    std::filesystem::remove_all(client_path);
 
     auto malformed = *encoded;
     malformed.pop_back();
