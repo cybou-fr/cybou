@@ -93,7 +93,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
     if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
     const auto local_bootstrap_account = m_runtime.LocalBootstrapAccountId();
-    if (local_bootstrap_account) caps |= CAP_BOOTSTRAP;
+    if (local_bootstrap_account) caps |= CAP_BOOTSTRAP | CAP_OPERATION_RELAY;
     // Only the configured bootstrap route needs the Central Authority's
     // session proof; discovered peers remain ordinary outbound sessions.
     if (m_runtime.IsPoaFinalizerEnabled() && m_runtime.IsConfiguredP2pEndpoint(endpoint.first, port)) {
@@ -337,8 +337,13 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
             if (!Connect(host, port)) continue;
             it = m_peers.find(endpoint);
         }
-        if (it == m_peers.end() || !it->second->Peer() ||
-            !(it->second->Peer()->capabilities & (CAP_ACCEPT_OPERATIONS | CAP_OPERATION_RELAY))) continue;
+        if (it == m_peers.end() || !it->second->Peer()) continue;
+        const auto capabilities = it->second->Peer()->capabilities;
+        const bool accepts_direct = (capabilities & CAP_ACCEPT_OPERATIONS) &&
+            it->second->PeerFinalizerAuthenticated();
+        const bool accepts_relay = (capabilities & CAP_OPERATION_RELAY) &&
+            it->second->PeerBootstrapAuthenticated();
+        if (!accepts_direct && !accepts_relay) continue;
         const auto acknowledgment = it->second->SubmitOperation(operation);
         if (!acknowledgment) {
             result.delivery_uncertain = true;

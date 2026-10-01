@@ -161,7 +161,9 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
             m_store, m_config.poa_finalizer_recovery_entropy->Get());
         m_config.poa_finalizer_recovery_entropy.reset();
     }
-    if (m_config.p2p_endpoint) m_peer_manager = std::make_unique<p2p::PeerManager>(*this);
+    // Keep the local full node usable before it has learned or connected to a
+    // peer. Configured endpoints and discovered hints can be added later.
+    m_peer_manager = std::make_unique<p2p::PeerManager>(*this);
 }
 
 bool CybouNodeRuntime::AdmitPeerAddress(const std::string& numeric_address) const
@@ -532,7 +534,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         if (m_store.PoaSafetyHalted() || (m_finalizer_node && m_finalizer_node->SafetyHalted())) {
             return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
         }
-        if (m_finalizer_node) {
+        if (m_finalizer_node && m_finalizer_node->SignerEnabled()) {
             const auto status = m_finalizer_node->SubmitOperationWithStatus(op, std::move(source_peer));
             if (status == OperationSubmitStatus::ACCEPTED || status == OperationSubmitStatus::ALREADY_PENDING) {
                 RememberOperationStatus(op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
@@ -547,17 +549,25 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         p2p_endpoint = m_config.p2p_endpoint;
         net_id = m_network_id;
     }
-    if (p2p_endpoint && m_peer_manager) {
+    if (m_peer_manager) {
         std::lock_guard p2p_lock(m_p2p_mutex);
-        // The configured finalizer always gets the operation, reconnecting if
-        // its session dropped (for example after a finalizer restart) while
-        // other peers, such as storage providers, stayed connected.
-        std::vector<std::pair<std::string, uint16_t>> accepting_candidates{*p2p_endpoint};
-        for (const auto& peer : m_peer_manager->Peers()) {
-            const std::pair<std::string, uint16_t> candidate{peer.address, peer.port};
-            if ((peer.hello.capabilities & p2p::CAP_ACCEPT_OPERATIONS) && candidate != *p2p_endpoint) {
-                accepting_candidates.push_back(candidate);
+        // Bring up the configured route if possible, then prefer a live
+        // genesis-key-authenticated finalizer session over the bootstrap relay.
+        if (p2p_endpoint) m_peer_manager->Connect(p2p_endpoint->first, p2p_endpoint->second);
+        std::vector<std::pair<std::string, uint16_t>> accepting_candidates;
+        for (const auto& peer : m_peer_manager->AuthenticatedFinalizerSessions()) {
+            if (peer.hello.capabilities & p2p::CAP_ACCEPT_OPERATIONS) {
+                accepting_candidates.emplace_back(peer.address, peer.port);
             }
+        }
+        for (const auto& peer : m_peer_manager->AuthenticatedBootstrapSessions()) {
+            if (peer.hello.capabilities & p2p::CAP_OPERATION_RELAY) {
+                accepting_candidates.emplace_back(peer.address, peer.port);
+            }
+        }
+        if (p2p_endpoint && std::find(accepting_candidates.begin(), accepting_candidates.end(), *p2p_endpoint) ==
+                accepting_candidates.end()) {
+            accepting_candidates.push_back(*p2p_endpoint);
         }
         const auto submitted = m_peer_manager->SubmitOperationToAny(accepting_candidates, op);
         // No acknowledgment from anyone is not a rejection: nothing proved the
@@ -837,7 +847,7 @@ void CybouNodeRuntime::SchedulePeerRetry(
 
 SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_blocks)
 {
-    if (!m_config.p2p_endpoint || !m_peer_manager) return {};
+    if (!m_peer_manager) return {};
     std::lock_guard p2p_lock(m_p2p_mutex);
 
     const auto local_status = GetStatus();
@@ -849,8 +859,9 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     }
 
     auto explicit_endpoints = GetExplicitPeerEndpoints();
-    if (std::find(explicit_endpoints.begin(), explicit_endpoints.end(), *m_config.p2p_endpoint) ==
-        explicit_endpoints.end()) {
+    if (m_config.p2p_endpoint &&
+        std::find(explicit_endpoints.begin(), explicit_endpoints.end(), *m_config.p2p_endpoint) ==
+            explicit_endpoints.end()) {
         explicit_endpoints.push_back(*m_config.p2p_endpoint);
     }
     m_peer_manager->SetExplicitEndpoints(explicit_endpoints);
@@ -901,7 +912,7 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     }
     const auto route_rank = [&](const p2p::PeerInfo& peer) {
         const auto endpoint = std::make_pair(peer.address, peer.port);
-        if (m_config.p2p_endpoint == endpoint) return 0;
+        if (m_config.p2p_endpoint && *m_config.p2p_endpoint == endpoint) return 0;
         return std::find(explicit_endpoints.begin(), explicit_endpoints.end(), endpoint) != explicit_endpoints.end() ? 1 : 2;
     };
     // HELLO heights are connection-time snapshots. Prefer configured routes so
@@ -924,8 +935,7 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
         // the configured genesis-key finalizer, not a provider's HELLO height
         // or its claim that it has no newer blocks. The session role is trusted
         // only after CYP2 verified FINALIZER_PROOF against the network key.
-        if (attempt.reached_peer_tip && peer.finalizer_authenticated && m_config.p2p_endpoint &&
-            peer.address == m_config.p2p_endpoint->first && peer.port == m_config.p2p_endpoint->second) {
+        if (attempt.reached_peer_tip && peer.finalizer_authenticated) {
             result.reached_peer_tip = true;
         }
         if (attempt.status == SyncPeerStatus::BLOCKS_APPLIED) {
@@ -1010,7 +1020,7 @@ size_t CybouNodeRuntime::ConnectedPeerCount() const
 bool CybouNodeRuntime::CanSubmitOperations() const
 {
     std::lock_guard lock(m_mutex);
-    return m_finalizer_node != nullptr || m_config.p2p_endpoint.has_value();
+    return (m_finalizer_node && m_finalizer_node->SignerEnabled()) || m_peer_manager != nullptr;
 }
 
 std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetPeerEndpointsForGossip() const

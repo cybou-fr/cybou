@@ -47,6 +47,43 @@ BOOST_AUTO_TEST_CASE(desktop_finalizer_worker_produces_blocks_and_stops_cleanly)
     BOOST_CHECK_EQUAL(service.Runtime().GetFinalizedHeight().value_or(0), stopped_height);
 }
 
+BOOST_AUTO_TEST_CASE(observer_network_service_starts_without_an_initial_peer)
+{
+    CybouServiceTestFixture local;
+    cybou::CybouNodeService service{{
+        .runtime = cybou::NodeRuntimeConfig{
+            .network_definition = local.definition,
+            .data_dir = local.directory / "peerless-observer-service",
+            .memory_only = true,
+            .wipe_data = true,
+            .peer_admission_policy = TestLabAdmissionPolicy(),
+        },
+        .genesis = local.genesis,
+    }};
+    service.Start();
+
+    std::mutex mutex;
+    std::condition_variable changed;
+    bool callback_seen{false};
+    bool reports_waiting_for_peer{false};
+    service.StartNetwork({.sync_interval = std::chrono::milliseconds{20}, .sync_batch_size = 1},
+        [&](const cybou::SyncPeerResult& result, const cybou::NodeRuntimeStatus& status, size_t peers) {
+            std::lock_guard lock{mutex};
+            callback_seen = true;
+            reports_waiting_for_peer = status.is_initialized && peers == 0 &&
+                result.status == cybou::SyncPeerStatus::CONNECTION_FAILED;
+            changed.notify_all();
+            return true;
+        });
+
+    {
+        std::unique_lock lock{mutex};
+        BOOST_REQUIRE(changed.wait_for(lock, std::chrono::seconds{5}, [&] { return callback_seen; }));
+    }
+    service.StopNetwork();
+    BOOST_CHECK(reports_waiting_for_peer);
+}
+
 BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
 {
     CybouServiceTestFixture primary;

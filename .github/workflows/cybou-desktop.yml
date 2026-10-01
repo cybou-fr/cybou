@@ -62,6 +62,16 @@ jobs:
             libxkbcommon-dev \
             libxkbcommon-x11-dev
 
+      - name: Install Qt 6.8.3 (Linux GCC)
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4
+        with:
+          version: '6.8.3'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          modules: ''
+          cache: true
+
       - name: Set up vcpkg
         uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
         with:
@@ -78,6 +88,7 @@ jobs:
             -DVCPKG_HOST_TRIPLET=x64-linux \
             -DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON \
             -DVCPKG_MANIFEST_FEATURES=tests \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
             -DCYBOU_CONSUMER_BUILD=ON \
             -DBUILD_GUI=ON \
             -DBUILD_TESTS=ON

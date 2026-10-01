@@ -51,7 +51,7 @@ public:
 
     /** Open or initialize the local state, rejecting corrupt and foreign state. */
     void Start();
-    /** Start CYP2 peer maintenance, verified sync and optional inbound CYP2 (needs runtime p2p_endpoint). */
+    /** Start CYP2 peer maintenance and verified sync, optionally before any peer is known. */
     void StartNetwork(
         CybouNetworkServiceConfig config,
         NetworkUpdate update);

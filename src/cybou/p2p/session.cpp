@@ -280,6 +280,11 @@ bool IsSupportedMessageType(const uint8_t type)
     case MessageType::CHUNK_DATA:
     case MessageType::GET_CHUNK_AUTHORIZATION_PROOF:
     case MessageType::CHUNK_AUTHORIZATION_PROOF:
+    case MessageType::BOOTSTRAP_RELAY_POLL:
+    case MessageType::BOOTSTRAP_RELAY_OPERATION_META:
+    case MessageType::BOOTSTRAP_RELAY_OPERATION_CHUNK:
+    case MessageType::BOOTSTRAP_RELAY_ACK:
+    case MessageType::BOOTSTRAP_RELAY_ACK_RESULT:
         return true;
     default:
         return false;
@@ -1330,7 +1335,10 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
         const auto endpoint = m_socket.remote_endpoint(endpoint_error);
         if (endpoint_error) return false;
         OperationSubmitResult result;
-        if (relay_session) {
+        // Client operations arrive on a different CYP2 session than the live
+        // finalizer route. Queue them at the bootstrap whenever a finalizer
+        // session is attached; Enqueue reports FINALIZER_UNAVAILABLE if not.
+        if (runtime.LocalBootstrapAccountId()) {
             switch (runtime.EnqueueRelayedOperation(bytes)) {
             case BootstrapRelayEnqueueStatus::QUEUED:
             case BootstrapRelayEnqueueStatus::DUPLICATE:

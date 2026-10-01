@@ -69,8 +69,6 @@ void CybouNodeService::StartNetwork(
     if (m_sync_thread.joinable() || m_listener_thread.joinable()) throw std::logic_error("observer network service is already running");
     if (config.sync_interval <= std::chrono::milliseconds::zero()) throw std::invalid_argument("network sync interval must be positive");
     if (config.sync_batch_size == 0 || config.sync_batch_size > 128) throw std::invalid_argument("invalid network sync batch size");
-    if (!m_runtime->HasP2pEndpoint()) throw std::invalid_argument("network service requires a configured CYP2 peer");
-
     m_stop_network.store(false);
     try {
         if (config.listen_endpoint) {

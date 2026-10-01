@@ -104,6 +104,28 @@ jobs:
           build-ci/bin/cybou-node finalizer run --network /tmp/net.def --data-dir /tmp/cybou-producer --key-file /tmp/val.key --listen 127.0.0.1:29461 --block-interval 100ms --peer-admission lab &
           producer_pid=$!
           trap 'kill "$producer_pid" 2>/dev/null || true' EXIT
+          python3 - <<'PY'
+          import subprocess
+          import sys
+          import time
+
+          command = ["build-ci/bin/cybou-node", "network", "probe", "--network", "/tmp/net.def",
+                     "--data-dir", "/tmp/cybou-observer", "--peer", "127.0.0.1:29461",
+                     "--peer-admission", "lab"]
+          deadline = time.monotonic() + 20
+          last = None
+          while time.monotonic() < deadline:
+              last = subprocess.run(command, text=True, capture_output=True)
+              if last.returncode == 0:
+                  break
+              time.sleep(0.1)
+          else:
+              print("finalizer CYP2 handshake did not become ready", file=sys.stderr)
+              if last is not None:
+                  print(last.stdout, end="", file=sys.stderr)
+                  print(last.stderr, end="", file=sys.stderr)
+              raise SystemExit(1)
+          PY
           build-ci/bin/cybou-node network sync --network /tmp/net.def --data-dir /tmp/cybou-observer --peer 127.0.0.1:29461 --count 1 --peer-admission lab
 
       - name: PoA finalizer + storage provider multi-process smoke
