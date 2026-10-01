@@ -68,6 +68,7 @@ int main(int argc, char** argv)
         std::cerr << "Could not load integrity-pinned DB-IP country CSV.\n";
         return 1;
     }
+    std::cerr << "Peer Geo data: DB-IP Lite IP to Country; attribution: DB-IP.com (CC BY 4.0)\n";
     const auto admission = cybou::p2p::PeerAdmissionPolicy::Public(dataset);
 
     unsigned port_value{0};
