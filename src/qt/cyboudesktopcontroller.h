@@ -20,6 +20,7 @@ class CybouNodeService;
 class CybouIdentityService;
 class CybouWalletService;
 class AuthorityIndex;
+namespace p2p { class GeoDatabaseUpdater; }
 }
 
 /** Owns the native CYBOU runtime and its services for one desktop session. */
@@ -45,6 +46,8 @@ private:
     std::unique_ptr<CybouCoreApplicationAdapter> m_application;
     /** Derived Identity Authority preview; used only on the network refresh thread. */
     std::unique_ptr<cybou::AuthorityIndex> m_authority_index;
+    std::shared_ptr<cybou::p2p::GeoDatabaseUpdater> m_geo_database_updater;
+    bool m_geo_admission_required{true};
     std::mutex m_identity_access_mutex;
     /** Where data of an older DEV network was moved at startup, if it was. */
     QString m_archived_network;

@@ -44,6 +44,8 @@ struct CybouCapabilities {
     bool validation{false};
 };
 
+enum class CybouGeoAdmissionStatus : quint8 { NotRequired, Waiting, Ready };
+
 /**
  * Identity-centric desktop status. Pages render product state only;
  * finalized_height is shown in Diagnostics and Security Details.
@@ -61,6 +63,7 @@ struct CybouDesktopStatus {
     bool finality_known{false};
     QString sync_error;
     QString data_directory;
+    CybouGeoAdmissionStatus geo_admission{CybouGeoAdmissionStatus::Waiting};
 
     CybouIdentityState identity_state{CybouIdentityState::None};
     CybouIdentityStep identity_step{CybouIdentityStep::PreparingKeys};
@@ -139,6 +142,7 @@ public:
     void setNetworkInfo(const QString& network_name, const QString& network_id);
     void setFinalizedHeight(quint64 finalized_height);
     void setPeerCount(int peer_count);
+    void setGeoAdmissionStatus(CybouGeoAdmissionStatus status);
     const cybou::NodeDiagnosticsSnapshot& networkDiagnostics() const { return m_network_diagnostics; }
     void setNetworkDiagnostics(cybou::NodeDiagnosticsSnapshot snapshot);
     /** Authority-only view; `proven` is false for every other Identity. */

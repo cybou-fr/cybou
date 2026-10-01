@@ -790,6 +790,18 @@ void CybouShellTests::networkPageReflectsModel()
         if (label->text() == network_name) found_network_name = true;
     }
     QVERIFY(found_network_name);
+
+    auto* model = window->desktopModel();
+    QVERIFY(model);
+    auto has_text = [network](const QString& text) {
+        for (const auto* label : network->findChildren<QLabel*>()) if (label->text() == text) return true;
+        return false;
+    };
+    QVERIFY(has_text(QStringLiteral("Waiting for a valid Geo database")));
+    model->setGeoAdmissionStatus(CybouGeoAdmissionStatus::Ready);
+    QVERIFY(has_text(QStringLiteral("Ready")));
+    model->setGeoAdmissionStatus(CybouGeoAdmissionStatus::NotRequired);
+    QVERIFY(has_text(QStringLiteral("Not required by Lab policy")));
 }
 
 void CybouShellTests::adapterSettersDrivePages()

@@ -892,6 +892,22 @@ Stan</translation>
 <context>
     <name>DiagnosticsPage</name>
     <message>
+        <source>Peer admission Geo database</source>
+        <translation>Base Geo pour l’admission des pairs</translation>
+    </message>
+    <message>
+        <source>Ready</source>
+        <translation>Prête</translation>
+    </message>
+    <message>
+        <source>Not required by Lab policy</source>
+        <translation>Non requise par la politique Lab</translation>
+    </message>
+    <message>
+        <source>Waiting for a valid Geo database</source>
+        <translation>En attente d’une base Geo valide</translation>
+    </message>
+    <message>
         <location filename="../pages/diagnosticspage.cpp" line="85" />
         <source>Technical information about the CYBOU node running inside this app.</source>
         <translation>Informations techniques sur le nœud CYBOU exécuté dans cette application.</translation>

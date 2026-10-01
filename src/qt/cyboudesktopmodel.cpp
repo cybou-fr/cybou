@@ -196,6 +196,13 @@ void CybouDesktopModel::setPeerCount(int peer_count)
     Q_EMIT statusChanged();
 }
 
+void CybouDesktopModel::setGeoAdmissionStatus(CybouGeoAdmissionStatus status)
+{
+    if (m_status.geo_admission == status) return;
+    m_status.geo_admission = status;
+    Q_EMIT statusChanged();
+}
+
 void CybouDesktopModel::setSyncing(bool syncing)
 {
     if (m_status.syncing == syncing) return;

@@ -207,6 +207,10 @@ void DiagnosticsPage::refresh()
     ClearLayout(m_rows);
     QWidget* parent = m_rows->parentWidget();
     Row(m_rows, tr("Connection"), cybouConnectionText(status), parent);
+    const QString geo_status = status.geo_admission == CybouGeoAdmissionStatus::Ready ? tr("Ready")
+        : status.geo_admission == CybouGeoAdmissionStatus::NotRequired ? tr("Not required by Lab policy")
+        : tr("Waiting for a valid Geo database");
+    Row(m_rows, tr("Peer admission Geo database"), geo_status, parent);
     Row(m_rows, tr("Last sync"), m_model->lastSync().isValid() ? relTime(m_model->lastSync()) : tr("Not yet"), parent);
     if (!status.sync_error.isEmpty()) Row(m_rows, tr("Last error"), status.sync_error, parent);
     Row(m_rows, tr("Network ID"), status.network_id.isEmpty() ? tr("Available after node startup") : status.network_id, parent);
