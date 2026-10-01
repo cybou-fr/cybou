@@ -2746,8 +2746,8 @@ Objet : %3
     </message>
     <message>
         <location filename="../pages/networkauthoritypage.cpp" line="102" />
-        <source>Last new block</source>
-        <translation>Dernier nouveau bloc</translation>
+        <source>Height change observed</source>
+        <translation>Changement de hauteur observé</translation>
     </message>
     <message>
         <location filename="../pages/networkauthoritypage.cpp" line="103" />
@@ -2820,19 +2820,24 @@ Objet : %3
         <translation>Correspond à la phrase de récupération de cette identité (preuve issue du genesis)</translation>
     </message>
     <message>
-        <location filename="../pages/networkauthoritypage.cpp" line="145" />
-        <source>Liveness</source>
-        <translation>Activité</translation>
+        <source>Not observed yet</source>
+        <translation>Pas encore observé</translation>
     </message>
     <message>
-        <location filename="../pages/networkauthoritypage.cpp" line="146" />
-        <source>No new finalized block seen for %1 s: check the PoA finalizer</source>
-        <translation>Aucun nouveau bloc finalisé depuis %1 s : vérifiez le finaliseur PoA</translation>
+        <source>P2P connection</source>
+        <translation>Connexion P2P</translation>
     </message>
     <message>
-        <location filename="../pages/networkauthoritypage.cpp" line="147" />
-        <source>Advancing</source>
-        <translation>Progresse</translation>
+        <source>Height tracking</source>
+        <translation>Suivi de la hauteur</translation>
+    </message>
+    <message>
+        <source>Height changed %1 s ago in this view</source>
+        <translation>La hauteur a changé il y a %1 s dans cette vue</translation>
+    </message>
+    <message>
+        <source>Waiting to observe a height change in this view</source>
+        <translation>En attente d’un changement de hauteur dans cette vue</translation>
     </message>
     <message>
         <location filename="../pages/networkauthoritypage.cpp" line="148" />

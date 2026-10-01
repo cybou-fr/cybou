@@ -38,6 +38,8 @@ private:
     QVBoxLayout* m_providers{nullptr};
     quint64 m_seen_height{0};
     QDateTime m_seen_at;
+    bool m_seen_authority_height{false};
+    bool m_height_advanced_in_view{false};
 
     void refresh();
 };

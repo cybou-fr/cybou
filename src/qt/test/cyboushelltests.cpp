@@ -22,6 +22,7 @@
 #include <qt/pages/mailreader.h>
 #include <qt/pages/storagepage.h>
 #include <qt/pages/diagnosticspage.h>
+#include <qt/pages/networkauthoritypage.h>
 #include <QTableWidget>
 
 #include <cybou/network_definition.h>
@@ -773,6 +774,33 @@ void CybouShellTests::networkMonitorUsesCoreSnapshot()
     model.setNetworkDiagnostics(snapshot);
     QCOMPARE(peers->rowCount(),0);
     QCOMPARE(operations->rowCount(),0);
+}
+
+void CybouShellTests::authorityDashboardUsesLocalHeightObservation()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    model.setNodeStatus(true, 2, true);
+    CybouNetworkAuthorityStatus authority;
+    authority.proven = true;
+    authority.finalized_height = 10;
+    model.setNetworkAuthority(authority);
+    NetworkAuthorityPage page{&model};
+
+    auto has_text = [&page](const QString& text) {
+        for (const auto* label : page.findChildren<QLabel*>()) if (label->text() == text) return true;
+        return false;
+    };
+    QVERIFY(has_text(QStringLiteral("Not observed yet")));
+    QVERIFY(has_text(QStringLiteral("Synced")));
+    QVERIFY(has_text(QStringLiteral("Waiting to observe a height change in this view")));
+
+    authority.finalized_height = 11;
+    model.setNetworkAuthority(authority);
+    QVERIFY(!has_text(QStringLiteral("Not observed yet")));
+    const auto labels = page.findChildren<QLabel*>();
+    QVERIFY(std::any_of(labels.begin(), labels.end(), [](const QLabel* label) {
+        return label->text().contains(QStringLiteral("Height changed "));
+    }));
 }
 
 void CybouShellTests::networkPageReflectsModel()

@@ -99,7 +99,7 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     auto* grid = new QGridLayout;
     grid->setSpacing(14);
     m_height = Tile(grid, 0, 0, tr("Finalized height"), this);
-    m_last_block = Tile(grid, 0, 1, tr("Last new block"), this);
+    m_last_block = Tile(grid, 0, 1, tr("Height change observed"), this);
     m_safety = Tile(grid, 0, 2, tr("Safety halt"), this);
     m_identities = Tile(grid, 1, 0, tr("Identities"), this);
     m_names = Tile(grid, 1, 1, tr(".cybou names"), this);
@@ -125,14 +125,25 @@ void NetworkAuthorityPage::refresh()
     const auto& d = m_model->networkDiagnostics();
     const QLocale locale;
     const auto now = QDateTime::currentDateTimeUtc();
-    if (a.finalized_height != m_seen_height || !m_seen_at.isValid()) {
+    if (!a.proven) {
+        m_seen_authority_height = false;
+        m_height_advanced_in_view = false;
+        m_seen_at = {};
+    } else if (!m_seen_authority_height) {
         m_seen_height = a.finalized_height;
         m_seen_at = now;
+        m_seen_authority_height = true;
+    } else if (a.finalized_height != m_seen_height) {
+        m_seen_height = a.finalized_height;
+        m_seen_at = now;
+        m_height_advanced_in_view = true;
     }
-    const qint64 age = m_seen_at.secsTo(now);
+    const qint64 age = m_seen_at.isValid() ? m_seen_at.secsTo(now) : 0;
 
     m_height->setText(a.proven ? locale.toString(a.finalized_height) : QStringLiteral("—"));
-    m_last_block->setText(a.proven ? tr("%1 s ago").arg(age) : QStringLiteral("—"));
+    m_last_block->setText(a.proven
+        ? (m_height_advanced_in_view ? tr("%1 s ago").arg(age) : tr("Not observed yet"))
+        : QStringLiteral("—"));
     m_safety->setText(d.safety_halted ? tr("HALTED") : tr("No"));
     m_identities->setText(locale.toString(a.identities));
     m_names->setText(locale.toString(a.names));
@@ -142,9 +153,10 @@ void NetworkAuthorityPage::refresh()
     Row(m_finality, tr("Local PoA signer"), a.signer_enabled ? tr("Enabled in the unlocked vault") : tr("Not enabled"));
     Row(m_finality, tr("Model"), tr("Genesis-bound single-operator hybrid-PQ PoA (centralized finality, not BFT)"));
     Row(m_finality, tr("Finalizer key"), tr("Matches this Identity's recovery phrase (proven from genesis)"));
-    Row(m_finality, tr("Liveness"), age > 120
-        ? tr("No new finalized block seen for %1 s: check the PoA finalizer").arg(age)
-        : tr("Advancing"));
+    Row(m_finality, tr("P2P connection"), cybouConnectionText(m_model->status()));
+    Row(m_finality, tr("Height tracking"), m_height_advanced_in_view
+        ? tr("Height changed %1 s ago in this view").arg(age)
+        : tr("Waiting to observe a height change in this view"));
     Row(m_finality, tr("Tip"), QString::fromStdString(d.tip));
     Row(m_finality, tr("State root"), QString::fromStdString(d.state_root));
     Row(m_finality, tr("Network ID"), QString::fromStdString(d.network_id));
