@@ -1239,8 +1239,7 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
     QCOMPARE(failures.count(), 1);
     QVERIFY(model.status().node_running);
 
-    // Data of an older DEV network is moved aside (never deleted), then the
-    // current bundled network starts.
+    // A network mismatch fails closed and leaves the Identity and state in place.
     {
         QTemporaryDir stale;
         QVERIFY(WriteNetworkFile(stale.filePath(QStringLiteral("network.bin")), 0x34));
@@ -1254,14 +1253,11 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
         CybouDesktopController stale_controller{&stale_model, stale.path().toStdString()};
         QSignalSpy stale_failures{&stale_controller, &CybouDesktopController::startupFailed};
         stale_controller.start();
-        QCOMPARE(stale_failures.count(), 0);
-        QVERIFY(stale_model.status().node_running);
-        const QDir archive{stale.filePath(QStringLiteral("archived-networks"))};
-        const auto moved = archive.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-        QCOMPARE(moved.size(), 1);
-        QVERIFY(QFile::exists(archive.filePath(moved.first() + QStringLiteral("/network.bin"))));
-        QVERIFY(QFile::exists(archive.filePath(moved.first() + QStringLiteral("/identity.cybou"))));
-        QVERIFY(!QFile::exists(stale.filePath(QStringLiteral("identity.cybou"))));
+        QCOMPARE(stale_failures.count(), 1);
+        QVERIFY(!stale_model.status().node_running);
+        QVERIFY(QFile::exists(stale.filePath(QStringLiteral("network.bin"))));
+        QVERIFY(QFile::exists(stale.filePath(QStringLiteral("identity.cybou"))));
+        QVERIFY(!QFile::exists(stale.filePath(QStringLiteral("archived-networks"))));
     }
 
     // A fresh data directory starts on the bundled public DEV network.

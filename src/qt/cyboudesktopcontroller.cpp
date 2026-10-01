@@ -14,7 +14,6 @@
 #include <cybou/node_service.h>
 #include <cybou/wallet_service.h>
 
-#include <QDateTime>
 #include <QFile>
 #include <QMetaObject>
 
@@ -46,33 +45,23 @@ void CybouDesktopController::start()
         const auto explicit_network = qEnvironmentVariable("CYBOU_NETWORK_FILE");
         const auto network_path = explicit_network.isEmpty() ? m_data_directory / "network.bin"
             : std::filesystem::path{explicit_network.toStdU16String()};
-        // The desktop runs on the bundled public DEV network (genesis and PoA
-        // public key; no secrets). Data left from an older DEV network (a reset
-        // or an old file format) cannot sync with today's finalizer, so it is
-        // moved aside, never deleted, and the current network is installed.
-        // CYBOU_DEV_KEEP_NETWORK=1 keeps a deliberately different network.bin.
+        // A release pins its network to the bundled public manifest. A mismatch
+        // must not move or rewrite user state; use an explicit LAB override.
         QFile bundled{QStringLiteral(":/network/cybou-dev-network.bin")};
         if (!bundled.open(QIODevice::ReadOnly)) throw std::runtime_error("the bundled CYBOU network is missing");
         const QByteArray current = bundled.readAll();
         const auto path_text = [](const std::filesystem::path& path) {
             return QString::fromStdU16String(path.u16string());
         };
-        if (explicit_network.isEmpty() && std::filesystem::exists(network_path) && !qEnvironmentVariableIsSet("CYBOU_DEV_KEEP_NETWORK")) {
-            QFile existing{path_text(network_path)};
-            const QByteArray bytes = existing.open(QIODevice::ReadOnly) ? existing.readAll() : QByteArray{};
-            existing.close();
-            if (bytes != current) {
-                const auto archive = m_data_directory / "archived-networks" /
-                    QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmss")).toStdString();
-                std::filesystem::create_directories(archive);
-                // Everything bound to that network: chain state, the Identity
-                // registered on it, and its local projections.
-                for (const char* name : {"network.bin", "cybou_state", "identity.cybou", "identity.cybou.nameclaim",
-                         "mailbox.dat", "identities", "authority-index.bin", "identity-operation.cyiop"}) {
-                    const auto from = m_data_directory / name;
-                    if (std::filesystem::exists(from)) std::filesystem::rename(from, archive / name);
-                }
-                m_archived_network = path_text(archive);
+        const bool lab_override = !explicit_network.isEmpty() || qEnvironmentVariableIsSet("CYBOU_DEV_KEEP_NETWORK");
+        if (!lab_override) {
+            const auto pinned = cybou::DeserializeCybouNetworkFile(std::span<const unsigned char>{
+                reinterpret_cast<const unsigned char*>(current.constData()), static_cast<size_t>(current.size())});
+            if (!pinned) throw std::runtime_error("bundled DEV network manifest is invalid");
+            if (std::filesystem::exists(network_path)) {
+                const auto selected = cybou::LoadCybouNetworkFile(network_path);
+                if (!selected || cybou::NetworkId(selected->definition) != cybou::NetworkId(pinned->definition))
+                    throw std::runtime_error("network differs from the pinned release; existing Identity and state are preserved");
             }
         }
         if (explicit_network.isEmpty() && !std::filesystem::exists(network_path)) {
@@ -87,7 +76,7 @@ void CybouDesktopController::start()
         const auto& genesis = network_file->genesis;
         const auto& definition = network_file->definition;
         m_model->setNetworkInfo(
-            explicit_network.isEmpty() ? QStringLiteral("CYBOU DEV") : QStringLiteral("CYBOU LAB"),
+            lab_override ? QStringLiteral("CYBOU LAB") : QStringLiteral("CYBOU DEV"),
             QString::fromStdString(cybou::NetworkId(definition).GetHex()));
         if (!m_archived_network.isEmpty()) {
             qWarning() << "CYBOU: data of an older DEV network moved to" << m_archived_network;

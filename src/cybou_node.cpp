@@ -7,6 +7,8 @@
 #include <cybou/private_application_store.h>
 #include <cybou/storage_service.h>
 #include <cybou/protocol_limits.h>
+#include <cybou/secret_file.h>
+#include <cybou/secret32.h>
 #include <cybou/bootstrap_nodes.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/hex.h>
@@ -401,11 +403,13 @@ int Execute(const int argc, char* argv[])
         return PrintPeerSubmitResult(peers.SubmitOperationToAny({{argv[4], port}}, *operation));
     }
     if (std::string_view{argv[1]} == "finalizer-run" && argc >= 7 && argc <= 10) {
-        auto key_bytes = ReadFile(argv[4], 32);
-        if (key_bytes.size() != 32) throw std::runtime_error("PoA finalizer recovery entropy must contain exactly 32 raw bytes");
+        auto key_file = cybou::ReadSecretFile(argv[4], 32);
+        if (!key_file || key_file->size() != 32) throw std::runtime_error("PoA finalizer key file must be private and contain exactly 32 raw bytes");
         std::array<unsigned char, 32> key{};
-        std::copy(key_bytes.begin(), key_bytes.end(), key.begin());
-        cybou::crypto::CleanseMemory(key_bytes.data(), key_bytes.size());
+        std::copy(key_file->begin(), key_file->end(), key.begin());
+        cybou::crypto::CleanseMemory(key_file->data(), key_file->size());
+        cybou::Secret32 finalizer_key{key};
+        cybou::crypto::CleanseMemory(key.data(), key.size());
 
         const auto p2p_port = Port(argv[6]);
         const auto interval_ms = argc >= 8 ? PositiveCount(argv[7]) : 1000;
@@ -415,7 +419,7 @@ int Execute(const int argc, char* argv[])
         cybou::NodeRuntimeConfig config{
             .network_definition = network->definition,
             .data_dir = argv[3],
-            .poa_finalizer_recovery_entropy = key,
+            .poa_finalizer_recovery_entropy = finalizer_key.Get(),
             .db_cache_bytes = 8 << 20,
         };
         if (argc == 10) {
@@ -423,7 +427,6 @@ int Execute(const int argc, char* argv[])
             config.storage_capacity_bytes = CapacityBytes(argv[9]);
         }
         config.local_p2p_endpoint = advertised_endpoint.value_or(std::make_pair(bind_address.to_string(), p2p_port));
-        cybou::crypto::CleanseMemory(key.data(), key.size());
         config.event_writer = events;
         cybou::CybouNodeService node_service{{
             .runtime = std::move(config),
@@ -514,11 +517,11 @@ std::pair<std::string,uint16_t> Endpoint(const std::string& text)
 }
 const char* Help = R"(CYBOU operator CLI (CYP2 only)
   finalizer run --network FILE --data-dir DIR --key-file FILE --listen IP:PORT
-                [--block-interval 1000ms] [--peers FILE] [--event-log FILE]
+                [--block-interval 1000ms] [--peers FILE] [--event-log FILE] [--event-log-mode minimal|lab]
   provider run  --network FILE --data-dir DIR --peer IP:PORT --listen IP:PORT
-                --capacity 20GiB [--peers FILE] [--event-log FILE]
+                --capacity 20GiB [--peers FILE] [--event-log FILE] [--event-log-mode minimal|lab]
   observer run  --network FILE --data-dir DIR --peer IP:PORT
-                [--listen IP:PORT] [--peers FILE] [--event-log FILE]
+                [--listen IP:PORT] [--peers FILE] [--event-log FILE] [--event-log-mode minimal|lab]
   network info --network FILE
   network init-dev --network FILE --key-file FILE
          [--authority-balance CYBOU --authority-name LABEL]
@@ -654,9 +657,10 @@ int StorageCommand(const std::string& action, const cybou::cli::Options& opts)
     }
     if (action!="placement") throw std::invalid_argument("unknown storage command");
     cybou::CybouIdentityService identity{runtime,opts.Require("vault")};
-    auto password_bytes=ReadFile(opts.Require("password-file"),1024);
-    std::string password(password_bytes.begin(),password_bytes.end());
-    cybou::crypto::CleanseMemory(password_bytes.data(),password_bytes.size());
+    auto password_bytes=cybou::ReadSecretFile(opts.Require("password-file"),1024);
+    if (!password_bytes) throw std::runtime_error("password file must be a private regular file");
+    std::string password(password_bytes->begin(),password_bytes->end());
+    cybou::crypto::CleanseMemory(password_bytes->data(),password_bytes->size());
     const bool unlocked=identity.LoadVault(password);
     cybou::crypto::CleanseMemory(password.data(),password.size());
     if (!unlocked || !identity.GetAccountId()) throw std::runtime_error("cannot unlock Identity vault");
@@ -698,8 +702,10 @@ int Main(int argc, char* argv[])
             args.insert(args.end(),{opts.Require("authority-balance"),opts.Require("authority-name")});
         }
     } else if ((group=="finalizer" || group=="provider" || group=="observer") && action=="run") {
-        if (group=="finalizer") opts.Allow({"network","data-dir","key-file","listen","block-interval","peers","event-log","capacity","advertise"});
-        else opts.Allow({"network","data-dir","peer","listen","peers","capacity","event-log","advertise"});
+        if (group=="finalizer") opts.Allow({"network","data-dir","key-file","listen","block-interval","peers","event-log","event-log-mode","capacity","advertise"});
+        else opts.Allow({"network","data-dir","peer","listen","peers","capacity","event-log","event-log-mode","advertise"});
+        if (opts.Has("event-log-mode") && opts.Get("event-log-mode")!="minimal" && opts.Get("event-log-mode")!="lab")
+            throw std::invalid_argument("event log mode must be minimal or lab");
         if (group=="observer" && opts.Has("capacity")) throw std::invalid_argument("observer has no storage role");
         if (opts.Has("event-log")) event_path = opts.Get("event-log");
         args.insert(args.end(),{group+"-run",opts.Require("network"),opts.Require("data-dir")});
@@ -742,7 +748,8 @@ int Main(int argc, char* argv[])
         if (action=="follow" && opts.Has("until-height")) args.push_back(opts.Get("until-height"));
         if (action=="submit") args.push_back(opts.Require("operation-file"));
     } else throw std::invalid_argument("unknown command; use --help");
-    if (!event_path.empty()) events = std::make_shared<cybou::EventWriter>(event_path);
+    if (!event_path.empty()) events = std::make_shared<cybou::EventWriter>(event_path,
+        opts.Get("event-log-mode","minimal")=="lab" ? cybou::EventLogMode::LAB : cybou::EventLogMode::MINIMAL);
     std::vector<char*> pointers; for (auto& arg : args) pointers.push_back(arg.data());
     if (events) events->Write(cybou::NodeEvent::node_started,{{"role",group}});
     const auto result=Execute(static_cast<int>(pointers.size()),pointers.data());

@@ -5,12 +5,67 @@
 #include <cybou/hex.h>
 #include <cybou/kv_store.h>
 #include <cybou/poa_finalizer.h>
+#include <cybou/secret_file.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_test_setup.h>
 
 #include <boost/test/unit_test.hpp>
 
+#include <fstream>
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
+
 BOOST_FIXTURE_TEST_SUITE(cybou_node_runtime_tests, CybouTestSetup)
+
+BOOST_AUTO_TEST_CASE(secret_files_are_private_and_reject_links)
+{
+    CybouServiceTestFixture fixture;
+    const auto path = fixture.directory / "secret.bin";
+    const std::array<unsigned char, 4> secret{1, 2, 3, 4};
+    BOOST_REQUIRE(cybou::CreateSecretFile(path, secret));
+    const auto read = cybou::ReadSecretFile(path, 4);
+    BOOST_REQUIRE(read);
+    BOOST_CHECK(*read == std::vector<unsigned char>(secret.begin(), secret.end()));
+    BOOST_CHECK(!cybou::CreateSecretFile(path, secret));
+#ifndef _WIN32
+    struct stat info{};
+    BOOST_REQUIRE_EQUAL(::stat(path.c_str(), &info), 0);
+    BOOST_CHECK_EQUAL(info.st_mode & 0777, 0600);
+    const auto link = fixture.directory / "secret-link.bin";
+    std::filesystem::create_symlink(path, link);
+    BOOST_CHECK(!cybou::ReadSecretFile(link, 4));
+#endif
+}
+
+BOOST_AUTO_TEST_CASE(event_log_privacy_modes_filter_sensitive_identifiers)
+{
+    CybouServiceTestFixture fixture;
+    const auto minimal_path = fixture.directory / "minimal-events.jsonl";
+    const auto lab_path = fixture.directory / "lab-events.jsonl";
+    const cybou::EventFields fields{{"operation_id", std::string{"operation-secret"}},
+        {"account_id", std::string{"account-secret"}}, {"peer", std::string{"peer-secret"}},
+        {"network_id", std::string{"public-network"}}};
+    {
+        cybou::EventWriter writer{minimal_path};
+        writer.Write(cybou::NodeEvent::operation_accepted, fields);
+    }
+    {
+        cybou::EventWriter writer{lab_path, cybou::EventLogMode::LAB};
+        writer.Write(cybou::NodeEvent::operation_accepted, fields);
+    }
+    std::ifstream minimal_file{minimal_path};
+    std::ifstream lab_file{lab_path};
+    const std::string minimal{std::istreambuf_iterator<char>{minimal_file}, {}};
+    const std::string lab{std::istreambuf_iterator<char>{lab_file}, {}};
+    BOOST_CHECK(minimal.find("operation-secret") == std::string::npos);
+    BOOST_CHECK(minimal.find("account-secret") == std::string::npos);
+    BOOST_CHECK(minimal.find("peer-secret") == std::string::npos);
+    BOOST_CHECK(minimal.find("public-network") != std::string::npos);
+    BOOST_CHECK(lab.find("operation-secret") != std::string::npos);
+    BOOST_CHECK(lab.find("account-secret") != std::string::npos);
+    BOOST_CHECK(lab.find("peer-secret") != std::string::npos);
+}
 
 BOOST_AUTO_TEST_CASE(public_event_writer_rejects_secret_fields)
 {
