@@ -2,16 +2,26 @@
 
 Before changing code, read `AGENTS.md` and the active protocol documents it
 names. The single protocol authority in `main` is the PoA + encrypted chunk-tree
-target described by `docs/cybou/POA_FINALITY.md`,
-`ENCRYPTED_CHUNK_TREE.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`,
-`IDENTITY_DISCOVERY_AND_RECOVERY.md`, and `spec/poa_chunk_tree.yaml`.
+target described by `docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`,
+`docs/cybou/POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`, `ROOT_PUBLICATION.md`,
+`STORAGE_ADMISSION.md`, `IDENTITY_DISCOVERY_AND_RECOVERY.md`,
+`37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`, and `spec/poa_chunk_tree.yaml`.
 `docs/cybou/26_IMPLEMENTATION_STATUS.md` distinguishes implemented substrate
 code from integration and deployment gates.
 
 ## Architecture rules
 
-- The finalizer uses a genesis-bound hybrid-PQ PoA key. This is a centralized
-  trust model and must not be described as BFT fault tolerance.
+- All participants run the same full-node software (`CybouNode`). Bootstrap,
+  storage, advisory Validation, and PoA finalization are optional local
+  capabilities, not separate protocol node classes.
+- A new network genesis authorizes 1–4 bootstrap Identities by stable
+  `AccountID` plus expected `RecoveryKeyID`. Bootstrap nodes do not vote,
+  form a quorum, or finalize.
+- Public P2P admission is France-only in production and DEV (inbound and outbound)
+  using local Geo data (fails closed).
+- The finalizer uses a genesis-bound hybrid-PQ PoA key operated from the
+  Central Authority desktop. This is a centralized trust model and must not be
+  described as BFT fault tolerance.
 - Generic `RootPublication` is the only application-content publication
   operation. Mail, Files, Backup, filenames, recipients, graph edges, and
   application schemas are private encrypted content.

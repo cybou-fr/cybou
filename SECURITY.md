@@ -18,6 +18,16 @@ maintainers time to investigate and prepare a fix before public disclosure.
   release signing, and treasury authority use separate key roles.
 - Production signatures require the configured Ed25519 and post-quantum
   components. Classical-only fallback is not allowed.
+- A network genesis authorizes 1–4 bootstrap Identities by stable `AccountID`
+  and expected `RecoveryKeyID`. Pre-genesis numeric IP:port locators and TLS SPKI
+  pins are discovery/authentication boundaries only; they grant no post-genesis
+  role and are never consensus state.
+- Public P2P admission is France-only in production and DEV (inbound and outbound)
+  for every peer capability. Classification uses local Geo data; missing, corrupt,
+  or expired Geo data fails closed. LAB loopback/private test traffic requires
+  an explicit LAB bypass.
+- Optional VPN/proxy/Tor filtering is local operator policy; it never alters
+  Identity, Authority, consensus, or canonical state.
 - The PoA signing key is genesis-bound, held in memory only, and protected by a
   durable anti-equivocation journal. Journal rollback or conflicting signing
   must fail closed.

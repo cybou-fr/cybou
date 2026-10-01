@@ -30,7 +30,7 @@ The project has a CMake/vcpkg CI build for the native core and `cybou-node`; see
 
 ## DEV node
 
-The PoA runtime cutover is still in progress. Do not use the legacy DEV executable as an implementation guide or reset the deployed DEV network until the coordinated cutover gate in [implementation status](docs/cybou/26_IMPLEMENTATION_STATUS.md) passes. Never use development keys or balances as production assets.
+The current DEV installation is an operational legacy testnet topology (`cybou-node.service` PoA finalizer on port 29461 and independent storage providers on ports 29471/29481). It is not the target architecture described in [`docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md). Keep the current DEV testnet operational for routine development until specified acceptance tests and the planned new-genesis DEV cutover are complete. Do not reset DEV state or replace the PoA key during routine development. Never use development keys or balances as production assets.
 
 ## Tests
 

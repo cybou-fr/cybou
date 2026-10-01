@@ -15,19 +15,31 @@ under active development.
 
 ## Current status
 
-The active protocol is deployed on the experimental DEV network. The current
-DEV deployment uses a genesis-bound, hybrid-signature Proof of Authority (PoA)
-finalizer operated by CYBOU on its VPS. Full nodes independently verify blocks
-and state transitions. The approved target moves the finalizer to the Central
-Authority desktop and leaves one relay/cache bootstrap service on the VPS;
-that migration is not implemented yet. This is a
-single-operator trust model: it is **not BFT**, and the network does not claim
-Byzantine-fault-tolerant finality.
+CYBOU is experimental software under active development; it is not yet ready
+for public or production use. DEV state and tokens are disposable testnet assets
+with no production value.
 
-The protocol and storage substrate are in place, but the user-facing Mail and
-Files product is not complete. In particular, CYBOU is not yet ready for public
-or production use. DEV state and tokens are experimental and have no production
-value.
+The approved target architecture specifies:
+- **One unified full-node software**: bootstrap, storage, advisory Validation,
+  and PoA finalization are optional local capabilities, not protocol node classes.
+- **1–4 genesis-authorized bootstrap Identities**: authorized by stable `AccountID`
+  and expected `RecoveryKeyID`. Bootstrap capability provides rendezvous and
+  relay; it does not vote, form a quorum, or finalize.
+- **Central Authority PoA finalization**: single-operator hybrid-PQ PoA runs on the
+  Central Authority desktop after local vault unlock and chain verification.
+  Central Authority is identified only by the genesis PoA key; its route is
+  ephemeral per live session.
+- **France-only public P2P admission**: enforced locally for all capabilities
+  using integrity-checked Geo data (fails closed).
+- **Single-operator trust model**: this is **not BFT**, and the network makes no
+  Byzantine fault tolerance claim. Full nodes independently verify all blocks,
+  operations, and state transitions.
+
+The currently running DEV deployment is an operational legacy testnet topology
+(`cybou-node.service` PoA finalizer on port 29461 and independent storage providers
+on ports 29471/29481). It is maintained for routine development until specified
+acceptance tests and the coordinated new-genesis DEV cutover replace it. That
+cutover replaces this testnet, not a production network.
 
 ## Architecture
 
