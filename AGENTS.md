@@ -70,11 +70,25 @@ a production-network migration.
   transfer, DeviceAdd, or DeviceRevoke.
 - `.cybou` names use finalized commit/work/reveal and the active name rules.
 
+## Documentation hierarchy and sources of truth
+
+The documentation has a strict hierarchy; lower levels cannot introduce
+architecture that is absent from higher levels:
+- LEVEL 0 — Implementation authority: `AGENTS.md`
+- LEVEL 1 — Frozen architecture and decisions: `docs/cybou/24_DECISIONS.md`, `docs/cybou/02_ARCHITECTURE.md`
+- LEVEL 2 — Normative domain documents: `04_NETWORK_BOOTSTRAP_AND_GENESIS.md`, `05_CHAIN_STATE.md`, `08_P2P.md`, `POA_FINALITY.md`, `VALIDATION.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, `10_IDENTITY_NAMES.md`, `18_ECONOMICS_FEES.md`, etc.
+- LEVEL 3 — Mutable implementation truth: `docs/cybou/26_IMPLEMENTATION_STATUS.md`
+- LEVEL 4 — Roadmap and unresolved work: `docs/cybou/22_ROADMAP.md`, `docs/cybou/25_OPEN_QUESTIONS.md`
+- LEVEL 5 — Product and UX contracts: `docs/cybou/81_BETA_PRODUCT_SCOPE.md`–`85_BETA_UI_ACCEPTANCE.md`, `APPLICATION_DATA_PLANE.md`
+- LEVEL 6 — Business, legal, and sovereign policy: `docs/cybou/37`–`43`
+- LEVEL 7 — Machine-readable mirrors: `spec/*`
+- LEVEL 8 — Public projection: `README.md`, `www/*`, `www/llms.txt`
+
 ## Finality
 
 - Finality is genesis-bound single-operator hybrid-PQ PoA.
 - Target operation puts the genesis-key holder on its Central Authority
-  desktop; the official VPS bootstrap never finalizes. See
+  desktop; bootstrap-capable full nodes never finalize. See
   `docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`.
 - Full nodes independently validate every operation, block transition, state
   root, and PoA certificate.

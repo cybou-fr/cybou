@@ -30,6 +30,20 @@ genesis-authorized bootstrap capabilities, sovereign peer admission, and
 Central Authority operation. The current binary/deployment has not completed
 that migration.
 
+## Documentation hierarchy
+
+CYBOU architecture adheres to a strict hierarchy of authority. Lower levels
+cannot introduce protocol mechanics absent from higher levels:
+- **Level 0 (Implementation authority)**: `AGENTS.md`
+- **Level 1 (Frozen architecture / decisions)**: `docs/cybou/24_DECISIONS.md`, `docs/cybou/02_ARCHITECTURE.md`
+- **Level 2 (Normative domain documents)**: `04_NETWORK_BOOTSTRAP_AND_GENESIS.md`, `05_CHAIN_STATE.md`, `08_P2P.md`, `POA_FINALITY.md`, `VALIDATION.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, `10_IDENTITY_NAMES.md`, `18_ECONOMICS_FEES.md`, `57_AUTHORITY_AND_VALIDATION.md`
+- **Level 3 (Mutable implementation truth)**: `docs/cybou/26_IMPLEMENTATION_STATUS.md`
+- **Level 4 (Roadmap / unresolved work)**: `docs/cybou/22_ROADMAP.md`, `docs/cybou/25_OPEN_QUESTIONS.md`
+- **Level 5 (Product / UX)**: `docs/cybou/81`–`85`, `APPLICATION_DATA_PLANE.md`
+- **Level 6 (Sovereignty / legal / strategy)**: `docs/cybou/37`–`43`
+- **Level 7 (Machine-readable mirrors)**: `spec/*`
+- **Level 8 (Public projection)**: `README.md`, `www/*`, `www/llms.txt`
+
 ## Node capabilities and peer admission
 
 Every participant runs the same full-node architecture. Bootstrap, storage,
