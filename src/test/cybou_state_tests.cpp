@@ -161,8 +161,10 @@ BOOST_AUTO_TEST_CASE(genesis_bootstrap_grant_is_claimed_by_recovery_and_tracks_s
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.genesis_bootstrap_grants.emplace(*recovery_id, GenesisBootstrapGrant{});
+    state.genesis_bootstrap_grants.emplace(account,
+        GenesisBootstrapGrant{.recovery_key_id = *recovery_id});
     BOOST_CHECK(!state.HasBootstrapGrant(account));
+    BOOST_CHECK(HasValidGenesisBootstrapRoster(state));
     const auto genesis_bytes = SerializeCybouState(state);
     BOOST_REQUIRE(genesis_bytes);
     BOOST_CHECK_EQUAL(genesis_bytes->front(), CYBOU_STATE_VERSION);
@@ -170,8 +172,47 @@ BOOST_AUTO_TEST_CASE(genesis_bootstrap_grant_is_claimed_by_recovery_and_tracks_s
     BOOST_REQUIRE(decoded);
     BOOST_CHECK_EQUAL(decoded->genesis_bootstrap_grants.size(), 1U);
 
+    // The reserved AccountID cannot be consumed with a different Recovery key.
+    std::array<unsigned char, 32> wrong_root_seed{};
+    wrong_root_seed[0] = 0x37;
+    const auto wrong_root = DeriveIdentityPublicKey(wrong_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    BOOST_REQUIRE(wrong_root);
+    const IdentityAuthorization wrong_auth{*wrong_root, *device};
+    const auto wrong_binding = test::MakeIdentityKemBinding(network_id, account, wrong_auth);
+    const auto wrong_recovery_pop = SignIdentityMessage(wrong_root_seed,
+        IdentityKeyPurpose::RECOVERY_ROOT, wrong_binding.pop_digest);
+    const auto wrong_authorization_pop = SignIdentityMessage(device_seed,
+        IdentityKeyPurpose::AUTHORIZATION, wrong_binding.pop_digest);
+    BOOST_REQUIRE(wrong_recovery_pop && wrong_authorization_pop);
+    const AccountCreateOp wrong_create{account, wrong_auth, wrong_binding.package,
+        {.network_id = network_id, .account_id = account,
+            .authorization_commitment = wrong_binding.authorization_commitment},
+        *wrong_recovery_pop, *wrong_authorization_pop};
+    BOOST_CHECK(ApplyAccountCreate(wrong_create, network_id, 1, params, state) ==
+        AccountCreateStateError::INVALID_CREATE);
+    BOOST_CHECK(!state.accounts.contains(account));
+    BOOST_CHECK(!state.genesis_bootstrap_grants.at(account).claimed);
+
+    uint256 alternate_raw_account{};
+    alternate_raw_account.begin()[0] = 0x38;
+    const AccountId alternate_account{alternate_raw_account};
+    const auto alternate_binding = test::MakeIdentityKemBinding(network_id, alternate_account, auth);
+    const auto alternate_recovery_pop = SignIdentityMessage(root_seed,
+        IdentityKeyPurpose::RECOVERY_ROOT, alternate_binding.pop_digest);
+    const auto alternate_authorization_pop = SignIdentityMessage(device_seed,
+        IdentityKeyPurpose::AUTHORIZATION, alternate_binding.pop_digest);
+    BOOST_REQUIRE(alternate_recovery_pop && alternate_authorization_pop);
+    const AccountCreateOp alternate_create{alternate_account, auth, alternate_binding.package,
+        {.network_id = network_id, .account_id = alternate_account,
+            .authorization_commitment = alternate_binding.authorization_commitment},
+        *alternate_recovery_pop, *alternate_authorization_pop};
+    BOOST_CHECK(ApplyAccountCreate(alternate_create, network_id, 1, params, state) ==
+        AccountCreateStateError::INVALID_CREATE);
+    BOOST_CHECK(!state.accounts.contains(alternate_account));
+    BOOST_CHECK(!state.genesis_bootstrap_grants.at(account).claimed);
+
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 1, params, state) == AccountCreateStateError::NONE);
-    BOOST_CHECK(state.genesis_bootstrap_grants.at(*recovery_id).claimed_by == account);
+    BOOST_CHECK(state.genesis_bootstrap_grants.at(account).claimed);
     BOOST_CHECK(state.HasBootstrapGrant(account));
     const auto claimed_bytes = SerializeCybouState(state);
     BOOST_REQUIRE(claimed_bytes);
@@ -209,6 +250,74 @@ BOOST_AUTO_TEST_CASE(genesis_bootstrap_grant_is_claimed_by_recovery_and_tracks_s
     BOOST_REQUIRE(legacy_bytes);
     BOOST_CHECK_EQUAL(legacy_bytes->front(), CYBOU_STATE_LEGACY_VERSION);
     BOOST_CHECK(DeserializeCybouState(*legacy_bytes));
+
+    // Previously shipped v8 grants remain byte-for-byte readable as legacy
+    // recovery-key-keyed state; new network genesis uses the v9 roster above.
+    CybouState legacy_v8{};
+    legacy_v8.legacy_genesis_bootstrap_grants.emplace(*recovery_id, std::nullopt);
+    const auto legacy_v8_bytes = SerializeCybouState(legacy_v8);
+    BOOST_REQUIRE(legacy_v8_bytes);
+    BOOST_CHECK_EQUAL(legacy_v8_bytes->front(), CYBOU_STATE_RECOVERY_GRANT_VERSION);
+    const auto legacy_v8_decoded = DeserializeCybouState(*legacy_v8_bytes);
+    BOOST_REQUIRE(legacy_v8_decoded);
+    const auto legacy_v8_reencoded = SerializeCybouState(*legacy_v8_decoded);
+    BOOST_REQUIRE(legacy_v8_reencoded);
+    BOOST_CHECK(*legacy_v8_bytes == *legacy_v8_reencoded);
+}
+
+BOOST_AUTO_TEST_CASE(genesis_bootstrap_roster_requires_one_to_four_unique_identity_bindings)
+{
+    using namespace cybou;
+    CybouState state{};
+    BOOST_CHECK(!HasValidGenesisBootstrapRoster(state));
+    for (unsigned char value{1}; value <= MAX_GENESIS_BOOTSTRAP_GRANTS; ++value) {
+        uint256 raw_account{};
+        raw_account.begin()[0] = value;
+        IdentityKeyId recovery_id{};
+        recovery_id[0] = static_cast<unsigned char>(value + 16);
+        state.genesis_bootstrap_grants.emplace(AccountId{raw_account},
+            GenesisBootstrapGrant{.recovery_key_id = recovery_id});
+        BOOST_CHECK(HasValidGenesisBootstrapRoster(state));
+    }
+    uint256 fifth_account{};
+    fifth_account.begin()[0] = 5;
+    IdentityKeyId fifth_recovery{};
+    fifth_recovery[0] = 25;
+    state.genesis_bootstrap_grants.emplace(AccountId{fifth_account},
+        GenesisBootstrapGrant{.recovery_key_id = fifth_recovery});
+    BOOST_CHECK(!HasValidGenesisBootstrapRoster(state));
+
+    state.genesis_bootstrap_grants.erase(AccountId{fifth_account});
+    uint256 sixth_account{};
+    sixth_account.begin()[0] = 6;
+    state.genesis_bootstrap_grants.emplace(AccountId{sixth_account},
+        GenesisBootstrapGrant{.recovery_key_id = IdentityKeyId{}});
+    BOOST_CHECK(!HasValidGenesisBootstrapRoster(state));
+
+    state.genesis_bootstrap_grants.erase(AccountId{sixth_account});
+    state.genesis_bootstrap_grants.emplace(AccountId{sixth_account},
+        GenesisBootstrapGrant{.recovery_key_id = IdentityKeyId{17}});
+    BOOST_CHECK(!HasValidGenesisBootstrapRoster(state)); // duplicate RecoveryKeyID
+
+    auto& first_grant = state.genesis_bootstrap_grants.begin()->second;
+    const auto first_account = state.genesis_bootstrap_grants.begin()->first;
+    state.accounts.emplace(first_account, AccountState{});
+    first_grant.claimed = true;
+    BOOST_CHECK(!HasValidGenesisBootstrapRoster(state)); // genesis grants start unclaimed
+
+    for (size_t count{MIN_GENESIS_BOOTSTRAP_GRANTS}; count <= MAX_GENESIS_BOOTSTRAP_GRANTS; ++count) {
+        CybouState candidate{};
+        std::vector<std::pair<AccountId, IdentityKeyId>> roster;
+        for (size_t i{0}; i < count; ++i) {
+            uint256 account_bytes{};
+            account_bytes.begin()[0] = static_cast<unsigned char>(i + 1);
+            IdentityKeyId recovery{};
+            recovery[0] = static_cast<unsigned char>(i + 31);
+            roster.emplace_back(AccountId{account_bytes}, recovery);
+        }
+        BOOST_CHECK(SetGenesisBootstrapRoster(candidate, roster));
+        BOOST_CHECK(HasValidGenesisBootstrapRoster(candidate));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)

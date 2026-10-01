@@ -66,6 +66,21 @@ private:
     std::span<const unsigned char> m_bytes;
     size_t m_offset{0};
 };
+
+bool BootstrapGrantMapValid(const CybouState& state)
+{
+    if (!state.legacy_genesis_bootstrap_grants.empty() ||
+        state.genesis_bootstrap_grants.size() < MIN_GENESIS_BOOTSTRAP_GRANTS ||
+        state.genesis_bootstrap_grants.size() > MAX_GENESIS_BOOTSTRAP_GRANTS) return false;
+    std::set<IdentityKeyId> recovery_ids;
+    for (const auto& [account_id, grant] : state.genesis_bootstrap_grants) {
+        const bool recovery_id_is_zero = std::ranges::all_of(grant.recovery_key_id,
+            [](unsigned char byte) { return byte == 0; });
+        if (account_id.IsNull() || recovery_id_is_zero || !recovery_ids.insert(grant.recovery_key_id).second ||
+            (grant.claimed ? !state.accounts.contains(account_id) : state.accounts.contains(account_id))) return false;
+    }
+    return true;
+}
 } // namespace
 
 AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
@@ -78,6 +93,17 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     }
     if (state.accounts.size() >= MAX_IDENTITY_REGISTRY_ACCOUNTS) return AccountCreateStateError::ACCOUNT_LIMIT;
     if (state.accounts.contains(op.account_id)) return AccountCreateStateError::ACCOUNT_EXISTS;
+    const auto bootstrap_grant = state.genesis_bootstrap_grants.find(op.account_id);
+    const auto bootstrap_recovery_id = ComputeRecoveryKeyId(op.authorization.recovery_root);
+    if (bootstrap_grant != state.genesis_bootstrap_grants.end() &&
+        (!bootstrap_recovery_id || bootstrap_grant->second.recovery_key_id != *bootstrap_recovery_id)) {
+        return AccountCreateStateError::INVALID_CREATE;
+    }
+    if (bootstrap_recovery_id && std::ranges::any_of(state.genesis_bootstrap_grants,
+        [&](const auto& grant) {
+            return grant.second.recovery_key_id == *bootstrap_recovery_id &&
+                grant.first != op.account_id && !grant.second.claimed;
+        })) return AccountCreateStateError::INVALID_CREATE;
     if (state.onboarding_pool < params.onboarding_bonus) return AccountCreateStateError::INSUFFICIENT_ONBOARDING_POOL;
     const auto identity_result = state.identities.Register(op, network_id, block_height, params);
     switch (identity_result) {
@@ -99,9 +125,10 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
                 state.names.account_names.emplace(op.account_id, it->second.label);
             }
         }
-        if (auto grant = state.genesis_bootstrap_grants.find(*recovery_id);
-            grant != state.genesis_bootstrap_grants.end() && !grant->second.claimed_by) {
-            grant->second.claimed_by = op.account_id;
+        if (bootstrap_grant != state.genesis_bootstrap_grants.end()) bootstrap_grant->second.claimed = true;
+        if (auto legacy_grant = state.legacy_genesis_bootstrap_grants.find(*recovery_id);
+            legacy_grant != state.legacy_genesis_bootstrap_grants.end() && !legacy_grant->second) {
+            legacy_grant->second = op.account_id;
         }
     }
     state.accounts.emplace(op.account_id, AccountState{
@@ -115,8 +142,11 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
 
 bool CybouState::HasBootstrapGrant(const AccountId& account_id) const
 {
-    return !account_id.IsNull() && std::ranges::any_of(genesis_bootstrap_grants,
-        [&](const auto& grant) { return grant.second.claimed_by == account_id; });
+    if (account_id.IsNull()) return false;
+    if (const auto grant = genesis_bootstrap_grants.find(account_id);
+        grant != genesis_bootstrap_grants.end() && grant->second.claimed) return true;
+    return std::ranges::any_of(legacy_genesis_bootstrap_grants,
+        [&](const auto& grant) { return grant.second == account_id; });
 }
 
 std::optional<IdentityHybridPublicKey> CybouState::BootstrapAuthorizationKey(const AccountId& account_id) const
@@ -291,12 +321,16 @@ StateValidationError ValidateCybouState(const CybouState& state)
             return StateValidationError::INVALID_NAME_REGISTRY;
         }
     }
-    if (state.genesis_bootstrap_grants.size() > MAX_GENESIS_BOOTSTRAP_GRANTS) {
+    if (!state.genesis_bootstrap_grants.empty() && !BootstrapGrantMapValid(state)) {
         return StateValidationError::INVALID_BOOTSTRAP_GRANTS;
     }
-    for (const auto& [recovery_id, grant] : state.genesis_bootstrap_grants) {
+    if (state.legacy_genesis_bootstrap_grants.size() > MAX_LEGACY_GENESIS_BOOTSTRAP_GRANTS ||
+        (!state.genesis_bootstrap_grants.empty() && !state.legacy_genesis_bootstrap_grants.empty())) {
+        return StateValidationError::INVALID_BOOTSTRAP_GRANTS;
+    }
+    for (const auto& [recovery_id, claimed_by] : state.legacy_genesis_bootstrap_grants) {
         if (std::ranges::all_of(recovery_id, [](unsigned char byte) { return byte == 0; }) ||
-            (grant.claimed_by && !state.accounts.contains(*grant.claimed_by))) {
+            (claimed_by && !state.accounts.contains(*claimed_by))) {
             return StateValidationError::INVALID_BOOTSTRAP_GRANTS;
         }
     }
@@ -325,6 +359,33 @@ StateValidationError ValidateCybouState(const CybouState& state)
     const uint64_t total = TotalSupply(state);
     if (total > MAX_SUPPLY) return StateValidationError::BALANCE_OVERFLOW;
     return StateValidationError::NONE;
+}
+
+bool HasValidGenesisBootstrapRoster(const CybouState& state)
+{
+    if (!BootstrapGrantMapValid(state)) return false;
+    return std::ranges::all_of(state.genesis_bootstrap_grants,
+        [](const auto& entry) { return !entry.second.claimed; });
+}
+
+bool SetGenesisBootstrapRoster(CybouState& state,
+    const std::span<const std::pair<AccountId, IdentityKeyId>> roster)
+{
+    if (roster.size() < MIN_GENESIS_BOOTSTRAP_GRANTS ||
+        roster.size() > MAX_GENESIS_BOOTSTRAP_GRANTS ||
+        !state.accounts.empty() || !state.identities.Accounts().empty() ||
+        !state.genesis_bootstrap_grants.empty() || !state.legacy_genesis_bootstrap_grants.empty()) return false;
+
+    CybouState candidate{state};
+    for (const auto& [account_id, recovery_id] : roster) {
+        if (!candidate.genesis_bootstrap_grants.emplace(account_id,
+            GenesisBootstrapGrant{.recovery_key_id = recovery_id}).second) return false;
+    }
+    if (!HasValidGenesisBootstrapRoster(candidate) || ValidateCybouState(candidate) != StateValidationError::NONE) {
+        return false;
+    }
+    state.genesis_bootstrap_grants = std::move(candidate.genesis_bootstrap_grants);
+    return true;
 }
 
 uint64_t TotalSupply(const CybouState& state)
@@ -359,9 +420,12 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
     const auto names = SerializeNameRegistry(state.names);
     if (names.size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
     std::vector<unsigned char> out;
-    // Preserve the canonical v7 encoding and state roots for existing networks
-    // without bootstrap grants. Genesis bootstrap grants opt into v8 encoding.
-    out.push_back(state.genesis_bootstrap_grants.empty() ? CYBOU_STATE_LEGACY_VERSION : CYBOU_STATE_VERSION);
+    // Preserve legacy v7/v8 bytes exactly. The AccountID-keyed target roster
+    // opts new states into v9.
+    const uint8_t version = !state.genesis_bootstrap_grants.empty() ? CYBOU_STATE_VERSION :
+        (!state.legacy_genesis_bootstrap_grants.empty() ? CYBOU_STATE_RECOVERY_GRANT_VERSION :
+            CYBOU_STATE_LEGACY_VERSION);
+    out.push_back(version);
     Write64(out, state.onboarding_pool);
     Write64(out, state.security_reward_pool);
     Write64(out, state.pending_fee_pool);
@@ -389,12 +453,19 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
             out.insert(out.end(), allocation.claimed_by->Value().begin(), allocation.claimed_by->Value().end());
         }
     }
-    if (!state.genesis_bootstrap_grants.empty()) {
-        Write32(out, static_cast<uint32_t>(state.genesis_bootstrap_grants.size()));
-        for (const auto& [recovery_id, grant] : state.genesis_bootstrap_grants) {
+    if (version == CYBOU_STATE_RECOVERY_GRANT_VERSION) {
+        Write32(out, static_cast<uint32_t>(state.legacy_genesis_bootstrap_grants.size()));
+        for (const auto& [recovery_id, claimed_by] : state.legacy_genesis_bootstrap_grants) {
             out.insert(out.end(), recovery_id.begin(), recovery_id.end());
-            out.push_back(grant.claimed_by ? 1 : 0);
-            if (grant.claimed_by) out.insert(out.end(), grant.claimed_by->Value().begin(), grant.claimed_by->Value().end());
+            out.push_back(claimed_by ? 1 : 0);
+            if (claimed_by) out.insert(out.end(), claimed_by->Value().begin(), claimed_by->Value().end());
+        }
+    } else if (version == CYBOU_STATE_VERSION) {
+        Write32(out, static_cast<uint32_t>(state.genesis_bootstrap_grants.size()));
+        for (const auto& [account_id, grant] : state.genesis_bootstrap_grants) {
+            out.insert(out.end(), account_id.Value().begin(), account_id.Value().end());
+            out.insert(out.end(), grant.recovery_key_id.begin(), grant.recovery_key_id.end());
+            out.push_back(grant.claimed ? 1 : 0);
         }
     }
     return out;
@@ -408,7 +479,9 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
     const auto security = reader.U64();
     const auto pending = reader.U64();
     const auto count = reader.U32();
-    if (!version || (*version != CYBOU_STATE_LEGACY_VERSION && *version != CYBOU_STATE_VERSION) || !onboarding || !security || !pending ||
+    if (!version || (*version != CYBOU_STATE_LEGACY_VERSION &&
+        *version != CYBOU_STATE_RECOVERY_GRANT_VERSION && *version != CYBOU_STATE_VERSION) ||
+        !onboarding || !security || !pending ||
         !count || *count > MAX_IDENTITY_REGISTRY_ACCOUNTS || *count > reader.Remaining() / ACCOUNT_SIZE) return std::nullopt;
     CybouState state{};
     state.onboarding_pool = *onboarding;
@@ -468,9 +541,9 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         }
         state.genesis_allocations.emplace(recovery_id, std::move(allocation));
     }
-    if (*version == CYBOU_STATE_VERSION) {
+    if (*version == CYBOU_STATE_RECOVERY_GRANT_VERSION) {
         const auto grants = reader.U32();
-        if (!grants || *grants == 0 || *grants > MAX_GENESIS_BOOTSTRAP_GRANTS) return std::nullopt;
+        if (!grants || *grants == 0 || *grants > MAX_LEGACY_GENESIS_BOOTSTRAP_GRANTS) return std::nullopt;
         std::optional<IdentityKeyId> prior_grant;
         for (uint32_t i{0}; i < *grants; ++i) {
             const auto id_bytes = reader.Bytes(IdentityKeyId{}.size());
@@ -480,14 +553,32 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
             std::copy(id_bytes->begin(), id_bytes->end(), recovery_id.begin());
             if (prior_grant && !(*prior_grant < recovery_id)) return std::nullopt;
             prior_grant = recovery_id;
-            GenesisBootstrapGrant grant;
+            std::optional<AccountId> claimed_by;
             if (*claimed) {
                 const auto claimant = reader.Bytes(AccountId::SIZE);
                 const auto account = claimant ? AccountId::FromBytes(*claimant) : std::nullopt;
                 if (!account) return std::nullopt;
-                grant.claimed_by = *account;
+                claimed_by = *account;
             }
-            state.genesis_bootstrap_grants.emplace(recovery_id, std::move(grant));
+            state.legacy_genesis_bootstrap_grants.emplace(recovery_id, claimed_by);
+        }
+    } else if (*version == CYBOU_STATE_VERSION) {
+        const auto grants = reader.U32();
+        if (!grants || *grants < MIN_GENESIS_BOOTSTRAP_GRANTS ||
+            *grants > MAX_GENESIS_BOOTSTRAP_GRANTS) return std::nullopt;
+        std::optional<AccountId> prior_account;
+        for (uint32_t i{0}; i < *grants; ++i) {
+            const auto account_bytes = reader.Bytes(AccountId::SIZE);
+            const auto recovery_bytes = reader.Bytes(IdentityKeyId{}.size());
+            const auto claimed = reader.U8();
+            const auto account = account_bytes ? AccountId::FromBytes(*account_bytes) : std::nullopt;
+            if (!account || (prior_account && !(*prior_account < *account)) || !recovery_bytes ||
+                !claimed || *claimed > 1) return std::nullopt;
+            prior_account = *account;
+            GenesisBootstrapGrant grant;
+            std::copy(recovery_bytes->begin(), recovery_bytes->end(), grant.recovery_key_id.begin());
+            grant.claimed = *claimed != 0;
+            state.genesis_bootstrap_grants.emplace(*account, std::move(grant));
         }
     }
     if (reader.Remaining()) return std::nullopt;
