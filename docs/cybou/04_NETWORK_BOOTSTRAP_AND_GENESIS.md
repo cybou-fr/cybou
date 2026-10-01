@@ -166,13 +166,17 @@ and the peer manager exposes that role only on its current session. This does
 not implement the bootstrap service, outbound Authority route, operation relay,
 or any of the cutover requirements above.
 
-The public network-file format now has a canonical serializer, and a
-`CYBB1` NetworkBinding envelope can be signed by and verified against the
-genesis PoA key. Verification checks the exact file hash, NetworkID, genesis
-contents, display name, and generation. This is only the signed data format;
-durable `EMPTY`/`BOUND` state, activation-code consumption, atomic claims,
-generation rollback protection, replacement, and bootstrap identity pinning
-are still unimplemented.
+The public network-file format has a canonical serializer, and a `CYBB1`
+NetworkBinding envelope can be signed by and verified against the genesis PoA
+key. Verification checks the exact file hash, NetworkID, genesis contents,
+display name, and generation. The core now also has a durable LevelDB
+`EMPTY`/`BOUND` store: provisioning generates a 256-bit one-use activation
+code, stores only its domain-separated hash, and an initial claim atomically
+stores generation 1 while consuming the code. Reopening validates the stored
+binding and state, and concurrent claims serialize through the store lock.
+This is a storage primitive only; the authenticated bootstrap protocol,
+generation rollback protection for clients, replacement, transport identity
+pinning, and end-to-end bootstrap service remain unimplemented.
 
 Until that cutover is accepted, do not describe the deployed legacy DEV as the
 new bootstrap architecture, and do not point a new executable at it as if it
