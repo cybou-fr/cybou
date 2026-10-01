@@ -21,6 +21,73 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  cybou-desktop-linux:
+    name: CYBOU desktop Linux build and smoke tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      VCPKG_DISABLE_METRICS: 1
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            xvfb \
+            libdbus-1-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxcb-icccm4-dev \
+            libxcb-image0-dev \
+            libxcb-keysyms1-dev \
+            libxcb-randr0-dev \
+            libxcb-render-util0-dev \
+            libxcb-shape0-dev \
+            libxcb-sync-dev \
+            libxcb-xfixes0-dev \
+            libxcb-xinerama0-dev \
+            libxcb-xkb-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
+        with:
+          vcpkgDirectory: ${{ env.VCPKG_ROOT }}
+          runVcpkgInstall: true
+          prependedCacheKey: cybou-desktop-linux
+
+      - name: Configure Linux desktop build
+        run: |
+          cmake -S . -B build-desktop-linux -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=x64-linux \
+            -DVCPKG_HOST_TRIPLET=x64-linux \
+            -DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON \
+            -DVCPKG_MANIFEST_FEATURES=tests \
+            -DCYBOU_CONSUMER_BUILD=ON \
+            -DBUILD_GUI=ON \
+            -DBUILD_TESTS=ON
+
+      - name: Build Linux desktop and smoke tests
+        run: cmake --build build-desktop-linux --target cybou test_cybou-native-qt --parallel 2
+
+      - name: Run desktop smoke tests under Xvfb
+        run: xvfb-run --auto-servernum ctest --test-dir build-desktop-linux -R '^test_cybou-native-qt$' --output-on-failure
+
   cybou-desktop:
     name: CYBOU desktop build and smoke tests
     runs-on: windows-2025

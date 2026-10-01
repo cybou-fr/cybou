@@ -26,7 +26,7 @@ The desktop executable is `build_cybou_qt_mingw/bin/cybou.exe`; the standalone D
 
 ## Linux and other platforms
 
-The project has a CMake/vcpkg CI build for the native core and `cybou-node`; see [the core workflow](.github/workflows/cybou-core.yml) for the exact configure, test, and smoke-test commands. Linux desktop builds need platform-specific verification.
+The project has CMake/vcpkg CI builds for the native core and desktop; see [the core workflow](.github/workflows/cybou-core.yml) and [the desktop workflow](.github/workflows/cybou-desktop.yml). Desktop CI covers Windows and Ubuntu 24.04; the Linux Qt smoke test runs under Xvfb.
 
 ## DEV node
 

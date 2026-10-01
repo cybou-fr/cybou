@@ -26,6 +26,9 @@ import_plugins(test_cybou-native-qt)
 add_test(NAME test_cybou-native-qt
   COMMAND test_cybou-native-qt
 )
+set_tests_properties(test_cybou-native-qt PROPERTIES
+  ENVIRONMENT "CYBOU_DEV_PEER_ADMISSION=lab"
+)
 if(WIN32 AND VCPKG_TARGET_TRIPLET)
   set(plugin_path "$<SHELL_PATH:$<PATH:GET_PARENT_PATH,$<PATH:GET_PARENT_PATH,$<TARGET_PROPERTY:Qt6::QWindowsIntegrationPlugin,LOCATION_$<CONFIG>>>>>")
   set_property(TEST test_cybou-native-qt APPEND PROPERTY
