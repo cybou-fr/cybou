@@ -13,14 +13,8 @@
 #include <QMessageBox>
 #include <QSettings>
 
-#include <util/translation.h>
-
 #include <filesystem>
 #include <string>
-
-extern const TranslateFn G_TRANSLATION_FUN = [](const char* text) {
-    return QCoreApplication::translate("bitcoin-core", text).toStdString();
-};
 
 namespace {
 

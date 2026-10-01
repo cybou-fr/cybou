@@ -3,6 +3,7 @@
 
 #include <cybou/hex.h>
 #include <cybou/p2p/peer_manager.h>
+#include <cybou/p2p/peer_admission.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_test_setup.h>
 
@@ -71,6 +72,25 @@ std::optional<TestTlsIdentity> CreateTestTlsIdentity(const std::filesystem::path
 } // namespace
 
 BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, CybouTestSetup)
+
+BOOST_AUTO_TEST_CASE(public_peer_policy_rejects_before_opening_socket)
+{
+    CybouServiceTestFixture fixture;
+    auto config = cybou::NodeRuntimeConfig{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "public-admission-observer",
+        .memory_only = true,
+        .wipe_data = true,
+        .peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
+            cybou::p2p::PeerAdmissionPolicy::Public(nullptr)),
+    };
+    cybou::CybouNodeRuntime runtime{std::move(config)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+    cybou::p2p::PeerManager peers{runtime};
+    BOOST_CHECK(!peers.Connect("127.0.0.1", 1));
+    BOOST_CHECK(peers.LastConnectStatus() == cybou::p2p::PeerConnectStatus::ADMISSION_REJECTED);
+    BOOST_CHECK_EQUAL(peers.ConnectedCount(), 0);
+}
 
 BOOST_AUTO_TEST_CASE(removed_storage_wire_ids_are_rejected)
 {

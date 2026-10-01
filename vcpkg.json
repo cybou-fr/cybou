@@ -34,7 +34,7 @@
       ]
     },
     "tests": {
-      "description": "Build test_bitcoin.exe executable",
+      "description": "Build CYBOU test suites",
       "dependencies": [
         "boost-test"
       ]

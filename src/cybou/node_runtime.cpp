@@ -9,6 +9,7 @@
 #include <cybou/identity_crypto.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/p2p/peer_manager.h>
+#include <cybou/p2p/peer_admission.h>
 
 #include <boost/asio/ip/address.hpp>
 #include <openssl/rand.h>
@@ -124,6 +125,13 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
       })},
       m_store{*m_db, m_config.network_definition}
 {
+    if (!m_config.peer_admission_policy) {
+        // Memory-only runtimes are isolated LAB/test instances. Persistent
+        // runtimes without an explicit local Geo policy fail closed.
+        const auto policy = m_config.memory_only ? p2p::PeerAdmissionPolicy::Lab() :
+            p2p::PeerAdmissionPolicy::Public(nullptr);
+        m_config.peer_admission_policy = std::make_shared<const p2p::PeerAdmissionPolicy>(policy);
+    }
     std::filesystem::path storage_path;
     if (!m_config.memory_only) {
         storage_path = std::filesystem::path{m_config.data_dir.string() + ".chunks"};
@@ -161,6 +169,11 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
         m_config.poa_finalizer_recovery_entropy.reset();
     }
     if (m_config.p2p_endpoint) m_peer_manager = std::make_unique<p2p::PeerManager>(*this);
+}
+
+bool CybouNodeRuntime::AdmitPeerAddress(const std::string& numeric_address) const
+{
+    return m_config.peer_admission_policy && m_config.peer_admission_policy->Allows(numeric_address);
 }
 
 CybouNodeRuntime::~CybouNodeRuntime()

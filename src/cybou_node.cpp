@@ -16,6 +16,7 @@
 #include <cybou/node_runtime.h>
 #include <cybou/node_service.h>
 #include <cybou/p2p/peer_manager.h>
+#include <cybou/p2p/peer_admission.h>
 #include <cybou/signing.h>
 
 #include <boost/asio.hpp>
@@ -44,6 +45,7 @@ std::atomic_bool stopping{false};
 std::shared_ptr<cybou::EventWriter> events;
 std::vector<std::pair<std::string,uint16_t>> explicit_peers;
 std::optional<std::pair<std::string,uint16_t>> advertised_endpoint;
+std::shared_ptr<const cybou::p2p::PeerAdmissionPolicy> active_peer_admission_policy;
 
 void Stop(int) { stopping.store(true); }
 
@@ -144,6 +146,45 @@ uint64_t TargetHeight(const char* value)
     return height;
 }
 
+std::array<unsigned char, 32> Sha256Pin(std::string_view text)
+{
+    if (text.size() != 64) throw std::invalid_argument("Geo data SHA-256 must contain 64 hex characters");
+    std::array<unsigned char, 32> digest{};
+    auto nibble = [](const char c) -> unsigned {
+        if (c >= '0' && c <= '9') return static_cast<unsigned>(c - '0');
+        if (c >= 'a' && c <= 'f') return static_cast<unsigned>(c - 'a' + 10);
+        if (c >= 'A' && c <= 'F') return static_cast<unsigned>(c - 'A' + 10);
+        throw std::invalid_argument("Geo data SHA-256 is not hexadecimal");
+    };
+    for (size_t i = 0; i < digest.size(); ++i) {
+        digest[i] = static_cast<unsigned char>((nibble(text[2 * i]) << 4) | nibble(text[2 * i + 1]));
+    }
+    return digest;
+}
+
+void ConfigurePeerAdmission(const cybou::cli::Options& opts)
+{
+    const auto mode = opts.Require("peer-admission");
+    if (mode == "lab") {
+        if (opts.Has("geo-country-csv") || opts.Has("geo-sha256")) {
+            throw std::invalid_argument("LAB admission cannot be combined with Geo data pins");
+        }
+        active_peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
+            cybou::p2p::PeerAdmissionPolicy::Lab());
+        return;
+    }
+    if (mode != "france") throw std::invalid_argument("peer admission must be france or lab");
+    if (!opts.Has("geo-country-csv") || !opts.Has("geo-sha256")) {
+        throw std::invalid_argument("France admission requires --geo-country-csv and --geo-sha256");
+    }
+    const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(
+        opts.Require("geo-country-csv"), Sha256Pin(opts.Require("geo-sha256")));
+    if (!dataset) throw std::invalid_argument("France Geo CSV is missing, corrupt, or has the wrong SHA-256");
+    active_peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
+        cybou::p2p::PeerAdmissionPolicy::Public(dataset));
+    std::cerr << "Peer Geo data: DB-IP Lite IP to Country; attribution: DB-IP.com (CC BY 4.0)\n";
+}
+
 int PrintPeerSubmitResult(const cybou::p2p::PeerSubmitResult& result)
 {
     std::cout << "status=";
@@ -218,6 +259,7 @@ int Execute(const int argc, char* argv[])
         if (!op_id || op_id->IsNull()) throw std::runtime_error("invalid OperationID");
         cybou::NodeRuntimeConfig config{.network_definition = network->definition,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
         cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
         node_service.Start();
@@ -238,6 +280,7 @@ int Execute(const int argc, char* argv[])
     if (std::string_view{argv[1]} == "network-probe" && argc == 6) {
         cybou::NodeRuntimeConfig config{.network_definition = network->definition,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
         cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
         node_service.Start();
@@ -255,6 +298,7 @@ int Execute(const int argc, char* argv[])
     if (std::string_view{argv[1]} == "network-sync" && argc == 7) {
         cybou::NodeRuntimeConfig config{.network_definition = network->definition,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
         cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
         node_service.Start();
@@ -271,6 +315,7 @@ int Execute(const int argc, char* argv[])
     if (std::string_view{argv[1]} == "network-follow" && (argc == 6 || argc == 7)) {
         cybou::NodeRuntimeConfig config{.network_definition = network->definition,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
         cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
         node_service.Start();
@@ -312,6 +357,7 @@ int Execute(const int argc, char* argv[])
         const auto until_height = argc == 6 ? std::optional<uint64_t>{TargetHeight(argv[5])} : std::nullopt;
         cybou::NodeRuntimeConfig config{.network_definition = network->definition,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
         cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
         node_service.Start();
@@ -380,6 +426,7 @@ int Execute(const int argc, char* argv[])
         if (!operation) throw std::runtime_error("invalid operation file");
         cybou::NodeRuntimeConfig config{.network_definition = network->definition,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
         cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
         node_service.Start();
@@ -394,6 +441,7 @@ int Execute(const int argc, char* argv[])
         if (!operation) throw std::runtime_error("invalid operation file");
         cybou::NodeRuntimeConfig config{.network_definition = network->definition,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
+        config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
         cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
         node_service.Start();
@@ -427,6 +475,7 @@ int Execute(const int argc, char* argv[])
             config.storage_capacity_bytes = CapacityBytes(argv[9]);
         }
         config.local_p2p_endpoint = advertised_endpoint.value_or(std::make_pair(bind_address.to_string(), p2p_port));
+        config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
         cybou::CybouNodeService node_service{{
             .runtime = std::move(config),
@@ -469,6 +518,7 @@ int Execute(const int argc, char* argv[])
             .storage_enabled = provider,
             .storage_capacity_bytes = capacity,
         };
+        config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
         cybou::CybouNodeService node_service{{
             .runtime = std::move(config),
@@ -541,6 +591,8 @@ const char* Help = R"(CYBOU operator CLI (CYP2 only)
                     --operation-id HEX [--replicas 1|2] (offline Identity projection)
 No positional arguments or legacy command aliases. Secrets are file inputs.
 Event JSONL is output only. Peer advertised heights are not canonical evidence.
+Network-facing commands require --peer-admission france --geo-country-csv FILE
+and --geo-sha256 HEX. Use --peer-admission lab only for loopback/private LAB peers.
 )";
 int Doctor(const cybou::cli::Options& opts)
 {
@@ -626,10 +678,13 @@ int StorageCommand(const std::string& action, const cybou::cli::Options& opts)
         if (last.empty()) throw std::runtime_error("no complete recent node_status sample");
         std::cout << last << '\n'; return 0;
     }
-    opts.Allow({"network","data-dir","peer","chunk-id","vault","password-file","operation-id","replicas"});
+    opts.Allow({"network","data-dir","peer","chunk-id","vault","password-file","operation-id","replicas",
+        "peer-admission","geo-country-csv","geo-sha256"});
+    if (opts.Has("peer")) ConfigurePeerAdmission(opts);
     auto net=cybou::LoadCybouNetworkFile(opts.Require("network"));
     if (!net) throw std::runtime_error("invalid network");
     cybou::NodeRuntimeConfig config{.network_definition=net->definition,.data_dir=opts.Require("data-dir")};
+    config.peer_admission_policy = active_peer_admission_policy;
     if (opts.Has("peer")) config.p2p_endpoint=Endpoint(opts.Get("peer"));
     cybou::CybouNodeService node{{.runtime=std::move(config),.genesis=net->genesis}};
     node.Start(); auto& runtime=node.Runtime();
@@ -678,6 +733,7 @@ int StorageCommand(const std::string& action, const cybou::cli::Options& opts)
 }
 int Main(int argc, char* argv[])
 {
+    active_peer_admission_policy.reset();
     if (argc == 1 || std::any_of(argv+1,argv+argc,[](const char* arg){ return std::string_view{arg}=="--help"; })) {
         std::cout << Help; return 0;
     }
@@ -702,8 +758,11 @@ int Main(int argc, char* argv[])
             args.insert(args.end(),{opts.Require("authority-balance"),opts.Require("authority-name")});
         }
     } else if ((group=="finalizer" || group=="provider" || group=="observer") && action=="run") {
-        if (group=="finalizer") opts.Allow({"network","data-dir","key-file","listen","block-interval","peers","event-log","event-log-mode","capacity","advertise"});
-        else opts.Allow({"network","data-dir","peer","listen","peers","capacity","event-log","event-log-mode","advertise"});
+        if (group=="finalizer") opts.Allow({"network","data-dir","key-file","listen","block-interval","peers","event-log","event-log-mode","capacity","advertise",
+            "peer-admission","geo-country-csv","geo-sha256"});
+        else opts.Allow({"network","data-dir","peer","listen","peers","capacity","event-log","event-log-mode","advertise",
+            "peer-admission","geo-country-csv","geo-sha256"});
+        ConfigurePeerAdmission(opts);
         if (opts.Has("event-log-mode") && opts.Get("event-log-mode")!="minimal" && opts.Get("event-log-mode")!="lab")
             throw std::invalid_argument("event log mode must be minimal or lab");
         if (group=="observer" && opts.Has("capacity")) throw std::invalid_argument("observer has no storage role");
@@ -734,10 +793,11 @@ int Main(int argc, char* argv[])
         opts.Allow({"network","data-dir","operation-id"});
         args.insert(args.end(),{"operation-status",opts.Require("network"),opts.Require("data-dir"),opts.Require("operation-id")});
     } else if ((group=="network" && (action=="probe" || action=="sync" || action=="follow")) || (group=="operation" && action=="submit")) {
-        if (action=="probe") opts.Allow({"network","data-dir","peer"});
-        else if (action=="sync") opts.Allow({"network","data-dir","peer","count"});
-        else if (action=="follow") opts.Allow({"network","data-dir","peer","peers","until-height"});
-        else opts.Allow({"network","data-dir","peer","peers","operation-file"});
+        if (action=="probe") opts.Allow({"network","data-dir","peer","peer-admission","geo-country-csv","geo-sha256"});
+        else if (action=="sync") opts.Allow({"network","data-dir","peer","count","peer-admission","geo-country-csv","geo-sha256"});
+        else if (action=="follow") opts.Allow({"network","data-dir","peer","peers","until-height","peer-admission","geo-country-csv","geo-sha256"});
+        else opts.Allow({"network","data-dir","peer","peers","operation-file","peer-admission","geo-country-csv","geo-sha256"});
+        ConfigurePeerAdmission(opts);
         if (opts.Has("peer") == opts.Has("peers")) throw std::invalid_argument("specify exactly one of --peer or --peers");
         const bool peer_list = opts.Has("peers");
         if (peer_list && (action=="probe" || action=="sync")) throw std::invalid_argument("command requires --peer");

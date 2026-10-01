@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(dataset_integrity_and_prefix_matching_are_fail_closed)
 
     auto wrong_digest = Hash(bytes);
     wrong_digest[0] ^= 1;
-    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::Load(path, wrong_digest));
+    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, wrong_digest));
 
     const std::string malformed{"192.0.2.0,192.0.2.255,FRA\n"};
     Write(path, malformed);
@@ -80,6 +80,8 @@ BOOST_AUTO_TEST_CASE(public_policy_fails_closed_and_lab_only_allows_private_rout
     const auto lab_policy = cybou::p2p::PeerAdmissionPolicy::Lab();
     BOOST_CHECK(lab_policy.Ready());
     BOOST_CHECK(lab_policy.Allows("127.0.0.1"));
+    BOOST_CHECK(lab_policy.Allows("::ffff:127.0.0.1"));
+    BOOST_CHECK(lab_policy.Allows("::ffff:192.168.1.2"));
     BOOST_CHECK(lab_policy.Allows("10.0.0.1"));
     BOOST_CHECK(lab_policy.Allows("fc00::1"));
     BOOST_CHECK(!lab_policy.Allows("198.51.100.42"));

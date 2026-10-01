@@ -5,7 +5,6 @@
 #include <cybou/signing.h>
 
 #include <uint256.h>
-#include <util/strencodings.h>
 
 #include <boost/test/unit_test.hpp>
 

@@ -44,14 +44,21 @@ std::optional<std::pair<std::array<unsigned char, 16>, bool>> AddressBytes(std::
 
 bool IsLabAddress(const boost::asio::ip::address& address)
 {
-    if (address.is_v4()) {
-        const auto bytes = address.to_v4().to_bytes();
+    auto normalized = address;
+    if (normalized.is_v6() && normalized.to_v6().is_v4_mapped()) {
+        const auto mapped = normalized.to_v6().to_bytes();
+        boost::asio::ip::address_v4::bytes_type v4{};
+        std::copy_n(mapped.end() - static_cast<std::ptrdiff_t>(v4.size()), v4.size(), v4.begin());
+        normalized = boost::asio::ip::address_v4{v4};
+    }
+    if (normalized.is_v4()) {
+        const auto bytes = normalized.to_v4().to_bytes();
         return bytes[0] == 10 || bytes[0] == 127 ||
             (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
             (bytes[0] == 192 && bytes[1] == 168) ||
             (bytes[0] == 169 && bytes[1] == 254);
     }
-    const auto v6 = address.to_v6();
+    const auto v6 = normalized.to_v6();
     if (v6.is_loopback() || v6.is_link_local()) return true;
     const auto bytes = v6.to_bytes();
     return (bytes[0] & 0xfeU) == 0xfcU; // IPv6 unique-local fc00::/7

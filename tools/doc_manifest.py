@@ -21,7 +21,6 @@ INCLUDED_ROOT_FILES = [
     "INSTALL.md",
     "README.md",
     "SECURITY.md",
-    "doc/README.md",
 ]
 
 

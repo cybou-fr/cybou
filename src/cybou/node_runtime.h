@@ -33,7 +33,7 @@
 #include <vector>
 
 namespace cybou {
-namespace p2p { class PeerManager; }
+namespace p2p { class PeerAdmissionPolicy; class PeerManager; }
 class CybouKeyStore;
 class IdentityOperationCoordinator;
 
@@ -54,6 +54,8 @@ struct NodeRuntimeConfig {
     std::optional<AccountId> bootstrap_identity_account;
     std::function<std::optional<std::vector<unsigned char>>(std::span<const unsigned char>)>
         bootstrap_proof_signer;
+    /** Required local address policy for all public P2P sockets. */
+    std::shared_ptr<const p2p::PeerAdmissionPolicy> peer_admission_policy;
 };
 
 enum class NodeRuntimeState : uint8_t {
@@ -233,6 +235,7 @@ public:
     /** Local pre-parse abuse limiter; it has no protocol or Authority effect. */
     bool AdmitIngress(const std::string& address, p2p::IngressBudget::Work work, size_t bytes = 0)
     { return m_ingress.Admit(address, work, bytes); }
+    bool AdmitPeerAddress(const std::string& numeric_address) const;
     std::vector<std::pair<std::string, uint16_t>> GetPeerEndpointsForGossip() const;
     /**
      * Replace the explicit peer endpoints supplied by the operator.

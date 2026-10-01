@@ -112,59 +112,13 @@ if(CYBOU_ENABLE_TEST_HOOKS AND NOT BUILD_TESTS)
   message(FATAL_ERROR "CYBOU_ENABLE_TEST_HOOKS requires BUILD_TESTS=ON.")
 endif()
 
-option(BUILD_KERNEL_LIB "Build experimental bitcoinkernel library." OFF)
-cmake_dependent_option(BUILD_KERNEL_TEST "Build tests for the experimental bitcoinkernel library." OFF "BUILD_KERNEL_LIB" OFF)
-
 option(REDUCE_EXPORTS "Attempt to reduce exported symbols in the resulting executables." OFF)
 option(CMAKE_COMPILE_WARNING_AS_ERROR "Treat compiler warnings as errors." OFF)
 option(WITH_CCACHE "Attempt to use ccache for compiling." ON)
 
-option(WITH_EMBEDDED_ASMAP "Embed default ASMap data." ON)
-
-option(WITH_USDT "Enable tracepoints for Userspace, Statically Defined Tracing." OFF)
-if(WITH_USDT)
-  find_package(USDT MODULE REQUIRED)
-endif()
-
-option(ENABLE_EXTERNAL_SIGNER "Enable external signer support." ON)
-if(CYBOU_CONSUMER_BUILD)
-  set(ENABLE_EXTERNAL_SIGNER OFF CACHE BOOL "Enable inherited external signer support." FORCE)
-endif()
-
-cmake_dependent_option(WITH_QRENCODE "Enable QR code support." ON "BUILD_GUI" OFF)
-if(CYBOU_CONSUMER_BUILD)
-  set(WITH_QRENCODE OFF CACHE BOOL "Enable inherited payment QR support." FORCE)
-endif()
-if(WITH_QRENCODE)
-  find_package(QRencode MODULE REQUIRED)
-  set(USE_QRCODE TRUE)
-endif()
-
-cmake_dependent_option(WITH_DBUS "Enable DBus support." ON "NOT CMAKE_SYSTEM_NAME MATCHES \"(Windows|Darwin)\" AND BUILD_GUI" OFF)
-
-cmake_dependent_option(ENABLE_IPC "Build multiprocess node/gui executables." ON "NOT WIN32" OFF)
-cmake_dependent_option(WITH_EXTERNAL_LIBMULTIPROCESS "Build with external libmultiprocess library instead of with local git subtree when ENABLE_IPC is enabled. This is not normally recommended, but can be useful for developing libmultiprocess itself." OFF "ENABLE_IPC" OFF)
-if(CYBOU_CONSUMER_BUILD)
-  # The consumer package is a single-process desktop application.
-  set(BUILD_GUI ON CACHE BOOL "Build CYBOU desktop executable." FORCE)
-  set(ENABLE_IPC OFF CACHE BOOL "Build inherited multiprocess executables." FORCE)
-  set(ENABLE_EXTERNAL_SIGNER OFF CACHE BOOL "Enable inherited external signer support." FORCE)
-  set(WITH_QRENCODE OFF CACHE BOOL "Enable inherited payment QR support." FORCE)
-endif()
-if(ENABLE_IPC AND WITH_EXTERNAL_LIBMULTIPROCESS)
-  find_package(Libmultiprocess REQUIRED COMPONENTS Lib)
-  find_package(LibmultiprocessNative REQUIRED COMPONENTS Bin
-    NAMES Libmultiprocess
-  )
-endif()
-
 cmake_dependent_option(BUILD_GUI_TESTS "Build CYBOU native Qt smoke test." ON "BUILD_GUI;BUILD_TESTS" OFF)
 if(BUILD_GUI)
   set(qt_components Core Gui Widgets Svg)
-  if(WITH_DBUS)
-    list(APPEND qt_components DBus)
-    set(USE_DBUS TRUE)
-  endif()
   if(BUILD_GUI_TESTS)
     list(APPEND qt_components Test)
   endif()
@@ -174,18 +128,12 @@ if(BUILD_GUI)
   unset(qt_components)
 endif()
 
-option(BUILD_BENCH "Build bench_bitcoin executable." OFF)
-option(BUILD_FUZZ_BINARY "Build fuzz binary." OFF)
-option(BUILD_FOR_FUZZING "Build for fuzzing. Enabling this will disable all other targets and override BUILD_FUZZ_BINARY." OFF)
-
-option(INSTALL_MAN "Install man pages." ON)
+option(INSTALL_MAN "Install man pages." OFF)
 
 set(APPEND_CPPFLAGS "" CACHE STRING "Preprocessor flags that are appended to the command line after all other flags added by the build system. This variable is intended for debugging and special builds.")
 set(APPEND_CFLAGS "" CACHE STRING "C compiler flags that are appended to the command line after all other flags added by the build system. This variable is intended for debugging and special builds.")
 set(APPEND_CXXFLAGS "" CACHE STRING "(Objective) C++ compiler flags that are appended to the command line after all other flags added by the build system. This variable is intended for debugging and special builds.")
 set(APPEND_LDFLAGS "" CACHE STRING "Linker flags that are appended to the command line after all other flags added by the build system. This variable is intended for debugging and special builds.")
-# Appending to this low-level rule variables is the only way to
-# guarantee that the flags appear at the end of the command line.
 string(APPEND CMAKE_CXX_COMPILE_OBJECT " ${APPEND_CPPFLAGS} ${APPEND_CXXFLAGS}")
 string(APPEND CMAKE_CXX_CREATE_SHARED_LIBRARY " ${APPEND_LDFLAGS}")
 string(APPEND CMAKE_CXX_LINK_EXECUTABLE " ${APPEND_LDFLAGS}")
@@ -195,9 +143,6 @@ set(configure_warnings)
 include(CheckLinkerSupportsPIE)
 check_linker_supports_pie(configure_warnings)
 
-# The core_interface library aims to encapsulate common build flags.
-# It is a usage requirement for all targets except for secp256k1, which
-# gets its flags by other means.
 add_library(core_interface INTERFACE)
 add_library(core_interface_relwithdebinfo INTERFACE)
 add_library(core_interface_debug INTERFACE)
@@ -205,24 +150,6 @@ target_link_libraries(core_interface INTERFACE
   $<$<CONFIG:RelWithDebInfo>:core_interface_relwithdebinfo>
   $<$<CONFIG:Debug>:core_interface_debug>
 )
-
-if(BUILD_FOR_FUZZING)
-  message(WARNING "BUILD_FOR_FUZZING=ON will disable all other targets and force BUILD_FUZZ_BINARY=ON.")
-  set(BUILD_KERNEL_LIB OFF)
-  set(BUILD_KERNEL_TEST OFF)
-  set(BUILD_GUI OFF)
-  set(ENABLE_EXTERNAL_SIGNER OFF)
-  set(WITH_EMBEDDED_ASMAP OFF)
-  set(BUILD_TESTS OFF)
-  set(BUILD_GUI_TESTS OFF)
-  set(BUILD_BENCH OFF)
-  set(ENABLE_IPC OFF)
-  set(BUILD_FUZZ_BINARY ON)
-
-  target_compile_definitions(core_interface INTERFACE
-    FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-  )
-endif()
 
 include(TryAppendCXXFlags)
 include(TryAppendLinkerFlag)
@@ -601,9 +528,6 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.29)
   set(CMAKE_SKIP_TEST_ALL_DEPENDENCY FALSE)
 endif()
 
-add_subdirectory(test)
-add_subdirectory(doc)
-
 add_subdirectory(src)
 
 include(Maintenance)
@@ -615,29 +539,11 @@ message("=================")
 message("Executables:")
 message("  cybou (GUI) ......................... ${BUILD_GUI}")
 message("  cybou-node .......................... ON")
-message("  libbitcoinkernel (experimental) ..... ${BUILD_KERNEL_LIB}")
-message("  kernel-test (experimental) .......... ${BUILD_KERNEL_TEST}")
-message("Optional features:")
-message("  external signer ..................... ${ENABLE_EXTERNAL_SIGNER}")
-if(ENABLE_IPC)
-  if (WITH_EXTERNAL_LIBMULTIPROCESS)
-    set(ipc_status "ON (with external libmultiprocess)")
-  else()
-    set(ipc_status ON)
-  endif()
-else()
-  set(ipc_status OFF)
-endif()
-message("  IPC ................................. ${ipc_status}")
-message("  Embedded ASMap ...................... ${WITH_EMBEDDED_ASMAP}")
-message("  USDT tracing ........................ ${WITH_USDT}")
-message("  QR code (GUI) ....................... ${WITH_QRENCODE}")
-message("  DBus (GUI) .......................... ${WITH_DBUS}")
+message("  cybou-bootstrap ..................... ON")
+message("  cybou-loadgen ....................... ON")
 message("Tests:")
-message("  test ................................ ${BUILD_TESTS}")
+message("  test (cybou-core-test) .............. ${BUILD_TESTS}")
 message("  test_cybou-native-qt ................ ${BUILD_GUI_TESTS}")
-message("  bench_bitcoin ....................... ${BUILD_BENCH}")
-message("  fuzz binary ......................... ${BUILD_FUZZ_BINARY}")
 message("")
 if(CMAKE_CROSSCOMPILING)
   set(cross_status "TRUE, for ${CMAKE_SYSTEM_NAME}, ${CMAKE_SYSTEM_PROCESSOR}")

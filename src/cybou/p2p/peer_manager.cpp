@@ -42,6 +42,10 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     const auto address = boost::asio::ip::make_address(numeric_address, ec);
     if (ec) return false;
     const Endpoint endpoint{address.to_string(), port};
+    if (!m_runtime.AdmitPeerAddress(endpoint.first)) {
+        m_last_connect_status = PeerConnectStatus::ADMISSION_REJECTED;
+        return false;
+    }
     if (m_peers.contains(endpoint)) return false;
     if (m_peers.size() >= MAX_OUTBOUND_PEERS) {
         if (!m_explicit_endpoints.contains(endpoint)) {

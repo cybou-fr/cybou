@@ -59,7 +59,8 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
         }
         if (ec) { stopping = true; break; }
         const auto remote=socket.remote_endpoint(ec);
-        if (ec || !m_runtime.AdmitIngress(remote.address().to_string(),IngressBudget::Work::CONNECTION)) {
+        if (ec || !m_runtime.AdmitPeerAddress(remote.address().to_string()) ||
+            !m_runtime.AdmitIngress(remote.address().to_string(), IngressBudget::Work::CONNECTION)) {
             socket.close(); continue;
         }
         if (m_workers.size() >= MAX_INBOUND_PEERS) {

@@ -2,8 +2,8 @@
 
 Это **единственная авторитетная процедура сборки** CYBOU core на Windows.
 Воспроизводит конфигурацию `build_cybou_qt_mingw`, на которой собираются
-`cybou-core-test.exe`, `cybou-node.exe` и Qt GUI. Унаследованный
-`test_bitcoin.exe` остаётся отдельным тестовым набором.
+`cybou-core-test.exe`, `cybou-node.exe`, `cybou-bootstrap.exe`,
+`cybou-loadgen.exe` и Qt GUI.
 
 ## Что требуется (один раз)
 
@@ -96,10 +96,9 @@ qtbase/qttools/sqlite3/zeromq и vcpkg начнёт собирать Qt (~час
   -DVCPKG_MANIFEST_INSTALL=OFF ^
   -DCMAKE_PREFIX_PATH=C:/Qt/6.11.2/mingw_64 ^
   -DCMAKE_CXX_COMPILER=C:/Qt/Tools/mingw1310_64/bin/g++.exe ^
-  -DBUILD_BITCOIN_BIN=OFF -DBUILD_DAEMON=OFF -DBUILD_GUI=ON -DBUILD_CLI=OFF ^
-  -DBUILD_TESTS=ON -DBUILD_TX=OFF -DBUILD_UTIL=OFF ^
-  -DENABLE_EXTERNAL_SIGNER=OFF -DENABLE_IPC=OFF ^
-  -DWITH_CCACHE=OFF -DWITH_ZMQ=OFF
+  -DBUILD_GUI=ON ^
+  -DBUILD_TESTS=ON ^
+  -DWITH_CCACHE=OFF
 ```
 
 Ключевые решения:

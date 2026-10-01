@@ -13,7 +13,6 @@ editing an included file.
 | INSTALL.md | 37 | 836eee88885dfa41 |
 | README.md | 138 | 42cba454681879a6 |
 | SECURITY.md | 57 | 96f65f343afaa06e |
-| doc/README.md | 36 | 36c6684f20dd0086 |
 | docs/cybou/00_VISION.md | 72 | 2cba76b0edaf59a4 |
 | docs/cybou/02_ARCHITECTURE.md | 136 | 646d075f54a18b52 |
 | docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md | 235 | 880cc17ecb380bc9 |
@@ -45,7 +44,7 @@ editing an included file.
 | docs/cybou/59_DETERMINISTIC_FEE_ROUTER.md | 89 | cfbf1329a4e0f587 |
 | docs/cybou/68_OPERATOR_KEY_SEPARATION.md | 32 | 6b34da0aef178515 |
 | docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 37 | 985b7549c28e8840 |
-| docs/cybou/71_WINDOWS_MINGW_BUILD.md | 147 | 347f5cd755e85843 |
+| docs/cybou/71_WINDOWS_MINGW_BUILD.md | 146 | a149e0762bd36088 |
 | docs/cybou/72_DESKTOP_WALLET_UI.md | 81 | d58fb6c8a3ad9144 |
 | docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 159 | a92054b2d978cd6f |
 | docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 62 | 5fd4730a222232f8 |
