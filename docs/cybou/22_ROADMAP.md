@@ -33,19 +33,22 @@ audit/repair, and placement recovery are integrated with the desktop.
 
 ## Network lifecycle migration
 
-The approved target is specified in
+The revised target is specified in
 [`04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](04_NETWORK_BOOTSTRAP_AND_GENESIS.md):
-one non-finalizing/non-provider bootstrap service on the official VPS and the
-genesis-key holder finalizing from its Central Authority desktop. The current
-DEV executable and services still use the legacy arrangement. Before cutover,
-implement the initial locator pin and genesis-granted bootstrap Identity,
-EMPTY/BOUND state, one-use initial claim,
-generation-safe replacement, desktop genesis creation/finalizer lifecycle,
-per-session genesis-key proof with no persistent Authority address, and
-authenticated relay. Pass clean-install, compromise, rollback, restart,
-Authority mobility, offline-authority, and replacement acceptance tests, then
-perform an explicit DEV reset/cutover. Routine deployments continue to
-preserve the existing DEV network and key until that procedure is ready.
+all participants run the same full-node software with optional capabilities;
+genesis authorizes one to four bootstrap Identities; and production/DEV public
+P2P admission is France-only. The current DEV executable and services still
+use the legacy arrangement. Before cutover, implement the AccountID plus
+RecoveryKeyID genesis roster, pre-genesis pinned Identity proof, current-key
+per-session bootstrap proof, unified node capabilities, local Geo admission,
+network creation across selected bootstrap seeds, generation-safe replacement
+history, and optional anonymizer filtering. Pass the multi-bootstrap,
+clean-install, compromise, rollback, restart, France-admission, LAB-bypass,
+Authority-mobility, offline-authority, and replacement acceptance tests, then
+replace the development-only DEV testnet through an explicit coordinated
+new-genesis cutover. No production/Beta network is being migrated. Routine
+code deployments continue to preserve the running test state and key until
+that procedure is ready.
 
 ## Authority and Validation
 

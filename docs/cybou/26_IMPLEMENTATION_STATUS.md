@@ -1,13 +1,37 @@
 # Implementation status
 
+## Bootstrap prototype and target gap
+
+The current branch contains a bootstrap prototype, not the revised target
+genesis roster or France-only peer admission:
+
+- grant-bearing state currently uses v8 and keys grants by RecoveryKeyID with
+  optional claimed AccountID; grant-free legacy state retains the exact v7
+  encoding and root;
+- the pinned pre-genesis proof binds a fresh challenge, TLS exporter, and
+  Recovery public key, but does not yet bind the candidate's stable AccountID;
+- `CAP_BOOTSTRAP` verifies an AccountID session proof against a claimed grant
+  and current Authorization key;
+- the initial locator list is intentionally empty pending an approved target
+  endpoint and SPKI pin;
+- the pre-genesis proof is not yet wired into the running bootstrap CLI/vault
+  flow or desktop network-creation wizard;
+- France-only `PeerAdmissionPolicy`, local Geo dataset integrity/update,
+  outbound/inbound integration, LAB bypass, and optional anonymizer filtering
+  are not implemented.
+
+The revised target requires a new canonical state version (v9) with one to
+four grants keyed by stable AccountID and storing expected RecoveryKeyID plus
+a claimed flag. It also requires retaining v7/v8 legacy-state support until a
+coordinated new-genesis cutover.
+
 ## Implemented substrate
 
 Current `main` implements the canonical low-level substrate:
 
-- optional genesis bootstrap grants keyed by RecoveryKeyID, one-time
-  AccountCreate claim into stable AccountID, and current Authorization-key
-  lookup that survives IdentityRotate; grant-free states retain the exact v7
-  serialization/state root while grant-bearing states use v8;
+- prototype optional genesis bootstrap grants keyed by RecoveryKeyID,
+  one-time AccountCreate claim into stable AccountID, and current
+  Authorization-key lookup that survives IdentityRotate;
 - CYP2 `CAP_BOOTSTRAP` proof bound to NetworkID, TLS exporter, both HELLOs and
   AccountID, with remote Authorization keys resolved only from finalized
   genesis grants and caller-supplied unlocked-Identity signing;

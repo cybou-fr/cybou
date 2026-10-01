@@ -89,6 +89,15 @@ See [INSTALL.md](INSTALL.md) for prerequisites and build instructions, including
 the Windows MinGW/Ninja path. The project uses C++20, CMake, Qt 6 for the
 desktop client, and the repository's native dependencies.
 
+All participants use the same full-node software with optional capabilities.
+Genesis authorizes one to four bootstrap Identities; bootstrap is not a node
+class or a finality quorum. The target production/DEV policy admits public P2P
+only from French IP space using local Geo data. See
+[`docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md)
+for the target and migration gates; the current DEV deployment remains on its
+legacy testnet topology until coordinated new-genesis cutover. No production
+or Beta network is running.
+
 ## Protocol and product documentation
 
 - [Vision](docs/cybou/00_VISION.md)

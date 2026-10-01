@@ -27,7 +27,9 @@ pending state.
 The Central Authority Identity's recovery entropy derives its role-specific
 `POA_FINALIZER` hybrid key through the existing HKDF-SHA256 derivation and
 purpose label. Its public key is committed by the network definition at
-genesis. This is a distinct key role, separate from Identity recovery,
+genesis. This is a local capability of an ordinary full node, separate from
+its optional bootstrap, storage, or advisory Validation capabilities. It is a
+distinct key role, separate from Identity recovery,
 authorization and KEM keys, Release Signing, and Treasury. In the target
 deployment, the desktop unlocks this Identity and runs the finalizer locally;
 the private material is never sent to bootstrap. The current legacy DEV still
@@ -93,11 +95,12 @@ separate Operator Authority key. The Central Authority remains an ordinary
 protocol Identity; only its distinct genesis-bound `POA_FINALIZER` role signs
 blocks. This role does not derive from the Authority score.
 
-The current DEV network completed its last protocol reset, but has not yet
-completed the bootstrap/desktop-finalizer architecture cutover. Routine
-deployments preserve chain state and PoA key. The cutover defined in
-`04_NETWORK_BOOTSTRAP_AND_GENESIS.md` is a separate explicit reset with its own
-genesis and operational procedure. Runtime compatibility and old-state import
-are not required after that cutover.
+The running DEV chain is a development testnet; no production or Beta network
+exists. It has not yet completed the bootstrap/desktop-finalizer architecture
+cutover. Routine code deployments preserve its current test state and PoA key.
+The planned cutover defined in `04_NETWORK_BOOTSTRAP_AND_GENESIS.md` replaces
+that testnet with a new genesis and target topology after acceptance gates.
+Runtime compatibility and old-state import are not required for that new
+genesis.
 
 \n

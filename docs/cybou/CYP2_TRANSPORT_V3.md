@@ -17,10 +17,12 @@ chunk transfer over TCP protected by TLS 1.3.
   authenticated by proofs bound to both CYP2 HELLOs and the TLS exporter.
 - The compiled initial locator carries an SPKI SHA-256 pin for pre-genesis
   first contact. That pin authenticates only that initial endpoint; it does
-  not grant a network role. The pinned session challenges the bootstrap
-  Recovery key and verifies its proof against the same TLS exporter. After
-  genesis, peers authenticate bootstrap service through its genesis grant and
-  session proof. Ordinary peer sessions continue to use ephemeral certificates.
+  not grant a network role. The pinned pre-genesis exchange binds a fresh
+  client nonce, TLS exporter, proposed stable AccountID, and Recovery public
+  key in a signed proof. Genesis records AccountID plus RecoveryKeyID. After
+  genesis, peers authenticate bootstrap capability through the claimed grant
+  and per-session Authorization proof. Ordinary peer sessions continue to use
+  ephemeral certificates.
 - Bootstrap request/response frames have a 16 MiB plus 16 KiB payload bound
   for the signed network definition. All ordinary CYP2 frames retain the 4096
   byte limit.
@@ -39,6 +41,15 @@ The role proofs identify providers and the canonical finalizer over this TLS
 session; they do not establish a global identity for ordinary peers. CYBOU
 operation signatures, PoA certificate checks, publication proofs, and ChunkID
 checks remain independent and mandatory.
+
+The target policy is France-only public peer admission before TLS on inbound
+sockets and before connect on outbound sockets, including addresses
+learned through DNS or peer discovery. Every resolved numeric IPv4/IPv6
+address is classified using local Geo data. Missing/corrupt mandatory data
+fails closed. LAB loopback/private networking requires an explicit test-only
+bypass. Optional known VPN/proxy/Tor filtering is local and is not a consensus
+rule. This admission policy is not yet implemented; see
+[`26_IMPLEMENTATION_STATUS.md`](26_IMPLEMENTATION_STATUS.md).
 
 ## CYP2 scope
 

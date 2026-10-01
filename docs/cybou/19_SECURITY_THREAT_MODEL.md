@@ -11,6 +11,16 @@
   policy. Provider IDs prove keys, not independent hosts or operators.
 - The desktop's encrypted Application DB is a local projection, not network
   storage truth.
+- Bootstrap capability is authorized by genesis to one of at most four
+  ordinary Identity AccountIDs and never grants finality. One through four
+  bootstrap peers do not form a quorum.
+- Production/DEV public peer admission uses local French-IP classification.
+  This is a node-local routing policy, not a consensus guarantee or proof of a
+  peer's physical location. Missing or corrupt mandatory Geo data fails
+  closed; LAB bypass is explicit and limited to test networking.
+- Optional VPN/proxy/Tor filtering is only as complete as its local data. It
+  does not detect unknown relays or tunnels and does not affect canonical
+  state, Identity, Authority, or PoA.
 
 ## Transport and service identity
 
@@ -18,7 +28,9 @@ CYP2 v3 requires TLS 1.3 with the configured hybrid X25519+ML-KEM-768 group.
 Finalizer and provider role proofs are tied to both HELLOs and the TLS exporter.
 The ephemeral TLS certificate alone is not a peer identity. Ordinary peers do
 not have globally authenticated identities; discovered addresses are hints.
-IP addresses, timing, and traffic sizes remain observable.
+IP addresses, timing, and traffic sizes remain observable. A France-only
+admission rule can reduce accepted public routes; it does not hide source IPs
+or prevent routing through an allowed French endpoint.
 
 ## Content and local data
 

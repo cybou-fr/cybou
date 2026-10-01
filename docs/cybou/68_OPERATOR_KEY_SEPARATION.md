@@ -6,9 +6,15 @@ remain cryptographically separate:
 | Role | Authority |
 |---|---|
 | PoA finalizer | Signs the next canonical block under the genesis-bound key |
+| Bootstrap capability | Provides relay/discovery only when AccountID + RecoveryKeyID are authorized by genesis |
 | Release Signing | Authenticates software and update artifacts |
 | Treasury | Controls company-owned CYBOU funds |
 | Identity recovery/authorization | User-owned account recovery and operations |
+
+The genesis state contains one to four bootstrap grants, each binding a stable
+AccountID to an expected RecoveryKeyID. The live proof uses the current
+Identity Authorization key; the Recovery key is only the initial AccountCreate
+claim check. Bootstrap authority does not confer PoA authority.
 
 The current genesis definition contains the PoA finalizer public key. There is
 no Operator Authority key, validator set, validator admission/removal, or

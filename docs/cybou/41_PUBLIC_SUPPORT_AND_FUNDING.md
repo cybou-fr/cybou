@@ -69,7 +69,10 @@ As of September 2026, Digital Europe has cybersecurity calls covering areas incl
 
 These programmes often favor European deployment and consortium structure.
 
-CYBOU's European-first architecture can fit better here than a France-only network.
+CYBOU's France-first public P2P policy can fit European cybersecurity
+programmes when paired with a clear sovereignty, security, and interoperability
+case. Any expansion of the permitted peer region would require an explicit
+network-policy decision.
 
 ## EIC
 

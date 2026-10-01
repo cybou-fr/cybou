@@ -94,6 +94,14 @@ Mail capability requires publication, scan, retrieval and mailbox projection.
 Files capability requires private catalog/mutation publication, retrieval and
 durability.
 
+Bootstrap, storage, PoA finalization, and advisory Validation are optional
+full-node capabilities. The desktop may display capability availability and
+network-policy diagnostics, but it must consume decisions from core services;
+Qt does not classify IP addresses or infer bootstrap authorization. Production
+and DEV public P2P is France-only. The region policy is mandatory and
+read-only in ordinary settings; known VPN/proxy/Tor filtering is an optional
+local setting. Neither setting changes canonical state.
+
 ## Authority UI
 
 The GUI may show the read-only Authority value and its finalized-history

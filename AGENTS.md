@@ -5,13 +5,17 @@ architecture; do not keep obsolete runtime paths alive for compatibility.
 
 ## DEV VPS deployment — migration state
 
-The current DEV installation is a legacy topology. It is not the frozen target
+The current DEV installation is a legacy testnet topology; there is no
+production or Beta network to preserve or migrate. It is not the target
 architecture in `docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`. Do not treat
-its finalizer endpoint as the future bootstrap, or its two providers as part
-of the official VPS target. The target is one bootstrap service on the VPS and
-the genesis-key holder finalizing from its desktop. The migration is not
-implemented yet; keep the current network operational until the specified
-acceptance tests and coordinated DEV cutover are complete.
+its finalizer endpoint as a future initial locator. The target uses one full-
+node software architecture with one to four genesis-authorized bootstrap
+capabilities and the genesis-key holder finalizing from the Central Authority
+desktop. France-only public peer admission is mandatory in production/DEV.
+The migration is not implemented yet; keep the current DEV testnet operational
+for routine development until the specified acceptance tests and planned new-
+genesis DEV cutover are complete. The cutover replaces this testnet; it is not
+a production-network migration.
 - Central Authority is identified only by possession of the genesis PoA key.
   Never add a persistent Authority IP, host, endpoint, or NodeID to bootstrap
   state or consensus. Authenticate its current route per live session and
@@ -31,6 +35,28 @@ acceptance tests and coordinated DEV cutover are complete.
   independent storage providers (`cybou-node provider run`, P2P ports
   29471/29481, state in `/var/lib/cybou/provider-N-db`). Restart all three
   after a rebuild and verify the providers follow finalized height.
+
+## Network and node architecture
+
+- Every participant runs the same full-node software. Bootstrap, storage,
+  advisory Validation, and PoA finalization are optional local capabilities,
+  not protocol node classes.
+- A new network genesis authorizes 1–4 bootstrap Identities by stable
+  `AccountID` plus expected `RecoveryKeyID`. `AccountCreate` claims a grant
+  only when both match. Bootstrap authorization follows the stable AccountID
+  through `IdentityRotate`; the current Authorization key proves the role per
+  live session.
+- Initial IP:port and TLS SPKI pins are pre-genesis discovery/authentication
+  material only. They grant no post-genesis role and are never consensus
+  state. Do not reuse the legacy DEV finalizer endpoint as an initial locator.
+- Public P2P admission is France-only in production/DEV, for inbound and
+  outbound peers and every capability. Classification uses local Geo data;
+  unavailable/corrupt data fails closed. LAB loopback/private test traffic
+  requires an explicit LAB bypass. Optional VPN/proxy/Tor filtering is local
+  policy and never changes consensus or Identity.
+- Bootstrap nodes do not vote, form a quorum, or finalize. PoA remains
+  single-operator finality under the genesis-bound key. Keep the existing DEV
+  state operational until acceptance tests and a coordinated cutover pass.
 
 ## Identity
 

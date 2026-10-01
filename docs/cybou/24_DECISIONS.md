@@ -56,15 +56,24 @@ Git history.
 
 | ID | Decision | Status |
 |---|---|---|
-| DEC-218 | The official VPS runs one bootstrap relay/cache service only; it holds no PoA key, user Identity, or storage-provider role and never finalizes. | Frozen target; implementation/cutover pending |
+| DEC-218 | The official VPS runs one bootstrap relay/cache service only; it holds no PoA key, user Identity, or storage-provider role and never finalizes. | Superseded by DEC-227/228 |
 | DEC-219 | The Central Authority is the ordinary desktop Identity whose role-specific `POA_FINALIZER` public key is committed by genesis; its desktop runs PoA finalization after unlock and local chain verification. | Frozen target; implementation/cutover pending |
 | DEC-220 | Bootstrap network creation is allowed only from authenticated `EMPTY`, with a one-use activation code and proof of possession of the proposed genesis key; the binding is atomic and generation-numbered. | Frozen target; implementation/cutover pending |
 | DEC-221 | Replacing a bound network requires authorization by the current Authority key, proof by the new key, and both signatures when the key changes; clients reject generation rollback. | Frozen target; implementation/cutover pending |
-| DEC-222 | A bootstrap transport identity is separate from PoA/Identity keys and must be pinned through a trusted release or approved out-of-band source. A self-asserted network key from bootstrap is not a trust anchor. | Frozen target; implementation/cutover pending |
-| DEC-223 | Headless finalizer/provider processes are LAB/test topology only; the official DEV VPS target is not a finalizer or provider. | Frozen target; implementation/cutover pending |
-| DEC-224 | Central Authority identity is possession of the genesis PoA key, not an IP, hostname, endpoint, or persistent NodeID. Bootstrap authenticates its current route per fresh live CYP2 session and forgets it at disconnect. | Frozen target; implementation/cutover pending |
+| DEC-222 | A bootstrap transport identity is separate from PoA/Identity keys and must be pinned through a trusted release or approved out-of-band source. A self-asserted network key from bootstrap is not a trust anchor. | Superseded by DEC-231 |
+| DEC-223 | Headless finalizer/provider processes are LAB/test topology only; the official DEV VPS target is not a finalizer or provider. | Superseded by DEC-227 |
+| DEC-224 | Central Authority identity is possession of the genesis PoA key, not an IP, hostname, endpoint, or persistent NodeID. Bootstrap authenticates its current route per fresh live CYP2 session and forgets it at disconnect. | Superseded by DEC-235; invariant retained |
 | DEC-225 | Bootstrap may relay to a live authenticated finalizer session and use bounded transient memory buffering, but keeps no durable shared pending-operation pool or Authority location record. | Frozen target; implementation/cutover pending |
 | DEC-226 | Authority mobility does not permit concurrent independent signers sharing one PoA key; one active signer and durable anti-equivocation safety remain required. | Frozen target; implementation/cutover pending |
+| DEC-227 | All participants run the same full-node architecture. Bootstrap, storage, advisory Validation, and PoA finalization are optional capabilities, not protocol node classes. | Frozen target; implementation/cutover pending |
+| DEC-228 | Genesis authorizes between one and four bootstrap Identities. Bootstrap capability grants no quorum, voting, or PoA finality power. | Frozen target; implementation/cutover pending |
+| DEC-229 | Each genesis bootstrap grant binds stable AccountID to an expected RecoveryKeyID. AccountCreate claims it only when both match. | Frozen target; implementation/cutover pending |
+| DEC-230 | After claim, bootstrap authorization follows stable AccountID through IdentityRotate and uses the current Authorization key for each live session proof. | Frozen target; implementation/cutover pending |
+| DEC-231 | Initial numeric IP:port and TLS SPKI pins are pre-genesis discovery/authentication material only. They never grant post-genesis bootstrap authority. | Frozen target; implementation/cutover pending |
+| DEC-232 | All public inbound and outbound P2P admission is France-only for every peer capability; the rule is local networking policy, not consensus state. | Frozen target; implementation/cutover pending |
+| DEC-233 | Known VPN/proxy/Tor filtering is optional local policy using local data. It never affects consensus, Identity, Authority, or PoA. | Frozen target; implementation/cutover pending |
+| DEC-234 | The canonical bootstrap roster is fixed by genesis in v1. Roster changes require signed network replacement; no BootstrapAdd/BootstrapRemove operation exists. | Frozen target; implementation/cutover pending |
+| DEC-235 | Central Authority is identified only by the genesis PoA key. Its live route is session-authenticated and discarded at disconnect; no persistent Authority endpoint or NodeID is stored. | Frozen target; implementation/cutover pending |
 
 ## Fixed economics
 

@@ -25,9 +25,27 @@ native CYBOU NodeRuntime
 
 `APPLICATION_DATA_PLANE.md` defines the local/network data boundary.
 
-`04_NETWORK_BOOTSTRAP_AND_GENESIS.md` defines the frozen target for network
-creation, official bootstrap, and Central Authority operation. The current
-binary/deployment has not completed that migration.
+`04_NETWORK_BOOTSTRAP_AND_GENESIS.md` defines the target for network creation,
+genesis-authorized bootstrap capabilities, sovereign peer admission, and
+Central Authority operation. The current binary/deployment has not completed
+that migration.
+
+## Node capabilities and peer admission
+
+Every participant runs the same full-node architecture. Bootstrap, storage,
+advisory Validation, and PoA finalization are optional local capabilities;
+they are not protocol node classes. Genesis authorizes one to four bootstrap
+Identities by stable `AccountID` and expected `RecoveryKeyID`. Bootstrap is
+proved per session with the current Identity Authorization key. Bootstrap
+peers do not form a quorum and do not finalize blocks.
+
+Production and DEV public P2P admission is France-only for inbound and
+outbound peers, including bootstrap, storage, ordinary peers, and the Central
+Authority. This is a local networking rule, not consensus state or a guarantee
+that a peer is physically located in France. It requires local, integrity-
+checked Geo data and fails closed when that data is unavailable. LAB has an
+explicit loopback/private-network bypass. Known VPN/proxy/Tor filtering is an
+optional local setting and does not affect Identity, Authority, or consensus.
 
 ## Identity
 
@@ -43,8 +61,8 @@ or binding of provider processes to an AccountID.
 
 A genesis-bound single-operator hybrid-PQ PoA signer finalizes blocks. In the
 target deployment, the Central Authority desktop runs that signer after the
-matching Identity is unlocked. The official VPS bootstrap only relays and
-caches data; it never finalizes. Every full node independently verifies the
+matching Identity is unlocked. PoA finalization is an optional capability of
+the same full-node software. Every full node independently verifies the
 certificate, executes operations and checks the resulting state root.
 
 CYBOU is not BFT. Durable anti-equivocation signing and a fail-closed conflict

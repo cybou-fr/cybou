@@ -1,16 +1,23 @@
 # Network bootstrap and genesis lifecycle
 
-Status: **frozen target architecture; implementation and DEV cutover pending**.
-This document defines the approved deployment and network-creation model. It
-does not claim that the current executable or DEV deployment implements it.
-Consensus format changes are not implied.
+Status: **revised target architecture; implementation and DEV cutover pending**.
+This document defines the approved node-capability, genesis-bootstrap, and
+France-only public P2P admission model. The current executable and DEV
+deployment have not completed that migration. There is no production or Beta
+network; the running VPS chain is a development testnet. Keep it available for
+routine development until the acceptance matrix and planned new-genesis DEV
+cutover are complete. That cutover replaces the testnet, not a production
+network.
 
 ## Roles and deployment
 
-The official VPS runs one `cybou-bootstrap` service. It provides rendezvous,
-peer discovery, operation relay, and finalized-history relay/cache. It is not a
-finalizer, storage provider, user Identity, or consensus authority. It has no
-PoA private key and cannot create, replace, or finalize a network.
+Every participant runs the same full-node software. Bootstrap, storage,
+advisory Validation, and PoA finalization are optional local capabilities, not
+protocol node classes or separate consensus roles. A network genesis
+authorizes one to four bootstrap Identities. Each bootstrap is an ordinary
+full node that may provide rendezvous, peer discovery, operation relay, and
+finalized-history relay/cache. Bootstrap capability does not provide PoA or
+storage authority by itself.
 
 The Central Authority is the ordinary desktop Identity whose role-specific
 `POA_FINALIZER` public key is committed by the network definition. After that
@@ -20,14 +27,16 @@ continues to validate blocks and state transitions independently. Finality is
 unavailable while the Central Authority desktop is offline; the bootstrap does
 not take over signing.
 
-The bootstrap may retain the network definition and finalized history for
-relay and sync. It does not accept application chunks as a storage provider.
-Independent nodes may run providers under their owners' local policies.
+Bootstrap-capable nodes may retain the network definition and finalized
+history for relay and sync. They accept application chunks only when they
+separately run the storage capability and satisfy the same finalized
+RootPublication rules as any provider.
 
 ```text
-official VPS: one bootstrap service, no PoA or provider role
+all participants: same full-node software
+1–4 genesis-authorized Identities: optional bootstrap capability
 Central Authority desktop: full node + unlocked Identity + PoA finalizer
-other desktops: full nodes; optional provider role is independently operated
+any node: optional storage and advisory Validation capabilities
 ```
 
 Headless finalizer/provider processes remain supported for isolated LAB and
@@ -40,28 +49,28 @@ Bootstrap has two durable states:
 - `EMPTY`: no network has been claimed.
 - `BOUND`: one current network binding and monotonically increasing generation.
 
-The initial-locator format is an address plus a TLS SPKI pin. It is used only
-to find the first peer and authenticate the pre-genesis exchange. The address
-grants no role; the TLS pin authenticates only that first endpoint. The
-approved future endpoint and pin have not been configured yet.
-After genesis, bootstrap authority belongs to the ordinary CYBOU Identity
-named by a genesis grant, and the service proves that role on each live CYP2
-session with its current Authorization key. Its IP and TLS certificate may
-change without changing the grant. The legacy DEV P2P seed is separate from
-this future initial locator and must not be reused as one.
+The initial-locator list contains one to four numeric IP:port endpoints and
+TLS SPKI pins. It is used only to find candidate peers and authenticate the
+pre-genesis exchange. Neither an address nor a pin grants a post-genesis role.
+The target locator and pins are not configured yet. The legacy DEV P2P seed is
+separate and must not be reused as an initial locator.
 
-Before the network exists, the bootstrap Identity proves possession of its
-Recovery key over the pinned TLS session. The proof binds the TLS exporter, a
-fresh challenge, and the Recovery public key. The Central Authority includes
-the resulting RecoveryKeyID in genesis as an unclaimed bootstrap grant. The
-Recovery private key stays with the bootstrap owner.
+Before the network exists, each candidate proves control of a proposed stable
+`AccountID` and its Recovery key over the pinned TLS session. The signed
+message binds the protocol domain, fresh client nonce, TLS exporter,
+`AccountID`, and Recovery public key. The Central Authority verifies the proof
+and records both `AccountID` and `RecoveryKeyID` in genesis. Recovery private
+material remains inside the candidate's unlocked vault boundary.
 
-Bootstrap grants are consensus state keyed by RecoveryKeyID. A matching
-`AccountCreate` claims the grant for its stable AccountID exactly once. Later
-`IdentityRotate` operations change the Authorization key used for session
-proofs while the bootstrap role remains with the same AccountID. Multiple
-genesis grants are permitted; each grants the same service role. No address,
-TLS pin, process identity, or NodeID is stored in genesis.
+Bootstrap grants are consensus state keyed by stable `AccountID`, each storing
+the expected `RecoveryKeyID` and a claimed flag. A matching `AccountCreate`
+claims the grant only when both values match. A mismatch leaves it unclaimed.
+The genesis roster has between one and four distinct AccountIDs and distinct
+RecoveryKeyIDs. Later `IdentityRotate` operations change the current
+Authorization key used for session proofs while the bootstrap capability
+remains with the same AccountID. No address, TLS pin, process identity, or
+NodeID is stored in genesis. Changing the roster requires a signed network
+replacement; there is no BootstrapAdd/BootstrapRemove operation.
 
 The signed binding contains at least the generation, display name, NetworkID,
 hash of the exact network file, and genesis-bound finalizer public key. The
@@ -72,8 +81,8 @@ Clients that have previously accepted a binding persist the highest generation
 and reject rollback or a different binding at that generation.
 
 Central Authority identity is possession of the genesis-bound PoA private key;
-its network location is irrelevant. Any full node may connect from any address
-and request the finalizer role for a network. After the ordinary bootstrap
+its network location is irrelevant to authorization. It must still pass the
+same France-only public peer admission as every other node. After the ordinary bootstrap
 service is authenticated, the candidate proves possession by signing a fresh
 bootstrap challenge bound to that CYP2 session (including the TLS exporter and
 both HELLO transcripts). Bootstrap verifies against the finalizer public key
@@ -83,10 +92,26 @@ address mapping. On disconnect, bootstrap drops the route. A later session
 from a new address must prove possession again. IP, DNS name, and source
 address are routing data only and never authorize a role.
 
-A peer claiming `CAP_BOOTSTRAP` proves a genesis-granted AccountID on that
-session. The proof binds NetworkID, TLS exporter, both HELLO messages, and the
-AccountID, and is checked against that AccountID's current Authorization key.
-The route and authenticated AccountID are discarded when the session ends.
+A peer claiming `CAP_BOOTSTRAP` proves a claimed genesis-granted AccountID on
+that session. The proof binds NetworkID, TLS exporter, both HELLO messages,
+and AccountID, and is checked against that AccountID's current Authorization
+key. The route and authenticated AccountID are discarded when the session
+ends. Bootstrap nodes do not vote, form a quorum, or finalize blocks.
+
+## Sovereign peer admission
+
+Production and DEV public P2P admission is restricted to French IP space for
+inbound and outbound connections. The same local admission policy applies to
+bootstrap candidates, providers, ordinary peers, and the Central Authority.
+DNS names are resolved first; every resulting numeric IPv4/IPv6 address is
+classified locally. Country suffixes and remote GeoIP services are not
+evidence. An unavailable or corrupt mandatory Geo dataset fails closed for
+public P2P. LAB loopback/private traffic requires an explicit LAB bypass.
+
+Optional known VPN/proxy/Tor filtering uses local data and can only reject
+addresses classified by that data. It is not a consensus rule or a guarantee
+against unknown relays, tunnels, or reclassification errors. Missing optional
+filter data blocks new public peers only when that setting is enabled.
 
 Direct node-to-node connections follow the same cryptographic rule: a peer
 that claims the finalizer role proves the genesis key for that session. A
@@ -97,8 +122,8 @@ A first claim requires all of:
 1. an authenticated `EMPTY` response from the pinned bootstrap;
 2. an unguessable, one-use activation code provisioned by the bootstrap owner;
 3. proof of possession of the proposed genesis finalizer key; and
-4. the pinned endpoint's Recovery-key proof, whose RecoveryKeyID is included
-   in the proposed genesis bootstrap grants; and
+4. each selected pinned endpoint's Recovery-key proof bound to its proposed
+   AccountID, with the AccountID and RecoveryKeyID included in genesis; and
 5. an atomic bootstrap transition from `EMPTY` to `BOUND`.
 
 The activation code is consumed only when the binding is durably committed and
@@ -118,23 +143,27 @@ bootstrap itself is compromised.
 ## Desktop network creation and startup
 
 Production/DEV startup must not silently install a network definition bundled
-in the executable. The desktop authenticates the official bootstrap and fetches
-its state first:
+in the executable. The desktop authenticates its configured bootstrap peers
+and checks their state first:
 
 - On `BOUND`, it downloads the exact bound network file, verifies its hash,
   definition structure, NetworkID, genesis state root/block ID, finalizer key,
   and Authority signature, then atomically stores it before starting the full
   node. It does not offer network creation.
-- On authenticated `EMPTY`, and only after the user supplies the one-use
-  activation code, the desktop may create a local Identity/vault, derive its
-  role-specific finalizer public key, obtain and verify the initial bootstrap
-  Identity claim, create genesis with that RecoveryKeyID grant, create the
-  network file locally, and submit the signed initial binding. The PoA secret
-  never leaves the desktop. The bootstrap receives only public network data,
-  signatures, and the one-use activation code.
-- The network becomes ready for bootstrap service after the granted Identity's
-  `AccountCreate` is PoA-finalized. Until then, the pinned initial locator is
-  the only bootstrap trust path.
+- On authenticated `EMPTY`, and only after the user supplies the required
+  one-use activation codes, the desktop may create/unlock its local
+  Identity/vault, derive its role-specific finalizer public key, obtain and
+  verify one to four initial bootstrap Identity claims, create genesis with
+  those AccountID/RecoveryKeyID grants, create the network file locally, and
+  submit the same signed initial binding to every selected bootstrap node.
+  The PoA secret never leaves the desktop. Bootstrap nodes receive only public
+  network data, signatures, and their own one-use activation code.
+- The network is operational when genesis exists, the Central Authority full
+  node is active, and at least one bootstrap grant is claimed by a finalized
+  `AccountCreate`. Report the registered/available bootstrap count out of the
+  genesis roster; one unavailable candidate does not block the network. Until
+  a grant is claimed, the pinned initial locators are the only bootstrap trust
+  path.
 - On unavailable, unauthenticated, malformed, or inconsistent bootstrap
   status, the desktop fails closed and offers retry/recovery. It must not
   infer `EMPTY` from a timeout, an empty file, or an unverified peer.
@@ -175,20 +204,25 @@ chunk admission.
 
 ## Cutover requirements
 
-The current DEV deployment and executable still use the legacy topology and
-must be treated as a migration state until all of the following exist and pass:
+The current DEV testnet deployment and executable still use the legacy
+topology. It is development-only; there is no production/Beta network
+migration. Replace it with the new-genesis DEV topology only after all of the
+following exist and pass:
 
 - authenticated bootstrap `EMPTY`/`BOUND` protocol, pinning, one-use claim,
   durable atomic binding, generation rollback protection, and replacement;
 - initial-locator TLS pin and Recovery-key proof, genesis bootstrap grants,
   one-time AccountCreate claim, and current Authorization-key bootstrap proof;
+- one-to-four bootstrap roster validation, France-only peer admission for all
+  public P2P paths, local Geo data integrity/fail-closed behavior, and LAB
+  bypass tests;
 - desktop genesis creation and desktop finalizer lifecycle through the vault;
 - bootstrap relay/discovery/history sync, with no bootstrap PoA or storage role;
 - clean-install, compromised-bootstrap, replay/race, restart, offline-authority,
   and replacement acceptance tests;
-- a coordinated DEV network reset and deployment plan that creates the new
-  network from the Central Authority desktop and retires legacy VPS
-  finalizer/provider services.
+- a coordinated plan that replaces the disposable DEV testnet with a new
+  genesis created from the Central Authority desktop and retires the legacy
+  VPS finalizer/provider services.
 
 The CYP2 direct-peer foundation is implemented: an operation-accepting peer
 proves the genesis finalizer key over the live TLS-exporter-bound handshake,
@@ -223,9 +257,11 @@ state. The service accepts that dual-signed replacement and returns the new
 binding. Durable client-side acceptance in the bootstrap exchange and database
 rollback/recovery remain unimplemented.
 
-Genesis bootstrap grants now use RecoveryKeyID and are claimed by AccountCreate
-into stable AccountID state. A state with no grants retains the exact prior v7
-encoding and state root; v8 is emitted only when grants exist. CYP2 now defines
+The current implementation prototype uses RecoveryKeyID-keyed grants and
+claims them into stable AccountID state. A state with no grants retains the
+exact prior v7 encoding and state root; v8 is emitted only when grants exist.
+This is not the revised target schema, which binds AccountID and expected
+RecoveryKeyID directly and requires v9 for grant-bearing genesis. CYP2 currently defines
 `CAP_BOOTSTRAP` and an exporter/HELLO/AccountID-bound proof checked against the
 current Authorization key resolved from a claimed genesis grant. Runtime APIs
 accept an external unlocked-Identity signer and resolve remote role keys from
@@ -234,8 +270,9 @@ bootstrap Recovery key against the same TLS exporter and fresh challenge.
 Vault integration, initial locator values, and the network-creation client
 are still pending.
 
-This endpoint is an implementation milestone only. Authority outbound
-sessions, relays/history, client application flows, pin distribution, and the
+The existing endpoint implementation is a transitional milestone only.
+Authority outbound sessions, multi-bootstrap relays/history, client
+application flows, pin distribution, France-only peer admission, and the
 acceptance tests and coordinated DEV cutover remain incomplete. The DEV VPS
 continues to run its existing legacy finalizer and two providers until those
 gates are completed.

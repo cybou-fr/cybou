@@ -12,7 +12,11 @@ Central Authority Identity from its desktop. The operator orders blocks and
 can censor transactions or stop progress. This is explicit centralized trust,
 not BFT. Full nodes independently verify finality signatures and deterministic
 state transitions, but cannot make the network progress while that desktop is
-offline. The official VPS bootstrap relays and caches but never finalizes.
+offline. Bootstrap is an optional capability granted by genesis to one through
+four ordinary full-node Identities. Bootstrap nodes may relay and cache but
+never finalize by virtue of that capability. Any full node may independently
+run storage or advisory Validation capabilities under the relevant local
+policy.
 
 The PoA finalizer key, Identity recovery/authorization keys, Release Signing
 key, and Treasury key are separate roles. The Central Authority Identity's
@@ -24,8 +28,8 @@ see `04_NETWORK_BOOTSTRAP_AND_GENESIS.md`.
 ## Resilience boundary
 
 Mail and Files availability depends on independent storage providers, but
-provider diversity does not decentralize block finality. Operational reporting
-must state these trust domains separately. Any future change to block ordering
+provider and bootstrap diversity do not decentralize block finality.
+Operational reporting must state these trust domains separately. Any future change to block ordering
 authority is a new protocol design based on measured operating needs; no BFT,
 validator admission, staking, or validator-set state is part of the current
 architecture.
