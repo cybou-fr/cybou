@@ -1,138 +1,111 @@
 # CYBOU
 
-Operator commands and disposable network testing are documented in
-[Operator CLI and Network Lab](docs/cybou/OPERATOR_LAB.md).
-The approved network creation and bootstrap target is recorded in
-[Network bootstrap and genesis lifecycle](docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md);
-the current DEV deployment has not migrated to it.
+CYBOU est un projet open source qui développe un logiciel de bureau et un
+réseau pair-à-pair pour l'identité, la messagerie privée et les fichiers.
+Ce dépôt contient le code du client, du nœud, du protocole et de leurs tests.
+CYBOU n'est pas un service public de messagerie ou de stockage cloud.
 
-**One identity. Private communication. Your data under your control.**
+**Une identité. Des échanges privés. Vos données sous votre contrôle.**
 
-CYBOU is an open-source project building an identity-centered platform for
-private messaging and user-controlled files. It is experimental software, not
-a public mail or cloud-storage service. The desktop client and network are
-under active development.
+## Produit
 
-## Current status
+Le client de bureau relie une identité CYBOU aux fonctions Wallet, Mail et
+Files. Le code applicatif prend en charge la rédaction et l'envoi de messages,
+les pièces jointes, ainsi que le dépôt, le téléchargement et l'organisation de
+fichiers et de dossiers.
 
-CYBOU is experimental software under active development; it is not yet ready
-for public or production use. DEV state and tokens are disposable testnet assets
-with no production value.
+Pour les entreprises, l'offre visée est la création d'un réseau CYBOU privé
+distinct, gouverné par l'organisation cliente : genèse et identifiant de réseau
+propres, clés d'autorité détenues par l'entreprise, nœuds bootstrap et règles
+d'accès par IP définis pour cette instance. Le client choisit l'infrastructure
+et la connectivité ; Internet ou intranet ne sont pas des produits différents.
 
-The approved target architecture specifies:
-- **One unified full-node software**: bootstrap, storage, advisory Validation,
-  and PoA finalization are optional local capabilities, not protocol node classes.
-- **1–4 genesis-authorized bootstrap Identities**: authorized by stable `AccountID`
-  and expected `RecoveryKeyID`. Bootstrap capability provides rendezvous and
-  relay; it does not vote, form a quorum, or finalize.
-- **Central Authority PoA finalization**: single-operator hybrid-PQ PoA runs on the
-  Central Authority desktop after local vault unlock and chain verification.
-  Central Authority is identified only by the genesis PoA key; its route is
-  ephemeral per live session.
-- **France-only public P2P admission**: enforced locally for all capabilities
-  using integrity-checked Geo data (fails closed).
-- **Single-operator trust model**: this is **not BFT**, and the network makes no
-  Byzantine fault tolerance claim. Full nodes independently verify all blocks,
-  operations, and state transitions.
+Cette offre décrit l'objectif du produit, pas une fonction déjà disponible de
+bout en bout. Dans le code actuel, le client de bureau charge le réseau DEV et
+son bootstrap configuré ; le mode finalizer de bureau est explicitement
+désactivé. `cybou-node` sait charger un fichier réseau et propose notamment
+`network init-dev`, `finalizer run`, `provider run` et `observer run`, mais le
+client ne possède pas encore de parcours général de création et de mise en
+service d'un réseau privé d'entreprise.
 
-The currently running DEV deployment is an operational legacy testnet topology
-(`cybou-node.service` PoA finalizer on port 29461 and independent storage providers
-on ports 29471/29481). It is maintained for routine development until specified
-acceptance tests and the coordinated new-genesis DEV cutover replace it. That
-cutover replaces this testnet, not a production network.
+## Fonctionnement technique
 
-## Architecture
+- **Identité et clés.** Le coffre local protège le matériel de récupération
+  d'une identité au niveau du compte. Le code sépare les rôles de clés et
+  combine Ed25519 avec ML-DSA pour les signatures d'identité.
+- **Contenus privés.** Mail et Files sont convertis en contenu chiffré côté
+  client, découpé en blocs ROOT/INDEX/DATA. `RootPublication` est l'opération
+  protocolaire qui autorise une publication ; les schémas Mail et Files sont
+  des données applicatives privées.
+- **Stockage vérifiable.** Le nœud de stockage vérifie qu'un bloc appartient à
+  une publication finalisée. `StorageService` gère les répliques distantes,
+  l'audit d'intégrité et la réparation. La finalité seule ne signifie pas que
+  le contenu est disponible ou durable.
+- **Transport P2P.** CYP2 v3 utilise TLS 1.3 avec l'échange hybride
+  `X25519MLKEM768`. Les preuves de rôle du finalizer et du fournisseur sont
+  liées à la session TLS.
+- **Finalité.** Les commandes opérateur incluent un finalizer PoA. C'est une
+  finalité à opérateur unique, pas un consensus BFT ; chaque nœud vérifie les
+  blocs et les transitions d'état.
+- **Admission réseau.** Les commandes réseau de `cybou-node` exigent une
+  politique d'admission explicite. Le mode `france` utilise une base GeoIP
+  validée ; le mode `lab` est réservé aux pairs de test locaux ou privés.
 
-- **One account-level Identity.** A portable encrypted vault stores a stable
-  AccountID and recovery entropy. The 24-word phrase restores Identity keys;
-  it does not by itself restore Mail or Files content.
-- **Separate key roles.** Identity recovery, Identity authorization, Identity
-  key agreement, PoA, Release Signing, and Treasury are distinct. Required
-  production signing paths use Ed25519 together with the designated ML-DSA
-  profile; there is no classical-only fallback.
-- **One content publication operation.** `RootPublication` is the only
-  application-content operation. Mail, Files, and future Backup schemas are
-  encrypted client data, not separate consensus object types.
-- **One encrypted chunk tree.** Ordered ROOT/INDEX/DATA chunks are encrypted
-  before storage and addressed by the full BLAKE3-256 hash of their stored
-  ciphertext. Recipient key capsules do not publish recipient AccountIDs.
-- **Proof-based provider admission.** A provider accepts a chunk only when a
-  valid inclusion proof ties it to a finalized publication. Finality authorizes
-  storage; it does not prove availability or durability.
-- **Client-owned views.** Clients scan finalized publications
-  and rebuild local Mail/Files indexes. Local databases are caches, not the
-  source of protocol identity.
+Les vues Mail et Files sont conservées dans une base applicative chiffrée
+propre à chaque identité et peuvent être reconstruites à partir des publications
+finalisées et des fournisseurs. Une copie locale en cache n'est pas comptée
+comme réplique distante.
 
-DEV pins the X-Wing / HPKE post-quantum draft-05 profile. It is DEV-only and is
-not an external audit or a production security claim. Beta and Mainnet need
-separately reviewed profiles and independent genesis parameters.
+## État du code
 
-## Implementation and next work
+Le dépôt contient des implémentations natives pour le coffre et la récupération
+d'identité, les opérations d'identité, les noms `.cybou`, Wallet, Mail, Files,
+les publications chiffrées, le stockage et le transport P2P. Les tests natifs
+couvrent notamment ces composants, l'admission des pairs et le cycle de vie du
+stockage ; le shell Qt dispose également de tests d'interface.
 
-The current source includes hybrid Identity operations and recovery vaults,
-finalized `.cybou` name claims, genesis-bound PoA with a durable equivocation
-safety halt, `RootPublication`, the encrypted chunk tree, local provider
-admission, and CYP2 block/chunk transport.
+Le client de bureau démarre actuellement avec le réseau DEV configuré dans le
+code et ne finalise pas les blocs ; le finalizer PoA s'exécute séparément via la
+commande opérateur `finalizer run`. Le CLI fournit aussi des outils de
+diagnostic, de synchronisation et de vérification du stockage. Les
+fonctions de déploiement d'un réseau d'entreprise doivent encore être reliées
+à un parcours opérateur complet avant de pouvoir être présentées comme une
+fonction utilisable depuis le bureau.
 
-Mail and Files now use the encrypted per-Identity Application DB through
-ApplicationService, PublicationService and StorageService. The desktop supports
-publication, attachments, retrieval and rebuilding private views. Storage uses
-verified ProviderIDs, post-finality replication, periodic audit and repair.
-RecoveryBridge supports recovery rotation and clean-machine content restore.
-Development requires one remote replica; Beta requires two. Local cache does
-not count toward durability.
+Ce projet est en développement actif. Le code et ses tests ne constituent ni
+une certification, ni un audit de sécurité indépendant, ni une garantie
+d'aptitude à la production.
 
-CYP2 v3 protects node traffic with TLS 1.3 and binds provider/finalizer role
-proofs to the TLS session. Ordinary peers do not have a global authenticated
-identity.
+## Compilation et tests
 
-Remaining work is sustained failure/restart soak, clean-install desktop Beta
-acceptance, operating-cost measurement and security review. Authority remains
-an informational derived metric. Optional signed Validation is advisory and
-recipients decide locally whether to trust it; PoA alone finalizes.
-Backup remains post-Beta.
+Le projet utilise C++20, CMake et OpenSSL 3.5 ou ultérieur. Qt 6 est requis
+pour construire le client de bureau. Les dépendances natives et les étapes de
+compilation par plateforme sont détaillées dans [INSTALL.md](INSTALL.md).
 
-Read [the implementation status](docs/cybou/26_IMPLEMENTATION_STATUS.md) for
-the maintained list of implemented components and open gates.
+La cible de tests protocole est `cybou-core-test`. Elle regroupe les suites
+natives sur l'identité, les clés, PoA, les publications, le stockage et le
+transport. Les tests Qt sont activés avec les options de compilation GUI et
+tests correspondantes. Les presets et cibles sont définis dans
+[`CMakePresets.json`](CMakePresets.json), [`CMakeLists.txt`](CMakeLists.txt) et
+[`src/test/CMakeLists.txt`](src/test/CMakeLists.txt).
 
-## Build
+## Parcours du code
 
-See [INSTALL.md](INSTALL.md) for prerequisites and build instructions, including
-the Windows MinGW/Ninja path. The project uses C++20, CMake, Qt 6 for the
-desktop client, and the repository's native dependencies.
+- [Client de bureau et démarrage réseau](src/qt/cyboudesktopcontroller.cpp)
+- [Adaptateur applicatif Mail et Files](src/qt/cyboucoreapplicationadapter.cpp)
+- [Runtime du nœud](src/cybou/node_runtime.cpp)
+- [Commandes de `cybou-node`](src/cybou_node.cpp)
+- [Tests natifs](src/test/CMakeLists.txt)
+- [Tests du shell Qt](src/qt/test/cyboushelltests.cpp)
 
-All participants use the same full-node software with optional capabilities.
-Genesis authorizes one to four bootstrap Identities; bootstrap is not a node
-class or a finality quorum. The target production/DEV policy admits public P2P
-only from French IP space using local Geo data. See
-[`docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md)
-for the target and migration gates; the current DEV deployment remains on its
-legacy testnet topology until coordinated new-genesis cutover. No production
-or Beta network is running.
+## Contribution et sécurité
 
-## Protocol and product documentation
+- [Contribuer au projet](CONTRIBUTING.md)
+- [Politique de sécurité](SECURITY.md)
+- [Licence](COPYING)
 
-- [Vision](docs/cybou/00_VISION.md)
-- [Architecture](docs/cybou/02_ARCHITECTURE.md)
-- [Protocol and product roadmap](docs/cybou/22_ROADMAP.md)
-- [Implementation status](docs/cybou/26_IMPLEMENTATION_STATUS.md)
-- [PoA finality and trust model](docs/cybou/POA_FINALITY.md)
-- [Identity and `.cybou` names](docs/cybou/10_IDENTITY_NAMES.md)
-- [Identity vault and recovery](docs/cybou/76_IDENTITY_VAULT_RECOVERY.md)
-- [RootPublication](docs/cybou/ROOT_PUBLICATION.md)
-- [Encrypted chunk tree](docs/cybou/ENCRYPTED_CHUNK_TREE.md)
-- [Storage admission](docs/cybou/STORAGE_ADMISSION.md)
-- [Mail product and UX contract](docs/cybou/82_MAIL_UI_UX.md)
-- [Files product and UX contract](docs/cybou/83_STORAGE_UI_UX.md)
-- [Beta acceptance criteria](docs/cybou/85_BETA_UI_ACCEPTANCE.md)
+Ne réutilisez pas les clés ou données de développement comme actifs de
+production. Signalez les problèmes de sécurité selon la procédure décrite dans
+`SECURITY.md`.
 
-## Contributing and security
-
-- [Contributing](CONTRIBUTING.md)
-- [Security policy](SECURITY.md)
-- [License](COPYING)
-
-Do not use DEV keys, balances, or data as production assets. Report security
-issues through the process in `SECURITY.md`.
-
-© 2026 Stanislav Saveliev. Designed in France.
+© 2026 Stanislav Saveliev. Conçu en France.
