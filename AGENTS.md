@@ -3,7 +3,15 @@
 Read the active CYBOU documents before coding. Git history records superseded
 architecture; do not keep obsolete runtime paths alive for compatibility.
 
-## DEV VPS deployment
+## DEV VPS deployment — migration state
+
+The current DEV installation is a legacy topology. It is not the frozen target
+architecture in `docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`. Do not treat
+its finalizer endpoint as the future bootstrap, or its two providers as part
+of the official VPS target. The target is one bootstrap service on the VPS and
+the genesis-key holder finalizing from its desktop. The migration is not
+implemented yet; keep the current network operational until the specified
+acceptance tests and coordinated DEV cutover are complete.
 
 - After changing CYBOU core or `cybou-node`, run relevant tests, rebuild
   `cybou-node` on the DEV VPS, and restart `cybou-node.service` in the same
@@ -14,10 +22,11 @@ architecture; do not keep obsolete runtime paths alive for compatibility.
 - Preserve the current executable for rollback, restart with systemd, then
   verify service health, listening port, and advancing finalized height.
 - Do not reset DEV state or replace the PoA key during a routine deployment.
-- DEV also runs `cybou-provider-1.service` and `cybou-provider-2.service`
-  (`cybou-node provider run`, P2P ports 29471/29481, state in
-  `/var/lib/cybou/provider-N-db`). Restart them with the node after a rebuild
-  and verify they follow finalized height.
+- Current legacy topology: `cybou-node.service` is the VPS PoA finalizer on
+  port 29461; `cybou-provider-1.service` and `cybou-provider-2.service` are
+  independent storage providers (`cybou-node provider run`, P2P ports
+  29471/29481, state in `/var/lib/cybou/provider-N-db`). Restart all three
+  after a rebuild and verify the providers follow finalized height.
 
 ## Identity
 
@@ -34,6 +43,9 @@ architecture; do not keep obsolete runtime paths alive for compatibility.
 ## Finality
 
 - Finality is genesis-bound single-operator hybrid-PQ PoA.
+- Target operation puts the genesis-key holder on its Central Authority
+  desktop; the official VPS bootstrap never finalizes. See
+  `docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`.
 - Full nodes independently validate every operation, block transition, state
   root, and PoA certificate.
 - PoA is centralized finality, not BFT.

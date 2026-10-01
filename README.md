@@ -2,6 +2,9 @@
 
 Operator commands and disposable network testing are documented in
 [Operator CLI and Network Lab](docs/cybou/OPERATOR_LAB.md).
+The approved network creation and bootstrap target is recorded in
+[Network bootstrap and genesis lifecycle](docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md);
+the current DEV deployment has not migrated to it.
 
 **One identity. Private communication. Your data under your control.**
 
@@ -12,9 +15,12 @@ under active development.
 
 ## Current status
 
-The active protocol is deployed on the experimental DEV network. DEV uses a
-genesis-bound, hybrid-signature Proof of Authority (PoA) finalizer operated by
-CYBOU. Full nodes independently verify blocks and state transitions. This is a
+The active protocol is deployed on the experimental DEV network. The current
+DEV deployment uses a genesis-bound, hybrid-signature Proof of Authority (PoA)
+finalizer operated by CYBOU on its VPS. Full nodes independently verify blocks
+and state transitions. The approved target moves the finalizer to the Central
+Authority desktop and leaves one relay/cache bootstrap service on the VPS;
+that migration is not implemented yet. This is a
 single-operator trust model: it is **not BFT**, and the network does not claim
 Byzantine-fault-tolerant finality.
 

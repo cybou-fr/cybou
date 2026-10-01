@@ -7,16 +7,19 @@ private keys, plaintext content, or arbitrary account debits.
 
 ## Initial network operation
 
-The current target uses one genesis-bound hybrid-PQ PoA finalizer operated by
-CYBOU. The operator orders blocks and can censor transactions or stop progress.
-This is explicit centralized trust, not BFT. Full nodes independently verify
-finality signatures and deterministic state transitions, but cannot make the
-network progress without the operator.
+The target uses one genesis-bound hybrid-PQ PoA finalizer operated by the
+Central Authority Identity from its desktop. The operator orders blocks and
+can censor transactions or stop progress. This is explicit centralized trust,
+not BFT. Full nodes independently verify finality signatures and deterministic
+state transitions, but cannot make the network progress while that desktop is
+offline. The official VPS bootstrap relays and caches but never finalizes.
 
 The PoA finalizer key, Identity recovery/authorization keys, Release Signing
-key, and Treasury key are separate roles. The finalizer's private material is
-derived for the session, kept in memory, and protected by a durable
-anti-equivocation journal.
+key, and Treasury key are separate roles. The Central Authority Identity's
+recovery entropy derives its role-specific PoA key; the key remains local to
+the unlocked desktop and is protected by a durable anti-equivocation journal.
+The current DEV deployment has not yet migrated away from its VPS finalizer;
+see `04_NETWORK_BOOTSTRAP_AND_GENESIS.md`.
 
 ## Resilience boundary
 

@@ -9,6 +9,12 @@ required by the active product and protocol.
 
 ## Initial synchronization
 
+Network existence, initial claim, and network replacement are defined by
+[`04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](04_NETWORK_BOOTSTRAP_AND_GENESIS.md).
+This document covers syncing after a network definition has been authenticated
+and installed; a peer or successful sync connection is not itself the network
+trust anchor.
+
 The initial implementation synchronizes finalized blocks from the network
 definition's genesis in height order:
 

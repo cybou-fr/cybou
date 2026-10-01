@@ -25,20 +25,27 @@ native CYBOU NodeRuntime
 
 `APPLICATION_DATA_PLANE.md` defines the local/network data boundary.
 
+`04_NETWORK_BOOTSTRAP_AND_GENESIS.md` defines the frozen target for network
+creation, official bootstrap, and Central Authority operation. The current
+binary/deployment has not completed that migration.
+
 ## Identity
 
 One AccountID is the stable Identity. Mnemonic-derived Recovery, Authorization
 and KEM roles are separate. Device is not a protocol entity.
 
-Service nodes use their own service keys where the transport requires a
-provider or finalizer identity. There is no canonical service-node registry or
-binding to an AccountID.
+Storage providers prove their own service keys where the transport requires a
+provider identity. The PoA finalizer proves the genesis-bound key derived for
+the Central Authority Identity. There is no canonical service-node registry
+or binding of provider processes to an AccountID.
 
 ## Finality
 
-A genesis-bound single-operator hybrid-PQ PoA signer finalizes blocks. Every
-full node independently verifies the certificate, executes operations and
-checks the resulting state root.
+A genesis-bound single-operator hybrid-PQ PoA signer finalizes blocks. In the
+target deployment, the Central Authority desktop runs that signer after the
+matching Identity is unlocked. The official VPS bootstrap only relays and
+caches data; it never finalizes. Every full node independently verifies the
+certificate, executes operations and checks the resulting state root.
 
 CYBOU is not BFT. Durable anti-equivocation signing and a fail-closed conflict
 halt protect against conflicting valid PoA certificates.

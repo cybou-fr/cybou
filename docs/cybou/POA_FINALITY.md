@@ -1,14 +1,18 @@
 # PoA finality target
 
-Status: active DEV protocol. This document defines the genesis-bound PoA
-format implemented by `main`; it supersedes the former BFT target. DEV has
-completed its coordinated reset. It does not authorize a compatibility decoder.
+Status: active PoA protocol. This document defines the genesis-bound PoA
+format implemented by `main`; it supersedes the former BFT target. The target
+deployment runs the genesis-key holder on the Central Authority desktop; the
+current DEV deployment has not completed that migration. See
+[`04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](04_NETWORK_BOOTSTRAP_AND_GENESIS.md).
+It does not authorize a compatibility decoder.
 
 ## Trust model
 
-The next DEV network has one genesis-bound PoA finalizer operated by CYBOU.
-Finality therefore means that the configured PoA key signed the canonical next
-block; it is not Byzantine fault tolerance and must never be marketed as such.
+The target DEV network has one genesis-bound PoA finalizer operated from the
+Central Authority desktop. Finality therefore means that the configured PoA
+key signed the canonical next block; it is not Byzantine fault tolerance and
+must never be marketed as such.
 Every full node still validates the signature, parent, height, operations,
 state transition, and recomputed state root independently.
 
@@ -20,13 +24,14 @@ pending state.
 
 ## PoA signing role
 
-The operator supplies a dedicated 24-word recovery phrase for the PoA finalizer.
-Its entropy derives the `POA_FINALIZER` hybrid key purpose through the existing
-HKDF-SHA256 key derivation, with the `POA_FINALIZER` purpose label. Its public
-key is committed by the network definition at genesis. It is independent of
-every CYBOU Identity, Validator, Operator Authority, Release Signing, and
-Treasury key. Private signing material is never persisted and is cleansed when
-the finalizer session ends.
+The Central Authority Identity's recovery entropy derives its role-specific
+`POA_FINALIZER` hybrid key through the existing HKDF-SHA256 derivation and
+purpose label. Its public key is committed by the network definition at
+genesis. This is a distinct key role, separate from Identity recovery,
+authorization and KEM keys, Release Signing, and Treasury. In the target
+deployment, the desktop unlocks this Identity and runs the finalizer locally;
+the private material is never sent to bootstrap. The current legacy DEV still
+loads operator entropy on the VPS until cutover.
 Its journal and operator diagnostics identify the public key by
 `SHA256(CYBOU/POA-FINALIZER-KEY-ID/V1 || Ed25519_public_key ||
 ML-DSA-65_public_key)`; the genesis definition still commits the full public
@@ -84,14 +89,15 @@ halt. A rolled-back or conflicting anti-equivocation journal also halts.
 
 The network definition contains the genesis block/state, protocol parameters,
 and hybrid PoA public key. It contains no initial ValidatorSet commitment or
-Operator Authority key. `cybou.cybou` remains an ordinary Identity unrelated
-to the PoA signer.
+separate Operator Authority key. The Central Authority remains an ordinary
+protocol Identity; only its distinct genesis-bound `POA_FINALIZER` role signs
+blocks. This role does not derive from the Authority score.
 
-DEV has completed the coordinated protocol reset to this network definition.
-Routine deployments preserve chain state and validator key. If a future
-incompatible protocol change requires a reset, make that a separate explicit
-cutover with its own genesis and operational procedure. The repository's Git
-history is sufficient record of superseded implementations; runtime
-compatibility and old-state import are not required.
+The current DEV network completed its last protocol reset, but has not yet
+completed the bootstrap/desktop-finalizer architecture cutover. Routine
+deployments preserve chain state and PoA key. The cutover defined in
+`04_NETWORK_BOOTSTRAP_AND_GENESIS.md` is a separate explicit reset with its own
+genesis and operational procedure. Runtime compatibility and old-state import
+are not required after that cutover.
 
 \n

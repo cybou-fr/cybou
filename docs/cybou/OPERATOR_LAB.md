@@ -1,5 +1,9 @@
 # Operator CLI and Network Lab
 
+This file describes isolated LAB/test processes, not the official DEV VPS
+deployment. The target production/DEV bootstrap and desktop-finalizer model is
+defined in [`04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](04_NETWORK_BOOTSTRAP_AND_GENESIS.md).
+
 The operator interface uses named commands and CYP2. Run `cybou-node --help`
 for the complete grammar. The former positional commands are removed.
 `finalizer run` alone signs PoA blocks; `provider run` and `observer run`

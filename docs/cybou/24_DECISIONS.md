@@ -52,6 +52,17 @@ Git history.
 | DEC-216 | Validation does not alter canonical state, PoA admission, finality, resource allocation, or remote storage authorization. | Frozen |
 | DEC-217 | Authority creates no canonical reservations, tickets, grants, rewards, or penalties. Provider limits are local policy. | Frozen |
 
+## Network bootstrap and operations
+
+| ID | Decision | Status |
+|---|---|---|
+| DEC-218 | The official VPS runs one bootstrap relay/cache service only; it holds no PoA key, user Identity, or storage-provider role and never finalizes. | Frozen target; implementation/cutover pending |
+| DEC-219 | The Central Authority is the ordinary desktop Identity whose role-specific `POA_FINALIZER` public key is committed by genesis; its desktop runs PoA finalization after unlock and local chain verification. | Frozen target; implementation/cutover pending |
+| DEC-220 | Bootstrap network creation is allowed only from authenticated `EMPTY`, with a one-use activation code and proof of possession of the proposed genesis key; the binding is atomic and generation-numbered. | Frozen target; implementation/cutover pending |
+| DEC-221 | Replacing a bound network requires authorization by the current Authority key, proof by the new key, and both signatures when the key changes; clients reject generation rollback. | Frozen target; implementation/cutover pending |
+| DEC-222 | A bootstrap transport identity is separate from PoA/Identity keys and must be pinned through a trusted release or approved out-of-band source. A self-asserted network key from bootstrap is not a trust anchor. | Frozen target; implementation/cutover pending |
+| DEC-223 | Headless finalizer/provider processes are LAB/test topology only; the official DEV VPS target is not a finalizer or provider. | Frozen target; implementation/cutover pending |
+
 ## Fixed economics
 
 ```text
