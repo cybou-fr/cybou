@@ -235,6 +235,7 @@ add_library(cybou_node STATIC
   cybou/identity_service.cpp
   cybou/name_service.cpp
   cybou/p2p/session.cpp
+  cybou/p2p/peer_admission.cpp
   cybou/p2p/inbound_server.cpp
   cybou/p2p/peer_manager.cpp
 )
