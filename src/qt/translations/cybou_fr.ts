@@ -3643,8 +3643,8 @@ Enregistrer quand même ?</translation>
     </message>
     <message>
         <location filename="../pages/settingspage.cpp" line="132" />
-        <source>Same as Windows</source>
-        <translation>Identique à Windows</translation>
+        <source>Same as system</source>
+        <translation>Identique au système</translation>
     </message>
     <message>
         <location filename="../pages/settingspage.cpp" line="133" />

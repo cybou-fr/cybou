@@ -129,7 +129,7 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
     m_appearance = new QComboBox{this};
     m_appearance->setObjectName(QStringLiteral("appearanceMode"));
     m_appearance->setAccessibleName(tr("Theme"));
-    m_appearance->addItem(tr("Same as Windows"), static_cast<int>(CybouTheme::Appearance::System));
+    m_appearance->addItem(tr("Same as system"), static_cast<int>(CybouTheme::Appearance::System));
     m_appearance->addItem(tr("Light"), static_cast<int>(CybouTheme::Appearance::Light));
     m_appearance->addItem(tr("Dark"), static_cast<int>(CybouTheme::Appearance::Dark));
     m_appearance->setMinimumWidth(200);
