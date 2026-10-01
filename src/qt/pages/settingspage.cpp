@@ -13,13 +13,18 @@
 #include <QTimer>
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
+#include <QSaveFile>
 #include <QSignalBlocker>
 #include <QStandardPaths>
+#include <QXmlStreamWriter>
 #include <QVBoxLayout>
 
 #include <utility>
@@ -48,16 +53,29 @@ QSettings RunKey()
 }
 #endif
 
-bool StartsWithWindows()
+QString LoginItemPath()
+{
+#if defined(Q_OS_MACOS)
+    return QDir::home().filePath(QStringLiteral("Library/LaunchAgents/com.cybou.desktop.plist"));
+#elif defined(Q_OS_LINUX)
+    return QDir{QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)}
+        .filePath(QStringLiteral("autostart/cybou.desktop"));
+#else
+    return {};
+#endif
+}
+
+bool StartsAtLogin()
 {
 #ifdef Q_OS_WIN
     return RunKey().contains(QStringLiteral("CYBOU"));
 #else
-    return false;
+    const auto path = LoginItemPath();
+    return !path.isEmpty() && QFile::exists(path);
 #endif
 }
 
-void SetStartWithWindows(bool enabled)
+bool SetStartAtLogin(bool enabled)
 {
 #ifdef Q_OS_WIN
     QSettings key = RunKey();
@@ -67,8 +85,50 @@ void SetStartWithWindows(bool enabled)
     } else {
         key.remove(QStringLiteral("CYBOU"));
     }
+    return key.status() == QSettings::NoError;
+#elif defined(Q_OS_LINUX)
+    const QString path = LoginItemPath();
+    if (!enabled) return path.isEmpty() || !QFile::exists(path) || QFile::remove(path);
+    QString escaped = QCoreApplication::applicationFilePath();
+    escaped.replace(QStringLiteral("\\"), QStringLiteral("\\\\"));
+    escaped.replace(QStringLiteral("\""), QStringLiteral("\\\""));
+    escaped.replace(QStringLiteral("`"), QStringLiteral("\\`"));
+    escaped.replace(QStringLiteral("$"), QStringLiteral("\\$"));
+    escaped.replace(QStringLiteral("%"), QStringLiteral("%%"));
+    if (!QDir{}.mkpath(QFileInfo{path}.absolutePath())) return false;
+    QSaveFile file{path};
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
+    const QByteArray entry = "[Desktop Entry]\nType=Application\nName=CYBOU\nExec=\"" + escaped.toUtf8() +
+        "\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n";
+    if (file.write(entry) != entry.size()) return false;
+    return file.commit();
+#elif defined(Q_OS_MACOS)
+    const QString path = LoginItemPath();
+    if (!enabled) return path.isEmpty() || !QFile::exists(path) || QFile::remove(path);
+    if (!QDir{}.mkpath(QFileInfo{path}.absolutePath())) return false;
+    QSaveFile file{path};
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
+    QXmlStreamWriter xml{&file};
+    xml.setAutoFormatting(true);
+    xml.writeStartDocument();
+    xml.writeStartElement(QStringLiteral("plist"));
+    xml.writeAttribute(QStringLiteral("version"), QStringLiteral("1.0"));
+    xml.writeStartElement(QStringLiteral("dict"));
+    xml.writeTextElement(QStringLiteral("key"), QStringLiteral("Label"));
+    xml.writeTextElement(QStringLiteral("string"), QStringLiteral("com.cybou.desktop"));
+    xml.writeTextElement(QStringLiteral("key"), QStringLiteral("ProgramArguments"));
+    xml.writeStartElement(QStringLiteral("array"));
+    xml.writeTextElement(QStringLiteral("string"), QCoreApplication::applicationFilePath());
+    xml.writeEndElement();
+    xml.writeTextElement(QStringLiteral("key"), QStringLiteral("RunAtLoad"));
+    xml.writeEmptyElement(QStringLiteral("true"));
+    xml.writeEndElement();
+    xml.writeEndElement();
+    xml.writeEndDocument();
+    return !xml.hasError() && file.commit();
 #else
     Q_UNUSED(enabled);
+    return false;
 #endif
 }
 
@@ -89,13 +149,18 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
     root->setSpacing(16);
 
     auto* general = Section(root, tr("General"), {}, this);
-    m_start_with_windows = new QCheckBox{tr("Start CYBOU with Windows"), this};
-    m_start_with_windows->setObjectName(QStringLiteral("startWithWindows"));
-#ifndef Q_OS_WIN
-    m_start_with_windows->setEnabled(false);
+    m_start_at_login = new QCheckBox{tr("Start CYBOU at login"), this};
+    m_start_at_login->setObjectName(QStringLiteral("startAtLogin"));
+#if !defined(Q_OS_WIN) && !defined(Q_OS_LINUX) && !defined(Q_OS_MACOS)
+    m_start_at_login->setEnabled(false);
 #endif
-    connect(m_start_with_windows, &QCheckBox::toggled, this, [](bool on) { SetStartWithWindows(on); });
-    general->addWidget(m_start_with_windows);
+    connect(m_start_at_login, &QCheckBox::toggled, this, [this](bool on) {
+        if (SetStartAtLogin(on)) return;
+        const QSignalBlocker blocker{m_start_at_login};
+        m_start_at_login->setChecked(StartsAtLogin());
+        QMessageBox::warning(this, tr("Startup setting"), tr("CYBOU could not update the start-at-login setting."));
+    });
+    general->addWidget(m_start_at_login);
     m_run_in_background = new QCheckBox{tr("Keep running in background when the window is closed"), this};
     m_run_in_background->setObjectName(QStringLiteral("runInBackground"));
     connect(m_run_in_background, &QCheckBox::toggled, this,
@@ -244,7 +309,7 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
 
 void SettingsPage::refresh()
 {
-    const QSignalBlocker b1{m_start_with_windows};
+    const QSignalBlocker b1{m_start_at_login};
     const QSignalBlocker b2{m_run_in_background};
     const QSignalBlocker b3{m_mail_previews};
     const QSignalBlocker b4{m_appearance};
@@ -255,7 +320,7 @@ void SettingsPage::refresh()
     m_appearance->setCurrentIndex(m_appearance->findData(static_cast<int>(CybouTheme::savedAppearance())));
     m_language->setCurrentIndex(std::max(0, m_language->findData(
         QSettings{}.value(languageKey(), QStringLiteral("fr")).toString())));
-    m_start_with_windows->setChecked(StartsWithWindows());
+    m_start_at_login->setChecked(StartsAtLogin());
     m_run_in_background->setChecked(QSettings{}.value(runInBackgroundKey(), false).toBool());
     m_mail_previews->setChecked(QSettings{}.value(mailPreviewsKey(), false).toBool());
     const QSignalBlocker b6{m_notifications};

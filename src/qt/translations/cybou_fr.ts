@@ -3616,8 +3616,16 @@ Enregistrer quand même ?</translation>
     </message>
     <message>
         <location filename="../pages/settingspage.cpp" line="92" />
-        <source>Start CYBOU with Windows</source>
-        <translation>Lancer CYBOU au démarrage de Windows</translation>
+        <source>Start CYBOU at login</source>
+        <translation>Lancer CYBOU à l’ouverture de session</translation>
+    </message>
+    <message>
+        <source>Startup setting</source>
+        <translation>Paramètre de démarrage</translation>
+    </message>
+    <message>
+        <source>CYBOU could not update the start-at-login setting.</source>
+        <translation>CYBOU n’a pas pu modifier le démarrage à l’ouverture de session.</translation>
     </message>
     <message>
         <location filename="../pages/settingspage.cpp" line="99" />

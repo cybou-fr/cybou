@@ -45,7 +45,7 @@ private:
     CybouDesktopModel* const m_model;
     QComboBox* m_appearance{nullptr};
     QComboBox* m_language{nullptr};
-    QCheckBox* m_start_with_windows{nullptr};
+    QCheckBox* m_start_at_login{nullptr};
     QCheckBox* m_run_in_background{nullptr};
     QCheckBox* m_mail_previews{nullptr};
     QCheckBox* m_notifications{nullptr};
