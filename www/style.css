@@ -296,7 +296,23 @@ a {
   flex-direction: column;
   align-items: center;
   text-align: center;
+  overflow: hidden;
   background: radial-gradient(ellipse 90% 55% at 50% -5%, rgba(52, 211, 153, 0.15), rgba(243, 244, 246, 0.6) 45%, transparent 80%);
+}
+
+.hero-particles-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hero-section > *:not(.hero-particles-canvas) {
+  position: relative;
+  z-index: 2;
 }
 
 /* Hero Big Logo Presentation Tile */

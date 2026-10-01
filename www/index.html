@@ -36,7 +36,7 @@
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/cybou.png">
-  <link rel="stylesheet" href="style.css?v=20261001-2">
+  <link rel="stylesheet" href="style.css?v=20261001-3">
 
   <!-- Schema.org JSON-LD Structured Data for Search Engines & AI Models -->
   <script type="application/ld+json">
@@ -166,13 +166,15 @@
        Hero Section — Product Focus with Prominent TLS 1.3 Advantage
        ========================================================================== -->
   <section class="hero-section" id="hero">
+    <canvas id="hero-particles" class="hero-particles-canvas" aria-hidden="true"></canvas>
+
     <div class="hero-logo-box" aria-hidden="true">
       <img src="assets/cybou.png" alt="CYBOU Emblem" width="90" height="90">
     </div>
 
     <div class="hero-tag">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      <span data-i18n="heroTag">Transport 100% Chiffré TLS 1.3 • Souveraineté France • Post-Quantique</span>
+      <span data-i18n="heroTag">Cryptographie standard OpenSSL v3.5.2+ • Souveraineté France • Post-Quantique NIST</span>
     </div>
 
     <h1 class="hero-title">
@@ -180,7 +182,7 @@
       <span class="accent-text" data-i18n="heroAccent">Votre espace privé souverain. Messagerie, fichiers et identité.</span>
     </h1>
 
-    <p class="hero-subtitle" data-i18n="heroSubtitle">CYBOU réunit messagerie privée, stockage de fichiers et identité souveraine dans une application de bureau protectrice. Vos données sont chiffrées sur votre ordinateur avant tout envoi, et tous les flux réseau sont verrouillés en TLS 1.3.</p>
+    <p class="hero-subtitle" data-i18n="heroSubtitle">CYBOU réunit messagerie privée, stockage de fichiers et identité souveraine dans une application de bureau protectrice. Zéro algorithme maison : toute la cryptographie repose sur OpenSSL v3.5.2+ et les standards post-quantiques du NIST.</p>
 
     <div class="hero-slogan-pill">
       <span data-i18n="heroPillSlogan">Une suite souveraine qui protège votre vie privée — sans compromis publicitaire ni surveillance.</span>
@@ -193,7 +195,7 @@
       </div>
       <div class="status-callout-text">
         <h4 data-i18n="statusCalloutTitle">Protocole DEV opérationnel. Préparation de la version publique.</h4>
-        <p data-i18n="statusCalloutBody">Le réseau expérimental DEV fonctionne avec finalité PoA, stockage distribué et transport TLS 1.3. L'application de bureau CYBOU fait l'objet de tests continus de durcissement et d'intégration avant ouverture au grand public.</p>
+        <p data-i18n="statusCalloutBody">Le réseau expérimental DEV fonctionne avec finalité PoA, stockage distribué et transport TLS 1.3 post-quantique. L'application de bureau CYBOU fait l'objet de tests continus de durcissement et d'intégration avant ouverture au grand public.</p>
       </div>
     </aside>
 
@@ -207,21 +209,21 @@
 
     <!-- Trust Badges Strip (Immediate User Advantages) -->
     <div class="trust-badges" aria-label="Points forts de sécurité">
-      <div class="trust-badge-item tls-highlight">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <span data-i18n="badgeTls">Transport 100% TLS 1.3 (Anti-interception Wi-Fi/FAI)</span>
+      <div class="trust-badge-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span data-i18n="badgeOpenssl">Moteur OpenSSL v3.5.2+ (Zéro crypto maison)</span>
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
         <span data-i18n="badgeFrance">Souveraineté France (Hors Cloud Act US)</span>
       </div>
       <div class="trust-badge-item">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
-        <span data-i18n="badgePhrase">Zéro Mot de passe / Clé 24 mots</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span data-i18n="badgeTls">Transport TLS 1.3 Post-Quantique (CYP2)</span>
       </div>
       <div class="trust-badge-item">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span data-i18n="badgePq">Bouclier Post-Quantique NIST</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+        <span data-i18n="badgePhrase">Zéro Mot de passe / Clé 24 mots</span>
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
@@ -255,7 +257,7 @@
           </div>
           <div class="mockup-tls-status">
             <span class="dot"></span>
-            <span data-i18n="mockupStatusTls">Connecté via TLS 1.3</span>
+            <span data-i18n="mockupStatus">Connecté • Réseau France (2 répliques)</span>
           </div>
         </div>
 
@@ -304,7 +306,7 @@
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                   <span data-i18n="mockupTabSec">Sécurité &amp; Réseau</span>
                 </span>
-                <span class="mockup-tab-badge">TLS 1.3</span>
+                <span class="mockup-tab-badge" data-i18n="mockupTabSecBadge">12 pairs FR</span>
               </button>
             </nav>
           </aside>
@@ -320,11 +322,11 @@
                       <span data-i18n="mockupMailFrom1">Pierre Martin</span>
                       <span style="font-size: 0.72rem; color: var(--text-muted);">14:32</span>
                     </div>
-                    <div class="mockup-mail-subject" data-i18n="mockupMailSub1">Documents confidentiels 2026</div>
+                    <div class="mockup-mail-subject" data-i18n="mockupMailSub1">Documents d'audit confidentiels 2026</div>
                     <div class="mockup-mail-snippet" data-i18n="mockupMailSnip1">Bonjour Alice, voici les documents chiffrés demandés...</div>
                     <div class="mockup-security-pill">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                      <span data-i18n="mockupBadgeE2ee">Chiffré client • TLS 1.3</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>
+                      <span data-i18n="mockupBadgeE2ee">Chiffré E2EE • Protégé</span>
                     </div>
                   </div>
 
@@ -337,36 +339,36 @@
                     <div class="mockup-mail-snippet" data-i18n="mockupMailSnip2">Le document a été validé et scellé avec signature hybride...</div>
                     <div class="mockup-security-pill">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                      <span data-i18n="mockupBadgePq">Signature ML-DSA</span>
+                      <span data-i18n="mockupBadgePq">Signature ML-DSA-44</span>
                     </div>
                   </div>
                 </div>
 
                 <div class="mockup-mail-reader">
                   <div class="mockup-reader-header">
-                    <div class="mockup-reader-subject" data-i18n="mockupMailBodyTitle">Documents fiscaux et comptables 2026</div>
+                    <div class="mockup-reader-subject" data-i18n="mockupMailBodyTitle">Documents d'audit confidentiels 2026</div>
                     <div class="mockup-reader-meta">
                       <span>De : <strong>pierre.cybou</strong> &lt;pierre.cybou&gt;</span>
                       <span>À : <strong>alice.cybou</strong></span>
                     </div>
                     <div class="mockup-badges-row">
                       <span class="mockup-reader-badge highlight">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        <span data-i18n="mockupBadgeTlsPill">Transport TLS 1.3 Certifié</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>
+                        <span data-i18n="mockupReaderBadge1">Chiffrement client E2EE</span>
                       </span>
                       <span class="mockup-reader-badge">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                        <span>Chiffrement hybride post-quantique</span>
+                        <span data-i18n="mockupReaderBadge2">Signé ML-DSA-44 • Vérifié</span>
                       </span>
                       <span class="mockup-reader-badge">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>
-                        <span>Stocké en France (2 répliques)</span>
+                        <span data-i18n="mockupReaderBadge3">Stocké en France (2 répliques)</span>
                       </span>
                     </div>
                   </div>
                   <div class="mockup-reader-body" data-i18n="mockupMailBodyText">
                     Bonjour Alice,<br><br>
-                    Voici les pièces jointes chiffrées de notre bilan. Grâce au protocole CYBOU, cette transmission est passée directement par des liaisons chiffrées en TLS 1.3. Aucun serveur tiers, aucun FAI ni aucun robot publicitaire n'a pu lire un seul mot de notre échange.<br><br>
+                    Voici les pièces jointes chiffrées de notre audit annuel. Tout a été scellé directement depuis mon poste avec notre clé d'identité souveraine. Les fragments sont répliqués sur les nœuds souverains français et restent inaccessibles à tout tiers.<br><br>
                     Bien cordialement,<br>
                     Pierre
                   </div>
@@ -427,41 +429,48 @@
                 <div class="mockup-id-card">
                   <h5 data-i18n="mockupIdHeading1">Identité active</h5>
                   <div class="mockup-id-value">alice.cybou</div>
-                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">Compte souverain enregistré de manière permanente.</p>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;" data-i18n="mockupIdSub1">Compte souverain inaliénable enregistré par travail anti-Sybil.</p>
                 </div>
                 <div class="mockup-id-card">
                   <h5 data-i18n="mockupIdHeading2">Clés Post-Quantiques</h5>
                   <div class="mockup-id-value">ML-DSA-65 + Ed25519</div>
-                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">Signature hybride active contre attaques quantiques.</p>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;" data-i18n="mockupIdSub2">Signature hybride active contre attaques quantiques.</p>
                 </div>
                 <div class="mockup-id-card">
                   <h5 data-i18n="mockupIdHeading3">Restauration de compte</h5>
                   <div class="mockup-id-value">Phrase secrète de 24 mots</div>
-                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">Permet de recréer l'identité sur un nouveau PC sans mot de passe ni SMS.</p>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;" data-i18n="mockupIdSub3">Permet de recréer l'identité sur un nouveau PC sans mot de passe ni SMS.</p>
                 </div>
                 <div class="mockup-id-card">
-                  <h5 data-i18n="mockupIdHeading4">Souveraineté des données</h5>
-                  <div class="mockup-id-value">100% Client-Side</div>
-                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">Aucun identifiant centralisé, aucune collecte de numéro de téléphone.</p>
+                  <h5 data-i18n="mockupIdHeading4">Moteur cryptographique standard</h5>
+                  <div class="mockup-id-value">OpenSSL v3.5.2+</div>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;" data-i18n="mockupIdSub4">Standards officiels NIST FIPS 203/204. Zéro cryptographie maison.</p>
                 </div>
               </div>
             </div>
 
-            <!-- 4. Security View -->
+            <!-- 4. Security & Network View -->
             <div class="mockup-view" id="view-security">
               <div class="mockup-id-box">
                 <div class="mockup-id-card" style="grid-column: span 2;">
-                  <h5 style="color: var(--brand-teal-dark);" data-i18n="mockupSecHeading1">Chiffrement du transport (CYP2)</h5>
-                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px;" data-i18n="mockupSecDesc1">Tunnel TLS 1.3 strict avec négociation cryptographique moderne. Élimine tout risque d'interception sur Wi-Fi public ou inspection FAI (DPI).</p>
+                  <h5 style="color: var(--brand-teal-dark);" data-i18n="mockupSecHeading1">Cryptographie éprouvée OpenSSL v3.5.2+ (Zéro crypto maison)</h5>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px;" data-i18n="mockupSecDesc1">CYBOU applique la règle d'or de la sécurité : "Don't roll your own crypto". Aucun algorithme inventé : tout s'appuie sur la bibliothèque officielle OpenSSL v3.5.2+ conforme aux standards NIST FIPS 203 et FIPS 204.</p>
                   <div style="margin-top: 10px; font-family: var(--font-mono); font-size: 0.78rem; color: var(--brand-teal-dark);">
-                    TLS_AES_256_GCM_SHA384 • SPKI Pinning • Ephemeral ECDHE
+                    OpenSSL 3.5.2+ • NIST FIPS 203 (ML-KEM-768) • NIST FIPS 204 (ML-DSA-44/65) • BLAKE3-256
                   </div>
                 </div>
-                <div class="mockup-id-card" style="grid-column: span 2;">
-                  <h5 data-i18n="mockupSecHeading2">Politique d'admission réseau</h5>
-                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px;" data-i18n="mockupSecDesc2">Trafic P2P public restreint exclusivement au territoire français via géolocalisation IP stricte. Failsafe fermé en cas de doute.</p>
+                <div class="mockup-id-card">
+                  <h5 data-i18n="mockupSecHeading2">Transport P2P TLS 1.3 Post-Quantique</h5>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px;" data-i18n="mockupSecDesc2">Tunnel TLS 1.3 avec groupe hybride X25519MLKEM768. Tout repli classique non-PQ est rejeté (fail-closed).</p>
                   <div style="margin-top: 10px; font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-secondary);">
-                    Public P2P : France-only (Inbound &amp; Outbound) • Fail-closed
+                    CYP2 Protocol • TLS 1.3 • SPKI Pinning
+                  </div>
+                </div>
+                <div class="mockup-id-card">
+                  <h5 data-i18n="mockupSecHeading3">Souveraineté territoriale France</h5>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px;" data-i18n="mockupSecDesc3">Trafic P2P public restreint à l'espace IP français (fail-closed). Immunité contre le US Cloud Act et FISA 702.</p>
+                  <div style="margin-top: 10px; font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-secondary);">
+                    Admission France-only • Audit autonome
                   </div>
                 </div>
               </div>
@@ -490,7 +499,7 @@
         </div>
         <div class="service-card-tag" data-i18n="srvMailTag">Messagerie</div>
         <h3 data-i18n="srvMailTitle">CYBOU Mail — Votre boîte de réception inviolable</h3>
-        <p data-i18n="srvMailDesc">Ne laissez plus Google ou Microsoft analyser vos correspondances privées. Vos messages et pièces jointes sont chiffrés sur votre poste avec des clés post-quantiques et transmis via TLS 1.3. Zéro publicité, zéro profilage.</p>
+        <p data-i18n="srvMailDesc">Ne laissez plus Google ou Microsoft analyser vos correspondances privées. Vos messages et pièces jointes sont chiffrés sur votre poste avec des clés post-quantiques et transmis via TLS 1.3 post-quantique. Zéro publicité, zéro profilage.</p>
         <div class="service-status-pill">
           <span class="dot wip"></span>
           <span data-i18n="srvMailStatus">Flux intégrés — acceptation Beta en cours</span>
@@ -566,27 +575,37 @@
     </div>
 
     <div class="security-grid">
-      <!-- 1. TLS 1.3 Transport (Featured!) -->
+      <!-- 1. OpenSSL v3.5.2+ Standard Engine (Featured!) -->
       <article class="security-card featured">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="security-card-tag" data-i18n="secOpensslTag">Standard Mondial Audité</div>
+        <h3 data-i18n="secOpensslTitle">Cryptographie Standard OpenSSL v3.5.2+ (Zéro crypto maison)</h3>
+        <p data-i18n="secOpensslDesc">La règle d'or en cybersécurité est formelle : ne jamais inventer sa propre cryptographie (« Don't roll your own crypto »). CYBOU n'utilise aucun algorithme expérimental fait maison. Tous les protocoles post-quantiques (ML-DSA-44, ML-DSA-65, ML-KEM-768) et symétriques sont fournis directement par la version officielle d'OpenSSL v3.5.2+, certifiée et conforme aux normes du NIST (FIPS 203 et FIPS 204).</p>
+      </article>
+
+      <!-- 2. TLS 1.3 Post-Quantum Transport -->
+      <article class="security-card">
         <div class="card-icon" aria-hidden="true">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         </div>
         <div class="security-card-tag" data-i18n="secTlsTag">Protection Réseau</div>
-        <h3 data-i18n="secTlsTitle">Transport 100% Chiffré en TLS 1.3 (Protocole CYP2)</h3>
-        <p data-i18n="secTlsDesc">Que vous soyez sur le Wi-Fi public d'une gare, d'un hôtel ou sur votre box fibre domestique, chaque connexion entre votre application et le réseau est scellée par le standard TLS 1.3 le plus strict. Ni votre FAI (Orange, SFR, Free, Bouygues), ni un pirate sur le réseau local ne peuvent voir ce que vous transférez ni modifier un seul octet.</p>
+        <h3 data-i18n="secTlsTitle">Transport 100% Chiffré en TLS 1.3 Post-Quantique (CYP2)</h3>
+        <p data-i18n="secTlsDesc">Chaque connexion réseau impose un échange de clés hybride post-quantique combinant X25519 et le standard NIST ML-KEM-768 (Kyber). Tout repli classique sans ML-KEM est refusé net. Ni votre FAI, ni un pirate sur le Wi-Fi public, ni de futurs calculateurs quantiques ne peuvent intercepter vos échanges.</p>
       </article>
 
-      <!-- 2. Client-side E2EE -->
+      <!-- 3. Client-side E2EE & BLAKE3 -->
       <article class="security-card">
         <div class="card-icon" aria-hidden="true">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>
         </div>
         <div class="security-card-tag" data-i18n="secE2eeTag">Confidentialité Totale</div>
-        <h3 data-i18n="secE2eeTitle">Chiffrement Client de bout en bout</h3>
-        <p data-i18n="secE2eeDesc">Le TLS protège le transport, mais CYBOU protège aussi la donnée elle-même. Les messages et fichiers sont chiffrés sur votre processeur avec vos propres clés secrètes avant de partir. Même les nœuds du réseau ne voient que des données opaques et incompréhensibles.</p>
+        <h3 data-i18n="secE2eeTitle">Chiffrement Client de bout en bout &amp; Arbre BLAKE3</h3>
+        <p data-i18n="secE2eeDesc">Le TLS protège le transport, mais CYBOU protège aussi la donnée elle-même. Les messages et fichiers sont chiffrés sur votre processeur avec vos propres clés secrètes avant de partir. Le consensus de la chaîne n'enregistre aucun message, aucun nom de fichier, aucun destinataire : seuls des fragments chiffrés opaques existent.</p>
       </article>
 
-      <!-- 3. Sovereign France P2P -->
+      <!-- 4. Sovereign France P2P -->
       <article class="security-card">
         <div class="card-icon" aria-hidden="true">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
@@ -594,16 +613,6 @@
         <div class="security-card-tag" data-i18n="secFranceTag">Immunité Juridique</div>
         <h3 data-i18n="secFranceTitle">Souveraineté Territoriale France &amp; UE</h3>
         <p data-i18n="secFranceDesc">Zéro serveur aux États-Unis, zéro dépendance aux géants de la Silicon Valley. L'admission P2P publique est strictement limitée à la France avec contrôle géographique rigoureux (fail-closed). Vos données échappent totalement au US Cloud Act et à la FISA 702.</p>
-      </article>
-
-      <!-- 4. Post-Quantum NIST -->
-      <article class="security-card">
-        <div class="card-icon" aria-hidden="true">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        </div>
-        <div class="security-card-tag" data-i18n="secPqTag">Prêt pour l'Avenir</div>
-        <h3 data-i18n="secPqTitle">Bouclier Post-Quantique NIST (ML-DSA)</h3>
-        <p data-i18n="secPqDesc">Les futurs ordinateurs quantiques menacent de casser les chiffrements traditionnels (RSA, courbes elliptiques). CYBOU déploie dès aujourd'hui les algorithmes post-quantiques normalisés par le NIST (ML-DSA-44 et ML-DSA-65) pour garantir la sécurité de vos données pour les décennies à venir.</p>
       </article>
     </div>
   </section>
@@ -651,18 +660,39 @@
             </td>
           </tr>
           <tr>
+            <td><strong data-i18n="compRowCryptoCrit">Moteur et code cryptographique</strong></td>
+            <td class="col-cybou">
+              <span class="comparison-tag-good">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                <span data-i18n="compRowCryptoCybou">OpenSSL v3.5.2+ standard (Zéro crypto maison, NIST FIPS 203/204)</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRowCryptoGoogle">Propriétaire / Boîte noire serveur</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRowCryptoAppleMs">Propriétaire / Boîte noire serveur</span>
+              </span>
+            </td>
+          </tr>
+          <tr>
             <td><strong data-i18n="compRow2Crit">Sécurité du transport réseau</strong></td>
             <td class="col-cybou">
               <span class="comparison-tag-good">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-                <span data-i18n="compRow2Cybou">Tunnel strict TLS 1.3 de bout en bout (CYP2)</span>
+                <span data-i18n="compRow2Cybou">TLS 1.3 Hybride Post-Quantique (X25519 + ML-KEM-768)</span>
               </span>
             </td>
             <td>
-              <span style="color: var(--text-secondary);" data-i18n="compRow2Google">TLS vers centres de données Google</span>
+              <span style="color: var(--text-secondary);" data-i18n="compRow2Google">TLS classique (Vulnérable à l'enregistrement et déchiffrement quantique)</span>
             </td>
             <td>
-              <span style="color: var(--text-secondary);" data-i18n="compRow2AppleMs">TLS vers centres de données US</span>
+              <span style="color: var(--text-secondary);" data-i18n="compRow2AppleMs">TLS classique (Algorithmes traditionnels vulnérables)</span>
             </td>
           </tr>
           <tr>
@@ -856,7 +886,7 @@
       <dl class="tech-spec-grid">
         <div class="spec-item">
           <dt data-i18n="dtTransport">Transport P2P &amp; Chiffrement</dt>
-          <dd data-i18n="ddTransport">CYP2 encapsulé dans TLS 1.3 strict. SPKI pinning éphémère, zéro fuite de métadonnées de transport vers FAI/tiers.</dd>
+          <dd data-i18n="ddTransport">CYP2 encapsulé dans TLS 1.3 post-quantique strict (groupe X25519MLKEM768 obligatoire, fail-closed). Exportation de clé de session 32 octets liée aux preuves cryptographiques.</dd>
         </div>
 
         <div class="spec-item">
@@ -988,17 +1018,31 @@
         </div>
       </article>
 
-      <!-- FAQ 2: TLS 1.3 Transport Security (High priority user focus!) -->
+      <!-- FAQ 2: Post-Quantum TLS 1.3 Transport Security -->
       <article class="faq-card pq-focus">
         <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-2">
           <span class="faq-heading">
-            <span class="faq-badge-pq" data-i18n="faqTlsBadge">Transport Chiffré</span>
-            <span class="faq-question" data-i18n="faqQTls">En quoi le transport chiffré en TLS 1.3 protège-t-il mes connexions sur Wi-Fi public ou chez mon FAI ?</span>
+            <span class="faq-badge-pq" data-i18n="faqTlsBadge">Transport Post-Quantique</span>
+            <span class="faq-question" data-i18n="faqQTls">En quoi le transport TLS 1.3 de CYBOU est-il post-quantique et que protège-t-il ?</span>
           </span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-2" aria-hidden="true">
-          <p data-i18n="faqATls">Toutes les communications entre pairs et nœuds CYBOU (protocole CYP2 v3) sont encapsulées dans un tunnel TLS 1.3 strict. Que vous utilisiez le Wi-Fi ouvert d'une gare, d'un café ou votre box internet à domicile, aucun tiers ni votre fournisseur d'accès (Orange, SFR, Free, Bouygues) ne peut intercepter, lire vos messages ou savoir quels fichiers vous échangez. L'inspection approfondie des paquets (DPI) est totalement inopérante.</p>
+          <p data-i18n="faqATls">Toutes les communications entre pairs et nœuds CYBOU (protocole CYP2 v3) utilisent un handshake TLS 1.3 avec le groupe d'échange de clés X25519MLKEM768. Cette négociation associe la cryptographie classique à ML-KEM-768 (standard NIST FIPS 203). Si un pair ne supporte pas ce mode post-quantique, la connexion est immédiatement interrompue. Cela protège vos transferts contre l'interception locale (Wi-Fi public, FAI) et contre la stratégie d'espionnage « Récolter maintenant, déchiffrer plus tard ».</p>
+        </div>
+      </article>
+
+      <!-- FAQ: Standard OpenSSL v3.5.2+ Cryptography -->
+      <article class="faq-card pq-focus">
+        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-openssl">
+          <span class="faq-heading">
+            <span class="faq-badge-pq" data-i18n="faqOpensslBadge">Standard Audité</span>
+            <span class="faq-question" data-i18n="faqQOpenssl">Les algorithmes de CYBOU sont-ils développés en interne (« crypto maison ») ?</span>
+          </span>
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer" id="faq-answer-openssl" aria-hidden="true">
+          <p data-i18n="faqAOpenssl">Absolument pas. La règle d'or de la sécurité est formelle : « Don't roll your own crypto » (ne réinventez jamais la cryptographie). CYBOU s'appuie exclusivement sur la bibliothèque officielle OpenSSL v3.5.2+, internationalement auditée et éprouvée. Les primitives post-quantiques intégrées sont les standards officiels du NIST : ML-KEM-768 (FIPS 203) et ML-DSA-44/65 (FIPS 204). Vous bénéficiez ainsi d'une robustesse mathématique vérifiable, sans aucune boîte noire ni algorithme expérimental fait maison.</p>
         </div>
       </article>
 
@@ -1094,7 +1138,7 @@
         <div class="footer-col">
           <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footSec">Sécurité &amp; Souveraineté</h4>
           <ul class="footer-links">
-            <li><a href="#security" data-i18n="footSecTls">Transport 100% TLS 1.3</a></li>
+            <li><a href="#security" data-i18n="footSecTls">Transport TLS 1.3 Post-Quantique</a></li>
             <li><a href="#security" data-i18n="footSecE2ee">Chiffrement client intégral</a></li>
             <li><a href="#security" data-i18n="footSecFrance">Réseau souverain France</a></li>
             <li><a href="#security" data-i18n="footSecPq">Résistance Post-Quantique</a></li>
@@ -1131,6 +1175,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=20261001-2"></script>
+  <script src="app.js?v=20261001-3"></script>
 </body>
 </html>

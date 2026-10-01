@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initMobileMenu();
   initFaqAccordion();
   initMockupTabs();
+  initHeroParticles();
   checkUrlLanguage();
 });
 
@@ -22,44 +23,47 @@ const translations = {
     navFaq: "FAQ",
     menuLabel: "Menu",
 
-    heroTag: "Transport 100% Chiffré TLS 1.3 • Souveraineté France • Post-Quantique",
+    heroTag: "Cryptographie standard OpenSSL v3.5.2+ • Souveraineté France • Post-Quantique NIST",
     heroAccent: "Votre espace privé souverain. Messagerie, fichiers et identité.",
-    heroSubtitle: "CYBOU réunit messagerie privée, stockage de fichiers et identité souveraine dans une application de bureau protectrice. Vos données sont chiffrées sur votre ordinateur avant tout envoi, et tous les flux réseau sont verrouillés en TLS 1.3.",
+    heroSubtitle: "CYBOU réunit messagerie privée, stockage de fichiers et identité souveraine dans une application de bureau protectrice. Zéro algorithme maison : toute la cryptographie repose sur OpenSSL v3.5.2+ et les standards post-quantiques du NIST.",
     heroPillSlogan: "Une suite souveraine qui protège votre vie privée — sans compromis publicitaire ni surveillance.",
 
     statusCalloutTitle: "Protocole DEV opérationnel. Préparation de la version publique.",
-    statusCalloutBody: "Le réseau expérimental DEV fonctionne avec finalité PoA, stockage distribué et transport TLS 1.3. L'application de bureau CYBOU fait l'objet de tests continus de durcissement et d'intégration avant ouverture au grand public.",
+    statusCalloutBody: "Le réseau expérimental DEV fonctionne avec finalité PoA, stockage distribué et transport TLS 1.3 post-quantique. L'application de bureau CYBOU fait l'objet de tests continus de durcissement et d'intégration avant ouverture au grand public.",
 
     heroBtnShowcase: "Découvrir l'application",
     heroBtnSecurity: "Pourquoi CYBOU ?",
 
-    badgeTls: "Transport 100% TLS 1.3 (Anti-interception Wi-Fi/FAI)",
+    badgeOpenssl: "Moteur OpenSSL v3.5.2+ (Zéro crypto maison)",
     badgeFrance: "Souveraineté France (Hors Cloud Act US)",
+    badgeTls: "Transport TLS 1.3 Post-Quantique (CYP2)",
     badgePhrase: "Zéro Mot de passe / Clé 24 mots",
-    badgePq: "Bouclier Post-Quantique NIST",
     badgeNoAds: "Zéro Collecte & Zéro Publicité",
 
     showcaseLabel: "Aperçu de l'application",
     showcaseTitle: "L'expérience CYBOU Desktop.",
     showcaseDesc: "Une interface unifiée et intuitive qui réunit vos communications, vos fichiers et votre identité sous une protection cryptographique continue.",
-    mockupStatusTls: "Connecté via TLS 1.3",
+    mockupStatus: "Connecté • Réseau France (2 répliques)",
     mockupNetworkFr: "Nœud souverain France",
     mockupTabMail: "Mail",
     mockupTabFiles: "Files",
     mockupTabId: "Identité",
     mockupTabSec: "Sécurité & Réseau",
+    mockupTabSecBadge: "12 pairs FR",
 
     mockupMailFrom1: "Pierre Martin",
-    mockupMailSub1: "Documents confidentiels 2026",
+    mockupMailSub1: "Documents d'audit confidentiels 2026",
     mockupMailSnip1: "Bonjour Alice, voici les documents chiffrés demandés...",
-    mockupBadgeE2ee: "Chiffré client • TLS 1.3",
+    mockupBadgeE2ee: "Chiffré E2EE • Protégé",
     mockupMailFrom2: "Cabinet Juridique",
     mockupMailSub2: "Contrat de partenariat signé",
     mockupMailSnip2: "Le document a été validé et scellé avec signature hybride...",
-    mockupBadgePq: "Signature ML-DSA",
-    mockupMailBodyTitle: "Documents fiscaux et comptables 2026",
-    mockupBadgeTlsPill: "Transport TLS 1.3 Certifié",
-    mockupMailBodyText: "Bonjour Alice,<br><br>Voici les pièces jointes chiffrées de notre bilan. Grâce au protocole CYBOU, cette transmission est passée directement par des liaisons chiffrées en TLS 1.3. Aucun serveur tiers, aucun FAI ni aucun robot publicitaire n'a pu lire un seul mot de notre échange.<br><br>Bien cordialement,<br>Pierre",
+    mockupBadgePq: "Signature ML-DSA-44",
+    mockupMailBodyTitle: "Documents d'audit confidentiels 2026",
+    mockupReaderBadge1: "Chiffrement client E2EE",
+    mockupReaderBadge2: "Signé ML-DSA-44 • Vérifié",
+    mockupReaderBadge3: "Stocké en France (2 répliques)",
+    mockupMailBodyText: "Bonjour Alice,<br><br>Voici les pièces jointes chiffrées de notre audit annuel. Tout a été scellé directement depuis mon poste avec notre clé d'identité souveraine. Les fragments sont répliqués sur les nœuds souverains français et restent inaccessibles à tout tiers.<br><br>Bien cordialement,<br>Pierre",
 
     mockupFilesColName: "Fichier",
     mockupFilesColSize: "Taille",
@@ -68,14 +72,20 @@ const translations = {
     mockupProtected: "Protégé en France",
 
     mockupIdHeading1: "Identité active",
+    mockupIdSub1: "Compte souverain inaliénable enregistré par travail anti-Sybil.",
     mockupIdHeading2: "Clés Post-Quantiques",
+    mockupIdSub2: "Signature hybride active contre attaques quantiques.",
     mockupIdHeading3: "Restauration de compte",
-    mockupIdHeading4: "Souveraineté des données",
+    mockupIdSub3: "Permet de recréer l'identité sur un nouveau PC sans mot de passe ni SMS.",
+    mockupIdHeading4: "Moteur cryptographique standard",
+    mockupIdSub4: "Standards officiels NIST FIPS 203/204. Zéro cryptographie maison.",
 
-    mockupSecHeading1: "Chiffrement du transport (CYP2)",
-    mockupSecDesc1: "Tunnel TLS 1.3 strict avec négociation cryptographique moderne. Élimine tout risque d'interception sur Wi-Fi public ou inspection FAI (DPI).",
-    mockupSecHeading2: "Politique d'admission réseau",
-    mockupSecDesc2: "Trafic P2P public restreint exclusivement au territoire français via géolocalisation IP stricte. Failsafe fermé en cas de doute.",
+    mockupSecHeading1: "Cryptographie éprouvée OpenSSL v3.5.2+ (Zéro crypto maison)",
+    mockupSecDesc1: "CYBOU applique la règle d'or de la sécurité : \"Don't roll your own crypto\". Aucun algorithme inventé : tout s'appuie sur la bibliothèque officielle OpenSSL v3.5.2+ conforme aux standards NIST FIPS 203 et FIPS 204.",
+    mockupSecHeading2: "Transport P2P TLS 1.3 Post-Quantique",
+    mockupSecDesc2: "Tunnel TLS 1.3 avec groupe hybride X25519MLKEM768. Tout repli classique non-PQ est rejeté (fail-closed).",
+    mockupSecHeading3: "Souveraineté territoriale France",
+    mockupSecDesc3: "Trafic P2P public restreint à l'espace IP français (fail-closed). Immunité contre le US Cloud Act et FISA 702.",
 
     servicesLabel: "Services intégrés",
     servicesTitle: "Trois piliers pour votre indépendance numérique.",
@@ -83,7 +93,7 @@ const translations = {
 
     srvMailTag: "Messagerie",
     srvMailTitle: "CYBOU Mail — Votre boîte de réception inviolable",
-    srvMailDesc: "Ne laissez plus Google ou Microsoft analyser vos correspondances privées. Vos messages et pièces jointes sont chiffrés sur votre poste avec des clés post-quantiques et transmis via TLS 1.3. Zéro publicité, zéro profilage.",
+    srvMailDesc: "Ne laissez plus Google ou Microsoft analyser vos correspondances privées. Vos messages et pièces jointes sont chiffrés sur votre poste avec des clés post-quantiques et transmis via TLS 1.3 post-quantique. Zéro publicité, zéro profilage.",
     srvMailStatus: "Flux intégrés — acceptation Beta en cours",
 
     srvFilesTag: "Stockage",
@@ -110,21 +120,21 @@ const translations = {
     secTitle: "Une forteresse numérique de bout en bout.",
     secDesc: "De votre connexion Wi-Fi jusqu'au stockage de vos fichiers, découvrez pourquoi vos données sont réellement impénétrables.",
 
+    secOpensslTag: "Standard Mondial Audité",
+    secOpensslTitle: "Cryptographie Standard OpenSSL v3.5.2+ (Zéro crypto maison)",
+    secOpensslDesc: "La règle d'or en cybersécurité est formelle : ne jamais inventer sa propre cryptographie (« Don't roll your own crypto »). CYBOU n'utilise aucun algorithme expérimental fait maison. Tous les protocoles post-quantiques (ML-DSA-44, ML-DSA-65, ML-KEM-768) et symétriques sont fournis directement par la version officielle d'OpenSSL v3.5.2+, certifiée et conforme aux normes du NIST (FIPS 203 et FIPS 204).",
+
     secTlsTag: "Protection Réseau",
-    secTlsTitle: "Transport 100% Chiffré en TLS 1.3 (Protocole CYP2)",
-    secTlsDesc: "Que vous soyez sur le Wi-Fi public d'une gare, d'un hôtel ou sur votre box fibre domestique, chaque connexion entre votre application et le réseau est scellée par le standard TLS 1.3 le plus strict. Ni votre FAI (Orange, SFR, Free, Bouygues), ni un pirate sur le réseau local ne peuvent voir ce que vous transférez ni modifier un seul octet.",
+    secTlsTitle: "Transport 100% Chiffré en TLS 1.3 Post-Quantique (CYP2)",
+    secTlsDesc: "Chaque connexion réseau impose un échange de clés hybride post-quantique combinant X25519 et le standard NIST ML-KEM-768 (Kyber). Tout repli classique sans ML-KEM est refusé net. Ni votre FAI, ni un pirate sur le Wi-Fi public, ni de futurs calculateurs quantiques ne peuvent intercepter vos échanges.",
 
     secE2eeTag: "Confidentialité Totale",
-    secE2eeTitle: "Chiffrement Client de bout en bout",
-    secE2eeDesc: "Le TLS protège le transport, mais CYBOU protège aussi la donnée elle-même. Les messages et fichiers sont chiffrés sur votre processeur avec vos propres clés secrètes avant de partir. Même les nœuds du réseau ne voient que des données opaques et incompréhensibles.",
+    secE2eeTitle: "Chiffrement Client de bout en bout & Arbre BLAKE3",
+    secE2eeDesc: "Le TLS protège le transport, mais CYBOU protège aussi la donnée elle-même. Les messages et fichiers sont chiffrés sur votre processeur avec vos propres clés secrètes avant de partir. Le consensus de la chaîne n'enregistre aucun message, aucun nom de fichier, aucun destinataire : seuls des fragments chiffrés opaques existent.",
 
     secFranceTag: "Immunité Juridique",
     secFranceTitle: "Souveraineté Territoriale France & UE",
     secFranceDesc: "Zéro serveur aux États-Unis, zéro dépendance aux géants de la Silicon Valley. L'admission P2P publique est strictement limitée à la France avec contrôle géographique rigoureux (fail-closed). Vos données échappent totalement au US Cloud Act et à la FISA 702.",
-
-    secPqTag: "Prêt pour l'Avenir",
-    secPqTitle: "Bouclier Post-Quantique NIST (ML-DSA)",
-    secPqDesc: "Les futurs ordinateurs quantiques menacent de casser les chiffrements traditionnels (RSA, courbes elliptiques). CYBOU déploie dès aujourd'hui les algorithmes post-quantiques normalisés par le NIST (ML-DSA-44 et ML-DSA-65) pour garantir la sécurité de vos données pour les décennies à venir.",
 
     compLabel: "Comparatif objectif",
     compTitle: "CYBOU face aux géants du numérique.",
@@ -137,10 +147,14 @@ const translations = {
     compRow1Cybou: "Client-side obligatoire (Zero-Knowledge)",
     compRow1Google: "Chiffré sur serveurs Google (Google possède les clés)",
     compRow1AppleMs: "Chiffrement serveur avec clés détenues par l'éditeur",
+    compRowCryptoCrit: "Moteur et code cryptographique",
+    compRowCryptoCybou: "OpenSSL v3.5.2+ standard (Zéro crypto maison, NIST FIPS 203/204)",
+    compRowCryptoGoogle: "Propriétaire / Boîte noire serveur",
+    compRowCryptoAppleMs: "Propriétaire / Boîte noire serveur",
     compRow2Crit: "Sécurité du transport réseau",
-    compRow2Cybou: "Tunnel strict TLS 1.3 de bout en bout (CYP2)",
-    compRow2Google: "TLS vers centres de données Google",
-    compRow2AppleMs: "TLS vers centres de données US",
+    compRow2Cybou: "TLS 1.3 Hybride Post-Quantique (X25519 + ML-KEM-768)",
+    compRow2Google: "TLS classique (Vulnérable à l'enregistrement et déchiffrement quantique)",
+    compRow2AppleMs: "TLS classique (Algorithmes traditionnels vulnérables)",
     compRow3Crit: "Analyse des contenus pour pub / IA",
     compRow3Cybou: "Zéro analyse, zéro publicité, zéro entraînement IA",
     compRow3Google: "Indexation pour ciblage et entraînement d'algorithmes",
@@ -193,7 +207,7 @@ const translations = {
 
     factsheetHeading: "Paramètres canoniques de l'architecture CYBOU",
     dtTransport: "Transport P2P & Chiffrement",
-    ddTransport: "CYP2 encapsulé dans TLS 1.3 strict. SPKI pinning éphémère, zéro fuite de métadonnées de transport vers FAI/tiers.",
+    ddTransport: "CYP2 encapsulé dans TLS 1.3 post-quantique strict (groupe X25519MLKEM768 obligatoire, fail-closed). Moteur OpenSSL v3.5.2+ avec export de clé de session 32 octets liée aux preuves cryptographiques.",
     dtConsensus: "Finalité actuelle sur DEV",
     ddConsensus: "PoA hybride à un signataire exploité par CYBOU sur DEV. Les nœuds complets vérifient indépendamment ; pas de revendication BFT. Cible : PoA sur poste Central Authority.",
     dtBootstrap: "1 à 4 identités d'amorce",
@@ -209,9 +223,9 @@ const translations = {
     dtPublication: "Publication de contenu",
     ddPublication: "<code>RootPublication</code> générique. Mail, Files et Backup sont des schémas privés chiffrés, pas des opérations de consensus distinctes.",
     dtKeys: "Rôles cryptographiques",
-    ddKeys: "Identity recovery, Identity authorization, Identity KEM, PoA, Release Signing et Treasury sont des rôles séparés ; aucune signature de production classique seule.",
+    ddKeys: "Identity recovery, Identity authorization, Identity KEM, PoA, Release Signing et Treasury sont des rôles séparés ; moteur OpenSSL v3.5.2+ certifié.",
     dtStack: "Socle technique",
-    ddStack: "C++20, CMake, Qt 6, LevelDB, OpenSSL, BLAKE3 et transport CYP2 sur TLS 1.3.",
+    ddStack: "C++20, CMake, Qt 6, LevelDB, OpenSSL v3.5.2+, BLAKE3 et transport CYP2 sur TLS 1.3.",
 
     matrixLabel: "Transparence technique",
     matrixTitle: "Matrice d'implémentation.",
@@ -223,7 +237,7 @@ const translations = {
     col1Item2: "<strong>Finalité PoA :</strong> un signataire DEV dédié, journal anti-équivocation durable, arrêt de sécurité en cas de conflit et validation indépendante par les nœuds complets.",
     col1Item3: "<strong>RootPublication :</strong> opération générique autorisée par Identity ; aucun objet Mail ou fichier permanent dans le consensus.",
     col1Item4: "<strong>Arbre de contenu chiffré :</strong> chunks ROOT/INDEX/DATA ordonnés, adressés par BLAKE3-256 et construits pour le traitement en flux.",
-    col1Item5: "<strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et transport CYP2 sécurisé en TLS 1.3.",
+    col1Item5: "<strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et transport CYP2 sécurisé en TLS 1.3 post-quantique.",
     col1Item6: "<strong>Économie déterministe :</strong> frais et transitions de solde validés par le state machine ; DEV, Beta et Mainnet ont des paramètres distincts.",
 
     col2Title: "Durcissement et préparation Beta",
@@ -244,10 +258,13 @@ const translations = {
     faqTitle: "Comprendre CYBOU.",
     faqDesc: "Ce qui fonctionne sur DEV, ce qui reste à construire et les garanties de sécurité.",
     faqQ1: "Qu’est-ce que CYBOU en termes simples ?",
-    faqA1: "CYBOU est une suite logicielle souveraine réunissant messagerie privée (Mail), stockage de fichiers chiffré (Files) et gestionnaire d'identité (Identity). Vos données sont chiffrées sur votre ordinateur avant tout envoi et tout le transport réseau est protégé en TLS 1.3.",
-    faqTlsBadge: "Transport Chiffré",
-    faqQTls: "En quoi le transport chiffré en TLS 1.3 protège-t-il mes connexions sur Wi-Fi public ou chez mon FAI ?",
-    faqATls: "Toutes les communications entre pairs et nœuds CYBOU (protocole CYP2 v3) sont encapsulées dans un tunnel TLS 1.3 strict. Que vous utilisiez le Wi-Fi ouvert d'une gare, d'un café ou votre box internet à domicile, aucun tiers ni votre fournisseur d'accès (Orange, SFR, Free, Bouygues) ne peut intercepter, lire vos messages ou savoir quels fichiers vous échangez. L'inspection approfondie des paquets (DPI) est totalement inopérante.",
+    faqA1: "CYBOU est une suite logicielle souveraine réunissant messagerie privée (Mail), stockage de fichiers chiffré (Files) et gestionnaire d'identité (Identity). Vos données sont chiffrées sur votre ordinateur avant tout envoi et tout le transport réseau est protégé en TLS 1.3 post-quantique.",
+    faqTlsBadge: "Transport Post-Quantique",
+    faqQTls: "En quoi le transport TLS 1.3 de CYBOU est-il post-quantique et que protège-t-il ?",
+    faqATls: "Toutes les communications entre pairs et nœuds CYBOU (protocole CYP2 v3) utilisent un handshake TLS 1.3 avec le groupe d'échange de clés X25519MLKEM768. Cette négociation associe la cryptographie classique à ML-KEM-768 (standard NIST FIPS 203). Si un pair ne supporte pas ce mode post-quantique, la connexion est immédiatement interrompue. Cela protège vos transferts contre l'interception locale (Wi-Fi public, FAI) et contre la stratégie d'espionnage « Récolter maintenant, déchiffrer plus tard ».",
+    faqOpensslBadge: "Standard Audité",
+    faqQOpenssl: "Les algorithmes de CYBOU sont-ils développés en interne (« crypto maison ») ?",
+    faqAOpenssl: "Absolument pas. La règle d'or de la sécurité est formelle : « Don't roll your own crypto » (ne réinventez jamais la cryptographie). CYBOU s'appuie exclusivement sur la bibliothèque officielle OpenSSL v3.5.2+, internationalement auditée et éprouvée. Les primitives post-quantiques intégrées sont les standards officiels du NIST : ML-KEM-768 (FIPS 203) et ML-DSA-44/65 (FIPS 204). Vous bénéficiez ainsi d'une robustesse mathématique vérifiable, sans aucune boîte noire ni algorithme expérimental fait maison.",
     faqQ2: "En quoi CYBOU diffère-t-il de Gmail ou Google Drive ?",
     faqA2: "Contrairement à Google qui centralise vos données, possède les clés et scanne les contenus pour la publicité ou l'entraînement d'IA, CYBOU chiffre tout sur votre ordinateur. Aucun serveur ne peut lire vos emails ou fichiers, et tout le réseau public est localisé en France, à l'abri du Cloud Act américain.",
     faqQ3: "À quoi servent un nom .cybou et la phrase de récupération de 24 mots ?",
@@ -267,7 +284,7 @@ const translations = {
     footProdFiles: "CYBOU Files",
     footProdIdentity: "CYBOU Identity",
     footSec: "Sécurité & Souveraineté",
-    footSecTls: "Transport 100% TLS 1.3",
+    footSecTls: "Transport TLS 1.3 Post-Quantique",
     footSecE2ee: "Chiffrement client intégral",
     footSecFrance: "Réseau souverain France",
     footSecPq: "Résistance Post-Quantique",
@@ -288,9 +305,9 @@ const translations = {
     navFaq: "FAQ",
     menuLabel: "Menu",
 
-    heroTag: "100% TLS 1.3 Encrypted • France Sovereign • Post-Quantum",
+    heroTag: "Standard OpenSSL v3.5.2+ Cryptography • France Sovereign • NIST Post-Quantum",
     heroAccent: "Your sovereign private workspace. Mail, files, and identity.",
-    heroSubtitle: "CYBOU brings private messaging, file storage, and sovereign identity together into a protective desktop application. Your data is encrypted on your computer before leaving, and all network traffic is secured with TLS 1.3.",
+    heroSubtitle: "CYBOU brings private messaging, file storage, and sovereign identity together into a protective desktop application. Zero homemade crypto: all cryptography relies on official OpenSSL v3.5.2+ and NIST post-quantum standards.",
     heroPillSlogan: "A sovereign suite protecting your privacy — without ad tracking or surveillance.",
 
     statusCalloutTitle: "DEV protocol operational. Hardening for public release.",
@@ -299,33 +316,36 @@ const translations = {
     heroBtnShowcase: "Explore the Desktop App",
     heroBtnSecurity: "Why CYBOU?",
 
-    badgeTls: "100% TLS 1.3 Transport (Anti Wi-Fi/ISP interception)",
+    badgeOpenssl: "OpenSSL v3.5.2+ Engine (Zero Homemade Crypto)",
     badgeFrance: "France Sovereign Network (Immune to US Cloud Act)",
+    badgeTls: "Post-Quantum TLS 1.3 Transport (CYP2)",
     badgePhrase: "Zero Passwords / 24-Word Master Key",
-    badgePq: "NIST Post-Quantum Shield",
     badgeNoAds: "Zero Tracking & Zero Ads",
 
     showcaseLabel: "Application Preview",
     showcaseTitle: "The CYBOU Desktop Experience.",
     showcaseDesc: "A unified and intuitive interface bringing your communications, files, and identity together under continuous cryptographic protection.",
-    mockupStatusTls: "Connected via TLS 1.3",
+    mockupStatus: "Connected • France Network (2 replicas)",
     mockupNetworkFr: "France sovereign node",
     mockupTabMail: "Mail",
     mockupTabFiles: "Files",
     mockupTabId: "Identity",
     mockupTabSec: "Security & Network",
+    mockupTabSecBadge: "12 FR peers",
 
     mockupMailFrom1: "Pierre Martin",
-    mockupMailSub1: "Confidential Documents 2026",
-    mockupMailSnip1: "Hello Alice, here are the encrypted files you requested...",
-    mockupBadgeE2ee: "Client Encrypted • TLS 1.3",
+    mockupMailSub1: "Confidential Audit Records 2026",
+    mockupMailSnip1: "Hello Alice, here are the requested encrypted files...",
+    mockupBadgeE2ee: "E2EE Encrypted • Protected",
     mockupMailFrom2: "Legal Advisory",
     mockupMailSub2: "Signed Partnership Agreement",
     mockupMailSnip2: "The document has been validated and sealed with hybrid signature...",
-    mockupBadgePq: "ML-DSA Signature",
-    mockupMailBodyTitle: "Tax & Accounting Records 2026",
-    mockupBadgeTlsPill: "TLS 1.3 Certified Transport",
-    mockupMailBodyText: "Hello Alice,<br><br>Here are the encrypted attachments for our annual report. Thanks to the CYBOU protocol, this transmission traveled directly over TLS 1.3 encrypted links. No third-party server, no ISP, and no advertising bot could read a single word of our exchange.<br><br>Best regards,<br>Pierre",
+    mockupBadgePq: "ML-DSA-44 Signature",
+    mockupMailBodyTitle: "Confidential Audit Records 2026",
+    mockupReaderBadge1: "E2EE Client Encryption",
+    mockupReaderBadge2: "Signed ML-DSA-44 • Verified",
+    mockupReaderBadge3: "Stored in France (2 replicas)",
+    mockupMailBodyText: "Hello Alice,<br><br>Here are the encrypted attachments for our annual audit. Everything was sealed directly from my computer using our sovereign identity key. The chunks are replicated across sovereign French nodes and remain inaccessible to any third party.<br><br>Best regards,<br>Pierre",
 
     mockupFilesColName: "File Name",
     mockupFilesColSize: "Size",
@@ -334,14 +354,20 @@ const translations = {
     mockupProtected: "Protected in France",
 
     mockupIdHeading1: "Active Identity",
+    mockupIdSub1: "Permanent sovereign account registered with anti-Sybil proof-of-work.",
     mockupIdHeading2: "Post-Quantum Keys",
+    mockupIdSub2: "Hybrid signatures active against future quantum threats.",
     mockupIdHeading3: "Account Recovery",
-    mockupIdHeading4: "Data Sovereignty",
+    mockupIdSub3: "Reconstructs your identity on a new PC without passwords or SMS codes.",
+    mockupIdHeading4: "Standard Crypto Engine",
+    mockupIdSub4: "Official NIST FIPS 203/204 standards. Zero homemade crypto.",
 
-    mockupSecHeading1: "Transport Encryption (CYP2)",
-    mockupSecDesc1: "Strict TLS 1.3 tunnel with modern cipher negotiation. Eliminates any risk of public Wi-Fi snooping or ISP Deep Packet Inspection (DPI).",
-    mockupSecHeading2: "Network Admission Policy",
-    mockupSecDesc2: "Public P2P traffic strictly restricted to French IP space using local geolocation. Fails closed on uncertainty.",
+    mockupSecHeading1: "Battle-Tested OpenSSL v3.5.2+ (Zero Homemade Crypto)",
+    mockupSecDesc1: "CYBOU follows the golden rule of cybersecurity: \"Don't roll your own crypto\". No custom math: all algorithms rely directly on OpenSSL v3.5.2+ compliant with NIST FIPS 203 and FIPS 204 standards.",
+    mockupSecHeading2: "Post-Quantum TLS 1.3 P2P Transport",
+    mockupSecDesc2: "TLS 1.3 tunnel with hybrid X25519MLKEM768 group. Any classical fallback is strictly rejected (fails closed).",
+    mockupSecHeading3: "Territorial France Sovereignty",
+    mockupSecDesc3: "Public P2P traffic strictly restricted to French IP space (fails closed). Immune to US Cloud Act and FISA 702.",
 
     servicesLabel: "Integrated Services",
     servicesTitle: "Three Pillars for Your Digital Independence.",
@@ -376,21 +402,21 @@ const translations = {
     secTitle: "An End-to-End Digital Fortress.",
     secDesc: "From your local Wi-Fi connection down to file storage, discover why your data is truly impenetrable.",
 
+    secOpensslTag: "Audited Global Standard",
+    secOpensslTitle: "Standard OpenSSL v3.5.2+ Cryptography (Zero Homemade Crypto)",
+    secOpensslDesc: "The golden rule in cybersecurity is clear: never invent your own cryptography (\"Don't roll your own crypto\"). CYBOU uses zero experimental or homemade crypto code. All post-quantum algorithms (ML-DSA-44, ML-DSA-65, ML-KEM-768) and symmetric primitives are powered by official OpenSSL v3.5.2+, certified and strictly compliant with NIST FIPS 203 and FIPS 204.",
+
     secTlsTag: "Network Protection",
-    secTlsTitle: "100% TLS 1.3 Encrypted Transport (CYP2 Protocol)",
-    secTlsDesc: "Whether you are on public Wi-Fi at a train station or hotel, or on your home fiber connection, every link between your app and the network is sealed by strict TLS 1.3. Neither your ISP nor an attacker on the local network can inspect what you transfer or alter a single byte.",
+    secTlsTitle: "100% Post-Quantum TLS 1.3 Encrypted Transport (CYP2)",
+    secTlsDesc: "Every network connection enforces a post-quantum hybrid key exchange combining X25519 and NIST ML-KEM-768 (Kyber). Any classical fallback without ML-KEM is rejected. Neither your ISP, nor Wi-Fi eavesdroppers, nor future quantum supercomputers can decrypt your traffic.",
 
     secE2eeTag: "Zero-Knowledge Privacy",
-    secE2eeTitle: "End-to-End Client Encryption",
-    secE2eeDesc: "TLS protects the wire, but CYBOU also protects the data itself. Messages and files are encrypted on your CPU with your private keys before departure. Even network relay nodes see only opaque, indecipherable bytes.",
+    secE2eeTitle: "End-to-End Client Encryption & BLAKE3 Chunking",
+    secE2eeDesc: "TLS protects the wire, but CYBOU also protects the data itself. Messages and files are encrypted on your CPU with private keys before departure. The blockchain consensus stores zero emails, zero file names, zero recipients: only opaque encrypted chunks exist.",
 
     secFranceTag: "Legal Immunity",
     secFranceTitle: "Territorial Sovereignty France & EU",
     secFranceDesc: "Zero servers in the US, zero dependence on Silicon Valley giants. Public P2P admission is strictly confined to France with rigorous geolocation enforcement (fails closed). Your data is fully immune to the US Cloud Act and FISA 702.",
-
-    secPqTag: "Future Proof",
-    secPqTitle: "NIST Post-Quantum Shield (ML-DSA)",
-    secPqDesc: "Future quantum computers will break traditional encryption (RSA, elliptic curves). CYBOU integrates NIST-standardized post-quantum algorithms (ML-DSA-44 and ML-DSA-65) today to ensure your security for decades to come.",
 
     compLabel: "Objective Comparison",
     compTitle: "CYBOU vs Big Tech.",
@@ -403,8 +429,12 @@ const translations = {
     compRow1Cybou: "Mandatory Client-side (Zero-Knowledge)",
     compRow1Google: "Server-side encryption (Google holds keys)",
     compRow1AppleMs: "Server encryption with vendor-held keys",
+    compRowCryptoCrit: "Cryptographic Engine & Code",
+    compRowCryptoCybou: "Standard OpenSSL v3.5.2+ (Zero homemade crypto, NIST FIPS 203/204)",
+    compRowCryptoGoogle: "Proprietary / Server black-box",
+    compRowCryptoAppleMs: "Proprietary / Server black-box",
     compRow2Crit: "Network Transport Security",
-    compRow2Cybou: "Strict end-to-end TLS 1.3 tunnel (CYP2)",
+    compRow2Cybou: "TLS 1.3 Hybride Post-Quantique (X25519 + ML-KEM-768)",
     compRow2Google: "TLS to Google datacenters",
     compRow2AppleMs: "TLS to US datacenters",
     compRow3Crit: "Content scanning for ads / AI",
@@ -459,7 +489,7 @@ const translations = {
 
     factsheetHeading: "Canonical CYBOU Architecture Parameters",
     dtTransport: "P2P Transport & Encryption",
-    ddTransport: "CYP2 encapsulated in strict TLS 1.3. Ephemeral SPKI pinning, zero transport metadata leakage to ISPs or third parties.",
+    ddTransport: "CYP2 encapsulated in strict post-quantum TLS 1.3 (mandatory X25519MLKEM768 group, fails closed). Powered by OpenSSL v3.5.2+ with 32-byte session key export bound to crypto proofs.",
     dtConsensus: "Current DEV finality",
     ddConsensus: "Hybrid PoA with one signer operated by CYBOU on DEV. Full nodes independently verify; no BFT claim. Target: Central Authority desktop finalizer.",
     dtBootstrap: "1–4 bootstrap Identities",
@@ -475,9 +505,9 @@ const translations = {
     dtPublication: "Content publication",
     ddPublication: "Generic <code>RootPublication</code>. Mail, Files, and Backup are private encrypted schemas, not separate consensus operations.",
     dtKeys: "Cryptographic key roles",
-    ddKeys: "Identity recovery, Identity authorization, Identity KEM, PoA, Release Signing, and Treasury are separate roles; no classical-only production signature.",
+    ddKeys: "Identity recovery, Identity authorization, Identity KEM, PoA, Release Signing, and Treasury are separate roles; official OpenSSL v3.5.2+ certified engine.",
     dtStack: "Technology stack",
-    ddStack: "C++20, CMake, Qt 6, LevelDB, OpenSSL, BLAKE3, and CYP2 transport over TLS 1.3.",
+    ddStack: "C++20, CMake, Qt 6, LevelDB, OpenSSL v3.5.2+, BLAKE3, and CYP2 transport over TLS 1.3.",
 
     matrixLabel: "Technical Transparency",
     matrixTitle: "Implementation Matrix.",
@@ -510,10 +540,13 @@ const translations = {
     faqTitle: "Understanding CYBOU.",
     faqDesc: "What runs on DEV, what still needs to be built, and security guarantees.",
     faqQ1: "What is CYBOU in simple terms?",
-    faqA1: "CYBOU is a sovereign desktop privacy suite combining private messaging (Mail), encrypted cloud storage (Files), and an identity manager (Identity). Your data is encrypted on your machine before being sent, and all network transport is protected with TLS 1.3.",
+    faqA1: "CYBOU is a sovereign desktop privacy suite combining private messaging (Mail), encrypted cloud storage (Files), and an identity manager (Identity). Your data is encrypted on your machine before being sent, and all network transport is protected with post-quantum TLS 1.3.",
     faqTlsBadge: "Encrypted Transport",
-    faqQTls: "How does TLS 1.3 transport encryption protect my connections on public Wi-Fi or with my ISP?",
-    faqATls: "All communications between CYBOU peers and nodes (CYP2 protocol v3) are sealed inside a strict TLS 1.3 tunnel. Whether you use public Wi-Fi at a train station or hotel, or your home fiber internet, no third party or ISP can intercept or read your messages or know what files you transfer. Deep Packet Inspection (DPI) is completely blocked.",
+    faqQTls: "How does post-quantum TLS 1.3 protect my connections on public Wi-Fi or with my ISP?",
+    faqATls: "All communications between CYBOU peers and nodes (CYP2 protocol v3) are sealed inside a strict post-quantum TLS 1.3 tunnel with X25519MLKEM768 key exchange. Whether you use public Wi-Fi at a train station or hotel, or your home fiber internet, no third party or ISP can intercept or read your messages or know what files you transfer. Deep Packet Inspection (DPI) and quantum recording are completely blocked.",
+    faqOpensslBadge: "Audited Standard",
+    faqQOpenssl: "Are CYBOU's cryptographic algorithms developed in-house (\"homemade crypto\")?",
+    faqAOpenssl: "Absolutely not. The primary rule of cybersecurity is: \"Don't roll your own crypto\" (never reinvent cryptography). CYBOU relies exclusively on the official OpenSSL v3.5.2+ library, globally audited and battle-tested. The post-quantum primitives are official NIST standards: ML-KEM-768 (FIPS 203) and ML-DSA-44/65 (FIPS 204). You get proven mathematical robustness without black boxes or uncertified code.",
     faqQ2: "How is CYBOU different from Gmail or Google Drive?",
     faqA2: "Unlike Google which centralizes your data, holds the decryption keys, and scans contents for advertising or AI model training, CYBOU encrypts everything directly on your computer. No server can read your emails or files, and the entire public network is based in France, shielded from the US Cloud Act.",
     faqQ3: "What do .cybou names and the 24-word recovery phrase do?",
@@ -676,3 +709,200 @@ function setLanguage(lang, updateUrl = false) {
     });
   }
 }
+
+// --- DeepTech Reactive Particle Canvas (Hero Network Visualizer) ---
+function initHeroParticles() {
+  const canvas = document.getElementById('hero-particles');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const heroSection = document.getElementById('hero');
+  let width = 0;
+  let height = 0;
+  let dpr = 1;
+  let animationFrameId = null;
+  let isVisible = true;
+
+  const mouse = { x: -9999, y: -9999, maxDistance: 140 };
+  const particleCount = 48;
+  const particles = [];
+  const maxConnectionDistance = 115;
+
+  function resize() {
+    if (!heroSection) return;
+    dpr = window.devicePixelRatio || 1;
+    width = heroSection.clientWidth;
+    height = heroSection.clientHeight;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function createParticles() {
+    particles.length = 0;
+    for (let i = 0; i < particleCount; i++) {
+      particles.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.42,
+        vy: (Math.random() - 0.5) * 0.42,
+        radius: Math.random() * 1.6 + 1.2,
+        baseAlpha: Math.random() * 0.28 + 0.22,
+        pulseSpeed: Math.random() * 0.02 + 0.01,
+        pulsePhase: Math.random() * Math.PI * 2
+      });
+    }
+  }
+
+  function onPointerMove(e) {
+    const rect = heroSection.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
+  }
+
+  function onPointerLeave() {
+    mouse.x = -9999;
+    mouse.y = -9999;
+  }
+
+  if (heroSection) {
+    heroSection.addEventListener('pointermove', onPointerMove, { passive: true });
+    heroSection.addEventListener('pointerleave', onPointerLeave, { passive: true });
+  }
+
+  function draw() {
+    if (!isVisible) return;
+    ctx.clearRect(0, 0, width, height);
+
+    const time = Date.now() * 0.001;
+
+    // 1. Draw connection lines between nearby cryptographic nodes
+    for (let i = 0; i < particles.length; i++) {
+      const p1 = particles[i];
+
+      for (let j = i + 1; j < particles.length; j++) {
+        const p2 = particles[j];
+        const dx = p1.x - p2.x;
+        const dy = p1.y - p2.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < maxConnectionDistance) {
+          const lineAlpha = (1 - dist / maxConnectionDistance) * 0.22;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.strokeStyle = `rgba(5, 150, 105, ${lineAlpha})`;
+          ctx.lineWidth = 0.85;
+          ctx.stroke();
+        }
+      }
+
+      // 2. Interactive line to cursor when nearby
+      const dxM = p1.x - mouse.x;
+      const dyM = p1.y - mouse.y;
+      const distM = Math.hypot(dxM, dyM);
+      if (distM < mouse.maxDistance) {
+        const mAlpha = (1 - distM / mouse.maxDistance) * 0.32;
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(mouse.x, mouse.y);
+        ctx.strokeStyle = `rgba(52, 211, 153, ${mAlpha})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
+    // 3. Update and draw nodes
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+
+      // Gentle interactive gravity towards cursor
+      const dx = mouse.x - p.x;
+      const dy = mouse.y - p.y;
+      const distMouse = Math.hypot(dx, dy);
+      if (distMouse < mouse.maxDistance && distMouse > 1) {
+        const force = (1 - distMouse / mouse.maxDistance) * 0.04;
+        p.vx += (dx / distMouse) * force;
+        p.vy += (dy / distMouse) * force;
+      }
+
+      // Movement
+      p.x += p.vx;
+      p.y += p.vy;
+
+      // Damping
+      p.vx *= 0.992;
+      p.vy *= 0.992;
+
+      // Soft bounce on canvas borders
+      if (p.x < 0) { p.x = 0; p.vx *= -1; }
+      else if (p.x > width) { p.x = width; p.vx *= -1; }
+      if (p.y < 0) { p.y = 0; p.vy *= -1; }
+      else if (p.y > height) { p.y = height; p.vy *= -1; }
+
+      // Breathing node pulse
+      const alpha = p.baseAlpha + Math.sin(time * 2 + p.pulsePhase) * 0.1;
+
+      // Soft ambient aura
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius * 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(52, 211, 153, ${Math.max(0.02, alpha * 0.28)})`;
+      ctx.fill();
+
+      // Sharp central node
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(5, 150, 105, ${Math.max(0.12, alpha)})`;
+      ctx.fill();
+    }
+
+    animationFrameId = requestAnimationFrame(draw);
+  }
+
+  resize();
+  createParticles();
+  animationFrameId = requestAnimationFrame(draw);
+
+  // Resize handler
+  let resizeTimeout;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      resize();
+      createParticles();
+    }, 120);
+  });
+
+  // IntersectionObserver to conserve resources when out of view
+  if ('IntersectionObserver' in window && heroSection) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          if (!isVisible) {
+            isVisible = true;
+            animationFrameId = requestAnimationFrame(draw);
+          }
+        } else {
+          isVisible = false;
+          if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        }
+      });
+    }, { threshold: 0.05 });
+    observer.observe(heroSection);
+  }
+
+  // Page visibility API
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      isVisible = false;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    } else {
+      isVisible = true;
+      animationFrameId = requestAnimationFrame(draw);
+    }
+  });
+}
+
