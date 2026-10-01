@@ -8,6 +8,9 @@
 !/build-aux
 !/build_msvc
 
+# Local artifacts from the retired depends build system.
+/depends/
+
 *.pyc
 
 # Only ignore unexpected patches
