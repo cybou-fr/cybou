@@ -30,7 +30,7 @@ std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
         .finalized_tip = status.finalized_tip,
         .capabilities = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY |
             (runtime.HasStorageProvider() ? CAP_STORAGE | CAP_STORAGE_PROOFS : 0) |
-            (status.is_finalizer ? (CAP_ACCEPT_OPERATIONS) : 0),
+            (status.is_finalizer ? CAP_ACCEPT_OPERATIONS : 0),
         .nonce = nonce};
 }
 
@@ -57,18 +57,26 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
             continue;
         }
         if (ec) { stopping = true; break; }
+        const auto remote=socket.remote_endpoint(ec);
+        if (ec || !m_runtime.AdmitIngress(remote.address().to_string(),IngressBudget::Work::CONNECTION)) {
+            socket.close(); continue;
+        }
         if (m_workers.size() >= MAX_INBOUND_PEERS) {
             socket.close();
             continue;
         }
         auto done = std::make_shared<std::atomic_bool>(false);
         m_workers.push_back(Worker{done, std::jthread{[this, &stopping, done, socket = std::move(socket)]() mutable {
-            PeerSession session{std::move(socket)};
+            PeerSession session{std::move(socket), TransportRole::SERVER};
             const auto hello = LocalHello(m_runtime);
             const auto signer = [this](std::span<const unsigned char> message) {
                 return m_runtime.SignProviderProof(message);
             };
-            if (hello && session.Handshake(*hello, signer) &&
+            const auto finalizer_signer = [this](std::span<const unsigned char> message) {
+                return m_runtime.SignFinalizerTransportProof(message);
+            };
+            if (hello && session.Handshake(*hello, signer, finalizer_signer,
+                    &m_runtime.GetNetworkDefinition().poa_finalizer_public_key) &&
                 MatchesKnownFinalizedChain(m_runtime, *session.Peer())) {
                 while (!stopping && session.ServeNext(m_runtime)) {}
             }

@@ -200,14 +200,9 @@ uint256 NetworkId(const CybouNetworkDefinition& definition)
     return result;
 }
 
-std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path& path)
+std::optional<CybouNetworkFile> DeserializeCybouNetworkFile(const std::span<const unsigned char> bytes)
 {
-    std::error_code ec;
-    const auto size = std::filesystem::file_size(path, ec);
-    if (ec || size < 12 || size > 16 * 1024 * 1024) return std::nullopt;
-    std::vector<unsigned char> bytes(size);
-    std::ifstream file(path, std::ios::binary);
-    if (!file || !file.read(reinterpret_cast<char*>(bytes.data()), bytes.size()) ||
+    if (bytes.size() < 12 || bytes.size() > 16 * 1024 * 1024 ||
         !std::equal(bytes.begin(), bytes.begin() + 4, "CYN1")) return std::nullopt;
     const auto read_u32 = [&bytes](size_t offset) {
         uint32_t value{0};
@@ -228,6 +223,17 @@ std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path
         return std::nullopt;
     }
     return CybouNetworkFile{*definition, *genesis};
+}
+
+std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path& path)
+{
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(path, ec);
+    if (ec || size < 12 || size > 16 * 1024 * 1024) return std::nullopt;
+    std::vector<unsigned char> bytes(size);
+    std::ifstream file(path, std::ios::binary);
+    if (!file || !file.read(reinterpret_cast<char*>(bytes.data()), bytes.size())) return std::nullopt;
+    return DeserializeCybouNetworkFile(bytes);
 }
 
 CybouState CreateDevGenesisState()

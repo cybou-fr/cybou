@@ -211,6 +211,7 @@ add_library(cybou_node STATIC
   cybou/storage_service.cpp
   cybou/application_service.cpp
   cybou/authority.cpp
+  cybou/secret_file.cpp
   cybou/poa_conflict_detector.cpp
   cybou/poa_finalizer.cpp
   cybou/poa_signing_journal.cpp
@@ -241,6 +242,7 @@ target_link_libraries(cybou_node
     $<TARGET_NAME_IF_EXISTS:libevent::core>
     $<TARGET_NAME_IF_EXISTS:libevent::extra>
     OpenSSL::Crypto
+    OpenSSL::SSL
     $<$<PLATFORM_ID:Windows>:crypt32>
 )
 

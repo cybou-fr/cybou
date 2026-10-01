@@ -72,11 +72,20 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             acceptor.accept(socket);
             // Model a lost acknowledgment: handshake as an operation-accepting
             // finalizer, then drop the session without answering.
-            cybou::p2p::PeerSession session{std::move(socket)};
+            cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+            const auto signer = [&validator_seed](std::span<const unsigned char> message) -> std::optional<std::vector<unsigned char>> {
+                const auto signature = cybou::SignIdentityMessage(validator_seed,
+                    cybou::IdentityKeyPurpose::POA_FINALIZER, message);
+                if (!signature) return std::nullopt;
+                std::vector<unsigned char> proof(signature->ed25519.begin(), signature->ed25519.end());
+                proof.insert(proof.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
+                return proof;
+            };
             (void)session.Handshake({.network_id = network_id, .finalized_height = 1,
                 .finalized_tip = cybou::ComputeBlockId(account_block->block),
                 .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_ACCEPT_OPERATIONS,
-                .nonce = static_cast<std::uint64_t>(4100 + attempt)});
+                .nonce = static_cast<std::uint64_t>(4100 + attempt)}, {}, signer,
+                &definition.poa_finalizer_public_key);
             std::this_thread::sleep_for(std::chrono::milliseconds{200});
         }
     });

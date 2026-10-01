@@ -78,6 +78,7 @@ public:
     /** Finalize the pending batch, including an empty block when the queue is empty. */
     BlockProductionResult ProduceNextBlock(bool sync = true);
     bool SafetyHalted() const;
+    std::optional<IdentityHybridSignature> SignTransportProof(std::span<const unsigned char> message) const;
 
 private:
     CybouStateStore& m_store;

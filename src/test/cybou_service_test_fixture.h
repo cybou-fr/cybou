@@ -6,6 +6,7 @@
 
 #include <cybou/identity_service.h>
 #include <cybou/network_definition.h>
+#include <cybou/p2p/session.h>
 #include <test/cybou_test_helpers.h>
 
 #include <array>
@@ -64,6 +65,24 @@ struct CybouServiceTestFixture {
             throw std::runtime_error("account creation failed");
         }
         return service;
+    }
+
+    std::optional<std::vector<unsigned char>> SignFinalizerTransportProof(
+        std::span<const unsigned char> message) const
+    {
+        const auto signature = cybou::SignIdentityMessage(validator_seed,
+            cybou::IdentityKeyPurpose::POA_FINALIZER, message);
+        if (!signature || signature->ml_dsa.size() != 3309) return std::nullopt;
+        std::vector<unsigned char> proof(signature->ed25519.begin(), signature->ed25519.end());
+        proof.insert(proof.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
+        return proof;
+    }
+
+    bool HandshakeAsFinalizer(cybou::p2p::PeerSession& session, const cybou::p2p::Hello& hello) const
+    {
+        return session.Handshake(hello, {},
+            [this](std::span<const unsigned char> message) { return SignFinalizerTransportProof(message); },
+            &definition.poa_finalizer_public_key);
     }
 };
 

@@ -94,4 +94,11 @@ PoaSigningResult PoaFinalizer::SignFinality(const uint64_t finalized_height,
     };
 }
 
+std::optional<IdentityHybridSignature> PoaFinalizer::SignTransportProof(
+    const std::span<const unsigned char> message) const
+{
+    if (message.empty() || m_journal.SafetyHalted()) return std::nullopt;
+    return SignIdentityMessage(m_operator_recovery_entropy, IdentityKeyPurpose::POA_FINALIZER, message);
+}
+
 } // namespace cybou

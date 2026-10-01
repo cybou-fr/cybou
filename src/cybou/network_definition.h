@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace cybou {
@@ -55,6 +56,7 @@ struct CybouNetworkFile {
     CybouState genesis;
 };
 
+std::optional<CybouNetworkFile> DeserializeCybouNetworkFile(std::span<const unsigned char> bytes);
 std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path& path);
 
 uint256 ComputeGenesisBlockId(const uint256& state_root, const IdentityHybridPublicKey& poa_finalizer_public_key);

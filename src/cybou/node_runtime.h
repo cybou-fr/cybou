@@ -10,6 +10,7 @@
 #include <cybou/protocol_limits.h>
 #include <cybou/sync_result.h>
 #include <cybou/network_definition.h>
+#include <cybou/p2p/ingress_budget.h>
 #include <cybou/state_store.h>
 #include <cybou/chunk_retention.h>
 #include <cybou/finalized_chunk_store.h>
@@ -209,6 +210,7 @@ public:
     std::optional<std::array<unsigned char, 32>> LocalProviderId() const;
     /** Encoded PROVIDER_PROOF for a handshake message; nullopt unless storage is enabled. */
     std::optional<std::vector<unsigned char>> SignProviderProof(std::span<const unsigned char> message) const;
+    std::optional<std::vector<unsigned char>> SignFinalizerTransportProof(std::span<const unsigned char> message) const;
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStoragePeer(
         const std::string& address, uint16_t port, const std::array<unsigned char, 32>& provider_id,
         const uint256& publication_operation_id, const ChunkId& chunk_id);
@@ -217,6 +219,9 @@ public:
     bool CanSubmitOperations() const;
 
     /** Peer discovery endpoints */
+    /** Local pre-parse abuse limiter; it has no protocol or Authority effect. */
+    bool AdmitIngress(const std::string& address, p2p::IngressBudget::Work work, size_t bytes = 0)
+    { return m_ingress.Admit(address, work, bytes); }
     std::vector<std::pair<std::string, uint16_t>> GetPeerEndpointsForGossip() const;
     /**
      * Replace the explicit peer endpoints supplied by the operator.
@@ -268,6 +273,7 @@ private:
     std::vector<PeerDiagnostics> m_service_peers;
     using Endpoint = std::pair<std::string, uint16_t>;
     std::set<Endpoint> m_explicit_peer_endpoints;
+    p2p::IngressBudget m_ingress;
     std::set<Endpoint> m_discovered_peer_endpoints;
 };
 

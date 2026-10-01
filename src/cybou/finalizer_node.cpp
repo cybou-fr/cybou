@@ -93,4 +93,11 @@ bool CybouFinalizerNode::SafetyHalted() const
     return m_store.PoaSafetyHalted() || m_finalizer->SafetyHalted();
 }
 
+std::optional<IdentityHybridSignature> CybouFinalizerNode::SignTransportProof(
+    const std::span<const unsigned char> message) const
+{
+    if (SafetyHalted()) return std::nullopt;
+    return m_finalizer->SignTransportProof(message);
+}
+
 } // namespace cybou
