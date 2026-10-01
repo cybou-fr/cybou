@@ -10,7 +10,7 @@ editing an included file.
 |---|---:|---|
 | AGENTS.md | 176 | 686b94ea00f2d1ac |
 | CONTRIBUTING.md | 49 | bf30b703d800d63c |
-| INSTALL.md | 37 | 836eee88885dfa41 |
+| INSTALL.md | 37 | 999e1208b3440350 |
 | README.md | 138 | 42cba454681879a6 |
 | SECURITY.md | 57 | 96f65f343afaa06e |
 | docs/cybou/00_VISION.md | 72 | 2cba76b0edaf59a4 |

@@ -13,7 +13,7 @@ The repository pins third-party dependencies in [`vcpkg.json`](vcpkg.json). A ge
 
 ## Windows desktop and core
 
-The currently verified local setup is **Qt MinGW + vcpkg**, documented step by step in [the Windows build procedure](docs/cybou/71_WINDOWS_MINGW_BUILD.md). It configures `build_cybou_qt_mingw` with `BUILD_GUI=ON`, `BUILD_TESTS=ON`, and wallet/IPC disabled.
+The currently verified local setup is **Qt MinGW + vcpkg**, documented step by step in [the Windows build procedure](docs/cybou/71_WINDOWS_MINGW_BUILD.md). It configures `build_cybou_qt_mingw` with `BUILD_GUI=ON` and `BUILD_TESTS=ON`.
 
 After following that procedure, build the native targets:
 
