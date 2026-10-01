@@ -33,7 +33,9 @@ separately run the storage capability and satisfy the same finalized
 RootPublication rules as any provider.
 
 ```text
-all participants: same full-node software
+TARGET ARCHITECTURE: ordinary CybouNode full node + optional bootstrap capability
+CURRENT IMPLEMENTATION PROTOTYPE: cybou-bootstrap executable (transitional prototype only)
+
 1–4 genesis-authorized Identities: optional bootstrap capability
 Central Authority desktop: full node + unlocked Identity + PoA finalizer
 any node: optional storage and advisory Validation capabilities
@@ -224,61 +226,10 @@ following exist and pass:
   genesis created from the Central Authority desktop and retires the legacy
   VPS finalizer/provider services.
 
-The CYP2 direct-peer foundation is implemented: an operation-accepting peer
-proves the genesis finalizer key over the live TLS-exporter-bound handshake,
-and the peer manager exposes that role only on its current session. This does
-not implement the bootstrap service, outbound Authority route, operation relay,
-or any of the cutover requirements above.
+For the current implementation prototype (`cybou-bootstrap` utility, LevelDB store, v8 prototype state vs v9 target schema, and open cutover gates), see [`26_IMPLEMENTATION_STATUS.md`](26_IMPLEMENTATION_STATUS.md).
 
-The public network-file format has a canonical serializer, and a `CYBB1`
-NetworkBinding envelope can be signed by and verified against the genesis PoA
-key. Verification checks the exact file hash, NetworkID, genesis contents,
-display name, and generation. The core now also has a durable LevelDB
-`EMPTY`/`BOUND` store: provisioning generates a 256-bit one-use activation
-code, stores only its domain-separated hash, and an initial claim atomically
-stores generation 1 while consuming the code. Reopening validates the stored
-binding and state, and concurrent claims serialize through the store lock.
-The core now has a bounded STATUS/CLAIM/REPLACE protocol handler and a
-`cybou-bootstrap provision|serve` executable. Bootstrap exchanges use a
-persistent server TLS identity and require the client's SPKI SHA-256 pin for
-initial contact; they deliberately do not send HELLO because an empty network
-has no NetworkID to put in HELLO. The persistent certificate is only an
-initial locator trust anchor, not bootstrap authority. Configuring the target
-endpoint and distributing its pin through a trusted release or approved
-out-of-band path remain deployment work. A client-side
-durable binding pin is also implemented: first acceptance requires an
-explicit trust write, later generations must increase, same-generation
-responses must be byte-identical, and a changed genesis finalizer key is
-rejected. Signed key
-replacement now has a signed data format and durable-store primitive: the
-current key authorizes the exact next binding, the new key signs that binding,
-and one synchronous batch archives the prior binding and advances current
-state. The service accepts that dual-signed replacement and returns the new
-binding. Durable client-side acceptance in the bootstrap exchange and database
-rollback/recovery remain unimplemented.
-
-The current implementation prototype uses RecoveryKeyID-keyed grants and
-claims them into stable AccountID state. A state with no grants retains the
-exact prior v7 encoding and state root; v8 is emitted only when grants exist.
-This is not the revised target schema, which binds AccountID and expected
-RecoveryKeyID directly and requires v9 for grant-bearing genesis. CYP2 currently defines
-`CAP_BOOTSTRAP` and an exporter/HELLO/AccountID-bound proof checked against the
-current Authorization key resolved from a claimed genesis grant. Runtime APIs
-accept an external unlocked-Identity signer and resolve remote role keys from
-canonical state. A pinned-TLS challenge/response primitive now verifies the
-bootstrap Recovery key against the same TLS exporter and fresh challenge.
-Vault integration, initial locator values, and the network-creation client
-are still pending.
-
-The existing endpoint implementation is a transitional milestone only.
-Authority outbound sessions, multi-bootstrap relays/history, client
-application flows, pin distribution, France-only peer admission, and the
-acceptance tests and coordinated DEV cutover remain incomplete. The DEV VPS
-continues to run its existing legacy finalizer and two providers until those
-gates are completed.
-
-Until that cutover is accepted, do not describe the deployed legacy DEV as the
-new bootstrap architecture, and do not point a new executable at it as if it
-were a bootstrap. Preserve the existing network and key during routine work.
-The isolated LAB may continue using explicit network files and separate
-headless finalizer/provider processes.
+Until the cutover gates pass and coordinated cutover is executed:
+- Keep the existing DEV testnet and key operational for routine development.
+- Do not describe the deployed legacy DEV testnet as the target bootstrap architecture.
+- Do not point new executables at legacy DEV as if it were a bootstrap service.
+- The isolated LAB may continue using explicit network files and separate headless processes.

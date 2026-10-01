@@ -1,5 +1,11 @@
 # Implementation status
 
+## Target architecture vs prototype
+
+- **Target architecture**: Every participant runs the same full-node software (`CybouNode`). Bootstrap, storage, advisory Validation, and PoA finalization are optional local capabilities, not protocol node classes. Genesis authorizes 1–4 bootstrap Identities (by stable `AccountID` and expected `RecoveryKeyID`). Public P2P admission is France-only (fails closed). The Central Authority desktop runs PoA finalization; bootstrap never finalizes. State v9 schema.
+- **Current implementation prototype**: Temporary standalone utility `cybou-bootstrap provision|serve`, bounded STATUS/CLAIM/REPLACE protocol handler, LevelDB `EMPTY`/`BOUND` store with generation numbering, and v8 prototype state (grants keyed by RecoveryKeyID).
+- **Legacy DEV deployment**: Operational legacy testnet topology (VPS PoA finalizer on port 29461 + two storage providers on ports 29471/29481). Retained for routine development until specified acceptance tests and coordinated new-genesis DEV cutover replace it.
+
 ## Bootstrap prototype and target gap
 
 The current branch contains a bootstrap prototype, not the revised target
@@ -8,6 +14,15 @@ genesis roster or France-only peer admission:
 - grant-bearing state currently uses v8 and keys grants by RecoveryKeyID with
   optional claimed AccountID; grant-free legacy state retains the exact v7
   encoding and root;
+- the public network-file format has a canonical serializer, and a `CYBB1`
+  NetworkBinding envelope can be signed by and verified against the genesis PoA key;
+- the core has a durable LevelDB `EMPTY`/`BOUND` store: provisioning generates a
+  256-bit one-use activation code, stores its domain-separated hash, and an initial
+  claim atomically stores generation 1;
+- `cybou-bootstrap provision|serve` is a prototype executable; initial contact requires
+  client SPKI SHA-256 pinning;
+- signed key replacement primitive is implemented in the store, but client-side
+  acceptance and database rollback remain open;
 - the pinned pre-genesis proof binds a fresh challenge, TLS exporter, and
   Recovery public key, but does not yet bind the candidate's stable AccountID;
 - `CAP_BOOTSTRAP` verifies an AccountID session proof against a claimed grant
