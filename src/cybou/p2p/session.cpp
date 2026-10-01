@@ -638,10 +638,11 @@ std::optional<BootstrapIdentityClaim> PeerSession::RequestBootstrapIdentityClaim
     return claim;
 }
 
-bool PeerSession::ServeBootstrapIdentityClaim(const IdentityHybridPublicKey& recovery_key,
+bool PeerSession::ServeBootstrapIdentityClaim(const AccountId& account_id,
+    const IdentityHybridPublicKey& recovery_key,
     const ProviderProofSigner& recovery_signer)
 {
-    if (m_transport_role != TransportRole::SERVER || !recovery_signer ||
+    if (m_transport_role != TransportRole::SERVER || account_id.IsNull() || !recovery_signer ||
         recovery_key.purpose != IdentityKeyPurpose::RECOVERY_ROOT || !ComputeRecoveryKeyId(recovery_key) ||
         m_tls_config.certificate_chain_file.empty() || m_tls_config.private_key_file.empty() ||
         !EstablishSecureTransport(std::chrono::steady_clock::now() + TLS_HANDSHAKE_TIMEOUT)) return false;
@@ -653,11 +654,12 @@ bool PeerSession::ServeBootstrapIdentityClaim(const IdentityHybridPublicKey& rec
     std::array<unsigned char, 32> challenge{};
     std::copy_n(request->payload.begin() + 6, challenge.size(), challenge.begin());
     if (std::ranges::all_of(challenge, [](unsigned char byte) { return byte == 0; })) return false;
-    const auto message = BootstrapIdentityClaimMessage(m_tls_exporter, challenge, recovery_key);
+    const auto message = BootstrapIdentityClaimMessage(m_tls_exporter, challenge, account_id, recovery_key);
     const auto encoded_signature = recovery_signer(message);
     if (message.empty() || !encoded_signature || encoded_signature->size() != 64 + 3309) return false;
     BootstrapIdentityClaim claim;
     claim.challenge = challenge;
+    claim.account_id = account_id;
     claim.recovery_key = recovery_key;
     std::copy_n(encoded_signature->begin(), claim.proof.ed25519.size(), claim.proof.ed25519.begin());
     claim.proof.ml_dsa.assign(encoded_signature->begin() + claim.proof.ed25519.size(), encoded_signature->end());

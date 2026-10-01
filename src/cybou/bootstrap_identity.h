@@ -5,6 +5,7 @@
 #define CYBOU_BOOTSTRAP_IDENTITY_H
 
 #include <cybou/identity_crypto.h>
+#include <cybou/identity_registry.h>
 
 #include <array>
 #include <optional>
@@ -15,6 +16,7 @@ namespace cybou {
 
 struct BootstrapIdentityClaim {
     std::array<unsigned char, 32> challenge{};
+    AccountId account_id;
     IdentityHybridPublicKey recovery_key{.purpose = IdentityKeyPurpose::RECOVERY_ROOT,
         .ed25519 = {}, .ml_dsa = {}};
     IdentityHybridSignature proof;
@@ -23,7 +25,8 @@ struct BootstrapIdentityClaim {
 };
 
 std::vector<unsigned char> BootstrapIdentityClaimMessage(std::span<const unsigned char> tls_exporter,
-    std::span<const unsigned char, 32> challenge, const IdentityHybridPublicKey& recovery_key);
+    std::span<const unsigned char, 32> challenge, const AccountId& account_id,
+    const IdentityHybridPublicKey& recovery_key);
 std::optional<std::array<unsigned char, 32>> VerifyBootstrapIdentityClaim(
     const BootstrapIdentityClaim& claim, std::span<const unsigned char> tls_exporter);
 std::optional<std::vector<unsigned char>> EncodeBootstrapIdentityClaim(const BootstrapIdentityClaim& claim);

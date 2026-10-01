@@ -203,6 +203,9 @@ BOOST_AUTO_TEST_CASE(pinned_initial_locator_requires_tls_bound_recovery_identity
     const auto recovery_key = cybou::DeriveIdentityPublicKey(recovery_seed,
         cybou::IdentityKeyPurpose::RECOVERY_ROOT);
     BOOST_REQUIRE(recovery_key);
+    uint256 raw_account{};
+    raw_account.begin()[0] = 0x72;
+    const cybou::AccountId account_id{raw_account};
     boost::asio::io_context io;
     using boost::asio::ip::tcp;
     tcp::acceptor acceptor{io, {boost::asio::ip::address_v4::loopback(), 0}};
@@ -222,7 +225,7 @@ BOOST_AUTO_TEST_CASE(pinned_initial_locator_requires_tls_bound_recovery_identity
             bytes.insert(bytes.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
             return bytes;
         };
-        served = session.ServeBootstrapIdentityClaim(*recovery_key, signer);
+        served = session.ServeBootstrapIdentityClaim(account_id, *recovery_key, signer);
     }};
     tcp::socket socket{io};
     socket.connect({boost::asio::ip::address_v4::loopback(), acceptor.local_endpoint().port()});
@@ -232,6 +235,7 @@ BOOST_AUTO_TEST_CASE(pinned_initial_locator_requires_tls_bound_recovery_identity
     auto claim = client.RequestBootstrapIdentityClaim();
     server.join();
     BOOST_REQUIRE(served && claim);
+    BOOST_CHECK(claim->account_id == account_id);
     BOOST_CHECK(claim->recovery_key == *recovery_key);
     BOOST_CHECK(std::ranges::any_of(claim->challenge, [](unsigned char byte) { return byte != 0; }));
     BOOST_CHECK(cybou::ComputeRecoveryKeyId(claim->recovery_key));

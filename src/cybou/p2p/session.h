@@ -240,9 +240,10 @@ public:
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     /** One pinned bootstrap protocol exchange without a network-bound HELLO. */
     std::optional<Frame> RequestBootstrap(const Frame& request);
-    /** Pinned pre-genesis endpoint proves a Recovery Identity on this TLS session. */
+    /** Pinned pre-genesis endpoint proves AccountID + Recovery on this TLS session. */
     std::optional<BootstrapIdentityClaim> RequestBootstrapIdentityClaim();
-    bool ServeBootstrapIdentityClaim(const IdentityHybridPublicKey& recovery_key,
+    bool ServeBootstrapIdentityClaim(const AccountId& account_id,
+        const IdentityHybridPublicKey& recovery_key,
         const ProviderProofSigner& recovery_signer);
     /** Serve one bootstrap request over a persistent-identity TLS session. */
     bool ServeBootstrapRequest(const std::function<std::optional<Frame>(const Frame&)>& handler);
