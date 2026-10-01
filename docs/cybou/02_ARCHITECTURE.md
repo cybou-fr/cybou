@@ -126,7 +126,7 @@ it never browses the provider ChunkStore.
 Authority is a read-only metric derived from finalized account history. It is
 separate from CYBOU and System Balance, non-transferable, and grants no
 protocol, resource-allocation, or PoA power. See
-[`57_GLOBAL_PROOF_OF_TRUST_POLICY.md`](57_GLOBAL_PROOF_OF_TRUST_POLICY.md).
+[`57_AUTHORITY_AND_VALIDATION.md`](57_AUTHORITY_AND_VALIDATION.md).
 
 Any full node may produce optional advisory Validation. Recipients verify it
 and decide locally whether to trust it. A local Authority threshold of
