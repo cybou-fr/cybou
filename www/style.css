@@ -1593,9 +1593,47 @@ a {
    Comparison Section (CYBOU vs Big Tech)
    ========================================================================== */
 
+/* Comparison Filter Bar */
+.comp-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+  margin-bottom: 22px;
+  padding: 6px;
+  background: #f1f5f9;
+  border-radius: var(--radius-pill);
+  width: fit-content;
+}
+
+.comp-filter-btn {
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.comp-filter-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.comp-filter-btn.active {
+  background: #ffffff;
+  color: var(--brand-teal-dark);
+  border-color: rgba(5, 150, 105, 0.2);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
 .comparison-wrapper {
   overflow-x: auto;
-  margin-top: 36px;
+  margin-top: 10px;
   background: #ffffff;
   border-radius: var(--radius-xl);
   border: 1px solid var(--border-subtle);
@@ -1606,19 +1644,21 @@ a {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.92rem;
+  font-size: 0.86rem;
 }
 
 .comparison-table th, .comparison-table td {
-  padding: 16px 20px;
+  padding: 13px 12px;
   border-bottom: 1px solid var(--border-subtle);
+  vertical-align: top;
+  line-height: 1.45;
 }
 
 .comparison-table th {
   font-weight: 700;
   color: var(--text-primary);
   background: #f8f9fb;
-  font-size: 0.88rem;
+  font-size: 0.84rem;
 }
 
 .comparison-table th.col-cybou {
@@ -1631,6 +1671,50 @@ a {
   background: rgba(5, 150, 105, 0.03);
   font-weight: 600;
   color: var(--text-primary);
+}
+
+/* Head-to-Head filtered views */
+.comparison-wrapper.filter-nextcloud .col-dropbox,
+.comparison-wrapper.filter-nextcloud .col-google,
+.comparison-wrapper.filter-nextcloud .col-msapple {
+  display: none !important;
+}
+
+.comparison-wrapper.filter-dropbox .col-nextcloud,
+.comparison-wrapper.filter-dropbox .col-google,
+.comparison-wrapper.filter-dropbox .col-msapple {
+  display: none !important;
+}
+
+.comparison-wrapper.filter-google .col-nextcloud,
+.comparison-wrapper.filter-google .col-dropbox,
+.comparison-wrapper.filter-google .col-msapple {
+  display: none !important;
+}
+
+.comparison-wrapper.filter-msapple .col-nextcloud,
+.comparison-wrapper.filter-msapple .col-dropbox,
+.comparison-wrapper.filter-msapple .col-google {
+  display: none !important;
+}
+
+/* In head-to-head mode, columns expand generously */
+.comparison-wrapper:not(.filter-all) .col-crit {
+  width: 28%;
+}
+
+.comparison-wrapper:not(.filter-all) .col-cybou {
+  width: 36%;
+}
+
+.comparison-wrapper:not(.filter-all) .col-comp {
+  width: 36%;
+}
+
+.comparison-wrapper:not(.filter-all) .comparison-table th,
+.comparison-wrapper:not(.filter-all) .comparison-table td {
+  padding: 16px 20px;
+  font-size: 0.92rem;
 }
 
 .comparison-tag-good {
@@ -1854,6 +1938,10 @@ a {
   display: flex;
   flex-direction: column;
   gap: 40px;
+}
+
+.compliance-container.container-wide {
+  max-width: 1260px;
 }
 
 .compliance-article {

@@ -128,7 +128,7 @@
   <!-- ==========================================================================
        Main Comparison Container
        ========================================================================== -->
-  <main class="compliance-container">
+  <main class="compliance-container container-wide">
 
     <!-- 1. Matrice Comparative Globale -->
     <article class="compliance-article" id="matrice">
@@ -141,47 +141,56 @@
         <div class="compliance-article-sub" data-i18n="cmpMatSub">Une comparaison directe et impartiale sur la sécurité, l'architecture, la cryptographie et la juridiction.</div>
       </div>
 
-      <div class="comparison-wrapper" style="margin-top: 10px;">
+      <!-- Interactive Comparison Filter Tabs -->
+      <div class="comp-filter-bar" role="tablist" aria-label="Mode de comparaison">
+        <button type="button" class="comp-filter-btn active" data-view="all" data-i18n="cmpTabAll">Vue Complète (Tous)</button>
+        <button type="button" class="comp-filter-btn" data-view="nextcloud" data-i18n="cmpTabNextcloud">vs. Nextcloud</button>
+        <button type="button" class="comp-filter-btn" data-view="dropbox" data-i18n="cmpTabDropbox">vs. Dropbox</button>
+        <button type="button" class="comp-filter-btn" data-view="google" data-i18n="cmpTabGoogle">vs. Google Workspace</button>
+        <button type="button" class="comp-filter-btn" data-view="msapple" data-i18n="cmpTabMsApple">vs. Microsoft 365 / Apple</button>
+      </div>
+
+      <div class="comparison-wrapper" id="comparison-wrapper">
         <table class="comparison-table">
           <thead>
             <tr>
-              <th style="min-width: 200px;" data-i18n="cmpThCrit">Critère de Protection</th>
-              <th class="col-cybou" style="min-width: 170px;" data-i18n="cmpThCybou">CYBOU Desktop</th>
-              <th style="min-width: 170px;" data-i18n="cmpThNextcloud">Nextcloud</th>
-              <th style="min-width: 160px;" data-i18n="cmpThDropbox">Dropbox</th>
-              <th style="min-width: 160px;" data-i18n="cmpThGoogle">Google Workspace</th>
-              <th style="min-width: 160px;" data-i18n="cmpThMsApple">Microsoft 365 / Apple</th>
+              <th class="col-crit" data-i18n="cmpThCrit">Critère de Protection</th>
+              <th class="col-cybou" data-i18n="cmpThCybou">CYBOU Desktop</th>
+              <th class="col-comp col-nextcloud" data-i18n="cmpThNextcloud">Nextcloud</th>
+              <th class="col-comp col-dropbox" data-i18n="cmpThDropbox">Dropbox</th>
+              <th class="col-comp col-google" data-i18n="cmpThGoogle">Google Workspace</th>
+              <th class="col-comp col-msapple" data-i18n="cmpThMsApple">Microsoft 365 / Apple</th>
             </tr>
           </thead>
           <tbody>
             <!-- Row 1: Chiffrement des données -->
             <tr>
-              <td><strong data-i18n="cmpR1Crit">Chiffrement des messages et fichiers</strong></td>
+              <td class="col-crit"><strong data-i18n="cmpR1Crit">Chiffrement des messages et fichiers</strong></td>
               <td class="col-cybou">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR1Cybou">Client-side obligatoire (Zero-Knowledge)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-nextcloud">
                 <span class="comparison-tag-warning">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                   <span data-i18n="cmpR1Nextcloud">Serveur par défaut (admin lit tout) ; E2EE optionnel complexe</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-dropbox">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR1Dropbox">Chiffrement serveur (Dropbox possède les clés)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-google">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR1Google">Chiffrement serveur (Google possède les clés)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-msapple">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR1MsApple">Chiffrement serveur (Éditeur possède les clés)</span>
@@ -191,32 +200,32 @@
 
             <!-- Row 2: Moteur cryptographique -->
             <tr>
-              <td><strong data-i18n="cmpR2Crit">Moteur et code cryptographique</strong></td>
+              <td class="col-crit"><strong data-i18n="cmpR2Crit">Moteur et code cryptographique</strong></td>
               <td class="col-cybou">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR2Cybou">Standard OpenSSL v3.5.2+ (NIST FIPS 203/204, zéro code maison)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-nextcloud">
                 <span class="comparison-tag-warning">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                   <span data-i18n="cmpR2Nextcloud">PHP / OpenSSL classique (RSA / AES traditionnels)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-dropbox">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR2Dropbox">Boîte noire propriétaire fermée</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-google">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR2Google">Boîte noire propriétaire fermée</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-msapple">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR2MsApple">Boîte noire propriétaire fermée</span>
@@ -226,32 +235,32 @@
 
             <!-- Row 3: Résistance quantique -->
             <tr>
-              <td><strong data-i18n="cmpR3Crit">Résistance aux attaques quantiques</strong></td>
+              <td class="col-crit"><strong data-i18n="cmpR3Crit">Résistance aux attaques quantiques</strong></td>
               <td class="col-cybou">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR3Cybou">Natif : ML-KEM-768 (TLS 1.3) + ML-DSA-44/65 (Identités)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-nextcloud">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR3Nextcloud">Aucune protection post-quantique</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-dropbox">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR3Dropbox">Aucune protection post-quantique</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-google">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR3Google">Algorithmes classiques (RSA / ECC vulnérables)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-msapple">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR3MsApple">Algorithmes classiques (RSA / ECC vulnérables)</span>
@@ -261,32 +270,32 @@
 
             <!-- Row 4: Architecture et SPOF -->
             <tr>
-              <td><strong data-i18n="cmpR4Crit">Architecture &amp; Point unique de panne</strong></td>
+              <td class="col-crit"><strong data-i18n="cmpR4Crit">Architecture &amp; Point unique de panne</strong></td>
               <td class="col-cybou">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR4Cybou">P2P décentralisé unifié C++, auto-réparation de fragments</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-nextcloud">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR4Nextcloud">Client-Serveur (SPOF MySQL + Web server + Redis + PHP)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-dropbox">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR4Dropbox">Cloud centralisé américain</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-google">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR4Google">Cloud centralisé américain</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-msapple">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR4MsApple">Cloud centralisé américain</span>
@@ -296,32 +305,32 @@
 
             <!-- Row 5: Juridiction et Souveraineté -->
             <tr>
-              <td><strong data-i18n="cmpR5Crit">Juridiction &amp; Lois extraterritoriales</strong></td>
+              <td class="col-crit"><strong data-i18n="cmpR5Crit">Juridiction &amp; Lois extraterritoriales</strong></td>
               <td class="col-cybou">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR5Cybou">France &amp; UE (P2P filtré France-only, immunité Cloud Act)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-nextcloud">
                 <span class="comparison-tag-warning">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                   <span data-i18n="cmpR5Nextcloud">Dépend de l'hébergeur choisi (soumis au Cloud Act si AWS/Azure)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-dropbox">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR5Dropbox">États-Unis (Soumis sans réserve au Cloud Act et FISA 702)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-google">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR5Google">États-Unis (Soumis au US Cloud Act et FISA 702)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-msapple">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR5MsApple">États-Unis (Soumis aux lois extraterritoriales US)</span>
@@ -331,32 +340,32 @@
 
             <!-- Row 6: Entraînement IA / Télémétrie -->
             <tr>
-              <td><strong data-i18n="cmpR6Crit">Scan pour pub ou entraînement d'IA</strong></td>
+              <td class="col-crit"><strong data-i18n="cmpR6Crit">Scan pour pub ou entraînement d'IA</strong></td>
               <td class="col-cybou">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR6Cybou">Zéro scan, zéro IA, zéro pub (données opaques)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-nextcloud">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR6Nextcloud">Zéro scan par défaut (plugins IA optionnels)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-dropbox">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR6Dropbox">Scans de contenu et intégration IA tierce (Dropbox Dash)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-google">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR6Google">Indexation algorithmique pour publicité et modèles IA</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-msapple">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR6MsApple">Télémétrie intensive et intégration Copilot</span>
@@ -366,32 +375,32 @@
 
             <!-- Row 7: Authentification -->
             <tr>
-              <td><strong data-i18n="cmpR7Crit">Authentification &amp; Dépendance</strong></td>
+              <td class="col-crit"><strong data-i18n="cmpR7Crit">Authentification &amp; Dépendance</strong></td>
               <td class="col-cybou">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR7Cybou">Phrase secrète 24 mots, zéro mot de passe, zéro SMS</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-nextcloud">
                 <span class="comparison-tag-warning">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                   <span data-i18n="cmpR7Nextcloud">Mots de passe stockés en base MySQL ou annuaire LDAP</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-dropbox">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR7Dropbox">Mots de passe serveur, compte révocable à tout moment</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-google">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR7Google">Numéro de téléphone requis, risque de ban unilatéral</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-msapple">
                 <span class="comparison-tag-bad">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   <span data-i18n="cmpR7MsApple">Compte lié à carte bancaire et téléphone, verrouillage éditeur</span>
@@ -401,32 +410,32 @@
 
             <!-- Row 8: Déploiement et Maintenance -->
             <tr>
-              <td><strong data-i18n="cmpR8Crit">Déploiement &amp; Maintenance</strong></td>
+              <td class="col-crit"><strong data-i18n="cmpR8Crit">Déploiement &amp; Maintenance</strong></td>
               <td class="col-cybou">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR8Cybou">Binaire C++ autonome sans dépendances externes</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-nextcloud">
                 <span class="comparison-tag-warning">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                   <span data-i18n="cmpR8Nextcloud">Déploiement lourd (pile LAMP, bases SQL, migrations délicates)</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-dropbox">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR8Dropbox">Simple utilisateur, mais enfermement propriétaire</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-google">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR8Google">SaaS géré, mais perte totale de contrôle</span>
                 </span>
               </td>
-              <td>
+              <td class="col-comp col-msapple">
                 <span class="comparison-tag-good">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
                   <span data-i18n="cmpR8MsApple">SaaS géré, mais dépendance commerciale critique</span>
@@ -472,6 +481,12 @@
             <span data-i18n="cmpNextItem4Desc">Administrer Nextcloud exige de maintenir un serveur web, un interpréteur PHP, une base de données relationnelle, un cache Redis et de gérer des migrations de schémas souvent périlleuses. CYBOU se déploie via un <strong>binaire unique C++</strong> sans aucune dépendance externe, consommant une fraction infime de mémoire vive et de CPU.</span>
           </li>
         </ul>
+
+        <div style="margin-top: 20px;">
+          <button type="button" class="btn btn-outline" onclick="setComparisonView('nextcloud'); document.getElementById('matrice').scrollIntoView({behavior: 'smooth'});" data-i18n="cmpBtnViewNextcloud">
+            Voir le face-à-face complet CYBOU vs. Nextcloud ↑
+          </button>
+        </div>
       </div>
     </article>
 
@@ -505,6 +520,12 @@
             <span data-i18n="cmpDropItem3Desc">Dropbox chiffre vos fichiers « au repos », mais Dropbox détient la clé maîtresse. Un employé indélicat de Dropbox, une erreur de configuration ou une injonction judiciaire suffisent pour dévoiler vos fichiers. Chez CYBOU, seuls vos terminaux possèdent les clés de déchiffrement dérivées de votre phrase secrète de 24 mots.</span>
           </li>
         </ul>
+
+        <div style="margin-top: 20px;">
+          <button type="button" class="btn btn-outline" onclick="setComparisonView('dropbox'); document.getElementById('matrice').scrollIntoView({behavior: 'smooth'});" data-i18n="cmpBtnViewDropbox">
+            Voir le face-à-face complet CYBOU vs. Dropbox ↑
+          </button>
+        </div>
       </div>
     </article>
 
@@ -538,6 +559,15 @@
             <span data-i18n="cmpGafamItem3Desc">Pour ouvrir un compte Google ou Microsoft, vous devez fournir un numéro de téléphone mobile et accepter des conditions générales modifiables à tout moment. Votre compte peut être suspendu arbitrairement sans recours. Une identité CYBOU est inaliénable : elle est protégée par votre phrase secrète de 24 mots et une preuve de travail anti-Sybil. Personne ne peut vous bannir de votre propre espace.</span>
           </li>
         </ul>
+
+        <div style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px;">
+          <button type="button" class="btn btn-outline" onclick="setComparisonView('google'); document.getElementById('matrice').scrollIntoView({behavior: 'smooth'});" data-i18n="cmpBtnViewGoogle">
+            Voir CYBOU vs. Google Workspace ↑
+          </button>
+          <button type="button" class="btn btn-outline" onclick="setComparisonView('msapple'); document.getElementById('matrice').scrollIntoView({behavior: 'smooth'});" data-i18n="cmpBtnViewMsApple">
+            Voir CYBOU vs. Microsoft 365 / Apple ↑
+          </button>
+        </div>
       </div>
     </article>
 

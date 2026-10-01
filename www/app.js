@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initFaqAccordion();
   initMockupTabs();
   initHeroParticles();
+  initComparisonFilter();
   checkUrlLanguage();
 });
 
@@ -671,6 +672,12 @@ const translations = {
     cmpPillBigTech: "CYBOU vs. GAFAM",
     cmpPillSummary: "Synthèse & Décision",
 
+    cmpTabAll: "Vue Complète (Tous)",
+    cmpTabNextcloud: "vs. Nextcloud",
+    cmpTabDropbox: "vs. Dropbox",
+    cmpTabGoogle: "vs. Google Workspace",
+    cmpTabMsApple: "vs. Microsoft 365 / Apple",
+
     cmpMatPill: "Tableau Comparatif Global",
     cmpMatStatus: "8 Critères Clés",
     cmpMatTitle: "Matrice Complète des Solutions de Collaboration & Stockage",
@@ -789,7 +796,12 @@ const translations = {
     cmpCtaTitle: "Prêt à tester l'alternative souveraine CYBOU ?",
     cmpCtaDesc: "Explorez notre code open-source sur GitHub ou découvrez comment déployer un réseau privé d'entreprise dédié.",
     cmpCtaBtnEnterprise: "Solutions Entreprise",
-    cmpCtaBtnGithub: "Code source GitHub"
+    cmpCtaBtnGithub: "Code source GitHub",
+
+    cmpBtnViewNextcloud: "Voir le face-à-face complet CYBOU vs. Nextcloud ↑",
+    cmpBtnViewDropbox: "Voir le face-à-face complet CYBOU vs. Dropbox ↑",
+    cmpBtnViewGoogle: "Voir CYBOU vs. Google Workspace ↑",
+    cmpBtnViewMsApple: "Voir CYBOU vs. Microsoft 365 / Apple ↑"
   },
 
   en: {
@@ -1449,6 +1461,12 @@ const translations = {
     cmpPillBigTech: "CYBOU vs. Big Tech",
     cmpPillSummary: "Synthesis & Decision",
 
+    cmpTabAll: "Complete Matrix (All)",
+    cmpTabNextcloud: "vs. Nextcloud",
+    cmpTabDropbox: "vs. Dropbox",
+    cmpTabGoogle: "vs. Google Workspace",
+    cmpTabMsApple: "vs. Microsoft 365 / Apple",
+
     cmpMatPill: "Comprehensive Comparison",
     cmpMatStatus: "8 Core Criteria",
     cmpMatTitle: "Complete Matrix of Collaboration & Storage Solutions",
@@ -1567,7 +1585,12 @@ const translations = {
     cmpCtaTitle: "Ready to Experience the Sovereign Alternative with CYBOU?",
     cmpCtaDesc: "Explore our open-source codebase on GitHub or discover how to deploy a dedicated enterprise private network.",
     cmpCtaBtnEnterprise: "Enterprise Solutions",
-    cmpCtaBtnGithub: "GitHub Source Code"
+    cmpCtaBtnGithub: "GitHub Source Code",
+
+    cmpBtnViewNextcloud: "View Head-to-Head: CYBOU vs. Nextcloud ↑",
+    cmpBtnViewDropbox: "View Head-to-Head: CYBOU vs. Dropbox ↑",
+    cmpBtnViewGoogle: "View Head-to-Head: CYBOU vs. Google Workspace ↑",
+    cmpBtnViewMsApple: "View Head-to-Head: CYBOU vs. Microsoft 365 / Apple ↑"
   }
 };
 
@@ -1665,6 +1688,42 @@ function initMockupTabs() {
       views[targetTab].classList.add('active');
     });
   });
+}
+
+// --- Comparison Table Head-to-Head & Global Filter ---
+function initComparisonFilter() {
+  const filterBtns = document.querySelectorAll('.comp-filter-btn');
+  const wrapper = document.getElementById('comparison-wrapper');
+  if (!filterBtns.length || !wrapper) return;
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.getAttribute('data-view');
+      setComparisonView(view);
+    });
+  });
+}
+
+function setComparisonView(view) {
+  const filterBtns = document.querySelectorAll('.comp-filter-btn');
+  const wrapper = document.getElementById('comparison-wrapper');
+  if (!wrapper) return;
+
+  filterBtns.forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-view') === view);
+  });
+
+  wrapper.classList.remove(
+    'filter-all',
+    'filter-nextcloud',
+    'filter-dropbox',
+    'filter-google',
+    'filter-msapple'
+  );
+
+  if (view && view !== 'all') {
+    wrapper.classList.add('filter-' + view);
+  }
 }
 
 function setLanguage(lang, updateUrl = false) {
