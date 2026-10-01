@@ -28,10 +28,10 @@ std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
     if (nonce == 0) return std::nullopt;
     return Hello{.network_id = status.network_id, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip,
-        .capabilities = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY |
+        .capabilities = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS |
+            CAP_PEER_DISCOVERY | CAP_OPERATION_RELAY |
             (runtime.HasStorageProvider() ? CAP_STORAGE | CAP_STORAGE_PROOFS : 0) |
             (runtime.LocalBootstrapAccountId() ? CAP_BOOTSTRAP : 0) |
-            (runtime.LocalBootstrapAccountId() ? CAP_OPERATION_RELAY : 0) |
             (status.is_finalizer ? CAP_ACCEPT_OPERATIONS : 0),
         .nonce = nonce};
 }

@@ -13,11 +13,12 @@ network.
 
 Every participant runs the same full-node software. Bootstrap, storage,
 advisory Validation, and PoA finalization are optional local capabilities, not
-protocol node classes or separate consensus roles. A network genesis
+protocol node classes or separate consensus roles. Operation relay is a
+baseline full-node capability, not a bootstrap role. A network genesis
 authorizes one to four bootstrap Identities. Each bootstrap is an ordinary
-full node that may provide rendezvous, peer discovery, operation relay, and
-finalized-history relay/cache. Bootstrap capability does not provide PoA or
-storage authority by itself.
+full node that may provide rendezvous, peer discovery, and finalized-history
+relay/cache. Every full node may relay operations; bootstrap capability does
+not provide PoA or storage authority by itself.
 
 The Central Authority is the ordinary desktop Identity whose role-specific
 `POA_FINALIZER` public key is committed by the network definition. After that
@@ -117,7 +118,7 @@ filter data blocks new public peers only when that setting is enabled.
 
 Direct node-to-node connections follow the same cryptographic rule: a peer
 that claims the finalizer role proves the genesis key for that session. A
-bootstrap relay is a convenient route, not the identity anchor.
+any full-node relay is a convenient route, not the identity anchor.
 
 A first claim requires all of:
 
@@ -181,18 +182,19 @@ anti-equivocation, and must never send signing material to bootstrap.
 
 ## Relay and validation boundaries
 
-The Central Authority full node maintains an authenticated outbound session to
-bootstrap, allowing nodes behind NAT to submit operations and receive finalized
-history without publishing the Authority's address. Bootstrap relays exact
-operation bytes only while an authenticated finalizer session is live; it may
-use a bounded in-memory queue for transient delivery, but has no durable shared
-pending-operation pool. If no such session is live, clients retain exact
-signed operations and report `FINALIZER_UNAVAILABLE` for retry. Bootstrap
-relays/caches finalized blocks but does not decide validity or finality. The
-Authority full node performs consensus checks and signs; receiving full nodes
-independently verify every block, operation, certificate, and state root.
+The Central Authority full node may maintain authenticated outbound sessions
+to any full nodes in the P2P mesh, allowing clients to submit operations
+through whichever connected peer currently has a live Authority route. A relay
+forwards exact operation bytes only while an authenticated finalizer session is
+live; it may use a bounded in-memory queue for transient delivery, but has no
+durable shared pending-operation pool. Bootstrap membership is not required.
+If no route is live, clients retain exact signed operations and report
+`FINALIZER_UNAVAILABLE` for retry. Relays/caches of finalized blocks do not
+decide validity or finality. The Authority full node performs consensus checks
+and signs; receiving full nodes independently verify every block, operation,
+certificate, and state root.
 
-Bootstrap's finalizer-authenticated session route is ephemeral memory state,
+Each relay's finalizer-authenticated session route is ephemeral memory state,
 not part of the durable NetworkBinding. Session teardown removes that route.
 The transport/session design does not make it safe to run independent
 simultaneous finalizers with the same private key. One active signer and the
@@ -206,10 +208,10 @@ chunk admission.
 
 ## Cutover requirements
 
-The DEV VPS now runs only the standalone bootstrap prototype; the legacy
-finalizer and provider services are inactive. This operational reset is not a
-completed new-genesis network cutover: desktop finalization and peer discovery
-are not implemented, and there is no production/Beta network migration. The
+The DEV VPS currently runs the legacy testnet topology described in
+`AGENTS.md`. Keep it operational until the acceptance gates below pass and the
+new-genesis cutover is coordinated. Desktop finalization and peer discovery
+remain incomplete, and there is no production/Beta network migration. The
 target network remains blocked on all of the following:
 
 - authenticated bootstrap `EMPTY`/`BOUND` protocol, pinning, one-use claim,
@@ -220,7 +222,8 @@ target network remains blocked on all of the following:
   public P2P paths, local Geo data integrity/fail-closed behavior, and LAB
   bypass tests;
 - desktop genesis creation and desktop finalizer lifecycle through the vault;
-- bootstrap relay/discovery/history sync, with no bootstrap PoA or storage role;
+- ordinary full-node relay/discovery/history sync, with no bootstrap PoA or
+  storage role;
 - clean-install, compromised-bootstrap, replay/race, restart, offline-authority,
   and replacement acceptance tests;
 - a coordinated plan that replaces the disposable DEV testnet with a new
@@ -230,7 +233,7 @@ target network remains blocked on all of the following:
 For the current implementation prototype (`cybou-bootstrap` utility, LevelDB store, v8 prototype state vs v9 target schema, and open cutover gates), see [`26_IMPLEMENTATION_STATUS.md`](26_IMPLEMENTATION_STATUS.md).
 
 Until the cutover gates pass and coordinated cutover is executed:
-- Keep the deployed bootstrap prototype available for its current tests; do not recreate the removed finalizer/provider topology.
+- Keep the current DEV testnet operational during routine development; do not reset its state or replace its PoA key before the planned cutover.
 - Do not describe the bootstrap prototype as a complete target network.
 - Do not point CYP2 executables at the bootstrap protocol port as if it were a peer endpoint.
 - The isolated LAB may continue using explicit network files and separate headless processes.

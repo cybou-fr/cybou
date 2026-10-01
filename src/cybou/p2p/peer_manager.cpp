@@ -90,13 +90,15 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
         return false;
     }
-    uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS | CAP_PEER_DISCOVERY;
+    uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS |
+        CAP_PEER_DISCOVERY | CAP_OPERATION_RELAY;
     if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
     const auto local_bootstrap_account = m_runtime.LocalBootstrapAccountId();
-    if (local_bootstrap_account) caps |= CAP_BOOTSTRAP | CAP_OPERATION_RELAY;
-    // Only the configured bootstrap route needs the Central Authority's
-    // session proof; discovered peers remain ordinary outbound sessions.
-    if (m_runtime.IsPoaFinalizerEnabled() && m_runtime.IsConfiguredP2pEndpoint(endpoint.first, port)) {
+    if (local_bootstrap_account) caps |= CAP_BOOTSTRAP;
+    // The Central Authority proves itself to an explicitly configured peer;
+    // the address only selects the live route and never grants the role.
+    if (m_runtime.IsPoaFinalizerEnabled() &&
+        (m_runtime.AuthenticatesFinalizerToAnyPeer() || m_runtime.IsConfiguredP2pEndpoint(endpoint.first, port))) {
         caps |= CAP_ACCEPT_OPERATIONS;
     }
     Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
@@ -341,8 +343,7 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
         const auto capabilities = it->second->Peer()->capabilities;
         const bool accepts_direct = (capabilities & CAP_ACCEPT_OPERATIONS) &&
             it->second->PeerFinalizerAuthenticated();
-        const bool accepts_relay = (capabilities & CAP_OPERATION_RELAY) &&
-            it->second->PeerBootstrapAuthenticated();
+        const bool accepts_relay = capabilities & CAP_OPERATION_RELAY;
         if (!accepts_direct && !accepts_relay) continue;
         const auto acknowledgment = it->second->SubmitOperation(operation);
         if (!acknowledgment) {
@@ -422,15 +423,15 @@ size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
     return delivered;
 }
 
-size_t PeerManager::PollBootstrapRelays()
+size_t PeerManager::PollOperationRelays()
 {
     if (!m_runtime.IsPoaFinalizerEnabled()) return 0;
     size_t delivered{0};
     for (auto& [endpoint, session] : m_peers) {
         (void)endpoint;
-        if (!session->PeerBootstrapAuthenticated() || !session->Peer() ||
+        if (!session->Peer() ||
             !(session->Peer()->capabilities & CAP_OPERATION_RELAY)) continue;
-        if (session->PollBootstrapRelay(m_runtime)) ++delivered;
+        if (session->PollOperationRelay(m_runtime)) ++delivered;
     }
     return delivered;
 }

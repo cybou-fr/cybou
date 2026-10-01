@@ -280,11 +280,11 @@ bool IsSupportedMessageType(const uint8_t type)
     case MessageType::CHUNK_DATA:
     case MessageType::GET_CHUNK_AUTHORIZATION_PROOF:
     case MessageType::CHUNK_AUTHORIZATION_PROOF:
-    case MessageType::BOOTSTRAP_RELAY_POLL:
-    case MessageType::BOOTSTRAP_RELAY_OPERATION_META:
-    case MessageType::BOOTSTRAP_RELAY_OPERATION_CHUNK:
-    case MessageType::BOOTSTRAP_RELAY_ACK:
-    case MessageType::BOOTSTRAP_RELAY_ACK_RESULT:
+    case MessageType::OPERATION_RELAY_POLL:
+    case MessageType::OPERATION_RELAY_OPERATION_META:
+    case MessageType::OPERATION_RELAY_OPERATION_CHUNK:
+    case MessageType::OPERATION_RELAY_ACK:
+    case MessageType::OPERATION_RELAY_ACK_RESULT:
         return true;
     default:
         return false;
@@ -1057,13 +1057,14 @@ std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const Protocol
             status == OperationSubmitStatus::RELAY_QUEUE_FULL};
 }
 
-bool PeerSession::PollBootstrapRelay(CybouNodeRuntime& runtime)
+bool PeerSession::PollOperationRelay(CybouNodeRuntime& runtime)
 {
-    if (!m_peer || !PeerBootstrapAuthenticated() || !(m_peer->capabilities & CAP_OPERATION_RELAY)) return false;
+    if (!m_peer || !(m_peer->capabilities & CAP_OPERATION_RELAY) ||
+        !(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) return false;
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-    if (!Write(Frame{MessageType::BOOTSTRAP_RELAY_POLL, {}}, deadline)) return false;
+    if (!Write(Frame{MessageType::OPERATION_RELAY_POLL, {}}, deadline)) return false;
     const auto meta = Read(deadline);
-    if (!meta || meta->type != MessageType::BOOTSTRAP_RELAY_OPERATION_META ||
+    if (!meta || meta->type != MessageType::OPERATION_RELAY_OPERATION_META ||
         (meta->payload.size() != 1 && meta->payload.size() != 37) || meta->payload[0] > 1) return false;
     if (meta->payload[0] == 0) return meta->payload.size() == 1;
     uint256 operation_id;
@@ -1074,7 +1075,7 @@ bool PeerSession::PollBootstrapRelay(CybouNodeRuntime& runtime)
     bytes.reserve(size);
     while (bytes.size() < size) {
         const auto chunk = Read(deadline);
-        if (!chunk || chunk->type != MessageType::BOOTSTRAP_RELAY_OPERATION_CHUNK || chunk->payload.empty() ||
+        if (!chunk || chunk->type != MessageType::OPERATION_RELAY_OPERATION_CHUNK || chunk->payload.empty() ||
             chunk->payload.size() > size - bytes.size()) return false;
         bytes.insert(bytes.end(), chunk->payload.begin(), chunk->payload.end());
     }
@@ -1091,10 +1092,10 @@ bool PeerSession::PollBootstrapRelay(CybouNodeRuntime& runtime)
         admitted.status != OperationSubmitStatus::ALREADY_FINALIZED &&
         admitted.status != OperationSubmitStatus::INVALID_PAYLOAD &&
         admitted.status != OperationSubmitStatus::NETWORK_MISMATCH) return false;
-    if (!Write(Frame{MessageType::BOOTSTRAP_RELAY_ACK,
+    if (!Write(Frame{MessageType::OPERATION_RELAY_ACK,
             std::vector<unsigned char>(operation_id.begin(), operation_id.end())}, deadline)) return false;
     const auto ack = Read(deadline);
-    return ack && ack->type == MessageType::BOOTSTRAP_RELAY_ACK_RESULT &&
+    return ack && ack->type == MessageType::OPERATION_RELAY_ACK_RESULT &&
         ack->payload.size() == 1 && ack->payload[0] == 1;
 }
 
@@ -1206,7 +1207,7 @@ std::optional<ChunkAuthorizationProof> PeerSession::GetChunkAuthorizationProof(
 }
 
 bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
-    const std::optional<BootstrapOperationRelay::FinalizerSession> relay_session)
+    const std::optional<OperationRelay::FinalizerSession> relay_session)
 {
     if (!m_peer) return false;
     const auto request = Read();
@@ -1282,7 +1283,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
         const auto endpoints = runtime.GetPeerEndpointsForGossip();
         return SendPeers(endpoints);
     }
-    if (request->type == MessageType::BOOTSTRAP_RELAY_POLL) {
+    if (request->type == MessageType::OPERATION_RELAY_POLL) {
         if (!relay_session || !request->payload.empty()) return false;
         const auto item = runtime.PeekRelayedOperation(*relay_session);
         std::vector<unsigned char> meta{static_cast<unsigned char>(item.has_value())};
@@ -1291,20 +1292,20 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
             Put32(meta, static_cast<uint32_t>(item->exact_bytes.size()));
         }
         const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-        if (!Write(Frame{MessageType::BOOTSTRAP_RELAY_OPERATION_META, meta}, deadline)) return false;
+        if (!Write(Frame{MessageType::OPERATION_RELAY_OPERATION_META, meta}, deadline)) return false;
         if (!item) return true;
         for (size_t offset = 0; offset < item->exact_bytes.size(); offset += MAX_FRAME_PAYLOAD) {
             const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, item->exact_bytes.size() - offset);
-            if (!Write(Frame{MessageType::BOOTSTRAP_RELAY_OPERATION_CHUNK,
+            if (!Write(Frame{MessageType::OPERATION_RELAY_OPERATION_CHUNK,
                     std::vector<unsigned char>{item->exact_bytes.begin() + offset,
                         item->exact_bytes.begin() + offset + count}}, deadline)) return false;
         }
         const auto ack = Read(deadline);
-        if (!ack || ack->type != MessageType::BOOTSTRAP_RELAY_ACK || ack->payload.size() != 32) return false;
+        if (!ack || ack->type != MessageType::OPERATION_RELAY_ACK || ack->payload.size() != 32) return false;
         uint256 operation_id;
         std::copy_n(ack->payload.begin(), 32, operation_id.begin());
         const bool acknowledged = runtime.AcknowledgeRelayedOperation(*relay_session, operation_id);
-        return Write(Frame{MessageType::BOOTSTRAP_RELAY_ACK_RESULT,
+        return Write(Frame{MessageType::OPERATION_RELAY_ACK_RESULT,
             {static_cast<unsigned char>(acknowledged)}}, deadline);
     }
     if (request->type == MessageType::PING) {
@@ -1335,28 +1336,25 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
         const auto endpoint = m_socket.remote_endpoint(endpoint_error);
         if (endpoint_error) return false;
         OperationSubmitResult result;
-        // Client operations arrive on a different CYP2 session than the live
-        // finalizer route. Queue them at the bootstrap whenever a finalizer
-        // session is attached; Enqueue reports FINALIZER_UNAVAILABLE if not.
-        if (runtime.LocalBootstrapAccountId()) {
+        // Client operations arrive on a different session from the Authority
+        // route. Ordinary full nodes relay them through a bounded volatile
+        // queue; the Authority itself admits them directly to its local pool.
+        if (!runtime.IsPoaFinalizerEnabled() && !(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) {
             switch (runtime.EnqueueRelayedOperation(bytes)) {
-            case BootstrapRelayEnqueueStatus::QUEUED:
-            case BootstrapRelayEnqueueStatus::DUPLICATE:
+            case OperationRelayEnqueueStatus::QUEUED:
+            case OperationRelayEnqueueStatus::DUPLICATE:
                 result = {.status = OperationSubmitStatus::RELAY_QUEUED, .op_id = *operation_id};
                 break;
-            case BootstrapRelayEnqueueStatus::FINALIZER_UNAVAILABLE:
+            case OperationRelayEnqueueStatus::FINALIZER_UNAVAILABLE:
                 result = {.status = OperationSubmitStatus::FINALIZER_UNAVAILABLE, .op_id = *operation_id, .delivery_uncertain = true};
                 break;
-            case BootstrapRelayEnqueueStatus::QUEUE_FULL:
+            case OperationRelayEnqueueStatus::QUEUE_FULL:
                 result = {.status = OperationSubmitStatus::RELAY_QUEUE_FULL, .op_id = *operation_id, .delivery_uncertain = true};
                 break;
-            case BootstrapRelayEnqueueStatus::INVALID_OPERATION:
+            case OperationRelayEnqueueStatus::INVALID_OPERATION:
                 result = {.status = OperationSubmitStatus::INVALID_PAYLOAD, .op_id = *operation_id};
                 break;
             }
-        } else if (runtime.LocalBootstrapAccountId()) {
-            result = {.status = OperationSubmitStatus::FINALIZER_UNAVAILABLE,
-                .op_id = *operation_id, .delivery_uncertain = true};
         } else {
             result = runtime.SubmitPeerOperation(*operation, endpoint.address().to_string());
         }

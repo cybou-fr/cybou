@@ -15,7 +15,7 @@
 #include <cybou/state_store.h>
 #include <cybou/chunk_retention.h>
 #include <cybou/finalized_chunk_store.h>
-#include <cybou/bootstrap_operation_relay.h>
+#include <cybou/operation_relay.h>
 #include <cybou/secret32.h>
 
 #include <array>
@@ -47,6 +47,8 @@ struct NodeRuntimeConfig {
     std::optional<std::pair<std::string, uint16_t>> p2p_endpoint{std::nullopt};
     /** This node's own CYP2 listener; used to filter self-addresses out of discovery. */
     std::optional<std::pair<std::string, uint16_t>> local_p2p_endpoint{std::nullopt};
+    /** When this desktop holds the genesis PoA key, authenticate its live route to every mesh peer. */
+    bool authenticate_finalizer_to_any_peer{false};
     size_t db_cache_bytes{8 << 20};
     bool memory_only{false};
     bool wipe_data{false};
@@ -175,15 +177,16 @@ public:
     void DisablePoaFinalizer();
     bool IsPoaFinalizerEnabled() const;
     bool IsConfiguredP2pEndpoint(std::string_view address, uint16_t port) const;
+    bool AuthenticatesFinalizerToAnyPeer() const { return m_config.authenticate_finalizer_to_any_peer; }
 
     /** Attach only after a live CYP2 session has verified the genesis finalizer proof. */
-    std::optional<BootstrapOperationRelay::FinalizerSession> AttachAuthenticatedFinalizerRelay();
-    void DetachAuthenticatedFinalizerRelay(BootstrapOperationRelay::FinalizerSession session);
+    std::optional<OperationRelay::FinalizerSession> AttachAuthenticatedFinalizerRelay();
+    void DetachAuthenticatedFinalizerRelay(OperationRelay::FinalizerSession session);
     bool CanAcceptOperations() const;
-    BootstrapRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes);
-    std::optional<BootstrapRelayOperation> PeekRelayedOperation(
-        BootstrapOperationRelay::FinalizerSession session) const;
-    bool AcknowledgeRelayedOperation(BootstrapOperationRelay::FinalizerSession session,
+    OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes);
+    std::optional<RelayedOperation> PeekRelayedOperation(
+        OperationRelay::FinalizerSession session) const;
+    bool AcknowledgeRelayedOperation(OperationRelay::FinalizerSession session,
         const uint256& operation_id);
 
     /** Commit a finalized block */
@@ -293,7 +296,7 @@ private:
     std::optional<std::array<unsigned char, 32>> m_provider_id;
     CybouStateStore m_store;
     std::unique_ptr<CybouFinalizerNode> m_finalizer_node;
-    BootstrapOperationRelay m_bootstrap_operation_relay;
+    OperationRelay m_operation_relay;
     std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;
     std::map<uint256, OperationStatus> m_recent_operation_status;
     std::deque<uint256> m_recent_operation_status_order;

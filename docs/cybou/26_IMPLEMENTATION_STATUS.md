@@ -3,8 +3,8 @@
 ## Target architecture vs prototype
 
 - **Target architecture**: Every participant runs the same full-node software (`CybouNode`). Bootstrap, storage, advisory Validation, and PoA finalization are optional local capabilities, not protocol node classes. Genesis authorizes 1–4 bootstrap Identities (by stable `AccountID` and expected `RecoveryKeyID`). Public P2P admission is France-only (fails closed). The Central Authority desktop runs PoA finalization; bootstrap never finalizes. State v9 schema.
-- **Current implementation prototype**: Temporary standalone utility `cybou-bootstrap provision|serve`, bounded STATUS/CLAIM/REPLACE protocol handler, LevelDB `EMPTY`/`BOUND` store with generation numbering, and v8 prototype state (grants keyed by RecoveryKeyID).
-- **Current DEV deployment**: One bootstrap service on the VPS, with only SSH and the bootstrap port exposed. The previous finalizer/provider services, databases, and DEV signing key were removed by explicit operator instruction. The bootstrap store is empty and does not finalize; the genesis-key holder must finalize from the desktop when that implementation is ready.
+- **Current implementation prototype**: Temporary standalone utility `cybou-bootstrap provision|serve`, bounded STATUS/CLAIM/REPLACE protocol handler, LevelDB `EMPTY`/`BOUND` store with generation numbering, legacy v8 state support, and target v9 state with grants keyed by stable AccountID plus expected RecoveryKeyID.
+- **Current DEV deployment**: The existing legacy testnet remains available for routine development: `cybou-node.service` finalizes on port 29461, and `cybou-provider-1.service` / `cybou-provider-2.service` provide storage on ports 29471/29481. Keep its state and PoA key until acceptance tests and the planned new-genesis DEV cutover are complete.
 
 ## Bootstrap prototype and target gap
 
@@ -126,6 +126,8 @@ Current `main` implements the canonical low-level substrate:
   GET and self-healing re-PUT; private Files schema v2 (modified time, every
   FILE has content, reserved Trash ID);
 - CYP2 verified block sync and content-addressed PUT/GET;
+- any full node may relay exact signed operations through a bounded volatile
+  queue while the Central Authority has a live PoA-authenticated session to it;
 - removal of legacy BFT, ValidatorSet, MailTx and indexed StorageObject runtime
   paths.
 

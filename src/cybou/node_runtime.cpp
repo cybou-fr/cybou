@@ -412,40 +412,37 @@ OperationSubmitResult CybouNodeRuntime::SubmitPeerOperation(ProtocolOperation op
     return SubmitOperationInternal(std::move(op), std::move(source_peer));
 }
 
-std::optional<BootstrapOperationRelay::FinalizerSession> CybouNodeRuntime::AttachAuthenticatedFinalizerRelay()
+std::optional<OperationRelay::FinalizerSession> CybouNodeRuntime::AttachAuthenticatedFinalizerRelay()
 {
-    if (!LocalBootstrapAccountId()) return std::nullopt;
-    return m_bootstrap_operation_relay.AttachAuthenticatedFinalizer();
+    return m_operation_relay.AttachAuthenticatedFinalizer();
 }
 
-void CybouNodeRuntime::DetachAuthenticatedFinalizerRelay(const BootstrapOperationRelay::FinalizerSession session)
+void CybouNodeRuntime::DetachAuthenticatedFinalizerRelay(const OperationRelay::FinalizerSession session)
 {
-    m_bootstrap_operation_relay.DetachFinalizer(session);
+    m_operation_relay.DetachFinalizer(session);
 }
 
 bool CybouNodeRuntime::CanAcceptOperations() const
 {
-    return IsPoaFinalizerEnabled() || (LocalBootstrapAccountId().has_value() &&
-        m_bootstrap_operation_relay.HasAuthenticatedFinalizer());
+    return IsPoaFinalizerEnabled() || m_operation_relay.HasAuthenticatedFinalizer();
 }
 
-BootstrapRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
+OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
     const std::span<const unsigned char> exact_bytes)
 {
-    if (!LocalBootstrapAccountId()) return BootstrapRelayEnqueueStatus::FINALIZER_UNAVAILABLE;
-    return m_bootstrap_operation_relay.Enqueue(exact_bytes);
+    return m_operation_relay.Enqueue(exact_bytes);
 }
 
-std::optional<BootstrapRelayOperation> CybouNodeRuntime::PeekRelayedOperation(
-    const BootstrapOperationRelay::FinalizerSession session) const
+std::optional<RelayedOperation> CybouNodeRuntime::PeekRelayedOperation(
+    const OperationRelay::FinalizerSession session) const
 {
-    return m_bootstrap_operation_relay.Peek(session);
+    return m_operation_relay.Peek(session);
 }
 
 bool CybouNodeRuntime::AcknowledgeRelayedOperation(
-    const BootstrapOperationRelay::FinalizerSession session, const uint256& operation_id)
+    const OperationRelay::FinalizerSession session, const uint256& operation_id)
 {
-    return m_bootstrap_operation_relay.Acknowledge(session, operation_id);
+    return m_operation_relay.Acknowledge(session, operation_id);
 }
 
 OperationStatus CybouNodeRuntime::GetOperationStatus(const uint256& op_id) const
@@ -552,7 +549,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
     if (m_peer_manager) {
         std::lock_guard p2p_lock(m_p2p_mutex);
         // Bring up the configured route if possible, then prefer a live
-        // genesis-key-authenticated finalizer session over the bootstrap relay.
+        // genesis-key-authenticated finalizer session over an ordinary relay.
         if (p2p_endpoint) m_peer_manager->Connect(p2p_endpoint->first, p2p_endpoint->second);
         std::vector<std::pair<std::string, uint16_t>> accepting_candidates;
         for (const auto& peer : m_peer_manager->AuthenticatedFinalizerSessions()) {
@@ -560,9 +557,11 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
                 accepting_candidates.emplace_back(peer.address, peer.port);
             }
         }
-        for (const auto& peer : m_peer_manager->AuthenticatedBootstrapSessions()) {
+        for (const auto& peer : m_peer_manager->Peers()) {
             if (peer.hello.capabilities & p2p::CAP_OPERATION_RELAY) {
-                accepting_candidates.emplace_back(peer.address, peer.port);
+                const auto endpoint = std::make_pair(peer.address, peer.port);
+                if (std::find(accepting_candidates.begin(), accepting_candidates.end(), endpoint) ==
+                    accepting_candidates.end()) accepting_candidates.push_back(endpoint);
             }
         }
         if (p2p_endpoint && std::find(accepting_candidates.begin(), accepting_candidates.end(), *p2p_endpoint) ==
@@ -640,15 +639,30 @@ std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
 bool CybouNodeRuntime::EnablePoaFinalizer(std::shared_ptr<PoaSigner> signer)
 {
     if (!signer) return false;
-    std::lock_guard lock(m_mutex);
-    if (!m_finalizer_node) m_finalizer_node = std::make_unique<CybouFinalizerNode>(m_store);
-    return m_finalizer_node->EnableSigner(std::move(signer));
+    bool enabled{false};
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_finalizer_node) m_finalizer_node = std::make_unique<CybouFinalizerNode>(m_store);
+        enabled = m_finalizer_node->EnableSigner(std::move(signer));
+    }
+    if (enabled) {
+        // Existing TCP handshakes cannot gain a finalizer proof later. Reconnect
+        // so the new capability is authenticated on each fresh session.
+        std::lock_guard p2p_lock(m_p2p_mutex);
+        if (m_peer_manager) m_peer_manager->DisconnectAll();
+    }
+    return enabled;
 }
 
 void CybouNodeRuntime::DisablePoaFinalizer()
 {
-    std::lock_guard lock(m_mutex);
-    if (m_finalizer_node) m_finalizer_node->DisableSigner();
+    {
+        std::lock_guard lock(m_mutex);
+        if (m_finalizer_node) m_finalizer_node->DisableSigner();
+    }
+    // Drop every route that authenticated the former finalizer session.
+    std::lock_guard p2p_lock(m_p2p_mutex);
+    if (m_peer_manager) m_peer_manager->DisconnectAll();
 }
 
 bool CybouNodeRuntime::IsPoaFinalizerEnabled() const
@@ -962,7 +976,7 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
         }
     }
     if (result.blocks_applied==0 && any_peer_up_to_date) result.status = SyncPeerStatus::UP_TO_DATE;
-    m_peer_manager->PollBootstrapRelays();
+    m_peer_manager->PollOperationRelays();
     m_peer_manager->FanoutRecentBlocks();
     return result;
 }

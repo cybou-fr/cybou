@@ -391,7 +391,7 @@ BOOST_AUTO_TEST_CASE(manager_tracks_finalizer_proof_only_for_the_live_session)
     BOOST_CHECK(manager.AuthenticatedFinalizerSessions().empty());
 }
 
-BOOST_AUTO_TEST_CASE(configured_authority_bootstrap_session_proves_genesis_finalizer_key)
+BOOST_AUTO_TEST_CASE(authority_proves_key_to_unconfigured_live_peer_session)
 {
     CybouServiceTestFixture fixture;
     boost::asio::io_context io;
@@ -403,7 +403,7 @@ BOOST_AUTO_TEST_CASE(configured_authority_bootstrap_session_proves_genesis_final
         .network_definition = fixture.definition,
         .data_dir = fixture.directory / "configured-authority-bootstrap-proof",
         .poa_finalizer_recovery_entropy = fixture.validator_seed,
-        .p2p_endpoint = endpoint,
+        .authenticate_finalizer_to_any_peer = true,
         .memory_only = true,
         .wipe_data = true,
         .peer_admission_policy = TestLabAdmissionPolicy(),
@@ -430,7 +430,7 @@ BOOST_AUTO_TEST_CASE(configured_authority_bootstrap_session_proves_genesis_final
     BOOST_CHECK(finalizer_authenticated);
 }
 
-BOOST_AUTO_TEST_CASE(authenticated_bootstrap_relays_client_operation_to_live_finalizer)
+BOOST_AUTO_TEST_CASE(any_full_node_relays_client_operation_to_live_finalizer)
 {
     CybouServiceTestFixture fixture;
     cybou::CybouKeyStore bootstrap_keys;
@@ -489,7 +489,7 @@ BOOST_AUTO_TEST_CASE(authenticated_bootstrap_relays_client_operation_to_live_fin
         .network_definition = definition,
         .data_dir = fixture.directory / "relay-authority",
         .poa_finalizer_recovery_entropy = fixture.validator_seed,
-        .p2p_endpoint = endpoint,
+        .authenticate_finalizer_to_any_peer = true,
         .memory_only = true,
         .wipe_data = true,
         .peer_admission_policy = TestLabAdmissionPolicy(),
@@ -499,28 +499,18 @@ BOOST_AUTO_TEST_CASE(authenticated_bootstrap_relays_client_operation_to_live_fin
     const auto bootstrap_claim_block = authority.ProduceBlock();
     BOOST_REQUIRE(bootstrap_claim_block);
 
-    const auto bootstrap_signer = [&bootstrap_keys](std::span<const unsigned char> message)
-        -> std::optional<std::vector<unsigned char>> {
-        const auto signature = bootstrap_keys.SignAuthorization(message);
-        if (!signature || signature->ml_dsa.size() != 2420) return std::nullopt;
-        std::vector<unsigned char> proof(signature->ed25519.begin(), signature->ed25519.end());
-        proof.insert(proof.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
-        return proof;
-    };
-    cybou::CybouNodeRuntime bootstrap{{
+    cybou::CybouNodeRuntime relay_node{{
         .network_definition = definition,
-        .data_dir = fixture.directory / "relay-bootstrap",
+        .data_dir = fixture.directory / "relay-ordinary-node",
         .memory_only = true,
         .wipe_data = true,
-        .bootstrap_identity_account = *bootstrap_account,
-        .bootstrap_proof_signer = bootstrap_signer,
         .peer_admission_policy = TestLabAdmissionPolicy(),
     }};
-    BOOST_REQUIRE(bootstrap.InitializeGenesis(genesis));
-    BOOST_REQUIRE(static_cast<bool>(bootstrap.CommitBlock(*bootstrap_claim_block)));
-    BOOST_REQUIRE(bootstrap.LocalBootstrapAccountId());
+    BOOST_REQUIRE(relay_node.InitializeGenesis(genesis));
+    BOOST_REQUIRE(static_cast<bool>(relay_node.CommitBlock(*bootstrap_claim_block)));
+    BOOST_REQUIRE(!relay_node.LocalBootstrapAccountId());
 
-    cybou::p2p::InboundPeerServer server{bootstrap, io, tcp::endpoint{loopback, endpoint.second}};
+    cybou::p2p::InboundPeerServer server{relay_node, io, tcp::endpoint{loopback, endpoint.second}};
     BOOST_REQUIRE_NE(server.Port(), 0U);
     std::atomic_bool stopping{false};
     std::jthread listener{[&] { server.Run(stopping); }};
@@ -538,15 +528,17 @@ BOOST_AUTO_TEST_CASE(authenticated_bootstrap_relays_client_operation_to_live_fin
     cybou::p2p::PeerManager authority_peers{authority};
     const bool authority_connected = authority_peers.Connect(server_endpoint.first, server_endpoint.second);
     BOOST_REQUIRE_MESSAGE(authority_connected,
-        "finalizer bootstrap connection failed: endpoint=" << endpoint.first << ':' << endpoint.second <<
+        "finalizer connection to ordinary relay failed: endpoint=" << endpoint.first << ':' << endpoint.second <<
             " initialized=" << authority.GetStatus().is_initialized << " status=" <<
             static_cast<unsigned>(authority_peers.LastConnectStatus()));
-    BOOST_REQUIRE_EQUAL(authority_peers.AuthenticatedBootstrapSessions().size(), 1U);
+    BOOST_REQUIRE_EQUAL(authority_peers.Peers().size(), 1U);
+    BOOST_CHECK(!authority_peers.Peers().front().finalizer_authenticated);
+    BOOST_CHECK(authority_peers.Peers().front().hello.capabilities & cybou::p2p::CAP_OPERATION_RELAY);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-    while (!bootstrap.CanAcceptOperations() && std::chrono::steady_clock::now() < deadline) {
+    while (!relay_node.CanAcceptOperations() && std::chrono::steady_clock::now() < deadline) {
         std::this_thread::sleep_for(std::chrono::milliseconds{10});
     }
-    BOOST_REQUIRE(bootstrap.CanAcceptOperations());
+    BOOST_REQUIRE(relay_node.CanAcceptOperations());
 
     cybou::CybouNodeRuntime client{{
         .network_definition = definition,
@@ -560,15 +552,17 @@ BOOST_AUTO_TEST_CASE(authenticated_bootstrap_relays_client_operation_to_live_fin
     BOOST_REQUIRE(static_cast<bool>(client.CommitBlock(*bootstrap_claim_block)));
     cybou::p2p::PeerManager client_peers{client};
     BOOST_REQUIRE(client_peers.Connect(server_endpoint.first, server_endpoint.second));
-    BOOST_REQUIRE_EQUAL(client_peers.AuthenticatedBootstrapSessions().size(), 1U);
+    BOOST_REQUIRE_EQUAL(client_peers.Peers().size(), 1U);
+    BOOST_CHECK(!client_peers.Peers().front().bootstrap_account_id);
+    BOOST_CHECK(client_peers.Peers().front().hello.capabilities & cybou::p2p::CAP_OPERATION_RELAY);
 
     const auto submitted = client_peers.SubmitOperationToAny({server_endpoint}, client_operation);
     BOOST_REQUIRE(submitted.acknowledgment);
     BOOST_CHECK(submitted.acknowledgment->status == cybou::OperationSubmitStatus::RELAY_QUEUED);
     BOOST_CHECK(submitted.acknowledgment->op_id == *client_operation_id);
-    BOOST_REQUIRE_EQUAL(authority_peers.AuthenticatedBootstrapSessions().size(), 1U);
+    BOOST_REQUIRE_EQUAL(authority_peers.Peers().size(), 1U);
 
-    BOOST_CHECK_EQUAL(authority_peers.PollBootstrapRelays(), 1U);
+    BOOST_CHECK_EQUAL(authority_peers.PollOperationRelays(), 1U);
     BOOST_REQUIRE(authority.IsPoaFinalizerEnabled());
     BOOST_REQUIRE(authority.GetOperationStatus(*client_operation_id).kind ==
         cybou::OperationStatusKind::LOCAL_PENDING);
@@ -586,45 +580,10 @@ BOOST_AUTO_TEST_CASE(authenticated_bootstrap_relays_client_operation_to_live_fin
     authority_peers.DisconnectAll();
 }
 
-BOOST_AUTO_TEST_CASE(submit_operation_rejects_unproven_bootstrap_relay_capability)
+BOOST_AUTO_TEST_CASE(relay_without_live_finalizer_returns_unavailable)
 {
     CybouServiceTestFixture fixture;
-    auto identity = fixture.CreateIdentity("bootstrap-relay-submission.cybou");
-    (void)identity;
-    const auto source = fixture.runtime->GetBlockAtHeight(1);
-    BOOST_REQUIRE(source);
-    const auto operation = source->block.operations.front();
-    const auto operation_bytes = cybou::SerializeProtocolOperation(operation);
-    const auto operation_id = cybou::ComputeOperationId(operation);
-    BOOST_REQUIRE(operation_bytes && operation_id);
-
-    boost::asio::io_context io;
-    using boost::asio::ip::tcp;
-    const auto loopback = boost::asio::ip::address_v4::loopback();
-    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
-    bool handshake_ok{false};
-    std::jthread server{[&] {
-        tcp::socket socket{io};
-        acceptor.accept(socket);
-        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        handshake_ok = session.Handshake({.network_id = fixture.runtime->GetNetworkId(),
-                .finalized_height = 1, .finalized_tip = cybou::ComputeBlockId(source->block),
-                .capabilities = cybou::p2p::CAP_OPERATION_RELAY, .nonce = 9913});
-    }};
-
-    cybou::p2p::PeerManager manager{*fixture.runtime};
-    const auto result = manager.SubmitOperationToAny(
-        {{loopback.to_string(), acceptor.local_endpoint().port()}}, operation);
-    server.join();
-    BOOST_CHECK(handshake_ok);
-    BOOST_CHECK(!result.acknowledgment);
-    BOOST_CHECK(!result.delivery_uncertain);
-}
-
-BOOST_AUTO_TEST_CASE(unproven_relay_capability_does_not_receive_inbound_operation)
-{
-    CybouServiceTestFixture fixture;
-    auto identity = fixture.CreateIdentity("bootstrap-relay-inbound.cybou");
+    auto identity = fixture.CreateIdentity("ordinary-relay-without-finalizer.cybou");
     (void)identity;
     const auto source = fixture.runtime->GetBlockAtHeight(1);
     BOOST_REQUIRE(source);
@@ -632,7 +591,7 @@ BOOST_AUTO_TEST_CASE(unproven_relay_capability_does_not_receive_inbound_operatio
 
     cybou::CybouNodeRuntime receiver{{
         .network_definition = fixture.definition,
-        .data_dir = fixture.directory / "relay-inbound-observer",
+        .data_dir = fixture.directory / "ordinary-relay-without-authority",
         .memory_only = true,
         .wipe_data = true,
         .peer_admission_policy = TestLabAdmissionPolicy(),
@@ -642,24 +601,21 @@ BOOST_AUTO_TEST_CASE(unproven_relay_capability_does_not_receive_inbound_operatio
     boost::asio::io_context io;
     using boost::asio::ip::tcp;
     const auto loopback = boost::asio::ip::address_v4::loopback();
-    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
-    bool served{false};
-    std::jthread server{[&] {
-        tcp::socket socket{io};
-        acceptor.accept(socket);
-        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        served = session.Handshake({.network_id = receiver.GetNetworkId(),
-            .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_OPERATION_RELAY, .nonce = 9914});
-    }};
+    cybou::p2p::InboundPeerServer server{receiver, io, tcp::endpoint{loopback, 0}};
+    std::atomic_bool stopping{false};
+    std::jthread listener{[&] { server.Run(stopping); }};
+    struct StopListener {
+        std::atomic_bool& stopping;
+        std::jthread& listener;
+        ~StopListener() { stopping = true; if (listener.joinable()) listener.join(); }
+    } stop_listener{stopping, listener};
 
     cybou::p2p::PeerManager manager{*fixture.runtime};
     const auto result = manager.SubmitOperationToAny(
-        {{loopback.to_string(), acceptor.local_endpoint().port()}}, operation);
-    server.join();
-    BOOST_CHECK(served);
-    BOOST_CHECK(!result.acknowledgment);
-    BOOST_CHECK(!result.delivery_uncertain);
+        {{loopback.to_string(), server.Port()}}, operation);
+    BOOST_REQUIRE(result.acknowledgment);
+    BOOST_CHECK(result.acknowledgment->status == cybou::OperationSubmitStatus::FINALIZER_UNAVAILABLE);
+    BOOST_CHECK(result.acknowledgment->op_id == cybou::ComputeOperationId(operation));
 }
 
 BOOST_AUTO_TEST_CASE(manager_pings_only_the_requested_peer_budget_and_rotates)

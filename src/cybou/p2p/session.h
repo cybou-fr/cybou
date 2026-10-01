@@ -9,7 +9,7 @@
 #include <cybou/bootstrap_identity.h>
 #include <cybou/finalizer_node.h>
 #include <cybou/finalized_chunk_store.h>
-#include <cybou/bootstrap_operation_relay.h>
+#include <cybou/operation_relay.h>
 
 #include <boost/asio/ip/tcp.hpp>
 
@@ -39,7 +39,7 @@ inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
 inline constexpr uint64_t CAP_STORAGE{1ULL << 7};
 inline constexpr uint64_t CAP_STORAGE_PROOFS{1ULL << 8};
 inline constexpr uint64_t CAP_BOOTSTRAP{1ULL << 9};
-/** Genesis-granted bootstrap endpoint can relay operations to its live finalizer session. */
+/** Every full node can relay exact signed operations to a live authenticated finalizer session. */
 inline constexpr uint64_t CAP_OPERATION_RELAY{1ULL << 10};
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder
@@ -79,13 +79,13 @@ enum class MessageType : uint8_t {
     BOOTSTRAP_REQUEST = 41,
     BOOTSTRAP_RESPONSE = 42,
     BOOTSTRAP_PROOF = 43,
-    BOOTSTRAP_RELAY_POLL = 44,
-    BOOTSTRAP_RELAY_OPERATION_META = 45,
-    BOOTSTRAP_RELAY_OPERATION_CHUNK = 46,
-    BOOTSTRAP_RELAY_ACK = 47,
-    BOOTSTRAP_RELAY_ACK_RESULT = 48,
+    OPERATION_RELAY_POLL = 44,
+    OPERATION_RELAY_OPERATION_META = 45,
+    OPERATION_RELAY_OPERATION_CHUNK = 46,
+    OPERATION_RELAY_ACK = 47,
+    OPERATION_RELAY_ACK_RESULT = 48,
 };
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::BOOTSTRAP_RELAY_ACK_RESULT)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::OPERATION_RELAY_ACK_RESULT)};
 
 /** Stable identity of a storage provider: BLAKE3 of its STORAGE_PROVIDER public key. */
 using ProviderId = std::array<unsigned char, 32>;
@@ -229,7 +229,7 @@ public:
     std::optional<BlockAnnounceResult> AdvertiseBlock(const BlockAnnouncement& announcement,
         const FinalizedBlock& block, uint64_t& peer_finalized_height);
     std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation);
-    bool PollBootstrapRelay(CybouNodeRuntime& runtime);
+    bool PollOperationRelay(CybouNodeRuntime& runtime);
     std::vector<std::pair<std::string, uint16_t>> RequestPeers(
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     bool SendPeers(const std::vector<std::pair<std::string, uint16_t>>& peers,
@@ -241,7 +241,7 @@ public:
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
         const uint256& publication_operation_id, const ChunkId& chunk_id);
     bool ServeNext(CybouNodeRuntime& runtime,
-        std::optional<BootstrapOperationRelay::FinalizerSession> relay_session = std::nullopt);
+        std::optional<OperationRelay::FinalizerSession> relay_session = std::nullopt);
     const std::optional<Hello>& Peer() const { return m_peer; }
     /** One authenticated CYP2 frame for bounded peer extensions and protocol tests. */
     bool SendFrame(const Frame& frame,

@@ -188,6 +188,7 @@ void CybouDesktopController::start()
             .poa_finalizer_recovery_entropy = std::nullopt,
             .p2p_endpoint = configured_p2p,
             .local_p2p_endpoint = network_config.listen_endpoint,
+            .authenticate_finalizer_to_any_peer = true,
             .db_cache_bytes = 8 << 20,
             .peer_admission_policy = std::move(peer_admission.policy),
         };
