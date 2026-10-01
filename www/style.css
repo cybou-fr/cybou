@@ -2199,16 +2199,17 @@ a {
 /* Pricing Grid & Cards (Entreprise) */
 .pricing-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  margin-top: 24px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 28px;
+  max-width: 920px;
+  margin: 28px auto 0;
 }
 
 .pricing-card {
   background: #ffffff;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
-  padding: 32px 24px;
+  padding: 32px 26px;
   box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
@@ -2239,6 +2240,7 @@ a {
   letter-spacing: 0.06em;
   padding: 4px 12px;
   border-radius: var(--radius-pill);
+  white-space: nowrap;
 }
 
 .pricing-tier {
@@ -2249,7 +2251,7 @@ a {
 }
 
 .pricing-price {
-  font-size: 2rem;
+  font-size: 1.85rem;
   font-weight: 800;
   color: var(--brand-teal-dark);
   letter-spacing: -0.02em;
@@ -2278,7 +2280,7 @@ a {
   margin: 0 0 24px 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   font-size: 0.84rem;
   color: var(--text-secondary);
   flex-grow: 1;
@@ -2297,12 +2299,23 @@ a {
   margin-top: 2px;
 }
 
+.pricing-disclaimer {
+  max-width: 920px;
+  margin: 18px auto 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  text-align: center;
+  font-style: italic;
+}
+
 .roi-banner {
   background: linear-gradient(135deg, #f0fdf4, #e6fffa);
   border: 1px solid rgba(13, 148, 136, 0.2);
   border-radius: var(--radius-lg);
   padding: 22px 26px;
-  margin-top: 24px;
+  max-width: 920px;
+  margin: 24px auto 0;
   display: flex;
   align-items: center;
   gap: 20px;
@@ -2334,8 +2347,8 @@ a {
   margin: 0;
 }
 
-@media (max-width: 900px) {
-  .pricing-grid { grid-template-columns: 1fr; }
+@media (max-width: 820px) {
+  .pricing-grid { grid-template-columns: 1fr; max-width: 480px; }
   .roi-banner { flex-direction: column; text-align: center; }
 }
 
