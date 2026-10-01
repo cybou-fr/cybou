@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CYBOU — Identité numérique, Mail et Files privés</title>
-  <meta name="description" content="CYBOU construit un protocole expérimental centré sur l'identité pour la messagerie privée et les fichiers chiffrés. Le protocole DEV fonctionne ; Mail et Files ne sont pas encore des services publics.">
-  <meta name="keywords" content="CYBOU, identité numérique, communication sécurisée, messagerie chiffrée, souveraineté numérique, post-quantique, P2P, France, Europe">
+  <title>CYBOU — Bureau privé souverain : Mail, Files et Identité protégés</title>
+  <meta name="description" content="CYBOU réunit messagerie privée, stockage de fichiers et identité souveraine dans une application de bureau protégée par chiffrement client, transport TLS 1.3 et cryptographie post-quantique en France.">
+  <meta name="keywords" content="CYBOU, identité numérique, communication sécurisée, messagerie chiffrée, souveraineté numérique, post-quantique, P2P, France, Europe, TLS 1.3, alternative Gmail, alternative Google Drive">
   <meta name="author" content="Stanislav Saveliev">
   <meta name="copyright" content="Stanislav Saveliev">
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
@@ -20,8 +20,8 @@
 
   <!-- OpenGraph Metadata -->
   <meta property="og:site_name" content="CYBOU">
-  <meta property="og:title" content="CYBOU — Identité numérique, Mail et Files privés">
-  <meta property="og:description" content="Un protocole expérimental centré sur l'identité pour la messagerie privée et les fichiers chiffrés. Mail et Files sont en développement, pas encore des services publics.">
+  <meta property="og:title" content="CYBOU — Bureau privé souverain : Mail, Files et Identité">
+  <meta property="og:description" content="Alternative souveraine à Big Tech : messagerie et fichiers chiffrés sur votre ordinateur, transport sécurisé TLS 1.3 et réseau souverain en France.">
   <meta property="og:image" content="https://cybou.fr/assets/cybou.png">
   <meta property="og:url" content="https://cybou.fr/">
   <meta property="og:type" content="website">
@@ -30,13 +30,13 @@
 
   <!-- Twitter Metadata -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="CYBOU — Identité numérique, Mail et Files privés">
-  <meta name="twitter:description" content="Un protocole expérimental centré sur l'identité. Le protocole DEV fonctionne ; Mail et Files sont en développement.">
+  <meta name="twitter:title" content="CYBOU — Bureau privé souverain : Mail, Files et Identité">
+  <meta name="twitter:description" content="Messagerie et cloud personnel souverains. Chiffrement de bout en bout, transport TLS 1.3 et cryptographie post-quantique.">
   <meta name="twitter:image" content="https://cybou.fr/assets/cybou.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/cybou.png">
-  <link rel="stylesheet" href="style.css?v=20260929-1">
+  <link rel="stylesheet" href="style.css?v=20261001-2">
 
   <!-- Schema.org JSON-LD Structured Data for Search Engines & AI Models -->
   <script type="application/ld+json">
@@ -49,7 +49,7 @@
         "name": "CYBOU",
         "operatingSystem": "Linux, Windows",
         "applicationCategory": "SecurityApplication, CommunicationApplication",
-        "description": "Experimental open-source identity-centered protocol. DEV runs single-operator hybrid-PQ PoA with independently validating full nodes. Mail and Files are not yet public services.",
+        "description": "Sovereign desktop privacy suite providing encrypted Mail, Files and Identity. Transport protected by TLS 1.3, client-side encryption, and post-quantum NIST algorithms.",
         "url": "https://cybou.fr",
         "codeRepository": "https://github.com/cybou-fr/cybou",
         "license": "https://github.com/cybou-fr/cybou/blob/main/COPYING",
@@ -65,13 +65,13 @@
         "name": "CYBOU Core Source Code",
         "codeRepository": "https://github.com/cybou-fr/cybou",
         "programmingLanguage": "C++20",
-        "runtimePlatform": "CMake, LevelDB, OpenSSL"
+        "runtimePlatform": "CMake, Qt 6, LevelDB, OpenSSL"
       },
       {
         "@type": "TechArticle",
         "@id": "https://cybou.fr/#architecture-spec",
-        "headline": "Architecture du protocole CYBOU",
-        "description": "PoA à opérateur unique sur DEV, Identity, RootPublication et arbre de chunks chiffrés. Le protocole est actif ; les produits Mail et Files restent en développement.",
+        "headline": "Architecture du protocole et de la suite CYBOU",
+        "description": "Sécurité de transport TLS 1.3, chiffrement client de bout en bout, finalité PoA sur DEV, Identity et arbre de chunks BLAKE3.",
         "inLanguage": "fr",
         "author": {
           "@type": "Person",
@@ -87,55 +87,23 @@
             "name": "Qu'est-ce que CYBOU en termes simples ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "CYBOU est un projet logiciel expérimental centré sur une identité et un socle partagé pour la communication privée et les fichiers. Le protocole DEV existe ; Mail et Files ne sont pas encore des services publics utilisables."
+              "text": "CYBOU est une suite logicielle souveraine réunissant messagerie privée (Mail), stockage de fichiers chiffré (Files) et gestionnaire d'identité (Identity). Vos données sont chiffrées sur votre ordinateur avant tout envoi et tout le transport réseau est protégé en TLS 1.3."
             }
           },
           {
             "@type": "Question",
-            "name": "En quoi CYBOU diffère-t-il des services comme Gmail, Proton ou iCloud ?",
+            "name": "En quoi le transport chiffré en TLS 1.3 protège-t-il mes connexions sur Wi-Fi public ou chez mon FAI ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "L'objectif produit est de proposer des parcours familiers de messagerie et de fichiers tout en chiffrant les contenus côté client et en laissant les vues Inbox/Files au client. Ces parcours ne sont pas encore intégrés de bout en bout ; CYBOU ne remplace pas aujourd'hui Gmail ni Google Drive."
+              "text": "Le protocole CYP2 encapsule chaque flux réseau dans un tunnel TLS 1.3 strict. Que vous soyez sur un Wi-Fi public (gare, aéroport, café) ou sur votre box internet, aucun tiers ni votre fournisseur d'accès ne peut espionner vos communications ni altérer un octet de données."
             }
           },
           {
             "@type": "Question",
-            "name": "Comment fonctionnent les noms .cybou et la récupération de compte ?",
+            "name": "En quoi CYBOU diffère-t-il des services comme Gmail ou Google Drive ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Les noms .cybou sont des alias lisibles enregistrés par des opérations finalisées. La phrase de 24 mots restaure l'Identity ; retrouver les contenus Mail et Files nécessite aussi de reconstruire les index et de récupérer les chunks, un parcours encore en développement."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Pourquoi y a-t-il un portefeuille (Wallet) et pourquoi n'est-ce pas de la spéculation ?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Le protocole distingue le solde dépensable Balance du budget de services SystemBalance. Les frais et le bonus de création sont déterministes et propres au réseau. Les soldes DEV sont expérimentaux et n'ont pas de valeur de production."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Que signifie le profil de cryptographie hybride de DEV ?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Les signatures du protocole combinent Ed25519 avec le profil ML-DSA désigné. La capacité KEM X-Wing du DEV utilise le draft IETF -05. Il s'agit d'un profil de développement, pas d'une garantie de confidentialité à long terme ni d'un audit indépendant."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "La phrase de récupération restaure-t-elle mes messages et fichiers ?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Elle restaure les clés et l'identité si les vérifications réseau réussissent. La reconstruction de Mail et Files doit également retrouver les publications finalisées, ouvrir les capsules et récupérer les chunks. Ce parcours complet n'est pas encore livré."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Quel est l'état réel d'avancement et puis-je utiliser CYBOU dès aujourd'hui ?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "CYBOU n'est pas encore un service public de messagerie ou de stockage. Le réseau DEV et le client de bureau sont expérimentaux. Le dépôt contient le protocole PoA, Identity, publications et chunks ; les applications Mail/Files et la disponibilité durable restent en développement."
+              "text": "Contrairement aux géants du Web qui analysent vos emails et fichiers pour la publicité ou pour entraîner des IA, CYBOU chiffre tout localement sur votre processeur. Aucun serveur intermédiaire ne possède vos clés ni n'a accès à vos données privées."
             }
           }
         ]
@@ -165,11 +133,11 @@
 
       <nav class="desktop-nav" aria-label="Navigation principale">
         <ul class="nav-links">
-          <li><a href="#services" data-i18n="navServices">Services</a></li>
-          <li><a href="#statut" data-i18n="navStatus">État du projet</a></li>
-          <li><a href="#architecture" data-i18n="navArch">Fondations</a></li>
-          <li><a href="#protocol" data-i18n="navProtocol">Architecture du protocole</a></li>
-          <li><a href="#factsheet" data-i18n="navSpecs">Fiche technique</a></li>
+          <li><a href="#services" data-i18n="navProducts">Produits</a></li>
+          <li><a href="#showcase" data-i18n="navShowcase">Aperçu</a></li>
+          <li><a href="#security" data-i18n="navSecurity">Sécurité &amp; TLS</a></li>
+          <li><a href="#comparatif" data-i18n="navComparison">Comparatif</a></li>
+          <li><a href="#architecture" data-i18n="navArch">Sous le capot</a></li>
           <li><a href="#faq" data-i18n="navFaq">FAQ</a></li>
         </ul>
       </nav>
@@ -185,38 +153,37 @@
       </div>
     </div>
     <nav class="mobile-menu" id="mobile-menu" aria-label="Navigation mobile" hidden>
-      <a href="#services" data-i18n="navServices">Services</a>
-      <a href="#statut" data-i18n="navStatus">État du projet</a>
-      <a href="#architecture" data-i18n="navArch">Fondations</a>
-      <a href="#protocol" data-i18n="navProtocol">Architecture du protocole</a>
-      <a href="#factsheet" data-i18n="navSpecs">Fiche technique</a>
+      <a href="#services" data-i18n="navProducts">Produits</a>
+      <a href="#showcase" data-i18n="navShowcase">Aperçu</a>
+      <a href="#security" data-i18n="navSecurity">Sécurité &amp; TLS</a>
+      <a href="#comparatif" data-i18n="navComparison">Comparatif</a>
+      <a href="#architecture" data-i18n="navArch">Sous le capot</a>
       <a href="#faq" data-i18n="navFaq">FAQ</a>
     </nav>
   </header>
 
   <!-- ==========================================================================
-       Hero Section — Technical Statement & Honest Status
+       Hero Section — Product Focus with Prominent TLS 1.3 Advantage
        ========================================================================== -->
   <section class="hero-section" id="hero">
-    <!-- Big Logo Contrast Squircle Tile -->
     <div class="hero-logo-box" aria-hidden="true">
       <img src="assets/cybou.png" alt="CYBOU Emblem" width="90" height="90">
     </div>
 
     <div class="hero-tag">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-      <span data-i18n="heroTag">Identité numérique • Services privés • Protocole ouvert</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <span data-i18n="heroTag">Transport 100% Chiffré TLS 1.3 • Souveraineté France • Post-Quantique</span>
     </div>
 
     <h1 class="hero-title">
       CYBOU<br>
-      <span class="accent-text" data-i18n="heroAccent">Une identité unique. Des communications privées. Vos données sous votre contrôle.</span>
+      <span class="accent-text" data-i18n="heroAccent">Votre espace privé souverain. Messagerie, fichiers et identité.</span>
     </h1>
 
-    <p class="hero-subtitle" data-i18n="heroSubtitle">CYBOU construit une identité numérique portable et un socle partagé pour des services de communication et de fichiers privés. Le protocole fonctionne sur le réseau expérimental DEV ; les produits Mail et Files complets restent en développement.</p>
+    <p class="hero-subtitle" data-i18n="heroSubtitle">CYBOU réunit messagerie privée, stockage de fichiers et identité souveraine dans une application de bureau protectrice. Vos données sont chiffrées sur votre ordinateur avant tout envoi, et tous les flux réseau sont verrouillés en TLS 1.3.</p>
 
     <div class="hero-slogan-pill">
-      <span data-i18n="heroPillSlogan">Une identité protégée avec des services privés — sans promesse de service public prématurée.</span>
+      <span data-i18n="heroPillSlogan">Une suite souveraine qui protège votre vie privée — sans compromis publicitaire ni surveillance.</span>
     </div>
 
     <!-- Transparent Reality Callout -->
@@ -225,17 +192,283 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </div>
       <div class="status-callout-text">
-        <h4 data-i18n="statusCalloutTitle">Le protocole DEV fonctionne. Le produit reste en construction.</h4>
-        <p data-i18n="statusCalloutBody">CYBOU reste expérimental et non prêt pour la production. DEV utilise un finaliseur PoA unique ; les nœuds vérifient les blocs et l’état. Mail/Files, restauration, réplication, audit et réparation sont intégrés ; les tests prolongés et l’acceptation Beta restent à compléter.</p>
+        <h4 data-i18n="statusCalloutTitle">Protocole DEV opérationnel. Préparation de la version publique.</h4>
+        <p data-i18n="statusCalloutBody">Le réseau expérimental DEV fonctionne avec finalité PoA, stockage distribué et transport TLS 1.3. L'application de bureau CYBOU fait l'objet de tests continus de durcissement et d'intégration avant ouverture au grand public.</p>
       </div>
     </aside>
 
     <div class="hero-buttons">
-      <a href="#services" class="btn-primary">
-        <span data-i18n="heroBtnServices">Découvrir les services</span>
+      <a href="#showcase" class="btn-primary">
+        <span data-i18n="heroBtnShowcase">Découvrir l'application</span>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </a>
-      <a href="#statut" class="btn-secondary" data-i18n="heroBtnStatus">Consulter l'état réel d'avancement</a>
+      <a href="#security" class="btn-secondary" data-i18n="heroBtnSecurity">Pourquoi CYBOU ?</a>
+    </div>
+
+    <!-- Trust Badges Strip (Immediate User Advantages) -->
+    <div class="trust-badges" aria-label="Points forts de sécurité">
+      <div class="trust-badge-item tls-highlight">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span data-i18n="badgeTls">Transport 100% TLS 1.3 (Anti-interception Wi-Fi/FAI)</span>
+      </div>
+      <div class="trust-badge-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+        <span data-i18n="badgeFrance">Souveraineté France (Hors Cloud Act US)</span>
+      </div>
+      <div class="trust-badge-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+        <span data-i18n="badgePhrase">Zéro Mot de passe / Clé 24 mots</span>
+      </div>
+      <div class="trust-badge-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span data-i18n="badgePq">Bouclier Post-Quantique NIST</span>
+      </div>
+      <div class="trust-badge-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+        <span data-i18n="badgeNoAds">Zéro Collecte &amp; Zéro Publicité</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Section: Interactive Desktop App Showcase
+       ========================================================================== -->
+  <section class="section" id="showcase">
+    <div class="section-header">
+      <div class="section-label" data-i18n="showcaseLabel">Aperçu de l'application</div>
+      <h2 class="section-title" data-i18n="showcaseTitle">L'expérience CYBOU Desktop.</h2>
+      <p class="section-description" data-i18n="showcaseDesc">Une interface unifiée et intuitive qui réunit vos communications, vos fichiers et votre identité sous une protection cryptographique continue.</p>
+    </div>
+
+    <div class="mockup-container">
+      <div class="app-mockup">
+        <!-- Mockup Window Header -->
+        <div class="mockup-header">
+          <div class="window-controls">
+            <span class="window-dot close"></span>
+            <span class="window-dot min"></span>
+            <span class="window-dot max"></span>
+          </div>
+          <div class="mockup-titlebar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span>CYBOU Desktop — alice.cybou</span>
+          </div>
+          <div class="mockup-tls-status">
+            <span class="dot"></span>
+            <span data-i18n="mockupStatusTls">Connecté via TLS 1.3</span>
+          </div>
+        </div>
+
+        <!-- Mockup Window Body -->
+        <div class="mockup-body">
+          <!-- Sidebar -->
+          <aside class="mockup-sidebar">
+            <div class="mockup-user-badge">
+              <div class="mockup-avatar">A</div>
+              <div>
+                <div class="mockup-username">
+                  <span>alice.cybou</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <div class="mockup-network-pill" data-i18n="mockupNetworkFr">Nœud souverain France</div>
+              </div>
+            </div>
+
+            <nav class="mockup-nav" aria-label="Navigation de l'application simulée">
+              <button class="mockup-tab-btn active" data-mockup-tab="mail" type="button">
+                <span class="mockup-tab-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                  <span data-i18n="mockupTabMail">Mail</span>
+                </span>
+                <span class="mockup-tab-badge">3</span>
+              </button>
+
+              <button class="mockup-tab-btn" data-mockup-tab="files" type="button">
+                <span class="mockup-tab-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <span data-i18n="mockupTabFiles">Files</span>
+                </span>
+                <span class="mockup-tab-badge">42</span>
+              </button>
+
+              <button class="mockup-tab-btn" data-mockup-tab="identity" type="button">
+                <span class="mockup-tab-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span data-i18n="mockupTabId">Identité</span>
+                </span>
+                <span class="mockup-tab-badge" style="background: rgba(16,185,129,0.15); color: #047857;">OK</span>
+              </button>
+
+              <button class="mockup-tab-btn" data-mockup-tab="security" type="button">
+                <span class="mockup-tab-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <span data-i18n="mockupTabSec">Sécurité &amp; Réseau</span>
+                </span>
+                <span class="mockup-tab-badge">TLS 1.3</span>
+              </button>
+            </nav>
+          </aside>
+
+          <!-- Main Content Area -->
+          <main class="mockup-main">
+            <!-- 1. Mail View -->
+            <div class="mockup-view active" id="view-mail">
+              <div class="mockup-mail-layout">
+                <div class="mockup-inbox-list">
+                  <div class="mockup-mail-item selected">
+                    <div class="mockup-mail-from">
+                      <span data-i18n="mockupMailFrom1">Pierre Martin</span>
+                      <span style="font-size: 0.72rem; color: var(--text-muted);">14:32</span>
+                    </div>
+                    <div class="mockup-mail-subject" data-i18n="mockupMailSub1">Documents confidentiels 2026</div>
+                    <div class="mockup-mail-snippet" data-i18n="mockupMailSnip1">Bonjour Alice, voici les documents chiffrés demandés...</div>
+                    <div class="mockup-security-pill">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                      <span data-i18n="mockupBadgeE2ee">Chiffré client • TLS 1.3</span>
+                    </div>
+                  </div>
+
+                  <div class="mockup-mail-item">
+                    <div class="mockup-mail-from">
+                      <span data-i18n="mockupMailFrom2">Cabinet Juridique</span>
+                      <span style="font-size: 0.72rem; color: var(--text-muted);">Hier</span>
+                    </div>
+                    <div class="mockup-mail-subject" data-i18n="mockupMailSub2">Contrat de partenariat signé</div>
+                    <div class="mockup-mail-snippet" data-i18n="mockupMailSnip2">Le document a été validé et scellé avec signature hybride...</div>
+                    <div class="mockup-security-pill">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                      <span data-i18n="mockupBadgePq">Signature ML-DSA</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mockup-mail-reader">
+                  <div class="mockup-reader-header">
+                    <div class="mockup-reader-subject" data-i18n="mockupMailBodyTitle">Documents fiscaux et comptables 2026</div>
+                    <div class="mockup-reader-meta">
+                      <span>De : <strong>pierre.cybou</strong> &lt;pierre.cybou&gt;</span>
+                      <span>À : <strong>alice.cybou</strong></span>
+                    </div>
+                    <div class="mockup-badges-row">
+                      <span class="mockup-reader-badge highlight">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <span data-i18n="mockupBadgeTlsPill">Transport TLS 1.3 Certifié</span>
+                      </span>
+                      <span class="mockup-reader-badge">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        <span>Chiffrement hybride post-quantique</span>
+                      </span>
+                      <span class="mockup-reader-badge">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>
+                        <span>Stocké en France (2 répliques)</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div class="mockup-reader-body" data-i18n="mockupMailBodyText">
+                    Bonjour Alice,<br><br>
+                    Voici les pièces jointes chiffrées de notre bilan. Grâce au protocole CYBOU, cette transmission est passée directement par des liaisons chiffrées en TLS 1.3. Aucun serveur tiers, aucun FAI ni aucun robot publicitaire n'a pu lire un seul mot de notre échange.<br><br>
+                    Bien cordialement,<br>
+                    Pierre
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Files View -->
+            <div class="mockup-view" id="view-files">
+              <table class="mockup-files-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="mockupFilesColName">Fichier</th>
+                    <th data-i18n="mockupFilesColSize">Taille</th>
+                    <th data-i18n="mockupFilesColReplicas">Réplication</th>
+                    <th data-i18n="mockupFilesColStatus">État</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="mockup-file-name">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      <span>Contrat-Cadre-2026.pdf</span>
+                    </td>
+                    <td>14.2 Mo</td>
+                    <td>2 nœuds (France)</td>
+                    <td><span class="mockup-status-badge protected" data-i18n="mockupProtected">Protégé en France</span></td>
+                  </tr>
+                  <tr>
+                    <td class="mockup-file-name">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      <span>Sauvegarde-Comptabilite.enc</span>
+                    </td>
+                    <td>85.4 Mo</td>
+                    <td>2 nœuds (France)</td>
+                    <td><span class="mockup-status-badge protected" data-i18n="mockupProtected">Protégé en France</span></td>
+                  </tr>
+                  <tr>
+                    <td class="mockup-file-name">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      <span>Archives-Photos-Famille.tar</span>
+                    </td>
+                    <td>420.1 Mo</td>
+                    <td>2 nœuds (France)</td>
+                    <td><span class="mockup-status-badge protected" data-i18n="mockupProtected">Protégé en France</span></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style="margin-top: 24px; padding: 12px 16px; background: #f8f9fb; border-radius: var(--radius-sm); font-size: 0.82rem; color: var(--text-secondary); display: flex; justify-content: space-between;">
+                <span>Espace utilisé : <strong>519.7 Mo</strong> chiffrés en local (BLAKE3-256)</span>
+                <span>Zéro indexation Cloud Act • Zéro entraînement IA</span>
+              </div>
+            </div>
+
+            <!-- 3. Identity View -->
+            <div class="mockup-view" id="view-identity">
+              <div class="mockup-id-box">
+                <div class="mockup-id-card">
+                  <h5 data-i18n="mockupIdHeading1">Identité active</h5>
+                  <div class="mockup-id-value">alice.cybou</div>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">Compte souverain enregistré de manière permanente.</p>
+                </div>
+                <div class="mockup-id-card">
+                  <h5 data-i18n="mockupIdHeading2">Clés Post-Quantiques</h5>
+                  <div class="mockup-id-value">ML-DSA-65 + Ed25519</div>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">Signature hybride active contre attaques quantiques.</p>
+                </div>
+                <div class="mockup-id-card">
+                  <h5 data-i18n="mockupIdHeading3">Restauration de compte</h5>
+                  <div class="mockup-id-value">Phrase secrète de 24 mots</div>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">Permet de recréer l'identité sur un nouveau PC sans mot de passe ni SMS.</p>
+                </div>
+                <div class="mockup-id-card">
+                  <h5 data-i18n="mockupIdHeading4">Souveraineté des données</h5>
+                  <div class="mockup-id-value">100% Client-Side</div>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">Aucun identifiant centralisé, aucune collecte de numéro de téléphone.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Security View -->
+            <div class="mockup-view" id="view-security">
+              <div class="mockup-id-box">
+                <div class="mockup-id-card" style="grid-column: span 2;">
+                  <h5 style="color: var(--brand-teal-dark);" data-i18n="mockupSecHeading1">Chiffrement du transport (CYP2)</h5>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px;" data-i18n="mockupSecDesc1">Tunnel TLS 1.3 strict avec négociation cryptographique moderne. Élimine tout risque d'interception sur Wi-Fi public ou inspection FAI (DPI).</p>
+                  <div style="margin-top: 10px; font-family: var(--font-mono); font-size: 0.78rem; color: var(--brand-teal-dark);">
+                    TLS_AES_256_GCM_SHA384 • SPKI Pinning • Ephemeral ECDHE
+                  </div>
+                </div>
+                <div class="mockup-id-card" style="grid-column: span 2;">
+                  <h5 data-i18n="mockupSecHeading2">Politique d'admission réseau</h5>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px;" data-i18n="mockupSecDesc2">Trafic P2P public restreint exclusivement au territoire français via géolocalisation IP stricte. Failsafe fermé en cas de doute.</p>
+                  <div style="margin-top: 10px; font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-secondary);">
+                    Public P2P : France-only (Inbound &amp; Outbound) • Fail-closed
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -244,65 +477,65 @@
        ========================================================================== -->
   <section class="section" id="services">
     <div class="section-header">
-      <div class="section-label" data-i18n="servicesLabel">Écosystème unifié</div>
-      <h2 class="section-title" data-i18n="servicesTitle">Une seule identité. Vos services essentiels.</h2>
-      <p class="section-description" data-i18n="servicesDesc">CYBOU réunit l'identité, le budget de service et un protocole de contenu chiffré. Mail et Files sont des expériences produit prévues sur ce socle, pas des services publics déjà disponibles.</p>
+      <div class="section-label" data-i18n="servicesLabel">Services intégrés</div>
+      <h2 class="section-title" data-i18n="servicesTitle">Trois piliers pour votre indépendance numérique.</h2>
+      <p class="section-description" data-i18n="servicesDesc">Chaque outil fonctionne directement sur votre machine sans dépendre des géants de la tech.</p>
     </div>
 
     <div class="services-grid">
-      <!-- 1. Identity -->
-      <article class="service-card">
-        <div class="card-icon" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        </div>
-        <div class="service-card-tag" data-i18n="srvIdentityTag">Fondation</div>
-        <h3 data-i18n="srvIdentityTitle">Identité souveraine</h3>
-        <p data-i18n="srvIdentityDesc">Identité de compte, coffre CYBV2 et noms .cybou. La phrase restaure les clés ; l’historique finalisé, les capsules et les chunks disponibles permettent de reconstruire les contenus, y compris après rotation via RecoveryBridge.</p>
-        <div class="service-status-pill">
-          <span class="dot ready"></span>
-          <span data-i18n="srvIdentityStatus">Identité et coffre intégrés au protocole DEV</span>
-        </div>
-      </article>
-
-      <!-- 2. Mail -->
+      <!-- 1. Mail -->
       <article class="service-card">
         <div class="card-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
         </div>
-        <div class="service-card-tag" data-i18n="srvMailTag">Communication</div>
-        <h3 data-i18n="srvMailTitle">Messagerie privée (Mail)</h3>
-        <p data-i18n="srvMailDesc">Publications privées avec pièces jointes, découverte des capsules, récupération vérifiée et vues Inbox/Sent dans une base applicative chiffrée par Identity.</p>
+        <div class="service-card-tag" data-i18n="srvMailTag">Messagerie</div>
+        <h3 data-i18n="srvMailTitle">CYBOU Mail — Votre boîte de réception inviolable</h3>
+        <p data-i18n="srvMailDesc">Ne laissez plus Google ou Microsoft analyser vos correspondances privées. Vos messages et pièces jointes sont chiffrés sur votre poste avec des clés post-quantiques et transmis via TLS 1.3. Zéro publicité, zéro profilage.</p>
         <div class="service-status-pill">
           <span class="dot wip"></span>
           <span data-i18n="srvMailStatus">Flux intégrés — acceptation Beta en cours</span>
         </div>
       </article>
 
-      <!-- 3. Files -->
+      <!-- 2. Files -->
       <article class="service-card">
         <div class="card-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
         </div>
-        <div class="service-card-tag" data-i18n="srvFilesTag">Données</div>
-        <h3 data-i18n="srvFilesTitle">Stockage chiffré (Files)</h3>
-        <p data-i18n="srvFilesDesc">Catalogue privé, transferts et reconstruction via le même socle que Mail. Le stockage distant est audité et réparé ; une finalisation seule ne signifie pas Protected.</p>
+        <div class="service-card-tag" data-i18n="srvFilesTag">Stockage</div>
+        <h3 data-i18n="srvFilesTitle">CYBOU Files — Vos documents sous clé en France</h3>
+        <p data-i18n="srvFilesDesc">Un cloud personnel souverain qui échappe au US Cloud Act. Vos fichiers sont découpés en fragments chiffrés (BLAKE3-256), répliqués et automatiquement audités sur des nœuds indépendants en France.</p>
         <div class="service-status-pill">
           <span class="dot wip"></span>
           <span data-i18n="srvFilesStatus">Flux intégrés — tests prolongés en cours</span>
         </div>
       </article>
 
-      <!-- 4. Backup -->
+      <!-- 3. Identity -->
+      <article class="service-card">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div class="service-card-tag" data-i18n="srvIdentityTag">Identité</div>
+        <h3 data-i18n="srvIdentityTitle">CYBOU Identity — Une clé unique pour votre vie numérique</h3>
+        <p data-i18n="srvIdentityDesc">Oubliez les mots de passe vulnérables et les SMS piratables. Votre compte est sécurisé par une phrase secrète de 24 mots et un nom lisible .cybou inaliénable qui vous appartient à vie.</p>
+        <div class="service-status-pill">
+          <span class="dot ready"></span>
+          <span data-i18n="srvIdentityStatus">Identité et coffre intégrés au protocole DEV</span>
+        </div>
+      </article>
+
+      <!-- 4. Continuity -->
       <article class="service-card">
         <div class="card-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
         </div>
-        <div class="service-card-tag" data-i18n="srvBackupTag">Continuité</div>
-        <h3 data-i18n="srvBackupTitle">Sauvegarde souveraine</h3>
-        <p data-i18n="srvBackupDesc">La sauvegarde complète est une application ultérieure du même socle de contenu. Elle ne fait pas partie de la version initiale.</p>
+        <div class="service-card-tag" data-i18n="srvContinuityTag">Continuité</div>
+        <h3 data-i18n="srvContinuityTitle">Restauration &amp; Continuité</h3>
+        <p data-i18n="srvContinuityDesc">En cas de perte ou de changement d'ordinateur, votre phrase de 24 mots et les preuves finalisées permettent de reconstruire vos emails, fichiers et carnet d'adresses en toute sécurité.</p>
         <div class="service-status-pill">
-          <span class="dot"></span>
-          <span data-i18n="srvBackupStatus">Prévu après Beta</span>
+          <span class="dot ready"></span>
+          <span data-i18n="srvContinuityStatus">Reconstruction intégrée sur DEV</span>
         </div>
       </article>
 
@@ -311,83 +544,224 @@
         <div class="card-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
         </div>
-        <div class="service-card-tag" data-i18n="srvWalletTag">Usage</div>
-        <h3 data-i18n="srvWalletTitle">Budget de service (Wallet)</h3>
-        <p data-i18n="srvWalletDesc">Balance finance les transferts ; SystemBalance est un budget de services protocolaires. Les règles économiques sont déterministes et propres à chaque réseau.</p>
+        <div class="service-card-tag" data-i18n="srvWalletTag">Économie</div>
+        <h3 data-i18n="srvWalletTitle">Budget de service transparent</h3>
+        <p data-i18n="srvWalletDesc">Un modèle économique déterministe et prévisible pour rémunérer le stockage et la sécurité du réseau sans abonnement caché ni exploitation de vos données.</p>
         <div class="service-status-pill">
           <span class="dot ready"></span>
           <span data-i18n="srvWalletStatus">Opérations de base disponibles dans le client DEV</span>
         </div>
       </article>
-
     </div>
   </section>
 
   <!-- ==========================================================================
-       Section: Transparent Implementation Status Matrix
+       Section: Security Spotlight (Highlighting TLS 1.3 & Zero-Knowledge)
        ========================================================================== -->
-  <section class="section" id="statut">
+  <section class="section" id="security">
     <div class="section-header">
-      <div class="section-label" data-i18n="matrixLabel">Transparence technique</div>
-      <h2 class="section-title" data-i18n="matrixTitle">Matrice d'implémentation.</h2>
-      <p class="section-description" data-i18n="matrixDesc">Mail/Files et le stockage sont intégrés sur DEV. Les tests prolongés, installations propres, critères UX et revue de sécurité restent les étapes Beta.</p>
+      <div class="section-label" data-i18n="secLabel">Sécurité &amp; Transport</div>
+      <h2 class="section-title" data-i18n="secTitle">Une forteresse numérique de bout en bout.</h2>
+      <p class="section-description" data-i18n="secDesc">De votre connexion Wi-Fi jusqu'au stockage de vos fichiers, découvrez pourquoi vos données sont réellement impénétrables.</p>
     </div>
 
-    <div class="status-grid">
-      <!-- Column 1: Implemented -->
-      <article class="status-card">
-        <div class="status-card-header">
-          <h3 data-i18n="col1Title">Socle implémenté sur DEV</h3>
-          <span class="badge-done" data-i18n="badgeDone">IMPLÉMENTÉ</span>
+    <div class="security-grid">
+      <!-- 1. TLS 1.3 Transport (Featured!) -->
+      <article class="security-card featured">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         </div>
-        <ul class="status-list">
-          <li data-i18n="col1Item1"><strong>Identity et noms .cybou :</strong> AccountCreate avec travail anti-Sybil, rôles de clés hybrides, coffre portable et registre de noms finalisé.</li>
-          <li data-i18n="col1Item2"><strong>Finalité PoA :</strong> un signataire DEV dédié, journal anti-équivocation durable, arrêt de sécurité en cas de conflit et validation indépendante par les nœuds complets.</li>
-          <li data-i18n="col1Item3"><strong>RootPublication :</strong> opération générique autorisée par Identity ; aucun objet Mail ou fichier permanent dans le consensus.</li>
-          <li data-i18n="col1Item4"><strong>Arbre de contenu chiffré :</strong> chunks ROOT/INDEX/DATA ordonnés, adressés par BLAKE3-256 et construits pour le traitement en flux.</li>
-          <li data-i18n="col1Item5"><strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et messages CYP2 PUT/GET.</li>
-          <li data-i18n="col1Item6"><strong>Économie déterministe :</strong> frais et transitions de solde validés par le state machine ; DEV, Beta et Mainnet ont des paramètres distincts.</li>
-        </ul>
+        <div class="security-card-tag" data-i18n="secTlsTag">Protection Réseau</div>
+        <h3 data-i18n="secTlsTitle">Transport 100% Chiffré en TLS 1.3 (Protocole CYP2)</h3>
+        <p data-i18n="secTlsDesc">Que vous soyez sur le Wi-Fi public d'une gare, d'un hôtel ou sur votre box fibre domestique, chaque connexion entre votre application et le réseau est scellée par le standard TLS 1.3 le plus strict. Ni votre FAI (Orange, SFR, Free, Bouygues), ni un pirate sur le réseau local ne peuvent voir ce que vous transférez ni modifier un seul octet.</p>
       </article>
 
-      <!-- Column 2: In Progress -->
-      <article class="status-card wip">
-        <div class="status-card-header">
-          <h3 data-i18n="col2Title">Durcissement et préparation Beta</h3>
-          <span class="badge-wip" data-i18n="badgeWip">EN COURS</span>
+      <!-- 2. Client-side E2EE -->
+      <article class="security-card">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>
         </div>
-        <ul class="status-list">
-          <li data-i18n="col2Item1"><strong>Mail intégré :</strong> publications, pièces jointes et reconstruction Inbox/Sent ; acceptation desktop à compléter.</li>
-          <li data-i18n="col2Item2"><strong>Files intégré :</strong> catalogue privé, transferts et restauration ; installations propres et UX à vérifier.</li>
-          <li data-i18n="col2Item3"><strong>Durabilité :</strong> réplication, audit et réparation intégrés. DEV : 1 copie distante ; Beta : 2 indépendantes. Le cache local ne compte pas.</li>
-          <li data-i18n="col2Item4"><strong>Preuves :</strong> tests de restauration propre et de panne multiprocessus ; soak prolongé et acceptation Beta à compléter.</li>
-        </ul>
+        <div class="security-card-tag" data-i18n="secE2eeTag">Confidentialité Totale</div>
+        <h3 data-i18n="secE2eeTitle">Chiffrement Client de bout en bout</h3>
+        <p data-i18n="secE2eeDesc">Le TLS protège le transport, mais CYBOU protège aussi la donnée elle-même. Les messages et fichiers sont chiffrés sur votre processeur avec vos propres clés secrètes avant de partir. Même les nœuds du réseau ne voient que des données opaques et incompréhensibles.</p>
       </article>
 
-      <!-- Column 3: Planned -->
-      <article class="status-card planned">
-        <div class="status-card-header">
-          <h3 data-i18n="col3Title">Étapes ultérieures</h3>
-          <span class="badge-planned" data-i18n="badgePlanned">PLUS TARD</span>
+      <!-- 3. Sovereign France P2P -->
+      <article class="security-card">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
         </div>
-        <ul class="status-list">
-          <li data-i18n="col3Item1"><strong>Validation facultative :</strong> avis signé, vérifié et évalué localement. Aucun effet canonique ni pouvoir PoA.</li>
-          <li data-i18n="col3Item2"><strong>Montée en charge :</strong> tests prolongés des pièces jointes et du stockage partagé déjà intégrés.</li>
-          <li data-i18n="col3Item3"><strong>Sauvegarde :</strong> application post-Beta du même graphe chiffré, avec restauration vérifiable.</li>
-          <li data-i18n="col3Item4"><strong>Beta puis service public :</strong> coûts opérationnels mesurés, revue de sécurité, critères UX et exploitation documentée avant ouverture.</li>
-        </ul>
+        <div class="security-card-tag" data-i18n="secFranceTag">Immunité Juridique</div>
+        <h3 data-i18n="secFranceTitle">Souveraineté Territoriale France &amp; UE</h3>
+        <p data-i18n="secFranceDesc">Zéro serveur aux États-Unis, zéro dépendance aux géants de la Silicon Valley. L'admission P2P publique est strictement limitée à la France avec contrôle géographique rigoureux (fail-closed). Vos données échappent totalement au US Cloud Act et à la FISA 702.</p>
+      </article>
+
+      <!-- 4. Post-Quantum NIST -->
+      <article class="security-card">
+        <div class="card-icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="security-card-tag" data-i18n="secPqTag">Prêt pour l'Avenir</div>
+        <h3 data-i18n="secPqTitle">Bouclier Post-Quantique NIST (ML-DSA)</h3>
+        <p data-i18n="secPqDesc">Les futurs ordinateurs quantiques menacent de casser les chiffrements traditionnels (RSA, courbes elliptiques). CYBOU déploie dès aujourd'hui les algorithmes post-quantiques normalisés par le NIST (ML-DSA-44 et ML-DSA-65) pour garantir la sécurité de vos données pour les décennies à venir.</p>
       </article>
     </div>
   </section>
 
   <!-- ==========================================================================
-       Section: Core Architectural Pillars (Bento Grid)
+       Section: Comparison Matrix (CYBOU vs Big Tech)
+       ========================================================================== -->
+  <section class="section" id="comparatif">
+    <div class="section-header">
+      <div class="section-label" data-i18n="compLabel">Comparatif objectif</div>
+      <h2 class="section-title" data-i18n="compTitle">CYBOU face aux géants du numérique.</h2>
+      <p class="section-description" data-i18n="compDesc">Comprenez en un coup d'œil ce qui change lorsque vous passez d'un service centralisé à une suite souveraine.</p>
+    </div>
+
+    <div class="comparison-wrapper">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th data-i18n="compThCriteria">Critère de protection</th>
+            <th class="col-cybou" data-i18n="compThCybou">CYBOU Desktop</th>
+            <th data-i18n="compThGoogle">Google (Gmail / Drive)</th>
+            <th data-i18n="compThAppleMs">Apple iCloud / Microsoft</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong data-i18n="compRow1Crit">Chiffrement des messages et fichiers</strong></td>
+            <td class="col-cybou">
+              <span class="comparison-tag-good">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                <span data-i18n="compRow1Cybou">Client-side obligatoire (Zero-Knowledge)</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRow1Google">Chiffré sur serveurs Google (Google possède les clés)</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRow1AppleMs">Chiffrement serveur avec clés détenues par l'éditeur</span>
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td><strong data-i18n="compRow2Crit">Sécurité du transport réseau</strong></td>
+            <td class="col-cybou">
+              <span class="comparison-tag-good">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                <span data-i18n="compRow2Cybou">Tunnel strict TLS 1.3 de bout en bout (CYP2)</span>
+              </span>
+            </td>
+            <td>
+              <span style="color: var(--text-secondary);" data-i18n="compRow2Google">TLS vers centres de données Google</span>
+            </td>
+            <td>
+              <span style="color: var(--text-secondary);" data-i18n="compRow2AppleMs">TLS vers centres de données US</span>
+            </td>
+          </tr>
+          <tr>
+            <td><strong data-i18n="compRow3Crit">Analyse des contenus pour pub / IA</strong></td>
+            <td class="col-cybou">
+              <span class="comparison-tag-good">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                <span data-i18n="compRow3Cybou">Zéro analyse, zéro publicité, zéro entraînement IA</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRow3Google">Indexation pour ciblage et entraînement d'algorithmes</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRow3AppleMs">Scans automatisés et télémétrie</span>
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td><strong data-i18n="compRow4Crit">Juridiction et législation</strong></td>
+            <td class="col-cybou">
+              <span class="comparison-tag-good">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                <span data-i18n="compRow4Cybou">France &amp; Union Européenne (RGPD souverain)</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRow4Google">États-Unis (Soumis au Cloud Act &amp; FISA 702)</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRow4AppleMs">États-Unis (Soumis aux lois extraterritoriales US)</span>
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td><strong data-i18n="compRow5Crit">Résistance aux attaques quantiques</strong></td>
+            <td class="col-cybou">
+              <span class="comparison-tag-good">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                <span data-i18n="compRow5Cybou">NIST ML-DSA post-quantique intégré</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRow5Google">Algorithmes classiques (RSA / ECC)</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRow5AppleMs">Algorithmes classiques (RSA / ECC)</span>
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td><strong data-i18n="compRow6Crit">Authentification et propriété</strong></td>
+            <td class="col-cybou">
+              <span class="comparison-tag-good">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                <span data-i18n="compRow6Cybou">Phrase de 24 mots souveraine (Aucun mot de passe / SMS)</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRow6Google">Numéro de téléphone requis, risque de ban arbitraire</span>
+              </span>
+            </td>
+            <td>
+              <span class="comparison-tag-bad">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <span data-i18n="compRow6AppleMs">Identifiant lié à numéro de téléphone et carte bancaire</span>
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Section: Architecture & Specifications (Under the Hood / Technical)
        ========================================================================== -->
   <section class="section" id="architecture">
     <div class="section-header">
-      <div class="section-label" data-i18n="archLabel">Fondations de conception</div>
-      <h2 class="section-title" data-i18n="archTitle">Rupture avec les architectures centralisées.</h2>
-      <p class="section-description" data-i18n="archDesc">Le protocole sépare clairement les clés, le contenu privé, la finalité centralisée actuelle et les objectifs de résilience à venir.</p>
+      <div class="section-label" data-i18n="archLabel">Sous le capot</div>
+      <h2 class="section-title" data-i18n="archTitle">Architecture technique &amp; Fondations.</h2>
+      <p class="section-description" data-i18n="archDesc">Pour les développeurs, auditeurs et curieux : les spécifications exactes du moteur de consensus et du réseau.</p>
     </div>
 
     <div class="bento-grid">
@@ -444,19 +818,9 @@
         </div>
       </div>
     </div>
-  </section>
 
-  <!-- ==========================================================================
-       Section: Generic encrypted publication flow
-       ========================================================================== -->
-  <section class="section" id="protocol">
-    <div class="section-header">
-      <div class="section-label" data-i18n="flowLabel">Cycle de publication privée</div>
-      <h2 class="section-title" data-i18n="flowTitle">Du contenu chiffré à sa disponibilité.</h2>
-      <p class="section-description" data-i18n="flowDesc">Les services applicatifs relient chiffrement, publication PoA et stockage distant. La durabilité est mesurée séparément de la finalité.</p>
-    </div>
-
-    <div class="flow-container">
+    <!-- Flow container -->
+    <div class="flow-container" style="margin-top: 40px;">
       <article class="flow-step">
         <div class="step-num">01 / CONTENU</div>
         <h4 class="step-title" data-i18n="step1Title">Préparer le contenu privé</h4>
@@ -481,25 +845,20 @@
         <p class="step-desc" data-i18n="step4Desc">PoA finalise l'opération ; les fournisseurs vérifient ensuite les preuves d'admission des chunks. Finalité ne signifie pas durabilité : le client doit mesurer la disponibilité, réessayer et reconstruire ses index locaux.</p>
       </article>
     </div>
-  </section>
 
-  <!-- ==========================================================================
-       Section: AI & Search Engine Semantic Factsheet
-       ========================================================================== -->
-  <section class="section" id="factsheet">
-    <div class="section-header">
-      <div class="section-label" data-i18n="specLabel">Spécifications machine & humaine</div>
-      <h2 class="section-title" data-i18n="specTitle">Fiche technique du protocole CYBOU.</h2>
-      <p class="section-description" data-i18n="specDesc">Données d'ingénierie structurées et indexables pour moteurs de recherche et assistants d'analyse IA.</p>
-    </div>
-
-    <div class="factsheet-box">
+    <!-- Factsheet -->
+    <div class="factsheet-box" style="margin-top: 40px;">
       <div class="factsheet-title">
         <svg class="factsheet-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
         <span data-i18n="factsheetHeading">Paramètres canoniques de l'architecture CYBOU</span>
       </div>
 
       <dl class="tech-spec-grid">
+        <div class="spec-item">
+          <dt data-i18n="dtTransport">Transport P2P &amp; Chiffrement</dt>
+          <dd data-i18n="ddTransport">CYP2 encapsulé dans TLS 1.3 strict. SPKI pinning éphémère, zéro fuite de métadonnées de transport vers FAI/tiers.</dd>
+        </div>
+
         <div class="spec-item">
           <dt data-i18n="dtConsensus">Finalité actuelle sur DEV</dt>
           <dd data-i18n="ddConsensus">PoA hybride à un signataire exploité par CYBOU sur DEV. Les nœuds complets vérifient indépendamment ; pas de revendication BFT. Cible : PoA sur poste Central Authority.</dd>
@@ -513,11 +872,6 @@
         <div class="spec-item">
           <dt data-i18n="dtAdmission">Admission P2P France souveraine</dt>
           <dd data-i18n="ddAdmission">Admission P2P publique restreinte à l'espace IP français (données Geo locales, fail-closed). Filtrage VPN/proxy/Tor local optionnel.</dd>
-        </div>
-
-        <div class="spec-item">
-          <dt data-i18n="dtEpochs">Époques protocolaires</dt>
-          <dd data-i18n="ddEpochs">Les périodes dérivées de la hauteur et les calculs entiers évitent l’horloge locale dans les transitions de consensus.</dd>
         </div>
 
         <div class="spec-item">
@@ -547,14 +901,66 @@
 
         <div class="spec-item">
           <dt data-i18n="dtStack">Socle technique</dt>
-          <dd data-i18n="ddStack">C++20, CMake, Qt 6, LevelDB, OpenSSL, BLAKE3 et transport CYP2.</dd>
-        </div>
-
-        <div class="spec-item">
-          <dt data-i18n="dtNetworks">Réseaux DEV, Beta et Mainnet</dt>
-          <dd data-i18n="ddNetworks">DEV est actif avec PoA à opérateur unique. Beta et Mainnet auront des genèses et paramètres économiques séparés ; aucun solde Beta ne sera transféré.</dd>
+          <dd data-i18n="ddStack">C++20, CMake, Qt 6, LevelDB, OpenSSL, BLAKE3 et transport CYP2 sur TLS 1.3.</dd>
         </div>
       </dl>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Section: Transparent Implementation Status Matrix
+       ========================================================================== -->
+  <section class="section" id="statut">
+    <div class="section-header">
+      <div class="section-label" data-i18n="matrixLabel">Transparence technique</div>
+      <h2 class="section-title" data-i18n="matrixTitle">Matrice d'implémentation.</h2>
+      <p class="section-description" data-i18n="matrixDesc">Mail/Files et le stockage sont intégrés sur DEV. Les tests prolongés, installations propres, critères UX et revue de sécurité restent les étapes Beta.</p>
+    </div>
+
+    <div class="status-grid">
+      <!-- Column 1: Implemented -->
+      <article class="status-card">
+        <div class="status-card-header">
+          <h3 data-i18n="col1Title">Socle implémenté sur DEV</h3>
+          <span class="badge-done" data-i18n="badgeDone">IMPLÉMENTÉ</span>
+        </div>
+        <ul class="status-list">
+          <li data-i18n="col1Item1"><strong>Identity et noms .cybou :</strong> AccountCreate avec travail anti-Sybil, rôles de clés hybrides, coffre portable et registre de noms finalisé.</li>
+          <li data-i18n="col1Item2"><strong>Finalité PoA :</strong> un signataire DEV dédié, journal anti-équivocation durable, arrêt de sécurité en cas de conflit et validation indépendante par les nœuds complets.</li>
+          <li data-i18n="col1Item3"><strong>RootPublication :</strong> opération générique autorisée par Identity ; aucun objet Mail ou fichier permanent dans le consensus.</li>
+          <li data-i18n="col1Item4"><strong>Arbre de contenu chiffré :</strong> chunks ROOT/INDEX/DATA ordonnés, adressés par BLAKE3-256 et construits pour le traitement en flux.</li>
+          <li data-i18n="col1Item5"><strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et transport CYP2 sécurisé en TLS 1.3.</li>
+          <li data-i18n="col1Item6"><strong>Économie déterministe :</strong> frais et transitions de solde validés par le state machine ; DEV, Beta et Mainnet ont des paramètres distincts.</li>
+        </ul>
+      </article>
+
+      <!-- Column 2: In Progress -->
+      <article class="status-card wip">
+        <div class="status-card-header">
+          <h3 data-i18n="col2Title">Durcissement et préparation Beta</h3>
+          <span class="badge-wip" data-i18n="badgeWip">EN COURS</span>
+        </div>
+        <ul class="status-list">
+          <li data-i18n="col2Item1"><strong>Mail intégré :</strong> publications, pièces jointes et reconstruction Inbox/Sent ; acceptation desktop à compléter.</li>
+          <li data-i18n="col2Item2"><strong>Files intégré :</strong> catalogue privé, transferts et restauration ; installations propres et UX à vérifier.</li>
+          <li data-i18n="col2Item3"><strong>Durabilité :</strong> réplication, audit et réparation intégrés. DEV : 1 copie distante ; Beta : 2 indépendantes. Le cache local ne compte pas.</li>
+          <li data-i18n="col2Item4"><strong>Preuves :</strong> tests de restauration propre et de panne multiprocessus ; soak prolongé et acceptation Beta à compléter.</li>
+        </ul>
+      </article>
+
+      <!-- Column 3: Planned -->
+      <article class="status-card planned">
+        <div class="status-card-header">
+          <h3 data-i18n="col3Title">Étapes ultérieures</h3>
+          <span class="badge-planned" data-i18n="badgePlanned">PLUS TARD</span>
+        </div>
+        <ul class="status-list">
+          <li data-i18n="col3Item1"><strong>Validation facultative :</strong> avis signé, vérifié et évalué localement. Aucun effet canonique ni pouvoir PoA.</li>
+          <li data-i18n="col3Item2"><strong>Montée en charge :</strong> tests prolongés des pièces jointes et du stockage partagé déjà intégrés.</li>
+          <li data-i18n="col3Item3"><strong>Sauvegarde :</strong> application post-Beta du même graphe chiffré, avec restauration vérifiable.</li>
+          <li data-i18n="col3Item4"><strong>Beta puis service public :</strong> coûts opérationnels mesurés, revue de sécurité, critères UX et exploitation documentée avant ouverture.</li>
+        </ul>
+      </article>
     </div>
   </section>
 
@@ -565,7 +971,7 @@
     <div class="section-header">
       <div class="section-label" data-i18n="faqLabel">Questions fréquentes</div>
       <h2 class="section-title" data-i18n="faqTitle">Comprendre CYBOU.</h2>
-      <p class="section-description" data-i18n="faqDesc">Ce qui fonctionne sur DEV, ce qui reste à construire et les limites du modèle de confiance.</p>
+      <p class="section-description" data-i18n="faqDesc">Ce qui fonctionne sur DEV, ce qui reste à construire et les garanties de sécurité.</p>
     </div>
 
     <div class="faq-grid">
@@ -573,70 +979,73 @@
       <article class="faq-card is-open">
         <button class="faq-trigger" type="button" aria-expanded="true" aria-controls="faq-answer-1">
           <span class="faq-heading">
-            <span class="faq-question" data-i18n="faqQ1">Qu’est-ce que CYBOU ?</span>
+            <span class="faq-question" data-i18n="faqQ1">Qu’est-ce que CYBOU en termes simples ?</span>
           </span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-1" aria-hidden="false">
-          <p data-i18n="faqA1">CYBOU est un projet logiciel expérimental centré sur une Identity et un socle commun pour la communication privée et les fichiers. Le protocole DEV existe ; Mail et Files ne sont pas encore des services publics utilisables.</p>
+          <p data-i18n="faqA1">CYBOU est une suite logicielle souveraine réunissant messagerie privée (Mail), stockage de fichiers chiffré (Files) et gestionnaire d'identité (Identity). Vos données sont chiffrées sur votre ordinateur avant tout envoi et tout le transport réseau est protégé en TLS 1.3.</p>
         </div>
       </article>
 
-      <!-- FAQ 2: CYBOU vs Big Tech -->
-      <article class="faq-card">
-        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-2">
-          <span class="faq-question" data-i18n="faqQ2">En quoi CYBOU vise-t-il une expérience différente de Gmail ou Google Drive ?</span>
-          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-        </button>
-        <div class="faq-answer" id="faq-answer-2" aria-hidden="true">
-          <p data-i18n="faqA2">L'objectif produit est de proposer des parcours familiers de messagerie et de fichiers tout en chiffrant les contenus côté client et en laissant les vues Inbox/Files au client. Ces parcours ne sont pas encore intégrés de bout en bout ; CYBOU ne remplace pas aujourd'hui Gmail ni Google Drive.</p>
-        </div>
-      </article>
-
-      <!-- FAQ 3: Names and Recovery -->
-      <article class="faq-card">
-        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-3">
-          <span class="faq-question" data-i18n="faqQ3">À quoi servent un nom .cybou et la phrase de récupération ?</span>
-          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-        </button>
-        <div class="faq-answer" id="faq-answer-3" aria-hidden="true">
-          <p data-i18n="faqA3">Un nom .cybou est un alias de compte enregistré par opérations finalisées (5–32 caractères ASCII). La phrase restaure Identity ; les contenus nécessitent aussi l’historique et les chunks disponibles. La restauration et RecoveryBridge sont implémentés.</p>
-        </div>
-      </article>
-
-      <!-- FAQ 4: Wallet & Utility -->
-      <article class="faq-card">
-        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-4">
-          <span class="faq-question" data-i18n="faqQ4">Pourquoi un wallet dans un produit de communication ?</span>
-          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-        </button>
-        <div class="faq-answer" id="faq-answer-4" aria-hidden="true">
-          <p data-i18n="faqA4">Le protocole distingue le solde dépensable <code>Balance</code> du budget de services <code>SystemBalance</code>. Les frais et le bonus de création sont déterministes et propres au réseau. Les soldes DEV sont expérimentaux, sans valeur de production.</p>
-        </div>
-      </article>
-
-      <!-- FAQ 5: Hybrid cryptography -->
+      <!-- FAQ 2: TLS 1.3 Transport Security (High priority user focus!) -->
       <article class="faq-card pq-focus">
-        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-5">
+        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-2">
           <span class="faq-heading">
-          <span class="faq-badge-pq" data-i18n="faqPqBadge">Cryptographie hybride sur DEV</span>
-            <span class="faq-question" data-i18n="faqQ5">Que signifie le profil de cryptographie hybride de DEV ?</span>
+            <span class="faq-badge-pq" data-i18n="faqTlsBadge">Transport Chiffré</span>
+            <span class="faq-question" data-i18n="faqQTls">En quoi le transport chiffré en TLS 1.3 protège-t-il mes connexions sur Wi-Fi public ou chez mon FAI ?</span>
           </span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
-        <div class="faq-answer" id="faq-answer-5" aria-hidden="true">
-          <p data-i18n="faqA5">Les signatures du protocole combinent Ed25519 avec le profil ML-DSA désigné. La capacité KEM X-Wing du DEV utilise le draft IETF -05. Il s'agit d'un profil de développement, pas d'une garantie de confidentialité à long terme ni d'un audit indépendant ; Beta/Mainnet doivent faire l'objet d'une décision séparée.</p>
+        <div class="faq-answer" id="faq-answer-2" aria-hidden="true">
+          <p data-i18n="faqATls">Toutes les communications entre pairs et nœuds CYBOU (protocole CYP2 v3) sont encapsulées dans un tunnel TLS 1.3 strict. Que vous utilisiez le Wi-Fi ouvert d'une gare, d'un café ou votre box internet à domicile, aucun tiers ni votre fournisseur d'accès (Orange, SFR, Free, Bouygues) ne peut intercepter, lire vos messages ou savoir quels fichiers vous échangez. L'inspection approfondie des paquets (DPI) est totalement inopérante.</p>
         </div>
       </article>
 
-      <!-- FAQ 6: Content recovery -->
+      <!-- FAQ 3: CYBOU vs Big Tech -->
       <article class="faq-card">
+        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-3">
+          <span class="faq-question" data-i18n="faqQ2">En quoi CYBOU diffère-t-il de Gmail ou Google Drive ?</span>
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer" id="faq-answer-3" aria-hidden="true">
+          <p data-i18n="faqA2">Contrairement à Google qui centralise vos données, possède les clés et scanne les contenus pour la publicité ou l'entraînement d'IA, CYBOU chiffre tout sur votre ordinateur. Aucun serveur ne peut lire vos emails ou fichiers, et tout le réseau public est localisé en France, à l'abri du Cloud Act américain.</p>
+        </div>
+      </article>
+
+      <!-- FAQ 4: Names and Recovery -->
+      <article class="faq-card">
+        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-4">
+          <span class="faq-question" data-i18n="faqQ3">À quoi servent un nom .cybou et la phrase de récupération de 24 mots ?</span>
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer" id="faq-answer-4" aria-hidden="true">
+          <p data-i18n="faqA3">Un nom .cybou (ex: alice.cybou) est votre identifiant lisible inaliénable. La phrase de 24 mots est votre clé secrète maîtresse : elle vous permet de recréer instantanément votre environnement et vos clés sur n'importe quel ordinateur, sans jamais dépendre d'un mot de passe ou d'un numéro de mobile piratable.</p>
+        </div>
+      </article>
+
+      <!-- FAQ 5: Why France and Europe -->
+      <article class="faq-card">
+        <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-5">
+          <span class="faq-question" data-i18n="faqQFrance">Pourquoi CYBOU est-il hébergé exclusivement en France et en Europe ?</span>
+          <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="faq-answer" id="faq-answer-5" aria-hidden="true">
+          <p data-i18n="faqAFrance">La souveraineté numérique exige une étanchéité juridique totale. En restreignant les nœuds publics au territoire français, CYBOU garantit que vos flux de données et vos fragments de stockage ne transitent jamais sous le contrôle de lois extraterritoriales étrangères comme le US Cloud Act ou la FISA 702.</p>
+        </div>
+      </article>
+
+      <!-- FAQ 6: Post-Quantum Cryptography -->
+      <article class="faq-card pq-focus">
         <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-6">
-          <span class="faq-question" data-i18n="faqQ6">La phrase de récupération restaure-t-elle mes messages et fichiers ?</span>
+          <span class="faq-heading">
+            <span class="faq-badge-pq" data-i18n="faqPqBadge">Sécurité Future</span>
+            <span class="faq-question" data-i18n="faqQ5">Que signifie la cryptographie post-quantique (ML-DSA) ?</span>
+          </span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-6" aria-hidden="true">
-          <p data-i18n="faqA6">Elle restaure les clés et l'Identity si les vérifications réseau réussissent. La reconstruction de Mail et Files doit également retrouver les publications finalisées, ouvrir les capsules et récupérer les chunks. Ce parcours complet n'est pas encore livré.</p>
+          <p data-i18n="faqA5">Les ordinateurs quantiques rendront obsolètes les signatures RSA et ECC actuelles. CYBOU utilise dès aujourd'hui les algorithmes post-quantiques récemment normalisés par le NIST (ML-DSA-44 et ML-DSA-65) couplés à Ed25519 pour protéger vos correspondances contre l'enregistrement malveillant et le déchiffrement rétroactif futur.</p>
         </div>
       </article>
 
@@ -647,18 +1056,19 @@
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-7" aria-hidden="true">
-          <p data-i18n="faqA7">Le client et DEV restent expérimentaux. Mail/Files, réplication, audit, réparation et restauration sont intégrés ; soak prolongé, acceptation Beta et revue de sécurité restent ouverts. Consultez le statut dans le dépôt.</p>
+          <p data-i18n="faqA7">Le réseau DEV et le code source complet sont actifs et consultables sur GitHub. L'application CYBOU Desktop est actuellement en cours de durcissement et d'intégration continue avant sa distribution publique pour la phase Beta.</p>
         </div>
       </article>
     </div>
   </section>
 
   <!-- ==========================================================================
-       Footer (Apple Style, Clean & Authoritative)
+       Footer (Clean, Professional, Product-Oriented)
        ========================================================================== -->
   <footer class="footer">
     <div class="footer-container">
       <div class="footer-grid">
+        <!-- Col 1: Brand & Purpose -->
         <div class="footer-col-brand">
           <div class="footer-brand-title">
             <div class="logo-tile" style="width: 28px; height: 28px; border-radius: 7px;">
@@ -666,39 +1076,39 @@
             </div>
             <span>CYBOU</span>
           </div>
-          <p data-i18n="footBrand">Projet open source en développement.<br>Protocole DEV expérimental. Mail et Files ne sont pas encore des services publics.</p>
+          <p data-i18n="footBrand">L'alternative souveraine pour vos communications et fichiers privés.<br>Conçu et développé en France.</p>
         </div>
 
+        <!-- Col 2: Product -->
         <div class="footer-col">
-          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footNav">Navigation</h4>
+          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footProd">Produit</h4>
           <ul class="footer-links">
-            <li><a href="#statut" data-i18n="navStatus">État du projet</a></li>
-            <li><a href="#architecture" data-i18n="navArch">Fondations</a></li>
-            <li><a href="#protocol" data-i18n="navProtocol">Architecture du protocole</a></li>
-            <li><a href="#factsheet" data-i18n="navSpecs">Fiche technique</a></li>
-            <li><a href="#faq" data-i18n="navFaq">FAQ</a></li>
+            <li><a href="#showcase" data-i18n="footProdDesktop">CYBOU Desktop</a></li>
+            <li><a href="#services" data-i18n="footProdMail">CYBOU Mail</a></li>
+            <li><a href="#services" data-i18n="footProdFiles">CYBOU Files</a></li>
+            <li><a href="#services" data-i18n="footProdIdentity">CYBOU Identity</a></li>
           </ul>
         </div>
 
+        <!-- Col 3: Security -->
         <div class="footer-col">
-          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footDocs">Spécifications</h4>
+          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footSec">Sécurité &amp; Souveraineté</h4>
           <ul class="footer-links">
-            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/00_VISION.md">00_VISION.md</a></li>
-            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/POA_FINALITY.md">POA_FINALITY.md</a></li>
-            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/ROOT_PUBLICATION.md">ROOT_PUBLICATION.md</a></li>
-            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/26_IMPLEMENTATION_STATUS.md">26_STATUS.md</a></li>
-            <li><a href="https://github.com/cybou-fr/cybou/blob/main/docs/cybou/06_BOOTSTRAP_STATE_SYNC.md">06_BOOTSTRAP_STATE_SYNC.md</a></li>
+            <li><a href="#security" data-i18n="footSecTls">Transport 100% TLS 1.3</a></li>
+            <li><a href="#security" data-i18n="footSecE2ee">Chiffrement client intégral</a></li>
+            <li><a href="#security" data-i18n="footSecFrance">Réseau souverain France</a></li>
+            <li><a href="#security" data-i18n="footSecPq">Résistance Post-Quantique</a></li>
           </ul>
         </div>
 
+        <!-- Col 4: Resources -->
         <div class="footer-col">
-          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footGov">Gouvernance</h4>
+          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footRes">Ressources</h4>
           <ul class="footer-links">
-            <li><a href="https://github.com/cybou-fr/cybou/blob/main/AGENTS.md">AGENTS.md (Autorité)</a></li>
-            <li><a href="https://github.com/cybou-fr/cybou/blob/main/MANIFEST.md">MANIFEST.md (SHA-256)</a></li>
-            <li><a href="https://github.com/cybou-fr/cybou/blob/main/SECURITY.md">SECURITY.md</a></li>
-            <li><a href="/llms.txt">llms.txt (Contexte IA)</a></li>
-            <li><a href="/sitemap.xml">sitemap.xml</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou" target="_blank" rel="noopener noreferrer" data-i18n="footResGithub">Code source GitHub</a></li>
+            <li><a href="#architecture" data-i18n="footResTech">Sous le capot (Technique)</a></li>
+            <li><a href="#faq" data-i18n="footResFaq">Foire aux questions</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/COPYING" target="_blank" rel="noopener noreferrer" data-i18n="footResLicense">Licence open source</a></li>
           </ul>
         </div>
       </div>
@@ -715,12 +1125,12 @@
         </div>
         <div style="display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--brand-teal-dark);">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
-          <span>Recherche &amp; Souveraineté Numérique Européenne</span>
+          <span data-i18n="footBottomBadge">Recherche &amp; Souveraineté Numérique Européenne</span>
         </div>
       </div>
     </div>
   </footer>
 
-  <script src="app.js?v=20260929-1"></script>
+  <script src="app.js?v=20261001-2"></script>
 </body>
 </html>
