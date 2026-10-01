@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comparatif Détaillé : CYBOU vs. Nextcloud, Dropbox &amp; GAFAM</title>
+  <meta name="description" content="Comparatif technique et juridique objectif : CYBOU face à Nextcloud, Dropbox, Google Workspace et Microsoft 365. Chiffrement post-quantique, souveraineté France, Cloud Act et résilience P2P.">
+  <meta name="author" content="CYBOU">
+  <meta name="robots" content="index, follow">
+
+  <link rel="canonical" href="https://cybou.fr/comparatif.html">
+  <link rel="alternate" hreflang="fr" href="https://cybou.fr/comparatif.html">
+  <link rel="alternate" hreflang="en" href="https://cybou.fr/comparatif.html?lang=en">
+
+  <meta property="og:title" content="Comparatif Détaillé : CYBOU vs. Nextcloud, Dropbox &amp; GAFAM">
+  <meta property="og:description" content="Analyse comparative objective : protection des données, chiffrement post-quantique, architecture P2P vs. LAMP, immunité Cloud Act.">
+  <meta property="og:url" content="https://cybou.fr/comparatif.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="CYBOU">
+  <meta property="og:image" content="https://cybou.fr/assets/cybou.png">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Comparatif Détaillé : CYBOU vs. Nextcloud, Dropbox &amp; GAFAM">
+  <meta name="twitter:description" content="Analyse comparative objective : protection des données, chiffrement post-quantique, architecture P2P vs. LAMP, immunité Cloud Act.">
+  <meta name="twitter:image" content="https://cybou.fr/assets/cybou.png">
+
+  <link rel="icon" type="image/png" href="assets/cybou.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=20261001-6">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Comparatif Technique : CYBOU face à Nextcloud, Dropbox, Google et Microsoft",
+    "description": "Étude comparative approfondie sur les modèles de sécurité, la cryptographie post-quantique, l'architecture réseau et la souveraineté juridique.",
+    "url": "https://cybou.fr/comparatif.html",
+    "inLanguage": "fr",
+    "author": {
+      "@type": "Organization",
+      "name": "CYBOU"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ==========================================================================
+       Navigation Bar
+       ========================================================================== -->
+  <header class="nav-header">
+    <div class="nav-container">
+      <div class="nav-brand-group">
+        <a href="index.html" class="nav-brand" aria-label="Accueil CYBOU">
+          <div class="logo-tile">
+            <img src="assets/cybou.png" alt="CYBOU Logo" width="26" height="26">
+          </div>
+          <span>CYBOU</span>
+        </a>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="mobile-menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+
+      <nav class="desktop-nav" aria-label="Navigation principale">
+        <ul class="nav-links">
+          <li><a href="index.html#services" data-i18n="navProducts">Produits</a></li>
+          <li><a href="index.html#showcase" data-i18n="navShowcase">Aperçu</a></li>
+          <li><a href="entreprise.html" data-i18n="navEnterprise">Entreprise</a></li>
+          <li><a href="index.html#security" data-i18n="navSecurity">Sécurité &amp; TLS</a></li>
+          <li><a href="conformite.html" data-i18n="navCompliance">Conformité</a></li>
+          <li><a href="comparatif.html" class="active" style="color: var(--brand-teal-dark); font-weight: 700;" data-i18n="navComparison">Comparatif</a></li>
+          <li><a href="index.html#architecture" data-i18n="navArch">Sous le capot</a></li>
+          <li><a href="index.html#faq" data-i18n="navFaq">FAQ</a></li>
+        </ul>
+      </nav>
+
+      <div class="nav-actions">
+        <div class="lang-switch" role="group" aria-label="Choix de la langue">
+          <button id="lang-fr" class="lang-btn active" type="button">FR</button>
+          <button id="lang-en" class="lang-btn" type="button">EN</button>
+        </div>
+        <a href="https://github.com/cybou-fr/cybou" target="_blank" rel="noopener noreferrer" class="github-link" aria-label="Dépôt GitHub CYBOU" title="GitHub">
+          <img src="https://github.com/favicon.ico" alt="" width="22" height="22">
+        </a>
+      </div>
+    </div>
+    <nav class="mobile-menu" id="mobile-menu" aria-label="Navigation mobile" hidden>
+      <a href="index.html#services" data-i18n="navProducts">Produits</a>
+      <a href="index.html#showcase" data-i18n="navShowcase">Aperçu</a>
+      <a href="entreprise.html" data-i18n="navEnterprise">Entreprise</a>
+      <a href="index.html#security" data-i18n="navSecurity">Sécurité &amp; TLS</a>
+      <a href="conformite.html" data-i18n="navCompliance">Conformité</a>
+      <a href="comparatif.html" data-i18n="navComparison">Comparatif</a>
+      <a href="index.html#architecture" data-i18n="navArch">Sous le capot</a>
+      <a href="index.html#faq" data-i18n="navFaq">FAQ</a>
+    </nav>
+  </header>
+
+  <!-- ==========================================================================
+       Hero Section
+       ========================================================================== -->
+  <header class="compliance-page-hero">
+    <div class="compliance-breadcrumb">
+      <a href="index.html" data-i18n="cmpBreadHome">Accueil</a>
+      <span>/</span>
+      <span data-i18n="cmpBreadCurrent">Comparatif Objectif des Solutions</span>
+    </div>
+
+    <div class="badge-pill" data-i18n="cmpHeroTag">Analyse Technique &amp; Souveraine</div>
+    <h1 class="hero-title" style="max-width: 960px; margin-top: 14px;" data-i18n="cmpHeroTitle">CYBOU face à Nextcloud, Dropbox, Google &amp; Microsoft</h1>
+    <p class="hero-subtitle" style="max-width: 860px;" data-i18n="cmpHeroDesc">
+      Comprenez en profondeur ce qui différencie la suite souveraine CYBOU des clouds centralisés américains (Google, Microsoft, Dropbox) et des serveurs auto-hébergés classiques (Nextcloud). Architecture P2P, cryptographie post-quantique OpenSSL v3.5.2+, immunité légale et modèle de données Zero-Knowledge.
+    </p>
+
+    <!-- Anchor Pills Navigation -->
+    <nav class="compliance-nav-pills" aria-label="Sommaire Comparatif">
+      <a href="#matrice" class="nav-pill-btn" data-i18n="cmpPillMatrix">Matrice Complète</a>
+      <a href="#vs-nextcloud" class="nav-pill-btn" data-i18n="cmpPillNextcloud">CYBOU vs. Nextcloud</a>
+      <a href="#vs-dropbox" class="nav-pill-btn" data-i18n="cmpPillDropbox">CYBOU vs. Dropbox</a>
+      <a href="#vs-bigtech" class="nav-pill-btn" data-i18n="cmpPillBigTech">CYBOU vs. GAFAM</a>
+      <a href="#synthese" class="nav-pill-btn" data-i18n="cmpPillSummary">Synthèse &amp; Décision</a>
+    </nav>
+  </header>
+
+  <!-- ==========================================================================
+       Main Comparison Container
+       ========================================================================== -->
+  <main class="compliance-container">
+
+    <!-- 1. Matrice Comparative Globale -->
+    <article class="compliance-article" id="matrice">
+      <div class="compliance-article-header">
+        <div class="compliance-tag-row">
+          <span class="compliance-pill" data-i18n="cmpMatPill">Tableau Comparatif Global</span>
+          <span class="compliance-status-good" data-i18n="cmpMatStatus">8 Critères Clés</span>
+        </div>
+        <h2 class="compliance-article-title" data-i18n="cmpMatTitle">Matrice Complète des Solutions de Collaboration &amp; Stockage</h2>
+        <div class="compliance-article-sub" data-i18n="cmpMatSub">Une comparaison directe et impartiale sur la sécurité, l'architecture, la cryptographie et la juridiction.</div>
+      </div>
+
+      <div class="comparison-wrapper" style="margin-top: 10px;">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th style="min-width: 200px;" data-i18n="cmpThCrit">Critère de Protection</th>
+              <th class="col-cybou" style="min-width: 170px;" data-i18n="cmpThCybou">CYBOU Desktop</th>
+              <th style="min-width: 170px;" data-i18n="cmpThNextcloud">Nextcloud</th>
+              <th style="min-width: 160px;" data-i18n="cmpThDropbox">Dropbox</th>
+              <th style="min-width: 160px;" data-i18n="cmpThGoogle">Google Workspace</th>
+              <th style="min-width: 160px;" data-i18n="cmpThMsApple">Microsoft 365 / Apple</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Row 1: Chiffrement des données -->
+            <tr>
+              <td><strong data-i18n="cmpR1Crit">Chiffrement des messages et fichiers</strong></td>
+              <td class="col-cybou">
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR1Cybou">Client-side obligatoire (Zero-Knowledge)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-warning">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span data-i18n="cmpR1Nextcloud">Serveur par défaut (admin lit tout) ; E2EE optionnel complexe</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR1Dropbox">Chiffrement serveur (Dropbox possède les clés)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR1Google">Chiffrement serveur (Google possède les clés)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR1MsApple">Chiffrement serveur (Éditeur possède les clés)</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- Row 2: Moteur cryptographique -->
+            <tr>
+              <td><strong data-i18n="cmpR2Crit">Moteur et code cryptographique</strong></td>
+              <td class="col-cybou">
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR2Cybou">Standard OpenSSL v3.5.2+ (NIST FIPS 203/204, zéro code maison)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-warning">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span data-i18n="cmpR2Nextcloud">PHP / OpenSSL classique (RSA / AES traditionnels)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR2Dropbox">Boîte noire propriétaire fermée</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR2Google">Boîte noire propriétaire fermée</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR2MsApple">Boîte noire propriétaire fermée</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- Row 3: Résistance quantique -->
+            <tr>
+              <td><strong data-i18n="cmpR3Crit">Résistance aux attaques quantiques</strong></td>
+              <td class="col-cybou">
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR3Cybou">Natif : ML-KEM-768 (TLS 1.3) + ML-DSA-44/65 (Identités)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR3Nextcloud">Aucune protection post-quantique</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR3Dropbox">Aucune protection post-quantique</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR3Google">Algorithmes classiques (RSA / ECC vulnérables)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR3MsApple">Algorithmes classiques (RSA / ECC vulnérables)</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- Row 4: Architecture et SPOF -->
+            <tr>
+              <td><strong data-i18n="cmpR4Crit">Architecture &amp; Point unique de panne</strong></td>
+              <td class="col-cybou">
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR4Cybou">P2P décentralisé unifié C++, auto-réparation de fragments</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR4Nextcloud">Client-Serveur (SPOF MySQL + Web server + Redis + PHP)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR4Dropbox">Cloud centralisé américain</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR4Google">Cloud centralisé américain</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR4MsApple">Cloud centralisé américain</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- Row 5: Juridiction et Souveraineté -->
+            <tr>
+              <td><strong data-i18n="cmpR5Crit">Juridiction &amp; Lois extraterritoriales</strong></td>
+              <td class="col-cybou">
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR5Cybou">France &amp; UE (P2P filtré France-only, immunité Cloud Act)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-warning">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span data-i18n="cmpR5Nextcloud">Dépend de l'hébergeur choisi (soumis au Cloud Act si AWS/Azure)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR5Dropbox">États-Unis (Soumis sans réserve au Cloud Act et FISA 702)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR5Google">États-Unis (Soumis au US Cloud Act et FISA 702)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR5MsApple">États-Unis (Soumis aux lois extraterritoriales US)</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- Row 6: Entraînement IA / Télémétrie -->
+            <tr>
+              <td><strong data-i18n="cmpR6Crit">Scan pour pub ou entraînement d'IA</strong></td>
+              <td class="col-cybou">
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR6Cybou">Zéro scan, zéro IA, zéro pub (données opaques)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR6Nextcloud">Zéro scan par défaut (plugins IA optionnels)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR6Dropbox">Scans de contenu et intégration IA tierce (Dropbox Dash)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR6Google">Indexation algorithmique pour publicité et modèles IA</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR6MsApple">Télémétrie intensive et intégration Copilot</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- Row 7: Authentification -->
+            <tr>
+              <td><strong data-i18n="cmpR7Crit">Authentification &amp; Dépendance</strong></td>
+              <td class="col-cybou">
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR7Cybou">Phrase secrète 24 mots, zéro mot de passe, zéro SMS</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-warning">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span data-i18n="cmpR7Nextcloud">Mots de passe stockés en base MySQL ou annuaire LDAP</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR7Dropbox">Mots de passe serveur, compte révocable à tout moment</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR7Google">Numéro de téléphone requis, risque de ban unilatéral</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-bad">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  <span data-i18n="cmpR7MsApple">Compte lié à carte bancaire et téléphone, verrouillage éditeur</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- Row 8: Déploiement et Maintenance -->
+            <tr>
+              <td><strong data-i18n="cmpR8Crit">Déploiement &amp; Maintenance</strong></td>
+              <td class="col-cybou">
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR8Cybou">Binaire C++ autonome sans dépendances externes</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-warning">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span data-i18n="cmpR8Nextcloud">Déploiement lourd (pile LAMP, bases SQL, migrations délicates)</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR8Dropbox">Simple utilisateur, mais enfermement propriétaire</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR8Google">SaaS géré, mais perte totale de contrôle</span>
+                </span>
+              </td>
+              <td>
+                <span class="comparison-tag-good">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span data-i18n="cmpR8MsApple">SaaS géré, mais dépendance commerciale critique</span>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <!-- 2. CYBOU vs. Nextcloud -->
+    <article class="compliance-article" id="vs-nextcloud">
+      <div class="compliance-article-header">
+        <div class="compliance-tag-row">
+          <span class="compliance-pill" data-i18n="cmpNextPill">Analyse Open Source</span>
+          <span class="compliance-status-good" data-i18n="cmpNextStatus">Architecture P2P vs. LAMP</span>
+        </div>
+        <h2 class="compliance-article-title" data-i18n="cmpNextTitle">CYBOU vs. Nextcloud : Pourquoi le P2P Zero-Knowledge surpasse le modèle Client-Serveur PHP</h2>
+        <div class="compliance-article-sub" data-i18n="cmpNextSub">Nextcloud est une excellente solution open-source de première génération, mais son architecture client-serveur traditionnelle présente des limites structurelles que CYBOU a résolues.</div>
+      </div>
+
+      <div class="compliance-prose">
+        <p data-i18n="cmpNextP1">
+          Nextcloud a popularisé l'auto-hébergement collaboratif. Cependant, son socle technique conçu il y a plus de 15 ans repose sur une pile <strong>LAMP (Linux, Apache, MySQL, PHP)</strong> conçue pour le web classique, et non pour la résilience cryptographique décentralisée :
+        </p>
+
+        <ul>
+          <li>
+            <strong data-i18n="cmpNextItem1Title">L'illusion du chiffrement côté serveur :</strong><br>
+            <span data-i18n="cmpNextItem1Desc">Par défaut, Nextcloud stocke les fichiers en clair sur le serveur ou les chiffre avec des clés stockées sur le serveur lui-même. Tout administrateur système ayant un accès SSH ou root peut lire l'intégralité des données des utilisateurs. Le module de chiffrement de bout en bout (E2EE) de Nextcloud est un greffon complexe, tristement célèbre pour ses pannes de synchronisation et ses pertes de clés. Chez CYBOU, le chiffrement Zero-Knowledge est le socle obligatoire et inaltérable du protocole.</span>
+          </li>
+          <li>
+            <strong data-i18n="cmpNextItem2Title">Résilience P2P vs. Single Point of Failure (SPOF) :</strong><br>
+            <span data-i18n="cmpNextItem2Desc">Un serveur Nextcloud est un point individuel de panne : si la base de données MySQL est corrompue, si le serveur PHP tombe ou si le stockage local sature, l'organisation entière est paralysée. CYBOU élimine les bases de données SQL centralisées. Les fichiers sont morcelés en fragments cryptographiques BLAKE3-256 distribués et auto-réparés sur plusieurs serveurs indépendants.</span>
+          </li>
+          <li>
+            <strong data-i18n="cmpNextItem3Title">Transition Post-Quantique (NIST FIPS 203/204) :</strong><br>
+            <span data-i18n="cmpNextItem3Desc">Nextcloud utilise les primitives classiques RSA et ECC, désormais reconnues vulnérables aux futures attaques par calculateurs quantiques. CYBOU intègre nativement la cryptographie post-quantique certifiée OpenSSL v3.5.2+ (ML-KEM-768 et ML-DSA).</span>
+          </li>
+          <li>
+            <strong data-i18n="cmpNextItem4Title">Maintenance et empreinte opérationnelle :</strong><br>
+            <span data-i18n="cmpNextItem4Desc">Administrer Nextcloud exige de maintenir un serveur web, un interpréteur PHP, une base de données relationnelle, un cache Redis et de gérer des migrations de schémas souvent périlleuses. CYBOU se déploie via un <strong>binaire unique C++</strong> sans aucune dépendance externe, consommant une fraction infime de mémoire vive et de CPU.</span>
+          </li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- 3. CYBOU vs. Dropbox -->
+    <article class="compliance-article" id="vs-dropbox">
+      <div class="compliance-article-header">
+        <div class="compliance-tag-row">
+          <span class="compliance-pill" data-i18n="cmpDropPill">Stockage Cloud US</span>
+          <span class="compliance-status-good" data-i18n="cmpDropStatus">Danger Cloud Act &amp; IA</span>
+        </div>
+        <h2 class="compliance-article-title" data-i18n="cmpDropTitle">CYBOU vs. Dropbox : Le danger de l'extraterritorialité et de l'analyse par IA</h2>
+        <div class="compliance-article-sub" data-i18n="cmpDropSub">Dropbox reste l'un des services grand public et d'entreprise les plus utilisés, mais il constitue un risque majeur pour la confidentialité des affaires et la souveraineté.</div>
+      </div>
+
+      <div class="compliance-prose">
+        <p data-i18n="cmpDropP1">
+          Sous son interface soignée, Dropbox fonctionne sur un modèle économique et juridique incompatible avec le secret professionnel européen :
+        </p>
+
+        <ul>
+          <li>
+            <strong data-i18n="cmpDropItem1Title">Soumission totale au US Cloud Act et à FISA 702 :</strong><br>
+            <span data-i18n="cmpDropItem1Desc">Dropbox étant une entreprise soumise au droit américain, les agences fédérales et les tribunaux des États-Unis peuvent ordonner l'accès aux données stockées, y compris lorsque celles-ci concernent des entreprises françaises ou européennes, sans notification préalable. CYBOU est ancré en France avec un filtrage géographique fail-closed garantissant une immunité totale face à ces lois extraterritoriales.</span>
+          </li>
+          <li>
+            <strong data-i18n="cmpDropItem2Title">Exploitation et scan des données pour les outils d'IA :</strong><br>
+            <span data-i18n="cmpDropItem2Desc">Dropbox a suscité une vive controverse en activant par défaut des fonctionnalités d'intelligence artificielle (Dropbox Dash / AI) transmettant des données de fichiers à des partenaires tiers (comme OpenAI). Avec CYBOU, les fragments de fichiers stockés sur le réseau sont mathématiquement indéchiffrables pour les nœuds d'hébergement : aucune indexation, aucun scan et aucun entraînement d'IA ne sont physiquement possibles.</span>
+          </li>
+          <li>
+            <strong data-i18n="cmpDropItem3Title">Possession unilatérale des clés de déchiffrement :</strong><br>
+            <span data-i18n="cmpDropItem3Desc">Dropbox chiffre vos fichiers « au repos », mais Dropbox détient la clé maîtresse. Un employé indélicat de Dropbox, une erreur de configuration ou une injonction judiciaire suffisent pour dévoiler vos fichiers. Chez CYBOU, seuls vos terminaux possèdent les clés de déchiffrement dérivées de votre phrase secrète de 24 mots.</span>
+          </li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- 4. CYBOU vs. GAFAM (Google Workspace, Microsoft 365, Apple) -->
+    <article class="compliance-article" id="vs-bigtech">
+      <div class="compliance-article-header">
+        <div class="compliance-tag-row">
+          <span class="compliance-pill" data-i18n="cmpGafamPill">Monopoles Big Tech</span>
+          <span class="compliance-status-good" data-i18n="cmpGafamStatus">Émancipation Numérique</span>
+        </div>
+        <h2 class="compliance-article-title" data-i18n="cmpGafamTitle">CYBOU vs. GAFAM : Reprendre le contrôle de ses communications</h2>
+        <div class="compliance-article-sub" data-i18n="cmpGafamSub">Pourquoi les suites de Google, Microsoft et Apple ne garantissent aucune confidentialité réelle pour les décideurs européens.</div>
+      </div>
+
+      <div class="compliance-prose">
+        <p data-i18n="cmpGafamP1">
+          Google Workspace (Gmail, Drive) et Microsoft 365 (Outlook, OneDrive) dominent le marché des suites bureautiques. Cette hégémonie pose trois problèmes critiques résolus par CYBOU :
+        </p>
+
+        <ul>
+          <li>
+            <strong data-i18n="cmpGafamItem1Title">Le piège de la fausse promesse du « chiffrement géré » :</strong><br>
+            <span data-i18n="cmpGafamItem1Desc">Les géants américains affirment chiffrer vos données, mais ils gèrent eux-mêmes les modules HSM et les clés. Cette approche permet à leurs algorithmes de scanner en continu vos emails et documents pour alimenter leurs modèles d'IA, leurs moteurs publicitaires ou leurs télémétries. CYBOU applique le véritable chiffrement de bout en bout : le contenu est scellé avant de quitter votre processeur.</span>
+          </li>
+          <li>
+            <strong data-i18n="cmpGafamItem2Title">L'enfermement propriétaire et la dépendance tarifaire :</strong><br>
+            <span data-i18n="cmpGafamItem2Desc">Les hausses de tarifs unilatérales imposées aux entreprises et aux administrations publiques illustrent le risque du monopole. CYBOU est un protocole open-source, décentralisé, déployable sur site (on-premise) ou sur cloud souverain, garantissant une indépendance pérenne.</span>
+          </li>
+          <li>
+            <strong data-i18n="cmpGafamItem3Title">Souveraineté des identités sans numéros de téléphone ni SMS :</strong><br>
+            <span data-i18n="cmpGafamItem3Desc">Pour ouvrir un compte Google ou Microsoft, vous devez fournir un numéro de téléphone mobile et accepter des conditions générales modifiables à tout moment. Votre compte peut être suspendu arbitrairement sans recours. Une identité CYBOU est inaliénable : elle est protégée par votre phrase secrète de 24 mots et une preuve de travail anti-Sybil. Personne ne peut vous bannir de votre propre espace.</span>
+          </li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- 5. Synthèse & Décision -->
+    <article class="compliance-article" id="synthese">
+      <div class="compliance-article-header">
+        <div class="compliance-tag-row">
+          <span class="compliance-pill" data-i18n="cmpSynPill">Guide de Choix</span>
+          <span class="compliance-status-good" data-i18n="cmpSynStatus">Synthèse Décisionnelle</span>
+        </div>
+        <h2 class="compliance-article-title" data-i18n="cmpSynTitle">Quelle solution choisir selon vos priorités ?</h2>
+        <div class="compliance-article-sub" data-i18n="cmpSynSub">Un récapitulatif clair pour orienter les décideurs, RSSI et utilisateurs exigeants.</div>
+      </div>
+
+      <div class="compliance-prose">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 14px;">
+          <div style="padding: 24px; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: #fcfdfe;">
+            <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;" data-i18n="cmpSynCol1Title">Nextcloud</div>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55;" data-i18n="cmpSynCol1Desc">
+              Adapté aux équipes cherchant une suite collaborative riche (agendas, visio, kanban) et disposant d'administrateurs système dédiés pour maintenir une pile LAMP. Non adapté si vous exigez une étanchéité Zero-Knowledge stricte et une résistance post-quantique.
+            </p>
+          </div>
+
+          <div style="padding: 24px; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: #fcfdfe;">
+            <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;" data-i18n="cmpSynCol2Title">Dropbox / Google / Microsoft</div>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55;" data-i18n="cmpSynCol2Desc">
+              Pratiques pour un usage grand public non critique ou des documents non confidentiels. Totalement inadaptés pour les secrets d'affaires, les brevets, les données médicales HDS ou les organisations soumises à la directive NIS 2 et au RGPD souverain.
+            </p>
+          </div>
+
+          <div style="padding: 24px; border: 2px solid var(--brand-teal); border-radius: var(--radius-lg); background: rgba(5, 150, 105, 0.03);">
+            <div style="font-size: 1.1rem; font-weight: 700; color: var(--brand-teal-dark); margin-bottom: 8px;" data-i18n="cmpSynCol3Title">CYBOU Desktop &amp; Entreprise</div>
+            <p style="font-size: 0.88rem; color: var(--text-primary); line-height: 1.55;" data-i18n="cmpSynCol3Desc">
+              <strong>Le choix incontournable</strong> dès lors que la confidentialité, l'immunité juridique face aux lois américaines, la résilience sans SPOF et la préparation à l'ère post-quantique sont des impératifs non négociables.
+            </p>
+          </div>
+        </div>
+
+        <div class="compliance-cta-box" style="margin-top: 32px;">
+          <div>
+            <div class="compliance-cta-title" data-i18n="cmpCtaTitle">Prêt à tester l'alternative souveraine CYBOU ?</div>
+            <div class="compliance-cta-desc" data-i18n="cmpCtaDesc">Explorez notre code open-source sur GitHub ou découvrez comment déployer un réseau privé d'entreprise dédié.</div>
+          </div>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <a href="entreprise.html" class="btn btn-primary" style="white-space: nowrap;" data-i18n="cmpCtaBtnEnterprise">Solutions Entreprise</a>
+            <a href="https://github.com/cybou-fr/cybou" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="white-space: nowrap;" data-i18n="cmpCtaBtnGithub">Code source GitHub</a>
+          </div>
+        </div>
+      </div>
+    </article>
+
+  </main>
+
+  <!-- ==========================================================================
+       Footer
+       ========================================================================== -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-grid">
+        <div class="footer-col-brand">
+          <div class="footer-brand-title">
+            <div class="logo-tile" style="width: 28px; height: 28px; border-radius: 7px;">
+              <img src="assets/cybou.png" alt="CYBOU Logo" width="20" height="20">
+            </div>
+            <span>CYBOU</span>
+          </div>
+          <p data-i18n="footBrand">L'alternative souveraine pour vos communications et fichiers privés.<br>Conçu et développé en France.</p>
+        </div>
+
+        <div class="footer-col">
+          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footProd">Produit</h4>
+          <ul class="footer-links">
+            <li><a href="index.html#showcase" data-i18n="footProdDesktop">CYBOU Desktop</a></li>
+            <li><a href="entreprise.html" data-i18n="navEnterprise">CYBOU Entreprise</a></li>
+            <li><a href="comparatif.html" data-i18n="navComparison">Comparatif Détaillé</a></li>
+            <li><a href="index.html#services" data-i18n="footProdMail">CYBOU Mail</a></li>
+            <li><a href="index.html#services" data-i18n="footProdFiles">CYBOU Files</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footSec">Sécurité &amp; Souveraineté</h4>
+          <ul class="footer-links">
+            <li><a href="index.html#security" data-i18n="footSecTls">Transport TLS 1.3 Post-Quantique</a></li>
+            <li><a href="index.html#security" data-i18n="footSecE2ee">Chiffrement client intégral</a></li>
+            <li><a href="conformite.html" data-i18n="navCompliance">Conformité RGPD / NIS 2</a></li>
+            <li><a href="entreprise.html" data-i18n="footSecEnterprise">Réseaux privés dédiés</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; color: var(--text-primary);" data-i18n="footRes">Ressources</h4>
+          <ul class="footer-links">
+            <li><a href="https://github.com/cybou-fr/cybou" target="_blank" rel="noopener noreferrer" data-i18n="footResGithub">Code source GitHub</a></li>
+            <li><a href="index.html#architecture" data-i18n="footResTech">Sous le capot (Technique)</a></li>
+            <li><a href="index.html#faq" data-i18n="footResFaq">Foire aux questions</a></li>
+            <li><a href="https://github.com/cybou-fr/cybou/blob/main/COPYING" target="_blank" rel="noopener noreferrer" data-i18n="footResLicense">Licence open source</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>
+          © 2026 Stanislav Saveliev. CYBOU, conçu en France. Tous droits réservés.
+          <span style="margin: 0 8px; color: var(--border-medium);">•</span>
+          <a href="/robots.txt" style="color: var(--text-muted);">robots.txt</a>
+          <span style="margin: 0 6px; color: var(--border-medium);">•</span>
+          <a href="/sitemap.xml" style="color: var(--text-muted);">sitemap.xml</a>
+          <span style="margin: 0 6px; color: var(--border-medium);">•</span>
+          <a href="/llms.txt" style="color: var(--text-muted);">llms.txt</a>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--brand-teal-dark);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+          <span data-i18n="footBottomBadge">Recherche &amp; Souveraineté Numérique Européenne</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js?v=20261001-6"></script>
+</body>
+</html>

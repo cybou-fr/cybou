@@ -696,169 +696,63 @@
   </section>
 
   <!-- ==========================================================================
-       Section: Comparison Matrix (CYBOU vs Big Tech)
+       Section: Comparison Matrix Teaser (CYBOU vs Nextcloud, Dropbox & GAFAM)
        ========================================================================== -->
   <section class="section" id="comparatif">
     <div class="section-header">
       <div class="section-label" data-i18n="compLabel">Comparatif objectif</div>
-      <h2 class="section-title" data-i18n="compTitle">CYBOU face aux géants du numérique.</h2>
-      <p class="section-description" data-i18n="compDesc">Comprenez en un coup d'œil ce qui change lorsque vous passez d'un service centralisé à une suite souveraine.</p>
+      <h2 class="section-title" data-i18n="compTitle">CYBOU face à Nextcloud, Dropbox &amp; GAFAM.</h2>
+      <p class="section-description" data-i18n="compDesc">Comprenez en un coup d'œil ce qui change lorsque vous passez d'un service centralisé américain ou d'un serveur LAMP classique à une suite souveraine post-quantique.</p>
     </div>
 
-    <div class="comparison-wrapper">
-      <table class="comparison-table">
-        <thead>
-          <tr>
-            <th data-i18n="compThCriteria">Critère de protection</th>
-            <th class="col-cybou" data-i18n="compThCybou">CYBOU Desktop</th>
-            <th data-i18n="compThGoogle">Google (Gmail / Drive)</th>
-            <th data-i18n="compThAppleMs">Apple iCloud / Microsoft</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong data-i18n="compRow1Crit">Chiffrement des messages et fichiers</strong></td>
-            <td class="col-cybou">
-              <span class="comparison-tag-good">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-                <span data-i18n="compRow1Cybou">Client-side obligatoire (Zero-Knowledge)</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRow1Google">Chiffré sur serveurs Google (Google possède les clés)</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRow1AppleMs">Chiffrement serveur avec clés détenues par l'éditeur</span>
-              </span>
-            </td>
-          </tr>
-          <tr>
-            <td><strong data-i18n="compRowCryptoCrit">Moteur et code cryptographique</strong></td>
-            <td class="col-cybou">
-              <span class="comparison-tag-good">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-                <span data-i18n="compRowCryptoCybou">OpenSSL v3.5.2+ standard (Zéro crypto maison, NIST FIPS 203/204)</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRowCryptoGoogle">Propriétaire / Boîte noire serveur</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRowCryptoAppleMs">Propriétaire / Boîte noire serveur</span>
-              </span>
-            </td>
-          </tr>
-          <tr>
-            <td><strong data-i18n="compRow2Crit">Sécurité du transport réseau</strong></td>
-            <td class="col-cybou">
-              <span class="comparison-tag-good">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-                <span data-i18n="compRow2Cybou">TLS 1.3 Hybride Post-Quantique (X25519 + ML-KEM-768)</span>
-              </span>
-            </td>
-            <td>
-              <span style="color: var(--text-secondary);" data-i18n="compRow2Google">TLS classique (Vulnérable à l'enregistrement et déchiffrement quantique)</span>
-            </td>
-            <td>
-              <span style="color: var(--text-secondary);" data-i18n="compRow2AppleMs">TLS classique (Algorithmes traditionnels vulnérables)</span>
-            </td>
-          </tr>
-          <tr>
-            <td><strong data-i18n="compRow3Crit">Analyse des contenus pour pub / IA</strong></td>
-            <td class="col-cybou">
-              <span class="comparison-tag-good">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-                <span data-i18n="compRow3Cybou">Zéro analyse, zéro publicité, zéro entraînement IA</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRow3Google">Indexation pour ciblage et entraînement d'algorithmes</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRow3AppleMs">Scans automatisés et télémétrie</span>
-              </span>
-            </td>
-          </tr>
-          <tr>
-            <td><strong data-i18n="compRow4Crit">Juridiction et législation</strong></td>
-            <td class="col-cybou">
-              <span class="comparison-tag-good">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-                <span data-i18n="compRow4Cybou">France &amp; Union Européenne (RGPD souverain)</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRow4Google">États-Unis (Soumis au Cloud Act &amp; FISA 702)</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRow4AppleMs">États-Unis (Soumis aux lois extraterritoriales US)</span>
-              </span>
-            </td>
-          </tr>
-          <tr>
-            <td><strong data-i18n="compRow5Crit">Résistance aux attaques quantiques</strong></td>
-            <td class="col-cybou">
-              <span class="comparison-tag-good">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-                <span data-i18n="compRow5Cybou">NIST ML-DSA post-quantique intégré</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRow5Google">Algorithmes classiques (RSA / ECC)</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRow5AppleMs">Algorithmes classiques (RSA / ECC)</span>
-              </span>
-            </td>
-          </tr>
-          <tr>
-            <td><strong data-i18n="compRow6Crit">Authentification et propriété</strong></td>
-            <td class="col-cybou">
-              <span class="comparison-tag-good">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-                <span data-i18n="compRow6Cybou">Phrase de 24 mots souveraine (Aucun mot de passe / SMS)</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRow6Google">Numéro de téléphone requis, risque de ban arbitraire</span>
-              </span>
-            </td>
-            <td>
-              <span class="comparison-tag-bad">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                <span data-i18n="compRow6AppleMs">Identifiant lié à numéro de téléphone et carte bancaire</span>
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="compliance-preview-grid">
+      <!-- Card 1: vs Nextcloud -->
+      <article class="compliance-card">
+        <div class="compliance-badge-row">
+          <span class="compliance-pill" data-i18n="compCardNextPill">Open Source &amp; Auto-Hébergement</span>
+          <span class="compliance-status-good" data-i18n="compCardNextStatus">P2P vs. LAMP</span>
+        </div>
+        <h3 data-i18n="compCardNextTitle">CYBOU vs. Nextcloud — Zéro-Knowledge vs. Serveur PHP</h3>
+        <p data-i18n="compCardNextDesc">Nextcloud chiffre côté serveur par défaut (l'administrateur peut lire vos fichiers) et dépend d'une pile fragile (MySQL/PHP/Apache). CYBOU chiffre obligatoirement sur votre terminal et fonctionne sur un binaire C++ P2P sans base de données centrale.</p>
+      </article>
+
+      <!-- Card 2: vs Dropbox -->
+      <article class="compliance-card">
+        <div class="compliance-badge-row">
+          <span class="compliance-pill" data-i18n="compCardDropPill">Stockage Cloud Américain</span>
+          <span class="compliance-status-good" data-i18n="compCardDropStatus">Cloud Act &amp; IA</span>
+        </div>
+        <h3 data-i18n="compCardDropTitle">CYBOU vs. Dropbox — Immunité Légale vs. Scans d'IA</h3>
+        <p data-i18n="compCardDropDesc">Dropbox est soumis au US Cloud Act et intègre des outils d'IA analysant vos documents. CYBOU restreint son réseau à la France (fail-closed), isole mathématiquement chaque fragment (BLAKE3-256) et interdit tout scan ou entraînement d'IA.</p>
+      </article>
+
+      <!-- Card 3: vs Google & Microsoft -->
+      <article class="compliance-card">
+        <div class="compliance-badge-row">
+          <span class="compliance-pill" data-i18n="compCardGafamPill">Suites Centralisées US</span>
+          <span class="compliance-status-good" data-i18n="compCardGafamStatus">Émancipation</span>
+        </div>
+        <h3 data-i18n="compCardGafamTitle">CYBOU vs. Google Workspace &amp; Microsoft 365</h3>
+        <p data-i18n="compCardGafamDesc">Les GAFAM détiennent vos clés de déchiffrement et imposent des numéros de téléphone et cartes bancaires. CYBOU vous redonne la pleine propriété de votre compte via une phrase secrète de 24 mots et des clés post-quantiques inaliénables.</p>
+      </article>
+
+      <!-- Card 4: Cryptographie Post-Quantique -->
+      <article class="compliance-card">
+        <div class="compliance-badge-row">
+          <span class="compliance-pill" data-i18n="compCardPqPill">Standard Mondial OpenSSL v3.5.2+</span>
+          <span class="compliance-status-good" data-i18n="compCardPqStatus">Post-Quantique</span>
+        </div>
+        <h3 data-i18n="compCardPqTitle">Résistance Quantique Immédiate (NIST FIPS 203/204)</h3>
+        <p data-i18n="compCardPqDesc">Alors que Nextcloud, Dropbox et Microsoft restent cantonnés aux algorithmes classiques (RSA/ECC) vulnérables aux interceptions futures (« Harvest Now, Decrypt Later »), CYBOU déploie dès aujourd'hui ML-KEM-768 et ML-DSA.</p>
+      </article>
+    </div>
+
+    <div class="compliance-cta-box" style="margin-top: 32px;">
+      <div>
+        <div class="compliance-cta-title" data-i18n="compTeaserCtaTitle">Consulter la matrice comparative complète et détaillée</div>
+        <div class="compliance-cta-desc" data-i18n="compTeaserCtaDesc">Tableau exhaustif sur 8 critères de sécurité, analyse architecturale approfondie face à Nextcloud et Dropbox, et guide de choix pour les DSI.</div>
+      </div>
+      <a href="comparatif.html" class="btn btn-primary" style="white-space: nowrap;" data-i18n="compTeaserCtaBtn">Voir le grand comparatif</a>
     </div>
   </section>
 

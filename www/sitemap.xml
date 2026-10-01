@@ -55,4 +55,22 @@
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
+  <url>
+    <loc>https://cybou.fr/comparatif.html</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://cybou.fr/comparatif.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cybou.fr/comparatif.html?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cybou.fr/comparatif.html"/>
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://cybou.fr/comparatif.html?lang=en</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://cybou.fr/comparatif.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cybou.fr/comparatif.html?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cybou.fr/comparatif.html"/>
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>
