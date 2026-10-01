@@ -435,8 +435,10 @@ BOOST_AUTO_TEST_CASE(any_full_node_relays_client_operation_to_live_finalizer)
     CybouServiceTestFixture fixture;
     cybou::CybouKeyStore bootstrap_keys;
     cybou::CybouKeyStore client_keys;
+    cybou::CybouKeyStore second_client_keys;
     BOOST_REQUIRE(bootstrap_keys.GenerateNew());
     BOOST_REQUIRE(client_keys.GenerateNew());
+    BOOST_REQUIRE(second_client_keys.GenerateNew());
 
     const auto bootstrap_account = bootstrap_keys.GetAccountId();
     const auto bootstrap_recovery = bootstrap_keys.GetRecoveryPublicKey();
@@ -470,12 +472,15 @@ BOOST_AUTO_TEST_CASE(any_full_node_relays_client_operation_to_live_finalizer)
     };
     const auto bootstrap_create = make_account_create(bootstrap_keys);
     const auto client_create = make_account_create(client_keys);
-    BOOST_REQUIRE(bootstrap_create && client_create);
+    const auto second_client_create = make_account_create(second_client_keys);
+    BOOST_REQUIRE(bootstrap_create && client_create && second_client_create);
     const cybou::ProtocolOperation bootstrap_operation{*bootstrap_create};
     const cybou::ProtocolOperation client_operation{*client_create};
+    const cybou::ProtocolOperation second_client_operation{*second_client_create};
     const auto client_operation_id = cybou::ComputeOperationId(client_operation);
+    const auto second_client_operation_id = cybou::ComputeOperationId(second_client_operation);
     const auto client_operation_bytes = cybou::SerializeProtocolOperation(client_operation);
-    BOOST_REQUIRE(client_operation_id && client_operation_bytes);
+    BOOST_REQUIRE(client_operation_id && second_client_operation_id && client_operation_bytes);
 
     boost::asio::io_context io;
     using boost::asio::ip::tcp;
@@ -510,10 +515,26 @@ BOOST_AUTO_TEST_CASE(any_full_node_relays_client_operation_to_live_finalizer)
     BOOST_REQUIRE(static_cast<bool>(relay_node.CommitBlock(*bootstrap_claim_block)));
     BOOST_REQUIRE(!relay_node.LocalBootstrapAccountId());
 
+    cybou::CybouNodeRuntime second_relay_node{{
+        .network_definition = definition,
+        .data_dir = fixture.directory / "relay-second-ordinary-node",
+        .memory_only = true,
+        .wipe_data = true,
+        .peer_admission_policy = TestLabAdmissionPolicy(),
+    }};
+    BOOST_REQUIRE(second_relay_node.InitializeGenesis(genesis));
+    BOOST_REQUIRE(static_cast<bool>(second_relay_node.CommitBlock(*bootstrap_claim_block)));
+    BOOST_REQUIRE(!second_relay_node.LocalBootstrapAccountId());
+
     cybou::p2p::InboundPeerServer server{relay_node, io, tcp::endpoint{loopback, endpoint.second}};
     BOOST_REQUIRE_NE(server.Port(), 0U);
     std::atomic_bool stopping{false};
     std::jthread listener{[&] { server.Run(stopping); }};
+    cybou::p2p::InboundPeerServer second_server{second_relay_node, io,
+        tcp::endpoint{loopback, 0}};
+    BOOST_REQUIRE_NE(second_server.Port(), 0U);
+    std::atomic_bool stopping_second{false};
+    std::jthread second_listener{[&] { second_server.Run(stopping_second); }};
     struct StopListener {
         std::atomic_bool& stopping;
         std::jthread& listener;
@@ -522,8 +543,17 @@ BOOST_AUTO_TEST_CASE(any_full_node_relays_client_operation_to_live_finalizer)
             if (listener.joinable()) listener.join();
         }
     } stop_listener{stopping, listener};
+    struct StopSecondListener {
+        std::atomic_bool& stopping;
+        std::jthread& listener;
+        ~StopSecondListener() {
+            stopping = true;
+            if (listener.joinable()) listener.join();
+        }
+    } stop_second_listener{stopping_second, second_listener};
     const auto server_endpoint = std::make_pair(std::string{"127.0.0.1"}, server.Port());
     BOOST_REQUIRE_EQUAL(server_endpoint.second, endpoint.second);
+    const auto second_server_endpoint = std::make_pair(std::string{"127.0.0.1"}, second_server.Port());
 
     cybou::p2p::PeerManager authority_peers{authority};
     const bool authority_connected = authority_peers.Connect(server_endpoint.first, server_endpoint.second);
@@ -531,14 +561,19 @@ BOOST_AUTO_TEST_CASE(any_full_node_relays_client_operation_to_live_finalizer)
         "finalizer connection to ordinary relay failed: endpoint=" << endpoint.first << ':' << endpoint.second <<
             " initialized=" << authority.GetStatus().is_initialized << " status=" <<
             static_cast<unsigned>(authority_peers.LastConnectStatus()));
-    BOOST_REQUIRE_EQUAL(authority_peers.Peers().size(), 1U);
-    BOOST_CHECK(!authority_peers.Peers().front().finalizer_authenticated);
-    BOOST_CHECK(authority_peers.Peers().front().hello.capabilities & cybou::p2p::CAP_OPERATION_RELAY);
+    BOOST_REQUIRE(authority_peers.Connect(second_server_endpoint.first, second_server_endpoint.second));
+    BOOST_REQUIRE_EQUAL(authority_peers.Peers().size(), 2U);
+    for (const auto& peer : authority_peers.Peers()) {
+        BOOST_CHECK(!peer.finalizer_authenticated);
+        BOOST_CHECK(peer.hello.capabilities & cybou::p2p::CAP_OPERATION_RELAY);
+    }
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-    while (!relay_node.CanAcceptOperations() && std::chrono::steady_clock::now() < deadline) {
+    while ((!relay_node.CanAcceptOperations() || !second_relay_node.CanAcceptOperations()) &&
+        std::chrono::steady_clock::now() < deadline) {
         std::this_thread::sleep_for(std::chrono::milliseconds{10});
     }
     BOOST_REQUIRE(relay_node.CanAcceptOperations());
+    BOOST_REQUIRE(second_relay_node.CanAcceptOperations());
 
     cybou::CybouNodeRuntime client{{
         .network_definition = definition,
@@ -560,11 +595,30 @@ BOOST_AUTO_TEST_CASE(any_full_node_relays_client_operation_to_live_finalizer)
     BOOST_REQUIRE(submitted.acknowledgment);
     BOOST_CHECK(submitted.acknowledgment->status == cybou::OperationSubmitStatus::RELAY_QUEUED);
     BOOST_CHECK(submitted.acknowledgment->op_id == *client_operation_id);
-    BOOST_REQUIRE_EQUAL(authority_peers.Peers().size(), 1U);
 
-    BOOST_CHECK_EQUAL(authority_peers.PollOperationRelays(), 1U);
+    cybou::CybouNodeRuntime second_client{{
+        .network_definition = definition,
+        .data_dir = fixture.directory / "relay-second-client",
+        .p2p_endpoint = second_server_endpoint,
+        .memory_only = true,
+        .wipe_data = true,
+        .peer_admission_policy = TestLabAdmissionPolicy(),
+    }};
+    BOOST_REQUIRE(second_client.InitializeGenesis(genesis));
+    BOOST_REQUIRE(static_cast<bool>(second_client.CommitBlock(*bootstrap_claim_block)));
+    cybou::p2p::PeerManager second_client_peers{second_client};
+    BOOST_REQUIRE(second_client_peers.Connect(second_server_endpoint.first, second_server_endpoint.second));
+    const auto second_submitted = second_client_peers.SubmitOperationToAny(
+        {second_server_endpoint}, second_client_operation);
+    BOOST_REQUIRE(second_submitted.acknowledgment);
+    BOOST_CHECK(second_submitted.acknowledgment->status == cybou::OperationSubmitStatus::RELAY_QUEUED);
+    BOOST_CHECK(second_submitted.acknowledgment->op_id == *second_client_operation_id);
+
+    BOOST_CHECK_EQUAL(authority_peers.PollOperationRelays(), 2U);
     BOOST_REQUIRE(authority.IsPoaFinalizerEnabled());
     BOOST_REQUIRE(authority.GetOperationStatus(*client_operation_id).kind ==
+        cybou::OperationStatusKind::LOCAL_PENDING);
+    BOOST_REQUIRE(authority.GetOperationStatus(*second_client_operation_id).kind ==
         cybou::OperationStatusKind::LOCAL_PENDING);
     const auto finalized = authority.ProduceBlock();
     BOOST_REQUIRE_MESSAGE(finalized, "height=" << authority.GetStatus().finalized_height <<
@@ -574,9 +628,15 @@ BOOST_AUTO_TEST_CASE(any_full_node_relays_client_operation_to_live_finalizer)
     const bool included = std::any_of(finalized->block.operations.begin(), finalized->block.operations.end(),
         [&](const cybou::ProtocolOperation& op) { return cybou::ComputeOperationId(op) == client_operation_id; });
     BOOST_CHECK(included);
+    const bool second_included = std::any_of(finalized->block.operations.begin(), finalized->block.operations.end(),
+        [&](const cybou::ProtocolOperation& op) { return cybou::ComputeOperationId(op) == second_client_operation_id; });
+    BOOST_CHECK(second_included);
     BOOST_CHECK(authority.GetOperationStatus(*client_operation_id).kind == cybou::OperationStatusKind::FINALIZED);
+    BOOST_CHECK(authority.GetOperationStatus(*second_client_operation_id).kind ==
+        cybou::OperationStatusKind::FINALIZED);
 
     client_peers.DisconnectAll();
+    second_client_peers.DisconnectAll();
     authority_peers.DisconnectAll();
 }
 
