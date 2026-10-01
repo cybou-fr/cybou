@@ -186,6 +186,7 @@ add_executable(cybou-core-test
   cybou_identity_service_tests.cpp
   cybou_network_definition_tests.cpp
   cybou_bootstrap_binding_tests.cpp
+  cybou_bootstrap_binding_store_tests.cpp
   cybou_bootstrap_store_tests.cpp
   cybou_poa_tests.cpp
   cybou_p2p_peer_manager_tests.cpp

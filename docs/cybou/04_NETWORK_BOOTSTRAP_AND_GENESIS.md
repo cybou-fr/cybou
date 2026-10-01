@@ -175,8 +175,11 @@ code, stores only its domain-separated hash, and an initial claim atomically
 stores generation 1 while consuming the code. Reopening validates the stored
 binding and state, and concurrent claims serialize through the store lock.
 This is a storage primitive only; the authenticated bootstrap protocol,
-generation rollback protection for clients, replacement, transport identity
-pinning, and end-to-end bootstrap service remain unimplemented.
+and transport identity pinning remain unimplemented. A client-side durable
+binding pin is also implemented: first acceptance requires an explicit trust
+write, later generations must increase, same-generation responses must be
+byte-identical, and a changed genesis finalizer key is rejected. Signed key
+replacement and bootstrap rollback/recovery remain unimplemented.
 
 Until that cutover is accepted, do not describe the deployed legacy DEV as the
 new bootstrap architecture, and do not point a new executable at it as if it
