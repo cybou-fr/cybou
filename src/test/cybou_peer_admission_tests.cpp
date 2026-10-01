@@ -40,9 +40,10 @@ BOOST_AUTO_TEST_CASE(dataset_integrity_and_prefix_matching_are_fail_closed)
 {
     const auto path = UniquePath();
     std::filesystem::remove_all(path);
-    const std::string bytes{"CYBOU-GEO-FR-v1\n192.0.2.0/24\n2001:db8::/32\n"};
+    const std::string bytes{"192.0.2.0,192.0.2.255,FR\n2001:db8::,2001:db8::ffff,FR\n"
+        "198.51.100.0,198.51.100.255,US\n"};
     Write(path, bytes);
-    const auto dataset = cybou::p2p::FrenchIpDataset::Load(path, Hash(bytes));
+    const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, Hash(bytes));
     BOOST_REQUIRE(dataset);
     BOOST_CHECK(dataset->IsFrench("192.0.2.1"));
     BOOST_CHECK(dataset->IsFrench("::ffff:192.0.2.1"));
@@ -54,9 +55,9 @@ BOOST_AUTO_TEST_CASE(dataset_integrity_and_prefix_matching_are_fail_closed)
     wrong_digest[0] ^= 1;
     BOOST_CHECK(!cybou::p2p::FrenchIpDataset::Load(path, wrong_digest));
 
-    const std::string noncanonical{"CYBOU-GEO-FR-v1\n192.0.2.1/24\n"};
-    Write(path, noncanonical);
-    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::Load(path, Hash(noncanonical)));
+    const std::string malformed{"192.0.2.0,192.0.2.255,FRA\n"};
+    Write(path, malformed);
+    BOOST_CHECK(!cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, Hash(malformed)));
     std::filesystem::remove(path);
 }
 
@@ -64,9 +65,9 @@ BOOST_AUTO_TEST_CASE(public_policy_fails_closed_and_lab_only_allows_private_rout
 {
     const auto path = UniquePath();
     std::filesystem::remove_all(path);
-    const std::string bytes{"CYBOU-GEO-FR-v1\n198.51.100.0/24\n"};
+    const std::string bytes{"198.51.100.0,198.51.100.255,FR\n"};
     Write(path, bytes);
-    const auto dataset = cybou::p2p::FrenchIpDataset::Load(path, Hash(bytes));
+    const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, Hash(bytes));
     BOOST_REQUIRE(dataset);
 
     const auto public_policy = cybou::p2p::PeerAdmissionPolicy::Public(dataset);

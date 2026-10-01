@@ -14,23 +14,23 @@
 
 namespace cybou::p2p {
 
-/** Integrity-checked local list of French public address prefixes. */
+/** Integrity-checked local DB-IP country CSV reduced to French IP ranges. */
 class FrenchIpDataset final {
 public:
-    static std::shared_ptr<const FrenchIpDataset> Load(const std::filesystem::path& path,
+    static std::shared_ptr<const FrenchIpDataset> LoadDbIpCountryCsv(const std::filesystem::path& path,
         const std::array<unsigned char, 32>& expected_sha256);
 
     bool IsFrench(std::string_view numeric_address) const;
 
 private:
-    struct Prefix {
-        std::array<unsigned char, 16> address{};
-        uint8_t bits{0};
+    struct Range {
+        std::array<unsigned char, 16> first{};
+        std::array<unsigned char, 16> last{};
         bool ipv6{false};
     };
 
-    explicit FrenchIpDataset(std::vector<Prefix> prefixes) : m_prefixes{std::move(prefixes)} {}
-    std::vector<Prefix> m_prefixes;
+    explicit FrenchIpDataset(std::vector<Range> ranges) : m_ranges{std::move(ranges)} {}
+    std::vector<Range> m_ranges;
 };
 
 /** Local policy only; it has no consensus, Identity, or Authority effect. */
