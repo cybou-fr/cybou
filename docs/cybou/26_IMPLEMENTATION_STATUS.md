@@ -35,7 +35,7 @@ policy and does not change consensus:
 - `PeerAdmissionPolicy` checks the SHA-256 pin and a declared DB-IP release
   month before admitting public peers; data older than 45 days is rejected.
   Node, bootstrap, and desktop use the built-in updater to check the official
-  DB-IP Lite release page over verified HTTPS at startup and every 12 hours,
+  DB-IP Lite release page over verified HTTPS at startup and every 14 days,
   verify the published archive SHA-1, validate the decompressed CSV, calculate
   its local SHA-256, and atomically activate it. They reuse a validated cache
   during network outages; if no fresh dataset is available, P2P admission

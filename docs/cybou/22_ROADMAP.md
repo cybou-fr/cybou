@@ -38,7 +38,7 @@ The revised target is specified in
 all participants run the same full-node software with optional capabilities;
 genesis authorizes one to four bootstrap Identities; and production/DEV public
 P2P admission is France-only. Node, bootstrap, and desktop automatically check
-DB-IP Lite for updates at startup and every 12 hours, verify the vendor's
+DB-IP Lite for updates at startup and every 14 days, verify the vendor's
 published archive digest and the CSV contents, and atomically activate a fresh
 cache. A cached release older than 45 days fails closed. Acceptance tests for
 the desktop/bootstrap boundaries remain. DEV currently runs one

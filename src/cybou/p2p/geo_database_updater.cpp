@@ -47,7 +47,7 @@ constexpr std::string_view DB_IP_FILE_HOST{"download.db-ip.com"};
 constexpr size_t MAX_PAGE_BYTES{2 * 1024 * 1024};
 constexpr size_t MAX_GZIP_BYTES{64 * 1024 * 1024};
 constexpr size_t MAX_CSV_BYTES{64 * 1024 * 1024};
-constexpr auto UPDATE_INTERVAL{std::chrono::hours{12}};
+constexpr auto UPDATE_INTERVAL{std::chrono::days{14}};
 
 #ifdef _WIN32
 void AddWindowsRootCertificates(asio::ssl::context& tls)
