@@ -9,14 +9,66 @@
 #include <boost/asio.hpp>
 #include <boost/test/unit_test.hpp>
 
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
+
 #include <array>
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <memory>
 #include <stdexcept>
 #include <thread>
 #include <vector>
+
+namespace {
+
+struct TestTlsIdentity {
+    std::filesystem::path certificate;
+    std::filesystem::path private_key;
+    std::array<unsigned char, 32> pin{};
+};
+
+std::optional<TestTlsIdentity> CreateTestTlsIdentity(const std::filesystem::path& directory)
+{
+    std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)> key_context{
+        EVP_PKEY_CTX_new_from_name(nullptr, "EC", nullptr), EVP_PKEY_CTX_free};
+    if (!key_context || EVP_PKEY_keygen_init(key_context.get()) <= 0 ||
+        EVP_PKEY_CTX_set_group_name(key_context.get(), "prime256v1") <= 0) return std::nullopt;
+    EVP_PKEY* raw_key{nullptr};
+    if (EVP_PKEY_generate(key_context.get(), &raw_key) <= 0) return std::nullopt;
+    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> key{raw_key, EVP_PKEY_free};
+    std::unique_ptr<X509, decltype(&X509_free)> certificate{X509_new(), X509_free};
+    if (!certificate || X509_set_version(certificate.get(), 2) != 1 ||
+        ASN1_INTEGER_set(X509_get_serialNumber(certificate.get()), 7) != 1 ||
+        !X509_gmtime_adj(X509_getm_notBefore(certificate.get()), 0) ||
+        !X509_gmtime_adj(X509_getm_notAfter(certificate.get()), 24 * 60 * 60) ||
+        X509_set_pubkey(certificate.get(), key.get()) != 1) return std::nullopt;
+    X509_NAME* subject = X509_get_subject_name(certificate.get());
+    constexpr unsigned char common_name[]{'C','Y','B','O','U',' ','T','E','S','T'};
+    if (!subject || X509_NAME_add_entry_by_txt(subject, "CN", MBSTRING_ASC, common_name,
+            sizeof(common_name), -1, 0) != 1 || X509_set_issuer_name(certificate.get(), subject) != 1 ||
+        X509_sign(certificate.get(), key.get(), EVP_sha256()) <= 0) return std::nullopt;
+
+    TestTlsIdentity result{directory / "bootstrap-test-cert.pem", directory / "bootstrap-test-key.pem"};
+    const auto cert_path = result.certificate.string();
+    const auto key_path = result.private_key.string();
+    std::unique_ptr<BIO, decltype(&BIO_free)> cert_bio{BIO_new_file(cert_path.c_str(), "wb"), BIO_free};
+    std::unique_ptr<BIO, decltype(&BIO_free)> key_bio{BIO_new_file(key_path.c_str(), "wb"), BIO_free};
+    if (!cert_bio || !key_bio || PEM_write_bio_X509(cert_bio.get(), certificate.get()) != 1 ||
+        PEM_write_bio_PrivateKey(key_bio.get(), key.get(), nullptr, nullptr, 0, nullptr, nullptr) != 1 ||
+        BIO_flush(cert_bio.get()) != 1 || BIO_flush(key_bio.get()) != 1) {
+        return std::nullopt;
+    }
+    const auto pin = cybou::p2p::TlsCertificateSpkiSha256(result.certificate);
+    if (!pin) return std::nullopt;
+    result.pin = *pin;
+    return result;
+}
+
+} // namespace
 
 BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, CybouTestSetup)
 
@@ -28,6 +80,58 @@ BOOST_AUTO_TEST_CASE(removed_storage_wire_ids_are_rejected)
             'C', 'Y', 'P', '2', cybou::p2p::WIRE_VERSION, type, 0, 0, 0, 0};
         BOOST_CHECK(!cybou::p2p::DecodeFrame(encoded));
     }
+}
+
+BOOST_AUTO_TEST_CASE(stable_tls_identity_accepts_matching_spki_pin_and_rejects_mismatch)
+{
+    CybouServiceTestFixture fixture;
+    const auto identity = CreateTestTlsIdentity(fixture.directory);
+    BOOST_REQUIRE(identity);
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    const auto network = fixture.runtime->GetNetworkId();
+    const auto server_hello = cybou::p2p::Hello{.network_id = network,
+        .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
+        .capabilities = 0, .nonce = 801};
+    const auto client_hello = cybou::p2p::Hello{.network_id = network,
+        .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
+        .capabilities = 0, .nonce = 802};
+
+    auto run_session = [&](const std::array<unsigned char, 32>& expected_pin) {
+        tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+        bool server_handshake{false};
+        std::jthread server{[&] {
+            tcp::socket socket{io};
+            acceptor.accept(socket);
+            cybou::p2p::TlsSessionConfig tls;
+            tls.certificate_chain_file = identity->certificate;
+            tls.private_key_file = identity->private_key;
+            cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER,
+                std::move(tls)};
+            server_handshake = session.Handshake(server_hello);
+        }};
+        tcp::socket socket{io};
+        socket.connect(tcp::endpoint{loopback, acceptor.local_endpoint().port()});
+        cybou::p2p::TlsSessionConfig tls;
+        tls.expected_server_spki_sha256 = expected_pin;
+        cybou::p2p::PeerSession client{std::move(socket), cybou::p2p::TransportRole::CLIENT,
+            std::move(tls)};
+        const bool client_handshake = client.Handshake(client_hello);
+        server.join();
+        return std::pair{client_handshake, server_handshake};
+    };
+
+    const auto accepted = run_session(identity->pin);
+    BOOST_CHECK(accepted.first);
+    BOOST_CHECK(accepted.second);
+
+    auto wrong_pin = identity->pin;
+    wrong_pin[0] ^= 1;
+    const auto rejected = run_session(wrong_pin);
+    BOOST_CHECK(!rejected.first);
+    std::filesystem::remove(identity->certificate);
+    std::filesystem::remove(identity->private_key);
 }
 
 BOOST_AUTO_TEST_CASE(manager_tracks_two_live_peers_and_drops_closed_sockets)

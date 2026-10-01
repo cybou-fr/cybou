@@ -11,7 +11,9 @@
 
 #include <boost/asio/ip/address.hpp>
 
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <openssl/x509.h>
 
 #include <algorithm>
@@ -82,6 +84,55 @@ std::optional<TlsContexts> CreateTlsContexts()
         SSL_CTX_check_private_key(contexts.server) != 1) return std::nullopt;
 
     return std::optional<TlsContexts>{std::move(contexts)};
+}
+
+SSL_CTX* CreateStableServerTlsContext(const std::filesystem::path& certificate_chain_file,
+    const std::filesystem::path& private_key_file)
+{
+    SSL_CTX* context = SSL_CTX_new(TLS_method());
+    if (!context) return nullptr;
+    if (SSL_CTX_set_min_proto_version(context, TLS1_3_VERSION) != 1 ||
+        SSL_CTX_set_max_proto_version(context, TLS1_3_VERSION) != 1 ||
+        SSL_CTX_set1_groups_list(context, "X25519MLKEM768") != 1) {
+        SSL_CTX_free(context);
+        return nullptr;
+    }
+    SSL_CTX_set_options(context, SSL_OP_NO_COMPRESSION | SSL_OP_NO_RENEGOTIATION);
+    SSL_CTX_set_verify(context, SSL_VERIFY_NONE, nullptr);
+    const auto certificate_path = certificate_chain_file.string();
+    const auto private_key_path = private_key_file.string();
+    if (SSL_CTX_use_certificate_chain_file(context, certificate_path.c_str()) != 1 ||
+        SSL_CTX_use_PrivateKey_file(context, private_key_path.c_str(), SSL_FILETYPE_PEM) != 1 ||
+        SSL_CTX_check_private_key(context) != 1) {
+        SSL_CTX_free(context);
+        return nullptr;
+    }
+    return context;
+}
+
+std::optional<std::array<unsigned char, 32>> CertificateSpkiSha256(X509* certificate)
+{
+    if (!certificate) return std::nullopt;
+    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> public_key{
+        X509_get_pubkey(certificate), EVP_PKEY_free};
+    if (!public_key) return std::nullopt;
+    const int der_size = i2d_PUBKEY(public_key.get(), nullptr);
+    if (der_size <= 0) return std::nullopt;
+    std::vector<unsigned char> der(static_cast<size_t>(der_size));
+    unsigned char* der_cursor = der.data();
+    if (i2d_PUBKEY(public_key.get(), &der_cursor) != der_size) return std::nullopt;
+    std::array<unsigned char, 32> digest{};
+    unsigned int digest_size{0};
+    if (EVP_Digest(der.data(), der.size(), digest.data(), &digest_size, EVP_sha256(), nullptr) != 1 ||
+        digest_size != digest.size()) return std::nullopt;
+    return digest;
+}
+
+bool MatchesPeerSpkiPin(SSL* ssl, const std::array<unsigned char, 32>& expected)
+{
+    std::unique_ptr<X509, decltype(&X509_free)> certificate{SSL_get1_peer_certificate(ssl), X509_free};
+    const auto actual = CertificateSpkiSha256(certificate.get());
+    return actual && CRYPTO_memcmp(actual->data(), expected.data(), expected.size()) == 0;
 }
 
 SSL_CTX* TlsContext(const bool server)
@@ -365,8 +416,9 @@ bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& pe
     return !known || ComputeBlockId(known->block) == peer.finalized_tip;
 }
 
-PeerSession::PeerSession(boost::asio::ip::tcp::socket socket, const TransportRole transport_role)
-    : m_socket{std::move(socket)}, m_transport_role{transport_role}
+PeerSession::PeerSession(boost::asio::ip::tcp::socket socket, const TransportRole transport_role,
+    TlsSessionConfig tls_config)
+    : m_socket{std::move(socket)}, m_transport_role{transport_role}, m_tls_config{std::move(tls_config)}
 {
     boost::system::error_code ec;
     m_socket.non_blocking(true, ec);
@@ -376,6 +428,7 @@ PeerSession::PeerSession(boost::asio::ip::tcp::socket socket, const TransportRol
 PeerSession::~PeerSession()
 {
     SSL_free(m_ssl);
+    SSL_CTX_free(m_owned_ssl_context);
 }
 
 bool PeerSession::AdvanceTlsOperation(const int result,
@@ -394,7 +447,17 @@ bool PeerSession::EstablishSecureTransport(const std::chrono::steady_clock::time
     // The caller must provide the actual transport role. Inferring roles from
     // socket endpoints is unreliable across NAT and IPv4/IPv6 mappings.
     const bool server = m_transport_role == TransportRole::SERVER;
-    SSL_CTX* context = TlsContext(server);
+    SSL_CTX* context{nullptr};
+    if (server && !m_tls_config.certificate_chain_file.empty() &&
+        !m_tls_config.private_key_file.empty() && !m_tls_config.expected_server_spki_sha256) {
+        m_owned_ssl_context = CreateStableServerTlsContext(m_tls_config.certificate_chain_file,
+            m_tls_config.private_key_file);
+        context = m_owned_ssl_context;
+    } else {
+        if (!m_tls_config.certificate_chain_file.empty() || !m_tls_config.private_key_file.empty() ||
+            (server && m_tls_config.expected_server_spki_sha256)) return false;
+        context = TlsContext(server);
+    }
     if (!context) return false;
     m_ssl = SSL_new(context);
     BIO_METHOD* bio_method = TlsBioMethod();
@@ -414,6 +477,8 @@ bool PeerSession::EstablishSecureTransport(const std::chrono::steady_clock::time
             const char* negotiated_group = SSL_get0_group_name(m_ssl);
             if (SSL_version(m_ssl) != TLS1_3_VERSION || !negotiated_group ||
                 std::string_view{negotiated_group} != "X25519MLKEM768" ||
+                (m_tls_config.expected_server_spki_sha256 &&
+                    !MatchesPeerSpkiPin(m_ssl, *m_tls_config.expected_server_spki_sha256)) ||
                 SSL_export_keying_material(m_ssl, m_tls_exporter.data(), m_tls_exporter.size(),
                     TLS_EXPORTER_LABEL.data(), TLS_EXPORTER_LABEL.size(), nullptr, 0, 0) != 1) break;
             return true;
@@ -424,6 +489,16 @@ bool PeerSession::EstablishSecureTransport(const std::chrono::steady_clock::time
     boost::system::error_code ignored;
     m_socket.close(ignored);
     return false;
+}
+
+std::optional<std::array<unsigned char, 32>> TlsCertificateSpkiSha256(
+    const std::filesystem::path& certificate_file)
+{
+    const auto path = certificate_file.string();
+    std::unique_ptr<BIO, decltype(&BIO_free)> bio{BIO_new_file(path.c_str(), "rb"), BIO_free};
+    if (!bio) return std::nullopt;
+    std::unique_ptr<X509, decltype(&X509_free)> certificate{PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr), X509_free};
+    return CertificateSpkiSha256(certificate.get());
 }
 
 bool PeerSession::ReadExact(unsigned char* out, size_t length, std::chrono::steady_clock::time_point deadline)

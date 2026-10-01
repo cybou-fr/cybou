@@ -174,11 +174,15 @@ display name, and generation. The core now also has a durable LevelDB
 code, stores only its domain-separated hash, and an initial claim atomically
 stores generation 1 while consuming the code. Reopening validates the stored
 binding and state, and concurrent claims serialize through the store lock.
-This is a storage primitive only; the authenticated bootstrap protocol,
-and transport identity pinning remain unimplemented. A client-side durable
-binding pin is also implemented: first acceptance requires an explicit trust
-write, later generations must increase, same-generation responses must be
-byte-identical, and a changed genesis finalizer key is rejected. Signed key
+This is a storage primitive only; the authenticated bootstrap protocol and
+request handler remain unimplemented. CYP2 sessions now support a persistent
+server TLS identity and client verification of its SPKI SHA-256 pin before
+HELLO. Configuring the service and distributing its pin through a trusted
+release or approved out-of-band path remain deployment work. A client-side
+durable binding pin is also implemented: first acceptance requires an
+explicit trust write, later generations must increase, same-generation
+responses must be byte-identical, and a changed genesis finalizer key is
+rejected. Signed key
 replacement now has a signed data format and durable-store primitive: the
 current key authorizes the exact next binding, the new key signs that binding,
 and one synchronous batch archives the prior binding and advances current

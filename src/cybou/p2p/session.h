@@ -11,10 +11,12 @@
 #include <boost/asio/ip/tcp.hpp>
 
 #include <openssl/ssl.h>
+#include <openssl/x509.h>
 
 #include <cstdint>
 #include <array>
 #include <chrono>
+#include <filesystem>
 #include <functional>
 #include <optional>
 #include <span>
@@ -110,6 +112,17 @@ struct Hello {
 
 enum class TransportRole : uint8_t { CLIENT, SERVER };
 
+/** Optional stable TLS identity/pin for service sessions such as bootstrap. */
+struct TlsSessionConfig {
+    std::filesystem::path certificate_chain_file;
+    std::filesystem::path private_key_file;
+    std::optional<std::array<unsigned char, 32>> expected_server_spki_sha256;
+};
+
+/** SHA-256 pin of the DER SubjectPublicKeyInfo in a PEM certificate. */
+std::optional<std::array<unsigned char, 32>> TlsCertificateSpkiSha256(
+    const std::filesystem::path& certificate_file);
+
 enum class HandshakeStatus : uint8_t {
     NOT_ATTEMPTED,
     CONNECTED,
@@ -151,7 +164,8 @@ bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& pe
 // One persistent TCP socket. The caller owns connection setup and deadlines.
 class PeerSession {
 public:
-    explicit PeerSession(boost::asio::ip::tcp::socket socket, TransportRole transport_role);
+    explicit PeerSession(boost::asio::ip::tcp::socket socket, TransportRole transport_role,
+        TlsSessionConfig tls_config = {});
     ~PeerSession();
     PeerSession(const PeerSession&) = delete;
     PeerSession& operator=(const PeerSession&) = delete;
@@ -216,6 +230,8 @@ private:
     ReadStatus m_last_read_status{ReadStatus::UNAVAILABLE};
     boost::asio::ip::tcp::socket m_socket;
     TransportRole m_transport_role;
+    TlsSessionConfig m_tls_config;
+    SSL_CTX* m_owned_ssl_context{nullptr};
     SSL* m_ssl{nullptr};
     std::array<unsigned char, 32> m_tls_exporter{};
     std::optional<Hello> m_peer;

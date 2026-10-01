@@ -13,6 +13,13 @@ chunk transfer over TCP protected by TLS 1.3.
   addresses, timing, and traffic sizes remain visible.
 - The TLS certificate is ephemeral and self-signed. Special service roles are
   authenticated by proofs bound to both CYP2 HELLOs and the TLS exporter.
+- A bootstrap service may use a persistent TLS certificate and private key.
+  Bootstrap clients must pin the SHA-256 digest of the certificate's DER
+  SubjectPublicKeyInfo from a trusted CYBOU release or another approved
+  out-of-band source, and verify it immediately after TLS completes and before
+  sending CYP2 HELLO. A pin learned from the same unauthenticated connection
+  is not a trust anchor. Ordinary peer sessions continue to use ephemeral
+  certificates.
 
 A storage peer advertising `CAP_STORAGE` proves its stable hybrid
 `STORAGE_PROVIDER` key. Peers verify the proof and derive its ProviderID. A
