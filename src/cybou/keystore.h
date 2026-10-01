@@ -10,6 +10,7 @@
 #include <cybou/identity_crypto.h>
 #include <cybou/identity_kem.h>
 #include <cybou/identity_material.h>
+#include <cybou/poa_signer.h>
 #include <uint256.h>
 
 #include <array>
@@ -49,6 +50,9 @@ public:
     std::optional<RecoveryWords> GetRecoveryWords() const;
     /** True when the loaded recovery entropy derives exactly `key` for `purpose`; the entropy never leaves the store. */
     bool DerivesPublicKey(IdentityKeyPurpose purpose, const IdentityHybridPublicKey& key) const;
+    std::optional<IdentityHybridPublicKey> GetPoaFinalizerPublicKey() const;
+    std::optional<IdentityHybridSignature> SignPoaFinalizerMessage(
+        std::span<const unsigned char> message) const;
 
     /** Securely wipe the in-memory key */
     void Clear();
@@ -87,6 +91,17 @@ public:
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
+};
+
+/** A PoA signer view over an unlocked vault; the recovery entropy never leaves CybouKeyStore. */
+class CybouKeyStorePoaSigner final : public PoaSigner {
+public:
+    explicit CybouKeyStorePoaSigner(const CybouKeyStore& keystore) : m_keystore{keystore} {}
+    std::optional<IdentityHybridPublicKey> PublicKey() const override;
+    std::optional<IdentityHybridSignature> Sign(std::span<const unsigned char> message) const override;
+
+private:
+    const CybouKeyStore& m_keystore;
 };
 
 } // namespace cybou

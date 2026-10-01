@@ -18,6 +18,35 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_service_tests, CybouTestSetup)
 
+BOOST_AUTO_TEST_CASE(desktop_finalizer_worker_produces_blocks_and_stops_cleanly)
+{
+    CybouServiceTestFixture local;
+    cybou::CybouNodeService service{{
+        .runtime = cybou::NodeRuntimeConfig{
+            .network_definition = local.definition,
+            .data_dir = local.directory / "desktop-finalizer-service",
+            .poa_finalizer_recovery_entropy = local.validator_seed,
+            .memory_only = true,
+            .wipe_data = true,
+            .peer_admission_policy = TestLabAdmissionPolicy(),
+        },
+        .genesis = local.genesis,
+    }};
+    service.Start();
+    service.StartDesktopFinalizer(10);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    while (service.Runtime().GetFinalizedHeight().value_or(0) < 2 &&
+        std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    }
+    BOOST_REQUIRE_GE(service.Runtime().GetFinalizedHeight().value_or(0), 2U);
+    service.Runtime().DisablePoaFinalizer();
+    service.StopDesktopFinalizer();
+    const auto stopped_height = service.Runtime().GetFinalizedHeight().value_or(0);
+    std::this_thread::sleep_for(std::chrono::milliseconds{50});
+    BOOST_CHECK_EQUAL(service.Runtime().GetFinalizedHeight().value_or(0), stopped_height);
+}
+
 BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
 {
     CybouServiceTestFixture primary;

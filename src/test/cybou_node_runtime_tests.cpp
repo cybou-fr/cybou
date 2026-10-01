@@ -3,6 +3,8 @@
 
 #include <cybou/crypto/cleanse.h>
 #include <cybou/hex.h>
+#include <cybou/identity_material.h>
+#include <cybou/keystore.h>
 #include <cybou/kv_store.h>
 #include <cybou/poa_finalizer.h>
 #include <cybou/secret_file.h>
@@ -121,6 +123,42 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     const auto missing = observer.FindFinalizedOperation(missing_id);
     BOOST_CHECK(missing.status == cybou::FinalizedOperationLookupStatus::NOT_FOUND);
     BOOST_CHECK_EQUAL(missing.scanned_height, 1U);
+}
+
+BOOST_AUTO_TEST_CASE(runtime_finalizer_can_be_armed_and_disarmed_with_a_vault_signer)
+{
+    CybouServiceTestFixture fixture;
+    cybou::CybouNodeRuntime runtime{cybou::NodeRuntimeConfig{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "vault-finalizer-runtime",
+        .memory_only = true,
+        .wipe_data = true,
+        .peer_admission_policy = TestLabAdmissionPolicy(),
+    }};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+    BOOST_CHECK(!runtime.GetStatus().is_finalizer);
+    BOOST_CHECK(!runtime.ProduceBlock());
+
+    auto material = cybou::GenerateIdentityMaterial();
+    BOOST_REQUIRE(material);
+    cybou::crypto::CleanseMemory(material->recovery_entropy.data(), material->recovery_entropy.size());
+    material->recovery_entropy = fixture.validator_seed;
+    cybou::CybouKeyStore keystore;
+    BOOST_REQUIRE(keystore.LoadMaterial(std::move(*material)));
+    auto signer = std::make_shared<cybou::CybouKeyStorePoaSigner>(keystore);
+    BOOST_REQUIRE(runtime.EnablePoaFinalizer(signer));
+    BOOST_CHECK(runtime.GetStatus().is_finalizer);
+    BOOST_REQUIRE(runtime.ProduceBlock());
+
+    runtime.DisablePoaFinalizer();
+    BOOST_CHECK(!runtime.GetStatus().is_finalizer);
+    BOOST_CHECK(!runtime.ProduceBlock());
+
+    cybou::CybouKeyStore wrong_keystore;
+    BOOST_REQUIRE(wrong_keystore.GenerateNew());
+    auto wrong_signer = std::make_shared<cybou::CybouKeyStorePoaSigner>(wrong_keystore);
+    BOOST_CHECK(!runtime.EnablePoaFinalizer(wrong_signer));
+    BOOST_CHECK(!runtime.GetStatus().is_finalizer);
 }
 
 BOOST_AUTO_TEST_CASE(runtime_halts_on_valid_poa_equivocation)

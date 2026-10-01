@@ -39,6 +39,7 @@ struct CybouNodeService::ObserverListener {
 
 CybouNodeService::~CybouNodeService()
 {
+    StopDesktopFinalizer();
     StopNetwork();
 }
 
@@ -119,10 +120,57 @@ void CybouNodeService::StartNetwork(
 
 void CybouNodeService::StopNetwork()
 {
+    StopDesktopFinalizer();
     m_stop_network.store(true);
     if (m_sync_thread.joinable()) m_sync_thread.join();
     if (m_listener_thread.joinable()) m_listener_thread.join();
     m_observer_listener.reset();
+}
+
+void CybouNodeService::StartDesktopFinalizer(const uint64_t block_interval_ms)
+{
+    if (!m_started) throw std::logic_error("CYBOU node service must be started before desktop finalizer");
+    if (block_interval_ms == 0 || block_interval_ms > 60000) {
+        throw std::invalid_argument("invalid desktop finalizer block interval");
+    }
+    if (!m_runtime->IsPoaFinalizerEnabled()) throw std::logic_error("desktop finalizer signer is not enabled");
+    if (m_desktop_finalizer_thread.joinable()) return;
+
+    m_stop_desktop_finalizer.store(false);
+    m_desktop_finalizer_thread = std::thread{[this, block_interval_ms] {
+        p2p::PeerManager peers{*m_runtime};
+        auto next_block = std::chrono::steady_clock::now();
+        auto next_peer_maintenance = std::chrono::steady_clock::time_point{};
+        while (!m_stop_desktop_finalizer.load()) {
+            if (m_runtime->IsPoaFinalizerEnabled() && std::chrono::steady_clock::now() >= next_block) {
+                const auto block = m_runtime->ProduceBlock();
+                if (!block) {
+                    if (m_runtime->GetStatus().poa_safety_halted) {
+                        if (auto log = m_runtime->EventLog()) log->Write(NodeEvent::poa_safety_halt);
+                    }
+                    m_runtime->DisablePoaFinalizer();
+                    break;
+                }
+                next_block = std::chrono::steady_clock::now() + std::chrono::milliseconds{block_interval_ms};
+            }
+
+            if (std::chrono::steady_clock::now() >= next_peer_maintenance) {
+                peers.DiscoverPeers();
+                peers.FanoutRecentBlocks();
+                peers.PingAll();
+                next_peer_maintenance = std::chrono::steady_clock::now() + std::chrono::seconds{1};
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        }
+    }};
+}
+
+void CybouNodeService::StopDesktopFinalizer()
+{
+    m_stop_desktop_finalizer.store(true);
+    if (m_desktop_finalizer_thread.joinable() && m_desktop_finalizer_thread.get_id() != std::this_thread::get_id()) {
+        m_desktop_finalizer_thread.join();
+    }
 }
 
 int CybouNodeService::RunFinalizer(const CybouFinalizerServiceConfig& config, std::atomic_bool& stopping)

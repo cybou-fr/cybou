@@ -19,6 +19,15 @@ BlockProductionResult Failure(const BlockProductionError error)
 } // namespace
 
 CybouFinalizerNode::CybouFinalizerNode(
+    CybouStateStore& store)
+    : m_store{store},
+      m_finalizer{std::make_unique<PoaFinalizer>(store.GetDatabase(), store.GetNetworkId(),
+          store.GetNetworkDefinition().genesis_block_id, store.GetNetworkDefinition().poa_finalizer_public_key)},
+      m_pool{store}
+{
+}
+
+CybouFinalizerNode::CybouFinalizerNode(
     CybouStateStore& store, const RecoveryEntropy& poa_recovery_entropy)
     : m_store{store},
       m_finalizer{std::make_unique<PoaFinalizer>(store.GetDatabase(), store.GetNetworkId(),
@@ -50,6 +59,7 @@ bool CybouFinalizerNode::SubmitOperation(const ProtocolOperation& operation)
 BlockProductionResult CybouFinalizerNode::ProduceNextBlock(const bool sync)
 {
     if (SafetyHalted()) return Failure(BlockProductionError::POA_SAFETY_HALTED);
+    if (!SignerEnabled()) return Failure(BlockProductionError::POA_SIGNING_FAILED);
     const auto head = m_store.GetFinalizedHead();
     if (!head || head->height == std::numeric_limits<uint64_t>::max()) {
         return Failure(BlockProductionError::STATE_UNAVAILABLE);
@@ -91,6 +101,21 @@ BlockProductionResult CybouFinalizerNode::ProduceNextBlock(const bool sync)
 bool CybouFinalizerNode::SafetyHalted() const
 {
     return m_store.PoaSafetyHalted() || m_finalizer->SafetyHalted();
+}
+
+bool CybouFinalizerNode::EnableSigner(PoaSignerRef signer)
+{
+    return m_finalizer->EnableSigner(std::move(signer));
+}
+
+void CybouFinalizerNode::DisableSigner()
+{
+    m_finalizer->DisableSigner();
+}
+
+bool CybouFinalizerNode::SignerEnabled() const
+{
+    return m_finalizer->SignerEnabled();
 }
 
 std::optional<IdentityHybridSignature> CybouFinalizerNode::SignTransportProof(

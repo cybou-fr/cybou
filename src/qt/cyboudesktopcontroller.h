@@ -49,6 +49,7 @@ private:
     /** Where data of an older DEV network was moved at startup, if it was. */
     QString m_archived_network;
     void stop();
+    void updatePoaFinalizer();
     void publishAuthority();
     void lockIdentity();
     /** Canonical network totals, published only when the unlocked Identity is the genesis authority. */

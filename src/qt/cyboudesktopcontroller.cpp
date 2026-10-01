@@ -88,6 +88,7 @@ CybouDesktopController::CybouDesktopController(CybouDesktopModel* model,
 {
     if (m_model) {
         connect(m_model, &CybouDesktopModel::lockVaultRequested, this, [this] { lockIdentity(); });
+        connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { updatePoaFinalizer(); });
     }
 }
 
@@ -142,11 +143,6 @@ void CybouDesktopController::start()
                                "Create or restore your Identity on the current network.").arg(m_archived_network));
         }
         const std::filesystem::path data_dir = m_data_directory / "cybou_state";
-        if (qEnvironmentVariableIsSet("CYBOU_DEV_FINALIZER")) {
-            throw std::runtime_error(
-                "desktop finalizer mode is disabled; run cybou-node finalizer run for DEV PoA finalization");
-        }
-
         bool p2p_port_ok{false};
         const int p2p_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_PORT", &p2p_port_ok);
         if (qEnvironmentVariableIsSet("CYBOU_DEV_P2P_PORT") &&
@@ -353,13 +349,42 @@ void CybouDesktopController::publishNetworkAuthority()
 
 void CybouDesktopController::lockIdentity()
 {
-    if (!m_model || !m_identity_service || !m_model->beginVaultLock()) return;
+    if (!m_model || !m_identity_service) return;
+    if (m_node_service) m_node_service->Runtime().DisablePoaFinalizer();
+    if (m_node_service) m_node_service->StopDesktopFinalizer();
+    if (!m_model->beginVaultLock()) return;
     {
         std::lock_guard identity_access{m_identity_access_mutex};
         m_identity_service->Lock();
     }
     m_model->completeVaultLock();
     publishNetworkAuthority();
+}
+
+void CybouDesktopController::updatePoaFinalizer()
+{
+    if (!m_model || !m_node_service || !m_identity_service) return;
+    std::lock_guard identity_access{m_identity_access_mutex};
+    try {
+        if (m_model->status().identity_state != CybouIdentityState::Active ||
+            !m_identity_service->IsUnlocked() || !m_identity_service->IsNetworkAuthority()) {
+            m_node_service->Runtime().DisablePoaFinalizer();
+            m_node_service->StopDesktopFinalizer();
+            return;
+        }
+        auto signer = std::make_shared<cybou::CybouKeyStorePoaSigner>(m_identity_service->GetKeyStore());
+        if (!m_node_service->Runtime().EnablePoaFinalizer(std::move(signer))) {
+            m_node_service->StopDesktopFinalizer();
+            m_node_service->Runtime().DisablePoaFinalizer();
+            qWarning() << "unlocked Identity does not match the genesis PoA key";
+            return;
+        }
+        m_node_service->StartDesktopFinalizer();
+    } catch (const std::exception& e) {
+        m_node_service->StopDesktopFinalizer();
+        m_node_service->Runtime().DisablePoaFinalizer();
+        qWarning() << "cannot enable the Central Authority finalizer:" << e.what();
+    }
 }
 
 void CybouDesktopController::publishAuthority()

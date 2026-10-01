@@ -36,6 +36,7 @@ namespace cybou {
 namespace p2p { class PeerAdmissionPolicy; class PeerManager; }
 class CybouKeyStore;
 class IdentityOperationCoordinator;
+class PoaSigner;
 
 struct NodeRuntimeConfig {
     CybouNetworkDefinition network_definition;
@@ -166,6 +167,11 @@ public:
 
     /** Produce a block if running as the PoA finalizer */
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);
+    /** Arm the local PoA capability with a signer matching this network's genesis key. */
+    bool EnablePoaFinalizer(std::shared_ptr<PoaSigner> signer);
+    /** Stop signing while preserving the node's pending operation pool and journal. */
+    void DisablePoaFinalizer();
+    bool IsPoaFinalizerEnabled() const;
 
     /** Commit a finalized block */
     BlockTransitionResult CommitBlock(const FinalizedBlock& block, bool sync = true);

@@ -56,6 +56,9 @@ public:
         CybouNetworkServiceConfig config,
         NetworkUpdate update);
     void StopNetwork();
+    /** Start or stop desktop PoA production and block gossip as the vault unlocks/locks. */
+    void StartDesktopFinalizer(uint64_t block_interval_ms = 1000);
+    void StopDesktopFinalizer();
     /** Run the finalizer block production, inbound CYP2 and gossip loops. */
     int RunFinalizer(const CybouFinalizerServiceConfig& config, std::atomic_bool& stopping);
 
@@ -71,6 +74,8 @@ private:
     std::atomic_bool m_stop_network{false};
     std::thread m_sync_thread;
     std::thread m_listener_thread;
+    std::atomic_bool m_stop_desktop_finalizer{true};
+    std::thread m_desktop_finalizer_thread;
 };
 
 } // namespace cybou

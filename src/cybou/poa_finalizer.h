@@ -9,6 +9,7 @@
 #include <cybou/poa_signing_journal.h>
 #include <cybou/recovery_phrase.h>
 #include <cybou/block.h>
+#include <cybou/poa_signer.h>
 
 namespace cybou {
 
@@ -25,13 +26,15 @@ struct PoaSigningResult {
     std::optional<PoaFinalityCertificate> certificate;
 };
 
-/** Keeps operator recovery entropy in RAM and journals every intent before signing. */
+/** Journals every intent before calling its local signer. */
 class PoaFinalizer final {
 public:
     PoaFinalizer(KVStore& db, const uint256& network_id,
+        const uint256& genesis_block_id, const IdentityHybridPublicKey& genesis_finalizer_key);
+    PoaFinalizer(KVStore& db, const uint256& network_id,
         const uint256& genesis_block_id, const RecoveryEntropy& operator_recovery_entropy,
         const IdentityHybridPublicKey& genesis_finalizer_key);
-    ~PoaFinalizer();
+    ~PoaFinalizer() = default;
     PoaFinalizer(const PoaFinalizer&) = delete;
     PoaFinalizer& operator=(const PoaFinalizer&) = delete;
     PoaFinalizer(PoaFinalizer&&) = delete;
@@ -39,14 +42,17 @@ public:
 
     PoaJournalStatus CheckCanonicalTip(uint64_t finalized_height, const uint256& finalized_tip);
     bool SafetyHalted() const { return m_journal.SafetyHalted(); }
+    bool EnableSigner(PoaSignerRef signer);
+    void DisableSigner();
+    bool SignerEnabled() const { return static_cast<bool>(m_signer); }
     PoaSigningResult SignFinality(uint64_t finalized_height, const uint256& finalized_tip,
         const CybouBlock& block);
     std::optional<IdentityHybridSignature> SignTransportProof(std::span<const unsigned char> message) const;
 
 private:
     const uint256 m_network_id;
-    RecoveryEntropy m_operator_recovery_entropy;
     IdentityHybridPublicKey m_public_key;
+    PoaSignerRef m_signer;
     PoaSigningJournal m_journal;
 };
 

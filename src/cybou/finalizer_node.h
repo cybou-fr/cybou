@@ -63,6 +63,8 @@ struct OperationSubmitResult {
 class CybouFinalizerNode
 {
 public:
+    /** Constructs an unarmed capability slot bound to the network's genesis key. */
+    explicit CybouFinalizerNode(CybouStateStore& store);
     CybouFinalizerNode(CybouStateStore& store, const RecoveryEntropy& poa_recovery_entropy);
     ~CybouFinalizerNode();
 
@@ -78,6 +80,9 @@ public:
     /** Finalize the pending batch, including an empty block when the queue is empty. */
     BlockProductionResult ProduceNextBlock(bool sync = true);
     bool SafetyHalted() const;
+    bool EnableSigner(PoaSignerRef signer);
+    void DisableSigner();
+    bool SignerEnabled() const;
     std::optional<IdentityHybridSignature> SignTransportProof(std::span<const unsigned char> message) const;
 
 private:

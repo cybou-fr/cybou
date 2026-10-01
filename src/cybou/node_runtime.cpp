@@ -206,6 +206,7 @@ std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignProviderProof(
 std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignFinalizerTransportProof(
     const std::span<const unsigned char> message) const
 {
+    std::lock_guard lock(m_mutex);
     if (!m_finalizer_node) return std::nullopt;
     const auto signature = m_finalizer_node->SignTransportProof(message);
     if (!signature || signature->ml_dsa.size() != 3309) return std::nullopt;
@@ -336,7 +337,7 @@ NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
     std::lock_guard lock(m_mutex);
     NodeRuntimeStatus status;
     status.network_id = m_network_id;
-    status.is_finalizer = (m_finalizer_node != nullptr);
+    status.is_finalizer = m_finalizer_node && m_finalizer_node->SignerEnabled();
 
     const auto loaded = m_store.LoadState();
     if (loaded.error == StateLoadError::NETWORK_MISMATCH) {
@@ -578,7 +579,7 @@ void CybouNodeRuntime::EmitFinalizedEvents(const FinalizedBlock& block, bool pro
 std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
 {
     std::lock_guard lock(m_mutex);
-    if (!m_finalizer_node) return std::nullopt;
+    if (!m_finalizer_node || !m_finalizer_node->SignerEnabled()) return std::nullopt;
     if (m_store.PoaSafetyHalted() || m_finalizer_node->SafetyHalted()) return std::nullopt;
     const auto loaded = m_store.LoadState();
     if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
@@ -586,6 +587,26 @@ std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
     if (!result) return std::nullopt;
     if (result.finalized_block) { RememberFinalizedBlockForGossip(*result.finalized_block); EmitFinalizedEvents(*result.finalized_block, true); }
     return result.finalized_block;
+}
+
+bool CybouNodeRuntime::EnablePoaFinalizer(std::shared_ptr<PoaSigner> signer)
+{
+    if (!signer) return false;
+    std::lock_guard lock(m_mutex);
+    if (!m_finalizer_node) m_finalizer_node = std::make_unique<CybouFinalizerNode>(m_store);
+    return m_finalizer_node->EnableSigner(std::move(signer));
+}
+
+void CybouNodeRuntime::DisablePoaFinalizer()
+{
+    std::lock_guard lock(m_mutex);
+    if (m_finalizer_node) m_finalizer_node->DisableSigner();
+}
+
+bool CybouNodeRuntime::IsPoaFinalizerEnabled() const
+{
+    std::lock_guard lock(m_mutex);
+    return m_finalizer_node && m_finalizer_node->SignerEnabled();
 }
 
 BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block, const bool sync)

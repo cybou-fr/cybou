@@ -110,6 +110,30 @@ bool CybouKeyStore::DerivesPublicKey(IdentityKeyPurpose purpose, const IdentityH
     return derived && *derived == key;
 }
 
+std::optional<IdentityHybridPublicKey> CybouKeyStore::GetPoaFinalizerPublicKey() const
+{
+    if (!m_impl->material) return std::nullopt;
+    return DeriveIdentityPublicKey(m_impl->material->recovery_entropy, IdentityKeyPurpose::POA_FINALIZER);
+}
+
+std::optional<IdentityHybridSignature> CybouKeyStore::SignPoaFinalizerMessage(
+    const std::span<const unsigned char> message) const
+{
+    if (!m_impl->material || message.empty()) return std::nullopt;
+    return SignIdentityMessage(m_impl->material->recovery_entropy, IdentityKeyPurpose::POA_FINALIZER, message);
+}
+
+std::optional<IdentityHybridPublicKey> CybouKeyStorePoaSigner::PublicKey() const
+{
+    return m_keystore.GetPoaFinalizerPublicKey();
+}
+
+std::optional<IdentityHybridSignature> CybouKeyStorePoaSigner::Sign(
+    const std::span<const unsigned char> message) const
+{
+    return m_keystore.SignPoaFinalizerMessage(message);
+}
+
 void CybouKeyStore::Clear() { m_impl->Clear(); }
 bool CybouKeyStore::HasKey() const { return m_impl->material.has_value(); }
 std::optional<XWingPublicKey> CybouKeyStore::GetIdentityXWingPublicKey() const { return m_impl->identity_xwing_public_key; }
