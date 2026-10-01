@@ -10,8 +10,10 @@
 #include <test/cybou_test_setup.h>
 
 #include <boost/test/unit_test.hpp>
+#include <boost/asio.hpp>
 
 #include <fstream>
+#include <thread>
 #ifndef _WIN32
 #include <sys/stat.h>
 #endif
@@ -390,6 +392,67 @@ BOOST_AUTO_TEST_CASE(runtime_private_listener_accepts_private_discovery)
     BOOST_CHECK_EQUAL(gossip[1].first, "172.16.2.3");
     BOOST_CHECK_EQUAL(gossip[2].first, "192.168.2.4");
     BOOST_CHECK_EQUAL(gossip[3].first, "198.51.100.5");
+}
+
+BOOST_AUTO_TEST_CASE(sync_tip_confirmation_requires_the_configured_genesis_finalizer)
+{
+    CybouServiceTestFixture fixture;
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor finalizer_acceptor{io, tcp::endpoint{loopback, 0}};
+    const auto finalizer_port = finalizer_acceptor.local_endpoint().port();
+    const auto tip = fixture.runtime->GetFinalizedTip();
+    BOOST_REQUIRE(tip);
+    std::atomic_bool finalizer_served{false};
+    std::jthread finalizer_server{[&] {
+        tcp::socket socket{io};
+        finalizer_acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+        const bool handshake = fixture.HandshakeAsFinalizer(session, {.network_id = fixture.runtime->GetNetworkId(),
+            .finalized_height = 1, .finalized_tip = *tip,
+            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 1301});
+        finalizer_served = handshake && session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
+    }};
+
+    cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
+        .data_dir = fixture.directory / "finalizer-tip-observer",
+        .p2p_endpoint = std::make_pair(loopback.to_string(), finalizer_port),
+        .memory_only = true, .wipe_data = true};
+    cybou::CybouNodeRuntime observer{std::move(observer_config)};
+    BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
+    const auto finalizer_sync = observer.SyncFromConfiguredPeer(10);
+    finalizer_server.join();
+    BOOST_CHECK(finalizer_served.load());
+    BOOST_CHECK_EQUAL(finalizer_sync.blocks_applied, 1U);
+    BOOST_CHECK(finalizer_sync.reached_peer_tip);
+
+    tcp::acceptor provider_acceptor{io, tcp::endpoint{loopback, 0}};
+    const auto provider_port = provider_acceptor.local_endpoint().port();
+    std::atomic_bool provider_served{false};
+    std::jthread provider_server{[&] {
+        tcp::socket socket{io};
+        provider_acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+        const bool handshake = session.Handshake({.network_id = fixture.runtime->GetNetworkId(),
+            .finalized_height = 1, .finalized_tip = *tip,
+            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 1302});
+        provider_served = handshake && session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
+    }};
+
+    cybou::NodeRuntimeConfig provider_observer_config{.network_definition = fixture.definition,
+        .data_dir = fixture.directory / "provider-tip-observer",
+        .p2p_endpoint = std::make_pair(loopback.to_string(), provider_port),
+        .memory_only = true, .wipe_data = true};
+    cybou::CybouNodeRuntime provider_observer{std::move(provider_observer_config)};
+    BOOST_REQUIRE(provider_observer.InitializeGenesis(fixture.genesis));
+    const auto provider_sync = provider_observer.SyncFromConfiguredPeer(10);
+    provider_server.join();
+    BOOST_CHECK(provider_served.load());
+    BOOST_CHECK_EQUAL(provider_sync.blocks_applied, 1U);
+    BOOST_CHECK(!provider_sync.reached_peer_tip);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

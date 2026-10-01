@@ -164,6 +164,8 @@ public:
         const IdentityHybridPublicKey* genesis_finalizer_key = nullptr);
     /** Proven ProviderID of a storage peer. */
     const std::optional<ProviderId>& PeerProviderId() const { return m_peer_provider_id; }
+    /** True only while this live session has verified the peer's genesis PoA proof. */
+    bool PeerFinalizerAuthenticated() const { return m_peer_finalizer_authenticated; }
     HandshakeStatus LastHandshakeStatus() const { return m_handshake_status; }
     bool Ping(uint64_t nonce);
     bool AnswerPing();
@@ -218,6 +220,9 @@ private:
     std::array<unsigned char, 32> m_tls_exporter{};
     std::optional<Hello> m_peer;
     std::optional<ProviderId> m_peer_provider_id;
+    // Ephemeral session fact. Never serialize or persist an Authority address
+    // or map this role to a durable node identity.
+    bool m_peer_finalizer_authenticated{false};
     uint64_t m_local_capabilities{0};
     HandshakeStatus m_handshake_status{HandshakeStatus::NOT_ATTEMPTED};
 };

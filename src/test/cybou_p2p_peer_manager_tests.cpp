@@ -66,12 +66,44 @@ BOOST_AUTO_TEST_CASE(manager_tracks_two_live_peers_and_drops_closed_sockets)
     const auto peers = manager.Peers();
     BOOST_REQUIRE_EQUAL(peers.size(), 2U);
     BOOST_CHECK(peers[0].hello.network_id == network);
+    BOOST_CHECK(manager.AuthenticatedFinalizerSessions().empty());
     BOOST_CHECK_EQUAL(manager.PingAll(), 2U);
     first_server.join();
     second_server.join();
     BOOST_CHECK(served[0] && served[1]);
     BOOST_CHECK_EQUAL(manager.PingAll(), 0U);
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(manager_tracks_finalizer_proof_only_for_the_live_session)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    const auto network = fixture.runtime->GetNetworkId();
+    bool handshake_ok{false};
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+        handshake_ok = fixture.HandshakeAsFinalizer(session, {.network_id = network,
+            .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
+            .capabilities = cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 901});
+    }};
+
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    BOOST_REQUIRE(manager.Connect(loopback.to_string(), acceptor.local_endpoint().port()));
+    const auto live_routes = manager.AuthenticatedFinalizerSessions();
+    BOOST_REQUIRE_EQUAL(live_routes.size(), 1U);
+    BOOST_CHECK(live_routes.front().finalizer_authenticated);
+    BOOST_CHECK(live_routes.front().hello.capabilities & cybou::p2p::CAP_ACCEPT_OPERATIONS);
+
+    server.join();
+    BOOST_CHECK(handshake_ok);
+    BOOST_CHECK_EQUAL(manager.PingAll(), 0U);
+    BOOST_CHECK(manager.AuthenticatedFinalizerSessions().empty());
 }
 
 BOOST_AUTO_TEST_CASE(manager_pings_only_the_requested_peer_budget_and_rotates)

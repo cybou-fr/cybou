@@ -160,6 +160,12 @@ must be treated as a migration state until all of the following exist and pass:
   network from the Central Authority desktop and retires legacy VPS
   finalizer/provider services.
 
+The CYP2 direct-peer foundation is implemented: an operation-accepting peer
+proves the genesis finalizer key over the live TLS-exporter-bound handshake,
+and the peer manager exposes that role only on its current session. This does
+not implement the bootstrap service, outbound Authority route, operation relay,
+or any of the cutover requirements above.
+
 Until that cutover is accepted, do not describe the deployed legacy DEV as the
 new bootstrap architecture, and do not point a new executable at it as if it
 were a bootstrap. Preserve the existing network and key during routine work.

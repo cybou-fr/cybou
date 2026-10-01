@@ -589,6 +589,9 @@ bool VerifyFinalizerProof(const std::span<const unsigned char> payload,
 bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provider_signer,
     const FinalizerProofSigner& finalizer_signer, const IdentityHybridPublicKey* genesis_finalizer_key)
 {
+    m_peer.reset();
+    m_peer_provider_id.reset();
+    m_peer_finalizer_authenticated = false;
     m_handshake_status = HandshakeStatus::INVALID_LOCAL;
     if (local.network_id.IsNull() || local.finalized_tip.IsNull() || local.nonce == 0) return false;
     m_handshake_status = HandshakeStatus::UNAVAILABLE;
@@ -630,7 +633,6 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
             return false;
         }
     }
-    m_peer_provider_id.reset();
     if (peer->capabilities & CAP_STORAGE) {
         const auto proof_frame = Read();
         if (!proof_frame || proof_frame->type != MessageType::PROVIDER_PROOF) return false;
@@ -647,6 +649,7 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
         if (!proof_frame || proof_frame->type != MessageType::FINALIZER_PROOF ||
             !VerifyFinalizerProof(proof_frame->payload,
                 FinalizerProofMessage(*peer, local, m_tls_exporter), *genesis_finalizer_key)) return false;
+        m_peer_finalizer_authenticated = true;
     }
     m_peer = *peer;
     m_local_capabilities = local.capabilities;

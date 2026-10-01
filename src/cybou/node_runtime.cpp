@@ -818,6 +818,14 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     bool any_peer_up_to_date{false};
     for (const auto& peer : peers) {
         const auto attempt = m_peer_manager->SyncFromPeer(peer.address, peer.port, max_blocks-result.blocks_applied);
+        // Desktop Identity creation is gated on a positive freshness proof from
+        // the configured genesis-key finalizer, not a provider's HELLO height
+        // or its claim that it has no newer blocks. The session role is trusted
+        // only after CYP2 verified FINALIZER_PROOF against the network key.
+        if (attempt.reached_peer_tip && peer.finalizer_authenticated && m_config.p2p_endpoint &&
+            peer.address == m_config.p2p_endpoint->first && peer.port == m_config.p2p_endpoint->second) {
+            result.reached_peer_tip = true;
+        }
         if (attempt.status == SyncPeerStatus::BLOCKS_APPLIED) {
             result.status=SyncPeerStatus::BLOCKS_APPLIED;
             result.blocks_applied+=attempt.blocks_applied;

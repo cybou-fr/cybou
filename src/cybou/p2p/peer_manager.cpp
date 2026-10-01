@@ -406,10 +406,23 @@ std::vector<PeerInfo> PeerManager::Peers() const
     peers.reserve(m_peers.size());
     for (const auto& [endpoint, session] : m_peers) {
         if (session->Peer()) {
-            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId()});
+            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId(),
+                session->PeerFinalizerAuthenticated()});
         }
     }
     return peers;
+}
+
+std::vector<PeerInfo> PeerManager::AuthenticatedFinalizerSessions() const
+{
+    std::vector<PeerInfo> sessions;
+    for (const auto& [endpoint, session] : m_peers) {
+        if (session->Peer() && session->PeerFinalizerAuthenticated()) {
+            sessions.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(),
+                session->PeerProviderId(), true});
+        }
+    }
+    return sessions;
 }
 
 std::vector<PeerInfo> PeerManager::StoragePeers() const
@@ -417,7 +430,8 @@ std::vector<PeerInfo> PeerManager::StoragePeers() const
     std::vector<PeerInfo> peers;
     for (const auto& [endpoint, session] : m_peers) {
         if (session->Peer() && (session->Peer()->capabilities & CAP_STORAGE) && session->PeerProviderId()) {
-            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId()});
+            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId(),
+                session->PeerFinalizerAuthenticated()});
         }
     }
     return peers;

@@ -42,6 +42,8 @@ struct PeerInfo {
     Hello hello;
     /** Proven ProviderID for storage peers. */
     std::optional<ProviderId> provider_id;
+    /** Session-only proof of the genesis PoA key; cleared when the session drops. */
+    bool finalizer_authenticated{false};
 };
 
 struct PeerSubmitResult {
@@ -80,6 +82,8 @@ public:
     size_t FanoutRecentBlocks(size_t max_per_peer = 16);
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
+    /** Live finalizer-authenticated sessions; endpoints are transient routes only. */
+    std::vector<PeerInfo> AuthenticatedFinalizerSessions() const;
     /** Connected peers that advertised the optional ciphertext storage service. */
     std::vector<PeerInfo> StoragePeers() const;
     std::optional<ChunkAdmissionResult> PutAuthorizedChunk(
