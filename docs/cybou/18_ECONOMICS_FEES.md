@@ -85,6 +85,11 @@ Every complete four fee units route:
 
 No burn and no priority bidding.
 
-Storage-provider economic rewards remain separate from Identity Authority.
-Authority may credit verified contribution without making Authority itself
-transferable or redeemable as CYBOU.
+Authority is not transferable or redeemable as CYBOU, and there are no
+protocol-level validator or provider monetary reward distributions.
+
+## Network separation
+
+DEV, Beta, and Mainnet have separate genesis allocations and economic parameters.
+Beta balances do not carry to Mainnet. Mainnet onboarding values remain unset
+until integrated Mail and Files operating data is measured.

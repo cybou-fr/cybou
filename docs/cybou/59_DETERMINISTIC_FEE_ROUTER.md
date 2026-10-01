@@ -5,7 +5,7 @@
 Route indivisible CYBOU protocol fees exactly between:
 
 ```text
-Validators / Security
+Security
 Onboarding
 ```
 
@@ -87,9 +87,3 @@ increase(OnboardingPool)
 ```
 
 No CYBOU is created or destroyed.
-
-## Future Store
-
-A later protocol version can define a new batch ratio including Storage providers.
-
-The v1 router deliberately contains no service-node bucket.

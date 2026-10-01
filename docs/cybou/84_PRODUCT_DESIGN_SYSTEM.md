@@ -94,7 +94,7 @@ Search follows context:
 - Home/global search may later route to service-specific search;
 - Mail search operates over private local Mail indexes;
 - Files search operates over private local Files metadata;
-- search terms must not be leaked to validators/providers merely for UX parity.
+- search terms must not be leaked to peers/providers merely for UX parity.
 
 Search fields should be prominent where users expect them, especially Mail and
 Files.
@@ -452,7 +452,7 @@ report.pdf protected
 100 CYBOU sent to bob.cybou
 ```
 
-Raw peer/validator/height metrics remain in Network Diagnostics.
+Raw peer/finality/network metrics remain in Network Diagnostics.
 
 ## 23. Settings structure
 
