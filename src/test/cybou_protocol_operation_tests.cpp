@@ -3,6 +3,8 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/protocol_operation.h>
+#include <cybou/bootstrap_operation_relay.h>
+#include <cybou/protocol_limits.h>
 #include "cybou_test_identity_helpers.h"
 #include <uint256.h>
 
@@ -114,6 +116,59 @@ cybou::AuthorizedSystemLock MakeTestSystemLock(const TestIdentity& sender, uint6
 
 
 } // namespace
+
+BOOST_AUTO_TEST_CASE(bootstrap_operation_relay_is_volatile_bounded_and_session_scoped)
+{
+    cybou::BootstrapOperationRelay relay{1, cybou::MAX_OPERATION_PAYLOAD_BYTES};
+    auto first = MakeTestAccountCreate(MakeTestIdentity(1));
+    auto first_bytes = cybou::SerializeProtocolOperation(cybou::ProtocolOperation{first});
+    BOOST_REQUIRE(first_bytes);
+    BOOST_CHECK(relay.Enqueue(*first_bytes) == cybou::BootstrapRelayEnqueueStatus::FINALIZER_UNAVAILABLE);
+
+    const auto session = relay.AttachAuthenticatedFinalizer();
+    BOOST_REQUIRE(session);
+    BOOST_CHECK(!relay.AttachAuthenticatedFinalizer());
+    BOOST_CHECK(relay.Enqueue(*first_bytes) == cybou::BootstrapRelayEnqueueStatus::QUEUED);
+    BOOST_CHECK(relay.Enqueue(*first_bytes) == cybou::BootstrapRelayEnqueueStatus::DUPLICATE);
+    BOOST_CHECK_EQUAL(relay.QueuedOperations(), 1U);
+    BOOST_CHECK_EQUAL(relay.QueuedBytes(), first_bytes->size());
+
+    const auto first_id = cybou::ComputeOperationId(cybou::ProtocolOperation{first});
+    BOOST_REQUIRE(first_id);
+    const auto peeked = relay.Peek(*session);
+    BOOST_REQUIRE(peeked);
+    BOOST_CHECK(peeked->exact_bytes == *first_bytes);
+    BOOST_CHECK(!relay.Peek(*session + 1));
+    const auto unrelated_id = cybou::ComputeOperationId(
+        cybou::ProtocolOperation{MakeTestSystemLock(MakeTestIdentity(2), 1)});
+    BOOST_REQUIRE(unrelated_id);
+    BOOST_CHECK(!relay.Acknowledge(*session, *unrelated_id));
+
+    auto second = MakeTestAccountCreate(MakeTestIdentity(3));
+    second.work.nonce = 43;
+    const auto second_bytes = cybou::SerializeProtocolOperation(cybou::ProtocolOperation{second});
+    BOOST_REQUIRE(second_bytes);
+    BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::BootstrapRelayEnqueueStatus::QUEUE_FULL);
+
+    BOOST_CHECK(relay.Acknowledge(*session, *first_id));
+    BOOST_CHECK_EQUAL(relay.QueuedOperations(), 0U);
+    BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::BootstrapRelayEnqueueStatus::QUEUED);
+    relay.DetachFinalizer(*session);
+    BOOST_CHECK(!relay.HasAuthenticatedFinalizer());
+    BOOST_CHECK_EQUAL(relay.QueuedOperations(), 0U);
+    BOOST_CHECK_EQUAL(relay.QueuedBytes(), 0U);
+    BOOST_CHECK(!relay.Peek(*session));
+    BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::BootstrapRelayEnqueueStatus::FINALIZER_UNAVAILABLE);
+
+    const auto next_session = relay.AttachAuthenticatedFinalizer();
+    BOOST_REQUIRE(next_session);
+    BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::BootstrapRelayEnqueueStatus::QUEUED);
+    relay.DetachFinalizer(*session);
+    BOOST_CHECK(relay.HasAuthenticatedFinalizer());
+    BOOST_REQUIRE(relay.Peek(*next_session));
+    relay.DetachFinalizer(*next_session);
+    BOOST_CHECK(!relay.HasAuthenticatedFinalizer());
+}
 
 BOOST_AUTO_TEST_CASE(account_create_canonical_typed_roundtrip)
 {
