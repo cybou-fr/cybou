@@ -7,9 +7,13 @@ experimental software, not a public mail or cloud-storage service.
 ## Current status
 
 - The active protocol is deployed on the experimental DEV network.
-- DEV uses a genesis-bound, hybrid-signature PoA finalizer operated by CYBOU.
-  Full nodes independently validate blocks and state. This is a centralized
-  trust model, not Byzantine fault tolerance.
+- The deployed DEV network operates a legacy testnet topology (`cybou-node.service`
+  finalizer on port 29461 and two storage providers on ports 29471/29481). It is
+  maintained for routine development until planned acceptance tests and a
+  coordinated new-genesis cutover replace it.
+- Finality is single-operator hybrid-PQ PoA; full nodes independently validate
+  blocks, state roots, and certificates. This is a centralized trust model,
+  **not BFT**, and the network makes no Byzantine fault tolerance claim.
 - The protocol substrate includes account Identity, `.cybou` names,
   `RootPublication`, an encrypted ROOT/INDEX/DATA chunk tree, finalized chunk
   admission proofs, and CYP2 block/chunk transport.
@@ -23,6 +27,18 @@ experimental software, not a public mail or cloud-storage service.
 
 ## Architecture rules
 
+- All participants run the same full-node software (`CybouNode`). Bootstrap,
+  storage, advisory Validation, and PoA finalization are optional local capabilities,
+  not protocol node classes.
+- Genesis authorizes 1–4 bootstrap Identities by stable `AccountID` and expected
+  `RecoveryKeyID`. Bootstrap nodes provide rendezvous and relay; they do not vote,
+  form a quorum, or finalize.
+- The Central Authority is identified only by possession of the genesis PoA key;
+  its finalizer runs from its desktop after vault unlock. Its route is ephemeral
+  per session.
+- Public P2P admission is France-only in production and DEV (inbound and outbound)
+  using local Geo data (fails closed). Optional VPN/proxy/Tor filtering is local
+  operator policy and never changes consensus.
 - `RootPublication` is the only application-content publication operation.
 - Mail, Files, Backup, names, recipients, and application schemas are encrypted
   client payloads; no permanent per-message or per-file consensus objects.
@@ -48,17 +64,14 @@ experimental software, not a public mail or cloud-storage service.
 - CYP2 v3 uses TLS 1.3; provider and finalizer role proofs are bound to the TLS
   session. Ordinary peers do not have global authenticated identities.
 
-## Documentation
+## Documentation hierarchy
 
-- `README.md` is the project overview and build entry point.
-- `AGENTS.md` is the implementation authority.
-- `docs/cybou/26_IMPLEMENTATION_STATUS.md` records code status and remaining
-  Beta acceptance and hardening gates.
-- `docs/cybou/POA_FINALITY.md`, `ROOT_PUBLICATION.md`,
-  `ENCRYPTED_CHUNK_TREE.md`, `STORAGE_ADMISSION.md`, and
-  `IDENTITY_DISCOVERY_AND_RECOVERY.md` define active protocol behavior.
-- `docs/cybou/82_MAIL_UI_UX.md` and `83_STORAGE_UI_UX.md` define product UX.
-- `docs/cybou/85_BETA_UI_ACCEPTANCE.md` defines Beta acceptance scenarios.
+- Level 0 (Implementation authority): `AGENTS.md`
+- Level 1 (Frozen decisions / architecture): `docs/cybou/24_DECISIONS.md`, `docs/cybou/02_ARCHITECTURE.md`
+- Level 2 (Normative domain specs): `04_NETWORK_BOOTSTRAP_AND_GENESIS.md`, `POA_FINALITY.md`, `37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`, `ROOT_PUBLICATION.md`, `ENCRYPTED_CHUNK_TREE.md`, `STORAGE_ADMISSION.md`, `57_AUTHORITY_AND_VALIDATION.md`, etc.
+- Level 3 (Implementation status): `docs/cybou/26_IMPLEMENTATION_STATUS.md`
+- Level 4 (Roadmap): `docs/cybou/22_ROADMAP.md`, `25_OPEN_QUESTIONS.md`
+- Level 5 (Product contracts): `docs/cybou/82_MAIL_UI_UX.md`, `83_STORAGE_UI_UX.md`, `85_BETA_UI_ACCEPTANCE.md`
 
 Do not describe CYBOU as a public production service, BFT network, or completed
 Gmail/Google Drive replacement.

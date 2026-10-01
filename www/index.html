@@ -502,12 +502,22 @@
       <dl class="tech-spec-grid">
         <div class="spec-item">
           <dt data-i18n="dtConsensus">Finalité actuelle sur DEV</dt>
-          <dd data-i18n="ddConsensus">PoA hybride à un signataire exploité par CYBOU. Les nœuds complets vérifient indépendamment ; pas de revendication BFT.</dd>
+          <dd data-i18n="ddConsensus">PoA hybride à un signataire exploité par CYBOU sur DEV. Les nœuds complets vérifient indépendamment ; pas de revendication BFT. Cible : PoA sur poste Central Authority.</dd>
         </div>
 
         <div class="spec-item">
-          <dt data-i18n="dtPoT">Époques protocolaires</dt>
-          <dd data-i18n="ddPoT">Les périodes dérivées de la hauteur et les calculs entiers évitent l’horloge locale dans les transitions de consensus.</dd>
+          <dt data-i18n="dtBootstrap">1 à 4 identités d'amorce</dt>
+          <dd data-i18n="ddBootstrap">1 à 4 identités autorisées par la genèse (AccountID + RecoveryKeyID) pour la découverte et le relais ; aucun rôle de finalité ou de vote. Même logiciel de nœud complet.</dd>
+        </div>
+
+        <div class="spec-item">
+          <dt data-i18n="dtAdmission">Admission P2P France souveraine</dt>
+          <dd data-i18n="ddAdmission">Admission P2P publique restreinte à l'espace IP français (données Geo locales, fail-closed). Filtrage VPN/proxy/Tor local optionnel.</dd>
+        </div>
+
+        <div class="spec-item">
+          <dt data-i18n="dtEpochs">Époques protocolaires</dt>
+          <dd data-i18n="ddEpochs">Les périodes dérivées de la hauteur et les calculs entiers évitent l’horloge locale dans les transitions de consensus.</dd>
         </div>
 
         <div class="spec-item">
