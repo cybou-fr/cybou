@@ -107,6 +107,22 @@ bool CybouIdentityService::LoadVault(std::string_view password)
     return true;
 }
 
+void CybouIdentityService::Lock()
+{
+    Cancel();
+    if (m_worker.joinable()) m_worker.join();
+    std::lock_guard lock(m_mutex);
+    m_keystore.Clear();
+    m_vault_saved = false;
+    m_phase.store(IdentityCreationPhase::IDLE);
+}
+
+bool CybouIdentityService::IsUnlocked() const
+{
+    std::lock_guard lock(m_mutex);
+    return m_keystore.HasKey();
+}
+
 namespace {
 
 struct PasswordWiper {

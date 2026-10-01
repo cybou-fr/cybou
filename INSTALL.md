@@ -30,7 +30,7 @@ The project has a CMake/vcpkg CI build for the native core and `cybou-node`; see
 
 ## DEV node
 
-The current DEV installation is an operational legacy testnet topology (`cybou-node.service` PoA finalizer on port 29461 and independent storage providers on ports 29471/29481). It is not the target architecture described in [`docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md). Keep the current DEV testnet operational for routine development until specified acceptance tests and the planned new-genesis DEV cutover are complete. Do not reset DEV state or replace the PoA key during routine development. Never use development keys or balances as production assets.
+The current DEV VPS runs one `cybou-bootstrap.service`, bound to TCP port 29461; SSH listens on port 22. The legacy finalizer and provider services are inactive. The bootstrap store is an empty prototype store and does not finalize blocks. Desktop CYP2 peer discovery is not yet configured, and the desktop finalizer is not implemented. This deployment is a development prototype, not the target architecture described in [`docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md). Never use development keys or balances as production assets.
 
 ## Tests
 

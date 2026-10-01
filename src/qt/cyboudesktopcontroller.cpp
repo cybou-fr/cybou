@@ -86,6 +86,9 @@ CybouDesktopController::CybouDesktopController(CybouDesktopModel* model,
     std::filesystem::path data_directory, QObject* parent)
     : QObject{parent}, m_model{model}, m_data_directory{std::move(data_directory)}
 {
+    if (m_model) {
+        connect(m_model, &CybouDesktopModel::lockVaultRequested, this, [this] { lockIdentity(); });
+    }
 }
 
 CybouDesktopController::~CybouDesktopController()
@@ -144,7 +147,6 @@ void CybouDesktopController::start()
                 "desktop finalizer mode is disabled; run cybou-node finalizer run for DEV PoA finalization");
         }
 
-        const auto& endpoint = cybou::CYBOU_DEV_BOOTSTRAP_NODES.front();
         bool p2p_port_ok{false};
         const int p2p_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_PORT", &p2p_port_ok);
         if (qEnvironmentVariableIsSet("CYBOU_DEV_P2P_PORT") &&
@@ -152,9 +154,13 @@ void CybouDesktopController::start()
             throw std::runtime_error("invalid CYBOU_DEV_P2P_PORT");
         }
         const QString p2p_host = qEnvironmentVariable("CYBOU_DEV_P2P_HOST");
-        const auto selected_p2p_port = p2p_port_ok ? static_cast<uint16_t>(p2p_port) : endpoint.p2p_port;
-        const auto selected_p2p_host = p2p_host.isEmpty() ? std::string{endpoint.host} : p2p_host.toStdString();
-        const auto configured_p2p = std::make_pair(selected_p2p_host, selected_p2p_port);
+        std::optional<std::pair<std::string, uint16_t>> configured_p2p;
+        if (!p2p_host.isEmpty() || p2p_port_ok) {
+            if (p2p_host.isEmpty() || !p2p_port_ok) {
+                throw std::runtime_error("CYBOU_DEV_P2P_HOST and CYBOU_DEV_P2P_PORT must be set together");
+            }
+            configured_p2p = std::make_pair(p2p_host.toStdString(), static_cast<uint16_t>(p2p_port));
+        }
         cybou::CybouNetworkServiceConfig network_config;
         bool listen_port_ok{false};
         const int listen_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_LISTEN_PORT", &listen_port_ok);
@@ -235,7 +241,8 @@ void CybouDesktopController::start()
                     qWarning() << sync_error;
                 }
                 try {
-                    if (m_wallet_service) {
+                    std::lock_guard identity_access{m_identity_access_mutex};
+                    if (m_wallet_service && m_identity_service && m_identity_service->IsUnlocked()) {
                         m_wallet_service->SyncLedger();
                         const auto [balance, system_balance] = m_wallet_service->GetBalances();
                         QVector<CybouWalletEntry> entries;
@@ -321,6 +328,7 @@ void CybouDesktopController::start()
 void CybouDesktopController::publishNetworkAuthority()
 {
     CybouNetworkAuthorityStatus status;
+    std::lock_guard identity_access{m_identity_access_mutex};
     if (m_identity_service && m_node_service && m_identity_service->IsNetworkAuthority()) {
         const auto loaded = m_node_service->Runtime().GetStore().LoadState();
         if (loaded && loaded.state) {
@@ -343,9 +351,21 @@ void CybouDesktopController::publishNetworkAuthority()
         Qt::QueuedConnection);
 }
 
+void CybouDesktopController::lockIdentity()
+{
+    if (!m_model || !m_identity_service || !m_model->beginVaultLock()) return;
+    {
+        std::lock_guard identity_access{m_identity_access_mutex};
+        m_identity_service->Lock();
+    }
+    m_model->completeVaultLock();
+    publishNetworkAuthority();
+}
+
 void CybouDesktopController::publishAuthority()
 {
     if (!m_authority_index || !m_identity_service) return;
+    std::lock_guard identity_access{m_identity_access_mutex};
     m_authority_index->Sync();
     CybouAuthoritySummary summary;
     summary.scanned_height = m_authority_index->ScannedHeight();

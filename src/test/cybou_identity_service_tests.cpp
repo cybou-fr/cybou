@@ -136,6 +136,44 @@ BOOST_AUTO_TEST_CASE(account_creation_requires_prepared_durable_vault)
     std::filesystem::remove(mismatched_path);
 }
 
+BOOST_AUTO_TEST_CASE(lock_erases_authority_key_material_and_vault_can_be_reopened)
+{
+    RuntimeFixture fixture;
+    cybou::CybouNodeRuntime runtime{fixture.Config()};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+
+    const auto dir = std::filesystem::temp_directory_path() / "cybou-identity-service-lock-test";
+    std::filesystem::create_directories(dir);
+    const auto path = dir / "authority.cybou";
+    std::filesystem::remove(path);
+
+    auto material = cybou::GenerateIdentityMaterial();
+    BOOST_REQUIRE(material);
+    cybou::crypto::CleanseMemory(material->recovery_entropy.data(), material->recovery_entropy.size());
+    material->recovery_entropy = fixture.validator_seed;
+    cybou::CybouKeyStore writer;
+    BOOST_REQUIRE(writer.LoadMaterial(std::move(*material)));
+    BOOST_REQUIRE(writer.SaveToFile(path, "correct horse battery staple"));
+
+    cybou::CybouIdentityService identity{runtime, path};
+    BOOST_REQUIRE(identity.LoadVault("correct horse battery staple"));
+    BOOST_CHECK(identity.IsUnlocked());
+    BOOST_CHECK(identity.GetKeyStore().HasKey());
+    BOOST_CHECK(identity.IsNetworkAuthority());
+
+    identity.Lock();
+    BOOST_CHECK(!identity.IsUnlocked());
+    BOOST_CHECK(!identity.GetKeyStore().HasKey());
+    BOOST_CHECK(!identity.IsNetworkAuthority());
+    BOOST_CHECK(identity.GetPhase() == cybou::IdentityCreationPhase::IDLE);
+    BOOST_CHECK(std::filesystem::exists(path));
+
+    BOOST_REQUIRE(identity.LoadVault("correct horse battery staple"));
+    BOOST_CHECK(identity.IsUnlocked());
+    BOOST_CHECK(identity.IsNetworkAuthority());
+    std::filesystem::remove(path);
+}
+
 BOOST_AUTO_TEST_CASE(vault_save_failure_prevents_broadcast)
 {
     RuntimeFixture fixture;

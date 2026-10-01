@@ -32,8 +32,8 @@ its optional bootstrap, storage, or advisory Validation capabilities. It is a
 distinct key role, separate from Identity recovery,
 authorization and KEM keys, Release Signing, and Treasury. In the target
 deployment, the desktop unlocks this Identity and runs the finalizer locally;
-the private material is never sent to bootstrap. The current legacy DEV still
-loads operator entropy on the VPS until cutover.
+the private material is never sent to bootstrap. The current DEV VPS runs no
+finalizer, and the desktop finalizer is not implemented yet.
 Its journal and operator diagnostics identify the public key by
 `SHA256(CYBOU/POA-FINALIZER-KEY-ID/V1 || Ed25519_public_key ||
 ML-DSA-65_public_key)`; the genesis definition still commits the full public

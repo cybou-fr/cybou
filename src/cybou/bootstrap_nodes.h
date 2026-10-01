@@ -11,24 +11,14 @@
 
 namespace cybou {
 
-/**
- * Legacy DEV P2P seed endpoints.
- *
- * These endpoints feed the existing DEV peer-sync path, which currently
- * connects to the legacy VPS finalizer. They are not initial locators for the
- * future bootstrap service and grant no bootstrap role.
- *
- * CYP2 is the only transport. The list is
- * transport metadata only. It is never part of consensus state.
- */
+/** Optional DEV CYP2 peers. The VPS bootstrap uses a separate protocol and
+ * must never be treated as a CYP2 peer or PoA finalizer. */
 struct BootstrapEndpoint {
     std::string_view host;
     uint16_t p2p_port; // CYP2 peer session
 };
 
-inline constexpr std::array<BootstrapEndpoint, 1> CYBOU_DEV_BOOTSTRAP_NODES{{
-    {"51.255.46.58", 29461}, // OVH DEV PoA finalizer node (vps-d0669a91)
-}};
+inline constexpr std::array<BootstrapEndpoint, 0> CYBOU_DEV_BOOTSTRAP_NODES{};
 
 /** Pre-genesis discovery hint. SPKI pin authenticates first contact only. */
 struct InitialBootstrapLocator {
@@ -38,7 +28,7 @@ struct InitialBootstrapLocator {
 };
 
 // No future-service locator is compiled in until its endpoint and SPKI pin
-// are approved. Never reuse the DEV finalizer above as that locator.
+// are approved.
 inline constexpr std::array<InitialBootstrapLocator, 0> CYBOU_INITIAL_BOOTSTRAP_LOCATORS{};
 
 } // namespace cybou

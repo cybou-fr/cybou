@@ -65,9 +65,9 @@ Current `main` implements the canonical low-level substrate:
   genesis grants and caller-supplied unlocked-Identity signing;
 - pinned-TLS pre-genesis Recovery-key challenge/response bound to a fresh
   challenge and that TLS exporter;
-- explicit distinction between the legacy DEV P2P seed and a future
-  pre-genesis address/SPKI locator; the latter remains unconfigured until the
-  official endpoint and pin are approved;
+- no compiled CYP2 peer seed; the DEV bootstrap's STATUS/CLAIM protocol is not
+  a CYP2 endpoint. The future pre-genesis address/SPKI locator also remains
+  unconfigured until the official endpoint and pin are approved;
 
 - Identity keys/authorization/recovery and current KEM publication;
 - names, balances and deterministic state execution;

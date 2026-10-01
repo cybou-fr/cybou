@@ -1260,9 +1260,59 @@ void CybouDesktopModel::setNameClaimFinished()
 
 void CybouDesktopModel::requestLockVault()
 {
-    if (m_status.identity_state != CybouIdentityState::Active) return;
-    setIdentityState(CybouIdentityState::Locked, m_status.account_id, m_status.creation_height);
+    if (m_status.identity_state != CybouIdentityState::Active || m_vault_locking) return;
+    if (m_fixture_mode || !m_identity_service) {
+        setIdentityState(CybouIdentityState::Locked, m_status.account_id, m_status.creation_height);
+        return;
+    }
+    m_vault_locking = true;
     Q_EMIT lockVaultRequested();
+}
+
+bool CybouDesktopModel::beginVaultLock()
+{
+    if (!m_vault_locking || m_status.identity_state != CybouIdentityState::Active) return false;
+    // Closing the backend joins its worker and clears the private Mail/Files
+    // projection before the keystore is erased.
+    setIdentityState(CybouIdentityState::Locked, m_status.account_id, m_status.creation_height);
+    if (m_name_service) m_name_service->Cancel();
+    if (m_name_worker.joinable()) m_name_worker.join();
+    if (m_recovery_rotation_worker.joinable()) m_recovery_rotation_worker.join();
+    if (m_payment_worker.joinable()) m_payment_worker.join();
+    if (m_vault_worker.joinable()) m_vault_worker.join();
+    m_recovery_rotation_pending = false;
+    return true;
+}
+
+void CybouDesktopModel::completeVaultLock()
+{
+    m_status.primary_name.clear();
+    m_status.balance = 0;
+    m_status.system_balance = 0;
+    m_status.storage_used = 0;
+    m_status.storage_quota = 0;
+    m_names.clear();
+    m_contacts.clear();
+    m_activity.clear();
+    m_extra_activity.clear();
+    m_wallet_entries.clear();
+    m_operations.clear();
+    m_authority = {};
+    m_network_authority = {};
+    m_payment_fee.reset();
+    m_payment_pending = false;
+    m_recovery_rotation_pending = false;
+    m_vault_locking = false;
+    m_capabilities.payments = false;
+    m_requested_capabilities.payments = false;
+    Q_EMIT statusChanged();
+    Q_EMIT namesChanged();
+    Q_EMIT contactsChanged();
+    Q_EMIT activityChanged();
+    Q_EMIT walletChanged();
+    Q_EMIT authorityChanged();
+    Q_EMIT networkAuthorityChanged();
+    Q_EMIT capabilitiesChanged();
 }
 
 namespace {

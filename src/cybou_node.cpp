@@ -215,8 +215,8 @@ int PrintPeerSubmitResult(const cybou::p2p::PeerSubmitResult& result)
 int Execute(const int argc, char* argv[])
 {
     if (argc == 2 && std::string_view{argv[1]} == "network-bootstrap") {
-        // DEV bootstrap seed list (doc 75). Transport metadata only — trust
-        // always comes from the network definition file, never from seeds.
+        // Optional CYP2 peer hints. The bootstrap protocol has separate
+        // locators and this legacy DEV deployment is not a CYP2 peer.
         for (const auto& endpoint : cybou::CYBOU_DEV_BOOTSTRAP_NODES) {
             std::cout << endpoint.host << ':' << endpoint.p2p_port << '\n';
         }

@@ -22,8 +22,9 @@ The PoA finalizer key, Identity recovery/authorization keys, Release Signing
 key, and Treasury key are separate roles. The Central Authority Identity's
 recovery entropy derives its role-specific PoA key; the key remains local to
 the unlocked desktop and is protected by a durable anti-equivocation journal.
-The current DEV deployment has not yet migrated away from its VPS finalizer;
-see `04_NETWORK_BOOTSTRAP_AND_GENESIS.md`.
+The current DEV VPS runs only the bootstrap prototype; no PoA finalizer is
+running there, and desktop finalization remains unimplemented. See
+`04_NETWORK_BOOTSTRAP_AND_GENESIS.md` and `26_IMPLEMENTATION_STATUS.md`.
 
 ## Resilience boundary
 

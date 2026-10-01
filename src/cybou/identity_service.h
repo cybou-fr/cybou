@@ -74,6 +74,9 @@ public:
     void DiscardPreparedIdentity();
     /** Unlock an existing portable vault; no raw-seed or automatic import path. */
     bool LoadVault(std::string_view password);
+    /** Stop identity work and erase all unlocked key material from memory. */
+    void Lock();
+    bool IsUnlocked() const;
     /**
      * The unlocked Identity's recovery phrase derives this network's genesis
      * PoA finalizer key: it is the network's central authority. Proven from

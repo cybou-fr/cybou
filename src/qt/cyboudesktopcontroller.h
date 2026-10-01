@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <mutex>
 
 #include <QObject>
 #include <QString>
@@ -44,10 +45,12 @@ private:
     std::unique_ptr<CybouCoreApplicationAdapter> m_application;
     /** Derived Identity Authority preview; used only on the network refresh thread. */
     std::unique_ptr<cybou::AuthorityIndex> m_authority_index;
+    std::mutex m_identity_access_mutex;
     /** Where data of an older DEV network was moved at startup, if it was. */
     QString m_archived_network;
     void stop();
     void publishAuthority();
+    void lockIdentity();
     /** Canonical network totals, published only when the unlocked Identity is the genesis authority. */
     void publishNetworkAuthority();
 };

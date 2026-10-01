@@ -206,10 +206,11 @@ chunk admission.
 
 ## Cutover requirements
 
-The current DEV testnet deployment and executable still use the legacy
-topology. It is development-only; there is no production/Beta network
-migration. Replace it with the new-genesis DEV topology only after all of the
-following exist and pass:
+The DEV VPS now runs only the standalone bootstrap prototype; the legacy
+finalizer and provider services are inactive. This operational reset is not a
+completed new-genesis network cutover: desktop finalization and peer discovery
+are not implemented, and there is no production/Beta network migration. The
+target network remains blocked on all of the following:
 
 - authenticated bootstrap `EMPTY`/`BOUND` protocol, pinning, one-use claim,
   durable atomic binding, generation rollback protection, and replacement;
@@ -229,7 +230,7 @@ following exist and pass:
 For the current implementation prototype (`cybou-bootstrap` utility, LevelDB store, v8 prototype state vs v9 target schema, and open cutover gates), see [`26_IMPLEMENTATION_STATUS.md`](26_IMPLEMENTATION_STATUS.md).
 
 Until the cutover gates pass and coordinated cutover is executed:
-- Keep the existing DEV testnet and key operational for routine development.
-- Do not describe the deployed legacy DEV testnet as the target bootstrap architecture.
-- Do not point new executables at legacy DEV as if it were a bootstrap service.
+- Keep the deployed bootstrap prototype available for its current tests; do not recreate the removed finalizer/provider topology.
+- Do not describe the bootstrap prototype as a complete target network.
+- Do not point CYP2 executables at the bootstrap protocol port as if it were a peer endpoint.
 - The isolated LAB may continue using explicit network files and separate headless processes.

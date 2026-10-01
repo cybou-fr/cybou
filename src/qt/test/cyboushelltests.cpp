@@ -1873,6 +1873,12 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QCOMPARE(key_epoch(), std::uint64_t{0});
 
     // Locking drops private Mail and the session, and cancels the rotation.
+    QObject::connect(alice_model.get(), &CybouDesktopModel::lockVaultRequested, alice_model.get(),
+        [desktop_model = alice_model.get()] {
+            if (desktop_model->beginVaultLock()) {
+                desktop_model->completeVaultLock();
+            }
+        });
     alice_model->requestLockVault();
     QCOMPARE(rotated.count(), 1);
     QCOMPARE(rotated.first().at(0).value<CybouOperationOutcome>(), CybouOperationOutcome::Failed);

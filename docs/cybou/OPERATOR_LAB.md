@@ -46,7 +46,7 @@ CYP2 endpoint independently of the local `--listen` address. The manifest's
 Use the same public LAB network file for the Windows desktop:
 
 ```powershell
-cybou.exe --network C:\cybou-lab\network.bin --datadir C:\cybou-lab\desktop --peer 51.255.46.58:31461
+cybou.exe --network C:\cybou-lab\network.bin --datadir C:\cybou-lab\desktop --peer <configured-cyp2-peer>:<port>
 ```
 
 An explicit `--network` requires an explicit `--datadir` and `--peer`. Diagnostics → Open

@@ -326,6 +326,9 @@ public:
     void revealRecoveryWordsAsync(const QString& vault_password,
         std::function<void(std::optional<QStringList> words)> done);
     void requestLockVault();
+    /** Controller lifecycle hooks; called in order around CybouIdentityService::Lock(). */
+    bool beginVaultLock();
+    void completeVaultLock();
     bool requestClaimName(const QString& label, const QString& vault_password);
     bool requestRecoveryRootRotation(const QStringList& new_phrase, const QString& vault_password,
         bool resume_pending = false);
@@ -431,6 +434,7 @@ private:
     cybou::NodeDiagnosticsSnapshot m_network_diagnostics;
     CybouNetworkAuthorityStatus m_network_authority;
     bool m_validation_shown{true};
+    bool m_vault_locking{false};
 
     void refreshFinalizedName();
     /** True when private Mail/Files commands may be issued. */
