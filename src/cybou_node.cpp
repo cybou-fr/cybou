@@ -17,6 +17,7 @@
 #include <cybou/network_definition.h>
 #include <cybou/network_genesis.h>
 #include <cybou/official_networks.h>
+#include <cybou/provision.h>
 #include <cybou/node_runtime.h>
 #include <cybou/node_service.h>
 #include <cybou/p2p/peer_manager.h>
@@ -288,7 +289,6 @@ int Execute(const int argc, char* argv[])
         }
 
         auto genesis_state = cybou::CreateDevGenesisState();
-        std::vector<cybou::InitialAuthorityAssignment> initial_authority;
 
         if (argc >= 7 && std::string_view{argv[5]} != "-") {
             auto boot_id_hex = cybou::ParseUint256UserHex(argv[5]);
@@ -296,8 +296,7 @@ int Execute(const int argc, char* argv[])
             uint64_t boot_auth = std::stoull(argv[6]);
             cybou::IdentityKeyId id{};
             std::copy(boot_id_hex->begin(), boot_id_hex->end(), id.begin());
-            initial_authority.push_back({id, boot_auth});
-            genesis_state.genesis_allocations.emplace(id, cybou::GenesisAllocation{.balance = 0, .label = ""});
+            genesis_state.genesis_allocations.emplace(id, cybou::GenesisAllocation{.balance = 0, .authority = boot_auth, .label = ""});
         }
 
         if (argc >= 10 && std::string_view{argv[7]} != "-") {
@@ -307,7 +306,7 @@ int Execute(const int argc, char* argv[])
             std::string label = argv[9];
             cybou::IdentityKeyId id{};
             std::copy(auth_id_hex->begin(), auth_id_hex->end(), id.begin());
-            genesis_state.genesis_allocations.emplace(id, cybou::GenesisAllocation{.balance = balance, .label = label});
+            genesis_state.genesis_allocations.emplace(id, cybou::GenesisAllocation{.balance = balance, .authority = 0, .label = label});
         }
 
         if (cybou::ValidateCybouState(genesis_state) != cybou::StateValidationError::NONE) {
@@ -327,7 +326,6 @@ int Execute(const int argc, char* argv[])
         spec.genesis_state_root = *state_root;
         spec.poa_finalizer_public_key = *poa_pub;
         spec.protocol_parameters = cybou::DevProtocolParameters();
-        spec.initial_authority = std::move(initial_authority);
 
         const auto digest = cybou::ComputeNetworkGenesisDigest(spec);
         auto sig = cybou::SignIdentityMessage(net_seed, cybou::IdentityKeyPurpose::NETWORK_ROOT,
@@ -683,6 +681,7 @@ const char* Help = R"(CYBOU operator CLI (CYP2 only)
   network genesis-create --network-key-file FILE --poa-public-key FILE --out FILE
          [--bootstrap-recovery-id HEX] [--bootstrap-authority 1000001]
          [--authority-recovery-id HEX --authority-balance CYBOU --authority-name LABEL]
+  network provision-devnet [--private-dir DIR] [--out-constants FILE] [--force]
   network bootstrap
   network probe --network FILE --data-dir DIR --peer IP:PORT
   network sync --network FILE --data-dir DIR --peer IP:PORT [--count 100]
@@ -858,6 +857,16 @@ int Main(int argc, char* argv[])
     std::string event_path;
     std::vector<std::string> args{"cybou-node"};
     if (group=="network" && action=="bootstrap") { opts.Allow({}); args.push_back("network-bootstrap"); }
+    else if (group=="network" && action=="provision-devnet") {
+        opts.Allow({"private-dir", "out-constants", "force"});
+        const std::filesystem::path priv_dir = opts.Get("private-dir", "private/devnet");
+        const std::filesystem::path const_path = opts.Get("out-constants", "src/cybou/official_devnet_constants.h");
+        const bool force = opts.Has("force");
+        if (!cybou::ProvisionDevnet(priv_dir, const_path, force)) {
+            return 1;
+        }
+        return 0;
+    }
     else if (group=="network" && action=="info") {
         opts.Allow({"network"}); auto net=cybou::LoadNetworkGenesisBundle(opts.Require("network"));
         if (!net) throw std::runtime_error("invalid network/genesis");

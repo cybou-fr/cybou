@@ -21,19 +21,8 @@ namespace cybou {
 
 struct OfficialNetworkProfile;
 
-inline constexpr uint8_t CYBOU_NETWORK_GENESIS_VERSION{1};
-inline constexpr std::string_view CYBOU_GENESIS_SIGNING_DOMAIN{"CYBOU/GENESIS/V1"};
-
-/**
- * Baseline initial Authority assignment configured in genesis for a designated recovery key.
- * Used for bootstrap and official identities (e.g. DEV bootstrap baseline = 1,000,001).
- */
-struct InitialAuthorityAssignment {
-    IdentityKeyId recovery_key_id;
-    uint64_t initial_authority{0};
-
-    friend bool operator==(const InitialAuthorityAssignment&, const InitialAuthorityAssignment&) = default;
-};
+inline constexpr uint8_t CYBOU_NETWORK_GENESIS_VERSION{2};
+inline constexpr std::string_view CYBOU_GENESIS_SIGNING_DOMAIN{"CYBOU/GENESIS/V2"};
 
 /**
  * Canonical signed network genesis specification.
@@ -49,8 +38,6 @@ struct NetworkGenesis {
     IdentityHybridPublicKey poa_finalizer_public_key{IdentityKeyPurpose::POA_FINALIZER, {}, {}};
     CybouProtocolParameters protocol_parameters;
 
-    std::vector<InitialAuthorityAssignment> initial_authority;
-
     /** Signature signed by the strictly offline Network Private Key over the canonical specification digest. */
     IdentityHybridSignature signature;
 
@@ -64,7 +51,6 @@ enum class NetworkGenesisError : uint8_t {
     NULL_GENESIS_STATE_ROOT,
     INVALID_POA_KEY,
     INVALID_PROTOCOL_PARAMETERS,
-    INVALID_INITIAL_AUTHORITY,
     INVALID_SIGNATURE,
 };
 
@@ -96,7 +82,6 @@ public:
     const uint256& GetGenesisStateRoot() const noexcept { return m_genesis.genesis_state_root; }
     const IdentityHybridPublicKey& GetPoaPublicKey() const noexcept { return m_genesis.poa_finalizer_public_key; }
     const CybouProtocolParameters& GetProtocolParameters() const noexcept { return m_genesis.protocol_parameters; }
-    std::span<const InitialAuthorityAssignment> GetInitialAuthority() const noexcept { return m_genesis.initial_authority; }
 
     /** Returns the exact canonical NetworkID bytes representing this network. */
     std::span<const unsigned char> GetNetworkId() const noexcept { return m_network_id_bytes; }
@@ -111,8 +96,7 @@ private:
 
 /** Helper to create a validly signed VerifiedNetworkGenesis for testing from a definition. */
 VerifiedNetworkGenesis CreateTestVerifiedGenesis(
-    const CybouNetworkDefinition& definition,
-    const std::vector<InitialAuthorityAssignment>& initial_auth = {});
+    const CybouNetworkDefinition& definition);
 
 /** Canonical byte serialization of any IdentityHybridPublicKey. */
 std::vector<unsigned char> CanonicalSerializeHybridPublicKey(const IdentityHybridPublicKey& key);

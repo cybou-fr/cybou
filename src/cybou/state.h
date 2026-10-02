@@ -20,11 +20,12 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_STATE_VERSION{10};
+inline constexpr uint8_t CYBOU_STATE_VERSION{11};
 
 struct AccountState {
     uint64_t balance{0};
     uint64_t system_balance{0};
+    uint64_t authority{0};
     uint64_t creation_height{0};
     uint64_t creation_epoch{0};
 
@@ -32,7 +33,7 @@ struct AccountState {
 };
 
 /**
- * Genesis-fixed Balance and name for the Identity whose recovery phrase has
+ * Genesis-fixed Balance, AUTH and name for the Identity whose recovery phrase has
  * this recovery key. Claimed exactly once by that Identity's AccountCreate,
  * which receives `balance` as spendable Balance and `label` as its .cybou
  * name (reserved labels are allowed only here). The record stays after the
@@ -40,6 +41,7 @@ struct AccountState {
  */
 struct GenesisAllocation {
     uint64_t balance{0};
+    uint64_t authority{0};
     std::string label;
     std::optional<AccountId> claimed_by;
 

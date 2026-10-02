@@ -13,7 +13,7 @@
 
 namespace cybou {
 namespace {
-constexpr size_t ACCOUNT_SIZE{32 + 8 * 5 + 4};
+constexpr size_t ACCOUNT_SIZE{32 + 8 * 5};
 
 void Write32(std::vector<unsigned char>& out, uint32_t value)
 {
@@ -89,11 +89,13 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     }
     state.onboarding_pool -= params.onboarding_bonus;
     uint64_t genesis_balance{0};
+    uint64_t genesis_authority{0};
     if (const auto recovery_id = ComputeRecoveryKeyId(op.authorization.recovery_root)) {
         if (auto it = state.genesis_allocations.find(*recovery_id);
             it != state.genesis_allocations.end() && !it->second.claimed_by) {
             // Registration above rejects a reused recovery key, so a claim happens once.
             genesis_balance = it->second.balance;
+            genesis_authority = it->second.authority;
             it->second.claimed_by = op.account_id;
             if (!it->second.label.empty()) {
                 state.names.names.emplace(it->second.label, op.account_id);
@@ -104,6 +106,7 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     state.accounts.emplace(op.account_id, AccountState{
         .balance = genesis_balance,
         .system_balance = params.onboarding_bonus,
+        .authority = genesis_authority,
         .creation_height = block_height,
         .creation_epoch = EpochForHeight(block_height, params),
     });
@@ -343,6 +346,7 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
         out.insert(out.end(), id.Value().begin(), id.Value().end());
         Write64(out, account.balance);
         Write64(out, account.system_balance);
+        Write64(out, account.authority);
         Write64(out, account.creation_height);
         Write64(out, account.creation_epoch);
     }
@@ -354,6 +358,7 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
     for (const auto& [recovery_id, allocation] : state.genesis_allocations) {
         out.insert(out.end(), recovery_id.begin(), recovery_id.end());
         Write64(out, allocation.balance);
+        Write64(out, allocation.authority);
         Write32(out, static_cast<uint32_t>(allocation.label.size()));
         out.insert(out.end(), allocation.label.begin(), allocation.label.end());
         out.push_back(allocation.claimed_by ? 1 : 0);
@@ -386,11 +391,12 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         const auto id = AccountId::FromBytes(*id_bytes);
         const auto balance = reader.U64();
         const auto system = reader.U64();
+        const auto authority = reader.U64();
         const auto height = reader.U64();
         const auto epoch = reader.U64();
-        if (!id || (prior && !(*prior < *id)) || !balance || !system || !height || !epoch) return std::nullopt;
+        if (!id || (prior && !(*prior < *id)) || !balance || !system || !authority || !height || !epoch) return std::nullopt;
         prior = *id;
-        state.accounts.emplace(*id, AccountState{*balance, *system, *height, *epoch});
+        state.accounts.emplace(*id, AccountState{*balance, *system, *authority, *height, *epoch});
     }
     const auto identity_size = reader.U32();
     if (!identity_size) return std::nullopt;
@@ -415,8 +421,9 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
     for (uint32_t i{0}; i < *allocations; ++i) {
         const auto id_bytes = reader.Bytes(IdentityKeyId{}.size());
         const auto balance = reader.U64();
+        const auto authority = reader.U64();
         const auto label_size = reader.U32();
-        if (!id_bytes || !balance || !label_size || *label_size > NAME_MAX_LABEL_LENGTH) return std::nullopt;
+        if (!id_bytes || !balance || !authority || !label_size || *label_size > NAME_MAX_LABEL_LENGTH) return std::nullopt;
         const auto label = reader.Bytes(*label_size);
         const auto claimed = reader.U8();
         if (!label || !claimed || *claimed > 1) return std::nullopt;
@@ -424,7 +431,8 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         std::copy(id_bytes->begin(), id_bytes->end(), recovery_id.begin());
         if (prior_allocation && !(*prior_allocation < recovery_id)) return std::nullopt;
         prior_allocation = recovery_id;
-        GenesisAllocation allocation{.balance = *balance, .label = std::string(label->begin(), label->end())};
+        GenesisAllocation allocation{.balance = *balance, .authority = *authority,
+            .label = std::string(label->begin(), label->end())};
         if (*claimed) {
             const auto claimant = reader.Bytes(AccountId::SIZE);
             const auto account = claimant ? AccountId::FromBytes(*claimant) : std::nullopt;
@@ -440,7 +448,7 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
 
 std::optional<uint256> CybouStateHash(const CybouState& state)
 {
-    constexpr std::string_view domain{"CYBOU/STATE/V5"};
+    constexpr std::string_view domain{"CYBOU/STATE/V6"};
     const auto bytes = SerializeCybouState(state);
     if (!bytes) return std::nullopt;
     uint256 hash;

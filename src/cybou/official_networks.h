@@ -6,6 +6,7 @@
 #define CYBOU_OFFICIAL_NETWORKS_H
 
 #include <cybou/identity_crypto.h>
+#include <cybou/official_devnet_constants.h>
 #include <uint256.h>
 
 #include <algorithm>
@@ -54,11 +55,13 @@ inline constexpr std::array<OfficialBootstrapLocator, 1> OFFICIAL_DEVNET_BOOTSTR
     },
 }};
 
+struct VerifiedNetworkBundle;
+
 inline constexpr OfficialNetworkProfile OFFICIAL_DEVNET_PROFILE{
     .kind = NetworkKind::DEVNET,
     .name = "DEVNET",
-    .network_public_key_bytes = {},
-    .genesis_digest = {},
+    .network_public_key_bytes = devnet_constants::NETWORK_ID_BYTES,
+    .genesis_digest = uint256{devnet_constants::GENESIS_DIGEST_BYTES},
     .bootstrap_locators = OFFICIAL_DEVNET_BOOTSTRAP_LOCATORS,
 };
 
@@ -69,6 +72,9 @@ inline constexpr OfficialNetworkProfile OFFICIAL_MAINNET_PROFILE{
     .genesis_digest = {},
     .bootstrap_locators = {},
 };
+
+/** Returns the immutable compiled DEVNET bundle (verified cryptographically). */
+const VerifiedNetworkBundle& GetOfficialDevnetBundle();
 
 inline const OfficialNetworkProfile* FindOfficialNetworkProfile(std::string_view name)
 {
@@ -84,6 +90,12 @@ inline const OfficialNetworkProfile* FindOfficialNetworkProfile(NetworkKind kind
     case NetworkKind::MAINNET: return &OFFICIAL_MAINNET_PROFILE;
     }
     return nullptr;
+}
+
+inline bool IsOfficialNetworkConfigured(NetworkKind kind)
+{
+    const auto* profile = FindOfficialNetworkProfile(kind);
+    return profile && !profile->network_public_key_bytes.empty();
 }
 
 inline const OfficialNetworkProfile* FindOfficialNetworkProfile(std::span<const unsigned char> network_id)

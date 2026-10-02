@@ -133,13 +133,6 @@ std::vector<unsigned char> SerializeNetworkGenesisPayload(const NetworkGenesis& 
     WriteU32LE(out, p.max_pending_name_commits);
     WriteU8(out, p.identity_kem_xwing_enabled ? 1 : 0);
 
-    // Initial Authority Assignments
-    WriteU32LE(out, static_cast<uint32_t>(genesis.initial_authority.size()));
-    for (const auto& a : genesis.initial_authority) {
-        out.insert(out.end(), a.recovery_key_id.begin(), a.recovery_key_id.end());
-        WriteU64LE(out, a.initial_authority);
-    }
-
     return out;
 }
 
@@ -256,19 +249,6 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
     p.max_pending_name_commits = *max_pending_names;
     p.identity_kem_xwing_enabled = (*kem_xwing == 1);
 
-    const auto auth_count = read_u32le();
-    if (!auth_count || *auth_count > 128) return std::nullopt;
-    std::vector<InitialAuthorityAssignment> initial_authority;
-    initial_authority.reserve(*auth_count);
-    for (uint32_t i = 0; i < *auth_count; ++i) {
-        const auto key_id = read_hash();
-        const auto val = read_u64le();
-        if (!key_id || !val) return std::nullopt;
-        IdentityKeyId id{};
-        std::copy(key_id->begin(), key_id->end(), id.begin());
-        initial_authority.push_back(InitialAuthorityAssignment{.recovery_key_id = id, .initial_authority = *val});
-    }
-
     if (pos + 64 + 4 > bytes.size()) return std::nullopt;
     IdentityHybridSignature sig;
     std::copy_n(bytes.begin() + pos, 64, sig.ed25519.begin());
@@ -283,7 +263,6 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
     result.genesis_state_root = *state_root;
     result.poa_finalizer_public_key = poa_key;
     result.protocol_parameters = p;
-    result.initial_authority = std::move(initial_authority);
     result.signature = std::move(sig);
 
     return result;
@@ -312,20 +291,6 @@ NetworkGenesisError VerifySignedNetworkGenesis(const NetworkGenesis& genesis)
         return NetworkGenesisError::INVALID_PROTOCOL_PARAMETERS;
     }
 
-    if (genesis.initial_authority.size() > 128) {
-        return NetworkGenesisError::INVALID_INITIAL_AUTHORITY;
-    }
-    for (size_t i = 0; i < genesis.initial_authority.size(); ++i) {
-        const auto& entry = genesis.initial_authority[i];
-        if (entry.initial_authority == 0 ||
-            std::all_of(entry.recovery_key_id.begin(), entry.recovery_key_id.end(), [](unsigned char b){ return b == 0; })) {
-            return NetworkGenesisError::INVALID_INITIAL_AUTHORITY;
-        }
-        if (i > 0 && entry.recovery_key_id <= genesis.initial_authority[i - 1].recovery_key_id) {
-            return NetworkGenesisError::INVALID_INITIAL_AUTHORITY;
-        }
-    }
-
     // Cryptographic signature check under Network Key
     const auto digest = ComputeNetworkGenesisDigest(genesis);
     if (!VerifyIdentityMessage(genesis.network_public_key, genesis.signature,
@@ -352,8 +317,7 @@ std::optional<VerifiedNetworkGenesis> VerifiedNetworkGenesis::Create(NetworkGene
 }
 
 VerifiedNetworkGenesis CreateTestVerifiedGenesis(
-    const CybouNetworkDefinition& definition,
-    const std::vector<InitialAuthorityAssignment>& initial_auth)
+    const CybouNetworkDefinition& definition)
 {
     std::array<unsigned char, 32> net_secret{};
     net_secret.fill(0x33);
@@ -364,7 +328,6 @@ VerifiedNetworkGenesis CreateTestVerifiedGenesis(
     spec.genesis_state_root = definition.genesis_state_root;
     spec.poa_finalizer_public_key = definition.poa_finalizer_public_key;
     spec.protocol_parameters = definition.protocol_parameters;
-    spec.initial_authority = initial_auth;
 
     const auto digest = ComputeNetworkGenesisDigest(spec);
     auto sig = SignIdentityMessage(net_secret, IdentityKeyPurpose::NETWORK_ROOT,
@@ -387,11 +350,6 @@ std::optional<std::vector<unsigned char>> SerializeNetworkGenesisBundle(
     const auto computed_root = CybouStateHash(genesis_state);
     if (!computed_root || *computed_root != genesis.genesis_state_root) {
         return std::nullopt;
-    }
-    for (const auto& entry : genesis.initial_authority) {
-        if (!genesis_state.genesis_allocations.contains(entry.recovery_key_id)) {
-            return std::nullopt;
-        }
     }
 
     const auto signed_bytes = SerializeSignedNetworkGenesis(genesis);
@@ -465,11 +423,6 @@ std::optional<VerifiedNetworkBundle> VerifyNetworkGenesisBundle(const std::span<
         return std::nullopt;
     }
 
-    for (const auto& entry : verified_genesis->GetInitialAuthority()) {
-        if (!state->genesis_allocations.contains(entry.recovery_key_id)) {
-            return std::nullopt;
-        }
-    }
 
     CybouNetworkDefinition def;
     def.protocol_version = CYBOU_NETWORK_DEFINITION_VERSION;

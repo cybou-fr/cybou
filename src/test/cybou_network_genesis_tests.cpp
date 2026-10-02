@@ -50,11 +50,6 @@ BOOST_AUTO_TEST_CASE(test_network_key_and_signed_genesis_lifecycle)
     spec.protocol_parameters.name_commit_max_lifetime = 10;
     spec.protocol_parameters.max_pending_name_commits = 32;
 
-    // Add initial Authority baseline for bootstrap recovery key
-    cybou::IdentityKeyId bootstrap_recovery_id{};
-    bootstrap_recovery_id.fill(0x01);
-    spec.initial_authority.push_back({bootstrap_recovery_id, 1000001});
-
     // Compute digest and sign with Network Private Key
     const auto digest = cybou::ComputeNetworkGenesisDigest(spec);
     auto signature = cybou::SignIdentityMessage(
@@ -80,8 +75,6 @@ BOOST_AUTO_TEST_CASE(test_network_key_and_signed_genesis_lifecycle)
     BOOST_REQUIRE(verified.has_value());
     BOOST_CHECK(verified->GetGenesisDigest() == digest);
     BOOST_CHECK(verified->GetNetworkPublicKey() == *net_pub);
-    BOOST_CHECK_EQUAL(verified->GetInitialAuthority().size(), 1);
-    BOOST_CHECK_EQUAL(verified->GetInitialAuthority()[0].initial_authority, 1000001);
     BOOST_CHECK_EQUAL(verified->GetNetworkId().size(), net_id_bytes.size());
 
     // Tampering test: modify state root and check failure
@@ -89,52 +82,6 @@ BOOST_AUTO_TEST_CASE(test_network_key_and_signed_genesis_lifecycle)
     tampered.genesis_state_root = uint256::ZERO;
     BOOST_CHECK(cybou::VerifySignedNetworkGenesis(tampered) != cybou::NetworkGenesisError::NONE);
     BOOST_CHECK(!cybou::VerifiedNetworkGenesis::Create(tampered).has_value());
-}
-
-BOOST_AUTO_TEST_CASE(test_initial_authority_hardening_and_validation)
-{
-    std::array<unsigned char, 32> net_secret{};
-    net_secret.fill(0x11);
-    auto net_pub = cybou::DeriveIdentityPublicKey(net_secret, cybou::IdentityKeyPurpose::NETWORK_ROOT);
-    auto poa_pub = cybou::DeriveIdentityPublicKey(net_secret, cybou::IdentityKeyPurpose::POA_FINALIZER);
-    BOOST_REQUIRE(net_pub && poa_pub);
-
-    cybou::NetworkGenesis spec;
-    spec.version = cybou::CYBOU_NETWORK_GENESIS_VERSION;
-    spec.network_public_key = *net_pub;
-    spec.genesis_state_root = uint256::ONE;
-    spec.poa_finalizer_public_key = *poa_pub;
-    spec.protocol_parameters = cybou::DevProtocolParameters();
-
-    cybou::IdentityKeyId id1{}, id2{};
-    id1[0] = 0x10;
-    id2[0] = 0x20;
-
-    // Zero ID rejected
-    cybou::IdentityKeyId zero_id{};
-    spec.initial_authority = {{zero_id, 1000001}};
-    BOOST_CHECK(cybou::VerifySignedNetworkGenesis(spec) == cybou::NetworkGenesisError::INVALID_INITIAL_AUTHORITY);
-
-    // Zero authority value rejected
-    spec.initial_authority = {{id1, 0}};
-    BOOST_CHECK(cybou::VerifySignedNetworkGenesis(spec) == cybou::NetworkGenesisError::INVALID_INITIAL_AUTHORITY);
-
-    // Unsorted keys rejected
-    spec.initial_authority = {{id2, 1000001}, {id1, 1000002}};
-    BOOST_CHECK(cybou::VerifySignedNetworkGenesis(spec) == cybou::NetworkGenesisError::INVALID_INITIAL_AUTHORITY);
-
-    // Duplicate keys rejected
-    spec.initial_authority = {{id1, 1000001}, {id1, 1000002}};
-    BOOST_CHECK(cybou::VerifySignedNetworkGenesis(spec) == cybou::NetworkGenesisError::INVALID_INITIAL_AUTHORITY);
-
-    // Strictly canonical order accepted
-    spec.initial_authority = {{id1, 1000001}, {id2, 1000002}};
-    const auto digest = cybou::ComputeNetworkGenesisDigest(spec);
-    auto sig = cybou::SignIdentityMessage(net_secret, cybou::IdentityKeyPurpose::NETWORK_ROOT,
-        std::span<const unsigned char>{digest.begin(), digest.size()});
-    BOOST_REQUIRE(sig.has_value());
-    spec.signature = *sig;
-    BOOST_CHECK(cybou::VerifySignedNetworkGenesis(spec) == cybou::NetworkGenesisError::NONE);
 }
 
 BOOST_AUTO_TEST_CASE(test_cyg1_signed_genesis_bundle_lifecycle)
@@ -148,7 +95,8 @@ BOOST_AUTO_TEST_CASE(test_cyg1_signed_genesis_bundle_lifecycle)
     auto state = cybou::CreateDevGenesisState();
     cybou::IdentityKeyId auth_id{};
     auth_id[0] = 0x42;
-    state.genesis_allocations.emplace(auth_id, cybou::GenesisAllocation{.balance = 100, .label = "bootstrap"});
+    state.genesis_allocations.emplace(auth_id, cybou::GenesisAllocation{
+        .balance = 100, .authority = 1000001, .label = "bootstrap"});
     const auto state_root = cybou::CybouStateHash(state);
     BOOST_REQUIRE(state_root.has_value());
 
@@ -158,7 +106,6 @@ BOOST_AUTO_TEST_CASE(test_cyg1_signed_genesis_bundle_lifecycle)
     spec.genesis_state_root = *state_root;
     spec.poa_finalizer_public_key = *poa_pub;
     spec.protocol_parameters = cybou::DevProtocolParameters();
-    spec.initial_authority.push_back({auth_id, 1000001});
 
     const auto digest = cybou::ComputeNetworkGenesisDigest(spec);
     auto sig = cybou::SignIdentityMessage(net_secret, cybou::IdentityKeyPurpose::NETWORK_ROOT,
@@ -206,7 +153,7 @@ BOOST_AUTO_TEST_CASE(test_cyg1_signed_genesis_bundle_lifecycle)
     BOOST_CHECK(!cybou::VerifyNetworkGenesisBundle(malformed));
     auto signed_genesis = cybou::SerializeSignedNetworkGenesis(spec);
     const auto unsigned_payload = cybou::SerializeNetworkGenesisPayload(spec);
-    const size_t boolean_offset = unsigned_payload.size() - 4 - spec.initial_authority.size() * 40 - 1;
+    const size_t boolean_offset = unsigned_payload.size() - 1;
     signed_genesis[boolean_offset] = 2;
     BOOST_CHECK(!cybou::DeserializeSignedNetworkGenesis(signed_genesis));
 
@@ -215,7 +162,7 @@ BOOST_AUTO_TEST_CASE(test_cyg1_signed_genesis_bundle_lifecycle)
     BOOST_REQUIRE(net_file.has_value());
     BOOST_CHECK(net_file->definition.genesis_state_root == *state_root);
 
-    // Initial authority not in state allocations fails bundle serialization & verification
+    // Genesis allocations are self-contained; no parallel Authority list is required.
     auto bad_state = state;
     bad_state.genesis_allocations.erase(auth_id);
     const auto bad_state_root = cybou::CybouStateHash(bad_state);
@@ -228,7 +175,7 @@ BOOST_AUTO_TEST_CASE(test_cyg1_signed_genesis_bundle_lifecycle)
     BOOST_REQUIRE(bad_sig.has_value());
     bad_spec.signature = *bad_sig;
 
-    BOOST_CHECK(!cybou::SerializeNetworkGenesisBundle(bad_spec, bad_state).has_value());
+    BOOST_CHECK(cybou::SerializeNetworkGenesisBundle(bad_spec, bad_state).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(test_official_network_profiles_constitution)

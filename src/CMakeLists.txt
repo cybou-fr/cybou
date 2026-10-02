@@ -60,6 +60,7 @@ add_library(cybou_core STATIC
   cybou/signing_openssl.cpp
   cybou/state.cpp
   cybou/network_genesis.cpp
+  cybou/official_networks.cpp
 )
 target_link_libraries(cybou_core
   PUBLIC
@@ -87,8 +88,8 @@ add_library(cybou_node STATIC
   cybou/publication_service.cpp
   cybou/storage_service.cpp
   cybou/application_service.cpp
-  cybou/authority.cpp
   cybou/secret_file.cpp
+  cybou/provision.cpp
   cybou/poa_conflict_detector.cpp
   cybou/poa_finalizer.cpp
   cybou/poa_signing_journal.cpp
