@@ -38,8 +38,6 @@ struct CybouCapabilities {
     bool files{false};
     bool sharing{false};
     bool version_history{false};
-    /** Identity Authority preview is computed from finalized history. */
-    bool authority{false};
 };
 
 enum class CybouGeoAdmissionStatus : quint8 { NotRequired, Waiting, Ready };
@@ -74,6 +72,7 @@ struct CybouDesktopStatus {
 
     quint64 balance{0};
     quint64 system_balance{0};
+    quint64 authority{0};
 
     quint64 storage_used{0};
     quint64 storage_quota{0};
@@ -94,6 +93,7 @@ struct CybouNetworkAuthorityStatus {
     quint64 pending_name_commits{0};
     quint64 total_balance{0};
     quint64 total_system_balance{0};
+    quint64 total_authority{0};
     quint64 onboarding_pool{0};
     quint64 security_reward_pool{0};
     quint64 pending_fee_pool{0};
@@ -244,9 +244,9 @@ public:
     /** Adapter entry: payment finished (ok) or failed with a reason. */
     void setPaymentFinished(bool ok, const QString& error = {});
 
-    /* ---- Identity Authority (derived preview; never social trust). ---- */
-    const CybouAuthoritySummary& authority() const { return m_authority; }
-    void setAuthority(const CybouAuthoritySummary& authority);
+    /* ---- Canonical Identity Authority (AUTH in AccountState). ---- */
+    quint64 authority() const { return m_status.authority; }
+    void setAuthority(quint64 authority);
 
     /*
      * ---- Operation lifecycle, shared by Wallet, Mail, Files and Identity. ----
@@ -428,7 +428,6 @@ private:
     QVector<CybouWalletEntry> m_wallet_entries;
     QVector<CybouContact> m_contacts;
     CybouRestoreProgress m_restore_progress;
-    CybouAuthoritySummary m_authority;
     QHash<QString, CybouOperationStatus> m_operations;
     cybou::NodeDiagnosticsSnapshot m_network_diagnostics;
     CybouNetworkAuthorityStatus m_network_authority;

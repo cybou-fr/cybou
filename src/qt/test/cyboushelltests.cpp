@@ -2011,34 +2011,18 @@ void CybouShellTests::identityAuthorityIsAnHonestPreview()
     auto window = makeWindow();
     auto* model = window->desktopModel();
     auto* page = window->page(CybouPage::Identity);
-    const auto card = [page]() -> QWidget* {
-        for (auto* widget : page->findChildren<QWidget*>()) {
-            if (widget->property("cybouId").toString() == QLatin1String{"identityAuthority"}) return widget;
+    const auto auth_label = [page]() -> QLabel* {
+        for (auto* widget : page->findChildren<QLabel*>()) {
+            if (widget->property("cybouId").toString() == QLatin1String{"identityAuthorityValue"}) return widget;
         }
         return nullptr;
     };
     QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
-    QVERIFY(model->capabilities().authority);
-    QVERIFY(card());
-    QVERIFY(!card()->isHidden());
-    static_cast<IdentityPage*>(page)->showAuthorityDetails(true);
-    QStringList texts;
-    for (const auto* label : card()->findChildren<QLabel*>()) texts << label->text();
-    QVERIFY(texts.contains(QLocale{}.toString(1482)));
-    QVERIFY(std::none_of(texts.begin(), texts.end(),
-        [](const QString& t) { return t.contains(QLatin1String{"Level"}) ||
-            t.contains(QLatin1String{"Liveness"}) || t.contains(QLatin1String{"Penalties"}); }));
-    for (const auto& text : texts) {
-        QVERIFY2(!text.contains(QLatin1String{"trust"}, Qt::CaseInsensitive), qPrintable(text));
-        QVERIFY2(!text.contains(QLatin1String{"reputation"}, Qt::CaseInsensitive), qPrintable(text));
-    }
-    QVERIFY(std::any_of(texts.begin(), texts.end(),
-        [](const QString& t) { return t.contains(QLatin1String{"informational"}); }));
+    QVERIFY(auth_label());
+    QVERIFY(auth_label()->text().contains(QLatin1String{"AUTH"}));
 
-    // Without a real summary there is no Authority view at all.
-    model->setAuthority({});
-    QVERIFY(!model->capabilities().authority);
-    QVERIFY(card()->isHidden());
+    model->setAuthority(500);
+    QVERIFY(auth_label()->text().contains(QStringLiteral("500 AUTH")));
 }
 
 void CybouShellTests::rotationKeepsLiveSessionWorking()

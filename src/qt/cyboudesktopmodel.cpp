@@ -163,8 +163,7 @@ void CybouDesktopModel::setCapabilities(const CybouCapabilities& requested)
         m_capabilities.mail == capabilities.mail &&
         m_capabilities.files == capabilities.files &&
         m_capabilities.sharing == capabilities.sharing &&
-        m_capabilities.version_history == capabilities.version_history &&
-        m_capabilities.authority == capabilities.authority) {
+        m_capabilities.version_history == capabilities.version_history) {
         return;
     }
     m_capabilities = capabilities;
@@ -640,16 +639,12 @@ void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
     Q_EMIT walletChanged();
 }
 
-void CybouDesktopModel::setAuthority(const CybouAuthoritySummary& authority)
+void CybouDesktopModel::setAuthority(quint64 authority)
 {
-    if (m_authority == authority) return;
-    m_authority = authority;
+    if (m_status.authority == authority) return;
+    m_status.authority = authority;
     Q_EMIT authorityChanged();
-    // The Authority view exists only while a real summary does.
-    if (m_requested_capabilities.authority != authority.available) {
-        m_requested_capabilities.authority = authority.available;
-        setCapabilities(m_requested_capabilities);
-    }
+    Q_EMIT statusChanged();
 }
 
 void CybouDesktopModel::setNetworkDiagnostics(cybou::NodeDiagnosticsSnapshot snapshot)
@@ -1290,7 +1285,7 @@ void CybouDesktopModel::completeVaultLock()
     m_extra_activity.clear();
     m_wallet_entries.clear();
     m_operations.clear();
-    m_authority = {};
+    m_status.authority = 0;
     m_network_authority = {};
     m_payment_fee.reset();
     m_payment_pending = false;

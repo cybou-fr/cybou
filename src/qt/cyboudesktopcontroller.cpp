@@ -7,7 +7,6 @@
 #include <qt/cyboucoreapplicationadapter.h>
 #include <qt/cyboudesktopmodel.h>
 
-#include <cybou/authority.h>
 #include <cybou/bootstrap_nodes.h>
 #include <cybou/identity_service.h>
 #include <cybou/network_definition.h>
@@ -215,8 +214,6 @@ void CybouDesktopController::start()
         m_wallet_service = std::make_unique<cybou::CybouWalletService>(
             runtime, m_identity_service->GetKeyStore());
         m_model->setWalletService(m_wallet_service.get());
-        // Read-only, rebuildable Authority preview over finalized history.
-        m_authority_index = std::make_unique<cybou::AuthorityIndex>(runtime, m_data_directory / "authority-index.bin");
 
         const auto status = runtime.GetStatus();
         m_model->setFinalizedHeight(status.finalized_height);
@@ -328,7 +325,6 @@ void CybouDesktopController::start()
         m_application.reset();
         m_model->setIdentityService(nullptr);
         m_model->setWalletService(nullptr);
-        m_authority_index.reset();
         m_wallet_service.reset();
         m_identity_service.reset();
         m_node_service.reset();
@@ -355,6 +351,7 @@ void CybouDesktopController::publishNetworkAuthority()
             for (const auto& [id, account] : state.accounts) {
                 status.total_balance += account.balance;
                 status.total_system_balance += account.system_balance;
+                status.total_authority += account.authority;
             }
             status.onboarding_pool = state.onboarding_pool;
             status.security_reward_pool = state.security_reward_pool;
@@ -407,28 +404,21 @@ void CybouDesktopController::updatePoaFinalizer()
 
 void CybouDesktopController::publishAuthority()
 {
-    if (!m_authority_index || !m_identity_service) return;
+    if (!m_identity_service || !m_node_service) return;
     std::lock_guard identity_access{m_identity_access_mutex};
-    m_authority_index->Sync();
-    CybouAuthoritySummary summary;
-    summary.scanned_height = m_authority_index->ScannedHeight();
+    quint64 auth_val{0};
     if (const auto account = m_identity_service->GetAccountId()) {
-        if (const auto record = m_authority_index->Get(*account)) {
-            summary.available = true;
-            summary.age = record->age;
-            summary.activity = record->activity;
-            summary.system_contribution = record->system_contribution;
-            summary.value = record->value;
+        if (const auto account_state = m_node_service->Runtime().GetAccountState(*account)) {
+            auth_val = account_state->authority;
         }
     }
-    QMetaObject::invokeMethod(m_model, [model = m_model, summary] { model->setAuthority(summary); },
+    QMetaObject::invokeMethod(m_model, [model = m_model, auth_val] { model->setAuthority(auth_val); },
         Qt::QueuedConnection);
 }
 
 void CybouDesktopController::stop()
 {
     if (m_node_service) m_node_service->StopNetwork();
-    m_authority_index.reset();
     // Joins the application worker before the runtime goes away.
     if (m_model) m_model->setApplicationBackend(nullptr);
     m_application.reset();

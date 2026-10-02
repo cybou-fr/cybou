@@ -5,7 +5,6 @@
 #include <qt/pages/identitypage.h>
 
 #include <qt/cyboudesktopmodel.h>
-#include <cybou/authority.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 #include <qt/recoveryphrasedialog.h>
@@ -156,7 +155,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, std::function<void()> home_
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::namesChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::authorityChanged, this, [this] { refreshAuthority(); });
+    connect(m_model, &CybouDesktopModel::authorityChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::nameClaimFailed, this, [this](const QString& reason) {
         QMessageBox::warning(this, tr("Name not claimed"),
@@ -244,6 +243,11 @@ QWidget* IdentityPage::buildContent()
     copy->setProperty("cybouId", QStringLiteral("copyAccountId"));
     connect(copy, &QPushButton::clicked, this, [this] { copyAccountId(); });
     m_account_id = DetailRow(account, tr("Account ID"), page, copy);
+    m_balance = DetailRow(account, tr("Balance"), page);
+    m_system_balance = DetailRow(account, tr("System Balance"), page);
+    m_authority_value = DetailRow(account, tr("Authority"), page);
+    m_authority_value->setProperty("cybouId", QStringLiteral("identityAuthorityValue"));
+    account->addWidget(MutedText(tr("Authority > 1,000,000 AUTH enables Validation."), page));
     account->addWidget(MutedText(tr("Share your Account ID only if someone cannot find your .cybou name."), page));
 
     // Names.
@@ -273,31 +277,6 @@ QWidget* IdentityPage::buildContent()
     // Security.
     auto* security = Section(root, tr("Security"), page);
     m_pq_state = DetailRow(security, tr("Post-quantum protection"), page);
-
-    // Identity Authority: derived from finalized history; informational only.
-    auto* authority = Section(root, tr("Identity Authority"), page, &m_authority_card);
-    m_authority_card->setProperty("cybouId", QStringLiteral("identityAuthority"));
-    auto* authority_header = new QHBoxLayout;
-    authority_header->addWidget(MutedText(tr("Derived from finalized history."), page), 1);
-    authority->addLayout(authority_header);
-    m_authority_value = DetailRow(authority, tr("Authority"), page);
-    authority->addWidget(MutedText(tr("Authority is informational. It does not control network limits or PoA finality."), page));
-    m_authority_toggle = new QToolButton{page};
-    m_authority_toggle->setObjectName(QStringLiteral("sectionLink"));
-    m_authority_toggle->setText(tr("View details"));
-    m_authority_toggle->setCheckable(true);
-    m_authority_toggle->setAutoRaise(true);
-    authority->addWidget(m_authority_toggle, 0, Qt::AlignLeft);
-    m_authority_details = new QWidget{page};
-    m_authority_rows = new QVBoxLayout{m_authority_details};
-    m_authority_rows->setContentsMargins(0, 0, 0, 0);
-    m_authority_rows->setSpacing(6);
-    m_authority_details->setVisible(false);
-    authority->addWidget(m_authority_details);
-    connect(m_authority_toggle, &QToolButton::toggled, this, [this](bool open) {
-        m_authority_details->setVisible(open);
-        m_authority_toggle->setText(open ? tr("Hide details") : tr("View details"));
-    });
 
     // Danger zone: actions that replace keys are visually separated.
     auto* danger = Card(page);
@@ -387,6 +366,10 @@ void IdentityPage::refresh()
     m_claim_status->setText(status.name_claim_status);
     m_claim_status->setVisible(status.name_claim_pending);
 
+    m_balance->setText(cybouAmountText(status.balance));
+    m_system_balance->setText(cybouAmountText(status.system_balance));
+    m_authority_value->setText(QStringLiteral("%1 AUTH").arg(locale().toString(m_model->authority())));
+
     ClearLayout(m_advanced_rows);
     const auto add = [this](const QString& key, const QString& value) {
         DetailRow(m_advanced_rows, key, m_advanced)->setText(value);
@@ -397,41 +380,10 @@ void IdentityPage::refresh()
     add(tr("Recovery"), tr("Ed25519 + ML-DSA-65 · secured"));
     add(tr("Key encapsulation"), tr("Hybrid post-quantum KEM · published"));
     add(tr("Created at finalized height"), status.creation_height > 0 ? QString::number(status.creation_height) : tr("Not reported yet"));
-    refreshAuthority();
 }
 
-void IdentityPage::showAuthorityDetails(bool open)
+void IdentityPage::showAuthorityDetails(bool /*open*/)
 {
-    if (m_authority_toggle) m_authority_toggle->setChecked(open);
-    // Bring the card into view when the page scrolls.
-    for (QWidget* w = parentWidget(); w; w = w->parentWidget()) {
-        if (auto* scroll = qobject_cast<QScrollArea*>(w)) {
-            QCoreApplication::processEvents();
-            scroll->ensureWidgetVisible(m_authority_card, 0, 40);
-            break;
-        }
-    }
-}
-
-void IdentityPage::refreshAuthority()
-{
-    if (!m_authority_card) return;
-    const auto& authority = m_model->authority();
-    const bool shown = m_model->capabilities().authority && authority.available;
-    m_authority_card->setVisible(shown);
-    if (!shown) return;
-    const QLocale locale;
-    m_authority_value->setText(locale.toString(authority.value));
-    ClearLayout(m_authority_rows);
-    const auto add = [this, &locale](const QString& key, quint64 value) {
-        DetailRow(m_authority_rows, key, m_authority_details)->setText(locale.toString(value));
-    };
-    add(tr("Age"), authority.age);
-    add(tr("Activity"), authority.activity);
-    add(tr("System contribution"), authority.system_contribution);
-    add(tr("Authority age"), authority.age);
-    add(tr("Qualifying activity"), authority.activity);
-    add(tr("System Balance contribution"), authority.system_contribution);
 }
 
 void IdentityPage::copyAccountId()

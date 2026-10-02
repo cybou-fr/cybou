@@ -84,18 +84,6 @@ struct CybouOperationStatus {
     QString error;
 };
 
-/** Identity Authority is informational and has no protocol or resource power. */
-struct CybouAuthoritySummary {
-    bool available{false};
-    quint64 age{0};
-    quint64 activity{0};
-    quint64 system_contribution{0};
-    quint64 value{0};
-    /** Finalized height the Authority index has scanned up to. */
-    quint64 scanned_height{0};
-    bool operator==(const CybouAuthoritySummary&) const = default;
-};
-
 /** Download/retrieval progress for protected content. */
 enum class CybouRetrievalState {
     Idle,

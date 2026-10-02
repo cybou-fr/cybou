@@ -103,15 +103,7 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     caps.files = true;
     model.setCapabilities(caps);
 
-    // Derived Authority preview: Age 284 + Activity 198 + System contribution 1,000.
-    CybouAuthoritySummary authority;
-    authority.available = true;
-    authority.age = 284;
-    authority.activity = 198;
-    authority.system_contribution = 1000;
-    authority.value = 1482;
-    authority.scanned_height = 1242;
-    model.setAuthority(authority);
+    model.setAuthority(1'200'000);
 
     model.setPaymentFee(1);
     model.setContacts({

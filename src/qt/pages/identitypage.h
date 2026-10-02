@@ -52,12 +52,9 @@ private:
     QPushButton* m_setup_restore{nullptr};
     QLabel* m_claim_status{nullptr};
     QPushButton* m_lock{nullptr};
-    /* Identity Authority: a derived network-capability preview, not trust. */
-    QFrame* m_authority_card{nullptr};
+    QLabel* m_balance{nullptr};
+    QLabel* m_system_balance{nullptr};
     QLabel* m_authority_value{nullptr};
-    QToolButton* m_authority_toggle{nullptr};
-    QWidget* m_authority_details{nullptr};
-    QVBoxLayout* m_authority_rows{nullptr};
     QToolButton* m_advanced_toggle{nullptr};
     QFrame* m_advanced{nullptr};
     QVBoxLayout* m_advanced_rows{nullptr};
@@ -65,7 +62,6 @@ private:
     QWidget* buildSetupPrompt();
     QWidget* buildContent();
     void refresh();
-    void refreshAuthority();
     void copyAccountId();
     void revealRecoveryPhrase();
     void replaceRecoveryPhrase();
