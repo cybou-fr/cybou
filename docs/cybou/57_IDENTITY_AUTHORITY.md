@@ -1,20 +1,49 @@
-# 57 — Identity Authority
+# 57 — Identity Authority (AUTH)
 
-Every Identity has three canonical account values in PoA-finalized blockchain
-state: spendable `Balance` in CYBOU, non-transferable `System Balance` in CYBOU,
-and non-transferable `Authority` in AUTH. `AccountState.authority` is committed
-by the state root. AUTH is excluded from the 100 billion CYBOU supply.
+AUTH is a separate network-native, non-transferable unit. It is not CYBOU,
+is excluded from the 100 billion CYBOU supply, and is stored directly in
+`AccountState`, committed by the finalized state root.
 
-## Genesis and transitions
+## Account model
 
-`GenesisAllocation.authority` may assign initial AUTH to a RecoveryKeyID. The
-matching AccountCreate claims the allocation once and copies that AUTH into
-its AccountState. Ordinary AccountCreate starts with zero AUTH. IdentityRotate
-preserves the account and its AUTH.
+```text
+AccountState
+├── Balance         CYBOU  spendable, transferable
+├── System Balance  CYBOU  non-transferable service budget
+└── Authority       AUTH   non-transferable
+```
 
-Balance-to-System Balance locks move CYBOU only. Age, activity, fees, storage,
-and System Balance do not implicitly create AUTH. A future change to AUTH
-requires an explicit protocol state transition.
+## Issuance
+
+AUTH changes only through deterministic transitions in a PoA-finalized block:
+
+```text
+GenesisAllocation.authority        -> initial AUTH, claimed once by AccountCreate
+finalized Identity-authorized op   -> +1 AUTH to its authorizing account
+AUTH_GRANT (PoA only)              -> +N AUTH to target account
+```
+
+AccountCreate counts as an Identity-authorized operation: the new account
+receives its genesis allocation (if any) plus 1 AUTH. `AUTH_GRANT` and
+`AUTH_BURN` are not Identity-authorized operations and earn no AUTH.
+Submitted or Validated operations earn nothing; only finality does.
+
+## Burn
+
+```text
+AUTH_BURN (PoA only) -> -N AUTH from target account, floor 0
+```
+
+Automatic penalties require objectively verifiable protocol evidence and are
+not yet frozen. An eligible Identity's Validation signature over an operation
+that is invalid against the stated finalized base block is such evidence, but
+no automatic penalty rule is defined.
+
+## No transfer
+
+There is no AUTH transfer between Identities. SystemLock, fees, onboarding
+credit and storage leave AUTH unchanged. IdentityRotate preserves the account
+and its AUTH.
 
 ## Validation eligibility
 
@@ -23,10 +52,12 @@ validation_eligible(identity) :=
     latest_finalized_state.accounts[identity].authority > 1,000,000 AUTH
 ```
 
-An eligible Identity may sign advisory Validation attestations. Provisional
-state never changes eligibility. AUTH grants no PoA finalization, voting,
-stake weight, resource allocation, or CYBOU redemption.
+See [`VALIDATION.md`](VALIDATION.md).
 
-There is no AuthorityIndex, local AuthorityPolicy, validator registry,
-ValidatorSet, NodeID binding, liveness/storage evidence, reward/penalty system,
-resource budget, reservation, grant, ticket, or per-I/O accounting.
+## What AUTH does not do
+
+AUTH does not grant PoA finalization, transfer or redeem CYBOU, create stake,
+voting weight or quorum, create validator registry membership, or allocate
+resources. Nodes read `state.accounts[id].authority`; nothing is derived from
+history, and there is no AuthorityIndex, AuthorityPolicy, age or activity
+accumulator.

@@ -1,6 +1,14 @@
-# 52 — Balance, System Balance and Authority
+# 52 — Balance, System Balance and AUTH
 
-CYBOU has one indivisible native asset:
+Every AccountState holds three values:
+
+```text
+Balance         transferable CYBOU
+System Balance  non-transferable CYBOU, pays protocol services
+AUTH            non-transferable separate unit, Validation eligibility
+```
+
+CYBOU is one indivisible native asset:
 
 ```text
 1 CYBOU = minimum unit
@@ -32,14 +40,18 @@ is not.
 
 System Balance pays deterministic protocol service fees.
 
-## Identity Authority
+SystemLock:
 
-Authority is the third canonical account value, denominated in AUTH. It is
-non-transferable and excluded from CYBOU supply. GenesisAllocation may assign
-initial AUTH, claimed exactly once by AccountCreate; ordinary accounts start
-with zero AUTH.
+```text
+Balance        -= X
+System Balance += X
+AUTH unchanged
+```
 
-Moving CYBOU from Balance to System Balance, onboarding credit and spending
-System Balance leave AUTH unchanged. Only an explicit future protocol state
-transition may change AUTH. Finalized Authority above 1,000,000 AUTH enables
-advisory Validation, never PoA finalization.
+## AUTH
+
+AUTH is not CYBOU and is excluded from CYBOU supply. Onboarding credit and
+spending System Balance leave AUTH unchanged; System Balance never creates
+AUTH. AUTH issuance and burn are defined in
+[`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md). Finalized AUTH above
+1,000,000 enables Validation signatures, never PoA finalization.

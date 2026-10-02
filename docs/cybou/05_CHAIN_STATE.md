@@ -33,12 +33,13 @@ Clients rebuild private application projections from finalized publications.
 
 ## Authority
 
-Authority is a canonical non-transferable AUTH account value, committed by the
-state root. GenesisAllocation may assign initial AUTH (e.g., DEV bootstrap
-Identity initial AUTH = 1,000,001), claimed once by AccountCreate. AUTH is
-excluded from CYBOU supply. Its sole protocol eligibility effect is qualifying
-an Identity to sign provisional Validation attestations when its latest
-finalized `AccountState.authority > 1,000,000`.
+Authority is a canonical non-transferable AUTH account value, included in the
+state root and excluded from CYBOU TotalSupply. AUTH changes only through
+deterministic finalized state transitions: GenesisAllocation claimed once by
+AccountCreate, +1 AUTH per finalized Identity-authorized operation, and
+PoA-only `AUTH_GRANT` / `AUTH_BURN` (floor 0). There is no derived Authority
+index. Its sole protocol eligibility effect is qualifying an Identity to sign
+Validation when its latest finalized `AccountState.authority > 1,000,000`.
 
 Detailed Authority policies are defined in [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md).
 

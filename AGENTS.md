@@ -53,30 +53,48 @@ Bootstrap:
     - no BootstrapNode class
     - no special consensus role
     - IP:port is known in advance for initial discovery
-    - bootstrap status itself grants no authority
+    - bootstrap status itself grants no authority and no AUTH
+    - any AUTH held by the bootstrap operator's Identity is an ordinary
+      GenesisAllocation decision, not a property of the bootstrap role
 
-Bootstrap Identity:
-    - ordinary CYBOU Identity
-    - initial Authority assigned by genesis
-    - DEV bootstrap initial Authority = 1,000,001
+Account values (AccountState, committed by the state root):
+    Balance         spendable, transferable CYBOU
+    System Balance  non-transferable CYBOU service budget
+    Authority       non-transferable AUTH, separate unit, not CYBOU supply
 
-Authority:
-    - canonical non-transferable AUTH account value in finalized state
-    - stored in AccountState and committed by the state root
+AUTH:
+    - changes only through deterministic finalized state transitions
+    - GenesisAllocation may assign initial AUTH
+    - finalized ordinary Identity action -> +1 AUTH to its authorizing account
+    - AUTH_GRANT (PoA only) -> +N AUTH
+    - AUTH_BURN  (PoA only) -> -N AUTH, floor 0
+    - no transfer between Identities
     - Authority > 1,000,000 AUTH makes an Identity eligible to sign Validation
     - Authority never grants PoA finalization power
+    - automatic penalties are not frozen
+
+Candidate execution:
+    - every full node independently validates and executes every candidate
+      operation against its latest finalized state
+    - invalid -> reject, do not relay
+    - valid   -> keep in bounded volatile pool and relay
 
 Validation:
-    - optional pre-finalization
-    - non-canonical
-    - peer chooses locally whether to trust it
-    - default minimum signatures = 1
-    - only signatures of eligible Identities count
+    - an additional signature, never a substitute for local execution
+    - an Identity with finalized AUTH > 1,000,000 may sign an operation
+      only after its own node independently validated it
+    - signs NetworkID, OperationID, finalized base BlockID, AccountID
+      with the ordinary Identity Authorization key
+    - receiving nodes MUST independently validate the operation regardless
+      of Validation signatures
     - eligibility is evaluated against latest FINALIZED state
+    - pre-finalization evidence only; never changes balances or state
+    - no provisional state, no provisional storage admission
 
 PoA:
     - sole canonical finalizer
-    - independently executes every candidate
+    - MUST independently execute every candidate
+    - Validation signatures are never sufficient for finalization
     - trusts no validator/bootstrap/peer state
     - valid -> signs/finalizes
     - invalid -> drops
@@ -88,16 +106,15 @@ PoA:
 Canonical truth:
     latest valid PoA-finalized state
 
-If Validation conflicts with PoA:
-    discard provisional state
-    rollback provisional effects
-    adopt PoA-finalized state unconditionally
+Only a valid PoA-finalized block changes canonical state.
 
 No:
     voting against PoA
     validator fork-choice
     validator quorum finality
-    merge of conflicting provisional state
+    validator registry, ValidatorSet, CAP_VALIDATOR
+    provisional state or provisional storage from Validation
+    validation.enabled / validation.min_signatures
     BFT
 ```
 
@@ -144,8 +161,8 @@ There is no production network.
   For each NetworkID, exactly one signed genesis is valid. There is no `genesis_generation`,
   no re-genesis, and no in-place genesis replacement.
 - Network genesis defines the initial chain state, protocol parameters, authorized
-  PoA public key, and initial AUTH in GenesisAllocation for designated ordinary Identities
-  (e.g., DEV bootstrap Identity initial Authority = 1,000,001).
+  PoA public key, and initial AUTH in GenesisAllocation for designated ordinary Identities.
+  Such an allocation is a genesis decision, never a property of a bootstrap role.
 - `cybou.cybou` is an ordinary account-level Identity with AccountID, Recovery,
   Authorization, KEM, Mail/support, and a distinct PoA key role derived from its
   mnemonic. Consensus recognizes its finalization right solely through the PoA
@@ -157,8 +174,10 @@ There is no production network.
   peer DB, pending operations, and storage metadata.
 - Ordinary peers form a direct P2P mesh after initial discovery. Bootstrap is
   an initial rendezvous peer, not a mandatory traffic intermediary or separate node type.
-- There is no distributed mempool and PoA owns no canonical pending state. Operations
-  propagate across peers via bounded volatile relays until executed and finalized into blocks.
+- There is no distributed mempool and PoA owns no canonical pending state. Every
+  full node keeps a bounded volatile pool of candidate operations it has itself
+  executed against its finalized state, and relays only locally valid candidates
+  until they are finalized into blocks. A PoA node produces blocks from that same pool.
 - Public P2P admission is France-only in production/DEV, for inbound and
   outbound peers across all capabilities. Classification uses local Geo data;
   unavailable/corrupt data fails closed. LAB loopback/private test traffic
@@ -199,15 +218,15 @@ architecture that is absent from higher levels:
   PoA key for the block height.
 - The Central Authority PoA finalizer executes operations independently, trusts no
   external validator state, and publishes finalized blocks.
-- Full nodes independently validate every operation, block transition, state
-  root, and PoA certificate.
-- Advisory Validation is optional, non-canonical pre-finalization evidence.
-  A peer chooses locally whether to accept provisional validation.
-  Only signatures from Identities whose Authority in the latest finalized state
-  exceeds 1,000,000 are eligible.
-- PoA finality unconditionally overrides provisional Validation. In case of any conflict,
-  provisional state is discarded, provisional effects are rolled back, and the
-  PoA-finalized state is adopted unconditionally.
+- Full nodes independently validate every candidate operation, block transition,
+  state root, and PoA certificate.
+- Validation is an additional signature by an Identity whose Authority in the
+  latest finalized state exceeds 1,000,000, made only after its own node
+  independently validated the operation. It is pre-finalization evidence and
+  never substitutes local or PoA execution, never changes state, and creates
+  no provisional state. Receiving nodes and PoA always re-execute.
+- An operation is shown `Validated` when the local node holds it as valid and
+  has at least one valid eligible Validation signature for it.
 - PoA is centralized finality, not BFT.
 - Durable signing journal and equivocation conflict halt must fail closed.
 - AUTH never grants PoA finalization power.
@@ -221,10 +240,8 @@ architecture that is absent from higher levels:
 - Default storage admission is finality-first: chunks are admitted remotely only
   after a finalized RootPublication authorizes them by Merkle proof. Application
   publication remains local until finality.
-- Nodes or providers enabling provisional validation policy may optionally admit
-  and cache chunks upon receiving sufficient eligible Validation signatures, but
-  such chunks remain provisional until PoA finality. If PoA rejects the publication,
-  provisional admissions are purged and rolled back.
+- Validation never authorizes remote chunk admission; there is no provisional
+  storage admission.
 - A RootPublication may locally bundle multiple encrypted content trees under
   one authorization root; this is an application implementation pattern, not
   a new wire entity.
@@ -254,7 +271,7 @@ architecture that is absent from higher levels:
   remote durability. Beta uses full replication; erasure coding is disabled.
 - Placement, provider selection, health, audit, and repair are StorageService
   concerns, not consensus state.
-- The default provider policy is finality-first.
+- The provider admission policy is finality-first.
 - A file/message is not `Protected`/`Sent` merely because its RootPublication
   is finalized; durability requires confirmed remote replicas.
 
@@ -263,15 +280,21 @@ architecture that is absent from higher levels:
 - Every AccountState has three canonical account values: spendable Balance in CYBOU,
   non-transferable System Balance in CYBOU, and non-transferable Authority in AUTH.
   All three are committed by the finalized state root.
-- GenesisAllocation may assign initial AUTH, claimed exactly once by AccountCreate.
-  Ordinary AccountCreate starts with zero AUTH. SystemLock moves CYBOU from Balance
-  to System Balance and leaves AUTH unchanged.
-- Authority > 1,000,000 AUTH qualifies an Identity to sign provisional Validation attestations.
+- AUTH changes only through deterministic finalized transitions:
+  GenesisAllocation (claimed exactly once by AccountCreate), +1 AUTH to the
+  authorizing account of every finalized Identity-authorized operation
+  (AccountCreate included), and PoA-only `AUTH_GRANT` (+N) / `AUTH_BURN`
+  (-N, floor 0). AUTH is never transferred between Identities. SystemLock,
+  fees, onboarding credit and storage leave AUTH unchanged.
+- Authority > 1,000,000 AUTH qualifies an Identity to sign Validation.
 - Authority grants NO PoA finalization power, NO consensus voting rights, NO stake weight,
   and NO balance or resource allocations.
+- Automatic AUTH penalties require objectively verifiable protocol evidence and
+  are not frozen. Signed Validation of an operation that is invalid against its
+  stated finalized base is evidence a future penalty rule may use.
 - There is no canonical ValidatorSet, validator registry, NodeID binding,
-  liveness/storage evidence, reward/penalty system, resource budget,
-  reservation, grant, ticket, or per-I/O accounting.
+  liveness/storage evidence, resource budget, reservation, ticket, or
+  per-I/O accounting, and no derived AuthorityIndex.
 - Local peer failures use local disconnect, backoff, and abuse limits; they do
   not change global Authority.
 

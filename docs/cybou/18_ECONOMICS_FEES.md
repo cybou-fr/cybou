@@ -40,12 +40,13 @@ This does not mint new CYBOU.
 
 Automatic onboarding credit leaves AUTH unchanged.
 
-## Identity Authority interaction
+## AUTH economics
 
-Authority is a third canonical account value denominated in non-transferable
-AUTH. It is excluded from the 100 billion CYBOU supply. Balance-to-System
-Balance locks and fee spending leave AUTH unchanged. GenesisAllocation may
-assign initial AUTH; any later change requires an explicit protocol transition.
+AUTH has issuance independent from CYBOU, is excluded from the 100 billion
+CYBOU supply and is non-transferable. Finalized Identity activity (+1 AUTH per
+finalized Identity-authorized operation) and explicit PoA `AUTH_GRANT` /
+`AUTH_BURN` change AUTH; see [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md).
+Fees, Balance-to-System Balance locks and onboarding credit never change AUTH.
 
 ## RootPublication fee
 

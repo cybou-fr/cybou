@@ -16,9 +16,9 @@ ApplicationService / PublicationService / StorageService
   |
   v
 native CYBOU NodeRuntime
-  + canonical state execution
+  + canonical state execution and independent candidate execution
   + single-operator hybrid-PQ PoA finality (genesis-authorized P)
-  + provisional Validation evaluation (Authority > 1,000,000)
+  + Validation signatures (local Identity AUTH > 1,000,000)
   + P2P mesh synchronization and operation relay
   + RootPublication
   + common encrypted ChunkStore
@@ -39,7 +39,7 @@ Compiled OfficialNetwork public constants:
   -> Verify compiled genesis signature and initial state root
   -> Ordinary bootstrap peer seeds initial CYP2 discovery
   -> Direct P2P mesh
-  -> Provisional Validation (optional pre-finalization by eligible Identities)
+  -> Every node executes candidates; eligible Identities add Validation signatures
   -> Central Authority P signs finalized blocks (absolute canonical truth)
 ```
 
@@ -59,10 +59,9 @@ and `cybou.cybou` private material under gitignored `/private/`; only public
 material and signed constants enter the source tree.
 
 Every full node independently validates blocks, operation validity, and state
-transitions. Provisional Validation provides optional pre-finalization evidence
-under local policy; if Validation conflicts with PoA, provisional state is
-discarded, provisional effects are rolled back, and the PoA-finalized state is
-adopted unconditionally.
+transitions, and executes every candidate operation before relaying it.
+Validation signatures are pre-finalization evidence only; they never replace
+local or PoA execution and never change state.
 
 ## Documentation hierarchy
 
@@ -109,15 +108,17 @@ proves the genesis-authorized PoA key. There is no canonical service-node regist
 ## Finality and Validation
 
 Canonical finality is single-operator hybrid-PQ PoA under the genesis-authorized
-PoA key. The PoA finalizer executes operations independently and signs blocks.
+PoA key. The PoA finalizer MUST execute operations independently and signs
+blocks; Validation signatures are never sufficient for finalization.
 There is no BFT or validator quorum.
 
 Authority is a canonical non-transferable AUTH account value committed by the
-state root, separate from CYBOU Balance and System Balance. Advisory Validation
-is optional pre-finalization evidence. Identities whose AccountState.authority
-in the latest finalized state exceeds 1,000,000 AUTH are eligible to sign
-Validation attestations. A peer configures locally whether to accept provisional
-validation. PoA finality unconditionally overrides Validation.
+state root, separate from CYBOU Balance and System Balance. It changes only
+through finalized transitions (genesis, +1 per finalized Identity-authorized
+operation, PoA `AUTH_GRANT` / `AUTH_BURN`). An Identity whose finalized
+AccountState.authority exceeds 1,000,000 AUTH may add a Validation signature to
+an operation its own node has independently validated. Every receiving node and
+PoA still re-execute the operation.
 
 ## Application content and storage
 
@@ -125,12 +126,10 @@ validation. PoA finality unconditionally overrides Validation.
 Mail and Files share the same encrypted content substrate.
 ChunkID is the full BLAKE3-256 digest of stored encrypted bytes.
 
-Storage admission is finality-first by default: authorized chunks are admitted
-remotely only after a finalized RootPublication authorizes them by Merkle proof.
-Peers or storage providers enabling provisional validation policy may optionally
-admit chunks upon sufficient eligible Validation signatures, but purge and roll
-back such chunks if the candidate is rejected by PoA.
-Application publication remains local until finality (or provisional admission).
+Storage admission is finality-first: authorized chunks are admitted remotely
+only after a finalized RootPublication authorizes them by Merkle proof.
+Validation never authorizes chunk admission. Application publication remains
+local until finality.
 Recoverable owner content requires an application-layer self capsule.
 Beta storage durability targets 2 independent remote full replicas plus 1 local
 physical copy (3 physical copies total); erasure coding is disabled.
