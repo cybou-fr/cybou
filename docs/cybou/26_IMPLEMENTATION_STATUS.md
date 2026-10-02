@@ -3,7 +3,7 @@
 ## Target architecture vs prototype
 
 - **Target architecture**: Every participant runs the same full-node software (`CybouNode`). Bootstrap, storage, advisory Validation, and PoA finalization are optional local capabilities, not protocol node classes. Genesis authorizes 1–4 bootstrap Identities (by stable `AccountID` and expected `RecoveryKeyID`). Public P2P admission is France-only (fails closed). The Central Authority desktop runs PoA finalization; bootstrap never finalizes. State v9 schema.
-- **Current implementation prototype**: Temporary standalone utility `cybou-bootstrap provision|serve`, bounded STATUS/CLAIM/REPLACE protocol handler, LevelDB `EMPTY`/`BOUND` store with generation numbering, legacy v8 state support, and target v9 state with grants keyed by stable AccountID plus expected RecoveryKeyID.
+- **Current implementation prototype**: The pre-genesis STATUS/CLAIM/REPLACE service remains the transitional standalone `cybou-bootstrap provision|serve` utility. After genesis, the ordinary `cybou-node` full node can load its optional CYP2 bootstrap capability from an existing encrypted Identity vault; this does not turn bootstrap into a node class. The LevelDB prototype retains `EMPTY`/`BOUND` state with generation numbering, legacy v8 support, and target v9 grants keyed by stable AccountID plus expected RecoveryKeyID.
 - **Current DEV deployment**: The existing legacy testnet remains available for routine development: `cybou-node.service` finalizes on port 29461, and `cybou-provider-1.service` / `cybou-provider-2.service` provide storage on ports 29471/29481. Keep its state and PoA key until acceptance tests and the planned new-genesis DEV cutover are complete.
 
 ## Bootstrap prototype and target gap
