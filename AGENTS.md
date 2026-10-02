@@ -15,14 +15,24 @@ Official networks:
 
 Network identity:
     NetworkID = Network Public Key
+    Exactly one signed genesis per NetworkID forever
 
 Network Private Key:
-    - generated before network launch
+    - creation-time root of trust
+    - strictly offline
     - never used online
     - never stored on bootstrap
     - never stored on PoA
-    - owner can create/recreate/edit signed genesis with monotonic genesis_generation
-    - owner is the root authority of that network
+    - signs the immutable genesis specification ONCE at network creation
+    - never used by runtime
+    - never changes an existing network
+
+No:
+    genesis_generation
+    re-genesis
+    in-place genesis replacement
+    rollback between genesis versions
+    NetworkTrustStore
 
 Bootstrap:
     - ordinary CYBOU full peer
@@ -105,17 +115,18 @@ There is no production network.
   Central Authority PoA finalization are optional operational capabilities,
   not protocol node classes.
 - A standard CYBOU installation knows official network profiles (DEVNET, MAINNET).
-  Each profile pins the compiled Network Public Key (`NetworkID`), the bootstrap
-  IP:port and its TLS SPKI pin.
+  Each profile pins the compiled Network Public Key (`NetworkID`), the expected canonical
+  `GenesisDigest`, the bootstrap IP:port and its TLS SPKI pin. The official release carries
+  the signed immutable genesis bundle.
 - The Network Private Key is strictly offline and never online (including on DEVNET).
-  It is used solely by the network owner to sign genesis specifications containing
-  a strictly monotonic `genesis_generation`.
+  It is used solely at network creation time to sign the immutable genesis specification once.
+  For each NetworkID, exactly one signed genesis is valid. There is no `genesis_generation`,
+  no re-genesis, and no in-place genesis replacement.
 - Network genesis defines the initial chain state, protocol parameters, authorized
   PoA public key, and initial Authority assignments for designated ordinary Identities
   (e.g., DEV bootstrap Identity initial Authority = 1,000,001).
-- Cross-network migration does not exist. A newer valid official network replacement
-  (verified with `genesis_generation > installed_generation` and valid Network Key signature)
-  wipes all local network-bound state cleanly:
+- Cross-network migration does not exist. A network cutover to a new official network
+  (a new Network Public Key, new NetworkID, new genesis) wipes all local network-bound state cleanly:
   chain/state, network definition, genesis, Identity, vault, AccountID,
   Recovery/Auth/KEM keys, balances, names, Mail, Files, application DB,
   peer DB, pending operations, storage metadata, and Authority indexes.

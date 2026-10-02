@@ -15,7 +15,7 @@ Network Ownership != PoA Operation
 
 Network Owner:
     Offline Network Private Key
-    Sole authority to sign/re-sign genesis specifications (with monotonic genesis_generation)
+    Sole authority to sign the immutable genesis specification at network creation
     Never online, never used by runtime
 
 Network Operator (Central Authority):

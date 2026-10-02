@@ -4,8 +4,9 @@ consensus:
   mode: genesis_authorized_single_operator_PoA
   network_identity:
     network_id: network_public_key
-    network_private_key: strictly_offline_never_online_never_on_bootstrap_never_on_poa
-    signed_genesis: monotonic_genesis_generation
+    genesis: immutable
+    genesis_replacement: forbidden
+    official_genesis_digest: pinned
   poa_public_key: genesis_authorized
   authority_assignment: genesis_initial_assignment_and_finalized_history_state
   bft: false

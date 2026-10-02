@@ -18,8 +18,9 @@ The corresponding **Network Private Key**:
 - is generated before network launch;
 - is strictly offline and **never used online** (including in DEVNET);
 - is never stored on bootstrap or on the PoA finalizer;
-- is used solely by the network owner to create, recreate, or edit signed genesis;
-- makes the network owner the root authority of that network.
+- is used solely by the network owner at creation time to sign the immutable genesis specification once;
+- never changes an existing network;
+- is the creation-time root of trust for that network.
 
 ## Bootstrap peer
 
@@ -45,17 +46,18 @@ The bootstrap node runs an ordinary CYBOU Identity:
 
 ```text
 Offline:
-  Owner creates genesis (params, initial Authority assignments, PoA key P)
-  Owner signs genesis with Network Private Key
+  Owner creates immutable genesis (params, initial Authority assignments, PoA key P)
+  Owner signs genesis once with Network Private Key
+  Official release packages signed genesis bundle (CYG1) with pinned NetworkID and GenesisDigest
 
 Online:
-  Ordinary bootstrap peer starts with signed genesis
-  Clients connect to known bootstrap locator
-  Verify signed genesis against compiled Network Public Key (NetworkID)
+  Client verifies bundled genesis against pinned Network Public Key (NetworkID) and GenesisDigest
+  Initializes local consensus state
+  Connects to known bootstrap locator as an ordinary CYP2 peer
   Bootstrap seeds initial peers -> direct CYP2 mesh forms
 ```
 
-Every full node independently checks the signed genesis, operational PoA
+Every full node independently checks the signed genesis bundle, operational PoA
 certificate, block transitions, and state roots.
 
 ## Authority and Validation
@@ -98,13 +100,26 @@ There is:
 - NO merge of conflicting provisional state;
 - NO BFT consensus.
 
-## Network replacement and full wipe
+## Immutable genesis
 
-If the network owner issues a newer signed genesis for the network (or on network cutover):
-The new genesis must carry a strictly greater `genesis_generation` (`generation > installed_generation`)
-and a valid signature by the compiled Network Public Key (`NetworkID`). An older or equal generation
-is rejected immediately to prevent rollback attacks.
-Upon verifying the new signed genesis:
+A NetworkID has exactly one genesis.
+Nodes MUST reject any genesis whose canonical digest differs
+from the GenesisDigest pinned for that official network.
+
+There is NO `genesis_generation`, NO re-genesis, and NO in-place genesis replacement inside a NetworkID.
+
+## Official network cutover and full wipe
+
+If an official network is replaced:
+```text
+new Network Public Key
+-> new NetworkID
+-> new immutable Genesis
+-> clean local network-domain reset
+```
+
+This is an entirely new network, not a version update of the old one.
+Upon adopting a new official network definition:
 The core stops network services and wipes all local network-bound state cleanly:
 - chain/state
 - network definition

@@ -5,7 +5,7 @@ remain cryptographically separate:
 
 | Role | Responsibility |
 |---|---|
-| Network Private Key | Strictly offline root authority; signs genesis/re-genesis specifications |
+| Network Private Key | Strictly offline creation-time root of trust; signs immutable genesis specification once |
 | PoA finalizer P | Operates from Central Authority desktop; signs canonical next blocks |
 | Release Signing | Authenticates official software releases and update artifacts |
 | Treasury | Controls company-owned reserve funds |
@@ -13,8 +13,8 @@ remain cryptographically separate:
 
 ## Key boundaries
 
-- **Network Private Key**: Strictly offline ALWAYS, including on DEVNET. Never stored on bootstrap, never stored on PoA finalizer, never loaded into normal CYBOU node runtime. Signs genesis specifications with monotonic `genesis_generation`.
-- **PoA finalizer**: The genesis-authorized operational key on the Central Authority desktop. It is never sent to bootstrap or peers. Blocks require both Ed25519 and ML-DSA-65 signatures. Compromising P does not confer power to forge a new genesis or change the Network Key.
+- **Network Private Key**: Strictly offline ALWAYS, including on DEVNET. Never stored on bootstrap, never stored on PoA finalizer, never loaded into normal CYBOU node runtime. Signs the immutable genesis specification once at network creation. Official profiles pin the exact `GenesisDigest`.
+- **PoA finalizer**: The genesis-authorized operational key on the Central Authority desktop. It is never sent to bootstrap or peers. Blocks require both Ed25519 and ML-DSA-65 signatures. Compromising P does not confer power to forge a new genesis or change the Network Key; it triggers equivocation safety halt requiring network cutover.
 - **Release Signing**: Kept on isolated build/release signing infrastructure.
 - **Treasury**: Stored in a distinct, dedicated vault holding company assets.
 - **User Identity**: Managed exclusively by each end-user in their local CVID5 vault.

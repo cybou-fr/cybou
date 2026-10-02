@@ -11,7 +11,7 @@ No protocol-level device identity exists. An Identity record has one current Rec
 | Recovery | Ed25519 + ML-DSA-65 | Restore identity and authorize full key rotation |
 | Authorization | Ed25519 + ML-DSA-44 | Sign account-level service operations and Validation attestations |
 | Recipient KEM | X-Wing (ML-KEM-768 + X25519) | Establish or wrap content keys; separate from signing |
-| Network Key | Hybrid PQ (Network Public Key = NetworkID) | Strictly offline root authority; signs genesis/re-genesis specifications |
+| Network Key | Hybrid PQ (Network Public Key = NetworkID) | Strictly offline creation-time root of trust; signs immutable genesis specification once |
 | PoA Finalizer P | Ed25519 + ML-DSA-65 | Authorized in genesis; signs canonical block certificates |
 | Release Signing | Hybrid PQ / Minisign | Authenticate official software and releases |
 | Treasury / Custody | Multi-signature hybrid PQ | Protect cold network reserves and custody |

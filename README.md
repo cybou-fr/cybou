@@ -50,8 +50,9 @@ service d'un réseau privé d'entreprise.
   finalité à opérateur unique, pas un consensus BFT ; chaque nœud vérifie les
   blocs et les transitions d'état. L'autorité racine du réseau est la clé
   publique de réseau (NetworkID = Network Public Key), dont la clé privée
-  reste strictement hors-ligne pour signer la genèse (avec `genesis_generation`
-  strictement monotone). La clé PoA autorisée par la genèse signe les blocs.
+  reste strictement hors-ligne pour signer la genèse immuable une seule fois.
+  Chaque profil officiel épingle son NetworkID et son GenesisDigest exact.
+  La clé PoA autorisée par la genèse signe les blocs.
   Une pré-validation consultative optionnelle peut être attestée par les identités
   dont l'autorité dérivée dépasse 1 000 000, mais la finalité PoA prévaut
   inconditionnellement.

@@ -15,8 +15,8 @@
 
 ## Compromise impact analysis
 
-- **Network Private Key compromised**: Attacker can sign a valid newer genesis specification with incremented `genesis_generation`, completely replacing the official network state. Critical root authority compromise. Private key must remain strictly offline at all times.
-- **PoA key compromised**: Attacker can produce equivocating or censoring canonical block certificates within the current network, but cannot forge a new genesis specification or alter the compiled Network Public Key.
+- **Network Private Key compromised**: An attacker stealing the key after official genesis release can sign an alternative genesis specification, but compliant nodes reject it because their official profile pins the exact canonical `GenesisDigest`. Existing official networks cannot be replaced or updated in-place. If compromised before release, an attacker could forge the initial network launch. The private key must remain strictly offline at all times.
+- **PoA key compromised**: Attacker can produce equivocating or censoring canonical block certificates within the current network. Equivocation triggers an immediate safety halt across compliant nodes. Because in-place PoA rotation is intentionally not supported, a compromised network cannot safely continue and requires launching a new NetworkID / new genesis cutover.
 - **Bootstrap compromised**: Attacker can cause discovery denial-of-service, eclipse connecting peers, or partition initial discovery. Cannot forge network-signed genesis or PoA certificates. Outage does not affect an already formed P2P mesh.
 - **Validator Identity (> 1M Authority) compromised**: Attacker can issue false advisory Validation attestations. This may cause peers with `validation.enabled = true` to accept provisional state temporarily, but CANNOT create canonical state. Once PoA publishes a conflicting block or drops the operation, the provisional state is discarded and rolled back unconditionally.
 

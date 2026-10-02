@@ -29,7 +29,7 @@ the constitutional target in `AGENTS.md` and `04_NETWORK_LIFECYCLE.md`.
 
 ## Open integration gates
 
-1. Define Network Key format and canonical signed genesis encoding with monotonic `genesis_generation`.
+1. Define Network Key format and canonical immutable signed genesis encoding (`CYG1`) with `GenesisDigest` pinning.
 2. Transition `NetworkId` from SHA256 definition hash to exact Network Public Key.
 3. Remove legacy TESTNET profile from `official_networks.h`.
 4. Implement Validation attestation wire protocol, eligibility check (`Authority > 1,000,000`), and provisional local acceptance policy.

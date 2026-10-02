@@ -7,24 +7,25 @@ protocol truth.
 core/application services → CybouDesktopModel → Qt pages
 ```
 
-## Network startup and replacement
+## Network startup and cutover
 
-The core receives the compiled `OfficialNetworkProfile` (DEVNET or MAINNET),
-contacts the known bootstrap locator, and verifies the signed genesis against
-the compiled Network Public Key (`NetworkID`). Only then may it open network-bound
-Identity and application state or connect to peers in the direct mesh. Bootstrap
-peer hints are untrusted until normal CYP2 and France-only admission checks pass.
+The core receives the compiled `OfficialNetworkProfile` (DEVNET or MAINNET)
+with pinned Network Public Key (`NetworkID`), canonical `GenesisDigest`, and
+bootstrap locators. The desktop verifies the bundled signed immutable genesis
+(`CYG1`) against the pinned `NetworkID` and `GenesisDigest`. Only then may it
+open network-bound Identity and application state or connect to peers in the direct mesh.
+Bootstrap is an ordinary peer whose hints are untrusted until normal CYP2 and
+France-only admission checks pass.
 
-On a verified newer `genesis_generation` (`generation > installed_generation`)
-signed by the Network Key, the core stops services and pending operations,
+On adopting a new official network definition (with a new Network Public Key, new
+NetworkID, and new immutable genesis), the core stops services and pending operations,
 prepares the new network domain, atomically activates it and destroys every old
 network-bound item: chain/state, genesis, Identity, vault, AccountID, signing
 and KEM keys, Wallet, Names, Mail, Files, Application DB, peer DB, storage
 metadata and Authority indexes. The GUI neither approves nor migrates old
 Identity data; it reports the completed transition, for example « Le réseau
-CYBOU a été mis à jour ». A preparation failure leaves the old generation
-usable. Theme, language, other application-global preferences and validated
-Geo cache live outside the network domain.
+CYBOU a été réinitialisé pour une nouvelle version ». Theme, language, other
+application-global preferences and validated Geo cache live outside the network domain.
 
 ## Data and request boundaries
 

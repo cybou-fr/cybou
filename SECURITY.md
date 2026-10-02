@@ -19,12 +19,16 @@ reproduce. Do not include real user secrets or recovery phrases.
   cannot produce a signed-genesis valid official network. Its outage does not halt
   an already connected P2P mesh. Bootstrap is an ordinary CYBOU peer with no
   special consensus powers.
-- Compromise of the active PoA key threatens finality until a newer genesis
-  specification replaces it. The PoA key cannot replace the network, sign genesis,
-  or alter genesis authority. Journal rollback and conflicting signing must fail closed.
+- Compromise of the active PoA key threatens finality until safety halt triggers.
+  Because there is no in-place PoA rotation, a compromised network cannot safely continue
+  and requires a clean cutover to a new NetworkID and new genesis. The PoA key cannot
+  replace the network, sign genesis, or alter genesis authority. Journal rollback and
+  conflicting signing must fail closed.
 - The Network Private Key is strictly offline and never online (including on DEVNET).
-  Its compromise would allow signing conflicting genesis specifications with higher
-  `genesis_generation`. It must never be stored on bootstrap or PoA machines.
+  It signs the immutable genesis once at network creation. Because official profiles pin
+  the exact `GenesisDigest`, a stolen Network Private Key cannot replace or update
+  existing official nodes running that NetworkID. It must never be stored on bootstrap
+  or PoA machines.
 - Full nodes check genesis signatures, both PoA signature components, operation
   execution, state roots, and validation attestations independently.
 - Identity Recovery, Authorization, KEM, Network Key, PoA, Release Signing

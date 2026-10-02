@@ -39,7 +39,7 @@ canonical state.
 Official network profiles (DEVNET, MAINNET) specify known bootstrap endpoints with
 IP:port and TLS SPKI pins, and the compiled Network Public Key (`NetworkID = Network Public Key`).
 Transport authentication protects against connection tampering; the offline Network
-Private Key signature on the genesis specification (with monotonic `genesis_generation`)
+Private Key signature on the immutable genesis specification (with pinned `GenesisDigest`)
 guarantees official network authenticity.
 See [`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md).
 

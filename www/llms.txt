@@ -27,9 +27,9 @@ experimental software, not a public mail or cloud-storage service.
 
 - All participants run the same full-node core. Storage and PoA finalization
   are optional capabilities. Bootstrap is an ordinary CYBOU full peer for initial discovery.
-- Official profiles pin bootstrap transport and the compiled Network Public Key (`NetworkID`).
-  The Network Private Key is strictly offline and never online; it signs genesis
-  specifications with strictly monotonic `genesis_generation`.
+- Official profiles pin bootstrap transport, compiled Network Public Key (`NetworkID`),
+  and canonical `GenesisDigest`. The Network Private Key is strictly offline and never
+  online; it signs the immutable genesis once at network creation.
 - The Central Authority finalizer is operated from its desktop after unlock using
   the genesis-authorized PoA key. Its live route is authenticated per session and then discarded.
 - Advisory Validation is provisional; only identities with Authority > 1,000,000

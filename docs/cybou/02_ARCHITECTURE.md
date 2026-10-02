@@ -31,17 +31,20 @@ and network replacement.
 ## Official network trust
 
 ```text
-Compiled Network Public Key (NetworkID) + Bootstrap IP:port & TLS SPKI pin
-  -> Offline-signed genesis (defines network parameters, initial Authority, PoA P)
+Compiled Network Public Key (NetworkID) + GenesisDigest + Bootstrap IP:port & TLS SPKI pin
+  -> Bundled offline-signed immutable genesis (defines parameters, initial Authority, PoA P)
+  -> Verify local genesis bundle against pinned NetworkID and GenesisDigest
   -> Ordinary bootstrap peer seeds initial CYP2 discovery
   -> Direct P2P mesh
   -> Provisional Validation (optional pre-finalization by eligible Identities)
   -> Central Authority P signs finalized blocks (absolute canonical truth)
 ```
 
-Bootstrap is an ordinary CYBOU full peer with a known locator; it distributes
-the signed genesis and initial peer hints. The Network Private Key is strictly
-offline and used solely by the network owner to sign genesis specifications.
+The Network Private Key is strictly offline and used solely at network creation
+time to sign the immutable genesis specification once. For each NetworkID, exactly
+one signed genesis is valid. The official release carries the signed immutable
+genesis bundle (`CYG1`). Nodes independently verify local genesis before connecting;
+bootstrap is an ordinary CYBOU full peer providing initial transport discovery only.
 The Central Authority operates the genesis-authorized PoA key `P` and finalizes
 blocks.
 

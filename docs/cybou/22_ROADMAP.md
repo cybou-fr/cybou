@@ -7,7 +7,7 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 
 1. **Constitutional documentation alignment**: establish single truth across Level 0, 1, and 2 documents (Completed in `AGENTS.md`, `24_DECISIONS.md`, `02_ARCHITECTURE.md`, `04_NETWORK_LIFECYCLE.md`, `VALIDATION.md`, and core domain specs).
 2. **State & transport cleanup**: completely eliminate obsolete bootstrap Identity, consensus grants, `CAP_BOOTSTRAP`, and legacy state decoders; establish clean `CYBOU_STATE_VERSION = 10` (Completed in code HEAD `0437427`).
-3. **Network Key and signed genesis specification**: define exact Network Public Key wire format (`NetworkID = Network Public Key`), signed genesis encoding, and anti-rollback `genesis_generation`.
+3. **Network Key and immutable signed genesis**: define exact Network Public Key wire format (`NetworkID = Network Public Key`), immutable signed genesis encoding (`CYG1`), and official profile pinning (`GenesisDigest`).
 
 ## Phase 2 — Network identity and bootstrap transition
 

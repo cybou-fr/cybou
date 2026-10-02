@@ -13,9 +13,10 @@ not a global peer identity. Addresses, timing and traffic sizes remain visible.
 
 Bootstrap is an ordinary CYBOU full peer with a known locator (`IP:port` and
 TLS SPKI pin). Transport discovery connects to the bootstrap locator using standard
-CYP2. The core verifies the returned genesis against the compiled Network Public
-Key (`NetworkID = Network Public Key`) and checks monotonic `genesis_generation > installed_generation`.
-Bootstrap status itself grants no consensus role, no authority, and no `CAP_BOOTSTRAP` flag.
+CYP2. The official release bundles the signed immutable genesis specification (`CYG1`);
+nodes independently verify genesis locally against the compiled `NetworkID = Network Public Key`
+and pinned `GenesisDigest` before peer connections. Bootstrap status itself grants no
+consensus role, no authority, and no `CAP_BOOTSTRAP` flag.
 
 A `CAP_STORAGE` peer proves its stable `STORAGE_PROVIDER` key in a session
 proof bound to both HELLOs and the TLS exporter. The receiver derives
@@ -28,7 +29,7 @@ PoA certificates, publication proofs, Validation attestations, and ChunkID check
 remain independent and mandatory.
 
 Ordinary CYP2 frames retain the standard 4096-byte limit, while chunk transfers
-and signed genesis specifications use their bounded stream decoders.
+use their bounded stream decoders.
 
 ## Admission and scope
 

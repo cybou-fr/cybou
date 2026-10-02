@@ -7,7 +7,6 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 
 - exact algorithm and byte encoding of the Network Public Key (`NetworkID = Network Public Key`);
 - exact binary encoding and signature container for the offline-signed genesis;
-- wire representation and validation rules for monotonic `genesis_generation` against rollback;
 - transitional plan for existing SHA256 definition hash usage in internal DBs and wire messages.
 
 ## Validation and provisional lifecycle

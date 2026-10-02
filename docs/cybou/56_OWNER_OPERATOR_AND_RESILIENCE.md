@@ -11,7 +11,7 @@ Network authority and operational roles remain strictly separated:
 
 ```text
 Network Private Key offline:
-    -> create / re-genesis with monotonic genesis_generation only
+    -> create and sign the immutable genesis ONCE only
 
 PoA key P:
     -> block finality only
@@ -28,8 +28,8 @@ Validator Identity (> 1M finalized Authority):
 - **Authority offline**: If the Central Authority desktop is offline, block finalization pauses. Full nodes continue serving existing state and chunks, but canonical state cannot advance.
 - **Bootstrap resilience**: Bootstrap is an ordinary CYBOU full peer with a known locator. A bootstrap outage does not halt the network; connected mesh peers continue exchanging blocks, operations, validation attestations, and storage chunks directly.
 - **Bootstrap compromise**: A hostile bootstrap can deny discovery or partition new connections, but cannot forge a genesis signed by the offline Network Private Key or forge PoA block certificates.
-- **PoA compromise**: A stolen `P` threatens canonical block finality, but cannot sign a new genesis specification or alter the compiled Network Public Key (`NetworkID`).
-- **Network Private Key compromise**: A stolen Network Private Key is a catastrophic root authority compromise, allowing the attacker to issue a valid newer genesis specification (`genesis_generation > installed_generation`). The private key must remain strictly offline at all times.
+- **PoA compromise**: A stolen `P` threatens canonical block finality, triggering equivocation safety halt across observing nodes. The current network cannot safely continue and requires launching a new NetworkID / genesis cutover. A stolen `P` cannot sign a genesis specification or alter the compiled Network Public Key (`NetworkID`).
+- **Network Private Key compromise**: The Network Private Key signs the immutable genesis once at network creation. Because official profiles pin the exact `GenesisDigest`, an attacker stealing the key after release cannot replace or update existing nodes running that NetworkID. The private key must remain strictly offline at all times.
 - **Validator compromise**: A compromised Identity with Authority > 1,000,000 can issue false advisory Validation attestations. This affects only provisional state on nodes with validation enabled; once PoA publishes a conflicting block, the provisional state is unconditionally rolled back.
 - **Verification**: Every full node independently validates signatures, operation rules, and state roots. The operator cannot forge state transitions without detection.
 

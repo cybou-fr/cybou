@@ -16,14 +16,16 @@ Bootstrap is an ordinary CYBOU full peer with a known IP:port and TLS SPKI pin.
 It is a trusted initial discovery peer, but is NOT trusted to define canonical
 truth or replace cryptographic verification.
 
-Synchronization proceeds from the compiled Network Public Key:
+Synchronization proceeds from the compiled Network Public Key and pinned GenesisDigest:
 
 ```text
-compiled Network Public Key (NetworkID)
--> connect to known bootstrap IP:port via standard CYP2 protocol
--> receive offline-signed genesis and verify Network Key signature
--> verify genesis_generation > installed_generation (anti-rollback)
--> initialize genesis state and genesis block ID
+load official signed genesis bundle (CYG1)
+-> verify Network Public Key (NetworkID)
+-> verify GenesisDigest matches pinned official profile
+-> verify offline Network Key signature over genesis specification
+-> verify hash(genesis state) == genesis_state_root
+-> initialize local consensus state and genesis block ID
+-> connect to ordinary bootstrap peer (or known peers) via standard CYP2 protocol
 -> synchronize PoA-finalized blocks in height order
 -> independently execute operations for each block
 -> recompute state root and verify against block commitment
