@@ -82,6 +82,8 @@ public:
         const ProtocolOperation& operation);
     size_t FanoutRecentBlocks(size_t max_per_peer = 16);
     size_t PollOperationRelays();
+    /** Pull new Validation attestations from every relay peer; returns how many were received. */
+    size_t PollValidationAttestations();
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
     /** Live finalizer-authenticated sessions; endpoints are transient routes only. */

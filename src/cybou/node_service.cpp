@@ -163,6 +163,7 @@ void CybouNodeService::StartDesktopFinalizer(const uint64_t block_interval_ms)
             if (std::chrono::steady_clock::now() >= next_peer_maintenance) {
                 peers.DiscoverPeers();
                 peers.PollOperationRelays();
+                peers.PollValidationAttestations();
                 peers.FanoutRecentBlocks();
                 peers.PingAll();
                 next_peer_maintenance = std::chrono::steady_clock::now() + std::chrono::seconds{1};
@@ -256,6 +257,7 @@ int CybouNodeService::RunFinalizer(const CybouFinalizerServiceConfig& config, st
             }
             if (!stopping) {
                 peers.PollOperationRelays();
+                peers.PollValidationAttestations();
                 peers.FanoutRecentBlocks();
                 peers.PingAll();
                 std::vector<PeerDiagnostics> diagnostics;

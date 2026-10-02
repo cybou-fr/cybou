@@ -558,6 +558,72 @@ BOOST_AUTO_TEST_CASE(relay_without_live_finalizer_stages_operation_for_mesh)
     BOOST_CHECK(result.acknowledgment->op_id == cybou::ComputeOperationId(operation));
 }
 
+BOOST_AUTO_TEST_CASE(validation_attestations_gossip_only_to_nodes_holding_the_candidate)
+{
+    CybouServiceTestFixture fixture;
+    const auto alice = fixture.CreateIdentity("gossip-validator.cybou");
+    BOOST_REQUIRE(fixture.runtime->SubmitPoaAuthAdjustment(cybou::PoaAuthAction::GRANT, *alice->GetAccountId(),
+        1'000'001).status == cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    const auto bob = fixture.CreateIdentity("gossip-subject.cybou");
+    const auto create = fixture.runtime->GetBlockAtHeight(*fixture.runtime->GetFinalizedHeight());
+    BOOST_REQUIRE(create && create->block.operations.size() == 1);
+    const auto operation = create->block.operations.front();
+    const auto bytes = cybou::SerializeProtocolOperation(operation);
+    const auto operation_id = cybou::ComputeOperationId(operation);
+    BOOST_REQUIRE(bytes && operation_id);
+    const auto head = create->block.height;
+
+    const auto make_node = [&](const std::string& name) {
+        auto node = std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
+            .network_definition = fixture.definition,
+            .data_dir = fixture.directory / name,
+            .memory_only = true,
+            .wipe_data = true,
+            .peer_admission_policy = TestLabAdmissionPolicy(),
+        });
+        BOOST_REQUIRE(node->InitializeGenesis(fixture.genesis));
+        for (uint64_t height{1}; height < head; ++height) {
+            BOOST_REQUIRE(node->CommitBlock(*fixture.runtime->GetBlockAtHeight(height)));
+        }
+        return node;
+    };
+    const auto validator = make_node("gossip-validator-node");
+    validator->SetValidationSigner(std::make_shared<cybou::CybouKeyStoreValidationSigner>(alice->GetKeyStore()));
+    BOOST_REQUIRE(validator->EnqueueRelayedOperation(*bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_REQUIRE_EQUAL(validator->GetValidationAttestations(*operation_id).size(), 1U);
+    const auto ordinary = make_node("gossip-ordinary-node");
+
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    cybou::p2p::InboundPeerServer server{*validator, io, tcp::endpoint{loopback, 0}};
+    std::atomic_bool stopping{false};
+    std::jthread listener{[&] { server.Run(stopping); }};
+    struct StopListener {
+        std::atomic_bool& stopping;
+        std::jthread& listener;
+        ~StopListener() { stopping = true; if (listener.joinable()) listener.join(); }
+    } stop_listener{stopping, listener};
+
+    cybou::p2p::PeerManager manager{*ordinary};
+    BOOST_REQUIRE(manager.Connect(loopback.to_string(), server.Port()));
+    // Received but not stored: the ordinary node has not executed the operation yet.
+    BOOST_CHECK_EQUAL(manager.PollValidationAttestations(), 1U);
+    BOOST_CHECK(ordinary->GetValidationAttestations(*operation_id).empty());
+    BOOST_CHECK_EQUAL(manager.PollValidationAttestations(), 0U);
+
+    // After its own execution it accepts the attestation, served again on a fresh session.
+    BOOST_REQUIRE(ordinary->EnqueueRelayedOperation(*bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    manager.DisconnectAll();
+    BOOST_REQUIRE(manager.Connect(loopback.to_string(), server.Port()));
+    BOOST_CHECK_EQUAL(manager.PollValidationAttestations(), 1U);
+    BOOST_CHECK_EQUAL(ordinary->GetValidationAttestations(*operation_id).size(), 1U);
+    BOOST_CHECK(ordinary->GetOperationStatus(*operation_id).IsValidated());
+    manager.DisconnectAll();
+    (void)bob;
+}
+
 BOOST_AUTO_TEST_CASE(manager_pings_only_the_requested_peer_budget_and_rotates)
 {
     CybouServiceTestFixture fixture;

@@ -60,7 +60,7 @@ editing an included file.
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 35 | 870d2d08b963af58 |
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 34 | feaf7a136cba1025 |
 | docs/cybou/APPLICATION_DATA_PLANE.md | 461 | 8945acf5033d0f7c |
-| docs/cybou/CYP2_TRANSPORT_V3.md | 45 | c211a6045bb562bb |
+| docs/cybou/CYP2_TRANSPORT_V3.md | 61 | 852fa3a4246d92d2 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 85 | f32d4f33bab42f19 |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/OPERATOR_LAB.md | 180 | 4d42fcaf1f7c7ddc |

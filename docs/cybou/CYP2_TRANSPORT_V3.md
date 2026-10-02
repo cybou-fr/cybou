@@ -1,7 +1,7 @@
 # CYP2 transport version 3
 
 CYP2 v3 carries peer discovery, finalized block synchronization, bounded
-operation relay, Validation signature propagation, and authorized
+operation relay, Validation attestation propagation, and authorized
 encrypted chunk transfer over TCP/TLS 1.3.
 
 ## Connection protection and roles
@@ -32,6 +32,22 @@ remain independent and mandatory.
 Ordinary CYP2 frames retain the standard 4096-byte limit, while chunk transfers
 use their bounded stream decoders.
 
+## Frame version 4: candidate execution and Validation attestations
+
+The frame header version byte is 4; frames of any other version are rejected,
+with no compatibility path. Before staging or forwarding an operation
+(`OP_META` or `OPERATION_RELAY_*`), every full node executes it on its own
+finalized state and refuses it if invalid.
+
+Between two `CAP_OPERATION_RELAY` peers, `VALIDATION_ATTESTATION_POLL` (49,
+empty payload) asks for one `ValidationAttestation` the serving session has
+not yet sent on its current finalized base; `VALIDATION_ATTESTATION` (50)
+carries one serialized attestation (2,709 bytes) or an empty payload when none
+is new. The receiver stores it, and offers it onward, only if it already holds
+the operation as a candidate it executed itself, the base is its finalized tip,
+the signer's finalized AUTH exceeds 1,000,000 and the Authorization signature
+verifies. There is no validator capability bit.
+
 ## Admission and scope
 
 Production/DEV public inbound and outbound P2P admission is France-only before
@@ -40,6 +56,6 @@ Missing or corrupt data fails closed. LAB loopback/private traffic needs an
 explicit bypass. Optional known VPN/proxy/Tor filtering is node-local policy.
 
 The active wire profile carries peer hints, finalized blocks, signed
-operations, Validation signatures, and authorized encrypted chunks.
+operations, Validation attestations, and authorized encrypted chunks.
 No validator quorum, resource ticket, canonical reservation or per-I/O
 accounting is part of active CYP2.

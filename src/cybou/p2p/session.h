@@ -9,6 +9,7 @@
 #include <cybou/finalizer_node.h>
 #include <cybou/finalized_chunk_store.h>
 #include <cybou/operation_relay.h>
+#include <cybou/validation_pool.h>
 
 #include <boost/asio/ip/tcp.hpp>
 
@@ -21,6 +22,7 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <set>
 #include <span>
 #include <vector>
 
@@ -29,7 +31,7 @@ namespace cybou::p2p {
 
 inline constexpr uint32_t MAX_FRAME_PAYLOAD{4096};
 inline constexpr uint32_t MAX_BOOTSTRAP_FRAME_PAYLOAD{16 * 1024 * 1024 + 16 * 1024};
-inline constexpr uint8_t WIRE_VERSION{3};
+inline constexpr uint8_t WIRE_VERSION{4};
 inline constexpr uint64_t CAP_SERVE_BLOCKS{1ULL << 0};
 inline constexpr uint64_t CAP_ACCEPT_OPERATIONS{1ULL << 1};
 inline constexpr uint64_t CAP_BLOCK_INVENTORY{1ULL << 3};
@@ -83,8 +85,12 @@ enum class MessageType : uint8_t {
     OPERATION_RELAY_OPERATION_CHUNK = 46,
     OPERATION_RELAY_ACK = 47,
     OPERATION_RELAY_ACK_RESULT = 48,
+    /** Pull one Validation attestation this session has not yet served. */
+    VALIDATION_ATTESTATION_POLL = 49,
+    /** One serialized ValidationAttestation, or an empty payload when none is new. */
+    VALIDATION_ATTESTATION = 50,
 };
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::OPERATION_RELAY_ACK_RESULT)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::VALIDATION_ATTESTATION)};
 
 /** Stable identity of a storage provider: BLAKE3 of its STORAGE_PROVIDER public key. */
 using ProviderId = std::array<unsigned char, 32>;
@@ -213,6 +219,8 @@ public:
         const FinalizedBlock& block, uint64_t& peer_finalized_height);
     std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation);
     bool PollOperationRelay(CybouNodeRuntime& runtime);
+    /** Pull one attestation; the local runtime re-verifies it against its own candidate and state. */
+    bool PollValidationAttestation(CybouNodeRuntime& runtime);
     std::vector<std::pair<std::string, uint16_t>> RequestPeers(
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     bool SendPeers(const std::vector<std::pair<std::string, uint16_t>>& peers,
@@ -259,6 +267,9 @@ private:
     // or map this role to a durable node identity.
     bool m_peer_finalizer_authenticated{false};
     uint64_t m_local_capabilities{0};
+    // Attestations already served to this peer on the current finalized base.
+    uint256 m_served_attestation_base;
+    std::set<ValidationPool::Key> m_served_attestations;
     HandshakeStatus m_handshake_status{HandshakeStatus::NOT_ATTEMPTED};
 };
 
