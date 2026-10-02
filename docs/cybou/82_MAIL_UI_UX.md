@@ -14,10 +14,10 @@ The normal user operates mail, not a blockchain, key exchange, finality mechanis
 or storage protocol. Technical evidence remains inspectable through Security
 Details and Advanced diagnostics.
 
-## 0. Content lifecycle (finality first)
+## 0. Content lifecycle (finality first & provisional validation)
 
 Every outgoing message, with or without attachments, follows one
-finality-first lifecycle shared with Files (`83_STORAGE_UI_UX.md`):
+shared lifecycle with Files (`83_STORAGE_UI_UX.md`):
 
 ```text
 local draft
@@ -26,32 +26,39 @@ local encrypt/chunk
    ↓
 RootPublication submission
    ↓
+[optional provisional Validation] ───(if PoA conflicts)──→ ROLLBACK / purge
+   ↓
 PoA finality
    ↓
 finalized-authorized chunks → storage providers
    ↓
-durability threshold
+durability threshold (2 remote replicas)
    ↓
 Sent / Protected
 ```
 
 Message text, recipients, attachment references, filenames, and the Mail schema
 are encrypted payload data inside one RootPublication. There is no Mail-specific
-consensus operation. No content is stored remotely before finality: until the
-RootPublication is finalized, all ciphertext chunks remain local staging only.
+consensus operation. Under default policy, no content is stored remotely before finality:
+until the RootPublication is finalized, all ciphertext chunks remain local staging only.
+Under optional provisional validation policy, participating providers may cache chunks
+provisionally upon eligible Validation signatures, but purge them if PoA conflicts.
 
 Status terms are distinct and must never share one indicator:
 
 ```text
+Validated    = provisional pre-finalization evidence received from eligible validator(s)
 Finalized    = the RootPublication is part of canonical PoA history
 Authorized   = its ChunkIDs are admitted for storage by that finalized publication
 Available    = the chunks can actually be retrieved from the network
-Protected    = the product durability threshold has been reached
+Protected    = the product durability threshold has been reached (2 remote replicas)
 Retrievable  = this client has fetched and verified the content
 ```
 
-`Finalized` does not mean `Sent`. Finality only authorizes storage admission;
-the message is `Sent` when the required durability/availability is reached.
+`Finalized` does not mean `Sent`. Finality authorizes storage admission;
+the message is `Sent` when the required remote durability/availability is reached.
+A provisionally `Validated` message displays informational confirmation, but cannot
+reach `Sent`/`Protected` until PoA finality confirms it.
 
 The Beta interaction target includes conversation threads, unread/read state,
 local labels, reply/reply-all/forward, blocked senders, local search, and

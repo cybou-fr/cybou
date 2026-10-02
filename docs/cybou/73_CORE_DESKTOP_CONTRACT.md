@@ -9,13 +9,14 @@ core/application services → CybouDesktopModel → Qt pages
 
 ## Network startup and replacement
 
-The core receives the `OfficialNetworkProfile`, contacts a pinned bootstrap,
-and verifies the root-signed `OfficialNetworkBinding`, exact network definition
-and genesis. Only then may it open network-bound Identity and application state
-or connect to peers. Bootstrap peer hints are untrusted until normal CYP2 and
-France-only admission checks pass.
+The core receives the compiled `OfficialNetworkProfile` (DEVNET or MAINNET),
+contacts the known bootstrap locator, and verifies the signed genesis against
+the compiled Network Public Key (`NetworkID`). Only then may it open network-bound
+Identity and application state or connect to peers in the direct mesh. Bootstrap
+peer hints are untrusted until normal CYP2 and France-only admission checks pass.
 
-On a verified newer `generation`, core stops services and pending operations,
+On a verified newer `genesis_generation` (`generation > installed_generation`)
+signed by the Network Key, the core stops services and pending operations,
 prepares the new network domain, atomically activates it and destroys every old
 network-bound item: chain/state, genesis, Identity, vault, AccountID, signing
 and KEM keys, Wallet, Names, Mail, Files, Application DB, peer DB, storage
@@ -25,13 +26,10 @@ CYBOU a été mis à jour ». A preparation failure leaves the old generation
 usable. Theme, language, other application-global preferences and validated
 Geo cache live outside the network domain.
 
-An `authority_epoch` change updates the verified PoA assignment without wiping
-Identity or application state. Pages never select a finalizer key.
-
 ## Data and request boundaries
 
 Canonical core provides node/finality status, AccountID/Identity, Balance,
-System Balance, Names and read-only Authority. Private application services
+System Balance, Names and Authority. Private application services
 provide Mail and Files projections, publication/storage progress and local
 search. Each unlocked Identity uses its own encrypted rebuildable Application
 DB. Pages and `CybouDesktopModel` never browse the common ChunkStore,
@@ -49,29 +47,50 @@ event loop.
 
 ## Operation and content states
 
-The operation axis is `Local → Preparing → Submitted → Finalized`, or `Failed`.
-It applies to payment, naming, rotation and publication operations. Submitted
-is displayed as waiting for confirmation. `Failed` is terminal for an exact
-OperationID unless independently verified PoA finality supersedes a local
-failure. Uncertain delivery remains Submitted; Finalized never regresses.
+The operation axis is:
 
-The separate content axis includes Local, Securing, Protected, Received,
-Temporarily unavailable and Needs attention. Outgoing content remains Local
-until finality. Finalized content enters Securing while remote replicas are
-placed/repaired. Development requires one remote full replica; Beta requires
-two independent remote full replicas. Local encrypted cache does not count.
-Mail maps Protected to Sent. Incoming Mail is Received after verified finality
-and decryption; the recipient does not claim proof of sender durability.
+```text
+Local → Preparing → Submitted → Validated (optional, provisional) → Finalized, or Failed
+```
+
+- **Submitted**: staged in volatile relay memory, awaiting confirmation.
+- **Validated**: received at least one valid attestation from an Identity with finalized Authority > 1,000,000 under active local validation policy. Displayed as informational provisional confirmation.
+- **Finalized**: included in a valid block signed by the PoA key and independently verified locally. Finalized never regresses.
+- **Failed**: terminal for an exact OperationID unless verified PoA finality includes it.
+
+### Provisional rollback lifecycle
+
+If a conflicting PoA block finalizes, or a new finalized state renders a provisionally
+`Validated` operation invalid:
+```text
+VALIDATED
+    ↓ conflicting/new PoA finalization
+ROLLBACK
+    ↓
+re-evaluate original operation against new FINALIZED state
+    ├─ still valid -> PENDING / SUBMITTED again
+    └─ invalid     -> DROP / FAILED
+```
+
+The separate content axis includes:
+`Local → Preparing → Securing → Protected → Received`, or `Temporarily unavailable` / `Needs attention`.
+Outgoing content remains Local until finality (or provisional admission under local provider policy).
+Finalized content enters Securing while remote replicas are placed/repaired.
+Development requires 1 remote full replica; Beta requires 2 independent remote full replicas
+(plus local copy = 3 physical copies total). Local encrypted cache does not count toward remote durability.
+Mail maps Protected to Sent. Incoming Mail is Received after verified finality and decryption;
+the recipient does not claim proof of sender durability.
 
 ## Capabilities, policy and Authority
 
 A UI capability becomes true only when its backend path is live. Mail needs
 publication, scanning, retrieval and mailbox projection. Files needs private
 catalog publication, retrieval and durability. Storage and PoA finalization
-are optional full-node capabilities. Bootstrap is an external rendezvous
-service. France-only public P2P admission is mandatory in DEV and production;
+are optional operational capabilities. Bootstrap is an ordinary CYBOU full peer
+with a known locator. France-only public P2P admission is mandatory in DEV and production;
 optional VPN/proxy/Tor filtering is local policy. Qt displays core decisions.
 
-Authority is informational and read-only. The controller syncs its derived
-index from finalized history and shows it only on Identity and Diagnostics,
-never as a contact trust label, resource tier or PoA power.
+Authority is a deterministic property derived from finalized history.
+Finalized Authority > 1,000,000 qualifies an Identity for provisional Validation.
+The controller displays Authority on Identity and Diagnostics, never as a contact
+trust label, resource tier, or PoA power.

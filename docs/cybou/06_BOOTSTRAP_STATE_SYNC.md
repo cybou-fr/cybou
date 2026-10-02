@@ -26,7 +26,8 @@ compiled Network Public Key (NetworkID)
 -> initialize genesis state and genesis block ID
 -> synchronize PoA-finalized blocks in height order
 -> independently execute operations for each block
--> verify resulting state root against PoA certificate
+-> recompute state root and verify against block commitment
+-> verify PoA certificate over BlockID
 -> canonical finalized state achieved
 ```
 

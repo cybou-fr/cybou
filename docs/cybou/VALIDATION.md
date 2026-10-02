@@ -44,9 +44,14 @@ An eligible validator issues a signed attestation for a candidate operation
 or block candidate:
 
 ```text
+ValidationSubjectType:
+    OPERATION = 1
+    BLOCK_CANDIDATE = 2
+
 ValidationAttestation:
     network_id: uint256
-    operation_id: uint256
+    subject_type: ValidationSubjectType
+    subject_id: uint256
     finalized_base_block_id: uint256
     validator_account_id: AccountId
     validator_signature: Ed25519 + ML-DSA-44 (Identity Authorization Key)
@@ -66,10 +71,9 @@ validation.min_signatures = N (default = 1)
 
 - A peer with `validation.enabled = false` waits exclusively for PoA finality.
 - A peer with `validation.enabled = true` and `min_signatures = 1` may treat
-  operations with at least 1 valid eligible signature as `Validated` / provisional.
+  candidates with at least 1 valid eligible signature as `Validated` / provisional.
 - Even if a candidate has 10, 100, or 1000 Validation signatures, a single valid
-  PoA block rejection or conflict unconditionally terminates and rolls back
-  the provisional state.
+  PoA block conflict unconditionally terminates and rolls back the provisional state.
 
 ## Provisional state and mandatory rollback
 
@@ -79,5 +83,8 @@ Provisional effects:
 - storage providers with provisional policy enabled may optionally cache/stage
   authorized chunks;
 - on PoA inclusion: promote provisional state to `Finalized`;
-- on PoA rejection or conflict: purge provisional cached chunks, rollback
-  provisional state, and adopt canonical PoA state.
+- on conflicting PoA finalization, or when a new finalized state renders the
+  provisional candidate invalid: purge provisional cached chunks, rollback
+  provisional state, and adopt canonical PoA state unconditionally.
+  If the original operation remains valid against the new finalized state,
+  it returns to `PENDING`; otherwise it is dropped.

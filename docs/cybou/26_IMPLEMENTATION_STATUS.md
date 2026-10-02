@@ -1,6 +1,6 @@
 # Implementation status
 
-Status: repository HEAD `98e182c`.
+Status: repository HEAD `e3c8752`, last code-changing baseline `0437427`.
 This page reports current code and deployment reality honestly, separated from
 the constitutional target in `AGENTS.md` and `04_NETWORK_LIFECYCLE.md`.
 

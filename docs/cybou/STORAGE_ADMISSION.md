@@ -23,13 +23,14 @@ File
 
 Provider metadata is separate from blob bytes.
 Local staging/cache and provider retention use the same physical blob. A local
-blob survives restart and provider-metadata reset; remote GET still requires
-provider admission metadata for a finalized publication. Provider capacity
+blob survives restart and provider-metadata reset. Provider capacity
 counts admitted bytes, while the common store counts each physical blob once.
 
-## Admission
+## Storage admission policies
 
-Provider accepts:
+### 1. Default policy (Finality-first)
+
+Under default policy, a provider accepts:
 
 ```text
 PutChunk(publication_reference, ChunkID, bytes, admission_proof)
@@ -37,25 +38,28 @@ PutChunk(publication_reference, ChunkID, bytes, admission_proof)
 
 only after verifying:
 
-1. publication exists in canonical finalized history;
+1. publication exists in canonical PoA-finalized history;
 2. Merkle proof authorizes ChunkID under that publication;
 3. BLAKE3(bytes) equals ChunkID;
 4. local capacity/policy allows storage.
 
-GET is content-addressed by ChunkID.
+Remote GET is content-addressed by ChunkID.
 
-For placement recovery, providers may return the stored authorization proof
-for a `(finalized OperationID, ChunkID)` pair only while the admitted blob is
-present and its proof verifies against canonical finalized history. Clients
-use verified leaf indices to reconstruct publication order; provider proof
-metadata remains operational and is not consensus state.
+### 2. Optional policy (Provisional validation)
 
-The current provider protocol admits remote chunks only after finality and a
-valid publication proof. This is the current/default finality-first policy.
+Nodes or storage providers enabling provisional validation policy locally may
+optionally admit and stage chunks upon receiving sufficient eligible Validation
+signatures (`Authority > 1,000,000` in latest finalized state) authorizing the
+candidate RootPublication:
 
-Provisional remote admission before finality is outside the active storage
-protocol. Providers admit chunks only after a finalized RootPublication and
-valid authorization proof; no provisional placement counts toward `Protected`.
+```text
+sufficient Validation
+-> PROVISIONAL remote admission / cache
+-> PoA finality agrees   -> promote provisional admission to canonical finalized
+-> PoA conflict / drop  -> purge provisional chunk admission and rollback
+```
+
+Provisional admission never counts toward `Protected` durability.
 
 ## Durability targets
 
@@ -72,10 +76,10 @@ Beta target:
 ```
 
 The local encrypted copy does not count toward the remote target, but it
-normally exists as one more physical copy (Beta: local + 2 remote = 3).
+normally exists as one more physical copy (Beta: local + 2 remote = 3 physical copies total).
 
-`Protected` in Beta means all required chunks satisfy the three-remote-replica
-target.
+`Protected` in Beta means all required chunks satisfy the 2 independent remote full replicas
+target (plus local copy = 3 physical copies total).
 
 ## Erasure coding
 
@@ -98,54 +102,6 @@ justifies the extra protocol complexity.
 Placement is per ChunkID, not necessarily one provider set per file.
 
 StorageService selects independent eligible remote providers using secure
-random selection and diversity/health/capacity rules.
-
-Do not freeze a deterministic provider-ranking algorithm that can be cheaply
-gamed by ProviderID generation before a mature provider anti-Sybil model exists.
-
-Providers may reject admission; StorageService tries other eligible peers until
-the replica target is reached or reports a retryable failure.
-
-Placement metadata is operational cache, not canonical recovery state.
-
-## Retrieval after clean recovery
-
-If old provider placement is unknown, query multiple discovered
-storage-capable peers for the requested ChunkID until a valid response is found.
-
-A DHT/global provider index is not required for the first Beta-scale network.
-
-## Audit and repair
-
-Initial durability may rely on successful PUT acknowledgments plus periodic
-health/retrieval verification.
-
-The current protocol has no canonical provider-contribution accounting, so
-provider receipts are not a consensus requirement. Local StorageService may
-keep operational acknowledgments for placement and repair.
-
-When healthy remote copies drop below target:
-
-```text
-retrieve any valid copy
--> choose replacement provider
--> PUT authorized chunk
--> restore replica target
-```
-
-Temporary provider timeout is not automatically fraud.
-
-## Local cache
-
-The local encrypted copy is useful for:
-
-```text
-offline access
-fast open
-repair
-re-upload
-```
-
-It may later be evicted after remote durability is healthy. Semantic Mail/Files
-items remain in the Identity Application DB and content is re-fetched on
-demand.
+random selection over proven ProviderIDs.
+Providers return stored authorization proofs for audit and state rebuild.
+Placement records live in the Identity's encrypted rebuildable Application DB.

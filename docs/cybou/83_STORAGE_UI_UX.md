@@ -20,35 +20,41 @@ publication use the shared encrypted chunk substrate described in
 The user manages files and folders. The user does not manage chunks, provider
 nodes, repair queues, proofs, leases, or replication topology.
 
-## 0. Content lifecycle (finality first)
+## 0. Content lifecycle (finality first & provisional validation)
 
-Files uses the same finality-first lifecycle as Mail (`82_MAIL_UI_UX.md` §0):
+Files uses the same shared lifecycle as Mail (`82_MAIL_UI_UX.md` §0):
 
 ```text
 file selected
 -> chunk/encrypt locally
 -> private Files catalog/root prepared locally
+-> [optional provisional Validation] ───(if PoA conflicts)──→ ROLLBACK / purge
 -> RootPublication finalized by PoA
 -> finalized-authorized chunks uploaded to storage providers
--> durability threshold reached
+-> durability threshold reached (2 independent remote replicas)
 -> Files item becomes Protected
 ```
 
-There is no remote upload of unfinalized content. Until the RootPublication is
-finalized, ciphertext chunks remain local staging only; providers accept only
-chunks with a valid finalized-publication admission proof.
+Under default policy, there is no remote upload of unfinalized content. Until the
+RootPublication is finalized, ciphertext chunks remain local staging only; providers
+accept only chunks with a valid finalized-publication admission proof. Under optional
+provisional validation policy, providers may provisionally cache chunks upon eligible
+Validation signatures, but purge them if PoA conflicts.
 
 Status terms are distinct and must never share one indicator:
 
 ```text
+Validated    = provisional pre-finalization evidence received from eligible validator(s)
 Finalized    = the RootPublication is part of canonical PoA history
 Authorized   = its ChunkIDs are admitted for storage by that finalized publication
 Available    = the chunks can actually be retrieved from the network
-Protected    = the product durability threshold has been reached
+Protected    = the product durability threshold has been reached (2 remote replicas)
 Retrievable  = this client has fetched and verified the content
 ```
 
 `Finalized` is not `Protected`; finality only authorizes storage admission.
+`Validated` displays provisional confirmation in the UI, but durability (`Protected`)
+always requires verified PoA finality.
 
 See also:
 

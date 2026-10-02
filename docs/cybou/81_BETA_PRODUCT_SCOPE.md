@@ -40,16 +40,20 @@ Beta Files provides familiar Drive-like workflows:
 
 ## Common lifecycle
 
+Default finality-first lifecycle:
+
 ```text
 prepare/encrypt locally
 -> RootPublication
 -> PoA finality
 -> remote provider admission
--> durability target
+-> durability target (2 independent remote replicas)
 -> Sent / Protected
 ```
 
-There is no remote upload of unfinalized chunks.
+Under optional local Validation policy, chunks may be provisionally placed upon
+sufficient eligible Validation signatures, but are purged if PoA conflicts.
+Remote durability (`Protected`) always requires verified PoA finality.
 
 ## Beta durability
 
