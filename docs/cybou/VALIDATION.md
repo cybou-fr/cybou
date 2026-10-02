@@ -1,90 +1,95 @@
-# VALIDATION — Advisory validation
+# VALIDATION — Eligible-Identity Validation signatures
 
 Status: **Active Level 2 normative protocol specification**.
 
-Validation is optional, advisory pre-finalization evidence. It allows peers to
-gain confidence in candidate operations before canonical PoA finality.
-Validation NEVER produces canonical state and NEVER overrides PoA finality.
+## Principle
 
-## Core invariant
+Validation is not validation instead of the node. It is an additional
+signature produced after a node has independently validated an operation.
 
 ```text
-Validation is provisional evidence,
-not an alternative finality mechanism.
+Every full node independently validates every candidate operation.
+An Identity with finalized AUTH > 1,000,000 may additionally sign an
+operation its own node has independently validated.
+That signature is pre-finalization evidence.
+Every receiving node still independently validates the operation.
+PoA also independently validates the operation.
+Only PoA finalization is canonical.
 ```
 
-If Validation conflicts with PoA:
-- discard provisional state;
-- rollback provisional effects;
-- adopt PoA-finalized state unconditionally.
+## Processing a candidate operation
 
-There is NO voting against PoA, NO validator fork-choice, NO validator quorum
-finality, and NO merge of conflicting provisional state.
+```text
+receive Operation
+-> canonical decode, Identity signature and authorization checks
+-> execute against local finalized state + locally accepted candidates
+-> invalid: reject, do not relay, never sign
+-> valid:   keep in bounded volatile pool, relay
+-> local Identity unlocked and finalized AUTH > 1,000,000?
+   yes: may sign and relay a ValidationSignature
+```
+
+## Receiving a ValidationSignature
+
+```text
+receive Operation + ValidationSignature
+-> independently validate the Operation (as above); invalid -> discard both
+-> validator AccountID exists in local finalized state
+-> its finalized AUTH > 1,000,000
+-> hybrid Authorization signature verifies under its current Authorization key
+-> keep as Validation evidence
+```
+
+A signature never authorizes relay of an otherwise invalid operation.
 
 ## Eligibility
 
-Validation attestations are valid only if signed by an eligible Identity.
-Eligibility is deterministic and evaluated strictly against the latest
-**PoA-finalized** state:
-
 ```text
 validation_eligible(identity) :=
-    authority_from_latest_PoA_finalized_state(identity) > 1,000,000
+    latest_finalized_state.accounts[identity].authority > 1,000,000 AUTH
 ```
 
-Signatures from Identities whose Authority in provisional state exceeds 1,000,000,
-but does not exceed 1,000,000 in the latest PoA-finalized state, are invalid
-and MUST be rejected.
+999,999 and 1,000,000 AUTH are not eligible; 1,000,001 is. There is no
+validator registry, ValidatorSet, `CAP_VALIDATOR`, validator key or staking.
 
-Canonical AUTH never grants PoA finalization power.
-
-## Validation attestation structure
-
-An eligible validator issues a signed attestation for a candidate operation
-or block candidate:
+## ValidationSignature
 
 ```text
-ValidationSubjectType:
-    OPERATION = 1
-    BLOCK_CANDIDATE = 2
-
-ValidationAttestation:
-    network_id: uint256
-    subject_type: ValidationSubjectType
-    subject_id: uint256
-    finalized_base_block_id: uint256
-    validator_account_id: AccountId
-    validator_signature: Ed25519 + ML-DSA-44 (Identity Authorization Key)
+ValidationSignature:
+    network_id               NetworkID
+    operation_id             OperationID
+    finalized_base_block_id  BlockID of the finalized state the operation was executed on
+    validator_account_id     AccountID
+    signature                Ed25519 + ML-DSA-44 (Identity Authorization key)
 ```
 
-The signature is created using the Identity's active Authorization Key role.
-Validators require no special validator-only key role.
+The signature covers domain `CYBOU/VALIDATION/V1`, NetworkID, OperationID,
+finalized base BlockID and validator AccountID. It is stored beside the
+operation and never changes its OperationID. Exact wire encoding is defined
+with the implementation.
 
-## Local acceptance policy
+Nodes keep Validation in a bounded volatile store keyed by OperationID, with
+one signature per AccountID, and drop entries when the operation finalizes or
+fails.
 
-Full nodes configure their validation policy locally:
+## Status
 
 ```text
-validation.enabled = true / false (peer preference)
-validation.min_signatures = N (default = 1)
+Validated := operation locally valid
+             + at least one valid eligible ValidationSignature
 ```
 
-- A peer with `validation.enabled = false` waits exclusively for PoA finality.
-- A peer with `validation.enabled = true` and `min_signatures = 1` may treat
-  candidates with at least 1 valid eligible signature as `Validated` / provisional.
-- Even if a candidate has 10, 100, or 1000 Validation signatures, a single valid
-  PoA block conflict unconditionally terminates and rolls back the provisional state.
+`Validated` is informational. It never changes balances, AUTH or any state.
 
-## Provisional state and mandatory rollback
+## PoA
 
-Provisional effects:
-- UI displays operation status as `Validated` (informational);
-- balances and spendable funds remain UNCHANGED until PoA finality;
-- storage providers with provisional policy enabled may optionally cache/stage
-  authorized chunks;
-- on PoA inclusion: promote provisional state to `Finalized`;
-- on conflicting PoA finalization, or when a new finalized state renders the
-  provisional candidate invalid: purge provisional cached chunks, rollback
-  provisional state, and adopt canonical PoA state unconditionally.
-  If the original operation remains valid against the new finalized state,
-  it returns to `PENDING`; otherwise it is dropped.
+Validation signatures may accompany candidate operations. PoA does not trust
+them; it independently executes every operation, and only a valid PoA-finalized
+block is canonical. If PoA does not finalize a Validated operation, nothing
+needs rolling back because Validation created no state.
+
+## Invalid Validation
+
+A ValidationSignature over an operation that is invalid against the stated
+finalized base block is verifiable evidence. Automatic AUTH penalties for it
+are not frozen; see [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md).

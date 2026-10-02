@@ -41,17 +41,18 @@ Bootstrap is an **ordinary CYBOU full peer**:
 - has no `CAP_BOOTSTRAP` capability flag;
 - has no `BootstrapNode` class or distinct role in consensus;
 - has an IP:port and TLS SPKI pin known in advance for initial discovery;
-- bootstrap status itself grants no authority.
+- bootstrap status itself grants no authority and no AUTH.
 
 The DEV locator is `51.255.46.58:29461`; its SPKI SHA-256 pin is compiled in
 `src/cybou/official_networks.h` to authenticate initial transport discovery.
 
 ## Bootstrap Identity
 
-The bootstrap node runs an ordinary CYBOU Identity:
-- no special consensus grant or wire structure;
-- initial Authority is assigned directly by genesis;
-- DEV bootstrap initial Authority = 1,000,001 (qualifying it for Validation).
+The bootstrap node runs an ordinary CYBOU Identity with no special consensus
+grant or wire structure. Whether that Identity holds AUTH is an ordinary
+GenesisAllocation decision for the network, not a property of the bootstrap
+role. Genesis may give `cybou.cybou` more than 1,000,000 AUTH so the network
+starts with an eligible Validation Identity.
 
 ## Network creation and joining
 
@@ -79,14 +80,11 @@ not confer consensus power, and there is no separate PoA Identity entity.
 ## Authority and Validation
 
 Authority is non-transferable AUTH stored in each finalized AccountState and
-committed by the state root. GenesisAllocation may assign initial AUTH once.
+committed by the state root; see `57_IDENTITY_AUTHORITY.md`.
 
-Validation is optional pre-finalization:
-- non-canonical evidence;
-- peer chooses locally whether to trust it (`validation.enabled`);
-- default minimum required signatures = 1;
-- only signatures of eligible Identities count;
-- eligibility requirement: `authority_from_latest_PoA_finalized_state(identity) > 1,000,000`.
+Every full node independently executes every candidate. Validation is an
+additional signature by an Identity with finalized AUTH > 1,000,000 after its
+own node validated the operation; it is evidence only. See `VALIDATION.md`.
 
 ## Canonical PoA finality
 
@@ -100,20 +98,13 @@ The Central Authority PoA finalizer:
 
 Canonical truth is always the latest valid PoA-finalized state.
 
-## Conflict resolution and unconditional rollback
+## No alternative finality
 
-If provisional Validation conflicts with PoA finality:
-```text
-discard provisional state
-rollback provisional effects
-adopt PoA-finalized state unconditionally
-```
-
-There is:
+Validation creates no state. Only a valid PoA-finalized block changes
+canonical state. There is:
 - NO voting against PoA;
 - NO validator fork-choice;
 - NO validator quorum finality;
-- NO merge of conflicting provisional state;
 - NO BFT consensus.
 
 ## Immutable genesis
@@ -158,7 +149,7 @@ domain (e.g., UI theme, language) may be retained.
 ## Direct P2P mesh
 
 Bootstrap provides initial peer hints. Ordinary full nodes then exchange
-finalized blocks, operation relays, validation attestations, and encrypted
+finalized blocks, operation relays, Validation signatures, and encrypted
 chunks directly. A bootstrap outage does not stop an already formed mesh.
 Production and DEV public inbound/outbound admission is France-only and fails
 closed when local Geo data is unavailable or corrupt; see

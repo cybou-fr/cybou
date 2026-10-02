@@ -6,7 +6,7 @@ ValidatorSet, vote, quorum or staking weight.
 
 ## Operational model
 
-Genesis defines the network, initial state, initial Authority baselines, and the
+Genesis defines the network, initial state, initial AUTH allocations, and the
 authorized PoA public key `P`.
 The Central Authority executes candidate operations independently from its
 desktop, trusts no validator or peer state, and publishes finalized blocks.
@@ -41,10 +41,16 @@ If two distinct valid certificates exist for the same network, height and
 parent, observing full nodes record verified evidence and enter a permanent
 safety halt. They do not branch-hop or automatically select a winner.
 
-## Conflict resolution with provisional Validation
+## Independent execution invariant
 
-PoA is the sole canonical truth:
-- If provisional Validation state agrees with PoA: promote provisional state to finalized.
-- If provisional Validation state conflicts with PoA: discard provisional state,
-  rollback provisional effects, and adopt PoA-finalized state unconditionally.
-- There is no validator fork-choice, no BFT voting, and no validator quorum override.
+```text
+PoA MUST independently execute candidate operations.
+Validation signatures are never sufficient for finalization.
+
+operation -> own validation/execution -> state root -> block -> PoA signature
+```
+
+PoA produces blocks from its node's ordinary candidate pool. It may receive
+Validation signatures but never relies on them. There is no validator
+fork-choice, no BFT voting, and no validator quorum override. Validation creates
+no state, so PoA finality never needs to roll back provisional effects.
