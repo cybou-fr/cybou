@@ -109,7 +109,8 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
-    state.genesis_allocations.emplace(*recovery_id, GenesisAllocation{.balance = 100'000'000, .label = "cybou"});
+    state.genesis_allocations.emplace(*recovery_id,
+        GenesisAllocation{.balance = 100'000'000, .authority = 1'000'001, .label = "cybou"});
     BOOST_REQUIRE(ValidateCybouState(state) == StateValidationError::NONE);
     const uint64_t supply = TotalSupply(state);
     const auto genesis_bytes = SerializeCybouState(state);
@@ -119,6 +120,7 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
 
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 1, params, state) == AccountCreateStateError::NONE);
     BOOST_CHECK_EQUAL(state.accounts.at(account).balance, 100'000'000u);
+    BOOST_CHECK_EQUAL(state.accounts.at(account).authority, 1'000'001u);
     BOOST_CHECK(state.genesis_allocations.at(*recovery_id).claimed_by == account);
     BOOST_REQUIRE(state.names.PrimaryName(account));
     BOOST_CHECK_EQUAL(*state.names.PrimaryName(account), "cybou");
@@ -129,6 +131,26 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
     const auto restored = DeserializeCybouState(*bytes);
     BOOST_REQUIRE(restored);
     BOOST_CHECK(SerializeCybouState(*restored) == bytes);
+    BOOST_CHECK_EQUAL(restored->accounts.at(account).authority, 1'000'001u);
+    BOOST_CHECK_EQUAL(restored->genesis_allocations.at(*recovery_id).authority, 1'000'001u);
+
+    // AUTH is committed by the state root but excluded from CYBOU supply.
+    auto more_auth = state;
+    ++more_auth.accounts.at(account).authority;
+    BOOST_CHECK_EQUAL(TotalSupply(more_auth), TotalSupply(state));
+    BOOST_CHECK(CybouStateHash(more_auth) != CybouStateHash(state));
+    auto more_genesis_auth = state;
+    ++more_genesis_auth.genesis_allocations.at(*recovery_id).authority;
+    BOOST_CHECK_EQUAL(TotalSupply(more_genesis_auth), TotalSupply(state));
+    BOOST_CHECK(CybouStateHash(more_genesis_auth) != CybouStateHash(state));
+    BOOST_CHECK(bytes->front() == CYBOU_STATE_VERSION);
+    auto old_version = *bytes;
+    old_version.front() = CYBOU_STATE_VERSION - 1;
+    BOOST_CHECK(!DeserializeCybouState(old_version));
+
+    // A second AccountCreate never claims the same genesis AUTH again.
+    BOOST_CHECK(ApplyAccountCreate(create, network_id, 2, params, state) != AccountCreateStateError::NONE);
+    BOOST_CHECK_EQUAL(state.accounts.at(account).authority, 1'000'001u);
 
     // A reserved label never validates without its genesis grant.
     auto forged = state;
@@ -398,6 +420,8 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     state.onboarding_pool = params.onboarding_bonus;
 
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
+    BOOST_CHECK_EQUAL(state.accounts.at(account).authority, 0U);
+    state.accounts.at(account).authority = 1'000'001;
 
     const IdentityAuthorization next_auth{*new_recovery, *new_authorization};
     const auto account_bytes = account.Value();
@@ -444,6 +468,7 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     const auto new_recovery_id = ComputeRecoveryKeyId(*new_recovery);
     BOOST_REQUIRE(new_recovery_id);
     BOOST_CHECK(rotated.state->identities.FindByRecoveryKeyId(*new_recovery_id) == account);
+    BOOST_CHECK_EQUAL(rotated.state->accounts.at(account).authority, 1'000'001U);
     const auto replay = ExecuteBlockOperations(*rotated.state, {operation}, network_id, 2, params);
     BOOST_CHECK(replay.error == BlockExecutionError::INVALID_IDENTITY_ROTATE);
 }
