@@ -17,8 +17,7 @@ namespace cybou {
 
 enum class NetworkKind : uint8_t {
     DEVNET = 0,
-    TESTNET = 1,
-    MAINNET = 2,
+    MAINNET = 1,
 };
 
 struct OfficialBootstrapLocator {
@@ -30,13 +29,13 @@ struct OfficialBootstrapLocator {
 /**
  * Standard known official network profile.
  * Contains bootstrap rendezvous locators with transport SPKI pins
- * and the initial official Authority / PoA key K0.
+ * and pinned canonical Network Public Key (NetworkID).
  */
 struct OfficialNetworkProfile {
     NetworkKind kind{NetworkKind::DEVNET};
     std::string_view name;
     std::span<const OfficialBootstrapLocator> bootstrap_locators;
-    std::optional<IdentityHybridPublicKey> initial_authority_key;
+    std::span<const unsigned char> network_public_key_bytes;
 };
 
 inline constexpr std::array<OfficialBootstrapLocator, 1> OFFICIAL_DEVNET_BOOTSTRAP_LOCATORS{{
@@ -56,21 +55,14 @@ inline constexpr OfficialNetworkProfile OFFICIAL_DEVNET_PROFILE{
     .kind = NetworkKind::DEVNET,
     .name = "DEVNET",
     .bootstrap_locators = OFFICIAL_DEVNET_BOOTSTRAP_LOCATORS,
-    .initial_authority_key = std::nullopt,
-};
-
-inline constexpr OfficialNetworkProfile OFFICIAL_TESTNET_PROFILE{
-    .kind = NetworkKind::TESTNET,
-    .name = "TESTNET",
-    .bootstrap_locators = {},
-    .initial_authority_key = std::nullopt,
+    .network_public_key_bytes = {},
 };
 
 inline constexpr OfficialNetworkProfile OFFICIAL_MAINNET_PROFILE{
     .kind = NetworkKind::MAINNET,
     .name = "MAINNET",
     .bootstrap_locators = {},
-    .initial_authority_key = std::nullopt,
+    .network_public_key_bytes = {},
 };
 
 } // namespace cybou

@@ -4,6 +4,7 @@
 
 #include <cybou/network_genesis.h>
 #include <cybou/identity_crypto.h>
+#include <cybou/official_networks.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -89,6 +90,24 @@ BOOST_AUTO_TEST_CASE(test_network_key_and_signed_genesis_lifecycle)
     tampered.genesis_state_root = uint256::ZERO;
     BOOST_CHECK(cybou::VerifySignedNetworkGenesis(tampered) != cybou::NetworkGenesisError::NONE);
     BOOST_CHECK(!cybou::VerifiedNetworkGenesis::Create(tampered).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(test_official_network_profiles_constitution)
+{
+    // DEVNET profile checks
+    BOOST_CHECK_EQUAL(static_cast<uint8_t>(cybou::OFFICIAL_DEVNET_PROFILE.kind), 0);
+    BOOST_CHECK_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.name, "DEVNET");
+    BOOST_REQUIRE_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.bootstrap_locators.size(), 1);
+    BOOST_CHECK_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.bootstrap_locators[0].host, "51.255.46.58");
+    BOOST_CHECK_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.bootstrap_locators[0].port, 29461);
+
+    // SPKI pin check
+    BOOST_CHECK_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.bootstrap_locators[0].tls_spki_sha256[0], 0xd8);
+    BOOST_CHECK_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.bootstrap_locators[0].tls_spki_sha256[31], 0xdb);
+
+    // MAINNET profile checks
+    BOOST_CHECK_EQUAL(static_cast<uint8_t>(cybou::OFFICIAL_MAINNET_PROFILE.kind), 1);
+    BOOST_CHECK_EQUAL(cybou::OFFICIAL_MAINNET_PROFILE.name, "MAINNET");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
