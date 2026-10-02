@@ -13,13 +13,14 @@ code from integration and deployment gates.
 
 - All participants run the same full-node software core. Storage and
   Central Authority PoA finalization are optional operational capabilities.
-- Bootstrap is a known rendezvous service distributing signed official
-  network state; it is not a consensus or Identity participant.
+- Bootstrap is an ordinary CYBOU full peer for initial discovery; it has no
+  special consensus powers and runs the same binary.
 - Public P2P admission is France-only in production and DEV (inbound and outbound)
   using local Geo data (fails closed).
-- The finalizer uses the currently Network-Root-authorized hybrid-PQ PoA key operated from the
-  Central Authority desktop. This is a centralized trust model and must not be
-  described as BFT fault tolerance.
+- The finalizer uses the genesis-authorized hybrid-PQ PoA key operated from the
+  Central Authority desktop. This is single-operator finality, not BFT consensus.
+  Advisory Validation attestations from identities with Authority > 1,000,000 are
+  provisional and overridden unconditionally by PoA finality.
 - Generic `RootPublication` is the only application-content publication
   operation. Mail, Files, Backup, filenames, recipients, graph edges, and
   application schemas are private encrypted content.

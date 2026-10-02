@@ -9,10 +9,10 @@ editing an included file.
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
 | AGENTS.md | 247 | 62141d8aa2b5cb52 |
-| CONTRIBUTING.md | 47 | 3728854a9b212287 |
+| CONTRIBUTING.md | 48 | df3c6d55e81cf78a |
 | INSTALL.md | 37 | 72f779b5e99c63c6 |
-| README.md | 115 | 9cf62e126cc1c173 |
-| SECURITY.md | 51 | b7e6b6caa28722bf |
+| README.md | 119 | cace8c63adb10b4b |
+| SECURITY.md | 53 | 533643f4c88164a7 |
 | docs/cybou/00_VISION.md | 73 | 856787283b43882a |
 | docs/cybou/02_ARCHITECTURE.md | 117 | ddf9fda09f12c3e5 |
 | docs/cybou/04_NETWORK_LIFECYCLE.md | 135 | 11ed104022180c96 |
@@ -66,7 +66,7 @@ editing an included file.
 | docs/cybou/OPERATOR_LAB.md | 180 | 99e7d1d387a45b5c |
 | docs/cybou/POA_FINALITY.md | 50 | cccaa78b6a06c308 |
 | docs/cybou/POA_FINALITY_VECTORS.md | 107 | 3d1f06214ad59f4f |
-| docs/cybou/README.md | 84 | 30f5d1c298263408 |
+| docs/cybou/README.md | 85 | 74cb1ed506e72f76 |
 | docs/cybou/ROOT_PUBLICATION.md | 113 | c737c5ee18676159 |
 | docs/cybou/STORAGE_ADMISSION.md | 107 | cf3d78598869b76f |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |
@@ -78,5 +78,5 @@ editing an included file.
 | spec/market_strategy.yaml | 51 | a447525f8d273776 |
 | spec/monetary_model.yaml | 65 | c58bdbf24fd161a9 |
 | spec/onboarding.yaml | 29 | 0f26395eae2874e3 |
-| spec/poa_chunk_tree.yaml | 160 | 64263f8a858fbf4c |
-| www/llms.txt | 69 | d3fe30a6ae2d4a3d |
+| spec/poa_chunk_tree.yaml | 180 | 27047a7da6dcf19c |
+| www/llms.txt | 71 | a3a974cee90e5015 |

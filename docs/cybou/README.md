@@ -76,9 +76,10 @@ from or conflicting with higher levels:
 | [`ENCRYPTED_CHUNK_TREE.md`](ENCRYPTED_CHUNK_TREE.md) | Encrypted ROOT/INDEX/DATA chunk tree structure | Level 2 | Active |
 | [`IDENTITY_DISCOVERY_AND_RECOVERY.md`](IDENTITY_DISCOVERY_AND_RECOVERY.md) | Clean-machine identity restore and publication scanning | Level 2 | Active |
 | [`OPERATOR_LAB.md`](OPERATOR_LAB.md) | Operator commands, multi-node lab, and stress tools | — | LAB only |
-| [`POA_FINALITY.md`](POA_FINALITY.md) | Network-Root-authorized single-operator PoA, anti-equivocation journal | Level 2 | Active |
+| [`POA_FINALITY.md`](POA_FINALITY.md) | Genesis-authorized single-operator PoA, anti-equivocation journal | Level 2 | Active |
 | [`POA_FINALITY_VECTORS.md`](POA_FINALITY_VECTORS.md) | PoA block and certificate test vectors | Level 2 | Active |
 | [`ROOT_PUBLICATION.md`](ROOT_PUBLICATION.md) | Canonical RootPublication wire format and validation | Level 2 | Active |
 | [`STORAGE_ADMISSION.md`](STORAGE_ADMISSION.md) | Merkle inclusion proofs, chunk admission, provider policy | Level 2 | Active |
 | [`UPSTREAM_BASELINE.md`](UPSTREAM_BASELINE.md) | Upstream Bitcoin Core baseline delta and removal plan | — | Historical |
-| [`future/VALIDATION.md`](future/VALIDATION.md) | Archived advisory Validation research | Future | Deferred |
+| [`VALIDATION.md`](VALIDATION.md) | Advisory pre-finalization attestation, eligibility (> 1M Authority), rollback rules | Level 2 | Active |
+| [`future/VALIDATION.md`](future/VALIDATION.md) | Archived historical note on early advisory validation design | Future | Historical |

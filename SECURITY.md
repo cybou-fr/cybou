@@ -12,19 +12,21 @@ reproduce. Do not include real user secrets or recovery phrases.
 
 ## Trust and failure boundaries
 
-- An official profile pins bootstrap IP:port, TLS SPKI and immutable Network
-  Root public key `R`. The pin authenticates the endpoint; only `R` verifies
-  official binding and Authority assignments.
+- An official profile pins bootstrap IP:port, TLS SPKI and the compiled Network
+  Public Key (`NetworkID`). The pin authenticates the endpoint for discovery; only
+  the Network Public Key verifies signed genesis specifications.
 - Bootstrap compromise may deny service or advertise false availability, but
-  cannot produce a root-valid official network. Its outage does not halt an
-  already connected P2P mesh.
-- Compromise of current PoA key `P` threatens finality in its assigned epoch.
-  `P` cannot replace the network, appoint its successor or sign a root-valid
-  binding. Journal rollback and conflicting signing must fail closed.
-- Compromise of private `R` is critical compromise of official network
-  authority. Keep it separate from routine desktop finalization.
-- Full nodes check root assignments, both PoA signature components,
-  operation execution and state roots independently.
+  cannot produce a signed-genesis valid official network. Its outage does not halt
+  an already connected P2P mesh. Bootstrap is an ordinary CYBOU peer with no
+  special consensus powers.
+- Compromise of the active PoA key threatens finality until a newer genesis
+  specification replaces it. The PoA key cannot replace the network, sign genesis,
+  or alter genesis authority. Journal rollback and conflicting signing must fail closed.
+- The Network Private Key is strictly offline and never online (including on DEVNET).
+  Its compromise would allow signing conflicting genesis specifications with higher
+  `genesis_generation`. It must never be stored on bootstrap or PoA machines.
+- Full nodes check genesis signatures, both PoA signature components, operation
+  execution, state roots, and validation attestations independently.
 - Identity Recovery, Authorization, KEM, Network Root, PoA, Release Signing
   and Treasury have separate key purposes and material. No classical-only
   production signature fallback is permitted.

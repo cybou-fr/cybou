@@ -48,9 +48,13 @@ service d'un réseau privé d'entreprise.
   liées à la session TLS.
 - **Finalité.** Les commandes opérateur incluent un finalizer PoA. C'est une
   finalité à opérateur unique, pas un consensus BFT ; chaque nœud vérifie les
-  blocs et les transitions d'état. Le modèle cible distingue la clé racine
-  immuable `R`, qui signe le binding du réseau et les affectations d'autorité,
-  de la clé PoA courante `P`, qui signe les blocs.
+  blocs et les transitions d'état. L'autorité racine du réseau est la clé
+  publique de réseau (NetworkID = Network Public Key), dont la clé privée
+  reste strictement hors-ligne pour signer la genèse (avec `genesis_generation`
+  strictement monotone). La clé PoA autorisée par la genèse signe les blocs.
+  Une pré-validation consultative optionnelle peut être attestée par les identités
+  dont l'autorité dérivée dépasse 1 000 000, mais la finalité PoA prévaut
+  inconditionnellement.
 - **Admission réseau.** Les commandes réseau de `cybou-node` exigent une
   politique d'admission explicite. Le mode `france` utilise une base GeoIP
   validée ; le mode `lab` est réservé aux pairs de test locaux ou privés.
