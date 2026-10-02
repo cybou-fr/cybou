@@ -14,7 +14,7 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 
 ## AUTH and Validation
 
-- exact wire encoding of `AUTH_GRANT`, `AUTH_BURN` and `ValidationSignature`;
+- exact wire encoding of `PoaAuthAdjustment` and `ValidationAttestation`;
 - bounds of the per-node candidate pool and Validation store, gossip rate limits and TTL;
 - re-execution policy for held candidates and signatures when the finalized base advances;
 - AUTH penalty table for verifiable invalid Validation (not frozen).

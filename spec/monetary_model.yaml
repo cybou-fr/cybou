@@ -54,9 +54,10 @@ auth:
   validation_threshold_exclusive: 1000000
   genesis_allocation: true
   finalized_identity_operation_reward: 1
-  account_create_rewarded: true
-  poa_grant: true
-  poa_burn: true
+  account_create_rewarded: false
+  poa_adjustment_operation: PoaAuthAdjustment
+  poa_adjustment_actions: [GRANT, BURN]
+  poa_adjustment_rewarded: false
   burn_floor: 0
   transfer: false
   automatic_penalties: not_frozen

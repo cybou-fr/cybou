@@ -17,6 +17,6 @@ No protocol-level device identity exists. An Identity record has one current Rec
 | Treasury / Custody | Multi-signature hybrid PQ | Protect cold network reserves and custody |
 | Storage Provider | Provider service key | Prove provider identity per live CYP2 session |
 
-Validation requires NO separate validator key role; eligible Identities sign ValidationSignatures using their standard Identity Authorization Key (Ed25519 + ML-DSA-44).
+Validation requires NO separate validator key role; eligible Identities sign ValidationAttestations using their standard Identity Authorization Key (Ed25519 + ML-DSA-44).
 
 Use standard cryptographic libraries and pinned vectors. No classical-only production fallback and no custom cryptographic primitives.

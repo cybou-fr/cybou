@@ -37,7 +37,7 @@ Authority is a canonical non-transferable AUTH account value, included in the
 state root and excluded from CYBOU TotalSupply. AUTH changes only through
 deterministic finalized state transitions: GenesisAllocation claimed once by
 AccountCreate, +1 AUTH per finalized Identity-authorized operation, and
-PoA-only `AUTH_GRANT` / `AUTH_BURN` (floor 0). There is no derived Authority
+PoA-signed `PoaAuthAdjustment` GRANT / BURN (floor 0). There is no derived Authority
 index. Its sole protocol eligibility effect is qualifying an Identity to sign
 Validation when its latest finalized `AccountState.authority > 1,000,000`.
 

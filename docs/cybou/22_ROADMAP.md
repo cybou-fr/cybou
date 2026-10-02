@@ -20,9 +20,9 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 
 ## Phase 3 — AUTH and Validation
 
-- **A — AUTH transitions**: +1 AUTH per finalized Identity-authorized operation (AccountCreate included); PoA-only `AUTH_GRANT` / `AUTH_BURN` with floor 0.
+- **A — AUTH transitions**: +1 AUTH per finalized Identity-authorized operation; one PoA-signed `PoaAuthAdjustment` operation (GRANT / BURN, floor 0).
 - **B — Full-node independent candidate execution**: move `OperationPool` from `CybouFinalizerNode` into `CybouNodeRuntime`; every node executes candidates before relay; PoA produces blocks from the same pool.
-- **C — Validation signatures**: `ValidationSignature` (NetworkID, OperationID, finalized base BlockID, AccountID, Authorization signature), local signing when AUTH > 1,000,000, bounded Validation store, `VALIDATION_SIGNATURE` CYP2 gossip.
+- **C — Validation signatures**: `ValidationAttestation` (NetworkID, OperationID, finalized base BlockID, AccountID, Authorization signature), local signing when AUTH > 1,000,000, bounded Validation store, `VALIDATION_ATTESTATION` CYP2 gossip.
 - **D — UI**: AUTH, Validation eligibility, Submitted / Validated · N / Finalized.
 - **E — Hardening**: evidence for invalid Validation and a frozen AUTH penalty table.
 

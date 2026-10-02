@@ -115,7 +115,7 @@ There is no BFT or validator quorum.
 Authority is a canonical non-transferable AUTH account value committed by the
 state root, separate from CYBOU Balance and System Balance. It changes only
 through finalized transitions (genesis, +1 per finalized Identity-authorized
-operation, PoA `AUTH_GRANT` / `AUTH_BURN`). An Identity whose finalized
+operation, PoA-signed `PoaAuthAdjustment` GRANT / BURN). An Identity whose finalized
 AccountState.authority exceeds 1,000,000 AUTH may add a Validation signature to
 an operation its own node has independently validated. Every receiving node and
 PoA still re-execute the operation.

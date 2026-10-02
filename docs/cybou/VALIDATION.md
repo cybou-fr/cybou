@@ -26,13 +26,13 @@ receive Operation
 -> invalid: reject, do not relay, never sign
 -> valid:   keep in bounded volatile pool, relay
 -> local Identity unlocked and finalized AUTH > 1,000,000?
-   yes: may sign and relay a ValidationSignature
+   yes: may sign and relay a ValidationAttestation
 ```
 
-## Receiving a ValidationSignature
+## Receiving a ValidationAttestation
 
 ```text
-receive Operation + ValidationSignature
+receive Operation + ValidationAttestation
 -> independently validate the Operation (as above); invalid -> discard both
 -> validator AccountID exists in local finalized state
 -> its finalized AUTH > 1,000,000
@@ -52,10 +52,11 @@ validation_eligible(identity) :=
 999,999 and 1,000,000 AUTH are not eligible; 1,000,001 is. There is no
 validator registry, ValidatorSet, `CAP_VALIDATOR`, validator key or staking.
 
-## ValidationSignature
+## ValidationAttestation
 
 ```text
-ValidationSignature:
+ValidationAttestation:
+    version                  1
     network_id               NetworkID
     operation_id             OperationID
     finalized_base_block_id  BlockID of the finalized state the operation was executed on
@@ -76,7 +77,7 @@ fails.
 
 ```text
 Validated := operation locally valid
-             + at least one valid eligible ValidationSignature
+             + at least one valid eligible ValidationAttestation
 ```
 
 `Validated` is informational. It never changes balances, AUTH or any state.
@@ -90,6 +91,6 @@ needs rolling back because Validation created no state.
 
 ## Invalid Validation
 
-A ValidationSignature over an operation that is invalid against the stated
+A ValidationAttestation over an operation that is invalid against the stated
 finalized base block is verifiable evidence. Automatic AUTH penalties for it
 are not frozen; see [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md).

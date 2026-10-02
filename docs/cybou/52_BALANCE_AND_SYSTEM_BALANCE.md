@@ -45,13 +45,12 @@ SystemLock:
 ```text
 Balance        -= X
 System Balance += X
-AUTH unchanged
+AUTH           += 1   (flat finalized-operation reward, independent of X)
 ```
 
 ## AUTH
 
-AUTH is not CYBOU and is excluded from CYBOU supply. Onboarding credit and
-spending System Balance leave AUTH unchanged; System Balance never creates
-AUTH. AUTH issuance and burn are defined in
+AUTH is not CYBOU and is excluded from CYBOU supply. Onboarding credit
+leaves AUTH unchanged, and no CYBOU amount (locked, held or spent) scales AUTH. AUTH issuance and burn are defined in
 [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md). Finalized AUTH above
 1,000,000 enables Validation signatures, never PoA finalization.

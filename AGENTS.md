@@ -65,9 +65,11 @@ Account values (AccountState, committed by the state root):
 AUTH:
     - changes only through deterministic finalized state transitions
     - GenesisAllocation may assign initial AUTH
-    - finalized ordinary Identity action -> +1 AUTH to its authorizing account
-    - AUTH_GRANT (PoA only) -> +N AUTH
-    - AUTH_BURN  (PoA only) -> -N AUTH, floor 0
+    - finalized Identity-authorized operation -> +1 AUTH to its authorizing
+      account; AccountCreate earns nothing (only its genesis AUTH, if any)
+    - PoaAuthAdjustment GRANT (signed by the genesis PoA key) -> +N AUTH
+    - PoaAuthAdjustment BURN  (signed by the genesis PoA key) -> -N AUTH, floor 0
+    - PoaAuthAdjustment itself earns no AUTH
     - no transfer between Identities
     - Authority > 1,000,000 AUTH makes an Identity eligible to sign Validation
     - Authority never grants PoA finalization power
@@ -282,10 +284,11 @@ architecture that is absent from higher levels:
   All three are committed by the finalized state root.
 - AUTH changes only through deterministic finalized transitions:
   GenesisAllocation (claimed exactly once by AccountCreate), +1 AUTH to the
-  authorizing account of every finalized Identity-authorized operation
-  (AccountCreate included), and PoA-only `AUTH_GRANT` (+N) / `AUTH_BURN`
-  (-N, floor 0). AUTH is never transferred between Identities. SystemLock,
-  fees, onboarding credit and storage leave AUTH unchanged.
+  authorizing account of every finalized Identity-authorized operation except
+  AccountCreate, and the PoA-signed `PoaAuthAdjustment` GRANT (+N) / BURN
+  (-N, floor 0). AUTH is never transferred between Identities. Amounts locked,
+  paid as fees, credited at onboarding or stored never scale AUTH; such an
+  operation earns only the flat +1.
 - Authority > 1,000,000 AUTH qualifies an Identity to sign Validation.
 - Authority grants NO PoA finalization power, NO consensus voting rights, NO stake weight,
   and NO balance or resource allocations.

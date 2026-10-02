@@ -19,9 +19,9 @@ define the target. Local uncommitted work is not counted as a released baseline.
 | Consensus bootstrap state | No grants, roster, or `CAP_BOOTSTRAP` | Removed. |
 | Consensus state | Unified current state format | State v11 with canonical AUTH; older decoders removed. |
 | AUTH state | Canonical non-transferable AUTH in AccountState and GenesisAllocation; state root commits it | Implemented (`393657f`): `AccountState.authority`, `GenesisAllocation.authority`, state v11. Legacy AuthorityIndex/AuthorityPolicy removed. Desktop reads AUTH from AccountState (`52c5406`). |
-| AUTH transitions | +1 per finalized Identity-authorized operation; PoA-only `AUTH_GRANT` / `AUTH_BURN` | Not implemented. AUTH changes only via GenesisAllocation claim. |
+| AUTH transitions | +1 per finalized Identity-authorized operation; PoA-signed `PoaAuthAdjustment` GRANT / BURN | Not implemented. AUTH changes only via GenesisAllocation claim. |
 | Candidate execution | Every full node executes candidates before relay; one pool per node, used by PoA for blocks | Not implemented. Ordinary nodes check encoding, signatures and authorization in `EnqueueRelayedOperation` and stage bytes in `OperationRelay`; full execution via `OperationPool::Admit` exists only inside `CybouFinalizerNode`. |
-| Validation | `ValidationSignature` after local execution by an Identity with finalized AUTH > 1,000,000 | Not implemented: no signature type, store, `VALIDATION_SIGNATURE` gossip or Validated status. |
+| Validation | `ValidationAttestation` after local execution by an Identity with finalized AUTH > 1,000,000 | Not implemented: no signature type, store, `VALIDATION_ATTESTATION` gossip or Validated status. |
 | PoA | Sole independent canonical finalizer | Single-operator PoA exists and executes candidates through its own `OperationPool`. |
 
 ## Current DEV VPS deployment

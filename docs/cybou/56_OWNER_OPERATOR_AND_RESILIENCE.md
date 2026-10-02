@@ -30,7 +30,7 @@ Validator Identity (> 1M finalized AUTH):
 - **Bootstrap compromise**: A hostile bootstrap can deny discovery or partition new connections, but cannot forge a genesis signed by the offline Network Private Key or forge PoA block certificates.
 - **PoA compromise**: A stolen `P` threatens canonical block finality, triggering equivocation safety halt across observing nodes. The current network cannot safely continue and requires launching a new NetworkID / genesis cutover. A stolen `P` cannot sign a genesis specification or alter the compiled Network Public Key (`NetworkID`).
 - **Network Private Key compromise**: The Network Private Key signs the immutable genesis once at network creation. Existing official binaries compile that exact signed genesis and initial state and accept no external official replacement, so a stolen key cannot update them in place. The private key remains strictly offline under gitignored `/private/` during provisioning.
-- **Validator compromise**: A compromised Identity with AUTH > 1,000,000 can sign false Validation. Every node re-executes the operation, so it creates no state; PoA may `AUTH_BURN` the Identity.
+- **Validator compromise**: A compromised Identity with AUTH > 1,000,000 can sign false Validation. Every node re-executes the operation, so it creates no state; PoA may BURN AUTH of the Identity.
 - **Verification**: Every full node independently validates signatures, operation rules, and state roots. The operator cannot forge state transitions without detection.
 
 Anti-equivocation protection is strictly enforced by local journals. If equivocation

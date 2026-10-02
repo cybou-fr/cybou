@@ -39,7 +39,7 @@ experimental software, not a public mail or cloud-storage service.
   the genesis-authorized PoA key. Its live route is authenticated per session and then discarded.
 - Authority is canonical non-transferable AUTH in AccountState, excluded from
   CYBOU supply. AUTH changes only by finalized transitions (+1 per finalized identity
-  operation, PoA AUTH_GRANT/AUTH_BURN) and is never transferred. Every full node executes
+  operation, PoA-signed GRANT/BURN adjustments) and is never transferred. Every full node executes
   every candidate; identities with AUTH > 1,000,000 may add Validation signatures as
   evidence only. PoA re-executes everything and alone finalizes.
 - Public P2P admission is France-only in production and DEV (inbound and outbound)

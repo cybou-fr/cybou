@@ -18,21 +18,32 @@ AccountState
 AUTH changes only through deterministic transitions in a PoA-finalized block:
 
 ```text
-GenesisAllocation.authority        -> initial AUTH, claimed once by AccountCreate
-finalized Identity-authorized op   -> +1 AUTH to its authorizing account
-AUTH_GRANT (PoA only)              -> +N AUTH to target account
+GenesisAllocation.authority          -> initial AUTH, claimed once by AccountCreate
+finalized Identity-authorized op     -> +1 AUTH to its authorizing account
+PoaAuthAdjustment GRANT N            -> +N AUTH to target account
 ```
 
-AccountCreate counts as an Identity-authorized operation: the new account
-receives its genesis allocation (if any) plus 1 AUTH. `AUTH_GRANT` and
-`AUTH_BURN` are not Identity-authorized operations and earn no AUTH.
-Submitted or Validated operations earn nothing; only finality does.
+```text
+Payment, SystemLock, IdentityRotate,
+NameCommit, NameReveal, RootPublication  -> +1 AUTH
+AccountCreate                            -> genesis AUTH or 0, no +1
+PoaAuthAdjustment                        -> no +1
+```
+
+The Identity does not exist before its AccountCreate, so a genesis allocation
+of 1,000,001 AUTH stays exactly 1,000,001. Submitted or Validated operations
+earn nothing; only finalized block execution does.
 
 ## Burn
 
 ```text
-AUTH_BURN (PoA only) -> -N AUTH from target account, floor 0
+PoaAuthAdjustment BURN N -> target AUTH -= min(AUTH, N)
 ```
+
+`PoaAuthAdjustment { action: GRANT | BURN, target_account_id, amount, nonce,
+poa_signature }` is signed by the genesis-authorized PoA finalizer key; every
+node verifies that signature itself. GRANT issues new AUTH and BURN destroys
+it.
 
 Automatic penalties require objectively verifiable protocol evidence and are
 not yet frozen. An eligible Identity's Validation signature over an operation
@@ -41,9 +52,9 @@ no automatic penalty rule is defined.
 
 ## No transfer
 
-There is no AUTH transfer between Identities. SystemLock, fees, onboarding
-credit and storage leave AUTH unchanged. IdentityRotate preserves the account
-and its AUTH.
+There is no AUTH transfer between Identities. Locked, paid or stored CYBOU
+amounts never scale AUTH, and onboarding credit leaves it unchanged.
+IdentityRotate preserves the account and its AUTH (and earns the flat +1).
 
 ## Validation eligibility
 

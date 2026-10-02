@@ -44,9 +44,9 @@ Automatic onboarding credit leaves AUTH unchanged.
 
 AUTH has issuance independent from CYBOU, is excluded from the 100 billion
 CYBOU supply and is non-transferable. Finalized Identity activity (+1 AUTH per
-finalized Identity-authorized operation) and explicit PoA `AUTH_GRANT` /
-`AUTH_BURN` change AUTH; see [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md).
-Fees, Balance-to-System Balance locks and onboarding credit never change AUTH.
+finalized Identity-authorized operation) and explicit PoA-signed `PoaAuthAdjustment`
+GRANT / BURN change AUTH; see [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md).
+Fee amounts, locked amounts and onboarding credit never scale AUTH.
 
 ## RootPublication fee
 
