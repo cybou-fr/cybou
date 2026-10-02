@@ -39,7 +39,6 @@ BOOST_AUTO_TEST_CASE(test_network_key_and_signed_genesis_lifecycle)
     // Prepare NetworkGenesis specification
     cybou::NetworkGenesis spec;
     spec.version = cybou::CYBOU_NETWORK_GENESIS_VERSION;
-    spec.genesis_generation = 1;
     spec.network_public_key = *net_pub;
     spec.genesis_state_root = uint256::ONE;
     spec.poa_finalizer_public_key = *poa_pub;
@@ -79,7 +78,7 @@ BOOST_AUTO_TEST_CASE(test_network_key_and_signed_genesis_lifecycle)
     // VerifiedNetworkGenesis high-integrity container
     auto verified = cybou::VerifiedNetworkGenesis::Create(*parsed_spec);
     BOOST_REQUIRE(verified.has_value());
-    BOOST_CHECK_EQUAL(verified->GetGeneration(), 1);
+    BOOST_CHECK(verified->GetGenesisDigest() == digest);
     BOOST_CHECK(verified->GetNetworkPublicKey() == *net_pub);
     BOOST_CHECK_EQUAL(verified->GetInitialAuthority().size(), 1);
     BOOST_CHECK_EQUAL(verified->GetInitialAuthority()[0].initial_authority, 1000001);

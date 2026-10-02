@@ -19,8 +19,7 @@ const std::string STATE_KEY{"cybou/state"};
 const std::string HASH_KEY{"cybou/hash"};
 const std::string HEAD_KEY{"cybou/head"};
 const std::string NETWORK_ID_KEY{"cybou/network-id"};
-const std::string GENESIS_GENERATION_KEY{"cybou/genesis-generation"};
-const std::string GENESIS_ID_KEY{"cybou/genesis-id"};
+const std::string GENESIS_DIGEST_KEY{"cybou/genesis-digest"};
 
 inline std::string BlockKey(const uint256& block_id)
 {
@@ -42,14 +41,12 @@ inline std::string OperationKey(const uint256& op_id)
 CybouStateStore::CybouStateStore(
     KVStore& db,
     CybouNetworkDefinition network_definition,
-    uint64_t genesis_generation,
-    uint256 genesis_id)
+    uint256 genesis_digest)
     : m_db{db},
       m_network_definition{std::move(network_definition)},
       m_network_definition_error{ValidateNetworkDefinition(m_network_definition)},
       m_network_id{NetworkId(m_network_definition)},
-      m_genesis_generation{genesis_generation},
-      m_genesis_id{genesis_id}
+      m_genesis_digest{genesis_digest}
 {
     if (m_network_definition_error == NetworkDefinitionError::NONE) {
         m_poa_conflict_detector = std::make_unique<PoaConflictDetector>(m_db, m_network_id,
@@ -119,9 +116,8 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     batch.Write(HASH_KEY, *state_hash);
     batch.Write(HEAD_KEY, initial_head);
     batch.Write(NETWORK_ID_KEY, m_network_id);
-    batch.Write(GENESIS_GENERATION_KEY, m_genesis_generation);
-    if (!m_genesis_id.IsNull()) {
-        batch.Write(GENESIS_ID_KEY, m_genesis_id);
+    if (!m_genesis_digest.IsNull()) {
+        batch.Write(GENESIS_DIGEST_KEY, m_genesis_digest);
     }
     m_db.WriteBatch(batch, sync);
     return {};
@@ -151,13 +147,9 @@ StateLoadResult CybouStateStore::LoadState() const
     if (*stored_network_id != m_network_id) {
         return {StateLoadError::NETWORK_MISMATCH, std::nullopt};
     }
-    const auto stored_generation{GetStoredGenesisGeneration()};
-    if (stored_generation && *stored_generation != m_genesis_generation) {
-        return {StateLoadError::GENESIS_GENERATION_MISMATCH, std::nullopt};
-    }
-    const auto stored_genesis_id{GetStoredGenesisId()};
-    if (stored_genesis_id && !m_genesis_id.IsNull() && *stored_genesis_id != m_genesis_id) {
-        return {StateLoadError::GENESIS_ID_MISMATCH, std::nullopt};
+    const auto stored_digest{GetStoredGenesisDigest()};
+    if (stored_digest && !m_genesis_digest.IsNull() && *stored_digest != m_genesis_digest) {
+        return {StateLoadError::GENESIS_DIGEST_MISMATCH, std::nullopt};
     }
     if (!m_db.Read(STATE_KEY, bytes) || !m_db.Read(HASH_KEY, stored_hash)) {
         return {StateLoadError::CORRUPT, std::nullopt};
@@ -208,18 +200,11 @@ std::optional<uint256> CybouStateStore::GetStoredNetworkId() const
     return network_id;
 }
 
-std::optional<uint64_t> CybouStateStore::GetStoredGenesisGeneration() const
+std::optional<uint256> CybouStateStore::GetStoredGenesisDigest() const
 {
-    uint64_t generation{0};
-    if (!m_db.Read(GENESIS_GENERATION_KEY, generation)) return std::nullopt;
-    return generation;
-}
-
-std::optional<uint256> CybouStateStore::GetStoredGenesisId() const
-{
-    uint256 genesis_id;
-    if (!m_db.Read(GENESIS_ID_KEY, genesis_id)) return std::nullopt;
-    return genesis_id;
+    uint256 digest;
+    if (!m_db.Read(GENESIS_DIGEST_KEY, digest)) return std::nullopt;
+    return digest;
 }
 
 BlockTransitionResult CybouStateStore::CommitFinalizedBlock(

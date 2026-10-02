@@ -260,7 +260,7 @@ int Execute(const int argc, char* argv[])
     }
     if (argc >= 5 && std::string_view{argv[1]} == "network-genesis-create") {
         // argv[2]: network_key_file, argv[3]: poa_pub_file, argv[4]: out_genesis_file
-        // Optional: argv[5]=gen, argv[6]=boot_rec_id, argv[7]=boot_auth, argv[8]=auth_rec_id, argv[9]=auth_bal, argv[10]=auth_name
+        // Optional: argv[5]=boot_rec_id, argv[6]=boot_auth, argv[7]=auth_rec_id, argv[8]=auth_bal, argv[9]=auth_name
         auto net_key_bytes = cybou::ReadSecretFile(argv[2], 32);
         if (!net_key_bytes || net_key_bytes->size() != 32) throw std::runtime_error("invalid network private key file (requires 32 raw secret bytes)");
         std::array<unsigned char, 32> net_seed{};
@@ -286,29 +286,24 @@ int Execute(const int argc, char* argv[])
             throw std::runtime_error("cannot read/derive PoA public key");
         }
 
-        uint64_t generation = 1;
-        if (argc >= 6 && std::string_view{argv[5]} != "-") {
-            generation = std::stoull(argv[5]);
-        }
-
         auto genesis_state = cybou::CreateDevGenesisState();
         std::vector<cybou::InitialAuthorityAssignment> initial_authority;
 
-        if (argc >= 8 && std::string_view{argv[6]} != "-") {
-            auto boot_id_hex = cybou::ParseUint256UserHex(argv[6]);
+        if (argc >= 7 && std::string_view{argv[5]} != "-") {
+            auto boot_id_hex = cybou::ParseUint256UserHex(argv[5]);
             if (!boot_id_hex) throw std::runtime_error("invalid bootstrap recovery key id hex");
-            uint64_t boot_auth = std::stoull(argv[7]);
+            uint64_t boot_auth = std::stoull(argv[6]);
             cybou::IdentityKeyId id{};
             std::copy(boot_id_hex->begin(), boot_id_hex->end(), id.begin());
             initial_authority.push_back({id, boot_auth});
             genesis_state.genesis_allocations.emplace(id, cybou::GenesisAllocation{.balance = 0, .label = ""});
         }
 
-        if (argc >= 11 && std::string_view{argv[8]} != "-") {
-            auto auth_id_hex = cybou::ParseUint256UserHex(argv[8]);
+        if (argc >= 10 && std::string_view{argv[7]} != "-") {
+            auto auth_id_hex = cybou::ParseUint256UserHex(argv[7]);
             if (!auth_id_hex) throw std::runtime_error("invalid authority recovery key id hex");
-            uint64_t balance = std::stoull(argv[9]);
-            std::string label = argv[10];
+            uint64_t balance = std::stoull(argv[8]);
+            std::string label = argv[9];
             cybou::IdentityKeyId id{};
             std::copy(auth_id_hex->begin(), auth_id_hex->end(), id.begin());
             genesis_state.genesis_allocations.emplace(id, cybou::GenesisAllocation{.balance = balance, .label = label});
@@ -327,7 +322,6 @@ int Execute(const int argc, char* argv[])
 
         cybou::NetworkGenesis spec;
         spec.version = cybou::CYBOU_NETWORK_GENESIS_VERSION;
-        spec.genesis_generation = generation;
         spec.network_public_key = *net_pub;
         spec.genesis_state_root = *state_root;
         spec.poa_finalizer_public_key = *poa_pub;
@@ -357,7 +351,10 @@ int Execute(const int argc, char* argv[])
         out.insert(out.end(), state_bytes->begin(), state_bytes->end());
 
         WriteNewFile(argv[4], out);
-        std::cout << "genesis_generation=" << generation << " state_root=" << state_root->GetHex() << '\n';
+        const auto net_id_bytes = cybou::CanonicalSerializeNetworkPublicKey(*net_pub);
+        std::cout << "network_id=" << HexStr(net_id_bytes)
+                  << " genesis_digest=" << digest.GetHex()
+                  << " state_root=" << state_root->GetHex() << '\n';
         return 0;
     }
     if ((argc == 4 || argc == 6) && std::string_view{argv[1]} == "network-init") {
@@ -726,7 +723,7 @@ const char* Help = R"(CYBOU operator CLI (CYP2 only)
   network keygen-network --out-key FILE
   network keygen-poa --out-key FILE --out-public-key FILE
   network genesis-create --network-key-file FILE --poa-public-key FILE --out FILE
-         [--generation 1] [--bootstrap-recovery-id HEX] [--bootstrap-authority 1000001]
+         [--bootstrap-recovery-id HEX] [--bootstrap-authority 1000001]
          [--authority-recovery-id HEX --authority-balance CYBOU --authority-name LABEL]
   network init-dev --network FILE --key-file FILE
          [--authority-balance CYBOU --authority-name LABEL]
@@ -914,10 +911,9 @@ int Main(int argc, char* argv[])
         opts.Allow({"out-key","out-public-key"});
         args.insert(args.end(),{"network-keygen-poa",opts.Require("out-key"),opts.Require("out-public-key")});
     } else if (group=="network" && action=="genesis-create") {
-        opts.Allow({"network-key-file","poa-public-key","out","generation",
+        opts.Allow({"network-key-file","poa-public-key","out",
             "bootstrap-recovery-id","bootstrap-authority",
             "authority-recovery-id","authority-balance","authority-name"});
-        const std::string gen = opts.Get("generation","1");
         std::string boot_id = "-";
         std::string boot_auth = "-";
         if (opts.Has("bootstrap-recovery-id")) {
@@ -938,7 +934,7 @@ int Main(int argc, char* argv[])
         }
         args.insert(args.end(),{"network-genesis-create",
             opts.Require("network-key-file"),opts.Require("poa-public-key"),opts.Require("out"),
-            gen,boot_id,boot_auth,auth_id,auth_bal,auth_name});
+            boot_id,boot_auth,auth_id,auth_bal,auth_name});
     } else if (group=="network" && action=="init-dev") {
         opts.Allow({"network","key-file","authority-balance","authority-name"});
         args.insert(args.end(),{"network-init",opts.Require("network"),opts.Require("key-file")});

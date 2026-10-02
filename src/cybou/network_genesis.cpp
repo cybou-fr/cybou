@@ -102,7 +102,6 @@ std::vector<unsigned char> SerializeNetworkGenesisPayload(const NetworkGenesis& 
 {
     std::vector<unsigned char> out;
     WriteU8(out, genesis.version);
-    WriteU64LE(out, genesis.genesis_generation);
 
     const auto net_key_bytes = CanonicalSerializeNetworkPublicKey(genesis.network_public_key);
     WriteU32LE(out, static_cast<uint32_t>(net_key_bytes.size()));
@@ -200,8 +199,6 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
 
     const auto version = read_u8();
     if (!version || *version != CYBOU_NETWORK_GENESIS_VERSION) return std::nullopt;
-    const auto gen = read_u64le();
-    if (!gen || *gen == 0) return std::nullopt;
 
     const auto net_key_len = read_u32le();
     if (!net_key_len || pos + *net_key_len > bytes.size()) return std::nullopt;
@@ -279,7 +276,6 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
 
     NetworkGenesis result;
     result.version = *version;
-    result.genesis_generation = *gen;
     result.network_public_key = *net_key;
     result.genesis_state_root = *state_root;
     result.poa_finalizer_public_key = poa_key;
@@ -294,9 +290,6 @@ NetworkGenesisError VerifySignedNetworkGenesis(const NetworkGenesis& genesis)
 {
     if (genesis.version != CYBOU_NETWORK_GENESIS_VERSION) {
         return NetworkGenesisError::UNSUPPORTED_VERSION;
-    }
-    if (genesis.genesis_generation == 0) {
-        return NetworkGenesisError::ZERO_GENERATION;
     }
     if (genesis.network_public_key.purpose != IdentityKeyPurpose::NETWORK_ROOT ||
         genesis.network_public_key.ml_dsa.size() != MLDSA65_PUBLIC_KEY_SIZE ||
@@ -342,8 +335,8 @@ NetworkGenesisError VerifySignedNetworkGenesis(const NetworkGenesis& genesis)
     return NetworkGenesisError::NONE;
 }
 
-VerifiedNetworkGenesis::VerifiedNetworkGenesis(NetworkGenesis genesis, std::vector<unsigned char> network_id_bytes)
-    : m_genesis(std::move(genesis)), m_network_id_bytes(std::move(network_id_bytes))
+VerifiedNetworkGenesis::VerifiedNetworkGenesis(NetworkGenesis genesis, std::vector<unsigned char> network_id_bytes, uint256 genesis_digest)
+    : m_genesis(std::move(genesis)), m_network_id_bytes(std::move(network_id_bytes)), m_genesis_digest(genesis_digest)
 {
 }
 
@@ -353,7 +346,31 @@ std::optional<VerifiedNetworkGenesis> VerifiedNetworkGenesis::Create(NetworkGene
         return std::nullopt;
     }
     auto id_bytes = CanonicalSerializeNetworkPublicKey(genesis.network_public_key);
-    return VerifiedNetworkGenesis(std::move(genesis), std::move(id_bytes));
+    const auto digest = ComputeNetworkGenesisDigest(genesis);
+    return VerifiedNetworkGenesis(std::move(genesis), std::move(id_bytes), digest);
+}
+
+VerifiedNetworkGenesis CreateTestVerifiedGenesis(
+    const CybouNetworkDefinition& definition,
+    const std::vector<InitialAuthorityAssignment>& initial_auth)
+{
+    std::array<unsigned char, 32> net_secret{};
+    net_secret.fill(0x33);
+    auto net_pub = DeriveIdentityPublicKey(net_secret, IdentityKeyPurpose::NETWORK_ROOT);
+    NetworkGenesis spec;
+    spec.version = CYBOU_NETWORK_GENESIS_VERSION;
+    spec.network_public_key = *net_pub;
+    spec.genesis_state_root = definition.genesis_state_root;
+    spec.poa_finalizer_public_key = definition.poa_finalizer_public_key;
+    spec.protocol_parameters = definition.protocol_parameters;
+    spec.initial_authority = initial_auth;
+
+    const auto digest = ComputeNetworkGenesisDigest(spec);
+    auto sig = SignIdentityMessage(net_secret, IdentityKeyPurpose::NETWORK_ROOT,
+        std::span<const unsigned char>{digest.begin(), digest.size()});
+    spec.signature = *sig;
+    auto verified = VerifiedNetworkGenesis::Create(spec);
+    return *verified;
 }
 
 } // namespace cybou

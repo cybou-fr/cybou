@@ -39,7 +39,6 @@ struct InitialAuthorityAssignment {
  */
 struct NetworkGenesis {
     uint8_t version{CYBOU_NETWORK_GENESIS_VERSION};
-    uint64_t genesis_generation{1};
 
     /** Network Public Key (Root authority of this official network). */
     IdentityHybridPublicKey network_public_key{IdentityKeyPurpose::NETWORK_ROOT, {}, {}};
@@ -59,7 +58,6 @@ struct NetworkGenesis {
 enum class NetworkGenesisError : uint8_t {
     NONE,
     UNSUPPORTED_VERSION,
-    ZERO_GENERATION,
     INVALID_NETWORK_KEY,
     NULL_GENESIS_STATE_ROOT,
     INVALID_POA_KEY,
@@ -91,7 +89,7 @@ public:
     static std::optional<VerifiedNetworkGenesis> Create(NetworkGenesis genesis);
 
     const NetworkGenesis& GetGenesis() const noexcept { return m_genesis; }
-    uint64_t GetGeneration() const noexcept { return m_genesis.genesis_generation; }
+    const uint256& GetGenesisDigest() const noexcept { return m_genesis_digest; }
     const IdentityHybridPublicKey& GetNetworkPublicKey() const noexcept { return m_genesis.network_public_key; }
     const uint256& GetGenesisStateRoot() const noexcept { return m_genesis.genesis_state_root; }
     const IdentityHybridPublicKey& GetPoaPublicKey() const noexcept { return m_genesis.poa_finalizer_public_key; }
@@ -102,11 +100,17 @@ public:
     std::span<const unsigned char> GetNetworkId() const noexcept { return m_network_id_bytes; }
 
 private:
-    explicit VerifiedNetworkGenesis(NetworkGenesis genesis, std::vector<unsigned char> network_id_bytes);
+    explicit VerifiedNetworkGenesis(NetworkGenesis genesis, std::vector<unsigned char> network_id_bytes, uint256 genesis_digest);
 
     NetworkGenesis m_genesis;
     std::vector<unsigned char> m_network_id_bytes;
+    uint256 m_genesis_digest{uint256::ZERO};
 };
+
+/** Helper to create a validly signed VerifiedNetworkGenesis for testing from a definition. */
+VerifiedNetworkGenesis CreateTestVerifiedGenesis(
+    const CybouNetworkDefinition& definition,
+    const std::vector<InitialAuthorityAssignment>& initial_auth = {});
 
 /** Canonical byte serialization of any IdentityHybridPublicKey. */
 std::vector<unsigned char> CanonicalSerializeHybridPublicKey(const IdentityHybridPublicKey& key);

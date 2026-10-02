@@ -97,7 +97,6 @@ add_library(cybou_node STATIC
   cybou/finalizer_node.cpp
   cybou/operation_pool.cpp
   cybou/network_definition.cpp
-  cybou/network_trust_store.cpp
   cybou/protocol_operation.cpp
   cybou/identity_operation_coordinator.cpp
   cybou/wallet_service.cpp

@@ -4,6 +4,8 @@
 
 #include <cybou/block_executor.h>
 #include <cybou/network_definition.h>
+#include <cybou/state_store.h>
+#include <cybou/kv_store.h>
 #include <cybou/support_mail.h>
 #include <test/cybou_test_helpers.h>
 #include "cybou_test_identity_helpers.h"
@@ -870,6 +872,40 @@ BOOST_AUTO_TEST_CASE(supply_conservation_invariant_check)
 
     overflow_state.onboarding_pool = 100'000'000'001ULL;
     BOOST_CHECK(ValidateCybouState(overflow_state) == StateValidationError::BALANCE_OVERFLOW);
+}
+
+BOOST_AUTO_TEST_CASE(state_store_verifies_genesis_digest)
+{
+    using namespace cybou;
+    KVStore db(KVStoreOptions{.memory_only = true});
+    const auto genesis_state = CreateDevGenesisState();
+    const auto definition = CreateDevNetworkDefinition(genesis_state, cybou::TestPoaFinalizerPublicKey());
+
+    uint256 expected_digest{};
+    expected_digest.begin()[0] = 0xAA;
+    expected_digest.begin()[1] = 0xBB;
+
+    CybouStateStore store(db, definition, expected_digest);
+    BOOST_CHECK(store.GetGenesisDigest() == expected_digest);
+    const auto init_res = store.InitializeGenesis(genesis_state);
+    BOOST_REQUIRE(init_res);
+
+    const auto stored_digest = store.GetStoredGenesisDigest();
+    BOOST_REQUIRE(stored_digest.has_value());
+    BOOST_CHECK(*stored_digest == expected_digest);
+
+    // Loading with matching store succeeds
+    const auto load_ok = store.LoadState();
+    BOOST_REQUIRE(load_ok);
+    BOOST_CHECK(load_ok.error == StateLoadError::NONE);
+
+    // Loading with mismatched digest fails closed with GENESIS_DIGEST_MISMATCH
+    uint256 wrong_digest{};
+    wrong_digest.begin()[0] = 0xEE;
+    CybouStateStore store_wrong(db, definition, wrong_digest);
+    const auto load_fail = store_wrong.LoadState();
+    BOOST_CHECK(!load_fail);
+    BOOST_CHECK(load_fail.error == StateLoadError::GENESIS_DIGEST_MISMATCH);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
