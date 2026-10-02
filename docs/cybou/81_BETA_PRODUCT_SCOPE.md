@@ -51,8 +51,7 @@ prepare/encrypt locally
 -> Sent / Protected
 ```
 
-Under optional local Validation policy, chunks may be provisionally placed upon
-sufficient eligible Validation signatures, but are purged if PoA conflicts.
+Validation signatures never trigger remote placement.
 Remote durability (`Protected`) always requires verified PoA finality.
 
 ## Beta durability
@@ -106,8 +105,9 @@ reconstruction.
 
 ## Authority
 
-Authority is a canonical non-transferable AUTH account value from the latest
-finalized state. Its sole protocol effect is qualifying an Identity to sign
-provisional Validation attestations when `Authority > 1,000,000 AUTH`.
+AUTH is a canonical network value attached to the Identity, read from the
+latest finalized state. Its sole protocol effect is qualifying an Identity to
+sign Validation when `Authority > 1,000,000 AUTH`. Validation is shown as
+additional pre-finalization confidence, never as a quorum or BFT guarantee.
 It does not allocate resources,
 confer stake weight, or grant PoA finalization power, and is not a gamified social score.

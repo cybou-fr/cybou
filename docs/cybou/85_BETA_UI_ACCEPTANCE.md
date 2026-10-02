@@ -140,17 +140,16 @@ Advanced details expose exact algorithms/evidence.
 [ ] technical evidence remains inspectable through Advanced
 ```
 
-## 10. Validation and provisional lifecycle
+## 10. Validation and AUTH
 
 ```text
 [ ] Validated status never displays as Finalized
-[ ] provisional payment does not modify spendable Balance
-[ ] provisional Mail/File never displays as Sent / Protected
-[ ] conflicting PoA finalization rolls provisional state back unconditionally
-[ ] an operation still valid against the new finalized state returns to Pending / Waiting for confirmation
-[ ] an operation made invalid by the new finalized state is dropped (Failed / Needs attention)
-[ ] provisional storage chunks are purged upon conflicting PoA finalization
-[ ] restart preserves enough provisional metadata for safe reconciliation upon sync
+[ ] Validated shows the eligible validator signature count
+[ ] a Validated payment does not modify spendable Balance
+[ ] a Validated Mail/File never displays as Sent / Protected
+[ ] Balance, System Balance and Authority (AUTH) display from finalized AccountState
+[ ] Validation eligibility displays Yes only when finalized AUTH > 1,000,000
+[ ] no Age, Activity, System contribution or Authority index fields appear
 ```
 
 ## 11. Beta wow-flow

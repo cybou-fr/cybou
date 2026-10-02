@@ -53,31 +53,21 @@ event loop.
 The operation axis is:
 
 ```text
-Local → Preparing → Submitted → Validated (optional, provisional) → Finalized, or Failed
+Local → Preparing → Submitted → Validated (optional) → Finalized, or Failed
 ```
 
-- **Submitted**: staged in volatile relay memory, awaiting confirmation.
-- **Validated**: received at least one valid attestation from an Identity with finalized Authority > 1,000,000 under active local validation policy. Displayed as informational provisional confirmation.
+- **Submitted**: locally executed as valid and held in the volatile candidate pool, awaiting finality.
+- **Validated**: locally valid and holding at least one valid Validation signature from an Identity with finalized AUTH > 1,000,000, displayed as `Validated · N signatures`. Informational only; it changes no Balance, System Balance, AUTH or other state.
 - **Finalized**: included in a valid block signed by the PoA key and independently verified locally. Finalized never regresses.
 - **Failed**: terminal for an exact OperationID unless verified PoA finality includes it.
 
-### Provisional rollback lifecycle
-
-If a conflicting PoA block finalizes, or a new finalized state renders a provisionally
-`Validated` operation invalid:
-```text
-VALIDATED
-    ↓ conflicting/new PoA finalization
-ROLLBACK
-    ↓
-re-evaluate original operation against new FINALIZED state
-    ├─ still valid -> PENDING / SUBMITTED again
-    └─ invalid     -> DROP / FAILED
-```
+When a new finalized block arrives, the node re-executes held candidates
+against it; one that is no longer valid becomes Failed and its Validation
+signatures are dropped. There is no provisional state to roll back.
 
 The separate content axis includes:
 `Local → Preparing → Securing → Protected → Received`, or `Temporarily unavailable` / `Needs attention`.
-Outgoing content remains Local until finality (or provisional admission under local provider policy).
+Outgoing content remains Local until finality.
 Finalized content enters Securing while remote replicas are placed/repaired.
 Development requires 1 remote full replica; Beta requires 2 independent remote full replicas
 (plus local copy = 3 physical copies total). Local encrypted cache does not count toward remote durability.
@@ -93,7 +83,14 @@ are optional operational capabilities. Bootstrap is an ordinary CYBOU full peer
 with a known locator. France-only public P2P admission is mandatory in DEV and production;
 optional VPN/proxy/Tor filtering is local policy. Qt displays core decisions.
 
-Authority is canonical AUTH from the latest finalized `AccountState`, displayed
-beside Balance and System Balance. The controller does not maintain an
-Authority index. Finalized Authority > 1,000,000 AUTH qualifies an Identity
-for provisional Validation; it grants no PoA power.
+The account panel shows, from the latest finalized `AccountState`:
+
+```text
+Balance: X CYBOU
+System Balance: Y CYBOU
+Authority: Z AUTH
+Validation eligible: Yes / No   (Yes iff Z > 1,000,000)
+```
+
+The controller does not maintain an Authority index and shows no Age,
+Activity, System contribution or scanned-height fields. AUTH grants no PoA power.
