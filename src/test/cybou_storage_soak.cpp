@@ -229,7 +229,7 @@ struct Services {
     }
 };
 
-std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::VerifiedNetworkBundle& network,
+std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::OfficialNetwork& network,
     const std::filesystem::path& data_dir, const std::string& ip, std::uint16_t port)
 {
     auto node = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{

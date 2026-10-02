@@ -4,6 +4,7 @@
 
 #include <cybou/network_genesis.h>
 #include <cybou/identity_crypto.h>
+#include <cybou/official_devnet_constants.h>
 #include <cybou/official_networks.h>
 
 #include <boost/test/unit_test.hpp>
@@ -120,8 +121,8 @@ BOOST_AUTO_TEST_CASE(compiled_devnet_is_the_only_official_startup_source)
     const auto& devnet = cybou::RequireOfficialNetwork("devnet");
     const auto network_id = devnet.genesis.GetNetworkId();
     BOOST_CHECK(std::equal(network_id.begin(), network_id.end(),
-        cybou::OFFICIAL_DEVNET_PROFILE.network_public_key_bytes.begin(),
-        cybou::OFFICIAL_DEVNET_PROFILE.network_public_key_bytes.end()));
+        cybou::devnet_constants::NETWORK_ID_BYTES.begin(), cybou::devnet_constants::NETWORK_ID_BYTES.end()));
+    BOOST_CHECK(devnet.kind == cybou::NetworkKind::DEVNET);
     BOOST_CHECK(cybou::CybouStateHash(devnet.genesis_state) == devnet.genesis.GetGenesisStateRoot());
     BOOST_CHECK(devnet.network_definition.poa_finalizer_public_key == devnet.genesis.GetPoaPublicKey());
     BOOST_CHECK(&cybou::RequireOfficialNetwork("DEVNET") == &devnet);
@@ -131,31 +132,16 @@ BOOST_AUTO_TEST_CASE(compiled_devnet_is_the_only_official_startup_source)
     BOOST_CHECK_THROW(cybou::RequireOfficialNetwork(""), std::runtime_error);
 }
 
-BOOST_AUTO_TEST_CASE(test_official_network_profiles_constitution)
+BOOST_AUTO_TEST_CASE(official_bootstrap_locator_is_an_ordinary_rendezvous_peer)
 {
-    // DEVNET profile checks
-    BOOST_CHECK_EQUAL(static_cast<uint8_t>(cybou::OFFICIAL_DEVNET_PROFILE.kind), 0);
-    BOOST_CHECK_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.name, "DEVNET");
-    BOOST_REQUIRE_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.bootstrap_locators.size(), 1);
-    BOOST_CHECK_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.bootstrap_locators[0].host, "51.255.46.58");
-    BOOST_CHECK_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.bootstrap_locators[0].port, 29461);
-
-    // SPKI pin check
-    BOOST_CHECK_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.bootstrap_locators[0].tls_spki_sha256[0], 0xd8);
-    BOOST_CHECK_EQUAL(cybou::OFFICIAL_DEVNET_PROFILE.bootstrap_locators[0].tls_spki_sha256[31], 0xdb);
-
-    // MAINNET profile checks
-    BOOST_CHECK_EQUAL(static_cast<uint8_t>(cybou::OFFICIAL_MAINNET_PROFILE.kind), 1);
-    BOOST_CHECK_EQUAL(cybou::OFFICIAL_MAINNET_PROFILE.name, "MAINNET");
-
-    // Profile lookup checks
-    BOOST_CHECK(cybou::FindOfficialNetworkProfile("DEVNET") == &cybou::OFFICIAL_DEVNET_PROFILE);
-    BOOST_CHECK(cybou::FindOfficialNetworkProfile("MAINNET") == &cybou::OFFICIAL_MAINNET_PROFILE);
-    BOOST_CHECK(cybou::FindOfficialNetworkProfile("UNKNOWN") == nullptr);
-    BOOST_CHECK(cybou::FindOfficialNetworkProfile("TESTNET") == nullptr);
-
-    BOOST_CHECK(cybou::FindOfficialNetworkProfile(cybou::NetworkKind::DEVNET) == &cybou::OFFICIAL_DEVNET_PROFILE);
-    BOOST_CHECK(cybou::FindOfficialNetworkProfile(cybou::NetworkKind::MAINNET) == &cybou::OFFICIAL_MAINNET_PROFILE);
+    const auto& devnet = cybou::RequireOfficialNetwork(cybou::NetworkKind::DEVNET);
+    BOOST_CHECK_EQUAL(devnet.name, "DEVNET");
+    BOOST_REQUIRE_EQUAL(devnet.bootstrap_locators.size(), 1U);
+    BOOST_CHECK_EQUAL(devnet.bootstrap_locators[0].host, "51.255.46.58");
+    BOOST_CHECK_EQUAL(devnet.bootstrap_locators[0].port, 29461);
+    BOOST_CHECK_EQUAL(devnet.bootstrap_locators[0].tls_spki_sha256[0], 0xd8);
+    BOOST_CHECK_EQUAL(devnet.bootstrap_locators[0].tls_spki_sha256[31], 0xdb);
+    BOOST_CHECK_THROW(cybou::RequireOfficialNetwork(cybou::NetworkKind::MAINNET), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

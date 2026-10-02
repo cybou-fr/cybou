@@ -41,12 +41,12 @@ struct Client {
     std::set<cybou::PrivateItemId> verified_files;
     std::vector<cybou::PrivateItemId> expected_incoming_mail;
     std::shared_ptr<cybou::EventWriter> events;
-    Client(const cybou::VerifiedNetworkBundle& net, const std::filesystem::path& dir,
+    Client(const cybou::OfficialNetwork& net, const std::filesystem::path& dir,
            const std::pair<std::string,uint16_t>& peer, const std::string& password, unsigned target) {
         std::filesystem::create_directories(dir);
         events=std::make_shared<cybou::EventWriter>(dir/"client.events.jsonl");
         node=std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
-            .runtime={.network_definition=net.network_definition,.genesis_digest=net.genesis_digest,.data_dir=dir/"node",.p2p_endpoint=peer,.event_writer=events},.genesis=net.genesis_state});
+            .runtime={.network_definition=net.network_definition,.genesis_digest=net.genesis.GetGenesisDigest(),.data_dir=dir/"node",.p2p_endpoint=peer,.event_writer=events},.genesis=net.genesis_state});
         node->Start();
         node->StartNetwork({.sync_interval=500ms},[](const auto&,const auto&,size_t){return true;});
         const auto ready_deadline = std::chrono::steady_clock::now()+120s;
