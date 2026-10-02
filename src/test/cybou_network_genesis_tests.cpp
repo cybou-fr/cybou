@@ -181,6 +181,19 @@ BOOST_AUTO_TEST_CASE(test_cyg1_signed_genesis_bundle_lifecycle)
     BOOST_CHECK(verified_bundle->network_definition.genesis_state_root == *state_root);
     BOOST_CHECK(verified_bundle->network_definition.poa_finalizer_public_key == *poa_pub);
 
+    // CYG1 must reject malformed framing, a noncanonical boolean, and altered state.
+    auto malformed = *bundle_bytes;
+    malformed.pop_back();
+    BOOST_CHECK(!cybou::VerifyNetworkGenesisBundle(malformed));
+    malformed = *bundle_bytes;
+    malformed.back() ^= 1;
+    BOOST_CHECK(!cybou::VerifyNetworkGenesisBundle(malformed));
+    auto signed_genesis = cybou::SerializeSignedNetworkGenesis(spec);
+    const auto unsigned_payload = cybou::SerializeNetworkGenesisPayload(spec);
+    const size_t boolean_offset = unsigned_payload.size() - 4 - spec.initial_authority.size() * 40 - 1;
+    signed_genesis[boolean_offset] = 2;
+    BOOST_CHECK(!cybou::DeserializeSignedNetworkGenesis(signed_genesis));
+
     // Transparent deserialization via DeserializeCybouNetworkFile
     auto net_file = cybou::DeserializeCybouNetworkFile(*bundle_bytes);
     BOOST_REQUIRE(net_file.has_value());
@@ -218,6 +231,15 @@ BOOST_AUTO_TEST_CASE(test_official_network_profiles_constitution)
     // MAINNET profile checks
     BOOST_CHECK_EQUAL(static_cast<uint8_t>(cybou::OFFICIAL_MAINNET_PROFILE.kind), 1);
     BOOST_CHECK_EQUAL(cybou::OFFICIAL_MAINNET_PROFILE.name, "MAINNET");
+
+    // Profile lookup checks
+    BOOST_CHECK(cybou::FindOfficialNetworkProfile("DEVNET") == &cybou::OFFICIAL_DEVNET_PROFILE);
+    BOOST_CHECK(cybou::FindOfficialNetworkProfile("MAINNET") == &cybou::OFFICIAL_MAINNET_PROFILE);
+    BOOST_CHECK(cybou::FindOfficialNetworkProfile("UNKNOWN") == nullptr);
+    BOOST_CHECK(cybou::FindOfficialNetworkProfile("TESTNET") == nullptr);
+
+    BOOST_CHECK(cybou::FindOfficialNetworkProfile(cybou::NetworkKind::DEVNET) == &cybou::OFFICIAL_DEVNET_PROFILE);
+    BOOST_CHECK(cybou::FindOfficialNetworkProfile(cybou::NetworkKind::MAINNET) == &cybou::OFFICIAL_MAINNET_PROFILE);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

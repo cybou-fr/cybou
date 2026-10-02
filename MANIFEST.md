@@ -25,10 +25,10 @@ editing an included file.
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 55 | 2f810a7d55c332cf |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 37 | b48c49a7d3ecbabd |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 29 | 19903cb840187af8 |
+| docs/cybou/22_ROADMAP.md | 29 | 83a0ed7262cef0c2 |
 | docs/cybou/24_DECISIONS.md | 117 | 27537030f6fcacd3 |
-| docs/cybou/25_OPEN_QUESTIONS.md | 50 | ff83db3ee61b5169 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 38 | da72168e2f021033 |
+| docs/cybou/25_OPEN_QUESTIONS.md | 50 | 64a72d1fc22796e2 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 38 | eae3e2382ffaeee9 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 57 | 7e61a1d65515ce76 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | f82d26a4d1681de3 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |

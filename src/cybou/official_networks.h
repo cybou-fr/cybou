@@ -6,7 +6,9 @@
 #define CYBOU_OFFICIAL_NETWORKS_H
 
 #include <cybou/identity_crypto.h>
+#include <uint256.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -28,14 +30,15 @@ struct OfficialBootstrapLocator {
 
 /**
  * Standard known official network profile.
- * Contains bootstrap rendezvous locators with transport SPKI pins
- * and pinned canonical Network Public Key (NetworkID).
+ * Contains bootstrap rendezvous locators with transport SPKI pins,
+ * pinned canonical Network Public Key (NetworkID), and expected GenesisDigest.
  */
 struct OfficialNetworkProfile {
     NetworkKind kind{NetworkKind::DEVNET};
     std::string_view name;
-    std::span<const OfficialBootstrapLocator> bootstrap_locators;
     std::span<const unsigned char> network_public_key_bytes;
+    uint256 genesis_digest{};
+    std::span<const OfficialBootstrapLocator> bootstrap_locators;
 };
 
 inline constexpr std::array<OfficialBootstrapLocator, 1> OFFICIAL_DEVNET_BOOTSTRAP_LOCATORS{{
@@ -54,16 +57,52 @@ inline constexpr std::array<OfficialBootstrapLocator, 1> OFFICIAL_DEVNET_BOOTSTR
 inline constexpr OfficialNetworkProfile OFFICIAL_DEVNET_PROFILE{
     .kind = NetworkKind::DEVNET,
     .name = "DEVNET",
-    .bootstrap_locators = OFFICIAL_DEVNET_BOOTSTRAP_LOCATORS,
     .network_public_key_bytes = {},
+    .genesis_digest = {},
+    .bootstrap_locators = OFFICIAL_DEVNET_BOOTSTRAP_LOCATORS,
 };
 
 inline constexpr OfficialNetworkProfile OFFICIAL_MAINNET_PROFILE{
     .kind = NetworkKind::MAINNET,
     .name = "MAINNET",
-    .bootstrap_locators = {},
     .network_public_key_bytes = {},
+    .genesis_digest = {},
+    .bootstrap_locators = {},
 };
+
+inline const OfficialNetworkProfile* FindOfficialNetworkProfile(std::string_view name)
+{
+    if (name == OFFICIAL_DEVNET_PROFILE.name) return &OFFICIAL_DEVNET_PROFILE;
+    if (name == OFFICIAL_MAINNET_PROFILE.name) return &OFFICIAL_MAINNET_PROFILE;
+    return nullptr;
+}
+
+inline const OfficialNetworkProfile* FindOfficialNetworkProfile(NetworkKind kind)
+{
+    switch (kind) {
+    case NetworkKind::DEVNET: return &OFFICIAL_DEVNET_PROFILE;
+    case NetworkKind::MAINNET: return &OFFICIAL_MAINNET_PROFILE;
+    }
+    return nullptr;
+}
+
+inline const OfficialNetworkProfile* FindOfficialNetworkProfile(std::span<const unsigned char> network_id)
+{
+    if (network_id.empty()) return nullptr;
+    for (const auto* profile : {&OFFICIAL_DEVNET_PROFILE, &OFFICIAL_MAINNET_PROFILE}) {
+        if (!profile->network_public_key_bytes.empty() &&
+            profile->network_public_key_bytes.size() == network_id.size() &&
+            std::equal(network_id.begin(), network_id.end(), profile->network_public_key_bytes.begin())) {
+            return profile;
+        }
+    }
+    return nullptr;
+}
+
+inline bool IsOfficialNetwork(std::span<const unsigned char> network_id)
+{
+    return FindOfficialNetworkProfile(network_id) != nullptr;
+}
 
 } // namespace cybou
 

@@ -7,12 +7,12 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 
 1. **Constitutional documentation alignment**: establish single truth across Level 0, 1, and 2 documents (Completed in `AGENTS.md`, `24_DECISIONS.md`, `02_ARCHITECTURE.md`, `04_NETWORK_LIFECYCLE.md`, `VALIDATION.md`, and core domain specs).
 2. **State & transport cleanup**: completely eliminate obsolete bootstrap Identity, consensus grants, `CAP_BOOTSTRAP`, and legacy state decoders; establish clean `CYBOU_STATE_VERSION = 10` (Completed in code HEAD `0437427`).
-3. **Network Key and immutable signed genesis**: define exact Network Public Key wire format (`NetworkID = Network Public Key`), immutable signed genesis encoding (`CYG1`), and official profile pinning (`GenesisDigest`).
+3. **Network Key and immutable signed genesis**: canonical Network Public Key encoding, CYG1 signing, digest and verified bundle reader are implemented. Official profile pins, bundled release artifact and runtime integration remain open.
 
 ## Phase 2 — Network identity and bootstrap transition
 
 4. **NetworkID transition**: transition `NetworkId` from SHA256 definition hash to exact Network Public Key.
-5. **Official profile cleanup**: restrict official profiles to DEVNET and MAINNET (remove legacy TESTNET profile).
+5. **Official profile cleanup**: DEVNET and MAINNET are the only declared profiles (completed); populate and enforce their NetworkID and GenesisDigest pins before official startup.
 6. **VPS bootstrap conversion**: transition DEV VPS from standalone `cybou-bootstrap.service` prototype to an ordinary full-peer running `cybou-node`.
 
 ## Phase 3 — Validation and provisional lifecycle

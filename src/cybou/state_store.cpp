@@ -148,7 +148,7 @@ StateLoadResult CybouStateStore::LoadState() const
         return {StateLoadError::NETWORK_MISMATCH, std::nullopt};
     }
     const auto stored_digest{GetStoredGenesisDigest()};
-    if (stored_digest && !m_genesis_digest.IsNull() && *stored_digest != m_genesis_digest) {
+    if (!m_genesis_digest.IsNull() && (!stored_digest || *stored_digest != m_genesis_digest)) {
         return {StateLoadError::GENESIS_DIGEST_MISMATCH, std::nullopt};
     }
     if (!m_db.Read(STATE_KEY, bytes) || !m_db.Read(HASH_KEY, stored_hash)) {

@@ -239,7 +239,7 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
     const auto kem_xwing = read_u8();
     if (!work_bits || !epoch_lag || !max_creates || !onboarding_bonus || !epoch_blocks ||
         !payment_fee || !per_kib || !per_chunk || !name_work || !name_min_depth ||
-        !name_max_life || !max_pending_names || !kem_xwing) return std::nullopt;
+        !name_max_life || !max_pending_names || !kem_xwing || *kem_xwing > 1) return std::nullopt;
 
     p.account_creation_work_bits = *work_bits;
     p.account_creation_epoch_lag = *epoch_lag;
@@ -311,6 +311,9 @@ NetworkGenesisError VerifySignedNetworkGenesis(const NetworkGenesis& genesis)
         return NetworkGenesisError::INVALID_PROTOCOL_PARAMETERS;
     }
 
+    if (genesis.initial_authority.size() > 128) {
+        return NetworkGenesisError::INVALID_INITIAL_AUTHORITY;
+    }
     for (size_t i = 0; i < genesis.initial_authority.size(); ++i) {
         const auto& entry = genesis.initial_authority[i];
         if (entry.initial_authority == 0 ||
@@ -412,7 +415,7 @@ std::optional<std::vector<unsigned char>> SerializeNetworkGenesisBundle(
 
 std::optional<VerifiedNetworkBundle> VerifyNetworkGenesisBundle(const std::span<const unsigned char> bytes)
 {
-    if (bytes.size() < 12 || bytes.size() > 20 * 1024 * 1024) {
+    if (bytes.size() < 12 || bytes.size() > 20 * 1024 * 1024 + 12) {
         return std::nullopt;
     }
     if (bytes[0] != 'C' || bytes[1] != 'Y' || bytes[2] != 'G' || bytes[3] != '1') {
@@ -428,24 +431,29 @@ std::optional<VerifiedNetworkBundle> VerifyNetworkGenesisBundle(const std::span<
     };
 
     const uint32_t genesis_len = read_u32le(4);
-    if (genesis_len == 0 || 8 + genesis_len + 4 > bytes.size()) {
+    if (genesis_len == 0 || genesis_len > 4 * 1024 * 1024 ||
+        static_cast<size_t>(genesis_len) > bytes.size() - 12) {
         return std::nullopt;
     }
 
     const size_t state_offset = 8 + genesis_len;
     const uint32_t state_len = read_u32le(state_offset);
-    if (state_offset + 4 + state_len != bytes.size()) {
+    if (state_len == 0 || state_len > 16 * 1024 * 1024 ||
+        static_cast<size_t>(state_len) != bytes.size() - state_offset - 4) {
         return std::nullopt;
     }
 
     auto parsed_genesis = DeserializeSignedNetworkGenesis(bytes.subspan(8, genesis_len));
-    if (!parsed_genesis) return std::nullopt;
+    if (!parsed_genesis || SerializeSignedNetworkGenesis(*parsed_genesis) !=
+        std::vector<unsigned char>(bytes.begin() + 8, bytes.begin() + state_offset)) return std::nullopt;
 
     auto verified_genesis = VerifiedNetworkGenesis::Create(*parsed_genesis);
     if (!verified_genesis) return std::nullopt;
 
     auto state = DeserializeCybouState(bytes.subspan(state_offset + 4, state_len));
-    if (!state) return std::nullopt;
+    if (!state || SerializeCybouState(*state) !=
+        std::optional<std::vector<unsigned char>>(std::vector<unsigned char>(
+            bytes.begin() + state_offset + 4, bytes.end()))) return std::nullopt;
 
     if (ValidateCybouState(*state) != StateValidationError::NONE) {
         return std::nullopt;
@@ -486,7 +494,7 @@ std::optional<VerifiedNetworkBundle> LoadNetworkGenesisBundle(const std::filesys
 {
     std::error_code ec;
     const auto file_size = std::filesystem::file_size(path, ec);
-    if (ec || file_size < 12 || file_size > 20 * 1024 * 1024) return std::nullopt;
+    if (ec || file_size < 12 || file_size > 20 * 1024 * 1024 + 12) return std::nullopt;
 
     std::ifstream stream(path, std::ios::binary);
     if (!stream.is_open()) return std::nullopt;

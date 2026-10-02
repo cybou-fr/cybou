@@ -42,6 +42,8 @@ class PoaSigner;
 
 struct NodeRuntimeConfig {
     CybouNetworkDefinition network_definition;
+    /** Exact digest of a verified signed genesis; required by CYG1 startup. */
+    uint256 genesis_digest{};
     std::filesystem::path data_dir;
     std::optional<Secret32> poa_finalizer_recovery_entropy{std::nullopt};
     std::optional<std::pair<std::string, uint16_t>> p2p_endpoint{std::nullopt};

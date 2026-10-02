@@ -906,6 +906,15 @@ BOOST_AUTO_TEST_CASE(state_store_verifies_genesis_digest)
     const auto load_fail = store_wrong.LoadState();
     BOOST_CHECK(!load_fail);
     BOOST_CHECK(load_fail.error == StateLoadError::GENESIS_DIGEST_MISMATCH);
+
+    // A database initialized without a digest must not be accepted by a CYG1 runtime.
+    KVStore legacy_db(KVStoreOptions{.memory_only = true});
+    CybouStateStore legacy_store(legacy_db, definition);
+    BOOST_REQUIRE(legacy_store.InitializeGenesis(genesis_state));
+    CybouStateStore pinned_store(legacy_db, definition, expected_digest);
+    const auto missing_digest = pinned_store.LoadState();
+    BOOST_CHECK(!missing_digest);
+    BOOST_CHECK(missing_digest.error == StateLoadError::GENESIS_DIGEST_MISMATCH);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

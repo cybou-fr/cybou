@@ -75,11 +75,6 @@ void WriteNewFile(const std::filesystem::path& path, const std::vector<unsigned 
     }
 }
 
-void PutU32(std::vector<unsigned char>& out, const uint32_t value)
-{
-    for (unsigned i = 0; i < 4; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
-}
-
 uint16_t Port(const char* value)
 {
     unsigned number{0};
@@ -274,16 +269,9 @@ int Execute(const int argc, char* argv[])
 
         auto poa_pub_bytes = ReadFile(argv[3], 4096);
         auto poa_pub = cybou::CanonicalDeserializeHybridPublicKey(poa_pub_bytes, cybou::IdentityKeyPurpose::POA_FINALIZER);
-        if (!poa_pub && poa_pub_bytes.size() == 32) {
-            // Also allow supplying 32-byte secret seed as fallback
-            std::array<unsigned char, 32> poa_seed{};
-            std::copy(poa_pub_bytes.begin(), poa_pub_bytes.end(), poa_seed.begin());
-            poa_pub = cybou::DeriveIdentityPublicKey(poa_seed, cybou::IdentityKeyPurpose::POA_FINALIZER);
-            cybou::crypto::CleanseMemory(poa_seed.data(), poa_seed.size());
-        }
         if (!poa_pub) {
             cybou::crypto::CleanseMemory(net_seed.data(), net_seed.size());
-            throw std::runtime_error("cannot read/derive PoA public key");
+            throw std::runtime_error("PoA key file must contain a canonical public key");
         }
 
         auto genesis_state = cybou::CreateDevGenesisState();
@@ -349,45 +337,9 @@ int Execute(const int argc, char* argv[])
                   << " state_root=" << state_root->GetHex() << '\n';
         return 0;
     }
-    if ((argc == 4 || argc == 6) && std::string_view{argv[1]} == "network-init") {
-        auto poa_seed_bytes = ReadFile(argv[3], 32);
-        if (poa_seed_bytes.size() != 32) throw std::runtime_error("PoA finalizer key file must contain exactly 32 raw bytes");
-        std::array<unsigned char, 32> poa_seed{};
-        std::copy(poa_seed_bytes.begin(), poa_seed_bytes.end(), poa_seed.begin());
-        cybou::crypto::CleanseMemory(poa_seed_bytes.data(), poa_seed_bytes.size());
-        const auto poa_finalizer_key = cybou::DeriveIdentityPublicKey(poa_seed, cybou::IdentityKeyPurpose::POA_FINALIZER);
-        // The operator recovery phrase is also the authority Identity: its
-        // AccountCreate later claims the genesis allocation (Balance + name).
-        const auto authority_recovery_key = cybou::DeriveIdentityPublicKey(poa_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
-        cybou::crypto::CleanseMemory(poa_seed.data(), poa_seed.size());
-        if (!poa_finalizer_key) throw std::runtime_error("cannot derive PoA finalizer public key");
-
-        auto genesis = cybou::CreateDevGenesisState();
-        if (argc == 6) {
-            const auto recovery_id = authority_recovery_key ? cybou::ComputeRecoveryKeyId(*authority_recovery_key) : std::nullopt;
-            if (!recovery_id) throw std::runtime_error("cannot derive authority recovery key");
-            const auto balance = std::stoull(argv[4]);
-            genesis.genesis_allocations.emplace(*recovery_id, cybou::GenesisAllocation{.balance = balance, .label = argv[5]});
-            if (cybou::ValidateCybouState(genesis) != cybou::StateValidationError::NONE) {
-                throw std::runtime_error("invalid authority genesis allocation (balance or name)");
-            }
-        }
-        const auto definition = cybou::CreateDevNetworkDefinition(genesis, *poa_finalizer_key);
-        auto definition_bytes = cybou::SerializeNetworkDefinition(definition);
-        auto state_bytes = cybou::SerializeCybouState(genesis);
-        if (!state_bytes) throw std::runtime_error("cannot serialize genesis state");
-        std::vector<unsigned char> out{'C', 'Y', 'N', '1'};
-        PutU32(out, definition_bytes.size());
-        out.insert(out.end(), definition_bytes.begin(), definition_bytes.end());
-        PutU32(out, state_bytes->size());
-        out.insert(out.end(), state_bytes->begin(), state_bytes->end());
-        WriteNewFile(argv[2], out);
-        std::cout << "network=" << cybou::NetworkId(definition).GetHex() << '\n';
-        return 0;
-    }
     if (argc < 5) throw std::runtime_error("invalid command arguments; use --help");
-    const auto network = cybou::LoadCybouNetworkFile(argv[2]);
-    if (!network) throw std::runtime_error("invalid CYBOU network file");
+    const auto network = cybou::LoadNetworkGenesisBundle(argv[2]);
+    if (!network) throw std::runtime_error("invalid signed CYG1 network bundle");
     std::signal(SIGINT, Stop);
     std::signal(SIGTERM, Stop);
 #ifdef _WIN32
@@ -396,11 +348,11 @@ int Execute(const int argc, char* argv[])
     if (std::string_view{argv[1]} == "operation-status" && argc == 5) {
         const auto op_id = cybou::ParseUint256UserHex(argv[4]);
         if (!op_id || op_id->IsNull()) throw std::runtime_error("invalid OperationID");
-        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+        cybou::NodeRuntimeConfig config{.network_definition = network->network_definition, .genesis_digest = network->genesis_digest,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
         config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
-        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
+        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis_state}};
         node_service.Start();
         auto& runtime = node_service.Runtime();
         const auto result = runtime.FindFinalizedOperation(*op_id);
@@ -417,11 +369,11 @@ int Execute(const int argc, char* argv[])
         return result.status == cybou::FinalizedOperationLookupStatus::NOT_FOUND ? 1 : 2;
     }
     if (std::string_view{argv[1]} == "network-probe" && argc == 6) {
-        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+        cybou::NodeRuntimeConfig config{.network_definition = network->network_definition, .genesis_digest = network->genesis_digest,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
         config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
-        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
+        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis_state}};
         node_service.Start();
         auto& runtime = node_service.Runtime();
         cybou::p2p::PeerManager peers{runtime};
@@ -435,11 +387,11 @@ int Execute(const int argc, char* argv[])
         return 0;
     }
     if (std::string_view{argv[1]} == "network-sync" && argc == 7) {
-        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+        cybou::NodeRuntimeConfig config{.network_definition = network->network_definition, .genesis_digest = network->genesis_digest,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
         config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
-        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
+        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis_state}};
         node_service.Start();
         auto& runtime = node_service.Runtime();
         cybou::p2p::PeerManager peers{runtime};
@@ -452,11 +404,11 @@ int Execute(const int argc, char* argv[])
         return 0;
     }
     if (std::string_view{argv[1]} == "network-follow" && (argc == 6 || argc == 7)) {
-        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+        cybou::NodeRuntimeConfig config{.network_definition = network->network_definition, .genesis_digest = network->genesis_digest,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
         config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
-        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
+        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis_state}};
         node_service.Start();
         auto& runtime = node_service.Runtime();
         const auto until_height = argc == 7 ? std::optional<uint64_t>{TargetHeight(argv[6])} : std::nullopt;
@@ -494,11 +446,11 @@ int Execute(const int argc, char* argv[])
     if (std::string_view{argv[1]} == "network-follow-peers" && (argc == 5 || argc == 6)) {
         const auto endpoints = ReadPeerEndpoints(argv[4]);
         const auto until_height = argc == 6 ? std::optional<uint64_t>{TargetHeight(argv[5])} : std::nullopt;
-        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+        cybou::NodeRuntimeConfig config{.network_definition = network->network_definition, .genesis_digest = network->genesis_digest,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
         config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
-        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
+        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis_state}};
         node_service.Start();
         auto& runtime = node_service.Runtime();
         cybou::p2p::PeerManager peers{runtime};
@@ -563,11 +515,11 @@ int Execute(const int argc, char* argv[])
         const auto bytes = ReadFile(argv[5], cybou::MAX_OPERATION_PAYLOAD_BYTES);
         const auto operation = cybou::DeserializeProtocolOperation(bytes);
         if (!operation) throw std::runtime_error("invalid operation file");
-        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+        cybou::NodeRuntimeConfig config{.network_definition = network->network_definition, .genesis_digest = network->genesis_digest,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
         config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
-        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
+        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis_state}};
         node_service.Start();
         auto& runtime = node_service.Runtime();
         cybou::p2p::PeerManager peers{runtime};
@@ -578,11 +530,11 @@ int Execute(const int argc, char* argv[])
         const auto bytes = ReadFile(argv[6], cybou::MAX_OPERATION_PAYLOAD_BYTES);
         const auto operation = cybou::DeserializeProtocolOperation(bytes);
         if (!operation) throw std::runtime_error("invalid operation file");
-        cybou::NodeRuntimeConfig config{.network_definition = network->definition,
+        cybou::NodeRuntimeConfig config{.network_definition = network->network_definition, .genesis_digest = network->genesis_digest,
             .data_dir = argv[3], .db_cache_bytes = 8 << 20};
         config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
-        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis}};
+        cybou::CybouNodeService node_service{{.runtime = std::move(config), .genesis = network->genesis_state}};
         node_service.Start();
         auto& runtime = node_service.Runtime();
         cybou::p2p::PeerManager peers{runtime};
@@ -604,7 +556,7 @@ int Execute(const int argc, char* argv[])
         const auto bind_address = boost::asio::ip::make_address(argv[5]);
 
         cybou::NodeRuntimeConfig config{
-            .network_definition = network->definition,
+            .network_definition = network->network_definition, .genesis_digest = network->genesis_digest,
             .data_dir = argv[3],
             .poa_finalizer_recovery_entropy = std::move(finalizer_key),
             .db_cache_bytes = 8 << 20,
@@ -618,7 +570,7 @@ int Execute(const int argc, char* argv[])
         config.event_writer = events;
         cybou::CybouNodeService node_service{{
             .runtime = std::move(config),
-            .genesis = network->genesis,
+            .genesis = network->genesis_state,
         }};
         node_service.Start();
         const auto gossip_endpoints = argc >= 9 ? ReadPeerEndpoints(argv[8]) :
@@ -649,7 +601,7 @@ int Execute(const int argc, char* argv[])
         const auto capacity = provider ? CapacityBytes(argv[8]) : 0;
         const auto listen = std::make_pair(bind_address.to_string(), listen_port);
         cybou::NodeRuntimeConfig config{
-            .network_definition = network->definition,
+            .network_definition = network->network_definition, .genesis_digest = network->genesis_digest,
             .data_dir = argv[3],
             .p2p_endpoint = std::make_pair(peer_host, peer_port),
             .local_p2p_endpoint = advertised_endpoint.value_or(listen),
@@ -661,7 +613,7 @@ int Execute(const int argc, char* argv[])
         config.event_writer = events;
         cybou::CybouNodeService node_service{{
             .runtime = std::move(config),
-            .genesis = network->genesis,
+            .genesis = network->genesis_state,
         }};
         node_service.Start();
         if (argc == 9 && explicit_peers.size()) node_service.Runtime().SetExplicitPeerEndpoints(explicit_peers);
@@ -717,8 +669,6 @@ const char* Help = R"(CYBOU operator CLI (CYP2 only)
   network genesis-create --network-key-file FILE --poa-public-key FILE --out FILE
          [--bootstrap-recovery-id HEX] [--bootstrap-authority 1000001]
          [--authority-recovery-id HEX --authority-balance CYBOU --authority-name LABEL]
-  network init-dev --network FILE --key-file FILE
-         [--authority-balance CYBOU --authority-name LABEL]
   network bootstrap
   network probe --network FILE --data-dir DIR --peer IP:PORT
   network sync --network FILE --data-dir DIR --peer IP:PORT [--count 100]
@@ -742,9 +692,10 @@ country database automatically. Optional offline overrides: --geo-country-csv FI
 int Doctor(const cybou::cli::Options& opts)
 {
     opts.Allow({"network","data-dir","listen","peers","key-file"});
-    const auto net = cybou::LoadCybouNetworkFile(opts.Require("network"));
+    const auto net = cybou::LoadNetworkGenesisBundle(opts.Require("network"));
     if (!net) throw std::runtime_error("doctor: invalid network/genesis");
-    std::cout << "Network OK\nNetwork ID " << cybou::NetworkId(net->definition).GetHex() << '\n';
+    std::cout << "Network OK\nNetwork ID " << HexStr(net->genesis.GetNetworkId())
+              << "\nGenesis digest " << net->genesis_digest.GetHex() << '\n';
     auto dir = std::filesystem::absolute(opts.Require("data-dir"));
     auto parent = dir;
     while (!std::filesystem::exists(parent)) parent = parent.parent_path();
@@ -775,7 +726,7 @@ int Doctor(const cybou::cli::Options& opts)
         cybou::crypto::CleanseMemory(bytes.data(),bytes.size());
         auto key = cybou::DeriveIdentityPublicKey(seed,cybou::IdentityKeyPurpose::POA_FINALIZER);
         cybou::crypto::CleanseMemory(seed.data(),seed.size());
-        if (!key || *key != net->definition.poa_finalizer_public_key) throw std::runtime_error("doctor: wrong PoA key");
+        if (!key || *key != net->network_definition.poa_finalizer_public_key) throw std::runtime_error("doctor: wrong PoA key");
         std::cout << "PoA key OK\n";
     }
     // LevelDB has no read-only open. Inspect a stable private COPY, never recover
@@ -799,7 +750,7 @@ int Doctor(const cybou::cli::Options& opts)
         for (const auto& [path,stamp] : before)
             if (std::filesystem::file_size(path)!=stamp.first || std::filesystem::last_write_time(path)!=stamp.second)
                 throw std::runtime_error("doctor: DB changed during read-only snapshot; retry while stopped");
-        cybou::CybouNodeRuntime copy{{.network_definition=net->definition,.data_dir=temp}};
+        cybou::CybouNodeRuntime copy{{.network_definition=net->network_definition,.genesis_digest=net->genesis_digest,.data_dir=temp}};
         const auto status = copy.GetStatus();
         if (!status.is_initialized || status.poa_safety_halted) throw std::runtime_error("doctor: foreign/corrupt/halted DB");
         std::cout << "State OK height=" << status.finalized_height << '\n';
@@ -826,12 +777,12 @@ int StorageCommand(const std::string& action, const cybou::cli::Options& opts)
     opts.Allow({"network","data-dir","peer","chunk-id","vault","password-file","operation-id","replicas",
         "peer-admission","geo-country-csv","geo-sha256","geo-issued-month"});
     if (opts.Has("peer")) ConfigurePeerAdmission(opts, opts.Require("data-dir"));
-    auto net=cybou::LoadCybouNetworkFile(opts.Require("network"));
+    auto net=cybou::LoadNetworkGenesisBundle(opts.Require("network"));
     if (!net) throw std::runtime_error("invalid network");
-    cybou::NodeRuntimeConfig config{.network_definition=net->definition,.data_dir=opts.Require("data-dir")};
+    cybou::NodeRuntimeConfig config{.network_definition=net->network_definition,.genesis_digest=net->genesis_digest,.data_dir=opts.Require("data-dir")};
     config.peer_admission_policy = active_peer_admission_policy;
     if (opts.Has("peer")) config.p2p_endpoint=Endpoint(opts.Get("peer"));
-    cybou::CybouNodeService node{{.runtime=std::move(config),.genesis=net->genesis}};
+    cybou::CybouNodeService node{{.runtime=std::move(config),.genesis=net->genesis_state}};
     node.Start(); auto& runtime=node.Runtime();
     if (action=="verify") {
         auto hex=cybou::ParseUint256UserHex(opts.Require("chunk-id"));
@@ -892,10 +843,11 @@ int Main(int argc, char* argv[])
     std::vector<std::string> args{"cybou-node"};
     if (group=="network" && action=="bootstrap") { opts.Allow({}); args.push_back("network-bootstrap"); }
     else if (group=="network" && action=="info") {
-        opts.Allow({"network"}); auto net=cybou::LoadCybouNetworkFile(opts.Require("network"));
+        opts.Allow({"network"}); auto net=cybou::LoadNetworkGenesisBundle(opts.Require("network"));
         if (!net) throw std::runtime_error("invalid network/genesis");
-        std::cout << "network_id=" << cybou::NetworkId(net->definition).GetHex()
-            << " genesis=" << net->definition.genesis_block_id.GetHex() << '\n'; return 0;
+        std::cout << "network_id=" << HexStr(net->genesis.GetNetworkId())
+            << " genesis_digest=" << net->genesis_digest.GetHex()
+            << " genesis=" << net->network_definition.genesis_block_id.GetHex() << '\n'; return 0;
     } else if (group=="network" && action=="keygen-network") {
         opts.Allow({"out-key"});
         args.insert(args.end(),{"network-keygen-net",opts.Require("out-key")});
@@ -927,12 +879,6 @@ int Main(int argc, char* argv[])
         args.insert(args.end(),{"network-genesis-create",
             opts.Require("network-key-file"),opts.Require("poa-public-key"),opts.Require("out"),
             boot_id,boot_auth,auth_id,auth_bal,auth_name});
-    } else if (group=="network" && action=="init-dev") {
-        opts.Allow({"network","key-file","authority-balance","authority-name"});
-        args.insert(args.end(),{"network-init",opts.Require("network"),opts.Require("key-file")});
-        if (opts.Has("authority-balance") || opts.Has("authority-name")) {
-            args.insert(args.end(),{opts.Require("authority-balance"),opts.Require("authority-name")});
-        }
     } else if ((group=="finalizer" || group=="provider" || group=="observer") && action=="run") {
         if (group=="finalizer") opts.Allow({"network","data-dir","key-file","listen","block-interval","peers","event-log","event-log-mode","capacity","advertise",
             "peer-admission","geo-country-csv","geo-sha256","geo-issued-month"});

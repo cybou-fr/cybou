@@ -123,7 +123,7 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
           .memory_only = m_config.memory_only,
           .wipe_data = m_config.wipe_data,
       })},
-      m_store{*m_db, m_config.network_definition}
+      m_store{*m_db, m_config.network_definition, m_config.genesis_digest}
 {
     std::filesystem::path storage_path;
     if (!m_config.memory_only) {

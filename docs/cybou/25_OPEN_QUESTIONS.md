@@ -5,9 +5,9 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 
 ## Network and cryptographic identity
 
-- exact algorithm and byte encoding of the Network Public Key (`NetworkID = Network Public Key`);
-- exact binary encoding and signature container for the offline-signed genesis;
-- transitional plan for existing SHA256 definition hash usage in internal DBs and wire messages.
+- migration of existing SHA-256 definition-hash usage in runtime, DBs and wire messages to the canonical Network Public Key bytes;
+- exact DEVNET pin values, release bundling and a coordinated clean cutover;
+- retirement of CYN1 and legacy network-init once official startup consumes only verified CYG1.
 
 ## Validation and provisional lifecycle
 
