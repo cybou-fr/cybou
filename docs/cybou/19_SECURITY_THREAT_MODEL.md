@@ -3,28 +3,22 @@
 ## Trust boundaries
 
 - The single PoA operator controls ordering and can censor or stop finality
-  under the active Authority key; it cannot forge Identity authorization or decrypt private content.
+  under the genesis-authorized key; it cannot forge Identity authorization or decrypt private content.
 - Full nodes independently execute operations, verify blocks, and recompute
   state roots.
 - Providers store encrypted chunks and apply local capacity and admission
   policy. Provider IDs prove keys, not independent hosts or operators.
 - The desktop's encrypted Application DB is a local projection, not network
   storage truth.
-- Bootstrap is discovery rendezvous infrastructure. It distributes signed
-  official network state and cannot alter or forge blocks or state transitions.
-- A compromised bootstrap can deny service or lie about availability, but
-  cannot create a binding valid under immutable Network Root `R`. A bootstrap
-  outage does not stop an existing direct mesh.
-- Compromise of current PoA key `P` threatens finality within its assigned
-  epoch but cannot authorize a new network or successor key. Compromise of
-  private `R` is critical compromise of official network authority.
-- Production/DEV public peer admission uses local French-IP classification.
-  This is a node-local routing policy, not a consensus guarantee or proof of a
-  peer's physical location. Missing or corrupt mandatory Geo data fails
-  closed; LAB bypass is explicit and limited to test networking.
-- Optional VPN/proxy/Tor filtering is only as complete as its local data. It
-  does not detect unknown relays or tunnels and does not affect canonical
-  state, Identity, Authority, or PoA.
+- Bootstrap is an ordinary CYBOU full peer with a known locator. It distributes
+  signed genesis and seeds initial discovery, but cannot alter or forge blocks or state transitions.
+
+## Compromise impact analysis
+
+- **Network Private Key compromised**: Attacker can sign a valid newer genesis specification with incremented `genesis_generation`, completely replacing the official network state. Critical root authority compromise. Private key must remain strictly offline at all times.
+- **PoA key compromised**: Attacker can produce equivocating or censoring canonical block certificates within the current network, but cannot forge a new genesis specification or alter the compiled Network Public Key.
+- **Bootstrap compromised**: Attacker can cause discovery denial-of-service, eclipse connecting peers, or partition initial discovery. Cannot forge network-signed genesis or PoA certificates. Outage does not affect an already formed P2P mesh.
+- **Validator Identity (> 1M Authority) compromised**: Attacker can issue false advisory Validation attestations. This may cause peers with `validation.enabled = true` to accept provisional state temporarily, but CANNOT create canonical state. Once PoA publishes a conflicting block or drops the operation, the provisional state is discarded and rolled back unconditionally.
 
 ## Transport and service identity
 
@@ -52,20 +46,10 @@ Finalized status requires locally verified inclusion.
 - Verify full BLAKE3 ChunkID before using fetched bytes.
 - Verify content capsules and encrypted ROOT/INDEX/DATA structures.
 - Keep finality, availability, and durability as separate states.
-- Admit remote chunks only after finalized RootPublication authorization.
+- Default storage admission requires finalized RootPublication authorization Merkle proof.
+- Optional provisional admission by participating providers is purged and rolled back upon PoA conflict.
 - Repair degraded replicas through StorageService policy.
 
 Development targets one remote full replica; Beta targets two independent
-remote full replicas. A local cache does not count as a remote replica.
-
-## Derived Authority
-
-Authority is an informational derived metric. It cannot grant PoA power,
-resource allocation, rewards, or penalties. The PoA finalizer independently
-validates every finalized operation.
-
-## Recovery
-
-Before rotating to a new Identity KEM epoch, protect historical decryption
-capability required for clean recovery through the private RecoveryBridge
-flow.
+remote full replicas (plus local copy = 3 physical copies total).
+A local cache does not count as a remote replica.

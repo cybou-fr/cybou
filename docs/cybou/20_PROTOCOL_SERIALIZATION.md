@@ -10,6 +10,7 @@ check lengths and nesting limits before allocation.
 The active formats are defined by their protocol authorities:
 
 - block and PoA finality: `POA_FINALITY.md`;
+- advisory validation attestations: `VALIDATION.md`;
 - deterministic application encoding: `ROOT_PUBLICATION.md`;
 - encrypted payload and chunk tree: `ENCRYPTED_CHUNK_TREE.md`;
 - provider admission proofs: `STORAGE_ADMISSION.md`;
@@ -32,5 +33,5 @@ the key role; missing post-quantum components fail closed.
 Product releases, network definitions, consensus encodings, storage profiles,
 and cryptographic suites have separate version lifecycles. Source and public
 API names remain canonical and unversioned. Version bytes exist inside wire
-and vault encodings only. The protocol reset does not include legacy decoders,
-automatic import, or dual-format operation.
+and vault encodings only. State serialization uses canonical version 10 (`CYBOU_STATE_VERSION = 10`).
+The protocol reset does not include legacy decoders, automatic import, or dual-format operation.

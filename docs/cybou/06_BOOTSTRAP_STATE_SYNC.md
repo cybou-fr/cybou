@@ -2,37 +2,38 @@
 
 ## Node roles
 
-Every node validates the same canonical chain. The root-authorized PoA signer
-orders and finalizes blocks; it does not replace full-node validation. Ordinary
-desktop nodes may prune old block bodies after retaining the state and evidence
-required by the active product and protocol.
+Every node validates the same canonical chain. The Central Authority PoA finalizer
+executes candidates independently and signs finalized blocks; it does not replace
+full-node validation. Ordinary desktop nodes may prune old block bodies after
+retaining the state and evidence required by the active product and protocol.
 
 ## Initial synchronization
 
-Network existence, initial claim, and network replacement are defined by
-[`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md).
-This document covers syncing after a network definition has been authenticated
-and installed; a peer or successful sync connection is not itself the network
-trust anchor.
+Network profiles (DEVNET, MAINNET), Network Public Key (`NetworkID`), and
+network replacement are defined in [`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md).
 
-The initial implementation synchronizes finalized blocks from the network
-definition's genesis in height order:
+Bootstrap is an ordinary CYBOU full peer with a known IP:port and TLS SPKI pin.
+It is a trusted initial discovery peer, but is NOT trusted to define canonical
+truth or replace cryptographic verification.
+
+Synchronization proceeds from the compiled Network Public Key:
 
 ```text
-verified OfficialNetworkBinding and exact network definition
--> genesis state and genesis block ID
--> root-signed Authority assignment for each block height
--> PoA certificate verification for each next block
--> deterministic operation execution
--> resulting state-root verification
--> canonical finalized state
+compiled Network Public Key (NetworkID)
+-> connect to known bootstrap IP:port via standard CYP2 protocol
+-> receive offline-signed genesis and verify Network Key signature
+-> verify genesis_generation > installed_generation (anti-rollback)
+-> initialize genesis state and genesis block ID
+-> synchronize PoA-finalized blocks in height order
+-> independently execute operations for each block
+-> verify resulting state root against PoA certificate
+-> canonical finalized state achieved
 ```
 
 Peers are untrusted data sources. A peer's reputation, claimed height, or
 snapshot is never a substitute for local signature, parent, operation, and
-state-root verification. The installed profile's immutable Network Root `R`
-authenticates the binding and Authority assignments; genesis defines the
-network and initial state.
+state-root verification. The compiled Network Public Key authenticates genesis;
+genesis defines the network, initial state, initial Authority baselines, and PoA key.
 
 ## Pruning and snapshots
 

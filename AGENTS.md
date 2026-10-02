@@ -21,7 +21,7 @@ Network Private Key:
     - never used online
     - never stored on bootstrap
     - never stored on PoA
-    - owner can create/recreate/edit signed genesis
+    - owner can create/recreate/edit signed genesis with monotonic genesis_generation
     - owner is the root authority of that network
 
 Bootstrap:
@@ -59,6 +59,7 @@ PoA:
     - trusts no validator/bootstrap/peer state
     - valid -> signs/finalizes
     - invalid -> drops
+    - owns no special canonical pending state; only finalized state is canonical
 
 Canonical truth:
     latest valid PoA-finalized state
@@ -78,37 +79,25 @@ No:
 
 ## DEV VPS deployment — migration state
 
-There is no production network. The DEV VPS runs an ordinary CYBOU full node
-process. Its pinned TLS endpoint is the approved DEV Bootstrap locator
-(`51.255.46.58:29461`). This assigns discovery trust to that live TLS key only;
-it grants no consensus role, no special protocol capability, and does not make
-the bootstrap a separate node class. The target uses one full-node core software
-with optional storage and PoA finalization capabilities, with the currently authorized
-PoA key holder finalizing from the Central Authority desktop. France-only public peer admission
-is mandatory in production/DEV. The planned new-genesis DEV cutover replaces the
-legacy testnet; it is not a production-network migration.
-- Central Authority is identified by the PoA key authorized by network genesis.
+There is no production network.
+- **Target architecture**: The DEV bootstrap is an ordinary CYBOU full peer process.
+- **Current migration state**: The DEV VPS currently runs the standalone prototype
+  `cybou-bootstrap.service` (`/home/debian/cybou/build/bin/cybou-bootstrap serve` on `0.0.0.0:29461`,
+  state in `/var/lib/cybou/bootstrap/state`, TLS files under `/etc/cybou-bootstrap/tls/`)
+  until the coordinated migration to the ordinary CYBOU full-peer service.
+- Its pinned TLS endpoint is the approved DEV Bootstrap locator (`51.255.46.58:29461`);
+  its SPKI SHA-256 pin is compiled in `src/cybou/official_networks.h` for initial transport
+  discovery only. This grants no consensus role, no special protocol capability, and does not make
+  the bootstrap a separate node class.
+- The target uses one full-node core software with optional storage and PoA finalization
+  capabilities, with the authorized PoA key holder finalizing from the Central Authority desktop.
+  France-only public peer admission is mandatory in production/DEV.
+- Central Authority is identified solely by the PoA key authorized by network genesis.
   Never add a persistent Authority IP, host, endpoint, or NodeID to bootstrap
   state or consensus. Authenticate its current route per live session and
   discard that route on disconnect.
-
-- After changing CYBOU core or `cybou-node`, run relevant tests, rebuild the
-  affected DEV executable on the VPS, and restart its systemd service in the
-  same task.
-- Connect as `debian@vps-d0669a91.vps.ovh.net`; checkout:
-  `/home/debian/cybou`; service binary:
-  `/home/debian/cybou/build/bin/cybou-node`.
-- Preserve the current executable for rollback, restart with systemd, then
-  verify service health and listening port. Finalized-height checks apply only
-  when a finalizer is deployed.
-- Current DEV service: `cybou-bootstrap.service` runs
-  `/home/debian/cybou/build/bin/cybou-bootstrap serve` on `0.0.0.0:29461`,
-  with state in `/var/lib/cybou/bootstrap/state` and TLS files under
-  `/etc/cybou-bootstrap/tls/`. SSH listens on port 22. The legacy
-  `cybou-node.service` finalizer and both provider services are inactive.
-- The DEV locator is `51.255.46.58:29461`; its SPKI SHA-256 pin is compiled
-  in `src/cybou/official_networks.h`. The pin authenticates this TLS endpoint
-  for initial transport discovery only. Do not infer PoA or consensus authority from it.
+- Connect as `debian@vps-d0669a91.vps.ovh.net`; checkout: `/home/debian/cybou`;
+  service binary: `/home/debian/cybou/build/bin/cybou-node`.
 
 ## Network and node architecture
 
@@ -119,20 +108,21 @@ legacy testnet; it is not a production-network migration.
   Each profile pins the compiled Network Public Key (`NetworkID`), the bootstrap
   IP:port and its TLS SPKI pin.
 - The Network Private Key is strictly offline and never online (including on DEVNET).
-  It is used solely by the network owner to create, recreate, or edit signed
-  genesis specifications.
+  It is used solely by the network owner to sign genesis specifications containing
+  a strictly monotonic `genesis_generation`.
 - Network genesis defines the initial chain state, protocol parameters, authorized
   PoA public key, and initial Authority assignments for designated ordinary Identities
   (e.g., DEV bootstrap Identity initial Authority = 1,000,001).
 - Cross-network migration does not exist. A newer valid official network replacement
+  (verified with `genesis_generation > installed_generation` and valid Network Key signature)
   wipes all local network-bound state cleanly:
   chain/state, network definition, genesis, Identity, vault, AccountID,
   Recovery/Auth/KEM keys, balances, names, Mail, Files, application DB,
   peer DB, pending operations, storage metadata, and Authority indexes.
 - Ordinary peers form a direct P2P mesh after initial discovery. Bootstrap is
   an initial rendezvous peer, not a mandatory traffic intermediary or separate node type.
-- Only the Central Authority has canonical pending state. Operation relay
-  through ordinary peers is bounded and volatile; there is no distributed mempool.
+- There is no distributed mempool and PoA owns no canonical pending state. Operations
+  propagate across peers via bounded volatile relays until executed and finalized into blocks.
 - Public P2P admission is France-only in production/DEV, for inbound and
   outbound peers across all capabilities. Classification uses local Geo data;
   unavailable/corrupt data fails closed. LAB loopback/private test traffic

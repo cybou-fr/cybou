@@ -58,14 +58,13 @@ architecture that contradicts these decisions.
 | ID | Decision | Status |
 |---|---|---|
 | DEC-219 | The Central Authority desktop operates the genesis-authorized PoA key after unlock and local chain verification. The Network Private Key is separate and strictly offline. | Frozen target |
-| DEC-225 | Any full node may relay exact operations hop by hop using bounded volatile queues; only the Authority's live session admits them to canonical pending state. No durable shared pending-operation pool or distributed mempool. | Frozen target |
 | DEC-226 | Authority mobility does not permit concurrent independent signers sharing one PoA key; one active signer and durable anti-equivocation safety remain required. | Frozen target |
 | DEC-232 | All public inbound and outbound P2P admission is France-only for every peer capability; the rule is local networking policy, not consensus state. | Frozen target |
 | DEC-233 | Known VPN/proxy/Tor filtering is optional local policy using local data. It never affects consensus, Identity, Authority, or PoA. | Frozen target |
 | DEC-235 | Central Authority is identified only by the PoA key. Its live route is session-authenticated and discarded at disconnect; no persistent Authority endpoint or NodeID is stored. | Frozen target |
 | DEC-238 | Cross-network migration does not exist. A newer valid official network replaces all local network-bound state, wiping everything (chain, genesis, Identity, vault, AccountID, balances, names, Mail, Files, application DB, peer DB, storage metadata). | Frozen target |
 | DEC-240 | Ordinary peers form a direct P2P mesh after initial discovery. Bootstrap is an initial rendezvous peer, not a mandatory traffic intermediary. | Frozen target |
-| DEC-241 | Only the Central Authority has canonical pending state. Operation relay through ordinary peers is bounded and volatile; there is no distributed mempool. | Frozen target |
+| DEC-251 | PoA owns no special canonical pending state and acts purely as a finalizer. Candidate operations or blocks propagate across ordinary peers via bounded volatile relay queues. Only finalized state is canonical; pending and provisional states are never canonical. | Frozen target |
 
 ### Fixed economics
 
@@ -108,7 +107,9 @@ The following decisions recorded during development iterations have been superse
 | DEC-231 | Initial IP/SPKI locator pins are pre-genesis only | Superseded | Superseded by DEC-244, DEC-245 (Official profiles have known bootstrap locator IP:port + SPKI for transport authentication) |
 | DEC-234 | Canonical bootstrap roster fixed by genesis in v1 | Superseded | Superseded by DEC-246 (No genesis bootstrap roster) |
 | DEC-236 | Official profiles pin bootstrap locator, TLS SPKI and Network Root R | Superseded | Superseded by DEC-244, DEC-245 (Profiles DEVNET and MAINNET pin NetworkID = Network Public Key, bootstrap IP:port + SPKI) |
+| DEC-225 | Only Authority's live session admits operations into canonical pending state | Superseded | Superseded by DEC-251 (PoA owns no canonical pending state; acts as finalizer only) |
 | DEC-237 | Bootstrap distributes root-signed OfficialNetworkBindings | Superseded | Superseded by DEC-245 (Bootstrap is ordinary CYBOU full peer; no separate service or consensus binding) |
 | DEC-239 | R signs Authority assignments {epoch, activation_height, P} | Superseded | Superseded by DEC-244, DEC-247 (Network genesis signed offline by owner fixes PoA key P) |
+| DEC-241 | Only Central Authority has canonical pending state | Superseded | Superseded by DEC-251 (Only finalized state is canonical; no canonical pending state) |
 | DEC-242 | Advisory Validation is deferred non-canonical functionality | Superseded | Superseded by DEC-248, DEC-249 (Validation is active provisional pre-finalization evidence) |
 | DEC-243 | Root-signed OfficialNetworkBinding fixes generation, epoch, network definition and P | Superseded | Superseded by DEC-244 (NetworkID = Network Public Key; owner signs genesis offline) |

@@ -1,7 +1,21 @@
 # Open engineering and product gates
 
-These are implementation/readiness questions inside the active architecture,
+These are implementation and integration questions inside the active architecture,
 not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
+
+## Network and cryptographic identity
+
+- exact algorithm and byte encoding of the Network Public Key (`NetworkID = Network Public Key`);
+- exact binary encoding and signature container for the offline-signed genesis;
+- wire representation and validation rules for monotonic `genesis_generation` against rollback;
+- transitional plan for existing SHA256 definition hash usage in internal DBs and wire messages.
+
+## Validation and provisional lifecycle
+
+- exact payload format for `ValidationAttestation` signed with Identity Authorization Key;
+- peer-to-peer gossip propagation limits, cache TTL, and rate limiting for active attestations;
+- atomic rollback mechanism in `NodeRuntime` for clearing provisional effects upon PoA conflict;
+- provisional chunk cache eviction semantics on storage providers if candidate publication is rejected.
 
 ## Application data plane
 
@@ -17,14 +31,13 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 - clean-machine recovery performance from large finalized history;
 - provider discovery/fan-out behavior when old placement metadata is gone.
 
-## Storage
+## Storage durability
 
 Decided:
 
 ```text
 development = 1 remote full replica
-Beta        = 2 remote full replicas
-local copy  = not counted
+Beta        = 2 remote full replicas (plus local copy = 3 physical copies total)
 erasure coding Beta = disabled
 ```
 
@@ -36,14 +49,3 @@ Still open:
 - repair cadence and retry/backoff;
 - scalable discovery after small-network fan-out;
 - measured provider independence for the two-replica Beta target.
-
-Provider placement remains local StorageService policy. Do not freeze a
-deterministic provider-ranking algorithm before provider independence can be
-measured reliably.
-
-## Future research
-
-- [`future/VALIDATION.md`](future/VALIDATION.md) archives deferred advisory
-  evidence research; it is outside active product and network operation;
-- recovery from loss or compromise of private Network Root `R`, without
-  treating an operational PoA key as a root replacement authority.

@@ -3,32 +3,27 @@
 CYBOU is an Identity-centered private Mail and Files platform over an
 encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 
-## Cleanup and trust-model implementation
+## Phase 1 — Architectural alignment and clean core (In Progress)
 
-1. Remove bootstrap Identity/grant state and `CAP_BOOTSTRAP` from consensus,
-   transport and UI. Retain bootstrap as the pinned TLS rendezvous prototype.
-2. Remove legacy state decoders and obsolete operation paths; cut over to one
-   clean state version after acceptance tests. Keep the current DEV service
-   operational until the coordinated cutover.
-3. Add official profiles with immutable Network Root `R`, and root-signed
-   `OfficialNetworkBinding` plus historical Authority assignments. Separate
-   `R` custody and signing purpose from operational PoA `P`.
-4. Replace binding verification based on genesis/PoA keys with external `R`.
-   Remove bundled production `network.bin` as network truth.
-5. Implement crash-safe atomic network-root replacement and full deletion of
-   the old network-bound domain. Rotation of `P` must preserve that domain.
-6. Remove active Validation protocol/UI scaffolding.
+1. **Constitutional documentation alignment**: establish single truth across Level 0, 1, and 2 documents (Completed in `AGENTS.md`, `24_DECISIONS.md`, `02_ARCHITECTURE.md`, `04_NETWORK_LIFECYCLE.md`, `VALIDATION.md`, and core domain specs).
+2. **State & transport cleanup**: completely eliminate obsolete bootstrap Identity, consensus grants, `CAP_BOOTSTRAP`, and legacy state decoders; establish clean `CYBOU_STATE_VERSION = 10` (Completed in code HEAD `0437427`).
+3. **Network Key and signed genesis specification**: define exact Network Public Key wire format (`NetworkID = Network Public Key`), signed genesis encoding, and anti-rollback `genesis_generation`.
 
-## Integration and acceptance
+## Phase 2 — Network identity and bootstrap transition
 
-7. Wire desktop bootstrap locator/client, `EMPTY`/`BOUND` state and root-signed
-   DEV genesis creation with activation code.
-8. Add bootstrap first-peer discovery followed by direct CYP2 mesh and bounded
-   volatile operation relay.
-9. Connect Central Authority desktop finalization to the verified assignment,
-   one active signer and durable anti-equivocation journal.
-10. Validate Windows/Linux clean install, verified sync, recovery, private Mail
-    and Files end to end.
-11. Harden storage from one development remote replica to two independent Beta
-    replicas, with provider audit, repair, restart recovery and soak.
-12. Deploy isolated TESTNET, then MAINNET, only after their gates pass.
+4. **NetworkID transition**: transition `NetworkId` from SHA256 definition hash to exact Network Public Key.
+5. **Official profile cleanup**: restrict official profiles to DEVNET and MAINNET (remove legacy TESTNET profile).
+6. **VPS bootstrap conversion**: transition DEV VPS from standalone `cybou-bootstrap.service` prototype to an ordinary full-peer running `cybou-node`.
+
+## Phase 3 — Validation and provisional lifecycle
+
+7. **Validation attestation protocol**: implement advisory Validation wire messaging for eligible Identities (`Authority > 1,000,000` in latest PoA-finalized state).
+8. **Provisional execution & rollback**: implement local acceptance policy (`validation.enabled`, `min_signatures`), provisional state staging, and mandatory atomic rollback upon PoA conflict.
+9. **Finalizer simplification**: ensure PoA finalizer acts purely as an independent candidate evaluator and certificate signer with no canonical pending mempool.
+
+## Phase 4 — Product integration and end-to-end acceptance
+
+10. **Application data plane integration**: connect Mail and Files publication, provisional staging, and finalized promotion to the desktop model.
+11. **Storage durability hardening**: verify Beta target of 2 independent remote full replicas plus local copy (3 physical copies total) with audit and repair.
+12. **DEVNET coordinated cutover**: deploy fresh signed genesis on DEV VPS and execute end-to-end multi-node desktop acceptance.
+13. **MAINNET launch**: launch MAINNET only after full soak and formal acceptance.

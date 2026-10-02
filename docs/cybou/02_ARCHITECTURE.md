@@ -71,7 +71,7 @@ Every participant runs the same full-node core software.
 
 Optional operational capabilities:
 - **Storage**: admits and serves authorized encrypted chunks.
-- **Central Authority / PoA**: orders transactions and finalizes blocks.
+- **Central Authority / PoA**: independently executes candidates and finalizes valid blocks.
 
 **Bootstrap** is an ordinary CYBOU full peer whose IP:port is known in advance
 for initial peer discovery. It runs the same executable and CYP2 protocol.

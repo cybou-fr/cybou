@@ -1,53 +1,37 @@
 # Implementation status
 
-Status: repository HEAD `818c683` plus current uncommitted workspace changes.
-This page reports code/deployment reality separately from the target in
-`04_NETWORK_LIFECYCLE.md`. Working-tree code changes may move before commit.
+Status: repository HEAD `98e182c`.
+This page reports current code and deployment reality honestly, separated from
+the constitutional target in `AGENTS.md` and `04_NETWORK_LIFECYCLE.md`.
 
-## Current DEV deployment
+## Target architecture vs. current code reality
 
-- `cybou-bootstrap.service` runs standalone `cybou-bootstrap serve` on
-  `51.255.46.58:29461`, with state under `/var/lib/cybou/bootstrap/state`.
-  Its TLS SPKI pin is compiled into `src/cybou/bootstrap_nodes.h`.
-- The service is a pre-genesis `EMPTY`/`BOUND` prototype, not a CYP2 full
-  node or finalizer. Legacy `cybou-node.service` and both provider services
-  are inactive. No desktop finalizer is deployed on this VPS.
-- There is no production or Beta network. A planned new-genesis DEV cutover
-  replaces the old testnet only after acceptance and coordinated activation.
+| Component | Target constitution | Current code / HEAD reality |
+|---|---|---|
+| Official networks | DEVNET and MAINNET only | Profiles still declare DEVNET, TESTNET, MAINNET enum in `official_networks.h` |
+| Network identity | `NetworkID = Network Public Key` | `NetworkId = SHA256("CYBOU/NETWORK-ID/V5" \|\| Serialize(definition))` |
+| Network Private Key | Strictly offline root authority; signs genesis | Genesis specification parsing is present, but offline-signed genesis format is pending wire definition |
+| Bootstrap role | Ordinary CYBOU full peer; same executable and CYP2 | Legacy standalone prototype `cybou-bootstrap` binary still exists in repo; VPS service runs `cybou-bootstrap serve` |
+| Consensus bootstrap state | Completely removed (ordinary Identity, genesis Authority baseline) | Cleanly removed in HEAD `0437427` (no bootstrap grants, roster, or `CAP_BOOTSTRAP`) |
+| Consensus state version | Single unified version: `CYBOU_STATE_VERSION = 10` | Implemented in HEAD `0437427` (legacy v7/v8/v9 decoding logic deleted) |
+| Advisory Validation | Active provisional pre-finalization (Authority > 1M) | Core data models cleaned in `0437427`; active Validation wire protocol and local evaluation policy pending implementation |
+| PoA Finalizer role | Sole canonical finalizer; independently executes candidates | Single-operator PoA implemented; pending operation queue cleanup to finalizer-only pending |
 
-## Implemented in repository
+## Current DEV VPS deployment
 
-- Deterministic state execution, hybrid Ed25519 + ML-DSA-65 PoA certificates,
-  durable signing journal, conflict halt, operation and state-root validation.
-- Account Identity, separate Recovery/Authorization/KEM roles, CVID5 vault,
-  rotation/recovery, names, balances and System Balance.
-- RootPublication, encrypted ROOT/INDEX/DATA trees, ChunkID verification,
-  finalized-publication Merkle admission, provider transfer and placement.
-- CYP2 v3 TLS transport, bounded operation relay, France-only Geo admission.
-- Standalone bootstrap prototype with pinned TLS and activation store.
-- Desktop finalizer core exists, but the official locator/binding/peer workflow
-  and operator UX are not wired end to end or deployed.
-
-## Obsolete implementation debt scheduled for deletion
-
-The code still derives operational PoA authority from the genesis key, retains
-bootstrap Identity/grant and `CAP_BOOTSTRAP` paths, legacy state versions,
-bundled desktop `network.bin`, Validation UI scaffolding and the standalone
-bootstrap prototype. These are implementation facts, not current architecture.
-The target is immutable Network Root `R`, root-signed
-`OfficialNetworkBinding` and height-specific PoA `P` assignments, with no
-cross-generation Identity migration. Code cleanup must preserve current DEV
-service until a coordinated cutover passes.
+- The DEV VPS (`debian@vps-d0669a91.vps.ovh.net`) currently runs the standalone prototype
+  `cybou-bootstrap.service` (`/home/debian/cybou/build/bin/cybou-bootstrap serve` on `51.255.46.58:29461`,
+  with state under `/var/lib/cybou/bootstrap/state`).
+- Its TLS SPKI pin is compiled into `src/cybou/official_networks.h`.
+- Migration state: The legacy standalone service remains running until the coordinated
+  cutover to an ordinary CYBOU full-peer service running `cybou-node`.
 
 ## Open integration gates
 
-1. Remove obsolete consensus/transport/UI paths and install one clean state
-   version at cutover.
-2. Implement root-signed binding/assignment verification and separate `R`
-   custody from routine desktop finalization.
-3. Wire desktop bootstrap discovery, verified network creation/join, direct
-   peer mesh and Authority operation under assigned `P`.
-4. Make generation replacement atomic and wipe the complete old network-bound
-   domain; keep epoch rotation non-destructive.
-5. Complete Windows/Linux clean-install, sync, Mail/Files and recovery
-   acceptance; then harden two-independent-replica Beta durability.
+1. Define Network Key format and canonical signed genesis encoding with monotonic `genesis_generation`.
+2. Transition `NetworkId` from SHA256 definition hash to exact Network Public Key.
+3. Remove legacy TESTNET profile from `official_networks.h`.
+4. Implement Validation attestation wire protocol, eligibility check (`Authority > 1,000,000`), and provisional local acceptance policy.
+5. Implement mandatory rollback and reconciliation of provisional state upon PoA block arrival.
+6. Migrate DEV VPS service from `cybou-bootstrap.service` to ordinary full-peer `cybou-node.service`.
+7. End-to-end integration and clean cutover to DEVNET.

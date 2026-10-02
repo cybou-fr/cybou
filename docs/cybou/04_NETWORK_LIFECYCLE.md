@@ -101,6 +101,10 @@ There is:
 ## Network replacement and full wipe
 
 If the network owner issues a newer signed genesis for the network (or on network cutover):
+The new genesis must carry a strictly greater `genesis_generation` (`generation > installed_generation`)
+and a valid signature by the compiled Network Public Key (`NetworkID`). An older or equal generation
+is rejected immediately to prevent rollback attacks.
+Upon verifying the new signed genesis:
 The core stops network services and wipes all local network-bound state cleanly:
 - chain/state
 - network definition
