@@ -78,10 +78,8 @@ chunk fails, so callers write to local staging and expose the result only after 
 artificial 256 MiB per-file limit; primitive chunk, tree depth, count, and
 uint64 byte-counter bounds remain enforced.
 
-Providers admit a chunk after a finalized RootPublication (or provisionally upon
-sufficient eligible Validation signatures under optional local provider policy) and a valid
-Merkle inclusion proof for that ChunkID. If PoA rejects or conflicts with a provisional
-publication, provisional admissions are purged. The leaf needs no separate size field:
+Providers admit a chunk only after a finalized RootPublication and a valid
+Merkle inclusion proof for that ChunkID. The leaf needs no separate size field:
 ChunkID commits to the complete stored encrypted bytes. RootPublication does
 not publish the complete chunk-ID list. Each provider enforces its own physical
 capacity limit. Finality authorizes storage but does not prove durability.

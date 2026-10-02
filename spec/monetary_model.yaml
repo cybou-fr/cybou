@@ -45,8 +45,21 @@ balances:
     unit: AUTH
     transferable: false
     canonical_state: AccountState.authority
+    fixed_supply: false
+    included_in_cybou_supply: false
     validation_threshold_exclusive: 1000000
     poa_power: false
+
+auth:
+  validation_threshold_exclusive: 1000000
+  genesis_allocation: true
+  finalized_identity_operation_reward: 1
+  account_create_rewarded: true
+  poa_grant: true
+  poa_burn: true
+  burn_floor: 0
+  transfer: false
+  automatic_penalties: not_frozen
 
 cybou_supply:
   max: 100000000000

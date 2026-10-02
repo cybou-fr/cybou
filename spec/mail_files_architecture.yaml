@@ -49,8 +49,7 @@ publication:
   self_capsule_required_for_recoverable_owner_content: true
   storage_admission:
     default: finalized_only
-    optional_provisional: allowed_on_eligible_validation
-    poa_conflict: purge_and_rollback
+    validation_authorizes_admission: false
     protected_requires_finality: true
 
 mail:

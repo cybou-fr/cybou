@@ -17,16 +17,20 @@ consensus:
   bft: false
   validator_set: absent
   validation:
-    role: provisional_non_canonical_advisory_prefinalization
-    peer_trust_policy: local_choice
+    role: optional_prefinalization_signatures
+    requires_local_independent_execution: true
+    receivers_reexecute: true
+    poa_reexecutes: true
+    creates_state: false
     minimum_authority_for_eligibility: 1000001
     authority_evaluation_state: latest_finalized_state
-    poa_conflict_resolution: discard_provisional_rollback_effects_adopt_poa_unconditionally
+    signed_fields: [network_id, operation_id, finalized_base_block_id, validator_account_id]
+    signature: identity_authorization_ed25519_mldsa44
   bootstrap:
     role: ordinary_cybou_full_peer
     same_executable: true
     same_protocol: CYP2
-    devnet_initial_bootstrap_identity_baseline: 1000001
+    auth_from_role: false
     special_consensus_role: absent
     cap_bootstrap: absent
   unfinalized_operations: local_origin_bounded_volatile_peer_relay
@@ -167,7 +171,7 @@ publication:
 storage:
   address: ChunkID
   admission_policy_default: finality_first
-  provisional_admission_policy: optional_upon_eligible_validation_signatures_with_mandatory_poa_conflict_rollback
+  validation_authorizes_admission: false
   proof: domain_separated_Merkle_inclusion
   durability_targets:
     development: 1_remote_full_replica

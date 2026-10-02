@@ -58,11 +58,9 @@ RootPublication with an optional recipient capsule and a mandatory self
 capsule, persists the exact publication intent in the Application DB before
 signing, and submits through `IdentityOperationCoordinator`. Resume never
 builds a replacement operation while the recorded one is unresolved. Job
-phases are WAITING_FINALITY, VALIDATED (provisional, optional), SECURING (finalized, awaiting remote durability),
-PROTECTED, and NEEDS_ATTENTION.
-If a provisionally validated candidate is superseded or invalidated by new PoA
-finalized state, the publication is rolled back: if still valid against the
-new finalized state, it returns to WAITING_FINALITY; if invalid, it drops.
+phases are WAITING_FINALITY, SECURING (finalized, awaiting remote durability),
+PROTECTED, and NEEDS_ATTENTION. A `Validated` indicator may accompany
+WAITING_FINALITY as evidence only; it changes no phase or storage behavior.
 
 ### StorageService
 
@@ -80,11 +78,9 @@ repair
 
 No separate user-visible provider layer exists.
 
-The default policy of `StorageService` places only finalized publications: the
-ordered chunk list must reproduce the publication's chunk-authorization root,
-and per-chunk proofs are rebuilt from it. Under optional provisional validation policy,
-chunks may be provisionally placed upon sufficient eligible Validation signatures, but
-are purged if PoA rejects or conflicts with the publication.
+`StorageService` places only finalized publications: the ordered chunk list
+must reproduce the publication's chunk-authorization root, and per-chunk proofs
+are rebuilt from it. Validation never triggers placement.
 Each chunk goes to distinct CSPRNG-selected CYP2 storage providers until the remote
 target is met (1 in development, 2 in Beta; plus local copy = 3 physical copies total);
 STORED and ALREADY_STORED both count, the local copy never does.

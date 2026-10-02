@@ -14,7 +14,7 @@ The normal user operates mail, not a blockchain, key exchange, finality mechanis
 or storage protocol. Technical evidence remains inspectable through Security
 Details and Advanced diagnostics.
 
-## 0. Content lifecycle (finality first & provisional validation)
+## 0. Content lifecycle (finality first)
 
 Every outgoing message, with or without attachments, follows one
 shared lifecycle with Files (`83_STORAGE_UI_UX.md`):
@@ -26,7 +26,7 @@ local encrypt/chunk
    ↓
 RootPublication submission
    ↓
-[optional provisional Validation] ───(if PoA conflicts)──→ ROLLBACK / purge
+[optional Validation signatures: evidence only]
    ↓
 PoA finality
    ↓
@@ -39,15 +39,13 @@ Sent / Protected
 
 Message text, recipients, attachment references, filenames, and the Mail schema
 are encrypted payload data inside one RootPublication. There is no Mail-specific
-consensus operation. Under default policy, no content is stored remotely before finality:
-until the RootPublication is finalized, all ciphertext chunks remain local staging only.
-Under optional provisional validation policy, participating providers may cache chunks
-provisionally upon eligible Validation signatures, but purge them if PoA conflicts.
+consensus operation. No content is stored remotely before finality: until the
+RootPublication is finalized, all ciphertext chunks remain local staging only.
 
 Status terms are distinct and must never share one indicator:
 
 ```text
-Validated    = provisional pre-finalization evidence received from eligible validator(s)
+Validated    = locally valid and signed by at least one eligible Identity (evidence only)
 Finalized    = the RootPublication is part of canonical PoA history
 Authorized   = its ChunkIDs are admitted for storage by that finalized publication
 Available    = the chunks can actually be retrieved from the network
@@ -57,8 +55,8 @@ Retrievable  = this client has fetched and verified the content
 
 `Finalized` does not mean `Sent`. Finality authorizes storage admission;
 the message is `Sent` when the required remote durability/availability is reached.
-A provisionally `Validated` message displays informational confirmation, but cannot
-reach `Sent`/`Protected` until PoA finality confirms it.
+A `Validated` message displays informational confirmation only; it cannot reach
+`Sent`/`Protected` until PoA finality and remote durability.
 
 The Beta interaction target includes conversation threads, unread/read state,
 local labels, reply/reply-all/forward, blocked senders, local search, and
@@ -359,17 +357,14 @@ read local file
 -> encrypt/chunk locally (local staging only)
 -> include the private attachment reference in the encrypted Mail root
 -> build one RootPublication for the message
--> [optional provisional Validation -> provisional remote caching; purge on conflicting PoA]
 -> obtain PoA finality
 -> upload the finalized-authorized chunks to storage providers
 -> reach the durability threshold
 ```
 
-Under default policy, attachment chunks exist only in local staging before finality;
-the client uploads ciphertext only after finalized RootPublication. Under optional
-provisional validation policy, providers may provisionally cache chunks upon eligible
-Validation signatures, but this never counts as Sent/Protected, and chunks are purged
-if a conflicting PoA finalization occurs. Providers reject unauthorized chunks.
+Attachment chunks exist only in local staging before finality; the client
+uploads ciphertext only after finalized RootPublication. Providers reject
+unauthorized chunks.
 
 In Compose, attachment chips show only local preparation (`Preparing`,
 `Encrypted locally`). After Send, the whole message, including attachments,

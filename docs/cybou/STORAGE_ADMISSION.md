@@ -26,11 +26,9 @@ Local staging/cache and provider retention use the same physical blob. A local
 blob survives restart and provider-metadata reset. Provider capacity
 counts admitted bytes, while the common store counts each physical blob once.
 
-## Storage admission policies
+## Storage admission (finality-first)
 
-### 1. Default policy (Finality-first)
-
-Under default policy, a provider accepts:
+A provider accepts:
 
 ```text
 PutChunk(publication_reference, ChunkID, bytes, admission_proof)
@@ -45,21 +43,8 @@ only after verifying:
 
 Remote GET is content-addressed by ChunkID.
 
-### 2. Optional policy (Provisional validation)
-
-Nodes or storage providers enabling provisional validation policy locally may
-optionally admit and stage chunks upon receiving sufficient eligible Validation
-signatures (`Authority > 1,000,000` in latest finalized state) authorizing the
-candidate RootPublication:
-
-```text
-sufficient Validation
--> PROVISIONAL remote admission / cache
--> PoA finality agrees   -> promote provisional admission to canonical finalized
--> PoA conflict / drop  -> purge provisional chunk admission and rollback
-```
-
-Provisional admission never counts toward `Protected` durability.
+Validation signatures never authorize remote chunk admission. There is no
+provisional storage admission.
 
 ## Durability targets
 
