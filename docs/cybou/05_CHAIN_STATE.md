@@ -31,7 +31,7 @@ Clients rebuild private application projections from finalized publications.
 Authority is a read-only derived metric over finalized account history. It is
 not a canonical state field and does not allocate resources, reward services,
 bind node identities, or grant PoA power. Its current informational policy is
-defined in `57_AUTHORITY_AND_VALIDATION.md`.
+defined in `57_IDENTITY_AUTHORITY.md`.
 
 ## Invariants
 

@@ -55,7 +55,7 @@ evidence recipients want to display or trust before PoA finality.
 
 ## Future research
 
-- [`VALIDATION.md`](VALIDATION.md) defines optional advisory evidence; the
+- [`future/VALIDATION.md`](future/VALIDATION.md) defines optional advisory evidence; the
   future question is whether users need it before finality and how to present
   local trust choices;
-- erasure coding after Beta measurements.
+- emergency Authority recovery key if the current active Authority private key is lost or compromised.

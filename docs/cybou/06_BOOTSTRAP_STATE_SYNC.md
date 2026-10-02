@@ -10,7 +10,7 @@ required by the active product and protocol.
 ## Initial synchronization
 
 Network existence, initial claim, and network replacement are defined by
-[`04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](04_NETWORK_BOOTSTRAP_AND_GENESIS.md).
+[`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md).
 This document covers syncing after a network definition has been authenticated
 and installed; a peer or successful sync connection is not itself the network
 trust anchor.

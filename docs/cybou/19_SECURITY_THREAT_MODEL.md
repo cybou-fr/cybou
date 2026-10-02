@@ -2,18 +2,16 @@
 
 ## Trust boundaries
 
-- The single genesis-bound PoA operator controls ordering and can censor or
-  stop finality; it cannot forge Identity authorization or decrypt private
-  content.
+- The single PoA operator controls ordering and can censor or stop finality
+  under the active Authority key; it cannot forge Identity authorization or decrypt private content.
 - Full nodes independently execute operations, verify blocks, and recompute
   state roots.
 - Providers store encrypted chunks and apply local capacity and admission
   policy. Provider IDs prove keys, not independent hosts or operators.
 - The desktop's encrypted Application DB is a local projection, not network
   storage truth.
-- Bootstrap capability is authorized by genesis to one of at most four
-  ordinary Identity AccountIDs and never grants finality. One through four
-  bootstrap peers do not form a quorum.
+- Bootstrap is discovery rendezvous infrastructure. It distributes signed
+  official network state and cannot alter or forge blocks or state transitions.
 - Production/DEV public peer admission uses local French-IP classification.
   This is a node-local routing policy, not a consensus guarantee or proof of a
   peer's physical location. Missing or corrupt mandatory Geo data fails

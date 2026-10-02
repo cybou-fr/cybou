@@ -1,246 +1,187 @@
-# Network bootstrap and genesis lifecycle
+# 04 — Network lifecycle
 
-Status: **revised target architecture; implementation and DEV cutover pending**.
-This document defines the approved node-capability, genesis-bootstrap, and
-France-only public P2P admission model. The current executable and DEV
-deployment have not completed that migration. There is no production or Beta
-network; the running VPS chain is a development testnet. Keep it available for
-routine development until the acceptance matrix and planned new-genesis DEV
-cutover are complete. That cutover replaces the testnet, not a production
-network.
+Status: **Active architecture target**.
+This document defines official network profiles, bootstrap rendezvous, network
+creation, joining, monotonic replacement, full wipe semantics, Authority key
+rotation, and direct peer discovery.
 
-## Roles and deployment
+---
 
-Every participant runs the same full-node software. Bootstrap, storage,
-advisory Validation, and PoA finalization are optional local capabilities, not
-protocol node classes or separate consensus roles. Operation relay is a
-baseline full-node capability, not a bootstrap role. A network genesis
-authorizes one to four bootstrap Identities. Each bootstrap is an ordinary
-full node that may provide rendezvous, peer discovery, and finalized-history
-relay/cache. Every full node may relay operations; bootstrap capability does
-not provide PoA or storage authority by itself.
+## 1. Official network profiles
 
-The Central Authority is the ordinary desktop Identity whose role-specific
-`POA_FINALIZER` public key is committed by the network definition. After that
-Identity is unlocked and the local full node has verified the current chain,
-that desktop may run the existing single-operator PoA finalizer. Every desktop
-continues to validate blocks and state transitions independently. Finality is
-unavailable while the Central Authority desktop is offline; the bootstrap does
-not take over signing.
-
-Bootstrap-capable nodes may retain the network definition and finalized
-history for relay and sync. They accept application chunks only when they
-separately run the storage capability and satisfy the same finalized
-RootPublication rules as any provider.
+A standard CYBOU installation initially knows explicit official network
+profiles compiled into the software:
 
 ```text
-TARGET ARCHITECTURE: ordinary CybouNode full node + optional bootstrap capability
-CURRENT IMPLEMENTATION PROTOTYPE: cybou-bootstrap executable (transitional prototype only)
+DEVNET:
+    bootstrap IP:port (51.255.46.58:29461)
+    SPKI SHA-256 pin
+    initial official PoA public key (K0)
 
-1–4 genesis-authorized Identities: optional bootstrap capability
-Central Authority desktop: full node + unlocked Identity + PoA finalizer
-any node: optional storage and advisory Validation capabilities
+TESTNET:
+    bootstrap IP:port
+    SPKI SHA-256 pin
+    initial official PoA public key (K0)
+
+MAINNET:
+    bootstrap IP:port
+    SPKI SHA-256 pin
+    initial official PoA public key (K0)
 ```
 
-Headless finalizer/provider processes remain supported for isolated LAB and
-test topologies. They are not the official DEV deployment architecture.
+Transport authentication and canonical truth are strictly separated:
+- **IP:port** tells the client where to reach the rendezvous endpoint.
+- **TLS SPKI pin** proves the client is talking to the intended bootstrap server (protects against MITM / network tampering).
+- **Authority signature / trust chain** proves the advertised network state is official and valid.
 
-## Bootstrap trust and state
+Bootstrap is rendezvous and state distribution infrastructure. It is not a
+consensus participant, has no voting power, and does not hold an Identity role.
 
-Bootstrap has two durable states:
+---
 
-- `EMPTY`: no network has been claimed.
-- `BOUND`: one current network binding and monotonically increasing generation.
+## 2. Bootstrap lifecycle: EMPTY and BOUND
 
-The initial-locator list contains one to four numeric IP:port endpoints and
-TLS SPKI pins. It is used only to find candidate peers and authenticate the
-pre-genesis exchange. Neither an address nor a pin grants a post-genesis role.
-DEV Bootstrap #1 is explicitly assigned to the current
-`cybou-bootstrap.service` at `51.255.46.58:29461`; its current SPKI pin is
-compiled in `src/cybou/bootstrap_nodes.h`. The service currently runs the
-standalone pre-genesis STATUS/CLAIM/REPLACE prototype. Desktop retrieval of the
-binding and transition into CYP2 peer discovery are not yet wired end to end.
-The legacy PoA finalizer role is inactive and is not the source of locator
-trust.
+A bootstrap service holds one of two durable states:
 
-Before the network exists, each candidate proves control of a proposed stable
-`AccountID` and its Recovery key over the pinned TLS session. The signed
-message binds the protocol domain, fresh client nonce, TLS exporter,
-`AccountID`, and Recovery public key. The Central Authority verifies the proof
-and records both `AccountID` and `RecoveryKeyID` in genesis. Recovery private
-material remains inside the candidate's unlocked vault boundary.
+1. `EMPTY`: No official network has been registered.
+2. `BOUND`: An official network binding is active at generation $N$.
 
-Bootstrap grants are consensus state keyed by stable `AccountID`, each storing
-the expected `RecoveryKeyID` and a claimed flag. A matching `AccountCreate`
-claims the grant only when both values match. A mismatch leaves it unclaimed.
-The genesis roster has between one and four distinct AccountIDs and distinct
-RecoveryKeyIDs. Later `IdentityRotate` operations change the current
-Authorization key used for session proofs while the bootstrap capability
-remains with the same AccountID. No address, TLS pin, process identity, or
-NodeID is stored in genesis. Changing the roster requires a signed network
-replacement; there is no BootstrapAdd/BootstrapRemove operation.
+### Connecting to bootstrap
 
-The signed binding contains at least the generation, display name, NetworkID,
-hash of the exact network file, and genesis-bound finalizer public key. The
-Central Authority signs each binding. It contains no Authority IP address,
-hostname, endpoint, or persistent node identifier. Bootstrap authentication
-protects the service connection; it does not replace the Authority signature.
-Clients that have previously accepted a binding persist the highest generation
-and reject rollback or a different binding at that generation.
+```text
+CYBOU starts
+   ↓
+Connect known bootstrap (IP:port + SPKI pin)
+   ↓
+STATUS
+   ├── EMPTY
+   │     → Central Authority may create official network
+   │
+   └── BOUND
+         → Receive current OfficialNetworkBinding
+         → Verify binding through official Authority trust chain (starting at K0)
+         → Compare generation N against local generation
+```
 
-Central Authority identity is possession of the genesis-bound PoA private key;
-its network location is irrelevant to authorization. It must still pass the
-same France-only public peer admission as every other node. After the ordinary bootstrap
-service is authenticated, the candidate proves possession by signing a fresh
-bootstrap challenge bound to that CYP2 session (including the TLS exporter and
-both HELLO transcripts). Bootstrap verifies against the finalizer public key
-in the already-bound network definition. Success marks only that live session
-as finalizer-authenticated; it does not create a durable Authority record or
-address mapping. On disconnect, bootstrap drops the route. A later session
-from a new address must prove possession again. IP, DNS name, and source
-address are routing data only and never authorize a role.
+---
 
-A peer claiming `CAP_BOOTSTRAP` proves a claimed genesis-granted AccountID on
-that session. The proof binds NetworkID, TLS exporter, both HELLO messages,
-and AccountID, and is checked against that AccountID's current Authorization
-key. The route and authenticated AccountID are discarded when the session
-ends. Bootstrap nodes do not vote, form a quorum, or finalize blocks.
+## 3. Creating an official network
 
-## Sovereign peer admission
+Network creation is permitted only when bootstrap is authenticated in the
+`EMPTY` state.
 
-Production and DEV public P2P admission is restricted to French IP space for
-inbound and outbound connections. The same local admission policy applies to
-bootstrap candidates, providers, ordinary peers, and the Central Authority.
-DNS names are resolved first; every resulting numeric IPv4/IPv6 address is
-classified locally. Country suffixes and remote GeoIP services are not
-evidence. An unavailable or corrupt mandatory Geo dataset fails closed for
-public P2P. LAB loopback/private traffic requires an explicit LAB bypass.
+1. **Prerequisites**:
+   - Pinned TLS connection to bootstrap returning `EMPTY`.
+   - Single-use bootstrap activation code (provisioned out-of-band by the operator).
+   - Possession of the initial Central Authority PoA key $K_0$.
+2. **Execution**:
+   - The Central Authority desktop initializes genesis with initial parameters and finalizer public key $K_0$.
+   - The desktop constructs the `OfficialNetworkBinding` (generation 1).
+   - The binding is signed by $K_0$ and submitted to bootstrap along with the activation code.
+   - Bootstrap atomically verifies the activation code, commits the binding to durable storage, and transitions to `BOUND` (generation 1).
+   - The activation code is consumed permanently.
 
-Optional known VPN/proxy/Tor filtering uses local data and can only reject
-addresses classified by that data. It is not a consensus rule or a guarantee
-against unknown relays, tunnels, or reclassification errors. Missing optional
-filter data blocks new public peers only when that setting is enabled.
+Bootstrap nodes never receive private keys. The Central Authority PoA key
+remains exclusively on the operator desktop.
 
-Direct node-to-node connections follow the same cryptographic rule: a peer
-that claims the finalizer role proves the genesis key for that session. A
-any full-node relay is a convenient route, not the identity anchor.
+---
 
-A first claim requires all of:
+## 4. Joining an official network
 
-1. an authenticated `EMPTY` response from the pinned bootstrap;
-2. an unguessable, one-use activation code provisioned by the bootstrap owner;
-3. proof of possession of the proposed genesis finalizer key; and
-4. each selected pinned endpoint's Recovery-key proof bound to its proposed
-   AccountID, with the AccountID and RecoveryKeyID included in genesis; and
-5. an atomic bootstrap transition from `EMPTY` to `BOUND`.
+When a client connects to a `BOUND` bootstrap:
 
-The activation code is consumed only when the binding is durably committed and
-is never a PoA or Identity key. Empty-state authentication and this claim flow
-must be tested against races, replay, interruption, and bootstrap database
-rollback before DEV cutover.
+1. The client receives the `OfficialNetworkBinding` and the exact network definition (genesis, state root, parameters).
+2. The client verifies:
+   - Network kind matches the local profile.
+   - The binding is authentically signed by the current Authority key validly derived from compiled $K_0$.
+   - The network definition hash matches the binding.
+3. If valid, the client initializes local chain state from genesis and connects to initial peers.
 
-For replacement of a bound network, the current Authority key signs the
-replacement request and the new finalizer key proves possession. If the key
-changes, both old and new keys sign. Bootstrap archives the old binding and
-atomically advances the generation. A new installation that has no previously
-trusted binding needs a trust path for the current Authority key (for example,
-a release-pinned key or an owner-signed binding); a self-asserted key included
-in a bootstrap response is not enough to protect that installation if the
-bootstrap itself is compromised.
+---
 
-## Desktop network creation and startup
+## 5. Network replacement and full wipe semantics
 
-Production/DEV startup must not silently install a network definition bundled
-in the executable. The desktop authenticates its configured bootstrap peers
-and checks their state first:
+If bootstrap advertises a newer generation $N > \text{local generation}$ under
+a validly signed binding:
 
-- On `BOUND`, it downloads the exact bound network file, verifies its hash,
-  definition structure, NetworkID, genesis state root/block ID, finalizer key,
-  and Authority signature, then atomically stores it before starting the full
-  node. It does not offer network creation.
-- On authenticated `EMPTY`, and only after the user supplies the required
-  one-use activation codes, the desktop may create/unlock its local
-  Identity/vault, derive its role-specific finalizer public key, obtain and
-  verify one to four initial bootstrap Identity claims, create genesis with
-  those AccountID/RecoveryKeyID grants, create the network file locally, and
-  submit the same signed initial binding to every selected bootstrap node.
-  The PoA secret never leaves the desktop. Bootstrap nodes receive only public
-  network data, signatures, and their own one-use activation code.
-- The network is operational when genesis exists, the Central Authority full
-  node is active, and at least one bootstrap grant is claimed by a finalized
-  `AccountCreate`. Report the registered/available bootstrap count out of the
-  genesis roster; one unavailable candidate does not block the network. Until
-  a grant is claimed, the pinned initial locators are the only bootstrap trust
-  path.
-- On unavailable, unauthenticated, malformed, or inconsistent bootstrap
-  status, the desktop fails closed and offers retry/recovery. It must not
-  infer `EMPTY` from a timeout, an empty file, or an unverified peer.
+```text
+bootstrap advertises generation N
+local generation < N
++
+binding verified by Authority trust chain
+    ↓
+STOP RUNTIME
+    ↓
+WIPE EVERYTHING
+    ↓
+install generation N
+    ↓
+start clean from new genesis
+```
 
-The network display name belongs to the operational binding and is not added
-to consensus serialization solely for presentation. NetworkID remains derived
-from the existing immutable network definition.
+### Full wipe definition
 
-The existing runtime accepts recovery entropy to sign PoA blocks. A future
-signer interface may keep that material behind the unlocked vault boundary;
-it must preserve durable journal-before-sign ordering, fail-closed
-anti-equivocation, and must never send signing material to bootstrap.
+Cross-network migration does not exist. A network replacement wipes all
+network-bound local state completely:
 
-## Relay and validation boundaries
+- chain and block store
+- state DB and state roots
+- network definition and genesis
+- Identity, vault, AccountID, recovery and authorization keys
+- balances, System Balances, onboarding pool state
+- registered `.cybou` names
+- Mail, Files, application DB
+- peer DB and address cache
+- pending operations and volatile relay queues
+- storage metadata, replica tracking, provider records
+- Authority derived indexes
 
-The Central Authority full node may maintain authenticated outbound sessions
-to ordinary full nodes in the P2P mesh. Every full node can stage exact signed
-operation bytes in a bounded volatile queue and pull queued operations from its
-connected relay peers, forwarding them hop by hop until they reach the
-Authority. Bootstrap membership is not required. Queue acknowledgments only
-confirm that the next relay accepted volatile bytes; the origin retains its
-exact operation until PoA finality. Only the Authority admits an operation to
-the canonical pending pool, and only over a session with a fresh proof of the
-genesis PoA key. Relays/caches of finalized blocks do not decide validity or
-finality. Receiving full nodes independently verify every block, operation,
-certificate, and state root.
+A clean network starts strictly from the new genesis. No state carries over.
 
-Each relay's finalizer-authenticated direct session route is ephemeral memory
-state, not part of durable NetworkBinding. Session teardown removes that route;
-the bounded operation queue remains volatile and can continue across another
-available mesh route.
-The transport/session design does not make it safe to run independent
-simultaneous finalizers with the same private key. One active signer and the
-existing durable anti-equivocation journal remain required; key replication
-and signer failover need a separately specified safety mechanism.
+---
 
-Bootstrap relay/cache data is not canonical merely because it came from the
-official service. Only a verified PoA-finalized block advances local canonical
-state. Bootstrap does not become a chunk provider and cannot authorize remote
-chunk admission.
+## 6. Authority key rotation
 
-## Cutover requirements
+Genesis starts the Authority trust chain at initial public key $K_0$. Operational
+PoA signing keys may rotate monotonically without wiping the network:
 
-The DEV VPS currently runs the legacy testnet topology described in
-`AGENTS.md`. Keep it operational until the acceptance gates below pass and the
-new-genesis cutover is coordinated. Desktop finalization and peer discovery
-remain incomplete, and there is no production/Beta network migration. The
-target network remains blocked on all of the following:
+```text
+Genesis:
+    Authority K0
 
-- authenticated bootstrap `EMPTY`/`BOUND` protocol, pinning, one-use claim,
-  durable atomic binding, generation rollback protection, and replacement;
-- initial-locator TLS pin and Recovery-key proof, genesis bootstrap grants,
-  one-time AccountCreate claim, and current Authorization-key bootstrap proof;
-- one-to-four bootstrap roster validation, France-only peer admission for all
-  public P2P paths, local Geo data integrity/fail-closed behavior, and LAB
-  bypass tests;
-- desktop genesis creation and desktop finalizer lifecycle through the vault;
-- ordinary full-node relay/discovery/history sync, with no bootstrap PoA or
-  storage role;
-- clean-install, compromised-bootstrap, replay/race, restart, offline-authority,
-  and replacement acceptance tests;
-- a coordinated plan that replaces the disposable DEV testnet with a new
-  genesis created from the Central Authority desktop and retires the legacy
-  VPS finalizer/provider services.
+Heights 1 .. h_1:
+    Blocks signed by K0
 
-For the current implementation prototype (`cybou-bootstrap` utility, LevelDB store, v8 compatibility for legacy RecoveryKeyID grants, v9 stable-AccountID bootstrap rosters, and open cutover gates), see [`26_IMPLEMENTATION_STATUS.md`](26_IMPLEMENTATION_STATUS.md).
+Rotation record:
+    K0 authorizes K1 (epoch 1)
 
-Until the cutover gates pass and coordinated cutover is executed:
-- Keep the current DEV testnet operational during routine development; do not reset its state or replace its PoA key before the planned cutover.
-- Do not describe the bootstrap prototype as a complete target network.
-- Do not point CYP2 executables at the bootstrap protocol port as if it were a peer endpoint.
-- The isolated LAB may continue using explicit network files and separate headless processes.
+Heights (h_1 + 1) .. h_2:
+    Blocks signed by K1
+```
+
+### Rotation format
+
+```text
+AuthorityRotation {
+    network_kind
+    epoch
+    previous_key_id
+    new_public_key
+    signature_by_previous
+    proof_by_new
+}
+```
+
+Clients and full nodes accept blocks from $K_{\text{epoch}}$ once the signed
+rotation record is finalized. The chain of trust always roots in the compiled $K_0$.
+
+---
+
+## 7. Direct peer discovery and mesh operation
+
+Bootstrap is an initial discovery rendezvous, not a permanent intermediary.
+
+1. **Rendezvous**: Clients discover active full nodes from bootstrap's volatile peer cache.
+2. **Mesh connection**: Peers connect directly to one another using CYP2 v3.
+3. **Autonomy**: If bootstrap becomes unreachable, existing mesh peers continue syncing finalized blocks, relaying operations, and transferring storage chunks without interruption.
+4. **Admission policy**: All public inbound and outbound P2P connections strictly follow the sovereign admission rules defined in [`37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`](37_FRANCE_SOVEREIGN_NETWORK_POLICY.md).

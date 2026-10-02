@@ -56,20 +56,19 @@ architecture that contradicts these decisions.
 
 | ID | Decision | Status |
 |---|---|---|
-| DEC-219 | The Central Authority is the ordinary desktop Identity whose role-specific `POA_FINALIZER` public key is committed by genesis; its desktop runs PoA finalization after unlock and local chain verification. | Frozen target; implementation/cutover pending |
-| DEC-220 | Bootstrap network creation is allowed only from authenticated `EMPTY`, with a one-use activation code and proof of possession of the proposed genesis key; the binding is atomic and generation-numbered. | Frozen target; implementation/cutover pending |
-| DEC-221 | Replacing a bound network requires authorization by the current Authority key, proof by the new key, and both signatures when the key changes; clients reject generation rollback. | Frozen target; implementation/cutover pending |
-| DEC-225 | Any full node may relay exact operations hop by hop using bounded volatile queues; only the Authority's live genesis-PoA-authenticated session admits them to canonical pending state. No durable shared pending-operation pool or Authority location record. | Frozen target; implementation/cutover pending |
-| DEC-226 | Authority mobility does not permit concurrent independent signers sharing one PoA key; one active signer and durable anti-equivocation safety remain required. | Frozen target; implementation/cutover pending |
-| DEC-227 | All participants run the same full-node architecture. Bootstrap, storage, advisory Validation, and PoA finalization are optional capabilities, not protocol node classes. | Frozen target; implementation/cutover pending |
-| DEC-228 | Genesis authorizes between one and four bootstrap Identities. Bootstrap capability grants no quorum, voting, or PoA finality power. | Frozen target; implementation/cutover pending |
-| DEC-229 | Each genesis bootstrap grant binds stable AccountID to an expected RecoveryKeyID. AccountCreate claims it only when both match. | Frozen target; implementation/cutover pending |
-| DEC-230 | After claim, bootstrap authorization follows stable AccountID through IdentityRotate and uses the current Authorization key for each live session proof. | Frozen target; implementation/cutover pending |
-| DEC-231 | Initial numeric IP:port and TLS SPKI pins are pre-genesis discovery/authentication material only. They never grant post-genesis bootstrap authority. | Frozen target; implementation/cutover pending |
-| DEC-232 | All public inbound and outbound P2P admission is France-only for every peer capability; the rule is local networking policy, not consensus state. | Frozen target; implementation/cutover pending |
-| DEC-233 | Known VPN/proxy/Tor filtering is optional local policy using local data. It never affects consensus, Identity, Authority, or PoA. | Frozen target; implementation/cutover pending |
-| DEC-234 | The canonical bootstrap roster is fixed by genesis in v1. Roster changes require signed network replacement; no BootstrapAdd/BootstrapRemove operation exists. | Frozen target; implementation/cutover pending |
-| DEC-235 | Central Authority is identified only by the genesis PoA key. Its live route is session-authenticated and discarded at disconnect; no persistent Authority endpoint or NodeID is stored. | Frozen target; implementation/cutover pending |
+| DEC-219 | The Central Authority is the ordinary desktop Identity whose role-specific `POA_FINALIZER` public key starts the Authority key chain at K0; its desktop runs PoA finalization after unlock and local chain verification. | Frozen target; implementation/cutover pending |
+| DEC-225 | Any full node may relay exact operations hop by hop using bounded volatile queues; only the Authority's live session admits them to canonical pending state. No durable shared pending-operation pool or distributed mempool. | Frozen target |
+| DEC-226 | Authority mobility does not permit concurrent independent signers sharing one PoA key; one active signer and durable anti-equivocation safety remain required. | Frozen target |
+| DEC-232 | All public inbound and outbound P2P admission is France-only for every peer capability; the rule is local networking policy, not consensus state. | Frozen target |
+| DEC-233 | Known VPN/proxy/Tor filtering is optional local policy using local data. It never affects consensus, Identity, Authority, or PoA. | Frozen target |
+| DEC-235 | Central Authority is identified only by the PoA key. Its live route is session-authenticated and discarded at disconnect; no persistent Authority endpoint or NodeID is stored. | Frozen target |
+| DEC-236 | A standard CYBOU installation knows explicit official network profiles (DEVNET, TESTNET, MAINNET), each with known bootstrap locator(s) and an initial Authority public key K0. | Frozen target |
+| DEC-237 | Bootstrap defines which official network generation clients run. It is rendezvous and network state distributor infrastructure, not a consensus participant, validator, or Identity entity. | Frozen target |
+| DEC-238 | Cross-network migration does not exist. A newer valid official network replaces all local network-bound state, wiping everything (chain, genesis, Identity, vault, AccountID, balances, names, Mail, Files, application DB, peer DB, storage metadata). | Frozen target |
+| DEC-239 | Genesis starts the Authority key chain at K0. Operational rotation is monotonic K0 → K1 → ... via a signed rotation chain and does not require network replacement or BFT. | Frozen target |
+| DEC-240 | Ordinary peers form a direct P2P mesh after initial discovery. Bootstrap is an initial rendezvous service, not a mandatory traffic intermediary. | Frozen target |
+| DEC-241 | Only the Central Authority has canonical pending state. Operation relay through ordinary peers is bounded and volatile; there is no distributed mempool. | Frozen target |
+| DEC-242 | Advisory Validation is deferred non-canonical functionality and is not part of the active network lifecycle or node capabilities. | Frozen target |
 
 ### Fixed economics
 
@@ -93,7 +92,19 @@ The following decisions recorded during development iterations have been superse
 | DEC-208 | Canonical Age/activity/lock accumulators, liveness/storage evidence, and penalty debt | Rejected | Superseded by DEC-207, DEC-217 (Authority is read-only derived metric; no canonical accumulators or evidence) |
 | DEC-209 | Canonical NodeID binding and per-Account service-node registry | Rejected | Superseded by DEC-193, DEC-214 (No protocol device/service-node registry) |
 | DEC-210 | Authority-derived Protocol/Storage/Bandwidth budgets, reservations, and tickets | Rejected | Superseded by DEC-207, DEC-217 (No canonical budgets, reservations, or tickets) |
-| DEC-218 | Official VPS runs one bootstrap relay/cache service only and never finalizes | Superseded | Superseded by DEC-227, DEC-228 (1–4 bootstrap Identities, unified full-node architecture) |
-| DEC-222 | Bootstrap transport identity pinned through release | Superseded | Superseded by DEC-231 (Initial IP/SPKI locator pins are pre-genesis only; grants tied to AccountID + RecoveryKeyID) |
-| DEC-223 | Headless finalizer/provider processes LAB-only; official VPS not a finalizer or provider | Superseded | Superseded by DEC-227 (All nodes run same full-node software; capabilities are local options) |
+| DEC-211 | Optional signed Validation in active capability story | Deferred | Superseded by DEC-242 (Validation deferred; not part of active node capabilities or network lifecycle) |
+| DEC-214 | Any full node may issue Validation opinion | Deferred | Superseded by DEC-242 (Deferred non-canonical functionality) |
+| DEC-215 | Validator-qualified threshold presentation | Deferred | Superseded by DEC-242 (Deferred non-canonical functionality) |
+| DEC-216 | Validation does not alter canonical state | Deferred | Superseded by DEC-242 (Deferred non-canonical functionality) |
+| DEC-218 | Official VPS runs one bootstrap relay/cache service only and never finalizes | Superseded | Superseded by DEC-237 (Bootstrap is rendezvous / signed state distributor) |
+| DEC-220 | Complex bootstrap creation with multi-identity binding | Superseded | Superseded by DEC-236, DEC-237 (Bootstrap EMPTY/BOUND with activation code + Authority-signed NetworkBinding) |
+| DEC-221 | Network replacement with multi-party proof and history archive | Superseded | Superseded by DEC-237, DEC-238 (Newer generation replaces network and wipes all local state; no migration) |
+| DEC-222 | Bootstrap transport identity pinned through release | Superseded | Superseded by DEC-236, DEC-237 (IP:port + TLS/SPKI transport pin; state verified by Authority trust chain) |
+| DEC-223 | Headless finalizer/provider processes LAB-only; official VPS not a finalizer or provider | Superseded | Superseded by DEC-237, DEC-240 (All nodes run same core; bootstrap is known rendezvous service) |
 | DEC-224 | Central Authority route session-authenticated without persistent IP | Consolidated | Superseded by DEC-235 (Ephemeral session route invariant preserved and clarified) |
+| DEC-227 | Bootstrap/Validation as full-node consensus capabilities | Superseded | Superseded by DEC-237, DEC-242 (Bootstrap is known rendezvous; Validation is deferred; capabilities are storage + PoA) |
+| DEC-228 | Genesis authorizes 1-4 bootstrap Identities | Superseded | Superseded by DEC-237 (Bootstrap is rendezvous infrastructure, not consensus Identity) |
+| DEC-229 | Genesis bootstrap grant binds AccountID + RecoveryKeyID | Superseded | Superseded by DEC-237 (No bootstrap grants or consensus Identity roster) |
+| DEC-230 | Bootstrap authorization follows AccountID through IdentityRotate | Superseded | Superseded by DEC-237 (No bootstrap AccountID or CAP_BOOTSTRAP Identity role) |
+| DEC-231 | Initial IP/SPKI locator pins are pre-genesis only | Superseded | Superseded by DEC-236, DEC-237 (Official profiles have known bootstrap locator IP:port + SPKI for transport authentication) |
+| DEC-234 | Canonical bootstrap roster fixed by genesis in v1 | Superseded | Superseded by DEC-237 (No genesis bootstrap roster) |

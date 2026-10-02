@@ -2,35 +2,16 @@
 
 CYBOU is commercially owned and operated by CYBOU. User Identity, balances,
 names, and encrypted content remain protocol-owned under their respective
-authorization rules. Commercial ownership does not confer access to user
-private keys, plaintext content, or arbitrary account debits.
+cryptographic authorization rules. Commercial ownership does not confer access
+to user private keys, plaintext content, or arbitrary account debits.
 
-## Initial network operation
+## Operational model
 
-The target uses one genesis-bound hybrid-PQ PoA finalizer operated by the
-Central Authority Identity from its desktop. The operator orders blocks and
-can censor transactions or stop progress. This is explicit centralized trust,
-not BFT. Full nodes independently verify finality signatures and deterministic
-state transitions, but cannot make the network progress while that desktop is
-offline. Bootstrap is an optional capability granted by genesis to one through
-four ordinary full-node Identities. Bootstrap nodes may relay and cache but
-never finalize by virtue of that capability. Any full node may independently
-run storage or advisory Validation capabilities under the relevant local
-policy.
+The network uses single-operator hybrid-PQ PoA finality operated by the
+Central Authority Identity from its desktop.
+- **Authority offline**: If the Central Authority desktop is offline, block finalization pauses. Full nodes continue serving existing state and chunks, but canonical state cannot advance.
+- **Bootstrap resilience**: Bootstrap is discovery rendezvous infrastructure. A bootstrap outage does not halt the network; connected mesh peers continue exchanging blocks, operations, and storage chunks directly.
+- **Verification**: Every full node independently validates signatures, operation rules, and state roots. The operator cannot forge state transitions without detection.
 
-The PoA finalizer key, Identity recovery/authorization keys, Release Signing
-key, and Treasury key are separate roles. The Central Authority Identity's
-recovery entropy derives its role-specific PoA key; the key remains local to
-the unlocked desktop and is protected by a durable anti-equivocation journal.
-The current DEV VPS runs only the bootstrap prototype; no PoA finalizer is
-running there, and desktop finalization remains unimplemented. See
-`04_NETWORK_BOOTSTRAP_AND_GENESIS.md` and `26_IMPLEMENTATION_STATUS.md`.
-
-## Resilience boundary
-
-Mail and Files availability depends on independent storage providers, but
-provider and bootstrap diversity do not decentralize block finality.
-Operational reporting must state these trust domains separately. Any future change to block ordering
-authority is a new protocol design based on measured operating needs; no BFT,
-validator admission, staking, or validator-set state is part of the current
-architecture.
+Anti-equivocation protection is strictly enforced by local journals. If equivocation
+is detected, all observing full nodes halt permanently.

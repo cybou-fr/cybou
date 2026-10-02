@@ -17,18 +17,15 @@ ApplicationService / PublicationService / StorageService
   v
 native CYBOU NodeRuntime
   + canonical state execution
-  + genesis-bound hybrid-PQ PoA finality
-  + P2P synchronization
+  + single-operator hybrid-PQ PoA finality (Authority chain K0 -> K1 -> ...)
+  + P2P mesh synchronization and operation relay
   + RootPublication
   + common encrypted ChunkStore
 ```
 
 `APPLICATION_DATA_PLANE.md` defines the local/network data boundary.
-
-`04_NETWORK_BOOTSTRAP_AND_GENESIS.md` defines the target for network creation,
-genesis-authorized bootstrap capabilities, sovereign peer admission, and
-Central Authority operation. The current binary/deployment has not completed
-that migration.
+`04_NETWORK_LIFECYCLE.md` defines the official network lifecycle, bootstrap rendezvous,
+network replacement, and Authority rotation.
 
 ## Documentation hierarchy
 
@@ -36,7 +33,7 @@ CYBOU architecture adheres to a strict hierarchy of authority. Lower levels
 cannot introduce protocol mechanics absent from higher levels:
 - **Level 0 (Implementation authority)**: `AGENTS.md`
 - **Level 1 (Frozen architecture / decisions)**: `docs/cybou/24_DECISIONS.md`, `docs/cybou/02_ARCHITECTURE.md`
-- **Level 2 (Normative domain documents)**: `04_NETWORK_BOOTSTRAP_AND_GENESIS.md`, `05_CHAIN_STATE.md`, `08_P2P.md`, `POA_FINALITY.md`, `VALIDATION.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, `10_IDENTITY_NAMES.md`, `18_ECONOMICS_FEES.md`, `57_AUTHORITY_AND_VALIDATION.md`
+- **Level 2 (Normative domain documents)**: `04_NETWORK_LIFECYCLE.md`, `05_CHAIN_STATE.md`, `08_P2P.md`, `POA_FINALITY.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, `10_IDENTITY_NAMES.md`, `18_ECONOMICS_FEES.md`, `57_IDENTITY_AUTHORITY.md`
 - **Level 3 (Mutable implementation truth)**: `docs/cybou/26_IMPLEMENTATION_STATUS.md`
 - **Level 4 (Roadmap / unresolved work)**: `docs/cybou/22_ROADMAP.md`, `docs/cybou/25_OPEN_QUESTIONS.md`
 - **Level 5 (Product / UX)**: `docs/cybou/81`–`85`, `APPLICATION_DATA_PLANE.md`
@@ -46,91 +43,54 @@ cannot introduce protocol mechanics absent from higher levels:
 
 ## Node capabilities and peer admission
 
-Every participant runs the same full-node architecture. Bootstrap, storage,
-advisory Validation, and PoA finalization are optional local capabilities;
-they are not protocol node classes. Genesis authorizes one to four bootstrap
-Identities by stable `AccountID` and expected `RecoveryKeyID`. Bootstrap is
-proved per session with the current Identity Authorization key. Bootstrap
-peers do not form a quorum and do not finalize blocks.
+Every participant runs the same full-node core software.
 
-Production and DEV public P2P admission is France-only for inbound and
-outbound peers, including bootstrap, storage, ordinary peers, and the Central
-Authority. This is a local networking rule, not consensus state or a guarantee
-that a peer is physically located in France. It requires local, integrity-
-checked Geo data and fails closed when that data is unavailable. LAB has an
-explicit loopback/private-network bypass. Known VPN/proxy/Tor filtering is an
-optional local setting and does not affect Identity, Authority, or consensus.
+Optional operational capabilities:
+- **Storage**: admits and serves authorized encrypted chunks.
+- **Central Authority / PoA**: orders transactions and finalizes blocks.
+
+**Bootstrap** is a known rendezvous service that distributes signed official
+network state and seeds initial peer discovery. It is not a consensus role or Identity entity.
+
+Optional advisory Validation is non-canonical future functionality and does
+not participate in network operation or finality.
+
+Public P2P admission is France-only for inbound and outbound connections across
+all capabilities. Policy rules and local fail-closed Geo enforcement are
+detailed in [`37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`](37_FRANCE_SOVEREIGN_NETWORK_POLICY.md).
 
 ## Identity
 
-One AccountID is the stable Identity. Mnemonic-derived Recovery, Authorization
+One AccountID is the stable Identity. Mnemonic-derived Recovery, Authorization,
 and KEM roles are separate. Device is not a protocol entity.
 
-Storage providers prove their own service keys where the transport requires a
-provider identity. The PoA finalizer proves the genesis-bound key derived for
-the Central Authority Identity. There is no canonical service-node registry
-or binding of provider processes to an AccountID.
+Storage providers prove their own service keys per CYP2 session. The PoA finalizer
+proves the current Authority key ($K_{\text{epoch}}$). There is no canonical service-node registry.
 
 ## Finality
 
-A genesis-bound single-operator hybrid-PQ PoA signer finalizes blocks. In the
-target deployment, the Central Authority desktop runs that signer after the
-matching Identity is unlocked. PoA finalization is an optional capability of
-the same full-node software. Every full node independently verifies the
-certificate, executes operations and checks the resulting state root.
+Single-operator hybrid-PQ PoA finalizes blocks. Genesis establishes the initial
+Authority key $K_0$, which may rotate monotonically ($K_0 \to K_1 \to \dots$).
+Every full node independently verifies PoA certificates, operation validity,
+and state transitions. Anti-equivocation journaling and fail-closed halt protect against conflicting blocks.
+There is no BFT or validator quorum.
 
-CYBOU is not BFT. Durable anti-equivocation signing and a fail-closed conflict
-halt protect against conflicting valid PoA certificates.
-
-## Application content
+## Application content and storage
 
 `RootPublication` is the only application-content protocol operation.
-
-Mail/Files type, filenames, folders, recipient identity and graph topology are
-encrypted application data. Recipient capsules wrap the main root ContentKey
-without exposing recipient AccountID.
-
-One RootPublication may authorize chunks from multiple private content trees
-under one authorization Merkle root. This is an application-layer bundle, not
-a new protocol operation or wire entity.
-
-## Storage
-
-ChunkID is full BLAKE3-256 of exact stored encrypted bytes. The common
-ChunkStore has no semantic own/foreign distinction and is invisible to the GUI.
-
-Remote admission is finality-first:
-
-```text
-prepare encrypted chunks locally
--> finalize RootPublication by PoA
--> providers admit authorized chunks
--> reach durability target
-```
-
-Development targets one remote full replica; Beta targets two independent
-remote full replicas. The local encrypted copy is cache/staging and does not
-count toward remote durability, though it is normally a further physical copy. Beta does not use erasure coding.
+Mail and Files share the same encrypted content substrate.
+ChunkID is the full BLAKE3-256 digest of stored encrypted bytes.
+Remote chunk admission is finality-first: authorized chunks are admitted only
+after their RootPublication is finalized.
+Development targets 1 remote full replica; Beta targets 2 independent remote full replicas.
 
 ## Application projection
 
-Each unlocked Identity has a separate encrypted rebuildable Application DB for
-Mail/Files semantic state. It contains only content the Identity can
-cryptographically open.
+Each unlocked Identity maintains a private encrypted rebuildable Application DB.
+The GUI renders this semantic projection and never browses provider storage directly.
 
-The GUI renders this private projection and canonical Wallet/Names/Authority;
-it never browses the provider ChunkStore.
+## Derived Authority metric
 
-## Authority and Validation
-
-Authority is a read-only metric derived from finalized account history. It is
-separate from CYBOU and System Balance, non-transferable, and grants no
-protocol, resource-allocation, or PoA power. See
-[`57_AUTHORITY_AND_VALIDATION.md`](57_AUTHORITY_AND_VALIDATION.md).
-
-Any full node may produce optional advisory Validation. Recipients verify it
-and decide locally whether to trust it. A local Authority threshold of
-1,000,000 may label an opinion as validator-qualified; it is not an admission
-rule. Validation never affects state transitions, finality, or provider
-authorization. Only PoA finality advances canonical state and authorizes
-remote storage.
+Authority is an informational, read-only metric derived from finalized account
+history. It is non-transferable and grants no protocol or PoA power. See
+[`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md).

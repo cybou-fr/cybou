@@ -2,7 +2,7 @@
 
 Before changing code, read `AGENTS.md` and the active protocol documents it
 names. The single protocol authority in `main` is the PoA + encrypted chunk-tree
-target described by `docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`,
+target described by `docs/cybou/04_NETWORK_LIFECYCLE.md`,
 `docs/cybou/POA_FINALITY.md`, `ENCRYPTED_CHUNK_TREE.md`, `ROOT_PUBLICATION.md`,
 `STORAGE_ADMISSION.md`, `IDENTITY_DISCOVERY_AND_RECOVERY.md`,
 `37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`, and `spec/poa_chunk_tree.yaml`.
@@ -11,12 +11,10 @@ code from integration and deployment gates.
 
 ## Architecture rules
 
-- All participants run the same full-node software (`CybouNode`). Bootstrap,
-  storage, advisory Validation, and PoA finalization are optional local
-  capabilities, not separate protocol node classes.
-- A new network genesis authorizes 1–4 bootstrap Identities by stable
-  `AccountID` plus expected `RecoveryKeyID`. Bootstrap nodes do not vote,
-  form a quorum, or finalize.
+- All participants run the same full-node software core. Storage and
+  Central Authority PoA finalization are optional operational capabilities.
+- Bootstrap is a known rendezvous service distributing signed official
+  network state; it is not a consensus or Identity participant.
 - Public P2P admission is France-only in production and DEV (inbound and outbound)
   using local Geo data (fails closed).
 - The finalizer uses a genesis-bound hybrid-PQ PoA key operated from the

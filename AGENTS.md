@@ -5,21 +5,19 @@ architecture; do not keep obsolete runtime paths alive for compatibility.
 
 ## DEV VPS deployment — migration state
 
-There is no production or Beta network. The DEV VPS has been repurposed from
-the legacy finalizer/provider topology to the `cybou-bootstrap.service`
-prototype. Its pinned TLS endpoint is the approved DEV Bootstrap #1
-pre-genesis locator. This assigns discovery trust to that live TLS key only;
-it grants no consensus role and does not make the service a CYP2 full node.
-The complete desktop locator-to-binding-to-peer discovery flow remains under
-implementation. The target uses one full-node software architecture with one
-to four genesis-authorized bootstrap capabilities and the genesis-key holder
-finalizing from the Central Authority desktop. France-only public peer
-admission is mandatory in production/DEV. The planned new-genesis DEV cutover
-replaces the legacy testnet; it is not a production-network migration.
-- Central Authority is identified only by possession of the genesis PoA key.
-  Never add a persistent Authority IP, host, endpoint, or NodeID to bootstrap
-  state or consensus. Authenticate its current route per live session and
-  discard that route on disconnect.
+There is no production or Beta network. The DEV VPS runs the
+`cybou-bootstrap.service` prototype. Its pinned TLS endpoint is the approved
+DEV Bootstrap locator (`51.255.46.58:29461`). This assigns discovery trust to
+that live TLS key only; it grants no consensus role and does not make the
+service a CYP2 full node. The target uses one full-node core software with
+optional storage and PoA finalization capabilities, with the genesis-key holder
+finalizing from the Central Authority desktop. France-only public peer admission
+is mandatory in production/DEV. The planned new-genesis DEV cutover replaces the
+legacy testnet; it is not a production-network migration.
+- Central Authority is identified by the PoA key ($K_{\text{epoch}}$) derived
+  from initial $K_0$. Never add a persistent Authority IP, host, endpoint, or
+  NodeID to bootstrap state or consensus. Authenticate its current route per live
+  session and discard that route on disconnect.
 
 - After changing CYBOU core or `cybou-node`, run relevant tests, rebuild the
   affected DEV executable on the VPS, and restart its systemd service in the
@@ -41,27 +39,33 @@ replaces the legacy testnet; it is not a production-network migration.
 
 ## Network and node architecture
 
-- Every participant runs the same full-node software. Bootstrap, storage,
-  advisory Validation, and PoA finalization are optional local capabilities,
+- Every participant runs the same full-node software core. Storage and
+  Central Authority PoA finalization are optional operational capabilities,
   not protocol node classes.
-- A new network genesis authorizes 1–4 bootstrap Identities by stable
-  `AccountID` plus expected `RecoveryKeyID`. `AccountCreate` claims a grant
-  only when both match. Bootstrap authorization follows the stable AccountID
-  through `IdentityRotate`; the current Authorization key proves the role per
-  live session.
-- Initial IP:port and TLS SPKI pins are pre-genesis discovery/authentication
-  material only. They grant no post-genesis role and are never consensus
-  state. DEV Bootstrap #1 is the explicitly repurposed
-  `cybou-bootstrap.service` at `51.255.46.58:29461`, authenticated by the
-  pinned SPKI in `src/cybou/bootstrap_nodes.h`; the former PoA finalizer role
-  and its state are not used as locator trust.
+- A standard CYBOU installation initially knows official network profiles
+  (DEVNET, TESTNET, MAINNET), each with known bootstrap locator(s) and an
+  initial Authority public key $K_0$.
+- Bootstrap defines which official network generation clients run. It is
+  rendezvous and signed state distributor infrastructure, not a consensus participant.
+- Cross-network migration does not exist. A newer valid official network
+  replaces all local network-bound state, wiping everything:
+  chain/state, network definition, genesis, Identity, vault, AccountID,
+  Recovery/Auth/KEM keys, balances, names, Mail, Files, application DB,
+  peer DB, pending operations, storage metadata, and Authority indexes.
+- Genesis starts the Authority key chain at $K_0$. Operational rotation is
+  monotonic $K_0 \to K_1 \to \dots$ via a signed rotation chain and does not
+  require network replacement.
+- Ordinary peers form a direct P2P mesh after initial discovery. Bootstrap is
+  an initial rendezvous service, not a mandatory traffic intermediary.
+- Only the Central Authority has canonical pending state. Operation relay
+  through ordinary peers is bounded and volatile; there is no distributed mempool.
 - Public P2P admission is France-only in production/DEV, for inbound and
-  outbound peers and every capability. Classification uses local Geo data;
+  outbound peers across all capabilities. Classification uses local Geo data;
   unavailable/corrupt data fails closed. LAB loopback/private test traffic
   requires an explicit LAB bypass. Optional VPN/proxy/Tor filtering is local
   policy and never changes consensus or Identity.
 - Bootstrap nodes do not vote, form a quorum, or finalize. PoA remains
-  single-operator finality under the genesis-bound key. Keep the existing DEV
+  single-operator finality under the active Authority key. Keep the existing DEV
   state operational until acceptance tests and a coordinated cutover pass.
 
 ## Identity
@@ -82,7 +86,7 @@ The documentation has a strict hierarchy; lower levels cannot introduce
 architecture that is absent from higher levels:
 - LEVEL 0 — Implementation authority: `AGENTS.md`
 - LEVEL 1 — Frozen architecture and decisions: `docs/cybou/24_DECISIONS.md`, `docs/cybou/02_ARCHITECTURE.md`
-- LEVEL 2 — Normative domain documents: `04_NETWORK_BOOTSTRAP_AND_GENESIS.md`, `05_CHAIN_STATE.md`, `08_P2P.md`, `POA_FINALITY.md`, `VALIDATION.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, `10_IDENTITY_NAMES.md`, `18_ECONOMICS_FEES.md`, etc.
+- LEVEL 2 — Normative domain documents: `04_NETWORK_LIFECYCLE.md`, `05_CHAIN_STATE.md`, `08_P2P.md`, `POA_FINALITY.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, `10_IDENTITY_NAMES.md`, `18_ECONOMICS_FEES.md`, `57_IDENTITY_AUTHORITY.md`, etc.
 - LEVEL 3 — Mutable implementation truth: `docs/cybou/26_IMPLEMENTATION_STATUS.md`
 - LEVEL 4 — Roadmap and unresolved work: `docs/cybou/22_ROADMAP.md`, `docs/cybou/25_OPEN_QUESTIONS.md`
 - LEVEL 5 — Product and UX contracts: `docs/cybou/81_BETA_PRODUCT_SCOPE.md`–`85_BETA_UI_ACCEPTANCE.md`, `APPLICATION_DATA_PLANE.md`
@@ -92,17 +96,16 @@ architecture that is absent from higher levels:
 
 ## Finality
 
-- Finality is genesis-bound single-operator hybrid-PQ PoA.
+- Finality is single-operator hybrid-PQ PoA rooted in genesis key $K_0$.
 - Target operation puts the genesis-key holder on its Central Authority
-  desktop; bootstrap-capable full nodes never finalize. See
-  `docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`.
+  desktop; bootstrap services never finalize. See
+  `docs/cybou/04_NETWORK_LIFECYCLE.md`.
 - Full nodes independently validate every operation, block transition, state
   root, and PoA certificate.
 - PoA is centralized finality, not BFT.
 - Durable signing journal and equivocation conflict halt must fail closed.
-- Authority and advisory Validation never grant PoA finalization power.
-- The PoA finalizer independently executes operations and ignores Validation
-  for correctness.
+- Authority metric never grants PoA finalization power.
+- The PoA finalizer independently executes operations.
 
 ## Application content
 
@@ -142,16 +145,11 @@ architecture that is absent from higher levels:
   remote durability. Beta uses full replication; erasure coding is disabled.
 - Placement, provider selection, health, audit, and repair are StorageService
   concerns, not consensus state.
-- The current/default provider policy is finality-first. A future provider may
-  independently choose to offer provisional resources under local trust policy
-  (including optional advisory Validation), at its own risk. Such resources
-  create no canonical right or durability guarantee and are not Protected.
-  This provisional path is not implemented. Do not add canonical per-I/O
-  accounting or resource tickets.
+- The default provider policy is finality-first.
 - A file/message is not `Protected`/`Sent` merely because its RootPublication
   is finalized.
 
-## Authority and Validation
+## Derived Identity Authority
 
 - Authority is an informational, read-only metric derived from finalized
   history. It is separate from Balance and System Balance and grants no
@@ -159,16 +157,10 @@ architecture that is absent from higher levels:
 - There is no canonical ValidatorSet, validator registry, NodeID binding,
   liveness/storage evidence, reward/penalty system, resource budget,
   reservation, grant, ticket, or per-I/O accounting.
-- Any full node may produce optional signed advisory Validation. Recipients
-  verify the claim and decide locally whether to trust it or act before
-  finality.
-- A recipient may label an opinion validator-qualified when the signer has
-  Authority >= 1,000,000 in that recipient's local view. This is presentation
-  policy, never protocol admission.
-- `network validated` is never equivalent to `PoA-finalized`. Only PoA finality
-  advances canonical state and authorizes remote chunk admission.
 - Local peer failures use local disconnect, backoff, and abuse limits; they do
   not change global Authority.
+- Advisory Validation is deferred non-canonical functionality and not part of
+  active node operation.
 
 ## Economics
 

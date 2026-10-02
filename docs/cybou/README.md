@@ -27,7 +27,7 @@ from or conflicting with higher levels:
 |---|---|---|---|
 | [`00_VISION.md`](00_VISION.md) | High-level vision and product principles | Level 5 | Product target |
 | [`02_ARCHITECTURE.md`](02_ARCHITECTURE.md) | High-level system architecture and data plane | Level 1 | Frozen |
-| [`04_NETWORK_BOOTSTRAP_AND_GENESIS.md`](04_NETWORK_BOOTSTRAP_AND_GENESIS.md) | Genesis bootstrap grants, capabilities, and France P2P policy | Level 2 | Frozen target (cutover pending) |
+| [`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md) | Official network profiles, bootstrap lifecycle, wipe semantics, and key rotation | Level 2 | Active |
 | [`05_CHAIN_STATE.md`](05_CHAIN_STATE.md) | Deterministic state execution, accounts, and names | Level 2 | Active |
 | [`06_BOOTSTRAP_STATE_SYNC.md`](06_BOOTSTRAP_STATE_SYNC.md) | Verified state synchronization over CYP2 | Level 2 | Active |
 | [`08_P2P.md`](08_P2P.md) | CYP2 transport and peer management | Level 2 | Active |
@@ -52,7 +52,7 @@ from or conflicting with higher levels:
 | [`50_EMAIL_SECURITY_MODEL.md`](50_EMAIL_SECURITY_MODEL.md) | End-to-end encrypted email privacy model | Level 5 | Product target |
 | [`52_BALANCE_AND_SYSTEM_BALANCE.md`](52_BALANCE_AND_SYSTEM_BALANCE.md) | Balance and System Balance semantics | Level 2 | Active |
 | [`56_OWNER_OPERATOR_AND_RESILIENCE.md`](56_OWNER_OPERATOR_AND_RESILIENCE.md) | Operational resilience and operator key handling | Level 6 | Active |
-| [`57_AUTHORITY_AND_VALIDATION.md`](57_AUTHORITY_AND_VALIDATION.md) | Derived read-only Authority metric and advisory Validation | Level 2 | Active |
+| [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md) | Derived read-only Identity Authority metric | Level 2 | Active |
 | [`59_DETERMINISTIC_FEE_ROUTER.md`](59_DETERMINISTIC_FEE_ROUTER.md) | Deterministic integer 3 Security / 1 Onboarding fee router | Level 2 | Active |
 | [`68_OPERATOR_KEY_SEPARATION.md`](68_OPERATOR_KEY_SEPARATION.md) | PoA and operator key role custody | Level 2 | Active |
 | [`70_ACCOUNT_CREATION_ANTI_SYBIL.md`](70_ACCOUNT_CREATION_ANTI_SYBIL.md) | Permissionless AccountCreate, anti-Sybil work, and OnboardingPool | Level 2 | Active |
@@ -81,4 +81,4 @@ from or conflicting with higher levels:
 | [`ROOT_PUBLICATION.md`](ROOT_PUBLICATION.md) | Canonical RootPublication wire format and validation | Level 2 | Active |
 | [`STORAGE_ADMISSION.md`](STORAGE_ADMISSION.md) | Merkle inclusion proofs, chunk admission, provider policy | Level 2 | Active |
 | [`UPSTREAM_BASELINE.md`](UPSTREAM_BASELINE.md) | Upstream Bitcoin Core baseline delta and removal plan | — | Historical |
-| [`VALIDATION.md`](VALIDATION.md) | Signed advisory Validation statements and local trust | Level 2 | Active |
+| [`future/VALIDATION.md`](future/VALIDATION.md) | Deferred advisory Validation concept and local trust | Level 2 | Deferred |
