@@ -40,6 +40,8 @@ std::optional<BootstrapNetworkBinding> CreateBootstrapNetworkBinding(
     uint64_t generation, std::string display_name, std::span<const unsigned char> exact_network_file,
     const RecoveryEntropy& poa_recovery_entropy);
 bool VerifyBootstrapNetworkBinding(const BootstrapNetworkBinding& binding);
+bool VerifyBootstrapNetworkBinding(const BootstrapNetworkBinding& binding,
+    const IdentityHybridPublicKey& trusted_authority_key);
 std::optional<std::vector<unsigned char>> EncodeBootstrapNetworkBinding(
     const BootstrapNetworkBinding& binding);
 std::optional<BootstrapNetworkBinding> DecodeBootstrapNetworkBinding(

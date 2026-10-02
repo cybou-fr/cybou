@@ -319,8 +319,6 @@ void MailReader::refresh()
             // Before finality the operation tells where the message is.
             if (!online) {
                 text = tr("Waiting for network. Your message is saved and will be sent when CYBOU reconnects.");
-            } else if (operation == CybouOperationState::Validated) {
-                text = tr("Validated. The network has checked your message; it becomes final once confirmed.");
             } else if (operation == CybouOperationState::Submitted) {
                 text = tr("Waiting for confirmation… The network is confirming your message.");
             } else {
@@ -437,10 +435,8 @@ void MailReader::showSecurityDetails()
         item->state == CybouContentState::Securing;
     AddDetailRow(layout, tr("Sender identity"), tr("Verified"), &dialog);
     AddDetailRow(layout, tr("Identity authorization"), tr("Valid"), &dialog);
-    // Validated is pre-finalization; only PoA finality reads Finalized.
     const auto operation = m_model->displayedOperationState(item->operation_id, item->operation_state);
-    AddDetailRow(layout, tr("Network confirmation"), confirmed ? tr("Finalized")
-        : operation == CybouOperationState::Validated ? tr("Validated (not final yet)") : tr("Waiting"), &dialog);
+    AddDetailRow(layout, tr("Network confirmation"), confirmed ? tr("Finalized") : tr("Waiting"), &dialog);
     AddDetailRow(layout, tr("Content protection"), tr("Verified"), &dialog);
     AddDetailRow(layout, tr("Content availability"), CybouProduct::contentStateText(item->state), &dialog);
     AddDetailRow(layout, tr("Post-quantum authorization"), tr("Ed25519 + ML-DSA"), &dialog);

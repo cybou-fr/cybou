@@ -85,7 +85,6 @@ QString AdvertisedCapabilities(const std::uint64_t capabilities)
     if (capabilities & cybou::p2p::CAP_PEER_DISCOVERY) result << translate("Peer discovery");
     if (capabilities & cybou::p2p::CAP_STORAGE) result << translate("Storage");
     if (capabilities & cybou::p2p::CAP_STORAGE_PROOFS) result << translate("Storage proofs");
-    if (capabilities & cybou::p2p::CAP_BOOTSTRAP) result << translate("Bootstrap");
     if (capabilities & cybou::p2p::CAP_OPERATION_RELAY) result << translate("Operation relay");
     return result.isEmpty() ? translate("None advertised") : result.join(QStringLiteral(", "));
 }
@@ -242,10 +241,6 @@ void DiagnosticsPage::refresh()
               status.finality_known && authority.scanned_height >= status.finalized_height ? tr("Up to date") : tr("Catching up"))
         : tr("Not available"), parent);
     Row(m_rows, tr("Identity Authority"), tr("Informational only"), parent);
-    // Validation (pre-finalization) is informational and never canonical.
-    Row(m_rows, tr("Validation"), m_model->capabilities().validation
-        ? (m_model->validationStatusShown() ? tr("Observing (informational, not final)") : tr("Hidden by settings"))
-        : tr("Not available"), parent);
 
     ClearLayout(m_services);
     const auto& caps = m_model->capabilities();

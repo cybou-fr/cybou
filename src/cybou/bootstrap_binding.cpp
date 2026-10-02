@@ -164,6 +164,15 @@ bool VerifyBootstrapNetworkBinding(const BootstrapNetworkBinding& binding)
         binding.authority_signature, message);
 }
 
+bool VerifyBootstrapNetworkBinding(const BootstrapNetworkBinding& binding,
+    const IdentityHybridPublicKey& trusted_authority_key)
+{
+    if (!VerifyBootstrapNetworkBinding(binding)) return false;
+    const auto network = DeserializeCybouNetworkFile(binding.network_file);
+    if (!network || network->definition.poa_finalizer_public_key != trusted_authority_key) return false;
+    return true;
+}
+
 std::optional<std::vector<unsigned char>> EncodeBootstrapNetworkBinding(
     const BootstrapNetworkBinding& binding)
 {

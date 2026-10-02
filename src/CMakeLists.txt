@@ -104,7 +104,6 @@ add_library(cybou_node STATIC
   cybou/node_service.cpp
   cybou/bootstrap_binding.cpp
   cybou/bootstrap_binding_store.cpp
-  cybou/bootstrap_identity.cpp
   cybou/operation_relay.cpp
   cybou/bootstrap_protocol.cpp
   cybou/bootstrap_store.cpp

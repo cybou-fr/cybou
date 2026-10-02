@@ -72,7 +72,6 @@ private Q_SLOTS:
     void restoreFillsInProgressively();
     void liveMailAndFilesThroughCoreAdapter();
     void rotationKeepsLiveSessionWorking();
-    void operationValidationNeverActsAsFinality();
     void identityAuthorityIsAnHonestPreview();
 
 private:

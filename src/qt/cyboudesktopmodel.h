@@ -40,8 +40,6 @@ struct CybouCapabilities {
     bool version_history{false};
     /** Identity Authority preview is computed from finalized history. */
     bool authority{false};
-    /** Live network validation (pre-finalization) exists. False until core provides it. */
-    bool validation{false};
 };
 
 enum class CybouGeoAdmissionStatus : quint8 { NotRequired, Waiting, Ready };
@@ -259,14 +257,9 @@ public:
     std::optional<CybouOperationStatus> operationStatus(const QString& operation_id) const;
     /**
      * The operation state to show for an item whose own state is `own`.
-     * PoA finality and failure always win. Validated appears only while
-     * validation is available and shown; otherwise it reads as Submitted.
-     * It never affects balances or content durability.
+     * PoA finality and failure always win.
      */
     CybouOperationState displayedOperationState(const QString& operation_id, CybouOperationState own) const;
-    /** User preference: show "Validated" for operations (informational only). */
-    bool validationStatusShown() const { return m_validation_shown; }
-    void setValidationStatusShown(bool shown);
 
     const QVector<CybouContact>& contacts() const { return m_contacts; }
     void setContacts(QVector<CybouContact> contacts);
@@ -439,7 +432,6 @@ private:
     QHash<QString, CybouOperationStatus> m_operations;
     cybou::NodeDiagnosticsSnapshot m_network_diagnostics;
     CybouNetworkAuthorityStatus m_network_authority;
-    bool m_validation_shown{true};
     bool m_vault_locking{false};
 
     void refreshFinalizedName();

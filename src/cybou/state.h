@@ -20,9 +20,7 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_STATE_VERSION{9};
-inline constexpr uint8_t CYBOU_STATE_RECOVERY_GRANT_VERSION{8};
-inline constexpr uint8_t CYBOU_STATE_LEGACY_VERSION{7};
+inline constexpr uint8_t CYBOU_STATE_VERSION{10};
 
 struct AccountState {
     uint64_t balance{0};
@@ -48,20 +46,7 @@ struct GenesisAllocation {
     friend bool operator==(const GenesisAllocation&, const GenesisAllocation&) = default;
 };
 
-/** Genesis grant reserves a stable AccountID for one RecoveryKeyID. AccountCreate
- * claims the grant only when both match. The role then follows AccountID.
- */
-struct GenesisBootstrapGrant {
-    IdentityKeyId recovery_key_id{};
-    bool claimed{false};
-
-    friend bool operator==(const GenesisBootstrapGrant&, const GenesisBootstrapGrant&) = default;
-};
-
 inline constexpr size_t MAX_GENESIS_ALLOCATIONS{16};
-inline constexpr size_t MIN_GENESIS_BOOTSTRAP_GRANTS{1};
-inline constexpr size_t MAX_GENESIS_BOOTSTRAP_GRANTS{4};
-inline constexpr size_t MAX_LEGACY_GENESIS_BOOTSTRAP_GRANTS{16};
 
 struct CybouState {
     uint64_t onboarding_pool{0};
@@ -72,13 +57,6 @@ struct CybouState {
     NameRegistry names;
     /** Keyed by recovery key id; immutable except for the one-time claim. */
     std::map<IdentityKeyId, GenesisAllocation> genesis_allocations;
-    /** Target v9 grants: stable AccountID -> expected RecoveryKeyID + claim bit. */
-    std::map<AccountId, GenesisBootstrapGrant> genesis_bootstrap_grants;
-    /** v8 compatibility only; new genesis must not populate this map. */
-    std::map<IdentityKeyId, std::optional<AccountId>> legacy_genesis_bootstrap_grants;
-
-    bool HasBootstrapGrant(const AccountId& account_id) const;
-    std::optional<IdentityHybridPublicKey> BootstrapAuthorizationKey(const AccountId& account_id) const;
 };
 
 enum class AccountCreateStateError : uint8_t {
@@ -125,13 +103,9 @@ enum class StateValidationError : uint8_t {
     DUPLICATE_RECOVERY_BINDING,
     BALANCE_OVERFLOW,
     INVALID_NAME_REGISTRY,
-    INVALID_BOOTSTRAP_GRANTS,
 };
 
 StateValidationError ValidateCybouState(const CybouState& state);
-bool HasValidGenesisBootstrapRoster(const CybouState& state);
-bool SetGenesisBootstrapRoster(CybouState& state,
-    std::span<const std::pair<AccountId, IdentityKeyId>> roster);
 uint64_t TotalSupply(const CybouState& state);
 
 std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& state);

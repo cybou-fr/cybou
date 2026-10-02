@@ -55,10 +55,6 @@ struct NodeRuntimeConfig {
     bool storage_enabled{false};
     uint64_t storage_capacity_bytes{0};
     std::shared_ptr<EventWriter> event_writer;
-    /** Optional unlocked bootstrap Identity integration; key material stays outside runtime. */
-    std::optional<AccountId> bootstrap_identity_account;
-    std::function<std::optional<std::vector<unsigned char>>(std::span<const unsigned char>)>
-        bootstrap_proof_signer;
     /** Required local address policy for all public P2P sockets. */
     std::shared_ptr<const p2p::PeerAdmissionPolicy> peer_admission_policy;
 };
@@ -244,10 +240,6 @@ public:
     /** Encoded PROVIDER_PROOF for a handshake message; nullopt unless storage is enabled. */
     std::optional<std::vector<unsigned char>> SignProviderProof(std::span<const unsigned char> message) const;
     std::optional<std::vector<unsigned char>> SignFinalizerTransportProof(std::span<const unsigned char> message) const;
-    std::optional<AccountId> LocalBootstrapAccountId() const;
-    std::optional<std::vector<unsigned char>> SignBootstrapTransportProof(
-        std::span<const unsigned char> message) const;
-    std::optional<IdentityHybridPublicKey> BootstrapAuthorizationKey(const AccountId& account_id) const;
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStoragePeer(
         const std::string& address, uint16_t port, const std::array<unsigned char, 32>& provider_id,
         const uint256& publication_operation_id, const ChunkId& chunk_id);

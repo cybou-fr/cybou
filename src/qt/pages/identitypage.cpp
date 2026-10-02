@@ -281,7 +281,6 @@ QWidget* IdentityPage::buildContent()
     authority_header->addWidget(MutedText(tr("Derived from finalized history."), page), 1);
     authority->addLayout(authority_header);
     m_authority_value = DetailRow(authority, tr("Authority"), page);
-    m_authority_qualification = DetailRow(authority, tr("Validation qualification"), page);
     authority->addWidget(MutedText(tr("Authority is informational. It does not control network limits or PoA finality."), page));
     m_authority_toggle = new QToolButton{page};
     m_authority_toggle->setObjectName(QStringLiteral("sectionLink"));
@@ -423,8 +422,6 @@ void IdentityPage::refreshAuthority()
     if (!shown) return;
     const QLocale locale;
     m_authority_value->setText(locale.toString(authority.value));
-    m_authority_qualification->setText(authority.validator_qualified
-        ? tr("Validator-qualified") : tr("Below %1").arg(locale.toString(cybou::AUTHORITY_VALIDATOR_QUALIFICATION)));
     ClearLayout(m_authority_rows);
     const auto add = [this, &locale](const QString& key, quint64 value) {
         DetailRow(m_authority_rows, key, m_authority_details)->setText(locale.toString(value));

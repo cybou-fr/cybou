@@ -37,8 +37,6 @@ public:
     static QString autoLockMinutesKey() { return QStringLiteral("security/auto_lock_minutes"); }
     static constexpr int DEFAULT_AUTO_LOCK_MINUTES{15};
     static QString downloadFolderKey() { return QStringLiteral("files/download_folder"); }
-    /** Show "Validated" on operations (informational; only finality is canonical). */
-    static QString showValidationKey() { return QStringLiteral("network/show_validation"); }
     static QString languageKey() { return QStringLiteral("desktop/language"); }
 
 private:
@@ -50,8 +48,6 @@ private:
     QCheckBox* m_mail_previews{nullptr};
     QCheckBox* m_notifications{nullptr};
     QComboBox* m_auto_lock{nullptr};
-    QWidget* m_validation_section{nullptr};
-    QCheckBox* m_show_validation{nullptr};
     QLabel* m_download_folder{nullptr};
     QLabel* m_data_directory{nullptr};
 

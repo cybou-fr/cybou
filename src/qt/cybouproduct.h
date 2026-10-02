@@ -65,19 +65,13 @@ enum class CybouContentState {
  *   Local       exists only on this computer
  *   Preparing   being built and signed
  *   Submitted   handed to the network
- *   Validated   validation happened: PRE-FINALIZED, not canonical
  *   Finalized   included in a PoA-finalized block: canonical
  *   Failed      terminal local failure for exact OperationID; verified finality wins
- *
- * Validated never changes balances, never starts remote storage and is
- * never Protected; Protected and Securing are content durability, which
- * begins only after Finalized.
  */
 enum class CybouOperationState {
     Local,
     Preparing,
     Submitted,
-    Validated,
     Finalized,
     Failed,
 };
@@ -86,8 +80,6 @@ enum class CybouOperationState {
 struct CybouOperationStatus {
     QString operation_id;
     CybouOperationState state{CybouOperationState::Local};
-    /** Network validation confirmations; 0 until live validation exists. */
-    quint32 validation_confirmations{0};
     quint64 finalized_height{0};
     QString error;
 };
@@ -99,7 +91,6 @@ struct CybouAuthoritySummary {
     quint64 activity{0};
     quint64 system_contribution{0};
     quint64 value{0};
-    bool validator_qualified{false};
     /** Finalized height the Authority index has scanned up to. */
     quint64 scanned_height{0};
     bool operator==(const CybouAuthoritySummary&) const = default;
@@ -282,14 +273,13 @@ inline bool contentOnNetwork(CybouContentState state)
     return state == CybouContentState::Protected || state == CybouContentState::Received;
 }
 
-/** Operation wording; Validated is informational (pre-finalized). */
+/** Operation wording. */
 inline QString operationStateText(CybouOperationState state)
 {
     switch (state) {
     case CybouOperationState::Local: return QCoreApplication::translate("CybouProduct", "On this device");
     case CybouOperationState::Preparing: return QCoreApplication::translate("CybouProduct", "Preparing…");
     case CybouOperationState::Submitted: return QCoreApplication::translate("CybouProduct", "Waiting for confirmation");
-    case CybouOperationState::Validated: return QCoreApplication::translate("CybouProduct", "Validated");
     case CybouOperationState::Finalized: return QCoreApplication::translate("CybouProduct", "Finalized");
     case CybouOperationState::Failed: return QCoreApplication::translate("CybouProduct", "Failed");
     }
@@ -300,13 +290,12 @@ inline QString operationStateText(CybouOperationState state)
 inline bool operationPending(CybouOperationState state)
 {
     return state == CybouOperationState::Local || state == CybouOperationState::Preparing ||
-        state == CybouOperationState::Submitted || state == CybouOperationState::Validated;
+        state == CybouOperationState::Submitted;
 }
 
 /**
- * Content text with the operation axis applied: only while content is still
- * waiting for finality can a Validated operation show as "Validated". Once
- * content is Securing, Protected or Received, the content axis speaks.
+ * Content text with the operation axis applied: while content is still waiting
+ * for finality, Local content in flight shows its operation.
  */
 inline QString contentWithOperationText(CybouContentState content, CybouOperationState operation, bool online = true)
 {

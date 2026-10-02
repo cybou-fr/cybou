@@ -101,8 +101,6 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     caps.payments = true;
     caps.mail = true;
     caps.files = true;
-    // Fixture-only: live validation does not exist in core yet (capability false there).
-    caps.validation = true;
     model.setCapabilities(caps);
 
     // Derived Authority preview: Age 284 + Activity 198 + System contribution 1,000.
@@ -112,7 +110,6 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     authority.activity = 198;
     authority.system_contribution = 1000;
     authority.value = 1482;
-    authority.validator_qualified = false;
     authority.scanned_height = 1242;
     model.setAuthority(authority);
 
@@ -260,9 +257,6 @@ void ApplyWallet(CybouDesktopModel& model)
     entries.append(entry(QStringLiteral("w3"), CybouWalletEntryKind::NetworkServiceFee, -4, true, {}, At(1, 12, 20)));
     entries.append(entry(QStringLiteral("w4"), CybouWalletEntryKind::OnboardingCredit, 5000, true, {}, At(6, 10, 58)));
     model.setWalletEntries(entries);
-    // Simulated network validation for the fixture only; balances stay finalized-only.
-    model.setOperationStatus({.operation_id = QStringLiteral("op-w-validated"), .state = CybouOperationState::Validated,
-        .validation_confirmations = 3});
 }
 
 void ApplyActivity(CybouDesktopModel& model)
@@ -339,9 +333,6 @@ bool apply(CybouDesktopModel& model, const QString& name)
         mail.prepend(outgoing);
     }
     backend->seed(mail, FixtureFiles());
-    // Fixture-only validation of the outgoing message above: informational, not final.
-    model.setOperationStatus({.operation_id = QStringLiteral("op-m-sent-validated"),
-        .state = CybouOperationState::Validated, .validation_confirmations = 3});
     return true;
 }
 

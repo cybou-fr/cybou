@@ -48,33 +48,8 @@ std::shared_ptr<cybou::EventWriter> events;
 std::vector<std::pair<std::string,uint16_t>> explicit_peers;
 std::optional<std::pair<std::string,uint16_t>> advertised_endpoint;
 std::shared_ptr<const cybou::p2p::PeerAdmissionPolicy> active_peer_admission_policy;
-std::unique_ptr<cybou::CybouKeyStore> active_bootstrap_keystore;
 
 void Stop(int) { stopping.store(true); }
-
-void ConfigureBootstrapIdentity(cybou::NodeRuntimeConfig& config)
-{
-    if (!active_bootstrap_keystore) return;
-    const auto account = active_bootstrap_keystore->GetAccountId();
-    if (!account) throw std::runtime_error("cannot read bootstrap Identity account");
-    config.bootstrap_identity_account = *account;
-    config.bootstrap_proof_signer = [](const std::span<const unsigned char> message)
-        -> std::optional<std::vector<unsigned char>> {
-        if (!active_bootstrap_keystore || message.empty()) return std::nullopt;
-        const auto signature = active_bootstrap_keystore->SignAuthorization(message);
-        if (!signature || signature->ml_dsa.size() != 2420) return std::nullopt;
-        std::vector<unsigned char> bytes(signature->ed25519.begin(), signature->ed25519.end());
-        bytes.insert(bytes.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
-        return bytes;
-    };
-}
-
-void RequireBootstrapIdentityAuthorized(const cybou::CybouNodeRuntime& runtime)
-{
-    if (active_bootstrap_keystore && !runtime.LocalBootstrapAccountId()) {
-        throw std::runtime_error("bootstrap Identity has no claimed grant in this network");
-    }
-}
 
 std::vector<unsigned char> ReadFile(const std::filesystem::path& path, const size_t limit)
 {
@@ -241,10 +216,8 @@ int PrintPeerSubmitResult(const cybou::p2p::PeerSubmitResult& result)
 int Execute(const int argc, char* argv[])
 {
     if (argc == 2 && std::string_view{argv[1]} == "network-bootstrap") {
-        // Optional CYP2 peer hints. The bootstrap protocol has separate
-        // locators and this legacy DEV deployment is not a CYP2 peer.
-        for (const auto& endpoint : cybou::CYBOU_DEV_BOOTSTRAP_NODES) {
-            std::cout << endpoint.host << ':' << endpoint.p2p_port << '\n';
+        for (const auto& endpoint : cybou::OFFICIAL_DEVNET_BOOTSTRAP_LOCATORS) {
+            std::cout << endpoint.host << ':' << endpoint.port << '\n';
         }
         return 0;
     }
@@ -508,7 +481,6 @@ int Execute(const int argc, char* argv[])
             .poa_finalizer_recovery_entropy = std::move(finalizer_key),
             .db_cache_bytes = 8 << 20,
         };
-        ConfigureBootstrapIdentity(config);
         if (argc == 10) {
             config.storage_enabled = true;
             config.storage_capacity_bytes = CapacityBytes(argv[9]);
@@ -532,7 +504,6 @@ int Execute(const int argc, char* argv[])
                 for (int i=0;i<20 && !stop.stop_requested() && !stopping;++i) std::this_thread::sleep_for(std::chrono::milliseconds{100});
             }
         }};
-        RequireBootstrapIdentityAuthorized(node_service.Runtime());
         const auto result = node_service.RunFinalizer(cybou::CybouFinalizerServiceConfig{
             .bind_address = bind_address.to_string(), .p2p_port = p2p_port,
             .block_interval_ms = interval_ms, .peers = gossip_endpoints,
@@ -558,7 +529,6 @@ int Execute(const int argc, char* argv[])
             .storage_enabled = provider,
             .storage_capacity_bytes = capacity,
         };
-        ConfigureBootstrapIdentity(config);
         config.peer_admission_policy = active_peer_admission_policy;
         config.event_writer = events;
         cybou::CybouNodeService node_service{{
@@ -566,7 +536,6 @@ int Execute(const int argc, char* argv[])
             .genesis = network->genesis,
         }};
         node_service.Start();
-        RequireBootstrapIdentityAuthorized(node_service.Runtime());
         if (argc == 9 && explicit_peers.size()) node_service.Runtime().SetExplicitPeerEndpoints(explicit_peers);
         std::atomic<std::uint64_t> last_height{0};
         node_service.StartNetwork(cybou::CybouNetworkServiceConfig{.sync_interval = std::chrono::milliseconds{1000}, .listen_endpoint = listen_port ? std::optional{listen} : std::nullopt},
@@ -614,8 +583,6 @@ const char* Help = R"(CYBOU operator CLI (CYP2 only)
                 --capacity 20GiB [--peers FILE] [--event-log FILE] [--event-log-mode minimal|lab]
   observer run  --network FILE --data-dir DIR --peer IP:PORT
                 [--listen IP:PORT] [--peers FILE] [--event-log FILE] [--event-log-mode minimal|lab]
-  Any run command may enable the genesis-granted bootstrap capability with
-                --bootstrap-vault FILE --bootstrap-password-file FILE
   network info --network FILE
   network init-dev --network FILE --key-file FILE
          [--authority-balance CYBOU --authority-name LABEL]
@@ -779,7 +746,6 @@ int StorageCommand(const std::string& action, const cybou::cli::Options& opts)
 int Main(int argc, char* argv[])
 {
     active_peer_admission_policy.reset();
-    active_bootstrap_keystore.reset();
     if (argc == 1 || std::any_of(argv+1,argv+argc,[](const char* arg){ return std::string_view{arg}=="--help"; })) {
         std::cout << Help; return 0;
     }
@@ -804,22 +770,10 @@ int Main(int argc, char* argv[])
             args.insert(args.end(),{opts.Require("authority-balance"),opts.Require("authority-name")});
         }
     } else if ((group=="finalizer" || group=="provider" || group=="observer") && action=="run") {
-        if (group=="finalizer") opts.Allow({"network","data-dir","key-file","listen","block-interval","peers","event-log","event-log-mode","capacity","advertise","bootstrap-vault","bootstrap-password-file",
+        if (group=="finalizer") opts.Allow({"network","data-dir","key-file","listen","block-interval","peers","event-log","event-log-mode","capacity","advertise",
             "peer-admission","geo-country-csv","geo-sha256","geo-issued-month"});
-        else opts.Allow({"network","data-dir","peer","listen","peers","capacity","event-log","event-log-mode","advertise","bootstrap-vault","bootstrap-password-file",
+        else opts.Allow({"network","data-dir","peer","listen","peers","capacity","event-log","event-log-mode","advertise",
             "peer-admission","geo-country-csv","geo-sha256","geo-issued-month"});
-        if (opts.Has("bootstrap-vault") != opts.Has("bootstrap-password-file"))
-            throw std::invalid_argument("bootstrap capability requires both --bootstrap-vault and --bootstrap-password-file");
-        if (opts.Has("bootstrap-vault")) {
-            auto password_bytes = cybou::ReadSecretFile(opts.Get("bootstrap-password-file"), 1024);
-            if (!password_bytes) throw std::runtime_error("bootstrap password file must be a private regular file");
-            std::string password(password_bytes->begin(), password_bytes->end());
-            cybou::crypto::CleanseMemory(password_bytes->data(), password_bytes->size());
-            active_bootstrap_keystore = std::make_unique<cybou::CybouKeyStore>();
-            const bool unlocked = active_bootstrap_keystore->LoadFromFile(opts.Get("bootstrap-vault"), password);
-            cybou::crypto::CleanseMemory(password.data(), password.size());
-            if (!unlocked) throw std::runtime_error("cannot unlock bootstrap Identity vault");
-        }
         ConfigurePeerAdmission(opts, opts.Require("data-dir"));
         if (opts.Has("event-log-mode") && opts.Get("event-log-mode")!="minimal" && opts.Get("event-log-mode")!="lab")
             throw std::invalid_argument("event log mode must be minimal or lab");

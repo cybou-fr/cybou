@@ -418,7 +418,6 @@ void CybouDesktopController::publishAuthority()
             summary.activity = record->activity;
             summary.system_contribution = record->system_contribution;
             summary.value = record->value;
-            summary.validator_qualified = record->value >= cybou::AUTHORITY_VALIDATOR_QUALIFICATION;
         }
     }
     QMetaObject::invokeMethod(m_model, [model = m_model, summary] { model->setAuthority(summary); },

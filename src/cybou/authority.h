@@ -18,7 +18,6 @@
 namespace cybou {
 
 class CybouNodeRuntime;
-inline constexpr std::uint64_t AUTHORITY_VALIDATOR_QUALIFICATION{1'000'000};
 
 /**
  * Local indexing policy for the informational Authority metric. It has no

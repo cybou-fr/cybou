@@ -197,124 +197,6 @@ BOOST_AUTO_TEST_CASE(stable_tls_identity_accepts_matching_spki_pin_and_rejects_m
     std::filesystem::remove(identity->private_key);
 }
 
-BOOST_AUTO_TEST_CASE(bootstrap_capability_requires_session_bound_authorized_identity_proof)
-{
-    CybouServiceTestFixture fixture;
-    std::array<unsigned char, 32> client_seed{};
-    std::array<unsigned char, 32> server_seed{};
-    client_seed[0] = 0x61;
-    server_seed[0] = 0x62;
-    uint256 client_raw{}, server_raw{};
-    client_raw.begin()[0] = 0x63;
-    server_raw.begin()[0] = 0x64;
-    const cybou::AccountId client_account{client_raw}, server_account{server_raw};
-    const auto client_key = cybou::DeriveIdentityPublicKey(client_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
-    const auto server_key = cybou::DeriveIdentityPublicKey(server_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
-    BOOST_REQUIRE(client_key && server_key);
-    const auto signer = [](const std::array<unsigned char, 32>& seed) {
-        return [seed](std::span<const unsigned char> message) -> std::optional<std::vector<unsigned char>> {
-            const auto signature = cybou::SignIdentityMessage(seed, cybou::IdentityKeyPurpose::AUTHORIZATION, message);
-            if (!signature) return std::nullopt;
-            std::vector<unsigned char> bytes(signature->ed25519.begin(), signature->ed25519.end());
-            bytes.insert(bytes.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
-            return bytes;
-        };
-    };
-    const cybou::p2p::BootstrapProofIdentity client_identity{client_account, signer(client_seed)};
-    const cybou::p2p::BootstrapProofIdentity server_identity{server_account, signer(server_seed)};
-    const auto network = fixture.runtime->GetNetworkId();
-    boost::asio::io_context io;
-    using boost::asio::ip::tcp;
-    tcp::acceptor acceptor{io, {boost::asio::ip::address_v4::loopback(), 0}};
-    std::optional<cybou::AccountId> server_verified, client_verified;
-    bool server_ok{false};
-    std::jthread server{[&] {
-        tcp::socket socket{io};
-        acceptor.accept(socket);
-        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        const cybou::p2p::BootstrapIdentityResolver resolver = [&](const cybou::AccountId& account) {
-            return account == client_account ? client_key : std::nullopt;
-        };
-        server_ok = session.Handshake({.network_id = network, .finalized_height = 0,
-            .finalized_tip = fixture.definition.genesis_block_id, .capabilities = cybou::p2p::CAP_BOOTSTRAP,
-            .nonce = 1701}, {}, {}, nullptr, &server_identity, resolver);
-        if (server_ok) server_verified = session.PeerBootstrapAccountId();
-    }};
-    tcp::socket socket{io};
-    socket.connect({boost::asio::ip::address_v4::loopback(), acceptor.local_endpoint().port()});
-    cybou::p2p::PeerSession client{std::move(socket), cybou::p2p::TransportRole::CLIENT};
-    const cybou::p2p::BootstrapIdentityResolver resolver = [&](const cybou::AccountId& account) {
-        return account == server_account ? server_key : std::nullopt;
-    };
-    const bool client_ok = client.Handshake({.network_id = network, .finalized_height = 0,
-        .finalized_tip = fixture.definition.genesis_block_id, .capabilities = cybou::p2p::CAP_BOOTSTRAP,
-        .nonce = 1702}, {}, {}, nullptr, &client_identity, resolver);
-    if (client_ok) client_verified = client.PeerBootstrapAccountId();
-    server.join();
-    BOOST_REQUIRE(server_ok && client_ok);
-    BOOST_CHECK(server_verified == client_account);
-    BOOST_CHECK(client_verified == server_account);
-
-    const auto message = cybou::p2p::BootstrapProofMessage(
-        {.network_id = network, .nonce = 1}, {.network_id = network, .nonce = 2},
-        std::span<const unsigned char>{}, client_account);
-    BOOST_CHECK(message.empty()); // exporter is mandatory; a session nonce is not a substitute.
-}
-
-BOOST_AUTO_TEST_CASE(pinned_initial_locator_requires_tls_bound_recovery_identity_claim)
-{
-    CybouServiceTestFixture fixture;
-    const auto tls_identity = CreateTestTlsIdentity(fixture.directory);
-    BOOST_REQUIRE(tls_identity);
-    std::array<unsigned char, 32> recovery_seed{};
-    recovery_seed[0] = 0x71;
-    const auto recovery_key = cybou::DeriveIdentityPublicKey(recovery_seed,
-        cybou::IdentityKeyPurpose::RECOVERY_ROOT);
-    BOOST_REQUIRE(recovery_key);
-    uint256 raw_account{};
-    raw_account.begin()[0] = 0x72;
-    const cybou::AccountId account_id{raw_account};
-    boost::asio::io_context io;
-    using boost::asio::ip::tcp;
-    tcp::acceptor acceptor{io, {boost::asio::ip::address_v4::loopback(), 0}};
-    bool served{false};
-    std::jthread server{[&] {
-        tcp::socket socket{io};
-        acceptor.accept(socket);
-        cybou::p2p::TlsSessionConfig config;
-        config.certificate_chain_file = tls_identity->certificate;
-        config.private_key_file = tls_identity->private_key;
-        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER, config};
-        const auto signer = [&](std::span<const unsigned char> message) -> std::optional<std::vector<unsigned char>> {
-            const auto signature = cybou::SignIdentityMessage(recovery_seed,
-                cybou::IdentityKeyPurpose::RECOVERY_ROOT, message);
-            if (!signature) return std::nullopt;
-            std::vector<unsigned char> bytes(signature->ed25519.begin(), signature->ed25519.end());
-            bytes.insert(bytes.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
-            return bytes;
-        };
-        served = session.ServeBootstrapIdentityClaim(account_id, *recovery_key, signer);
-    }};
-    tcp::socket socket{io};
-    socket.connect({boost::asio::ip::address_v4::loopback(), acceptor.local_endpoint().port()});
-    cybou::p2p::TlsSessionConfig config;
-    config.expected_server_spki_sha256 = tls_identity->pin;
-    cybou::p2p::PeerSession client{std::move(socket), cybou::p2p::TransportRole::CLIENT, config};
-    auto claim = client.RequestBootstrapIdentityClaim();
-    server.join();
-    BOOST_REQUIRE(served && claim);
-    BOOST_CHECK(claim->account_id == account_id);
-    BOOST_CHECK(claim->recovery_key == *recovery_key);
-    BOOST_CHECK(std::ranges::any_of(claim->challenge, [](unsigned char byte) { return byte != 0; }));
-    BOOST_CHECK(cybou::ComputeRecoveryKeyId(claim->recovery_key));
-    const auto encoded = cybou::EncodeBootstrapIdentityClaim(*claim);
-    BOOST_REQUIRE(encoded);
-    const auto decoded = cybou::DecodeBootstrapIdentityClaim(*encoded);
-    BOOST_CHECK(decoded == claim);
-    std::filesystem::remove(tls_identity->certificate);
-    std::filesystem::remove(tls_identity->private_key);
-}
-
 BOOST_AUTO_TEST_CASE(manager_tracks_two_live_peers_and_drops_closed_sockets)
 {
     CybouServiceTestFixture fixture;
@@ -447,8 +329,6 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
     BOOST_REQUIRE(bootstrap_recovery_id);
 
     auto genesis = cybou::CreateDevGenesisState();
-    genesis.genesis_bootstrap_grants.emplace(*bootstrap_account,
-        cybou::GenesisBootstrapGrant{.recovery_key_id = *bootstrap_recovery_id});
     auto definition = cybou::CreateDevNetworkDefinition(genesis,
         cybou::TestPoaFinalizerPublicKey(fixture.validator_seed[0]));
     definition.protocol_parameters.account_creation_work_bits = 0;
@@ -513,7 +393,6 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
     }};
     BOOST_REQUIRE(relay_node.InitializeGenesis(genesis));
     BOOST_REQUIRE(static_cast<bool>(relay_node.CommitBlock(*bootstrap_claim_block)));
-    BOOST_REQUIRE(!relay_node.LocalBootstrapAccountId());
 
     cybou::CybouNodeRuntime second_relay_node{{
         .network_definition = definition,
@@ -524,7 +403,6 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
     }};
     BOOST_REQUIRE(second_relay_node.InitializeGenesis(genesis));
     BOOST_REQUIRE(static_cast<bool>(second_relay_node.CommitBlock(*bootstrap_claim_block)));
-    BOOST_REQUIRE(!second_relay_node.LocalBootstrapAccountId());
 
     cybou::p2p::InboundPeerServer server{relay_node, io, tcp::endpoint{loopback, endpoint.second}};
     BOOST_REQUIRE_NE(server.Port(), 0U);
@@ -589,7 +467,6 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
     cybou::p2p::PeerManager client_peers{client};
     BOOST_REQUIRE(client_peers.Connect(server_endpoint.first, server_endpoint.second));
     BOOST_REQUIRE_EQUAL(client_peers.Peers().size(), 1U);
-    BOOST_CHECK(!client_peers.Peers().front().bootstrap_account_id);
     BOOST_CHECK(client_peers.Peers().front().hello.capabilities & cybou::p2p::CAP_OPERATION_RELAY);
 
     const auto submitted = client_peers.SubmitOperationToAny({server_endpoint}, client_operation);

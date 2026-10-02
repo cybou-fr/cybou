@@ -758,7 +758,7 @@ void CybouShellTests::networkMonitorUsesCoreSnapshot()
     cybou::NodeDiagnosticsSnapshot snapshot;
     snapshot.network_id="lab"; snapshot.height=12; snapshot.tip="tip"; snapshot.state_root="root";
     snapshot.peers.push_back({"127.0.0.1:30471",9,
-        cybou::p2p::CAP_BOOTSTRAP | cybou::p2p::CAP_OPERATION_RELAY | cybou::p2p::CAP_STORAGE,"provider"});
+        cybou::p2p::CAP_OPERATION_RELAY | cybou::p2p::CAP_STORAGE,"provider"});
     snapshot.operations.push_back({"operation",3,12});
     model.setNetworkDiagnostics(snapshot);
     DiagnosticsPage page{&model,[]{}};
@@ -2004,85 +2004,7 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
 }
 
 
-void CybouShellTests::operationValidationNeverActsAsFinality()
-{
-    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
-    CybouCapabilities caps;
-    caps.payments = true;
-    model.setCapabilities(caps);
-    model.setBalances(1000, 50);
-    const QString op = QStringLiteral("op-pay");
 
-    // Without live validation, a validated report reads as still waiting.
-    model.setOperationStatus({.operation_id = op, .state = CybouOperationState::Validated, .validation_confirmations = 3});
-    QCOMPARE(model.displayedOperationState(op, CybouOperationState::Submitted), CybouOperationState::Submitted);
-    caps.validation = true;
-    model.setCapabilities(caps);
-    QCOMPARE(model.displayedOperationState(op, CybouOperationState::Submitted), CybouOperationState::Validated);
-    QVERIFY(CybouProduct::operationPending(CybouOperationState::Validated)); // Validated != Finalized
-    // The user can hide it; nothing else changes.
-    model.setValidationStatusShown(false);
-    QCOMPARE(model.displayedOperationState(op, CybouOperationState::Submitted), CybouOperationState::Submitted);
-    model.setValidationStatusShown(true);
-
-    // Balances come only from finalized state: validation never moves them.
-    QCOMPARE(model.status().balance, quint64{1000});
-    QCOMPARE(model.status().system_balance, quint64{50});
-
-    // PoA finality wins and is never undone by a later validation report.
-    QCOMPARE(model.displayedOperationState(op, CybouOperationState::Finalized), CybouOperationState::Finalized);
-    model.setOperationStatus({.operation_id = op, .state = CybouOperationState::Finalized, .finalized_height = 9});
-    model.setOperationStatus({.operation_id = op, .state = CybouOperationState::Validated});
-    QCOMPARE(model.operationStatus(op)->state, CybouOperationState::Finalized);
-    QCOMPARE(model.displayedOperationState(op, CybouOperationState::Submitted), CybouOperationState::Finalized);
-
-    const auto failed_op = QStringLiteral("op-failed");
-    model.setOperationStatus({.operation_id = failed_op, .state = CybouOperationState::Failed});
-    for (const auto state : {CybouOperationState::Preparing, CybouOperationState::Submitted,
-                            CybouOperationState::Validated}) {
-        model.setOperationStatus({.operation_id = failed_op, .state = state});
-        QCOMPARE(model.operationStatus(failed_op)->state, CybouOperationState::Failed);
-    }
-    // Verified canonical inclusion supersedes a local failure.
-    model.setOperationStatus({.operation_id = failed_op, .state = CybouOperationState::Finalized});
-    model.setOperationStatus({.operation_id = failed_op, .state = CybouOperationState::Failed});
-    QCOMPARE(model.operationStatus(failed_op)->state, CybouOperationState::Finalized);
-    QCOMPARE(model.displayedOperationState(failed_op, CybouOperationState::Failed), CybouOperationState::Finalized);
-
-    // Incoming mail was discovered after finality: it never shows Validated.
-    model.setOperationStatus({.operation_id = QStringLiteral("op-in"), .state = CybouOperationState::Validated});
-    CybouMailItem incoming;
-    incoming.operation_id = QStringLiteral("op-in");
-    incoming.state = CybouContentState::Received;
-    QCOMPARE(model.displayedOperationState(incoming.operation_id, incoming.operation_state), CybouOperationState::Finalized);
-    QCOMPARE(CybouProduct::contentWithOperationText(incoming.state, CybouOperationState::Validated),
-        CybouProduct::contentStateText(CybouContentState::Received));
-
-    // Protected and Securing are post-finality storage: validation never replaces them,
-    // and validation never starts storage (the content axis is untouched).
-    QCOMPARE(CybouProduct::contentWithOperationText(CybouContentState::Protected, CybouOperationState::Validated),
-        CybouProduct::contentStateText(CybouContentState::Protected));
-    QCOMPARE(CybouProduct::contentWithOperationText(CybouContentState::Securing, CybouOperationState::Validated),
-        CybouProduct::contentStateText(CybouContentState::Securing));
-    QCOMPARE(CybouProduct::contentWithOperationText(CybouContentState::Local,
-        CybouOperationState::Validated), CybouProduct::operationStateText(CybouOperationState::Validated));
-
-    // Fixture: a validated outgoing message stays Local content (no storage before finality).
-    auto window = makeWindow();
-    auto* fixture_model = window->desktopModel();
-    QVERIFY(CybouUiFixtures::apply(*fixture_model, QStringLiteral("active")));
-    const auto* validated = fixture_model->mailItem(QStringLiteral("m-sent-validated"));
-    QVERIFY(validated);
-    QCOMPARE(validated->state, CybouContentState::Local); // no storage before finality
-    QCOMPARE(fixture_model->displayedOperationState(validated->operation_id, validated->operation_state),
-        CybouOperationState::Validated);
-    // Wallet rows: one each of waiting, validated and finalized; balance unchanged.
-    QStringList subtitles;
-    for (const auto* label : window->page(CybouPage::Wallet)->findChildren<QLabel*>()) subtitles << label->text();
-    QVERIFY(subtitles.contains(CybouProduct::operationStateText(CybouOperationState::Submitted)));
-    QVERIFY(subtitles.contains(CybouProduct::operationStateText(CybouOperationState::Validated)));
-    QCOMPARE(fixture_model->status().balance, quint64{5820});
-}
 
 void CybouShellTests::identityAuthorityIsAnHonestPreview()
 {
@@ -2103,10 +2025,6 @@ void CybouShellTests::identityAuthorityIsAnHonestPreview()
     QStringList texts;
     for (const auto* label : card()->findChildren<QLabel*>()) texts << label->text();
     QVERIFY(texts.contains(QLocale{}.toString(1482)));
-    QVERIFY(std::any_of(texts.begin(), texts.end(),
-        [](const QString& t) { return t.contains(QLatin1String{"Validation qualification"}); }));
-    QVERIFY(std::any_of(texts.begin(), texts.end(),
-        [](const QString& t) { return t.startsWith(QLatin1String{"Below "}); }));
     QVERIFY(std::none_of(texts.begin(), texts.end(),
         [](const QString& t) { return t.contains(QLatin1String{"Level"}) ||
             t.contains(QLatin1String{"Liveness"}) || t.contains(QLatin1String{"Penalties"}); }));

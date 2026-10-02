@@ -164,8 +164,7 @@ void CybouDesktopModel::setCapabilities(const CybouCapabilities& requested)
         m_capabilities.files == capabilities.files &&
         m_capabilities.sharing == capabilities.sharing &&
         m_capabilities.version_history == capabilities.version_history &&
-        m_capabilities.authority == capabilities.authority &&
-        m_capabilities.validation == capabilities.validation) {
+        m_capabilities.authority == capabilities.authority) {
         return;
     }
     m_capabilities = capabilities;
@@ -680,10 +679,9 @@ void CybouDesktopModel::setOperationStatus(const CybouOperationStatus& status)
         if (status.state == stored.state || status.state == CybouOperationState::Finalized) return true;
         if (status.state == CybouOperationState::Failed) return stored.state != CybouOperationState::Finalized;
         switch (stored.state) {
-        case CybouOperationState::Local: return status.state == CybouOperationState::Preparing || status.state == CybouOperationState::Submitted || status.state == CybouOperationState::Validated;
-        case CybouOperationState::Preparing: return status.state == CybouOperationState::Submitted || status.state == CybouOperationState::Validated;
-        case CybouOperationState::Submitted: return status.state == CybouOperationState::Validated;
-        case CybouOperationState::Validated: case CybouOperationState::Finalized: case CybouOperationState::Failed: return false;
+        case CybouOperationState::Local: return status.state == CybouOperationState::Preparing || status.state == CybouOperationState::Submitted;
+        case CybouOperationState::Preparing: return status.state == CybouOperationState::Submitted;
+        case CybouOperationState::Submitted: case CybouOperationState::Finalized: case CybouOperationState::Failed: return false;
         }
         return false;
     };
@@ -715,19 +713,7 @@ CybouOperationState CybouDesktopModel::displayedOperationState(const QString& op
         if (own == CybouOperationState::Failed) return own;
         if (static_cast<int>(status->state) > static_cast<int>(state)) state = status->state;
     }
-    if (state == CybouOperationState::Validated && !(m_capabilities.validation && m_validation_shown)) {
-        return CybouOperationState::Submitted;
-    }
     return state;
-}
-
-void CybouDesktopModel::setValidationStatusShown(bool shown)
-{
-    if (m_validation_shown == shown) return;
-    m_validation_shown = shown;
-    Q_EMIT walletChanged();
-    Q_EMIT mailChanged();
-    Q_EMIT filesChanged();
 }
 
 bool CybouDesktopModel::requestPayment(const QString& to_name, quint64 amount)
