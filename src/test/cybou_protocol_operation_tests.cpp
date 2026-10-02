@@ -141,6 +141,13 @@ BOOST_AUTO_TEST_CASE(operation_relay_is_volatile_bounded_and_mesh_deduplicated)
         cybou::ProtocolOperation{MakeTestSystemLock(MakeTestIdentity(2), 1)});
     BOOST_REQUIRE(unrelated_id);
     BOOST_CHECK(!relay.Acknowledge(*unrelated_id));
+    const auto claimed = relay.Claim();
+    BOOST_REQUIRE(claimed);
+    BOOST_CHECK(claimed->operation_id == *first_id);
+    BOOST_CHECK(!relay.Claim()); // A second peer cannot race the same FIFO head.
+    relay.Release(*first_id); // Failed transfer makes it available to the next peer.
+    BOOST_CHECK(!relay.Acknowledge(*first_id));
+    BOOST_REQUIRE(relay.Claim());
 
     auto second = MakeTestAccountCreate(MakeTestIdentity(3));
     second.work.nonce = 43;
@@ -152,6 +159,7 @@ BOOST_AUTO_TEST_CASE(operation_relay_is_volatile_bounded_and_mesh_deduplicated)
     BOOST_CHECK_EQUAL(relay.QueuedOperations(), 0U);
     BOOST_CHECK(relay.Enqueue(*first_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
     BOOST_CHECK(relay.Enqueue(*first_bytes, true) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_REQUIRE(relay.Claim());
     BOOST_CHECK(relay.Acknowledge(*first_id));
     BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
     relay.DetachFinalizer(*session);
@@ -165,11 +173,13 @@ BOOST_AUTO_TEST_CASE(operation_relay_is_volatile_bounded_and_mesh_deduplicated)
     BOOST_REQUIRE(next_session);
     const auto second_id = cybou::ComputeOperationId(cybou::ProtocolOperation{second});
     BOOST_REQUIRE(second_id);
+    BOOST_REQUIRE(relay.Claim());
     BOOST_CHECK(relay.Acknowledge(*second_id));
     BOOST_CHECK(!relay.HasQueued(*second_id));
     BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
     BOOST_CHECK(relay.Enqueue(*second_bytes, true) == cybou::OperationRelayEnqueueStatus::QUEUED);
     BOOST_CHECK(relay.HasQueued(*second_id));
+    BOOST_REQUIRE(relay.Claim());
     relay.ForgetFinalized(*second_id);
     BOOST_CHECK(!relay.HasQueued(*second_id));
     BOOST_CHECK_EQUAL(relay.QueuedOperations(), 0U);

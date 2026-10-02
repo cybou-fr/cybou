@@ -1295,26 +1295,36 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     if (request->type == MessageType::OPERATION_RELAY_POLL) {
         if (!m_peer || !(m_peer->capabilities & CAP_OPERATION_RELAY) ||
             !(m_local_capabilities & CAP_OPERATION_RELAY) || !request->payload.empty()) return false;
-        const auto item = runtime.PeekRelayedOperation();
+        const auto item = runtime.ClaimRelayedOperation();
         std::vector<unsigned char> meta{static_cast<unsigned char>(item.has_value())};
         if (item) {
             meta.insert(meta.end(), item->operation_id.begin(), item->operation_id.end());
             Put32(meta, static_cast<uint32_t>(item->exact_bytes.size()));
         }
         const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-        if (!Write(Frame{MessageType::OPERATION_RELAY_OPERATION_META, meta}, deadline)) return false;
+        if (!Write(Frame{MessageType::OPERATION_RELAY_OPERATION_META, meta}, deadline)) {
+            if (item) runtime.ReleaseRelayedOperation(item->operation_id);
+            return false;
+        }
         if (!item) return true;
         for (size_t offset = 0; offset < item->exact_bytes.size(); offset += MAX_FRAME_PAYLOAD) {
             const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, item->exact_bytes.size() - offset);
             if (!Write(Frame{MessageType::OPERATION_RELAY_OPERATION_CHUNK,
                     std::vector<unsigned char>{item->exact_bytes.begin() + offset,
-                        item->exact_bytes.begin() + offset + count}}, deadline)) return false;
+                        item->exact_bytes.begin() + offset + count}}, deadline)) {
+                runtime.ReleaseRelayedOperation(item->operation_id);
+                return false;
+            }
         }
         const auto ack = Read(deadline);
-        if (!ack || ack->type != MessageType::OPERATION_RELAY_ACK || ack->payload.size() != 32) return false;
+        if (!ack || ack->type != MessageType::OPERATION_RELAY_ACK || ack->payload.size() != 32) {
+            runtime.ReleaseRelayedOperation(item->operation_id);
+            return false;
+        }
         uint256 operation_id;
         std::copy_n(ack->payload.begin(), 32, operation_id.begin());
         const bool acknowledged = runtime.AcknowledgeRelayedOperation(operation_id);
+        if (!acknowledged) runtime.ReleaseRelayedOperation(item->operation_id);
         return Write(Frame{MessageType::OPERATION_RELAY_ACK_RESULT,
             {static_cast<unsigned char>(acknowledged)}}, deadline);
     }

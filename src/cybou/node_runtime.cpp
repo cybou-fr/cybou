@@ -433,9 +433,14 @@ OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
     return m_operation_relay.Enqueue(exact_bytes, allow_seen_retry);
 }
 
-std::optional<RelayedOperation> CybouNodeRuntime::PeekRelayedOperation() const
+std::optional<RelayedOperation> CybouNodeRuntime::ClaimRelayedOperation()
 {
-    return m_operation_relay.Peek();
+    return m_operation_relay.Claim();
+}
+
+void CybouNodeRuntime::ReleaseRelayedOperation(const uint256& operation_id)
+{
+    m_operation_relay.Release(operation_id);
 }
 
 bool CybouNodeRuntime::AcknowledgeRelayedOperation(const uint256& operation_id)

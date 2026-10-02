@@ -85,13 +85,29 @@ std::optional<RelayedOperation> OperationRelay::Peek() const
     return m_queue.front();
 }
 
+std::optional<RelayedOperation> OperationRelay::Claim()
+{
+    std::lock_guard lock{m_mutex};
+    if (m_queue.empty() || m_claimed_id) return std::nullopt;
+    m_claimed_id = m_queue.front().operation_id;
+    return m_queue.front();
+}
+
+void OperationRelay::Release(const uint256& operation_id)
+{
+    std::lock_guard lock{m_mutex};
+    if (m_claimed_id && *m_claimed_id == operation_id) m_claimed_id.reset();
+}
+
 bool OperationRelay::Acknowledge(const uint256& operation_id)
 {
     std::lock_guard lock{m_mutex};
-    if (m_queue.empty() || m_queue.front().operation_id != operation_id) return false;
+    if (!m_claimed_id || *m_claimed_id != operation_id || m_queue.empty() ||
+        m_queue.front().operation_id != operation_id) return false;
     m_queued_bytes -= m_queue.front().exact_bytes.size();
     m_queued_ids.erase(operation_id);
     m_queue.pop_front();
+    m_claimed_id.reset();
     return true;
 }
 
@@ -111,6 +127,7 @@ void OperationRelay::ForgetFinalized(const uint256& operation_id)
     m_queued_bytes -= item->exact_bytes.size();
     m_queued_ids.erase(operation_id);
     m_queue.erase(item);
+    if (m_claimed_id && *m_claimed_id == operation_id) m_claimed_id.reset();
 }
 
 size_t OperationRelay::QueuedOperations() const

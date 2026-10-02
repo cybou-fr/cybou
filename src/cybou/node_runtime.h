@@ -185,7 +185,8 @@ public:
     bool HasAuthenticatedFinalizerRoute() const;
     OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes,
         bool allow_seen_retry = false);
-    std::optional<RelayedOperation> PeekRelayedOperation() const;
+    std::optional<RelayedOperation> ClaimRelayedOperation();
+    void ReleaseRelayedOperation(const uint256& operation_id);
     bool AcknowledgeRelayedOperation(const uint256& operation_id);
     bool HasRelayedOperation(const uint256& operation_id) const;
 

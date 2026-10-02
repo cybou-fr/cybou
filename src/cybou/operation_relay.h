@@ -51,6 +51,10 @@ public:
         bool allow_seen_retry = false);
     /** View the FIFO head until a connected full node accepts the operation. */
     std::optional<RelayedOperation> Peek() const;
+    /** Reserve the FIFO head for one in-flight peer transfer. */
+    std::optional<RelayedOperation> Claim();
+    /** Release a failed/incomplete transfer so another peer can retry it. */
+    void Release(const uint256& operation_id);
     bool Acknowledge(const uint256& operation_id);
     bool HasQueued(const uint256& operation_id) const;
     void ForgetFinalized(const uint256& operation_id);
@@ -65,6 +69,7 @@ private:
     FinalizerSession m_next_session{1};
     std::optional<FinalizerSession> m_finalizer_session;
     std::deque<RelayedOperation> m_queue;
+    std::optional<uint256> m_claimed_id;
     std::set<uint256> m_queued_ids;
     std::deque<uint256> m_seen_order;
     std::set<uint256> m_seen_ids;
