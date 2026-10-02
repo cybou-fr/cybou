@@ -10,6 +10,7 @@
 // holds the replica, waits until that provider is killed, detects the loss by
 // audit, repairs to another provider and verifies exact bytes from remote GET.
 
+#include <cybou/official_networks.h>
 #include <cybou/application_service.h>
 #include <cybou/encrypted_chunk_tree.h>
 #include <cybou/identity_service.h>
@@ -58,21 +59,20 @@ void WaitFor(const std::string& what, const std::function<bool()>& done, std::ch
 int main(int argc, char* argv[])
 {
     if (argc != 5) {
-        std::cerr << "usage: cybou-storage-smoke NETWORK_FILE WORK_DIR FINALIZER_IP FINALIZER_P2P_PORT\n";
+        std::cerr << "usage: cybou-storage-smoke devnet WORK_DIR FINALIZER_IP FINALIZER_P2P_PORT\n";
         return 2;
     }
     try {
         const std::filesystem::path work{argv[2]};
         std::filesystem::create_directories(work);
-        const auto network = cybou::LoadCybouNetworkFile(argv[1]);
-        if (!network) Fail("invalid network file");
+        const auto* network = &cybou::RequireOfficialNetwork(argv[1]);
         const std::string finalizer_ip{argv[3]};
         const auto finalizer_port = static_cast<std::uint16_t>(std::stoul(argv[4]));
 
         cybou::CybouNodeService node{{
-            .runtime = cybou::NodeRuntimeConfig{.network_definition = network->definition,
+            .runtime = cybou::NodeRuntimeConfig{.network_definition = network->network_definition,
                 .data_dir = work / "client-db", .p2p_endpoint = std::make_pair(finalizer_ip, finalizer_port), .peer_admission_policy = TestLabAdmissionPolicy()},
-            .genesis = network->genesis,
+            .genesis = network->genesis_state,
         }};
         node.Start();
         node.StartNetwork(cybou::CybouNetworkServiceConfig{.sync_interval = 500ms},

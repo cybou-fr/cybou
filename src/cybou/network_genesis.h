@@ -19,8 +19,6 @@
 
 namespace cybou {
 
-struct OfficialNetworkProfile;
-
 inline constexpr uint8_t CYBOU_NETWORK_GENESIS_VERSION{2};
 inline constexpr std::string_view CYBOU_GENESIS_SIGNING_DOMAIN{"CYBOU/GENESIS/V2"};
 
@@ -118,20 +116,6 @@ struct VerifiedNetworkBundle {
     CybouNetworkDefinition network_definition;
     uint256 genesis_digest;
 };
-
-/** Serializes a signed genesis and genesis state into a CYG1 bundle. */
-std::optional<std::vector<unsigned char>> SerializeNetworkGenesisBundle(
-    const NetworkGenesis& genesis,
-    const CybouState& genesis_state);
-
-/** Verifies and deserializes a CYG1 signed genesis bundle. */
-std::optional<VerifiedNetworkBundle> VerifyNetworkGenesisBundle(std::span<const unsigned char> bytes);
-
-/** Rejects unconfigured official profiles and bundles with a different NetworkID or GenesisDigest. */
-bool MatchesOfficialNetworkProfile(const VerifiedNetworkBundle& bundle, const OfficialNetworkProfile& profile);
-
-/** Loads and verifies a CYG1 signed genesis bundle from disk. */
-std::optional<VerifiedNetworkBundle> LoadNetworkGenesisBundle(const std::filesystem::path& path);
 
 } // namespace cybou
 

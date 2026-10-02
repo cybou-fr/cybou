@@ -107,11 +107,7 @@ add_library(cybou_node STATIC
   cybou/node_runtime.cpp
   cybou/node_service.h
   cybou/node_service.cpp
-  cybou/bootstrap_binding.cpp
-  cybou/bootstrap_binding_store.cpp
   cybou/operation_relay.cpp
-  cybou/bootstrap_protocol.cpp
-  cybou/bootstrap_store.cpp
   cybou/event_record.cpp
   cybou/identity_service.cpp
   cybou/name_service.cpp
@@ -138,12 +134,9 @@ target_link_libraries(cybou_node
 # CYBOU daemon executables.
 add_executable(cybou-node cybou_node.cpp)
 target_link_libraries(cybou-node PRIVATE cybou_node)
-add_executable(cybou-bootstrap cybou_bootstrap.cpp)
-target_link_libraries(cybou-bootstrap PRIVATE cybou_node)
 add_executable(cybou-loadgen cybou_loadgen.cpp)
 target_link_libraries(cybou-loadgen PRIVATE cybou_node)
 add_windows_application_manifest(cybou-node)
-add_windows_application_manifest(cybou-bootstrap)
 add_windows_application_manifest(cybou-loadgen)
 
 if(BUILD_GUI)

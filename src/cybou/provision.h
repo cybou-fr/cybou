@@ -25,12 +25,6 @@ struct DevnetProvisionResult {
     IdentityHybridPublicKey network_public_key;
     std::vector<unsigned char> network_id_bytes;
 
-    // DEV Bootstrap Identity
-    RecoveryEntropy bootstrap_entropy{};
-    RecoveryWords bootstrap_words{};
-    IdentityHybridPublicKey bootstrap_recovery_key;
-    IdentityKeyId bootstrap_recovery_key_id{};
-
     // cybou.cybou Identity
     RecoveryEntropy cybou_entropy{};
     RecoveryWords cybou_words{};
@@ -45,7 +39,6 @@ struct DevnetProvisionResult {
     // Consensus Genesis & Initial State
     CybouState genesis_state;
     NetworkGenesis signed_genesis;
-    uint256 genesis_digest;
     uint256 genesis_state_root;
     std::vector<unsigned char> serialized_signed_genesis;
     std::vector<unsigned char> serialized_genesis_state;

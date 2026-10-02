@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license.
 // Synthetic client: all operations go through production services and journals.
+#include <cybou/official_networks.h>
 #include <cybou/cli/command_line.h>
 #include <cybou/node_service.h>
 #include <cybou/identity_service.h>
@@ -40,12 +41,12 @@ struct Client {
     std::set<cybou::PrivateItemId> verified_files;
     std::vector<cybou::PrivateItemId> expected_incoming_mail;
     std::shared_ptr<cybou::EventWriter> events;
-    Client(const cybou::CybouNetworkFile& net, const std::filesystem::path& dir,
+    Client(const cybou::VerifiedNetworkBundle& net, const std::filesystem::path& dir,
            const std::pair<std::string,uint16_t>& peer, const std::string& password, unsigned target) {
         std::filesystem::create_directories(dir);
         events=std::make_shared<cybou::EventWriter>(dir/"client.events.jsonl");
         node=std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
-            .runtime={.network_definition=net.definition,.data_dir=dir/"node",.p2p_endpoint=peer,.event_writer=events},.genesis=net.genesis});
+            .runtime={.network_definition=net.network_definition,.genesis_digest=net.genesis_digest,.data_dir=dir/"node",.p2p_endpoint=peer,.event_writer=events},.genesis=net.genesis_state});
         node->Start();
         node->StartNetwork({.sync_interval=500ms},[](const auto&,const auto&,size_t){return true;});
         const auto ready_deadline = std::chrono::steady_clock::now()+120s;
@@ -140,7 +141,7 @@ struct Client {
 int main(int argc,char* argv[]) {
     try {
         if (argc==1 || (argc==2 && std::string_view{argv[1]}=="--help")) {
-            std::cout << "cybou-loadgen --network FILE --data-dir DIR --peer IP:PORT --password-file FILE\n"
+            std::cout << "cybou-loadgen --network devnet --data-dir DIR --peer IP:PORT --password-file FILE\n"
                 " [--identities 2] [--profile files|mail|root-publications|payments|system-locks|mixed]\n"
                 " [--operations-per-second 1] [--file-size 4MiB] [--duration 15m] [--replicas 2]\n"
                 "Financial profiles require pre-funded synthetic vaults; onboarding funds only System Balance.\n";
@@ -148,8 +149,7 @@ int main(int argc,char* argv[]) {
         }
         cybou::cli::Options opts{argc,argv,1};
         opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations"});
-        auto net=cybou::LoadCybouNetworkFile(opts.Require("network"));
-        if (!net) throw std::runtime_error("invalid network");
+        const auto* net=&cybou::RequireOfficialNetwork(opts.Require("network"));
         const auto endpoint=opts.Require("peer"); const auto colon=endpoint.rfind(':');
         if (colon==std::string::npos) throw std::runtime_error("invalid peer");
         auto address=endpoint.substr(0,colon);

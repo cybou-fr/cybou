@@ -59,4 +59,13 @@ const VerifiedNetworkBundle& GetOfficialDevnetBundle()
     return s_bundle;
 }
 
+const VerifiedNetworkBundle& RequireOfficialNetwork(std::string_view name)
+{
+    if (name == "devnet" || name == "DEVNET") return GetOfficialDevnetBundle();
+    if (name == "mainnet" || name == "MAINNET") {
+        throw std::runtime_error("MAINNET unavailable: not provisioned (no key, no genesis, no bootstrap)");
+    }
+    throw std::runtime_error("unknown network; use --network devnet");
+}
+
 } // namespace cybou

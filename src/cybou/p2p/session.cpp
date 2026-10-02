@@ -257,8 +257,6 @@ bool IsSupportedMessageType(const uint8_t type)
     case MessageType::HELLO:
     case MessageType::PROVIDER_PROOF:
     case MessageType::FINALIZER_PROOF:
-    case MessageType::BOOTSTRAP_REQUEST:
-    case MessageType::BOOTSTRAP_RESPONSE:
     case MessageType::PING:
     case MessageType::PONG:
     case MessageType::GET_BLOCK:
@@ -295,9 +293,7 @@ bool IsSupportedMessageType(const uint8_t type)
 
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
-    const auto maximum_payload = frame.type == MessageType::BOOTSTRAP_REQUEST ||
-        frame.type == MessageType::BOOTSTRAP_RESPONSE ? MAX_BOOTSTRAP_FRAME_PAYLOAD : MAX_FRAME_PAYLOAD;
-    if (frame.payload.size() > maximum_payload ||
+    if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
         !IsSupportedMessageType(static_cast<uint8_t>(frame.type))) return std::nullopt;
     std::vector<unsigned char> bytes{'C', 'Y', 'P', '2', WIRE_VERSION, static_cast<unsigned char>(frame.type)};
     const auto size = static_cast<uint32_t>(frame.payload.size());
@@ -313,9 +309,7 @@ std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[6 + i]} << (8 * i);
     const auto type = static_cast<MessageType>(bytes[5]);
-    const auto maximum_payload = type == MessageType::BOOTSTRAP_REQUEST ||
-        type == MessageType::BOOTSTRAP_RESPONSE ? MAX_BOOTSTRAP_FRAME_PAYLOAD : MAX_FRAME_PAYLOAD;
-    if (size > maximum_payload || bytes.size() != HEADER_SIZE + size) return std::nullopt;
+    if (size > MAX_FRAME_PAYLOAD || bytes.size() != HEADER_SIZE + size) return std::nullopt;
     return Frame{static_cast<MessageType>(bytes[5]),
         std::vector<unsigned char>{bytes.begin() + HEADER_SIZE, bytes.end()}};
 }
@@ -583,10 +577,7 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     }
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{header[6 + i]} << (8 * i);
-    const auto message_type = static_cast<MessageType>(header[5]);
-    const auto maximum_payload = message_type == MessageType::BOOTSTRAP_REQUEST ||
-        message_type == MessageType::BOOTSTRAP_RESPONSE ? MAX_BOOTSTRAP_FRAME_PAYLOAD : MAX_FRAME_PAYLOAD;
-    if (size > maximum_payload) {
+    if (size > MAX_FRAME_PAYLOAD) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
         return std::nullopt;
     }
@@ -613,32 +604,6 @@ bool PeerSession::SendFrame(const Frame& frame, const std::chrono::steady_clock:
 std::optional<Frame> PeerSession::ReceiveFrame(const std::chrono::steady_clock::time_point deadline)
 {
     return Read(deadline);
-}
-
-std::optional<Frame> PeerSession::RequestBootstrap(const Frame& request)
-{
-    if (m_transport_role != TransportRole::CLIENT || !m_tls_config.expected_server_spki_sha256 ||
-        request.type != MessageType::BOOTSTRAP_REQUEST ||
-        !EstablishSecureTransport(std::chrono::steady_clock::now() + TLS_HANDSHAKE_TIMEOUT)) return std::nullopt;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
-    if (!Write(request, deadline)) return std::nullopt;
-    const auto response = Read(deadline);
-    if (!response || response->type != MessageType::BOOTSTRAP_RESPONSE) return std::nullopt;
-    return response;
-}
-
-
-bool PeerSession::ServeBootstrapRequest(
-    const std::function<std::optional<Frame>(const Frame&)>& handler)
-{
-    if (m_transport_role != TransportRole::SERVER || !handler ||
-        m_tls_config.certificate_chain_file.empty() || m_tls_config.private_key_file.empty() ||
-        !EstablishSecureTransport(std::chrono::steady_clock::now() + TLS_HANDSHAKE_TIMEOUT)) return false;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
-    const auto request = Read(deadline);
-    if (!request || request->type != MessageType::BOOTSTRAP_REQUEST) return false;
-    const auto response = handler(*request);
-    return response && response->type == MessageType::BOOTSTRAP_RESPONSE && Write(*response, deadline);
 }
 
 std::vector<unsigned char> ProviderProofMessage(const Hello& signer,const Hello& verifier,

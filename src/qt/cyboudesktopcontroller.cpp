@@ -7,7 +7,7 @@
 #include <qt/cyboucoreapplicationadapter.h>
 #include <qt/cyboudesktopmodel.h>
 
-#include <cybou/bootstrap_nodes.h>
+#include <cybou/official_networks.h>
 #include <cybou/identity_service.h>
 #include <cybou/network_definition.h>
 #include <cybou/node_service.h>
@@ -110,47 +110,12 @@ void CybouDesktopController::start()
 {
     if (m_node_service) return;
     try {
-        const auto explicit_network = qEnvironmentVariable("CYBOU_NETWORK_FILE");
-        const auto network_path = explicit_network.isEmpty() ? m_data_directory / "network.bin"
-            : std::filesystem::path{explicit_network.toStdU16String()};
-        // A release pins its network to the bundled public manifest. A mismatch
-        // must not move or rewrite user state; use an explicit LAB override.
-        QFile bundled{QStringLiteral(":/network/cybou-dev-network.bin")};
-        if (!bundled.open(QIODevice::ReadOnly)) throw std::runtime_error("the bundled CYBOU network is missing");
-        const QByteArray current = bundled.readAll();
-        const auto path_text = [](const std::filesystem::path& path) {
-            return QString::fromStdU16String(path.u16string());
-        };
-        const bool lab_override = !explicit_network.isEmpty() || qEnvironmentVariableIsSet("CYBOU_DEV_KEEP_NETWORK");
-        if (!lab_override) {
-            const auto pinned = cybou::DeserializeCybouNetworkFile(std::span<const unsigned char>{
-                reinterpret_cast<const unsigned char*>(current.constData()), static_cast<size_t>(current.size())});
-            if (!pinned) throw std::runtime_error("bundled DEV network manifest is invalid");
-            if (std::filesystem::exists(network_path)) {
-                const auto selected = cybou::LoadCybouNetworkFile(network_path);
-                if (!selected || cybou::NetworkId(selected->definition) != cybou::NetworkId(pinned->definition))
-                    throw std::runtime_error("network differs from the pinned release; existing Identity and state are preserved");
-            }
-        }
-        if (explicit_network.isEmpty() && !std::filesystem::exists(network_path)) {
-            QFile installed{path_text(network_path)};
-            if (!installed.open(QIODevice::WriteOnly) || installed.write(current) != current.size()) {
-                installed.remove();
-                throw std::runtime_error("cannot install the CYBOU network file");
-            }
-        }
-        const auto network_file = cybou::LoadCybouNetworkFile(network_path);
-        if (!network_file) throw std::runtime_error("missing or invalid CYBOU network.bin");
-        const auto& genesis = network_file->genesis;
-        const auto& definition = network_file->definition;
-        m_model->setNetworkInfo(
-            lab_override ? QStringLiteral("CYBOU LAB") : QStringLiteral("CYBOU DEV"),
+        // The desktop starts only from the compiled, verified DEVNET constants.
+        const auto& network = cybou::RequireOfficialNetwork("devnet");
+        const auto& genesis = network.genesis_state;
+        const auto& definition = network.network_definition;
+        m_model->setNetworkInfo(QStringLiteral("CYBOU DEVNET"),
             QString::fromStdString(cybou::NetworkId(definition).GetHex()));
-        if (!m_archived_network.isEmpty()) {
-            qWarning() << "CYBOU: data of an older DEV network moved to" << m_archived_network;
-            m_model->notify(tr("This computer had data from an older CYBOU DEV network. It was moved to %1. "
-                               "Create or restore your Identity on the current network.").arg(m_archived_network));
-        }
         const std::filesystem::path data_dir = m_data_directory / "cybou_state";
         bool p2p_port_ok{false};
         const int p2p_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_PORT", &p2p_port_ok);
@@ -186,7 +151,7 @@ void CybouDesktopController::start()
             : (peer_admission.policy->Ready() ? CybouGeoAdmissionStatus::Ready : CybouGeoAdmissionStatus::Waiting));
         cybou::NodeRuntimeConfig config{
             .network_definition = definition,
-            .genesis_digest = network_file->genesis_digest,
+            .genesis_digest = network.genesis_digest,
             .data_dir = data_dir,
             .poa_finalizer_recovery_entropy = std::nullopt,
             .p2p_endpoint = configured_p2p,

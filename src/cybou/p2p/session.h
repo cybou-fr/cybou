@@ -30,7 +30,6 @@ namespace cybou { class CybouNodeRuntime; }
 namespace cybou::p2p {
 
 inline constexpr uint32_t MAX_FRAME_PAYLOAD{4096};
-inline constexpr uint32_t MAX_BOOTSTRAP_FRAME_PAYLOAD{16 * 1024 * 1024 + 16 * 1024};
 inline constexpr uint8_t WIRE_VERSION{4};
 inline constexpr uint64_t CAP_SERVE_BLOCKS{1ULL << 0};
 inline constexpr uint64_t CAP_ACCEPT_OPERATIONS{1ULL << 1};
@@ -77,8 +76,8 @@ enum class MessageType : uint8_t {
     PROVIDER_PROOF = 36,
     RESERVED_37 = 37, RESERVED_38 = 38, RESERVED_39 = 39,
     FINALIZER_PROOF = 40,
-    BOOTSTRAP_REQUEST = 41,
-    BOOTSTRAP_RESPONSE = 42,
+    RESERVED_41 = 41,
+    RESERVED_42 = 42,
     RESERVED_43 = 43,
     OPERATION_RELAY_POLL = 44,
     OPERATION_RELAY_OPERATION_META = 45,
@@ -238,10 +237,6 @@ public:
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     std::optional<Frame> ReceiveFrame(
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
-    /** One pinned bootstrap protocol exchange without a network-bound HELLO. */
-    std::optional<Frame> RequestBootstrap(const Frame& request);
-    /** Serve one bootstrap request over a persistent-identity TLS session. */
-    bool ServeBootstrapRequest(const std::function<std::optional<Frame>(const Frame&)>& handler);
     boost::asio::ip::tcp::socket& Socket() { return m_socket; }
 
 private:

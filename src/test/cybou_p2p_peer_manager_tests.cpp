@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(removed_storage_wire_ids_are_rejected)
     }
 }
 
-BOOST_AUTO_TEST_CASE(stable_tls_identity_accepts_matching_spki_pin_and_rejects_mismatch)
+BOOST_AUTO_TEST_CASE(pinned_tls_identity_gates_an_ordinary_cyp2_handshake)
 {
     CybouServiceTestFixture fixture;
     const auto identity = CreateTestTlsIdentity(fixture.directory);
@@ -169,10 +169,8 @@ BOOST_AUTO_TEST_CASE(stable_tls_identity_accepts_matching_spki_pin_and_rejects_m
             tls.private_key_file = identity->private_key;
             cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER,
                 std::move(tls)};
-            server_handshake = session.ServeBootstrapRequest([](const cybou::p2p::Frame& request) ->
-                std::optional<cybou::p2p::Frame> {
-                return cybou::p2p::Frame{cybou::p2p::MessageType::BOOTSTRAP_RESPONSE, request.payload};
-            });
+            server_handshake = session.Handshake({.network_id = fixture.runtime->GetNetworkId(), .finalized_tip = *fixture.runtime->GetFinalizedTip(),
+                .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 1});
         }};
         tcp::socket socket{io};
         socket.connect(tcp::endpoint{loopback, acceptor.local_endpoint().port()});
@@ -180,9 +178,10 @@ BOOST_AUTO_TEST_CASE(stable_tls_identity_accepts_matching_spki_pin_and_rejects_m
         tls.expected_server_spki_sha256 = expected_pin;
         cybou::p2p::PeerSession client{std::move(socket), cybou::p2p::TransportRole::CLIENT,
             std::move(tls)};
-        const auto response = client.RequestBootstrap({cybou::p2p::MessageType::BOOTSTRAP_REQUEST, {1, 2, 3}});
+        const bool client_handshake = client.Handshake({.network_id = fixture.runtime->GetNetworkId(), .finalized_tip = *fixture.runtime->GetFinalizedTip(),
+            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 2});
         server.join();
-        return std::pair{response && response->payload == std::vector<unsigned char>{1, 2, 3}, server_handshake};
+        return std::pair{client_handshake, server_handshake};
     };
 
     const auto accepted = run_session(identity->pin);

@@ -10,7 +10,6 @@
 #include <cybou/crypto/sha256.h>
 
 #include <algorithm>
-#include <fstream>
 #include <limits>
 #include <string_view>
 
@@ -232,68 +231,6 @@ uint256 NetworkId(const CybouNetworkDefinition& definition)
     hasher.Write(bytes.data(), bytes.size());
     hasher.Finalize(result.begin());
     return result;
-}
-
-std::optional<CybouNetworkFile> DeserializeCybouNetworkFile(const std::span<const unsigned char> bytes)
-{
-    if (bytes.size() >= 4 && bytes[0] == 'C' && bytes[1] == 'Y' && bytes[2] == 'G' && bytes[3] == '1') {
-        const auto bundle = VerifyNetworkGenesisBundle(bytes);
-        if (!bundle) return std::nullopt;
-        return CybouNetworkFile{bundle->network_definition, bundle->genesis_state, bundle->genesis_digest};
-    }
-    if (bytes.size() < 12 || bytes.size() > 16 * 1024 * 1024 ||
-        !std::equal(bytes.begin(), bytes.begin() + 4, "CYN1")) return std::nullopt;
-    const auto read_u32 = [&bytes](size_t offset) {
-        uint32_t value{0};
-        for (unsigned i{0}; i < 4; ++i) value |= uint32_t{bytes[offset + i]} << (8 * i);
-        return value;
-    };
-    const auto definition_size = read_u32(4);
-    if (definition_size > bytes.size() - 12) return std::nullopt;
-    const size_t state_offset = 8 + definition_size;
-    const auto state_size = read_u32(state_offset);
-    if (state_size != bytes.size() - state_offset - 4) return std::nullopt;
-    const auto definition = DeserializeNetworkDefinition(
-        std::span<const unsigned char>{bytes.data() + 8, definition_size});
-    const auto genesis = DeserializeCybouState(
-        std::span<const unsigned char>{bytes.data() + state_offset + 4, state_size});
-    if (!definition || !genesis || CybouStateHash(*genesis) != definition->genesis_state_root ||
-        ComputeGenesisBlockId(definition->genesis_state_root, definition->poa_finalizer_public_key) != definition->genesis_block_id) {
-        return std::nullopt;
-    }
-    return CybouNetworkFile{*definition, *genesis};
-}
-
-std::optional<std::vector<unsigned char>> SerializeCybouNetworkFile(const CybouNetworkFile& file)
-{
-    if (ValidateNetworkDefinition(file.definition) != NetworkDefinitionError::NONE ||
-        CybouStateHash(file.genesis) != file.definition.genesis_state_root) return std::nullopt;
-    const auto definition = SerializeNetworkDefinition(file.definition);
-    const auto state = SerializeCybouState(file.genesis);
-    if (!state || definition.size() > std::numeric_limits<uint32_t>::max() ||
-        state->size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
-
-    std::vector<unsigned char> bytes{'C', 'Y', 'N', '1'};
-    const auto append_u32 = [&bytes](const uint32_t value) {
-        for (unsigned i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(value >> (8 * i)));
-    };
-    append_u32(static_cast<uint32_t>(definition.size()));
-    bytes.insert(bytes.end(), definition.begin(), definition.end());
-    append_u32(static_cast<uint32_t>(state->size()));
-    bytes.insert(bytes.end(), state->begin(), state->end());
-    if (bytes.size() > 16 * 1024 * 1024) return std::nullopt;
-    return bytes;
-}
-
-std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path& path)
-{
-    std::error_code ec;
-    const auto size = std::filesystem::file_size(path, ec);
-    if (ec || size < 12 || size > 16 * 1024 * 1024) return std::nullopt;
-    std::vector<unsigned char> bytes(size);
-    std::ifstream file(path, std::ios::binary);
-    if (!file || !file.read(reinterpret_cast<char*>(bytes.data()), bytes.size())) return std::nullopt;
-    return DeserializeCybouNetworkFile(bytes);
 }
 
 CybouState CreateDevGenesisState()

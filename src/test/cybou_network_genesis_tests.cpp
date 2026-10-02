@@ -84,98 +84,51 @@ BOOST_AUTO_TEST_CASE(test_network_key_and_signed_genesis_lifecycle)
     BOOST_CHECK(!cybou::VerifiedNetworkGenesis::Create(tampered).has_value());
 }
 
-BOOST_AUTO_TEST_CASE(test_cyg1_signed_genesis_bundle_lifecycle)
+BOOST_AUTO_TEST_CASE(signed_genesis_rejects_noncanonical_encoding)
 {
     std::array<unsigned char, 32> net_secret{};
     net_secret.fill(0x77);
     auto net_pub = cybou::DeriveIdentityPublicKey(net_secret, cybou::IdentityKeyPurpose::NETWORK_ROOT);
     auto poa_pub = cybou::DeriveIdentityPublicKey(net_secret, cybou::IdentityKeyPurpose::POA_FINALIZER);
     BOOST_REQUIRE(net_pub && poa_pub);
-
-    auto state = cybou::CreateDevGenesisState();
-    cybou::IdentityKeyId auth_id{};
-    auth_id[0] = 0x42;
-    state.genesis_allocations.emplace(auth_id, cybou::GenesisAllocation{
-        .balance = 100, .authority = 1000001, .label = "bootstrap"});
-    const auto state_root = cybou::CybouStateHash(state);
-    BOOST_REQUIRE(state_root.has_value());
-
+    const auto state_root = cybou::CybouStateHash(cybou::CreateDevGenesisState());
+    BOOST_REQUIRE(state_root);
     cybou::NetworkGenesis spec;
-    spec.version = cybou::CYBOU_NETWORK_GENESIS_VERSION;
     spec.network_public_key = *net_pub;
     spec.genesis_state_root = *state_root;
     spec.poa_finalizer_public_key = *poa_pub;
     spec.protocol_parameters = cybou::DevProtocolParameters();
-
     const auto digest = cybou::ComputeNetworkGenesisDigest(spec);
     auto sig = cybou::SignIdentityMessage(net_secret, cybou::IdentityKeyPurpose::NETWORK_ROOT,
         std::span<const unsigned char>{digest.begin(), digest.size()});
-    BOOST_REQUIRE(sig.has_value());
+    BOOST_REQUIRE(sig);
     spec.signature = *sig;
+    const auto bytes = cybou::SerializeSignedNetworkGenesis(spec);
+    BOOST_CHECK(cybou::DeserializeSignedNetworkGenesis(bytes) == spec);
+    auto truncated = bytes;
+    truncated.pop_back();
+    BOOST_CHECK(!cybou::DeserializeSignedNetworkGenesis(truncated));
+    auto noncanonical = bytes;
+    noncanonical[cybou::SerializeNetworkGenesisPayload(spec).size() - 1] = 2;
+    BOOST_CHECK(!cybou::DeserializeSignedNetworkGenesis(noncanonical));
+}
 
-    // Serialization to CYG1 bundle
-    const auto bundle_bytes = cybou::SerializeNetworkGenesisBundle(spec, state);
-    BOOST_REQUIRE(bundle_bytes.has_value());
-    BOOST_CHECK_EQUAL(bundle_bytes->at(0), 'C');
-    BOOST_CHECK_EQUAL(bundle_bytes->at(1), 'Y');
-    BOOST_CHECK_EQUAL(bundle_bytes->at(2), 'G');
-    BOOST_CHECK_EQUAL(bundle_bytes->at(3), '1');
+BOOST_AUTO_TEST_CASE(compiled_devnet_is_the_only_official_startup_source)
+{
+    // The compiled signed genesis verifies under the compiled Network Public Key
+    // and its compiled initial state matches the signed state root.
+    const auto& devnet = cybou::RequireOfficialNetwork("devnet");
+    const auto network_id = devnet.genesis.GetNetworkId();
+    BOOST_CHECK(std::equal(network_id.begin(), network_id.end(),
+        cybou::OFFICIAL_DEVNET_PROFILE.network_public_key_bytes.begin(),
+        cybou::OFFICIAL_DEVNET_PROFILE.network_public_key_bytes.end()));
+    BOOST_CHECK(cybou::CybouStateHash(devnet.genesis_state) == devnet.genesis.GetGenesisStateRoot());
+    BOOST_CHECK(devnet.network_definition.poa_finalizer_public_key == devnet.genesis.GetPoaPublicKey());
+    BOOST_CHECK(&cybou::RequireOfficialNetwork("DEVNET") == &devnet);
 
-    // Verification of CYG1 bundle
-    auto verified_bundle = cybou::VerifyNetworkGenesisBundle(*bundle_bytes);
-    BOOST_REQUIRE(verified_bundle.has_value());
-    BOOST_CHECK(verified_bundle->genesis_digest == digest);
-    BOOST_CHECK(verified_bundle->network_definition.genesis_state_root == *state_root);
-    BOOST_CHECK(verified_bundle->network_definition.poa_finalizer_public_key == *poa_pub);
-
-    const auto network_id = verified_bundle->genesis.GetNetworkId();
-    cybou::OfficialNetworkProfile profile{
-        .kind = cybou::NetworkKind::DEVNET,
-        .name = "DEVNET",
-        .network_public_key_bytes = network_id,
-        .genesis_digest = digest,
-    };
-    BOOST_CHECK(cybou::MatchesOfficialNetworkProfile(*verified_bundle, profile));
-    profile.genesis_digest = uint256{};
-    BOOST_CHECK(!cybou::MatchesOfficialNetworkProfile(*verified_bundle, profile));
-    profile.genesis_digest = uint256::ONE;
-    BOOST_CHECK(!cybou::MatchesOfficialNetworkProfile(*verified_bundle, profile));
-    profile.genesis_digest = digest;
-    profile.network_public_key_bytes = {};
-    BOOST_CHECK(!cybou::MatchesOfficialNetworkProfile(*verified_bundle, profile));
-
-    // CYG1 must reject malformed framing, a noncanonical boolean, and altered state.
-    auto malformed = *bundle_bytes;
-    malformed.pop_back();
-    BOOST_CHECK(!cybou::VerifyNetworkGenesisBundle(malformed));
-    malformed = *bundle_bytes;
-    malformed.back() ^= 1;
-    BOOST_CHECK(!cybou::VerifyNetworkGenesisBundle(malformed));
-    auto signed_genesis = cybou::SerializeSignedNetworkGenesis(spec);
-    const auto unsigned_payload = cybou::SerializeNetworkGenesisPayload(spec);
-    const size_t boolean_offset = unsigned_payload.size() - 1;
-    signed_genesis[boolean_offset] = 2;
-    BOOST_CHECK(!cybou::DeserializeSignedNetworkGenesis(signed_genesis));
-
-    // Transparent deserialization via DeserializeCybouNetworkFile
-    auto net_file = cybou::DeserializeCybouNetworkFile(*bundle_bytes);
-    BOOST_REQUIRE(net_file.has_value());
-    BOOST_CHECK(net_file->definition.genesis_state_root == *state_root);
-
-    // Genesis allocations are self-contained; no parallel Authority list is required.
-    auto bad_state = state;
-    bad_state.genesis_allocations.erase(auth_id);
-    const auto bad_state_root = cybou::CybouStateHash(bad_state);
-    BOOST_REQUIRE(bad_state_root.has_value());
-    auto bad_spec = spec;
-    bad_spec.genesis_state_root = *bad_state_root;
-    const auto bad_digest = cybou::ComputeNetworkGenesisDigest(bad_spec);
-    auto bad_sig = cybou::SignIdentityMessage(net_secret, cybou::IdentityKeyPurpose::NETWORK_ROOT,
-        std::span<const unsigned char>{bad_digest.begin(), bad_digest.size()});
-    BOOST_REQUIRE(bad_sig.has_value());
-    bad_spec.signature = *bad_sig;
-
-    BOOST_CHECK(cybou::SerializeNetworkGenesisBundle(bad_spec, bad_state).has_value());
+    BOOST_CHECK_THROW(cybou::RequireOfficialNetwork("mainnet"), std::runtime_error);
+    BOOST_CHECK_THROW(cybou::RequireOfficialNetwork("network.bin"), std::runtime_error);
+    BOOST_CHECK_THROW(cybou::RequireOfficialNetwork(""), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(test_official_network_profiles_constitution)

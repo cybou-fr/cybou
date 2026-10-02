@@ -70,19 +70,7 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
     res.network_public_key = *net_pub;
     res.network_id_bytes = CanonicalSerializeNetworkPublicKey(res.network_public_key);
 
-    // 2. DEV Bootstrap Identity
-    auto boot_entropy = GenerateRecoveryEntropy();
-    if (!boot_entropy) return std::nullopt;
-    res.bootstrap_entropy = *boot_entropy;
-    res.bootstrap_words = EncodeRecoveryWords(res.bootstrap_entropy);
-    auto boot_rec = DeriveIdentityPublicKey(res.bootstrap_entropy, IdentityKeyPurpose::RECOVERY_ROOT);
-    if (!boot_rec) return std::nullopt;
-    res.bootstrap_recovery_key = *boot_rec;
-    auto boot_rec_id = ComputeRecoveryKeyId(res.bootstrap_recovery_key);
-    if (!boot_rec_id) return std::nullopt;
-    res.bootstrap_recovery_key_id = *boot_rec_id;
-
-    // 3. cybou.cybou Identity
+    // 2. cybou.cybou Identity
     auto cybou_entropy = GenerateRecoveryEntropy();
     if (!cybou_entropy) return std::nullopt;
     res.cybou_entropy = *cybou_entropy;
@@ -124,13 +112,11 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
     if (!poa_id) return std::nullopt;
     res.cybou_poa_key_id = *poa_id;
 
-    // 4. Consensus Genesis State
+    // 3. Consensus Genesis State: cybou.cybou is the only genesis allocation.
     res.genesis_state = CreateDevGenesisState();
     res.genesis_state.onboarding_pool = 10'000'000;
     res.genesis_state.security_reward_pool = 0;
     res.genesis_state.pending_fee_pool = 0;
-    res.genesis_state.genesis_allocations[res.bootstrap_recovery_key_id] = GenesisAllocation{
-        .balance = 0, .authority = 1'000'001, .label = ""};
     res.genesis_state.genesis_allocations[res.cybou_recovery_key_id] = GenesisAllocation{
         .balance = 100'000'000, .authority = 1'000'001, .label = "cybou"};
 
@@ -141,17 +127,17 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
     if (!state_root) return std::nullopt;
     res.genesis_state_root = *state_root;
 
-    // 5. Signed NetworkGenesis
+    // 4. Signed NetworkGenesis: the digest is only what the Network Key signs.
     res.signed_genesis.version = CYBOU_NETWORK_GENESIS_VERSION;
     res.signed_genesis.network_public_key = res.network_public_key;
     res.signed_genesis.genesis_state_root = res.genesis_state_root;
     res.signed_genesis.poa_finalizer_public_key = res.cybou_poa_pub;
     res.signed_genesis.protocol_parameters = DevProtocolParameters();
-    res.genesis_digest = ComputeNetworkGenesisDigest(res.signed_genesis);
+    const auto genesis_digest = ComputeNetworkGenesisDigest(res.signed_genesis);
     auto sig = SignIdentityMessage(
         res.network_entropy,
         IdentityKeyPurpose::NETWORK_ROOT,
-        std::span<const unsigned char>{res.genesis_digest.begin(), res.genesis_digest.size()});
+        std::span<const unsigned char>{genesis_digest.begin(), genesis_digest.size()});
     if (!sig) return std::nullopt;
     res.signed_genesis.signature = *sig;
 
@@ -159,7 +145,7 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
         return std::nullopt;
     }
 
-    // 6. Serializations
+    // 5. Serializations
     res.serialized_signed_genesis = SerializeSignedNetworkGenesis(res.signed_genesis);
     auto state_bytes = SerializeCybouState(res.genesis_state);
     if (!state_bytes) return std::nullopt;
@@ -252,19 +238,6 @@ bool ProvisionDevnet(
         if (!write_secret("cybou_identity_secret.txt", ss.str())) return false;
     }
 
-    // DEV Bootstrap Identity secret
-    {
-        std::ostringstream ss;
-        ss << "# CYBOU DEVNET Bootstrap Peer Identity\n"
-           << "# Ordinary full node peer with initial authority = 1,000,001\n\n"
-           << "MNEMONIC_PHRASE:\n" << JoinWords(prov->bootstrap_words) << "\n\n"
-           << "MNEMONIC_WORDS:\n" << FormatWordsNumbered(prov->bootstrap_words) << '\n'
-           << "BOOTSTRAP_SEED_HEX: " << HexStr(prov->bootstrap_entropy) << '\n'
-           << "BOOTSTRAP_RECOVERY_KEY_ID_HEX: " << HexStr(prov->bootstrap_recovery_key_id) << '\n'
-           << "INITIAL_AUTHORITY: 1000001\n";
-        if (!write_secret("bootstrap_identity_secret.txt", ss.str())) return false;
-    }
-
     // Human-readable summary
     {
         std::ostringstream ss;
@@ -273,13 +246,10 @@ bool ProvisionDevnet(
            << "=================================================================\n\n"
            << "Network Public Key (NetworkID):\n  " << HexStr(prov->network_id_bytes) << "\n\n"
            << "Genesis State Root:\n  " << prov->genesis_state_root.GetHex() << "\n\n"
-           << "Genesis Digest:\n  " << prov->genesis_digest.GetHex() << "\n\n"
            << "PoA Finalizer Key ID:\n  " << HexStr(prov->cybou_poa_key_id) << "\n\n"
            << "cybou.cybou Account ID:\n  " << prov->cybou_account_id.Value().GetHex() << "\n\n"
-           << "cybou.cybou Recovery Key ID:\n  " << HexStr(prov->cybou_recovery_key_id) << "\n\n"
-           << "DEV Bootstrap Recovery Key ID:\n  " << HexStr(prov->bootstrap_recovery_key_id) << "\n"
-           << "  Initial Authority: 1,000,001\n"
-           << "  Bootstrap Locator: 51.255.46.58:29461\n\n"
+           << "cybou.cybou Recovery Key ID:\n  " << HexStr(prov->cybou_recovery_key_id) << "\n"
+           << "  Genesis allocation: 100,000,000 CYBOU, 1,000,001 AUTH, name cybou\n\n"
            << "Signed Genesis Size: " << prov->serialized_signed_genesis.size() << " bytes\n"
            << "Genesis State Size:  " << prov->serialized_genesis_state.size() << " bytes\n";
         const auto summary_path = private_dir / "summary.txt";
@@ -319,9 +289,6 @@ bool ProvisionDevnet(
           << "// Genesis State Root (BLAKE3-256)\n"
           << "inline constexpr std::array<unsigned char, 32> GENESIS_STATE_ROOT_BYTES = {\n"
           << FormatByteArrayCpp(std::span<const unsigned char>{prov->genesis_state_root.data(), 32}, 4) << "\n};\n\n"
-          << "// Signed Genesis Specification Digest\n"
-          << "inline constexpr std::array<unsigned char, 32> GENESIS_DIGEST_BYTES = {\n"
-          << FormatByteArrayCpp(std::span<const unsigned char>{prov->genesis_digest.data(), 32}, 4) << "\n};\n\n"
           << "// cybou.cybou Public Identity Constants\n"
           << "inline constexpr std::array<unsigned char, 32> CYBOU_ACCOUNT_ID = {\n"
           << FormatByteArrayCpp(std::span<const unsigned char>{prov->cybou_account_id.Value().data(), 32}, 4) << "\n};\n\n"
@@ -329,10 +296,6 @@ bool ProvisionDevnet(
           << FormatByteArrayCpp(prov->cybou_recovery_key_id, 4) << "\n};\n\n"
           << "inline constexpr std::array<unsigned char, 32> CYBOU_POA_KEY_ID = {\n"
           << FormatByteArrayCpp(prov->cybou_poa_key_id, 4) << "\n};\n\n"
-          << "// DEV Bootstrap Identity Constants\n"
-          << "inline constexpr std::array<unsigned char, 32> BOOTSTRAP_RECOVERY_KEY_ID = {\n"
-          << FormatByteArrayCpp(prov->bootstrap_recovery_key_id, 4) << "\n};\n"
-          << "inline constexpr uint64_t BOOTSTRAP_INITIAL_AUTHORITY = 1000001;\n\n"
           << "} // namespace cybou::devnet_constants\n\n"
           << "#endif // CYBOU_DEVNET_CONSTANTS_H\n";
 
@@ -347,13 +310,11 @@ bool ProvisionDevnet(
     // Cleanse secret memory in stack
     ::cybou::crypto::CleanseMemory(prov->network_entropy.data(), prov->network_entropy.size());
     ::cybou::crypto::CleanseMemory(prov->cybou_entropy.data(), prov->cybou_entropy.size());
-    ::cybou::crypto::CleanseMemory(prov->bootstrap_entropy.data(), prov->bootstrap_entropy.size());
 
     std::cout << "DEVNET provisioned successfully!\n"
               << "Private secrets saved to:  " << private_dir.string() << "\n"
               << "Public constants saved to: " << constants_header_path.string() << "\n"
-              << "NetworkID: " << HexStr(prov->network_id_bytes) << "\n"
-              << "Genesis Digest: " << prov->genesis_digest.GetHex() << "\n";
+              << "NetworkID: " << HexStr(prov->network_id_bytes) << "\n";
 
     return true;
 }

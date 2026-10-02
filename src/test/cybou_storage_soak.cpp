@@ -21,6 +21,7 @@
 // The orchestrator acts on "REQUEST <n> <action> ..." lines and acknowledges
 // by creating WORK_DIR/ack-<n>.
 
+#include <cybou/official_networks.h>
 #include <cybou/application_service.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/encrypted_chunk_tree.h>
@@ -228,13 +229,13 @@ struct Services {
     }
 };
 
-std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::CybouNetworkFile& network,
+std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::VerifiedNetworkBundle& network,
     const std::filesystem::path& data_dir, const std::string& ip, std::uint16_t port)
 {
     auto node = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
-        .runtime = cybou::NodeRuntimeConfig{.network_definition = network.definition,
+        .runtime = cybou::NodeRuntimeConfig{.network_definition = network.network_definition,
             .data_dir = data_dir, .p2p_endpoint = std::make_pair(ip, port), .peer_admission_policy = TestLabAdmissionPolicy()},
-        .genesis = network.genesis,
+        .genesis = network.genesis_state,
     });
     node->Start();
     node->StartNetwork(cybou::CybouNetworkServiceConfig{.sync_interval = 500ms},
@@ -262,14 +263,13 @@ std::optional<std::uint16_t> PortOf(cybou::CybouNodeRuntime& runtime, const std:
 int main(int argc, char* argv[])
 {
     if (argc != 5) {
-        std::cerr << "usage: cybou-storage-soak NETWORK_FILE WORK_DIR FINALIZER_IP FINALIZER_P2P_PORT\n";
+        std::cerr << "usage: cybou-storage-soak devnet WORK_DIR FINALIZER_IP FINALIZER_P2P_PORT\n";
         return 2;
     }
     try {
         const std::filesystem::path work{argv[2]};
         std::filesystem::create_directories(work);
-        const auto network = cybou::LoadCybouNetworkFile(argv[1]);
-        if (!network) Fail("invalid network file");
+        const auto* network = &cybou::RequireOfficialNetwork(argv[1]);
         const std::string ip{argv[3]};
         const auto port = static_cast<std::uint16_t>(std::stoul(argv[4]));
         Orchestrator orchestrator{work};

@@ -12,7 +12,6 @@
 #include <uint256.h>
 
 #include <cstdint>
-#include <filesystem>
 #include <optional>
 #include <span>
 #include <vector>
@@ -51,16 +50,6 @@ NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& d
 std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefinition& definition);
 std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(std::span<const unsigned char> bytes);
 uint256 NetworkId(const CybouNetworkDefinition& definition);
-
-struct CybouNetworkFile {
-    CybouNetworkDefinition definition;
-    CybouState genesis;
-    uint256 genesis_digest{};
-};
-
-std::optional<std::vector<unsigned char>> SerializeCybouNetworkFile(const CybouNetworkFile& file);
-std::optional<CybouNetworkFile> DeserializeCybouNetworkFile(std::span<const unsigned char> bytes);
-std::optional<CybouNetworkFile> LoadCybouNetworkFile(const std::filesystem::path& path);
 
 uint256 ComputeGenesisBlockId(const uint256& state_root, const IdentityHybridPublicKey& poa_finalizer_public_key);
 

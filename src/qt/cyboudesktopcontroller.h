@@ -48,7 +48,6 @@ private:
     std::mutex m_identity_access_mutex;
     bool m_validation_signer_enabled{false};
     /** Where data of an older DEV network was moved at startup, if it was. */
-    QString m_archived_network;
     void stop();
     void updatePoaFinalizer();
     void updateValidationSigner();

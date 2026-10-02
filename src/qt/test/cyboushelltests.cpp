@@ -26,6 +26,7 @@
 #include <QTableWidget>
 
 #include <cybou/network_definition.h>
+#include <cybou/node_runtime.h>
 #include <cybou/p2p/session.h>
 #include <test/cybou_test_helpers.h>
 #include <test/cybou_service_test_fixture.h>
@@ -62,29 +63,15 @@
 #include <vector>
 
 namespace {
-void AppendUint32LE(std::vector<unsigned char>& out, uint32_t value)
+/** Initializes a canonical state DB for a different (test PoA key) network. */
+bool WriteForeignNetworkState(const QString& directory)
 {
-    for (int i = 0; i < 4; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
-}
-
-bool WriteNetworkFile(const QString& path, const unsigned char seed_byte)
-{
-    // Distinct PoA finalizer keys give distinct networks.
     const auto genesis = cybou::CreateDevGenesisState();
-    const auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(seed_byte));
-    const auto definition_bytes = cybou::SerializeNetworkDefinition(definition);
-    const auto state_bytes = cybou::SerializeCybouState(genesis);
-    if (!state_bytes) return false;
-
-    std::vector<unsigned char> bytes{'C', 'Y', 'N', '1'};
-    AppendUint32LE(bytes, static_cast<uint32_t>(definition_bytes.size()));
-    bytes.insert(bytes.end(), definition_bytes.begin(), definition_bytes.end());
-    AppendUint32LE(bytes, static_cast<uint32_t>(state_bytes->size()));
-    bytes.insert(bytes.end(), state_bytes->begin(), state_bytes->end());
-
-    QFile file{path};
-    return file.open(QIODevice::WriteOnly | QIODevice::Truncate) &&
-        file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<qint64>(bytes.size())) == static_cast<qint64>(bytes.size());
+    cybou::CybouNodeRuntime runtime{{
+        .network_definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(0x33)),
+        .data_dir = std::filesystem::path{directory.toStdU16String()} / "cybou_state",
+    }};
+    return runtime.InitializeGenesis(genesis);
 }
 
 class ScopedEnvironment final
@@ -1348,81 +1335,40 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    ScopedEnvironment keep_network{"CYBOU_DEV_KEEP_NETWORK", "1"};
-    ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
-    ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
     ScopedUnsetEnvironment finalizer_mode{"CYBOU_DEV_FINALIZER"};
-
-    // A present but invalid network file is never replaced: startup fails.
+    // A stray legacy network file is never read: startup uses compiled DEVNET only.
     {
-        QFile corrupt{directory.filePath(QStringLiteral("network.bin"))};
-        QVERIFY(corrupt.open(QIODevice::WriteOnly));
-        corrupt.write("not a CYBOU network");
+        QFile stray{directory.filePath(QStringLiteral("network.bin"))};
+        QVERIFY(stray.open(QIODevice::WriteOnly));
+        stray.write("not a CYBOU network");
     }
     CybouDesktopModel model{QStringLiteral("CYBOU-DEV")};
     CybouDesktopController controller{&model, directory.path().toStdString()};
     QSignalSpy failures{&controller, &CybouDesktopController::startupFailed};
-    controller.start();
+    {
+        ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
+        ScopedEnvironment bad_port{"CYBOU_DEV_P2P_PORT", "0"};
+        controller.start();
+    }
     QCOMPARE(failures.count(), 1);
     QVERIFY(!model.status().node_running);
 
-    QVERIFY(WriteNetworkFile(directory.filePath(QStringLiteral("network.bin")), 0x31));
+    ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
+    ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
     controller.start();
     QCOMPARE(failures.count(), 1);
     QVERIFY(model.status().node_running);
-
-    // A network mismatch fails closed and leaves the Identity and state in place.
-    {
-        QTemporaryDir stale;
-        QVERIFY(WriteNetworkFile(stale.filePath(QStringLiteral("network.bin")), 0x34));
-        {
-            QFile vault{stale.filePath(QStringLiteral("identity.cybou"))};
-            QVERIFY(vault.open(QIODevice::WriteOnly));
-            vault.write("old-network identity");
-        }
-        ScopedUnsetEnvironment dont_keep{"CYBOU_DEV_KEEP_NETWORK"};
-        CybouDesktopModel stale_model{QStringLiteral("CYBOU-DEV")};
-        CybouDesktopController stale_controller{&stale_model, stale.path().toStdString()};
-        QSignalSpy stale_failures{&stale_controller, &CybouDesktopController::startupFailed};
-        stale_controller.start();
-        QCOMPARE(stale_failures.count(), 1);
-        QVERIFY(!stale_model.status().node_running);
-        QVERIFY(QFile::exists(stale.filePath(QStringLiteral("network.bin"))));
-        QVERIFY(QFile::exists(stale.filePath(QStringLiteral("identity.cybou"))));
-        QVERIFY(!QFile::exists(stale.filePath(QStringLiteral("archived-networks"))));
-    }
-
-    // A fresh data directory starts on the bundled public DEV network.
-    QTemporaryDir fresh;
-    CybouDesktopModel fresh_model{QStringLiteral("CYBOU-DEV")};
-    CybouDesktopController fresh_controller{&fresh_model, fresh.path().toStdString()};
-    QSignalSpy fresh_failures{&fresh_controller, &CybouDesktopController::startupFailed};
-    fresh_controller.start();
-    QCOMPARE(fresh_failures.count(), 0);
-    QVERIFY(fresh_model.status().node_running);
-    QVERIFY(QFile::exists(fresh.filePath(QStringLiteral("network.bin"))));
 }
 
 void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    ScopedEnvironment keep_network{"CYBOU_DEV_KEEP_NETWORK", "1"};
     ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
     ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
     ScopedUnsetEnvironment finalizer_mode{"CYBOU_DEV_FINALIZER"};
-    QVERIFY(WriteNetworkFile(directory.filePath(QStringLiteral("network.bin")), 0x32));
+    QVERIFY(WriteForeignNetworkState(directory.path()));
 
-    {
-        CybouDesktopModel model{QStringLiteral("CYBOU-DEV")};
-        CybouDesktopController controller{&model, directory.path().toStdString()};
-        QSignalSpy failures{&controller, &CybouDesktopController::startupFailed};
-        controller.start();
-        QCOMPARE(failures.count(), 0);
-        QVERIFY(model.status().node_running);
-    }
-
-    QVERIFY(WriteNetworkFile(directory.filePath(QStringLiteral("network.bin")), 0x33));
     CybouDesktopModel model{QStringLiteral("CYBOU-DEV")};
     CybouDesktopController controller{&model, directory.path().toStdString()};
     QSignalSpy failures{&controller, &CybouDesktopController::startupFailed};

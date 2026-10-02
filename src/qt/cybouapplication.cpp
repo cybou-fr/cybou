@@ -56,9 +56,6 @@ int CybouQtMain(int argc, char* argv[])
     QCommandLineOption data_dir_option(QStringList{QStringLiteral("datadir")},
         QObject::tr("Use the specified CYBOU data directory."), QObject::tr("directory"));
     parser.addOption(data_dir_option);
-    QCommandLineOption network_option(QStringList{QStringLiteral("network")},
-        QObject::tr("Use an explicit network file with an isolated --datadir."), QObject::tr("file"));
-    parser.addOption(network_option);
     QCommandLineOption peer_option(QStringList{QStringLiteral("peer")},
         QObject::tr("Connect to this CYP2 IP:port endpoint."), QObject::tr("endpoint"));
     parser.addOption(peer_option);
@@ -79,13 +76,6 @@ int CybouQtMain(int argc, char* argv[])
         qputenv("CYBOU_DEV_P2P_PORT",QByteArray::number(port));
     }
 
-    if (parser.isSet(network_option)) {
-        if (!parser.isSet(data_dir_option) || !parser.isSet(peer_option)) {
-            QMessageBox::critical(nullptr, QObject::tr("CYBOU"), QObject::tr("--network requires an explicit isolated --datadir and --peer."));
-            return 1;
-        }
-        qputenv("CYBOU_NETWORK_FILE", QFileInfo{parser.value(network_option)}.absoluteFilePath().toUtf8());
-    }
     QString data_dir;
     if (parser.isSet(data_dir_option)) {
         data_dir = QDir::cleanPath(parser.value(data_dir_option));

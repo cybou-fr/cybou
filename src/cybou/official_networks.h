@@ -6,6 +6,7 @@
 #define CYBOU_OFFICIAL_NETWORKS_H
 
 #include <cybou/identity_crypto.h>
+#include <cybou/network_genesis.h>
 #include <cybou/official_devnet_constants.h>
 #include <uint256.h>
 
@@ -30,15 +31,15 @@ struct OfficialBootstrapLocator {
 };
 
 /**
- * Standard known official network profile.
- * Contains bootstrap rendezvous locators with transport SPKI pins,
- * pinned canonical Network Public Key (NetworkID), and expected GenesisDigest.
+ * Standard known official network profile: the canonical Network Public Key
+ * (NetworkID) and bootstrap rendezvous locators with transport SPKI pins.
+ * The compiled signed genesis is verified against that key; there is no
+ * second trust anchor.
  */
 struct OfficialNetworkProfile {
     NetworkKind kind{NetworkKind::DEVNET};
     std::string_view name;
     std::span<const unsigned char> network_public_key_bytes;
-    uint256 genesis_digest{};
     std::span<const OfficialBootstrapLocator> bootstrap_locators;
 };
 
@@ -61,7 +62,6 @@ inline constexpr OfficialNetworkProfile OFFICIAL_DEVNET_PROFILE{
     .kind = NetworkKind::DEVNET,
     .name = "DEVNET",
     .network_public_key_bytes = devnet_constants::NETWORK_ID_BYTES,
-    .genesis_digest = uint256{devnet_constants::GENESIS_DIGEST_BYTES},
     .bootstrap_locators = OFFICIAL_DEVNET_BOOTSTRAP_LOCATORS,
 };
 
@@ -69,12 +69,18 @@ inline constexpr OfficialNetworkProfile OFFICIAL_MAINNET_PROFILE{
     .kind = NetworkKind::MAINNET,
     .name = "MAINNET",
     .network_public_key_bytes = {},
-    .genesis_digest = {},
     .bootstrap_locators = {},
 };
 
 /** Returns the immutable compiled DEVNET bundle (verified cryptographically). */
 const VerifiedNetworkBundle& GetOfficialDevnetBundle();
+
+/**
+ * The only official startup source: "devnet" selects the compiled, verified
+ * DEVNET constants. MAINNET is not provisioned and fails closed; any other
+ * value, including a file path, is rejected.
+ */
+const VerifiedNetworkBundle& RequireOfficialNetwork(std::string_view name);
 
 inline const OfficialNetworkProfile* FindOfficialNetworkProfile(std::string_view name)
 {
