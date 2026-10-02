@@ -68,6 +68,14 @@ PoolAdmission OperationPool::Admit(const ProtocolOperation& operation,
     return PoolAdmission::ACCEPTED;
 }
 
+std::vector<uint256> OperationPool::Ids() const
+{
+    std::vector<uint256> ids;
+    ids.reserve(m_entries.size());
+    for (const auto& entry : m_entries) ids.push_back(entry.id);
+    return ids;
+}
+
 std::vector<ProtocolOperation> OperationPool::Snapshot() const
 {
     std::vector<ProtocolOperation> operations;

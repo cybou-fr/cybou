@@ -432,6 +432,8 @@ OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
         // forwards an operation it could not execute itself.
         switch (m_operation_pool.Admit(*operation, std::move(source_peer))) {
         case PoolAdmission::ACCEPTED:
+            if (const auto id = ComputeOperationId(*operation)) AttestCandidate(*id);
+            break;
         case PoolAdmission::ALREADY_PENDING:
             break;
         case PoolAdmission::ALREADY_FINALIZED:
@@ -458,6 +460,74 @@ bool CybouNodeRuntime::HasCandidateOperation(const uint256& operation_id) const
 void CybouNodeRuntime::RevalidateCandidates()
 {
     for (const auto& dropped : m_operation_pool.Revalidate()) m_operation_relay.ForgetFinalized(dropped);
+    // Attestations name their finalized base: all become stale, and every
+    // still-valid candidate is attested again relative to the new tip.
+    if (const auto tip = m_store.GetFinalizedTip()) m_validation_pool.ResetBase(*tip);
+    for (const auto& id : m_operation_pool.Ids()) AttestCandidate(id);
+}
+
+void CybouNodeRuntime::AttestCandidate(const uint256& operation_id)
+{
+    if (!m_validation_signer || !m_operation_pool.Contains(operation_id)) return;
+    const auto tip = m_store.GetFinalizedTip();
+    const auto loaded = m_store.LoadState();
+    if (!tip || !loaded || !loaded.state) return;
+    m_validation_pool.ResetBase(*tip);
+    const auto attestation = SignValidationAttestation(*m_validation_signer, m_network_id, operation_id, *tip,
+        *loaded.state);
+    if (attestation) m_validation_pool.Add(*attestation);
+}
+
+void CybouNodeRuntime::SetValidationSigner(ValidationSignerRef signer)
+{
+    std::lock_guard lock{m_mutex};
+    m_validation_signer = std::move(signer);
+    for (const auto& id : m_operation_pool.Ids()) AttestCandidate(id);
+}
+
+bool CybouNodeRuntime::IsLocalValidationEligible() const
+{
+    std::lock_guard lock{m_mutex};
+    const auto account = m_validation_signer ? m_validation_signer->Account() : std::nullopt;
+    const auto loaded = m_store.LoadState();
+    return account && loaded && loaded.state && IsValidationEligible(*loaded.state, *account);
+}
+
+ValidationAcceptStatus CybouNodeRuntime::AcceptValidationAttestation(const ValidationAttestation& attestation)
+{
+    std::lock_guard lock{m_mutex};
+    // The attestation never replaces execution: this node must already hold
+    // the operation as a candidate it executed itself.
+    if (!m_operation_pool.Contains(attestation.operation_id)) return ValidationAcceptStatus::NOT_CANDIDATE;
+    const auto tip = m_store.GetFinalizedTip();
+    const auto loaded = m_store.LoadState();
+    if (!tip || !loaded || !loaded.state) return ValidationAcceptStatus::INVALID;
+    switch (VerifyValidationAttestation(attestation, m_network_id, *tip, *loaded.state)) {
+    case ValidationAttestationError::NONE: break;
+    case ValidationAttestationError::STALE_BASE: return ValidationAcceptStatus::STALE_BASE;
+    default: return ValidationAcceptStatus::INVALID;
+    }
+    m_validation_pool.ResetBase(*tip);
+    switch (m_validation_pool.Add(attestation)) {
+    case ValidationPoolAdd::ADDED: return ValidationAcceptStatus::ADDED;
+    case ValidationPoolAdd::DUPLICATE: return ValidationAcceptStatus::DUPLICATE;
+    case ValidationPoolAdd::STALE_BASE: return ValidationAcceptStatus::STALE_BASE;
+    case ValidationPoolAdd::FULL: return ValidationAcceptStatus::FULL;
+    }
+    return ValidationAcceptStatus::INVALID;
+}
+
+std::vector<ValidationAttestation> CybouNodeRuntime::GetValidationAttestations(const uint256& operation_id) const
+{
+    std::lock_guard lock{m_mutex};
+    return m_validation_pool.ForOperation(operation_id);
+}
+
+std::optional<ValidationAttestation> CybouNodeRuntime::NextValidationAttestation(
+    const std::function<bool(const ValidationPool::Key&)>& skip) const
+{
+    std::lock_guard lock{m_mutex};
+    return m_validation_pool.First(skip);
 }
 
 std::optional<RelayedOperation> CybouNodeRuntime::ClaimRelayedOperation()
@@ -489,12 +559,18 @@ OperationStatus CybouNodeRuntime::GetOperationStatus(const uint256& op_id) const
     }
     // Only a PoA node's own pool is local pending; an ordinary node holding a
     // candidate must keep relaying it until the finalizer acknowledges it.
+    const auto signatures = m_operation_pool.Contains(op_id) ?
+        static_cast<uint32_t>(m_validation_pool.Count(op_id)) : 0U;
     if (m_finalizer_node && m_finalizer_node->SignerEnabled() && m_operation_pool.Contains(op_id)) {
-        return {.kind = OperationStatusKind::LOCAL_PENDING};
+        return {.kind = OperationStatusKind::LOCAL_PENDING, .validation_signatures = signatures};
     }
     const auto known = m_recent_operation_status.find(op_id);
-    if (known != m_recent_operation_status.end()) return known->second;
-    return {};
+    if (known != m_recent_operation_status.end()) {
+        auto status = known->second;
+        status.validation_signatures = signatures;
+        return status;
+    }
+    return {.validation_signatures = signatures};
 }
 
 IdentityOperationCoordinator& CybouNodeRuntime::GetIdentityOperationCoordinator(CybouKeyStore& keystore)
@@ -593,6 +669,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
             RememberOperationStatus(op_id, {.kind = OperationStatusKind::REJECTED_KNOWN});
             return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
         }
+        if (admission == PoolAdmission::ACCEPTED) AttestCandidate(op_id);
         if (m_finalizer_node && m_finalizer_node->SignerEnabled()) {
             RememberOperationStatus(op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
             return OperationSubmitResult{.status = admission == PoolAdmission::ACCEPTED ?

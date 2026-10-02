@@ -57,6 +57,7 @@ add_library(cybou_core STATIC
   cybou/payment.cpp
   cybou/poa_auth_adjustment.cpp
   cybou/validation_attestation.cpp
+  cybou/validation_pool.cpp
   cybou/poa_finality.cpp
   cybou/recovery_phrase.cpp
   cybou/signing_openssl.cpp

@@ -17,6 +17,7 @@
 #include <cybou/finalized_chunk_store.h>
 #include <cybou/operation_relay.h>
 #include <cybou/secret32.h>
+#include <cybou/validation_pool.h>
 
 #include <array>
 #include <chrono>
@@ -124,6 +125,21 @@ enum class OperationStatusKind : uint8_t {
 struct OperationStatus {
     OperationStatusKind kind{OperationStatusKind::UNKNOWN};
     uint64_t finalized_height{0};
+    /** Verified eligible attestations held for this locally valid, unfinalized candidate. */
+    uint32_t validation_signatures{0};
+
+    /** VALIDATED: locally valid and attested by at least one eligible Identity. Changes no state. */
+    bool IsValidated() const { return kind != OperationStatusKind::FINALIZED && validation_signatures > 0; }
+};
+
+enum class ValidationAcceptStatus : uint8_t {
+    ADDED,
+    DUPLICATE,
+    /** This node holds no locally valid candidate with that OperationID. */
+    NOT_CANDIDATE,
+    STALE_BASE,
+    INVALID,
+    FULL,
 };
 
 /**
@@ -187,6 +203,17 @@ public:
     /** Relay only after this node independently executed the operation on its finalized state. */
     OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes,
         bool allow_seen_retry = false, std::optional<std::string> source_peer = std::nullopt);
+    /**
+     * Local Identity used to attest candidates this node executed. It signs only
+     * while unlocked and while its finalized AUTH exceeds 1,000,000; nullptr clears it.
+     */
+    void SetValidationSigner(ValidationSignerRef signer);
+    bool IsLocalValidationEligible() const;
+    /** Verify a peer attestation against this node's own candidate and finalized state. */
+    ValidationAcceptStatus AcceptValidationAttestation(const ValidationAttestation& attestation);
+    std::vector<ValidationAttestation> GetValidationAttestations(const uint256& operation_id) const;
+    std::optional<ValidationAttestation> NextValidationAttestation(
+        const std::function<bool(const ValidationPool::Key&)>& skip) const;
     /** Locally executed, not yet finalized candidates held by this node. */
     size_t CandidateOperationCount() const;
     bool HasCandidateOperation(const uint256& operation_id) const;
@@ -289,6 +316,8 @@ private:
     void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
     /** Re-execute candidates on the new head and stop relaying the ones that became invalid. */
     void RevalidateCandidates();
+    /** Attest one locally accepted candidate on the current finalized base, if eligible. */
+    void AttestCandidate(const uint256& operation_id);
     NodeRuntimeConfig m_config;
     uint256 m_network_id;
     std::unique_ptr<KVStore> m_db;
@@ -302,6 +331,8 @@ private:
     /** Every full node's own volatile candidate pool; a PoA node seals blocks from it. */
     OperationPool m_operation_pool{m_store};
     std::unique_ptr<CybouFinalizerNode> m_finalizer_node;
+    ValidationPool m_validation_pool;
+    ValidationSignerRef m_validation_signer;
     OperationRelay m_operation_relay;
     std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;
     std::map<uint256, OperationStatus> m_recent_operation_status;

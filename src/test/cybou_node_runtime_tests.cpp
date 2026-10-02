@@ -316,6 +316,85 @@ BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_one_mi
     BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_id, operation_id, tip, state));
 }
 
+BOOST_AUTO_TEST_CASE(eligible_node_attests_its_own_executed_candidates)
+{
+    CybouServiceTestFixture fixture;
+    const auto alice = fixture.CreateIdentity("alice.cybou");
+    BOOST_REQUIRE(fixture.runtime->SubmitPoaAuthAdjustment(cybou::PoaAuthAction::GRANT, *alice->GetAccountId(),
+        1'000'001).status == cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    const auto bob = fixture.CreateIdentity("bob.cybou");
+    cybou::CybouNameService names{*fixture.runtime, bob->GetKeyStore(), fixture.directory / "bob.cybou"};
+    const auto claimed = names.ClaimSync("bobby", "correct horse battery staple");
+    BOOST_REQUIRE_MESSAGE(claimed.success, claimed.message);
+    std::optional<cybou::ProtocolOperation> commit;
+    uint64_t commit_height{0};
+    for (uint64_t height{1}; height <= fixture.runtime->GetFinalizedHeight().value_or(0); ++height) {
+        const auto block = fixture.runtime->GetBlockAtHeight(height);
+        BOOST_REQUIRE(block);
+        for (const auto& operation : block->block.operations) {
+            if (std::holds_alternative<cybou::AuthorizedNameCommit>(operation)) { commit = operation; commit_height = height; }
+        }
+    }
+    BOOST_REQUIRE(commit);
+    const auto commit_bytes = cybou::SerializeProtocolOperation(*commit);
+    const auto commit_id = cybou::ComputeOperationId(*commit);
+    BOOST_REQUIRE(commit_bytes && commit_id);
+
+    const auto make_node = [&](const std::string& name) {
+        auto node = std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
+            .network_definition = fixture.definition,
+            .data_dir = fixture.directory / name,
+            .memory_only = true,
+            .wipe_data = true,
+        });
+        BOOST_REQUIRE(node->InitializeGenesis(fixture.genesis));
+        for (uint64_t height{1}; height < commit_height; ++height) {
+            BOOST_REQUIRE(node->CommitBlock(*fixture.runtime->GetBlockAtHeight(height)));
+        }
+        return node;
+    };
+
+    // Eligible validator node: executes, then signs.
+    const auto validator = make_node("validator-node");
+    validator->SetValidationSigner(std::make_shared<cybou::CybouKeyStoreValidationSigner>(alice->GetKeyStore()));
+    BOOST_CHECK(validator->IsLocalValidationEligible());
+    BOOST_REQUIRE(validator->EnqueueRelayedOperation(*commit_bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    const auto attestations = validator->GetValidationAttestations(*commit_id);
+    BOOST_REQUIRE_EQUAL(attestations.size(), 1U);
+    BOOST_CHECK(attestations.front().validator_account_id == *alice->GetAccountId());
+    BOOST_CHECK(attestations.front().finalized_base_block_id == *validator->GetFinalizedTip());
+    BOOST_CHECK(validator->GetOperationStatus(*commit_id).IsValidated());
+
+    // Ordinary node: an attestation never replaces its own execution.
+    const auto ordinary = make_node("ordinary-node");
+    BOOST_CHECK(!ordinary->IsLocalValidationEligible());
+    BOOST_CHECK(ordinary->AcceptValidationAttestation(attestations.front()) ==
+        cybou::ValidationAcceptStatus::NOT_CANDIDATE);
+    BOOST_REQUIRE(ordinary->EnqueueRelayedOperation(*commit_bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_CHECK(ordinary->GetValidationAttestations(*commit_id).empty());
+    BOOST_CHECK(!ordinary->GetOperationStatus(*commit_id).IsValidated());
+    auto forged = attestations.front();
+    forged.validator_account_id = *bob->GetAccountId();
+    BOOST_CHECK(ordinary->AcceptValidationAttestation(forged) == cybou::ValidationAcceptStatus::INVALID);
+    BOOST_CHECK(ordinary->AcceptValidationAttestation(attestations.front()) == cybou::ValidationAcceptStatus::ADDED);
+    BOOST_CHECK(ordinary->AcceptValidationAttestation(attestations.front()) == cybou::ValidationAcceptStatus::DUPLICATE);
+    const auto validated = ordinary->GetOperationStatus(*commit_id);
+    BOOST_CHECK(validated.IsValidated());
+    BOOST_CHECK_EQUAL(validated.validation_signatures, 1U);
+    const auto balances_before = ordinary->GetAccountState(*bob->GetAccountId());
+
+    // PoA finality is what changes state; Validation changed nothing.
+    BOOST_REQUIRE(ordinary->CommitBlock(*fixture.runtime->GetBlockAtHeight(commit_height)));
+    const auto finalized = ordinary->GetOperationStatus(*commit_id);
+    BOOST_CHECK(finalized.kind == cybou::OperationStatusKind::FINALIZED);
+    BOOST_CHECK(!finalized.IsValidated());
+    BOOST_CHECK(ordinary->GetValidationAttestations(*commit_id).empty());
+    BOOST_CHECK(ordinary->AcceptValidationAttestation(attestations.front()) ==
+        cybou::ValidationAcceptStatus::NOT_CANDIDATE);
+    BOOST_CHECK_EQUAL(ordinary->GetAccountState(*bob->GetAccountId())->balance, balances_before->balance);
+}
+
 BOOST_AUTO_TEST_CASE(runtime_finalizer_can_be_armed_and_disarmed_with_a_vault_signer)
 {
     CybouServiceTestFixture fixture;
