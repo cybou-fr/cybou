@@ -36,11 +36,11 @@ canonical state.
 
 ## Official endpoints and bootstrap trust
 
-Official network profiles (DEVNET, MAINNET) specify known bootstrap endpoints with
-IP:port and TLS SPKI pins, and the compiled Network Public Key (`NetworkID = Network Public Key`).
-Transport authentication protects against connection tampering; the offline Network
-Private Key signature on the immutable genesis specification (with pinned `GenesisDigest`)
-guarantees official network authenticity.
+The compiled DEVNET official network defines bootstrap `51.255.46.58:29461`
+with its TLS SPKI pin, Network Public Key (`NetworkID`), signed immutable
+genesis and initial state. MAINNET is unprovisioned and has no bootstrap
+locator. Transport authentication protects discovery; the offline Network
+Private Key signature on the compiled genesis guarantees its authenticity.
 See [`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md).
 
 ## Operational resilience

@@ -5,9 +5,12 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 
 ## Network and cryptographic identity
 
-- migration of existing SHA-256 definition-hash usage in runtime, DBs and wire messages to the canonical Network Public Key bytes;
-- exact DEVNET pin values, release bundling and a coordinated clean cutover;
-- retirement of CYN1 and legacy network-init once official startup consumes only verified CYG1.
+- one-time DEVNET provisioning procedure under gitignored `/private/`, including the Network and ordinary `cybou.cybou` Identity secret material;
+- generated public C++ representation of Network Public Key, immutable signed `NetworkGenesis`, initial state, `cybou.cybou` public Identity data and bootstrap locators;
+- retirement of official CYG1/CYN1 file paths, `--network` file startup and separate profile `GenesisDigest` pins;
+- migration of SHA-256 definition-hash usage in runtime, DBs and wire messages to exact canonical Network Public Key bytes;
+- removal of legacy bootstrap subsystem and coordinated DEV VPS cutover to ordinary `cybou-node`;
+- MAINNET provisioning and GUI enablement only after its actual keys, genesis and bootstrap exist.
 
 ## Validation and provisional lifecycle
 

@@ -25,8 +25,8 @@ bout en bout. Le VPS DEV héberge actuellement un prototype bootstrap autonome
 sur `51.255.46.58:29461` ; les anciens services finalizer et fournisseurs
 sont inactifs. Le cœur finalizer de bureau existe, mais la découverte bootstrap
 et la vérification de la genèse signée / Network Key ne sont pas intégrées de bout en bout.
-`cybou-node` sait charger un fichier réseau et propose notamment
-`network init-dev`, `finalizer run`, `provider run` et `observer run`, mais le
+`cybou-node` sait encore charger un fichier réseau externe et propose notamment
+`finalizer run`, `provider run` et `observer run`, mais le
 client ne possède pas encore de parcours général de création et de mise en
 service d'un réseau privé d'entreprise.
 
@@ -51,8 +51,10 @@ service d'un réseau privé d'entreprise.
   blocs et les transitions d'état. L'autorité racine du réseau est la clé
   publique de réseau (NetworkID = Network Public Key), dont la clé privée
   reste strictement hors-ligne pour signer la genèse immuable une seule fois.
-  Chaque profil officiel épingle son NetworkID et son GenesisDigest exact.
-  La clé PoA autorisée par la genèse signe les blocs.
+  Les données publiques du réseau officiel (clé publique, genèse signée, état
+  initial et adresses bootstrap) doivent être compilées dans le client, sans
+  fichier réseau officiel chargé à l'exécution. La clé PoA autorisée par la
+  genèse est un rôle distinct de l'identité ordinaire `cybou.cybou` et signe les blocs.
   Une pré-validation consultative optionnelle peut être attestée par les identités
   dont l'autorité dérivée dépasse 1 000 000, mais la finalité PoA prévaut
   inconditionnellement.
@@ -80,6 +82,10 @@ diagnostic, de synchronisation et de vérification du stockage. Les
 fonctions de déploiement d'un réseau d'entreprise doivent encore être reliées
 à un parcours opérateur complet avant de pouvoir être présentées comme une
 fonction utilisable depuis le bureau.
+
+DEVNET est le profil officiel visé avec le bootstrap `51.255.46.58:29461`.
+MAINNET n'est pas encore provisionné et doit rester désactivé dans l'interface.
+Les chemins actuels de fichiers réseau externes sont une dette de migration.
 
 Ce projet est en développement actif. Le code et ses tests ne constituent ni
 une certification, ni un audit de sécurité indépendant, ni une garantie

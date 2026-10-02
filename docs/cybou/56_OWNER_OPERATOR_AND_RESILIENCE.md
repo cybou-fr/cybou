@@ -13,7 +13,7 @@ Network authority and operational roles remain strictly separated:
 Network Private Key offline:
     -> create and sign the immutable genesis ONCE only
 
-PoA key P:
+Ordinary cybou.cybou Identity's PoA key role P:
     -> block finality only
 
 Bootstrap peer:
@@ -29,7 +29,7 @@ Validator Identity (> 1M finalized Authority):
 - **Bootstrap resilience**: Bootstrap is an ordinary CYBOU full peer with a known locator. A bootstrap outage does not halt the network; connected mesh peers continue exchanging blocks, operations, validation attestations, and storage chunks directly.
 - **Bootstrap compromise**: A hostile bootstrap can deny discovery or partition new connections, but cannot forge a genesis signed by the offline Network Private Key or forge PoA block certificates.
 - **PoA compromise**: A stolen `P` threatens canonical block finality, triggering equivocation safety halt across observing nodes. The current network cannot safely continue and requires launching a new NetworkID / genesis cutover. A stolen `P` cannot sign a genesis specification or alter the compiled Network Public Key (`NetworkID`).
-- **Network Private Key compromise**: The Network Private Key signs the immutable genesis once at network creation. Because official profiles pin the exact `GenesisDigest`, an attacker stealing the key after release cannot replace or update existing nodes running that NetworkID. The private key must remain strictly offline at all times.
+- **Network Private Key compromise**: The Network Private Key signs the immutable genesis once at network creation. Existing official binaries compile that exact signed genesis and initial state and accept no external official replacement, so a stolen key cannot update them in place. The private key remains strictly offline under gitignored `/private/` during provisioning.
 - **Validator compromise**: A compromised Identity with Authority > 1,000,000 can issue false advisory Validation attestations. This affects only provisional state on nodes with validation enabled; once PoA publishes a conflicting block, the provisional state is unconditionally rolled back.
 - **Verification**: Every full node independently validates signatures, operation rules, and state roots. The operator cannot forge state transitions without detection.
 

@@ -1,6 +1,7 @@
 # Implementation status
 
-Status: current CYG1 migration. This page describes
+Status: documentation aligned to compiled OfficialNetwork target at HEAD `3d00945`.
+This page describes
 implementation and deployment reality; `AGENTS.md` and the frozen architecture
 define the target. Local uncommitted work is not counted as a released baseline.
 
@@ -8,11 +9,11 @@ define the target. Local uncommitted work is not counted as a released baseline.
 
 | Component | Target constitution | Current code reality |
 |---|---|---|
-| Official networks | DEVNET and MAINNET only | The enum contains DEVNET and MAINNET. Both profile Network Public Key pins are empty; neither is ready for official startup. |
-| Network identity | `NetworkID = Network Public Key` | CYG1 carries the exact canonical Network Public Key, but most runtime paths still use the SHA-256 hash of a `CybouNetworkDefinition`. |
-| Signed genesis | One immutable, offline-signed CYG1 bundle per NetworkID | Canonical signed genesis, digest, CYG1 writer, verified bundle reader, and genesis state root check exist. CLI loads only verified CYG1; desktop and utility paths still use `CybouNetworkFile` and CYN1. |
-| Genesis pinning | Official profiles pin exact NetworkID and GenesisDigest | Profile pins are empty. Public CLI networking rejects unpinned bundles; LAB can use a valid CYG1. Desktop pinning remains definition-hash based. |
-| Network Private Key | Strictly offline, signs genesis once | `network-genesis-create` signs CYG1 from a supplied secret file. Operational separation and one-time creation procedure remain to be enforced. |
+| Official networks | Compiled DEVNET public constants; MAINNET unprovisioned and GUI-disabled | The enum contains DEVNET and MAINNET. Public Network Key fields are empty; MAINNET is not yet disabled throughout the GUI. DEV bootstrap locator is compiled. |
+| Network identity | `NetworkID = Network Public Key` | Genesis code carries canonical Network Public Key bytes, but most runtime paths still use the SHA-256 hash of a `CybouNetworkDefinition`. |
+| Signed genesis | One immutable offline-signed `NetworkGenesis` object and initial state compiled per official network | Canonical signing and verification exist, but code still has CYG1 reader/writer and external genesis/network-file paths. CLI loads CYG1; desktop and utility paths still use `CybouNetworkFile` and CYN1. These are technical debt, not architecture. |
+| Official startup | Select compiled public constants; verify signature and initial state root; no external official file or separate digest pin | Official public constants are not provisioned. CLI requires external genesis and profile digest pins; desktop pinning remains definition-hash based. |
+| Network Private Key | Strictly offline, signs genesis once; private material stays under gitignored `/private/` | `network-genesis-create` signs CYG1 from a supplied secret file. `/private/` is ignored in this working tree; one-time provisioning and generated public C++ constants remain to implement. |
 | Bootstrap | Ordinary CYBOU full peer | Standalone prototype binary and bootstrap protocol still exist; the DEV VPS still runs `cybou-bootstrap.service`. |
 | Consensus bootstrap state | No grants, roster, or `CAP_BOOTSTRAP` | Removed. |
 | Consensus state | Unified current state format | `CYBOU_STATE_VERSION = 10`; legacy v7/v8/v9 decoding was removed. |
@@ -29,10 +30,9 @@ define the target. Local uncommitted work is not counted as a released baseline.
 
 ## Open integration gates
 
-1. Pin the actual DEVNET Network Public Key and GenesisDigest and package its CYG1 bundle.
-2. Replace the desktop's bundled CYN1 resource with verified, pinned CYG1; remove remaining CYN1 and bootstrap prototype paths. CLI `network init-dev` has been removed.
-3. Transition runtime, wire, persistence, and cryptographic binding to exact Network Public Key NetworkID.
-4. Migrate DEV VPS to an ordinary `cybou-node` full-peer service after the coordinated state reset.
-5. Separate the operational PoA secret from the user Identity vault.
-6. Implement deterministic Authority eligibility and optional Validation against finalized state.
-7. Complete end-to-end DEVNET acceptance before any MAINNET launch.
+1. Gitignore `/private/`; provision DEVNET Network and ordinary `cybou.cybou` Identity secrets once and generate only public C++ constants.
+2. Make `NetworkKind::DEVNET` select its compiled Network Public Key, signed `NetworkGenesis`, initial state, PoA public key and bootstrap locator. Keep MAINNET unprovisioned and GUI-disabled.
+3. Remove CYG1/CYN1 external official network loaders, file options and separate profile `GenesisDigest` pinning. CLI `network init-dev` has already been removed.
+4. Transition runtime, wire, persistence and cryptographic binding to exact Network Public Key NetworkID.
+5. Remove legacy bootstrap binding/protocol and prototype binary; migrate DEV VPS to ordinary `cybou-node` after coordinated state reset.
+6. Complete DEVNET end-to-end acceptance before new Validation, Authority or provisional storage work.

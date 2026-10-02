@@ -13,9 +13,10 @@ not a global peer identity. Addresses, timing and traffic sizes remain visible.
 
 Bootstrap is an ordinary CYBOU full peer with a known locator (`IP:port` and
 TLS SPKI pin). Transport discovery connects to the bootstrap locator using standard
-CYP2. The official release bundles the signed immutable genesis specification (`CYG1`);
-nodes independently verify genesis locally against the compiled `NetworkID = Network Public Key`
-and pinned `GenesisDigest` before peer connections. Bootstrap status itself grants no
+CYP2. The official release compiles the Network Public Key (`NetworkID`),
+immutable signed `NetworkGenesis`, initial state, and bootstrap locators as public
+constants. Nodes verify the compiled genesis signature and initial state root
+before peer connections; no official network file is loaded. Bootstrap status itself grants no
 consensus role, no authority, and no `CAP_BOOTSTRAP` flag.
 
 A `CAP_STORAGE` peer proves its stable `STORAGE_PROVIDER` key in a session

@@ -17,6 +17,17 @@ Network identity:
     NetworkID = Network Public Key
     Exactly one signed genesis per NetworkID forever
 
+OfficialNetwork:
+    - compiled public constants: Network Public Key, immutable signed
+      NetworkGenesis object, initial genesis state, bootstrap locators
+    - no external official network/genesis file or runtime file loader
+    - no separate genesis digest profile pin
+
+Provisioning:
+    - generate Network and cybou.cybou private material once, offline
+    - keep private material only under gitignored /private/
+    - commit only public keys, public Identity data, and signed genesis constants
+
 Network Private Key:
     - creation-time root of trust
     - strictly offline
@@ -70,6 +81,9 @@ PoA:
     - valid -> signs/finalizes
     - invalid -> drops
     - owns no special canonical pending state; only finalized state is canonical
+    - cybou.cybou is an ordinary CYBOU Identity with a PoA key role
+    - finalization right is the PoA public key authorized by genesis
+    - no separate PoA Identity entity
 
 Canonical truth:
     latest valid PoA-finalized state
@@ -115,9 +129,16 @@ There is no production network.
   Central Authority PoA finalization are optional operational capabilities,
   not protocol node classes.
 - A standard CYBOU installation knows official network profiles (DEVNET, MAINNET).
-  Each profile pins the compiled Network Public Key (`NetworkID`), the expected canonical
-  `GenesisDigest`, the bootstrap IP:port and its TLS SPKI pin. The official release carries
-  the signed immutable genesis bundle.
+  Each official network is compiled as public constants: its Network Public Key
+  (`NetworkID`), immutable signed `NetworkGenesis` object, initial genesis state,
+  and bootstrap locators with TLS SPKI pins. There is no external official network
+  file, runtime file loader, or separate genesis digest profile pin.
+- DEVNET is the intended enabled network with bootstrap locator
+  `51.255.46.58:29461`; MAINNET is unprovisioned, has no bootstrap locator,
+  and remains disabled in the GUI until its keys, genesis, and bootstrap exist.
+- Provisioning creates the DEVNET Network and ordinary `cybou.cybou` Identity
+  secret material once under gitignored `/private/`. Only public keys, public
+  Identity data, and signed genesis constants may enter Git.
 - The Network Private Key is strictly offline and never online (including on DEVNET).
   It is used solely at network creation time to sign the immutable genesis specification once.
   For each NetworkID, exactly one signed genesis is valid. There is no `genesis_generation`,
@@ -125,6 +146,10 @@ There is no production network.
 - Network genesis defines the initial chain state, protocol parameters, authorized
   PoA public key, and initial Authority assignments for designated ordinary Identities
   (e.g., DEV bootstrap Identity initial Authority = 1,000,001).
+- `cybou.cybou` is an ordinary account-level Identity with AccountID, Recovery,
+  Authorization, KEM, Mail/support, and a distinct PoA key role derived from its
+  mnemonic. Consensus recognizes its finalization right solely through the PoA
+  public key in genesis; its name and Authority metric confer no finalization power.
 - Cross-network migration does not exist. A network cutover to a new official network
   (a new Network Public Key, new NetworkID, new genesis) wipes all local network-bound state cleanly:
   chain/state, network definition, genesis, Identity, vault, AccountID,

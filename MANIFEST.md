@@ -1,4 +1,4 @@
-# CYBOU documentation manifest — 2026-10-01
+# CYBOU documentation manifest — 2026-10-02
 
 This inventory records the current implementation authority, product and
 protocol documents, and machine-readable specifications, excluding this
@@ -8,28 +8,28 @@ editing an included file.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 258 | b5409e3580172bd8 |
+| AGENTS.md | 283 | e8f0692bd44e70b9 |
 | CONTRIBUTING.md | 48 | df3c6d55e81cf78a |
 | INSTALL.md | 37 | 72f779b5e99c63c6 |
-| README.md | 120 | eec14183bf9eb674 |
-| SECURITY.md | 57 | dd34783d7049f6aa |
+| README.md | 126 | 90897a29b0d82214 |
+| SECURITY.md | 59 | a059784dcf8eb766 |
 | docs/cybou/00_VISION.md | 73 | 856787283b43882a |
-| docs/cybou/02_ARCHITECTURE.md | 120 | 747d0c7a7a1f2e22 |
-| docs/cybou/04_NETWORK_LIFECYCLE.md | 150 | 4f0348b891aa996c |
+| docs/cybou/02_ARCHITECTURE.md | 134 | dbdb67e52daec8b7 |
+| docs/cybou/04_NETWORK_LIFECYCLE.md | 166 | 5d520d1b7b09fe0f |
 | docs/cybou/05_CHAIN_STATE.md | 54 | e6a2eb32c65289f4 |
-| docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 55 | b0137480d81cccdc |
+| docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 54 | b25b341e856d725c |
 | docs/cybou/08_P2P.md | 73 | ad145a7f1a229537 |
 | docs/cybou/09_CRYPTO_PQ.md | 22 | 85ef9fe8b6020132 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | 6b8887725be2a394 |
 | docs/cybou/18_ECONOMICS_FEES.md | 95 | 1bd08a43416632e0 |
-| docs/cybou/19_SECURITY_THREAT_MODEL.md | 55 | 2f810a7d55c332cf |
+| docs/cybou/19_SECURITY_THREAT_MODEL.md | 55 | 8c8c8c4ff413ff3c |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 37 | b48c49a7d3ecbabd |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 29 | 71a7cddd17b3c0d4 |
-| docs/cybou/24_DECISIONS.md | 117 | 27537030f6fcacd3 |
-| docs/cybou/25_OPEN_QUESTIONS.md | 50 | 64a72d1fc22796e2 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 38 | a1e37a4fba84b707 |
-| docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 57 | 7e61a1d65515ce76 |
+| docs/cybou/22_ROADMAP.md | 31 | a309ff51b954454f |
+| docs/cybou/24_DECISIONS.md | 120 | a23a2ede936f02be |
+| docs/cybou/25_OPEN_QUESTIONS.md | 53 | fbd75d333a1a8039 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 38 | 3c3628641270a44c |
+| docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 57 | b3737073fc0e8547 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | f82d26a4d1681de3 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
 | docs/cybou/40_REGULATORY_READINESS_FR_EU.md | 149 | 72e59c19f281912f |
@@ -39,14 +39,14 @@ editing an included file.
 | docs/cybou/46_COPYRIGHT_ATTRIBUTION_POLICY.md | 109 | 46d6006a02067fc5 |
 | docs/cybou/50_EMAIL_SECURITY_MODEL.md | 92 | d00a892605db794f |
 | docs/cybou/52_BALANCE_AND_SYSTEM_BALANCE.md | 60 | cab29a0de0d2092a |
-| docs/cybou/56_OWNER_OPERATOR_AND_RESILIENCE.md | 37 | a6f3a4dc0a3f28b4 |
+| docs/cybou/56_OWNER_OPERATOR_AND_RESILIENCE.md | 37 | 416f6c7dbfebfa81 |
 | docs/cybou/57_IDENTITY_AUTHORITY.md | 41 | c013928ff28dc0a6 |
 | docs/cybou/59_DETERMINISTIC_FEE_ROUTER.md | 89 | cfbf1329a4e0f587 |
-| docs/cybou/68_OPERATOR_KEY_SEPARATION.md | 23 | b4e72c2d172f88a1 |
+| docs/cybou/68_OPERATOR_KEY_SEPARATION.md | 27 | 4c9e9d1d4178a58d |
 | docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 37 | 3cdcec3902215bd7 |
 | docs/cybou/71_WINDOWS_MINGW_BUILD.md | 146 | a149e0762bd36088 |
 | docs/cybou/72_DESKTOP_WALLET_UI.md | 81 | d58fb6c8a3ad9144 |
-| docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 97 | b53c5c19ab4796d0 |
+| docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 99 | 7f90cd772df217bf |
 | docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 62 | 5fd4730a222232f8 |
 | docs/cybou/77_CYBOU_NAME_REGISTRY.md | 38 | 7d9fce7db6ff4f92 |
 | docs/cybou/78_IDENTITY_DESKTOP_UX.md | 23 | f0e426ca60241ed2 |
@@ -56,11 +56,11 @@ editing an included file.
 | docs/cybou/83_STORAGE_UI_UX.md | 579 | e8d198f425824306 |
 | docs/cybou/84_PRODUCT_DESIGN_SYSTEM.md | 520 | 43250d708665708f |
 | docs/cybou/85_BETA_UI_ACCEPTANCE.md | 189 | caecd704f05c41df |
-| docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 115 | f1ecd5f7cd816336 |
+| docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 116 | 338092b3064c51a3 |
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 35 | 870d2d08b963af58 |
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 34 | feaf7a136cba1025 |
 | docs/cybou/APPLICATION_DATA_PLANE.md | 465 | 0445ccc1fa0faa27 |
-| docs/cybou/CYP2_TRANSPORT_V3.md | 44 | 5e5a22835558c7a4 |
+| docs/cybou/CYP2_TRANSPORT_V3.md | 45 | bad882a27b444f70 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 87 | b642accdd01c0ebc |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/OPERATOR_LAB.md | 180 | 4d42fcaf1f7c7ddc |
@@ -78,5 +78,5 @@ editing an included file.
 | spec/market_strategy.yaml | 51 | a447525f8d273776 |
 | spec/monetary_model.yaml | 65 | c58bdbf24fd161a9 |
 | spec/onboarding.yaml | 29 | 0f26395eae2874e3 |
-| spec/poa_chunk_tree.yaml | 180 | 1d02ff3aa0709689 |
-| www/llms.txt | 71 | 359403564ea01bba |
+| spec/poa_chunk_tree.yaml | 183 | c8993f6d8a7d74ea |
+| www/llms.txt | 76 | 686c1c07ee1ebb79 |

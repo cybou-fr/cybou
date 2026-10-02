@@ -27,9 +27,14 @@ experimental software, not a public mail or cloud-storage service.
 
 - All participants run the same full-node core. Storage and PoA finalization
   are optional capabilities. Bootstrap is an ordinary CYBOU full peer for initial discovery.
-- Official profiles pin bootstrap transport, compiled Network Public Key (`NetworkID`),
-  and canonical `GenesisDigest`. The Network Private Key is strictly offline and never
-  online; it signs the immutable genesis once at network creation.
+- Official network public data is compiled into the client: Network Public Key
+  (`NetworkID`), immutable signed genesis, initial state and bootstrap locators.
+  No external official network file is loaded. The Network Private Key is strictly
+  offline and signs genesis once at network creation.
+- DEVNET uses bootstrap `51.255.46.58:29461`. MAINNET remains unprovisioned,
+  without a bootstrap locator, and disabled in the GUI until provisioning.
+- `cybou.cybou` is an ordinary Identity with a distinct genesis-authorized PoA
+  key role; its name and Authority metric do not grant finalization rights.
 - The Central Authority finalizer is operated from its desktop after unlock using
   the genesis-authorized PoA key. Its live route is authenticated per session and then discarded.
 - Advisory Validation is provisional; only identities with Authority > 1,000,000

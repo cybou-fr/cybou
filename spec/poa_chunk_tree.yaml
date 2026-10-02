@@ -6,8 +6,11 @@ consensus:
     network_id: network_public_key
     genesis: immutable
     genesis_replacement: forbidden
-    official_genesis_digest: pinned
+    official_public_data: compiled_network_public_key_signed_genesis_initial_state_bootstrap_locators
+    external_official_network_file: absent
+    separate_genesis_digest_profile_pin: absent
   poa_public_key: genesis_authorized
+  poa_identity: ordinary_cybou_dot_cybou_identity_with_distinct_poa_key_role
   authority_assignment: genesis_initial_assignment_and_finalized_history_state
   bft: false
   validator_set: absent

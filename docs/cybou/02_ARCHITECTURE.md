@@ -31,9 +31,12 @@ and network replacement.
 ## Official network trust
 
 ```text
-Compiled Network Public Key (NetworkID) + GenesisDigest + Bootstrap IP:port & TLS SPKI pin
-  -> Bundled offline-signed immutable genesis (defines parameters, initial Authority, PoA P)
-  -> Verify local genesis bundle against pinned NetworkID and GenesisDigest
+Compiled OfficialNetwork public constants:
+  Network Public Key (NetworkID)
+  immutable offline-signed NetworkGenesis object
+  initial genesis state
+  bootstrap IP:port and TLS SPKI pin
+  -> Verify compiled genesis signature and initial state root
   -> Ordinary bootstrap peer seeds initial CYP2 discovery
   -> Direct P2P mesh
   -> Provisional Validation (optional pre-finalization by eligible Identities)
@@ -42,11 +45,18 @@ Compiled Network Public Key (NetworkID) + GenesisDigest + Bootstrap IP:port & TL
 
 The Network Private Key is strictly offline and used solely at network creation
 time to sign the immutable genesis specification once. For each NetworkID, exactly
-one signed genesis is valid. The official release carries the signed immutable
-genesis bundle (`CYG1`). Nodes independently verify local genesis before connecting;
+one signed genesis is valid. The official release compiles its public genesis and
+initial state into the client; no external official network/genesis file
+is loaded at runtime. Nodes independently verify these constants before connecting;
 bootstrap is an ordinary CYBOU full peer providing initial transport discovery only.
 The Central Authority operates the genesis-authorized PoA key `P` and finalizes
 blocks.
+
+DEVNET is the enabled official profile with locator `51.255.46.58:29461`.
+MAINNET remains unprovisioned, has no bootstrap locator, and is disabled in the
+GUI until its keys, genesis, and bootstrap are ready. Provisioning keeps Network
+and `cybou.cybou` private material under gitignored `/private/`; only public
+material and signed constants enter the source tree.
 
 Every full node independently validates blocks, operation validity, and state
 transitions. Provisional Validation provides optional pre-finalization evidence
@@ -88,6 +98,10 @@ detailed in [`37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`](37_FRANCE_SOVEREIGN_NETWOR
 
 One AccountID is the stable Identity. Mnemonic-derived Recovery, Authorization,
 and KEM roles are separate. Device is not a protocol entity.
+
+`cybou.cybou` is an ordinary Identity with these roles, Mail/support, and a
+distinct PoA key role from its mnemonic. Its name is not a consensus authority:
+only the PoA public key authorized in genesis grants finalization right.
 
 Storage providers prove their own service keys per CYP2 session. The PoA finalizer
 proves the genesis-authorized PoA key. There is no canonical service-node registry.

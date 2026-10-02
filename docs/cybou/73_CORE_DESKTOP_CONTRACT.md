@@ -9,11 +9,13 @@ core/application services → CybouDesktopModel → Qt pages
 
 ## Network startup and cutover
 
-The core receives the compiled `OfficialNetworkProfile` (DEVNET or MAINNET)
-with pinned Network Public Key (`NetworkID`), canonical `GenesisDigest`, and
-bootstrap locators. The desktop verifies the bundled signed immutable genesis
-(`CYG1`) against the pinned `NetworkID` and `GenesisDigest`. Only then may it
+The core selects compiled `OfficialNetwork` public constants: Network Public
+Key (`NetworkID`), signed immutable `NetworkGenesis`, initial genesis state,
+and bootstrap locators. It verifies the compiled signature and initial state
+root. No external official network/genesis file is loaded. Only then may it
 open network-bound Identity and application state or connect to peers in the direct mesh.
+DEVNET is the enabled profile; MAINNET has no provisioned data or bootstrap and
+remains disabled in the GUI until provisioning is complete.
 Bootstrap is an ordinary peer whose hints are untrusted until normal CYP2 and
 France-only admission checks pass.
 

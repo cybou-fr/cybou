@@ -6,8 +6,14 @@ trust, creation, joining, Validation, and network replacement.
 ## Official networks
 
 A standard CYBOU installation knows two official network profiles:
-- **DEVNET**
-- **MAINNET**
+- **DEVNET**: enabled official profile, bootstrap locator `51.255.46.58:29461`.
+- **MAINNET**: unprovisioned, no bootstrap locator, disabled in the GUI until
+  its keys, genesis, and bootstrap exist.
+
+Each `OfficialNetwork` consists of compiled public constants: its Network
+Public Key, immutable signed `NetworkGenesis` object, initial genesis state,
+and bootstrap locators. Runtime loads no external official network/genesis
+file and has no separate genesis digest profile pin.
 
 Network identity is immutable:
 ```text
@@ -21,6 +27,11 @@ The corresponding **Network Private Key**:
 - is used solely by the network owner at creation time to sign the immutable genesis specification once;
 - never changes an existing network;
 - is the creation-time root of trust for that network.
+
+Provisioning creates the Network secret and the ordinary `cybou.cybou`
+Identity secret once. Private material stays only under gitignored `/private/`
+(`devnet/` for DEVNET; `mainnet/` does not yet exist). Only public keys,
+public Identity data, and signed genesis constants enter Git.
 
 ## Bootstrap peer
 
@@ -48,17 +59,22 @@ The bootstrap node runs an ordinary CYBOU Identity:
 Offline:
   Owner creates immutable genesis (params, initial Authority assignments, PoA key P)
   Owner signs genesis once with Network Private Key
-  Official release packages signed genesis bundle (CYG1) with pinned NetworkID and GenesisDigest
+  Provisioning generates public C++ constants for the official network
 
 Online:
-  Client verifies bundled genesis against pinned Network Public Key (NetworkID) and GenesisDigest
+  Client selects compiled OfficialNetwork and verifies its signed genesis and initial state root
   Initializes local consensus state
   Connects to known bootstrap locator as an ordinary CYP2 peer
   Bootstrap seeds initial peers -> direct CYP2 mesh forms
 ```
 
-Every full node independently checks the signed genesis bundle, operational PoA
+Every full node independently checks the compiled signed genesis, operational PoA
 certificate, block transitions, and state roots.
+
+`cybou.cybou` is an ordinary Identity with mnemonic, AccountID, Recovery,
+Authorization, KEM, Mail/support, and a distinct PoA key role. Its finalization
+right comes solely from the PoA public key authorized by genesis. Its name does
+not confer consensus power, and there is no separate PoA Identity entity.
 
 ## Authority and Validation
 
@@ -103,8 +119,8 @@ There is:
 ## Immutable genesis
 
 A NetworkID has exactly one genesis.
-Nodes MUST reject any genesis whose canonical digest differs
-from the GenesisDigest pinned for that official network.
+Nodes use the immutable signed genesis compiled for the selected official
+network and MUST reject invalid signatures or a mismatched initial state root.
 
 There is NO `genesis_generation`, NO re-genesis, and NO in-place genesis replacement inside a NetworkID.
 

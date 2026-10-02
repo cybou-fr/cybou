@@ -41,3 +41,6 @@ target/
 /artifacts/**/resources.jsonl
 /artifacts/**/offsets.json
 /artifacts/**/offsets.tmp
+
+# Private offline secrets (network root keys, identity seed material, private provisioning artifacts)
+/private/

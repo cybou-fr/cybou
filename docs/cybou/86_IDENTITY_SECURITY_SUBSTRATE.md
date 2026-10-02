@@ -29,8 +29,9 @@ user identities or parallel authorization systems.
 ```
 
 The Recovery Root is a separate authorization domain. The offline Network Private Key,
-operational PoA finalizer key `P`, Release Signing, and Treasury keys are separate system
-domains and are not user-service keys.
+Release Signing, and Treasury keys are separate system domains. The operational
+PoA key `P` is a distinct role of the ordinary `cybou.cybou` Identity; it is
+not used for ordinary user-service authorization.
 
 ## Identity and system key domains
 

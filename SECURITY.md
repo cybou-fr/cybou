@@ -12,9 +12,10 @@ reproduce. Do not include real user secrets or recovery phrases.
 
 ## Trust and failure boundaries
 
-- An official profile pins bootstrap IP:port, TLS SPKI and the compiled Network
-  Public Key (`NetworkID`). The pin authenticates the endpoint for discovery; only
-  the Network Public Key verifies signed genesis specifications.
+- An official network compiles bootstrap IP:port, TLS SPKI, Network Public Key
+  (`NetworkID`), immutable signed genesis and initial state as public constants.
+  The TLS pin authenticates the discovery endpoint; the Network Public Key
+  verifies the compiled genesis signature. No external official network file is loaded.
 - Bootstrap compromise may deny service or advertise false availability, but
   cannot produce a signed-genesis valid official network. Its outage does not halt
   an already connected P2P mesh. Bootstrap is an ordinary CYBOU peer with no
@@ -25,10 +26,11 @@ reproduce. Do not include real user secrets or recovery phrases.
   replace the network, sign genesis, or alter genesis authority. Journal rollback and
   conflicting signing must fail closed.
 - The Network Private Key is strictly offline and never online (including on DEVNET).
-  It signs the immutable genesis once at network creation. Because official profiles pin
-  the exact `GenesisDigest`, a stolen Network Private Key cannot replace or update
-  existing official nodes running that NetworkID. It must never be stored on bootstrap
-  or PoA machines.
+  It signs the immutable genesis once at network creation. Existing official
+  binaries contain that exact signed genesis and initial state, so a stolen
+  Network Private Key cannot replace them in place. It must never be stored on
+  bootstrap or PoA machines. Network and `cybou.cybou` private provisioning
+  material stays only under gitignored `/private/`.
 - Full nodes check genesis signatures, both PoA signature components, operation
   execution, state roots, and validation attestations independently.
 - Identity Recovery, Authorization, KEM, Network Key, PoA, Release Signing
