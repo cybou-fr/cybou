@@ -322,6 +322,20 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
     }
 }
 
+std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation)
+{
+    return std::visit([](const auto& op) -> std::optional<AccountId> {
+        using T = std::decay_t<decltype(op)>;
+        if constexpr (std::is_same_v<T, AccountCreateOp>) {
+            return std::nullopt;
+        } else if constexpr (std::is_same_v<T, IdentityRotate>) {
+            return op.account_id;
+        } else {
+            return op.authorization.account_id;
+        }
+    }, operation);
+}
+
 std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation)
 {
     constexpr std::string_view domain{"CYBOU/OP-ID/V5"};

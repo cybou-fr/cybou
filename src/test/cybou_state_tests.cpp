@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 
 BOOST_AUTO_TEST_SUITE(cybou_state_tests)
 
@@ -468,7 +469,8 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     const auto new_recovery_id = ComputeRecoveryKeyId(*new_recovery);
     BOOST_REQUIRE(new_recovery_id);
     BOOST_CHECK(rotated.state->identities.FindByRecoveryKeyId(*new_recovery_id) == account);
-    BOOST_CHECK_EQUAL(rotated.state->accounts.at(account).authority, 1'000'001U);
+    // IdentityRotate keeps the account's AUTH and earns the flat finalized +1.
+    BOOST_CHECK_EQUAL(rotated.state->accounts.at(account).authority, 1'000'002U);
     const auto replay = ExecuteBlockOperations(*rotated.state, {operation}, network_id, 2, params);
     BOOST_CHECK(replay.error == BlockExecutionError::INVALID_IDENTITY_ROTATE);
 }
@@ -501,6 +503,10 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus;
 
+    // A finalized AccountCreate earns no AUTH.
+    const auto created = ExecuteBlockOperations(state, {ProtocolOperation{create}}, network_id, 0, params);
+    BOOST_REQUIRE(created);
+    BOOST_CHECK_EQUAL(created.state->accounts.at(account).authority, 0U);
     BOOST_REQUIRE(ApplyAccountCreate(create, network_id, 0, params, state) == AccountCreateStateError::NONE);
 
     // Fund account balance
@@ -551,6 +557,14 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     BOOST_CHECK(block_res.state->accounts.at(account).system_balance == params.onboarding_bonus + 20);
     BOOST_CHECK(block_res.state->pending_fee_pool == 0); // no fee for lock
     BOOST_CHECK(block_res.state->identities.Find(account)->nonce == 1);
+    // A finalized SystemLock earns a flat +1 AUTH regardless of the locked amount.
+    BOOST_CHECK_EQUAL(block_res.state->accounts.at(account).authority, 1U);
+    BOOST_CHECK_EQUAL(TotalSupply(*block_res.state), TotalSupply(state));
+    auto saturated = state;
+    saturated.accounts.at(account).authority = std::numeric_limits<uint64_t>::max();
+    const auto saturated_res = ExecuteBlockOperations(saturated, {lock_op}, network_id, 1, params);
+    BOOST_REQUIRE(saturated_res);
+    BOOST_CHECK_EQUAL(saturated_res.state->accounts.at(account).authority, std::numeric_limits<uint64_t>::max());
 
     // Replay stale nonce fails
     const auto replay = ExecuteBlockOperations(*block_res.state, {lock_op}, network_id, 2, params);

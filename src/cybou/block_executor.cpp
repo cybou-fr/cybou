@@ -90,6 +90,16 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 return failure;
             }
         }
+        // Finalized execution only: AccountCreate earns nothing, so a genesis
+        // allocation keeps its exact AUTH. Saturating keeps a PoA-granted
+        // maximum from blocking the account's later operations.
+        if (const auto actor = AuthorizingAccount(operations[i])) {
+            const auto account = candidate.accounts.find(*actor);
+            if (account == candidate.accounts.end()) return fail(BlockExecutionError::INVALID_STATE);
+            auto& authority = account->second.authority;
+            authority = authority > std::numeric_limits<uint64_t>::max() - AUTH_PER_FINALIZED_OPERATION
+                ? std::numeric_limits<uint64_t>::max() : authority + AUTH_PER_FINALIZED_OPERATION;
+        }
     }
     const uint64_t chunks = candidate.pending_fee_pool / 4;
     const uint64_t security_addition = chunks * 3;

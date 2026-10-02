@@ -45,6 +45,8 @@ using ProtocolOperation = std::variant<
 std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const ProtocolOperation& operation);
 std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const unsigned char> bytes);
 std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation);
+/** The existing account that authorizes the operation; nullopt for AccountCreate. */
+std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation);
 /** Verify operation signatures and payload bindings before volatile mesh relay. */
 bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
     const uint256& network_id, const IdentityRegistry& identities);

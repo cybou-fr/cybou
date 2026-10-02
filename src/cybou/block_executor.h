@@ -42,6 +42,9 @@ struct BlockExecutionResult {
     explicit operator bool() const { return error == BlockExecutionError::NONE && state.has_value() && state_root.has_value(); }
 };
 
+/** Flat AUTH earned by the authorizing account of each finalized Identity operation. */
+inline constexpr uint64_t AUTH_PER_FINALIZED_OPERATION{1};
+
 BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
     const uint256& network_id, uint64_t block_height,
