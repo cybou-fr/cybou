@@ -422,27 +422,30 @@ void CybouNodeRuntime::DetachAuthenticatedFinalizerRelay(const OperationRelay::F
     m_operation_relay.DetachFinalizer(session);
 }
 
-bool CybouNodeRuntime::CanAcceptOperations() const
+bool CybouNodeRuntime::HasAuthenticatedFinalizerRoute() const
 {
     return IsPoaFinalizerEnabled() || m_operation_relay.HasAuthenticatedFinalizer();
 }
 
 OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
-    const std::span<const unsigned char> exact_bytes)
+    const std::span<const unsigned char> exact_bytes, const bool allow_seen_retry)
 {
-    return m_operation_relay.Enqueue(exact_bytes);
+    return m_operation_relay.Enqueue(exact_bytes, allow_seen_retry);
 }
 
-std::optional<RelayedOperation> CybouNodeRuntime::PeekRelayedOperation(
-    const OperationRelay::FinalizerSession session) const
+std::optional<RelayedOperation> CybouNodeRuntime::PeekRelayedOperation() const
 {
-    return m_operation_relay.Peek(session);
+    return m_operation_relay.Peek();
 }
 
-bool CybouNodeRuntime::AcknowledgeRelayedOperation(
-    const OperationRelay::FinalizerSession session, const uint256& operation_id)
+bool CybouNodeRuntime::AcknowledgeRelayedOperation(const uint256& operation_id)
 {
-    return m_operation_relay.Acknowledge(session, operation_id);
+    return m_operation_relay.Acknowledge(operation_id);
+}
+
+bool CybouNodeRuntime::HasRelayedOperation(const uint256& operation_id) const
+{
+    return m_operation_relay.HasQueued(operation_id);
 }
 
 OperationStatus CybouNodeRuntime::GetOperationStatus(const uint256& op_id) const
@@ -608,6 +611,7 @@ void CybouNodeRuntime::EmitFinalizedEvents(const FinalizedBlock& block, bool pro
         m_config.event_writer->Write(NodeEvent::block_finalized, fields);
     }
     for (const auto& op : block.block.operations) if (const auto id = ComputeOperationId(op)) {
+        m_operation_relay.ForgetFinalized(*id);
         RememberOperationStatus(*id, {.kind = OperationStatusKind::FINALIZED, .finalized_height = block.block.height});
           if (m_config.event_writer) std::visit([&](const auto& value) {
               EventFields operation{{"operation_id",id->GetHex()},{"height",block.block.height}};

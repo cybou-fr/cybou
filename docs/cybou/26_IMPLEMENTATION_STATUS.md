@@ -126,8 +126,9 @@ Current `main` implements the canonical low-level substrate:
   GET and self-healing re-PUT; private Files schema v2 (modified time, every
   FILE has content, reserved Trash ID);
 - CYP2 verified block sync and content-addressed PUT/GET;
-- any full node may relay exact signed operations through a bounded volatile
-  queue while the Central Authority has a live PoA-authenticated session to it;
+- any full node may relay exact signed operations hop by hop through bounded
+  volatile queues; only the Authority admits them over a live PoA-authenticated
+  session;
 - removal of legacy BFT, ValidatorSet, MailTx and indexed StorageObject runtime
   paths.
 

@@ -425,13 +425,16 @@ size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
 
 size_t PeerManager::PollOperationRelays()
 {
-    if (!m_runtime.IsPoaFinalizerEnabled()) return 0;
     size_t delivered{0};
+    constexpr size_t MAX_RELAY_OPERATIONS_PER_PEER{4};
     for (auto& [endpoint, session] : m_peers) {
         (void)endpoint;
         if (!session->Peer() ||
             !(session->Peer()->capabilities & CAP_OPERATION_RELAY)) continue;
-        if (session->PollOperationRelay(m_runtime)) ++delivered;
+        for (size_t i = 0; i < MAX_RELAY_OPERATIONS_PER_PEER; ++i) {
+            if (!session->PollOperationRelay(m_runtime)) break;
+            ++delivered;
+        }
     }
     return delivered;
 }

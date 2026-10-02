@@ -95,7 +95,7 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
                 MatchesKnownFinalizedChain(m_runtime, *session.Peer())) {
                 auto relay_session = session.PeerFinalizerAuthenticated()
                     ? m_runtime.AttachAuthenticatedFinalizerRelay() : std::nullopt;
-                while (!stopping && session.ServeNext(m_runtime, relay_session)) {}
+                while (!stopping && session.ServeNext(m_runtime)) {}
                 if (relay_session) m_runtime.DetachAuthenticatedFinalizerRelay(*relay_session);
             }
             done->store(true);

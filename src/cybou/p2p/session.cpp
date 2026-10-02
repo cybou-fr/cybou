@@ -1060,13 +1060,13 @@ std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const Protocol
 bool PeerSession::PollOperationRelay(CybouNodeRuntime& runtime)
 {
     if (!m_peer || !(m_peer->capabilities & CAP_OPERATION_RELAY) ||
-        !(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) return false;
+        !(m_local_capabilities & CAP_OPERATION_RELAY)) return false;
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
     if (!Write(Frame{MessageType::OPERATION_RELAY_POLL, {}}, deadline)) return false;
     const auto meta = Read(deadline);
     if (!meta || meta->type != MessageType::OPERATION_RELAY_OPERATION_META ||
         (meta->payload.size() != 1 && meta->payload.size() != 37) || meta->payload[0] > 1) return false;
-    if (meta->payload[0] == 0) return meta->payload.size() == 1;
+    if (meta->payload[0] == 0) return false;
     uint256 operation_id;
     std::copy_n(meta->payload.begin() + 1, 32, operation_id.begin());
     const uint32_t size = Read32(meta->payload.data() + 33);
@@ -1084,14 +1084,24 @@ bool PeerSession::PollOperationRelay(CybouNodeRuntime& runtime)
     boost::system::error_code endpoint_error;
     const auto endpoint = m_socket.remote_endpoint(endpoint_error);
     if (endpoint_error) return false;
-    // A local rejection is still an admission decision; ACK it so invalid or
-    // already finalized operations cannot wedge the relay FIFO.
-    const auto admitted = runtime.SubmitPeerOperation(*operation, endpoint.address().to_string());
-    if (admitted.status != OperationSubmitStatus::ACCEPTED &&
-        admitted.status != OperationSubmitStatus::ALREADY_PENDING &&
-        admitted.status != OperationSubmitStatus::ALREADY_FINALIZED &&
-        admitted.status != OperationSubmitStatus::INVALID_PAYLOAD &&
-        admitted.status != OperationSubmitStatus::NETWORK_MISMATCH) return false;
+    bool can_acknowledge{false};
+    if (runtime.IsPoaFinalizerEnabled() && (m_local_capabilities & CAP_ACCEPT_OPERATIONS)) {
+        // Finality authority consumes the operation and independently checks it.
+        const auto admitted = runtime.SubmitPeerOperation(*operation, endpoint.address().to_string());
+        can_acknowledge = admitted.status == OperationSubmitStatus::ACCEPTED ||
+            admitted.status == OperationSubmitStatus::ALREADY_PENDING ||
+            admitted.status == OperationSubmitStatus::ALREADY_FINALIZED ||
+            admitted.status == OperationSubmitStatus::REJECTED ||
+            admitted.status == OperationSubmitStatus::INVALID_PAYLOAD ||
+            admitted.status == OperationSubmitStatus::NETWORK_MISMATCH;
+    } else {
+        // Intermediate full nodes move the operation one hop while the bounded
+        // seen-ID cache suppresses cycles through the mesh.
+        const auto queued = runtime.EnqueueRelayedOperation(bytes);
+        can_acknowledge = queued == OperationRelayEnqueueStatus::QUEUED ||
+            (queued == OperationRelayEnqueueStatus::DUPLICATE && runtime.HasRelayedOperation(operation_id));
+    }
+    if (!can_acknowledge) return false;
     if (!Write(Frame{MessageType::OPERATION_RELAY_ACK,
             std::vector<unsigned char>(operation_id.begin(), operation_id.end())}, deadline)) return false;
     const auto ack = Read(deadline);
@@ -1206,8 +1216,7 @@ std::optional<ChunkAuthorizationProof> PeerSession::GetChunkAuthorizationProof(
     return proof;
 }
 
-bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
-    const std::optional<OperationRelay::FinalizerSession> relay_session)
+bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
 {
     if (!m_peer) return false;
     const auto request = Read();
@@ -1284,8 +1293,9 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
         return SendPeers(endpoints);
     }
     if (request->type == MessageType::OPERATION_RELAY_POLL) {
-        if (!relay_session || !request->payload.empty()) return false;
-        const auto item = runtime.PeekRelayedOperation(*relay_session);
+        if (!m_peer || !(m_peer->capabilities & CAP_OPERATION_RELAY) ||
+            !(m_local_capabilities & CAP_OPERATION_RELAY) || !request->payload.empty()) return false;
+        const auto item = runtime.PeekRelayedOperation();
         std::vector<unsigned char> meta{static_cast<unsigned char>(item.has_value())};
         if (item) {
             meta.insert(meta.end(), item->operation_id.begin(), item->operation_id.end());
@@ -1304,7 +1314,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
         if (!ack || ack->type != MessageType::OPERATION_RELAY_ACK || ack->payload.size() != 32) return false;
         uint256 operation_id;
         std::copy_n(ack->payload.begin(), 32, operation_id.begin());
-        const bool acknowledged = runtime.AcknowledgeRelayedOperation(*relay_session, operation_id);
+        const bool acknowledged = runtime.AcknowledgeRelayedOperation(operation_id);
         return Write(Frame{MessageType::OPERATION_RELAY_ACK_RESULT,
             {static_cast<unsigned char>(acknowledged)}}, deadline);
     }
@@ -1312,7 +1322,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});
     }
     if (request->type == MessageType::OP_META) {
-        if ((m_local_capabilities & (CAP_ACCEPT_OPERATIONS | CAP_OPERATION_RELAY)) == 0 && !relay_session) return false;
+        if ((m_local_capabilities & (CAP_ACCEPT_OPERATIONS | CAP_OPERATION_RELAY)) == 0) return false;
         if (request->payload.size() != 4) return false;
         const uint32_t size = Read32(request->payload.data());
         if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return false;
@@ -1336,17 +1346,15 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime,
         const auto endpoint = m_socket.remote_endpoint(endpoint_error);
         if (endpoint_error) return false;
         OperationSubmitResult result;
-        // Client operations arrive on a different session from the Authority
-        // route. Ordinary full nodes relay them through a bounded volatile
-        // queue; the Authority itself admits them directly to its local pool.
-        if (!runtime.IsPoaFinalizerEnabled() && !(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) {
-            switch (runtime.EnqueueRelayedOperation(bytes)) {
+        // Every ordinary full node can stage and forward exact operations over
+        // peer sessions. The Authority admits them directly to its local pool.
+        if (runtime.GetOperationStatus(*operation_id).kind == OperationStatusKind::FINALIZED) {
+            result = {.status = OperationSubmitStatus::ALREADY_FINALIZED, .op_id = *operation_id};
+        } else if (!runtime.IsPoaFinalizerEnabled() || !(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) {
+            switch (runtime.EnqueueRelayedOperation(bytes, true)) {
             case OperationRelayEnqueueStatus::QUEUED:
             case OperationRelayEnqueueStatus::DUPLICATE:
                 result = {.status = OperationSubmitStatus::RELAY_QUEUED, .op_id = *operation_id};
-                break;
-            case OperationRelayEnqueueStatus::FINALIZER_UNAVAILABLE:
-                result = {.status = OperationSubmitStatus::FINALIZER_UNAVAILABLE, .op_id = *operation_id, .delivery_uncertain = true};
                 break;
             case OperationRelayEnqueueStatus::QUEUE_FULL:
                 result = {.status = OperationSubmitStatus::RELAY_QUEUE_FULL, .op_id = *operation_id, .delivery_uncertain = true};

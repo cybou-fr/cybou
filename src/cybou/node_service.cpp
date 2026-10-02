@@ -137,10 +137,18 @@ void CybouNodeService::StartDesktopFinalizer(const uint64_t block_interval_ms)
     m_stop_desktop_finalizer.store(false);
     m_desktop_finalizer_thread = std::thread{[this, block_interval_ms] {
         p2p::PeerManager peers{*m_runtime};
+        std::optional<bool> previous_finalizer_state;
         auto next_block = std::chrono::steady_clock::now();
         auto next_peer_maintenance = std::chrono::steady_clock::time_point{};
         while (!m_stop_desktop_finalizer.load()) {
-            if (m_runtime->IsPoaFinalizerEnabled() && std::chrono::steady_clock::now() >= next_block) {
+            const bool finalizer_enabled = m_runtime->IsPoaFinalizerEnabled();
+            if (previous_finalizer_state && *previous_finalizer_state != finalizer_enabled) {
+                // Capability proofs belong to a live session. Drop old sessions
+                // so enable/disable transitions are reflected by fresh HELLOs.
+                peers.DisconnectAll();
+            }
+            previous_finalizer_state = finalizer_enabled;
+            if (finalizer_enabled && std::chrono::steady_clock::now() >= next_block) {
                 const auto block = m_runtime->ProduceBlock();
                 if (!block) {
                     if (m_runtime->GetStatus().poa_safety_halted) {
@@ -154,6 +162,7 @@ void CybouNodeService::StartDesktopFinalizer(const uint64_t block_interval_ms)
 
             if (std::chrono::steady_clock::now() >= next_peer_maintenance) {
                 peers.DiscoverPeers();
+                peers.PollOperationRelays();
                 peers.FanoutRecentBlocks();
                 peers.PingAll();
                 next_peer_maintenance = std::chrono::steady_clock::now() + std::chrono::seconds{1};
@@ -246,6 +255,7 @@ int CybouNodeService::RunFinalizer(const CybouFinalizerServiceConfig& config, st
                 }
             }
             if (!stopping) {
+                peers.PollOperationRelays();
                 peers.FanoutRecentBlocks();
                 peers.PingAll();
                 std::vector<PeerDiagnostics> diagnostics;

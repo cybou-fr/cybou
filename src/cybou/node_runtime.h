@@ -182,12 +182,12 @@ public:
     /** Attach only after a live CYP2 session has verified the genesis finalizer proof. */
     std::optional<OperationRelay::FinalizerSession> AttachAuthenticatedFinalizerRelay();
     void DetachAuthenticatedFinalizerRelay(OperationRelay::FinalizerSession session);
-    bool CanAcceptOperations() const;
-    OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes);
-    std::optional<RelayedOperation> PeekRelayedOperation(
-        OperationRelay::FinalizerSession session) const;
-    bool AcknowledgeRelayedOperation(OperationRelay::FinalizerSession session,
-        const uint256& operation_id);
+    bool HasAuthenticatedFinalizerRoute() const;
+    OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes,
+        bool allow_seen_retry = false);
+    std::optional<RelayedOperation> PeekRelayedOperation() const;
+    bool AcknowledgeRelayedOperation(const uint256& operation_id);
+    bool HasRelayedOperation(const uint256& operation_id) const;
 
     /** Commit a finalized block */
     BlockTransitionResult CommitBlock(const FinalizedBlock& block, bool sync = true);

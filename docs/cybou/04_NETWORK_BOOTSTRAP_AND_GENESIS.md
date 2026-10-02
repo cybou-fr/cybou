@@ -183,19 +183,21 @@ anti-equivocation, and must never send signing material to bootstrap.
 ## Relay and validation boundaries
 
 The Central Authority full node may maintain authenticated outbound sessions
-to any full nodes in the P2P mesh, allowing clients to submit operations
-through whichever connected peer currently has a live Authority route. A relay
-forwards exact operation bytes only while an authenticated finalizer session is
-live; it may use a bounded in-memory queue for transient delivery, but has no
-durable shared pending-operation pool. Bootstrap membership is not required.
-If no route is live, clients retain exact signed operations and report
-`FINALIZER_UNAVAILABLE` for retry. Relays/caches of finalized blocks do not
-decide validity or finality. The Authority full node performs consensus checks
-and signs; receiving full nodes independently verify every block, operation,
+to ordinary full nodes in the P2P mesh. Every full node can stage exact signed
+operation bytes in a bounded volatile queue and pull queued operations from its
+connected relay peers, forwarding them hop by hop until they reach the
+Authority. Bootstrap membership is not required. Queue acknowledgments only
+confirm that the next relay accepted volatile bytes; the origin retains its
+exact operation until PoA finality. Only the Authority admits an operation to
+the canonical pending pool, and only over a session with a fresh proof of the
+genesis PoA key. Relays/caches of finalized blocks do not decide validity or
+finality. Receiving full nodes independently verify every block, operation,
 certificate, and state root.
 
-Each relay's finalizer-authenticated session route is ephemeral memory state,
-not part of the durable NetworkBinding. Session teardown removes that route.
+Each relay's finalizer-authenticated direct session route is ephemeral memory
+state, not part of durable NetworkBinding. Session teardown removes that route;
+the bounded operation queue remains volatile and can continue across another
+available mesh route.
 The transport/session design does not make it safe to run independent
 simultaneous finalizers with the same private key. One active signer and the
 existing durable anti-equivocation journal remain required; key replication

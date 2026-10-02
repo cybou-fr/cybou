@@ -39,7 +39,7 @@ inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
 inline constexpr uint64_t CAP_STORAGE{1ULL << 7};
 inline constexpr uint64_t CAP_STORAGE_PROOFS{1ULL << 8};
 inline constexpr uint64_t CAP_BOOTSTRAP{1ULL << 9};
-/** Every full node can relay exact signed operations to a live authenticated finalizer session. */
+/** Every full node can stage and relay exact signed operations hop by hop. */
 inline constexpr uint64_t CAP_OPERATION_RELAY{1ULL << 10};
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder
@@ -240,8 +240,7 @@ public:
     std::optional<std::vector<unsigned char>> GetChunkById(const ChunkId& chunk_id);
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
         const uint256& publication_operation_id, const ChunkId& chunk_id);
-    bool ServeNext(CybouNodeRuntime& runtime,
-        std::optional<OperationRelay::FinalizerSession> relay_session = std::nullopt);
+    bool ServeNext(CybouNodeRuntime& runtime);
     const std::optional<Hello>& Peer() const { return m_peer; }
     /** One authenticated CYP2 frame for bounded peer extensions and protocol tests. */
     bool SendFrame(const Frame& frame,
