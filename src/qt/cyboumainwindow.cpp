@@ -14,6 +14,7 @@
 #include <qt/pages/networkauthoritypage.h>
 #include <qt/cybouactivity.h>
 #include <qt/pages/emailpage.h>
+#include <qt/pages/mailcompose.h>
 #include <qt/pages/homepage.h>
 #include <qt/pages/identitypage.h>
 #include <qt/pages/onboardingview.h>
@@ -49,6 +50,7 @@
 #include <QLocale>
 
 #include <cstdlib>
+#include <optional>
 #include <QStackedWidget>
 #include <QStyle>
 #include <QSystemTrayIcon>
@@ -885,6 +887,10 @@ void CybouMainWindow::closeEvent(QCloseEvent* event)
 void CybouMainWindow::reloadAppearance()
 {
     const auto current = static_cast<CybouPage>(currentPageIndex());
+    std::optional<CybouMailItem> compose_state;
+    if (auto* mail = static_cast<EmailPage*>(page(CybouPage::Mail)); mail && mail->isComposing()) {
+        compose_state = mail->composer()->snapshotForRebuild();
+    }
     CybouTheme::setAppearance(CybouTheme::savedAppearance());
     applyStyle();
     // Pages bake colors into pixmaps and inline styles: rebuild them. All
@@ -899,6 +905,9 @@ void CybouMainWindow::reloadAppearance()
     buildShell();
     setSidebarCompact(width() < 1180);
     showPage(current);
+    if (compose_state) {
+        static_cast<EmailPage*>(page(CybouPage::Mail))->openCompose(*compose_state);
+    }
 }
 
 void CybouMainWindow::setLanguage(const QString& language)

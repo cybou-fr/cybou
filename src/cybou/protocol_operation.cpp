@@ -4,9 +4,11 @@
 
 #include <cybou/protocol_operation.h>
 #include <cybou/crypto/sha256.h>
+#include <cybou/identity_kem.h>
 
 #include <algorithm>
 #include <string_view>
+#include <type_traits>
 
 namespace cybou {
 namespace {
@@ -328,6 +330,68 @@ std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation)
     uint256 id;
     if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), std::span<const unsigned char>{*bytes}}, id.begin())) return std::nullopt;
     return id;
+}
+
+bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
+    const uint256& network_id, const IdentityRegistry& identities)
+{
+    if (network_id.IsNull()) return false;
+    return std::visit([&](const auto& op) {
+        using T = std::decay_t<decltype(op)>;
+        if constexpr (std::is_same_v<T, AccountCreateOp>) {
+            if (op.work.network_id != network_id || op.work.account_id != op.account_id) return false;
+            const auto authorization_id = ComputeAuthorizationKeyId(op.authorization.authorization_key);
+            const auto account = op.account_id.Value();
+            const auto package_id = authorization_id ? ComputeIdentityKemPackageCommitment(
+                std::span<const unsigned char, 32>{network_id.begin(), 32},
+                std::span<const unsigned char, 32>{account.begin(), 32}, 0, op.kem_package) : std::nullopt;
+            const auto commitment = package_id ? ComputeAccountCreateAuthorizationCommitment(
+                op.authorization, *package_id) : std::nullopt;
+            const auto digest = package_id ? ComputeAccountCreatePopDigest(
+                network_id, op.account_id, op.authorization, *package_id) : std::nullopt;
+            return commitment && op.work.authorization_commitment == *commitment && digest &&
+                VerifyIdentityMessage(op.authorization.recovery_root, op.recovery_pop, *digest) &&
+                VerifyIdentityMessage(op.authorization.authorization_key, op.authorization_pop, *digest);
+        } else if constexpr (std::is_same_v<T, IdentityRotate>) {
+            const auto* record = identities.Find(op.account_id);
+            if (!record) return false;
+            const auto digest = ComputeIdentityRotateDigest(network_id, op);
+            const auto package_id = ComputeIdentityKemPackageCommitment(
+                std::span<const unsigned char, 32>{network_id.begin(), 32},
+                std::span<const unsigned char, 32>{op.account_id.Value().begin(), 32},
+                op.key_epoch, op.new_kem_package);
+            return digest && package_id && ComputeRecoveryKeyId(op.new_recovery_key) &&
+                ComputeAuthorizationKeyId(op.new_authorization_key) &&
+                VerifyIdentityMessage(record->recovery_key, op.old_recovery_signature, *digest) &&
+                VerifyIdentityMessage(op.new_recovery_key, op.new_recovery_pop, *digest) &&
+                VerifyIdentityMessage(op.new_authorization_key, op.new_authorization_pop, *digest);
+        } else {
+            const auto* record = identities.Find(op.authorization.account_id);
+            if (!record) return false;
+            std::optional<IdentityKeyId> payload_commitment;
+            IdentityOperationKind expected_kind{};
+            if constexpr (std::is_same_v<T, AuthorizedPayment>) {
+                expected_kind = IdentityOperationKind::PAYMENT;
+                payload_commitment = ComputePaymentPayloadCommitment(op.payment);
+            } else if constexpr (std::is_same_v<T, AuthorizedSystemLock>) {
+                expected_kind = IdentityOperationKind::SYSTEM_LOCK;
+                payload_commitment = ComputeSystemLockPayloadCommitment(op.lock);
+            } else if constexpr (std::is_same_v<T, AuthorizedNameCommit>) {
+                expected_kind = IdentityOperationKind::NAME_COMMIT;
+                payload_commitment = ComputeNameCommitPayloadCommitment(op.commit);
+            } else if constexpr (std::is_same_v<T, AuthorizedNameReveal>) {
+                expected_kind = IdentityOperationKind::NAME_REVEAL;
+                payload_commitment = ComputeNameRevealPayloadCommitment(op.reveal);
+            } else if constexpr (std::is_same_v<T, AuthorizedRootPublication>) {
+                expected_kind = IdentityOperationKind::ROOT_PUBLICATION;
+                payload_commitment = ComputeRootPublicationPayloadCommitment(op.publication);
+            }
+            const auto digest = ComputeIdentityOperationDigest(network_id, op.authorization);
+            return payload_commitment && op.authorization.kind == expected_kind &&
+                op.authorization.payload_commitment == *payload_commitment && digest &&
+                VerifyIdentityMessage(record->authorization_key, op.authorization.signature, *digest);
+        }
+    }, operation);
 }
 
 } // namespace cybou

@@ -47,6 +47,7 @@ public:
     /** Adds already protected content (Files → Send by CYBOU Mail). */
     void addProtectedAttachment(const CybouAttachmentItem& attachment);
     const QVector<CybouAttachmentItem>& attachments() const { return m_attachments; }
+    CybouMailItem snapshotForRebuild() const;
     void setBackVisible(bool visible);
     bool hasContent() const;
 

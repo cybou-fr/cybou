@@ -430,6 +430,24 @@ bool CybouNodeRuntime::HasAuthenticatedFinalizerRoute() const
 OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
     const std::span<const unsigned char> exact_bytes, const bool allow_seen_retry)
 {
+    const auto operation = DeserializeProtocolOperation(exact_bytes);
+    if (!operation) return OperationRelayEnqueueStatus::INVALID_OPERATION;
+    const auto canonical_bytes = SerializeProtocolOperation(*operation);
+    if (!canonical_bytes || !std::ranges::equal(*canonical_bytes, exact_bytes)) {
+        return OperationRelayEnqueueStatus::INVALID_OPERATION;
+    }
+    IdentityRegistry identities;
+    {
+        std::lock_guard lock{m_mutex};
+        const auto loaded = m_store.LoadState();
+        if (loaded.error != StateLoadError::NONE || !loaded.state) {
+            return OperationRelayEnqueueStatus::INVALID_OPERATION;
+        }
+        identities = loaded.state->identities;
+    }
+    if (!VerifyProtocolOperationRelayProofs(*operation, m_network_id, identities)) {
+        return OperationRelayEnqueueStatus::INVALID_OPERATION;
+    }
     return m_operation_relay.Enqueue(exact_bytes, allow_seen_retry);
 }
 

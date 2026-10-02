@@ -1207,6 +1207,38 @@ void CybouShellTests::languageSwitchRebuildsShell()
     window->setLanguage(saved_language);
 }
 
+void CybouShellTests::appearanceAndLanguageSwitchPreserveMailCompose()
+{
+    const QString saved_language = QSettings{}.value(QStringLiteral("desktop/language"), QStringLiteral("fr")).toString();
+    auto window = makeWindow();
+    QVERIFY(CybouUiFixtures::apply(*window->desktopModel(), QStringLiteral("mail")));
+    window->showPage(CybouPage::Mail);
+    auto* mail = static_cast<EmailPage*>(window->page(CybouPage::Mail));
+    mail->openCompose();
+    auto* to = mail->composer()->findChild<QLineEdit*>(QStringLiteral("recipientEdit"));
+    auto* subject = mail->composer()->findChild<QLineEdit*>(QStringLiteral("subjectEdit"));
+    auto* body = mail->composer()->findChild<QTextEdit*>(QStringLiteral("composeBody"));
+    QVERIFY(to && subject && body);
+    to->setText(QStringLiteral("alice.cybou"));
+    subject->setText(QStringLiteral("Draft survives refresh"));
+    body->setPlainText(QStringLiteral("Keep this text and its composer open."));
+
+    window->reloadAppearance();
+    mail = static_cast<EmailPage*>(window->page(CybouPage::Mail));
+    QVERIFY(mail->isComposing());
+    QCOMPARE(mail->composer()->findChild<QLineEdit*>(QStringLiteral("recipientEdit"))->text(), QStringLiteral("alice.cybou"));
+    QCOMPARE(mail->composer()->findChild<QLineEdit*>(QStringLiteral("subjectEdit"))->text(), QStringLiteral("Draft survives refresh"));
+    QCOMPARE(mail->composer()->findChild<QTextEdit*>(QStringLiteral("composeBody"))->toPlainText(),
+        QStringLiteral("Keep this text and its composer open."));
+
+    window->setLanguage(QStringLiteral("en"));
+    mail = static_cast<EmailPage*>(window->page(CybouPage::Mail));
+    QVERIFY(mail->isComposing());
+    QCOMPARE(mail->composer()->findChild<QTextEdit*>(QStringLiteral("composeBody"))->toPlainText(),
+        QStringLiteral("Keep this text and its composer open."));
+    window->setLanguage(saved_language);
+}
+
 void CybouShellTests::mailContextMenuAndMoves()
 {
     auto window = makeWindow();

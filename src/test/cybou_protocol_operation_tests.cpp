@@ -236,6 +236,27 @@ BOOST_AUTO_TEST_CASE(payment_canonical_typed_roundtrip)
     BOOST_CHECK(!op_id->IsNull());
 }
 
+BOOST_AUTO_TEST_CASE(relay_precheck_requires_valid_identity_signatures)
+{
+    const auto alice = MakeTestIdentity(0x31);
+    const auto create = MakeTestAccountCreate(alice);
+    cybou::IdentityRegistry identities;
+    auto parameters = cybou::DevProtocolParameters();
+    parameters.account_creation_work_bits = 0;
+    BOOST_REQUIRE(identities.Register(create, TestNetworkId(), 0, parameters) ==
+        cybou::IdentityRegistryError::NONE);
+
+    const auto bob = MakeTestIdentity(0x32);
+    auto payment = MakeTestPayment(alice, bob.account_id, 17);
+    const cybou::ProtocolOperation valid{payment};
+    BOOST_CHECK(cybou::VerifyProtocolOperationRelayProofs(valid, TestNetworkId(), identities));
+
+    payment.authorization.signature.ed25519[0] ^= 1;
+    BOOST_CHECK(!cybou::VerifyProtocolOperationRelayProofs(
+        cybou::ProtocolOperation{payment}, TestNetworkId(), identities));
+    BOOST_CHECK(!cybou::VerifyProtocolOperationRelayProofs(valid, uint256{}, identities));
+}
+
 BOOST_AUTO_TEST_CASE(system_lock_canonical_typed_roundtrip)
 {
     const auto alice = MakeTestIdentity(1);

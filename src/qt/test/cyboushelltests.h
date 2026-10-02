@@ -56,6 +56,7 @@ private Q_SLOTS:
     void globalSearchFindsMailAndFiles();
     void darkAppearanceResolvesTokens();
     void languageSwitchRebuildsShell();
+    void appearanceAndLanguageSwitchPreserveMailCompose();
     void mailContextMenuAndMoves();
     void filesDropIntoFolders();
     void themeResolvesAllTokens();

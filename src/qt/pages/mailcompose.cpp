@@ -362,6 +362,13 @@ CybouMailItem MailCompose::currentMessage() const
     return item;
 }
 
+CybouMailItem MailCompose::snapshotForRebuild() const
+{
+    auto item = currentMessage();
+    item.draft = true;
+    return item;
+}
+
 void MailCompose::send()
 {
     if (!m_send->isEnabled()) return;

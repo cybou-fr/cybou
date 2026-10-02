@@ -232,7 +232,7 @@ target network remains blocked on all of the following:
   genesis created from the Central Authority desktop and retires the legacy
   VPS finalizer/provider services.
 
-For the current implementation prototype (`cybou-bootstrap` utility, LevelDB store, v8 prototype state vs v9 target schema, and open cutover gates), see [`26_IMPLEMENTATION_STATUS.md`](26_IMPLEMENTATION_STATUS.md).
+For the current implementation prototype (`cybou-bootstrap` utility, LevelDB store, v8 compatibility for legacy RecoveryKeyID grants, v9 stable-AccountID bootstrap rosters, and open cutover gates), see [`26_IMPLEMENTATION_STATUS.md`](26_IMPLEMENTATION_STATUS.md).
 
 Until the cutover gates pass and coordinated cutover is executed:
 - Keep the current DEV testnet operational during routine development; do not reset its state or replace its PoA key before the planned cutover.

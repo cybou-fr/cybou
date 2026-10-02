@@ -760,6 +760,11 @@ void EmailPage::openCompose(const CybouMailItem& draft)
     updateLayoutMode();
 }
 
+bool EmailPage::isComposing() const
+{
+    return m_detail_open && m_detail->currentWidget() == m_compose;
+}
+
 CybouMailItem EmailPage::replyTo(const QString& id) const
 {
     CybouMailItem reply;

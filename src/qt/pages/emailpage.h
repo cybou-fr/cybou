@@ -62,6 +62,7 @@ public:
     void openCompose(const CybouMailItem& draft = {});
     MailReader* reader() const { return m_reader; }
     MailCompose* composer() const { return m_compose; }
+    bool isComposing() const;
     bool threePane() const { return m_three_pane; }
 
 protected:

@@ -104,6 +104,11 @@ target_compile_definitions(cybou_qt PUBLIC QT_NO_KEYWORDS QT_USE_QSTRINGBUILDER)
 target_include_directories(cybou_qt PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>)
 target_link_libraries(cybou_qt PUBLIC Qt6::Widgets Qt6::Svg PRIVATE cybou_node OpenSSL::Crypto)
 
+qt_add_translations(cybou_qt
+  TS_FILES translations/cybou_fr.ts
+  RESOURCE_PREFIX /i18n
+)
+
 add_executable(cybou
   main.cpp
   cybouapplication.cpp

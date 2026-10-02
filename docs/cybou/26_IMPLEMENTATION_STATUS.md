@@ -12,9 +12,9 @@ The current branch contains a bootstrap prototype, not the revised target
 genesis roster. France-only peer admission is implemented as local transport
 policy and does not change consensus:
 
-- grant-bearing state currently uses v8 and keys grants by RecoveryKeyID with
-  optional claimed AccountID; grant-free legacy state retains the exact v7
-  encoding and root;
+- legacy v8 grant state keys grants by RecoveryKeyID with optional claimed
+  AccountID; new stable-AccountID bootstrap rosters use state v9. Grant-free
+  legacy state retains the exact v7 encoding and root;
 - the public network-file format has a canonical serializer, and a `CYBB1`
   NetworkBinding envelope can be signed by and verified against the genesis PoA key;
 - the core has a durable LevelDB `EMPTY`/`BOUND` store: provisioning generates a
