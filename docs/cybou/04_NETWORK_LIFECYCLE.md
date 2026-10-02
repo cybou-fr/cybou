@@ -1,84 +1,130 @@
 # 04 — Network lifecycle
 
 Status: **Active architecture target**. This document defines official network
-trust, creation, joining, Authority rotation, network replacement and discovery.
+trust, creation, joining, Validation, and network replacement.
 
-## Official network profile and binding
+## Official networks
 
-A standard installation knows explicit DEVNET, TESTNET and MAINNET profiles.
-Each `OfficialNetworkProfile` contains bootstrap IP:port locator(s), their TLS
-SPKI SHA-256 pins, and one immutable Network Root public key `R`. The DEV
-locator is `51.255.46.58:29461`; its pin authenticates transport only.
+A standard CYBOU installation knows two official network profiles:
+- **DEVNET**
+- **MAINNET**
 
-`R` signs an `OfficialNetworkBinding` containing the profile/network kind,
-monotonic `generation`, `authority_epoch`, exact network definition (including
-genesis and its hash), and current PoA public key `P`. The binding also commits
-to the Authority assignment `{epoch, activation_height, P}`. The root signature
-is the proof of official network and Authority assignment. A pinned bootstrap
-can distribute a binding but cannot make one official. `R` never signs blocks;
-`P` cannot replace the network or authorize another `P`.
-
-Bootstrap is an `EMPTY` or `BOUND` rendezvous/state distribution service. It is
-not a CYP2 peer role, consensus participant or Identity entity. `EMPTY` has no
-binding. `BOUND` serves the current root-signed binding and initial peer hints.
-
-## Creation and joining
-
+Network identity is immutable:
 ```text
-EMPTY bootstrap → operator creates genesis and P0
-                → R signs generation 1 binding and epoch 0 assignment
-                → activation code + binding submitted to bootstrap
-                → bootstrap verifies and durably enters BOUND
+NetworkID = Network Public Key
 ```
 
-The one-use bootstrap activation code controls initial store activation, not
-network authenticity. Bootstrap receives no private keys. The operational PoA
-private key resides on the Central Authority desktop; private `R` remains
-outside routine finalizer execution.
+The corresponding **Network Private Key**:
+- is generated before network launch;
+- is strictly offline and **never used online** (including in DEVNET);
+- is never stored on bootstrap or on the PoA finalizer;
+- is used solely by the network owner to create, recreate, or edit signed genesis;
+- makes the network owner the root authority of that network.
+
+## Bootstrap peer
+
+Bootstrap is an **ordinary CYBOU full peer**:
+- runs the exact same executable as all other nodes;
+- communicates using the standard CYP2 protocol;
+- has no `CAP_BOOTSTRAP` capability flag;
+- has no `BootstrapNode` class or distinct role in consensus;
+- has an IP:port and TLS SPKI pin known in advance for initial discovery;
+- bootstrap status itself grants no authority.
+
+The DEV locator is `51.255.46.58:29461`; its SPKI SHA-256 pin is compiled in
+`src/cybou/official_networks.h` to authenticate initial transport discovery.
+
+## Bootstrap Identity
+
+The bootstrap node runs an ordinary CYBOU Identity:
+- no special consensus grant or wire structure;
+- initial Authority is assigned directly by genesis;
+- DEV bootstrap initial Authority = 1,000,001 (qualifying it for Validation).
+
+## Network creation and joining
 
 ```text
-profile → pinned bootstrap → root-signed OfficialNetworkBinding
-        → verified genesis → initial peers → direct CYP2 mesh
+Offline:
+  Owner creates genesis (params, initial Authority assignments, PoA key P)
+  Owner signs genesis with Network Private Key
+
+Online:
+  Ordinary bootstrap peer starts with signed genesis
+  Clients connect to known bootstrap locator
+  Verify signed genesis against compiled Network Public Key (NetworkID)
+  Bootstrap seeds initial peers -> direct CYP2 mesh forms
 ```
 
-The core checks the profile, root signature, binding fields, monotonic counters,
-exact network definition hash and genesis before opening network-bound local
-state. A peer address, claimed height, TLS pin or successful sync is never a
-substitute for this verification. All full nodes verify subsequent finalized
-blocks and state transitions independently.
+Every full node independently checks the signed genesis, operational PoA
+certificate, block transitions, and state roots.
 
-## Authority rotation within one generation
+## Authority and Validation
 
-A rotation increments `authority_epoch` from E to E+1. `R` signs the new
-assignment `{epoch, activation_height, P}` and updated binding. The old and
-new epochs have unambiguous height ranges. Nodes retain the minimum root-signed
-assignment history needed to verify historical certificates. They reject
-rollback, gaps, overlapping assignments and a key change without a valid root
-signature. A previous operational PoA key never signs its successor into
-authority. Rotation preserves the network, genesis and all Identity/application
-state. Signing journal semantics are specified in `POA_FINALITY.md`.
+Authority is a deterministic Identity property derived exclusively from
+PoA-finalized history.
 
-## New generation and full replacement
+Validation is optional pre-finalization:
+- non-canonical evidence;
+- peer chooses locally whether to trust it (`validation.enabled`);
+- default minimum required signatures = 1;
+- only signatures of eligible Identities count;
+- eligibility requirement: `authority_from_latest_PoA_finalized_state(identity) > 1,000,000`.
 
-A binding for generation N+1 is a new official network, even if issued for the
-same profile. The core verifies the entire new binding and definition before
-switching. It stops network services, prepares and atomically activates the
-new network root, then permanently removes the old network-bound domain. A
-failed preparation leaves the old generation intact; a crash during activation
-must recover to a single generation, never a mixture.
+## Canonical PoA finality
 
-The old domain includes chain/state, definition, genesis, Identity, vault,
-AccountID, Recovery/Authorization/KEM keys, balances, names, Mail, Files,
-Application DB, peer DB, pending operations, storage metadata and Authority
-indexes. No cross-network Identity or content migration exists. Application
-preferences outside the network domain, such as theme, language and validated
-Geo cache, may remain. A client must never open an old vault against the new
-network. Equal or lower generation cannot trigger replacement.
+The Central Authority PoA finalizer:
+- is the sole canonical finalizer;
+- operates from the Central Authority desktop;
+- independently executes every candidate;
+- trusts no validator, bootstrap, or peer state;
+- valid -> signs block certificate;
+- invalid -> drops candidate.
 
-## Direct mesh
+Canonical truth is always the latest valid PoA-finalized state.
+
+## Conflict resolution and unconditional rollback
+
+If provisional Validation conflicts with PoA finality:
+```text
+discard provisional state
+rollback provisional effects
+adopt PoA-finalized state unconditionally
+```
+
+There is:
+- NO voting against PoA;
+- NO validator fork-choice;
+- NO validator quorum finality;
+- NO merge of conflicting provisional state;
+- NO BFT consensus.
+
+## Network replacement and full wipe
+
+If the network owner issues a newer signed genesis for the network (or on network cutover):
+The core stops network services and wipes all local network-bound state cleanly:
+- chain/state
+- network definition
+- genesis
+- Identity
+- vault
+- AccountID
+- Recovery, Authorization, and KEM keys
+- balances and System Balances
+- names
+- Mail and Files
+- Application DB
+- peer DB
+- pending operations
+- storage metadata
+- Authority indexes
+
+No cross-network migration exists. Application preferences outside the network
+domain (e.g., UI theme, language) may be retained.
+
+## Direct P2P mesh
 
 Bootstrap provides initial peer hints. Ordinary full nodes then exchange
-finalized blocks, bounded volatile operation relays and authorized encrypted
+finalized blocks, operation relays, validation attestations, and encrypted
 chunks directly. A bootstrap outage does not stop an already formed mesh.
 Production and DEV public inbound/outbound admission is France-only and fails
 closed when local Geo data is unavailable or corrupt; see

@@ -1,4 +1,4 @@
-# CYBOU documentation manifest — 2026-10-02
+# CYBOU documentation manifest — 2026-10-01
 
 This inventory records the current implementation authority, product and
 protocol documents, and machine-readable specifications, excluding this
@@ -8,14 +8,14 @@ editing an included file.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 179 | 81de51302eaf4c41 |
+| AGENTS.md | 257 | 6814df37a6c26481 |
 | CONTRIBUTING.md | 47 | 3728854a9b212287 |
 | INSTALL.md | 37 | 72f779b5e99c63c6 |
 | README.md | 115 | 9cf62e126cc1c173 |
 | SECURITY.md | 51 | b7e6b6caa28722bf |
 | docs/cybou/00_VISION.md | 72 | 3d06d2a6de467fb9 |
-| docs/cybou/02_ARCHITECTURE.md | 113 | 62cc60bb5332fe4b |
-| docs/cybou/04_NETWORK_LIFECYCLE.md | 85 | 792b4f8a28638a09 |
+| docs/cybou/02_ARCHITECTURE.md | 117 | 3cd50b75e9ff934c |
+| docs/cybou/04_NETWORK_LIFECYCLE.md | 131 | b17ef562c94d55cc |
 | docs/cybou/05_CHAIN_STATE.md | 47 | 022c8f08a43acc77 |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 51 | 9019e5e802bcfceb |
 | docs/cybou/08_P2P.md | 64 | 5497a4ac0af8f2df |
@@ -26,7 +26,7 @@ editing an included file.
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 36 | 43cdf31bb132eda8 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
 | docs/cybou/22_ROADMAP.md | 34 | 52733b386a323f82 |
-| docs/cybou/24_DECISIONS.md | 107 | 1a543491d624fa2f |
+| docs/cybou/24_DECISIONS.md | 114 | f2684a03bc5fa78d |
 | docs/cybou/25_OPEN_QUESTIONS.md | 49 | af7724c7ce5cbd84 |
 | docs/cybou/26_IMPLEMENTATION_STATUS.md | 53 | 712bb0444c776e79 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 55 | 47442c75b43267b1 |
