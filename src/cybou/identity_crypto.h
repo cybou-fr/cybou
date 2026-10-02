@@ -21,6 +21,8 @@ enum class IdentityKeyPurpose : uint8_t {
     POA_FINALIZER = 7,
     /** CYP2 storage provider identity (ProviderID = hash of this key). */
     STORAGE_PROVIDER = 8,
+    /** Strictly offline root authority that signs official network genesis. */
+    NETWORK_ROOT = 9,
 };
 
 struct IdentityHybridPublicKey {

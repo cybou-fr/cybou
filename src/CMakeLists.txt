@@ -59,6 +59,7 @@ add_library(cybou_core STATIC
   cybou/recovery_phrase.cpp
   cybou/signing_openssl.cpp
   cybou/state.cpp
+  cybou/network_genesis.cpp
 )
 target_link_libraries(cybou_core
   PUBLIC

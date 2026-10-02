@@ -30,7 +30,8 @@ const char* Algorithm(IdentityKeyPurpose purpose)
     case IdentityKeyPurpose::STORAGE_PROVIDER: return "ML-DSA-44";
     case IdentityKeyPurpose::RELEASE_SIGNING:
     case IdentityKeyPurpose::TREASURY:
-    case IdentityKeyPurpose::POA_FINALIZER: return "ML-DSA-65";
+    case IdentityKeyPurpose::POA_FINALIZER:
+    case IdentityKeyPurpose::NETWORK_ROOT: return "ML-DSA-65";
     }
     return nullptr;
 }
@@ -59,6 +60,7 @@ std::optional<std::array<unsigned char, 32>> DeriveSeed(
     case IdentityKeyPurpose::TREASURY: purpose_label = "TREASURY"; break;
     case IdentityKeyPurpose::POA_FINALIZER: purpose_label = "POA_FINALIZER"; break;
     case IdentityKeyPurpose::STORAGE_PROVIDER: purpose_label = "STORAGE_PROVIDER"; break;
+    case IdentityKeyPurpose::NETWORK_ROOT: purpose_label = "NETWORK_ROOT"; break;
     }
     const std::string info = std::string{"CYBOU/IDENTITY-V2/"} + std::string{purpose_label} + "/" +
         (component == "ED25519" ? "ED25519" : Algorithm(purpose));
