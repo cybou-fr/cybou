@@ -13,39 +13,38 @@ user identities or parallel authorization systems.
 
 ```text
                          CYBOU Identity
-                              │
-            ┌─────────────────┴──────────────────┐
-            │                                    │
-    Hybrid authorization                 DEV key agreement
-    Ed25519 + ML-DSA-44                X-Wing (draft-05)
-            │                                    │
- IdentityOperationCoordinator              Key wrapping / CEKs
-            │                                    │
-    ┌───────┼────────┬───────┐          ┌────────┴──────────┐
-    │       │        │       │          │                   │
-   Name   Wallet    Mail    Files    Mail content       Files objects
-                                          + attachments
+                               │
+            ┌──────────────────┴──────────────────┐
+            │                                     │
+    Hybrid authorization                  DEV key agreement
+    Ed25519 + ML-DSA-44                 X-Wing (draft-05)
+            │                                     │
+ IdentityOperationCoordinator               Key wrapping / CEKs
+            │                                     │
+    ┌───────┼────────┬───────┐           ┌────────┴──────────┐
+    │       │        │       │           │                   │
+   Name   Wallet    Mail    Files     Mail content       Files objects
+            │                            + attachments
+  [Validation Attestation]
 ```
 
-The Recovery Root is a separate authorization domain. Network Root `R`,
-operational PoA `P`, Release Signing and Treasury keys are separate system
+The Recovery Root is a separate authorization domain. The offline Network Private Key,
+operational PoA finalizer key `P`, Release Signing, and Treasury keys are separate system
 domains and are not user-service keys.
 
-## Identity key domains
+## Identity and system key domains
 
 | Domain | Key material | Purpose | Current status |
 |---|---|---|---|
 | Recovery Root | Ed25519 + ML-DSA-65 | Recover account authority and authorize IdentityRotate | Implemented in the current identity path; encoding/vector work remains tracked by Identity docs |
-| Identity authorization signing | Ed25519 + ML-DSA-44 | Authorize all account-level user-service operations | Implemented for current Identity authorization |
-| Identity key agreement | X-Wing (ML-KEM-768 + X25519) | Establish or wrap content keys for an current Identity key epoch | Draft-05 profile is published per current Identity key epoch in DEV; Mail/Files do not consume it yet |
-| Network Root R | Ed25519 + ML-DSA-65 | Sign official bindings and Authority assignments | Target; not implemented in the active code |
-| PoA finalizer P | Ed25519 + ML-DSA-65 | Sign finalized blocks for its root-assigned epoch | Target; implementation gap tracked in `26_IMPLEMENTATION_STATUS.md` |
+| Identity authorization signing | Ed25519 + ML-DSA-44 | Authorize account operations AND sign advisory Validation attestations (if finalized Authority > 1M) | Implemented for Identity authorization |
+| Identity key agreement | X-Wing (ML-KEM-768 + X25519) | Establish or wrap content keys for an current Identity key epoch | Draft-05 profile is published per current Identity key epoch in DEV |
+| Network Key | Hybrid PQ (Public Key = NetworkID) | Offline root authority; signs genesis specifications with monotonic genesis_generation | Target; offline only |
+| PoA finalizer P | Ed25519 + ML-DSA-65 | Authorized in genesis; signs canonical block certificates | Implemented for single-operator PoA |
 
 Private keys remain client-controlled. DEV Identity binds one X-Wing public
 package to AccountID and key_epoch. Its draft-05 wire format and
-publication rules are frozen for DEV in `89_IDENTITY_KEM_PUBLICATION.md`; this
-does not freeze Mail application framing or make KEM-dependent services
-available.
+publication rules are frozen for DEV in `89_IDENTITY_KEM_PUBLICATION.md`.
 
 Signing keys MUST NOT be converted into or reused as Mail, Files, or Storage
 encryption keys. Recovery keys are not routine service-signing keys. Key
@@ -56,10 +55,11 @@ must be authenticated in their respective protocols.
 
 | Capability | Authorization | Confidentiality / key ownership | Finality or durability |
 |---|---|---|---|
-| Name | Identity hybrid signature through the coordinator | No content encryption capability | Root-authorized PoA finality for commit and reveal |
-| Wallet | Identity hybrid signature through the coordinator | No content encryption capability | Root-authorized PoA finality for payment and lock operations |
-| Mail | Identity-authorized generic RootPublication through the coordinator | Recipient KEM capsule and encrypted Mail schema inside the chunk tree | PoA finality authorizes chunk admission; storage availability is reported separately |
-| Files | Identity-authorized manifest/root changes through the coordinator (target) | Symmetric object encryption; account KEM capability wraps Files keys (target) | Storage durability contract, not chain inclusion alone |
+| Name | Identity hybrid signature through the coordinator | No content encryption capability | PoA finality for commit and reveal |
+| Wallet | Identity hybrid signature through the coordinator | No content encryption capability | PoA finality for payment and lock operations |
+| Mail | Identity-authorized generic RootPublication through the coordinator | Recipient KEM capsule and encrypted Mail schema inside the chunk tree | PoA finality authorizes chunk admission; storage durability (2 remote replicas) reported separately |
+| Files | Identity-authorized manifest/root changes through the coordinator | Symmetric object encryption; account KEM capability wraps Files keys | Storage durability contract (2 remote replicas + local = 3 physical copies total) |
+| Validation | Identity hybrid authorization signature | Non-confidential attestation | Advisory provisional pre-finalization; rolled back unconditionally on conflicting PoA finality |
 
 “Hybrid” does not mean every operation uses every key. Signatures authorize
 actions; KEM establishes or wraps content keys; a standard symmetric AEAD
@@ -99,15 +99,13 @@ of the same Storage layer.
 ## Implementation boundary
 
 The current runtime implements the shared coordinator for Wallet payments,
-System Balance locks, Name commit/reveal, IdentityRotate with finality-gated vault promotion. Mail and Files are not yet integrated. The current identity record
-publishes a draft-05 X-Wing KEM capability in source for the coordinated DEV cutover. Local key material does not imply an
-interoperable hybrid profile or service support. These gaps must remain visible
-in implementation status and UI capabilities; the architecture target is not
-a claim that Beta security is complete.
+System Balance locks, Name commit/reveal, and IdentityRotate.
+The current identity record publishes a draft-05 X-Wing KEM capability.
 
 ## Authority and related documents
 
 - `10_IDENTITY_NAMES.md` owns identity, recovery, and name protocol rules.
+- `VALIDATION.md` owns advisory validation attestation rules.
 - `76_IDENTITY_VAULT_RECOVERY.md` owns phrase and portable-vault behavior.
 - `87_IDENTITY_OPERATION_COORDINATOR.md` owns operation/nonce lifecycle.
 - `ENCRYPTED_CHUNK_TREE.md` and `ROOT_PUBLICATION.md` own encrypted content

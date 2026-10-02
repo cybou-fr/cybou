@@ -140,7 +140,20 @@ Advanced details expose exact algorithms/evidence.
 [ ] technical evidence remains inspectable through Advanced
 ```
 
-## 10. Beta wow-flow
+## 10. Validation and provisional lifecycle
+
+```text
+[ ] Validated status never displays as Finalized
+[ ] provisional payment does not modify spendable Balance
+[ ] provisional Mail/File never displays as Sent / Protected
+[ ] conflicting PoA finalization rolls provisional state back unconditionally
+[ ] an operation still valid against the new finalized state returns to Pending / Waiting for confirmation
+[ ] an operation made invalid by the new finalized state is dropped (Failed / Needs attention)
+[ ] provisional storage chunks are purged upon conflicting PoA finalization
+[ ] restart preserves enough provisional metadata for safe reconciliation upon sync
+```
+
+## 11. Beta wow-flow
 
 A candidate is not product-ready until this can be demonstrated live between
 two clean desktop installations:

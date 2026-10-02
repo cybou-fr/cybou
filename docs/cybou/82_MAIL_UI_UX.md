@@ -359,14 +359,17 @@ read local file
 -> encrypt/chunk locally (local staging only)
 -> include the private attachment reference in the encrypted Mail root
 -> build one RootPublication for the message
+-> [optional provisional Validation -> provisional remote caching; purge on conflicting PoA]
 -> obtain PoA finality
 -> upload the finalized-authorized chunks to storage providers
 -> reach the durability threshold
 ```
 
-Before finality, attachment chunks exist only in local staging. The client
-never uploads ciphertext to providers ahead of a finalized RootPublication, and
-providers reject chunks without a finalized-publication admission proof.
+Under default policy, attachment chunks exist only in local staging before finality;
+the client uploads ciphertext only after finalized RootPublication. Under optional
+provisional validation policy, providers may provisionally cache chunks upon eligible
+Validation signatures, but this never counts as Sent/Protected, and chunks are purged
+if a conflicting PoA finalization occurs. Providers reject unauthorized chunks.
 
 In Compose, attachment chips show only local preparation (`Preparing`,
 `Encrypted locally`). After Send, the whole message, including attachments,

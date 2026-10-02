@@ -13,7 +13,7 @@ editing an included file.
 | INSTALL.md | 37 | 72f779b5e99c63c6 |
 | README.md | 115 | 9cf62e126cc1c173 |
 | SECURITY.md | 51 | b7e6b6caa28722bf |
-| docs/cybou/00_VISION.md | 72 | 3d06d2a6de467fb9 |
+| docs/cybou/00_VISION.md | 73 | 856787283b43882a |
 | docs/cybou/02_ARCHITECTURE.md | 117 | ddf9fda09f12c3e5 |
 | docs/cybou/04_NETWORK_LIFECYCLE.md | 135 | 11ed104022180c96 |
 | docs/cybou/05_CHAIN_STATE.md | 54 | e6a2eb32c65289f4 |
@@ -29,8 +29,8 @@ editing an included file.
 | docs/cybou/24_DECISIONS.md | 115 | 79ff96a2d2f14707 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 51 | a9501c62069515e6 |
 | docs/cybou/26_IMPLEMENTATION_STATUS.md | 37 | a88f31a3fe16e9cc |
-| docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 55 | 47442c75b43267b1 |
-| docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 28 | 24d96b4fa3894d91 |
+| docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 57 | f196c0df1b1d33b6 |
+| docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | 2f7a22481bd9287e |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
 | docs/cybou/40_REGULATORY_READINESS_FR_EU.md | 149 | 72e59c19f281912f |
 | docs/cybou/41_PUBLIC_SUPPORT_AND_FUNDING.md | 113 | cbd6d5215e01bb38 |
@@ -39,7 +39,7 @@ editing an included file.
 | docs/cybou/46_COPYRIGHT_ATTRIBUTION_POLICY.md | 109 | 46d6006a02067fc5 |
 | docs/cybou/50_EMAIL_SECURITY_MODEL.md | 92 | d00a892605db794f |
 | docs/cybou/52_BALANCE_AND_SYSTEM_BALANCE.md | 60 | cab29a0de0d2092a |
-| docs/cybou/56_OWNER_OPERATOR_AND_RESILIENCE.md | 22 | 3f862ad0e14c3b2f |
+| docs/cybou/56_OWNER_OPERATOR_AND_RESILIENCE.md | 37 | df4c9470e28456ba |
 | docs/cybou/57_IDENTITY_AUTHORITY.md | 41 | c013928ff28dc0a6 |
 | docs/cybou/59_DETERMINISTIC_FEE_ROUTER.md | 89 | cfbf1329a4e0f587 |
 | docs/cybou/68_OPERATOR_KEY_SEPARATION.md | 23 | 5ab571254cafb062 |
@@ -51,12 +51,12 @@ editing an included file.
 | docs/cybou/77_CYBOU_NAME_REGISTRY.md | 38 | 7d9fce7db6ff4f92 |
 | docs/cybou/78_IDENTITY_DESKTOP_UX.md | 23 | f0e426ca60241ed2 |
 | docs/cybou/80_CRYPTO_SOVEREIGNTY_AUDIT.md | 51 | 0d89435ca454a6ee |
-| docs/cybou/81_BETA_PRODUCT_SCOPE.md | 111 | 38d9f8d1fcdd1577 |
-| docs/cybou/82_MAIL_UI_UX.md | 658 | aeabc43b377e3c40 |
-| docs/cybou/83_STORAGE_UI_UX.md | 573 | e6cf79927e542855 |
+| docs/cybou/81_BETA_PRODUCT_SCOPE.md | 112 | aa1be7dec386afe0 |
+| docs/cybou/82_MAIL_UI_UX.md | 661 | 39a9a929be13f127 |
+| docs/cybou/83_STORAGE_UI_UX.md | 579 | e8d198f425824306 |
 | docs/cybou/84_PRODUCT_DESIGN_SYSTEM.md | 520 | 43250d708665708f |
-| docs/cybou/85_BETA_UI_ACCEPTANCE.md | 176 | a020339792a2b8f1 |
-| docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 117 | 340c613925829540 |
+| docs/cybou/85_BETA_UI_ACCEPTANCE.md | 189 | caecd704f05c41df |
+| docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 115 | 4795a5a884bd5b22 |
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 35 | 870d2d08b963af58 |
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 34 | feaf7a136cba1025 |
 | docs/cybou/APPLICATION_DATA_PLANE.md | 465 | 0445ccc1fa0faa27 |

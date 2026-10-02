@@ -6,9 +6,11 @@ CYBOU is a peer-to-peer network of independently validating full nodes.
 Every participant runs the same node software. Storage and Central Authority PoA
 finalization are optional operational capabilities.
 
-Bootstrap is a rendezvous service distributing signed official network state and
-seeding initial peer discovery. It does not vote, form a quorum, or finalize. The
-The current root-authorized Central Authority PoA key remains the sole finality signer.
+Bootstrap is an ordinary CYBOU full peer whose IP:port and TLS SPKI pin are known
+in advance for initial rendezvous and peer discovery. It has no special consensus
+role, no `CAP_BOOTSTRAP` flag, does not vote, and does not finalize. Genesis may assign
+an ordinary initial Authority baseline to its Identity (e.g. 1,000,001 on DEVNET).
+The genesis-authorized Central Authority PoA key remains the sole canonical finality signer.
 
 ## France network policy
 
@@ -34,21 +36,21 @@ canonical state.
 
 ## Official endpoints and bootstrap trust
 
-Official network profiles specify known bootstrap endpoints with IP:port and
-TLS SPKI pins. Transport authentication protects against connection tampering;
-the Central Authority's signed NetworkBinding guarantees official network authenticity.
+Official network profiles (DEVNET, MAINNET) specify known bootstrap endpoints with
+IP:port and TLS SPKI pins, and the compiled Network Public Key (`NetworkID = Network Public Key`).
+Transport authentication protects against connection tampering; the offline Network
+Private Key signature on the genesis specification (with monotonic `genesis_generation`)
+guarantees official network authenticity.
 See [`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md).
 
 ## Operational resilience
 
-One available bootstrap node is enough for rendezvous and relay. Multiple
-bootstrap nodes improve availability but do not provide consensus resilience.
-Clients rotate through configured and discovered endpoints, discard routes
-for disconnected peers, and treat repeated relayed operations idempotently by
-their existing OperationID semantics. If all bootstrap nodes are offline,
-already connected direct P2P may continue; fresh discovery and relay are
-unavailable. PoA finality still stops when the Central Authority signer is
-offline.
+One available bootstrap peer is enough for initial rendezvous. Multiple
+bootstrap endpoints improve availability but do not provide consensus resilience.
+Clients connect, discover peers, establish direct P2P mesh connections, and
+discard routes for disconnected peers. If bootstrap is offline, already connected
+direct P2P continues uninterrupted. PoA finality stops only when the Central
+Authority signer is offline.
 
 France is the initial sovereign network boundary. Any future expansion beyond
 French IP space requires an explicit architecture and policy decision, not a

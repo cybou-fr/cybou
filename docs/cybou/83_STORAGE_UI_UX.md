@@ -213,9 +213,15 @@ read locally
 -> generate content key material
 -> encrypt/chunk locally (local staging only)
 -> prepare the updated private Files catalog/root locally
--> submit one RootPublication and obtain PoA finality
--> upload the finalized-authorized chunks
--> reach the durability threshold
+-> submit one RootPublication
+        │
+        ├─> [optional provisional Validation] ───> provisional remote caching
+        │                                         (purge on conflicting PoA)
+        │
+        └─> PoA finality
+                ↓
+upload finalized-authorized chunks (or promote provisional cache)
+-> reach the durability threshold (2 independent remote replicas)
 -> Files item becomes Protected
 ```
 
