@@ -5,36 +5,39 @@ architecture; do not keep obsolete runtime paths alive for compatibility.
 
 ## DEV VPS deployment — migration state
 
-The current DEV installation is a legacy testnet topology; there is no
-production or Beta network to preserve or migrate. It is not the target
-architecture in `docs/cybou/04_NETWORK_BOOTSTRAP_AND_GENESIS.md`. Do not treat
-its finalizer endpoint as a future initial locator. The target uses one full-
-node software architecture with one to four genesis-authorized bootstrap
-capabilities and the genesis-key holder finalizing from the Central Authority
-desktop. France-only public peer admission is mandatory in production/DEV.
-The migration is not implemented yet; keep the current DEV testnet operational
-for routine development until the specified acceptance tests and planned new-
-genesis DEV cutover are complete. The cutover replaces this testnet; it is not
-a production-network migration.
+There is no production or Beta network. The DEV VPS has been repurposed from
+the legacy finalizer/provider topology to the `cybou-bootstrap.service`
+prototype. Its pinned TLS endpoint is the approved DEV Bootstrap #1
+pre-genesis locator. This assigns discovery trust to that live TLS key only;
+it grants no consensus role and does not make the service a CYP2 full node.
+The complete desktop locator-to-binding-to-peer discovery flow remains under
+implementation. The target uses one full-node software architecture with one
+to four genesis-authorized bootstrap capabilities and the genesis-key holder
+finalizing from the Central Authority desktop. France-only public peer
+admission is mandatory in production/DEV. The planned new-genesis DEV cutover
+replaces the legacy testnet; it is not a production-network migration.
 - Central Authority is identified only by possession of the genesis PoA key.
   Never add a persistent Authority IP, host, endpoint, or NodeID to bootstrap
   state or consensus. Authenticate its current route per live session and
   discard that route on disconnect.
 
-- After changing CYBOU core or `cybou-node`, run relevant tests, rebuild
-  `cybou-node` on the DEV VPS, and restart `cybou-node.service` in the same
-  task.
+- After changing CYBOU core or `cybou-node`, run relevant tests, rebuild the
+  affected DEV executable on the VPS, and restart its systemd service in the
+  same task.
 - Connect as `debian@vps-d0669a91.vps.ovh.net`; checkout:
   `/home/debian/cybou`; service binary:
   `/home/debian/cybou/build/bin/cybou-node`.
 - Preserve the current executable for rollback, restart with systemd, then
-  verify service health, listening port, and advancing finalized height.
-- Do not reset DEV state or replace the PoA key during a routine deployment.
-- Current legacy topology: `cybou-node.service` is the VPS PoA finalizer on
-  port 29461; `cybou-provider-1.service` and `cybou-provider-2.service` are
-  independent storage providers (`cybou-node provider run`, P2P ports
-  29471/29481, state in `/var/lib/cybou/provider-N-db`). Restart all three
-  after a rebuild and verify the providers follow finalized height.
+  verify service health and listening port. Finalized-height checks apply only
+  when a finalizer is deployed.
+- Current DEV service: `cybou-bootstrap.service` runs
+  `/home/debian/cybou/build/bin/cybou-bootstrap serve` on `0.0.0.0:29461`,
+  with state in `/var/lib/cybou/bootstrap/state` and TLS files under
+  `/etc/cybou-bootstrap/tls/`. SSH listens on port 22. The legacy
+  `cybou-node.service` finalizer and both provider services are inactive.
+- The DEV locator is `51.255.46.58:29461`; its SPKI SHA-256 pin is compiled
+  in `src/cybou/bootstrap_nodes.h`. The pin authenticates this pre-genesis
+  TLS endpoint only. Do not infer PoA or other consensus authority from it.
 
 ## Network and node architecture
 
@@ -48,7 +51,10 @@ a production-network migration.
   live session.
 - Initial IP:port and TLS SPKI pins are pre-genesis discovery/authentication
   material only. They grant no post-genesis role and are never consensus
-  state. Do not reuse the legacy DEV finalizer endpoint as an initial locator.
+  state. DEV Bootstrap #1 is the explicitly repurposed
+  `cybou-bootstrap.service` at `51.255.46.58:29461`, authenticated by the
+  pinned SPKI in `src/cybou/bootstrap_nodes.h`; the former PoA finalizer role
+  and its state are not used as locator trust.
 - Public P2P admission is France-only in production/DEV, for inbound and
   outbound peers and every capability. Classification uses local Geo data;
   unavailable/corrupt data fails closed. LAB loopback/private test traffic

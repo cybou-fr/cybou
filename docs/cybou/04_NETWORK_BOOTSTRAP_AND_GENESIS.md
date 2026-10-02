@@ -55,8 +55,13 @@ Bootstrap has two durable states:
 The initial-locator list contains one to four numeric IP:port endpoints and
 TLS SPKI pins. It is used only to find candidate peers and authenticate the
 pre-genesis exchange. Neither an address nor a pin grants a post-genesis role.
-The target locator and pins are not configured yet. The legacy DEV P2P seed is
-separate and must not be reused as an initial locator.
+DEV Bootstrap #1 is explicitly assigned to the current
+`cybou-bootstrap.service` at `51.255.46.58:29461`; its current SPKI pin is
+compiled in `src/cybou/bootstrap_nodes.h`. The service currently runs the
+standalone pre-genesis STATUS/CLAIM/REPLACE prototype. Desktop retrieval of the
+binding and transition into CYP2 peer discovery are not yet wired end to end.
+The legacy PoA finalizer role is inactive and is not the source of locator
+trust.
 
 Before the network exists, each candidate proves control of a proposed stable
 `AccountID` and its Recovery key over the pinned TLS session. The signed

@@ -4,7 +4,7 @@
 
 - **Target architecture**: Every participant runs the same full-node software (`CybouNode`). Bootstrap, storage, advisory Validation, and PoA finalization are optional local capabilities, not protocol node classes. Genesis authorizes 1–4 bootstrap Identities (by stable `AccountID` and expected `RecoveryKeyID`). Public P2P admission is France-only (fails closed). The Central Authority desktop runs PoA finalization; bootstrap never finalizes. State v9 schema.
 - **Current implementation prototype**: The pre-genesis STATUS/CLAIM/REPLACE service remains the transitional standalone `cybou-bootstrap provision|serve` utility. After genesis, the ordinary `cybou-node` full node can load its optional CYP2 bootstrap capability from an existing encrypted Identity vault; this does not turn bootstrap into a node class. The LevelDB prototype retains `EMPTY`/`BOUND` state with generation numbering, legacy v8 support, and target v9 grants keyed by stable AccountID plus expected RecoveryKeyID.
-- **Current DEV deployment**: The existing legacy testnet remains available for routine development: `cybou-node.service` finalizes on port 29461, and `cybou-provider-1.service` / `cybou-provider-2.service` provide storage on ports 29471/29481. Keep its state and PoA key until acceptance tests and the planned new-genesis DEV cutover are complete.
+- **Current DEV deployment**: The VPS now runs only the standalone `cybou-bootstrap.service` prototype on `51.255.46.58:29461`; the old finalizer and provider services are inactive. The endpoint is the explicitly designated DEV Bootstrap #1 pre-genesis locator, authenticated by the SPKI pin in `src/cybou/bootstrap_nodes.h`. The service still uses STATUS/CLAIM/REPLACE and is not a CYP2 full node. Desktop binding retrieval and first-peer discovery remain unimplemented.
 
 ## Bootstrap prototype and target gap
 
@@ -28,8 +28,10 @@ policy and does not change consensus:
   Recovery public key, but does not yet bind the candidate's stable AccountID;
 - `CAP_BOOTSTRAP` verifies an AccountID session proof against a claimed grant
   and current Authorization key;
-- the initial locator list is intentionally empty pending an approved target
-  endpoint and SPKI pin;
+- DEV Bootstrap #1 is configured at `51.255.46.58:29461` with the verified
+  SPKI pin in `src/cybou/bootstrap_nodes.h`; desktop locator connection,
+  binding verification/persistence, and first CYP2 peer discovery remain
+  unwired end to end;
 - the pre-genesis proof is not yet wired into the running bootstrap CLI/vault
   flow or desktop network-creation wizard;
 - `PeerAdmissionPolicy` checks the SHA-256 pin and a declared DB-IP release
