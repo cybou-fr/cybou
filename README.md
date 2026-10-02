@@ -24,7 +24,7 @@ Cette offre décrit l'objectif du produit, pas une fonction déjà disponible de
 bout en bout. Le VPS DEV héberge actuellement un prototype bootstrap autonome
 sur `51.255.46.58:29461` ; les anciens services finalizer et fournisseurs
 sont inactifs. Le cœur finalizer de bureau existe, mais la découverte bootstrap
-et la vérification du binding officiel ne sont pas intégrées de bout en bout.
+et la vérification de la genèse signée / Network Key ne sont pas intégrées de bout en bout.
 `cybou-node` sait charger un fichier réseau et propose notamment
 `network init-dev`, `finalizer run`, `provider run` et `observer run`, mais le
 client ne possède pas encore de parcours général de création et de mise en

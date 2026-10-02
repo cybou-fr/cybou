@@ -1,12 +1,13 @@
 # Implementation status
 
-Status: repository HEAD `e3c8752`, last code-changing baseline `0437427`.
+Status: Last code-changing baseline: `0437427`.
+Documentation-only commits after that baseline do not change implementation reality.
 This page reports current code and deployment reality honestly, separated from
 the constitutional target in `AGENTS.md` and `04_NETWORK_LIFECYCLE.md`.
 
 ## Target architecture vs. current code reality
 
-| Component | Target constitution | Current code / HEAD reality |
+| Component | Target constitution | Current code reality |
 |---|---|---|
 | Official networks | DEVNET and MAINNET only | Profiles still declare DEVNET, TESTNET, MAINNET enum in `official_networks.h` |
 | Network identity | `NetworkID = Network Public Key` | `NetworkId = SHA256("CYBOU/NETWORK-ID/V5" \|\| Serialize(definition))` |

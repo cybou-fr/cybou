@@ -6,9 +6,8 @@ consensus:
     network_id: network_public_key
     network_private_key: strictly_offline_never_online_never_on_bootstrap_never_on_poa
     signed_genesis: monotonic_genesis_generation
-  official_binding: genesis_authorized_poa_public_key_and_parameters
+  poa_public_key: genesis_authorized
   authority_assignment: genesis_initial_assignment_and_finalized_history_state
-  historical_certificate_key: poa_public_key_authorized_at_block_height
   bft: false
   validator_set: absent
   validation:
@@ -21,7 +20,7 @@ consensus:
     role: ordinary_cybou_full_peer
     same_executable: true
     same_protocol: CYP2
-    initial_authority: 1000001
+    devnet_initial_bootstrap_identity_baseline: 1000001
     special_consensus_role: absent
     cap_bootstrap: absent
   unfinalized_operations: local_origin_bounded_volatile_peer_relay
@@ -146,7 +145,7 @@ publication:
   capsule_wrapped_content_key: nonce_12 || ciphertext_32 || tag_16
   capsule_kdf: HKDF-SHA256
   capsule_kdf_input: XWing_shared_secret
-  capsule_kdf_salt: NetworkID_32
+  capsule_kdf_salt: NetworkID
   capsule_kdf_info: "CYBOU/ROOT-CAPSULE-KEY/v1 || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
   capsule_aead: ChaCha20-Poly1305
   capsule_aad: "CYBOU/ROOT-CAPSULE-AAD/v1 || NetworkID || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"

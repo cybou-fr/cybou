@@ -47,7 +47,11 @@ publication:
   root_publication_root_is_main_private_root: true
   child_root_ids_and_keys_private_inside_main_root: true
   self_capsule_required_for_recoverable_owner_content: true
-  unfinalized_remote_storage: false
+  storage_admission:
+    default: finalized_only
+    optional_provisional: allowed_on_eligible_validation
+    poa_conflict: purge_and_rollback
+    protected_requires_finality: true
 
 mail:
   recipients_initial: 1
@@ -79,6 +83,7 @@ files:
 content_lifecycle:
   - local
   - preparing
+  - validated
   - waiting_for_confirmation
   - securing
   - protected

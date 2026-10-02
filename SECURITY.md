@@ -27,7 +27,7 @@ reproduce. Do not include real user secrets or recovery phrases.
   `genesis_generation`. It must never be stored on bootstrap or PoA machines.
 - Full nodes check genesis signatures, both PoA signature components, operation
   execution, state roots, and validation attestations independently.
-- Identity Recovery, Authorization, KEM, Network Root, PoA, Release Signing
+- Identity Recovery, Authorization, KEM, Network Key, PoA, Release Signing
   and Treasury have separate key purposes and material. No classical-only
   production signature fallback is permitted.
 

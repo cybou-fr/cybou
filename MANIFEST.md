@@ -11,8 +11,8 @@ editing an included file.
 | AGENTS.md | 247 | 62141d8aa2b5cb52 |
 | CONTRIBUTING.md | 48 | df3c6d55e81cf78a |
 | INSTALL.md | 37 | 72f779b5e99c63c6 |
-| README.md | 119 | cace8c63adb10b4b |
-| SECURITY.md | 53 | 533643f4c88164a7 |
+| README.md | 119 | 9b053284fb67c13a |
+| SECURITY.md | 53 | 1521d0dfe26bf2ad |
 | docs/cybou/00_VISION.md | 73 | 856787283b43882a |
 | docs/cybou/02_ARCHITECTURE.md | 117 | ddf9fda09f12c3e5 |
 | docs/cybou/04_NETWORK_LIFECYCLE.md | 135 | 11ed104022180c96 |
@@ -20,7 +20,7 @@ editing an included file.
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 53 | 8b6c736d7eae0c79 |
 | docs/cybou/08_P2P.md | 73 | ad145a7f1a229537 |
 | docs/cybou/09_CRYPTO_PQ.md | 22 | 0255e028f3194510 |
-| docs/cybou/10_IDENTITY_NAMES.md | 41 | 99e2afcbbac56e13 |
+| docs/cybou/10_IDENTITY_NAMES.md | 41 | 2fb66bf06565c0d0 |
 | docs/cybou/18_ECONOMICS_FEES.md | 95 | 1bd08a43416632e0 |
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 55 | a1c53a98cdb0f367 |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 37 | b48c49a7d3ecbabd |
@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 29 | 3f5919cbe227d5de |
 | docs/cybou/24_DECISIONS.md | 115 | 79ff96a2d2f14707 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 51 | a9501c62069515e6 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 37 | a88f31a3fe16e9cc |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 38 | 33b2c9d3c9ff1c22 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 57 | f196c0df1b1d33b6 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | 2f7a22481bd9287e |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
@@ -63,10 +63,10 @@ editing an included file.
 | docs/cybou/CYP2_TRANSPORT_V3.md | 43 | a2493b90cec09525 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 87 | b642accdd01c0ebc |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
-| docs/cybou/OPERATOR_LAB.md | 180 | 99e7d1d387a45b5c |
+| docs/cybou/OPERATOR_LAB.md | 180 | 4d42fcaf1f7c7ddc |
 | docs/cybou/POA_FINALITY.md | 50 | cccaa78b6a06c308 |
 | docs/cybou/POA_FINALITY_VECTORS.md | 107 | 3d1f06214ad59f4f |
-| docs/cybou/README.md | 85 | 74cb1ed506e72f76 |
+| docs/cybou/README.md | 85 | 9c8af11dca18bb69 |
 | docs/cybou/ROOT_PUBLICATION.md | 113 | c737c5ee18676159 |
 | docs/cybou/STORAGE_ADMISSION.md | 107 | cf3d78598869b76f |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |
@@ -74,9 +74,9 @@ editing an included file.
 | spec/circulation_scenarios.csv | 74 | db240cf0d3280644 |
 | spec/fee_router.yaml | 18 | ccebf298d9eb9ec0 |
 | spec/fee_router_test_vectors.csv | 9 | db9274d10b0a3dfa |
-| spec/mail_files_architecture.yaml | 105 | 0f7c2cf46ce9fc95 |
+| spec/mail_files_architecture.yaml | 110 | 265b05d5f22eeee1 |
 | spec/market_strategy.yaml | 51 | a447525f8d273776 |
 | spec/monetary_model.yaml | 65 | c58bdbf24fd161a9 |
 | spec/onboarding.yaml | 29 | 0f26395eae2874e3 |
-| spec/poa_chunk_tree.yaml | 180 | 27047a7da6dcf19c |
+| spec/poa_chunk_tree.yaml | 179 | d284fd0ae06b5d4d |
 | www/llms.txt | 71 | a3a974cee90e5015 |

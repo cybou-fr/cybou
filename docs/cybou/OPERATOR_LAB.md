@@ -30,7 +30,7 @@ python3 tools/cybou_stress.py down /path/to/lab.toml
 
 `init` creates one private LAB PoA seed and copies its public legacy LAB
 network file to every host. This isolated test workflow reflects the current
-CLI and does not define official Network Root trust. Existing network files
+CLI and does not define official Network Key / signed-genesis trust. Existing network files
 must match byte for byte.
 Controller actions require matching ownership markers, scoped paths, ports
 at least 30000 and matching process birth identity. They never target DEV
