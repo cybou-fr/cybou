@@ -28,6 +28,96 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_identity_operation_coordinator_tests, CybouTestSetup)
 
+BOOST_AUTO_TEST_CASE(relayed_identity_operation_is_retried_after_volatile_ack)
+{
+    namespace asio = boost::asio;
+    using tcp = asio::ip::tcp;
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("relay-retry-identity.cybou");
+    const auto account = identity->GetAccountId();
+    BOOST_REQUIRE(account);
+    const auto account_block = fixture.runtime->GetBlockAtHeight(1);
+    BOOST_REQUIRE(account_block);
+
+    cybou::CybouNodeRuntime relay{{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "ordinary-relay",
+        .memory_only = true,
+        .wipe_data = true,
+        .peer_admission_policy = TestLabAdmissionPolicy(),
+    }};
+    BOOST_REQUIRE(relay.InitializeGenesis(fixture.genesis));
+    BOOST_REQUIRE(relay.CommitBlock(*account_block));
+
+    asio::io_context io;
+    const auto loopback = asio::ip::address_v4::loopback();
+    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+    const uint16_t port = acceptor.local_endpoint().port();
+    std::atomic_bool first_served{false};
+    std::atomic_bool retry_served{false};
+    std::thread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+        const bool handshake = session.Handshake({.network_id = fixture.runtime->GetNetworkId(),
+            .finalized_height = 1, .finalized_tip = cybou::ComputeBlockId(account_block->block),
+            .capabilities = cybou::p2p::CAP_OPERATION_RELAY, .nonce = 7401});
+        if (!handshake) return;
+        first_served = session.ServeNext(relay);
+        if (first_served) retry_served = session.ServeNext(relay);
+    }};
+
+    cybou::CybouNodeRuntime client{{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "retry-origin",
+        .p2p_endpoint = std::pair<std::string, uint16_t>{loopback.to_string(), port},
+        .memory_only = true,
+        .wipe_data = true,
+        .peer_admission_policy = TestLabAdmissionPolicy(),
+    }};
+    BOOST_REQUIRE(client.InitializeGenesis(fixture.genesis));
+    BOOST_REQUIRE(client.CommitBlock(*account_block));
+
+    cybou::IdentityOperationCoordinator coordinator{client, identity->GetKeyStore(),
+        fixture.directory / "relay-retry.cyiop", std::chrono::milliseconds{5}};
+    std::array<unsigned char, 32> salt{};
+    salt[0] = 0x61;
+    const auto payload = cybou::NameCommitPayload{
+        .commitment = cybou::ComputeNameCommitment(client.GetNetworkId(), *account, "relayretry", salt)};
+    const auto payload_commitment = cybou::ComputeNameCommitPayloadCommitment(payload);
+    BOOST_REQUIRE(payload_commitment);
+    const auto submitted = coordinator.Execute(cybou::IdentityOperationKind::NAME_COMMIT,
+        *payload_commitment, [&](const cybou::IdentityOperationAuthorization& authorization)
+            -> std::optional<cybou::ProtocolOperation> {
+            return cybou::ProtocolOperation{cybou::AuthorizedNameCommit{authorization, payload}};
+        });
+
+    bool retry_status_accepted{false};
+    bool operation_requeued{false};
+    if (submitted.phase == cybou::IdentityOperationPhase::ACCEPTED && !submitted.op_id.IsNull()) {
+        const auto queued = relay.ClaimRelayedOperation();
+        if (queued && queued->operation_id == submitted.op_id) {
+            relay.AcknowledgeRelayedOperation(submitted.op_id); // Simulate the volatile relay losing its queued copy.
+            std::this_thread::sleep_for(std::chrono::milliseconds{15});
+            client.RetryPendingIdentityOperations();
+            const auto retried = coordinator.GetStatus(submitted.op_id);
+            retry_status_accepted = retried.phase == cybou::IdentityOperationPhase::ACCEPTED;
+            const auto restored = relay.ClaimRelayedOperation();
+            operation_requeued = restored && restored->operation_id == submitted.op_id &&
+                restored->exact_bytes == queued->exact_bytes;
+            if (restored) relay.ReleaseRelayedOperation(submitted.op_id);
+        }
+    }
+    server.join();
+    acceptor.close();
+
+    BOOST_CHECK(submitted.phase == cybou::IdentityOperationPhase::ACCEPTED);
+    BOOST_CHECK(first_served.load());
+    BOOST_CHECK(retry_status_accepted);
+    BOOST_CHECK(retry_served.load());
+    BOOST_CHECK(operation_requeued);
+}
+
 BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart_and_corruption)
 {
     namespace asio = boost::asio;

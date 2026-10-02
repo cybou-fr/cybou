@@ -167,6 +167,7 @@ public:
     OperationSubmitResult SubmitPeerOperation(ProtocolOperation op, std::string source_peer);
     OperationStatus GetOperationStatus(const uint256& op_id) const;
     IdentityOperationCoordinator& GetIdentityOperationCoordinator(CybouKeyStore& keystore);
+    void RetryPendingIdentityOperations();
     std::vector<FinalizedHead> RecentFinalizedBlocksForGossip() const;
 
     /** Produce a block if running as the PoA finalizer */

@@ -8,6 +8,7 @@
 #include <cybou/identity_registry.h>
 #include <cybou/protocol_operation.h>
 
+#include <chrono>
 #include <filesystem>
 #include <functional>
 #include <mutex>
@@ -41,7 +42,8 @@ using IdentityOperationBuilder = std::function<std::optional<ProtocolOperation>(
 class IdentityOperationCoordinator {
 public:
     IdentityOperationCoordinator(CybouNodeRuntime& runtime, CybouKeyStore& keystore,
-        std::filesystem::path journal_path);
+        std::filesystem::path journal_path,
+        std::chrono::milliseconds relay_retry_interval = std::chrono::seconds{30});
     ~IdentityOperationCoordinator();
     IdentityOperationCoordinator(const IdentityOperationCoordinator&) = delete;
     IdentityOperationCoordinator& operator=(const IdentityOperationCoordinator&) = delete;
@@ -49,6 +51,7 @@ public:
     IdentityOperationResult Execute(IdentityOperationKind kind, const IdentityKeyId& payload_commitment,
         const IdentityOperationBuilder& build);
     IdentityOperationResult RotateIdentity(std::span<const unsigned char, 32> new_identity_entropy);
+    bool RetryRelayIfDue();
     bool CompleteIdentityRotation(const IdentityRecord& finalized_identity);
     bool HasPendingIdentityRotation();
     IdentityOperationResult GetStatus(const uint256& op_id);
@@ -58,7 +61,9 @@ private:
     CybouNodeRuntime& m_runtime;
     CybouKeyStore& m_keystore;
     std::filesystem::path m_journal_path;
+    const std::chrono::milliseconds m_relay_retry_interval;
     mutable std::mutex m_mutex;
+    std::optional<std::chrono::steady_clock::time_point> m_next_relay_retry;
     std::unique_ptr<JournalEntry> m_entry;
     bool m_loaded{false};
     std::string m_load_error;

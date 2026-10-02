@@ -484,6 +484,20 @@ IdentityOperationCoordinator& CybouNodeRuntime::GetIdentityOperationCoordinator(
     return *coordinator;
 }
 
+void CybouNodeRuntime::RetryPendingIdentityOperations()
+{
+    std::vector<IdentityOperationCoordinator*> coordinators;
+    {
+        std::lock_guard lock(m_mutex);
+        coordinators.reserve(m_identity_operation_coordinators.size());
+        for (const auto& [keystore, coordinator] : m_identity_operation_coordinators) {
+            (void)keystore;
+            coordinators.push_back(coordinator.get());
+        }
+    }
+    for (auto* coordinator : coordinators) coordinator->RetryRelayIfDue();
+}
+
 void CybouNodeRuntime::RememberOperationStatus(const uint256& id, OperationStatus status)
 {
     if (id.IsNull()) return;
@@ -871,6 +885,7 @@ void CybouNodeRuntime::SchedulePeerRetry(
 SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_blocks)
 {
     if (!m_peer_manager) return {};
+    RetryPendingIdentityOperations();
     std::lock_guard p2p_lock(m_p2p_mutex);
 
     const auto local_status = GetStatus();

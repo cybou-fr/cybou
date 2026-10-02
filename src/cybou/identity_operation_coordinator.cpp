@@ -147,9 +147,14 @@ struct IdentityOperationCoordinator::JournalEntry {
 };
 
 IdentityOperationCoordinator::IdentityOperationCoordinator(CybouNodeRuntime& runtime,
-    CybouKeyStore& keystore, std::filesystem::path journal_path)
-    : m_runtime{runtime}, m_keystore{keystore}, m_journal_path{std::move(journal_path)}
+    CybouKeyStore& keystore, std::filesystem::path journal_path,
+    const std::chrono::milliseconds relay_retry_interval)
+    : m_runtime{runtime}, m_keystore{keystore}, m_journal_path{std::move(journal_path)},
+      m_relay_retry_interval{relay_retry_interval}
 {
+    if (m_relay_retry_interval <= std::chrono::milliseconds::zero()) {
+        throw std::invalid_argument{"relay retry interval must be positive"};
+    }
 }
 IdentityOperationCoordinator::~IdentityOperationCoordinator() = default;
 
@@ -233,11 +238,12 @@ bool IdentityOperationCoordinator::SaveJournal(const JournalEntry& entry)
 
 bool IdentityOperationCoordinator::ClearJournal()
 {
-    if (m_journal_path.empty()) { m_entry.reset(); return true; }
+    if (m_journal_path.empty()) { m_entry.reset(); m_next_relay_retry.reset(); return true; }
     std::error_code ec;
     const bool removed = !std::filesystem::exists(m_journal_path, ec) || std::filesystem::remove(m_journal_path, ec);
     if (ec || !removed) return false;
     m_entry.reset();
+    m_next_relay_retry.reset();
     return true;
 }
 
@@ -246,12 +252,16 @@ IdentityOperationResult IdentityOperationCoordinator::SubmitExact(JournalEntry& 
     const auto operation = DeserializeProtocolOperation(entry.operation_bytes);
     if (!operation) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = entry.op_id,
         .error = "Journaled Identity operation cannot be decoded"};
+    const bool relay_retry_in_flight = m_next_relay_retry.has_value();
     entry.phase = IdentityOperationPhase::SUBMITTING;
     if (!SaveJournal(entry)) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = entry.op_id,
         .error = "Could not persist Identity operation phase"};
     const auto result = m_runtime.SubmitOperation(*operation);
     if (!result) {
         if (result.delivery_uncertain) {
+            if (relay_retry_in_flight) {
+                m_next_relay_retry = std::chrono::steady_clock::now() + m_relay_retry_interval;
+            }
             entry.phase = IdentityOperationPhase::UNCERTAIN;
             SaveJournal(entry);
             return {.phase = IdentityOperationPhase::UNCERTAIN, .op_id = entry.op_id,
@@ -262,11 +272,20 @@ IdentityOperationResult IdentityOperationCoordinator::SubmitExact(JournalEntry& 
         return {.phase = IdentityOperationPhase::REJECTED, .op_id = op_id,
             .error = "Identity operation was rejected"};
     }
-    entry.phase = result.status == OperationSubmitStatus::ALREADY_FINALIZED ?
+    const auto result_phase = result.status == OperationSubmitStatus::ALREADY_FINALIZED ?
         IdentityOperationPhase::FINALIZED : IdentityOperationPhase::ACCEPTED;
+    // A volatile queue acknowledgment must survive restart as retryable state.
+    entry.phase = result.status == OperationSubmitStatus::RELAY_QUEUED ?
+        IdentityOperationPhase::UNCERTAIN : result_phase;
+    if (result.status == OperationSubmitStatus::RELAY_QUEUED ||
+        (m_next_relay_retry && result.delivery_uncertain)) {
+        m_next_relay_retry = std::chrono::steady_clock::now() + m_relay_retry_interval;
+    } else {
+        m_next_relay_retry.reset();
+    }
     if (!SaveJournal(entry)) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = entry.op_id,
         .error = "Operation was admitted but its journal could not be updated"};
-    const auto phase = entry.phase;
+    const auto phase = result_phase;
     const auto op_id = entry.op_id;
     if (phase == IdentityOperationPhase::FINALIZED && entry.kind != 0) ClearJournal();
     return {.phase = phase, .op_id = op_id};
@@ -276,6 +295,7 @@ IdentityOperationResult IdentityOperationCoordinator::Reconcile(JournalEntry& en
 {
     const auto status = m_runtime.GetOperationStatus(entry.op_id);
     if (status.kind == OperationStatusKind::FINALIZED) {
+        m_next_relay_retry.reset();
         const auto op_id = entry.op_id;
         if (entry.kind != 0) {
             if (!ClearJournal()) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = entry.op_id,
@@ -320,7 +340,13 @@ IdentityOperationResult IdentityOperationCoordinator::Reconcile(JournalEntry& en
     }
     if (status.kind == OperationStatusKind::LOCAL_PENDING || status.kind == OperationStatusKind::ACCEPTED_REMOTE) {
         entry.phase = IdentityOperationPhase::ACCEPTED;
+        if (status.kind == OperationStatusKind::ACCEPTED_REMOTE && m_next_relay_retry &&
+            std::chrono::steady_clock::now() >= *m_next_relay_retry) return SubmitExact(entry);
         return {.phase = IdentityOperationPhase::ACCEPTED, .op_id = entry.op_id};
+    }
+    if (m_next_relay_retry && std::chrono::steady_clock::now() < *m_next_relay_retry) {
+        return {.phase = IdentityOperationPhase::UNCERTAIN, .op_id = entry.op_id,
+            .error = "Relay acknowledgment is volatile; exact operation retry is scheduled"};
     }
     return SubmitExact(entry);
 }
@@ -455,6 +481,25 @@ IdentityOperationResult IdentityOperationCoordinator::RotateIdentity(
     return SubmitExact(*m_entry);
 }
 
+bool IdentityOperationCoordinator::RetryRelayIfDue()
+{
+    std::lock_guard lock(m_mutex);
+    if (!LoadJournal() || !m_entry || (!m_next_relay_retry &&
+        m_entry->phase != IdentityOperationPhase::UNCERTAIN &&
+        m_entry->phase != IdentityOperationPhase::SUBMITTING &&
+        m_entry->phase != IdentityOperationPhase::PREPARED)) return false;
+    const auto status = m_runtime.GetOperationStatus(m_entry->op_id);
+    if (status.kind == OperationStatusKind::FINALIZED ||
+        status.kind == OperationStatusKind::REJECTED_KNOWN ||
+        status.kind == OperationStatusKind::LOCAL_PENDING) return false;
+
+    const auto now = std::chrono::steady_clock::now();
+    if (!m_next_relay_retry) m_next_relay_retry = now;
+    if (now < *m_next_relay_retry) return false;
+    (void)SubmitExact(*m_entry);
+    return true;
+}
+
 bool IdentityOperationCoordinator::CompleteIdentityRotation(const IdentityRecord& finalized_identity)
 {
     std::lock_guard lock(m_mutex);
@@ -484,10 +529,18 @@ IdentityOperationResult IdentityOperationCoordinator::GetStatus(const uint256& o
     std::lock_guard lock(m_mutex);
     if (!LoadJournal()) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = op_id, .error = m_load_error};
     const auto status = m_runtime.GetOperationStatus(op_id);
-    if (status.kind == OperationStatusKind::FINALIZED) return {.phase = IdentityOperationPhase::FINALIZED,
-        .op_id = op_id, .finalized_height = status.finalized_height};
-    if (status.kind == OperationStatusKind::REJECTED_KNOWN) return {.phase = IdentityOperationPhase::REJECTED,
-        .op_id = op_id, .error = "Operation was rejected"};
+    if (status.kind == OperationStatusKind::FINALIZED) {
+        if (m_entry && m_entry->op_id == op_id) m_next_relay_retry.reset();
+        return {.phase = IdentityOperationPhase::FINALIZED, .op_id = op_id,
+            .finalized_height = status.finalized_height};
+    }
+    if (status.kind == OperationStatusKind::REJECTED_KNOWN) {
+        if (m_entry && m_entry->op_id == op_id) m_next_relay_retry.reset();
+        return {.phase = IdentityOperationPhase::REJECTED, .op_id = op_id,
+            .error = "Operation was rejected"};
+    }
+    if (m_entry && m_entry->op_id == op_id && m_next_relay_retry &&
+        std::chrono::steady_clock::now() >= *m_next_relay_retry) return SubmitExact(*m_entry);
     if (status.kind == OperationStatusKind::LOCAL_PENDING || status.kind == OperationStatusKind::ACCEPTED_REMOTE)
         return {.phase = IdentityOperationPhase::ACCEPTED, .op_id = op_id};
     return {.phase = IdentityOperationPhase::UNCERTAIN, .op_id = op_id,
