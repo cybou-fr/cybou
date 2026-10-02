@@ -19,8 +19,9 @@ code from integration and deployment gates.
   using local Geo data (fails closed).
 - The finalizer uses the genesis-authorized hybrid-PQ PoA key operated from the
   Central Authority desktop. This is single-operator finality, not BFT consensus.
-  Advisory Validation attestations from identities with Authority > 1,000,000 are
-  provisional and overridden unconditionally by PoA finality.
+  Every full node executes every candidate operation. Identities with finalized
+  AUTH > 1,000,000 may add Validation signatures after their own node validated
+  an operation; signatures are evidence only and PoA always re-executes.
 - Generic `RootPublication` is the only application-content publication
   operation. Mail, Files, Backup, filenames, recipients, graph edges, and
   application schemas are private encrypted content.

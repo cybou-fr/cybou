@@ -10,7 +10,7 @@ check lengths and nesting limits before allocation.
 The active formats are defined by their protocol authorities:
 
 - block and PoA finality: `POA_FINALITY.md`;
-- advisory validation attestations: `VALIDATION.md`;
+- Validation signatures: `VALIDATION.md`;
 - deterministic application encoding: `ROOT_PUBLICATION.md`;
 - encrypted payload and chunk tree: `ENCRYPTED_CHUNK_TREE.md`;
 - provider admission proofs: `STORAGE_ADMISSION.md`;

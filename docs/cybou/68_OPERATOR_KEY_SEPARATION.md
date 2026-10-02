@@ -9,7 +9,7 @@ remain cryptographically separate:
 | `cybou.cybou` PoA key role P | Ordinary Identity's distinct PoA role operates from Central Authority desktop; signs canonical next blocks |
 | Release Signing | Authenticates official software releases and update artifacts |
 | Treasury | Controls company-owned reserve funds |
-| User Identity | End-user account recovery, operations, and provisional Validation |
+| User Identity | End-user account recovery, operations, and Validation signatures |
 
 ## Key boundaries
 

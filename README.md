@@ -55,11 +55,11 @@ service d'un réseau privé d'entreprise.
   initial et adresses bootstrap) doivent être compilées dans le client, sans
   fichier réseau officiel chargé à l'exécution. La clé PoA autorisée par la
   genèse est un rôle distinct de l'identité ordinaire `cybou.cybou` et signe les blocs.
-  Une pré-validation consultative optionnelle peut être attestée par les identités
-  dont l'Authority canonique dépasse 1 000 000 AUTH. Elle est stockée dans
-  l'état du compte, non transférable et exclue des 100 milliards de CYBOU.
-  La finalité PoA prévaut
-  inconditionnellement.
+  Chaque nœud complet exécute lui-même chaque opération candidate. Une identité
+  dont l'AUTH finalisée dépasse 1 000 000 peut y ajouter une signature de
+  Validation, simple preuve pré-finalisation. L'AUTH est stockée dans l'état du
+  compte, non transférable et exclue des 100 milliards de CYBOU. Le PoA
+  ré-exécute tout et reste seul à finaliser.
 - **Admission réseau.** Les commandes réseau de `cybou-node` exigent une
   politique d'admission explicite. Le mode `france` utilise une base GeoIP
   validée ; le mode `lab` est réservé aux pairs de test locaux ou privés.

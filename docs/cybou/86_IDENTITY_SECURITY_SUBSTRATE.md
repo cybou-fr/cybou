@@ -25,7 +25,7 @@ user identities or parallel authorization systems.
     │       │        │       │           │                   │
    Name   Wallet    Mail    Files     Mail content       Files objects
             │                            + attachments
-  [Validation Attestation]
+  [Validation Signature]
 ```
 
 The Recovery Root is a separate authorization domain. The offline Network Private Key,
@@ -38,7 +38,7 @@ not used for ordinary user-service authorization.
 | Domain | Key material | Purpose | Current status |
 |---|---|---|---|
 | Recovery Root | Ed25519 + ML-DSA-65 | Recover account authority and authorize IdentityRotate | Implemented in the current identity path; encoding/vector work remains tracked by Identity docs |
-| Identity authorization signing | Ed25519 + ML-DSA-44 | Authorize account operations AND sign advisory Validation attestations (if finalized Authority > 1M) | Implemented for Identity authorization |
+| Identity authorization signing | Ed25519 + ML-DSA-44 | Authorize account operations AND sign Validation signatures (if finalized AUTH > 1M) | Implemented for Identity authorization |
 | Identity key agreement | X-Wing (ML-KEM-768 + X25519) | Establish or wrap content keys for an current Identity key epoch | Draft-05 profile is published per current Identity key epoch in DEV |
 | Network Key | Hybrid PQ (Public Key = NetworkID) | Offline creation-time root of trust; signs immutable genesis specification once | Target; offline only |
 | PoA finalizer P | Ed25519 + ML-DSA-65 | Authorized in genesis; signs canonical block certificates | Implemented for single-operator PoA |
@@ -60,7 +60,7 @@ must be authenticated in their respective protocols.
 | Wallet | Identity hybrid signature through the coordinator | No content encryption capability | PoA finality for payment and lock operations |
 | Mail | Identity-authorized generic RootPublication through the coordinator | Recipient KEM capsule and encrypted Mail schema inside the chunk tree | PoA finality authorizes chunk admission; storage durability (2 remote replicas) reported separately |
 | Files | Identity-authorized manifest/root changes through the coordinator | Symmetric object encryption; account KEM capability wraps Files keys | Storage durability contract (2 remote replicas + local = 3 physical copies total) |
-| Validation | Identity hybrid authorization signature | Non-confidential attestation | Advisory provisional pre-finalization; rolled back unconditionally on conflicting PoA finality |
+| Validation | Identity hybrid authorization signature | Non-confidential signature | Pre-finalization evidence after local execution; creates no state; PoA re-executes |
 
 “Hybrid” does not mean every operation uses every key. Signatures authorize
 actions; KEM establishes or wraps content keys; a standard symmetric AEAD
@@ -106,7 +106,7 @@ The current identity record publishes a draft-05 X-Wing KEM capability.
 ## Authority and related documents
 
 - `10_IDENTITY_NAMES.md` owns identity, recovery, and name protocol rules.
-- `VALIDATION.md` owns advisory validation attestation rules.
+- `VALIDATION.md` owns Validation signature rules.
 - `76_IDENTITY_VAULT_RECOVERY.md` owns phrase and portable-vault behavior.
 - `87_IDENTITY_OPERATION_COORDINATOR.md` owns operation/nonce lifecycle.
 - `ENCRYPTED_CHUNK_TREE.md` and `ROOT_PUBLICATION.md` own encrypted content

@@ -52,7 +52,7 @@ from or conflicting with higher levels:
 | [`50_EMAIL_SECURITY_MODEL.md`](50_EMAIL_SECURITY_MODEL.md) | End-to-end encrypted email privacy model | Level 5 | Product target |
 | [`52_BALANCE_AND_SYSTEM_BALANCE.md`](52_BALANCE_AND_SYSTEM_BALANCE.md) | Balance and System Balance semantics | Level 2 | Active |
 | [`56_OWNER_OPERATOR_AND_RESILIENCE.md`](56_OWNER_OPERATOR_AND_RESILIENCE.md) | Operational resilience and operator key handling | Level 6 | Active |
-| [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md) | Canonical AUTH account value and provisional Validation eligibility | Level 2 | Active |
+| [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md) | Canonical AUTH account value, issuance/burn and Validation eligibility | Level 2 | Active |
 | [`59_DETERMINISTIC_FEE_ROUTER.md`](59_DETERMINISTIC_FEE_ROUTER.md) | Deterministic integer 3 Security / 1 Onboarding fee router | Level 2 | Active |
 | [`68_OPERATOR_KEY_SEPARATION.md`](68_OPERATOR_KEY_SEPARATION.md) | PoA and operator key role custody | Level 2 | Active |
 | [`70_ACCOUNT_CREATION_ANTI_SYBIL.md`](70_ACCOUNT_CREATION_ANTI_SYBIL.md) | Permissionless AccountCreate, anti-Sybil work, and OnboardingPool | Level 2 | Active |
@@ -81,5 +81,5 @@ from or conflicting with higher levels:
 | [`ROOT_PUBLICATION.md`](ROOT_PUBLICATION.md) | Canonical RootPublication wire format and validation | Level 2 | Active |
 | [`STORAGE_ADMISSION.md`](STORAGE_ADMISSION.md) | Merkle inclusion proofs, chunk admission, provider policy | Level 2 | Active |
 | [`UPSTREAM_BASELINE.md`](UPSTREAM_BASELINE.md) | Upstream Bitcoin Core baseline delta and removal plan | — | Historical |
-| [`VALIDATION.md`](VALIDATION.md) | Advisory pre-finalization attestation, eligibility (> 1M Authority), rollback rules | Level 2 | Active |
+| [`VALIDATION.md`](VALIDATION.md) | Validation signatures after independent execution, eligibility (> 1M AUTH) | Level 2 | Active |
 | [`future/VALIDATION.md`](future/VALIDATION.md) | Archived historical note on early advisory validation design | Future | Historical |

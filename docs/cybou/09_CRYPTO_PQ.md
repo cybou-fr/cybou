@@ -9,7 +9,7 @@ No protocol-level device identity exists. An Identity record has one current Rec
 | Role | Algorithm | Purpose |
 | --- | --- | --- |
 | Recovery | Ed25519 + ML-DSA-65 | Restore identity and authorize full key rotation |
-| Authorization | Ed25519 + ML-DSA-44 | Sign account-level service operations and Validation attestations |
+| Authorization | Ed25519 + ML-DSA-44 | Sign account-level service operations and Validation signatures |
 | Recipient KEM | X-Wing (ML-KEM-768 + X25519) | Establish or wrap content keys; separate from signing |
 | Network Key | Hybrid PQ (Network Public Key = NetworkID) | Strictly offline creation-time root of trust; signs immutable genesis specification once |
 | PoA Finalizer P | Ed25519 + ML-DSA-65 | Authorized in genesis; signs canonical block certificates |
@@ -17,6 +17,6 @@ No protocol-level device identity exists. An Identity record has one current Rec
 | Treasury / Custody | Multi-signature hybrid PQ | Protect cold network reserves and custody |
 | Storage Provider | Provider service key | Prove provider identity per live CYP2 session |
 
-Advisory Validation requires NO separate validator key role; eligible validators sign attestations using their standard Identity Authorization Key (Ed25519 + ML-DSA-44).
+Validation requires NO separate validator key role; eligible Identities sign ValidationSignatures using their standard Identity Authorization Key (Ed25519 + ML-DSA-44).
 
 Use standard cryptographic libraries and pinned vectors. No classical-only production fallback and no custom cryptographic primitives.

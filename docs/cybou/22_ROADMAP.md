@@ -15,17 +15,19 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 5. **One official startup path**: select compiled DEVNET constants, verify signature/state root, and remove external official CYG1/CYN1 loaders, profile digest pins and `--network` file startup.
 6. **NetworkID transition**: transition `NetworkId` from SHA256 definition hash to exact Network Public Key throughout runtime, wire, persistence and crypto.
 7. **Bootstrap conversion**: remove legacy bootstrap binding/protocol and standalone executable; transition DEV VPS to an ordinary `cybou-node` after coordinated state reset.
-8. **Canonical AUTH clean cut**: store AUTH in AccountState and GenesisAllocation, remove initial_authority and AuthorityIndex, update desktop, bump state format, and verify supply independence.
-9. **DEVNET acceptance**: verify desktop, ordinary peers, finality, operation relay and storage end to end before Validation or provisional storage work.
+8. **Canonical AUTH state** (Completed in `393657f`, `52c5406`): AUTH in AccountState and GenesisAllocation, state v11, AuthorityIndex removed, desktop reads AUTH directly.
+9. **DEVNET acceptance**: verify desktop, ordinary peers, finality, operation relay and storage end to end.
 
-## Phase 3 — After DEVNET acceptance
+## Phase 3 — AUTH and Validation
 
-10. **Validation attestation protocol**: implement advisory Validation wire messaging for eligible Identities (`AccountState.authority > 1,000,000 AUTH` in latest PoA-finalized state).
-11. **Provisional execution & rollback**: implement local acceptance policy (`validation.enabled`, `min_signatures`), provisional state staging, and mandatory atomic rollback upon PoA conflict.
-12. **Finalizer simplification**: ensure PoA finalizer acts purely as an independent candidate evaluator and certificate signer with no canonical pending mempool.
+- **A — AUTH transitions**: +1 AUTH per finalized Identity-authorized operation (AccountCreate included); PoA-only `AUTH_GRANT` / `AUTH_BURN` with floor 0.
+- **B — Full-node independent candidate execution**: move `OperationPool` from `CybouFinalizerNode` into `CybouNodeRuntime`; every node executes candidates before relay; PoA produces blocks from the same pool.
+- **C — Validation signatures**: `ValidationSignature` (NetworkID, OperationID, finalized base BlockID, AccountID, Authorization signature), local signing when AUTH > 1,000,000, bounded Validation store, `VALIDATION_SIGNATURE` CYP2 gossip.
+- **D — UI**: AUTH, Validation eligibility, Submitted / Validated · N / Finalized.
+- **E — Hardening**: evidence for invalid Validation and a frozen AUTH penalty table.
 
 ## Phase 4 — Product integration and end-to-end acceptance
 
-13. **Application data plane integration**: connect Mail and Files publication, provisional staging, and finalized promotion to the desktop model.
+13. **Application data plane integration**: connect Mail and Files publication and finalized storage placement to the desktop model.
 14. **Storage durability hardening**: verify Beta target of 2 independent remote full replicas plus local copy (3 physical copies total) with audit and repair.
 15. **MAINNET provisioning and launch**: create its own keys, genesis and bootstrap only after full DEVNET soak and formal acceptance.

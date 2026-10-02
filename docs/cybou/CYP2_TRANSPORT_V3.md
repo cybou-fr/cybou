@@ -1,7 +1,7 @@
 # CYP2 transport version 3
 
 CYP2 v3 carries peer discovery, finalized block synchronization, bounded
-operation relay, advisory Validation attestation propagation, and authorized
+operation relay, Validation signature propagation, and authorized
 encrypted chunk transfer over TCP/TLS 1.3.
 
 ## Connection protection and roles
@@ -26,7 +26,7 @@ proof bound to both HELLOs and the TLS exporter. The receiver derives
 A peer advertising `CAP_ACCEPT_OPERATIONS` operates the genesis-authorized PoA
 key. Missing or invalid role proofs fail the handshake. These proofs identify
 live services, not globally authenticated ordinary peers. Operation signatures,
-PoA certificates, publication proofs, Validation attestations, and ChunkID checks
+PoA certificates, publication proofs, Validation signatures, and ChunkID checks
 remain independent and mandatory.
 
 Ordinary CYP2 frames retain the standard 4096-byte limit, while chunk transfers
@@ -40,6 +40,6 @@ Missing or corrupt data fails closed. LAB loopback/private traffic needs an
 explicit bypass. Optional known VPN/proxy/Tor filtering is node-local policy.
 
 The active wire profile carries peer hints, finalized blocks, signed
-operations, advisory Validation attestations, and authorized encrypted chunks.
+operations, Validation signatures, and authorized encrypted chunks.
 No validator quorum, resource ticket, canonical reservation or per-I/O
 accounting is part of active CYP2.

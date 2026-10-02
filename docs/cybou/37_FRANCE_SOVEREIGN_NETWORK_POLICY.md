@@ -8,8 +8,8 @@ finalization are optional operational capabilities.
 
 Bootstrap is an ordinary CYBOU full peer whose IP:port and TLS SPKI pin are known
 in advance for initial rendezvous and peer discovery. It has no special consensus
-role, no `CAP_BOOTSTRAP` flag, does not vote, and does not finalize. Genesis may assign
-an ordinary initial Authority baseline to its Identity (e.g. 1,000,001 on DEVNET).
+role, no `CAP_BOOTSTRAP` flag, does not vote, and does not finalize. Any AUTH its
+Identity holds is an ordinary GenesisAllocation decision, not a bootstrap property.
 The genesis-authorized Central Authority PoA key remains the sole canonical finality signer.
 
 ## France network policy

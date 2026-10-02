@@ -12,14 +12,12 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 - removal of legacy bootstrap subsystem and coordinated DEV VPS cutover to ordinary `cybou-node`;
 - MAINNET provisioning and GUI enablement only after its actual keys, genesis and bootstrap exist.
 
-## Validation and provisional lifecycle
+## AUTH and Validation
 
-- clean state v11 cutover to canonical `AccountState.authority` and
-  `GenesisAllocation.authority`, with no AuthorityIndex or v10 decoder;
-- exact payload format for `ValidationAttestation` signed with Identity Authorization Key;
-- peer-to-peer gossip propagation limits, cache TTL, and rate limiting for active attestations;
-- atomic rollback mechanism in `NodeRuntime` for clearing provisional effects upon PoA conflict;
-- provisional chunk cache eviction semantics on storage providers if candidate publication is rejected.
+- exact wire encoding of `AUTH_GRANT`, `AUTH_BURN` and `ValidationSignature`;
+- bounds of the per-node candidate pool and Validation store, gossip rate limits and TTL;
+- re-execution policy for held candidates and signatures when the finalized base advances;
+- AUTH penalty table for verifiable invalid Validation (not frozen).
 
 ## Application data plane
 

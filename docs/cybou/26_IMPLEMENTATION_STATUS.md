@@ -1,6 +1,7 @@
 # Implementation status
 
-Status: documentation aligned to compiled OfficialNetwork target at HEAD `3d00945`.
+Status: AUTH, candidate execution and Validation rows verified against code at HEAD `52c5406`;
+other rows last aligned at `3d00945`.
 This page describes
 implementation and deployment reality; `AGENTS.md` and the frozen architecture
 define the target. Local uncommitted work is not counted as a released baseline.
@@ -16,10 +17,12 @@ define the target. Local uncommitted work is not counted as a released baseline.
 | Network Private Key | Strictly offline, signs genesis once; private material stays under gitignored `/private/` | `network-genesis-create` signs CYG1 from a supplied secret file. `/private/` is ignored in this working tree; one-time provisioning and generated public C++ constants remain to implement. |
 | Bootstrap | Ordinary CYBOU full peer | Standalone prototype binary and bootstrap protocol still exist; the DEV VPS still runs `cybou-bootstrap.service`. |
 | Consensus bootstrap state | No grants, roster, or `CAP_BOOTSTRAP` | Removed. |
-| Consensus state | Unified current state format | `CYBOU_STATE_VERSION = 10`; legacy v7/v8/v9 decoding was removed. |
-| Authority | Canonical non-transferable AUTH in AccountState and GenesisAllocation; state root commits it | Code still derives a local AuthorityIndex from age, activity and SystemLock history. State v11 and UI migration are pending. |
-| Validation | Optional, non-canonical, eligible Authority > 1,000,000 | Attestation wire protocol and local evaluation policy are not implemented. |
-| PoA | Sole independent canonical finalizer | Single-operator PoA exists; candidate relay and finalizer-only pending cleanup remain. |
+| Consensus state | Unified current state format | State v11 with canonical AUTH; older decoders removed. |
+| AUTH state | Canonical non-transferable AUTH in AccountState and GenesisAllocation; state root commits it | Implemented (`393657f`): `AccountState.authority`, `GenesisAllocation.authority`, state v11. Legacy AuthorityIndex/AuthorityPolicy removed. Desktop reads AUTH from AccountState (`52c5406`). |
+| AUTH transitions | +1 per finalized Identity-authorized operation; PoA-only `AUTH_GRANT` / `AUTH_BURN` | Not implemented. AUTH changes only via GenesisAllocation claim. |
+| Candidate execution | Every full node executes candidates before relay; one pool per node, used by PoA for blocks | Not implemented. Ordinary nodes check encoding, signatures and authorization in `EnqueueRelayedOperation` and stage bytes in `OperationRelay`; full execution via `OperationPool::Admit` exists only inside `CybouFinalizerNode`. |
+| Validation | `ValidationSignature` after local execution by an Identity with finalized AUTH > 1,000,000 | Not implemented: no signature type, store, `VALIDATION_SIGNATURE` gossip or Validated status. |
+| PoA | Sole independent canonical finalizer | Single-operator PoA exists and executes candidates through its own `OperationPool`. |
 
 ## Current DEV VPS deployment
 
@@ -36,4 +39,4 @@ define the target. Local uncommitted work is not counted as a released baseline.
 3. Remove CYG1/CYN1 external official network loaders, file options and separate profile `GenesisDigest` pinning. CLI `network init-dev` has already been removed.
 4. Transition runtime, wire, persistence and cryptographic binding to exact Network Public Key NetworkID.
 5. Remove legacy bootstrap binding/protocol and prototype binary; migrate DEV VPS to ordinary `cybou-node` after coordinated state reset.
-6. Replace derived Authority with canonical AUTH in state v11 and desktop, then complete DEVNET end-to-end acceptance before Validation or provisional storage work.
+6. Implement AUTH transitions, universal per-node candidate execution and Validation signatures (see `22_ROADMAP.md` Phase 3).
