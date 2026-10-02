@@ -573,7 +573,7 @@ BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)
     cybou::CybouNodeRuntime observer{std::move(config)};
     BOOST_CHECK(!observer.InitializeGenesis(foreign_genesis));
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
-    const auto foreign_definition = cybou::CreateDevNetworkDefinition(foreign_genesis, cybou::TestPoaFinalizerPublicKey(0xBC));
+    const auto foreign_definition = cybou::CreateDevNetworkDefinition(foreign_genesis, cybou::TestPoaFinalizerPublicKey(0xBC), cybou::TestNetworkPublicKey(0xBC));
     cybou::NodeRuntimeConfig foreign_config{
         .network_definition = foreign_definition,
         .data_dir = fixture.directory / "foreign-producer",

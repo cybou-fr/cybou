@@ -68,7 +68,7 @@ bool WriteForeignNetworkState(const QString& directory)
 {
     const auto genesis = cybou::CreateDevGenesisState();
     cybou::CybouNodeRuntime runtime{{
-        .network_definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(0x33)),
+        .network_definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(0x33), cybou::TestNetworkPublicKey(0x33)),
         .data_dir = std::filesystem::path{directory.toStdU16String()} / "cybou_state",
     }};
     return runtime.InitializeGenesis(genesis);

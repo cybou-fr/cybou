@@ -115,7 +115,7 @@ void CybouDesktopController::start()
         const auto& genesis = network.genesis_state;
         const auto& definition = network.network_definition;
         m_model->setNetworkInfo(QStringLiteral("CYBOU DEVNET"),
-            QString::fromStdString(cybou::NetworkId(definition).GetHex()));
+            QString::fromStdString(HexStr(network.genesis.GetNetworkId())));
         const std::filesystem::path data_dir = m_data_directory / "cybou_state";
         bool p2p_port_ok{false};
         const int p2p_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_PORT", &p2p_port_ok);

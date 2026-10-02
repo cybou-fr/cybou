@@ -51,6 +51,15 @@ inline std::vector<unsigned char> ParseHex(std::string_view input)
 
 } // namespace test
 
+/** A test Network Public Key; distinct seeds give distinct networks. */
+inline IdentityHybridPublicKey TestNetworkPublicKey(unsigned char seed_byte = 0xA7)
+{
+    std::array<unsigned char, 32> seed{};
+    seed[0] = seed_byte;
+    seed[1] = 0x4e;
+    return DeriveIdentityPublicKey(seed, IdentityKeyPurpose::NETWORK_ROOT).value();
+}
+
 inline IdentityHybridPublicKey TestPoaFinalizerPublicKey(unsigned char seed_byte = 0xA7)
 {
     std::array<unsigned char, 32> seed{};

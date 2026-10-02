@@ -329,9 +329,9 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
 
     auto genesis = cybou::CreateDevGenesisState();
     auto definition = cybou::CreateDevNetworkDefinition(genesis,
-        cybou::TestPoaFinalizerPublicKey(fixture.validator_seed[0]));
+        cybou::TestPoaFinalizerPublicKey(fixture.validator_seed[0]), cybou::TestNetworkPublicKey(fixture.validator_seed[0]));
     definition.protocol_parameters.account_creation_work_bits = 0;
-    const auto network_id = cybou::NetworkId(definition);
+    const auto network_id = cybou::ComputeNetworkBinding(definition.network_public_key);
 
     const auto make_account_create = [&](const cybou::CybouKeyStore& keys) {
         const auto account = keys.GetAccountId();

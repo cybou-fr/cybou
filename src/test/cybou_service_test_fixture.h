@@ -39,7 +39,7 @@ struct CybouServiceTestFixture {
         std::filesystem::create_directories(directory);
         validator_seed[0] = seed_byte;
         genesis = cybou::CreateDevGenesisState();
-        definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(seed_byte));
+        definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(seed_byte), cybou::TestNetworkPublicKey(seed_byte));
         definition.protocol_parameters.account_creation_work_bits = 0;
         definition.protocol_parameters.name_claim_work_bits = 0;
         cybou::NodeRuntimeConfig config{

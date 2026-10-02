@@ -36,6 +36,7 @@ VerifiedNetworkBundle InitializeOfficialDevnetBundle()
     }
     CybouNetworkDefinition def;
     def.protocol_version = CYBOU_NETWORK_DEFINITION_VERSION;
+    def.network_public_key = verified->GetNetworkPublicKey();
     def.genesis_state_root = verified->GetGenesisStateRoot();
     def.poa_finalizer_public_key = verified->GetPoaPublicKey();
     def.genesis_block_id = ComputeGenesisBlockId(def.genesis_state_root, def.poa_finalizer_public_key);

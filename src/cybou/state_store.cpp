@@ -45,7 +45,7 @@ CybouStateStore::CybouStateStore(
     : m_db{db},
       m_network_definition{std::move(network_definition)},
       m_network_definition_error{ValidateNetworkDefinition(m_network_definition)},
-      m_network_id{NetworkId(m_network_definition)},
+      m_network_id{ComputeNetworkBinding(m_network_definition.network_public_key)},
       m_genesis_digest{genesis_digest}
 {
     if (m_network_definition_error == NetworkDefinitionError::NONE) {

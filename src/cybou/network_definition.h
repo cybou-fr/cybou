@@ -20,9 +20,14 @@ namespace cybou {
 
 inline constexpr uint8_t CYBOU_NETWORK_DEFINITION_VERSION{6};
 
-/** Immutable consensus identity for one DEV, Beta, or Mainnet network. */
+/**
+ * Runtime consensus view of one network, derived from its signed genesis.
+ * NetworkID is network_public_key itself; every 32-byte network field is
+ * ComputeNetworkBinding(network_public_key).
+ */
 struct CybouNetworkDefinition {
     uint8_t protocol_version{CYBOU_NETWORK_DEFINITION_VERSION};
+    IdentityHybridPublicKey network_public_key{IdentityKeyPurpose::NETWORK_ROOT, {}, {}};
     uint256 genesis_block_id;
     uint256 genesis_state_root;
     IdentityHybridPublicKey poa_finalizer_public_key{IdentityKeyPurpose::POA_FINALIZER, {}, {}};
@@ -36,6 +41,7 @@ enum class NetworkDefinitionError : uint8_t {
     UNSUPPORTED_VERSION,
     NULL_GENESIS_BLOCK_ID,
     NULL_GENESIS_STATE_ROOT,
+    INVALID_NETWORK_KEY,
     INVALID_POA_FINALIZER_KEY,
     GENESIS_BLOCK_ID_MISMATCH,
     INVALID_ACCOUNT_CREATION_WORK_BITS,
@@ -47,16 +53,20 @@ enum class NetworkDefinitionError : uint8_t {
 
 bool ValidateProtocolParameters(const CybouProtocolParameters& params);
 NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& definition);
-std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefinition& definition);
-std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(std::span<const unsigned char> bytes);
-uint256 NetworkId(const CybouNetworkDefinition& definition);
+/**
+ * The 32-byte binding used wherever wire formats, signatures and persistence
+ * carry the network: SHA-256("CYBOU/NETWORK-ID/V6" || canonical Network Public Key).
+ * It depends only on the key, because exactly one genesis exists per key.
+ */
+uint256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key);
 
 uint256 ComputeGenesisBlockId(const uint256& state_root, const IdentityHybridPublicKey& poa_finalizer_public_key);
 
 CybouState CreateDevGenesisState();
 CybouNetworkDefinition CreateDevNetworkDefinition(
     const CybouState& genesis,
-    const IdentityHybridPublicKey& poa_finalizer_public_key);
+    const IdentityHybridPublicKey& poa_finalizer_public_key,
+    const IdentityHybridPublicKey& network_public_key);
 
 } // namespace cybou
 

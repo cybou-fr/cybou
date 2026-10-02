@@ -86,7 +86,7 @@ BOOST_AUTO_TEST_CASE(runtime_exposes_local_blobs_without_provider_admission)
     const auto genesis = cybou::CreateDevGenesisState();
     cybou::NodeRuntimeConfig config{
         .network_definition = cybou::CreateDevNetworkDefinition(
-            genesis, cybou::TestPoaFinalizerPublicKey()),
+            genesis, cybou::TestPoaFinalizerPublicKey(), cybou::TestNetworkPublicKey()),
         .data_dir = m_data_dir / "runtime",
         .memory_only = true,
         .wipe_data = true,

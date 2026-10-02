@@ -50,6 +50,12 @@ bool ValidateProtocolParameters(const CybouProtocolParameters& params)
 
 NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& definition)
 {
+    if (definition.network_public_key.purpose != IdentityKeyPurpose::NETWORK_ROOT ||
+        definition.network_public_key.ml_dsa.size() != MLDSA65_PUBLIC_KEY_SIZE ||
+        std::all_of(definition.network_public_key.ed25519.begin(), definition.network_public_key.ed25519.end(),
+            [](unsigned char b) { return b == 0; })) {
+        return NetworkDefinitionError::INVALID_NETWORK_KEY;
+    }
     if (definition.protocol_version != CYBOU_NETWORK_DEFINITION_VERSION) {
         return NetworkDefinitionError::UNSUPPORTED_VERSION;
     }
@@ -97,138 +103,14 @@ NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& d
     return NetworkDefinitionError::NONE;
 }
 
-std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefinition& definition)
+uint256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key)
 {
-    std::vector<unsigned char> out;
-    const auto append_u32le = [&out](const uint32_t value) {
-        for (unsigned i = 0; i < 4; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
-    };
-    const auto append_u64le = [&out](const uint64_t value) {
-        for (unsigned i = 0; i < 8; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
-    };
-    const auto append_hash = [&out](const uint256& value) {
-        out.insert(out.end(), value.begin(), value.end());
-    };
-
-    out.push_back(definition.protocol_version);
-    append_hash(definition.genesis_block_id);
-    append_hash(definition.genesis_state_root);
-    out.insert(out.end(), definition.poa_finalizer_public_key.ed25519.begin(),
-        definition.poa_finalizer_public_key.ed25519.end());
-    out.insert(out.end(), definition.poa_finalizer_public_key.ml_dsa.begin(),
-        definition.poa_finalizer_public_key.ml_dsa.end());
-    append_u32le(static_cast<uint32_t>(definition.protocol_parameters.account_creation_work_bits));
-    append_u64le(definition.protocol_parameters.account_creation_epoch_lag);
-    append_u32le(definition.protocol_parameters.max_account_creates_per_block);
-    append_u64le(definition.protocol_parameters.onboarding_bonus);
-    append_u64le(definition.protocol_parameters.epoch_blocks);
-    append_u64le(definition.protocol_parameters.payment_fee);
-    append_u64le(definition.protocol_parameters.root_publication_fee_per_started_kib);
-    append_u64le(definition.protocol_parameters.root_publication_fee_per_chunk);
-    append_u32le(definition.protocol_parameters.name_claim_work_bits);
-    append_u64le(definition.protocol_parameters.name_commit_min_depth);
-    append_u64le(definition.protocol_parameters.name_commit_max_lifetime);
-    append_u32le(definition.protocol_parameters.max_pending_name_commits);
-    out.push_back(definition.protocol_parameters.identity_kem_xwing_enabled ? 1 : 0);
-    return out;
-}
-
-std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(const std::span<const unsigned char> bytes)
-{
-    size_t pos{0};
-    const auto read_u8 = [&]() -> std::optional<uint8_t> {
-        if (pos >= bytes.size()) return std::nullopt;
-        return bytes[pos++];
-    };
-    const auto read_u32le = [&]() -> std::optional<uint32_t> {
-        if (pos + 4 > bytes.size()) return std::nullopt;
-        uint32_t value{0};
-        for (unsigned i = 0; i < 4; ++i) {
-            value |= static_cast<uint32_t>(bytes[pos + i]) << (8 * i);
-        }
-        pos += 4;
-        return value;
-    };
-    const auto read_u64le = [&]() -> std::optional<uint64_t> {
-        if (pos + 8 > bytes.size()) return std::nullopt;
-        uint64_t value{0};
-        for (unsigned i = 0; i < 8; ++i) {
-            value |= static_cast<uint64_t>(bytes[pos + i]) << (8 * i);
-        }
-        pos += 8;
-        return value;
-    };
-    const auto read_hash = [&]() -> std::optional<uint256> {
-        if (pos + uint256::size() > bytes.size()) return std::nullopt;
-        uint256 value;
-        std::copy_n(bytes.begin() + pos, uint256::size(), value.begin());
-        pos += uint256::size();
-        return value;
-    };
-
-    const auto version = read_u8();
-    if (!version || *version != CYBOU_NETWORK_DEFINITION_VERSION) return std::nullopt;
-
-    CybouNetworkDefinition definition;
-    definition.protocol_version = *version;
-
-    const auto genesis_block_id = read_hash();
-    const auto genesis_state_root = read_hash();
-    if (pos + ED25519_PUBLIC_KEY_SIZE + MLDSA65_PUBLIC_KEY_SIZE > bytes.size()) return std::nullopt;
-    definition.poa_finalizer_public_key.purpose = IdentityKeyPurpose::POA_FINALIZER;
-    std::copy_n(bytes.begin() + pos, ED25519_PUBLIC_KEY_SIZE,
-        definition.poa_finalizer_public_key.ed25519.begin());
-    pos += ED25519_PUBLIC_KEY_SIZE;
-    definition.poa_finalizer_public_key.ml_dsa.assign(
-        bytes.begin() + pos, bytes.begin() + pos + MLDSA65_PUBLIC_KEY_SIZE);
-    pos += MLDSA65_PUBLIC_KEY_SIZE;
-    const auto work_bits = read_u32le();
-    const auto epoch_lag = read_u64le();
-    const auto max_creates = read_u32le();
-    const auto onboarding_bonus = read_u64le();
-    const auto epoch_blocks = read_u64le();
-    const auto payment_fee = read_u64le();
-    const auto root_publication_fee_per_kib = read_u64le();
-    const auto root_publication_fee_per_chunk = read_u64le();
-    const auto name_work_bits = read_u32le();
-    const auto name_min_depth = read_u64le();
-    const auto name_max_lifetime = read_u64le();
-    const auto max_pending_names = read_u32le();
-    const auto kem_enabled = read_u8();
-    if (!genesis_block_id || !genesis_state_root || !work_bits || !epoch_lag || !max_creates ||
-        !onboarding_bonus || !epoch_blocks || !payment_fee || !root_publication_fee_per_kib ||
-        !root_publication_fee_per_chunk || !name_work_bits || !name_min_depth ||
-        !name_max_lifetime || !max_pending_names || !kem_enabled || *kem_enabled > 1) {
-        return std::nullopt;
-    }
-
-    definition.genesis_block_id = *genesis_block_id;
-    definition.genesis_state_root = *genesis_state_root;
-    definition.protocol_parameters.account_creation_work_bits = *work_bits;
-    definition.protocol_parameters.account_creation_epoch_lag = *epoch_lag;
-    definition.protocol_parameters.max_account_creates_per_block = *max_creates;
-    definition.protocol_parameters.onboarding_bonus = *onboarding_bonus;
-    definition.protocol_parameters.epoch_blocks = *epoch_blocks;
-    definition.protocol_parameters.payment_fee = *payment_fee;
-    definition.protocol_parameters.root_publication_fee_per_started_kib = *root_publication_fee_per_kib;
-    definition.protocol_parameters.root_publication_fee_per_chunk = *root_publication_fee_per_chunk;
-    definition.protocol_parameters.name_claim_work_bits = *name_work_bits;
-    definition.protocol_parameters.name_commit_min_depth = *name_min_depth;
-    definition.protocol_parameters.name_commit_max_lifetime = *name_max_lifetime;
-    definition.protocol_parameters.max_pending_name_commits = *max_pending_names;
-    definition.protocol_parameters.identity_kem_xwing_enabled = *kem_enabled == 1;
-    if (pos != bytes.size() || ValidateNetworkDefinition(definition) != NetworkDefinitionError::NONE) return std::nullopt;
-    return definition;
-}
-
-uint256 NetworkId(const CybouNetworkDefinition& definition)
-{
-    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V5"};
-    const auto bytes = SerializeNetworkDefinition(definition);
+    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V6"};
+    const auto key = CanonicalSerializeNetworkPublicKey(network_public_key);
     uint256 result;
     ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
-    hasher.Write(bytes.data(), bytes.size());
+    hasher.Write(key.data(), key.size());
     hasher.Finalize(result.begin());
     return result;
 }
@@ -261,12 +143,14 @@ uint256 ComputeGenesisBlockId(const uint256& state_root, const IdentityHybridPub
 
 CybouNetworkDefinition CreateDevNetworkDefinition(
     const CybouState& genesis,
-    const IdentityHybridPublicKey& poa_finalizer_public_key)
+    const IdentityHybridPublicKey& poa_finalizer_public_key,
+    const IdentityHybridPublicKey& network_public_key)
 {
     const auto state_root_opt = CybouStateHash(genesis);
     const uint256 state_root = state_root_opt.value_or(uint256{});
     return CybouNetworkDefinition{
         .protocol_version = CYBOU_NETWORK_DEFINITION_VERSION,
+        .network_public_key = network_public_key,
         .genesis_block_id = ComputeGenesisBlockId(state_root, poa_finalizer_public_key),
         .genesis_state_root = state_root,
         .poa_finalizer_public_key = poa_finalizer_public_key,

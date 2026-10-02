@@ -116,7 +116,7 @@ std::optional<std::array<unsigned char, 32>> LoadOrCreateProviderSecret(const st
 
 CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     : m_config{std::move(config)},
-      m_network_id{NetworkId(m_config.network_definition)},
+      m_network_id{ComputeNetworkBinding(m_config.network_definition.network_public_key)},
       m_db{std::make_unique<KVStore>(KVStoreOptions{
           .path = m_config.data_dir,
           .cache_bytes = m_config.db_cache_bytes,

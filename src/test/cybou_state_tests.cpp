@@ -18,33 +18,6 @@
 
 BOOST_AUTO_TEST_SUITE(cybou_state_tests)
 
-BOOST_AUTO_TEST_CASE(network_id_commits_to_name_rules)
-{
-    using namespace cybou;
-    std::array<unsigned char, 32> seed{};
-    seed[0] = 0x51;
-    const auto definition = CreateDevNetworkDefinition(
-        CreateDevGenesisState(), cybou::TestPoaFinalizerPublicKey());
-    BOOST_CHECK(ValidateNetworkDefinition(definition) == NetworkDefinitionError::NONE);
-    const auto encoded = SerializeNetworkDefinition(definition);
-    const auto decoded = DeserializeNetworkDefinition(encoded);
-    BOOST_REQUIRE(decoded);
-    BOOST_CHECK(SerializeNetworkDefinition(*decoded) == encoded);
-
-    auto changed = definition;
-    ++changed.protocol_parameters.name_claim_work_bits;
-    BOOST_CHECK(NetworkId(changed) != NetworkId(definition));
-    changed = definition;
-    ++changed.protocol_parameters.name_commit_min_depth;
-    BOOST_CHECK(NetworkId(changed) != NetworkId(definition));
-    changed = definition;
-    ++changed.protocol_parameters.name_commit_max_lifetime;
-    BOOST_CHECK(NetworkId(changed) != NetworkId(definition));
-    changed = definition;
-    --changed.protocol_parameters.max_pending_name_commits;
-    BOOST_CHECK(NetworkId(changed) != NetworkId(definition));
-}
-
 BOOST_AUTO_TEST_CASE(support_mail_pads_to_the_support_rate)
 {
     using namespace cybou;
@@ -918,7 +891,7 @@ BOOST_AUTO_TEST_CASE(state_store_verifies_genesis_digest)
     using namespace cybou;
     KVStore db(KVStoreOptions{.memory_only = true});
     const auto genesis_state = CreateDevGenesisState();
-    const auto definition = CreateDevNetworkDefinition(genesis_state, cybou::TestPoaFinalizerPublicKey());
+    const auto definition = CreateDevNetworkDefinition(genesis_state, cybou::TestPoaFinalizerPublicKey(), cybou::TestNetworkPublicKey());
 
     uint256 expected_digest{};
     expected_digest.begin()[0] = 0xAA;
