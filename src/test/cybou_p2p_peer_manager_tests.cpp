@@ -624,6 +624,119 @@ BOOST_AUTO_TEST_CASE(validation_attestations_gossip_only_to_nodes_holding_the_ca
     (void)bob;
 }
 
+BOOST_AUTO_TEST_CASE(auth_validation_and_poa_end_to_end_over_cyp2)
+{
+    CybouServiceTestFixture fixture;
+    auto& poa = *fixture.runtime;
+    const auto alice = fixture.CreateIdentity("e2e-validator.cybou");
+    BOOST_REQUIRE(poa.SubmitPoaAuthAdjustment(cybou::PoaAuthAction::GRANT, *alice->GetAccountId(),
+        1'000'001).status == cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_REQUIRE(poa.ProduceBlock());
+    const auto head = *poa.GetFinalizedHeight();
+
+    // A new Identity's AccountCreate that PoA has not seen yet.
+    const auto& network_id = poa.GetNetworkId();
+    std::array<unsigned char, 32> root_seed{}, authorization_seed{};
+    root_seed[0] = 0x61;
+    authorization_seed[0] = 0x62;
+    uint256 raw_account;
+    raw_account.begin()[0] = 0x63;
+    const cybou::AccountId carol{raw_account};
+    const auto root = cybou::DeriveIdentityPublicKey(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto authorization = cybou::DeriveIdentityPublicKey(authorization_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
+    BOOST_REQUIRE(root && authorization);
+    const cybou::IdentityAuthorization auth{*root, *authorization};
+    const auto binding = cybou::test::MakeIdentityKemBinding(network_id, carol, auth);
+    const auto root_pop = cybou::SignIdentityMessage(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
+    const auto authorization_pop = cybou::SignIdentityMessage(authorization_seed,
+        cybou::IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
+    BOOST_REQUIRE(root_pop && authorization_pop);
+    const cybou::ProtocolOperation operation{cybou::AccountCreateOp{carol, auth, binding.package,
+        {.network_id = network_id, .account_id = carol, .authorization_commitment = binding.authorization_commitment},
+        *root_pop, *authorization_pop}};
+    const auto bytes = cybou::SerializeProtocolOperation(operation);
+    const auto operation_id = cybou::ComputeOperationId(operation);
+    BOOST_REQUIRE(bytes && operation_id);
+
+    const auto make_node = [&](const std::string& name) {
+        auto node = std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
+            .network_definition = fixture.definition,
+            .data_dir = fixture.directory / name,
+            .memory_only = true,
+            .wipe_data = true,
+            .peer_admission_policy = TestLabAdmissionPolicy(),
+        });
+        BOOST_REQUIRE(node->InitializeGenesis(fixture.genesis));
+        for (uint64_t height{1}; height <= head; ++height) {
+            BOOST_REQUIRE(node->CommitBlock(*poa.GetBlockAtHeight(height)));
+        }
+        return node;
+    };
+    const auto validator = make_node("e2e-validator-node");
+    const auto ordinary = make_node("e2e-ordinary-node");
+    validator->SetValidationSigner(std::make_shared<cybou::CybouKeyStoreValidationSigner>(alice->GetKeyStore()));
+    BOOST_REQUIRE(validator->IsLocalValidationEligible());
+    BOOST_CHECK(!ordinary->IsLocalValidationEligible());
+
+    // 1. The validator node executes the operation itself, then attests.
+    BOOST_REQUIRE(validator->EnqueueRelayedOperation(*bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_REQUIRE_EQUAL(validator->GetValidationAttestations(*operation_id).size(), 1U);
+
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    cybou::p2p::InboundPeerServer validator_server{*validator, io, tcp::endpoint{loopback, 0}};
+    cybou::p2p::InboundPeerServer ordinary_server{*ordinary, io, tcp::endpoint{loopback, 0}};
+    std::atomic_bool stopping{false};
+    std::jthread validator_listener{[&] { validator_server.Run(stopping); }};
+    std::jthread ordinary_listener{[&] { ordinary_server.Run(stopping); }};
+    struct StopListeners {
+        std::atomic_bool& stopping;
+        std::jthread& first;
+        std::jthread& second;
+        ~StopListeners() {
+            stopping = true;
+            if (first.joinable()) first.join();
+            if (second.joinable()) second.join();
+        }
+    } stop_listeners{stopping, validator_listener, ordinary_listener};
+
+    // 2. The ordinary node pulls the operation, executes it itself, then accepts the attestation.
+    cybou::p2p::PeerManager ordinary_peers{*ordinary};
+    BOOST_REQUIRE(ordinary_peers.Connect(loopback.to_string(), validator_server.Port()));
+    BOOST_CHECK_EQUAL(ordinary_peers.PollOperationRelays(), 1U);
+    BOOST_REQUIRE(ordinary->HasCandidateOperation(*operation_id));
+    BOOST_CHECK_EQUAL(ordinary_peers.PollValidationAttestations(), 1U);
+    BOOST_CHECK(ordinary->GetOperationStatus(*operation_id).IsValidated());
+    ordinary_peers.DisconnectAll();
+
+    // 3. PoA pulls the operation from the ordinary node; it holds no attestation
+    //    and still executes and finalizes on its own.
+    cybou::p2p::PeerManager poa_peers{poa};
+    BOOST_REQUIRE(poa_peers.Connect(loopback.to_string(), ordinary_server.Port()));
+    BOOST_CHECK_EQUAL(poa_peers.PollOperationRelays(), 1U);
+    BOOST_CHECK(poa.GetValidationAttestations(*operation_id).empty());
+    const auto finalized = poa.ProduceBlock();
+    BOOST_REQUIRE(finalized);
+    BOOST_REQUIRE_EQUAL(finalized->block.operations.size(), 1U);
+    BOOST_CHECK(finalized->block.operations.front() == operation);
+    poa_peers.DisconnectAll();
+
+    // 4. Every node verifies the PoA block; only that changes canonical state.
+    BOOST_REQUIRE(ordinary->CommitBlock(*finalized));
+    BOOST_REQUIRE(validator->CommitBlock(*finalized));
+    for (const auto* node : {ordinary.get(), validator.get()}) {
+        const auto status = node->GetOperationStatus(*operation_id);
+        BOOST_CHECK(status.kind == cybou::OperationStatusKind::FINALIZED);
+        BOOST_CHECK(!status.IsValidated());
+        BOOST_CHECK(node->GetValidationAttestations(*operation_id).empty());
+        BOOST_CHECK(node->GetStateRoot() == poa.GetStateRoot());
+        // AccountCreate earns no AUTH; the validator's AUTH came only from the PoA GRANT.
+        BOOST_CHECK_EQUAL(node->GetAccountState(carol)->authority, 0U);
+        BOOST_CHECK_EQUAL(node->GetAccountState(*alice->GetAccountId())->authority, 1'000'001U);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(manager_pings_only_the_requested_peer_budget_and_rotates)
 {
     CybouServiceTestFixture fixture;

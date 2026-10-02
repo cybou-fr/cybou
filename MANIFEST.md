@@ -1,4 +1,4 @@
-# CYBOU documentation manifest — 2026-10-02
+# CYBOU documentation manifest — 2026-10-03
 
 This inventory records the current implementation authority, product and
 protocol documents, and machine-readable specifications, excluding this
@@ -25,10 +25,10 @@ editing an included file.
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 55 | 376fde826a290f71 |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 37 | 85631fe5a8ba5de1 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 33 | 48deb373e7eb6743 |
+| docs/cybou/22_ROADMAP.md | 33 | 77a5ce6ecca27af0 |
 | docs/cybou/24_DECISIONS.md | 120 | 24884f65a5d04cd3 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 53 | e5a31b59a0226c45 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 42 | f5799bcc5fc28b7c |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 42 | 756fe11737c39240 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 57 | d8544d0e77a797de |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | f82d26a4d1681de3 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
