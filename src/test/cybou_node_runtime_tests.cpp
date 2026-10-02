@@ -10,6 +10,7 @@
 #include <cybou/block_executor.h>
 #include <cybou/poa_finalizer.h>
 #include <cybou/secret_file.h>
+#include <cybou/validation_attestation.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_test_setup.h>
 
@@ -198,7 +199,9 @@ BOOST_AUTO_TEST_CASE(ordinary_node_executes_candidates_before_relay)
     std::optional<cybou::ProtocolOperation> commit, reveal;
     uint64_t commit_height{0};
     for (uint64_t height{2}; height <= fixture.runtime->GetFinalizedHeight().value_or(0); ++height) {
-        for (const auto& operation : fixture.runtime->GetBlockAtHeight(height)->block.operations) {
+        const auto block = fixture.runtime->GetBlockAtHeight(height);
+        BOOST_REQUIRE(block);
+        for (const auto& operation : block->block.operations) {
             if (std::holds_alternative<cybou::AuthorizedNameCommit>(operation)) { commit = operation; commit_height = height; }
             if (std::holds_alternative<cybou::AuthorizedNameReveal>(operation)) reveal = operation;
         }
@@ -237,6 +240,80 @@ BOOST_AUTO_TEST_CASE(ordinary_node_executes_candidates_before_relay)
     BOOST_CHECK(!ordinary.HasRelayedOperation(*commit_id));
     BOOST_CHECK_EQUAL(ordinary.CandidateOperationCount(), 0U);
     BOOST_CHECK(ordinary.EnqueueRelayedOperation(*commit_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
+}
+
+BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_one_million)
+{
+    CybouServiceTestFixture fixture;
+    const auto alice = fixture.CreateIdentity("alice.cybou");
+    const auto account = alice->GetAccountId();
+    BOOST_REQUIRE(account);
+    const cybou::CybouKeyStoreValidationSigner signer{alice->GetKeyStore()};
+    const auto& network_id = fixture.runtime->GetNetworkId();
+    uint256 operation_id;
+    operation_id.begin()[0] = 0x42;
+    const auto finalized = [&] {
+        const auto loaded = fixture.runtime->GetStore().LoadState();
+        BOOST_REQUIRE(loaded.state);
+        return std::make_pair(*loaded.state, *fixture.runtime->GetFinalizedTip());
+    };
+    const auto grant = [&](uint64_t amount) {
+        BOOST_REQUIRE(fixture.runtime->SubmitPoaAuthAdjustment(cybou::PoaAuthAction::GRANT, *account, amount).status ==
+            cybou::OperationSubmitStatus::ACCEPTED);
+        BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    };
+
+    auto [state, tip] = finalized();
+    BOOST_CHECK(!cybou::IsValidationEligible(state, *account));
+    BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_id, operation_id, tip, state));
+
+    grant(1'000'000);
+    std::tie(state, tip) = finalized();
+    BOOST_CHECK_EQUAL(state.accounts.at(*account).authority, 1'000'000U);
+    BOOST_CHECK(!cybou::IsValidationEligible(state, *account));
+    BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_id, operation_id, tip, state));
+
+    grant(1);
+    std::tie(state, tip) = finalized();
+    BOOST_REQUIRE(cybou::IsValidationEligible(state, *account));
+    const auto attestation = cybou::SignValidationAttestation(signer, network_id, operation_id, tip, state);
+    BOOST_REQUIRE(attestation);
+    BOOST_CHECK(cybou::VerifyValidationAttestation(*attestation, network_id, tip, state) ==
+        cybou::ValidationAttestationError::NONE);
+    const auto bytes = cybou::SerializeValidationAttestation(*attestation);
+    BOOST_REQUIRE(bytes);
+    BOOST_CHECK_EQUAL(bytes->size(), cybou::VALIDATION_ATTESTATION_SIZE);
+    BOOST_CHECK(cybou::DeserializeValidationAttestation(*bytes) == attestation);
+    auto truncated = *bytes;
+    truncated.pop_back();
+    BOOST_CHECK(!cybou::DeserializeValidationAttestation(truncated));
+
+    uint256 other;
+    other.begin()[0] = 0x43;
+    BOOST_CHECK(cybou::VerifyValidationAttestation(*attestation, other, tip, state) ==
+        cybou::ValidationAttestationError::WRONG_NETWORK);
+    BOOST_CHECK(cybou::VerifyValidationAttestation(*attestation, network_id, other, state) ==
+        cybou::ValidationAttestationError::STALE_BASE);
+    auto tampered = *attestation;
+    tampered.operation_id = other;
+    BOOST_CHECK(cybou::VerifyValidationAttestation(tampered, network_id, tip, state) ==
+        cybou::ValidationAttestationError::INVALID_SIGNATURE);
+
+    // Eligibility is read from the verifier's own finalized state, not from the claim.
+    BOOST_REQUIRE(fixture.runtime->SubmitPoaAuthAdjustment(cybou::PoaAuthAction::BURN, *account, 1).status ==
+        cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    const auto [burned_state, burned_tip] = finalized();
+    auto rebased = *attestation;
+    rebased.finalized_base_block_id = burned_tip;
+    BOOST_CHECK(cybou::VerifyValidationAttestation(rebased, network_id, burned_tip, burned_state) ==
+        cybou::ValidationAttestationError::NOT_ELIGIBLE);
+
+    // A locked vault signs nothing.
+    grant(1);
+    std::tie(state, tip) = finalized();
+    alice->GetKeyStore().Clear();
+    BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_id, operation_id, tip, state));
 }
 
 BOOST_AUTO_TEST_CASE(runtime_finalizer_can_be_armed_and_disarmed_with_a_vault_signer)

@@ -11,6 +11,7 @@
 #include <cybou/identity_kem.h>
 #include <cybou/identity_material.h>
 #include <cybou/poa_signer.h>
+#include <cybou/validation_attestation.h>
 #include <uint256.h>
 
 #include <array>
@@ -99,6 +100,20 @@ public:
     explicit CybouKeyStorePoaSigner(const CybouKeyStore& keystore) : m_keystore{keystore} {}
     std::optional<IdentityHybridPublicKey> PublicKey() const override;
     std::optional<IdentityHybridSignature> Sign(std::span<const unsigned char> message) const override;
+
+private:
+    const CybouKeyStore& m_keystore;
+};
+
+/** Validation signer over an unlocked vault; it signs nothing once the vault is locked. */
+class CybouKeyStoreValidationSigner final : public ValidationSigner {
+public:
+    explicit CybouKeyStoreValidationSigner(const CybouKeyStore& keystore) : m_keystore{keystore} {}
+    std::optional<AccountId> Account() const override { return m_keystore.GetAccountId(); }
+    std::optional<IdentityHybridSignature> SignAuthorization(std::span<const unsigned char> digest) const override
+    {
+        return m_keystore.SignAuthorization(digest);
+    }
 
 private:
     const CybouKeyStore& m_keystore;
