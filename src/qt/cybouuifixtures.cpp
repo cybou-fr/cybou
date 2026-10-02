@@ -165,7 +165,7 @@ QVector<CybouMailItem> FixtureMail()
         QStringLiteral("carol.cybou"), QStringLiteral("Contract questions"),
         QStringLiteral("Two small questions about section 3 before I sign."), At(0, 10, 38));
     validated.state = CybouContentState::Local;
-    validated.operation_state = CybouOperationState::Submitted;
+    validated.operation_state = CybouOperationState::Validated;
     validated.operation_id = QStringLiteral("op-m-sent-validated");
     validated.finalized_height = 0;
     mail.append(validated);
@@ -243,7 +243,8 @@ void ApplyWallet(CybouDesktopModel& model)
     entries.append(entry(QStringLiteral("w-submitted"), CybouWalletEntryKind::Sent, -40, false, QStringLiteral("carol.cybou"),
         At(0, 10, 40), CybouOperationState::Submitted));
     entries.append(entry(QStringLiteral("w-validated"), CybouWalletEntryKind::Sent, -75, false, QStringLiteral("alice.cybou"),
-        At(0, 10, 35), CybouOperationState::Submitted));
+        At(0, 10, 35), CybouOperationState::Validated));
+    entries.back().validation_signatures = 2;
     entries.append(entry(QStringLiteral("w1"), CybouWalletEntryKind::Received, 250, false, QStringLiteral("alice.cybou"), At(0, 9, 30)));
     entries.append(entry(QStringLiteral("w2"), CybouWalletEntryKind::Sent, -100, false, QStringLiteral("bobby.cybou"), At(1, 17, 44)));
     entries.append(entry(QStringLiteral("w3"), CybouWalletEntryKind::NetworkServiceFee, -4, true, {}, At(1, 12, 20)));

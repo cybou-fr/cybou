@@ -590,7 +590,9 @@ void WalletPage::rebuildActivity()
         // Until PoA finality the row shows the operation (Waiting for
         // confirmation / Validated); balances never include it.
         const auto operation = m_model->displayedOperationState(entry.operation_id, entry.operation_state);
-        const QString subtitle = CybouProduct::operationPending(operation) || operation == CybouOperationState::Failed
+        const QString subtitle = operation == CybouOperationState::Validated && entry.validation_signatures > 0
+            ? tr("Validated  ·  %n signature(s)", nullptr, static_cast<int>(entry.validation_signatures))
+            : CybouProduct::operationPending(operation) || operation == CybouOperationState::Failed
             ? CybouProduct::operationStateText(operation)
             : entry.kind == CybouWalletEntryKind::NetworkServiceFee
                 ? tr("System Balance  ·  %1").arg(m_model->feePurpose(entry.operation_id))

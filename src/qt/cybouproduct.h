@@ -72,6 +72,8 @@ enum class CybouOperationState {
     Local,
     Preparing,
     Submitted,
+    /** Locally valid and attested by at least one eligible Identity; not canonical. */
+    Validated,
     Finalized,
     Failed,
 };
@@ -82,6 +84,7 @@ struct CybouOperationStatus {
     CybouOperationState state{CybouOperationState::Local};
     quint64 finalized_height{0};
     QString error;
+    quint32 validation_signatures{0};
 };
 
 /** Download/retrieval progress for protected content. */
@@ -226,6 +229,8 @@ struct CybouWalletEntry {
     CybouOperationState operation_state{CybouOperationState::Finalized};
     QString operation_id;
     quint64 finalized_height{0};
+    /** Eligible Validation attestations this node holds while the entry is Validated. */
+    quint32 validation_signatures{0};
 };
 
 struct CybouNameItem {
@@ -268,6 +273,7 @@ inline QString operationStateText(CybouOperationState state)
     case CybouOperationState::Local: return QCoreApplication::translate("CybouProduct", "On this device");
     case CybouOperationState::Preparing: return QCoreApplication::translate("CybouProduct", "Preparing…");
     case CybouOperationState::Submitted: return QCoreApplication::translate("CybouProduct", "Waiting for confirmation");
+    case CybouOperationState::Validated: return QCoreApplication::translate("CybouProduct", "Validated");
     case CybouOperationState::Finalized: return QCoreApplication::translate("CybouProduct", "Finalized");
     case CybouOperationState::Failed: return QCoreApplication::translate("CybouProduct", "Failed");
     }
@@ -278,7 +284,7 @@ inline QString operationStateText(CybouOperationState state)
 inline bool operationPending(CybouOperationState state)
 {
     return state == CybouOperationState::Local || state == CybouOperationState::Preparing ||
-        state == CybouOperationState::Submitted;
+        state == CybouOperationState::Submitted || state == CybouOperationState::Validated;
 }
 
 /**

@@ -676,7 +676,10 @@ void CybouDesktopModel::setOperationStatus(const CybouOperationStatus& status)
         switch (stored.state) {
         case CybouOperationState::Local: return status.state == CybouOperationState::Preparing || status.state == CybouOperationState::Submitted;
         case CybouOperationState::Preparing: return status.state == CybouOperationState::Submitted;
-        case CybouOperationState::Submitted: case CybouOperationState::Finalized: case CybouOperationState::Failed: return false;
+        // Attestations are volatile: a new finalized base can drop them until re-attested.
+        case CybouOperationState::Submitted: return status.state == CybouOperationState::Validated;
+        case CybouOperationState::Validated: return status.state == CybouOperationState::Submitted;
+        case CybouOperationState::Finalized: case CybouOperationState::Failed: return false;
         }
         return false;
     };

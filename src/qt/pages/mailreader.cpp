@@ -321,6 +321,8 @@ void MailReader::refresh()
                 text = tr("Waiting for network. Your message is saved and will be sent when CYBOU reconnects.");
             } else if (operation == CybouOperationState::Submitted) {
                 text = tr("Waiting for confirmation… The network is confirming your message.");
+            } else if (operation == CybouOperationState::Validated) {
+                text = tr("Validated… Network validators checked your message; waiting for final confirmation.");
             } else {
                 text = tr("Preparing… Your message is being encrypted on this computer.");
             }
