@@ -21,9 +21,11 @@ d'accès par IP définis pour cette instance. Le client choisit l'infrastructure
 et la connectivité ; Internet ou intranet ne sont pas des produits différents.
 
 Cette offre décrit l'objectif du produit, pas une fonction déjà disponible de
-bout en bout. Dans le code actuel, le client de bureau charge le réseau DEV et
-son bootstrap configuré ; le mode finalizer de bureau est explicitement
-désactivé. `cybou-node` sait charger un fichier réseau et propose notamment
+bout en bout. Le VPS DEV héberge actuellement un prototype bootstrap autonome
+sur `51.255.46.58:29461` ; les anciens services finalizer et fournisseurs
+sont inactifs. Le cœur finalizer de bureau existe, mais la découverte bootstrap
+et la vérification du binding officiel ne sont pas intégrées de bout en bout.
+`cybou-node` sait charger un fichier réseau et propose notamment
 `network init-dev`, `finalizer run`, `provider run` et `observer run`, mais le
 client ne possède pas encore de parcours général de création et de mise en
 service d'un réseau privé d'entreprise.
@@ -46,7 +48,9 @@ service d'un réseau privé d'entreprise.
   liées à la session TLS.
 - **Finalité.** Les commandes opérateur incluent un finalizer PoA. C'est une
   finalité à opérateur unique, pas un consensus BFT ; chaque nœud vérifie les
-  blocs et les transitions d'état.
+  blocs et les transitions d'état. Le modèle cible distingue la clé racine
+  immuable `R`, qui signe le binding du réseau et les affectations d'autorité,
+  de la clé PoA courante `P`, qui signe les blocs.
 - **Admission réseau.** Les commandes réseau de `cybou-node` exigent une
   politique d'admission explicite. Le mode `france` utilise une base GeoIP
   validée ; le mode `lab` est réservé aux pairs de test locaux ou privés.
@@ -64,9 +68,9 @@ les publications chiffrées, le stockage et le transport P2P. Les tests natifs
 couvrent notamment ces composants, l'admission des pairs et le cycle de vie du
 stockage ; le shell Qt dispose également de tests d'interface.
 
-Le client de bureau démarre actuellement avec le réseau DEV configuré dans le
-code et ne finalise pas les blocs ; le finalizer PoA s'exécute séparément via la
-commande opérateur `finalizer run`. Le CLI fournit aussi des outils de
+Le client de bureau démarre actuellement avec un fichier réseau DEV intégré et
+n'active pas encore le finalizer dans le parcours utilisateur ; le finalizer
+PoA s'exécute séparément via la commande opérateur `finalizer run`. Le CLI fournit aussi des outils de
 diagnostic, de synchronisation et de vérification du stockage. Les
 fonctions de déploiement d'un réseau d'entreprise doivent encore être reliées
 à un parcours opérateur complet avant de pouvoir être présentées comme une

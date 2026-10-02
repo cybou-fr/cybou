@@ -1,187 +1,85 @@
 # 04 — Network lifecycle
 
-Status: **Active architecture target**.
-This document defines official network profiles, bootstrap rendezvous, network
-creation, joining, monotonic replacement, full wipe semantics, Authority key
-rotation, and direct peer discovery.
+Status: **Active architecture target**. This document defines official network
+trust, creation, joining, Authority rotation, network replacement and discovery.
 
----
+## Official network profile and binding
 
-## 1. Official network profiles
+A standard installation knows explicit DEVNET, TESTNET and MAINNET profiles.
+Each `OfficialNetworkProfile` contains bootstrap IP:port locator(s), their TLS
+SPKI SHA-256 pins, and one immutable Network Root public key `R`. The DEV
+locator is `51.255.46.58:29461`; its pin authenticates transport only.
 
-A standard CYBOU installation initially knows explicit official network
-profiles compiled into the software:
+`R` signs an `OfficialNetworkBinding` containing the profile/network kind,
+monotonic `generation`, `authority_epoch`, exact network definition (including
+genesis and its hash), and current PoA public key `P`. The binding also commits
+to the Authority assignment `{epoch, activation_height, P}`. The root signature
+is the proof of official network and Authority assignment. A pinned bootstrap
+can distribute a binding but cannot make one official. `R` never signs blocks;
+`P` cannot replace the network or authorize another `P`.
 
-```text
-DEVNET:
-    bootstrap IP:port (51.255.46.58:29461)
-    SPKI SHA-256 pin
-    initial official PoA public key (K0)
+Bootstrap is an `EMPTY` or `BOUND` rendezvous/state distribution service. It is
+not a CYP2 peer role, consensus participant or Identity entity. `EMPTY` has no
+binding. `BOUND` serves the current root-signed binding and initial peer hints.
 
-TESTNET:
-    bootstrap IP:port
-    SPKI SHA-256 pin
-    initial official PoA public key (K0)
-
-MAINNET:
-    bootstrap IP:port
-    SPKI SHA-256 pin
-    initial official PoA public key (K0)
-```
-
-Transport authentication and canonical truth are strictly separated:
-- **IP:port** tells the client where to reach the rendezvous endpoint.
-- **TLS SPKI pin** proves the client is talking to the intended bootstrap server (protects against MITM / network tampering).
-- **Authority signature / trust chain** proves the advertised network state is official and valid.
-
-Bootstrap is rendezvous and state distribution infrastructure. It is not a
-consensus participant, has no voting power, and does not hold an Identity role.
-
----
-
-## 2. Bootstrap lifecycle: EMPTY and BOUND
-
-A bootstrap service holds one of two durable states:
-
-1. `EMPTY`: No official network has been registered.
-2. `BOUND`: An official network binding is active at generation $N$.
-
-### Connecting to bootstrap
+## Creation and joining
 
 ```text
-CYBOU starts
-   ↓
-Connect known bootstrap (IP:port + SPKI pin)
-   ↓
-STATUS
-   ├── EMPTY
-   │     → Central Authority may create official network
-   │
-   └── BOUND
-         → Receive current OfficialNetworkBinding
-         → Verify binding through official Authority trust chain (starting at K0)
-         → Compare generation N against local generation
+EMPTY bootstrap → operator creates genesis and P0
+                → R signs generation 1 binding and epoch 0 assignment
+                → activation code + binding submitted to bootstrap
+                → bootstrap verifies and durably enters BOUND
 ```
 
----
-
-## 3. Creating an official network
-
-Network creation is permitted only when bootstrap is authenticated in the
-`EMPTY` state.
-
-1. **Prerequisites**:
-   - Pinned TLS connection to bootstrap returning `EMPTY`.
-   - Single-use bootstrap activation code (provisioned out-of-band by the operator).
-   - Possession of the initial Central Authority PoA key $K_0$.
-2. **Execution**:
-   - The Central Authority desktop initializes genesis with initial parameters and finalizer public key $K_0$.
-   - The desktop constructs the `OfficialNetworkBinding` (generation 1).
-   - The binding is signed by $K_0$ and submitted to bootstrap along with the activation code.
-   - Bootstrap atomically verifies the activation code, commits the binding to durable storage, and transitions to `BOUND` (generation 1).
-   - The activation code is consumed permanently.
-
-Bootstrap nodes never receive private keys. The Central Authority PoA key
-remains exclusively on the operator desktop.
-
----
-
-## 4. Joining an official network
-
-When a client connects to a `BOUND` bootstrap:
-
-1. The client receives the `OfficialNetworkBinding` and the exact network definition (genesis, state root, parameters).
-2. The client verifies:
-   - Network kind matches the local profile.
-   - The binding is authentically signed by the current Authority key validly derived from compiled $K_0$.
-   - The network definition hash matches the binding.
-3. If valid, the client initializes local chain state from genesis and connects to initial peers.
-
----
-
-## 5. Network replacement and full wipe semantics
-
-If bootstrap advertises a newer generation $N > \text{local generation}$ under
-a validly signed binding:
+The one-use bootstrap activation code controls initial store activation, not
+network authenticity. Bootstrap receives no private keys. The operational PoA
+private key resides on the Central Authority desktop; private `R` remains
+outside routine finalizer execution.
 
 ```text
-bootstrap advertises generation N
-local generation < N
-+
-binding verified by Authority trust chain
-    ↓
-STOP RUNTIME
-    ↓
-WIPE EVERYTHING
-    ↓
-install generation N
-    ↓
-start clean from new genesis
+profile → pinned bootstrap → root-signed OfficialNetworkBinding
+        → verified genesis → initial peers → direct CYP2 mesh
 ```
 
-### Full wipe definition
+The core checks the profile, root signature, binding fields, monotonic counters,
+exact network definition hash and genesis before opening network-bound local
+state. A peer address, claimed height, TLS pin or successful sync is never a
+substitute for this verification. All full nodes verify subsequent finalized
+blocks and state transitions independently.
 
-Cross-network migration does not exist. A network replacement wipes all
-network-bound local state completely:
+## Authority rotation within one generation
 
-- chain and block store
-- state DB and state roots
-- network definition and genesis
-- Identity, vault, AccountID, recovery and authorization keys
-- balances, System Balances, onboarding pool state
-- registered `.cybou` names
-- Mail, Files, application DB
-- peer DB and address cache
-- pending operations and volatile relay queues
-- storage metadata, replica tracking, provider records
-- Authority derived indexes
+A rotation increments `authority_epoch` from E to E+1. `R` signs the new
+assignment `{epoch, activation_height, P}` and updated binding. The old and
+new epochs have unambiguous height ranges. Nodes retain the minimum root-signed
+assignment history needed to verify historical certificates. They reject
+rollback, gaps, overlapping assignments and a key change without a valid root
+signature. A previous operational PoA key never signs its successor into
+authority. Rotation preserves the network, genesis and all Identity/application
+state. Signing journal semantics are specified in `POA_FINALITY.md`.
 
-A clean network starts strictly from the new genesis. No state carries over.
+## New generation and full replacement
 
----
+A binding for generation N+1 is a new official network, even if issued for the
+same profile. The core verifies the entire new binding and definition before
+switching. It stops network services, prepares and atomically activates the
+new network root, then permanently removes the old network-bound domain. A
+failed preparation leaves the old generation intact; a crash during activation
+must recover to a single generation, never a mixture.
 
-## 6. Authority key rotation
+The old domain includes chain/state, definition, genesis, Identity, vault,
+AccountID, Recovery/Authorization/KEM keys, balances, names, Mail, Files,
+Application DB, peer DB, pending operations, storage metadata and Authority
+indexes. No cross-network Identity or content migration exists. Application
+preferences outside the network domain, such as theme, language and validated
+Geo cache, may remain. A client must never open an old vault against the new
+network. Equal or lower generation cannot trigger replacement.
 
-Genesis starts the Authority trust chain at initial public key $K_0$. Operational
-PoA signing keys may rotate monotonically without wiping the network:
+## Direct mesh
 
-```text
-Genesis:
-    Authority K0
-
-Heights 1 .. h_1:
-    Blocks signed by K0
-
-Rotation record:
-    K0 authorizes K1 (epoch 1)
-
-Heights (h_1 + 1) .. h_2:
-    Blocks signed by K1
-```
-
-### Rotation format
-
-```text
-AuthorityRotation {
-    network_kind
-    epoch
-    previous_key_id
-    new_public_key
-    signature_by_previous
-    proof_by_new
-}
-```
-
-Clients and full nodes accept blocks from $K_{\text{epoch}}$ once the signed
-rotation record is finalized. The chain of trust always roots in the compiled $K_0$.
-
----
-
-## 7. Direct peer discovery and mesh operation
-
-Bootstrap is an initial discovery rendezvous, not a permanent intermediary.
-
-1. **Rendezvous**: Clients discover active full nodes from bootstrap's volatile peer cache.
-2. **Mesh connection**: Peers connect directly to one another using CYP2 v3.
-3. **Autonomy**: If bootstrap becomes unreachable, existing mesh peers continue syncing finalized blocks, relaying operations, and transferring storage chunks without interruption.
-4. **Admission policy**: All public inbound and outbound P2P connections strictly follow the sovereign admission rules defined in [`37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`](37_FRANCE_SOVEREIGN_NETWORK_POLICY.md).
+Bootstrap provides initial peer hints. Ordinary full nodes then exchange
+finalized blocks, bounded volatile operation relays and authorized encrypted
+chunks directly. A bootstrap outage does not stop an already formed mesh.
+Production and DEV public inbound/outbound admission is France-only and fails
+closed when local Geo data is unavailable or corrupt; see
+`37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`.

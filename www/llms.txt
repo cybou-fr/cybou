@@ -6,11 +6,9 @@ experimental software, not a public mail or cloud-storage service.
 
 ## Current status
 
-- The active protocol is deployed on the experimental DEV network.
-- The deployed DEV network operates a legacy testnet topology (`cybou-node.service`
-  finalizer on port 29461 and two storage providers on ports 29471/29481). It is
-  maintained for routine development until planned acceptance tests and a
-  coordinated new-genesis cutover replace it.
+- The DEV VPS runs a pinned standalone bootstrap prototype at
+  `51.255.46.58:29461`; legacy finalizer and provider services are inactive.
+  Coordinated new-genesis DEV cutover remains pending.
 - Finality is single-operator hybrid-PQ PoA; full nodes independently validate
   blocks, state roots, and certificates. This is a centralized trust model,
   **not BFT**, and the network makes no Byzantine fault tolerance claim.
@@ -27,15 +25,13 @@ experimental software, not a public mail or cloud-storage service.
 
 ## Architecture rules
 
-- All participants run the same full-node software (`CybouNode`). Bootstrap,
-  storage, advisory Validation, and PoA finalization are optional local capabilities,
-  not protocol node classes.
-- Genesis authorizes 1–4 bootstrap Identities by stable `AccountID` and expected
-  `RecoveryKeyID`. Bootstrap nodes provide rendezvous and relay; they do not vote,
-  form a quorum, or finalize.
-- The Central Authority is identified only by possession of the genesis PoA key;
-  its finalizer runs from its desktop after vault unlock. Its route is ephemeral
-  per session.
+- All participants run the same full-node core. Storage and PoA finalization
+  are optional capabilities. Bootstrap is separate rendezvous infrastructure.
+- Official profiles pin bootstrap transport and immutable Network Root `R`.
+  `R` authenticates network bindings and PoA assignments; the current assigned
+  `P` signs blocks. Bootstrap cannot finalize or appoint an Authority.
+- The Central Authority finalizer is operated from its desktop after unlock.
+  Its live route is authenticated per session and then discarded.
 - Public P2P admission is France-only in production and DEV (inbound and outbound)
   using local Geo data (fails closed). Optional VPN/proxy/Tor filtering is local
   operator policy and never changes consensus.
@@ -57,10 +53,6 @@ experimental software, not a public mail or cloud-storage service.
   substrate.
 - Attachments depend on measured storage durability and recovery.
 - Backup is post-Beta.
-- Optional Validation is signed advisory evidence any full node may provide.
-  Recipients verify and trust it locally; it has no canonical effects. A local
-  Authority threshold of 1,000,000 may label an opinion validator-qualified,
-  but never admits a node or changes finality. Only PoA finalizes.
 - CYP2 v3 uses TLS 1.3; provider and finalizer role proofs are bound to the TLS
   session. Ordinary peers do not have global authenticated identities.
 

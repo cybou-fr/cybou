@@ -28,8 +28,10 @@ python3 tools/cybou_stress.py report /path/to/lab.toml
 python3 tools/cybou_stress.py down /path/to/lab.toml
 ```
 
-`init` creates one private LAB PoA seed and copies its public genesis-bound
-network file to every host. Existing network files must match byte for byte.
+`init` creates one private LAB PoA seed and copies its public legacy LAB
+network file to every host. This isolated test workflow reflects the current
+CLI and does not define official Network Root trust. Existing network files
+must match byte for byte.
 Controller actions require matching ownership markers, scoped paths, ports
 at least 30000 and matching process birth identity. They never target DEV
 systemd services. `down` retains DBs, vaults, journals, encrypted chunks and
@@ -174,5 +176,5 @@ it retains the LAB data and reports. Do not apply host-wide netem to DEV.
 
 Set `duration_seconds` to 1800, 7200 and 28800 for separate 30-minute, two-hour
 and overnight runs, using fresh evidence roots. A short smoke PASS does not
-certify these longer runs or cross-host NAT topology. Validation Architecture
+certify these longer runs or cross-host NAT topology.
 remains a proposal and grants no finalization or remote chunk admission power.

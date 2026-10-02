@@ -10,12 +10,12 @@ There is no production or Beta network. The DEV VPS runs the
 DEV Bootstrap locator (`51.255.46.58:29461`). This assigns discovery trust to
 that live TLS key only; it grants no consensus role and does not make the
 service a CYP2 full node. The target uses one full-node core software with
-optional storage and PoA finalization capabilities, with the genesis-key holder
-finalizing from the Central Authority desktop. France-only public peer admission
+optional storage and PoA finalization capabilities, with the currently authorized
+PoA key holder finalizing from the Central Authority desktop. France-only public peer admission
 is mandatory in production/DEV. The planned new-genesis DEV cutover replaces the
 legacy testnet; it is not a production-network migration.
-- Central Authority is identified by the PoA key ($K_{\text{epoch}}$) derived
-  from initial $K_0$. Never add a persistent Authority IP, host, endpoint, or
+- Central Authority is identified by the current Network-Root-authorized PoA
+  key $P_{\text{epoch}}$. Never add a persistent Authority IP, host, endpoint, or
   NodeID to bootstrap state or consensus. Authenticate its current route per live
   session and discard that route on disconnect.
 
@@ -42,19 +42,23 @@ legacy testnet; it is not a production-network migration.
 - Every participant runs the same full-node software core. Storage and
   Central Authority PoA finalization are optional operational capabilities,
   not protocol node classes.
-- A standard CYBOU installation initially knows official network profiles
-  (DEVNET, TESTNET, MAINNET), each with known bootstrap locator(s) and an
-  initial Authority public key $K_0$.
-- Bootstrap defines which official network generation clients run. It is
-  rendezvous and signed state distributor infrastructure, not a consensus participant.
+- A standard CYBOU installation knows official network profiles (DEVNET,
+  TESTNET, MAINNET). Each profile pins bootstrap IP:port and TLS SPKI plus an
+  immutable Network Root public key $R$.
+- An `OfficialNetworkBinding` signed by $R$ defines the network generation,
+  Authority epoch, exact network definition and current PoA public key $P$.
+  Bootstrap distributes the binding and initial peer addresses; it cannot
+  designate an official network or Authority on its own. $R$ never finalizes
+  blocks; $P$ cannot authorize its successor or replace the network.
 - Cross-network migration does not exist. A newer valid official network
   replaces all local network-bound state, wiping everything:
   chain/state, network definition, genesis, Identity, vault, AccountID,
   Recovery/Auth/KEM keys, balances, names, Mail, Files, application DB,
   peer DB, pending operations, storage metadata, and Authority indexes.
-- Genesis starts the Authority key chain at $K_0$. Operational rotation is
-  monotonic $K_0 \to K_1 \to \dots$ via a signed rotation chain and does not
-  require network replacement.
+- Authority rotation increments `authority_epoch` under a new root-signed
+  assignment `{epoch, activation_height, P}` without replacing the network or
+  Identity. Historical blocks use the assignment active at their height.
+  There is no working-PoA-key trust chain.
 - Ordinary peers form a direct P2P mesh after initial discovery. Bootstrap is
   an initial rendezvous service, not a mandatory traffic intermediary.
 - Only the Central Authority has canonical pending state. Operation relay
@@ -96,8 +100,9 @@ architecture that is absent from higher levels:
 
 ## Finality
 
-- Finality is single-operator hybrid-PQ PoA rooted in genesis key $K_0$.
-- Target operation puts the genesis-key holder on its Central Authority
+- Finality is single-operator hybrid-PQ PoA under the root-authorized key
+  $P_{\text{epoch}}$ for the block height.
+- Target operation puts the authorized PoA-key holder on its Central Authority
   desktop; bootstrap services never finalize. See
   `docs/cybou/04_NETWORK_LIFECYCLE.md`.
 - Full nodes independently validate every operation, block transition, state

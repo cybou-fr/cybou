@@ -27,9 +27,9 @@ user identities or parallel authorization systems.
                                           + attachments
 ```
 
-The Recovery Root is a separate authorization domain. Validator, Operator
-Authority, Release Signing, and Treasury keys are separate system domains and
-are not user-service keys.
+The Recovery Root is a separate authorization domain. Network Root `R`,
+operational PoA `P`, Release Signing and Treasury keys are separate system
+domains and are not user-service keys.
 
 ## Identity key domains
 
@@ -38,7 +38,8 @@ are not user-service keys.
 | Recovery Root | Ed25519 + ML-DSA-65 | Recover account authority and authorize IdentityRotate | Implemented in the current identity path; encoding/vector work remains tracked by Identity docs |
 | Identity authorization signing | Ed25519 + ML-DSA-44 | Authorize all account-level user-service operations | Implemented for current Identity authorization |
 | Identity key agreement | X-Wing (ML-KEM-768 + X25519) | Establish or wrap content keys for an current Identity key epoch | Draft-05 profile is published per current Identity key epoch in DEV; Mail/Files do not consume it yet |
-| Validator signing | Ed25519 + ML-DSA-65 | Validator consensus signatures | Separate target domain; production signature wiring remains incomplete |
+| Network Root R | Ed25519 + ML-DSA-65 | Sign official bindings and Authority assignments | Target; not implemented in the active code |
+| PoA finalizer P | Ed25519 + ML-DSA-65 | Sign finalized blocks for its root-assigned epoch | Target; implementation gap tracked in `26_IMPLEMENTATION_STATUS.md` |
 
 Private keys remain client-controlled. DEV Identity binds one X-Wing public
 package to AccountID and key_epoch. Its draft-05 wire format and
@@ -55,8 +56,8 @@ must be authenticated in their respective protocols.
 
 | Capability | Authorization | Confidentiality / key ownership | Finality or durability |
 |---|---|---|---|
-| Name | Identity hybrid signature through the coordinator | No content encryption capability | Genesis-bound PoA finality for commit and reveal |
-| Wallet | Identity hybrid signature through the coordinator | No content encryption capability | Genesis-bound PoA finality for payment and lock operations |
+| Name | Identity hybrid signature through the coordinator | No content encryption capability | Root-authorized PoA finality for commit and reveal |
+| Wallet | Identity hybrid signature through the coordinator | No content encryption capability | Root-authorized PoA finality for payment and lock operations |
 | Mail | Identity-authorized generic RootPublication through the coordinator | Recipient KEM capsule and encrypted Mail schema inside the chunk tree | PoA finality authorizes chunk admission; storage availability is reported separately |
 | Files | Identity-authorized manifest/root changes through the coordinator (target) | Symmetric object encryption; account KEM capability wraps Files keys (target) | Storage durability contract, not chain inclusion alone |
 

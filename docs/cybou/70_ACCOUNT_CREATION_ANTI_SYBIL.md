@@ -16,7 +16,7 @@ The work serialization is 113 bytes and binds NetworkID, AccountID, authorizatio
 
 Full nodes check canonical encoding, network and account bindings, authorization commitment, work difficulty, valid epoch range, both proofs of possession, duplicate accounts and recovery keys, the per-block creation limit, and OnboardingPool solvency. Consensus uses block height and immutable network parameters, never local wall-clock time.
 
-A successful operation atomically registers the Identity, debits the network onboarding bonus from OnboardingPool, and creates the monetary account with zero spendable Balance and the bonus in System Balance. The state change becomes durable only after the genesis-bound PoA finalizer signs the block and each full node verifies the deterministic transition.
+A successful operation atomically registers the Identity, debits the network onboarding bonus from OnboardingPool, and creates the monetary account with zero spendable Balance and the bonus in System Balance. The state change becomes durable only after the currently authorized PoA finalizer signs the block and each full node verifies the deterministic transition.
 
 ## Onboarding and Authority interaction
 

@@ -17,7 +17,7 @@ ApplicationService / PublicationService / StorageService
   v
 native CYBOU NodeRuntime
   + canonical state execution
-  + single-operator hybrid-PQ PoA finality (Authority chain K0 -> K1 -> ...)
+  + single-operator hybrid-PQ PoA finality (current root-authorized P)
   + P2P mesh synchronization and operation relay
   + RootPublication
   + common encrypted ChunkStore
@@ -26,6 +26,24 @@ native CYBOU NodeRuntime
 `APPLICATION_DATA_PLANE.md` defines the local/network data boundary.
 `04_NETWORK_LIFECYCLE.md` defines the official network lifecycle, bootstrap rendezvous,
 network replacement, and Authority rotation.
+
+## Official network trust
+
+```text
+OfficialNetworkProfile (bootstrap IP:port + SPKI, immutable Network Root R)
+  -> R-signed OfficialNetworkBinding (generation, authority_epoch,
+                                      network definition, current PoA P)
+  -> verified genesis and direct P2P mesh
+  -> Central Authority P signs finalized blocks
+```
+
+Bootstrap reports the current binding and initial peers. `R` confirms the
+official network and Authority assignment. `P` finalizes blocks for its epoch.
+Every full node independently checks the binding, historical key assignment,
+block certificate, operations and state root. An Authority epoch change keeps
+Identity and application state; a generation change replaces the entire
+network-bound domain. Neither bootstrap nor `P` may appoint an official
+network or successor PoA key.
 
 ## Documentation hierarchy
 
@@ -52,8 +70,6 @@ Optional operational capabilities:
 **Bootstrap** is a known rendezvous service that distributes signed official
 network state and seeds initial peer discovery. It is not a consensus role or Identity entity.
 
-Optional advisory Validation is non-canonical future functionality and does
-not participate in network operation or finality.
 
 Public P2P admission is France-only for inbound and outbound connections across
 all capabilities. Policy rules and local fail-closed Geo enforcement are
@@ -65,12 +81,13 @@ One AccountID is the stable Identity. Mnemonic-derived Recovery, Authorization,
 and KEM roles are separate. Device is not a protocol entity.
 
 Storage providers prove their own service keys per CYP2 session. The PoA finalizer
-proves the current Authority key ($K_{\text{epoch}}$). There is no canonical service-node registry.
+proves the current root-authorized PoA key ($P_{\text{epoch}}$). There is no canonical service-node registry.
 
 ## Finality
 
-Single-operator hybrid-PQ PoA finalizes blocks. Genesis establishes the initial
-Authority key $K_0$, which may rotate monotonically ($K_0 \to K_1 \to \dots$).
+Single-operator hybrid-PQ PoA finalizes blocks under the root-signed Authority
+assignment active at the block height. Genesis establishes the network, not
+the operational PoA trust chain.
 Every full node independently verifies PoA certificates, operation validity,
 and state transitions. Anti-equivocation journaling and fail-closed halt protect against conflicting blocks.
 There is no BFT or validator quorum.

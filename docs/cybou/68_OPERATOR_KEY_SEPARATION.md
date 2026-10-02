@@ -5,14 +5,16 @@ remain cryptographically separate:
 
 | Role | Responsibility |
 |---|---|
-| PoA finalizer | Signs the canonical next block under the active Authority key ($K_{\text{epoch}}$) |
+| Network Root R | Signs official network bindings and Authority assignments; never blocks |
+| PoA finalizer P | Signs the canonical next block under the assignment active at its height |
 | Release Signing | Authenticates official software releases and update artifacts |
 | Treasury | Controls company-owned reserve funds |
 | User Identity | End-user account recovery and operations |
 
 ## Key boundaries
 
-- **PoA finalizer**: Derived from the Central Authority operator Identity's recovery entropy for its dedicated `POA_FINALIZER` role. Operates locally on the operator desktop and is never sent to bootstrap or peers. Blocks require both Ed25519 and ML-DSA-65 signatures.
+- **Network Root**: Separate purpose and key material from the routine Central Authority runtime. DEV may use operational custody; Mainnet should use offline custody. Both signature components are required for root-signed bindings and assignments.
+- **PoA finalizer**: The current root-authorized operational key on the Central Authority desktop. It is never sent to bootstrap or peers. Blocks require both Ed25519 and ML-DSA-65 signatures. Compromising P does not confer power to change R, the network generation or the next assignment.
 - **Release Signing**: Kept on isolated build/release signing infrastructure.
 - **Treasury**: Stored in a distinct, dedicated vault holding company assets.
 - **User Identity**: Managed exclusively by each end-user in their local CVID5 vault.

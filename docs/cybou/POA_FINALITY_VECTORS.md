@@ -1,7 +1,8 @@
 # PoA finality interoperability vectors
 
-These vectors freeze key derivation, hash input bytes, and certificate wire
-encoding. All 32-byte IDs below are shown in canonical serialized byte order
+These vectors freeze the current implementation's key derivation, hash input
+bytes, and certificate wire encoding. They do not define the target root-signed
+Authority assignment format. All 32-byte IDs below are shown in canonical serialized byte order
 (the order returned by `uint256::begin()`), not the display order of `GetHex()`.
 
 ## Key derivation

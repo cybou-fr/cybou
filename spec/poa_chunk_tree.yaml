@@ -1,10 +1,14 @@
 version: '0.0.1'
 status: active_protocol_architecture
 consensus:
-  mode: genesis_bound_single_operator_PoA
+  mode: network_root_authorized_single_operator_PoA
+  network_root: immutable_profile_public_key_R
+  official_binding: root_signed_generation_authority_epoch_network_definition_and_P
+  authority_assignment: root_signed_epoch_activation_height_and_P
+  historical_certificate_key: P_effective_at_block_height
   bft: false
   validator_set: absent
-  unfinalized_operations: local_origin_and_finalizer_only
+  unfinalized_operations: local_origin_bounded_volatile_peer_relay_and_finalizer
   full_nodes_recompute_state: true
   finality_is_BFT: false
   poa_signature:

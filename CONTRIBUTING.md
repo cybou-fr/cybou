@@ -17,7 +17,7 @@ code from integration and deployment gates.
   network state; it is not a consensus or Identity participant.
 - Public P2P admission is France-only in production and DEV (inbound and outbound)
   using local Geo data (fails closed).
-- The finalizer uses a genesis-bound hybrid-PQ PoA key operated from the
+- The finalizer uses the currently Network-Root-authorized hybrid-PQ PoA key operated from the
   Central Authority desktop. This is a centralized trust model and must not be
   described as BFT fault tolerance.
 - Generic `RootPublication` is the only application-content publication

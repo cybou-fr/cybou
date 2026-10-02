@@ -2,7 +2,7 @@
 
 ## Node roles
 
-Every node validates the same canonical chain. The genesis-bound PoA signer
+Every node validates the same canonical chain. The root-authorized PoA signer
 orders and finalizes blocks; it does not replace full-node validation. Ordinary
 desktop nodes may prune old block bodies after retaining the state and evidence
 required by the active product and protocol.
@@ -19,8 +19,9 @@ The initial implementation synchronizes finalized blocks from the network
 definition's genesis in height order:
 
 ```text
-trusted network definition
+verified OfficialNetworkBinding and exact network definition
 -> genesis state and genesis block ID
+-> root-signed Authority assignment for each block height
 -> PoA certificate verification for each next block
 -> deterministic operation execution
 -> resulting state-root verification
@@ -29,8 +30,9 @@ trusted network definition
 
 Peers are untrusted data sources. A peer's reputation, claimed height, or
 snapshot is never a substitute for local signature, parent, operation, and
-state-root verification. The genesis definition is the trust anchor and binds
-the PoA finalizer key.
+state-root verification. The installed profile's immutable Network Root `R`
+authenticates the binding and Authority assignments; genesis defines the
+network and initial state.
 
 ## Pruning and snapshots
 

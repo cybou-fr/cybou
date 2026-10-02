@@ -41,21 +41,9 @@ Provider placement remains local StorageService policy. Do not freeze a
 deterministic provider-ranking algorithm before provider independence can be
 measured reliably.
 
-## Authority and Validation
-
-Authority is informational and read-only. It allocates no resources and creates
-no rewards or penalties. Recipients may label a signed Validation as
-validator-qualified when its signer has Authority >= 1,000,000 in their local
-view. This is not protocol admission.
-
-No canonical NodeID binding, validator registry, liveness/storage evidence,
-resource budget, reservation, grant, ticket, reward, or penalty mechanism is
-planned. The remaining product question is how much optional Validation
-evidence recipients want to display or trust before PoA finality.
-
 ## Future research
 
-- [`future/VALIDATION.md`](future/VALIDATION.md) defines optional advisory evidence; the
-  future question is whether users need it before finality and how to present
-  local trust choices;
-- emergency Authority recovery key if the current active Authority private key is lost or compromised.
+- [`future/VALIDATION.md`](future/VALIDATION.md) archives deferred advisory
+  evidence research; it is outside active product and network operation;
+- recovery from loss or compromise of private Network Root `R`, without
+  treating an operational PoA key as a root replacement authority.

@@ -13,6 +13,10 @@ objects.
 - economic pools and deterministic fee accounting;
 - immutable network parameters bound to the active network definition.
 
+Bootstrap locators, grants, roles and peer routes are not consensus state.
+Official binding and Authority assignments are verified against Network Root
+`R` outside the ordinary account/operation state machine.
+
 Application schemas and private metadata remain encrypted outside canonical
 state.
 
@@ -38,6 +42,6 @@ defined in `57_IDENTITY_AUTHORITY.md`.
 - no plaintext Mail/File metadata in consensus;
 - no per-Mail/per-file canonical state object;
 - no wall-clock consensus arithmetic;
-- Authority and advisory Validation never grant PoA finalization weight;
+- Authority never grants PoA finalization weight;
 - Balance, System Balance and Authority are distinct resources;
 - all consensus state arithmetic is bounded integer arithmetic.

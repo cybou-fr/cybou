@@ -11,11 +11,11 @@ No protocol-level device identity exists. An Identity record has one current Rec
 | Recovery | Ed25519 + ML-DSA-65 | Restore identity and authorize full key rotation |
 | Authorization | Ed25519 + ML-DSA-44 | Sign account-level service operations |
 | Recipient KEM | X-Wing (ML-KEM-768 + X25519) | Establish or wrap content keys; separate from signing |
-| PoA Finalizer | Ed25519 + ML-DSA-65 | Genesis-bound single-operator block finalization |
-| Central Authority | Role-specific PoA key pair | Identity holding the genesis-committed finalizer key |
+| Network Root R | Ed25519 + ML-DSA-65, separate signing domain | Authenticate official network bindings and Authority assignments; never sign blocks |
+| PoA Finalizer P | Ed25519 + ML-DSA-65 | Sign blocks for the assigned Authority epoch |
+| Central Authority | Current root-authorized PoA key pair | Desktop operation after unlock and local verification |
 | Release Signing | Hybrid PQ / Minisign | Authenticate official software and releases |
 | Treasury / Custody | Multi-signature hybrid PQ | Protect cold network reserves and custody |
-| Advisory Validation | Signer Identity Authorization | Optional signed advisory statements; does not finalize |
 | Storage Provider | Provider service key | Prove provider identity per live CYP2 session |
 
 Use standard cryptographic libraries and pinned vectors. No classical-only production fallback and no custom cryptographic primitives.

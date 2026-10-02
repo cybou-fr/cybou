@@ -1,39 +1,34 @@
 # CYBOU protocol and product roadmap
 
-CYBOU is an Identity-centered private Mail and Files platform over a
-content-addressed encrypted P2P mesh, finalized by a single-operator hybrid-PQ PoA Authority.
+CYBOU is an Identity-centered private Mail and Files platform over an
+encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 
-## Roadmap phases
+## Cleanup and trust-model implementation
 
-1. **Finish official DEV bootstrap lifecycle**
-   - Connect desktop to pinned DEV bootstrap locator (`51.255.46.58:29461`).
-   - Query `STATUS` (`EMPTY` vs `BOUND`).
-   - Implement client handling for `BOUND` generation verification and full wipe on newer generation.
+1. Remove bootstrap Identity/grant state and `CAP_BOOTSTRAP` from consensus,
+   transport and UI. Retain bootstrap as the pinned TLS rendezvous prototype.
+2. Remove legacy state decoders and obsolete operation paths; cut over to one
+   clean state version after acceptance tests. Keep the current DEV service
+   operational until the coordinated cutover.
+3. Add official profiles with immutable Network Root `R`, and root-signed
+   `OfficialNetworkBinding` plus historical Authority assignments. Separate
+   `R` custody and signing purpose from operational PoA `P`.
+4. Replace binding verification based on genesis/PoA keys with external `R`.
+   Remove bundled production `network.bin` as network truth.
+5. Implement crash-safe atomic network-root replacement and full deletion of
+   the old network-bound domain. Rotation of `P` must preserve that domain.
+6. Remove active Validation protocol/UI scaffolding.
 
-2. **Create DEV network from desktop**
-   - Desktop command/wizard to create DEV genesis with initial Authority key $K_0$.
-   - Claim `EMPTY` bootstrap with one-use activation code.
-   - Transition DEV bootstrap to `BOUND` at generation 1.
+## Integration and acceptance
 
-3. **Bootstrap → first peer discovery**
-   - Retrieve initial peer addresses from bootstrap rendezvous.
-   - Establish direct CYP2 mesh between nodes.
-   - Relay blocks and operations peer-to-peer without routing through bootstrap.
-
-4. **Central Authority operator workflow**
-   - Operate hybrid-PQ PoA block finalization from the Central Authority desktop.
-   - Maintain anti-equivocation journal and fail-closed safety halt.
-
-5. **Windows and Linux desktop acceptance**
-   - Validate clean-install UX, Identity creation, and network synchronization.
-   - Verify private Mail sending/receiving and Files upload/download.
-
-6. **Storage durability hardening**
-   - Advance from development target (1 remote full replica) to Beta target (2 independent remote full replicas).
-   - Multi-process failure soak, restart recovery, and provider audit/repair.
-
-7. **TESTNET release**
-   - Staging network deployment with isolated bootstrap and testing Authority key.
-
-8. **MAINNET release**
-   - Production network deployment under the French sovereign P2P policy.
+7. Wire desktop bootstrap locator/client, `EMPTY`/`BOUND` state and root-signed
+   DEV genesis creation with activation code.
+8. Add bootstrap first-peer discovery followed by direct CYP2 mesh and bounded
+   volatile operation relay.
+9. Connect Central Authority desktop finalization to the verified assignment,
+   one active signer and durable anti-equivocation journal.
+10. Validate Windows/Linux clean install, verified sync, recovery, private Mail
+    and Files end to end.
+11. Harden storage from one development remote replica to two independent Beta
+    replicas, with provider audit, repair, restart recovery and soak.
+12. Deploy isolated TESTNET, then MAINNET, only after their gates pass.

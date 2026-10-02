@@ -103,7 +103,5 @@ reconstruction.
 ## Authority
 
 Authority is an informational, read-only metric derived from finalized history.
-It does not allocate resources or grant PoA power. A recipient may use
-Authority >= 1,000,000 as a local label for validator-qualified advisory
-Validation. It is not a protocol admission rule and is not a gamified social
+It does not allocate resources or grant PoA power and is not a gamified social
 score.

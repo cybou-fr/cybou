@@ -1,81 +1,42 @@
 # PoA finality target
 
-Status: **Active PoA protocol**.
-This document defines the single-operator hybrid-PQ PoA finality model, Authority
-key rotation, anti-equivocation journaling, and verification rules.
+Status: **Active PoA protocol**. Finality is single-operator hybrid-PQ PoA
+under the current Network-Root-authorized operational key `P_epoch`. It is not
+BFT and has no ValidatorSet, vote, quorum or staking weight.
 
----
+Genesis defines the network and initial state. The active signing key comes
+from a verified root-signed Authority assignment `{epoch, activation_height,
+P}`. Each historical block is verified against the assignment effective at
+its height. Assignments must be monotonic and non-overlapping; a key cannot
+appoint its successor. `R` authenticates assignments but never signs blocks.
 
-## 1. Trust model
+Every full node independently checks certificate signatures, height, parent,
+timestamp, operation execution and deterministic state root. A signature alone
+never validates an invalid transition.
 
-Finality is single-operator hybrid-PQ PoA, operated from the Central Authority
-desktop. Finality signifies that the active Authority key signed the canonical next block.
-It is not Byzantine fault tolerance and carries no BFT consensus overhead.
+## Certificate
 
-Every full node independently verifies:
-- signature validity against the active Authority key;
-- block height, parent block ID, and timestamp;
-- valid execution of all included operations;
-- deterministic state root recomputation.
-
-There is no ValidatorSet, staking weight, validator admission operation, BFT
-round, vote, or quorum.
-
----
-
-## 2. Authority key chain and monotonic rotation
-
-Genesis binds the network to the initial Central Authority public key $K_0$.
-Operational signing keys can rotate monotonically without resetting the network:
-
-```text
-Genesis:
-    Initial Authority key K0
-
-Heights 1 .. h_1:
-    Signed by K0
-
-Rotation record:
-    K0 authorizes K1 (epoch 1)
-
-Heights (h_1 + 1) .. h_2:
-    Signed by K1
-```
-
-Derivation of the current active Authority key $K_{\text{epoch}}$ always traces
-back to compiled $K_0$ via finalized, signed rotation records.
-
-The PoA finalizer key role is separate from Identity recovery, authorization,
-KEM, Release Signing, and Treasury keys. Private PoA material never leaves the
-Central Authority operator machine.
-
----
-
-## 3. Hybrid-PQ signing and certificate structure
-
-PoA block signatures follow the hybrid post-quantum standard:
-**Ed25519 AND ML-DSA-65** are both required and verified. No classical-only fallback
-is permitted.
-
+PoA requires both Ed25519 and ML-DSA-65. There is no classical-only fallback.
 The certificate binds:
+
 ```text
-version_u8 || NetworkID || BlockID || height_u64le || parent_block_id || Ed25519_sig || ML-DSA-65_sig
+version_u8 || NetworkID || BlockID || height_u64le || parent_block_id ||
+Ed25519_sig || ML-DSA-65_sig
 ```
 
-Signatures are 64 and 3,309 bytes, respectively. Verification checks both
-cryptographic components against the active Authority public key and independently
-validates the block contents.
+The signatures are 64 and 3,309 bytes respectively. The verifier resolves
+`P_epoch` for the block height from the authenticated assignment history and
+checks both signatures. The PoA key role remains separate from Identity
+Recovery, Authorization, KEM, Network Root, Release Signing and Treasury.
 
----
+## Signing journal and conflict halt
 
-## 4. Anti-equivocation and permanent conflict halt
+The finalizer durably records an intent keyed by `NetworkID`, `authority_epoch`,
+PoA key ID, height and parent, including the intended BlockID, before signing.
+It must fail closed if journal recovery, rollback or signer exclusivity is
+uncertain. One operational key has only one active signer.
 
-The Central Authority maintains a durable local journal of signing intents:
-`network, PoA key ID, height, parent, block ID`.
-
-1. An intent must be committed to durable storage **before** signing.
-2. If two distinct valid PoA certificates are ever observed for the same height and parent:
-   - All observing full nodes enter an immediate, permanent safety halt.
-   - The conflict detector records revalidated cryptographic evidence.
-   - Nodes do not branch-hop, fork-choice, or attempt automatic recovery.
-   - The operator must investigate the equivocation out-of-band.
+If two distinct valid certificates exist for the same network, height and
+parent, observing full nodes record verified evidence and enter a permanent
+safety halt. They do not branch-hop or automatically select a winner. Rotation
+does not erase or merge the signing history of prior epochs.

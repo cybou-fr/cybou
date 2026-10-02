@@ -30,7 +30,7 @@ The project has CMake/vcpkg CI builds for the native core and desktop; see [the 
 
 ## DEV node
 
-The current DEV VPS runs one `cybou-bootstrap.service`, bound to TCP port 29461 at `51.255.46.58`; SSH listens on port 22. The legacy finalizer and provider services are inactive. The bootstrap store is an empty prototype store and does not finalize blocks. This endpoint is DEV Bootstrap #1 and its TLS SPKI SHA-256 pin is recorded in [`src/cybou/bootstrap_nodes.h`](src/cybou/bootstrap_nodes.h). The desktop has not yet wired locator connection, binding retrieval, and CYP2 peer discovery end to end, and the desktop finalizer is not implemented. This deployment is a development prototype, not the target architecture described in [`docs/cybou/04_NETWORK_LIFECYCLE.md`](docs/cybou/04_NETWORK_LIFECYCLE.md). Never use development keys or balances as production assets.
+The current DEV VPS runs one `cybou-bootstrap.service`, bound to TCP port 29461 at `51.255.46.58`; SSH listens on port 22. The legacy finalizer and provider services are inactive. The bootstrap store is an empty prototype store and does not finalize blocks. This endpoint is DEV Bootstrap #1 and its TLS SPKI SHA-256 pin is recorded in [`src/cybou/bootstrap_nodes.h`](src/cybou/bootstrap_nodes.h). Desktop finalizer core exists, but locator connection, root-signed binding retrieval, CYP2 peer discovery and operator UX are not yet wired end to end or deployed. This deployment is a development prototype, not the target architecture described in [`docs/cybou/04_NETWORK_LIFECYCLE.md`](docs/cybou/04_NETWORK_LIFECYCLE.md). Never use development keys or balances as production assets.
 
 ## Tests
 

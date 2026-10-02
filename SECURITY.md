@@ -1,57 +1,51 @@
 # Security policy — CYBOU
 
-CYBOU is experimental software. It is not a production communication or
-storage service. The active protocol target uses a genesis-bound,
-single-operator PoA finalizer. This is centralized finality and does not provide
-Byzantine fault tolerance.
+CYBOU is experimental software, not a production communication or storage
+service. The target uses single-operator hybrid-PQ PoA and independently
+validating full nodes; it does not provide Byzantine fault tolerance.
 
 ## Reporting a vulnerability
 
 Report security issues privately to `security@cybou.org` or the designated
-project security contact. Include the affected component, impact, and steps to
-reproduce. Do not include real user secrets or recovery phrases. Allow the
-maintainers time to investigate and prepare a fix before public disclosure.
+project security contact. Include the affected component, impact and steps to
+reproduce. Do not include real user secrets or recovery phrases.
 
-## Security boundaries
+## Trust and failure boundaries
 
-- Identity recovery, account authorization, Identity KEM, PoA finality,
-  release signing, and treasury authority use separate key roles.
-- Production signatures require the configured Ed25519 and post-quantum
-  components. Classical-only fallback is not allowed.
-- A network genesis authorizes 1–4 bootstrap Identities by stable `AccountID`
-  and expected `RecoveryKeyID`. Pre-genesis numeric IP:port locators and TLS SPKI
-  pins are discovery/authentication boundaries only; they grant no post-genesis
-  role and are never consensus state.
-- Public P2P admission is France-only in production and DEV (inbound and outbound)
-  for every peer capability. Classification uses local Geo data; missing, corrupt,
-  or expired Geo data fails closed. LAB loopback/private test traffic requires
-  an explicit LAB bypass.
-- Optional VPN/proxy/Tor filtering is local operator policy; it never alters
-  Identity, Authority, consensus, or canonical state.
-- The PoA signing key is genesis-bound, held in memory only, and protected by a
-  durable anti-equivocation journal. Journal rollback or conflicting signing
-  must fail closed.
-- RootPublication exposes generic publication accounting and opaque chunk IDs.
-  Application schemas, recipients, filenames, file metadata, and graph edges
-  remain inside encrypted content.
-- Providers verify the full ChunkID against stored encrypted bytes and require
-  finalized-publication admission proofs. Finality authorizes storage; it does
-  not prove durability.
-- The client retains encrypted content and must distinguish finalized,
-  available, and retrievable states.
-- CYP2 v3 uses TLS 1.3 with the configured `X25519MLKEM768` key exchange and
-  no plaintext fallback. Provider and genesis-key finalizer proofs bind the
-  role to the TLS exporter and both HELLOs. The ephemeral TLS certificate is
-  not itself a peer identity; ordinary peers are not globally authenticated.
-- Secret files require private owner-only permissions and reject links or
-  reparse points. Event logs are private and omit sensitive identifiers by
-  default; LAB mode is explicitly verbose.
-- Use vetted BLAKE3, HKDF-SHA256, ChaCha20-Poly1305, and the frozen hybrid KEM
-  profile. Do not create custom cryptographic primitives.
+- An official profile pins bootstrap IP:port, TLS SPKI and immutable Network
+  Root public key `R`. The pin authenticates the endpoint; only `R` verifies
+  official binding and Authority assignments.
+- Bootstrap compromise may deny service or advertise false availability, but
+  cannot produce a root-valid official network. Its outage does not halt an
+  already connected P2P mesh.
+- Compromise of current PoA key `P` threatens finality in its assigned epoch.
+  `P` cannot replace the network, appoint its successor or sign a root-valid
+  binding. Journal rollback and conflicting signing must fail closed.
+- Compromise of private `R` is critical compromise of official network
+  authority. Keep it separate from routine desktop finalization.
+- Full nodes check root assignments, both PoA signature components,
+  operation execution and state roots independently.
+- Identity Recovery, Authorization, KEM, Network Root, PoA, Release Signing
+  and Treasury have separate key purposes and material. No classical-only
+  production signature fallback is permitted.
 
-## Current limits
+Public P2P admission is France-only for inbound and outbound DEV/production
+connections, failing closed on unavailable or corrupt local Geo data. LAB
+loopback/private bypass must be explicit. Optional VPN/proxy/Tor filtering is
+local policy and changes no canonical state.
 
-DEV is an experimental network. Do not treat its identities, balances,
-ciphertext, or keys as production assets, and do not reset its state or replace
-its PoA key during routine deployments. See `AGENTS.md` and
-`docs/cybou/26_IMPLEMENTATION_STATUS.md`.
+RootPublication exposes generic accounting and opaque chunk IDs. Application
+schemas, recipients, filenames and graph edges remain encrypted. Providers
+verify full ChunkIDs and finalized-publication authorization proofs. Finality
+authorizes admission, not availability or durability.
+
+CYP2 v3 requires TLS 1.3 and `X25519MLKEM768`. Finalizer and provider role
+proofs bind to the TLS exporter and both HELLOs. Ordinary peers are not
+globally authenticated by their ephemeral certificates. Secret files require
+owner-only permissions and must reject links or reparse points.
+
+## Current DEV limit
+
+The DEV VPS runs an experimental standalone bootstrap prototype. Its existing
+state must remain operational until acceptance and coordinated cutover. See
+`AGENTS.md` and `docs/cybou/26_IMPLEMENTATION_STATUS.md`.

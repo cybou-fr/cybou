@@ -8,7 +8,7 @@ finalization are optional operational capabilities.
 
 Bootstrap is a rendezvous service distributing signed official network state and
 seeding initial peer discovery. It does not vote, form a quorum, or finalize. The
-Central Authority PoA key chain ($K_0 \to K_1 \to \dots$) remains the sole finality authority.
+The current root-authorized Central Authority PoA key remains the sole finality signer.
 
 ## France network policy
 

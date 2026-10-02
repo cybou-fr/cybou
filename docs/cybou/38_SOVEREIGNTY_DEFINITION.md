@@ -3,7 +3,7 @@
 CYBOU sovereignty means users retain control of Identity secrets, balances,
 decryption, and application state without a mandatory foreign SaaS control
 plane. It does not mean the initial network is decentralized: block ordering
-uses one CYBOU-operated genesis-bound PoA finalizer, and that operator can
+uses one CYBOU-operated Network-Root-authorized PoA finalizer, and that operator can
 censor or stop progress.
 
 ## Required properties

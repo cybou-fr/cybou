@@ -1,59 +1,41 @@
 # CYP2 transport version 3
 
-CYP2 v3 carries node synchronization, operation submission, and encrypted
-chunk transfer over TCP protected by TLS 1.3.
+CYP2 v3 carries peer discovery, finalized block synchronization, bounded
+operation relay and authorized encrypted chunk transfer over TCP/TLS 1.3.
 
-## Connection protection
+## Connection protection and roles
 
-- TLS 1.3 is required before CYP2 HELLO or any application frame; plaintext
-  fallback is rejected. The bootstrap exchange is the explicit exception to
-  HELLO: it sends its bootstrap request only after pinned TLS, since an empty
-  network has no NetworkID for HELLO.
-- The configured key exchange is `X25519MLKEM768`; a build that cannot provide
-  it fails the handshake.
-- TLS protects record confidentiality, integrity, and ordering. Endpoint
-  addresses, timing, and traffic sizes remain visible.
-- The TLS certificate is ephemeral and self-signed. Special service roles are
-  authenticated by proofs bound to both CYP2 HELLOs and the TLS exporter.
-- The compiled initial locator carries an SPKI SHA-256 pin for pre-genesis
-  first contact. That pin authenticates only that initial endpoint; it does
-  not grant a network role. The pinned pre-genesis exchange binds a fresh
-  client nonce, TLS exporter, proposed stable AccountID, and Recovery public
-  key in a signed proof. Genesis records AccountID plus RecoveryKeyID. After
-  genesis, peers authenticate bootstrap capability through the claimed grant
-  and per-session Authorization proof. Ordinary peer sessions continue to use
-  ephemeral certificates.
-- Bootstrap request/response frames have a 16 MiB plus 16 KiB payload bound
-  for the signed network definition. All ordinary CYP2 frames retain the 4096
-  byte limit.
+TLS 1.3 is required before HELLO or application frames, with no plaintext
+fallback. The configured hybrid key exchange is `X25519MLKEM768`; a build
+without it fails the handshake. The ephemeral self-signed TLS certificate is
+not a global peer identity. Addresses, timing and traffic sizes remain visible.
 
-A storage peer advertising `CAP_STORAGE` proves its stable hybrid
-`STORAGE_PROVIDER` key. Peers verify the proof and derive its ProviderID. A
-peer advertising `CAP_ACCEPT_OPERATIONS` proves the genesis-bound PoA
-finalizer key. A missing or invalid role proof fails the handshake.
+The bootstrap request runs over separately pinned TLS before a NetworkID
+exists; it is not a CYP2 peer role or capability. The profile's IP:port and
+SPKI pin authenticate the rendezvous endpoint only. The core verifies the
+returned `OfficialNetworkBinding` and Authority assignments against immutable
+Network Root `R` as specified in `04_NETWORK_LIFECYCLE.md`.
 
-A peer advertising `CAP_BOOTSTRAP` proves its stable AccountID with the current
-Identity Authorization key. The receiver resolves that key only when finalized
-state contains a claimed genesis bootstrap grant for the AccountID. The
-signature binds NetworkID, TLS exporter, both HELLO transcripts, and AccountID.
+A `CAP_STORAGE` peer proves its stable `STORAGE_PROVIDER` key in a session
+proof bound to both HELLOs and the TLS exporter. The receiver derives
+`ProviderID = BLAKE3(provider public key)`. A peer advertising
+`CAP_ACCEPT_OPERATIONS` proves possession of current root-authorized PoA key
+`P_epoch` for that height/epoch. Missing or invalid role proofs fail the
+handshake. These proofs identify live services, not globally authenticated
+ordinary peers. Operation signatures, PoA certificates, publication proofs
+and ChunkID checks remain independent and mandatory.
 
-The role proofs identify providers and the canonical finalizer over this TLS
-session; they do not establish a global identity for ordinary peers. CYBOU
-operation signatures, PoA certificate checks, publication proofs, and ChunkID
-checks remain independent and mandatory.
+Bootstrap response size may accommodate a signed network definition (16 MiB
+plus 16 KiB); ordinary CYP2 frames retain the 4096-byte limit.
 
-The target policy is France-only public peer admission before TLS on inbound
-sockets and before connect on outbound sockets, including addresses
-learned through DNS or peer discovery. Every resolved numeric IPv4/IPv6
-address is classified using local Geo data. Missing/corrupt mandatory data
-fails closed. LAB loopback/private networking requires an explicit test-only
-bypass. Optional known VPN/proxy/Tor filtering is local and is not a consensus
-rule. This admission policy is not yet implemented; see
-[`26_IMPLEMENTATION_STATUS.md`](26_IMPLEMENTATION_STATUS.md).
+## Admission and scope
 
-## CYP2 scope
+Production/DEV public inbound and outbound P2P admission is France-only before
+connect/accept, using local Geo data for every resolved IPv4/IPv6 address.
+Missing or corrupt data fails closed. LAB loopback/private traffic needs an
+explicit bypass. Optional known VPN/proxy/Tor filtering is node-local policy.
 
-The active wire profile carries finalized blocks, signed operations, peer
-discovery, and finalized-publication-authorized encrypted chunks. Validation
-attestations, ResourceTickets, canonical resource reservations, and per-I/O
-resource accounting are not CYP2 messages.
+The active wire profile carries peer hints, finalized blocks, signed
+operations and finalized-publication-authorized encrypted chunks. No
+validator opinion, resource ticket, canonical reservation or per-I/O
+accounting is part of active CYP2.

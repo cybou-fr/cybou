@@ -12,6 +12,12 @@
   storage truth.
 - Bootstrap is discovery rendezvous infrastructure. It distributes signed
   official network state and cannot alter or forge blocks or state transitions.
+- A compromised bootstrap can deny service or lie about availability, but
+  cannot create a binding valid under immutable Network Root `R`. A bootstrap
+  outage does not stop an existing direct mesh.
+- Compromise of current PoA key `P` threatens finality within its assigned
+  epoch but cannot authorize a new network or successor key. Compromise of
+  private `R` is critical compromise of official network authority.
 - Production/DEV public peer admission uses local French-IP classification.
   This is a node-local routing policy, not a consensus guarantee or proof of a
   peer's physical location. Missing or corrupt mandatory Geo data fails
@@ -52,14 +58,11 @@ Finalized status requires locally verified inclusion.
 Development targets one remote full replica; Beta targets two independent
 remote full replicas. A local cache does not count as a remote replica.
 
-## Authority and Validation
+## Derived Authority
 
 Authority is an informational derived metric. It cannot grant PoA power,
-resource allocation, rewards, or penalties. Optional Validation is a signed
-claim that a recipient verifies and assesses locally. A signed claim is not
-proof of correctness; the PoA finalizer independently validates every
-finalized operation. Neither mechanism changes canonical state or storage
-admission.
+resource allocation, rewards, or penalties. The PoA finalizer independently
+validates every finalized operation.
 
 ## Recovery
 
