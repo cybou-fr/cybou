@@ -82,7 +82,7 @@ jobs:
             -DWITH_CCACHE=OFF
 
       - name: Build CYBOU core test, node and smoke binaries
-        run: cmake --build build-ci --target cybou-core-test cybou-node cybou-bootstrap cybou-loadgen cybou-storage-smoke cybou-storage-soak --parallel 2
+        run: cmake --build build-ci --target cybou-core-test cybou-node cybou-loadgen cybou-storage-smoke cybou-storage-soak --parallel 2
 
       - name: Run CYBOU protocol tests
         run: |
@@ -91,7 +91,6 @@ jobs:
       - name: Operator CLI and LAB controller acceptance
         run: |
           python3 test/cybou_operator_cli.py build-ci/bin/cybou-node
-          python3 test/cybou_bootstrap_admission.py build-ci/bin/cybou-bootstrap
           python3 test/stress/test_controller.py
           sudo python3 test/stress/test_network_namespace.py
 

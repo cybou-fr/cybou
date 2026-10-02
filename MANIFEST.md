@@ -8,9 +8,9 @@ editing an included file.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 313 | 5d74412d9a505862 |
+| AGENTS.md | 314 | 77fbaa2d726a4939 |
 | CONTRIBUTING.md | 49 | f58a502f16b96450 |
-| INSTALL.md | 37 | 72f779b5e99c63c6 |
+| INSTALL.md | 37 | 87271f52265cb6af |
 | README.md | 128 | e18981c213849e92 |
 | SECURITY.md | 59 | 781bf2357a5cd2e4 |
 | docs/cybou/00_VISION.md | 73 | 856787283b43882a |
@@ -25,10 +25,10 @@ editing an included file.
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 55 | 376fde826a290f71 |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 37 | 85631fe5a8ba5de1 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 33 | 77a5ce6ecca27af0 |
+| docs/cybou/22_ROADMAP.md | 33 | f33f14a8c61ac206 |
 | docs/cybou/24_DECISIONS.md | 120 | 24884f65a5d04cd3 |
-| docs/cybou/25_OPEN_QUESTIONS.md | 53 | e5a31b59a0226c45 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 42 | 756fe11737c39240 |
+| docs/cybou/25_OPEN_QUESTIONS.md | 51 | a9e10029b0858923 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 39 | 4bbc45914d21688c |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 57 | d8544d0e77a797de |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | f82d26a4d1681de3 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
@@ -44,7 +44,7 @@ editing an included file.
 | docs/cybou/59_DETERMINISTIC_FEE_ROUTER.md | 89 | cfbf1329a4e0f587 |
 | docs/cybou/68_OPERATOR_KEY_SEPARATION.md | 27 | e7715c9b9f54348d |
 | docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 37 | 3cdcec3902215bd7 |
-| docs/cybou/71_WINDOWS_MINGW_BUILD.md | 146 | a149e0762bd36088 |
+| docs/cybou/71_WINDOWS_MINGW_BUILD.md | 146 | 66a9d4385aa69bf2 |
 | docs/cybou/72_DESKTOP_WALLET_UI.md | 81 | d58fb6c8a3ad9144 |
 | docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 96 | b65cb6a50279c946 |
 | docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 62 | d5d4128e730330c6 |
@@ -63,7 +63,7 @@ editing an included file.
 | docs/cybou/CYP2_TRANSPORT_V3.md | 61 | 852fa3a4246d92d2 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 85 | f32d4f33bab42f19 |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
-| docs/cybou/OPERATOR_LAB.md | 180 | 4d42fcaf1f7c7ddc |
+| docs/cybou/OPERATOR_LAB.md | 181 | b67ccd06cbaf5675 |
 | docs/cybou/POA_FINALITY.md | 56 | 6b829216a3e45f9a |
 | docs/cybou/POA_FINALITY_VECTORS.md | 107 | 3d1f06214ad59f4f |
 | docs/cybou/README.md | 85 | 69c6ce56388ef3bb |

@@ -2,7 +2,7 @@
 
 Это **единственная авторитетная процедура сборки** CYBOU core на Windows.
 Воспроизводит конфигурацию `build_cybou_qt_mingw`, на которой собираются
-`cybou-core-test.exe`, `cybou-node.exe`, `cybou-bootstrap.exe`,
+`cybou-core-test.exe`, `cybou-node.exe`,
 `cybou-loadgen.exe` и Qt GUI.
 
 ## Что требуется (один раз)

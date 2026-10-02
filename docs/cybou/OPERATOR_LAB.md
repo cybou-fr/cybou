@@ -45,13 +45,14 @@ participating node. The controller does not configure firewalls or NAT.
 For a forwarded provider listener, `--advertise IP:PORT` supplies its reachable
 CYP2 endpoint independently of the local `--listen` address. The manifest's
 `advertise` field is passed through to the daemon and used in peer files.
-Use the same public LAB network file for the Windows desktop:
+The Windows desktop always runs the compiled DEVNET; there is no network file
+option. Point it at a LAB peer with an isolated data directory:
 
 ```powershell
-cybou.exe --network C:\cybou-lab\network.bin --datadir C:\cybou-lab\desktop --peer <configured-cyp2-peer>:<port>
+cybou.exe --datadir C:\cybou-lab\desktop --peer <configured-cyp2-peer>:<port>
 ```
 
-An explicit `--network` requires an explicit `--datadir` and `--peer`. Diagnostics → Open
+Diagnostics → Open
 Network Monitor reads the desktop's own core snapshot: canonical head and
 state root, advertised peer heights, recent operations and private semantic
 Mail/Files durability. Peer lag is advisory; it is not finality evidence.

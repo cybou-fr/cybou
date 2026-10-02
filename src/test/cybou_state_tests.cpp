@@ -919,7 +919,7 @@ BOOST_AUTO_TEST_CASE(state_store_verifies_genesis_digest)
     BOOST_CHECK(!load_fail);
     BOOST_CHECK(load_fail.error == StateLoadError::GENESIS_DIGEST_MISMATCH);
 
-    // A database initialized without a digest must not be accepted by a CYG1 runtime.
+    // A database initialized without a digest is not accepted by an official-network runtime.
     KVStore legacy_db(KVStoreOptions{.memory_only = true});
     CybouStateStore legacy_store(legacy_db, definition);
     BOOST_REQUIRE(legacy_store.InitializeGenesis(genesis_state));

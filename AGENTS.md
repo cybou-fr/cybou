@@ -124,10 +124,11 @@ No:
 
 There is no production network.
 - **Target architecture**: The DEV bootstrap is an ordinary CYBOU full peer process.
-- **Current migration state**: The DEV VPS currently runs the standalone prototype
-  `cybou-bootstrap.service` (`/home/debian/cybou/build/bin/cybou-bootstrap serve` on `0.0.0.0:29461`,
-  state in `/var/lib/cybou/bootstrap/state`, TLS files under `/etc/cybou-bootstrap/tls/`)
-  until the coordinated migration to the ordinary CYBOU full-peer service.
+- **Current migration state**: The DEV VPS still runs a retired prototype service
+  (`cybou-bootstrap.service`, state in `/var/lib/cybou/bootstrap/state`, TLS files under
+  `/etc/cybou-bootstrap/tls/`) built from an older commit. This repository no longer builds
+  that executable or speaks its protocol; the coordinated migration replaces it with the
+  ordinary `cybou-node` on the re-provisioned DEVNET.
 - Its pinned TLS endpoint is the approved DEV Bootstrap locator (`51.255.46.58:29461`);
   its SPKI SHA-256 pin is compiled in `src/cybou/official_networks.h` for initial transport
   discovery only. This grants no consensus role, no special protocol capability, and does not make
