@@ -286,7 +286,8 @@ BOOST_AUTO_TEST_CASE(name_claim_saves_secret_before_commit_and_finalizes_owner)
     BOOST_CHECK(!std::filesystem::exists(claim_path));
     const auto claimed = names.ClaimSync("stanislav", "correct horse battery staple");
     BOOST_REQUIRE_MESSAGE(claimed.success, claimed.message);
-    cybou::CybouFinalizerNode producer{runtime.GetStore(), fixture.validator_seed};
+    cybou::OperationPool pool{runtime.GetStore()};
+    cybou::CybouFinalizerNode producer{runtime.GetStore(), pool, fixture.validator_seed};
     bool checked_name_operation = false;
     for (uint64_t height = 2; height <= runtime.GetFinalizedHeight().value_or(0); ++height) {
         const auto finalized = runtime.GetBlockAtHeight(height);

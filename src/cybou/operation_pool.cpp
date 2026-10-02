@@ -76,11 +76,15 @@ std::vector<ProtocolOperation> OperationPool::Snapshot() const
     return operations;
 }
 
-void OperationPool::Revalidate()
+std::vector<uint256> OperationPool::Revalidate()
 {
     auto previous = std::move(m_entries);
     Clear();
-    for (const auto& entry : previous) Admit(entry.operation, entry.source_peer);
+    std::vector<uint256> dropped;
+    for (const auto& entry : previous) {
+        if (Admit(entry.operation, entry.source_peer) != PoolAdmission::ACCEPTED) dropped.push_back(entry.id);
+    }
+    return dropped;
 }
 
 void OperationPool::Clear()

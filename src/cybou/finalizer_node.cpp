@@ -19,21 +19,21 @@ BlockProductionResult Failure(const BlockProductionError error)
 } // namespace
 
 CybouFinalizerNode::CybouFinalizerNode(
-    CybouStateStore& store)
+    CybouStateStore& store, OperationPool& pool)
     : m_store{store},
       m_finalizer{std::make_unique<PoaFinalizer>(store.GetDatabase(), store.GetNetworkId(),
           store.GetNetworkDefinition().genesis_block_id, store.GetNetworkDefinition().poa_finalizer_public_key)},
-      m_pool{store}
+      m_pool{pool}
 {
 }
 
 CybouFinalizerNode::CybouFinalizerNode(
-    CybouStateStore& store, const RecoveryEntropy& poa_recovery_entropy)
+    CybouStateStore& store, OperationPool& pool, const RecoveryEntropy& poa_recovery_entropy)
     : m_store{store},
       m_finalizer{std::make_unique<PoaFinalizer>(store.GetDatabase(), store.GetNetworkId(),
           store.GetNetworkDefinition().genesis_block_id, poa_recovery_entropy,
           store.GetNetworkDefinition().poa_finalizer_public_key)},
-      m_pool{store}
+      m_pool{pool}
 {
 }
 
@@ -113,7 +113,6 @@ BlockProductionResult CybouFinalizerNode::ProduceNextBlock(const bool sync)
         failure.commit_result = committed;
         return failure;
     }
-    m_pool.Revalidate();
     return BlockProductionResult{.finalized_block = std::move(finalized)};
 }
 

@@ -184,8 +184,12 @@ public:
     std::optional<OperationRelay::FinalizerSession> AttachAuthenticatedFinalizerRelay();
     void DetachAuthenticatedFinalizerRelay(OperationRelay::FinalizerSession session);
     bool HasAuthenticatedFinalizerRoute() const;
+    /** Relay only after this node independently executed the operation on its finalized state. */
     OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes,
-        bool allow_seen_retry = false);
+        bool allow_seen_retry = false, std::optional<std::string> source_peer = std::nullopt);
+    /** Locally executed, not yet finalized candidates held by this node. */
+    size_t CandidateOperationCount() const;
+    bool HasCandidateOperation(const uint256& operation_id) const;
     std::optional<RelayedOperation> ClaimRelayedOperation();
     void ReleaseRelayedOperation(const uint256& operation_id);
     bool AcknowledgeRelayedOperation(const uint256& operation_id);
@@ -283,6 +287,8 @@ private:
     void RememberOperationStatus(const uint256& id, OperationStatus status);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
     void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
+    /** Re-execute candidates on the new head and stop relaying the ones that became invalid. */
+    void RevalidateCandidates();
     NodeRuntimeConfig m_config;
     uint256 m_network_id;
     std::unique_ptr<KVStore> m_db;
@@ -293,6 +299,8 @@ private:
     std::optional<std::array<unsigned char, 32>> m_provider_secret;
     std::optional<std::array<unsigned char, 32>> m_provider_id;
     CybouStateStore m_store;
+    /** Every full node's own volatile candidate pool; a PoA node seals blocks from it. */
+    OperationPool m_operation_pool{m_store};
     std::unique_ptr<CybouFinalizerNode> m_finalizer_node;
     OperationRelay m_operation_relay;
     std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;

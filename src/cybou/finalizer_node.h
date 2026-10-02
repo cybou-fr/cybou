@@ -63,13 +63,16 @@ struct OperationSubmitResult {
     }
 };
 
-/** Single genesis-bound PoA producer for canonical CYBOU blocks. */
+/**
+ * Single genesis-bound PoA producer for canonical CYBOU blocks. It owns no
+ * pending state: it seals the node's own independently executed candidate pool.
+ */
 class CybouFinalizerNode
 {
 public:
     /** Constructs an unarmed capability slot bound to the network's genesis key. */
-    explicit CybouFinalizerNode(CybouStateStore& store);
-    CybouFinalizerNode(CybouStateStore& store, const RecoveryEntropy& poa_recovery_entropy);
+    CybouFinalizerNode(CybouStateStore& store, OperationPool& pool);
+    CybouFinalizerNode(CybouStateStore& store, OperationPool& pool, const RecoveryEntropy& poa_recovery_entropy);
     ~CybouFinalizerNode();
 
     /** Add an operation only if the complete pending batch executes on the current head. */
@@ -78,10 +81,6 @@ public:
         std::optional<std::string> source_peer = std::nullopt);
     /** Sign a GRANT/BURN for the next block and admit it like any other candidate. */
     OperationSubmitResult SubmitAuthAdjustment(PoaAuthAction action, const AccountId& target, uint64_t amount);
-    size_t PendingCount() const { return m_pool.Size(); }
-    bool HasPendingOperation(const uint256& id) const { return m_pool.Contains(id); }
-    void ClearPending() { m_pool.Clear(); }
-    void RevalidatePending() { m_pool.Revalidate(); }
 
     /** Finalize the pending batch, including an empty block when the queue is empty. */
     BlockProductionResult ProduceNextBlock(bool sync = true);
@@ -94,7 +93,7 @@ public:
 private:
     CybouStateStore& m_store;
     std::unique_ptr<PoaFinalizer> m_finalizer;
-    OperationPool m_pool;
+    OperationPool& m_pool;
 };
 
 } // namespace cybou

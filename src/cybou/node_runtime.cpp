@@ -158,7 +158,7 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     }
     if (m_config.poa_finalizer_recovery_entropy.has_value()) {
         m_finalizer_node = std::make_unique<CybouFinalizerNode>(
-            m_store, m_config.poa_finalizer_recovery_entropy->Get());
+            m_store, m_operation_pool, m_config.poa_finalizer_recovery_entropy->Get());
         m_config.poa_finalizer_recovery_entropy.reset();
     }
     // Keep the local full node usable before it has learned or connected to a
@@ -412,7 +412,8 @@ bool CybouNodeRuntime::HasAuthenticatedFinalizerRoute() const
 }
 
 OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
-    const std::span<const unsigned char> exact_bytes, const bool allow_seen_retry)
+    const std::span<const unsigned char> exact_bytes, const bool allow_seen_retry,
+    std::optional<std::string> source_peer)
 {
     const auto operation = DeserializeProtocolOperation(exact_bytes);
     if (!operation) return OperationRelayEnqueueStatus::INVALID_OPERATION;
@@ -420,19 +421,43 @@ OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
     if (!canonical_bytes || !std::ranges::equal(*canonical_bytes, exact_bytes)) {
         return OperationRelayEnqueueStatus::INVALID_OPERATION;
     }
-    IdentityRegistry identities;
     {
         std::lock_guard lock{m_mutex};
         const auto loaded = m_store.LoadState();
-        if (loaded.error != StateLoadError::NONE || !loaded.state) {
+        if (loaded.error != StateLoadError::NONE || !loaded.state ||
+            !VerifyProtocolOperationRelayProofs(*operation, m_network_id, loaded.state->identities)) {
             return OperationRelayEnqueueStatus::INVALID_OPERATION;
         }
-        identities = loaded.state->identities;
-    }
-    if (!VerifyProtocolOperationRelayProofs(*operation, m_network_id, identities)) {
-        return OperationRelayEnqueueStatus::INVALID_OPERATION;
+        // Full candidate execution, the same path PoA uses. A node never
+        // forwards an operation it could not execute itself.
+        switch (m_operation_pool.Admit(*operation, std::move(source_peer))) {
+        case PoolAdmission::ACCEPTED:
+        case PoolAdmission::ALREADY_PENDING:
+            break;
+        case PoolAdmission::ALREADY_FINALIZED:
+            return OperationRelayEnqueueStatus::DUPLICATE;
+        case PoolAdmission::REJECTED:
+            return OperationRelayEnqueueStatus::INVALID_OPERATION;
+        }
     }
     return m_operation_relay.Enqueue(exact_bytes, allow_seen_retry);
+}
+
+size_t CybouNodeRuntime::CandidateOperationCount() const
+{
+    std::lock_guard lock{m_mutex};
+    return m_operation_pool.Size();
+}
+
+bool CybouNodeRuntime::HasCandidateOperation(const uint256& operation_id) const
+{
+    std::lock_guard lock{m_mutex};
+    return m_operation_pool.Contains(operation_id);
+}
+
+void CybouNodeRuntime::RevalidateCandidates()
+{
+    for (const auto& dropped : m_operation_pool.Revalidate()) m_operation_relay.ForgetFinalized(dropped);
 }
 
 std::optional<RelayedOperation> CybouNodeRuntime::ClaimRelayedOperation()
@@ -462,7 +487,9 @@ OperationStatus CybouNodeRuntime::GetOperationStatus(const uint256& op_id) const
     if (const auto height = m_store.GetFinalizedOperationHeight(op_id)) {
         return {.kind = OperationStatusKind::FINALIZED, .finalized_height = *height};
     }
-    if (m_finalizer_node && m_finalizer_node->HasPendingOperation(op_id)) {
+    // Only a PoA node's own pool is local pending; an ordinary node holding a
+    // candidate must keep relaying it until the finalizer acknowledges it.
+    if (m_finalizer_node && m_finalizer_node->SignerEnabled() && m_operation_pool.Contains(op_id)) {
         return {.kind = OperationStatusKind::LOCAL_PENDING};
     }
     const auto known = m_recent_operation_status.find(op_id);
@@ -555,17 +582,21 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         if (m_store.PoaSafetyHalted() || (m_finalizer_node && m_finalizer_node->SafetyHalted())) {
             return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
         }
+        // Every full node executes the candidate itself before anything else.
+        const auto admission = m_operation_pool.Admit(op, std::move(source_peer));
+        if (admission == PoolAdmission::ALREADY_FINALIZED) {
+            const auto height = m_store.GetFinalizedOperationHeight(op_id).value_or(0);
+            RememberOperationStatus(op_id, {.kind = OperationStatusKind::FINALIZED, .finalized_height = height});
+            return OperationSubmitResult{.status = OperationSubmitStatus::ALREADY_FINALIZED, .op_id = op_id};
+        }
+        if (admission == PoolAdmission::REJECTED) {
+            RememberOperationStatus(op_id, {.kind = OperationStatusKind::REJECTED_KNOWN});
+            return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
+        }
         if (m_finalizer_node && m_finalizer_node->SignerEnabled()) {
-            const auto status = m_finalizer_node->SubmitOperationWithStatus(op, std::move(source_peer));
-            if (status == OperationSubmitStatus::ACCEPTED || status == OperationSubmitStatus::ALREADY_PENDING) {
-                RememberOperationStatus(op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
-            } else if (status == OperationSubmitStatus::ALREADY_FINALIZED) {
-                const auto height = m_store.GetFinalizedOperationHeight(op_id).value_or(0);
-                RememberOperationStatus(op_id, {.kind = OperationStatusKind::FINALIZED, .finalized_height = height});
-            } else {
-                RememberOperationStatus(op_id, {.kind = OperationStatusKind::REJECTED_KNOWN});
-            }
-            return OperationSubmitResult{.status = status, .op_id = op_id};
+            RememberOperationStatus(op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
+            return OperationSubmitResult{.status = admission == PoolAdmission::ACCEPTED ?
+                OperationSubmitStatus::ACCEPTED : OperationSubmitStatus::ALREADY_PENDING, .op_id = op_id};
         }
         p2p_endpoint = m_config.p2p_endpoint;
         net_id = m_network_id;
@@ -657,7 +688,11 @@ std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
     if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
     const auto result = m_finalizer_node->ProduceNextBlock(sync);
     if (!result) return std::nullopt;
-    if (result.finalized_block) { RememberFinalizedBlockForGossip(*result.finalized_block); EmitFinalizedEvents(*result.finalized_block, true); }
+    if (result.finalized_block) {
+        RememberFinalizedBlockForGossip(*result.finalized_block);
+        EmitFinalizedEvents(*result.finalized_block, true);
+        RevalidateCandidates();
+    }
     return result.finalized_block;
 }
 
@@ -667,7 +702,7 @@ bool CybouNodeRuntime::EnablePoaFinalizer(std::shared_ptr<PoaSigner> signer)
     bool enabled{false};
     {
         std::lock_guard lock(m_mutex);
-        if (!m_finalizer_node) m_finalizer_node = std::make_unique<CybouFinalizerNode>(m_store);
+        if (!m_finalizer_node) m_finalizer_node = std::make_unique<CybouFinalizerNode>(m_store, m_operation_pool);
         enabled = m_finalizer_node->EnableSigner(std::move(signer));
     }
     if (enabled) {
@@ -716,7 +751,7 @@ BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block,
     if (result) {
         RememberFinalizedBlockForGossip(block);
         EmitFinalizedEvents(block, false);
-        if (m_finalizer_node) m_finalizer_node->RevalidatePending();
+        RevalidateCandidates();
     }
     return result;
 }

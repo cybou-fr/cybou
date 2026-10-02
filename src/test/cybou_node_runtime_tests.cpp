@@ -6,6 +6,7 @@
 #include <cybou/identity_material.h>
 #include <cybou/keystore.h>
 #include <cybou/kv_store.h>
+#include <cybou/name_service.h>
 #include <cybou/block_executor.h>
 #include <cybou/poa_finalizer.h>
 #include <cybou/secret_file.h>
@@ -185,6 +186,57 @@ BOOST_AUTO_TEST_CASE(poa_auth_adjustment_grants_and_burns_with_floor)
     const auto decoded = cybou::DeserializeProtocolOperation(*wire);
     BOOST_REQUIRE(decoded && *decoded == signed_op);
     BOOST_CHECK(!cybou::AuthorizingAccount(signed_op));
+}
+
+BOOST_AUTO_TEST_CASE(ordinary_node_executes_candidates_before_relay)
+{
+    CybouServiceTestFixture fixture;
+    const auto alice = fixture.CreateIdentity("alice.cybou");
+    cybou::CybouNameService names{*fixture.runtime, alice->GetKeyStore(), fixture.directory / "alice.cybou"};
+    const auto claimed = names.ClaimSync("alice", "correct horse battery staple");
+    BOOST_REQUIRE_MESSAGE(claimed.success, claimed.message);
+    std::optional<cybou::ProtocolOperation> commit, reveal;
+    uint64_t commit_height{0};
+    for (uint64_t height{2}; height <= fixture.runtime->GetFinalizedHeight().value_or(0); ++height) {
+        for (const auto& operation : fixture.runtime->GetBlockAtHeight(height)->block.operations) {
+            if (std::holds_alternative<cybou::AuthorizedNameCommit>(operation)) { commit = operation; commit_height = height; }
+            if (std::holds_alternative<cybou::AuthorizedNameReveal>(operation)) reveal = operation;
+        }
+    }
+    BOOST_REQUIRE(commit && reveal);
+
+    cybou::CybouNodeRuntime ordinary{{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "ordinary-candidates",
+        .memory_only = true,
+        .wipe_data = true,
+    }};
+    BOOST_REQUIRE(ordinary.InitializeGenesis(fixture.genesis));
+    for (uint64_t height{1}; height < commit_height; ++height) {
+        BOOST_REQUIRE(ordinary.CommitBlock(*fixture.runtime->GetBlockAtHeight(height)));
+    }
+    const auto commit_bytes = cybou::SerializeProtocolOperation(*commit);
+    const auto reveal_bytes = cybou::SerializeProtocolOperation(*reveal);
+    const auto commit_id = cybou::ComputeOperationId(*commit);
+    const auto reveal_id = cybou::ComputeOperationId(*reveal);
+    BOOST_REQUIRE(commit_bytes && reveal_bytes && commit_id && reveal_id);
+
+    // Correctly signed but not executable on this node's finalized state: never relayed.
+    BOOST_CHECK(ordinary.EnqueueRelayedOperation(*reveal_bytes) == cybou::OperationRelayEnqueueStatus::INVALID_OPERATION);
+    BOOST_CHECK(!ordinary.HasRelayedOperation(*reveal_id));
+    BOOST_CHECK(!ordinary.HasCandidateOperation(*reveal_id));
+
+    BOOST_CHECK(ordinary.EnqueueRelayedOperation(*commit_bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_CHECK(ordinary.HasRelayedOperation(*commit_id));
+    BOOST_CHECK(ordinary.HasCandidateOperation(*commit_id));
+    // An ordinary node's own pool is not finalizer acceptance.
+    BOOST_CHECK(ordinary.GetOperationStatus(*commit_id).kind != cybou::OperationStatusKind::LOCAL_PENDING);
+
+    BOOST_REQUIRE(ordinary.CommitBlock(*fixture.runtime->GetBlockAtHeight(commit_height)));
+    BOOST_CHECK(!ordinary.HasCandidateOperation(*commit_id));
+    BOOST_CHECK(!ordinary.HasRelayedOperation(*commit_id));
+    BOOST_CHECK_EQUAL(ordinary.CandidateOperationCount(), 0U);
+    BOOST_CHECK(ordinary.EnqueueRelayedOperation(*commit_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
 }
 
 BOOST_AUTO_TEST_CASE(runtime_finalizer_can_be_armed_and_disarmed_with_a_vault_signer)

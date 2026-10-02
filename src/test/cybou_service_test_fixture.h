@@ -41,6 +41,7 @@ struct CybouServiceTestFixture {
         genesis = cybou::CreateDevGenesisState();
         definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(seed_byte));
         definition.protocol_parameters.account_creation_work_bits = 0;
+        definition.protocol_parameters.name_claim_work_bits = 0;
         cybou::NodeRuntimeConfig config{
             .network_definition = definition,
             .data_dir = directory / "runtime",

@@ -38,7 +38,8 @@ public:
     PoolAdmission Admit(const ProtocolOperation& operation,
                         std::optional<std::string> source_peer = std::nullopt);
     std::vector<ProtocolOperation> Snapshot() const;
-    void Revalidate();
+    /** Re-execute every candidate on the new finalized head; returns the IDs that were dropped. */
+    std::vector<uint256> Revalidate();
     void Clear();
     size_t Size() const { return m_entries.size(); }
     size_t Bytes() const { return m_bytes; }

@@ -977,9 +977,9 @@ bool PeerSession::PollOperationRelay(CybouNodeRuntime& runtime)
             admitted.status == OperationSubmitStatus::INVALID_PAYLOAD ||
             admitted.status == OperationSubmitStatus::NETWORK_MISMATCH;
     } else {
-        // Intermediate full nodes move the operation one hop while the bounded
-        // seen-ID cache suppresses cycles through the mesh.
-        const auto queued = runtime.EnqueueRelayedOperation(bytes);
+        // Intermediate full nodes execute the operation themselves, then move
+        // it one hop while the bounded seen-ID cache suppresses mesh cycles.
+        const auto queued = runtime.EnqueueRelayedOperation(bytes, false, endpoint.address().to_string());
         can_acknowledge = queued == OperationRelayEnqueueStatus::QUEUED ||
             (queued == OperationRelayEnqueueStatus::DUPLICATE && runtime.HasRelayedOperation(operation_id));
     }
@@ -1238,12 +1238,12 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         const auto endpoint = m_socket.remote_endpoint(endpoint_error);
         if (endpoint_error) return false;
         OperationSubmitResult result;
-        // Every ordinary full node can stage and forward exact operations over
-        // peer sessions. The Authority admits them directly to its local pool.
+        // Every full node executes the exact operation on its own finalized
+        // state; only a locally valid candidate is staged and forwarded.
         if (runtime.GetOperationStatus(*operation_id).kind == OperationStatusKind::FINALIZED) {
             result = {.status = OperationSubmitStatus::ALREADY_FINALIZED, .op_id = *operation_id};
         } else if (!runtime.IsPoaFinalizerEnabled() || !(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) {
-            switch (runtime.EnqueueRelayedOperation(bytes, true)) {
+            switch (runtime.EnqueueRelayedOperation(bytes, true, endpoint.address().to_string())) {
             case OperationRelayEnqueueStatus::QUEUED:
             case OperationRelayEnqueueStatus::DUPLICATE:
                 result = {.status = OperationSubmitStatus::RELAY_QUEUED, .op_id = *operation_id};
