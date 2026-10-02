@@ -18,6 +18,7 @@
 namespace cybou {
 
 inline constexpr size_t ED25519_PUBLIC_KEY_SIZE{32};
+inline constexpr size_t MLDSA44_PUBLIC_KEY_SIZE{1312};
 inline constexpr size_t MLDSA65_PUBLIC_KEY_SIZE{1952};
 
 inline constexpr size_t USER_SIGNATURE_SIZE{64};

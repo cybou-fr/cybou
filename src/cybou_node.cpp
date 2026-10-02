@@ -15,11 +15,14 @@
 #include <cybou/crypto/cleanse.h>
 #include <cybou/hex.h>
 #include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/node_runtime.h>
 #include <cybou/node_service.h>
 #include <cybou/p2p/peer_manager.h>
 #include <cybou/p2p/peer_admission.h>
 #include <cybou/signing.h>
+
+#include <openssl/rand.h>
 
 #include <boost/asio.hpp>
 
@@ -219,6 +222,142 @@ int Execute(const int argc, char* argv[])
         for (const auto& endpoint : cybou::OFFICIAL_DEVNET_BOOTSTRAP_LOCATORS) {
             std::cout << endpoint.host << ':' << endpoint.port << '\n';
         }
+        return 0;
+    }
+    if (argc == 3 && std::string_view{argv[1]} == "network-keygen-net") {
+        std::array<unsigned char, 32> seed{};
+        if (RAND_bytes(seed.data(), static_cast<int>(seed.size())) != 1) {
+            cybou::crypto::CleanseMemory(seed.data(), seed.size());
+            throw std::runtime_error("failed to generate random bytes for network private key");
+        }
+        if (!cybou::CreateSecretFile(argv[2], seed)) {
+            cybou::crypto::CleanseMemory(seed.data(), seed.size());
+            throw std::runtime_error("cannot write network private key file");
+        }
+        auto pub = cybou::DeriveIdentityPublicKey(seed, cybou::IdentityKeyPurpose::NETWORK_ROOT);
+        cybou::crypto::CleanseMemory(seed.data(), seed.size());
+        if (!pub) throw std::runtime_error("cannot derive network public key");
+        std::cout << "network_public_key=" << HexStr(pub->ed25519) << '\n';
+        return 0;
+    }
+    if (argc == 4 && std::string_view{argv[1]} == "network-keygen-poa") {
+        std::array<unsigned char, 32> seed{};
+        if (RAND_bytes(seed.data(), static_cast<int>(seed.size())) != 1) {
+            cybou::crypto::CleanseMemory(seed.data(), seed.size());
+            throw std::runtime_error("failed to generate random bytes for poa private key");
+        }
+        if (!cybou::CreateSecretFile(argv[2], seed)) {
+            cybou::crypto::CleanseMemory(seed.data(), seed.size());
+            throw std::runtime_error("cannot write poa private key file");
+        }
+        auto pub = cybou::DeriveIdentityPublicKey(seed, cybou::IdentityKeyPurpose::POA_FINALIZER);
+        cybou::crypto::CleanseMemory(seed.data(), seed.size());
+        if (!pub) throw std::runtime_error("cannot derive poa public key");
+        auto pub_bytes = cybou::CanonicalSerializeHybridPublicKey(*pub);
+        WriteNewFile(argv[3], pub_bytes);
+        std::cout << "poa_public_key=" << HexStr(pub->ed25519) << '\n';
+        return 0;
+    }
+    if (argc >= 5 && std::string_view{argv[1]} == "network-genesis-create") {
+        // argv[2]: network_key_file, argv[3]: poa_pub_file, argv[4]: out_genesis_file
+        // Optional: argv[5]=gen, argv[6]=boot_rec_id, argv[7]=boot_auth, argv[8]=auth_rec_id, argv[9]=auth_bal, argv[10]=auth_name
+        auto net_key_bytes = cybou::ReadSecretFile(argv[2], 32);
+        if (!net_key_bytes || net_key_bytes->size() != 32) throw std::runtime_error("invalid network private key file (requires 32 raw secret bytes)");
+        std::array<unsigned char, 32> net_seed{};
+        std::copy(net_key_bytes->begin(), net_key_bytes->end(), net_seed.begin());
+        cybou::crypto::CleanseMemory(net_key_bytes->data(), net_key_bytes->size());
+        auto net_pub = cybou::DeriveIdentityPublicKey(net_seed, cybou::IdentityKeyPurpose::NETWORK_ROOT);
+        if (!net_pub) {
+            cybou::crypto::CleanseMemory(net_seed.data(), net_seed.size());
+            throw std::runtime_error("cannot derive network public key");
+        }
+
+        auto poa_pub_bytes = ReadFile(argv[3], 4096);
+        auto poa_pub = cybou::CanonicalDeserializeHybridPublicKey(poa_pub_bytes, cybou::IdentityKeyPurpose::POA_FINALIZER);
+        if (!poa_pub && poa_pub_bytes.size() == 32) {
+            // Also allow supplying 32-byte secret seed as fallback
+            std::array<unsigned char, 32> poa_seed{};
+            std::copy(poa_pub_bytes.begin(), poa_pub_bytes.end(), poa_seed.begin());
+            poa_pub = cybou::DeriveIdentityPublicKey(poa_seed, cybou::IdentityKeyPurpose::POA_FINALIZER);
+            cybou::crypto::CleanseMemory(poa_seed.data(), poa_seed.size());
+        }
+        if (!poa_pub) {
+            cybou::crypto::CleanseMemory(net_seed.data(), net_seed.size());
+            throw std::runtime_error("cannot read/derive PoA public key");
+        }
+
+        uint64_t generation = 1;
+        if (argc >= 6 && std::string_view{argv[5]} != "-") {
+            generation = std::stoull(argv[5]);
+        }
+
+        auto genesis_state = cybou::CreateDevGenesisState();
+        std::vector<cybou::InitialAuthorityAssignment> initial_authority;
+
+        if (argc >= 8 && std::string_view{argv[6]} != "-") {
+            auto boot_id_hex = cybou::ParseUint256UserHex(argv[6]);
+            if (!boot_id_hex) throw std::runtime_error("invalid bootstrap recovery key id hex");
+            uint64_t boot_auth = std::stoull(argv[7]);
+            cybou::IdentityKeyId id{};
+            std::copy(boot_id_hex->begin(), boot_id_hex->end(), id.begin());
+            initial_authority.push_back({id, boot_auth});
+            genesis_state.genesis_allocations.emplace(id, cybou::GenesisAllocation{.balance = 0, .label = ""});
+        }
+
+        if (argc >= 11 && std::string_view{argv[8]} != "-") {
+            auto auth_id_hex = cybou::ParseUint256UserHex(argv[8]);
+            if (!auth_id_hex) throw std::runtime_error("invalid authority recovery key id hex");
+            uint64_t balance = std::stoull(argv[9]);
+            std::string label = argv[10];
+            cybou::IdentityKeyId id{};
+            std::copy(auth_id_hex->begin(), auth_id_hex->end(), id.begin());
+            genesis_state.genesis_allocations.emplace(id, cybou::GenesisAllocation{.balance = balance, .label = label});
+        }
+
+        if (cybou::ValidateCybouState(genesis_state) != cybou::StateValidationError::NONE) {
+            cybou::crypto::CleanseMemory(net_seed.data(), net_seed.size());
+            throw std::runtime_error("genesis state validation failed");
+        }
+
+        const auto state_root = cybou::CybouStateHash(genesis_state);
+        if (!state_root) {
+            cybou::crypto::CleanseMemory(net_seed.data(), net_seed.size());
+            throw std::runtime_error("cannot compute genesis state root");
+        }
+
+        cybou::NetworkGenesis spec;
+        spec.version = cybou::CYBOU_NETWORK_GENESIS_VERSION;
+        spec.genesis_generation = generation;
+        spec.network_public_key = *net_pub;
+        spec.genesis_state_root = *state_root;
+        spec.poa_finalizer_public_key = *poa_pub;
+        spec.protocol_parameters = cybou::DevProtocolParameters();
+        spec.initial_authority = std::move(initial_authority);
+
+        const auto digest = cybou::ComputeNetworkGenesisDigest(spec);
+        auto sig = cybou::SignIdentityMessage(net_seed, cybou::IdentityKeyPurpose::NETWORK_ROOT,
+            std::span<const unsigned char>{digest.begin(), digest.size()});
+        cybou::crypto::CleanseMemory(net_seed.data(), net_seed.size());
+        if (!sig) throw std::runtime_error("cannot sign genesis with network private key");
+        spec.signature = *sig;
+
+        if (cybou::VerifySignedNetworkGenesis(spec) != cybou::NetworkGenesisError::NONE) {
+            throw std::runtime_error("signed genesis verification failed");
+        }
+
+        auto signed_bytes = cybou::SerializeSignedNetworkGenesis(spec);
+        auto state_bytes = cybou::SerializeCybouState(genesis_state);
+        if (!state_bytes) throw std::runtime_error("cannot serialize genesis state");
+
+        // Format: 'C', 'Y', 'G', '1' || u32 signed_genesis_len || signed_genesis || u32 state_len || state
+        std::vector<unsigned char> out{'C', 'Y', 'G', '1'};
+        PutU32(out, signed_bytes.size());
+        out.insert(out.end(), signed_bytes.begin(), signed_bytes.end());
+        PutU32(out, state_bytes->size());
+        out.insert(out.end(), state_bytes->begin(), state_bytes->end());
+
+        WriteNewFile(argv[4], out);
+        std::cout << "genesis_generation=" << generation << " state_root=" << state_root->GetHex() << '\n';
         return 0;
     }
     if ((argc == 4 || argc == 6) && std::string_view{argv[1]} == "network-init") {
@@ -584,6 +723,11 @@ const char* Help = R"(CYBOU operator CLI (CYP2 only)
   observer run  --network FILE --data-dir DIR --peer IP:PORT
                 [--listen IP:PORT] [--peers FILE] [--event-log FILE] [--event-log-mode minimal|lab]
   network info --network FILE
+  network keygen-network --out-key FILE
+  network keygen-poa --out-key FILE --out-public-key FILE
+  network genesis-create --network-key-file FILE --poa-public-key FILE --out FILE
+         [--generation 1] [--bootstrap-recovery-id HEX] [--bootstrap-authority 1000001]
+         [--authority-recovery-id HEX --authority-balance CYBOU --authority-name LABEL]
   network init-dev --network FILE --key-file FILE
          [--authority-balance CYBOU --authority-name LABEL]
   network bootstrap
@@ -763,6 +907,38 @@ int Main(int argc, char* argv[])
         if (!net) throw std::runtime_error("invalid network/genesis");
         std::cout << "network_id=" << cybou::NetworkId(net->definition).GetHex()
             << " genesis=" << net->definition.genesis_block_id.GetHex() << '\n'; return 0;
+    } else if (group=="network" && action=="keygen-network") {
+        opts.Allow({"out-key"});
+        args.insert(args.end(),{"network-keygen-net",opts.Require("out-key")});
+    } else if (group=="network" && action=="keygen-poa") {
+        opts.Allow({"out-key","out-public-key"});
+        args.insert(args.end(),{"network-keygen-poa",opts.Require("out-key"),opts.Require("out-public-key")});
+    } else if (group=="network" && action=="genesis-create") {
+        opts.Allow({"network-key-file","poa-public-key","out","generation",
+            "bootstrap-recovery-id","bootstrap-authority",
+            "authority-recovery-id","authority-balance","authority-name"});
+        const std::string gen = opts.Get("generation","1");
+        std::string boot_id = "-";
+        std::string boot_auth = "-";
+        if (opts.Has("bootstrap-recovery-id")) {
+            boot_id = opts.Get("bootstrap-recovery-id");
+            boot_auth = opts.Get("bootstrap-authority","1000001");
+        } else if (opts.Has("bootstrap-authority")) {
+            throw std::invalid_argument("--bootstrap-authority requires --bootstrap-recovery-id");
+        }
+        std::string auth_id = "-";
+        std::string auth_bal = "-";
+        std::string auth_name = "-";
+        if (opts.Has("authority-recovery-id")) {
+            auth_id = opts.Get("authority-recovery-id");
+            auth_bal = opts.Require("authority-balance");
+            auth_name = opts.Require("authority-name");
+        } else if (opts.Has("authority-balance") || opts.Has("authority-name")) {
+            throw std::invalid_argument("--authority-balance and --authority-name require --authority-recovery-id");
+        }
+        args.insert(args.end(),{"network-genesis-create",
+            opts.Require("network-key-file"),opts.Require("poa-public-key"),opts.Require("out"),
+            gen,boot_id,boot_auth,auth_id,auth_bal,auth_name});
     } else if (group=="network" && action=="init-dev") {
         opts.Allow({"network","key-file","authority-balance","authority-name"});
         args.insert(args.end(),{"network-init",opts.Require("network"),opts.Require("key-file")});

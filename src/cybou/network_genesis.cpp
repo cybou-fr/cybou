@@ -36,7 +36,7 @@ void WriteHash(std::vector<unsigned char>& out, const uint256& hash) {
 
 } // namespace
 
-std::vector<unsigned char> CanonicalSerializeNetworkPublicKey(const IdentityHybridPublicKey& key)
+std::vector<unsigned char> CanonicalSerializeHybridPublicKey(const IdentityHybridPublicKey& key)
 {
     std::vector<unsigned char> out;
     out.reserve(1 + ED25519_PUBLIC_KEY_SIZE + 4 + key.ml_dsa.size());
@@ -47,12 +47,32 @@ std::vector<unsigned char> CanonicalSerializeNetworkPublicKey(const IdentityHybr
     return out;
 }
 
-std::optional<IdentityHybridPublicKey> CanonicalDeserializeNetworkPublicKey(std::span<const unsigned char> bytes)
+std::optional<IdentityHybridPublicKey> CanonicalDeserializeHybridPublicKey(
+    std::span<const unsigned char> bytes,
+    std::optional<IdentityKeyPurpose> expected_purpose)
 {
     if (bytes.size() < 1 + ED25519_PUBLIC_KEY_SIZE + 4) return std::nullopt;
     IdentityHybridPublicKey key;
     key.purpose = static_cast<IdentityKeyPurpose>(bytes[0]);
-    if (key.purpose != IdentityKeyPurpose::NETWORK_ROOT) return std::nullopt;
+    if (expected_purpose && key.purpose != *expected_purpose) return std::nullopt;
+
+    size_t expected_ml_dsa_size = 0;
+    switch (key.purpose) {
+    case IdentityKeyPurpose::AUTHORIZATION:
+    case IdentityKeyPurpose::STORAGE_PROVIDER:
+        expected_ml_dsa_size = MLDSA44_PUBLIC_KEY_SIZE;
+        break;
+    case IdentityKeyPurpose::RECOVERY_ROOT:
+    case IdentityKeyPurpose::RELEASE_SIGNING:
+    case IdentityKeyPurpose::TREASURY:
+    case IdentityKeyPurpose::POA_FINALIZER:
+    case IdentityKeyPurpose::NETWORK_ROOT:
+        expected_ml_dsa_size = MLDSA65_PUBLIC_KEY_SIZE;
+        break;
+    default:
+        return std::nullopt;
+    }
+
     size_t pos = 1;
     std::copy_n(bytes.begin() + pos, ED25519_PUBLIC_KEY_SIZE, key.ed25519.begin());
     pos += ED25519_PUBLIC_KEY_SIZE;
@@ -63,9 +83,19 @@ std::optional<IdentityHybridPublicKey> CanonicalDeserializeNetworkPublicKey(std:
                           (static_cast<uint32_t>(bytes[pos + 3]) << 24);
     pos += 4;
     if (pos + ml_dsa_len != bytes.size()) return std::nullopt;
-    if (ml_dsa_len != MLDSA65_PUBLIC_KEY_SIZE) return std::nullopt;
+    if (ml_dsa_len != expected_ml_dsa_size) return std::nullopt;
     key.ml_dsa.assign(bytes.begin() + pos, bytes.end());
     return key;
+}
+
+std::vector<unsigned char> CanonicalSerializeNetworkPublicKey(const IdentityHybridPublicKey& key)
+{
+    return CanonicalSerializeHybridPublicKey(key);
+}
+
+std::optional<IdentityHybridPublicKey> CanonicalDeserializeNetworkPublicKey(std::span<const unsigned char> bytes)
+{
+    return CanonicalDeserializeHybridPublicKey(bytes, IdentityKeyPurpose::NETWORK_ROOT);
 }
 
 std::vector<unsigned char> SerializeNetworkGenesisPayload(const NetworkGenesis& genesis)

@@ -108,6 +108,12 @@ private:
     std::vector<unsigned char> m_network_id_bytes;
 };
 
+/** Canonical byte serialization of any IdentityHybridPublicKey. */
+std::vector<unsigned char> CanonicalSerializeHybridPublicKey(const IdentityHybridPublicKey& key);
+std::optional<IdentityHybridPublicKey> CanonicalDeserializeHybridPublicKey(
+    std::span<const unsigned char> bytes,
+    std::optional<IdentityKeyPurpose> expected_purpose = std::nullopt);
+
 /** Canonical byte serialization of Network Public Key (exact NetworkID). */
 std::vector<unsigned char> CanonicalSerializeNetworkPublicKey(const IdentityHybridPublicKey& key);
 std::optional<IdentityHybridPublicKey> CanonicalDeserializeNetworkPublicKey(std::span<const unsigned char> bytes);
