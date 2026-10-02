@@ -46,6 +46,7 @@ enum class NetworkDefinitionError : uint8_t {
     INVALID_NAME_PARAMETERS,
 };
 
+bool ValidateProtocolParameters(const CybouProtocolParameters& params);
 NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& definition);
 std::vector<unsigned char> SerializeNetworkDefinition(const CybouNetworkDefinition& definition);
 std::optional<CybouNetworkDefinition> DeserializeNetworkDefinition(std::span<const unsigned char> bytes);

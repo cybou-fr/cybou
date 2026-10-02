@@ -339,18 +339,10 @@ int Execute(const int argc, char* argv[])
             throw std::runtime_error("signed genesis verification failed");
         }
 
-        auto signed_bytes = cybou::SerializeSignedNetworkGenesis(spec);
-        auto state_bytes = cybou::SerializeCybouState(genesis_state);
-        if (!state_bytes) throw std::runtime_error("cannot serialize genesis state");
+        const auto bundle_bytes = cybou::SerializeNetworkGenesisBundle(spec, genesis_state);
+        if (!bundle_bytes) throw std::runtime_error("cannot serialize network genesis bundle");
 
-        // Format: 'C', 'Y', 'G', '1' || u32 signed_genesis_len || signed_genesis || u32 state_len || state
-        std::vector<unsigned char> out{'C', 'Y', 'G', '1'};
-        PutU32(out, signed_bytes.size());
-        out.insert(out.end(), signed_bytes.begin(), signed_bytes.end());
-        PutU32(out, state_bytes->size());
-        out.insert(out.end(), state_bytes->begin(), state_bytes->end());
-
-        WriteNewFile(argv[4], out);
+        WriteNewFile(argv[4], *bundle_bytes);
         const auto net_id_bytes = cybou::CanonicalSerializeNetworkPublicKey(*net_pub);
         std::cout << "network_id=" << HexStr(net_id_bytes)
                   << " genesis_digest=" << digest.GetHex()

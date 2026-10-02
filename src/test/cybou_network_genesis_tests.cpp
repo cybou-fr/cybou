@@ -91,6 +91,117 @@ BOOST_AUTO_TEST_CASE(test_network_key_and_signed_genesis_lifecycle)
     BOOST_CHECK(!cybou::VerifiedNetworkGenesis::Create(tampered).has_value());
 }
 
+BOOST_AUTO_TEST_CASE(test_initial_authority_hardening_and_validation)
+{
+    std::array<unsigned char, 32> net_secret{};
+    net_secret.fill(0x11);
+    auto net_pub = cybou::DeriveIdentityPublicKey(net_secret, cybou::IdentityKeyPurpose::NETWORK_ROOT);
+    auto poa_pub = cybou::DeriveIdentityPublicKey(net_secret, cybou::IdentityKeyPurpose::POA_FINALIZER);
+    BOOST_REQUIRE(net_pub && poa_pub);
+
+    cybou::NetworkGenesis spec;
+    spec.version = cybou::CYBOU_NETWORK_GENESIS_VERSION;
+    spec.network_public_key = *net_pub;
+    spec.genesis_state_root = uint256::ONE;
+    spec.poa_finalizer_public_key = *poa_pub;
+    spec.protocol_parameters = cybou::DevProtocolParameters();
+
+    cybou::IdentityKeyId id1{}, id2{};
+    id1[0] = 0x10;
+    id2[0] = 0x20;
+
+    // Zero ID rejected
+    cybou::IdentityKeyId zero_id{};
+    spec.initial_authority = {{zero_id, 1000001}};
+    BOOST_CHECK(cybou::VerifySignedNetworkGenesis(spec) == cybou::NetworkGenesisError::INVALID_INITIAL_AUTHORITY);
+
+    // Zero authority value rejected
+    spec.initial_authority = {{id1, 0}};
+    BOOST_CHECK(cybou::VerifySignedNetworkGenesis(spec) == cybou::NetworkGenesisError::INVALID_INITIAL_AUTHORITY);
+
+    // Unsorted keys rejected
+    spec.initial_authority = {{id2, 1000001}, {id1, 1000002}};
+    BOOST_CHECK(cybou::VerifySignedNetworkGenesis(spec) == cybou::NetworkGenesisError::INVALID_INITIAL_AUTHORITY);
+
+    // Duplicate keys rejected
+    spec.initial_authority = {{id1, 1000001}, {id1, 1000002}};
+    BOOST_CHECK(cybou::VerifySignedNetworkGenesis(spec) == cybou::NetworkGenesisError::INVALID_INITIAL_AUTHORITY);
+
+    // Strictly canonical order accepted
+    spec.initial_authority = {{id1, 1000001}, {id2, 1000002}};
+    const auto digest = cybou::ComputeNetworkGenesisDigest(spec);
+    auto sig = cybou::SignIdentityMessage(net_secret, cybou::IdentityKeyPurpose::NETWORK_ROOT,
+        std::span<const unsigned char>{digest.begin(), digest.size()});
+    BOOST_REQUIRE(sig.has_value());
+    spec.signature = *sig;
+    BOOST_CHECK(cybou::VerifySignedNetworkGenesis(spec) == cybou::NetworkGenesisError::NONE);
+}
+
+BOOST_AUTO_TEST_CASE(test_cyg1_signed_genesis_bundle_lifecycle)
+{
+    std::array<unsigned char, 32> net_secret{};
+    net_secret.fill(0x77);
+    auto net_pub = cybou::DeriveIdentityPublicKey(net_secret, cybou::IdentityKeyPurpose::NETWORK_ROOT);
+    auto poa_pub = cybou::DeriveIdentityPublicKey(net_secret, cybou::IdentityKeyPurpose::POA_FINALIZER);
+    BOOST_REQUIRE(net_pub && poa_pub);
+
+    auto state = cybou::CreateDevGenesisState();
+    cybou::IdentityKeyId auth_id{};
+    auth_id[0] = 0x42;
+    state.genesis_allocations.emplace(auth_id, cybou::GenesisAllocation{.balance = 100, .label = "bootstrap"});
+    const auto state_root = cybou::CybouStateHash(state);
+    BOOST_REQUIRE(state_root.has_value());
+
+    cybou::NetworkGenesis spec;
+    spec.version = cybou::CYBOU_NETWORK_GENESIS_VERSION;
+    spec.network_public_key = *net_pub;
+    spec.genesis_state_root = *state_root;
+    spec.poa_finalizer_public_key = *poa_pub;
+    spec.protocol_parameters = cybou::DevProtocolParameters();
+    spec.initial_authority.push_back({auth_id, 1000001});
+
+    const auto digest = cybou::ComputeNetworkGenesisDigest(spec);
+    auto sig = cybou::SignIdentityMessage(net_secret, cybou::IdentityKeyPurpose::NETWORK_ROOT,
+        std::span<const unsigned char>{digest.begin(), digest.size()});
+    BOOST_REQUIRE(sig.has_value());
+    spec.signature = *sig;
+
+    // Serialization to CYG1 bundle
+    const auto bundle_bytes = cybou::SerializeNetworkGenesisBundle(spec, state);
+    BOOST_REQUIRE(bundle_bytes.has_value());
+    BOOST_CHECK_EQUAL(bundle_bytes->at(0), 'C');
+    BOOST_CHECK_EQUAL(bundle_bytes->at(1), 'Y');
+    BOOST_CHECK_EQUAL(bundle_bytes->at(2), 'G');
+    BOOST_CHECK_EQUAL(bundle_bytes->at(3), '1');
+
+    // Verification of CYG1 bundle
+    auto verified_bundle = cybou::VerifyNetworkGenesisBundle(*bundle_bytes);
+    BOOST_REQUIRE(verified_bundle.has_value());
+    BOOST_CHECK(verified_bundle->genesis_digest == digest);
+    BOOST_CHECK(verified_bundle->network_definition.genesis_state_root == *state_root);
+    BOOST_CHECK(verified_bundle->network_definition.poa_finalizer_public_key == *poa_pub);
+
+    // Transparent deserialization via DeserializeCybouNetworkFile
+    auto net_file = cybou::DeserializeCybouNetworkFile(*bundle_bytes);
+    BOOST_REQUIRE(net_file.has_value());
+    BOOST_CHECK(net_file->definition.genesis_state_root == *state_root);
+
+    // Initial authority not in state allocations fails bundle serialization & verification
+    auto bad_state = state;
+    bad_state.genesis_allocations.erase(auth_id);
+    const auto bad_state_root = cybou::CybouStateHash(bad_state);
+    BOOST_REQUIRE(bad_state_root.has_value());
+    auto bad_spec = spec;
+    bad_spec.genesis_state_root = *bad_state_root;
+    const auto bad_digest = cybou::ComputeNetworkGenesisDigest(bad_spec);
+    auto bad_sig = cybou::SignIdentityMessage(net_secret, cybou::IdentityKeyPurpose::NETWORK_ROOT,
+        std::span<const unsigned char>{bad_digest.begin(), bad_digest.size()});
+    BOOST_REQUIRE(bad_sig.has_value());
+    bad_spec.signature = *bad_sig;
+
+    BOOST_CHECK(!cybou::SerializeNetworkGenesisBundle(bad_spec, bad_state).has_value());
+}
+
 BOOST_AUTO_TEST_CASE(test_official_network_profiles_constitution)
 {
     // DEVNET profile checks

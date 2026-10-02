@@ -122,6 +122,28 @@ std::optional<IdentityHybridPublicKey> CanonicalDeserializeHybridPublicKey(
 std::vector<unsigned char> CanonicalSerializeNetworkPublicKey(const IdentityHybridPublicKey& key);
 std::optional<IdentityHybridPublicKey> CanonicalDeserializeNetworkPublicKey(std::span<const unsigned char> bytes);
 
+/**
+ * Immutable, cryptographically verified bundle containing the signed genesis specification,
+ * genesis state, and derived network consensus definition.
+ */
+struct VerifiedNetworkBundle {
+    VerifiedNetworkGenesis genesis;
+    CybouState genesis_state;
+    CybouNetworkDefinition network_definition;
+    uint256 genesis_digest;
+};
+
+/** Serializes a signed genesis and genesis state into a CYG1 bundle. */
+std::optional<std::vector<unsigned char>> SerializeNetworkGenesisBundle(
+    const NetworkGenesis& genesis,
+    const CybouState& genesis_state);
+
+/** Verifies and deserializes a CYG1 signed genesis bundle. */
+std::optional<VerifiedNetworkBundle> VerifyNetworkGenesisBundle(std::span<const unsigned char> bytes);
+
+/** Loads and verifies a CYG1 signed genesis bundle from disk. */
+std::optional<VerifiedNetworkBundle> LoadNetworkGenesisBundle(const std::filesystem::path& path);
+
 } // namespace cybou
 
 #endif // CYBOU_NETWORK_GENESIS_H

@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/state.h>
 #include <cybou/root_publication.h>
 
@@ -14,6 +15,39 @@
 #include <string_view>
 
 namespace cybou {
+
+bool ValidateProtocolParameters(const CybouProtocolParameters& params)
+{
+    if (params.account_creation_work_bits > uint256::size() * 8) {
+        return false;
+    }
+    if (params.max_account_creates_per_block == 0) {
+        return false;
+    }
+    if (params.epoch_blocks == 0) {
+        return false;
+    }
+    const auto max_fee_kib = (ROOT_PUBLICATION_MAX_OPERATION_BYTES + 1023) / 1024;
+    const auto per_kib = params.root_publication_fee_per_started_kib;
+    const auto per_chunk = params.root_publication_fee_per_chunk;
+    if ((per_kib != 0 && max_fee_kib > std::numeric_limits<uint64_t>::max() / per_kib) ||
+        (per_chunk != 0 && MAX_PUBLICATION_CHUNKS > std::numeric_limits<uint64_t>::max() / per_chunk)) {
+        return false;
+    }
+    const auto max_byte_fee = static_cast<uint64_t>(max_fee_kib) * per_kib;
+    const auto max_chunk_fee = static_cast<uint64_t>(MAX_PUBLICATION_CHUNKS) * per_chunk;
+    if (max_chunk_fee > std::numeric_limits<uint64_t>::max() - max_byte_fee) {
+        return false;
+    }
+    if (params.name_claim_work_bits > uint256::size() * 8 ||
+        params.name_commit_min_depth == 0 ||
+        params.name_commit_max_lifetime < params.name_commit_min_depth ||
+        params.max_pending_name_commits == 0 ||
+        params.max_pending_name_commits > DEFAULT_MAX_PENDING_NAME_COMMITS) {
+        return false;
+    }
+    return true;
+}
 
 NetworkDefinitionError ValidateNetworkDefinition(const CybouNetworkDefinition& definition)
 {
@@ -202,6 +236,11 @@ uint256 NetworkId(const CybouNetworkDefinition& definition)
 
 std::optional<CybouNetworkFile> DeserializeCybouNetworkFile(const std::span<const unsigned char> bytes)
 {
+    if (bytes.size() >= 4 && bytes[0] == 'C' && bytes[1] == 'Y' && bytes[2] == 'G' && bytes[3] == '1') {
+        const auto bundle = VerifyNetworkGenesisBundle(bytes);
+        if (!bundle) return std::nullopt;
+        return CybouNetworkFile{bundle->network_definition, bundle->genesis_state};
+    }
     if (bytes.size() < 12 || bytes.size() > 16 * 1024 * 1024 ||
         !std::equal(bytes.begin(), bytes.begin() + 4, "CYN1")) return std::nullopt;
     const auto read_u32 = [&bytes](size_t offset) {

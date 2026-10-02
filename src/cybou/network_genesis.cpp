@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 
 namespace cybou {
@@ -305,24 +307,19 @@ NetworkGenesisError VerifySignedNetworkGenesis(const NetworkGenesis& genesis)
         return NetworkGenesisError::INVALID_POA_KEY;
     }
 
-    const auto& p = genesis.protocol_parameters;
-    if (p.account_creation_work_bits > uint256::size() * 8 ||
-        p.max_account_creates_per_block == 0 ||
-        p.epoch_blocks == 0) {
+    if (!ValidateProtocolParameters(genesis.protocol_parameters)) {
         return NetworkGenesisError::INVALID_PROTOCOL_PARAMETERS;
     }
-    const auto max_fee_kib = (ROOT_PUBLICATION_MAX_OPERATION_BYTES + 1023) / 1024;
-    const auto per_kib = p.root_publication_fee_per_started_kib;
-    const auto per_chunk = p.root_publication_fee_per_chunk;
-    if ((per_kib != 0 && max_fee_kib > std::numeric_limits<uint64_t>::max() / per_kib) ||
-        (per_chunk != 0 && MAX_PUBLICATION_CHUNKS > std::numeric_limits<uint64_t>::max() / per_chunk)) {
-        return NetworkGenesisError::INVALID_PROTOCOL_PARAMETERS;
-    }
-    if (p.name_claim_work_bits > uint256::size() * 8 ||
-        p.name_commit_min_depth == 0 ||
-        p.name_commit_max_lifetime < p.name_commit_min_depth ||
-        p.max_pending_name_commits == 0) {
-        return NetworkGenesisError::INVALID_PROTOCOL_PARAMETERS;
+
+    for (size_t i = 0; i < genesis.initial_authority.size(); ++i) {
+        const auto& entry = genesis.initial_authority[i];
+        if (entry.initial_authority == 0 ||
+            std::all_of(entry.recovery_key_id.begin(), entry.recovery_key_id.end(), [](unsigned char b){ return b == 0; })) {
+            return NetworkGenesisError::INVALID_INITIAL_AUTHORITY;
+        }
+        if (i > 0 && entry.recovery_key_id <= genesis.initial_authority[i - 1].recovery_key_id) {
+            return NetworkGenesisError::INVALID_INITIAL_AUTHORITY;
+        }
     }
 
     // Cryptographic signature check under Network Key
@@ -371,6 +368,134 @@ VerifiedNetworkGenesis CreateTestVerifiedGenesis(
     spec.signature = *sig;
     auto verified = VerifiedNetworkGenesis::Create(spec);
     return *verified;
+}
+
+std::optional<std::vector<unsigned char>> SerializeNetworkGenesisBundle(
+    const NetworkGenesis& genesis,
+    const CybouState& genesis_state)
+{
+    if (VerifySignedNetworkGenesis(genesis) != NetworkGenesisError::NONE) {
+        return std::nullopt;
+    }
+    if (ValidateCybouState(genesis_state) != StateValidationError::NONE) {
+        return std::nullopt;
+    }
+    const auto computed_root = CybouStateHash(genesis_state);
+    if (!computed_root || *computed_root != genesis.genesis_state_root) {
+        return std::nullopt;
+    }
+    for (const auto& entry : genesis.initial_authority) {
+        if (!genesis_state.genesis_allocations.contains(entry.recovery_key_id)) {
+            return std::nullopt;
+        }
+    }
+
+    const auto signed_bytes = SerializeSignedNetworkGenesis(genesis);
+    const auto state_bytes = SerializeCybouState(genesis_state);
+    if (!state_bytes) return std::nullopt;
+
+    if (signed_bytes.size() > 4 * 1024 * 1024 || state_bytes->size() > 16 * 1024 * 1024) {
+        return std::nullopt;
+    }
+
+    std::vector<unsigned char> out;
+    out.reserve(4 + 4 + signed_bytes.size() + 4 + state_bytes->size());
+    out.insert(out.end(), {'C', 'Y', 'G', '1'});
+
+    WriteU32LE(out, static_cast<uint32_t>(signed_bytes.size()));
+    out.insert(out.end(), signed_bytes.begin(), signed_bytes.end());
+    WriteU32LE(out, static_cast<uint32_t>(state_bytes->size()));
+    out.insert(out.end(), state_bytes->begin(), state_bytes->end());
+
+    return out;
+}
+
+std::optional<VerifiedNetworkBundle> VerifyNetworkGenesisBundle(const std::span<const unsigned char> bytes)
+{
+    if (bytes.size() < 12 || bytes.size() > 20 * 1024 * 1024) {
+        return std::nullopt;
+    }
+    if (bytes[0] != 'C' || bytes[1] != 'Y' || bytes[2] != 'G' || bytes[3] != '1') {
+        return std::nullopt;
+    }
+
+    const auto read_u32le = [&bytes](size_t offset) -> uint32_t {
+        uint32_t val = 0;
+        for (int i = 0; i < 4; ++i) {
+            val |= static_cast<uint32_t>(bytes[offset + i]) << (8 * i);
+        }
+        return val;
+    };
+
+    const uint32_t genesis_len = read_u32le(4);
+    if (genesis_len == 0 || 8 + genesis_len + 4 > bytes.size()) {
+        return std::nullopt;
+    }
+
+    const size_t state_offset = 8 + genesis_len;
+    const uint32_t state_len = read_u32le(state_offset);
+    if (state_offset + 4 + state_len != bytes.size()) {
+        return std::nullopt;
+    }
+
+    auto parsed_genesis = DeserializeSignedNetworkGenesis(bytes.subspan(8, genesis_len));
+    if (!parsed_genesis) return std::nullopt;
+
+    auto verified_genesis = VerifiedNetworkGenesis::Create(*parsed_genesis);
+    if (!verified_genesis) return std::nullopt;
+
+    auto state = DeserializeCybouState(bytes.subspan(state_offset + 4, state_len));
+    if (!state) return std::nullopt;
+
+    if (ValidateCybouState(*state) != StateValidationError::NONE) {
+        return std::nullopt;
+    }
+
+    const auto state_hash = CybouStateHash(*state);
+    if (!state_hash || *state_hash != verified_genesis->GetGenesisStateRoot()) {
+        return std::nullopt;
+    }
+
+    for (const auto& entry : verified_genesis->GetInitialAuthority()) {
+        if (!state->genesis_allocations.contains(entry.recovery_key_id)) {
+            return std::nullopt;
+        }
+    }
+
+    CybouNetworkDefinition def;
+    def.protocol_version = CYBOU_NETWORK_DEFINITION_VERSION;
+    def.genesis_state_root = verified_genesis->GetGenesisStateRoot();
+    def.poa_finalizer_public_key = verified_genesis->GetPoaPublicKey();
+    def.genesis_block_id = ComputeGenesisBlockId(def.genesis_state_root, def.poa_finalizer_public_key);
+    def.protocol_parameters = verified_genesis->GetProtocolParameters();
+
+    if (ValidateNetworkDefinition(def) != NetworkDefinitionError::NONE) {
+        return std::nullopt;
+    }
+
+    const auto digest = verified_genesis->GetGenesisDigest();
+    return VerifiedNetworkBundle{
+        .genesis = std::move(*verified_genesis),
+        .genesis_state = std::move(*state),
+        .network_definition = std::move(def),
+        .genesis_digest = digest,
+    };
+}
+
+std::optional<VerifiedNetworkBundle> LoadNetworkGenesisBundle(const std::filesystem::path& path)
+{
+    std::error_code ec;
+    const auto file_size = std::filesystem::file_size(path, ec);
+    if (ec || file_size < 12 || file_size > 20 * 1024 * 1024) return std::nullopt;
+
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream.is_open()) return std::nullopt;
+
+    std::vector<unsigned char> bytes(file_size);
+    stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(file_size));
+    if (!stream) return std::nullopt;
+
+    return VerifyNetworkGenesisBundle(bytes);
 }
 
 } // namespace cybou
