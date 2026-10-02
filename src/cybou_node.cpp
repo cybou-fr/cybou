@@ -16,6 +16,7 @@
 #include <cybou/hex.h>
 #include <cybou/network_definition.h>
 #include <cybou/network_genesis.h>
+#include <cybou/official_networks.h>
 #include <cybou/node_runtime.h>
 #include <cybou/node_service.h>
 #include <cybou/p2p/peer_manager.h>
@@ -51,6 +52,7 @@ std::shared_ptr<cybou::EventWriter> events;
 std::vector<std::pair<std::string,uint16_t>> explicit_peers;
 std::optional<std::pair<std::string,uint16_t>> advertised_endpoint;
 std::shared_ptr<const cybou::p2p::PeerAdmissionPolicy> active_peer_admission_policy;
+bool active_lab_admission{false};
 
 void Stop(int) { stopping.store(true); }
 
@@ -171,9 +173,11 @@ void ConfigurePeerAdmission(const cybou::cli::Options& opts, const std::filesyst
         }
         active_peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
             cybou::p2p::PeerAdmissionPolicy::Lab());
+        active_lab_admission = true;
         return;
     }
     if (mode != "france") throw std::invalid_argument("peer admission must be france or lab");
+    active_lab_admission = false;
     const bool has_csv = opts.Has("geo-country-csv");
     const bool has_sha256 = opts.Has("geo-sha256");
     const bool has_month = opts.Has("geo-issued-month");
@@ -194,6 +198,15 @@ void ConfigurePeerAdmission(const cybou::cli::Options& opts, const std::filesyst
     active_peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
         cybou::p2p::PeerAdmissionPolicy::Public(dataset));
     std::cerr << "Peer Geo data: DB-IP Lite IP to Country; attribution: DB-IP.com (CC BY 4.0)\n";
+}
+
+void RequireOfficialBundleForPublicNetworking(const cybou::VerifiedNetworkBundle& bundle)
+{
+    if (!active_peer_admission_policy || active_lab_admission) return;
+    const auto* profile = cybou::FindOfficialNetworkProfile(bundle.genesis.GetNetworkId());
+    if (!profile || !cybou::MatchesOfficialNetworkProfile(bundle, *profile)) {
+        throw std::runtime_error("public networking requires a release-pinned official CYG1 bundle");
+    }
 }
 
 int PrintPeerSubmitResult(const cybou::p2p::PeerSubmitResult& result)
@@ -340,6 +353,7 @@ int Execute(const int argc, char* argv[])
     if (argc < 5) throw std::runtime_error("invalid command arguments; use --help");
     const auto network = cybou::LoadNetworkGenesisBundle(argv[2]);
     if (!network) throw std::runtime_error("invalid signed CYG1 network bundle");
+    RequireOfficialBundleForPublicNetworking(*network);
     std::signal(SIGINT, Stop);
     std::signal(SIGTERM, Stop);
 #ifdef _WIN32
@@ -779,6 +793,7 @@ int StorageCommand(const std::string& action, const cybou::cli::Options& opts)
     if (opts.Has("peer")) ConfigurePeerAdmission(opts, opts.Require("data-dir"));
     auto net=cybou::LoadNetworkGenesisBundle(opts.Require("network"));
     if (!net) throw std::runtime_error("invalid network");
+    RequireOfficialBundleForPublicNetworking(*net);
     cybou::NodeRuntimeConfig config{.network_definition=net->network_definition,.genesis_digest=net->genesis_digest,.data_dir=opts.Require("data-dir")};
     config.peer_admission_policy = active_peer_admission_policy;
     if (opts.Has("peer")) config.p2p_endpoint=Endpoint(opts.Get("peer"));
@@ -830,6 +845,7 @@ int StorageCommand(const std::string& action, const cybou::cli::Options& opts)
 int Main(int argc, char* argv[])
 {
     active_peer_admission_policy.reset();
+    active_lab_admission = false;
     if (argc == 1 || std::any_of(argv+1,argv+argc,[](const char* arg){ return std::string_view{arg}=="--help"; })) {
         std::cout << Help; return 0;
     }

@@ -55,6 +55,7 @@ uint256 NetworkId(const CybouNetworkDefinition& definition);
 struct CybouNetworkFile {
     CybouNetworkDefinition definition;
     CybouState genesis;
+    uint256 genesis_digest{};
 };
 
 std::optional<std::vector<unsigned char>> SerializeCybouNetworkFile(const CybouNetworkFile& file);

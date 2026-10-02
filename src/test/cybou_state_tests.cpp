@@ -915,6 +915,11 @@ BOOST_AUTO_TEST_CASE(state_store_verifies_genesis_digest)
     const auto missing_digest = pinned_store.LoadState();
     BOOST_CHECK(!missing_digest);
     BOOST_CHECK(missing_digest.error == StateLoadError::GENESIS_DIGEST_MISMATCH);
+
+    CybouStateStore unpinned_store(db, definition);
+    const auto unexpected_digest = unpinned_store.LoadState();
+    BOOST_CHECK(!unexpected_digest);
+    BOOST_CHECK(unexpected_digest.error == StateLoadError::GENESIS_DIGEST_MISMATCH);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

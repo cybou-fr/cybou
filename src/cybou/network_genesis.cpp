@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/network_genesis.h>
+#include <cybou/official_networks.h>
 #include <cybou/crypto/sha256.h>
 #include <cybou/root_publication.h>
 
@@ -488,6 +489,15 @@ std::optional<VerifiedNetworkBundle> VerifyNetworkGenesisBundle(const std::span<
         .network_definition = std::move(def),
         .genesis_digest = digest,
     };
+}
+
+bool MatchesOfficialNetworkProfile(const VerifiedNetworkBundle& bundle, const OfficialNetworkProfile& profile)
+{
+    const auto network_id = bundle.genesis.GetNetworkId();
+    return !profile.network_public_key_bytes.empty() && !profile.genesis_digest.IsNull() &&
+        network_id.size() == profile.network_public_key_bytes.size() &&
+        std::equal(network_id.begin(), network_id.end(), profile.network_public_key_bytes.begin()) &&
+        bundle.genesis_digest == profile.genesis_digest;
 }
 
 std::optional<VerifiedNetworkBundle> LoadNetworkGenesisBundle(const std::filesystem::path& path)

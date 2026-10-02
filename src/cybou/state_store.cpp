@@ -96,7 +96,7 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
         return {GenesisInitError::INVALID_NETWORK_DEFINITION};
     }
     if (m_db.Exists(STATE_KEY) || m_db.Exists(HASH_KEY) || m_db.Exists(HEAD_KEY) ||
-        m_db.Exists(NETWORK_ID_KEY)) {
+        m_db.Exists(NETWORK_ID_KEY) || m_db.Exists(GENESIS_DIGEST_KEY)) {
         return {GenesisInitError::ALREADY_INITIALIZED};
     }
     const auto state_hash = CybouStateHash(genesis_state);
@@ -134,7 +134,8 @@ StateLoadResult CybouStateStore::LoadState() const
     const bool hash_exists{m_db.Exists(HASH_KEY)};
     const bool head_exists{m_db.Exists(HEAD_KEY)};
     const bool network_exists{m_db.Exists(NETWORK_ID_KEY)};
-    if (!state_exists && !hash_exists && !head_exists && !network_exists) {
+    const bool digest_exists{m_db.Exists(GENESIS_DIGEST_KEY)};
+    if (!state_exists && !hash_exists && !head_exists && !network_exists && !digest_exists) {
         return {StateLoadError::NOT_FOUND, std::nullopt};
     }
     if (!state_exists || !hash_exists || !head_exists || !network_exists) {
@@ -148,7 +149,8 @@ StateLoadResult CybouStateStore::LoadState() const
         return {StateLoadError::NETWORK_MISMATCH, std::nullopt};
     }
     const auto stored_digest{GetStoredGenesisDigest()};
-    if (!m_genesis_digest.IsNull() && (!stored_digest || *stored_digest != m_genesis_digest)) {
+    if (stored_digest.has_value() != !m_genesis_digest.IsNull() ||
+        (stored_digest && *stored_digest != m_genesis_digest)) {
         return {StateLoadError::GENESIS_DIGEST_MISMATCH, std::nullopt};
     }
     if (!m_db.Read(STATE_KEY, bytes) || !m_db.Read(HASH_KEY, stored_hash)) {

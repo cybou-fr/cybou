@@ -181,6 +181,22 @@ BOOST_AUTO_TEST_CASE(test_cyg1_signed_genesis_bundle_lifecycle)
     BOOST_CHECK(verified_bundle->network_definition.genesis_state_root == *state_root);
     BOOST_CHECK(verified_bundle->network_definition.poa_finalizer_public_key == *poa_pub);
 
+    const auto network_id = verified_bundle->genesis.GetNetworkId();
+    cybou::OfficialNetworkProfile profile{
+        .kind = cybou::NetworkKind::DEVNET,
+        .name = "DEVNET",
+        .network_public_key_bytes = network_id,
+        .genesis_digest = digest,
+    };
+    BOOST_CHECK(cybou::MatchesOfficialNetworkProfile(*verified_bundle, profile));
+    profile.genesis_digest = uint256{};
+    BOOST_CHECK(!cybou::MatchesOfficialNetworkProfile(*verified_bundle, profile));
+    profile.genesis_digest = uint256::ONE;
+    BOOST_CHECK(!cybou::MatchesOfficialNetworkProfile(*verified_bundle, profile));
+    profile.genesis_digest = digest;
+    profile.network_public_key_bytes = {};
+    BOOST_CHECK(!cybou::MatchesOfficialNetworkProfile(*verified_bundle, profile));
+
     // CYG1 must reject malformed framing, a noncanonical boolean, and altered state.
     auto malformed = *bundle_bytes;
     malformed.pop_back();

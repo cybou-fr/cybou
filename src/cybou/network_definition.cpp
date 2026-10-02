@@ -239,7 +239,7 @@ std::optional<CybouNetworkFile> DeserializeCybouNetworkFile(const std::span<cons
     if (bytes.size() >= 4 && bytes[0] == 'C' && bytes[1] == 'Y' && bytes[2] == 'G' && bytes[3] == '1') {
         const auto bundle = VerifyNetworkGenesisBundle(bytes);
         if (!bundle) return std::nullopt;
-        return CybouNetworkFile{bundle->network_definition, bundle->genesis_state};
+        return CybouNetworkFile{bundle->network_definition, bundle->genesis_state, bundle->genesis_digest};
     }
     if (bytes.size() < 12 || bytes.size() > 16 * 1024 * 1024 ||
         !std::equal(bytes.begin(), bytes.begin() + 4, "CYN1")) return std::nullopt;
