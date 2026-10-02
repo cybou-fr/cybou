@@ -36,7 +36,7 @@ Signatures from Identities whose Authority in provisional state exceeds 1,000,00
 but does not exceed 1,000,000 in the latest PoA-finalized state, are invalid
 and MUST be rejected.
 
-Authority metric never grants PoA finalization power.
+Canonical AUTH never grants PoA finalization power.
 
 ## Validation attestation structure
 

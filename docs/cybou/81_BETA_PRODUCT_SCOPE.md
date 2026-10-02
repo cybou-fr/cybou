@@ -106,7 +106,8 @@ reconstruction.
 
 ## Authority
 
-Authority is a deterministic derived metric calculated exclusively from finalized history.
-Its sole protocol effect is qualifying an Identity to sign provisional Validation attestations
-when `Authority > 1,000,000` in the latest finalized state. It does not allocate resources,
+Authority is a canonical non-transferable AUTH account value from the latest
+finalized state. Its sole protocol effect is qualifying an Identity to sign
+provisional Validation attestations when `Authority > 1,000,000 AUTH`.
+It does not allocate resources,
 confer stake weight, or grant PoA finalization power, and is not a gamified social score.

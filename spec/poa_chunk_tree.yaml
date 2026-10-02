@@ -11,7 +11,9 @@ consensus:
     separate_genesis_digest_profile_pin: absent
   poa_public_key: genesis_authorized
   poa_identity: ordinary_cybou_dot_cybou_identity_with_distinct_poa_key_role
-  authority_assignment: genesis_initial_assignment_and_finalized_history_state
+  authority_assignment: genesis_allocation_claimed_once_into_canonical_account_AUTH
+  authority_state_field: AccountState.authority
+  authority_unit: AUTH
   bft: false
   validator_set: absent
   validation:

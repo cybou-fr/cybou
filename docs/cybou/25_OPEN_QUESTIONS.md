@@ -14,6 +14,8 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 
 ## Validation and provisional lifecycle
 
+- clean state v11 cutover to canonical `AccountState.authority` and
+  `GenesisAllocation.authority`, with no AuthorityIndex or v10 decoder;
 - exact payload format for `ValidationAttestation` signed with Identity Authorization Key;
 - peer-to-peer gossip propagation limits, cache TTL, and rate limiting for active attestations;
 - atomic rollback mechanism in `NodeRuntime` for clearing provisional effects upon PoA conflict;

@@ -6,12 +6,12 @@ objects.
 
 ## Current state domains
 
-- monetary accounts: Balance and System Balance;
+- account values: Balance and System Balance in CYBOU, Authority in AUTH;
 - Identity registry: stable AccountID, Recovery/Authorization capabilities,
   current KEM commitment, nonce and key epoch;
 - `.cybou` name registry;
 - economic pools and deterministic fee accounting;
-- genesis allocations and initial Authority baselines;
+- genesis allocations containing initial CYBOU and AUTH;
 - immutable network parameters bound to the active network definition.
 
 Bootstrap is an ordinary CYBOU full peer and has no consensus grants, roles, or
@@ -33,14 +33,12 @@ Clients rebuild private application projections from finalized publications.
 
 ## Authority
 
-Authority is a deterministic property derived exclusively from PoA-finalized history
-and state. Initial Authority baselines may be assigned at genesis (e.g., DEV bootstrap
-Identity initial Authority = 1,000,001).
-
-Authority is not a canonical currency and does not allocate spendable Balance,
-system resources, or PoA finalization power. Its sole protocol eligibility effect is
-qualifying an Identity to sign provisional Validation attestations when
-`Authority > 1,000,000` in the latest finalized state.
+Authority is a canonical non-transferable AUTH account value, committed by the
+state root. GenesisAllocation may assign initial AUTH (e.g., DEV bootstrap
+Identity initial AUTH = 1,000,001), claimed once by AccountCreate. AUTH is
+excluded from CYBOU supply. Its sole protocol eligibility effect is qualifying
+an Identity to sign provisional Validation attestations when its latest
+finalized `AccountState.authority > 1,000,000`.
 
 Detailed Authority policies are defined in [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md).
 
@@ -50,5 +48,5 @@ Detailed Authority policies are defined in [`57_IDENTITY_AUTHORITY.md`](57_IDENT
 - no per-Mail/per-file canonical state object;
 - no wall-clock consensus arithmetic;
 - Authority never grants PoA finalization weight or consensus voting power;
-- Balance, System Balance and Authority are distinct concepts;
+- Balance, System Balance and Authority are three distinct canonical account values;
 - all consensus state arithmetic is bounded integer arithmetic.

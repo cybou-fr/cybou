@@ -24,7 +24,7 @@ From the current mnemonic:
 4. verify current Recovery/Authorization/KEM commitment against current
    `key_epoch`;
 5. create/reopen the local vault;
-6. rebuild canonical Wallet/Names/Authority from chain state;
+6. read canonical Balance, System Balance and AUTH from finalized AccountState;
 7. rebuild private Mail/Files through publication discovery.
 
 Restore itself does not authorize a new protocol operation.

@@ -57,7 +57,7 @@ The bootstrap node runs an ordinary CYBOU Identity:
 
 ```text
 Offline:
-  Owner creates immutable genesis (params, initial Authority assignments, PoA key P)
+  Owner creates immutable genesis (params, GenesisAllocation AUTH, PoA key P)
   Owner signs genesis once with Network Private Key
   Provisioning generates public C++ constants for the official network
 
@@ -78,8 +78,8 @@ not confer consensus power, and there is no separate PoA Identity entity.
 
 ## Authority and Validation
 
-Authority is a deterministic Identity property derived exclusively from
-PoA-finalized history.
+Authority is non-transferable AUTH stored in each finalized AccountState and
+committed by the state root. GenesisAllocation may assign initial AUTH once.
 
 Validation is optional pre-finalization:
 - non-canonical evidence;
@@ -151,7 +151,6 @@ The core stops network services and wipes all local network-bound state cleanly:
 - peer DB
 - pending operations
 - storage metadata
-- Authority indexes
 
 No cross-network migration exists. Application preferences outside the network
 domain (e.g., UI theme, language) may be retained.

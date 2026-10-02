@@ -61,9 +61,9 @@ Bootstrap Identity:
     - DEV bootstrap initial Authority = 1,000,001
 
 Authority:
-    - deterministic Identity property
-    - canonical value comes only from PoA-finalized history/state
-    - Authority > 1,000,000 makes an Identity eligible to sign Validation
+    - canonical non-transferable AUTH account value in finalized state
+    - stored in AccountState and committed by the state root
+    - Authority > 1,000,000 AUTH makes an Identity eligible to sign Validation
     - Authority never grants PoA finalization power
 
 Validation:
@@ -144,17 +144,17 @@ There is no production network.
   For each NetworkID, exactly one signed genesis is valid. There is no `genesis_generation`,
   no re-genesis, and no in-place genesis replacement.
 - Network genesis defines the initial chain state, protocol parameters, authorized
-  PoA public key, and initial Authority assignments for designated ordinary Identities
+  PoA public key, and initial AUTH in GenesisAllocation for designated ordinary Identities
   (e.g., DEV bootstrap Identity initial Authority = 1,000,001).
 - `cybou.cybou` is an ordinary account-level Identity with AccountID, Recovery,
   Authorization, KEM, Mail/support, and a distinct PoA key role derived from its
   mnemonic. Consensus recognizes its finalization right solely through the PoA
-  public key in genesis; its name and Authority metric confer no finalization power.
+  public key in genesis; its name and AUTH value confer no finalization power.
 - Cross-network migration does not exist. A network cutover to a new official network
   (a new Network Public Key, new NetworkID, new genesis) wipes all local network-bound state cleanly:
   chain/state, network definition, genesis, Identity, vault, AccountID,
   Recovery/Auth/KEM keys, balances, names, Mail, Files, application DB,
-  peer DB, pending operations, storage metadata, and Authority indexes.
+  peer DB, pending operations, and storage metadata.
 - Ordinary peers form a direct P2P mesh after initial discovery. Bootstrap is
   an initial rendezvous peer, not a mandatory traffic intermediary or separate node type.
 - There is no distributed mempool and PoA owns no canonical pending state. Operations
@@ -210,7 +210,7 @@ architecture that is absent from higher levels:
   PoA-finalized state is adopted unconditionally.
 - PoA is centralized finality, not BFT.
 - Durable signing journal and equivocation conflict halt must fail closed.
-- Authority metric never grants PoA finalization power.
+- AUTH never grants PoA finalization power.
 
 ## Application content and storage admission
 
@@ -258,11 +258,15 @@ architecture that is absent from higher levels:
 - A file/message is not `Protected`/`Sent` merely because its RootPublication
   is finalized; durability requires confirmed remote replicas.
 
-## Derived Identity Authority
+## Canonical Identity Authority
 
-- Authority is a deterministic, non-transferable property derived exclusively from
-  PoA-finalized history and state.
-- Authority > 1,000,000 qualifies an Identity to sign provisional Validation attestations.
+- Every AccountState has three canonical account values: spendable Balance in CYBOU,
+  non-transferable System Balance in CYBOU, and non-transferable Authority in AUTH.
+  All three are committed by the finalized state root.
+- GenesisAllocation may assign initial AUTH, claimed exactly once by AccountCreate.
+  Ordinary AccountCreate starts with zero AUTH. SystemLock moves CYBOU from Balance
+  to System Balance and leaves AUTH unchanged.
+- Authority > 1,000,000 AUTH qualifies an Identity to sign provisional Validation attestations.
 - Authority grants NO PoA finalization power, NO consensus voting rights, NO stake weight,
   and NO balance or resource allocations.
 - There is no canonical ValidatorSet, validator registry, NodeID binding,
@@ -279,5 +283,5 @@ decimals = 0
 4 fee units -> 3 Security + 1 Onboarding
 ```
 
-Balance is spendable. System Balance is an irreversible service budget.
-Authority is non-transferable and derived.
+Balance is spendable CYBOU. System Balance is an irreversible CYBOU service budget.
+Authority is canonical, non-transferable AUTH and is excluded from CYBOU supply.

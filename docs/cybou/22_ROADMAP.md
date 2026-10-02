@@ -15,12 +15,12 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 5. **One official startup path**: select compiled DEVNET constants, verify signature/state root, and remove external official CYG1/CYN1 loaders, profile digest pins and `--network` file startup.
 6. **NetworkID transition**: transition `NetworkId` from SHA256 definition hash to exact Network Public Key throughout runtime, wire, persistence and crypto.
 7. **Bootstrap conversion**: remove legacy bootstrap binding/protocol and standalone executable; transition DEV VPS to an ordinary `cybou-node` after coordinated state reset.
-8. **DEVNET acceptance**: verify desktop, ordinary peers, finality, operation relay and storage end to end before further architecture work.
+8. **Canonical AUTH clean cut**: store AUTH in AccountState and GenesisAllocation, remove initial_authority and AuthorityIndex, update desktop, bump state format, and verify supply independence.
+9. **DEVNET acceptance**: verify desktop, ordinary peers, finality, operation relay and storage end to end before Validation or provisional storage work.
 
 ## Phase 3 — After DEVNET acceptance
 
-9. **Authority eligibility**: make Authority deterministic from genesis constants and finalized history before it gates Validation.
-10. **Validation attestation protocol**: implement advisory Validation wire messaging for eligible Identities (`Authority > 1,000,000` in latest PoA-finalized state).
+10. **Validation attestation protocol**: implement advisory Validation wire messaging for eligible Identities (`AccountState.authority > 1,000,000 AUTH` in latest PoA-finalized state).
 11. **Provisional execution & rollback**: implement local acceptance policy (`validation.enabled`, `min_signatures`), provisional state staging, and mandatory atomic rollback upon PoA conflict.
 12. **Finalizer simplification**: ensure PoA finalizer acts purely as an independent candidate evaluator and certificate signer with no canonical pending mempool.
 

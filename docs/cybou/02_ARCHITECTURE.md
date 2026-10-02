@@ -112,8 +112,10 @@ Canonical finality is single-operator hybrid-PQ PoA under the genesis-authorized
 PoA key. The PoA finalizer executes operations independently and signs blocks.
 There is no BFT or validator quorum.
 
-Advisory Validation is optional pre-finalization evidence. Identities whose
-Authority in the latest finalized state exceeds 1,000,000 are eligible to sign
+Authority is a canonical non-transferable AUTH account value committed by the
+state root, separate from CYBOU Balance and System Balance. Advisory Validation
+is optional pre-finalization evidence. Identities whose AccountState.authority
+in the latest finalized state exceeds 1,000,000 AUTH are eligible to sign
 Validation attestations. A peer configures locally whether to accept provisional
 validation. PoA finality unconditionally overrides Validation.
 

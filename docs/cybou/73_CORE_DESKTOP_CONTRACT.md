@@ -24,7 +24,7 @@ NetworkID, and new immutable genesis), the core stops services and pending opera
 prepares the new network domain, atomically activates it and destroys every old
 network-bound item: chain/state, genesis, Identity, vault, AccountID, signing
 and KEM keys, Wallet, Names, Mail, Files, Application DB, peer DB, storage
-metadata and Authority indexes. The GUI neither approves nor migrates old
+metadata. The GUI neither approves nor migrates old
 Identity data; it reports the completed transition, for example « Le réseau
 CYBOU a été réinitialisé pour une nouvelle version ». Theme, language, other
 application-global preferences and validated Geo cache live outside the network domain.
@@ -93,7 +93,7 @@ are optional operational capabilities. Bootstrap is an ordinary CYBOU full peer
 with a known locator. France-only public P2P admission is mandatory in DEV and production;
 optional VPN/proxy/Tor filtering is local policy. Qt displays core decisions.
 
-Authority is a deterministic property derived from finalized history.
-Finalized Authority > 1,000,000 qualifies an Identity for provisional Validation.
-The controller displays Authority on Identity and Diagnostics, never as a contact
-trust label, resource tier, or PoA power.
+Authority is canonical AUTH from the latest finalized `AccountState`, displayed
+beside Balance and System Balance. The controller does not maintain an
+Authority index. Finalized Authority > 1,000,000 AUTH qualifies an Identity
+for provisional Validation; it grants no PoA power.

@@ -1,41 +1,32 @@
 # 57 — Identity Authority
 
-Authority is a deterministic property derived exclusively from PoA-finalized history
-and state. It is separate from Balance and System Balance, is non-transferable, and
-grants NO PoA finalization power, NO consensus voting rights, and NO resource allocations.
+Every Identity has three canonical account values in PoA-finalized blockchain
+state: spendable `Balance` in CYBOU, non-transferable `System Balance` in CYBOU,
+and non-transferable `Authority` in AUTH. `AccountState.authority` is committed
+by the state root. AUTH is excluded from the 100 billion CYBOU supply.
 
-## Genesis Authority baseline and computation
+## Genesis and transitions
 
-Genesis defines the initial Authority baseline for designated ordinary Identities
-(e.g., DEV bootstrap Identity initial Authority = 1,000,001).
+`GenesisAllocation.authority` may assign initial AUTH to a RecoveryKeyID. The
+matching AccountCreate claims the allocation once and copies that AUTH into
+its AccountState. Ordinary AccountCreate starts with zero AUTH. IdentityRotate
+preserves the account and its AUTH.
 
-Beyond genesis, Authority develops deterministically from PoA-finalized history:
-- completed protocol age;
-- capped qualifying finalized activity;
-- voluntary Balance-to-System Balance lock contributions.
+Balance-to-System Balance locks move CYBOU only. Age, activity, fees, storage,
+and System Balance do not implicitly create AUTH. A future change to AUTH
+requires an explicit protocol state transition.
 
-Automatic onboarding credit gives no Authority.
+## Validation eligibility
 
-## Protocol effect: Validation eligibility
-
-Authority confers exactly ONE protocol eligibility:
 ```text
 validation_eligible(identity) :=
-    authority_from_latest_PoA_finalized_state(identity) > 1,000,000
+    latest_finalized_state.accounts[identity].authority > 1,000,000 AUTH
 ```
 
-An Identity with finalized `Authority > 1,000,000` is qualified to sign advisory
-Validation attestations for candidate operations.
+An eligible Identity may sign advisory Validation attestations. Provisional
+state never changes eligibility. AUTH grants no PoA finalization, voting,
+stake weight, resource allocation, or CYBOU redemption.
 
-Crucially:
-- eligibility is evaluated strictly against the latest **PoA-finalized** state;
-- provisional state never elevates an Identity's Authority or makes it eligible;
-- Authority never grants PoA finalization power, block signing rights, or quorum weight.
-
-## Explicit exclusions
-
-There is no canonical validator registry, ValidatorSet, NodeID binding, liveness accounting,
-storage contribution evidence, penalty debt, reward, resource tier, resource budget,
-grant, ticket, or per-I/O consensus accounting. Provider admission and replication remain
-local StorageService/provider policy. Ordinary peer failures use local disconnect,
-backoff, and abuse limits.
+There is no AuthorityIndex, local AuthorityPolicy, validator registry,
+ValidatorSet, NodeID binding, liveness/storage evidence, reward/penalty system,
+resource budget, reservation, grant, ticket, or per-I/O accounting.

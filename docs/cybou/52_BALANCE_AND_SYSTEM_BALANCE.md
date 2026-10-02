@@ -34,27 +34,12 @@ System Balance pays deterministic protocol service fees.
 
 ## Identity Authority
 
-Authority is not CYBOU and not a third monetary balance.
+Authority is the third canonical account value, denominated in AUTH. It is
+non-transferable and excluded from CYBOU supply. GenesisAllocation may assign
+initial AUTH, claimed exactly once by AccountCreate; ordinary accounts start
+with zero AUTH.
 
-The current System Balance amount does not continuously create Authority.
-
-A voluntary finalized user-authorized lock:
-
-```text
-Balance -> System Balance
-```
-
-may grant a one-time SystemContributionAuthority equal to the locked whole
-CYBOU amount.
-
-Automatic onboarding credit:
-
-```text
-OnboardingPool -> System Balance
-```
-
-grants no SystemContributionAuthority.
-
-Spending System Balance on fees does not grant the contribution again.
-
-Authority is non-transferable and never grants PoA finalization power.
+Moving CYBOU from Balance to System Balance, onboarding credit and spending
+System Balance leave AUTH unchanged. Only an explicit future protocol state
+transition may change AUTH. Finalized Authority above 1,000,000 AUTH enables
+advisory Validation, never PoA finalization.

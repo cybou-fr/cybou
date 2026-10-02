@@ -38,28 +38,14 @@ OnboardingPool -> System Balance
 
 This does not mint new CYBOU.
 
-Automatic onboarding credit does not generate SystemContributionAuthority.
+Automatic onboarding credit leaves AUTH unchanged.
 
 ## Identity Authority interaction
 
-Authority is not money and is not a third balance.
-
-A voluntary finalized user-authorized lock of `X` whole CYBOU:
-
-```text
-Balance -> System Balance
-```
-
-may give a one-time:
-
-```text
-SystemContributionAuthority += X
-```
-
-under the immutable Authority rules.
-
-Holding System Balance does not continuously generate Authority. Spending fees
-does not generate another Authority credit.
+Authority is a third canonical account value denominated in non-transferable
+AUTH. It is excluded from the 100 billion CYBOU supply. Balance-to-System
+Balance locks and fee spending leave AUTH unchanged. GenesisAllocation may
+assign initial AUTH; any later change requires an explicit protocol transition.
 
 ## RootPublication fee
 

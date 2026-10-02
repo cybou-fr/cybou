@@ -34,10 +34,11 @@ experimental software, not a public mail or cloud-storage service.
 - DEVNET uses bootstrap `51.255.46.58:29461`. MAINNET remains unprovisioned,
   without a bootstrap locator, and disabled in the GUI until provisioning.
 - `cybou.cybou` is an ordinary Identity with a distinct genesis-authorized PoA
-  key role; its name and Authority metric do not grant finalization rights.
+  key role; its name and AUTH value do not grant finalization rights.
 - The Central Authority finalizer is operated from its desktop after unlock using
   the genesis-authorized PoA key. Its live route is authenticated per session and then discarded.
-- Advisory Validation is provisional; only identities with Authority > 1,000,000
+- Authority is canonical non-transferable AUTH in AccountState, excluded from
+  CYBOU supply. Advisory Validation is provisional; only identities with AUTH > 1,000,000
   can sign validation attestations. PoA finality unconditionally overrides provisional state.
 - Public P2P admission is France-only in production and DEV (inbound and outbound)
   using local Geo data (fails closed). Optional VPN/proxy/Tor filtering is local

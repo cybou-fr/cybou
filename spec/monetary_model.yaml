@@ -31,24 +31,27 @@ onboarding_bonus:
   source: OnboardingPool
   destination: SystemBalance
   minted: false
-  earns_system_contribution_authority: false
 
 balances:
   Balance:
+    unit: CYBOU
     transferable: true
   SystemBalance:
+    unit: CYBOU
     transferable: false
     reversible_to_balance: false
     pays_protocol_services: true
+  Authority:
+    unit: AUTH
+    transferable: false
+    canonical_state: AccountState.authority
+    validation_threshold_exclusive: 1000000
+    poa_power: false
 
-authority:
-  monetary_asset: false
-  transferable: false
-  voluntary_balance_to_system_lock_one_time_points_per_cybou: 1
-  current_system_balance_recurring_points: false
-  informational_only: true
-  resource_allocation: false
-  poa_power: false
+cybou_supply:
+  max: 100000000000
+  includes: [Balance, SystemBalance, protocol_CYBOU_pools]
+  excludes: [Authority]
 
 fees:
   pending_pool: PendingFeePool

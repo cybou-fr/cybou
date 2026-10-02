@@ -17,6 +17,7 @@ define the target. Local uncommitted work is not counted as a released baseline.
 | Bootstrap | Ordinary CYBOU full peer | Standalone prototype binary and bootstrap protocol still exist; the DEV VPS still runs `cybou-bootstrap.service`. |
 | Consensus bootstrap state | No grants, roster, or `CAP_BOOTSTRAP` | Removed. |
 | Consensus state | Unified current state format | `CYBOU_STATE_VERSION = 10`; legacy v7/v8/v9 decoding was removed. |
+| Authority | Canonical non-transferable AUTH in AccountState and GenesisAllocation; state root commits it | Code still derives a local AuthorityIndex from age, activity and SystemLock history. State v11 and UI migration are pending. |
 | Validation | Optional, non-canonical, eligible Authority > 1,000,000 | Attestation wire protocol and local evaluation policy are not implemented. |
 | PoA | Sole independent canonical finalizer | Single-operator PoA exists; candidate relay and finalizer-only pending cleanup remain. |
 
@@ -35,4 +36,4 @@ define the target. Local uncommitted work is not counted as a released baseline.
 3. Remove CYG1/CYN1 external official network loaders, file options and separate profile `GenesisDigest` pinning. CLI `network init-dev` has already been removed.
 4. Transition runtime, wire, persistence and cryptographic binding to exact Network Public Key NetworkID.
 5. Remove legacy bootstrap binding/protocol and prototype binary; migrate DEV VPS to ordinary `cybou-node` after coordinated state reset.
-6. Complete DEVNET end-to-end acceptance before new Validation, Authority or provisional storage work.
+6. Replace derived Authority with canonical AUTH in state v11 and desktop, then complete DEVNET end-to-end acceptance before Validation or provisional storage work.
