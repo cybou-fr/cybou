@@ -163,6 +163,8 @@ public:
     /** Submit an operation to pending pool (producer) or direct execution */
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
     OperationSubmitResult SubmitPeerOperation(ProtocolOperation op, std::string source_peer);
+    /** PoA only: sign and queue an AUTH GRANT/BURN valid solely in the next block. */
+    OperationSubmitResult SubmitPoaAuthAdjustment(PoaAuthAction action, const AccountId& target, uint64_t amount);
     OperationStatus GetOperationStatus(const uint256& op_id) const;
     IdentityOperationCoordinator& GetIdentityOperationCoordinator(CybouKeyStore& keystore);
     void RetryPendingIdentityOperations();

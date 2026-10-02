@@ -8,6 +8,7 @@
 #include <cybou/account_creation.h>
 #include <cybou/name_registry.h>
 #include <cybou/payment.h>
+#include <cybou/poa_auth_adjustment.h>
 #include <cybou/root_publication.h>
 #include <cybou/identity_registry.h>
 
@@ -31,6 +32,7 @@ enum class ProtocolOperationKind : uint8_t {
     NAME_COMMIT = 5,
     NAME_REVEAL = 6,
     ROOT_PUBLICATION = 7,
+    POA_AUTH_ADJUSTMENT = 8,
 };
 
 using ProtocolOperation = std::variant<
@@ -40,12 +42,13 @@ using ProtocolOperation = std::variant<
     AuthorizedSystemLock,
     AuthorizedNameCommit,
     AuthorizedNameReveal,
-    AuthorizedRootPublication>;
+    AuthorizedRootPublication,
+    PoaAuthAdjustment>;
 
 std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const ProtocolOperation& operation);
 std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const unsigned char> bytes);
 std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation);
-/** The existing account that authorizes the operation; nullopt for AccountCreate. */
+/** The existing Identity that authorizes the operation; nullopt for AccountCreate and PoaAuthAdjustment. */
 std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation);
 /** Verify operation signatures and payload bindings before volatile mesh relay. */
 bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,

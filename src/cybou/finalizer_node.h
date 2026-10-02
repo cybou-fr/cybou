@@ -76,6 +76,8 @@ public:
     bool SubmitOperation(const ProtocolOperation& operation);
     OperationSubmitStatus SubmitOperationWithStatus(const ProtocolOperation& operation,
         std::optional<std::string> source_peer = std::nullopt);
+    /** Sign a GRANT/BURN for the next block and admit it like any other candidate. */
+    OperationSubmitResult SubmitAuthAdjustment(PoaAuthAction action, const AccountId& target, uint64_t amount);
     size_t PendingCount() const { return m_pool.Size(); }
     bool HasPendingOperation(const uint256& id) const { return m_pool.Contains(id); }
     void ClearPending() { m_pool.Clear(); }

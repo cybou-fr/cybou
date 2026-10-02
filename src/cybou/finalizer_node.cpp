@@ -51,6 +51,25 @@ OperationSubmitStatus CybouFinalizerNode::SubmitOperationWithStatus(
     return OperationSubmitStatus::REJECTED;
 }
 
+OperationSubmitResult CybouFinalizerNode::SubmitAuthAdjustment(
+    const PoaAuthAction action, const AccountId& target, const uint64_t amount)
+{
+    const auto head = m_store.GetFinalizedHead();
+    if (!head || head->height == std::numeric_limits<uint64_t>::max() || SafetyHalted()) return {};
+    PoaAuthAdjustment adjustment{
+        .action = action,
+        .target_account_id = target,
+        .amount = amount,
+        .block_height = head->height + 1,
+    };
+    if (!m_finalizer->SignAuthAdjustment(adjustment)) return {};
+    const ProtocolOperation operation{std::move(adjustment)};
+    return {
+        .status = SubmitOperationWithStatus(operation),
+        .op_id = ComputeOperationId(operation).value_or(uint256{}),
+    };
+}
+
 bool CybouFinalizerNode::SubmitOperation(const ProtocolOperation& operation)
 {
     return SubmitOperationWithStatus(operation) == OperationSubmitStatus::ACCEPTED;

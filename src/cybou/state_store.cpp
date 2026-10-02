@@ -84,7 +84,8 @@ std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
     if (operations.empty() && loaded.state->pending_fee_pool == 0 && !expires_name) {
         return GetStateRoot();
     }
-    const auto execution = ExecuteBlockOperations(*loaded.state, operations, m_network_id, height, m_network_definition.protocol_parameters);
+    const auto execution = ExecuteBlockOperations(*loaded.state, operations, m_network_id, height,
+        m_network_definition.protocol_parameters, &m_network_definition.poa_finalizer_public_key);
     return execution ? execution.state_root : std::nullopt;
 }
 
@@ -283,7 +284,8 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         if (!current_root) return {BlockTransitionError::CORRUPT_STATE};
         candidate_root = *current_root;
     } else {
-        auto execution = ExecuteBlockOperations(*loaded.state, block.operations, m_network_id, block.height, params);
+        auto execution = ExecuteBlockOperations(*loaded.state, block.operations, m_network_id, block.height, params,
+            &m_network_definition.poa_finalizer_public_key);
         if (!execution) {
             if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
             if (execution.error == BlockExecutionError::FEE_ROUTING_OVERFLOW) return {BlockTransitionError::FEE_ROUTING_FAILED};

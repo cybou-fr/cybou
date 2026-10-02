@@ -155,4 +155,14 @@ std::optional<IdentityHybridSignature> PoaFinalizer::SignTransportProof(
     return signature;
 }
 
+bool PoaFinalizer::SignAuthAdjustment(PoaAuthAdjustment& adjustment) const
+{
+    const auto digest = ComputePoaAuthAdjustmentDigest(m_network_id, adjustment);
+    if (!digest || m_journal.SafetyHalted() || !m_signer) return false;
+    const auto signature = m_signer->Sign(*digest);
+    if (!signature || !VerifyIdentityMessage(m_public_key, *signature, *digest)) return false;
+    adjustment.poa_signature = *signature;
+    return true;
+}
+
 } // namespace cybou

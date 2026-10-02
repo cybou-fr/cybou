@@ -272,6 +272,11 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const Proto
         if (!body || body->size() + 2 > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
         out.push_back(static_cast<unsigned char>(ProtocolOperationKind::ROOT_PUBLICATION));
         out.insert(out.end(), body->begin(), body->end());
+    } else if (const auto* adjustment = std::get_if<PoaAuthAdjustment>(&operation)) {
+        const auto body = SerializePoaAuthAdjustment(*adjustment);
+        if (!body) return std::nullopt;
+        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::POA_AUTH_ADJUSTMENT));
+        out.insert(out.end(), body->begin(), body->end());
     } else {
         return std::nullopt;
     }
@@ -318,6 +323,11 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
         const auto op = DeserializeRootPublicationOperation(bytes.subspan(2));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
+    case ProtocolOperationKind::POA_AUTH_ADJUSTMENT: {
+        if (bytes.size() != 2 + POA_AUTH_ADJUSTMENT_SIZE) return std::nullopt;
+        const auto op = DeserializePoaAuthAdjustment(bytes.subspan(2));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
+    }
     default: return std::nullopt;
     }
 }
@@ -326,7 +336,7 @@ std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation)
 {
     return std::visit([](const auto& op) -> std::optional<AccountId> {
         using T = std::decay_t<decltype(op)>;
-        if constexpr (std::is_same_v<T, AccountCreateOp>) {
+        if constexpr (std::is_same_v<T, AccountCreateOp> || std::is_same_v<T, PoaAuthAdjustment>) {
             return std::nullopt;
         } else if constexpr (std::is_same_v<T, IdentityRotate>) {
             return op.account_id;
@@ -379,6 +389,9 @@ bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
                 VerifyIdentityMessage(record->recovery_key, op.old_recovery_signature, *digest) &&
                 VerifyIdentityMessage(op.new_recovery_key, op.new_recovery_pop, *digest) &&
                 VerifyIdentityMessage(op.new_authorization_key, op.new_authorization_pop, *digest);
+        } else if constexpr (std::is_same_v<T, PoaAuthAdjustment>) {
+            // Created by the PoA node for its own next block; never relayed.
+            return false;
         } else {
             const auto* record = identities.Find(op.authorization.account_id);
             if (!record) return false;

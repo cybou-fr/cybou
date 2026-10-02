@@ -22,6 +22,7 @@ enum class BlockExecutionError : uint8_t {
     INVALID_NAME_COMMIT,
     INVALID_NAME_REVEAL,
     INVALID_ROOT_PUBLICATION,
+    INVALID_POA_AUTH_ADJUSTMENT,
     FEE_ROUTING_OVERFLOW,
     INVALID_STATE,
 };
@@ -36,6 +37,7 @@ struct BlockExecutionResult {
     NameCommitError name_commit_error{NameCommitError::NONE};
     NameRevealError name_reveal_error{NameRevealError::NONE};
     RootPublicationError root_publication_error{RootPublicationError::NONE};
+    PoaAuthAdjustmentError poa_auth_error{PoaAuthAdjustmentError::NONE};
     std::optional<CybouState> state;
     std::optional<uint256> state_root;
 
@@ -45,10 +47,12 @@ struct BlockExecutionResult {
 /** Flat AUTH earned by the authorizing account of each finalized Identity operation. */
 inline constexpr uint64_t AUTH_PER_FINALIZED_OPERATION{1};
 
+/** Without the genesis PoA key every PoaAuthAdjustment is invalid. */
 BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
     const uint256& network_id, uint64_t block_height,
-    const CybouProtocolParameters& params);
+    const CybouProtocolParameters& params,
+    const IdentityHybridPublicKey* poa_key = nullptr);
 
 } // namespace cybou
 #endif // CYBOU_BLOCK_EXECUTOR_H

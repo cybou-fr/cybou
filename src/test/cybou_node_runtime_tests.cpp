@@ -6,6 +6,7 @@
 #include <cybou/identity_material.h>
 #include <cybou/keystore.h>
 #include <cybou/kv_store.h>
+#include <cybou/block_executor.h>
 #include <cybou/poa_finalizer.h>
 #include <cybou/secret_file.h>
 #include <test/cybou_service_test_fixture.h>
@@ -123,6 +124,67 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     const auto missing = observer.FindFinalizedOperation(missing_id);
     BOOST_CHECK(missing.status == cybou::FinalizedOperationLookupStatus::NOT_FOUND);
     BOOST_CHECK_EQUAL(missing.scanned_height, 1U);
+}
+
+BOOST_AUTO_TEST_CASE(poa_auth_adjustment_grants_and_burns_with_floor)
+{
+    CybouServiceTestFixture fixture;
+    const auto alice = fixture.CreateIdentity("alice.cybou");
+    const auto account = alice->GetAccountId();
+    BOOST_REQUIRE(account);
+    BOOST_CHECK_EQUAL(fixture.runtime->GetAccountState(*account)->authority, 0U);
+
+    const auto grant = fixture.runtime->SubmitPoaAuthAdjustment(cybou::PoaAuthAction::GRANT, *account, 900'000);
+    BOOST_REQUIRE(grant.status == cybou::OperationSubmitStatus::ACCEPTED);
+    const auto granted = fixture.runtime->ProduceBlock();
+    BOOST_REQUIRE(granted);
+    // GRANT mints exactly N; the PoA operation itself earns no +1.
+    BOOST_CHECK_EQUAL(fixture.runtime->GetAccountState(*account)->authority, 900'000U);
+
+    cybou::CybouNodeRuntime observer{{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "auth-observer",
+        .memory_only = true,
+        .wipe_data = true,
+    }};
+    BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
+    for (uint64_t height{1}; height <= granted->block.height; ++height) {
+        BOOST_REQUIRE(observer.CommitBlock(*fixture.runtime->GetBlockAtHeight(height)));
+    }
+    BOOST_CHECK(observer.GetAccountState(*account) == fixture.runtime->GetAccountState(*account));
+
+    BOOST_REQUIRE(fixture.runtime->SubmitPoaAuthAdjustment(cybou::PoaAuthAction::BURN, *account, 2'000'000).status ==
+        cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    BOOST_CHECK_EQUAL(fixture.runtime->GetAccountState(*account)->authority, 0U);
+
+    // An adjustment is bound to one block height, the PoA key and one use per block.
+    const auto head = *fixture.runtime->GetFinalizedHeight();
+    BOOST_REQUIRE(fixture.runtime->SubmitPoaAuthAdjustment(cybou::PoaAuthAction::GRANT, *account, 5).status ==
+        cybou::OperationSubmitStatus::ACCEPTED);
+    const auto pending = fixture.runtime->ProduceBlock();
+    BOOST_REQUIRE(pending);
+    const auto signed_op = pending->block.operations.front();
+    const auto loaded = fixture.runtime->GetStore().LoadState();
+    BOOST_REQUIRE(loaded.state);
+    const auto& params = fixture.definition.protocol_parameters;
+    const auto& network_id = fixture.runtime->GetNetworkId();
+    const auto& poa_key = fixture.definition.poa_finalizer_public_key;
+    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {signed_op}, network_id, head + 2, params, &poa_key).error ==
+        cybou::BlockExecutionError::INVALID_POA_AUTH_ADJUSTMENT);
+    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {signed_op}, network_id, head + 1, params).error ==
+        cybou::BlockExecutionError::INVALID_POA_AUTH_ADJUSTMENT);
+    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {signed_op, signed_op}, network_id, head + 1, params,
+        &poa_key).error == cybou::BlockExecutionError::INVALID_POA_AUTH_ADJUSTMENT);
+    auto forged = std::get<cybou::PoaAuthAdjustment>(signed_op);
+    forged.amount = 6;
+    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {cybou::ProtocolOperation{forged}}, network_id, head + 1,
+        params, &poa_key).poa_auth_error == cybou::PoaAuthAdjustmentError::INVALID_SIGNATURE);
+    const auto wire = cybou::SerializeProtocolOperation(signed_op);
+    BOOST_REQUIRE(wire);
+    const auto decoded = cybou::DeserializeProtocolOperation(*wire);
+    BOOST_REQUIRE(decoded && *decoded == signed_op);
+    BOOST_CHECK(!cybou::AuthorizingAccount(signed_op));
 }
 
 BOOST_AUTO_TEST_CASE(runtime_finalizer_can_be_armed_and_disarmed_with_a_vault_signer)

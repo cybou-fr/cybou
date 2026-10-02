@@ -5,6 +5,7 @@
 #include <cybou/block_executor.h>
 
 #include <algorithm>
+#include <set>
 #include <limits>
 
 namespace cybou {
@@ -12,7 +13,8 @@ namespace cybou {
 BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
     const uint256& network_id, uint64_t block_height,
-    const CybouProtocolParameters& params)
+    const CybouProtocolParameters& params,
+    const IdentityHybridPublicKey* poa_key)
 {
     const auto fail = [](BlockExecutionError error) {
         BlockExecutionResult result{};
@@ -26,6 +28,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     });
     if (creates > params.max_account_creates_per_block) return fail(BlockExecutionError::TOO_MANY_ACCOUNT_CREATES);
     auto candidate = parent;
+    std::set<std::array<unsigned char, 32>> adjustment_digests;
     if (params.name_commit_max_lifetime > 0) {
         std::erase_if(candidate.names.pending_commits, [&](const auto& item) {
             return block_height > item.second.commit_height &&
@@ -87,6 +90,17 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 auto failure = fail(BlockExecutionError::INVALID_ROOT_PUBLICATION);
                 failure.failed_operation_index = i;
                 failure.root_publication_error = result;
+                return failure;
+            }
+        } else if (const auto* adjustment = std::get_if<PoaAuthAdjustment>(&operations[i])) {
+            const auto digest = ComputePoaAuthAdjustmentDigest(network_id, *adjustment);
+            auto result = !poa_key ? PoaAuthAdjustmentError::INVALID_SIGNATURE
+                : !digest || !adjustment_digests.insert(*digest).second ? PoaAuthAdjustmentError::INVALID_PAYLOAD
+                : ApplyPoaAuthAdjustment(*adjustment, network_id, block_height, *poa_key, candidate);
+            if (result != PoaAuthAdjustmentError::NONE) {
+                auto failure = fail(BlockExecutionError::INVALID_POA_AUTH_ADJUSTMENT);
+                failure.failed_operation_index = i;
+                failure.poa_auth_error = result;
                 return failure;
             }
         }

@@ -9,6 +9,7 @@
 #include <cybou/poa_signing_journal.h>
 #include <cybou/recovery_phrase.h>
 #include <cybou/block.h>
+#include <cybou/poa_auth_adjustment.h>
 #include <cybou/poa_signer.h>
 
 namespace cybou {
@@ -48,6 +49,8 @@ public:
     PoaSigningResult SignFinality(uint64_t finalized_height, const uint256& finalized_tip,
         const CybouBlock& block);
     std::optional<IdentityHybridSignature> SignTransportProof(std::span<const unsigned char> message) const;
+    /** Fill the PoA signature of a domain-separated AUTH adjustment. */
+    bool SignAuthAdjustment(PoaAuthAdjustment& adjustment) const;
 
 private:
     const uint256 m_network_id;

@@ -382,6 +382,20 @@ OperationSubmitResult CybouNodeRuntime::SubmitPeerOperation(ProtocolOperation op
     return SubmitOperationInternal(std::move(op), std::move(source_peer));
 }
 
+OperationSubmitResult CybouNodeRuntime::SubmitPoaAuthAdjustment(
+    const PoaAuthAction action, const AccountId& target, const uint64_t amount)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_finalizer_node || !m_finalizer_node->SignerEnabled() || m_store.PoaSafetyHalted()) {
+        return {.status = OperationSubmitStatus::FINALIZER_UNAVAILABLE};
+    }
+    const auto result = m_finalizer_node->SubmitAuthAdjustment(action, target, amount);
+    if (result.status == OperationSubmitStatus::ACCEPTED) {
+        RememberOperationStatus(result.op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
+    }
+    return result;
+}
+
 std::optional<OperationRelay::FinalizerSession> CybouNodeRuntime::AttachAuthenticatedFinalizerRelay()
 {
     return m_operation_relay.AttachAuthenticatedFinalizer();
