@@ -321,9 +321,23 @@ size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
         // тратя маленький per-cycle budget: иначе после каждого сброса set'а
         // fanout снова вязнет в древней истории и медленно доходит до frontier.
         const uint64_t peer_frontier = m_peer_finalized_heights[it->first];
+        // A peer that lags behind the recent window (e.g. we restarted after
+        // committing blocks it never saw) only accepts its next height over an
+        // announce. Offer it the next blocks in order from local history, so a
+        // gap of any size closes instead of staying a GAP forever.
+        std::vector<FinalizedHead> heads = recent;
+        if (peer_frontier > 0 && !recent.empty() && recent.front().height > peer_frontier + 1) {
+            heads.clear();
+            const uint64_t tip = m_runtime.GetFinalizedHeight().value_or(0);
+            for (uint64_t h = peer_frontier + 1; h <= tip && heads.size() < max_per_peer; ++h) {
+                const auto block = m_runtime.GetBlockAtHeight(h);
+                if (!block) break;
+                heads.push_back({ComputeBlockId(block->block), h});
+            }
+        }
         bool disconnected{false};
         size_t offered{0};
-        for (const auto& head : recent) {
+        for (const auto& head : heads) {
             if (offered >= max_per_peer) break;
             if (announced.contains(head.block_id)) continue;
             if (head.height <= peer_frontier) {

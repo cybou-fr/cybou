@@ -317,6 +317,24 @@ BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_ten_mi
     BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_binding, operation_id, tip, state));
 }
 
+BOOST_AUTO_TEST_CASE(validator_finalizer_attests_and_finalizes_account_create)
+{
+    // The PoA node is itself an eligible validator (genesis Central Authority
+    // above 10M AUTH): attesting an AccountCreate candidate, then finalizing it.
+    CybouServiceTestFixture fixture;
+    const auto alice = fixture.CreateIdentity("alice.cybou");
+    BOOST_REQUIRE(fixture.runtime->SubmitPoaAuthAdjustment(cybou::PoaAuthAction::GRANT, *alice->GetAccountId(),
+        10'000'001).status == cybou::OperationSubmitStatus::ACCEPTED);
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    fixture.runtime->SetValidationSigner(std::make_shared<cybou::CybouKeyStoreValidationSigner>(alice->GetKeyStore()));
+    BOOST_REQUIRE(fixture.runtime->IsLocalValidationEligible());
+    const auto carol = fixture.CreateIdentity("carol.cybou");
+    BOOST_REQUIRE(carol && carol->GetAccountId());
+    BOOST_CHECK(fixture.runtime->GetAccountState(*carol->GetAccountId()));
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    fixture.runtime->SetValidationSigner(nullptr);
+}
+
 BOOST_AUTO_TEST_CASE(eligible_node_attests_its_own_executed_candidates)
 {
     CybouServiceTestFixture fixture;
