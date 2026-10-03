@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_CYBOUPRODUCT_H
-#define BITCOIN_QT_CYBOUPRODUCT_H
+#ifndef CYBOU_QT_CYBOUPRODUCT_H
+#define CYBOU_QT_CYBOUPRODUCT_H
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -38,7 +38,7 @@ enum class CybouIdentityStep {
 
 /**
  * Finality-first content lifecycle shared by Mail and Files
- * (docs/cybou/82 §0, 83 §0). Finalized is not Protected: content is
+ * (docs/cybou/82 Â§0, 83 Â§0). Finalized is not Protected: content is
  * Securing between PoA finality and the durability threshold.
  */
 enum class CybouContentState {
@@ -157,7 +157,7 @@ struct CybouMailItem {
     bool below_support_rate{false};
     CybouContentState state{CybouContentState::Protected};
     QVector<CybouAttachmentItem> attachments;
-    /** Evidence for Security Details → Advanced; empty until reported. */
+    /** Evidence for Security Details â†’ Advanced; empty until reported. */
     QString operation_id;
     int min_remote_replicas{-1};
     int remote_replica_target{-1};
@@ -251,7 +251,7 @@ inline QString contentStateText(CybouContentState state)
 {
     switch (state) {
     case CybouContentState::Local: return QCoreApplication::translate("CybouProduct", "Local");
-    case CybouContentState::Securing: return QCoreApplication::translate("CybouProduct", "Securing…");
+    case CybouContentState::Securing: return QCoreApplication::translate("CybouProduct", "Securingâ€¦");
     case CybouContentState::Protected: return QCoreApplication::translate("CybouProduct", "Protected");
     case CybouContentState::Received: return QCoreApplication::translate("CybouProduct", "Received");
     case CybouContentState::TemporarilyUnavailable: return QCoreApplication::translate("CybouProduct", "Temporarily unavailable");
@@ -271,7 +271,7 @@ inline QString operationStateText(CybouOperationState state)
 {
     switch (state) {
     case CybouOperationState::Local: return QCoreApplication::translate("CybouProduct", "On this device");
-    case CybouOperationState::Preparing: return QCoreApplication::translate("CybouProduct", "Preparing…");
+    case CybouOperationState::Preparing: return QCoreApplication::translate("CybouProduct", "Preparingâ€¦");
     case CybouOperationState::Submitted: return QCoreApplication::translate("CybouProduct", "Waiting for confirmation");
     case CybouOperationState::Validated: return QCoreApplication::translate("CybouProduct", "Validated");
     case CybouOperationState::Finalized: return QCoreApplication::translate("CybouProduct", "Finalized");
@@ -332,9 +332,9 @@ inline QString retrievalText(CybouRetrievalState state)
 {
     switch (state) {
     case CybouRetrievalState::Idle: return {};
-    case CybouRetrievalState::Downloading: return QCoreApplication::translate("CybouProduct", "Downloading…");
-    case CybouRetrievalState::Verifying: return QCoreApplication::translate("CybouProduct", "Verifying…");
-    case CybouRetrievalState::Decrypting: return QCoreApplication::translate("CybouProduct", "Decrypting…");
+    case CybouRetrievalState::Downloading: return QCoreApplication::translate("CybouProduct", "Downloadingâ€¦");
+    case CybouRetrievalState::Verifying: return QCoreApplication::translate("CybouProduct", "Verifyingâ€¦");
+    case CybouRetrievalState::Decrypting: return QCoreApplication::translate("CybouProduct", "Decryptingâ€¦");
     case CybouRetrievalState::Ready: return QCoreApplication::translate("CybouProduct", "Ready");
     }
     return {};
@@ -362,7 +362,7 @@ inline QString fileStatusText(const CybouFileItem& item, bool online,
         ? progressText(item.state, item.progress_percent, online)
         : contentWithOperationText(item.state, operation, online);
     if (item.state == CybouContentState::Protected && item.available_offline)
-        return state + QStringLiteral("  ·  ") + localAvailabilityText(item);
+        return state + QStringLiteral("  Â·  ") + localAvailabilityText(item);
     return state;
 }
 
@@ -376,13 +376,13 @@ inline QString sizeText(quint64 bytes)
     return QCoreApplication::translate("CybouProduct", "%1 GB").arg(mb / 1024.0, 0, 'f', 1);
 }
 
-/** Short display form of an opaque account id: 2af3…91bc. */
+/** Short display form of an opaque account id: 2af3â€¦91bc. */
 inline QString shortId(const QString& id)
 {
     if (id.size() <= 12) return id;
-    return id.left(4) + QStringLiteral("…") + id.right(4);
+    return id.left(4) + QStringLiteral("â€¦") + id.right(4);
 }
 
 } // namespace CybouProduct
 
-#endif // BITCOIN_QT_CYBOUPRODUCT_H
+#endif // CYBOU_QT_CYBOUPRODUCT_H

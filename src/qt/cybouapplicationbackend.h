@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_CYBOUAPPLICATIONBACKEND_H
-#define BITCOIN_QT_CYBOUAPPLICATIONBACKEND_H
+#ifndef CYBOU_QT_CYBOUAPPLICATIONBACKEND_H
+#define CYBOU_QT_CYBOUAPPLICATIONBACKEND_H
 
 #include <qt/cybouproduct.h>
 
@@ -26,8 +26,8 @@
  * provider and finality mechanics stay behind the implementation:
  *
  *   CybouApplicationBackend
- *     ├── CybouFixtureApplicationBackend   (deterministic UI fixtures)
- *     └── CybouCoreApplicationAdapter      (core services, once available)
+ *     â”œâ”€â”€ CybouFixtureApplicationBackend   (deterministic UI fixtures)
+ *     â””â”€â”€ CybouCoreApplicationAdapter      (core services, once available)
  *
  * Ids passed to commands that create items (outgoing mail, uploads, folders,
  * copies, saved attachments) are opaque client ids chosen by the model; the
@@ -138,4 +138,4 @@ Q_SIGNALS:
     void commandFailed(const QString& text);
 };
 
-#endif // BITCOIN_QT_CYBOUAPPLICATIONBACKEND_H
+#endif // CYBOU_QT_CYBOUAPPLICATIONBACKEND_H

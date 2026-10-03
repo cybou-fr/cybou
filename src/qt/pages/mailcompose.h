@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_PAGES_MAILCOMPOSE_H
-#define BITCOIN_QT_PAGES_MAILCOMPOSE_H
+#ifndef CYBOU_QT_PAGES_MAILCOMPOSE_H
+#define CYBOU_QT_PAGES_MAILCOMPOSE_H
 
 #include <qt/cybouproduct.h>
 
@@ -44,7 +44,7 @@ public:
     void start(const CybouMailItem& draft = {});
     /** Adds local files as attachments (Attach file / drag & drop). */
     void addAttachments(const QStringList& paths);
-    /** Adds already protected content (Files → Send by CYBOU Mail). */
+    /** Adds already protected content (Files â†’ Send by CYBOU Mail). */
     void addProtectedAttachment(const CybouAttachmentItem& attachment);
     const QVector<CybouAttachmentItem>& attachments() const { return m_attachments; }
     CybouMailItem snapshotForRebuild() const;
@@ -83,4 +83,4 @@ private:
     void discard();
 };
 
-#endif // BITCOIN_QT_PAGES_MAILCOMPOSE_H
+#endif // CYBOU_QT_PAGES_MAILCOMPOSE_H

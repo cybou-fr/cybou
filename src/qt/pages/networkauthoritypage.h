@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_PAGES_NETWORKAUTHORITYPAGE_H
-#define BITCOIN_QT_PAGES_NETWORKAUTHORITYPAGE_H
+#ifndef CYBOU_QT_PAGES_NETWORKAUTHORITYPAGE_H
+#define CYBOU_QT_PAGES_NETWORKAUTHORITYPAGE_H
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -66,4 +66,4 @@ private:
     void confirmAuthAdjustment(bool grant);
 };
 
-#endif // BITCOIN_QT_PAGES_NETWORKAUTHORITYPAGE_H
+#endif // CYBOU_QT_PAGES_NETWORKAUTHORITYPAGE_H

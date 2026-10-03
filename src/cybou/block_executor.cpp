@@ -207,11 +207,7 @@ bool BlockExecutor::CanFinalize() const
     if (ValidateCybouState(m_candidate, &final_supply) != StateValidationError::NONE) {
         return false;
     }
-    if (final_supply != m_initial_supply) {
-        return false;
-    }
-    const auto root = CybouStateHash(m_candidate, /*validate=*/false);
-    return root.has_value();
+    return final_supply == m_initial_supply;
 }
 
 BlockExecutionResult BlockExecutor::Finalize() const

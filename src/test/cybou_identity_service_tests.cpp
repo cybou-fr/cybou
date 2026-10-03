@@ -521,4 +521,73 @@ BOOST_AUTO_TEST_CASE(competing_claim_loser_never_gains_ownership)
     for (const auto& path : {first_path, second_path, first_claim_path, second_claim_path}) std::filesystem::remove(path);
 }
 
+BOOST_AUTO_TEST_CASE(genesis_allocation_claim_e2e)
+{
+    const auto entropy = cybou::GenerateRecoveryEntropy();
+    BOOST_REQUIRE(entropy);
+    const auto words = cybou::EncodeRecoveryWords(*entropy);
+    const auto recovery_key = cybou::DeriveIdentityPublicKey(*entropy, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+    BOOST_REQUIRE(recovery_key);
+    const auto recovery_id = cybou::ComputeRecoveryKeyId(*recovery_key);
+    BOOST_REQUIRE(recovery_id);
+
+    RuntimeFixture fixture;
+    fixture.genesis.genesis_allocations.clear();
+    fixture.genesis.genesis_allocations[*recovery_id] = cybou::GenesisAllocation{
+        .balance = 100'000'000,
+        .authority = 10'000'001,
+        .label = "cybou",
+        .claimed_by = std::nullopt,
+    };
+    fixture.definition = cybou::CreateTestNetworkGenesis(fixture.genesis,
+        cybou::TestPoaFinalizerPublicKey(fixture.validator_seed[0]),
+        cybou::TestNetworkPublicKey(fixture.validator_seed[0]));
+    fixture.definition = cybou::WithTestGenesisParameters(fixture.definition, [](auto& params) {
+        params.account_creation_work_bits = 0;
+    });
+
+    cybou::CybouNodeRuntime runtime{fixture.Config()};
+    BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
+
+    const auto dir = std::filesystem::temp_directory_path() / "cybou-genesis-claim-vault-test";
+    std::filesystem::create_directories(dir);
+    const auto path = dir / "identity.cybou";
+    std::filesystem::remove(path);
+
+    cybou::CybouIdentityService service{runtime, path};
+    const auto result = service.RestoreIdentitySync(words, "correct horse battery staple");
+    BOOST_REQUIRE_MESSAGE(result.success, result.error_message);
+    BOOST_CHECK(!result.account_id.IsNull());
+    BOOST_CHECK_EQUAL(result.creation_height, 1);
+    BOOST_CHECK_EQUAL(runtime.GetFinalizedHeight().value_or(0), 1);
+
+    const auto loaded = runtime.GetStore().LoadState();
+    BOOST_REQUIRE(loaded && loaded.state);
+    const auto it = loaded.state->accounts.find(result.account_id);
+    BOOST_REQUIRE(it != loaded.state->accounts.end());
+    BOOST_CHECK_EQUAL(it->second.authority, 10'000'001u);
+    BOOST_CHECK_EQUAL(it->second.balance, 100'000'000u);
+    BOOST_CHECK_EQUAL(it->second.system_balance, fixture.definition.GetProtocolParameters().onboarding_bonus);
+
+    const auto alloc_it = loaded.state->genesis_allocations.find(*recovery_id);
+    BOOST_REQUIRE(alloc_it != loaded.state->genesis_allocations.end());
+    BOOST_REQUIRE(alloc_it->second.claimed_by.has_value());
+    BOOST_CHECK(*alloc_it->second.claimed_by == result.account_id);
+
+    BOOST_REQUIRE(loaded.state->names.PrimaryName(result.account_id));
+    BOOST_CHECK_EQUAL(*loaded.state->names.PrimaryName(result.account_id), "cybou");
+    BOOST_CHECK(loaded.state->identities.FindByRecoveryKeyId(*recovery_id) == result.account_id);
+
+    // Second restore with the same 24 words should find the existing on-chain identity
+    const auto second_path = dir / "restored.cybou";
+    std::filesystem::remove(second_path);
+    cybou::CybouIdentityService second_service{runtime, second_path};
+    const auto second_result = second_service.RestoreIdentitySync(words, "another password");
+    BOOST_REQUIRE_MESSAGE(second_result.success, second_result.error_message);
+    BOOST_CHECK(second_result.account_id == result.account_id);
+
+    std::filesystem::remove(path);
+    std::filesystem::remove(second_path);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

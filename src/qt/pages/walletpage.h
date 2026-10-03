@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_PAGES_WALLETPAGE_H
-#define BITCOIN_QT_PAGES_WALLETPAGE_H
+#ifndef CYBOU_QT_PAGES_WALLETPAGE_H
+#define CYBOU_QT_PAGES_WALLETPAGE_H
 
 #include <QCoreApplication>
 #include <QSet>
@@ -83,4 +83,4 @@ private:
     void showLockDialog();
 };
 
-#endif // BITCOIN_QT_PAGES_WALLETPAGE_H
+#endif // CYBOU_QT_PAGES_WALLETPAGE_H

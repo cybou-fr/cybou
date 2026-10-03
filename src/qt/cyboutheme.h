@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_CYBOUTHEME_H
-#define BITCOIN_QT_CYBOUTHEME_H
+#ifndef CYBOU_QT_CYBOUTHEME_H
+#define CYBOU_QT_CYBOUTHEME_H
 
 #include <QColor>
 #include <QIcon>
@@ -70,7 +70,7 @@ enum class Appearance {
     Dark,
 };
 
-/** Saved preference (Settings → Appearance), CYBOU_APPEARANCE overrides. */
+/** Saved preference (Settings â†’ Appearance), CYBOU_APPEARANCE overrides. */
 Appearance savedAppearance();
 void saveAppearance(Appearance appearance);
 /** Resolves System against the OS color scheme and activates it. */
@@ -118,4 +118,4 @@ void applyTo(QApplication& app);
 
 } // namespace CybouTheme
 
-#endif // BITCOIN_QT_CYBOUTHEME_H
+#endif // CYBOU_QT_CYBOUTHEME_H

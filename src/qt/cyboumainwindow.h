@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_CYBOUMAINWINDOW_H
-#define BITCOIN_QT_CYBOUMAINWINDOW_H
+#ifndef CYBOU_QT_CYBOUMAINWINDOW_H
+#define CYBOU_QT_CYBOUMAINWINDOW_H
 
 #include <QElapsedTimer>
 #include <QMainWindow>
@@ -131,4 +131,4 @@ private:
     void runScreenshotHarness(const QString& directory);
 };
 
-#endif // BITCOIN_QT_CYBOUMAINWINDOW_H
+#endif // CYBOU_QT_CYBOUMAINWINDOW_H

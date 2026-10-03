@@ -118,6 +118,10 @@ size_t SerializedStateSize(const CybouState& state,
         total_size += GENESIS_ALLOCATION_BASE_SIZE + allocation.label.size();
         if (allocation.claimed_by) total_size += AccountId::SIZE;
     }
+    if (!state.usage.empty() || !state.publications.empty()) {
+        total_size += 4 + state.usage.size() * (AccountId::SIZE + 8 + 8 + 4 + 8 + 4);
+        total_size += 4 + state.publications.size() * (32 + AccountId::SIZE + 32 + 4 + 8);
+    }
     return total_size;
 }
 

@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_RECOVERYPHRASEDIALOG_H
-#define BITCOIN_QT_RECOVERYPHRASEDIALOG_H
+#ifndef CYBOU_QT_RECOVERYPHRASEDIALOG_H
+#define CYBOU_QT_RECOVERYPHRASEDIALOG_H
 
 #include <QDialog>
 #include <QStringList>
@@ -18,7 +18,7 @@ class QTextEdit;
  *
  * Create mode: the words are shown in a selectable, copyable form, can be
  * saved to a file, and the user must confirm two random words before the
- * dialog accepts. Canceling means the identity is NOT created — the caller
+ * dialog accepts. Canceling means the identity is NOT created â€” the caller
  * discards the prepared identity material.
  *
  * View mode: read-only display of the words of an already unlocked identity
@@ -27,7 +27,7 @@ class QTextEdit;
  * File export is deliberately explicit about its outcome:
  *  - the consent warning names the proposed default file up front;
  *  - the save dialog always opens on top of this modal (the non-native Qt
- *    dialog is used — the platform-native one can open behind an
+ *    dialog is used â€” the platform-native one can open behind an
  *    application-modal parent and look like "nothing happened");
  *  - the always-visible status line afterwards states exactly what happened:
  *    the saved path, a cancel that wrote nothing, or the concrete write error.
@@ -72,4 +72,4 @@ private:
     void setFeedback(const QString& text, FeedbackTone tone);
 };
 
-#endif // BITCOIN_QT_RECOVERYPHRASEDIALOG_H
+#endif // CYBOU_QT_RECOVERYPHRASEDIALOG_H

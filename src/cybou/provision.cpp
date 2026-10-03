@@ -93,23 +93,21 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
     res.network_public_key = *net_pub;
     res.network_id_bytes = CanonicalSerializeNetworkPublicKey(res.network_public_key);
 
-    // 2. cybou.cybou Identity: a new network may keep the existing phrase,
-    // AccountID and therefore the same PoA key.
+    // 2. cybou.cybou Identity: a new network may keep the existing phrase
+    // and therefore the same PoA key; AccountID is network-instance state.
     if (central_authority) {
-        if (central_authority->account_id.IsNull()) return std::nullopt;
         res.cybou_entropy = central_authority->entropy;
-        res.cybou_account_id = central_authority->account_id;
     } else {
         auto cybou_entropy = GenerateRecoveryEntropy();
         if (!cybou_entropy) return std::nullopt;
         res.cybou_entropy = *cybou_entropy;
-        // Stable non-zero random AccountID (DEC-165): AccountID intentionally does
-        // not derive from mnemonic material, so network identity and account naming
-        // stay decoupled.
-        auto parsed_acc = GenerateRandomAccountId();
-        if (!parsed_acc) return std::nullopt;
-        res.cybou_account_id = *parsed_acc;
     }
+    // Stable non-zero random AccountID (DEC-165): AccountID intentionally does
+    // not derive from mnemonic material, so network identity and account naming
+    // stay decoupled; it is created upon initial network onboarding.
+    auto parsed_acc = GenerateRandomAccountId();
+    if (!parsed_acc) return std::nullopt;
+    res.cybou_account_id = *parsed_acc;
     res.cybou_words = EncodeRecoveryWords(res.cybou_entropy);
 
     auto cybou_rec = DeriveIdentityPublicKey(res.cybou_entropy, IdentityKeyPurpose::RECOVERY_ROOT);

@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_CYBOUUI_H
-#define BITCOIN_QT_CYBOUUI_H
+#ifndef CYBOU_QT_CYBOUUI_H
+#define CYBOU_QT_CYBOUUI_H
 
 #include <qt/cybouproduct.h>
 #include <qt/cyboutheme.h>
@@ -372,7 +372,7 @@ inline QLabel* Dot(Tint tint, QWidget* parent, int size = 8)
     return dot;
 }
 
-/** Flat circular icon button (search options, view toggle, more, star…). */
+/** Flat circular icon button (search options, view toggle, more, starâ€¦). */
 inline QToolButton* IconButton(Glyph glyph, QWidget* parent, const QString& tooltip = {})
 {
     auto* button = new QToolButton{parent};
@@ -431,7 +431,7 @@ inline QLabel* BodyText(const QString& text, QWidget* parent)
     return label;
 }
 
-/** "Section title ……… View all ›" header row; returns the link label (may be nullptr). */
+/** "Section title â€¦â€¦â€¦ View all â€º" header row; returns the link label (may be nullptr). */
 inline QHBoxLayout* SectionHeader(const QString& title, const QString& link_text, QLabel*& link_out, QWidget* parent)
 {
     auto* row = new QHBoxLayout;
@@ -450,7 +450,7 @@ inline QHBoxLayout* SectionHeader(const QString& title, const QString& link_text
     return row;
 }
 
-/** Icon-chip activity row: [chip] title / subtitle ……… meta [dot]. */
+/** Icon-chip activity row: [chip] title / subtitle â€¦â€¦â€¦ meta [dot]. */
 inline QFrame* ActivityRow(Glyph glyph, Tint tint, const QString& title, const QString& subtitle,
     const QString& meta, QWidget* parent, bool fresh = false)
 {
@@ -496,7 +496,7 @@ inline QVBoxLayout* StatColumn(const QString& caption, const QString& value, QWi
     return column;
 }
 
-/** Colour of the shared content lifecycle states (docs 82/83 §0). */
+/** Colour of the shared content lifecycle states (docs 82/83 Â§0). */
 inline QRgb stateColor(CybouContentState state, CybouOperationState operation = CybouOperationState::Finalized)
 {
     if (CybouProduct::itemPending(state, operation)) return CybouTheme::AMBER;
@@ -511,7 +511,7 @@ inline QRgb stateColor(CybouContentState state, CybouOperationState operation = 
     return CybouTheme::DIM;
 }
 
-/** Rich text "● text" in the state's colour; used by every state chip. */
+/** Rich text "â— text" in the state's colour; used by every state chip. */
 inline QString stateChipHtml(CybouContentState state, const QString& text,
     CybouOperationState operation = CybouOperationState::Finalized)
 {
@@ -521,7 +521,7 @@ inline QString stateChipHtml(CybouContentState state, const QString& text,
             text.toHtmlEscaped());
 }
 
-/** Compact state chip label ("● Securing 42%"). */
+/** Compact state chip label ("â— Securing 42%"). */
 inline QLabel* StateChip(CybouContentState state, const QString& text, QWidget* parent,
     CybouOperationState operation = CybouOperationState::Finalized)
 {
@@ -636,7 +636,7 @@ inline void startIdDrag(QWidget* source, const QString& mime, const QStringList&
     drag->exec(external.isEmpty() ? Qt::MoveAction : Qt::CopyAction);
 }
 
-/** Single-line label that elides with "…" instead of widening its parent. */
+/** Single-line label that elides with "â€¦" instead of widening its parent. */
 class ElidedLabel : public QLabel
 {
 public:
@@ -691,4 +691,4 @@ inline QString relTime(const QDateTime& when, const QDateTime& now = QDateTime::
 
 } // namespace CybouUi
 
-#endif // BITCOIN_QT_CYBOUUI_H
+#endif // CYBOU_QT_CYBOUUI_H

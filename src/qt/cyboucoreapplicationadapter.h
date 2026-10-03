@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_CYBOUCOREAPPLICATIONADAPTER_H
-#define BITCOIN_QT_CYBOUCOREAPPLICATIONADAPTER_H
+#ifndef CYBOU_QT_CYBOUCOREAPPLICATIONADAPTER_H
+#define CYBOU_QT_CYBOUCOREAPPLICATIONADAPTER_H
 
 #include <qt/cybouapplicationbackend.h>
 
@@ -128,4 +128,4 @@ private:
     void finishRotation(bool ok, const QString& error);
 };
 
-#endif // BITCOIN_QT_CYBOUCOREAPPLICATIONADAPTER_H
+#endif // CYBOU_QT_CYBOUCOREAPPLICATIONADAPTER_H

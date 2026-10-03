@@ -44,8 +44,9 @@ The corresponding **Network Private Key**:
 
 Provisioning creates the Network secret and the ordinary `cybou.cybou` and
 `bootstrap` Identity secrets once. A new network may keep `cybou.cybou`'s
-existing phrase, AccountID and PoA key (`cybou-provision create-devnet ...
---keep-central-authority FILE`); the Network key is always new, so the new
+existing phrase and PoA key (`cybou-provision create-devnet ...
+--keep-central-authority FILE`); AccountID is network-instance state created on
+initial network onboarding. The Network key is always new, so the new
 network always has a new NetworkID. Private material stays only under gitignored `/private/`
 (`devnet/` for DEVNET; `mainnet/` does not yet exist). Only public keys,
 public Identity data, and signed genesis constants enter Git.

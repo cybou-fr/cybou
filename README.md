@@ -45,9 +45,10 @@ service d'un réseau privé d'entreprise.
   strictement de l'état finalisé par le PoA (aucune déclaration locale ni voucher
   hors-chaîne ne confère d'autorité). Chaque identité reçoit un crédit de confiance
   d'accueil immédiat de 5 Go de stockage réseau, adossé à une obligation physique
-  réciproque de 1:3 (~10–15 Go alloués sur disque local pour les pairs). Les nœuds
-  vérifient mutuellement leur stockage et leur disponibilité via des audits cryptographiques
-  périodiques (offset d'octets et sel) notariés dans les blocs. Lors de la révocation
+  réciproque de 1:3 (~10–15 Go alloués sur disque local pour les pairs). Le mécanisme
+  cryptographique d'audit de stockage (`StorageAuditChallenge`, `CreateStorageAuditProof`,
+  `VerifyStorageAuditProof`) est implémenté ; le protocole réseau d'audit périodique
+  et sa notarisation sont en cours de développement. Lors de la révocation
   d'un objet (`RevokePublication`), les blocs de données associés sont immédiatement
   purgés par les nœuds hébergeurs. 100% des commissions de protocole reviennent à
   l'opérateur pour la maintenance et le développement du réseau.

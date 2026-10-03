@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_CYBOUDESKTOPMODEL_H
-#define BITCOIN_QT_CYBOUDESKTOPMODEL_H
+#ifndef CYBOU_QT_CYBOUDESKTOPMODEL_H
+#define CYBOU_QT_CYBOUDESKTOPMODEL_H
 
 #include <qt/cybouproduct.h>
 
@@ -150,7 +150,7 @@ QString cybouAuthorityText(quint64 authority);
  * Canonical CYBOU amount rendering.
  *
  * CYBOU is indivisible (decimals = 0, 1 CYBOU = minimum unit), so the
- * rendering is an integer with locale grouping — never a decimal fraction.
+ * rendering is an integer with locale grouping â€” never a decimal fraction.
  */
 inline QString cybouAmountText(quint64 amount)
 {
@@ -516,4 +516,4 @@ private:
     CybouFeatureAvailability m_requested_availability;
 };
 
-#endif // BITCOIN_QT_CYBOUDESKTOPMODEL_H
+#endif // CYBOU_QT_CYBOUDESKTOPMODEL_H

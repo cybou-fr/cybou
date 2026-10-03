@@ -413,6 +413,16 @@ int OperationCommand(const std::string& action, const Options& opts)
 
 // ---- Identity ----
 
+struct PasswordWiper {
+    std::string& value;
+    ~PasswordWiper() { if (!value.empty()) crypto::CleanseMemory(value.data(), value.size()); }
+};
+
+struct WordsWiper {
+    RecoveryWords& words;
+    ~WordsWiper() { for (auto& word : words) crypto::CleanseMemory(word.data(), word.size()); }
+};
+
 /** Reads a private password file; trailing newlines are not part of the password. */
 std::string ReadPassword(const std::filesystem::path& path)
 {
@@ -444,23 +454,25 @@ int IdentityCommand(const std::string& action, const Options& opts)
     const auto timeout_ms = Quantity(opts.Get("timeout", "600s"), true);
 
     RecoveryWords words;
+    WordsWiper wipe_words{words};
     {
         auto bytes = ReadSecretFile(opts.Require("phrase-file"), 1024);
         if (!bytes) throw std::runtime_error("phrase file must be a private regular file");
         std::string text(bytes->begin(), bytes->end());
+        PasswordWiper wipe_text{text};
         crypto::CleanseMemory(bytes->data(), bytes->size());
         std::istringstream in{text};
         size_t count{0};
         std::string word;
         while (in >> word) {
+            PasswordWiper wipe_word{word};
             if (count < words.size()) words[count] = word;
             ++count;
-            crypto::CleanseMemory(word.data(), word.size());
         }
-        crypto::CleanseMemory(text.data(), text.size());
         if (count != words.size() || !DecodeRecoveryWords(words)) throw std::runtime_error("the phrase file must hold one valid 24-word recovery phrase");
     }
     std::string password = ReadPassword(opts.Require("password-file"));
+    PasswordWiper wipe_password{password};
 
     auto config = RuntimeConfig(network, opts.Require("data-dir"));
     if (opts.Has("peer")) config.configured_peers.push_back({ParseEndpoint(opts.Get("peer")), std::nullopt});
@@ -478,14 +490,12 @@ int IdentityCommand(const std::string& action, const Options& opts)
     }
     if (!synced) {
         node->StopNetwork();
-        crypto::CleanseMemory(password.data(), password.size());
-        throw std::runtime_error("could not catch up with the network");
+        throw std::runtime_error("could not synchronize with known peers");
     }
     CybouIdentityService identity{node->Runtime(), vault};
     const auto result = identity.RestoreIdentitySync(words, std::move(password),
         [](IdentityCreationPhase, const std::string& message) { std::cout << message << std::endl; },
         std::chrono::milliseconds{timeout_ms});
-    for (auto& word : words) crypto::CleanseMemory(word.data(), word.size());
     node->StopNetwork();
     if (!result.success) throw std::runtime_error(result.error_message);
     std::cout << "account=" << result.account_id.Value().GetHex() << " height=" << result.creation_height << '\n';
@@ -541,11 +551,14 @@ int RunNode(const Options& opts)
     if (opts.Has("identity-vault")) {
         identity = std::make_unique<CybouIdentityService>(node->Runtime(), opts.Require("identity-vault"));
         std::string password = ReadPassword(opts.Require("identity-password-file"));
+        PasswordWiper wipe_password{password};
         const bool unlocked = identity->LoadVault(password);
-        crypto::CleanseMemory(password.data(), password.size());
         if (!unlocked || !identity->GetAccountId()) throw std::runtime_error("cannot unlock the Identity vault");
         node->Runtime().SetValidationSigner(std::make_shared<CybouKeyStoreValidationSigner>(identity->GetKeyStore()));
-        std::cout << "identity=" << identity->GetAccountId()->Value().GetHex() << " validation signer enabled" << std::endl;
+        const auto account_state = identity->GetFinalizedAccountState();
+        const bool eligible = account_state && account_state->authority > VALIDATION_AUTHORITY_THRESHOLD;
+        std::cout << "identity=" << identity->GetAccountId()->Value().GetHex()
+                  << " validation signer configured (eligible=" << (eligible ? "yes" : "no") << ")" << std::endl;
     }
     if (auto peers = PeerList(opts)) {
         if (opts.Has("peer")) peers->insert(peers->begin(), ParseEndpoint(opts.Get("peer")));

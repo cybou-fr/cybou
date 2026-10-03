@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_CYBOUACTIVITY_H
-#define BITCOIN_QT_CYBOUACTIVITY_H
+#ifndef CYBOU_QT_CYBOUACTIVITY_H
+#define CYBOU_QT_CYBOUACTIVITY_H
 
 #include <QCoreApplication>
 #include <QString>
@@ -57,4 +57,4 @@ private:
     void open(const CybouActivityOperation& operation);
 };
 
-#endif // BITCOIN_QT_CYBOUACTIVITY_H
+#endif // CYBOU_QT_CYBOUACTIVITY_H

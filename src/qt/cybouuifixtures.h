@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_CYBOUUIFIXTURES_H
-#define BITCOIN_QT_CYBOUUIFIXTURES_H
+#ifndef CYBOU_QT_CYBOUUIFIXTURES_H
+#define CYBOU_QT_CYBOUUIFIXTURES_H
 
 #include <QDateTime>
 #include <QObject>
@@ -68,4 +68,4 @@ private:
 
 } // namespace CybouUiFixtures
 
-#endif // BITCOIN_QT_CYBOUUIFIXTURES_H
+#endif // CYBOU_QT_CYBOUUIFIXTURES_H

@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_PAGES_STORAGEPAGE_H
-#define BITCOIN_QT_PAGES_STORAGEPAGE_H
+#ifndef CYBOU_QT_PAGES_STORAGEPAGE_H
+#define CYBOU_QT_PAGES_STORAGEPAGE_H
 
 #include <qt/cybouproduct.h>
 
@@ -137,4 +137,4 @@ private:
     void activate(const QString& id);
 };
 
-#endif // BITCOIN_QT_PAGES_STORAGEPAGE_H
+#endif // CYBOU_QT_PAGES_STORAGEPAGE_H

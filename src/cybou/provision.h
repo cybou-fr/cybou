@@ -87,13 +87,12 @@ inline constexpr std::string_view BOOTSTRAP_ALLOCATION_LABEL{"bootstrap"};
 /// \brief Уже существующая Identity `cybou.cybou`, переносимая в новую сеть без смены фразы.
 struct ExistingCentralAuthority {
     RecoveryEntropy entropy{};
-    AccountId account_id{};
 };
 
 /// \brief Генерирует весь DEVNET provisioning полностью в памяти.
 /// \return Полный набор секретов и public artifacts либо std::nullopt при криптографической/серилизационной ошибке.
 /// \post При успехе результат уже проходит round-trip и self-verification.
-/// \param central_authority Если задан, `cybou.cybou` сохраняет эту фразу и AccountID (новая сеть, тот же PoA-ключ).
+/// \param central_authority Если задан, `cybou.cybou` сохраняет эту фразу (новая сеть, тот же PoA-ключ; AccountID создаётся при онбординге).
 std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
     const std::optional<ExistingCentralAuthority>& central_authority = std::nullopt);
 

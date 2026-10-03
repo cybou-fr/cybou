@@ -1,9 +1,9 @@
-// Copyright (c) 2026 Stanislav Saveliev
+﻿// Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-#ifndef BITCOIN_QT_CYBOUNOTIFIER_H
-#define BITCOIN_QT_CYBOUNOTIFIER_H
+#ifndef CYBOU_QT_CYBOUNOTIFIER_H
+#define CYBOU_QT_CYBOUNOTIFIER_H
 
 #include <qt/cyboutheme.h>
 
@@ -20,7 +20,7 @@
 namespace CybouUi {
 
 /**
- * Transient confirmation at the bottom of the window ("Moved to Trash ·
+ * Transient confirmation at the bottom of the window ("Moved to Trash Â·
  * Undo"). One notice at a time; a new one replaces the current one. The
  * notice follows its host's size and never takes keyboard focus away.
  */
@@ -106,4 +106,4 @@ private:
 
 } // namespace CybouUi
 
-#endif // BITCOIN_QT_CYBOUNOTIFIER_H
+#endif // CYBOU_QT_CYBOUNOTIFIER_H
