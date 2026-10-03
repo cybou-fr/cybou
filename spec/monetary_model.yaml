@@ -17,7 +17,7 @@ dev_genesis:
     name: cybou
   issued_supply: 200000000
   unissued_supply: 99800000000
-  official_provisioning: deferred
+  official_provisioning: compiled_devnet_v12
   state_version: 12
 
 onboarding_bonus:
@@ -75,7 +75,7 @@ fees:
   burn_fraction: 0
   batching: false
   validator_rewards: false
-  provider_rewards: false
+  storage_rewards: false
   atomic: true
 
 application_content:

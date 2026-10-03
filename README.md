@@ -21,10 +21,10 @@ d'accès par IP définis pour cette instance. Le client choisit l'infrastructure
 et la connectivité ; Internet ou intranet ne sont pas des produits différents.
 
 Cette offre décrit l'objectif du produit, pas une fonction déjà disponible de
-bout en bout. Le VPS DEV héberge actuellement un prototype bootstrap autonome
+bout en bout. Le VPS DEV exécute désormais un Full Node ordinaire sur DEVNET v12
 sur `51.255.46.58:29461` ; les anciens services finalizer et fournisseurs
 sont inactifs. Le client vérifie la genèse signée compilée et utilise le bootstrap compilé
-avec son pin TLS ; la migration du VPS vers ce protocole reste à effectuer.
+avec son pin TLS ; le VPS utilise le même protocole CYP2 v5.
 L'exécutable unique `cybou` démarre uniquement le DEVNET compilé et propose, sans
 interface, `node run` avec la clé PoA optionnelle, mais le
 client ne possède pas encore de parcours général de création et de mise en
@@ -126,3 +126,9 @@ production. Signalez les problèmes de sécurité selon la procédure décrite d
 `SECURITY.md`.
 
 © 2026 Stanislav Saveliev. Conçu en France.
+
+Offline network tooling is built explicitly with `-DBUILD_PROVISION_TOOL=ON`.
+`cybou-provision verify-devnet private/devnet` checks existing material without
+signing; `create-devnet NEW_PRIVATE_DIR NEW_CONSTANTS_HEADER` only accepts fresh
+outputs. Production Full Nodes do not provision networks. Omitted `--capacity`
+allocates storage automatically while retaining a free-space reserve.

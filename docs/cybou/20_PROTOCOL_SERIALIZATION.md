@@ -32,13 +32,23 @@ Verification binds each signature to its network, object kind, and relevant
 state context. Every production signature requires all components mandated by
 the key role; missing post-quantum components fail closed.
 
-## Version policy
+## Single-current-format policy
 
-Product releases, network definitions, consensus encodings, storage profiles,
-and cryptographic suites have separate version lifecycles. Source and public
-API names remain canonical and unversioned. Version bytes exist inside wire
-and vault encodings only. State serialization uses canonical version 12 (`CYBOU_STATE_VERSION = 12`).
-The protocol reset does not include legacy decoders, automatic import, or dual-format operation.
+If only one supported form of a consensus object, state layout, wire message,
+or application schema exists, it has no version identifier. It is simply the
+current canonical format. Parsers expect and validate this single active layout.
+A version field is introduced only when two formats must coexist simultaneously
+in production or during a live migration window. Once migration concludes and
+the old format is retired, the discriminator and legacy decoder are eliminated.
+
+Code and protocol do not record development history. Type names, serialization
+layouts, and wire headers do not carry historical version tags.
+
+Cryptographic domain separation strings (`CYBOU/NETWORK-ID/V6`, `CYBOU/OP-ID/V5`,
+`CYBOU/BLOCK/V3`, etc.) are exact byte sequences of hash and key derivation
+functions. They are not renamed incrementally during development; rather, they
+transition to eternal unversioned domain strings (`CYBOU/NETWORK-ID`, `CYBOU/OP-ID`,
+`CYBOU/BLOCK`, etc.) as part of the scheduled pre-MAINNET de-versioning network reset.
 
 ## Native hash values
 

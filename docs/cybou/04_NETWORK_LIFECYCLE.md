@@ -184,3 +184,10 @@ RootPublication wire v4 and encrypted/private schema v3 are bounded binary
 layouts with exact consumption. Hash256 hex follows its raw 32-byte order.
 No legacy runtime, CBOR or reversed-hash decoder is retained. Provisioning and
 network cutover require the previously established operator authorization.
+
+Provisioning is offline-only in the separately built `cybou-provision` tool.
+Production `cybou` has no provisioning command or Network Root derivation/signing
+path. `verify-devnet PRIVATE_DIR` checks existing private material against compiled
+public constants without signing. `create-devnet` accepts only fresh output paths;
+it never replaces existing constants or secrets. The current v12 DEVNET NetworkID
+is retained; the prior DEVNET is retired.

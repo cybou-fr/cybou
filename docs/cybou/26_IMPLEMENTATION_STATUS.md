@@ -9,12 +9,12 @@ define the target. The prepared changes described here are not a released baseli
 
 | Component | Target constitution | Current code reality |
 |---|---|---|
-| Official networks | Compiled DEVNET public constants; MAINNET unprovisioned and GUI-disabled | Implemented (`d5d90cb`): one `OfficialNetwork` per kind via `RequireOfficialNetwork`. Prior DEVNET constants from `ec76ef3` are retained but contain state v11; startup now fails closed until separately authorized v12 provisioning under a new NetworkID. MAINNET throws as not provisioned; the GUI has no network selector and always runs DEVNET. |
+| Official networks | Compiled DEVNET public constants; MAINNET unprovisioned and GUI-disabled | Implemented (`d5d90cb`): one `OfficialNetwork` per kind via `RequireOfficialNetwork`. Current compiled DEVNET contains the immutable v12 signed genesis under its new NetworkID. Retired DEVNET is not accepted. MAINNET throws as not provisioned; the GUI has no network selector and always runs DEVNET. |
 | Network identity | `NetworkID = Network Public Key` | Implemented: verified genesis carries the exact key; every 32-byte field is named `network_binding` and equals `ComputeNetworkBinding(key)`; `GetNetworkId()` exists only for the exact key bytes of a verified genesis. The shared `MakeNodeRuntimeConfig` derives the verified genesis and rendezvous locators from `OfficialNetwork`; the genesis digest marker is removed from the StateStore. |
 | Signed genesis | One immutable offline-signed `NetworkGenesis` object and initial state compiled per official network | Implemented: the compiled genesis must carry exactly the compiled Network Public Key and its initial state root. CYG1/CYN1, `CybouNetworkFile` and every file loader are removed. |
 | Official startup | Select compiled public constants; verify signature and initial state root; no external official file or separate digest pin | Implemented: every `cybou` command, loadgen, storage smoke/soak and the desktop start only from a compiled network (`--network devnet`, or `lab` in LAB test builds). No profile digest pin; the verified genesis digest anchors height zero. |
-| Network Private Key | Strictly offline, signs genesis once; private material stays under gitignored `/private/` | `network provision-devnet` is the only provisioning flow; raw secret-file keygen and genesis-create commands are removed. The retired DEVNET material is kept under `/private/devnet-retired-20261003`. |
-| Bootstrap | Ordinary CYBOU full peer | Bootstrap binding/protocol/store, `BOOTSTRAP_REQUEST/RESPONSE` and the `cybou-bootstrap` executable are removed. Nodes and the desktop dial the compiled locator first and check its SPKI pin; the locator node serves `--tls-certificate/--tls-key`. Every process uses the same Full Node network lifecycle; signer activation does not reconnect peers. Pinned rendezvous endpoints are protected from discovered-peer crowd-out. The DEV VPS still runs the retired prototype service. |
+| Network Private Key | Strictly offline, signs genesis once; private material stays under gitignored `/private/` | `cybou-provision` is an explicitly built offline tool (`BUILD_PROVISION_TOOL=ON`), separate from production `cybou`; `verify-devnet` checks existing secrets without signing genesis. Existing constants and secrets cannot be overwritten. The retired DEVNET material is kept under `/private/devnet-retired-20261003`. |
+| Bootstrap | Ordinary CYBOU full peer | Bootstrap binding/protocol/store, `BOOTSTRAP_REQUEST/RESPONSE` and the `cybou-bootstrap` executable are removed. Nodes and the desktop dial the compiled locator first and check its SPKI pin; the locator node serves `--tls-certificate/--tls-key`. Every process uses the same Full Node network lifecycle; signer activation does not reconnect peers. Pinned rendezvous endpoints are protected from discovered-peer crowd-out. The DEV VPS runs the ordinary `cybou node run` command on current v12 DEVNET. |
 | Geo updater | France-only admission with a valid local dataset; fail closed otherwise | HTTPS and published archive SHA-1 verification, bounded gzip decode, SHA-256 CSV cache and validated atomic installation. Each failed attempt re-fetches metadata and archive; five attempts use interruptible 0/2/5/15/60s delays. Exhaustion retains valid cache and retries in 1h, or retries in 5m without a valid dataset. Successful/current checks use 14 days. Test-only fetch/wait hooks cover publication mismatch, rejected candidates, cache retention, strict temporary cleanup and cancellation without network access. |
 | Consensus bootstrap state | No grants, roster, or network-role announcements | Removed. |
 | Consensus state | Unified current state format | State v12 with canonical AUTH and only OnboardingPool; older decoders removed. |
@@ -31,13 +31,12 @@ define the target. The prepared changes described here are not a released baseli
 
 CYP2 v5 uses an 80-byte HELLO with no network-role field. Every Full Node
 serves blocks, discovery, operation relay, Validation transport and encrypted
-storage with a local quota (including zero). On-demand StorageId proof is
+storage with a positive automatic or explicitly configured local quota. On-demand StorageId proof is
 restricted to storage interactions. `node run` and its optional
 `--poa-key-file` option use `StartNetwork`; CybouNodeRuntime produces blocks
 and `PoaFinalizer` owns durable signing safety. Signer toggles preserve
 peer sessions. Qt uses feature availability and reports Full Node properties.
-The existing economic reset is retained; official provisioning and VPS
-migration remain deferred.
+The economic reset uses the currently provisioned immutable v12 DEVNET.
 
 ## Prepared economics reset (2026-10-03)
 
@@ -47,30 +46,25 @@ OnboardingPool begins at 100M in the genesis builder; provisioning shares that
 builder. Removed fee pools, end-of-block distribution, routing errors and GUI
 pool metrics. State v12 rejects v11. Canonical supply conservation remains.
 
-Official provisioning is deferred at the operator's request. Compiled DEVNET
-constants still contain the immutable prior v11 genesis and cannot start with
-this code. Do not modify or re-sign it under its old NetworkID. A separately
-authorized new NetworkID and clean state cutover are required before release.
-LAB has a synthetic Central Authority allocation and v12 state for integration.
+Current compiled DEVNET has its new NetworkID and immutable state v12 genesis.
+The former DEVNET is retired; no genesis is replaced under its NetworkID.
+MAINNET remains unprovisioned. LAB uses separate fixed test keys.
 
 Verification: headless LAB and Qt desktop builds succeeded; all 216 core tests
 (5,787 assertions) passed. The multi-process storage smoke passed publication,
 finality, remote protection, provider loss, repair and exact retrieval of
 716,800 bytes. Translation XML and the documentation manifest were checked.
 
-## Current DEV VPS deployment
+## DEV deployment and acceptance
 
-- The DEV VPS (`debian@vps-d0669a91.vps.ovh.net`) still runs the retired prototype
-  `cybou-bootstrap.service` built from an older commit, with state under
-  `/var/lib/cybou/bootstrap/state`. This repository no longer builds it.
-- The DEVNET locator and its TLS SPKI pin are compiled in `src/cybou/official_networks.cpp`.
-- No production network exists. The coordinated ordinary full-peer cutover has not occurred.
+The DEV VPS runs `cybou-node.service` as an ordinary Full Node at the compiled
+TLS-pinned locator. The old prototype service is inactive. Its TLS certificate
+continues to provide transport identity only; no PoA or Network Root secret is
+placed on the VPS. France-only admission remains fail closed.
 
-## Open integration gates
-
-1. Provision a new DEVNET NetworkID with v12 signed constants after operator authorization.
-2. Migrate the DEV VPS to an ordinary headless `cybou ... --network devnet` node with a TLS certificate matching the compiled SPKI pin, after a coordinated state reset.
-3. Complete DEVNET end-to-end acceptance.
+The hardening pass verifies existing DEVNET private material offline, builds and
+tests the ordinary `node run` command, then deploys it with a clean v12 domain.
+Deployment and acceptance evidence is recorded below after verification.
 
 ## Completed simplification pass (2026-10-03)
 
@@ -89,8 +83,8 @@ compat code are removed, along with unused libevent and Boost dependencies.
 
 Existing economics, AUTH transitions, France-only fail-closed admission,
 hybrid post-quantum signatures and BLAKE3 remain the implementation baseline.
-Provisioning, official constants, network reset and VPS deployment were not run
-as part of this pass; the previously documented operator gates remain open.
+That earlier simplification pass did not provision or deploy the network.
+The subsequent hardening pass uses the existing new DEVNET constants.
 
 Verification for this pass: both headless LAB and Qt builds succeeded; all 205
 core tests and 49 Qt tests passed. Operator CLI acceptance and the multi-process
@@ -99,3 +93,49 @@ repair and exact retrieval of 716,800 bytes. Seven stress-controller unit tests
 ran successfully with one skip. Active CYBOU production sources have zero
 references to the removed runtime APIs and Bitcoin/CBOR substrate. Third-party
 crc32c CPU hardware capability constants are outside that runtime check.
+
+## Final hardening and DEV deployment (2026-10-03)
+
+Existing Network Root and cybou.cybou mnemonic/seed material match compiled
+Network, PoA and Recovery keys, AccountID, allocation, genesis signature and
+state v12 root. The saved public AccountID and summary state-root text were
+normalized from the former reversed hex representation; seeds, keys, NetworkID
+and signed genesis were unchanged. Private files remain gitignored.
+
+Production `cybou` does not link provisioning and rejects Network Root private
+key derivation/signing. `cybou-provision` is opt-in and refuses replacement
+outputs. Storage defaults to a positive automatic allocation and reserves disk
+space; the opt-in GUI checkbox is removed. PoA retries retain the exact intent
+and certificate, use bounded backoff, preserve the worker across lock/unlock,
+and keep safety halts fail closed. Storage PUT/GET/proof have local byte/request
+and concurrency limits before chunk reads, with progress and absolute deadlines.
+Outward storage identifiers and events use `storage_*`; deployed cryptographic
+domains and storage-key bytes retain their original definitions.
+
+The VPS production headless build has tests, LAB and provisioning disabled.
+`cybou-node.service` uses `cybou node run` at `51.255.46.58:29461`, with the
+compiled TLS SPKI pin, validated October Geo cache and automatic allocation
+about 5.8 GiB. Old state is retired separately; the new state starts at its
+immutable genesis. No Network Root or PoA secret was sent to the VPS.
+Doctor reports READY, and a desktop-to-VPS France-admitted, TLS-pinned CYP2
+probe succeeded. PoA production remains the Central Authority desktop's job;
+this pass does not activate an official signer or manufacture official traffic.
+
+Verification: 210 core tests (8,640 assertions), 49 Qt tests, operator CLI
+acceptance, and multi-process LAB storage smoke (finality, remote protection,
+replica loss, repair, exact retrieval of 716,800 bytes) passed. A separately
+linked probe confirms production Network Root derivation and signing reject.
+Final transport/runtime refinements receive focused regression checks.
+
+The default Windows desktop domain was also cut over: legacy network-bound files
+are retired under `C:/Users/cybou/AppData/Local/CYBOU-retired-20261003-hardening`.
+`C:/Users/cybou/AppData/Local/CYBOU/cybou_state` now starts from current v12
+genesis, passes doctor READY and probes the VPS successfully. Host virtualization
+resources were preserved at their existing paths; `cybou-guest` is Off and the
+new Full Node does not use it. The desktop production build has BUILD_TESTS,
+LAB and provisioning disabled. The separate headless LAB build retains tests.
+
+After the final idle-session/truncated-frame refinement, all 53 runtime/P2P
+regression cases (1,082 assertions), CLI acceptance and storage smoke passed.
+Provisioning refusal against existing output was checked without generating any
+new material. Translation XML and the documentation manifest are consistent.

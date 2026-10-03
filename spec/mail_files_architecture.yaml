@@ -18,7 +18,7 @@ local_data_plane:
     encrypted_at_rest: true
     rebuildable: true
     gui_semantic_source: true
-    foreign_provider_chunks_visible: false
+    foreign_storage_chunks_visible: false
 
 services:
   application_service:
@@ -36,7 +36,7 @@ services:
   storage_service:
     responsibilities:
       - get_put_chunks
-      - provider_selection
+      - storage_selection
       - remote_replication
       - health_audit_repair
 
@@ -96,14 +96,14 @@ storage:
   erasure_coding_beta: false
   placement_granularity: chunk_id
   local_retention: pin_and_lru_cache_registry  # opaque holder/reference tags
-  replica_identity: provider_id  # BLAKE3 of the CYP2-proven provider key
-  deterministic_provider_ranking_frozen: false
-  provider_discovery_initial: peer_fanout_by_chunk_id
+  replica_identity: storage_id  # BLAKE3 of the CYP2-proven provider key
+  deterministic_storage_ranking_frozen: false
+  storage_discovery_initial: peer_fanout_by_chunk_id
   repair_required: true
 
 recovery:
   application_db_required: false
-  old_provider_placement_db_required: false
+  old_storage_placement_db_required: false
   current_mnemonic_plus_public_history: true
   historical_kem_recovery_after_rotation: recovery_bridge
   self_capsule_for_owner_recovery: true

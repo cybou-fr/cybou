@@ -30,18 +30,29 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 
 13. **Application data plane integration**: connect Mail and Files publication and finalized storage placement to the desktop model.
 14. **Storage durability hardening**: verify Beta target of 2 independent remote full replicas plus local copy (3 physical copies total) with audit and repair.
-15. **MAINNET provisioning and launch**: create its own keys, genesis and bootstrap only after full DEVNET soak and formal acceptance.
+15. **Pre-MAINNET de-versioning clean-break**: eliminate all historical version markers across wire frames, state encoding, blocks, operations, schemas, and crypto domain separation strings (DEC-264).
+16. **MAINNET provisioning and launch**: create its own keys, genesis and bootstrap only after full DEVNET soak and formal acceptance.
+
+## Pre-MAINNET de-versioning clean-break milestone
+
+Before MAINNET genesis, a dedicated architectural clean-break pass enforces the Single-current-baseline invariant (DEC-264) across all protocol layers:
+- **Wire framing**: Replace `CYP2` and `WIRE_VERSION = 5` with canonical unversioned P2P framing (`CYBP` magic, `message_type`, `payload_size`; no version byte or negotiation).
+- **Consensus layouts**: Remove `CYBOU_BLOCK_VERSION`, `CYBOU_STATE_VERSION`, `CYBOU_NETWORK_GENESIS_VERSION`, and `PROTOCOL_OPERATION_VERSION`. Blocks, operations, and state snapshots follow single active binary layouts without version fields.
+- **Application & Attestation schemas**: Strip version fields from `RootPublication`, `ValidationAttestation`, `AccountCreate`, `IdentityAuthorization`, and private application database formats.
+- **Eternal crypto domain strings**: Transition domain separation strings (`CYBOU/NETWORK-ID/V6`, `CYBOU/OP-ID/V5`, `CYBOU/BLOCK/V3`, `CYBOU/STORAGE-ID/v1`, etc.) to eternal unversioned constants (`CYBOU/NETWORK-ID`, `CYBOU/OP-ID`, `CYBOU/BLOCK`, `CYBOU/STORAGE-ID`, etc.) during the coordinated pre-MAINNET reset.
 
 ## Prepared economics reset
 
-Direct Central Authority fees and state v12 are prepared. New DEVNET NetworkID
-provisioning and coordinated clean state cutover remain deferred by the operator.
+Direct Central Authority fees and state v12 use the new compiled DEVNET
+NetworkID. The previous DEVNET is retired. Hardening and deployment acceptance
+close this pass before further product development.
 
 ## Simplification completion
 
 The uniform Full Node runtime, compact CYP2 v5 transfers, verified-genesis
 chain anchor, direct publication staging, transient Merkle proofs, bounded
 binary schemas and native Hash256 are implemented and tested. Dependency and
-legacy runtime cleanup is complete. Remaining official deployment work is
-operator-authorized new DEVNET provisioning and coordinated clean cutover;
-this implementation pass does not launch provisioning or reset machines.
+legacy runtime cleanup is complete. The final hardening pass verifies existing DEVNET secrets offline, separates
+provisioning tooling, enables automatic storage allocation, preserves PoA worker
+liveness and hardens storage transfers. Subsequent work develops CYBOU product
+features and durability rather than reopening architecture cleanup.

@@ -96,5 +96,9 @@ STORAGE_PROOF (23), bound to both HELLOs, TLS exporter and a fresh challenge.
 The STORAGE key retains purpose value 8 and its original derivation domain.
 No role is advertised. PublicationService retains ordered authorization leaves
 in the encrypted Application DB; StorageService builds transient Merkle levels
-and generates each proof on demand. Zero quota rejects admission while leaving
-block sync, candidate relay and Validation transport operational.
+and generates each proof on demand. Production nodes allocate a positive quota automatically (or accept an explicit
+positive quota). Zero is limited to memory-only unit tests. Automatic allocation
+uses 10% of space remaining after a reserve of max(1 GiB, 5% of filesystem size),
+clamped to 64 MiB–20 GiB. Admission preserves the same reserve and fails closed
+on unavailable disk-space information. Existing replicas survive quota reductions.
+Block sync, candidate relay and Validation transport remain operational.

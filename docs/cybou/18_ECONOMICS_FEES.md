@@ -82,6 +82,6 @@ finalized rules in `57_IDENTITY_AUTHORITY.md`. Fee amounts do not scale AUTH.
 
 State v12 has no v11 decoder. A new genesis requires a new Network Public Key
 and therefore a new NetworkID, followed by a clean network-bound state reset.
-The economic code is prepared; official DEVNET provisioning is deferred by the
-operator. Current compiled v11 constants are intentionally rejected. MAINNET
-remains unprovisioned. LAB tests use their own keys and v12 genesis.
+Current compiled DEVNET has its new NetworkID and immutable v12 genesis; the
+former DEVNET is retired. MAINNET remains unprovisioned. LAB tests use their
+own keys and v12 genesis. Existing genesis is never re-signed or replaced.

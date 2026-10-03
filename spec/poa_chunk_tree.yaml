@@ -193,9 +193,9 @@ storage:
   manifest_commit_staging_abort_protocol: absent
   chunk_placement: independent_per_chunk
   open_gates:
-    - provider_chunk_wire_serialization_and_admission_integration
+    - storage_chunk_wire_serialization_and_admission_integration
     - durability_threshold_and_retry_semantics
-    - retention_repair_accounting_and_provider_loss
+    - retention_repair_accounting_and_storage_loss
 recovery:
   publication_scanner: local_rebuildable_index
   clean_machine_requires_prior_client_database: false

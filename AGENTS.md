@@ -17,6 +17,23 @@ of global freshness or a prerequisite for creating an Identity.
 Read the active CYBOU documents before coding. Git history records superseded
 architecture; do not keep obsolete runtime paths alive for compatibility.
 
+## Single-current-baseline invariant
+
+If there is only one supported form of something, it has no version. It is simply
+the current form. A version appears ONLY when at least two forms actually coexist
+simultaneously or temporary migration between them is required. Once a migration
+window concludes and only one form remains supported, the older form and the
+version discriminator are removed. Code and architecture do not record development
+history in type names, wire headers, schema discriminators, or conceptual models
+(`CYP2`, `state v12`, `schema v3`, `wire v4`, `CVID5`, `CYBV2`). Git records
+history; code embodies only the active truth.
+
+Cryptographic domain separation strings (`CYBOU/NETWORK-ID/V6`, `CYBOU/OP-ID/V5`, etc.)
+are exact bytes of cryptographic hash functions and key derivation. They are never
+renamed mechanically in source; instead, they transition to eternal unversioned
+domain strings (`CYBOU/NETWORK-ID`, `CYBOU/OP-ID`, `CYBOU/STORAGE-ID`, etc.)
+exclusively during coordinated network genesis resets before MAINNET.
+
 ## CYBOU official networks constitution
 
 ```text
@@ -146,11 +163,12 @@ No:
 
 There is no production network.
 - **Target architecture**: The DEV bootstrap is an ordinary CYBOU full peer process.
-- **Current migration state**: The DEV VPS still runs a retired prototype service
-  (`cybou-bootstrap.service`, state in `/var/lib/cybou/bootstrap/state`, TLS files under
-  `/etc/cybou-bootstrap/tls/`) built from an older commit. This repository no longer builds
-  that executable or speaks its protocol; the coordinated migration replaces it with the
-  ordinary `cybou` node on the re-provisioned DEVNET.
+- **Current deployment**: `cybou-node.service` runs the ordinary headless
+  `cybou node run` on the immutable v12 DEVNET, with state under
+  `/var/lib/cybou/node/state` and intrinsic automatic storage allocation.
+  The old network domain is retired under `/var/lib/cybou/node-retired-20261003-hardening`;
+  it must never be reused by the new network. The prototype service is inactive.
+  TLS files remain under `/etc/cybou-bootstrap/tls/` for transport identity only.
 - Its pinned TLS endpoint is the approved DEV Bootstrap locator (`51.255.46.58:29461`);
   its SPKI SHA-256 pin is compiled in `src/cybou/official_networks.cpp` for initial transport
   discovery only. This grants no consensus role, no special protocol capability, and does not make
@@ -169,6 +187,12 @@ There is no production network.
   desktop; `cybou node run` (optional `--poa-key-file`), `cybou network ...`,
   `cybou doctor`, `cybou operation ...` and `cybou storage ...` run headless.
   A `BUILD_GUI=OFF` build contains only the headless commands.
+- Production `cybou` has no provisioning command or Network Root derivation/signing.
+  `cybou-provision` is a separate explicitly built offline tool (`BUILD_PROVISION_TOOL=ON`).
+  Creation never overwrites existing private material or public constants; verification never signs.
+- Every production Full Node has a positive local storage allocation. Omitted capacity is
+  automatic; explicit zero is confined to memory-only unit tests. Low disk space rejects
+  new admission without changing node type, consensus authority, or mesh participation.
 - `cybou-loadgen`, storage smoke/soak and other tools exist only with
   `BUILD_TESTS=ON`.
 - Multi-process LAB/CI networks use `--network lab`, compiled only with
