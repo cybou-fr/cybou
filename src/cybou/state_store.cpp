@@ -35,6 +35,11 @@ inline std::string OperationKey(const uint256& op_id)
     return "cybou/operation/" + op_id.GetHex();
 }
 
+inline std::string StateHeightKey(const uint64_t height)
+{
+    return "cybou/state-height/" + std::to_string(height);
+}
+
 } // namespace
 
 CybouStateStore::CybouStateStore(
@@ -114,6 +119,7 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     batch.Write(HASH_KEY, *state_hash);
     batch.Write(HEAD_KEY, initial_head);
     batch.Write(NETWORK_ID_KEY, m_network_binding);
+    batch.Write(StateHeightKey(0), *serialized_state);
     m_db.WriteBatch(batch, sync);
     return {};
 }
@@ -231,7 +237,8 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     }
 
     const auto observation = m_poa_conflict_detector->Observe(cert, block);
-    if (observation == PoaConflictStatus::SAFETY_CONFLICT) {
+    if (observation == PoaConflictStatus::SAFETY_CONFLICT ||
+        observation == PoaConflictStatus::COMPETING_NON_CANONICAL) {
         return {BlockTransitionError::POA_EQUIVOCATION_DETECTED};
     }
     if (observation == PoaConflictStatus::ALREADY_HALTED ||
@@ -241,6 +248,67 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     }
     if (observation == PoaConflictStatus::INVALID_CERTIFICATE) {
         return {BlockTransitionError::INVALID_CERTIFICATE};
+    }
+
+    if (observation == PoaConflictStatus::CANONICAL_REORG_REQUIRED) {
+        if (head->height != block.height) {
+            return {BlockTransitionError::INVALID_HEIGHT};
+        }
+        const auto old_block = GetBlockAtHeight(block.height);
+        if (!old_block || old_block->block.parent_block_id != block.parent_block_id) {
+            return {BlockTransitionError::PARENT_MISMATCH};
+        }
+
+        std::vector<unsigned char> parent_state_bytes;
+        if (!m_db.Read(StateHeightKey(block.height - 1), parent_state_bytes)) {
+            return {BlockTransitionError::CORRUPT_STATE};
+        }
+        auto parent_state = DeserializeCybouState(parent_state_bytes);
+        if (!parent_state) {
+            return {BlockTransitionError::CORRUPT_STATE};
+        }
+
+        const auto& params = m_network_definition.protocol_parameters;
+        auto execution = ExecuteBlockOperations(*parent_state, block.operations, m_network_binding,
+            block.height, params, &m_network_definition.poa_finalizer_public_key);
+        if (!execution) {
+            if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
+            if (execution.error == BlockExecutionError::FEE_ROUTING_OVERFLOW) return {BlockTransitionError::FEE_ROUTING_FAILED};
+            return BlockTransitionResult{.error = BlockTransitionError::INVALID_OPERATION, .op_result = execution};
+        }
+        if (*execution.state_root != block.resulting_state_root) {
+            return {BlockTransitionError::STATE_ROOT_MISMATCH};
+        }
+
+        KVStore::Batch batch;
+        for (const auto& op : old_block->block.operations) {
+            if (const auto op_id = ComputeOperationId(op); op_id && !op_id->IsNull()) {
+                batch.Erase(OperationKey(*op_id));
+            }
+        }
+        const auto state_bytes = SerializeCybouState(*execution.state);
+        if (!state_bytes) return {BlockTransitionError::CORRUPT_STATE};
+        batch.Write(STATE_KEY, *state_bytes);
+        batch.Write(HASH_KEY, *execution.state_root);
+        batch.Write(StateHeightKey(block.height), *state_bytes);
+
+        const FinalizedHead next_head{
+            .block_id = block_id,
+            .height = block.height,
+        };
+        batch.Write(HEAD_KEY, next_head);
+        const auto serialized_finalized = SerializeFinalizedBlock(finalized_block);
+        if (!serialized_finalized) return {BlockTransitionError::CORRUPT_STATE};
+        batch.Write(BlockKey(block_id), *serialized_finalized);
+        batch.Write(BlockHeightKey(block.height), block_id);
+
+        for (const auto& op : block.operations) {
+            if (const auto op_id = ComputeOperationId(op); op_id && !op_id->IsNull()) {
+                batch.Write(OperationKey(*op_id), block_id);
+            }
+        }
+        m_db.WriteBatch(batch, sync);
+        return {};
     }
 
     if (head->block_id != block.parent_block_id) {
@@ -286,11 +354,20 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     };
 
     KVStore::Batch batch;
+    const auto parent_state_bytes = SerializeCybouState(*loaded.state);
+    if (parent_state_bytes) {
+        batch.Write(StateHeightKey(head->height), *parent_state_bytes);
+    }
     if (!is_empty_noop_block) {
         const auto state_bytes = SerializeCybouState(*next_state);
         if (!state_bytes) return {BlockTransitionError::CORRUPT_STATE};
         batch.Write(STATE_KEY, *state_bytes);
         batch.Write(HASH_KEY, candidate_root);
+        batch.Write(StateHeightKey(block.height), *state_bytes);
+    } else {
+        if (parent_state_bytes) {
+            batch.Write(StateHeightKey(block.height), *parent_state_bytes);
+        }
     }
     batch.Write(HEAD_KEY, next_head);
     const auto serialized_finalized = SerializeFinalizedBlock(finalized_block);
@@ -301,6 +378,9 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         const auto op_id = ComputeOperationId(operation);
         if (!op_id || op_id->IsNull()) return {BlockTransitionError::INVALID_OPERATION};
         batch.Write(OperationKey(*op_id), block_id);
+    }
+    if (block.height > 16) {
+        batch.Erase(StateHeightKey(block.height - 16));
     }
     m_db.WriteBatch(batch, sync);
     return {};

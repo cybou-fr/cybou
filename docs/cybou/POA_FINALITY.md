@@ -38,8 +38,10 @@ if journal recovery, rollback or signer exclusivity is uncertain. One operationa
 key has only one active signer.
 
 If two distinct valid certificates exist for the same network, height and
-parent, observing full nodes record verified evidence and enter a permanent
-safety halt. They do not branch-hop or automatically select a winner.
+parent, observing full nodes record verified equivocation evidence and
+deterministically select the canonical winner min(BlockID_1, BlockID_2),
+re-orging if the newly observed certificate has a strictly smaller BlockID,
+or rejecting it if not. Corrupt storage halts fail closed.
 
 ## Independent execution invariant
 

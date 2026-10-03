@@ -8,7 +8,7 @@ editing an included file.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 332 | 7d454658735cc480 |
+| AGENTS.md | 332 | f372b3184397b6b4 |
 | CONTRIBUTING.md | 49 | 1560938a1a187d62 |
 | INSTALL.md | 37 | 7b13446c3e77413f |
 | README.md | 128 | c0cb7a50348905b2 |
@@ -64,7 +64,7 @@ editing an included file.
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 85 | f32d4f33bab42f19 |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/OPERATOR_LAB.md | 184 | 483bdfa9663d163a |
-| docs/cybou/POA_FINALITY.md | 56 | 6b829216a3e45f9a |
+| docs/cybou/POA_FINALITY.md | 58 | 33a6fc6852320178 |
 | docs/cybou/POA_FINALITY_VECTORS.md | 107 | 3d1f06214ad59f4f |
 | docs/cybou/README.md | 85 | 2d5478cc2214829e |
 | docs/cybou/ROOT_PUBLICATION.md | 113 | c737c5ee18676159 |

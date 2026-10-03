@@ -393,8 +393,14 @@ BOOST_AUTO_TEST_CASE(conflict_detector_persists_observations_and_equivocation_ev
         auto db = OpenDb(detector_path, false);
         cybou::PoaConflictDetector recovered{*db, network, *finalizer_key};
         BOOST_CHECK(recovered.Observe(first_certificate, first_block) == cybou::PoaConflictStatus::ALREADY_OBSERVED);
-        BOOST_CHECK(recovered.Observe(second_certificate, second_block) == cybou::PoaConflictStatus::SAFETY_CONFLICT);
-        BOOST_CHECK(recovered.SafetyHalted());
+        const auto status = recovered.Observe(second_certificate, second_block);
+        const bool first_is_winner = cybou::ComputeBlockId(first_block) < cybou::ComputeBlockId(second_block);
+        if (first_is_winner) {
+            BOOST_CHECK(status == cybou::PoaConflictStatus::COMPETING_NON_CANONICAL);
+        } else {
+            BOOST_CHECK(status == cybou::PoaConflictStatus::CANONICAL_REORG_REQUIRED);
+        }
+        BOOST_CHECK(!recovered.SafetyHalted());
         const auto evidence = recovered.ReadSafetyEvidence();
         BOOST_CHECK(evidence.status == cybou::PoaEvidenceReadStatus::EQUIVOCATION);
         BOOST_REQUIRE(evidence.equivocation);
@@ -405,13 +411,12 @@ BOOST_AUTO_TEST_CASE(conflict_detector_persists_observations_and_equivocation_ev
     {
         auto db = OpenDb(detector_path, false);
         cybou::PoaConflictDetector recovered{*db, network, *finalizer_key};
-        BOOST_CHECK(recovered.SafetyHalted());
+        BOOST_CHECK(!recovered.SafetyHalted());
         const auto evidence = recovered.ReadSafetyEvidence();
         BOOST_CHECK(evidence.status == cybou::PoaEvidenceReadStatus::EQUIVOCATION);
         BOOST_REQUIRE(evidence.equivocation);
         BOOST_CHECK(evidence.equivocation->first == first_certificate);
         BOOST_CHECK(evidence.equivocation->second == second_certificate);
-        BOOST_CHECK(recovered.Observe(first_certificate, first_block) == cybou::PoaConflictStatus::ALREADY_HALTED);
     }
 
     {

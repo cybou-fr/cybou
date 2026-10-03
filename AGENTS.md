@@ -249,7 +249,7 @@ architecture that is absent from higher levels:
 - An operation is shown `Validated` when the local node holds it as valid and
   has at least one valid eligible Validation signature for it.
 - PoA is centralized finality, not BFT.
-- Durable signing journal and equivocation conflict halt must fail closed.
+- Durable signing journal must fail closed; equivocation conflicts are deterministically resolved by min(BlockID) while verified evidence is durably recorded.
 - AUTH never grants PoA finalization power.
 
 ## Application content and storage admission

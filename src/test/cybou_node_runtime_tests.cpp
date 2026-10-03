@@ -431,7 +431,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizer_can_be_armed_and_disarmed_with_a_vault_si
     BOOST_CHECK(!runtime.GetStatus().is_finalizer);
 }
 
-BOOST_AUTO_TEST_CASE(runtime_halts_on_valid_poa_equivocation)
+BOOST_AUTO_TEST_CASE(runtime_resolves_valid_poa_equivocation_deterministically)
 {
     CybouServiceTestFixture fixture;
     const auto canonical = fixture.runtime->ProduceBlock();
@@ -452,11 +452,18 @@ BOOST_AUTO_TEST_CASE(runtime_halts_on_valid_poa_equivocation)
     cybou::FinalizedBlock conflicting{.block = conflicting_block,
         .certificate = *alternate_signature.certificate};
     const auto result = fixture.runtime->CommitBlock(conflicting);
-    BOOST_CHECK(result.error == cybou::BlockTransitionError::POA_EQUIVOCATION_DETECTED);
+    const bool conflicting_wins = cybou::ComputeBlockId(conflicting_block) < cybou::ComputeBlockId(canonical->block);
+    if (conflicting_wins) {
+        BOOST_CHECK(result.error == cybou::BlockTransitionError::NONE);
+        BOOST_CHECK(fixture.runtime->GetFinalizedTip() == cybou::ComputeBlockId(conflicting_block));
+    } else {
+        BOOST_CHECK(result.error == cybou::BlockTransitionError::POA_EQUIVOCATION_DETECTED);
+        BOOST_CHECK(fixture.runtime->GetFinalizedTip() == cybou::ComputeBlockId(canonical->block));
+    }
     const auto status = fixture.runtime->GetStatus();
-    BOOST_CHECK(status.poa_safety_halted);
-    BOOST_CHECK(status.runtime_state == cybou::NodeRuntimeState::SAFETY_HALTED);
-    BOOST_CHECK(!fixture.runtime->ProduceBlock());
+    BOOST_CHECK(!status.poa_safety_halted);
+    BOOST_CHECK(status.runtime_state != cybou::NodeRuntimeState::SAFETY_HALTED);
+    BOOST_CHECK(fixture.runtime->ProduceBlock().has_value());
     const auto evidence = fixture.runtime->ReadPoaSafetyEvidence();
     BOOST_CHECK(evidence.status == cybou::PoaEvidenceReadStatus::EQUIVOCATION);
     BOOST_REQUIRE(evidence.equivocation);

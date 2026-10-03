@@ -95,7 +95,9 @@ PoaConflictDetector::PoaConflictDetector(KVStore& db, const uint256& network_bin
             if (!valid_reason_only && !ValidConflictRecord(halt, m_network_binding, m_genesis_finalizer_key)) {
                 throw std::runtime_error{"corrupt PoA conflict detector halt record"};
             }
-            m_halted = true;
+            if (valid_reason_only) {
+                m_halted = true;
+            }
         } else if (m_db.Exists(halt_key)) {
             throw std::runtime_error{"corrupt PoA conflict detector halt record"};
         }
@@ -144,13 +146,31 @@ PoaConflictStatus PoaConflictDetector::Observe(
     }
     if (previous->block_id == certificate.block_id) return PoaConflictStatus::ALREADY_OBSERVED;
 
-    std::vector<unsigned char> halt;
-    halt.reserve(EQUIVOCATION_RECORD_SIZE);
-    halt.push_back(RECORD_VERSION);
-    halt.push_back(HALT_EQUIVOCATION);
-    halt.insert(halt.end(), previous_bytes.begin(), previous_bytes.end());
-    halt.insert(halt.end(), encoded->begin(), encoded->end());
-    return PersistHalt(halt) ? PoaConflictStatus::SAFETY_CONFLICT : PoaConflictStatus::STORAGE_ERROR;
+    std::vector<unsigned char> evidence;
+    evidence.reserve(EQUIVOCATION_RECORD_SIZE);
+    evidence.push_back(RECORD_VERSION);
+    evidence.push_back(HALT_EQUIVOCATION);
+    evidence.insert(evidence.end(), previous_bytes.begin(), previous_bytes.end());
+    evidence.insert(evidence.end(), encoded->begin(), encoded->end());
+    try {
+        const auto halt_key = m_prefix + "halt";
+        m_db.Write(halt_key, evidence, true);
+    } catch (...) {
+        m_halted = true;
+        return PoaConflictStatus::STORAGE_ERROR;
+    }
+
+    if (certificate.block_id < previous->block_id) {
+        try {
+            m_db.Write(observation_key, *encoded, true);
+        } catch (...) {
+            m_halted = true;
+            return PoaConflictStatus::STORAGE_ERROR;
+        }
+        return PoaConflictStatus::CANONICAL_REORG_REQUIRED;
+    }
+
+    return PoaConflictStatus::COMPETING_NON_CANONICAL;
 }
 
 bool PoaConflictDetector::SafetyHalted() const
@@ -190,7 +210,6 @@ PoaEvidenceReadResult PoaConflictDetector::ReadSafetyEvidence() const
         m_halted = true;
         return {PoaEvidenceReadStatus::UNAVAILABLE, std::nullopt};
     }
-    m_halted = true;
     return {PoaEvidenceReadStatus::EQUIVOCATION, PoaEquivocationEvidence{*first, *second}};
 }
 

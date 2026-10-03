@@ -18,6 +18,8 @@ enum class PoaConflictStatus : uint8_t {
     OBSERVED,
     ALREADY_OBSERVED,
     SAFETY_CONFLICT,
+    COMPETING_NON_CANONICAL,
+    CANONICAL_REORG_REQUIRED,
     INVALID_CERTIFICATE,
     ALREADY_HALTED,
     CORRUPT_STORAGE,
@@ -43,7 +45,7 @@ struct PoaEvidenceReadResult {
     std::optional<PoaEquivocationEvidence> equivocation;
 };
 
-/** Persists finality observations and halts on valid same-parent equivocation. */
+/** Persists finality observations, records equivocation evidence, and resolves forks via min(BlockID). */
 class PoaConflictDetector final {
 public:
     PoaConflictDetector(KVStore& db, const uint256& network_binding,
