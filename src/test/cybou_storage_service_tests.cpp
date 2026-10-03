@@ -434,4 +434,71 @@ BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
     BOOST_CHECK(fixture.runtime->LocalStorageId());
 }
 
+BOOST_AUTO_TEST_CASE(concurrency_inspection_not_blocked_during_placement)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("storage-owner.cybou");
+    ProviderNetwork network{fixture};
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    const auto content = Publish(fixture, *identity, application_db, true);
+    network.Sync();
+
+    class SlowTransport final : public cybou::StorageTransport {
+    public:
+        explicit SlowTransport(ProviderNetwork& base) : m_base{base} {}
+        std::vector<cybou::StorageEndpoint> Providers() override { return m_base.Providers(); }
+        std::optional<cybou::ChunkAdmissionResult> Put(const cybou::StorageEndpoint& provider,
+            const cybou::Hash256& op_id, const cybou::ChunkId& chunk_id, std::span<const unsigned char> bytes,
+            const cybou::ChunkAuthorizationProof& proof) override
+        {
+            in_put.store(true);
+            std::unique_lock lock{cv_mutex};
+            cv.wait_for(lock, std::chrono::milliseconds(2000), [&] { return inspect_done.load(); });
+            return m_base.Put(provider, op_id, chunk_id, bytes, proof);
+        }
+        std::optional<std::vector<unsigned char>> Get(const cybou::StorageEndpoint& provider,
+            const cybou::ChunkId& chunk_id) override { return m_base.Get(provider, chunk_id); }
+        std::optional<cybou::ChunkAuthorizationProof> GetProof(const cybou::StorageEndpoint& provider,
+            const cybou::Hash256& op_id, const cybou::ChunkId& chunk_id) override
+        {
+            return m_base.GetProof(provider, op_id, chunk_id);
+        }
+
+        ProviderNetwork& m_base;
+        std::atomic_bool in_put{false};
+        std::atomic_bool inspect_done{false};
+        std::mutex cv_mutex;
+        std::condition_variable cv;
+    } slow_transport{network};
+
+    cybou::StorageService storage{*fixture.runtime, slow_transport, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+
+    std::atomic_bool secure_done{false};
+    std::jthread worker([&] {
+        storage.Secure(content.operation_id, content.leaves);
+        secure_done.store(true);
+    });
+
+    while (!slow_transport.in_put.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    const auto start = std::chrono::steady_clock::now();
+    const auto durability = storage.GetDurability(content.operation_id);
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+    BOOST_CHECK(durability.has_value());
+    BOOST_CHECK_LT(elapsed, 500);
+
+    const auto fetched = storage.Fetch(content.leaves.front());
+    BOOST_CHECK(fetched.has_value());
+
+    {
+        std::lock_guard lock{slow_transport.cv_mutex};
+        slow_transport.inspect_done.store(true);
+    }
+    slow_transport.cv.notify_all();
+    worker.join();
+    BOOST_CHECK(secure_done.load());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

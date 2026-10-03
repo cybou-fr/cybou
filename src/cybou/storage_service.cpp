@@ -98,6 +98,36 @@ bool Shuffle(std::vector<StorageEndpoint>& items)
     return true;
 }
 
+class ActivePlacementGuard {
+public:
+    ActivePlacementGuard(std::unique_lock<std::mutex>& lock,
+                         std::set<cybou::Hash256>& active,
+                         std::condition_variable& cv,
+                         const cybou::Hash256& id)
+        : m_lock{lock}, m_active{active}, m_cv{cv}, m_id{id}
+    {
+        m_active.insert(m_id);
+    }
+
+    ~ActivePlacementGuard()
+    {
+        if (!m_lock.owns_lock()) {
+            m_lock.lock();
+        }
+        m_active.erase(m_id);
+        m_cv.notify_all();
+    }
+
+    ActivePlacementGuard(const ActivePlacementGuard&) = delete;
+    ActivePlacementGuard& operator=(const ActivePlacementGuard&) = delete;
+
+private:
+    std::unique_lock<std::mutex>& m_lock;
+    std::set<cybou::Hash256>& m_active;
+    std::condition_variable& m_cv;
+    const cybou::Hash256 m_id;
+};
+
 } // namespace
 
 int PublicationDurability::ProgressPercent(const std::uint8_t target) const
@@ -267,7 +297,7 @@ PublicationDurability StorageService::Summarize(const Placement& placement) cons
 
 PublicationDurability StorageService::Secure(const cybou::Hash256& operation_id, const std::span<const ChunkId> leaves)
 {
-    std::lock_guard lock{m_mutex};
+    std::unique_lock lock{m_mutex};
     if (!m_application_db.IsUnlocked()) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Application DB is locked"};
     }
@@ -298,7 +328,7 @@ PublicationDurability StorageService::Secure(const cybou::Hash256& operation_id,
         }
         if (auto log = m_runtime.EventLog()) log->Write(NodeEvent::placement_created,{{"operation_id",operation_id.GetHex()}});
     }
-    return Place(*placement);
+    return Place(lock, *placement);
 }
 
 std::optional<ChunkAuthorizationProof> StorageService::GetAuthorizationProof(
@@ -316,7 +346,7 @@ std::optional<ChunkAuthorizationProof> StorageService::GetAuthorizationProof(
 PublicationDurability StorageService::Rebuild(const cybou::Hash256& operation_id,
     const std::span<const ChunkId> candidate_chunks)
 {
-    std::lock_guard lock{m_mutex};
+    std::unique_lock lock{m_mutex};
     if (!m_application_db.IsUnlocked()) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Application DB is locked"};
     }
@@ -332,11 +362,15 @@ PublicationDurability StorageService::Rebuild(const cybou::Hash256& operation_id
         .replicas = std::vector<std::vector<StorageEndpoint>>(publication->chunk_count)};
     std::vector<bool> found(publication->chunk_count, false);
     std::set<ChunkId> unique;
+    lock.unlock();
     const auto providers = m_transport.Providers();
+    lock.lock();
     for (const auto& chunk_id : candidate_chunks) {
         if (chunk_id == ChunkId{} || !unique.insert(chunk_id).second) continue;
         for (const auto& provider : providers) {
+            lock.unlock();
             const auto proof = m_transport.GetProof(provider, operation_id, chunk_id);
+            lock.lock();
             if (!proof || !VerifyChunkAuthorizationProof(*publication, chunk_id, *proof)) continue;
             if (proof->leaf_index >= placement.leaves.size()) {
                 return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Provider returned an invalid leaf index"};
@@ -367,24 +401,32 @@ PublicationDurability StorageService::Rebuild(const cybou::Hash256& operation_id
     if (!Save(placement)) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save rebuilt placement state"};
     }
-    return Place(placement);
+    return Place(lock, placement);
 }
 
 PublicationDurability StorageService::Resume(const cybou::Hash256& operation_id)
 {
-    std::lock_guard lock{m_mutex};
+    std::unique_lock lock{m_mutex};
     auto placement = Load(operation_id);
     if (!placement) return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Unknown publication placement"};
     if (!m_runtime.FindFinalizedRootPublication(operation_id)) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Publication is not finalized"};
     }
-    return Place(*placement);
+    return Place(lock, *placement);
 }
 
-PublicationDurability StorageService::Place(Placement& placement)
+PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, Placement& placement)
 {
+    while (m_active_placements.contains(placement.operation_id)) {
+        m_placement_cv.wait(lock);
+    }
+    if (const auto latest = Load(placement.operation_id)) {
+        placement = *latest;
+    }
     auto result = Summarize(placement);
     if (result.state == DurabilityState::PROTECTED) return result;
+
+    ActivePlacementGuard guard{lock, m_active_placements, m_placement_cv, placement.operation_id};
 
     std::vector<AuthorizedChunk> chunks;
     chunks.reserve(placement.leaves.size());
@@ -393,8 +435,12 @@ PublicationDurability StorageService::Place(Placement& placement)
     if (!commitment || commitment->chunk_count != placement.leaves.size()) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot rebuild chunk authorization proofs"};
     }
+
+    lock.unlock();
     auto providers = m_transport.Providers();
-    if (!Shuffle(providers)) return {.state = DurabilityState::SECURING, .error = "System RNG failure"};
+    const bool shuffled = Shuffle(providers);
+    lock.lock();
+    if (!shuffled) return {.state = DurabilityState::SECURING, .error = "System RNG failure"};
 
     bool changed{false};
     bool content_missing{false};
@@ -402,18 +448,29 @@ PublicationDurability StorageService::Place(Placement& placement)
     for (std::size_t i{0}; i < placement.leaves.size(); ++i) {
         auto& replicas = placement.replicas[i];
         if (replicas.size() >= m_target) continue;
+
         // Local copy, or any healthy remote copy when repairing after eviction.
-        const auto bytes = FetchLocked(placement.leaves[i], replicas);
+        lock.unlock();
+        const auto bytes = FetchInternal(placement.leaves[i], replicas);
+        lock.lock();
         if (!bytes) {
             content_missing = true;
             continue;
         }
+
         for (const auto& provider : providers) {
             if (replicas.size() >= m_target) break;
             // One provider key is one replica, whatever endpoints it answers on.
             if (HasProvider(replicas, provider)) continue;
-            const auto admitted = m_transport.Put(provider, placement.operation_id, placement.leaves[i],
-                *bytes, commitment->Proof(i));
+
+            const auto op_id = placement.operation_id;
+            const auto chunk_id = placement.leaves[i];
+            const auto proof = commitment->Proof(i);
+
+            lock.unlock();
+            const auto admitted = m_transport.Put(provider, op_id, chunk_id, *bytes, proof);
+            lock.lock();
+
             // STORED and ALREADY_STORED both mean the provider now retains the chunk.
             if (!admitted || !*admitted) {
                 admission_error = "Provider " + provider.address + ':' + std::to_string(provider.port) +
@@ -421,8 +478,11 @@ PublicationDurability StorageService::Place(Placement& placement)
                               : " did not acknowledge chunk admission");
                 continue;
             }
-            replicas.push_back(provider);
-            changed = true;
+            if (!HasProvider(replicas, provider)) {
+                replicas.push_back(provider);
+                changed = true;
+                (void)Save(placement);
+            }
         }
     }
     if (changed && !Save(placement)) {
@@ -441,7 +501,7 @@ PublicationDurability StorageService::Place(Placement& placement)
 
 std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::AuditNextPlacement(const std::size_t max_chunks)
 {
-    std::lock_guard lock{m_mutex};
+    std::unique_lock lock{m_mutex};
     const auto index = PlacementIndex();
     if (index.empty()) return std::nullopt;
     const auto operation_id = index[m_audit_placement_cursor++ % index.size()];
@@ -455,12 +515,20 @@ std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::
         const std::size_t i = cursor % count;
         cursor = (cursor + 1) % count;
         auto& replicas = placement->replicas[i];
-        const auto before = replicas.size();
-        std::erase_if(replicas, [&](const StorageEndpoint& provider) {
-            const auto bytes = m_transport.Get(provider, placement->leaves[i]);
-            return !bytes || ComputeChunkId(*bytes) != placement->leaves[i];
-        });
-        changed = changed || replicas.size() != before;
+        const auto chunk_id = placement->leaves[i];
+        std::vector<StorageEndpoint> healthy;
+        for (const auto& provider : replicas) {
+            lock.unlock();
+            const auto bytes = m_transport.Get(provider, chunk_id);
+            lock.lock();
+            if (bytes && ComputeChunkId(*bytes) == chunk_id) {
+                healthy.push_back(provider);
+            }
+        }
+        if (healthy.size() != replicas.size()) {
+            replicas = std::move(healthy);
+            changed = true;
+        }
     }
     if (changed && !Save(*placement)) {
         return std::pair{operation_id, PublicationDurability{.state = DurabilityState::NEEDS_ATTENTION,
@@ -472,7 +540,7 @@ std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::
         {{"operation_id",operation_id.GetHex()},{"replicas",std::uint64_t{result.min_replicas}},{"target",std::uint64_t{m_target}}});
     // Below target: repair now from any valid copy (local or remote).
     if (result.state != DurabilityState::PROTECTED && m_runtime.FindFinalizedRootPublication(operation_id)) {
-        result = Place(*placement);
+        result = Place(lock, *placement);
     }
     if (degraded) if (auto log = m_runtime.EventLog()) log->Write(result.state == DurabilityState::PROTECTED ? NodeEvent::placement_repaired : NodeEvent::storage_audit_failed,
         {{"operation_id",operation_id.GetHex()},{"replicas",std::uint64_t{result.min_replicas}},{"target",std::uint64_t{m_target}}});
@@ -481,24 +549,32 @@ std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::
 
 PublicationDurability StorageService::Audit(const cybou::Hash256& operation_id)
 {
-    std::lock_guard lock{m_mutex};
+    std::unique_lock lock{m_mutex};
     auto placement = Load(operation_id);
     if (!placement) return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Unknown publication placement"};
     bool changed{false};
     for (std::size_t i{0}; i < placement->leaves.size(); ++i) {
         auto& replicas = placement->replicas[i];
-        const auto before = replicas.size();
-        std::erase_if(replicas, [&](const StorageEndpoint& provider) {
-            const auto bytes = m_transport.Get(provider, placement->leaves[i]);
-            return !bytes || ComputeChunkId(*bytes) != placement->leaves[i];
-        });
-        changed = changed || replicas.size() != before;
+        const auto chunk_id = placement->leaves[i];
+        std::vector<StorageEndpoint> healthy;
+        for (const auto& provider : replicas) {
+            lock.unlock();
+            const auto bytes = m_transport.Get(provider, chunk_id);
+            lock.lock();
+            if (bytes && ComputeChunkId(*bytes) == chunk_id) {
+                healthy.push_back(provider);
+            }
+        }
+        if (healthy.size() != replicas.size()) {
+            replicas = std::move(healthy);
+            changed = true;
+        }
     }
     if (changed && !Save(*placement)) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save placement state"};
     }
     if (!m_runtime.FindFinalizedRootPublication(operation_id)) return Summarize(*placement);
-    return Place(*placement);
+    return Place(lock, *placement);
 }
 
 std::optional<PublicationDurability> StorageService::GetDurability(const cybou::Hash256& operation_id)
@@ -519,11 +595,10 @@ std::optional<StorageService::PlacementView> StorageService::DescribePlacement(c
 
 std::optional<std::vector<unsigned char>> StorageService::Fetch(const ChunkId& chunk_id)
 {
-    std::lock_guard lock{m_mutex};
-    return FetchLocked(chunk_id, {});
+    return FetchInternal(chunk_id, {});
 }
 
-std::optional<std::vector<unsigned char>> StorageService::FetchLocked(const ChunkId& chunk_id,
+std::optional<std::vector<unsigned char>> StorageService::FetchInternal(const ChunkId& chunk_id,
     const std::span<const StorageEndpoint> preferred)
 {
     const auto now_ms = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(

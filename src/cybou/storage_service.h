@@ -12,10 +12,12 @@
 #include <cybou/hash256.h>
 
 #include <compare>
+#include <condition_variable>
 #include <cstdint>
 #include <map>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <vector>
@@ -152,9 +154,9 @@ private:
     struct Placement;
     std::optional<Placement> Load(const cybou::Hash256& operation_id) const;
     bool Save(const Placement& placement);
-    PublicationDurability Place(Placement& placement);
+    PublicationDurability Place(std::unique_lock<std::mutex>& lock, Placement& placement);
     PublicationDurability Summarize(const Placement& placement) const;
-    std::optional<std::vector<unsigned char>> FetchLocked(const ChunkId& chunk_id,
+    std::optional<std::vector<unsigned char>> FetchInternal(const ChunkId& chunk_id,
         std::span<const StorageEndpoint> preferred);
 
     CybouNodeRuntime& m_runtime;
@@ -162,6 +164,8 @@ private:
     PrivateApplicationStore& m_application_db;
     const std::uint8_t m_target;
     std::mutex m_mutex;
+    std::set<cybou::Hash256> m_active_placements;
+    std::condition_variable m_placement_cv;
     /** Next chunk to audit per publication; restarting from 0 is harmless. */
     std::map<cybou::Hash256, std::size_t> m_audit_cursor;
     std::size_t m_audit_placement_cursor{0};

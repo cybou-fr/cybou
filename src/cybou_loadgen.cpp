@@ -30,7 +30,6 @@ struct Client {
     std::unique_ptr<cybou::CybouNodeService> node;
     std::unique_ptr<cybou::CybouIdentityService> identity;
     std::unique_ptr<cybou::PrivateApplicationStore> db;
-    std::unique_ptr<cybou::KVStore> staging;
     std::unique_ptr<cybou::RuntimeStorageTransport> transport;
     std::unique_ptr<cybou::StorageService> storage;
     std::unique_ptr<cybou::PublicationService> publication;
@@ -77,10 +76,9 @@ struct Client {
         auto& runtime=node->Runtime(); auto& keys=identity->GetKeyStore();
         auto appdir=cybou::IdentityDataDirectory(dir/"node",*identity->GetAccountId());
         db=std::make_unique<cybou::PrivateApplicationStore>(keys,appdir);
-        staging=std::make_unique<cybou::KVStore>(cybou::KVStoreOptions{.path=dir/"staging"});
         transport=std::make_unique<cybou::RuntimeStorageTransport>(runtime);
         storage=std::make_unique<cybou::StorageService>(runtime,*transport,*db,static_cast<uint8_t>(target));
-        publication=std::make_unique<cybou::PublicationService>(runtime,keys,*db,runtime.GetIdentityOperationCoordinator(keys),*staging);
+        publication=std::make_unique<cybou::PublicationService>(runtime,keys,*db,runtime.GetIdentityOperationCoordinator(keys));
         application=std::make_unique<cybou::ApplicationService>(runtime,keys,*db,*storage);
         wallet=std::make_unique<cybou::CybouWalletService>(runtime,keys);
         jobs=publication->Jobs(); // Restart resumes durable exact operations and publication intents.
