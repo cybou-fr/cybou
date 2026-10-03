@@ -305,10 +305,6 @@ target_link_options(sanitize_interface INTERFACE ${SANITIZER_LDFLAGS})
 include(AddBoostIfNeeded)
 add_boost_if_needed()
 
-if(BUILD_GUI OR BUILD_TESTS)
-  find_package(Libevent 2.1.8 MODULE REQUIRED)
-endif()
-
 include(cmake/introspection.cmake)
 
 include(cmake/ccache.cmake)

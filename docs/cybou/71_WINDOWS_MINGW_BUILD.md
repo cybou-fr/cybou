@@ -71,7 +71,7 @@ C:\Users\cybou\vcpkg\vcpkg.exe install ^
 `C:\Qt\6.11.2`, wallet выключен):
 
 ```text
-boost-asio, boost-multi-index, boost-signals2, libevent (override 2.1.12#7), openssl 3.5.x, boost-test
+boost-asio, boost-beast, BLAKE3, ZLIB, OpenSSL 3.5.x, boost-test
 ```
 
 Первый запуск собирает OpenSSL из исходников (mingw gcc, debug+release) —

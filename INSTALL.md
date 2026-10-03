@@ -6,7 +6,7 @@ CYBOU is experimental software. The single `cybou` executable (Qt desktop plus h
 
 - CMake 3.22 or newer and a C++20 compiler.
 - OpenSSL **3.5 or newer** for the hybrid Ed25519 + ML-DSA-65 PoA signer.
-- Boost, libevent, and LevelDB dependencies as configured by CMake/vcpkg.
+- Boost, OpenSSL, ZLIB, BLAKE3, and LevelDB dependencies as configured by CMake/vcpkg.
 - Qt 6 for the optional desktop executable `cybou` (`cybou.exe` on Windows).
 
 The repository pins third-party dependencies in [`vcpkg.json`](vcpkg.json). A generic system build will fail configuration if its OpenSSL version is older than 3.5.

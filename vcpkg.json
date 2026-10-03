@@ -5,10 +5,7 @@
   "dependencies": [
     "boost-asio",
     "boost-beast",
-    "boost-multi-index",
-    "boost-signals2",
     "blake3",
-    "libevent",
     "openssl",
     "zlib"
   ],
@@ -40,12 +37,5 @@
         "boost-test"
       ]
     }
-  },
-  "overrides": [
-    {
-      "$comment": "Newer unreleased libevent versions cause https://github.com/bitcoin/bitcoin/issues/30096",
-      "name": "libevent",
-      "version": "2.1.12#7"
-    }
-  ]
+  }
 }
