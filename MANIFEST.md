@@ -14,7 +14,7 @@ editing an included file.
 | README.md | 134 | 1001897f70272b10 |
 | SECURITY.md | 59 | cc672cf53fa69a57 |
 | docs/cybou/00_VISION.md | 73 | 856787283b43882a |
-| docs/cybou/02_ARCHITECTURE.md | 173 | a340d8eba3bbfc07 |
+| docs/cybou/02_ARCHITECTURE.md | 174 | 466bc5c44bac466a |
 | docs/cybou/04_NETWORK_LIFECYCLE.md | 193 | fd30bd827b028e56 |
 | docs/cybou/05_CHAIN_STATE.md | 63 | 22f55126d3a9c3df |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 54 | b25b341e856d725c |
@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 58 | 7ada73010093598e |
 | docs/cybou/24_DECISIONS.md | 151 | 9810e799aa400a2d |
 | docs/cybou/25_OPEN_QUESTIONS.md | 49 | fdb75a610bd492ad |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 141 | f0c6eea0bdf372a0 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 158 | cdab4955c541806f |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 66 | e6d62d02c2b05edb |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | f82d26a4d1681de3 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |

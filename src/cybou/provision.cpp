@@ -199,6 +199,15 @@ bool ProvisionDevnet(
         std::cerr << "Error generating DEVNET provisioning material\n";
         return false;
     }
+    struct SecretCleanup {
+        decltype(prov)& material;
+        ~SecretCleanup() {
+            crypto::CleanseMemory(material->network_entropy.data(), material->network_entropy.size());
+            crypto::CleanseMemory(material->cybou_entropy.data(), material->cybou_entropy.size());
+            for (auto& word : material->network_words) crypto::CleanseMemory(word.data(), word.size());
+            for (auto& word : material->cybou_words) crypto::CleanseMemory(word.data(), word.size());
+        }
+    } cleanup{prov};
 
     // 1. Write private material files
     const auto write_secret = [&](const std::string& filename, const std::string& content) -> bool {
@@ -303,17 +312,15 @@ bool ProvisionDevnet(
           << "} // namespace cybou::devnet_constants\n\n"
           << "#endif // CYBOU_DEVNET_CONSTANTS_H\n";
 
-        std::ofstream out(constants_header_path);
-        if (!out) {
+        const auto header = h.str();
+        // Exclusive creation closes the check/write race: existing constants
+        // are never truncated even if another provisioner creates them first.
+        if (!CreateSecretFile(constants_header_path,
+                std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(header.data()), header.size()})) {
             std::cerr << "Failed to write constants header: " << constants_header_path.string() << '\n';
             return false;
         }
-        out << h.str();
     }
-
-    // Cleanse secret memory in stack
-    ::cybou::crypto::CleanseMemory(prov->network_entropy.data(), prov->network_entropy.size());
-    ::cybou::crypto::CleanseMemory(prov->cybou_entropy.data(), prov->cybou_entropy.size());
 
     std::cout << "DEVNET provisioned successfully!\n"
               << "Private secrets saved to:  " << private_dir.string() << "\n"

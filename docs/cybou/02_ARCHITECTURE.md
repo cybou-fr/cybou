@@ -96,7 +96,8 @@ cannot introduce protocol mechanics absent from higher levels:
 Every participant runs the same full-node core software.
 
 Storage admits and serves authorized encrypted chunks on every Full Node;
-its quota is local policy and may be zero. Possession of the genesis-authorized
+its quota is local policy and is positive in production. Zero capacity is reserved
+for memory-only unit tests. Possession of the genesis-authorized
 PoA private key activates the independent block-production worker.
 
 **Bootstrap** is an ordinary CYBOU full peer whose IP:port is known in advance

@@ -11,24 +11,39 @@
 namespace cybou::p2p {
 /** Local, bounded CPU admission policy; never changes global Identity Authority. */
 class IngressBudget {
+    struct Transfers {
+        std::mutex mutex;
+        std::map<std::string, size_t> active;
+        size_t total{0};
+    };
+    struct TransferLease {
+        std::shared_ptr<Transfers> state;
+        std::string address;
+        bool acquired{false};
+        ~TransferLease() {
+            if (!acquired) return;
+            std::lock_guard lock(state->mutex);
+            auto it = state->active.find(address);
+            if (--it->second == 0) state->active.erase(it);
+            --state->total;
+        }
+    };
 public:
     enum class Work { CONNECTION, OPERATION, STORAGE_PUT, STORAGE_GET, STORAGE_PROOF };
 
     /** At most two simultaneous storage requests per IP, eight per node. */
     std::shared_ptr<void> AcquireStorageTransfer(const std::string& address) {
-        std::lock_guard lock(m_mutex);
-        if (m_active_total >= 8) return {};
-        auto& active = m_active[address];
+        auto lease = std::make_shared<TransferLease>();
+        lease->state = m_transfers;
+        lease->address = address;
+        std::lock_guard lock(m_transfers->mutex);
+        if (m_transfers->total >= 8) return {};
+        auto& active = m_transfers->active[address];
         if (active >= 2) return {};
         ++active;
-        ++m_active_total;
-        return std::shared_ptr<void>(new unsigned{0}, [this, address](void* token) {
-            delete static_cast<unsigned*>(token);
-            std::lock_guard lock(m_mutex);
-            auto it = m_active.find(address);
-            if (--it->second == 0) m_active.erase(it);
-            --m_active_total;
-        });
+        ++m_transfers->total;
+        lease->acquired = true;
+        return lease;
     }
 
     bool Admit(const std::string& address, Work work, size_t bytes = 0,
@@ -109,8 +124,7 @@ private:
     };
 
     std::mutex m_mutex;
-    std::map<std::string, size_t> m_active;
-    size_t m_active_total{0};
+    std::shared_ptr<Transfers> m_transfers{std::make_shared<Transfers>()};
     std::chrono::steady_clock::time_point m_last_cleanup{};
     std::map<std::string, Window> m_peers;
 };

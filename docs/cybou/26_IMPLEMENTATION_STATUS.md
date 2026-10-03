@@ -139,3 +139,20 @@ After the final idle-session/truncated-frame refinement, all 53 runtime/P2P
 regression cases (1,082 assertions), CLI acceptance and storage smoke passed.
 Provisioning refusal against existing output was checked without generating any
 new material. Translation XML and the documentation manifest are consistent.
+
+### Repeat code audit (2026-10-03)
+
+The repeat audit closes a consumed-frame-header/body-timeout reuse gap, makes
+storage concurrency leases independent of runtime lifetime and exception-safe,
+and bounds decoded operation-count allocation by the actual block input.
+PoA checks serialized candidate size including certificate overhead before
+recording a signing intent. Offline provisioning exclusively creates public
+constants and cleanses seeds and mnemonic words on early write failure as well
+as success. The architecture document now agrees with the positive production
+storage allocation rule.
+
+All 212 core tests (8,643 assertions), operator CLI acceptance and LAB storage
+smoke passed. Existing DEVNET private material again matches compiled public
+constants. Production GUI and VPS headless builds succeeded. The VPS binary was
+updated without resetting state or provisioning a network; its service is active
+and doctor reports READY at the unchanged genesis. Official PoA remains locked.

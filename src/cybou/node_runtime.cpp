@@ -778,8 +778,12 @@ std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
             const auto operations = m_operation_pool.Snapshot();
             const auto root = m_store.ComputeCandidateStateRoot(operations, head->height + 1);
             if (!root) { RevalidateCandidates(); return std::nullopt; }
-            m_production_candidate = CybouBlock{.parent_block_id = head->block_id,
+            CybouBlock candidate{.parent_block_id = head->block_id,
                 .height = head->height + 1, .operations = operations, .resulting_state_root = *root};
+            const auto encoded = SerializeBlock(candidate);
+            if (!encoded || encoded->size() > MAX_FINALIZER_SERIALIZED_BLOCK_BYTES -
+                    POA_FINALITY_CERTIFICATE_SIZE - 8) return std::nullopt;
+            m_production_candidate = std::move(candidate);
         }
         if (!m_production_finalized) {
             const auto signing = m_poa_finalizer->SignFinality(head->height, head->block_id, *m_production_candidate);

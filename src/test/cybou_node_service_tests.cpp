@@ -93,6 +93,26 @@ BOOST_AUTO_TEST_CASE(storage_budgets_are_separate_and_bytes_are_reserved_before_
     BOOST_CHECK(budget.Admit("peer", Budget::Work::STORAGE_GET, 1, now + std::chrono::seconds{1}));
 }
 
+BOOST_AUTO_TEST_CASE(storage_transfer_lease_survives_budget_owner)
+{
+    std::shared_ptr<void> lease;
+    {
+        cybou::p2p::IngressBudget budget;
+        lease = budget.AcquireStorageTransfer("peer");
+        BOOST_REQUIRE(lease);
+    }
+    lease.reset();
+}
+
+BOOST_AUTO_TEST_CASE(block_decoder_rejects_unbounded_operation_count)
+{
+    auto encoded = cybou::SerializeBlock(cybou::CybouBlock{});
+    BOOST_REQUIRE(encoded);
+    BOOST_REQUIRE_EQUAL(encoded->size(), 77U);
+    for (size_t i = 73; i < 77; ++i) (*encoded)[i] = 0xff;
+    BOOST_CHECK(!cybou::DeserializeBlock(*encoded));
+}
+
 BOOST_AUTO_TEST_CASE(desktop_finalizer_worker_produces_blocks_and_stops_cleanly)
 {
     CybouServiceTestFixture local;

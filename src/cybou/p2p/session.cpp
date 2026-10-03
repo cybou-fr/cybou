@@ -622,6 +622,8 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     std::vector<unsigned char> bytes{header.begin(), header.end()};
     bytes.resize(HEADER_SIZE + size);
     if (size && !ReadExact(bytes.data() + HEADER_SIZE, size, deadline)) {
+        boost::system::error_code ignored;
+        m_socket.close(ignored); // A consumed header cannot be reused after an incomplete body.
         return std::nullopt;
     }
     auto frame = DecodeFrame(bytes);

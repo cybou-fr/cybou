@@ -167,6 +167,9 @@ std::optional<CybouBlock> DeserializeBlock(std::span<const unsigned char> bytes)
     const uint32_t op_count = ReadUint32LE(bytes, offset);
     offset += 4;
 
+    // Every operation needs at least a length prefix. Bound allocation by input,
+    // before trusting an attacker-controlled operation count.
+    if (op_count > (bytes.size() - offset) / 4) return std::nullopt;
     block.operations.reserve(op_count);
     for (uint32_t i = 0; i < op_count; ++i) {
         if (offset + 4 > bytes.size()) {
