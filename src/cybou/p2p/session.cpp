@@ -12,6 +12,12 @@
 
 #include <boost/asio/ip/address.hpp>
 
+#if defined(_WIN32)
+#include <winsock2.h>
+#else
+#include <poll.h>
+#endif
+
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
@@ -30,7 +36,7 @@ namespace cybou::p2p {
 namespace {
 constexpr size_t HEADER_SIZE{10};
 constexpr size_t HELLO_SIZE{80};
-constexpr auto BLOCK_TRANSFER_TIMEOUT{std::chrono::seconds{30}};
+constexpr auto BLOCK_TRANSFER_TIMEOUT{std::chrono::seconds{5}};
 constexpr auto TLS_HANDSHAKE_TIMEOUT{std::chrono::seconds{10}};
 constexpr std::string_view TLS_EXPORTER_LABEL{"EXPORTER-CYBOU-CYP2-V5"};
 
@@ -440,8 +446,25 @@ bool PeerSession::AdvanceTlsOperation(const int result,
 {
     const int error = SSL_get_error(m_ssl, result);
     if (error != SSL_ERROR_WANT_READ && error != SSL_ERROR_WANT_WRITE) return false;
-    if (std::chrono::steady_clock::now() >= deadline) return false;
-    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= deadline) return true;
+
+    const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+    const int timeout_ms = static_cast<int>(std::clamp<int64_t>(remaining.count(), 1, 100));
+
+#if defined(_WIN32)
+    WSAPOLLFD pfd{};
+    pfd.fd = m_socket.native_handle();
+    pfd.events = (error == SSL_ERROR_WANT_READ) ? POLLIN : POLLOUT;
+    const int poll_res = WSAPoll(&pfd, 1, timeout_ms);
+#else
+    pollfd pfd{};
+    pfd.fd = m_socket.native_handle();
+    pfd.events = (error == SSL_ERROR_WANT_READ) ? POLLIN : POLLOUT;
+    const int poll_res = ::poll(&pfd, 1, timeout_ms);
+#endif
+
+    if (poll_res < 0) return false;
     return true;
 }
 
