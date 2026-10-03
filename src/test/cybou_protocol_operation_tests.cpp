@@ -123,9 +123,9 @@ BOOST_AUTO_TEST_CASE(operation_relay_is_volatile_bounded_and_mesh_deduplicated)
     auto first = MakeTestAccountCreate(MakeTestIdentity(1));
     auto first_bytes = cybou::SerializeProtocolOperation(cybou::ProtocolOperation{first});
     BOOST_REQUIRE(first_bytes);
-    BOOST_CHECK(relay.Enqueue(*first_bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_CHECK(relay.Enqueue(*first_bytes, 0) == cybou::OperationRelayEnqueueStatus::QUEUED);
 
-    BOOST_CHECK(relay.Enqueue(*first_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
+    BOOST_CHECK(relay.Enqueue(*first_bytes, 0) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
     BOOST_CHECK_EQUAL(relay.QueuedOperations(), 1U);
     BOOST_CHECK_EQUAL(relay.QueuedBytes(), first_bytes->size());
 
@@ -150,27 +150,27 @@ BOOST_AUTO_TEST_CASE(operation_relay_is_volatile_bounded_and_mesh_deduplicated)
     second.work.nonce = 43;
     const auto second_bytes = cybou::SerializeProtocolOperation(cybou::ProtocolOperation{second});
     BOOST_REQUIRE(second_bytes);
-    BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::OperationRelayEnqueueStatus::QUEUE_FULL);
+    BOOST_CHECK(relay.Enqueue(*second_bytes, 0) == cybou::OperationRelayEnqueueStatus::QUEUE_FULL);
 
     BOOST_CHECK(relay.Acknowledge(*first_id));
     BOOST_CHECK_EQUAL(relay.QueuedOperations(), 0U);
-    BOOST_CHECK(relay.Enqueue(*first_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
-    BOOST_CHECK(relay.Enqueue(*first_bytes, true) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_CHECK(relay.Enqueue(*first_bytes, 0) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
+    BOOST_CHECK(relay.Enqueue(*first_bytes, 0, true) == cybou::OperationRelayEnqueueStatus::QUEUED);
     BOOST_REQUIRE(relay.Claim());
     BOOST_CHECK(relay.Acknowledge(*first_id));
-    BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_CHECK(relay.Enqueue(*second_bytes, 0) == cybou::OperationRelayEnqueueStatus::QUEUED);
     BOOST_CHECK_EQUAL(relay.QueuedOperations(), 1U);
     BOOST_CHECK_EQUAL(relay.QueuedBytes(), second_bytes->size());
     BOOST_REQUIRE(relay.Peek());
-    BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
+    BOOST_CHECK(relay.Enqueue(*second_bytes, 0) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
 
     const auto second_id = cybou::ComputeOperationId(cybou::ProtocolOperation{second});
     BOOST_REQUIRE(second_id);
     BOOST_REQUIRE(relay.Claim());
     BOOST_CHECK(relay.Acknowledge(*second_id));
     BOOST_CHECK(!relay.HasQueued(*second_id));
-    BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
-    BOOST_CHECK(relay.Enqueue(*second_bytes, true) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_CHECK(relay.Enqueue(*second_bytes, 0) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
+    BOOST_CHECK(relay.Enqueue(*second_bytes, 0, true) == cybou::OperationRelayEnqueueStatus::QUEUED);
     BOOST_CHECK(relay.HasQueued(*second_id));
     BOOST_REQUIRE(relay.Claim());
     relay.ForgetFinalized(*second_id);

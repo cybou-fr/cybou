@@ -45,7 +45,7 @@ OperationRelay::OperationRelay(const size_t max_operations,
 }
 
 OperationRelayEnqueueStatus OperationRelay::Enqueue(
-    const std::span<const unsigned char> exact_operation_bytes, const bool allow_seen_retry)
+    const std::span<const unsigned char> exact_operation_bytes, const uint64_t work_nonce, const bool allow_seen_retry)
 {
     if (exact_operation_bytes.empty() || exact_operation_bytes.size() > MAX_OPERATION_PAYLOAD_BYTES) {
         return OperationRelayEnqueueStatus::INVALID_OPERATION;
@@ -62,7 +62,8 @@ OperationRelayEnqueueStatus OperationRelay::Enqueue(
     if (!FitsQueueLimits(exact_operation_bytes.size())) {
         return OperationRelayEnqueueStatus::QUEUE_FULL;
     }
-    m_queue.push_back({*operation_id, std::vector<unsigned char>{exact_operation_bytes.begin(), exact_operation_bytes.end()}});
+    m_queue.push_back({*operation_id, std::vector<unsigned char>{exact_operation_bytes.begin(), exact_operation_bytes.end()},
+        work_nonce});
     m_queued_ids.insert(*operation_id);
     RememberSeen(*operation_id);
     m_queued_bytes += exact_operation_bytes.size();

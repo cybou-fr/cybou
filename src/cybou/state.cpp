@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <map>
 #include <set>
 #include <string_view>
 
@@ -318,6 +319,55 @@ RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
     return RootPublicationError::NONE;
 }
 
+bool RecordPublication(CybouState& state, const cybou::Hash256& publication_id, const AccountId& owner,
+    const ChunkId& chunk_authorization_root, uint32_t chunk_count, uint64_t height)
+{
+    if (publication_id.IsNull() || chunk_count == 0 || state.publications.contains(publication_id) ||
+        !state.accounts.contains(owner)) return false;
+    auto& usage = state.usage[owner];
+    if (usage.stored_chunks > std::numeric_limits<uint64_t>::max() - chunk_count) {
+        if (usage.Empty()) state.usage.erase(owner);
+        return false;
+    }
+    usage.stored_chunks += chunk_count;
+    state.publications.emplace(publication_id, PublicationRecord{.owner = owner,
+        .chunk_authorization_root = chunk_authorization_root, .chunk_count = chunk_count, .height = height});
+    return true;
+}
+
+RevokePublicationError ApplyRevokePublication(const AuthorizedRevokePublication& op,
+    const cybou::Hash256& network_binding, const CybouProtocolParameters& params, CybouState& state)
+{
+    if (op.authorization.kind != IdentityOperationKind::REVOKE_PUBLICATION) {
+        return RevokePublicationError::INVALID_AUTHORIZATION;
+    }
+    const auto commitment = ComputeRevokePublicationPayloadCommitment(op.revoke);
+    if (!commitment || op.authorization.payload_commitment != *commitment) return RevokePublicationError::INVALID_PAYLOAD;
+    const auto& account_id = op.authorization.account_id;
+    auto sender = state.accounts.find(account_id);
+    if (sender == state.accounts.end() || !state.identities.Find(account_id)) {
+        return RevokePublicationError::SENDER_NOT_FOUND;
+    }
+    const auto record = state.publications.find(op.revoke.publication_id);
+    if (record == state.publications.end()) return RevokePublicationError::PUBLICATION_NOT_FOUND;
+    if (record->second.owner != account_id) return RevokePublicationError::NOT_OWNER;
+    const auto usage = state.usage.find(account_id);
+    if (usage == state.usage.end() || usage->second.stored_chunks < record->second.chunk_count) {
+        return RevokePublicationError::INCONSISTENT_STATE;
+    }
+    if (sender->second.system_balance < params.payment_fee) return RevokePublicationError::INSUFFICIENT_SYSTEM_BALANCE;
+    if (!CanCreditCentralAuthorityFee(state, params.payment_fee)) return RevokePublicationError::FEE_TRANSFER_FAILED;
+    if (state.identities.AuthorizeOperation(op.authorization, network_binding) != IdentityRegistryError::NONE) {
+        return RevokePublicationError::INVALID_AUTHORIZATION;
+    }
+    usage->second.stored_chunks -= record->second.chunk_count;
+    if (usage->second.Empty()) state.usage.erase(usage);
+    state.publications.erase(record);
+    sender->second.system_balance -= params.payment_fee;
+    CreditCentralAuthorityFee(state, params.payment_fee);
+    return RevokePublicationError::NONE;
+}
+
 StateValidationError ValidateCybouState(const CybouState& state)
 {
     // Проверка состояния намеренно избыточна: state root может считаться только
@@ -374,6 +424,28 @@ StateValidationError ValidateCybouState(const CybouState& state)
     constexpr uint64_t MAX_SUPPLY{100'000'000'000};
     const uint64_t total = TotalSupply(state);
     if (total > MAX_SUPPLY) return StateValidationError::BALANCE_OVERFLOW;
+    // Учёт ресурсов: только ненулевые записи существующих аккаунтов, и квота каждого
+    // автора точно равна сумме chunk-ов его действующих публикаций.
+    std::map<AccountId, uint64_t> published;
+    for (const auto& [id, record] : state.publications) {
+        if (id.IsNull() || record.chunk_count == 0 || !state.accounts.contains(record.owner)) {
+            return StateValidationError::INVALID_RESOURCE_USAGE;
+        }
+        auto& total = published[record.owner];
+        if (total > std::numeric_limits<uint64_t>::max() - record.chunk_count) return StateValidationError::INVALID_RESOURCE_USAGE;
+        total += record.chunk_count;
+    }
+    for (const auto& [id, usage] : state.usage) {
+        if (usage.Empty() || !state.accounts.contains(id)) return StateValidationError::INVALID_RESOURCE_USAGE;
+        const auto found = published.find(id);
+        if (usage.stored_chunks != (found == published.end() ? 0 : found->second)) {
+            return StateValidationError::INVALID_RESOURCE_USAGE;
+        }
+    }
+    for (const auto& [id, total] : published) {
+        const auto usage = state.usage.find(id);
+        if (usage == state.usage.end() || usage->second.stored_chunks != total) return StateValidationError::INVALID_RESOURCE_USAGE;
+    }
     return StateValidationError::NONE;
 }
 
@@ -433,6 +505,27 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
         out.push_back(allocation.claimed_by ? 1 : 0);
         if (allocation.claimed_by) {
             out.insert(out.end(), allocation.claimed_by->Value().begin(), allocation.claimed_by->Value().end());
+        }
+    }
+    // Ресурсный раздел пишется только когда он непуст: пустое состояние (в том числе
+    // genesis) сохраняет те же байты и тот же state root.
+    if (!state.usage.empty() || !state.publications.empty()) {
+        Write32(out, static_cast<uint32_t>(state.usage.size()));
+        for (const auto& [id, usage] : state.usage) {
+            out.insert(out.end(), id.Value().begin(), id.Value().end());
+            Write64(out, usage.stored_chunks);
+            Write64(out, usage.epoch);
+            Write32(out, usage.epoch_operations);
+            Write64(out, usage.block_height);
+            Write32(out, usage.block_operations);
+        }
+        Write32(out, static_cast<uint32_t>(state.publications.size()));
+        for (const auto& [id, record] : state.publications) {
+            out.insert(out.end(), id.begin(), id.end());
+            out.insert(out.end(), record.owner.Value().begin(), record.owner.Value().end());
+            out.insert(out.end(), record.chunk_authorization_root.begin(), record.chunk_authorization_root.end());
+            Write32(out, record.chunk_count);
+            Write64(out, record.height);
         }
     }
     return out;
@@ -506,6 +599,47 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
             allocation.claimed_by = *account;
         }
         state.genesis_allocations.emplace(recovery_id, std::move(allocation));
+    }
+    if (reader.Remaining()) {
+        constexpr size_t USAGE_SIZE{32 + 8 + 8 + 4 + 8 + 4};
+        constexpr size_t PUBLICATION_SIZE{32 + 32 + 32 + 4 + 8};
+        const auto usage_count = reader.U32();
+        if (!usage_count || *usage_count > reader.Remaining() / USAGE_SIZE) return std::nullopt;
+        std::optional<AccountId> prior_usage;
+        for (uint32_t i{0}; i < *usage_count; ++i) {
+            const auto id_bytes = reader.Bytes(AccountId::SIZE);
+            const auto id = id_bytes ? AccountId::FromBytes(*id_bytes) : std::nullopt;
+            const auto stored = reader.U64();
+            const auto epoch = reader.U64();
+            const auto epoch_ops = reader.U32();
+            const auto block_height = reader.U64();
+            const auto block_ops = reader.U32();
+            if (!id || !stored || !epoch || !epoch_ops || !block_height || !block_ops ||
+                (prior_usage && !(*prior_usage < *id))) return std::nullopt;
+            prior_usage = *id;
+            state.usage.emplace(*id, AccountUsage{*stored, *epoch, *epoch_ops, *block_height, *block_ops});
+        }
+        const auto publication_count = reader.U32();
+        if (!publication_count || *publication_count > reader.Remaining() / PUBLICATION_SIZE) return std::nullopt;
+        std::optional<cybou::Hash256> prior_publication;
+        for (uint32_t i{0}; i < *publication_count; ++i) {
+            const auto id_bytes = reader.Bytes(32);
+            const auto owner_bytes = reader.Bytes(AccountId::SIZE);
+            const auto owner = owner_bytes ? AccountId::FromBytes(*owner_bytes) : std::nullopt;
+            const auto root_bytes = reader.Bytes(32);
+            const auto chunks = reader.U32();
+            const auto height = reader.U64();
+            if (!id_bytes || !owner || !root_bytes || !chunks || !height) return std::nullopt;
+            cybou::Hash256 id;
+            std::copy(id_bytes->begin(), id_bytes->end(), id.begin());
+            if (prior_publication && !(*prior_publication < id)) return std::nullopt;
+            prior_publication = id;
+            PublicationRecord record{.owner = *owner, .chunk_count = *chunks, .height = *height};
+            std::copy(root_bytes->begin(), root_bytes->end(), record.chunk_authorization_root.begin());
+            state.publications.emplace(id, record);
+        }
+        // Пустой ресурсный раздел неканоничен: он должен быть опущен целиком.
+        if (state.usage.empty() && state.publications.empty()) return std::nullopt;
     }
     if (reader.Remaining()) return std::nullopt;
     // Окончательная валидация после чтения всех доменов не допускает частично

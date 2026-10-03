@@ -640,13 +640,15 @@ void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
 
 CybouAccountLimits cybouAccountLimits(quint64 authority)
 {
-    // AUTH at which ComputeStorageQuotaBytes / ComputeMaxOperationsPerBlock step up.
+    // AUTH at which ComputeAuthorityTier steps up.
     static constexpr quint64 kTiers[]{10'000, 100'000, 1'000'000, 10'000'001};
+    const auto tier = cybou::ComputeAuthorityTierLimits(authority);
     CybouAccountLimits limits;
-    const auto quota = cybou::ComputeStorageQuotaBytes(authority);
-    if (quota != UINT64_MAX) limits.storage_quota = quota;
-    const auto operations = cybou::ComputeMaxOperationsPerBlock(authority);
-    if (operations != UINT32_MAX) limits.operations_per_block = operations;
+    limits.storage_quota = tier.storage_quota_chunks * cybou::QUOTA_CHUNK_BYTES;
+    limits.max_file_bytes = quint64{tier.max_publication_chunks} * cybou::QUOTA_CHUNK_BYTES;
+    limits.operations_per_block = tier.operations_per_block;
+    limits.operations_per_epoch = tier.operations_per_epoch;
+    limits.work_bits = tier.operation_work_bits;
     limits.validation_eligible = authority > cybou::VALIDATION_AUTHORITY_THRESHOLD;
     for (const quint64 tier : kTiers) {
         if (authority < tier) {
@@ -662,12 +664,32 @@ QString cybouAuthorityText(quint64 authority)
     return QLocale{}.toString(authority) + QStringLiteral(" AUTH");
 }
 
+void CybouDesktopModel::setResourceUsage(quint64 quota_used, quint32 epoch_operations, quint64 epoch_blocks_left)
+{
+    if (m_status.quota_used == quota_used && m_status.epoch_operations == epoch_operations &&
+        m_status.epoch_blocks_left == epoch_blocks_left) return;
+    m_status.quota_used = quota_used;
+    m_status.epoch_operations = epoch_operations;
+    m_status.epoch_blocks_left = epoch_blocks_left;
+    Q_EMIT statusChanged();
+}
+
+QString CybouDesktopModel::operationLimitProblem() const
+{
+    if (m_fixture_mode) return {};
+    const auto limits = cybouAccountLimits(m_status.authority);
+    if (m_status.epoch_operations < limits.operations_per_epoch) return {};
+    const auto minutes = static_cast<int>(qMax<quint64>(1, (m_status.epoch_blocks_left + 59) / 60));
+    return tr("You reached %1 network operations for this window. It resets in about %n minute(s).", nullptr, minutes)
+        .arg(limits.operations_per_epoch);
+}
+
 void CybouDesktopModel::setAuthority(quint64 authority)
 {
     if (m_status.authority == authority) return;
     m_status.authority = authority;
     // The remote storage quota follows finalized AUTH (fixtures set their own).
-    if (!m_fixture_mode) m_status.storage_quota = cybouAccountLimits(authority).storage_quota.value_or(0);
+    if (!m_fixture_mode) m_status.storage_quota = cybouAccountLimits(authority).storage_quota;
     Q_EMIT authorityChanged();
     Q_EMIT statusChanged();
 }
@@ -792,6 +814,10 @@ bool CybouDesktopModel::requestPayment(const QString& to_name, quint64 amount)
     const QString name = to_name.trimmed().toLower();
     if (!name.endsWith(QStringLiteral(".cybou")) || !nameLabelProblem(name.chopped(6)).isEmpty()) return false;
     if (name == m_status.primary_name) return false;
+    if (const auto problem = operationLimitProblem(); !problem.isEmpty()) {
+        Q_EMIT paymentFinished(false, problem);
+        return true;
+    }
     m_payment_pending = true;
     Q_EMIT statusChanged();
     Q_EMIT paymentRequested(name, amount);
@@ -836,6 +862,10 @@ bool CybouDesktopModel::requestLockToSystemBalance(quint64 amount)
 {
     if (m_payment_pending || amount == 0 || amount > m_status.balance ||
         m_status.identity_state != CybouIdentityState::Active) return false;
+    if (const auto problem = operationLimitProblem(); !problem.isEmpty()) {
+        Q_EMIT systemLockFinished(false, problem);
+        return true;
+    }
     m_payment_pending = true;
     Q_EMIT statusChanged();
     const auto finish = [this](bool ok, const QString& error) {

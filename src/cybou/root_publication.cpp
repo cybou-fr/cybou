@@ -117,4 +117,34 @@ std::optional<IdentityKeyId> ComputeRootPublicationPayloadCommitment(const RootP
     return digest;
 }
 
+std::optional<std::array<unsigned char, REVOKE_PUBLICATION_PAYLOAD_SIZE>> SerializeRevokePublicationPayload(
+    const RevokePublicationPayload& revoke)
+{
+    if (revoke.publication_id.IsNull()) return std::nullopt;
+    std::array<unsigned char, REVOKE_PUBLICATION_PAYLOAD_SIZE> out{};
+    std::copy(revoke.publication_id.begin(), revoke.publication_id.end(), out.begin());
+    return out;
+}
+
+std::optional<RevokePublicationPayload> DeserializeRevokePublicationPayload(std::span<const unsigned char> bytes)
+{
+    if (bytes.size() != REVOKE_PUBLICATION_PAYLOAD_SIZE) return std::nullopt;
+    RevokePublicationPayload revoke;
+    std::copy(bytes.begin(), bytes.end(), revoke.publication_id.begin());
+    if (revoke.publication_id.IsNull()) return std::nullopt;
+    return revoke;
+}
+
+std::optional<IdentityKeyId> ComputeRevokePublicationPayloadCommitment(const RevokePublicationPayload& revoke)
+{
+    constexpr std::string_view domain{"CYBOU/REVOKE-PUBLICATION-PAYLOAD"};
+    const auto encoded = SerializeRevokePublicationPayload(revoke);
+    if (!encoded) return std::nullopt;
+    IdentityKeyId digest{};
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), std::span<const unsigned char>{*encoded}}, digest.data())) {
+        return std::nullopt;
+    }
+    return digest;
+}
+
 } // namespace cybou

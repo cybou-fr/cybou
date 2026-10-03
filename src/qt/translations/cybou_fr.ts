@@ -275,7 +275,7 @@
     </message>
     <message>
         <location filename="../cyboudesktopmodel.cpp" line="92"/>
-        <location filename="../cyboudesktopmodel.cpp" line="877"/>
+        <location filename="../cyboudesktopmodel.cpp" line="907"/>
         <source>(no subject)</source>
         <translation>(sans objet)</translation>
     </message>
@@ -304,150 +304,158 @@
         <source>%1 received</source>
         <translation>%1 reçu(s)</translation>
     </message>
+    <message numerus="yes">
+        <location filename="../cyboudesktopmodel.cpp" line="683"/>
+        <source>You reached %1 network operations for this window. It resets in about %n minute(s).</source>
+        <translation>
+            <numerusform>Vous avez atteint %1 opérations réseau pour cette fenêtre. Elle se réinitialise dans environ %n minute.</numerusform>
+            <numerusform>Vous avez atteint %1 opérations réseau pour cette fenêtre. Elle se réinitialise dans environ %n minutes.</numerusform>
+        </translation>
+    </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="716"/>
+        <location filename="../cyboudesktopmodel.cpp" line="738"/>
         <source>%1 does not belong to a CYBOU Identity.</source>
         <translation>%1 n’appartient à aucune Identité CYBOU.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="800"/>
+        <location filename="../cyboudesktopmodel.cpp" line="826"/>
         <source>Payments are not connected yet.</source>
         <translation>Les paiements ne sont pas encore connectés.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="815"/>
+        <location filename="../cyboudesktopmodel.cpp" line="841"/>
         <source>This name does not belong to a CYBOU Identity.</source>
         <translation>Ce nom n’est associé à aucune identité CYBOU.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="824"/>
-        <location filename="../cyboudesktopmodel.cpp" line="862"/>
+        <location filename="../cyboudesktopmodel.cpp" line="850"/>
+        <location filename="../cyboudesktopmodel.cpp" line="892"/>
         <source>Not enough CYBOU available.</source>
         <translation>Solde CYBOU disponible insuffisant.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="825"/>
+        <location filename="../cyboudesktopmodel.cpp" line="851"/>
         <source>Not enough System Balance for the network service fee.</source>
         <translation>Le solde système ne suffit pas à payer les frais de service réseau.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="826"/>
+        <location filename="../cyboudesktopmodel.cpp" line="852"/>
         <source>You cannot send CYBOU to yourself.</source>
         <translation>Vous ne pouvez pas vous envoyer des CYBOU.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="827"/>
-        <location filename="../cyboudesktopmodel.cpp" line="863"/>
+        <location filename="../cyboudesktopmodel.cpp" line="853"/>
+        <location filename="../cyboudesktopmodel.cpp" line="893"/>
         <source>CYBOU could not reach the network. Try again.</source>
         <translation>CYBOU n’a pas pu joindre le réseau. Réessayez.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="828"/>
+        <location filename="../cyboudesktopmodel.cpp" line="854"/>
         <source>The payment could not be sent.</source>
         <translation>Le paiement n’a pas pu être envoyé.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="853"/>
+        <location filename="../cyboudesktopmodel.cpp" line="883"/>
         <source>The wallet is not connected yet.</source>
         <translation>Le portefeuille n’est pas encore connecté.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="864"/>
+        <location filename="../cyboudesktopmodel.cpp" line="894"/>
         <source>CYBOU could not be moved to System Balance.</source>
         <translation>Impossible de transférer les CYBOU vers le solde système.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="877"/>
+        <location filename="../cyboudesktopmodel.cpp" line="907"/>
         <source>Mail: %1</source>
         <translation>Courrier : %1</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="882"/>
+        <location filename="../cyboudesktopmodel.cpp" line="912"/>
         <source>Folder: %1</source>
         <translation>Dossier : %1</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="882"/>
+        <location filename="../cyboudesktopmodel.cpp" line="912"/>
         <source>File: %1</source>
         <translation>Fichier : %1</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="886"/>
+        <location filename="../cyboudesktopmodel.cpp" line="916"/>
         <source>Files and folders update</source>
         <translation>Mise à jour des fichiers et dossiers</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="949"/>
+        <location filename="../cyboudesktopmodel.cpp" line="979"/>
         <source>CYBOU Support</source>
         <translation>Assistance CYBOU</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1019"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1049"/>
         <source>Claiming %1.cybou…</source>
         <translation>Réservation de %1.cybou…</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1028"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1058"/>
         <source>Saving encrypted name claim…</source>
         <translation>Enregistrement chiffré de la réservation du nom…</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1081"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1111"/>
         <source>Your data cannot be secured for a new recovery phrase right now.</source>
         <translation>Vos données ne peuvent pas être protégées pour une nouvelle phrase de récupération pour le moment.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1084"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1114"/>
         <source>Securing your data for the new recovery phrase. Keep CYBOU open and unlocked.</source>
         <translation>Protection de vos données pour la nouvelle phrase de récupération. Gardez CYBOU ouvert et déverrouillé.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1304"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1334"/>
         <source>Enter a name.</source>
         <translation>Saisissez un nom.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1305"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1335"/>
         <source>Use at least 5 characters.</source>
         <translation>Utilisez au moins 5 caractères.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1306"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1336"/>
         <source>Use at most 32 characters.</source>
         <translation>Utilisez au maximum 32 caractères.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1307"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1337"/>
         <source>Use lowercase letters a–z, digits and hyphens.</source>
         <translation>Utilisez des lettres minuscules a–z, des chiffres et des tirets.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1308"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1338"/>
         <source>A name cannot start or end with a hyphen.</source>
         <translation>Un nom ne peut pas commencer ni se terminer par un tiret.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1309"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1339"/>
         <source>A name cannot contain two hyphens in a row.</source>
         <translation>Un nom ne peut pas contenir deux tirets consécutifs.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1310"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1340"/>
         <source>Names cannot start with &quot;xn--&quot;.</source>
         <translation>Les noms ne peuvent pas commencer par « xn-- ».</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1311"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1341"/>
         <source>A name needs at least one letter.</source>
         <translation>Un nom doit contenir au moins une lettre.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1312"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1342"/>
         <source>This name is reserved.</source>
         <translation>Ce nom est réservé.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1314"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1344"/>
         <source>This name is not valid.</source>
         <translation>Ce nom n’est pas valide.</translation>
     </message>
@@ -456,42 +464,42 @@
         <translation type="vanished">Attendez la fin de la synchronisation du réseau avant de créer une identité.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1606"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1636"/>
         <source>%1 saved to Files</source>
         <translation>%1 enregistré dans Fichiers</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1606"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1636"/>
         <source>From Mail</source>
         <translation>Depuis Courrier</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopcontroller.cpp" line="135"/>
+        <location filename="../cyboudesktopcontroller.cpp" line="136"/>
         <source>Block finalized.</source>
         <translation>Bloc finalisé.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopcontroller.cpp" line="136"/>
+        <location filename="../cyboudesktopcontroller.cpp" line="137"/>
         <source>No block was finalized. See the finalizer state.</source>
         <translation>Aucun bloc n’a été finalisé. Consultez l’état du finaliseur.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopcontroller.cpp" line="145"/>
+        <location filename="../cyboudesktopcontroller.cpp" line="146"/>
         <source>The AUTH change could not be prepared.</source>
         <translation>La modification d’AUTH n’a pas pu être préparée.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopcontroller.cpp" line="156"/>
+        <location filename="../cyboudesktopcontroller.cpp" line="157"/>
         <source>AUTH change submitted for the next block.</source>
         <translation>Modification d’AUTH soumise pour le prochain bloc.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopcontroller.cpp" line="158"/>
+        <location filename="../cyboudesktopcontroller.cpp" line="159"/>
         <source>The PoA signer is not active.</source>
         <translation>Le signataire PoA n’est pas actif.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopcontroller.cpp" line="159"/>
+        <location filename="../cyboudesktopcontroller.cpp" line="160"/>
         <source>The AUTH change was rejected by local execution.</source>
         <translation>La modification d’AUTH a été rejetée par l’exécution locale.</translation>
     </message>
@@ -562,7 +570,7 @@
         <location filename="../cyboumainwindow.cpp" line="134"/>
         <location filename="../cyboumainwindow.cpp" line="264"/>
         <location filename="../cyboumainwindow.cpp" line="648"/>
-        <location filename="../cyboumainwindow.cpp" line="926"/>
+        <location filename="../cyboumainwindow.cpp" line="949"/>
         <source>CYBOU</source>
         <translation>CYBOU</translation>
     </message>
@@ -4600,385 +4608,413 @@ Enregistrer quand même ?</translation>
         <translation>DISPONIBLE</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="111"/>
+        <location filename="../pages/walletpage.cpp" line="112"/>
         <source>SYSTEM BALANCE</source>
         <translation>SOLDE SYSTÈME</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="115"/>
-        <location filename="../pages/walletpage.cpp" line="375"/>
+        <location filename="../pages/walletpage.cpp" line="116"/>
+        <location filename="../pages/walletpage.cpp" line="377"/>
         <source>Pays network fees for Mail, Files and payments</source>
         <translation>Paie les frais réseau du courrier, des fichiers et des paiements</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="118"/>
+        <location filename="../pages/walletpage.cpp" line="119"/>
         <source>Add from Balance</source>
         <translation>Ajouter depuis le solde</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="126"/>
+        <location filename="../pages/walletpage.cpp" line="127"/>
         <source>AUTHORITY</source>
         <translation>AUTORITÉ</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="132"/>
+        <location filename="../pages/walletpage.cpp" line="133"/>
         <source>Earned by network use; cannot be sent</source>
         <translation>Acquise par l’usage du réseau ; non transférable</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="138"/>
-        <location filename="../pages/walletpage.cpp" line="239"/>
+        <location filename="../pages/walletpage.cpp" line="139"/>
+        <location filename="../pages/walletpage.cpp" line="241"/>
         <source>Send</source>
         <translation>Envoyer</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="142"/>
+        <location filename="../pages/walletpage.cpp" line="143"/>
         <source>Receive</source>
         <translation>Recevoir</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="160"/>
+        <location filename="../pages/walletpage.cpp" line="161"/>
         <source>Your current limits</source>
         <translation>Vos limites actuelles</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="175"/>
+        <location filename="../pages/walletpage.cpp" line="176"/>
         <source>Network storage</source>
         <translation>Stockage réseau</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="176"/>
         <source>Operations per block</source>
-        <translation>Opérations par bloc</translation>
+        <translation type="vanished">Opérations par bloc</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="177"/>
+        <location filename="../pages/walletpage.cpp" line="179"/>
         <source>Validation</source>
         <translation>Validation</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="194"/>
+        <location filename="../pages/walletpage.cpp" line="196"/>
         <source>Send CYBOU</source>
         <translation>Envoyer des CYBOU</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="195"/>
-        <location filename="../pages/walletpage.cpp" line="201"/>
-        <location filename="../pages/walletpage.cpp" line="554"/>
+        <location filename="../pages/walletpage.cpp" line="197"/>
+        <location filename="../pages/walletpage.cpp" line="203"/>
+        <location filename="../pages/walletpage.cpp" line="565"/>
         <source>To</source>
         <translation>À</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="200"/>
+        <location filename="../pages/walletpage.cpp" line="202"/>
         <source>name.cybou</source>
         <translation>nom.cybou</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="217"/>
+        <location filename="../pages/walletpage.cpp" line="219"/>
         <source>Amount</source>
         <translation>Montant</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="222"/>
-        <location filename="../pages/walletpage.cpp" line="593"/>
+        <location filename="../pages/walletpage.cpp" line="224"/>
+        <location filename="../pages/walletpage.cpp" line="604"/>
         <source>Whole CYBOU</source>
         <translation>CYBOU entiers</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="223"/>
+        <location filename="../pages/walletpage.cpp" line="225"/>
         <source>Amount in CYBOU</source>
         <translation>Montant en CYBOU</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="242"/>
+        <location filename="../pages/walletpage.cpp" line="244"/>
         <source>Cancel</source>
         <translation>Annuler</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="256"/>
+        <location filename="../pages/walletpage.cpp" line="258"/>
         <source>Recent activity</source>
         <translation>Activité récente</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="262"/>
+        <location filename="../pages/walletpage.cpp" line="264"/>
         <source>No activity yet.</source>
         <translation>Aucune activité pour le moment.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="271"/>
+        <location filename="../pages/walletpage.cpp" line="273"/>
         <source>Moving CYBOU to System Balance. It updates once the network confirms it.</source>
         <translation>Transfert de CYBOU vers le solde système. Le solde sera mis à jour après confirmation du réseau.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="272"/>
-        <location filename="../pages/walletpage.cpp" line="616"/>
+        <location filename="../pages/walletpage.cpp" line="274"/>
+        <location filename="../pages/walletpage.cpp" line="627"/>
         <source>CYBOU could not be moved to System Balance.</source>
         <translation>Le transfert de CYBOU vers le solde système a échoué.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="298"/>
+        <location filename="../pages/walletpage.cpp" line="300"/>
         <source>Payment submitted</source>
         <translation>Paiement envoyé</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="299"/>
+        <location filename="../pages/walletpage.cpp" line="301"/>
         <source>Submitted. Your balance changes once the network confirms it.</source>
         <translation>Envoyé. Votre solde changera après confirmation du réseau.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="303"/>
+        <location filename="../pages/walletpage.cpp" line="305"/>
         <source>The payment could not be sent.</source>
         <translation>Le paiement n’a pas pu être envoyé.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="353"/>
+        <location filename="../pages/walletpage.cpp" line="355"/>
         <source>You have no spendable CYBOU yet.</source>
         <translation>Vous n’avez pas encore de CYBOU disponible.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="356"/>
+        <location filename="../pages/walletpage.cpp" line="358"/>
         <source>Move spendable CYBOU into System Balance (cannot be undone)</source>
         <translation>Transférer des CYBOU disponibles vers le solde système (irréversible)</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="357"/>
+        <location filename="../pages/walletpage.cpp" line="359"/>
         <source>You have no spendable CYBOU to move.</source>
         <translation>Vous n’avez pas de CYBOU disponible à transférer.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="374"/>
+        <location filename="../pages/walletpage.cpp" line="376"/>
         <source>Pays network fees: about %1 more operations</source>
         <translation>Paie les frais réseau : environ %1 opérations supplémentaires</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="376"/>
+        <location filename="../pages/walletpage.cpp" line="378"/>
         <source>Wallet needs your CYBOU Identity. Create or restore it on Home.</source>
         <translation>Le portefeuille a besoin de votre identité CYBOU. Créez-la ou restaurez-la depuis l’accueil.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="377"/>
+        <location filename="../pages/walletpage.cpp" line="379"/>
         <source>Payments are not connected yet.</source>
         <translation>Les paiements ne sont pas encore connectés.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="378"/>
+        <location filename="../pages/walletpage.cpp" line="380"/>
         <source>You have no spendable CYBOU yet. Use Receive to share your name so others can pay you. Mail and Files keep working: their fees come from System Balance.</source>
         <translation>Vous n’avez pas encore de CYBOU disponible. Utilisez Recevoir pour partager votre nom afin que les autres puissent vous payer. Le courrier et les fichiers restent disponibles : leurs frais sont prélevés sur le solde système.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="387"/>
+        <location filename="../pages/walletpage.cpp" line="390"/>
         <source>%1 used of %2</source>
         <translation>%1 utilisés sur %2</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="388"/>
         <source>%1 used  ·  unlimited</source>
-        <translation>%1 utilisés  ·  illimité</translation>
+        <translation type="vanished">%1 utilisés  ·  illimité</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="390"/>
         <source>Unlimited</source>
-        <translation>Illimité</translation>
+        <translation type="vanished">Illimité</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="391"/>
+        <location filename="../pages/walletpage.cpp" line="400"/>
         <source>Eligible to sign</source>
         <translation>Peut signer</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="392"/>
+        <location filename="../pages/walletpage.cpp" line="401"/>
         <source>Above %1</source>
         <translation>Au-delà de %1</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="396"/>
         <source>%1 more to the next tier. Each finalized file or message publication and each move to System Balance adds 1 AUTH (at most 1 per block).</source>
-        <translation>Encore %1 jusqu’au palier suivant. Chaque publication finalisée de fichier ou de message et chaque transfert vers le Solde système ajoute 1 AUTH (au plus 1 par bloc).</translation>
+        <translation type="vanished">Encore %1 jusqu’au palier suivant. Chaque publication finalisée de fichier ou de message et chaque transfert vers le Solde système ajoute 1 AUTH (au plus 1 par bloc).</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="401"/>
         <source>Top tier: operations and storage are not limited by AUTH.</source>
-        <translation>Palier maximal : les opérations et le stockage ne sont pas limités par l’AUTH.</translation>
+        <translation type="vanished">Palier maximal : les opérations et le stockage ne sont pas limités par l’AUTH.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="413"/>
+        <location filename="../pages/walletpage.cpp" line="177"/>
+        <source>Network operations</source>
+        <translation>Opérations réseau</translation>
+    </message>
+    <message>
+        <location filename="../pages/walletpage.cpp" line="178"/>
+        <source>Largest file</source>
+        <translation>Fichier le plus volumineux</translation>
+    </message>
+    <message>
+        <location filename="../pages/walletpage.cpp" line="394"/>
+        <source>%1 of %2 in this window  ·  up to %3 per block</source>
+        <translation>%1 sur %2 dans cette fenêtre  ·  jusqu’à %3 par bloc</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../pages/walletpage.cpp" line="398"/>
+        <source>The window resets in about %n minute(s).</source>
+        <translation>
+            <numerusform>La fenêtre se réinitialise dans environ %n minute.</numerusform>
+            <numerusform>La fenêtre se réinitialise dans environ %n minutes.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location filename="../pages/walletpage.cpp" line="405"/>
+        <source>%1 more to the next tier. Each finalized file or message publication and each move to System Balance adds 1 AUTH (at most 1 per block). Every operation also needs %2-bit proof-of-work on this computer before the network accepts it.</source>
+        <translation>Encore %1 jusqu’au palier suivant. Chaque publication finalisée de fichier ou de message et chaque transfert vers le Solde système ajoute 1 AUTH (au plus 1 par bloc). Chaque opération exige aussi une preuve de travail de %2 bits sur cet ordinateur avant que le réseau ne l’accepte.</translation>
+    </message>
+    <message>
+        <location filename="../pages/walletpage.cpp" line="411"/>
+        <source>Validator tier: the highest limits. Every operation needs %1-bit proof-of-work.</source>
+        <translation>Palier validateur : les limites les plus élevées. Chaque opération exige une preuve de travail de %1 bits.</translation>
+    </message>
+    <message>
+        <location filename="../pages/walletpage.cpp" line="424"/>
         <source>Use a CYBOU name, for example alice.cybou.</source>
         <translation>Utilisez un nom CYBOU, par exemple alice.cybou.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="414"/>
+        <location filename="../pages/walletpage.cpp" line="425"/>
         <source>You cannot send CYBOU to yourself.</source>
         <translation>Vous ne pouvez pas vous envoyer des CYBOU.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="420"/>
+        <location filename="../pages/walletpage.cpp" line="431"/>
         <source>%1  ·  Verified identity</source>
         <translation>%1 · identité vérifiée</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="425"/>
+        <location filename="../pages/walletpage.cpp" line="436"/>
         <source>Network service fee: %1 (from System Balance)</source>
         <translation>Frais de service réseau : %1 (prélevés sur le solde système)</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="426"/>
+        <location filename="../pages/walletpage.cpp" line="437"/>
         <source>Network service fee: calculated when sending</source>
         <translation>Frais de service réseau : calculés lors de l’envoi</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="428"/>
+        <location filename="../pages/walletpage.cpp" line="439"/>
         <source>Not enough CYBOU available.</source>
         <translation>Solde CYBOU disponible insuffisant.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="431"/>
+        <location filename="../pages/walletpage.cpp" line="442"/>
         <source>Sending…</source>
         <translation>Envoi…</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="431"/>
+        <location filename="../pages/walletpage.cpp" line="442"/>
         <source>Confirm and send</source>
         <translation>Confirmer et envoyer</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="431"/>
+        <location filename="../pages/walletpage.cpp" line="442"/>
         <source>Review</source>
         <translation>Vérifier</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="444"/>
+        <location filename="../pages/walletpage.cpp" line="455"/>
         <source>&lt;b&gt;Send %1 to %2&lt;/b&gt;&lt;br&gt;Network service fee: %3 from System Balance&lt;br&gt;Payments cannot be reversed.</source>
         <translation>&lt;b&gt;Envoyer %1 à %2&lt;/b&gt;&lt;br&gt;Frais de service réseau : %3, prélevés sur le solde système&lt;br&gt;Les paiements sont irréversibles.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="446"/>
+        <location filename="../pages/walletpage.cpp" line="457"/>
         <source>calculated when sending</source>
         <translation>calculés lors de l’envoi</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="462"/>
+        <location filename="../pages/walletpage.cpp" line="473"/>
         <source>Sending %1 to %2…</source>
         <translation>Envoi de %1 à %2…</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="464"/>
+        <location filename="../pages/walletpage.cpp" line="475"/>
         <source>The payment could not be started.</source>
         <translation>Le paiement n’a pas pu démarrer.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="473"/>
-        <location filename="../pages/walletpage.cpp" line="478"/>
+        <location filename="../pages/walletpage.cpp" line="484"/>
+        <location filename="../pages/walletpage.cpp" line="489"/>
         <source>Receive CYBOU</source>
         <translation>Recevoir des CYBOU</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="479"/>
+        <location filename="../pages/walletpage.cpp" line="490"/>
         <source>Share your CYBOU name. Payments to it arrive in your Available balance.</source>
         <translation>Partagez votre nom CYBOU. Les paiements reçus apparaîtront dans votre solde disponible.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="483"/>
+        <location filename="../pages/walletpage.cpp" line="494"/>
         <source>Copy</source>
         <translation>Copier</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="550"/>
+        <location filename="../pages/walletpage.cpp" line="561"/>
         <source>Status</source>
         <translation>État</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="551"/>
+        <location filename="../pages/walletpage.cpp" line="562"/>
         <source>Balance</source>
         <translation>Solde</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="551"/>
+        <location filename="../pages/walletpage.cpp" line="562"/>
         <source>System Balance (network service budget)</source>
         <translation>Solde système (budget des services réseau)</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="551"/>
+        <location filename="../pages/walletpage.cpp" line="562"/>
         <source>Available (spendable)</source>
         <translation>Disponible (dépensable)</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="552"/>
+        <location filename="../pages/walletpage.cpp" line="563"/>
         <source>Paid for</source>
         <translation>Payé pour</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="554"/>
+        <location filename="../pages/walletpage.cpp" line="565"/>
         <source>From</source>
         <translation>De</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="556"/>
+        <location filename="../pages/walletpage.cpp" line="567"/>
         <source>Time</source>
         <translation>Date</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="557"/>
+        <location filename="../pages/walletpage.cpp" line="568"/>
         <source>Confirmed in block</source>
         <translation>Confirmé dans le bloc</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="558"/>
+        <location filename="../pages/walletpage.cpp" line="569"/>
         <source>Not yet</source>
         <translation>Pas encore</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="559"/>
+        <location filename="../pages/walletpage.cpp" line="570"/>
         <source>Operation ID</source>
         <translation>ID de l’opération</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="563"/>
+        <location filename="../pages/walletpage.cpp" line="574"/>
         <source>Copy operation ID</source>
         <translation>Copier l’ID de l’opération</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="579"/>
-        <location filename="../pages/walletpage.cpp" line="584"/>
+        <location filename="../pages/walletpage.cpp" line="590"/>
+        <location filename="../pages/walletpage.cpp" line="595"/>
         <source>Add to System Balance</source>
         <translation>Ajouter au solde système</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="585"/>
+        <location filename="../pages/walletpage.cpp" line="596"/>
         <source>System Balance pays CYBOU network fees for your Mail, Files and payments. Moving CYBOU there also counts once toward your Identity Authority.</source>
         <translation>Le solde système paie les frais réseau de votre courrier, vos fichiers et vos paiements. Les CYBOU transférés y contribuent aussi une fois à l’autorité de votre identité.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="588"/>
+        <location filename="../pages/walletpage.cpp" line="599"/>
         <source>Amount (available: %1)</source>
         <translation>Montant (disponible : %1)</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="597"/>
+        <location filename="../pages/walletpage.cpp" line="608"/>
         <source>&lt;b&gt;This cannot be undone.&lt;/b&gt; System Balance can never be sent or moved back.</source>
         <translation>&lt;b&gt;Cette action est irréversible.&lt;/b&gt; Le solde système ne peut jamais être envoyé ni récupéré.</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="603"/>
+        <location filename="../pages/walletpage.cpp" line="614"/>
         <source>Move to System Balance</source>
         <translation>Transférer au solde système</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="644"/>
+        <location filename="../pages/walletpage.cpp" line="655"/>
         <source>Network service fees  ·  %1</source>
         <translation>Frais de service réseau · %1</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="645"/>
+        <location filename="../pages/walletpage.cpp" line="656"/>
         <source>System Balance  ·  latest: %1</source>
         <translation>Solde système · dernier : %1</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="652"/>
+        <location filename="../pages/walletpage.cpp" line="663"/>
         <source>Show each fee</source>
         <translation>Afficher chaque frais</translation>
     </message>
     <message numerus="yes">
-        <location filename="../pages/walletpage.cpp" line="665"/>
+        <location filename="../pages/walletpage.cpp" line="676"/>
         <source>Validated  ·  %n signature(s)</source>
         <translation>
             <numerusform>Validé  ·  %n signature</numerusform>
@@ -4986,22 +5022,22 @@ Enregistrer quand même ?</translation>
         </translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="669"/>
+        <location filename="../pages/walletpage.cpp" line="680"/>
         <source>System Balance  ·  %1</source>
         <translation>Solde système · %1</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="670"/>
+        <location filename="../pages/walletpage.cpp" line="681"/>
         <source>System Balance</source>
         <translation>Solde système</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="670"/>
+        <location filename="../pages/walletpage.cpp" line="681"/>
         <source>Available</source>
         <translation>Disponible</translation>
     </message>
     <message>
-        <location filename="../pages/walletpage.cpp" line="677"/>
+        <location filename="../pages/walletpage.cpp" line="688"/>
         <source>Show details</source>
         <translation>Afficher les détails</translation>
     </message>

@@ -61,6 +61,34 @@ struct AuthorizedRootPublication {
     friend bool operator==(const AuthorizedRootPublication&, const AuthorizedRootPublication&) = default;
 };
 
+/// \brief Размер payload RevokePublication: OperationID отзываемой публикации.
+inline constexpr std::size_t REVOKE_PUBLICATION_PAYLOAD_SIZE{32};
+
+/// \brief Отзыв собственной финализированной RootPublication её автором.
+/// \details Запись удаляется из регистра публикаций, квота освобождается, а Full Node,
+///          хранящие её chunk-и, могут немедленно их удалить (DEC-271, DEC-272).
+struct RevokePublicationPayload {
+    cybou::Hash256 publication_id; ///< OperationID финализированной RootPublication.
+
+    friend bool operator==(const RevokePublicationPayload&, const RevokePublicationPayload&) = default;
+};
+
+/// \brief Identity-authorized RevokePublication.
+struct AuthorizedRevokePublication {
+    IdentityOperationAuthorization authorization;
+    RevokePublicationPayload revoke;
+
+    friend bool operator==(const AuthorizedRevokePublication&, const AuthorizedRevokePublication&) = default;
+};
+
+/// \brief Сериализует payload RevokePublication; нулевой publication_id недопустим.
+std::optional<std::array<unsigned char, REVOKE_PUBLICATION_PAYLOAD_SIZE>> SerializeRevokePublicationPayload(
+    const RevokePublicationPayload& revoke);
+/// \brief Десериализует payload RevokePublication с точным потреблением.
+std::optional<RevokePublicationPayload> DeserializeRevokePublicationPayload(std::span<const unsigned char> bytes);
+/// \brief Domain-separated коммитмент payload для Identity authorization.
+std::optional<IdentityKeyId> ComputeRevokePublicationPayloadCommitment(const RevokePublicationPayload& revoke);
+
 /// \brief Сериализует RootPublication в текущий канонический бинарный формат.
 std::optional<std::vector<unsigned char>> SerializeRootPublication(const RootPublication& publication);
 /// \brief Десериализует и валидирует RootPublication.

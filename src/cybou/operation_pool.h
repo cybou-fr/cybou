@@ -49,6 +49,8 @@ struct OperationPoolLimits {
     size_t max_peer_count{MAX_PEER_PENDING_OPERATIONS};
     /// \brief Максимум сериализованных байт от одного source_peer, байты.
     size_t max_peer_bytes{MAX_PEER_PENDING_BYTES};
+    /// \brief Только для component tests: фиксированная сложность relay-PoW вместо уровня AUTH.
+    std::optional<uint32_t> operation_work_bits;
 };
 
 /// \brief Хранит только локально исполненные кандидаты поверх последнего finalized head.
@@ -69,8 +71,12 @@ public:
     /// \return ACCEPTED, ALREADY_PENDING, ALREADY_FINALIZED или REJECTED.
     /// \pre Local finalized state уже загружен и согласован со store.
     /// \post При ACCEPTED операция появится в Snapshot() и будет учитываться в Size()/Bytes().
-    PoolAdmission Admit(const ProtocolOperation& operation,
+    PoolAdmission Admit(const ProtocolOperation& operation, uint64_t work_nonce,
                         std::optional<std::string> source_peer = std::nullopt);
+    /// \brief Сложность relay-PoW, которую этот пул требует от операции на finalized state.
+    uint32_t RequiredWorkBits(const ProtocolOperation& operation, const CybouState& finalized) const;
+    /// \brief Nonce relay-PoW удерживаемого кандидата (передаётся дальше вместе с exact bytes).
+    std::optional<uint64_t> WorkNonce(const cybou::Hash256& id) const;
     /// \brief Возвращает копию текущего порядка кандидатов для сборки блока.
     /// \return Копия операций в детерминированном порядке удержания.
     std::vector<ProtocolOperation> Snapshot() const;
@@ -94,6 +100,7 @@ private:
     struct Entry {
         ProtocolOperation operation;
         cybou::Hash256 id;
+        uint64_t work_nonce;
         size_t bytes;
         std::optional<std::string> source_peer;
     };

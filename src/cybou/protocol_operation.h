@@ -46,6 +46,9 @@ inline constexpr size_t IDENTITY_ROTATE_SIZE{32 + 32 + 1952 + 32 + 1312 + IDENTI
 /// \details Общая авторизация `IDENTITY_OPERATION_AUTH_SIZE` + payload `amount` 8 байт.
 inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_SIZE{IDENTITY_OPERATION_AUTH_SIZE + SYSTEM_LOCK_PAYLOAD_SIZE};
 
+/// \brief Размер канонической сериализации AuthorizedRevokePublication.
+inline constexpr size_t AUTHORIZED_REVOKE_PUBLICATION_SIZE{IDENTITY_OPERATION_AUTH_SIZE + REVOKE_PUBLICATION_PAYLOAD_SIZE};
+
 /// \brief Дискриминатор канонического бинарного формата ProtocolOperation.
 enum class ProtocolOperationKind : uint8_t {
     ACCOUNT_CREATE = 1,      ///< Payload: `AccountCreateOp`, включая PoW и два proof-of-possession.
@@ -56,6 +59,7 @@ enum class ProtocolOperationKind : uint8_t {
     NAME_REVEAL = 6,         ///< Payload: `AuthorizedNameReveal`, reveal фазы claim-а имени с PoW.
     ROOT_PUBLICATION = 7,    ///< Payload: `AuthorizedRootPublication`, единственная кандидат-операция публикации контента.
     POA_AUTH_ADJUSTMENT = 8, ///< Payload: `PoaAuthAdjustment`, PoA-подписанная корректировка AUTH для следующего блока.
+    REVOKE_PUBLICATION = 9,  ///< Payload: `AuthorizedRevokePublication`, отзыв собственной публикации автором.
 };
 
 /// \brief Канонический tagged union всех операций, попадающих в блок.
@@ -67,7 +71,8 @@ using ProtocolOperation = std::variant<
     AuthorizedNameCommit,
     AuthorizedNameReveal,
     AuthorizedRootPublication,
-    PoaAuthAdjustment>;
+    PoaAuthAdjustment,
+    AuthorizedRevokePublication>;
 
 /// \brief Сериализует tagged union операции в канонический бинарный формат.
 /// \param operation Операция в одном из поддерживаемых вариантов `ProtocolOperation`.

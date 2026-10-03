@@ -38,6 +38,8 @@ struct RelayedOperation {
     cybou::Hash256 operation_id;
     /// \brief Exact signed bytes, которые нужно повторно передавать без пересериализации.
     std::vector<unsigned char> exact_bytes;
+    /// rief Relay-PoW nonce, путешествующий вместе с exact bytes до финализации (DEC-273).
+    uint64_t work_nonce{0};
 };
 
 /// \brief Ограниченная RAM-очередь локально исполненных операций до подтверждения relay-пиром.
@@ -53,11 +55,12 @@ public:
 
     /// \brief Добавляет точные canonical bytes операции; allow_seen_retry разрешает повтор от исходного отправителя.
     /// \param exact_operation_bytes Exact canonical bytes signed operation.
+    /// \param work_nonce Relay-PoW nonce, уже проверенный пулом.
     /// \param allow_seen_retry true разрешает обойти seen-cache для повторной попытки исходного отправителя.
     /// \return QUEUED, DUPLICATE, QUEUE_FULL или INVALID_OPERATION.
     /// \post При QUEUED exact bytes сохраняются без модификации до Acknowledge() или ForgetFinalized().
     OperationRelayEnqueueStatus Enqueue(std::span<const unsigned char> exact_operation_bytes,
-        bool allow_seen_retry = false);
+        uint64_t work_nonce, bool allow_seen_retry = false);
     /// \brief Возвращает текущую голову FIFO без резервирования для передачи.
     /// \return Копия головы очереди или std::nullopt, если очередь пуста.
     std::optional<RelayedOperation> Peek() const;

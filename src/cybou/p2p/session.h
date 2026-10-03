@@ -246,7 +246,7 @@ public:
     std::optional<BlockAnnounceResult> AdvertiseBlock(const BlockAnnouncement& announcement,
         const FinalizedBlock& block, uint64_t& peer_finalized_height);
     /// \brief Отправляет exact signed operation и возвращает hop-by-hop результат.
-    std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation);
+    std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation, uint64_t work_nonce);
     /// \brief Забирает одну relay-операцию у удаленного пира и передает ее runtime.
     bool PollOperationRelay(CybouNodeRuntime& runtime);
     /// \brief Забирает одну Validation-attestation; runtime затем перепроверяет ее на своем состоянии.
@@ -283,7 +283,8 @@ public:
 private:
     bool SendBlock(uint64_t height, std::span<const unsigned char> bytes,
         std::chrono::steady_clock::time_point deadline);
-    bool SendOperation(std::span<const unsigned char> bytes, std::chrono::steady_clock::time_point deadline);
+    bool SendOperation(std::span<const unsigned char> bytes, uint64_t work_nonce,
+        std::chrono::steady_clock::time_point deadline);
     std::optional<OperationSubmitResult> ReceiveOperation(const Frame& meta, CybouNodeRuntime& runtime,
         bool allow_seen_retry, std::chrono::steady_clock::time_point deadline);
     bool SendOperationResult(const OperationSubmitResult& result, std::chrono::steady_clock::time_point deadline);

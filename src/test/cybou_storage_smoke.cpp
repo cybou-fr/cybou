@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
             .runtime = cybou::NodeRuntimeConfig{.network_genesis = network->genesis,
                 .data_dir = work / "client-db", .configured_peers = {{std::make_pair(finalizer_ip, finalizer_port)}},
                 .peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
-                    cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(cybou::p2p::GeoDatabaseUpdater::Start(work / "client-db" / "geo")))},
+                    cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(cybou::p2p::GeoDatabaseUpdater::Start(work / "client-db" / "geo"))), .operation_work_bits = 0},
             .genesis = network->genesis_state,
         }};
         node.Start();

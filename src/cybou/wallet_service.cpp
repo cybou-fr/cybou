@@ -386,6 +386,21 @@ size_t CybouWalletService::SyncLedger()
                             }
                         }
                     }
+                } else if constexpr (std::is_same_v<T, AuthorizedRevokePublication>) {
+                    const bool known = std::any_of(working_entries.begin(), working_entries.end(),
+                        [&](const auto& e) { return e.entry_id == op_id; });
+                    if (op.authorization.account_id == *my_account && !known) {
+                        working_entries.push_back(WalletLedgerEntry{
+                            .entry_id = op_id,
+                            .kind = WalletEntryKind::ROOT_PUBLICATION_FEE,
+                            .amount = -static_cast<int64_t>(params.payment_fee),
+                            .system_side = true,
+                            .counterparty = AccountId{},
+                            .timestamp = 0,
+                            .height = h,
+                            .finality = WalletEntryFinality::FINAL,
+                        });
+                    }
                 }
             }, proto_op);
         }

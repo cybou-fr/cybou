@@ -7,6 +7,7 @@
 #include <cybou/operation_pool.h>
 
 #include <cybou/block_executor.h>
+#include <cybou/operation_work.h>
 #include <cybou/protocol_limits.h>
 
 #include <limits>
@@ -40,7 +41,19 @@ void OperationPool::RecordPeerUsage(const std::optional<std::string>& peer, cons
     usage.bytes += bytes;
 }
 
-PoolAdmission OperationPool::Admit(const ProtocolOperation& operation,
+uint32_t OperationPool::RequiredWorkBits(const ProtocolOperation& operation, const CybouState& finalized) const
+{
+    const uint32_t bits = RequiredOperationWorkBits(operation, finalized);
+    return bits == 0 || !m_limits.operation_work_bits ? bits : *m_limits.operation_work_bits;
+}
+
+std::optional<uint64_t> OperationPool::WorkNonce(const cybou::Hash256& id) const
+{
+    for (const auto& entry : m_entries) if (entry.id == id) return entry.work_nonce;
+    return std::nullopt;
+}
+
+PoolAdmission OperationPool::Admit(const ProtocolOperation& operation, const uint64_t work_nonce,
                                    std::optional<std::string> source_peer)
 {
     const auto encoded = SerializeProtocolOperation(operation);
@@ -50,10 +63,17 @@ PoolAdmission OperationPool::Admit(const ProtocolOperation& operation,
     if (m_ids.contains(*id)) return PoolAdmission::ALREADY_PENDING;
     if (m_store.HasIndexedFinalizedOperation(*id)) return PoolAdmission::ALREADY_FINALIZED;
 
-    if (const auto* create = std::get_if<AccountCreateOp>(&operation)) {
+    {
         const auto loaded = m_store.LoadState();
         if (!loaded || !loaded.state) return PoolAdmission::REJECTED;
-        if (loaded.state->accounts.contains(create->account_id)) {
+        if (const auto* create = std::get_if<AccountCreateOp>(&operation);
+            create && loaded.state->accounts.contains(create->account_id)) {
+            return PoolAdmission::REJECTED;
+        }
+        // Relay PoW (DEC-273): no Full Node, PoA included, holds or forwards an
+        // operation whose work does not meet its author's tier on finalized state.
+        if (!CheckOperationWork(m_store.GetNetworkBinding(), *id, work_nonce,
+                RequiredWorkBits(operation, *loaded.state))) {
             return PoolAdmission::REJECTED;
         }
     }
@@ -71,7 +91,7 @@ PoolAdmission OperationPool::Admit(const ProtocolOperation& operation,
     auto candidate = Snapshot();
     candidate.push_back(operation);
     if (!m_store.ComputeCandidateStateRoot(candidate, head->height + 1)) return PoolAdmission::REJECTED;
-    m_entries.push_back(Entry{operation, *id, encoded->size(), std::move(source_peer)});
+    m_entries.push_back(Entry{operation, *id, work_nonce, encoded->size(), std::move(source_peer)});
     m_ids.insert(*id);
     m_bytes += encoded->size();
     RecordPeerUsage(m_entries.back().source_peer, m_entries.back().bytes);
@@ -138,6 +158,11 @@ std::vector<cybou::Hash256> OperationPool::Revalidate()
                 dropped.push_back(entry.id);
                 continue;
             }
+        }
+        // A tier can drop (BURN): the held work must still meet the finalized requirement.
+        if (!CheckOperationWork(binding, entry.id, entry.work_nonce, RequiredWorkBits(entry.operation, *loaded.state))) {
+            dropped.push_back(entry.id);
+            continue;
         }
         if (!FitsGlobalLimits(entry.bytes)) {
             dropped.push_back(entry.id);

@@ -354,11 +354,20 @@ architecture that is absent from higher levels:
   such an operation earns only the flat +1.
 - Authority > 10,000,000 AUTH qualifies an Identity to sign Validation.
 - Authority grants NO PoA finalization power, NO consensus voting rights, and NO stake weight.
-- AUTH acts as the anti-spam and resource scaling governor:
-  Low-AUTH identities have bounded per-epoch operation rates and storage allowances.
-  As finalized AUTH scales through proven utility and verified storage, limits expand
-  progressively up to the Validator tier (AUTH > 10,000,000) where operational limits
-  are unconstrained.
+- AUTH acts as the anti-spam and resource scaling governor (DEC-272). Block
+  execution enforces, per Identity and against the parent finalized AUTH, a tier
+  limit of metered operations per block and per epoch, a remote storage quota and a
+  largest single publication (file). Quota is counted in 512 KiB chunks of the
+  finalized publication register. Limits expand with AUTH up to the Validator tier
+  (AUTH > 10,000,000), whose limits are high but finite: one Identity can never
+  take a whole block. AccountCreate and PoaAuthAdjustment are not metered.
+- Every user operation carries relay proof-of-work (DEC-273): SHA-256 of
+  `CYBOU/OP-WORK || NetworkBinding || OperationID || nonce` with tier-dependent
+  difficulty (names harder). Every Full Node, the PoA included, admits and relays
+  only operations whose work meets the author's finalized tier. The nonce travels
+  with the exact bytes until finalization and never enters a block.
+- One `.cybou` name per Identity: NameCommit and NameReveal refuse an Identity that
+  already owns a name or holds a pending commit.
 - Every newly created Identity receives an immediate Onboarding Trust Credit of 5 GB
   remote storage in the network, grounded in the reciprocal 1:3 physical storage obligation
   (storing 10–15 GB of foreign data locally on desktop).
@@ -380,7 +389,9 @@ architecture that is absent from higher levels:
 - State Synthesis & Object Pruning: block finalization synthesizes history into state.
   When an object is deleted by its author (`RevokePublication`), its active state record
   is retired/tombstoned, authorizing storing nodes to immediately purge the underlying chunks
-  from local ChunkStore, preventing storage bloat.
+  from local ChunkStore, preventing storage bloat. `RevokePublication` is author-only,
+  costs the payment fee from System Balance, earns no AUTH and frees its chunks from the
+  author's quota; a revoked publication no longer authorizes chunk admission.
 
 ## Economics
 

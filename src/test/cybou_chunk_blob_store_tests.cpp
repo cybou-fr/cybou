@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(runtime_exposes_local_blobs_without_storage_admission)
         .data_dir = m_data_dir / "runtime",
         .memory_only = true,
         .wipe_data = true,
-        .storage_capacity_bytes = 0,
+        .storage_capacity_bytes = 0, .operation_work_bits = 0
     };
     cybou::CybouNodeRuntime runtime{std::move(config)};
     BOOST_REQUIRE(runtime.InitializeGenesis(genesis));

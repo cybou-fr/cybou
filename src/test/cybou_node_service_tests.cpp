@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(worker_retries_signing_failure_and_resumes_after_unlock)
     CybouServiceTestFixture local;
     cybou::CybouNodeService service{{.runtime = cybou::NodeRuntimeConfig{
         .network_genesis = local.definition, .memory_only = true,
-        .peer_admission_policy = TestPeerAdmissionPolicy()}, .genesis = local.genesis}};
+        .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0}, .genesis = local.genesis}};
     service.Start();
     auto signer = std::make_shared<FlakySigner>(local.validator_seed);
     BOOST_REQUIRE(service.Runtime().EnablePoaSigner(signer));
@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(desktop_finalizer_worker_produces_blocks_and_stops_cleanly)
             .poa_finalizer_recovery_entropy = local.validator_seed,
             .memory_only = true,
             .wipe_data = true,
-            .peer_admission_policy = TestPeerAdmissionPolicy(),
+            .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0
         },
         .genesis = local.genesis,
     }};
@@ -151,7 +151,7 @@ BOOST_AUTO_TEST_CASE(full_node_network_service_starts_without_an_initial_peer)
             .data_dir = local.directory / "peerless-observer-service",
             .memory_only = true,
             .wipe_data = true,
-            .peer_admission_policy = TestPeerAdmissionPolicy(),
+            .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0
         },
         .genesis = local.genesis,
     }};
@@ -203,7 +203,7 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
         .network_genesis=primary.definition,.data_dir=primary.directory/"route-observer",
         .configured_peers={{std::make_pair(loopback.to_string(),first.local_endpoint().port())}},
         .memory_only=true,.wipe_data=true,
-        .peer_admission_policy = TestPeerAdmissionPolicy()});
+        .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0});
     BOOST_REQUIRE(observer->InitializeGenesis(primary.genesis));
     BOOST_CHECK(observer->SyncFromConfiguredPeer(2).status==cybou::SyncPeerStatus::UP_TO_DATE);
     // The original route advances, but its stored HELLO remains at height zero.
@@ -300,7 +300,7 @@ BOOST_AUTO_TEST_CASE(full_node_network_worker_recovers_after_peer_protocol_error
             .configured_peers = {{std::make_pair(loopback.to_string(), acceptor.local_endpoint().port())}},
             .memory_only = true,
             .wipe_data = true,
-            .peer_admission_policy = TestPeerAdmissionPolicy(),
+            .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0
         },
         .genesis = local.genesis,
     }};

@@ -691,8 +691,14 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_CHECK(std::holds_alternative<AuthorizedNameReveal>(*decoded_reveal_wire));
     BOOST_CHECK(ComputeOperationId(*decoded_reveal_wire) == ComputeOperationId(reveal_proto_op));
 
-    // Adversarial: Premature reveal at height 10 (needs min depth 1 -> height >= 11)
-    const auto premature_res = ExecuteBlockOperations(*commit_block.state, {reveal_proto_op}, network_binding, 10, params);
+    // Adversarial: a T0 Identity gets one operation per block, so a reveal in the commit block
+    // is refused by the tier limit before any name rule (DEC-272).
+    const auto same_block_res = ExecuteBlockOperations(*commit_block.state, {reveal_proto_op}, network_binding, 10, params);
+    BOOST_CHECK(same_block_res.error == BlockExecutionError::OPERATION_LIMIT_EXCEEDED);
+    // Premature reveal at height 10 (needs min depth 1 -> height >= 11) for a T1 Identity.
+    auto t1_state = *commit_block.state;
+    t1_state.accounts.at(reveal_op.authorization.account_id).authority = 10'000;
+    const auto premature_res = ExecuteBlockOperations(t1_state, {reveal_proto_op}, network_binding, 10, params);
     BOOST_CHECK(premature_res.error == BlockExecutionError::INVALID_NAME_REVEAL);
     BOOST_CHECK(premature_res.name_reveal_error == NameRevealError::INSUFFICIENT_COMMIT_DEPTH);
 
@@ -1104,10 +1110,15 @@ BOOST_AUTO_TEST_CASE(authority_earning_utility_bound_and_velocity_capped)
     lock2.authorization.signature = *SignIdentityMessage(sender_auth_seed, IdentityKeyPurpose::AUTHORIZATION,
         *ComputeIdentityOperationDigest(network, lock2.authorization));
 
-    // Execute both locks in block height 2: authority must increase by only +1 (not +2)
-    const auto double_lock_res = ExecuteBlockOperations(*payment_res.state, {lock1, lock2}, network, 2, params);
+    // A T0 Identity may not even place two operations in one block (DEC-272).
+    BOOST_CHECK(ExecuteBlockOperations(*payment_res.state, {lock1, lock2}, network, 2, params).error ==
+        BlockExecutionError::OPERATION_LIMIT_EXCEEDED);
+    // At T1 (5 per block) both locks fit: authority must increase by only +1 (not +2)
+    auto t1_state = *payment_res.state;
+    t1_state.accounts.at(account_id).authority = 10'000;
+    const auto double_lock_res = ExecuteBlockOperations(t1_state, {lock1, lock2}, network, 2, params);
     BOOST_REQUIRE(double_lock_res);
-    BOOST_CHECK_EQUAL(double_lock_res.state->accounts.at(account_id).authority, 1U);
+    BOOST_CHECK_EQUAL(double_lock_res.state->accounts.at(account_id).authority, 10'001U);
 
     // 3. In the next block, another SystemLock grants +1 AUTH
     AuthorizedSystemLock lock3{
@@ -1120,7 +1131,7 @@ BOOST_AUTO_TEST_CASE(authority_earning_utility_bound_and_velocity_capped)
 
     const auto next_block_res = ExecuteBlockOperations(*double_lock_res.state, {lock3}, network, 3, params);
     BOOST_REQUIRE(next_block_res);
-    BOOST_CHECK_EQUAL(next_block_res.state->accounts.at(account_id).authority, 2U);
+    BOOST_CHECK_EQUAL(next_block_res.state->accounts.at(account_id).authority, 10'002U);
 
     // 4. Verify AuthorityEarningAccount behavior across op types
     BOOST_CHECK(!AuthorityEarningAccount(payment));

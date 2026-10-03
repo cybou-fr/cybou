@@ -245,7 +245,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
 
 
 OperationSubmitResult PeerManager::SubmitOperation(const std::string& numeric_address, uint16_t port,
-    const ProtocolOperation& operation)
+    const ProtocolOperation& operation, const uint64_t work_nonce)
 {
     const auto op_id = ComputeOperationId(operation).value_or(cybou::Hash256{});
     const OperationSubmitResult failure{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
@@ -253,7 +253,7 @@ OperationSubmitResult PeerManager::SubmitOperation(const std::string& numeric_ad
     if (!endpoint) return failure;
     auto it = m_peers.find(*endpoint);
     if (it == m_peers.end()) return failure;
-    const auto result = it->second->SubmitOperation(operation);
+    const auto result = it->second->SubmitOperation(operation, work_nonce);
     if (!result) {
         m_peers.erase(it);
         return failure;
@@ -263,7 +263,7 @@ OperationSubmitResult PeerManager::SubmitOperation(const std::string& numeric_ad
 
 PeerSubmitResult PeerManager::SubmitOperationToAny(
     const std::vector<std::pair<std::string, uint16_t>>& endpoints,
-    const ProtocolOperation& operation)
+    const ProtocolOperation& operation, const uint64_t work_nonce)
 {
     const auto op_id = ComputeOperationId(operation).value_or(cybou::Hash256{});
     PeerSubmitResult result{.op_id = op_id, .acknowledgment = std::nullopt,
@@ -280,7 +280,7 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
             it = m_peers.find(*endpoint);
         }
         if (it == m_peers.end() || !it->second->Peer()) continue;
-        const auto acknowledgment = it->second->SubmitOperation(operation);
+        const auto acknowledgment = it->second->SubmitOperation(operation, work_nonce);
         if (!acknowledgment) {
             result.delivery_uncertain = true;
             m_peers.erase(it);

@@ -46,6 +46,30 @@ struct GenesisAllocation {
 
 inline constexpr size_t MAX_GENESIS_ALLOCATIONS{16};
 
+/// \brief Детерминированный учёт ресурсов одной Identity для лимитов уровня AUTH (DEC-272).
+/// \details Запись существует только пока хотя бы один счётчик ненулевой; устаревшие окна
+///          блока и эпохи обнуляются в начале исполнения каждого блока.
+struct AccountUsage {
+    uint64_t stored_chunks{0};    ///< Chunk-и всех действующих публикаций Identity (квота хранения).
+    uint64_t epoch{0};            ///< Эпоха, к которой относится `epoch_operations`.
+    uint32_t epoch_operations{0}; ///< Метрируемые операции в эпохе `epoch`.
+    uint64_t block_height{0};     ///< Высота, к которой относится `block_operations`.
+    uint32_t block_operations{0}; ///< Метрируемые операции в блоке `block_height`.
+
+    bool Empty() const { return stored_chunks == 0 && epoch_operations == 0 && block_operations == 0; }
+    friend bool operator==(const AccountUsage&, const AccountUsage&) = default;
+};
+
+/// \brief Запись Notarial Register о действующей финализированной RootPublication.
+struct PublicationRecord {
+    AccountId owner;                   ///< Авторизовавшая публикацию Identity.
+    ChunkId chunk_authorization_root{}; ///< Merkle root авторизации chunk-ов для storage admission и purge.
+    uint32_t chunk_count{0};           ///< Учитываемый в квоте объём, chunk-и.
+    uint64_t height{0};                ///< Высота финализации.
+
+    friend bool operator==(const PublicationRecord&, const PublicationRecord&) = default;
+};
+
 /// \brief Полный консенсусный снимок CYBOU, из которого вычисляется state root.
 struct CybouState {
     uint64_t onboarding_pool{0};   ///< Остаток DEV OnboardingPool в CYBOU.
@@ -54,6 +78,10 @@ struct CybouState {
     NameRegistry names;            ///< Реестр `.cybou` имён и pending commit-ов.
     /** Keyed by recovery key id; only claim and pre-claim Central Authority fees mutate it. */
     std::map<IdentityKeyId, GenesisAllocation> genesis_allocations;
+    /// \brief Ненулевые счётчики ресурсов по аккаунтам (DEC-272).
+    std::map<AccountId, AccountUsage> usage;
+    /// \brief Действующие публикации по OperationID их RootPublication (DEC-271).
+    std::map<cybou::Hash256, PublicationRecord> publications;
 };
 
 /// \brief Ищет уникальное genesis-выделение Central Authority; дубликаты считаются некорректным состоянием.
@@ -126,6 +154,28 @@ enum class RootPublicationError : uint8_t {
 RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
     const cybou::Hash256& network_binding, const CybouProtocolParameters& params, CybouState& state);
 
+/// \brief Результаты применения RevokePublication.
+enum class RevokePublicationError : uint8_t {
+    NONE,                        ///< Публикация отозвана, квота освобождена.
+    INVALID_PAYLOAD,             ///< Payload неканоничен.
+    INVALID_AUTHORIZATION,       ///< Identity authorization невалидна.
+    SENDER_NOT_FOUND,            ///< Авторизующий аккаунт отсутствует.
+    PUBLICATION_NOT_FOUND,       ///< Действующей публикации с таким OperationID нет.
+    NOT_OWNER,                   ///< Публикация принадлежит другой Identity.
+    INSUFFICIENT_SYSTEM_BALANCE, ///< Недостаточно `System Balance` для комиссии.
+    FEE_TRANSFER_FAILED,         ///< Комиссия не может быть безопасно зачислена.
+    INCONSISTENT_STATE,          ///< Учёт квоты расходится с регистром публикаций.
+};
+
+/// \brief Отзывает собственную публикацию; комиссия равна `payment_fee`.
+RevokePublicationError ApplyRevokePublication(const AuthorizedRevokePublication& op,
+    const cybou::Hash256& network_binding, const CybouProtocolParameters& params, CybouState& state);
+
+/// \brief Регистрирует финализируемую RootPublication и учитывает её chunk-и в квоте автора.
+/// \return false, если запись уже существует или учёт переполнился (состояние не меняется).
+bool RecordPublication(CybouState& state, const cybou::Hash256& publication_id, const AccountId& owner,
+    const ChunkId& chunk_authorization_root, uint32_t chunk_count, uint64_t height);
+
 /// \brief Ошибки детерминированной валидации канонического состояния.
 enum class StateValidationError : uint8_t {
     NONE,                           ///< Все инварианты канонического состояния соблюдены.
@@ -135,6 +185,7 @@ enum class StateValidationError : uint8_t {
     DUPLICATE_RECOVERY_BINDING,     ///< RecoveryKeyId неоднозначен или не индексируется обратно.
     BALANCE_OVERFLOW,               ///< TotalSupply переполнен либо превысил `MAX_SUPPLY`.
     INVALID_NAME_REGISTRY,          ///< Нарушены правила имён, pending commit-ов или genesis-label binding.
+    INVALID_RESOURCE_USAGE,         ///< Учёт ресурсов или регистр публикаций неканоничен либо рассогласован.
 };
 
 /// \brief Проверяет внутренние инварианты консенсусного состояния.

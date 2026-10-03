@@ -99,6 +99,7 @@ add_library(cybou_node STATIC
   cybou/block_executor.cpp
   cybou/poa_finalizer.cpp
   cybou/operation_pool.cpp
+  cybou/operation_work.cpp
   cybou/identity_operation_coordinator.cpp
   cybou/wallet_service.cpp
   cybou/node_runtime.cpp

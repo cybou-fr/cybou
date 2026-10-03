@@ -119,12 +119,21 @@ Every newly registered Identity receives an immediate **Onboarding Trust Credit 
 
 ## AUTH resource ladder
 
-Remote storage allowances scale according to finalized Identity Authority (DEC-268):
-- `0 AUTH`: 5 GB remote network storage (Onboarding Credit);
-- `10,000 AUTH`: 25 GB remote network storage;
-- `100,000 AUTH`: 100 GB remote network storage;
-- `1,000,000 AUTH`: 500 GB remote network storage;
-- `> 10,000,000 AUTH`: Validator tier — unconstrained storage and operational limits.
+Remote storage allowances scale according to finalized Identity Authority (DEC-268, DEC-272).
+Block execution refuses a RootPublication whose `chunk_count` exceeds the author's largest
+file or whose author's register total would exceed the quota (512 KiB per chunk):
+
+| Tier | AUTH | Ops / block | Ops / epoch (1024 blocks, ~17 min) | Network storage | Largest file | Relay PoW |
+|---|---|---|---|---|---|---|
+| T0 | < 10,000 | 1 | 30 | 5 GiB | 1 GiB | 22 bits |
+| T1 | >= 10,000 | 5 | 150 | 25 GiB | 4 GiB | 21 bits |
+| T2 | >= 100,000 | 25 | 750 | 100 GiB | 16 GiB | 20 bits |
+| T3 | >= 1,000,000 | 100 | 3,000 | 500 GiB | 64 GiB | 19 bits |
+| Validator | > 10,000,000 | 1,000 | 30,000 | 2 TiB | 256 GiB | 18 bits |
+
+`RevokePublication` removes the record from the register and frees its chunks from the
+quota. A revoked publication no longer authorizes admission, and providers purge every
+chunk no other admitted publication still authorizes.
 
 ## Mutual proof of storage and uptime auditing
 

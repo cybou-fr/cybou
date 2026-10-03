@@ -89,6 +89,9 @@ struct NodeRuntimeConfig {
     std::shared_ptr<EventWriter> event_writer;
     /// \brief Локальная policy-проверка адресов для всех публичных P2P sockets.
     std::shared_ptr<const p2p::PeerAdmissionPolicy> peer_admission_policy;
+    /// \brief Только для component tests: фиксированная сложность relay-PoW (DEC-273).
+    /// \details nullopt (production) = сложность уровня AUTH автора операции.
+    std::optional<uint32_t> operation_work_bits;
 };
 
 /// \brief Строит согласованную runtime-конфигурацию из verified compiled official network.
@@ -305,6 +308,9 @@ public:
     /// \return Итог локального исполнения и/или relay.
     /// \post При ACCEPTED/ALREADY_PENDING/RELAY_QUEUED операция остаётся известной runtime до finalization или вытеснения.
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
+    /// \brief Решает relay-PoW операции для уровня AUTH её автора (DEC-273); кэширует результат.
+    /// \return Nonce или std::nullopt, если операция не сериализуется.
+    std::optional<uint64_t> PrepareOperationWork(const ProtocolOperation& op);
     /// \brief Только для PoA signer: подписывает AUTH GRANT/BURN, валидный лишь для следующего блока.
     /// \param action Вид PoaAuthAdjustment: GRANT или BURN.
     /// \param target Target AccountID изменения AUTH.
@@ -355,7 +361,7 @@ public:
     /// \return Статус постановки в relay-очередь.
     /// \pre exact_bytes должны кодировать ту же операцию, которую этот Full Node готов исполнить сам.
     OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes,
-        bool allow_seen_retry = false, std::optional<std::string> source_peer = std::nullopt);
+        uint64_t work_nonce, bool allow_seen_retry = false, std::optional<std::string> source_peer = std::nullopt);
     /// \brief Настраивает локальную Identity для attestation кандидатов; nullptr очищает signer.
     /// \param signer Новый signer или nullptr для полного отключения локального Validation.
     /// \post При новом signer runtime немедленно пытается аттестовать все текущие локальные кандидаты.
@@ -573,7 +579,8 @@ private:
         /// \brief Счётчик протокольных ошибок для более длинного backoff.
         uint32_t protocol_failures{0};
     };
-    OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
+    OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, uint64_t work_nonce,
+        std::optional<std::string> source_peer);
     void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
     void RememberOperationStatus(const cybou::Hash256& id, OperationStatus status);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
@@ -593,7 +600,9 @@ private:
     std::optional<std::array<unsigned char, 32>> m_storage_id;
     CybouStateStore m_store;
     /// \brief Собственный volatile candidate pool Full Node; PoA-узел собирает блоки только из него.
-    OperationPool m_operation_pool{m_store};
+    OperationPool m_operation_pool{m_store, OperationPoolLimits{.operation_work_bits = m_config.operation_work_bits}};
+    /// \brief Решённые relay-PoW nonce локально отправленных операций, чтобы повтор не решал заново.
+    std::map<cybou::Hash256, uint64_t> m_solved_work;
     std::unique_ptr<PoaFinalizer> m_poa_finalizer;
     // Preserve the exact journaled candidate across signing/commit retries.
     BlockProductionStatus m_production_status{BlockProductionStatus::SIGNER_UNAVAILABLE};

@@ -6,6 +6,7 @@
 
 #include <cybou/operation_submit.h>
 #include <cybou/node_runtime.h>
+#include <cybou/operation_work.h>
 #include <cybou/secret_file.h>
 #include <cybou/identity_operation_coordinator.h>
 #include <cybou/keystore.h>
@@ -395,9 +396,37 @@ std::optional<AccountState> CybouNodeRuntime::GetAccountState(const AccountId& a
     return it->second;
 }
 
+std::optional<uint64_t> CybouNodeRuntime::PrepareOperationWork(const ProtocolOperation& op)
+{
+    // The originating node does the relay proof-of-work (DEC-273) outside the
+    // runtime lock: it is meant to take noticeable time on the author's machine.
+    // Without finalized state the author counts as T0, the hardest tier.
+    const auto op_id = ComputeOperationId(op);
+    if (!op_id) return std::nullopt;
+    uint32_t bits{m_operation_pool.RequiredWorkBits(op, CybouState{})};
+    std::optional<uint64_t> nonce;
+    {
+        std::lock_guard lock(m_mutex);
+        if (const auto solved = m_solved_work.find(*op_id); solved != m_solved_work.end()) nonce = solved->second;
+        const auto loaded = m_store.LoadState();
+        if (loaded && loaded.state) bits = m_operation_pool.RequiredWorkBits(op, *loaded.state);
+    }
+    if (!nonce || !CheckOperationWork(m_network_binding, *op_id, *nonce, bits)) {
+        nonce = SolveOperationWork(m_network_binding, *op_id, bits);
+        if (!nonce) return std::nullopt;
+        std::lock_guard lock(m_mutex);
+        if (m_solved_work.size() >= 1024) m_solved_work.erase(m_solved_work.begin());
+        m_solved_work[*op_id] = *nonce;
+    }
+    return nonce;
+}
+
 OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
 {
-    return SubmitOperationInternal(std::move(op), std::nullopt);
+    const auto nonce = PrepareOperationWork(op);
+    if (!nonce) return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED,
+        .op_id = ComputeOperationId(op).value_or(cybou::Hash256{})};
+    return SubmitOperationInternal(std::move(op), *nonce, std::nullopt);
 }
 
 OperationSubmitResult CybouNodeRuntime::SubmitPoaAuthAdjustment(
@@ -414,7 +443,8 @@ OperationSubmitResult CybouNodeRuntime::SubmitPoaAuthAdjustment(
     if (!m_poa_finalizer->SignAuthAdjustment(adjustment)) return {};
     const ProtocolOperation operation{std::move(adjustment)};
     OperationSubmitStatus status{OperationSubmitStatus::REJECTED};
-    switch (m_operation_pool.Admit(operation)) {
+    // Signed by the genesis PoA key: its own protection, no relay PoW.
+    switch (m_operation_pool.Admit(operation, 0)) {
     case PoolAdmission::ACCEPTED: status = OperationSubmitStatus::ACCEPTED; break;
     case PoolAdmission::ALREADY_PENDING: status = OperationSubmitStatus::ALREADY_PENDING; break;
     case PoolAdmission::ALREADY_FINALIZED: status = OperationSubmitStatus::ALREADY_FINALIZED; break;
@@ -428,7 +458,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitPoaAuthAdjustment(
 }
 
 OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
-    const std::span<const unsigned char> exact_bytes, const bool allow_seen_retry,
+    const std::span<const unsigned char> exact_bytes, const uint64_t work_nonce, const bool allow_seen_retry,
     std::optional<std::string> source_peer)
 {
     const auto operation = DeserializeProtocolOperation(exact_bytes);
@@ -446,7 +476,7 @@ OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
         }
         // Full candidate execution, the same path PoA uses. A node never
         // forwards an operation it could not execute itself.
-        switch (m_operation_pool.Admit(*operation, std::move(source_peer))) {
+        switch (m_operation_pool.Admit(*operation, work_nonce, std::move(source_peer))) {
         case PoolAdmission::ACCEPTED:
             if (const auto id = ComputeOperationId(*operation)) AttestCandidate(*id);
             break;
@@ -458,7 +488,7 @@ OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
             return OperationRelayEnqueueStatus::INVALID_OPERATION;
         }
     }
-    return m_operation_relay.Enqueue(exact_bytes, allow_seen_retry);
+    return m_operation_relay.Enqueue(exact_bytes, work_nonce, allow_seen_retry);
 }
 
 size_t CybouNodeRuntime::CandidateOperationCount() const
@@ -659,7 +689,7 @@ void CybouNodeRuntime::RememberFinalizedBlockForGossip(const FinalizedBlock& blo
 }
 
 OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
-    ProtocolOperation op, std::optional<std::string> source_peer)
+    ProtocolOperation op, const uint64_t work_nonce, std::optional<std::string> source_peer)
 {
     const cybou::Hash256 op_id = ComputeOperationId(op).value_or(cybou::Hash256{});
     std::vector<std::pair<std::string, uint16_t>> configured_endpoints;
@@ -676,7 +706,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
             return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
         }
         // Every full node executes the candidate itself before anything else.
-        const auto admission = m_operation_pool.Admit(op, std::move(source_peer));
+        const auto admission = m_operation_pool.Admit(op, work_nonce, std::move(source_peer));
         if (admission == PoolAdmission::ALREADY_FINALIZED) {
             const auto height = m_store.GetFinalizedOperationHeight(op_id).value_or(0);
             RememberOperationStatus(op_id, {.kind = OperationStatusKind::FINALIZED, .finalized_height = height});
@@ -713,7 +743,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
                     accepting_candidates.end()) accepting_candidates.push_back(endpoint);
             }
         }
-        const auto submitted = m_peer_manager->SubmitOperationToAny(accepting_candidates, op);
+        const auto submitted = m_peer_manager->SubmitOperationToAny(accepting_candidates, op, work_nonce);
         // No acknowledgment from anyone is not a rejection: nothing proved the
         // operation invalid, so the exact bytes are retained for retry.
         auto result = submitted.acknowledgment.value_or(
@@ -756,6 +786,10 @@ void CybouNodeRuntime::EmitFinalizedEvents(const FinalizedBlock& block, bool pro
         // Finalization is the only canonical answer. Once known, clear any
         // lingering relay work and collapse local status to FINALIZED.
         m_operation_relay.ForgetFinalized(*id);
+        if (const auto* revoke = std::get_if<AuthorizedRevokePublication>(&op); revoke && m_finalized_chunk_store) {
+            // Finalized revocation: the author deleted the object; drop its replicas now.
+            (void)m_finalized_chunk_store->PurgePublication(revoke->revoke.publication_id);
+        }
         RememberOperationStatus(*id, {.kind = OperationStatusKind::FINALIZED, .finalized_height = block.block.height});
           if (m_config.event_writer) std::visit([&](const auto& value) {
               EventFields operation{{"operation_id",id->GetHex()},{"height",block.block.height}};
@@ -960,7 +994,12 @@ std::optional<RootPublication> CybouNodeRuntime::FindFinalizedRootPublication(co
     const auto operation_id = ComputeOperationId(operation);
     if (!operation_id || *operation_id != op_id) return std::nullopt;
     const auto* publication = std::get_if<AuthorizedRootPublication>(&operation);
-    return publication ? std::optional<RootPublication>{publication->publication} : std::nullopt;
+    if (!publication) return std::nullopt;
+    // A revoked publication authorizes nothing any more (DEC-271): it left the register.
+    std::lock_guard lock(m_mutex);
+    const auto loaded = m_store.LoadState();
+    if (!loaded || !loaded.state || !loaded.state->publications.contains(op_id)) return std::nullopt;
+    return publication->publication;
 }
 
 IdentityKemPackageLookupResult CybouNodeRuntime::FindIdentityKemPackage(

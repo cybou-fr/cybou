@@ -38,6 +38,8 @@ namespace cybou::p2p {
 namespace {
 constexpr size_t HEADER_SIZE{9};
 constexpr size_t HELLO_SIZE{80};
+/// OP_META: exact operation size u32 + relay-PoW nonce u64.
+constexpr size_t OP_META_SIZE{4 + 8};
 constexpr auto BLOCK_TRANSFER_TIMEOUT{std::chrono::seconds{5}};
 // 10 секунд базового setup + минимум 16 KiB/s; это локальный анти-зависательный
 // лимит transport/storage пути и он не выражает никакой консенсусной политики.
@@ -877,11 +879,15 @@ std::optional<BlockAnnounceResult> PeerSession::AdvertiseBlock(
     return static_cast<BlockAnnounceResult>(result->payload[0]);
 }
 
-bool PeerSession::SendOperation(std::span<const unsigned char> bytes, std::chrono::steady_clock::time_point deadline)
+bool PeerSession::SendOperation(std::span<const unsigned char> bytes, const uint64_t work_nonce,
+    std::chrono::steady_clock::time_point deadline)
 {
     if (bytes.size() > MAX_OPERATION_PAYLOAD_BYTES) return false;
+    // OP_META = size u32 || relay-PoW nonce u64 (DEC-273); the work travels with the
+    // exact bytes until finalization and never enters a block.
     std::vector<unsigned char> meta;
     Put32(meta, static_cast<uint32_t>(bytes.size()));
+    for (unsigned i{0}; i < 8; ++i) meta.push_back(static_cast<unsigned char>(work_nonce >> (8 * i)));
     if (!Write(Frame{MessageType::OP_META, meta}, deadline)) return false;
     for (size_t offset = 0; offset < bytes.size(); offset += MAX_FRAME_PAYLOAD) {
         const size_t count = std::min<size_t>(MAX_FRAME_PAYLOAD, bytes.size() - offset);
@@ -913,8 +919,10 @@ std::optional<OperationSubmitResult> PeerSession::ReadOperationResult(const cybo
 std::optional<OperationSubmitResult> PeerSession::ReceiveOperation(const Frame& meta, CybouNodeRuntime& runtime,
     bool allow_seen_retry, std::chrono::steady_clock::time_point deadline)
 {
-    if (meta.type != MessageType::OP_META || meta.payload.size() != 4) return std::nullopt;
+    if (meta.type != MessageType::OP_META || meta.payload.size() != OP_META_SIZE) return std::nullopt;
     const uint32_t size = Read32(meta.payload.data());
+    uint64_t work_nonce{0};
+    for (unsigned i{0}; i < 8; ++i) work_nonce |= uint64_t{meta.payload[4 + i]} << (8 * i);
     if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return std::nullopt;
     boost::system::error_code error;
     const auto remote = m_socket.remote_endpoint(error);
@@ -934,7 +942,7 @@ std::optional<OperationSubmitResult> PeerSession::ReceiveOperation(const Frame& 
     if (runtime.GetOperationStatus(*operation_id).kind == OperationStatusKind::FINALIZED)
         return OperationSubmitResult{.status = OperationSubmitStatus::ALREADY_FINALIZED, .op_id = *operation_id};
     // Both origin submission and hop-by-hop relay execute against local finalized state.
-    const auto queued = runtime.EnqueueRelayedOperation(bytes, allow_seen_retry, remote.address().to_string());
+    const auto queued = runtime.EnqueueRelayedOperation(bytes, work_nonce, allow_seen_retry, remote.address().to_string());
     OperationSubmitStatus status = OperationSubmitStatus::INVALID_PAYLOAD;
     switch (queued) {
     case OperationRelayEnqueueStatus::QUEUED: status = OperationSubmitStatus::RELAY_QUEUED; break;
@@ -948,14 +956,15 @@ std::optional<OperationSubmitResult> PeerSession::ReceiveOperation(const Frame& 
         .delivery_uncertain = status == OperationSubmitStatus::RELAY_QUEUE_FULL};
 }
 
-std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const ProtocolOperation& operation)
+std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const ProtocolOperation& operation,
+    const uint64_t work_nonce)
 {
     if (!m_peer) return std::nullopt;
     const auto bytes = SerializeProtocolOperation(operation);
     const auto operation_id = ComputeOperationId(operation);
     if (!bytes || !operation_id || bytes->empty()) return std::nullopt;
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-    if (!SendOperation(*bytes, deadline)) return std::nullopt;
+    if (!SendOperation(*bytes, work_nonce, deadline)) return std::nullopt;
     return ReadOperationResult(*operation_id, deadline);
 }
 
@@ -965,7 +974,7 @@ bool PeerSession::PollOperationRelay(CybouNodeRuntime& runtime)
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
     if (!Write(Frame{MessageType::OP_POLL, {}}, deadline)) return false;
     const auto meta = Read(deadline);
-    if (!meta || meta->type != MessageType::OP_META || meta->payload.size() != 4) return false;
+    if (!meta || meta->type != MessageType::OP_META || meta->payload.size() != OP_META_SIZE) return false;
     if (Read32(meta->payload.data()) == 0) return false;
     const auto result = ReceiveOperation(*meta, runtime, false, deadline);
     return result && SendOperationResult(*result, deadline) && static_cast<bool>(*result);
@@ -1200,8 +1209,8 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         if (!m_peer || !request->payload.empty()) return false;
         const auto item = runtime.ClaimRelayedOperation();
         const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-        if (!item) return SendOperation({}, deadline);
-        if (!SendOperation(item->exact_bytes, deadline)) {
+        if (!item) return SendOperation({}, 0, deadline);
+        if (!SendOperation(item->exact_bytes, item->work_nonce, deadline)) {
             runtime.ReleaseRelayedOperation(item->operation_id);
             return false;
         }

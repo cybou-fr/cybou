@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(relayed_identity_operation_is_retried_after_volatile_ack)
         .data_dir = fixture.directory / "ordinary-relay",
         .memory_only = true,
         .wipe_data = true,
-        .peer_admission_policy = TestPeerAdmissionPolicy(),
+        .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0
     }};
     BOOST_REQUIRE(relay.InitializeGenesis(fixture.genesis));
     BOOST_REQUIRE(relay.CommitBlock(*account_block));
@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(relayed_identity_operation_is_retried_after_volatile_ack)
         .configured_peers = {{std::pair<std::string, uint16_t>{loopback.to_string(), port}}},
         .memory_only = true,
         .wipe_data = true,
-        .peer_admission_policy = TestPeerAdmissionPolicy(),
+        .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0
     }};
     BOOST_REQUIRE(client.InitializeGenesis(fixture.genesis));
     BOOST_REQUIRE(client.CommitBlock(*account_block));
@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
         .data_dir = root / "producer",
         .poa_finalizer_recovery_entropy = validator_seed,
         .memory_only = true,
-        .wipe_data = true,
+        .wipe_data = true, .operation_work_bits = 0
     };
     cybou::CybouNodeRuntime producer{std::move(producer_config)};
     BOOST_REQUIRE(producer.InitializeGenesis(genesis));
@@ -178,7 +178,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             .configured_peers = {{std::pair<std::string, uint16_t>{"127.0.0.1", port}}},
             .memory_only = false,
             .wipe_data = wipe_data,
-            .peer_admission_policy = TestPeerAdmissionPolicy(),
+            .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0
         };
     };
     cybou::Hash256 operation_id;
@@ -316,7 +316,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             .network_genesis = foreign_definition,
             .data_dir = foreign_data,
             .memory_only = false,
-            .wipe_data = false,
+            .wipe_data = false, .operation_work_bits = 0
         };
         cybou::CybouNodeRuntime foreign_runtime{std::move(foreign_config)};
         BOOST_REQUIRE(foreign_runtime.InitializeGenesis(foreign_genesis));

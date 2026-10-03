@@ -26,6 +26,10 @@ enum class BlockExecutionError : uint8_t {
     INVALID_NAME_REVEAL,         ///< Одна из операций `NameReveal` отвергнута.
     INVALID_ROOT_PUBLICATION,    ///< Одна из операций `RootPublication` отвергнута.
     INVALID_POA_AUTH_ADJUSTMENT, ///< Одна из операций `PoaAuthAdjustment` отвергнута.
+    INVALID_REVOKE_PUBLICATION,  ///< Одна из операций `RevokePublication` отвергнута.
+    OPERATION_LIMIT_EXCEEDED,    ///< Identity превысила лимит операций своего уровня AUTH на блок или эпоху.
+    PUBLICATION_TOO_LARGE,       ///< RootPublication больше максимального файла уровня AUTH автора.
+    STORAGE_QUOTA_EXCEEDED,      ///< RootPublication превысила квоту хранения уровня AUTH автора.
     SUPPLY_CHANGED,              ///< Исполнение нарушило инвариант total supply из `docs/cybou/05_CHAIN_STATE.md`.
     INVALID_STATE,               ///< Родительское или итоговое состояние нарушает канонические инварианты.
 };
@@ -42,6 +46,7 @@ struct BlockExecutionResult {
     NameRevealError name_reveal_error{NameRevealError::NONE}; ///< Детализация для `INVALID_NAME_REVEAL`.
     RootPublicationError root_publication_error{RootPublicationError::NONE}; ///< Детализация для `INVALID_ROOT_PUBLICATION`.
     PoaAuthAdjustmentError poa_auth_error{PoaAuthAdjustmentError::NONE}; ///< Детализация для `INVALID_POA_AUTH_ADJUSTMENT`.
+    RevokePublicationError revoke_error{RevokePublicationError::NONE}; ///< Детализация для `INVALID_REVOKE_PUBLICATION`.
     std::optional<CybouState> state; ///< Кандидатное итоговое состояние при успехе.
     std::optional<cybou::Hash256> state_root; ///< Детерминированный `state root` итогового состояния.
 

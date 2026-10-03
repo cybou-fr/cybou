@@ -101,12 +101,12 @@ public:
     SyncPeerResult SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks);
     /// \brief Отправляет операцию в конкретный уже известный пир.
     OperationSubmitResult SubmitOperation(const std::string& numeric_address, uint16_t port,
-        const ProtocolOperation& operation);
+        const ProtocolOperation& operation, uint64_t work_nonce);
     /// \brief Пытается доставить операцию хотя бы в один из переданных endpoint'ов.
     /// \return Первый подтвержденный hop-by-hop результат; при потере ответа выставляет `delivery_uncertain`.
     PeerSubmitResult SubmitOperationToAny(
         const std::vector<std::pair<std::string, uint16_t>>& endpoints,
-        const ProtocolOperation& operation);
+        const ProtocolOperation& operation, uint64_t work_nonce);
     /// \brief Рассылает недавние финализованные блоки подключенным пирам.
     /// \param max_per_peer Верхняя граница предложений `BLOCK_ANNOUNCE` на пир за один проход.
     size_t FanoutRecentBlocks(size_t max_per_peer = 16);

@@ -243,10 +243,10 @@ BOOST_AUTO_TEST_CASE(canonical_resource_ladder_and_storage_quotas)
     BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(10'000), 25ULL * 1024 * 1024 * 1024);
     BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(100'000), 100ULL * 1024 * 1024 * 1024);
     BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(1'000'000), 500ULL * 1024 * 1024 * 1024);
-    // Validator tier (AUTH > 10M): unconstrained; exactly 10M stays capped
+    // Validator tier (AUTH > 10M): high but finite; exactly 10M stays T3
     BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(10'000'000), 500ULL * 1024 * 1024 * 1024);
-    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(10'000'001), UINT64_MAX);
-    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(100'000'000), UINT64_MAX);
+    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(10'000'001), 2048ULL * 1024 * 1024 * 1024);
+    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(100'000'000), 2048ULL * 1024 * 1024 * 1024);
 
     // Operation limits per block (DEC-268)
     BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(0), 1U);
@@ -254,7 +254,7 @@ BOOST_AUTO_TEST_CASE(canonical_resource_ladder_and_storage_quotas)
     BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(100'000), 25U);
     BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(1'000'000), 100U);
     BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(10'000'000), 100U);
-    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(10'000'001), UINT32_MAX);
+    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(10'000'001), 1000U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

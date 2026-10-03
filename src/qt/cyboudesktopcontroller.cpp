@@ -15,6 +15,7 @@
 #include <cybou/p2p/geo_database_updater.h>
 #include <cybou/p2p/peer_admission.h>
 #include <cybou/poa_auth_adjustment.h>
+#include <cybou/protocol_limits.h>
 #include <cybou/validation_attestation.h>
 #include <cybou/wallet_service.h>
 
@@ -455,13 +456,31 @@ void CybouDesktopController::publishAuthority()
     if (!m_identity_service || !m_node_service) return;
     std::lock_guard identity_access{m_identity_access_mutex};
     quint64 auth_val{0};
+    quint64 quota_used{0};
+    quint32 epoch_operations{0};
+    quint64 blocks_left{0};
     if (const auto account = m_identity_service->GetAccountId()) {
-        if (const auto account_state = m_node_service->Runtime().GetAccountState(*account)) {
+        auto& runtime = m_node_service->Runtime();
+        if (const auto account_state = runtime.GetAccountState(*account)) {
             auth_val = account_state->authority;
         }
+        // The next block's window: counters of an older epoch no longer count.
+        const auto& params = runtime.GetNetworkGenesis().GetProtocolParameters();
+        const uint64_t next_height = runtime.GetFinalizedHeight().value_or(0) + 1;
+        const uint64_t epoch = cybou::EpochForHeight(next_height, params);
+        if (params.epoch_blocks > 0) blocks_left = (epoch + 1) * params.epoch_blocks - next_height;
+        const auto loaded = runtime.GetStore().LoadState();
+        if (loaded && loaded.state) {
+            if (const auto usage = loaded.state->usage.find(*account); usage != loaded.state->usage.end()) {
+                quota_used = usage->second.stored_chunks * cybou::QUOTA_CHUNK_BYTES;
+                if (usage->second.epoch == epoch) epoch_operations = usage->second.epoch_operations;
+            }
+        }
     }
-    QMetaObject::invokeMethod(m_model, [model = m_model, auth_val] { model->setAuthority(auth_val); },
-        Qt::QueuedConnection);
+    QMetaObject::invokeMethod(m_model, [model = m_model, auth_val, quota_used, epoch_operations, blocks_left] {
+        model->setAuthority(auth_val);
+        model->setResourceUsage(quota_used, epoch_operations, blocks_left);
+    }, Qt::QueuedConnection);
 }
 
 void CybouDesktopController::stop()

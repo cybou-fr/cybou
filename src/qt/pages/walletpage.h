@@ -49,6 +49,7 @@ private:
     /** Current limits granted by finalized AUTH. */
     QLabel* m_limit_storage{nullptr};
     QLabel* m_limit_operations{nullptr};
+    QLabel* m_limit_file{nullptr};
     QLabel* m_limit_validation{nullptr};
     QLabel* m_limit_next{nullptr};
     QProgressBar* m_next_tier_bar{nullptr};

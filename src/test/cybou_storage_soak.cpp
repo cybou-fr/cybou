@@ -233,7 +233,7 @@ std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::OfficialNetwork&
         .runtime = cybou::NodeRuntimeConfig{.network_genesis = network.genesis,
             .data_dir = data_dir, .configured_peers = {{std::make_pair(ip, port)}},
             .peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
-                cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(cybou::p2p::GeoDatabaseUpdater::Start(data_dir / "geo")))},
+                cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(cybou::p2p::GeoDatabaseUpdater::Start(data_dir / "geo"))), .operation_work_bits = 0},
         .genesis = network.genesis_state,
     });
     node->Start();

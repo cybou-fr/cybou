@@ -6,6 +6,8 @@
 
 #include <cybou/block_executor.h>
 
+#include <cybou/protocol_limits.h>
+
 #include <algorithm>
 #include <limits>
 #include <unordered_set>
@@ -74,7 +76,49 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 block_height - item.second.commit_height > params.name_commit_max_lifetime;
         });
     }
+    // Окна лимитов (DEC-272): счётчики другого блока или другой эпохи обнуляются до
+    // исполнения, пустые записи удаляются. Идемпотентно для повторного исполнения той же высоты.
+    const uint64_t epoch = EpochForHeight(block_height, params);
+    for (auto it = candidate.usage.begin(); it != candidate.usage.end();) {
+        auto& usage = it->second;
+        if (usage.epoch != epoch) usage.epoch_operations = 0;
+        if (usage.epoch_operations == 0) usage.epoch = 0;
+        if (usage.block_height != block_height) usage.block_operations = 0;
+        if (usage.block_operations == 0) usage.block_height = 0;
+        it = usage.Empty() ? candidate.usage.erase(it) : std::next(it);
+    }
     for (size_t i{0}; i < operations.size(); ++i) {
+        // Лимиты уровня считаются по AUTH финализированного родителя: одно и то же
+        // решение для пула, Validation и PoA. AccountCreate и PoaAuthAdjustment не метрируются.
+        const auto metered = AuthorizingAccount(operations[i]);
+        const auto* publication_op = std::get_if<AuthorizedRootPublication>(&operations[i]);
+        if (metered) {
+            const auto parent_account = parent.accounts.find(*metered);
+            const auto limits = ComputeAuthorityTierLimits(
+                parent_account == parent.accounts.end() ? 0 : parent_account->second.authority);
+            const auto found = candidate.usage.find(*metered);
+            const AccountUsage usage = found == candidate.usage.end() ? AccountUsage{} : found->second;
+            if (usage.block_operations >= limits.operations_per_block ||
+                usage.epoch_operations >= limits.operations_per_epoch) {
+                auto failure = fail(BlockExecutionError::OPERATION_LIMIT_EXCEEDED);
+                failure.failed_operation_index = i;
+                return failure;
+            }
+            if (publication_op) {
+                const uint32_t chunks = publication_op->publication.chunk_count;
+                if (chunks > limits.max_publication_chunks) {
+                    auto failure = fail(BlockExecutionError::PUBLICATION_TOO_LARGE);
+                    failure.failed_operation_index = i;
+                    return failure;
+                }
+                if (usage.stored_chunks > limits.storage_quota_chunks ||
+                    chunks > limits.storage_quota_chunks - usage.stored_chunks) {
+                    auto failure = fail(BlockExecutionError::STORAGE_QUOTA_EXCEEDED);
+                    failure.failed_operation_index = i;
+                    return failure;
+                }
+            }
+        }
         if (const auto* create = std::get_if<AccountCreateOp>(&operations[i])) {
             const auto result = ApplyAccountCreate(*create, network_binding, block_height, params, candidate);
             if (result != AccountCreateStateError::NONE) {
@@ -131,6 +175,14 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 failure.root_publication_error = result;
                 return failure;
             }
+        } else if (const auto* revoke = std::get_if<AuthorizedRevokePublication>(&operations[i])) {
+            const auto result = ApplyRevokePublication(*revoke, network_binding, params, candidate);
+            if (result != RevokePublicationError::NONE) {
+                auto failure = fail(BlockExecutionError::INVALID_REVOKE_PUBLICATION);
+                failure.failed_operation_index = i;
+                failure.revoke_error = result;
+                return failure;
+            }
         } else if (const auto* adjustment = std::get_if<PoaAuthAdjustment>(&operations[i])) {
             const auto digest = ComputePoaAuthAdjustmentDigest(network_binding, *adjustment);
             auto result = !poa_key ? PoaAuthAdjustmentError::INVALID_SIGNATURE
@@ -142,6 +194,21 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 failure.poa_auth_error = result;
                 return failure;
             }
+        }
+        if (publication_op) {
+            const auto id = ComputeOperationId(operations[i]);
+            if (!id || !RecordPublication(candidate, *id, publication_op->authorization.account_id,
+                    publication_op->publication.chunk_authorization_root, publication_op->publication.chunk_count,
+                    block_height)) {
+                return fail(BlockExecutionError::INVALID_STATE);
+            }
+        }
+        if (metered) {
+            auto& usage = candidate.usage[*metered];
+            usage.epoch = epoch;
+            ++usage.epoch_operations;
+            usage.block_height = block_height;
+            ++usage.block_operations;
         }
         // Finalized execution only: only operations that confer network utility
         // earn AUTH (RootPublication, SystemLock). Identity maintenance (IdentityRotate,

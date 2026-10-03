@@ -55,6 +55,7 @@ struct RuntimeFixture {
             .poa_finalizer_recovery_entropy = validator_seed,
             .memory_only = true,
             .wipe_data = true,
+            .operation_work_bits = 0,
         };
     }
 };

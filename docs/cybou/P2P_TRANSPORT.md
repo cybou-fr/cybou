@@ -88,8 +88,10 @@ encoded size u32 LE), then BLOCK_DATA frames, followed by BLOCKS_END (actual
 count u8). Each block is independently executed before commit. No inventory
 exchange or alternate single-block transfer exists.
 
-Operation submission and OP_POLL share OP_META (size u32 LE), OP_DATA and
-OP_RESULT (status u8, OperationID 32). A zero OP_META answers an empty poll.
+Operation submission and OP_POLL share OP_META (size u32 LE, relay-PoW nonce
+u64 LE; DEC-273), OP_DATA and OP_RESULT (status u8, OperationID 32). A zero
+OP_META size answers an empty poll. A receiver checks the nonce against the
+author's finalized tier before candidate execution.
 The receiver applies ingress limits before payload allocation and independently
 executes the exact signed operation. Successful OP_RESULT acknowledges the
 sender's FIFO item; unsuccessful delivery preserves it for retry.

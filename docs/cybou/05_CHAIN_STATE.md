@@ -13,7 +13,11 @@ objects.
 - OnboardingPool and direct protocol fee transfers to Central Authority;
 - genesis allocations containing initial CYBOU and AUTH; the unique `cybou`
   allocation also accumulates protocol fees before its one-time claim;
-- immutable network parameters bound to the active network definition.
+- immutable network parameters bound to the active network definition;
+- resource accounting (DEC-272): per-Identity `usage` (stored chunks, operations in
+  the current epoch and block) and the publication register `publications`
+  (RootPublication OperationID -> owner, chunk authorization root, chunk count,
+  height). Records exist only while non-empty.
 
 Bootstrap is an ordinary CYBOU full peer and has no consensus grants, roles, or
 separate state registry. The active network definition and genesis are signed
@@ -49,16 +53,20 @@ Detailed Authority policies are defined in [`57_IDENTITY_AUTHORITY.md`](57_IDENT
 
 Block finalization synthesizes transaction history into canonical `CybouState`.
 Active publications remain in the notarial registry to authorize chunk storage
-and verify inclusion proofs. When an authenticated `RevokePublication` is finalized,
-the publication is pruned from the active state registry (or tombstoned for a bounded
-transition window), signaling storing nodes that the associated chunks are no longer
-authorized for network retention and can be garbage-collected from local `ChunkStore`.
+and verify inclusion proofs. When an authenticated `RevokePublication` from the
+publication's owner is finalized, its record is removed from the active register and
+its chunks leave the owner's quota. A revoked publication no longer authorizes chunk
+admission, and storing nodes purge every chunk no other admitted publication still
+authorizes from local `ChunkStore`.
 Historical blocks remain immutable, but active consensus state does not accumulate dead objects.
 
 ## Invariants
 
 - no plaintext Mail/File metadata in consensus;
-- no per-Mail/per-file canonical state object;
+- no per-Mail/per-file canonical state object: the register holds one record per
+  finalized RootPublication (which may bundle many encrypted trees), with no
+  plaintext metadata;
+- each Identity's `usage.stored_chunks` equals the sum of its register records;
 - no wall-clock consensus arithmetic;
 - Authority never grants PoA finalization weight or consensus voting power;
 - Balance, System Balance and Authority are three distinct canonical account values;
@@ -72,3 +80,7 @@ of the unique Central Authority allocation. After claim its allocation Balance
 stays fixed; new fees credit the claimant account Balance. TotalSupply counts
 OnboardingPool, unclaimed allocation Balances, account Balances and System
 Balances, with checked integer arithmetic. Every finalized block preserves it.
+The resource section (`usage`, then `publications`, each strictly ordered) is
+appended only when at least one of them is non-empty; an empty section is
+non-canonical. A state without resource records therefore keeps its exact bytes and
+state root, including the genesis state.

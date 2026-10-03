@@ -70,12 +70,18 @@ See [`VALIDATION.md`](VALIDATION.md).
 
 AUTH serves as the network's deterministic rate-limiting and resource-allocation governor:
 - **Anti-Spam protection**: freshly created identities with 0 AUTH start with conservative per-epoch operation limits and a 5 GB remote network storage credit (DEC-269). This prevents Sybil attackers from flooding the network with massive publications.
-- **Progressive tier scaling**: as an account demonstrates utility through verified storage retention, high uptime, and finalized operations, its AUTH increases. Remote storage allowances expand proportionally:
-  - `0 AUTH`: 5 GB remote network storage (Onboarding Trust Credit);
-  - `10,000 AUTH`: 25 GB remote network storage;
-  - `100,000 AUTH`: 100 GB remote network storage;
-  - `1,000,000 AUTH`: 500 GB remote network storage;
-  - `> 10,000,000 AUTH`: Validator tier — eligible to sign Validation attestations; operational rate limits and network storage allowances are unconstrained.
+- **Progressive tier scaling**: as an account demonstrates utility through verified storage retention, high uptime, and finalized operations, its AUTH increases and its limits expand (DEC-272). Block execution enforces them against the parent finalized AUTH:
+
+| Tier | AUTH | Ops / block | Ops / epoch (1024 blocks, ~17 min) | Network storage | Largest file | Relay PoW |
+|---|---|---|---|---|---|---|
+| T0 | < 10,000 | 1 | 30 | 5 GiB | 1 GiB | 22 bits |
+| T1 | >= 10,000 | 5 | 150 | 25 GiB | 4 GiB | 21 bits |
+| T2 | >= 100,000 | 25 | 750 | 100 GiB | 16 GiB | 20 bits |
+| T3 | >= 1,000,000 | 100 | 3,000 | 500 GiB | 64 GiB | 19 bits |
+| Validator | > 10,000,000 | 1,000 | 30,000 | 2 TiB | 256 GiB | 18 bits |
+
+  The Validator tier (`> 10,000,000 AUTH`) is also eligible to sign Validation attestations. Its limits are high but finite so that no single Identity can fill a block.
+- **Relay proof-of-work** (DEC-273): every user operation needs the tier's proof-of-work before any Full Node, the PoA included, holds or relays it. Name operations need 4 more bits. The work never enters a block.
 
 ## What AUTH does not do
 

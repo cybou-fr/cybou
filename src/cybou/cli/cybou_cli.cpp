@@ -403,7 +403,9 @@ int OperationCommand(const std::string& action, const Options& opts)
     if (!operation) throw std::runtime_error("invalid operation file");
     auto node = StartNode(network, RuntimeConfig(network, opts.Require("data-dir")));
     p2p::PeerManager peers{node->Runtime()};
-    return PrintPeerSubmitResult(peers.SubmitOperationToAny(endpoints, *operation));
+    const auto work = node->Runtime().PrepareOperationWork(*operation);
+    if (!work) throw std::runtime_error("cannot compute the operation proof-of-work");
+    return PrintPeerSubmitResult(peers.SubmitOperationToAny(endpoints, *operation, *work));
 }
 
 // ---- ordinary Full Node ----

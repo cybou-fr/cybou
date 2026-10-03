@@ -190,6 +190,26 @@ storage:
   local_onboarding_storage_baseline_bytes: 16106127360  # 15 GiB
   mutual_proof_of_storage: challenge_response_byte_offset_nonce_verified_in_blocks
   object_pruning_on_revocation: true
+  revocation_operation: RevokePublication  # author only, payment fee, no AUTH
+  quota_unit_bytes: 524288  # one authorized chunk
+  publication_register: state.publications_keyed_by_root_publication_operation_id
+resource_tiers:  # DEC-272, enforced by block execution against parent finalized AUTH
+  metered_operations: [Payment, SystemLock, IdentityRotate, NameCommit, NameReveal, RootPublication, RevokePublication]
+  epoch_blocks: 1024
+  tiers:
+    - {name: T0, min_auth: 0, ops_per_block: 1, ops_per_epoch: 30, quota_gib: 5, max_file_gib: 1, work_bits: 22}
+    - {name: T1, min_auth: 10000, ops_per_block: 5, ops_per_epoch: 150, quota_gib: 25, max_file_gib: 4, work_bits: 21}
+    - {name: T2, min_auth: 100000, ops_per_block: 25, ops_per_epoch: 750, quota_gib: 100, max_file_gib: 16, work_bits: 20}
+    - {name: T3, min_auth: 1000000, ops_per_block: 100, ops_per_epoch: 3000, quota_gib: 500, max_file_gib: 64, work_bits: 19}
+    - {name: VALIDATOR, min_auth_exclusive: 10000000, ops_per_block: 1000, ops_per_epoch: 30000, quota_gib: 2048, max_file_gib: 256, work_bits: 18}
+  one_name_per_identity: true
+relay_proof_of_work:  # DEC-273
+  hash: SHA-256(CYBOU/OP-WORK || NetworkBinding || OperationID || nonce_u64_le)
+  name_operation_extra_bits: 4
+  exempt: [AccountCreate, PoaAuthAdjustment]
+  checked_by: every_full_node_including_poa_before_candidate_execution_and_relay
+  transport: OP_META_size_u32_nonce_u64
+  in_block: false
   durability_targets:
     development: 1_remote_full_replica
     beta: 2_independent_remote_full_replicas_plus_local_copy_equals_3_physical_copies

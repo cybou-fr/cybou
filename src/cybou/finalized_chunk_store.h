@@ -138,6 +138,12 @@ public:
     /// \par Потокобезопасность
     /// Потокобезопасен для конкурентных вызовов одного объекта.
     bool PruneAdmittedChunk(const ChunkId& chunk_id);
+    /// \brief Удаляет привязки отозванной публикации и chunk-и, которые больше никто не авторизует.
+    /// \param publication_operation_id OperationID финализированно отозванной RootPublication.
+    /// \return Число физически удалённых chunk-ов.
+    /// \par Потокобезопасность
+    /// Потокобезопасен для конкурентных вызовов одного объекта.
+    std::size_t PurgePublication(const cybou::Hash256& publication_operation_id);
     /// \brief Возвращает число байтов, занятых admitted provider-репликами.
     /// \return Учтённый объём admitted provider-реплик; при повреждении счётчика
     /// возвращается большое fail-closed значение.

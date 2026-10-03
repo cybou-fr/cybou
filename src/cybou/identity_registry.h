@@ -77,6 +77,8 @@ enum class IdentityOperationKind : uint8_t {
     NAME_REVEAL = 4,
     /// Публикация encrypted application root в data plane.
     ROOT_PUBLICATION = 5,
+    /// Отзыв собственной финализированной RootPublication (освобождает квоту).
+    REVOKE_PUBLICATION = 6,
 };
 
 /// Каноническая authorizaton-обвязка для одной пользовательской операции.

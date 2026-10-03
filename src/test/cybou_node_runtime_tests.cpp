@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
         .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "observer",
         .memory_only = true,
-        .wipe_data = true,
+        .wipe_data = true, .operation_work_bits = 0
     };
     cybou::CybouNodeRuntime observer{std::move(observer_config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
@@ -148,7 +148,7 @@ BOOST_AUTO_TEST_CASE(poa_auth_adjustment_grants_and_burns_with_floor)
         .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "auth-observer",
         .memory_only = true,
-        .wipe_data = true,
+        .wipe_data = true, .operation_work_bits = 0
     }};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
     for (uint64_t height{1}; height <= granted->block.height; ++height) {
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(ordinary_node_executes_candidates_before_relay)
         .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "ordinary-candidates",
         .memory_only = true,
-        .wipe_data = true,
+        .wipe_data = true, .operation_work_bits = 0
     }};
     BOOST_REQUIRE(ordinary.InitializeGenesis(fixture.genesis));
     for (uint64_t height{1}; height < commit_height; ++height) {
@@ -226,11 +226,11 @@ BOOST_AUTO_TEST_CASE(ordinary_node_executes_candidates_before_relay)
     BOOST_REQUIRE(commit_bytes && reveal_bytes && commit_id && reveal_id);
 
     // Correctly signed but not executable on this node's finalized state: never relayed.
-    BOOST_CHECK(ordinary.EnqueueRelayedOperation(*reveal_bytes) == cybou::OperationRelayEnqueueStatus::INVALID_OPERATION);
+    BOOST_CHECK(ordinary.EnqueueRelayedOperation(*reveal_bytes, 0) == cybou::OperationRelayEnqueueStatus::INVALID_OPERATION);
     BOOST_CHECK(!ordinary.HasRelayedOperation(*reveal_id));
     BOOST_CHECK(!ordinary.HasCandidateOperation(*reveal_id));
 
-    BOOST_CHECK(ordinary.EnqueueRelayedOperation(*commit_bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_CHECK(ordinary.EnqueueRelayedOperation(*commit_bytes, 0) == cybou::OperationRelayEnqueueStatus::QUEUED);
     BOOST_CHECK(ordinary.HasRelayedOperation(*commit_id));
     BOOST_CHECK(ordinary.HasCandidateOperation(*commit_id));
     // An ordinary node's own pool is not finalizer acceptance.
@@ -240,7 +240,7 @@ BOOST_AUTO_TEST_CASE(ordinary_node_executes_candidates_before_relay)
     BOOST_CHECK(!ordinary.HasCandidateOperation(*commit_id));
     BOOST_CHECK(!ordinary.HasRelayedOperation(*commit_id));
     BOOST_CHECK_EQUAL(ordinary.CandidateOperationCount(), 0U);
-    BOOST_CHECK(ordinary.EnqueueRelayedOperation(*commit_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
+    BOOST_CHECK(ordinary.EnqueueRelayedOperation(*commit_bytes, 0) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
 }
 
 BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_ten_million)
@@ -347,7 +347,7 @@ BOOST_AUTO_TEST_CASE(eligible_node_attests_its_own_executed_candidates)
             .network_genesis = fixture.definition,
             .data_dir = fixture.directory / name,
             .memory_only = true,
-            .wipe_data = true,
+            .wipe_data = true, .operation_work_bits = 0
         });
         BOOST_REQUIRE(node->InitializeGenesis(fixture.genesis));
         for (uint64_t height{1}; height < commit_height; ++height) {
@@ -360,7 +360,7 @@ BOOST_AUTO_TEST_CASE(eligible_node_attests_its_own_executed_candidates)
     const auto validator = make_node("validator-node");
     validator->SetValidationSigner(std::make_shared<cybou::CybouKeyStoreValidationSigner>(alice->GetKeyStore()));
     BOOST_CHECK(validator->IsLocalValidationEligible());
-    BOOST_REQUIRE(validator->EnqueueRelayedOperation(*commit_bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_REQUIRE(validator->EnqueueRelayedOperation(*commit_bytes, 0) == cybou::OperationRelayEnqueueStatus::QUEUED);
     const auto attestations = validator->GetValidationAttestations(*commit_id);
     BOOST_REQUIRE_EQUAL(attestations.size(), 1U);
     BOOST_CHECK(attestations.front().validator_account_id == *alice->GetAccountId());
@@ -372,7 +372,7 @@ BOOST_AUTO_TEST_CASE(eligible_node_attests_its_own_executed_candidates)
     BOOST_CHECK(!ordinary->IsLocalValidationEligible());
     BOOST_CHECK(ordinary->AcceptValidationAttestation(attestations.front()) ==
         cybou::ValidationAcceptStatus::NOT_CANDIDATE);
-    BOOST_REQUIRE(ordinary->EnqueueRelayedOperation(*commit_bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_REQUIRE(ordinary->EnqueueRelayedOperation(*commit_bytes, 0) == cybou::OperationRelayEnqueueStatus::QUEUED);
     BOOST_CHECK(ordinary->GetValidationAttestations(*commit_id).empty());
     BOOST_CHECK(!ordinary->GetOperationStatus(*commit_id).IsValidated());
     auto forged = attestations.front();
@@ -404,7 +404,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizer_can_be_armed_and_disarmed_with_a_vault_si
         .data_dir = fixture.directory / "vault-finalizer-runtime",
         .memory_only = true,
         .wipe_data = true,
-        .peer_admission_policy = TestPeerAdmissionPolicy(),
+        .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0
     }};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
     BOOST_CHECK(!runtime.GetStatus().poa_signer_active);
@@ -570,7 +570,7 @@ BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)
         .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "foreign-observer",
         .memory_only = true,
-        .wipe_data = true,
+        .wipe_data = true, .operation_work_bits = 0
     };
     cybou::CybouNodeRuntime observer{std::move(config)};
     BOOST_CHECK(!observer.InitializeGenesis(foreign_genesis));
@@ -581,7 +581,7 @@ BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)
         .data_dir = fixture.directory / "foreign-producer",
         .poa_finalizer_recovery_entropy = foreign_seed,
         .memory_only = true,
-        .wipe_data = true,
+        .wipe_data = true, .operation_work_bits = 0
     };
     cybou::CybouNodeRuntime foreign{std::move(foreign_config)};
     BOOST_REQUIRE(foreign.InitializeGenesis(foreign_genesis));
@@ -599,7 +599,7 @@ BOOST_AUTO_TEST_CASE(runtime_explicit_peers_take_priority_over_discovered)
         .data_dir = fixture.directory / "peer-priority",
         .advertised_endpoint = std::make_pair("127.0.0.1", uint16_t{29001}),
         .memory_only = true,
-        .wipe_data = true,
+        .wipe_data = true, .operation_work_bits = 0
     };
     cybou::CybouNodeRuntime runtime{std::move(config)};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
@@ -642,7 +642,7 @@ BOOST_AUTO_TEST_CASE(runtime_discovery_filters_self_and_out_of_scope_addresses)
         .data_dir = fixture.directory / "peer-policy",
         .advertised_endpoint = std::make_pair("203.0.113.5", uint16_t{29001}),
         .memory_only = true,
-        .wipe_data = true,
+        .wipe_data = true, .operation_work_bits = 0
     };
     cybou::CybouNodeRuntime runtime{std::move(config)};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
@@ -684,7 +684,7 @@ BOOST_AUTO_TEST_CASE(runtime_private_listener_accepts_private_discovery)
         .data_dir = fixture.directory / "private-peer-policy",
         .advertised_endpoint = std::make_pair("10.1.1.1", uint16_t{29001}),
         .memory_only = true,
-        .wipe_data = true,
+        .wipe_data = true, .operation_work_bits = 0
     };
     cybou::CybouNodeRuntime runtime{std::move(config)};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
@@ -731,7 +731,7 @@ BOOST_AUTO_TEST_CASE(sync_completion_is_advisory_for_ordinary_peers)
     cybou::NodeRuntimeConfig observer_config{.network_genesis = fixture.definition,
         .data_dir = fixture.directory / "finalizer-tip-observer",
         .configured_peers = {{std::make_pair(loopback.to_string(), finalizer_port)}},
-        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestPeerAdmissionPolicy()};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0};
     cybou::CybouNodeRuntime observer{std::move(observer_config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
     const auto finalizer_sync = observer.SyncFromConfiguredPeer(10);
@@ -757,7 +757,7 @@ BOOST_AUTO_TEST_CASE(sync_completion_is_advisory_for_ordinary_peers)
     cybou::NodeRuntimeConfig storage_observer_config{.network_genesis = fixture.definition,
         .data_dir = fixture.directory / "provider-tip-observer",
         .configured_peers = {{std::make_pair(loopback.to_string(), storage_port)}},
-        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestPeerAdmissionPolicy()};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0};
     cybou::CybouNodeRuntime storage_observer{std::move(storage_observer_config)};
     BOOST_REQUIRE(storage_observer.InitializeGenesis(fixture.genesis));
     const auto storage_sync = storage_observer.SyncFromConfiguredPeer(10);

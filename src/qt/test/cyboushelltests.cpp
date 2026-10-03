@@ -838,20 +838,25 @@ void CybouShellTests::authorityDashboardUsesLocalHeightObservation()
 
 void CybouShellTests::walletShowsAuthorityLimits()
 {
+    constexpr quint64 GIB{1024ULL * 1024 * 1024};
     const auto base = cybouAccountLimits(0);
-    QCOMPARE(base.storage_quota.value_or(0), quint64{5} * 1024 * 1024 * 1024);
-    QCOMPARE(base.operations_per_block.value_or(0), quint32{1});
+    QCOMPARE(base.storage_quota, 5 * GIB);
+    QCOMPARE(base.max_file_bytes, 1 * GIB);
+    QCOMPARE(base.operations_per_block, quint32{1});
+    QCOMPARE(base.operations_per_epoch, quint32{30});
+    QCOMPARE(base.work_bits, quint32{22});
     QVERIFY(!base.validation_eligible);
     QCOMPARE(base.next_tier_authority.value_or(0), quint64{10'000});
     const auto top = cybouAccountLimits(10'000'001);
-    QVERIFY(!top.storage_quota);
-    QVERIFY(!top.operations_per_block);
+    QCOMPARE(top.storage_quota, 2048 * GIB);
+    QCOMPARE(top.operations_per_block, quint32{1'000});
     QVERIFY(top.validation_eligible);
     QVERIFY(!top.next_tier_authority);
 
     CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
     model.setAuthority(12'000);
-    QCOMPARE(model.status().storage_quota, quint64{25} * 1024 * 1024 * 1024);
+    model.setResourceUsage(3 * GIB, 7, 600);
+    QCOMPARE(model.status().storage_quota, 25 * GIB);
     WalletPage page{&model};
     QLabel* authority = nullptr;
     for (auto* label : page.findChildren<QLabel*>()) {
@@ -860,7 +865,12 @@ void CybouShellTests::walletShowsAuthorityLimits()
     QVERIFY(authority);
     QCOMPARE(authority->text(), cybouAuthorityText(12'000));
     const auto labels = page.findChildren<QLabel*>();
-    QVERIFY(std::any_of(labels.begin(), labels.end(), [](const QLabel* label) { return label->text() == QStringLiteral("5"); }));
+    const auto shows = [&labels](const QString& text) {
+        return std::any_of(labels.begin(), labels.end(), [&](const QLabel* label) { return label->text().contains(text); });
+    };
+    QVERIFY(shows(QStringLiteral("7 of 150 in this window")));
+    QVERIFY(shows(QStringLiteral("up to 5 per block")));
+    QVERIFY(shows(CybouProduct::sizeText(4 * GIB)));
 }
 
 void CybouShellTests::networkPageReflectsModel()

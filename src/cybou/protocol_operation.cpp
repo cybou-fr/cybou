@@ -170,6 +170,24 @@ std::optional<std::vector<unsigned char>> SerializeRootPublicationOperation(cons
         ComputeRootPublicationPayloadCommitment, SerializeRootPublication);
 }
 
+std::optional<std::vector<unsigned char>> SerializeRevokePublicationOperation(const AuthorizedRevokePublication& op)
+{
+    return SerializeAuthorizedPayload(op.authorization, IdentityOperationKind::REVOKE_PUBLICATION, op.revoke,
+        ComputeRevokePublicationPayloadCommitment, SerializeRevokePublicationPayload);
+}
+
+std::optional<AuthorizedRevokePublication> DeserializeRevokePublicationOperation(std::span<const unsigned char> bytes)
+{
+    if (bytes.size() != AUTHORIZED_REVOKE_PUBLICATION_SIZE) return std::nullopt;
+    const auto auth = DeserializeIdentityOperationAuthorization(bytes.first(IDENTITY_OPERATION_AUTH_SIZE),
+        IdentityOperationKind::REVOKE_PUBLICATION);
+    const auto payload = DeserializeRevokePublicationPayload(bytes.subspan(IDENTITY_OPERATION_AUTH_SIZE));
+    if (!auth || !payload || ComputeRevokePublicationPayloadCommitment(*payload) != auth->payload_commitment) {
+        return std::nullopt;
+    }
+    return AuthorizedRevokePublication{.authorization = *auth, .revoke = *payload};
+}
+
 std::optional<AuthorizedRootPublication> DeserializeRootPublicationOperation(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < IDENTITY_OPERATION_AUTH_SIZE || bytes.size() > ROOT_PUBLICATION_MAX_OPERATION_BYTES) {
@@ -289,6 +307,10 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const Proto
         const auto body = SerializePoaAuthAdjustment(*adjustment);
         if (!body) return std::nullopt;
         return TaggedOperationBytes(ProtocolOperationKind::POA_AUTH_ADJUSTMENT, *body);
+    } else if (const auto* revoke = std::get_if<AuthorizedRevokePublication>(&operation)) {
+        const auto body = SerializeRevokePublicationOperation(*revoke);
+        if (!body) return std::nullopt;
+        return TaggedOperationBytes(ProtocolOperationKind::REVOKE_PUBLICATION, *body);
     } else {
         return std::nullopt;
     }
@@ -340,6 +362,11 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
     case ProtocolOperationKind::POA_AUTH_ADJUSTMENT: {
         if (bytes.size() != 1 + POA_AUTH_ADJUSTMENT_SIZE) return std::nullopt;
         const auto op = DeserializePoaAuthAdjustment(bytes.subspan(1));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
+    }
+    case ProtocolOperationKind::REVOKE_PUBLICATION: {
+        if (bytes.size() != 1 + AUTHORIZED_REVOKE_PUBLICATION_SIZE) return std::nullopt;
+        const auto op = DeserializeRevokePublicationOperation(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     default: return std::nullopt;
@@ -439,6 +466,9 @@ bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
             } else if constexpr (std::is_same_v<T, AuthorizedRootPublication>) {
                 expected_kind = IdentityOperationKind::ROOT_PUBLICATION;
                 payload_commitment = ComputeRootPublicationPayloadCommitment(op.publication);
+            } else if constexpr (std::is_same_v<T, AuthorizedRevokePublication>) {
+                expected_kind = IdentityOperationKind::REVOKE_PUBLICATION;
+                payload_commitment = ComputeRevokePublicationPayloadCommitment(op.revoke);
             }
             const auto digest = ComputeIdentityOperationDigest(network_binding, op.authorization);
             return payload_commitment && op.authorization.kind == expected_kind &&

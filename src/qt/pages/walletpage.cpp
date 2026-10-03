@@ -174,8 +174,9 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
         return value;
     };
     m_limit_storage = limit(0, tr("Network storage"));
-    m_limit_operations = limit(1, tr("Operations per block"));
-    m_limit_validation = limit(2, tr("Validation"));
+    m_limit_operations = limit(1, tr("Network operations"));
+    m_limit_file = limit(2, tr("Largest file"));
+    m_limit_validation = limit(3, tr("Validation"));
     limits_layout->addLayout(limits_grid);
     m_next_tier_bar = new QProgressBar{limits};
     m_next_tier_bar->setRange(0, 1000);
@@ -384,22 +385,31 @@ void WalletPage::refresh()
     const QLocale locale;
     const auto limits = cybouAccountLimits(status.authority);
     m_authority->setText(cybouAuthorityText(status.authority));
-    m_limit_storage->setText(limits.storage_quota
-        ? tr("%1 used of %2").arg(CybouProduct::sizeText(status.storage_used), CybouProduct::sizeText(*limits.storage_quota))
-        : tr("%1 used  ·  unlimited").arg(CybouProduct::sizeText(status.storage_used)));
-    m_limit_operations->setText(limits.operations_per_block
-        ? locale.toString(*limits.operations_per_block) : tr("Unlimited"));
+    // Finalized quota use in live mode; fixtures only know the files they show.
+    const quint64 quota_used = m_model->fixtureMode() ? status.storage_used : status.quota_used;
+    m_limit_storage->setText(tr("%1 used of %2").arg(CybouProduct::sizeText(quota_used),
+        CybouProduct::sizeText(limits.storage_quota)));
+    // One block is about a second, so blocks left are seconds left.
+    const quint64 minutes = (status.epoch_blocks_left + 59) / 60;
+    m_limit_operations->setText(tr("%1 of %2 in this window  ·  up to %3 per block")
+        .arg(locale.toString(status.epoch_operations), locale.toString(limits.operations_per_epoch),
+            locale.toString(limits.operations_per_block)));
+    m_limit_operations->setToolTip(status.epoch_blocks_left > 0
+        ? tr("The window resets in about %n minute(s).", nullptr, static_cast<int>(qMax<quint64>(1, minutes))) : QString{});
+    m_limit_file->setText(CybouProduct::sizeText(limits.max_file_bytes));
     m_limit_validation->setText(limits.validation_eligible ? tr("Eligible to sign")
         : tr("Above %1").arg(cybouAuthorityText(cybou::VALIDATION_AUTHORITY_THRESHOLD)));
     if (limits.next_tier_authority) {
         const quint64 next = *limits.next_tier_authority;
         m_next_tier_bar->setValue(static_cast<int>(qMin<quint64>(1000, status.authority * 1000 / next)));
         m_limit_next->setText(tr("%1 more to the next tier. Each finalized file or message publication and each "
-                                 "move to System Balance adds 1 AUTH (at most 1 per block).")
-            .arg(cybouAuthorityText(next - status.authority)));
+                                 "move to System Balance adds 1 AUTH (at most 1 per block). Every operation also "
+                                 "needs %2-bit proof-of-work on this computer before the network accepts it.")
+            .arg(cybouAuthorityText(next - status.authority)).arg(limits.work_bits));
     } else {
         m_next_tier_bar->setValue(1000);
-        m_limit_next->setText(tr("Top tier: operations and storage are not limited by AUTH."));
+        m_limit_next->setText(tr("Validator tier: the highest limits. Every operation needs %1-bit proof-of-work.")
+            .arg(limits.work_bits));
     }
     if (!payments) m_send_panel->setVisible(false);
     updateSendState();

@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <set>
 #include <stdexcept>
 #include <string>
 
@@ -311,6 +312,45 @@ std::uint64_t FinalizedChunkStore::UsedBytes() const
 {
     const auto bytes = ReadCounter(m_namespace + "/storage-bytes");
     return bytes.value_or(std::numeric_limits<std::uint64_t>::max());
+}
+
+std::size_t FinalizedChunkStore::PurgePublication(const cybou::Hash256& publication_operation_id)
+{
+    if (publication_operation_id.IsNull()) return 0;
+    std::lock_guard lock{m_mutex};
+    const std::string associations = m_namespace + "/publication-chunk/";
+    const std::string prefix = associations + publication_operation_id.GetHex() + "/";
+    const size_t key_size = prefix.size() + 2 * ChunkId{}.size();
+    std::vector<ChunkId> chunks;
+    m_db->ForEachStringPrefixRaw(prefix, key_size, [&](const std::string& key, const std::string&) {
+        if (const auto id = ParseChunkId(std::string_view{key}.substr(prefix.size()))) chunks.push_back(*id);
+    });
+    if (chunks.empty()) return 0;
+    // A chunk stays while any other admitted publication still authorizes it.
+    std::set<ChunkId> shared;
+    const std::set<ChunkId> revoked{chunks.begin(), chunks.end()};
+    m_db->ForEachStringPrefixRaw(associations, key_size, [&](const std::string& key, const std::string&) {
+        if (key.compare(0, prefix.size(), prefix) == 0) return;
+        if (const auto id = ParseChunkId(std::string_view{key}.substr(key.size() - 2 * ChunkId{}.size()));
+            id && revoked.contains(*id)) shared.insert(*id);
+    });
+    const auto storage_bytes_key = m_namespace + "/storage-bytes";
+    uint64_t storage = ReadCounter(storage_bytes_key).value_or(0);
+    KVStore::Batch batch;
+    std::vector<ChunkId> removed;
+    for (const auto& chunk : chunks) {
+        batch.Erase(PublicationChunkKey(m_namespace, publication_operation_id, chunk));
+        if (shared.contains(chunk)) continue;
+        std::uint64_t size{0};
+        if (!m_db->Read(ChunkKey(m_namespace, chunk), size)) continue;
+        batch.Erase(ChunkKey(m_namespace, chunk));
+        storage = storage > size ? storage - size : 0;
+        removed.push_back(chunk);
+    }
+    batch.Write(storage_bytes_key, storage);
+    m_db->WriteBatch(batch, true);
+    for (const auto& chunk : removed) (void)m_blobs.Remove(chunk);
+    return removed.size();
 }
 
 } // namespace cybou

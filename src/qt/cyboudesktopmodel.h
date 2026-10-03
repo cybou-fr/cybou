@@ -76,6 +76,12 @@ struct CybouDesktopStatus {
 
     quint64 storage_used{0};
     quint64 storage_quota{0};
+
+    /** Finalized resource accounting of this Identity (DEC-272). */
+    quint64 quota_used{0};
+    quint32 epoch_operations{0};
+    /** Blocks until the operation window resets. */
+    quint64 epoch_blocks_left{0};
 };
 
 /**
@@ -119,10 +125,15 @@ struct CybouNetworkAuthorityStatus {
  * from the same deterministic tier rules every Full Node applies.
  */
 struct CybouAccountLimits {
-    /** Remote network storage quota; nullopt means unconstrained. */
-    std::optional<quint64> storage_quota;
-    /** Operations per block; nullopt means unconstrained. */
-    std::optional<quint32> operations_per_block;
+    /** Remote network storage quota, bytes. */
+    quint64 storage_quota{0};
+    /** Largest single file (one publication), bytes. */
+    quint64 max_file_bytes{0};
+    /** Network operations per block and per epoch (~17 minutes). */
+    quint32 operations_per_block{0};
+    quint32 operations_per_epoch{0};
+    /** Proof-of-work each operation needs before the network relays it, bits. */
+    quint32 work_bits{0};
     bool validation_eligible{false};
     /** AUTH at which the next tier starts; nullopt at the top tier. */
     std::optional<quint64> next_tier_authority;
@@ -201,6 +212,10 @@ public:
     void setPrimaryName(const QString& name);
     void setBalances(quint64 balance, quint64 system_balance);
     void setStorageUsage(quint64 used, quint64 quota);
+    /** Adapter entry: finalized quota use and the current operation window. */
+    void setResourceUsage(quint64 quota_used, quint32 epoch_operations, quint64 epoch_blocks_left);
+    /** Empty while another network operation fits this window, else a user-facing reason. */
+    QString operationLimitProblem() const;
     /** Recomputes storage_used from the Identity's files (live mode only). */
     void refreshStorageUsed();
 

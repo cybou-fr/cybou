@@ -69,7 +69,7 @@ struct CybouServiceTestFixture {
             .poa_finalizer_recovery_entropy = validator_seed,
             .memory_only = true,
             .wipe_data = true,
-            .peer_admission_policy = TestPeerAdmissionPolicy(),
+            .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0
         };
         runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
         if (!runtime->InitializeGenesis(genesis)) throw std::runtime_error("genesis initialization failed");
