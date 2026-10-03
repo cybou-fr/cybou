@@ -91,18 +91,18 @@ inline std::uint64_t Number(std::string_view text, std::uint64_t minimum, std::u
 /// \throw std::invalid_argument При неизвестном формате или выходе за диапазон.
 inline std::uint64_t Quantity(std::string text, bool duration = false) {
     std::uint64_t multiplier{1};
-    static constexpr std::array duration_units{
-        std::pair<std::string_view, std::uint64_t>{"ms", 1},
+    static constexpr std::array<std::pair<std::string_view, std::uint64_t>, 4> duration_units{{
+        {"ms", 1},
         {"s", 1000},
         {"m", 60000},
         {"h", 3600000},
-    };
-    static constexpr std::array size_units{
-        std::pair<std::string_view, std::uint64_t>{"KiB", 1ULL << 10},
+    }};
+    static constexpr std::array<std::pair<std::string_view, std::uint64_t>, 4> size_units{{
+        {"KiB", 1ULL << 10},
         {"MiB", 1ULL << 20},
         {"GiB", 1ULL << 30},
         {"TiB", 1ULL << 40},
-    };
+    }};
     const auto& units = duration ? duration_units : size_units;
     for (const auto& [suffix, factor] : units) if (text.ends_with(suffix)) {
         text.resize(text.size() - suffix.size()); multiplier = factor; break;

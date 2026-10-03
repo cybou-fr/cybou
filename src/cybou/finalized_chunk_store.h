@@ -132,6 +132,12 @@ public:
     /// \par Потокобезопасность
     /// Потокобезопасен для конкурентных вызовов одного объекта.
     bool RemoveUnlessAdmitted(const ChunkId& chunk_id);
+    /// \brief Принудительно удаляет admitted provider-реплику и её метаданные при отзыве/прюнинге объекта (DEC-271).
+    /// \param chunk_id ChunkId прюнимого чанка.
+    /// \return \c true только если чанк был учтён provider-store и успешно удалён.
+    /// \par Потокобезопасность
+    /// Потокобезопасен для конкурентных вызовов одного объекта.
+    bool PruneAdmittedChunk(const ChunkId& chunk_id);
     /// \brief Возвращает число байтов, занятых admitted provider-репликами.
     /// \return Учтённый объём admitted provider-реплик; при повреждении счётчика
     /// возвращается большое fail-closed значение.

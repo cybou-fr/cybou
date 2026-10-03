@@ -23,6 +23,16 @@ struct ByteArray32Hasher {
         }
         return hash;
     }
+
+    size_t operator()(const cybou::Hash256& value) const noexcept
+    {
+        size_t hash{1469598103934665603ull};
+        for (const unsigned char byte : value) {
+            hash ^= byte;
+            hash *= 1099511628211ull;
+        }
+        return hash;
+    }
 };
 
 struct AccountIdHasher {

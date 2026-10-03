@@ -286,6 +286,27 @@ bool FinalizedChunkStore::RemoveUnlessAdmitted(const ChunkId& chunk_id)
     return m_blobs.Remove(chunk_id);
 }
 
+bool FinalizedChunkStore::PruneAdmittedChunk(const ChunkId& chunk_id)
+{
+    if (chunk_id == ChunkId{}) return false;
+    std::lock_guard lock{m_mutex};
+    const auto chunk_key = ChunkKey(m_namespace, chunk_id);
+    std::uint64_t admitted_size{0};
+    if (!m_db->Read(chunk_key, admitted_size)) return false;
+
+    const auto storage_bytes_key = m_namespace + "/storage-bytes";
+    const auto current_storage = ReadCounter(storage_bytes_key).value_or(0);
+    const uint64_t updated_storage = current_storage > admitted_size ? current_storage - admitted_size : 0;
+
+    KVStore::Batch batch;
+    batch.Erase(chunk_key);
+    batch.Write(storage_bytes_key, updated_storage);
+    m_db->WriteBatch(batch, true);
+
+    (void)m_blobs.Remove(chunk_id);
+    return true;
+}
+
 std::uint64_t FinalizedChunkStore::UsedBytes() const
 {
     const auto bytes = ReadCounter(m_namespace + "/storage-bytes");

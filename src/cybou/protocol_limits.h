@@ -26,6 +26,50 @@ inline constexpr std::uint32_t MAX_OPERATION_PAYLOAD_BYTES{128U * 1024U};
 /// \details 32 * 1024 * 1024 байт = 32 MiB на весь блок вместе с операциями и PoA certificate.
 inline constexpr std::uint32_t MAX_FINALIZED_BLOCK_BYTES{32U * 1024U * 1024U};
 
+/// \brief Базовый кредит доверия для удалённого сетевого хранения при 0 AUTH (5 GiB, DEC-269).
+inline constexpr std::uint64_t ONBOARDING_STORAGE_CREDIT_BYTES{5ULL * 1024ULL * 1024ULL * 1024ULL};
+
+/// \brief Коэффициент взаимного обязательства физического хранения (1:3, DEC-269).
+/// \details Предоставление 15 GiB локального дискового пространства обеспечивает 5 GiB в сети.
+inline constexpr std::uint32_t RECIPROCAL_STORAGE_RATIO{3};
+inline constexpr std::uint64_t LOCAL_ONBOARDING_STORAGE_BASELINE_BYTES{ONBOARDING_STORAGE_CREDIT_BYTES * RECIPROCAL_STORAGE_RATIO};
+
+/// \brief Вычисляет максимальную квоту удалённого хранения по финализированному AUTH (DEC-268, DEC-269).
+constexpr std::uint64_t ComputeStorageQuotaBytes(std::uint64_t authority) noexcept
+{
+    if (authority >= 10'000'000ULL) {
+        return UINT64_MAX; // Неограниченно для уровня валидатора (> 10M AUTH)
+    }
+    if (authority >= 1'000'000ULL) {
+        return 500ULL * 1024ULL * 1024ULL * 1024ULL; // 500 GiB
+    }
+    if (authority >= 100'000ULL) {
+        return 100ULL * 1024ULL * 1024ULL * 1024ULL; // 100 GiB
+    }
+    if (authority >= 10'000ULL) {
+        return 25ULL * 1024ULL * 1024ULL * 1024ULL; // 25 GiB
+    }
+    return ONBOARDING_STORAGE_CREDIT_BYTES; // 5 GiB baseline onboarding credit
+}
+
+/// \brief Вычисляет ограничение числа операций на блок по финализированному AUTH (DEC-268).
+constexpr std::uint32_t ComputeMaxOperationsPerBlock(std::uint64_t authority) noexcept
+{
+    if (authority >= 10'000'000ULL) {
+        return UINT32_MAX; // Неограниченно для уровня валидатора
+    }
+    if (authority >= 1'000'000ULL) {
+        return 100;
+    }
+    if (authority >= 100'000ULL) {
+        return 25;
+    }
+    if (authority >= 10'000ULL) {
+        return 5;
+    }
+    return 1; // 1 операция на блок для 0-AUTH для предотвращения флуда
+}
+
 } // namespace cybou
 
 #endif // CYBOU_PROTOCOL_LIMITS_H

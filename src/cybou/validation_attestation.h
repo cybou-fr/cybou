@@ -19,9 +19,9 @@
 
 namespace cybou {
 
-/// \brief Минимальный finalized AUTH для права подписывать Validation-attestation (текущее кодовое значение: 1M AUTH).
+/// \brief Минимальный finalized AUTH для права подписывать Validation-attestation (текущее кодовое значение: 10M AUTH).
 /// \details Строгое условие — authority > VALIDATION_AUTHORITY_THRESHOLD; точное значение берётся из этой константы.
-inline constexpr uint64_t VALIDATION_AUTHORITY_THRESHOLD{1'000'000};
+inline constexpr uint64_t VALIDATION_AUTHORITY_THRESHOLD{10'000'000};
 /// \brief Точный canonical byte size: NetworkBinding || OperationID || base BlockID || AccountID || подписи.
 /// \details 32 + 32 + 32 + 32 + 64 + 2420 байт = тело attestation плюс Ed25519 и ML-DSA-44 signature.
 inline constexpr size_t VALIDATION_ATTESTATION_SIZE{ 32 + 32 + 32 + 32 + 64 + 2420};

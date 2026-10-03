@@ -3,6 +3,8 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/finalized_chunk_store.h>
+#include <cybou/protocol_limits.h>
+#include <cybou/storage_audit.h>
 
 
 #include <boost/test/unit_test.hpp>
@@ -168,6 +170,89 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_binds_persistent_database_to_network)
         BOOST_CHECK(store.UsedBytes() == 0);
     }
     std::filesystem::remove_all(path);
+}
+
+BOOST_AUTO_TEST_CASE(finalized_chunk_store_prunes_admitted_chunk_on_object_revocation)
+{
+    AuthorizedFixture fixture;
+    cybou::ChunkBlobStore blobs({}, true);
+    cybou::FinalizedChunkStore store(blobs, {}, fixture.network_binding, 4096);
+    BOOST_REQUIRE(store.PutChunk(fixture.operation_id, fixture.chunk_id, fixture.bytes, fixture.proof, fixture.Lookup()).status ==
+        cybou::ChunkAdmissionStatus::STORED);
+    BOOST_CHECK(store.HasChunk(fixture.chunk_id));
+    BOOST_CHECK_EQUAL(store.UsedBytes(), fixture.bytes.size());
+
+    // Prune admitted chunk (DEC-271)
+    BOOST_CHECK(store.PruneAdmittedChunk(fixture.chunk_id));
+    BOOST_CHECK(!store.HasChunk(fixture.chunk_id));
+    BOOST_CHECK_EQUAL(store.UsedBytes(), 0U);
+    BOOST_CHECK(!blobs.Has(fixture.chunk_id));
+
+    // Pruning an unknown or already pruned chunk returns false
+    BOOST_CHECK(!store.PruneAdmittedChunk(fixture.chunk_id));
+}
+
+BOOST_AUTO_TEST_CASE(storage_audit_challenge_and_proof_verification)
+{
+    std::vector<unsigned char> data(1200);
+    for (size_t i{0}; i < data.size(); ++i) data[i] = static_cast<unsigned char>(i * 37 + 13);
+    const auto chunk_id = cybou::ComputeChunkId(data);
+
+    cybou::StorageAuditChallenge challenge{
+        .chunk_id = chunk_id,
+        .byte_offset = 100,
+        .nonce = {0x01, 0x02, 0x03},
+    };
+
+    const auto proof = cybou::CreateStorageAuditProof(challenge, data);
+    BOOST_REQUIRE(proof.has_value());
+    BOOST_CHECK(proof->chunk_id == chunk_id);
+    BOOST_CHECK_EQUAL(proof->byte_offset, 100U);
+    BOOST_CHECK(cybou::VerifyStorageAuditProof(*proof, data));
+
+    // Tampered data fails verification
+    auto tampered_data = data;
+    tampered_data[100] ^= 0xff;
+    BOOST_CHECK(!cybou::VerifyStorageAuditProof(*proof, tampered_data));
+
+    // Tampered nonce fails verification
+    auto tampered_proof = *proof;
+    tampered_proof.nonce[0] ^= 0xff;
+    BOOST_CHECK(!cybou::VerifyStorageAuditProof(tampered_proof, data));
+
+    // Tampered offset fails verification
+    auto tampered_offset_proof = *proof;
+    tampered_offset_proof.byte_offset = 200;
+    BOOST_CHECK(!cybou::VerifyStorageAuditProof(tampered_offset_proof, data));
+
+    // Challenge with wrong chunk_id fails to create proof
+    auto invalid_challenge = challenge;
+    invalid_challenge.chunk_id.fill(0xee);
+    BOOST_CHECK(!cybou::CreateStorageAuditProof(invalid_challenge, data).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(canonical_resource_ladder_and_storage_quotas)
+{
+    // Onboarding baseline: 0 AUTH -> 5 GiB remote storage, 15 GiB local reciprocal (DEC-269)
+    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(0), 5ULL * 1024 * 1024 * 1024);
+    BOOST_CHECK_EQUAL(cybou::ONBOARDING_STORAGE_CREDIT_BYTES, 5ULL * 1024 * 1024 * 1024);
+    BOOST_CHECK_EQUAL(cybou::RECIPROCAL_STORAGE_RATIO, 3U);
+    BOOST_CHECK_EQUAL(cybou::LOCAL_ONBOARDING_STORAGE_BASELINE_BYTES, 15ULL * 1024 * 1024 * 1024);
+
+    // Progressive scale (DEC-268)
+    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(10'000), 25ULL * 1024 * 1024 * 1024);
+    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(100'000), 100ULL * 1024 * 1024 * 1024);
+    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(1'000'000), 500ULL * 1024 * 1024 * 1024);
+    // Validator tier (>= 10M AUTH): unconstrained
+    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(10'000'000), UINT64_MAX);
+    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(100'000'000), UINT64_MAX);
+
+    // Operation limits per block (DEC-268)
+    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(0), 1U);
+    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(10'000), 5U);
+    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(100'000), 25U);
+    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(1'000'000), 100U);
+    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(10'000'000), UINT32_MAX);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
