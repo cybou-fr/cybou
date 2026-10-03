@@ -74,7 +74,7 @@ public:
     }
 
     std::optional<cybou::ChunkAdmissionResult> Put(const cybou::StorageEndpoint& provider,
-        const uint256& op_id, const cybou::ChunkId& chunk_id, std::span<const unsigned char> bytes,
+        const cybou::Hash256& op_id, const cybou::ChunkId& chunk_id, std::span<const unsigned char> bytes,
         const cybou::ChunkAuthorizationProof& proof) override
     {
         ++puts;
@@ -92,7 +92,7 @@ public:
     }
 
     std::optional<cybou::ChunkAuthorizationProof> GetProof(const cybou::StorageEndpoint& provider,
-        const uint256& operation_id, const cybou::ChunkId& chunk_id) override
+        const cybou::Hash256& operation_id, const cybou::ChunkId& chunk_id) override
     {
         if (offline.contains(provider)) return std::nullopt;
         return m_providers.at(provider)->GetFinalizedChunkAuthorizationProof(operation_id, chunk_id);

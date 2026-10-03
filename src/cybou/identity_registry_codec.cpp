@@ -109,7 +109,7 @@ std::optional<IdentityRegistry> DeserializeIdentityRegistry(std::span<const unsi
     IdentityRegistry registry;
     std::optional<AccountId> prior_account;
     for (uint32_t i{0}; i < *count; ++i) {
-        uint256 raw_id;
+        cybou::Hash256 raw_id;
         if (!reader.Read(std::span<unsigned char>{raw_id.begin(), raw_id.size()})) return std::nullopt;
         const AccountId account_id{raw_id};
         if (account_id.IsNull() || (prior_account && !(*prior_account < account_id))) return std::nullopt;

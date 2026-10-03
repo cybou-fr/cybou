@@ -21,9 +21,9 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
         root_seed[i] = static_cast<unsigned char>(i);
         device_seed[i] = static_cast<unsigned char>(i + 32);
     }
-    uint256 account_bytes{};
+    cybou::Hash256 account_bytes{};
     account_bytes.begin()[0] = 0x42;
-    uint256 network_binding{};
+    cybou::Hash256 network_binding{};
     network_binding.begin()[0] = 0x99;
     const cybou::AccountId account_id{account_bytes};
     const auto root = cybou::DeriveIdentityPublicKey(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
@@ -59,7 +59,7 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
     const auto decoded = cybou::DeserializeAccountCreateOp(*bytes);
     BOOST_REQUIRE(decoded);
     BOOST_CHECK(cybou::ValidateAccountCreateOp(*decoded, network_binding, 0, params) == cybou::AccountCreateError::NONE);
-    uint256 other_network{};
+    cybou::Hash256 other_network{};
     other_network.begin()[0] = 0x98;
     BOOST_CHECK(cybou::ValidateAccountCreateOp(*decoded, other_network, 0, params) == cybou::AccountCreateError::NETWORK_MISMATCH);
     auto damaged = *decoded;

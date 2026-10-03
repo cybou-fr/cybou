@@ -1,20 +1,11 @@
-// Copyright (c) 2026 Stanislav SAVELIEV
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
-
+// Copyright (c) 2026 CYBOU contributors
 #ifndef CYBOU_HEX_H
 #define CYBOU_HEX_H
-
-#include <uint256.h>
-
-#include <optional>
-#include <string_view>
-
+#include <cybou/hash256.h>
+#include <span>
 namespace cybou {
-
-/** Parse a user-entered 256-bit hex value; accepts an optional 0x prefix and short values. */
-std::optional<uint256> ParseUint256UserHex(std::string_view input);
-
-} // namespace cybou
-
-#endif // CYBOU_HEX_H
+/** Strict 64-digit forward hex, without prefixes or numeric padding. */
+std::optional<Hash256> ParseHash256UserHex(std::string_view input);
+std::string HexEncode(std::span<const unsigned char> bytes);
+}
+#endif

@@ -41,14 +41,14 @@ bool ValidFields(const PoaFinalityCertificate& certificate)
 
 } // namespace
 
-uint256 ComputePoaFinalityDigest(const uint256& network_binding, const uint256& block_id,
-    const uint64_t height, const uint256& parent_block_id)
+cybou::Hash256 ComputePoaFinalityDigest(const cybou::Hash256& network_binding, const cybou::Hash256& block_id,
+    const uint64_t height, const cybou::Hash256& parent_block_id)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/POA_FINALITY/V1"};
     unsigned char height_bytes[8];
     for (int i = 0; i < 8; ++i) height_bytes[i] = static_cast<unsigned char>(height >> (8 * i));
 
-    uint256 digest;
+    cybou::Hash256 digest;
     ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(network_binding.begin(), network_binding.size());
@@ -61,8 +61,8 @@ uint256 ComputePoaFinalityDigest(const uint256& network_binding, const uint256& 
 
 bool VerifyPoaFinalityCertificate(const PoaFinalityCertificate& certificate,
     const IdentityHybridPublicKey& genesis_finalizer_key,
-    const uint256& expected_network_binding, const uint256& expected_block_id,
-    const uint64_t expected_height, const uint256& expected_parent_block_id)
+    const cybou::Hash256& expected_network_binding, const cybou::Hash256& expected_block_id,
+    const uint64_t expected_height, const cybou::Hash256& expected_parent_block_id)
 {
     if (!ValidFields(certificate) ||
         genesis_finalizer_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||
@@ -79,7 +79,7 @@ bool VerifyPoaFinalityCertificate(const PoaFinalityCertificate& certificate,
 
 bool VerifyPoaCertificateForBlock(const PoaFinalityCertificate& certificate,
     const IdentityHybridPublicKey& genesis_finalizer_key,
-    const uint256& expected_network_binding, const CybouBlock& block)
+    const cybou::Hash256& expected_network_binding, const CybouBlock& block)
 {
     if (!SerializeBlock(block)) return false;
     const auto block_id = ComputeBlockId(block);

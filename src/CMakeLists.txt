@@ -24,10 +24,9 @@ if(NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
 endif()
 
 # CYBOU-owned dependency boundary for consensus-neutral hash-value types.
-# The shared uint256 implementation uses only standard-library code here.
+# The native Hash256 implementation uses only standard-library code.
 add_library(cybou_base STATIC
-  uint256.cpp
-  crypto/hex_base.cpp
+  cybou/hash256.cpp
 )
 
 # CYBOU consensus and identity implementation.

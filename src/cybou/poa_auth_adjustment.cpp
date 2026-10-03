@@ -47,7 +47,7 @@ std::optional<std::vector<unsigned char>> SerializeBody(const PoaAuthAdjustment&
 } // namespace
 
 std::optional<std::array<unsigned char, 32>> ComputePoaAuthAdjustmentDigest(
-    const uint256& network_binding, const PoaAuthAdjustment& adjustment)
+    const cybou::Hash256& network_binding, const PoaAuthAdjustment& adjustment)
 {
     constexpr std::string_view domain{"CYBOU/POA-AUTH-ADJUSTMENT/V1"};
     const auto body = SerializeBody(adjustment);
@@ -86,7 +86,7 @@ std::optional<PoaAuthAdjustment> DeserializePoaAuthAdjustment(std::span<const un
 }
 
 PoaAuthAdjustmentError ApplyPoaAuthAdjustment(const PoaAuthAdjustment& adjustment,
-    const uint256& network_binding, uint64_t block_height,
+    const cybou::Hash256& network_binding, uint64_t block_height,
     const IdentityHybridPublicKey& poa_key, CybouState& state)
 {
     const auto digest = ComputePoaAuthAdjustmentDigest(network_binding, adjustment);

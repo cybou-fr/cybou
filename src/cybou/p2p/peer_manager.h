@@ -47,7 +47,7 @@ struct PeerInfo {
 };
 
 struct PeerSubmitResult {
-    uint256 op_id;
+    cybou::Hash256 op_id;
     std::optional<OperationSubmitResult> acknowledgment;
     std::optional<std::pair<std::string, uint16_t>> endpoint;
     bool delivery_uncertain{false};
@@ -89,14 +89,14 @@ public:
     std::vector<PeerInfo> StorageEndpoints();
     std::optional<ChunkAdmissionResult> PutAuthorizedChunk(
         const std::string& address, uint16_t port, const StorageId& provider_id,
-        const uint256& publication_operation_id,
+        const cybou::Hash256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
         const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetChunkById(
         const std::string& address, uint16_t port, const StorageId& provider_id, const ChunkId& chunk_id);
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
         const std::string& address, uint16_t port, const StorageId& provider_id,
-        const uint256& publication_operation_id, const ChunkId& chunk_id);
+        const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id);
     void DisconnectAll();
 
     /** Dynamic peer auto-discovery */
@@ -112,7 +112,7 @@ private:
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;
     std::optional<Endpoint> m_ping_cursor;
     std::optional<Endpoint> m_discovery_cursor;
-    std::map<Endpoint, std::set<uint256>> m_announced_blocks;
+    std::map<Endpoint, std::set<cybou::Hash256>> m_announced_blocks;
     // Last finalized height each peer reported in a BLOCK_RESULT ack, so the
     // fanout can skip (and mark announced) heads the peer already finalized
     // without spending the per-cycle offer budget on ancient history.

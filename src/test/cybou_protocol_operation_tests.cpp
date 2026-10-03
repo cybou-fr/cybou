@@ -6,7 +6,7 @@
 #include <cybou/operation_relay.h>
 #include <cybou/protocol_limits.h>
 #include "cybou_test_identity_helpers.h"
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -33,7 +33,7 @@ TestIdentity MakeTestIdentity(unsigned char fill_byte)
     id.root_seed.fill(fill_byte);
     id.dev_seed = id.root_seed;
 
-    uint256 acc_bytes{};
+    cybou::Hash256 acc_bytes{};
     acc_bytes.begin()[0] = fill_byte;
     id.account_id = cybou::AccountId{acc_bytes};
 
@@ -45,9 +45,9 @@ TestIdentity MakeTestIdentity(unsigned char fill_byte)
     return id;
 }
 
-uint256 TestNetworkId()
+cybou::Hash256 TestNetworkId()
 {
-    uint256 net_id{};
+    cybou::Hash256 net_id{};
     net_id.begin()[0] = 0xAA;
     return net_id;
 }
@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(relay_precheck_requires_valid_identity_signatures)
     payment.authorization.signature.ed25519[0] ^= 1;
     BOOST_CHECK(!cybou::VerifyProtocolOperationRelayProofs(
         cybou::ProtocolOperation{payment}, TestNetworkId(), identities));
-    BOOST_CHECK(!cybou::VerifyProtocolOperationRelayProofs(valid, uint256{}, identities));
+    BOOST_CHECK(!cybou::VerifyProtocolOperationRelayProofs(valid, cybou::Hash256{}, identities));
 }
 
 BOOST_AUTO_TEST_CASE(system_lock_canonical_typed_roundtrip)

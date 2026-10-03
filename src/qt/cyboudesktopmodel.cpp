@@ -618,7 +618,7 @@ void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
         std::optional<cybou::CybouState> state;
         for (auto& entry : entries) {
             if (entry.counterparty_name.size() != 64) continue;
-            const auto raw = cybou::ParseUint256UserHex(entry.counterparty_name.toStdString());
+            const auto raw = cybou::ParseHash256UserHex(entry.counterparty_name.toStdString());
             if (!raw) continue;
             if (!state) {
                 const auto loaded = m_identity_service->GetNodeRuntime().GetStore().LoadState();
@@ -1234,7 +1234,7 @@ QString CybouDesktopModel::nameLabelProblem(const QString& label) const
     case E::CONSECUTIVE_HYPHENS: return tr("A name cannot contain two hyphens in a row.");
     case E::IDN_PREFIX: return tr("Names cannot start with \"xn--\".");
     case E::ALL_DIGITS: return tr("A name needs at least one letter.");
-    case E::RESERVED_NAME: return tr("This name is reserved.");
+    case E::PROTECTED_NAME: return tr("This name is reserved.");
     }
     return tr("This name is not valid.");
 }

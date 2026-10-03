@@ -555,7 +555,7 @@ struct CybouCoreApplicationAdapter::Session {
             }
             it = indexed ? file_overlay.erase(it) : std::next(it);
         }
-        std::map<std::string, uint256> operations;
+        std::map<std::string, cybou::Hash256> operations;
         std::set<std::string> starred;
         for (const auto& record : application->ListFiles()) {
             operations[ToHex(record.item.item_id)] = record.operation_id;
@@ -648,7 +648,7 @@ struct CybouCoreApplicationAdapter::Session {
         // An Identity without a name can be addressed by its full AccountID.
         const QByteArray bytes = QByteArray::fromHex(label.toLatin1());
         if (label.size() != 64 || bytes.size() != 32) return std::nullopt;
-        uint256 value;
+        cybou::Hash256 value;
         std::copy(bytes.rbegin(), bytes.rend(), value.begin());
         const cybou::AccountId account{value};
         if (loaded.state->identities.Find(account)) return account;

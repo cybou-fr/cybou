@@ -52,8 +52,8 @@ private:
 };
 
 std::optional<PoaFinalityCertificate> CreateCertificate(
-    const IdentityHybridSignature& signature, const uint256& network_binding,
-    const uint256& block_id, const uint64_t height, const uint256& parent_block_id)
+    const IdentityHybridSignature& signature, const cybou::Hash256& network_binding,
+    const cybou::Hash256& block_id, const uint64_t height, const cybou::Hash256& parent_block_id)
 {
     if (network_binding.IsNull() || block_id.IsNull() || height == 0 || parent_block_id.IsNull()) return std::nullopt;
     PoaFinalityCertificate certificate{
@@ -70,8 +70,8 @@ std::optional<PoaFinalityCertificate> CreateCertificate(
 
 } // namespace
 
-PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_binding,
-    const uint256& genesis_anchor, const IdentityHybridPublicKey& genesis_finalizer_key)
+PoaFinalizer::PoaFinalizer(KVStore& db, const cybou::Hash256& network_binding,
+    const cybou::Hash256& genesis_anchor, const IdentityHybridPublicKey& genesis_finalizer_key)
     : m_network_binding{network_binding}, m_public_key{genesis_finalizer_key},
       m_journal{db, network_binding, genesis_anchor, m_public_key}
 {
@@ -81,8 +81,8 @@ PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_binding,
     }
 }
 
-PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_binding,
-    const uint256& genesis_anchor, const RecoveryEntropy& operator_recovery_entropy,
+PoaFinalizer::PoaFinalizer(KVStore& db, const cybou::Hash256& network_binding,
+    const cybou::Hash256& genesis_anchor, const RecoveryEntropy& operator_recovery_entropy,
     const IdentityHybridPublicKey& genesis_finalizer_key)
     : PoaFinalizer{db, network_binding, genesis_anchor,
           ValidateRecoveryPoaKey(operator_recovery_entropy, genesis_finalizer_key)}
@@ -108,13 +108,13 @@ void PoaFinalizer::DisableSigner()
 }
 
 PoaJournalStatus PoaFinalizer::CheckCanonicalTip(
-    const uint64_t finalized_height, const uint256& finalized_tip)
+    const uint64_t finalized_height, const cybou::Hash256& finalized_tip)
 {
     return m_journal.CheckCanonicalTip(finalized_height, finalized_tip);
 }
 
 PoaSigningResult PoaFinalizer::SignFinality(const uint64_t finalized_height,
-    const uint256& finalized_tip, const CybouBlock& block)
+    const cybou::Hash256& finalized_tip, const CybouBlock& block)
 {
     if (!SerializeBlock(block)) return {.status = PoaSigningStatus::SIGNING_FAILED};
     const auto block_id = ComputeBlockId(block);

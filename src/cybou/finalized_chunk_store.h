@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 namespace cybou {
 
@@ -43,7 +43,7 @@ struct ChunkAdmissionResult {
 };
 
 /** Must resolve only RootPublications found in this full node's canonical finalized history. */
-using FinalizedPublicationLookup = std::function<std::optional<RootPublication>(const uint256& operation_id)>;
+using FinalizedPublicationLookup = std::function<std::optional<RootPublication>(const cybou::Hash256& operation_id)>;
 
 /** Content-addressed immutable provider store for finalized RootPublication chunks. */
 class FinalizedChunkStore final {
@@ -55,12 +55,12 @@ public:
     FinalizedChunkStore(const FinalizedChunkStore&) = delete;
     FinalizedChunkStore& operator=(const FinalizedChunkStore&) = delete;
 
-    ChunkAdmissionResult PutChunk(const uint256& publication_operation_id,
+    ChunkAdmissionResult PutChunk(const cybou::Hash256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
         const ChunkAuthorizationProof& proof, const FinalizedPublicationLookup& lookup);
     /** Returns a verified stored proof only while the admitted blob is present. */
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
-        const uint256& publication_operation_id, const ChunkId& chunk_id,
+        const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id,
         const FinalizedPublicationLookup& lookup) const;
     std::optional<std::vector<unsigned char>> GetChunk(const ChunkId& chunk_id) const;
     bool HasChunk(const ChunkId& chunk_id) const;

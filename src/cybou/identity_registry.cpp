@@ -29,7 +29,7 @@ std::optional<IdentityKeyId> Hash(std::string_view domain, std::span<const unsig
 }
 } // namespace
 
-std::optional<IdentityKeyId> ComputeIdentityRotateDigest(const uint256& network_binding, const IdentityRotate& request)
+std::optional<IdentityKeyId> ComputeIdentityRotateDigest(const cybou::Hash256& network_binding, const IdentityRotate& request)
 {
     if (network_binding.IsNull() || request.account_id.IsNull()) return std::nullopt;
     const auto recovery_id = ComputeRecoveryKeyId(request.new_recovery_key);
@@ -55,7 +55,7 @@ std::optional<IdentityKeyId> ComputeIdentityRotateDigest(const uint256& network_
 }
 
 std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
-    const uint256& network_binding, const IdentityOperationAuthorization& request)
+    const cybou::Hash256& network_binding, const IdentityOperationAuthorization& request)
 {
     const auto kind = static_cast<uint8_t>(request.kind);
     if (kind < 1 || kind > 5 || !Nonzero(request.payload_commitment) ||
@@ -74,7 +74,7 @@ std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
 }
 
 IdentityRegistryError IdentityRegistry::Register(const AccountCreateOp& create,
-    const uint256& network_binding, const uint64_t block_height, const CybouProtocolParameters& params)
+    const cybou::Hash256& network_binding, const uint64_t block_height, const CybouProtocolParameters& params)
 {
     if (ValidateAccountCreateOp(create, network_binding, block_height, params) != AccountCreateError::NONE) return IdentityRegistryError::INVALID_CREATE;
     if (m_accounts.contains(create.account_id)) return IdentityRegistryError::ACCOUNT_EXISTS;
@@ -98,7 +98,7 @@ IdentityRegistryError IdentityRegistry::Register(const AccountCreateOp& create,
     return IdentityRegistryError::NONE;
 }
 
-IdentityRegistryError IdentityRegistry::RotateIdentity(const IdentityRotate& request, const uint256& network_binding)
+IdentityRegistryError IdentityRegistry::RotateIdentity(const IdentityRotate& request, const cybou::Hash256& network_binding)
 {
     auto it = m_accounts.find(request.account_id);
     if (it == m_accounts.end()) return IdentityRegistryError::ACCOUNT_NOT_FOUND;
@@ -134,7 +134,7 @@ IdentityRegistryError IdentityRegistry::RotateIdentity(const IdentityRotate& req
 }
 
 IdentityRegistryError IdentityRegistry::AuthorizeOperation(
-    const IdentityOperationAuthorization& request, const uint256& network_binding)
+    const IdentityOperationAuthorization& request, const cybou::Hash256& network_binding)
 {
     auto account = m_accounts.find(request.account_id);
     if (account == m_accounts.end()) return IdentityRegistryError::ACCOUNT_NOT_FOUND;

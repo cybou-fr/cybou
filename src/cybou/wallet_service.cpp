@@ -113,7 +113,7 @@ WalletOperationResult CybouWalletService::SendPayment(const AccountId& recipient
         });
     if (!submitted) return {.error = WalletOperationError::SUBMIT_FAILED, .op_id = submitted.op_id,
         .error_message = submitted.error, .operation_phase = submitted.phase};
-    const uint256 op_id = submitted.op_id;
+    const cybou::Hash256 op_id = submitted.op_id;
     WalletLedgerEntry pending_entry{
         .entry_id = op_id,
         .kind = WalletEntryKind::PAYMENT,
@@ -170,7 +170,7 @@ WalletOperationResult CybouWalletService::LockToSystemBalance(const uint64_t amo
         });
     if (!submitted) return {.error = WalletOperationError::SUBMIT_FAILED, .op_id = submitted.op_id,
         .error_message = submitted.error, .operation_phase = submitted.phase};
-    const uint256 op_id = submitted.op_id;
+    const cybou::Hash256 op_id = submitted.op_id;
     WalletLedgerEntry pending_entry{
         .entry_id = op_id,
         .kind = WalletEntryKind::LOCK_TO_SYSTEM,
@@ -262,7 +262,7 @@ size_t CybouWalletService::SyncLedger()
 
         for (const auto& proto_op : fin_block.block.operations) {
             const auto op_id_opt = ComputeOperationId(proto_op);
-            const uint256 op_id = op_id_opt.value_or(uint256{});
+            const cybou::Hash256 op_id = op_id_opt.value_or(cybou::Hash256{});
 
             std::visit([&](const auto& op) {
                 using T = std::decay_t<decltype(op)>;

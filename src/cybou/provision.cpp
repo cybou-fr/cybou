@@ -6,7 +6,7 @@
 #include <cybou/crypto/cleanse.h>
 #include <cybou/network_genesis.h>
 #include <cybou/secret_file.h>
-#include <crypto/hex_base.h>
+#include <cybou/hex.h>
 
 #include <openssl/rand.h>
 
@@ -212,10 +212,10 @@ bool ProvisionDevnet(
            << "# DO NOT COMMIT THIS FILE TO GIT OR DISTRIBUTE ONLINE\n\n"
            << "MNEMONIC_PHRASE:\n" << JoinWords(prov->network_words) << "\n\n"
            << "MNEMONIC_WORDS:\n" << FormatWordsNumbered(prov->network_words) << '\n'
-           << "NETWORK_SEED_HEX: " << HexStr(prov->network_entropy) << '\n'
-           << "NETWORK_ID_HEX: " << HexStr(prov->network_id_bytes) << '\n'
-           << "NETWORK_ED25519_HEX: " << HexStr(prov->network_public_key.ed25519) << '\n'
-           << "NETWORK_ML_DSA_HEX: " << HexStr(prov->network_public_key.ml_dsa) << '\n';
+           << "NETWORK_SEED_HEX: " << cybou::HexEncode(prov->network_entropy) << '\n'
+           << "NETWORK_ID_HEX: " << cybou::HexEncode(prov->network_id_bytes) << '\n'
+           << "NETWORK_ED25519_HEX: " << cybou::HexEncode(prov->network_public_key.ed25519) << '\n'
+           << "NETWORK_ML_DSA_HEX: " << cybou::HexEncode(prov->network_public_key.ml_dsa) << '\n';
         if (!write_secret("network_root_secret.txt", ss.str())) return false;
     }
 
@@ -226,12 +226,12 @@ bool ProvisionDevnet(
            << "# Central Authority Desktop Material\n\n"
            << "MNEMONIC_PHRASE:\n" << JoinWords(prov->cybou_words) << "\n\n"
            << "MNEMONIC_WORDS:\n" << FormatWordsNumbered(prov->cybou_words) << '\n'
-           << "CYBOU_SEED_HEX: " << HexStr(prov->cybou_entropy) << '\n'
+           << "CYBOU_SEED_HEX: " << cybou::HexEncode(prov->cybou_entropy) << '\n'
            << "ACCOUNT_ID_HEX: " << prov->cybou_account_id.Value().GetHex() << '\n'
-           << "RECOVERY_KEY_ID_HEX: " << HexStr(prov->cybou_recovery_key_id) << '\n'
-           << "POA_FINALIZER_KEY_ID_HEX: " << HexStr(prov->cybou_poa_key_id) << '\n'
-           << "POA_ED25519_HEX: " << HexStr(prov->cybou_poa_pub.ed25519) << '\n'
-           << "POA_ML_DSA_HEX: " << HexStr(prov->cybou_poa_pub.ml_dsa) << '\n';
+           << "RECOVERY_KEY_ID_HEX: " << cybou::HexEncode(prov->cybou_recovery_key_id) << '\n'
+           << "POA_FINALIZER_KEY_ID_HEX: " << cybou::HexEncode(prov->cybou_poa_key_id) << '\n'
+           << "POA_ED25519_HEX: " << cybou::HexEncode(prov->cybou_poa_pub.ed25519) << '\n'
+           << "POA_ML_DSA_HEX: " << cybou::HexEncode(prov->cybou_poa_pub.ml_dsa) << '\n';
         if (!write_secret("cybou_identity_secret.txt", ss.str())) return false;
     }
 
@@ -241,11 +241,11 @@ bool ProvisionDevnet(
         ss << "=================================================================\n"
            << "               CYBOU DEVNET PROVISIONING SUMMARY\n"
            << "=================================================================\n\n"
-           << "Network Public Key (NetworkID):\n  " << HexStr(prov->network_id_bytes) << "\n\n"
+           << "Network Public Key (NetworkID):\n  " << cybou::HexEncode(prov->network_id_bytes) << "\n\n"
            << "Genesis State Root:\n  " << prov->genesis_state_root.GetHex() << "\n\n"
-           << "PoA Finalizer Key ID:\n  " << HexStr(prov->cybou_poa_key_id) << "\n\n"
+           << "PoA Finalizer Key ID:\n  " << cybou::HexEncode(prov->cybou_poa_key_id) << "\n\n"
            << "cybou.cybou Account ID:\n  " << prov->cybou_account_id.Value().GetHex() << "\n\n"
-           << "cybou.cybou Recovery Key ID:\n  " << HexStr(prov->cybou_recovery_key_id) << "\n"
+           << "cybou.cybou Recovery Key ID:\n  " << cybou::HexEncode(prov->cybou_recovery_key_id) << "\n"
            << "  Genesis allocation: 100,000,000 CYBOU, 1,000,001 AUTH, name cybou\n\n"
            << "Signed Genesis Size: " << prov->serialized_signed_genesis.size() << " bytes\n"
            << "Genesis State Size:  " << prov->serialized_genesis_state.size() << " bytes\n";
@@ -311,7 +311,7 @@ bool ProvisionDevnet(
     std::cout << "DEVNET provisioned successfully!\n"
               << "Private secrets saved to:  " << private_dir.string() << "\n"
               << "Public constants saved to: " << constants_header_path.string() << "\n"
-              << "NetworkID: " << HexStr(prov->network_id_bytes) << "\n";
+              << "NetworkID: " << cybou::HexEncode(prov->network_id_bytes) << "\n";
 
     return true;
 }

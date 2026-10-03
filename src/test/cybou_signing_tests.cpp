@@ -4,7 +4,7 @@
 
 #include <cybou/signing.h>
 
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(user_ed25519_key_derivation_signing_and_verification)
     BOOST_CHECK(!cybou::VerifyUserSignature(wrong_pub, *sig, msg));
 
     // Null public key
-    BOOST_CHECK(!cybou::VerifyUserSignature(uint256{}, *sig, msg));
+    BOOST_CHECK(!cybou::VerifyUserSignature(cybou::Hash256{}, *sig, msg));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

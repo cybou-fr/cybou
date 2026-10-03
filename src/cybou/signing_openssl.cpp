@@ -36,7 +36,7 @@ bool VerifyComponent(
 } // namespace
 
 bool VerifyUserSignature(
-    const uint256& public_key,
+    const cybou::Hash256& public_key,
     const std::span<const unsigned char> signature,
     const std::span<const unsigned char> message)
 {
@@ -48,12 +48,12 @@ bool VerifyUserSignature(
         message);
 }
 
-std::optional<uint256> DeriveEd25519PublicKey(const std::span<const unsigned char, 32> private_key)
+std::optional<cybou::Hash256> DeriveEd25519PublicKey(const std::span<const unsigned char, 32> private_key)
 {
     PKey key{EVP_PKEY_new_raw_private_key_ex(
         nullptr, "ED25519", nullptr, private_key.data(), private_key.size()), EVP_PKEY_free};
     if (!key) return std::nullopt;
-    uint256 pub;
+    cybou::Hash256 pub;
     size_t len{pub.size()};
     if (EVP_PKEY_get_raw_public_key(key.get(), pub.begin(), &len) != 1 || len != pub.size()) {
         return std::nullopt;

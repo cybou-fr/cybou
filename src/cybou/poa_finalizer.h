@@ -30,10 +30,10 @@ struct PoaSigningResult {
 /** Journals every intent before calling its local signer. */
 class PoaFinalizer final {
 public:
-    PoaFinalizer(KVStore& db, const uint256& network_binding,
-        const uint256& genesis_anchor, const IdentityHybridPublicKey& genesis_finalizer_key);
-    PoaFinalizer(KVStore& db, const uint256& network_binding,
-        const uint256& genesis_anchor, const RecoveryEntropy& operator_recovery_entropy,
+    PoaFinalizer(KVStore& db, const cybou::Hash256& network_binding,
+        const cybou::Hash256& genesis_anchor, const IdentityHybridPublicKey& genesis_finalizer_key);
+    PoaFinalizer(KVStore& db, const cybou::Hash256& network_binding,
+        const cybou::Hash256& genesis_anchor, const RecoveryEntropy& operator_recovery_entropy,
         const IdentityHybridPublicKey& genesis_finalizer_key);
     ~PoaFinalizer() = default;
     PoaFinalizer(const PoaFinalizer&) = delete;
@@ -41,18 +41,18 @@ public:
     PoaFinalizer(PoaFinalizer&&) = delete;
     PoaFinalizer& operator=(PoaFinalizer&&) = delete;
 
-    PoaJournalStatus CheckCanonicalTip(uint64_t finalized_height, const uint256& finalized_tip);
+    PoaJournalStatus CheckCanonicalTip(uint64_t finalized_height, const cybou::Hash256& finalized_tip);
     bool SafetyHalted() const { return m_journal.SafetyHalted(); }
     bool EnableSigner(PoaSignerRef signer);
     void DisableSigner();
     bool SignerEnabled() const { return static_cast<bool>(m_signer); }
-    PoaSigningResult SignFinality(uint64_t finalized_height, const uint256& finalized_tip,
+    PoaSigningResult SignFinality(uint64_t finalized_height, const cybou::Hash256& finalized_tip,
         const CybouBlock& block);
     /** Fill the PoA signature of a domain-separated AUTH adjustment. */
     bool SignAuthAdjustment(PoaAuthAdjustment& adjustment) const;
 
 private:
-    const uint256 m_network_binding;
+    const cybou::Hash256 m_network_binding;
     IdentityHybridPublicKey m_public_key;
     PoaSignerRef m_signer;
     PoaSigningJournal m_journal;

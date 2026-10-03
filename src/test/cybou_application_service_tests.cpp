@@ -634,7 +634,7 @@ BOOST_AUTO_TEST_CASE(clean_restored_placements_are_audited_and_repaired)
     std::set<cybou::StorageEndpoint> holders;
     for (const auto& replicas : restored->replicas) holders.insert(replicas.begin(), replicas.end());
     for (const auto& endpoint : holders) network.offline.insert(endpoint);
-    std::optional<std::pair<uint256, cybou::PublicationDurability>> audited;
+    std::optional<std::pair<cybou::Hash256, cybou::PublicationDurability>> audited;
     for (int i = 0; i < 8 && !(audited && audited->first == operation); ++i) {
         audited = owner.storage->AuditNextPlacement(64);
     }

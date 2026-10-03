@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_CASE(test_network_key_and_signed_genesis_lifecycle)
     cybou::NetworkGenesis spec;
     spec.version = cybou::CYBOU_NETWORK_GENESIS_VERSION;
     spec.network_public_key = *net_pub;
-    spec.genesis_state_root = uint256::ONE;
+    spec.genesis_state_root = cybou::Hash256::ONE;
     spec.poa_finalizer_public_key = *poa_pub;
     spec.protocol_parameters.account_creation_work_bits = 8;
     spec.protocol_parameters.max_account_creates_per_block = 16;
@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(test_network_key_and_signed_genesis_lifecycle)
 
     // Tampering test: modify state root and check failure
     auto tampered = spec;
-    tampered.genesis_state_root = uint256::ZERO;
+    tampered.genesis_state_root = cybou::Hash256::ZERO;
     BOOST_CHECK(cybou::VerifySignedNetworkGenesis(tampered) != cybou::NetworkGenesisError::NONE);
     BOOST_CHECK(!cybou::VerifiedNetworkGenesis::Create(tampered).has_value());
 }

@@ -1,3 +1,4 @@
+#include <cybou/hex.h>
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
@@ -114,7 +115,7 @@ void CybouDesktopController::start()
         const auto& network = cybou::RequireOfficialNetwork("devnet");
         const auto& genesis = network.genesis_state;
         m_model->setNetworkInfo(QStringLiteral("CYBOU DEVNET"),
-            QString::fromStdString(HexStr(network.genesis.GetNetworkId())));
+            QString::fromStdString(cybou::HexEncode(network.genesis.GetNetworkId())));
         const std::filesystem::path data_dir = m_data_directory / "cybou_state";
         bool p2p_port_ok{false};
         const int p2p_port = qEnvironmentVariableIntValue("CYBOU_DEV_P2P_PORT", &p2p_port_ok);

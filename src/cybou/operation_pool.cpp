@@ -23,21 +23,6 @@ PoolAdmission OperationPool::Admit(const ProtocolOperation& operation,
         const auto loaded = m_store.LoadState();
         if (!loaded || !loaded.state) return PoolAdmission::REJECTED;
         if (loaded.state->accounts.contains(create->account_id)) {
-            // A pre-index AccountCreate can still be retried exactly. Never
-            // treat a different operation for the same AccountID as finalized.
-            const auto head = m_store.GetFinalizedHead();
-            if (!head) return PoolAdmission::REJECTED;
-            for (uint64_t height = head->height; height > 0; --height) {
-                const auto finalized = m_store.GetBlockAtHeight(height);
-                if (!finalized) return PoolAdmission::REJECTED;
-                for (const auto& prior : finalized->block.operations) {
-                    if (const auto* previous = std::get_if<AccountCreateOp>(&prior);
-                        previous && previous->account_id == create->account_id) {
-                        return prior == operation ? PoolAdmission::ALREADY_FINALIZED
-                                                  : PoolAdmission::REJECTED;
-                    }
-                }
-            }
             return PoolAdmission::REJECTED;
         }
     }
@@ -68,9 +53,9 @@ PoolAdmission OperationPool::Admit(const ProtocolOperation& operation,
     return PoolAdmission::ACCEPTED;
 }
 
-std::vector<uint256> OperationPool::Ids() const
+std::vector<cybou::Hash256> OperationPool::Ids() const
 {
-    std::vector<uint256> ids;
+    std::vector<cybou::Hash256> ids;
     ids.reserve(m_entries.size());
     for (const auto& entry : m_entries) ids.push_back(entry.id);
     return ids;
@@ -84,11 +69,11 @@ std::vector<ProtocolOperation> OperationPool::Snapshot() const
     return operations;
 }
 
-std::vector<uint256> OperationPool::Revalidate()
+std::vector<cybou::Hash256> OperationPool::Revalidate()
 {
     auto previous = std::move(m_entries);
     Clear();
-    std::vector<uint256> dropped;
+    std::vector<cybou::Hash256> dropped;
     for (const auto& entry : previous) {
         if (Admit(entry.operation, entry.source_peer) != PoolAdmission::ACCEPTED) dropped.push_back(entry.id);
     }

@@ -42,7 +42,7 @@ enum class PublicationJobPhase : std::uint8_t {
 
 struct PublicationJobResult {
     PublicationJobPhase phase{PublicationJobPhase::NEEDS_ATTENTION};
-    uint256 operation_id;
+    cybou::Hash256 operation_id;
     std::uint64_t finalized_height{0};
     std::string error;
     /** 0..100 toward the remote replica target while SECURING; -1 when unknown. */

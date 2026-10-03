@@ -9,7 +9,7 @@
 #include <cybou/keystore.h>
 #include <cybou/node_runtime.h>
 #include <cybou/protocol_operation.h>
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <cstdint>
 #include <condition_variable>
@@ -36,7 +36,7 @@ enum class WalletEntryFinality : uint8_t {
 };
 
 struct WalletLedgerEntry {
-    uint256 entry_id;
+    cybou::Hash256 entry_id;
     WalletEntryKind kind{WalletEntryKind::ONBOARDING_BONUS};
     int64_t amount{0};        // Positive for credit, negative for debit
     bool system_side{true};    // true: System Balance; false: Balance
@@ -63,7 +63,7 @@ enum class WalletOperationError : uint8_t {
 
 struct WalletOperationResult {
     WalletOperationError error{WalletOperationError::NONE};
-    uint256 op_id{};
+    cybou::Hash256 op_id{};
     std::string error_message{};
     IdentityOperationPhase operation_phase{IdentityOperationPhase::PREPARED};
 

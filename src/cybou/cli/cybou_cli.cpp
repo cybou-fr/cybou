@@ -254,12 +254,12 @@ int NetworkInfo(const Options& opts)
     Allow(opts, {"network"});
     const auto& network = RequireOfficialNetwork(opts.Require("network"));
     std::cout << "network=" << network.name
-              << "\nnetwork_id=" << HexStr(network.genesis.GetNetworkId())
+              << "\nnetwork_id=" << cybou::HexEncode(network.genesis.GetNetworkId())
               << "\nnetwork_binding=" << ComputeNetworkBinding(network.genesis.GetNetworkPublicKey()).GetHex()
               << "\ngenesis=" << network.genesis.GetGenesisAnchor().GetHex() << '\n';
     for (const auto& locator : network.rendezvous_locators) {
         std::cout << "bootstrap=" << locator.host << ':' << locator.port
-                  << " spki_sha256=" << HexStr(locator.tls_spki_sha256) << '\n';
+                  << " spki_sha256=" << cybou::HexEncode(locator.tls_spki_sha256) << '\n';
     }
     return 0;
 }
@@ -313,7 +313,7 @@ int NetworkFollow(const Options& opts)
     size_t preferred_peer{0};
     while (!stopping) {
         const auto status = runtime.GetStatus();
-        if (!status.is_initialized) throw std::runtime_error("observer state unavailable");
+        if (!status.is_initialized) throw std::runtime_error("node state unavailable");
         if (until_height && status.finalized_height >= *until_height) return 0;
         bool progress{false};
         for (size_t offset = 0; offset < endpoints.size() && !stopping; ++offset) {
@@ -334,7 +334,7 @@ int NetworkFollow(const Options& opts)
                 continue;
             }
             const auto height = runtime.GetFinalizedHeight();
-            if (!height) throw std::runtime_error("observer height unavailable");
+            if (!height) throw std::runtime_error("node height unavailable");
             const uint64_t batch = until_height ? std::min<uint64_t>(100, *until_height - *height) : 100;
             const auto result = peers.SyncFromPeer(host, port, batch);
             if (result.blocks_applied > 0) {
@@ -392,7 +392,7 @@ int OperationCommand(const std::string& action, const Options& opts)
     if (action == "status") {
         Allow(opts, {"network", "data-dir", "operation-id"});
         const auto& network = RequireOfficialNetwork(opts.Require("network"));
-        const auto op_id = ParseUint256UserHex(opts.Require("operation-id"));
+        const auto op_id = ParseHash256UserHex(opts.Require("operation-id"));
         if (!op_id || op_id->IsNull()) throw std::runtime_error("invalid OperationID");
         auto node = StartNode(network, RuntimeConfig(network, opts.Require("data-dir")));
         const auto result = node->Runtime().FindFinalizedOperation(*op_id);
@@ -590,7 +590,7 @@ int StorageCommand(const std::string& action, const Options& opts)
     auto node = StartNode(network, std::move(config));
     auto& runtime = node->Runtime();
     if (action == "verify") {
-        // ChunkID uses displayed raw BLAKE3 bytes, not uint256 display order.
+        // ChunkID uses displayed raw BLAKE3 bytes, not cybou::Hash256 display order.
         const auto text = opts.Require("chunk-id");
         if (text.size() != 64) throw std::runtime_error("ChunkID must be 64 raw hex characters");
         ChunkId chunk{};
@@ -622,7 +622,7 @@ int StorageCommand(const std::string& action, const Options& opts)
     const bool unlocked = identity.LoadVault(password);
     crypto::CleanseMemory(password.data(), password.size());
     if (!unlocked || !identity.GetAccountId()) throw std::runtime_error("cannot unlock Identity vault");
-    const auto operation = ParseUint256UserHex(opts.Require("operation-id"));
+    const auto operation = ParseHash256UserHex(opts.Require("operation-id"));
     if (!operation) throw std::runtime_error("invalid OperationID");
     PrivateApplicationStore db{identity.GetKeyStore(), IdentityDataDirectory(opts.Require("data-dir"), *identity.GetAccountId())};
     RuntimeStorageTransport transport{runtime};

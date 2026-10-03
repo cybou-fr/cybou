@@ -50,8 +50,8 @@ BOOST_AUTO_TEST_CASE(local_blob_survives_restart_and_provider_admission_without_
     publication.root_chunk_id = id;
     publication.chunk_authorization_root = commitment->root;
     publication.chunk_count = commitment->chunk_count;
-    const uint256 operation_id{uint8_t{1}};
-    const auto lookup = [operation_id, publication](const uint256& candidate)
+    const cybou::Hash256 operation_id{uint8_t{1}};
+    const auto lookup = [operation_id, publication](const cybou::Hash256& candidate)
         -> std::optional<cybou::RootPublication> {
         return candidate == operation_id ? std::optional{publication} : std::nullopt;
     };
@@ -118,8 +118,8 @@ BOOST_AUTO_TEST_CASE(provider_startup_checks_size_not_content_and_put_heals_dama
     publication.root_chunk_id = id;
     publication.chunk_authorization_root = commitment->root;
     publication.chunk_count = commitment->chunk_count;
-    const uint256 operation_id{uint8_t{7}};
-    const auto lookup = [operation_id, publication](const uint256& candidate)
+    const cybou::Hash256 operation_id{uint8_t{7}};
+    const auto lookup = [operation_id, publication](const cybou::Hash256& candidate)
         -> std::optional<cybou::RootPublication> {
         return candidate == operation_id ? std::optional{publication} : std::nullopt;
     };

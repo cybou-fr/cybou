@@ -9,7 +9,7 @@
 #include <cybou/chunk_id.h>
 #include <cybou/finalized_chunk_store.h>
 #include <cybou/private_application_store.h>
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <compare>
 #include <cstdint>
@@ -51,12 +51,12 @@ public:
     /** Currently reachable remote storage providers, never this node itself. */
     virtual std::vector<StorageEndpoint> Providers() = 0;
     virtual std::optional<ChunkAdmissionResult> Put(const StorageEndpoint& provider,
-        const uint256& publication_operation_id, const ChunkId& chunk_id,
+        const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id,
         std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof) = 0;
     virtual std::optional<std::vector<unsigned char>> Get(const StorageEndpoint& provider,
         const ChunkId& chunk_id) = 0;
     virtual std::optional<ChunkAuthorizationProof> GetProof(const StorageEndpoint& provider,
-        const uint256& publication_operation_id, const ChunkId& chunk_id) = 0;
+        const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id) = 0;
 };
 
 /** CYP2 PUT_AUTHORIZED_CHUNK / GET_CHUNK_BY_ID over the runtime's connected peers. */
@@ -65,12 +65,12 @@ public:
     explicit RuntimeStorageTransport(CybouNodeRuntime& runtime) : m_runtime{runtime} {}
     std::vector<StorageEndpoint> Providers() override;
     std::optional<ChunkAdmissionResult> Put(const StorageEndpoint& provider,
-        const uint256& publication_operation_id, const ChunkId& chunk_id,
+        const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id,
         std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof) override;
     std::optional<std::vector<unsigned char>> Get(const StorageEndpoint& provider,
         const ChunkId& chunk_id) override;
     std::optional<ChunkAuthorizationProof> GetProof(const StorageEndpoint& provider,
-        const uint256& publication_operation_id, const ChunkId& chunk_id) override;
+        const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id) override;
 
 private:
     CybouNodeRuntime& m_runtime;
@@ -113,17 +113,17 @@ public:
 
     /** Places every chunk of a finalized publication toward the remote target.
      * Idempotent: call again to retry. leaves are the ChunkIDs in authorization order. */
-    PublicationDurability Secure(const uint256& publication_operation_id, std::span<const ChunkId> leaves);
+    PublicationDurability Secure(const cybou::Hash256& publication_operation_id, std::span<const ChunkId> leaves);
     /** Rebuilds the exact leaf order from provider-held proofs for candidate chunks. */
-    PublicationDurability Rebuild(const uint256& publication_operation_id,
+    PublicationDurability Rebuild(const cybou::Hash256& publication_operation_id,
         std::span<const ChunkId> candidate_chunks);
     /** Checks whether a candidate chunk is a leaf of this finalized publication. */
     std::optional<ChunkAuthorizationProof> GetAuthorizationProof(
-        const uint256& publication_operation_id, const ChunkId& chunk_id);
+        const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id);
     /** Resumes placement for a publication already known to this service. */
-    PublicationDurability Resume(const uint256& publication_operation_id);
+    PublicationDurability Resume(const cybou::Hash256& publication_operation_id);
     /** Re-reads every recorded replica, drops missing/corrupt ones and repairs to target. */
-    PublicationDurability Audit(const uint256& publication_operation_id);
+    PublicationDurability Audit(const cybou::Hash256& publication_operation_id);
     /**
      * Periodic durability maintenance over every placement this Identity
      * knows (published here, restored on a clean machine, or rebuilt after
@@ -132,16 +132,16 @@ public:
      * copies and, if the target is no longer met, repairs immediately.
      * Returns the audited publication and its resulting durability.
      */
-    std::optional<std::pair<uint256, PublicationDurability>> AuditNextPlacement(std::size_t max_chunks);
+    std::optional<std::pair<cybou::Hash256, PublicationDurability>> AuditNextPlacement(std::size_t max_chunks);
     /** Adds an existing placement to the maintained set (backfill for older databases). */
-    bool Track(const uint256& publication_operation_id);
-    std::optional<PublicationDurability> GetDurability(const uint256& publication_operation_id);
+    bool Track(const cybou::Hash256& publication_operation_id);
+    std::optional<PublicationDurability> GetDurability(const cybou::Hash256& publication_operation_id);
     /** Read-only placement view for diagnostics and smoke tests. */
     struct PlacementView {
         std::vector<ChunkId> leaves;
         std::vector<std::vector<StorageEndpoint>> replicas;
     };
-    std::optional<PlacementView> DescribePlacement(const uint256& publication_operation_id);
+    std::optional<PlacementView> DescribePlacement(const cybou::Hash256& publication_operation_id);
 
     /** Local encrypted blob, else the first BLAKE3-valid provider copy (cached locally). */
     std::optional<std::vector<unsigned char>> Fetch(const ChunkId& chunk_id);
@@ -150,7 +150,7 @@ public:
 
 private:
     struct Placement;
-    std::optional<Placement> Load(const uint256& operation_id) const;
+    std::optional<Placement> Load(const cybou::Hash256& operation_id) const;
     bool Save(const Placement& placement);
     PublicationDurability Place(Placement& placement);
     PublicationDurability Summarize(const Placement& placement) const;
@@ -163,9 +163,9 @@ private:
     const std::uint8_t m_target;
     std::mutex m_mutex;
     /** Next chunk to audit per publication; restarting from 0 is harmless. */
-    std::map<uint256, std::size_t> m_audit_cursor;
+    std::map<cybou::Hash256, std::size_t> m_audit_cursor;
     std::size_t m_audit_placement_cursor{0};
-    std::vector<uint256> PlacementIndex() const;
+    std::vector<cybou::Hash256> PlacementIndex() const;
 };
 
 } // namespace cybou

@@ -12,7 +12,7 @@ namespace cybou {
 
 BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
-    const uint256& network_binding, uint64_t block_height,
+    const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params,
     const IdentityHybridPublicKey* poa_key)
 {

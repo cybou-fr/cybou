@@ -5,7 +5,7 @@
 #ifndef CYBOU_KV_STORE_H
 #define CYBOU_KV_STORE_H
 
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -118,15 +118,15 @@ struct LocalRecordCodec<T, std::enable_if_t<std::is_unsigned_v<T>>> {
 };
 
 template <>
-struct LocalRecordCodec<uint256> {
-    static std::vector<unsigned char> Encode(const uint256& value)
+struct LocalRecordCodec<cybou::Hash256> {
+    static std::vector<unsigned char> Encode(const cybou::Hash256& value)
     {
         return {value.begin(), value.end()};
     }
-    static bool Decode(const std::span<const unsigned char> bytes, uint256& value)
+    static bool Decode(const std::span<const unsigned char> bytes, cybou::Hash256& value)
     {
-        if (bytes.size() < uint256::size()) return false;
-        std::copy_n(bytes.begin(), uint256::size(), value.begin());
+        if (bytes.size() < cybou::Hash256::size()) return false;
+        std::copy_n(bytes.begin(), cybou::Hash256::size(), value.begin());
         return true;
     }
 };

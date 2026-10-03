@@ -77,7 +77,7 @@ std::optional<std::array<unsigned char, 32>> ComputeAccountCreateWorkHash(const 
 }
 
 std::optional<std::array<unsigned char, 32>> ComputeAccountCreatePopDigest(
-    const uint256& network_binding, const AccountId& account_id,
+    const cybou::Hash256& network_binding, const AccountId& account_id,
     const IdentityAuthorization& authorization,
     std::span<const unsigned char, 32> kem_package_id)
 {
@@ -156,7 +156,7 @@ std::optional<AccountCreateOp> DeserializeAccountCreateOp(std::span<const unsign
 }
 
 AccountCreateError ValidateAccountCreateOp(
-    const AccountCreateOp& op, const uint256& network_binding,
+    const AccountCreateOp& op, const cybou::Hash256& network_binding,
     uint64_t block_height, const CybouProtocolParameters& params)
 {
     if (!SerializeAccountCreateOp(op)) return AccountCreateError::INVALID_FORMAT;

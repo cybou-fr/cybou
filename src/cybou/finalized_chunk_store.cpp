@@ -48,7 +48,7 @@ std::string ChunkKey(const std::string& name_space, const ChunkId& id)
     return name_space + "/chunk/" + Hex(id);
 }
 
-std::string PublicationChunkKey(const std::string& name_space, const uint256& publication_id, const ChunkId& id)
+std::string PublicationChunkKey(const std::string& name_space, const cybou::Hash256& publication_id, const ChunkId& id)
 {
     return name_space + "/publication-chunk/" + publication_id.GetHex() + "/" + Hex(id);
 }
@@ -152,7 +152,7 @@ std::optional<std::uint64_t> FinalizedChunkStore::ReadCounter(const std::string&
     return value;
 }
 
-ChunkAdmissionResult FinalizedChunkStore::PutChunk(const uint256& publication_operation_id,
+ChunkAdmissionResult FinalizedChunkStore::PutChunk(const cybou::Hash256& publication_operation_id,
     const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes,
     const ChunkAuthorizationProof& proof, const FinalizedPublicationLookup& lookup)
 {
@@ -220,7 +220,7 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const uint256& publication_op
 }
 
 std::optional<ChunkAuthorizationProof> FinalizedChunkStore::GetChunkAuthorizationProof(
-    const uint256& publication_operation_id, const ChunkId& chunk_id,
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id,
     const FinalizedPublicationLookup& lookup) const
 {
     if (publication_operation_id.IsNull() || chunk_id == ChunkId{} || !lookup) return std::nullopt;

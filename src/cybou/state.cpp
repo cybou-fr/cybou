@@ -116,7 +116,7 @@ bool CreditCentralAuthorityFee(CybouState& state, uint64_t fee)
 }
 
 AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
-    const uint256& network_binding, uint64_t block_height,
+    const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
     if (state.accounts.size() != state.identities.Accounts().size()) return AccountCreateStateError::INCONSISTENT_STATE;
@@ -160,7 +160,7 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
 }
 
 NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
-    const uint256& network_binding, uint64_t block_height,
+    const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
     if (op.commit.version != NAME_REGISTRY_VERSION) {
@@ -199,7 +199,7 @@ NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
 }
 
 NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
-    const uint256& network_binding, uint64_t block_height,
+    const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
     if (op.reveal.version != NAME_REGISTRY_VERSION) {
@@ -267,7 +267,7 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
 }
 
 RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
-    const uint256& network_binding, const CybouProtocolParameters& params, CybouState& state)
+    const cybou::Hash256& network_binding, const CybouProtocolParameters& params, CybouState& state)
 {
     if (op.authorization.kind != IdentityOperationKind::ROOT_PUBLICATION) {
         return RootPublicationError::INVALID_AUTHORIZATION;
@@ -313,7 +313,7 @@ StateValidationError ValidateCybouState(const CybouState& state)
     for (const auto& [recovery_id, allocation] : state.genesis_allocations) {
         const auto validity = ValidateNameLabel(allocation.label);
         if (!allocation.label.empty() && validity != NameValidationError::NONE &&
-            validity != NameValidationError::RESERVED_NAME) return StateValidationError::INVALID_NAME_REGISTRY;
+            validity != NameValidationError::PROTECTED_NAME) return StateValidationError::INVALID_NAME_REGISTRY;
         if (!allocation.label.empty() && !allocation_labels.insert(allocation.label).second) {
             return StateValidationError::INVALID_NAME_REGISTRY;
         }
@@ -329,7 +329,7 @@ StateValidationError ValidateCybouState(const CybouState& state)
     for (const auto& [label, acc] : state.names.names) {
         const auto validity = ValidateNameLabel(label);
         if (validity != NameValidationError::NONE &&
-            !(validity == NameValidationError::RESERVED_NAME && genesis_granted(label, acc))) {
+            !(validity == NameValidationError::PROTECTED_NAME && genesis_granted(label, acc))) {
             return StateValidationError::INVALID_NAME_REGISTRY;
         }
         auto it = state.names.account_names.find(acc);
@@ -480,12 +480,12 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
     return state;
 }
 
-std::optional<uint256> CybouStateHash(const CybouState& state)
+std::optional<cybou::Hash256> CybouStateHash(const CybouState& state)
 {
     constexpr std::string_view domain{"CYBOU/STATE/V6"};
     const auto bytes = SerializeCybouState(state);
     if (!bytes) return std::nullopt;
-    uint256 hash;
+    cybou::Hash256 hash;
     if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), std::span<const unsigned char>{*bytes}}, hash.begin())) return std::nullopt;
     return hash;
 }

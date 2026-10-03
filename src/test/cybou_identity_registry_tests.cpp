@@ -15,7 +15,7 @@ BOOST_AUTO_TEST_CASE(identity_authorization_nonce_rotation_and_snapshot)
     std::array<unsigned char, 32> entropy{}, next_entropy{};
     entropy.fill(0x21);
     next_entropy.fill(0x42);
-    uint256 account_bytes{}, network_binding{};
+    cybou::Hash256 account_bytes{}, network_binding{};
     account_bytes.begin()[0] = 1;
     network_binding.begin()[0] = 2;
     const AccountId account{account_bytes};

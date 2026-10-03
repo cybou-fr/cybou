@@ -39,7 +39,7 @@ struct BlockExecutionResult {
     RootPublicationError root_publication_error{RootPublicationError::NONE};
     PoaAuthAdjustmentError poa_auth_error{PoaAuthAdjustmentError::NONE};
     std::optional<CybouState> state;
-    std::optional<uint256> state_root;
+    std::optional<cybou::Hash256> state_root;
 
     explicit operator bool() const { return error == BlockExecutionError::NONE && state.has_value() && state_root.has_value(); }
 };
@@ -50,7 +50,7 @@ inline constexpr uint64_t AUTH_PER_FINALIZED_OPERATION{1};
 /** Without the genesis PoA key every PoaAuthAdjustment is invalid. */
 BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
-    const uint256& network_binding, uint64_t block_height,
+    const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params,
     const IdentityHybridPublicKey* poa_key = nullptr);
 

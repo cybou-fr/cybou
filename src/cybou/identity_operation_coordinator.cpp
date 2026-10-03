@@ -136,14 +136,14 @@ std::optional<std::array<unsigned char, 32>> PackageCommitment(
 } // namespace
 
 struct IdentityOperationCoordinator::JournalEntry {
-    uint256 network_binding;
+    cybou::Hash256 network_binding;
     AccountId account_id;
     uint64_t nonce{0};
     uint64_t key_epoch{0};
     uint8_t kind{0}; // zero denotes atomic IdentityRotate; other values are IdentityOperationKind.
     IdentityKeyId payload_commitment{};
     IdentityOperationPhase phase{IdentityOperationPhase::PREPARED};
-    uint256 op_id;
+    cybou::Hash256 op_id;
     std::vector<unsigned char> operation_bytes;
 };
 
@@ -507,7 +507,7 @@ bool IdentityOperationCoordinator::CompleteIdentityRotation(const IdentityRecord
     if (!LoadJournal() || !m_entry || m_entry->kind != 0) return false;
     const auto operation = DeserializeProtocolOperation(m_entry->operation_bytes);
     const auto* rotate = operation ? std::get_if<IdentityRotate>(&*operation) : nullptr;
-    const auto account_bytes = rotate ? rotate->account_id.Value() : uint256{};
+    const auto account_bytes = rotate ? rotate->account_id.Value() : cybou::Hash256{};
     const auto expected_package = rotate ? ComputeIdentityKemPackageCommitment(
         std::span<const unsigned char, 32>{m_runtime.GetNetworkBinding().begin(), 32},
         std::span<const unsigned char, 32>{account_bytes.begin(), 32},
@@ -525,7 +525,7 @@ bool IdentityOperationCoordinator::HasPendingIdentityRotation()
     return LoadJournal() && m_entry && m_entry->kind == 0;
 }
 
-IdentityOperationResult IdentityOperationCoordinator::GetStatus(const uint256& op_id)
+IdentityOperationResult IdentityOperationCoordinator::GetStatus(const cybou::Hash256& op_id)
 {
     std::lock_guard lock(m_mutex);
     if (!LoadJournal()) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = op_id, .error = m_load_error};

@@ -70,13 +70,13 @@ std::optional<RelayedOperation> OperationRelay::Claim()
     return m_queue.front();
 }
 
-void OperationRelay::Release(const uint256& operation_id)
+void OperationRelay::Release(const cybou::Hash256& operation_id)
 {
     std::lock_guard lock{m_mutex};
     if (m_claimed_id && *m_claimed_id == operation_id) m_claimed_id.reset();
 }
 
-bool OperationRelay::Acknowledge(const uint256& operation_id)
+bool OperationRelay::Acknowledge(const cybou::Hash256& operation_id)
 {
     std::lock_guard lock{m_mutex};
     if (!m_claimed_id || *m_claimed_id != operation_id || m_queue.empty() ||
@@ -88,13 +88,13 @@ bool OperationRelay::Acknowledge(const uint256& operation_id)
     return true;
 }
 
-bool OperationRelay::HasQueued(const uint256& operation_id) const
+bool OperationRelay::HasQueued(const cybou::Hash256& operation_id) const
 {
     std::lock_guard lock{m_mutex};
     return m_queued_ids.contains(operation_id);
 }
 
-void OperationRelay::ForgetFinalized(const uint256& operation_id)
+void OperationRelay::ForgetFinalized(const cybou::Hash256& operation_id)
 {
     std::lock_guard lock{m_mutex};
     const auto item = std::find_if(m_queue.begin(), m_queue.end(), [&](const RelayedOperation& queued) {

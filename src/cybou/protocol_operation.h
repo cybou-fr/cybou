@@ -47,14 +47,14 @@ using ProtocolOperation = std::variant<
 
 std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const ProtocolOperation& operation);
 std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const unsigned char> bytes);
-std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation);
+std::optional<cybou::Hash256> ComputeOperationId(const ProtocolOperation& operation);
 /** The existing Identity that authorizes the operation; nullopt for AccountCreate and PoaAuthAdjustment. */
 std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation);
 /** The account that earns AUTH upon finalized execution. Only utility operations (RootPublication, SystemLock) earn AUTH. */
 std::optional<AccountId> AuthorityEarningAccount(const ProtocolOperation& operation);
 /** Verify operation signatures and payload bindings before volatile mesh relay. */
 bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
-    const uint256& network_binding, const IdentityRegistry& identities);
+    const cybou::Hash256& network_binding, const IdentityRegistry& identities);
 
 } // namespace cybou
 #endif // CYBOU_PROTOCOL_OPERATION_H

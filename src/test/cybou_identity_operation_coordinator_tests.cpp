@@ -181,7 +181,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             .peer_admission_policy = TestLabAdmissionPolicy(),
         };
     };
-    uint256 operation_id;
+    cybou::Hash256 operation_id;
     {
         cybou::CybouNodeRuntime client{make_client_config(true)};
         BOOST_REQUIRE(client.InitializeGenesis(genesis));

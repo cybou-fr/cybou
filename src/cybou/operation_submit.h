@@ -3,7 +3,7 @@
 #ifndef CYBOU_OPERATION_SUBMIT_H
 #define CYBOU_OPERATION_SUBMIT_H
 #include <cybou/operation_submit.h>
-#include <uint256.h>
+#include <cybou/hash256.h>
 #include <cstdint>
 namespace cybou {
 enum class OperationSubmitStatus : uint8_t {
@@ -20,7 +20,7 @@ enum class OperationSubmitStatus : uint8_t {
 
 struct OperationSubmitResult {
     OperationSubmitStatus status{OperationSubmitStatus::REJECTED};
-    uint256 op_id;
+    cybou::Hash256 op_id;
     // Local transport metadata: no acknowledgment after sending does not prove
     // that the remote finalizer rejected the operation.
     bool delivery_uncertain{false};

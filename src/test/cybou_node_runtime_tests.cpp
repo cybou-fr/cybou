@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     BOOST_CHECK_EQUAL(found.height, 1U);
     BOOST_CHECK_EQUAL(found.operation_index, 0U);
     BOOST_CHECK(found.block_id == cybou::ComputeBlockId(block->block));
-    const auto missing_id = *op_id == uint256::ONE ? *cybou::ParseUint256UserHex("02") : uint256::ONE;
+    const auto missing_id = *op_id == cybou::Hash256::ONE ? cybou::Hash256{uint8_t{2}} : cybou::Hash256::ONE;
     const auto missing = observer.FindFinalizedOperation(missing_id);
     BOOST_CHECK(missing.status == cybou::FinalizedOperationLookupStatus::NOT_FOUND);
     BOOST_CHECK_EQUAL(missing.scanned_height, 1U);
@@ -251,7 +251,7 @@ BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_one_mi
     BOOST_REQUIRE(account);
     const cybou::CybouKeyStoreValidationSigner signer{alice->GetKeyStore()};
     const auto& network_binding = fixture.runtime->GetNetworkBinding();
-    uint256 operation_id;
+    cybou::Hash256 operation_id;
     operation_id.begin()[0] = 0x42;
     const auto finalized = [&] {
         const auto loaded = fixture.runtime->GetStore().LoadState();
@@ -289,7 +289,7 @@ BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_one_mi
     truncated.pop_back();
     BOOST_CHECK(!cybou::DeserializeValidationAttestation(truncated));
 
-    uint256 other;
+    cybou::Hash256 other;
     other.begin()[0] = 0x43;
     BOOST_CHECK(cybou::VerifyValidationAttestation(*attestation, other, tip, state) ==
         cybou::ValidationAttestationError::WRONG_NETWORK);
@@ -502,7 +502,7 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_only_finalized_root_publications)
     BOOST_CHECK(!fixture.runtime->FindFinalizedRootPublication(submitted.op_id));
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
     BOOST_CHECK(fixture.runtime->FindFinalizedRootPublication(submitted.op_id) == publication);
-    BOOST_CHECK(!fixture.runtime->FindFinalizedRootPublication(uint256::ONE));
+    BOOST_CHECK(!fixture.runtime->FindFinalizedRootPublication(cybou::Hash256::ONE));
 }
 
 BOOST_AUTO_TEST_CASE(runtime_resolves_current_identity_kem_package_by_key_epoch)

@@ -233,7 +233,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
 OperationSubmitResult PeerManager::SubmitOperation(const std::string& numeric_address, uint16_t port,
     const ProtocolOperation& operation)
 {
-    const auto op_id = ComputeOperationId(operation).value_or(uint256{});
+    const auto op_id = ComputeOperationId(operation).value_or(cybou::Hash256{});
     const OperationSubmitResult failure{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
     boost::system::error_code ec;
     const auto address = boost::asio::ip::make_address(numeric_address, ec);
@@ -253,7 +253,7 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
     const std::vector<std::pair<std::string, uint16_t>>& endpoints,
     const ProtocolOperation& operation)
 {
-    const auto op_id = ComputeOperationId(operation).value_or(uint256{});
+    const auto op_id = ComputeOperationId(operation).value_or(cybou::Hash256{});
     PeerSubmitResult result{.op_id = op_id, .acknowledgment = std::nullopt,
         .endpoint = std::nullopt, .delivery_uncertain = false};
     if (endpoints.empty() || endpoints.size() > MAX_OUTBOUND_PEERS) return result;
@@ -294,7 +294,7 @@ size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
         else ++it;
     }
     const auto recent = m_runtime.RecentFinalizedBlocksForGossip();
-    std::set<uint256> live_ids;
+    std::set<cybou::Hash256> live_ids;
     for (const auto& head : recent) live_ids.insert(head.block_id);
     size_t delivered{0};
     for (auto it = m_peers.begin(); it != m_peers.end();) {
@@ -395,12 +395,14 @@ std::vector<PeerInfo> PeerManager::StorageEndpoints()
     std::vector<PeerInfo> peers;
     for (auto it = m_peers.begin(); it != m_peers.end();) {
         auto& session = it->second;
-        if (!session->Peer() || !session->ProveStorageIdentity()) {
+        if (!session->Peer()) {
             m_announced_blocks.erase(it->first);
             it = m_peers.erase(it);
             continue;
         }
-        peers.push_back(PeerInfo{it->first.first, it->first.second, *session->Peer(), session->PeerStorageId()});
+        if (session->ProveStorageIdentity()) {
+            peers.push_back(PeerInfo{it->first.first, it->first.second, *session->Peer(), session->PeerStorageId()});
+        }
         ++it;
     }
     return peers;
@@ -408,7 +410,7 @@ std::vector<PeerInfo> PeerManager::StorageEndpoints()
 
 std::optional<ChunkAdmissionResult> PeerManager::PutAuthorizedChunk(
     const std::string& address, const uint16_t port, const StorageId& provider_id,
-    const uint256& publication_operation_id, const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes,
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes,
     const ChunkAuthorizationProof& proof)
 {
     Endpoint endpoint;
@@ -438,7 +440,7 @@ std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
 
 std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
     const std::string& address, const uint16_t port, const StorageId& provider_id,
-    const uint256& publication_operation_id, const ChunkId& chunk_id)
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id)
 {
     Endpoint endpoint;
     auto* session = FindStorageSession(address, port, provider_id, &endpoint);
@@ -461,9 +463,12 @@ PeerSession* PeerManager::FindStorageSession(
     const Endpoint key{parsed.to_string(), port};
     const auto it = m_peers.find(key);
     if (it == m_peers.end()) return nullptr;
-    if (!it->second->Peer() || !it->second->ProveStorageIdentity()) {
+    if (!it->second->Peer()) {
         m_announced_blocks.erase(key);
         m_peers.erase(it);
+        return nullptr;
+    }
+    if (!it->second->ProveStorageIdentity()) {
         return nullptr;
     }
     // A different provider now answering at this endpoint is not the recorded replica.

@@ -83,15 +83,15 @@ enum class AccountCreateStateError : uint8_t {
 // The caller applies this to a candidate state and commits after the entire
 // block succeeds. On a validation error the supplied state is unchanged.
 AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
-    const uint256& network_binding, uint64_t block_height,
+    const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state);
 
 NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
-    const uint256& network_binding, uint64_t block_height,
+    const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state);
 
 NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
-    const uint256& network_binding, uint64_t block_height,
+    const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state);
 
 enum class RootPublicationError : uint8_t {
@@ -104,7 +104,7 @@ enum class RootPublicationError : uint8_t {
 };
 
 RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
-    const uint256& network_binding, const CybouProtocolParameters& params, CybouState& state);
+    const cybou::Hash256& network_binding, const CybouProtocolParameters& params, CybouState& state);
 
 enum class StateValidationError : uint8_t {
     NONE,
@@ -121,7 +121,7 @@ uint64_t TotalSupply(const CybouState& state);
 
 std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& state);
 std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> bytes);
-std::optional<uint256> CybouStateHash(const CybouState& state);
+std::optional<cybou::Hash256> CybouStateHash(const CybouState& state);
 
 } // namespace cybou
 #endif // CYBOU_STATE_H

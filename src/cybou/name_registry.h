@@ -10,7 +10,7 @@
 #include <cybou/account_id.h>
 #include <cybou/identity_registry.h>
 #include <cybou/protocol_params.h>
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <algorithm>
 #include <array>
@@ -44,7 +44,7 @@ enum class NameValidationError : uint8_t {
     CONSECUTIVE_HYPHENS,
     IDN_PREFIX,
     ALL_DIGITS,
-    RESERVED_NAME,
+    PROTECTED_NAME,
 };
 
 inline NameValidationError ValidateNameLabel(std::string_view label)
@@ -87,15 +87,15 @@ inline NameValidationError ValidateNameLabel(std::string_view label)
     };
     for (const auto& reserved : RESERVED) {
         if (label == reserved) {
-            return NameValidationError::RESERVED_NAME;
+            return NameValidationError::PROTECTED_NAME;
         }
     }
 
     return NameValidationError::NONE;
 }
 
-inline uint256 ComputeNameCommitment(
-    const uint256& network_binding,
+inline cybou::Hash256 ComputeNameCommitment(
+    const cybou::Hash256& network_binding,
     const AccountId& account_id,
     std::string_view label,
     std::span<const unsigned char, 32> salt)
@@ -111,14 +111,14 @@ inline uint256 ComputeNameCommitment(
     hasher.Write(&len, 1);
     hasher.Write(reinterpret_cast<const unsigned char*>(label.data()), label.size());
     hasher.Write(salt.data(), 32);
-    uint256 commitment;
+    cybou::Hash256 commitment;
     hasher.Finalize(commitment.begin());
     return commitment;
 }
 
 struct NameCommitPayload {
     uint8_t version{NAME_REGISTRY_VERSION};
-    uint256 commitment;
+    cybou::Hash256 commitment;
 
     friend bool operator==(const NameCommitPayload&, const NameCommitPayload&) = default;
 };
@@ -165,9 +165,9 @@ struct AuthorizedNameCommit {
 
 struct NameClaimWork {
     uint8_t version{NAME_REGISTRY_VERSION};
-    uint256 network_binding;
+    cybou::Hash256 network_binding;
     AccountId account_id;
-    uint256 commitment;
+    cybou::Hash256 commitment;
     uint64_t work_epoch{0};
     uint64_t nonce{0};
 
@@ -210,15 +210,15 @@ inline std::optional<NameClaimWork> DeserializeNameClaimWork(std::span<const uns
     return work;
 }
 
-inline uint256 ComputeNameClaimWorkHash(const NameClaimWork& work)
+inline cybou::Hash256 ComputeNameClaimWorkHash(const NameClaimWork& work)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/NAME-WORK/V2"};
     const auto bytes = SerializeNameClaimWork(work);
-    if (!bytes) return uint256{};
+    if (!bytes) return cybou::Hash256{};
     ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(bytes->data(), bytes->size());
-    uint256 hash;
+    cybou::Hash256 hash;
     hasher.Finalize(hash.begin());
     return hash;
 }
@@ -227,7 +227,7 @@ inline bool CheckNameClaimWork(const NameClaimWork& work, uint32_t required_bits
 {
     if (required_bits == 0) return true;
     if (required_bits > 256) return false;
-    const uint256 hash = ComputeNameClaimWorkHash(work);
+    const cybou::Hash256 hash = ComputeNameClaimWorkHash(work);
     unsigned count{0};
     for (size_t i = 0; i < 32; ++i) {
         const unsigned char b = hash.begin()[i];
@@ -321,7 +321,7 @@ struct NameRegistry {
     uint8_t version{NAME_REGISTRY_VERSION};
     std::map<std::string, AccountId> names;
     std::map<AccountId, std::string> account_names;
-    std::map<uint256, NameCommitRecord> pending_commits;
+    std::map<cybou::Hash256, NameCommitRecord> pending_commits;
 
     friend bool operator==(const NameRegistry&, const NameRegistry&) = default;
 
@@ -383,7 +383,7 @@ inline std::optional<NameRegistry> DeserializeNameRegistry(std::span<const unsig
         // Reserved labels pass syntax here; ValidateCybouState admits them
         // only with a matching claimed genesis allocation.
         if (const auto validity = ValidateNameLabel(label);
-            validity != NameValidationError::NONE && validity != NameValidationError::RESERVED_NAME) return std::nullopt;
+            validity != NameValidationError::NONE && validity != NameValidationError::PROTECTED_NAME) return std::nullopt;
 
         const auto acc = AccountId::FromBytes(bytes.subspan(offset, 32));
         offset += 32;
@@ -402,7 +402,7 @@ inline std::optional<NameRegistry> DeserializeNameRegistry(std::span<const unsig
     if (bytes.size() != offset + static_cast<size_t>(commit_count) * (32 + 32 + 8)) return std::nullopt;
 
     for (uint32_t i = 0; i < commit_count; ++i) {
-        uint256 commit;
+        cybou::Hash256 commit;
         std::copy_n(bytes.begin() + offset, 32, commit.begin());
         offset += 32;
         const auto acc = AccountId::FromBytes(bytes.subspan(offset, 32));

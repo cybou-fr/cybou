@@ -12,7 +12,7 @@
 #include <cybou/identity_material.h>
 #include <cybou/poa_signer.h>
 #include <cybou/validation_attestation.h>
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <array>
 #include <cstdint>

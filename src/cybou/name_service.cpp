@@ -48,7 +48,7 @@ NameClaimResult Fail(std::string message)
 }
 
 std::optional<ClaimSecret> LoadClaim(const std::filesystem::path& path, std::string_view password,
-    const uint256& network, const AccountId& account)
+    const cybou::Hash256& network, const AccountId& account)
 {
     auto bytes = LoadIdentityVault(path, password);
     if (!bytes) return std::nullopt;
@@ -74,7 +74,7 @@ std::optional<ClaimSecret> LoadClaim(const std::filesystem::path& path, std::str
 }
 
 bool SaveClaim(const std::filesystem::path& path, std::string_view password,
-    const uint256& network, const AccountId& account, const ClaimSecret& claim)
+    const cybou::Hash256& network, const AccountId& account, const ClaimSecret& claim)
 {
     std::array<unsigned char, CLAIM_SIZE> payload{};
     std::copy_n(MAGIC, 5, payload.begin());

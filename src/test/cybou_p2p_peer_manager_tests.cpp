@@ -80,9 +80,9 @@ BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, CybouTestSetup)
 BOOST_AUTO_TEST_CASE(v5_hello_has_only_baseline_fields_and_rejects_v4)
 {
     cybou::p2p::Hello hello;
-    hello.network_binding = uint256::ONE;
+    hello.network_binding = cybou::Hash256::ONE;
     hello.finalized_height = 123;
-    hello.finalized_tip = uint256::ONE;
+    hello.finalized_tip = cybou::Hash256::ONE;
     hello.nonce = 456;
     const auto encoded = cybou::p2p::EncodeHello(hello);
     BOOST_CHECK_EQUAL(encoded.size(), 80U);
@@ -687,7 +687,7 @@ BOOST_AUTO_TEST_CASE(auth_validation_and_poa_end_to_end_over_cyp2)
     std::array<unsigned char, 32> root_seed{}, authorization_seed{};
     root_seed[0] = 0x61;
     authorization_seed[0] = 0x62;
-    uint256 raw_account;
+    cybou::Hash256 raw_account;
     raw_account.begin()[0] = 0x63;
     const cybou::AccountId carol{raw_account};
     const auto root = cybou::DeriveIdentityPublicKey(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
@@ -829,7 +829,7 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_network_peer)
     using boost::asio::ip::tcp;
     const auto loopback = boost::asio::ip::address_v4::loopback();
     tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
-    const auto wrong_network = cybou::ParseUint256UserHex("02");
+    const auto wrong_network = std::optional<cybou::Hash256>{cybou::Hash256{uint8_t{2}}};
     BOOST_REQUIRE(wrong_network);
     std::jthread server{[&] {
         tcp::socket socket{io};
@@ -905,7 +905,7 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
     BOOST_CHECK(current.front().provider_id == second_id);
     cybou::ChunkId chunk{};
     chunk[0] = 1;
-    const auto operation = uint256::ONE;
+    const auto operation = cybou::Hash256::ONE;
     BOOST_CHECK(!manager.GetChunkAuthorizationProof(address, port, *first_id, operation, chunk));
     manager.DisconnectAll();
     second_server.join();
@@ -1054,7 +1054,7 @@ BOOST_AUTO_TEST_CASE(manager_refuses_hello_tip_conflicting_with_known_block)
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         handshake_ok = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
-            .finalized_height = 1, .finalized_tip = uint256::ONE,
+            .finalized_height = 1, .finalized_tip = cybou::Hash256::ONE,
             .nonce = 111});
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
@@ -1087,8 +1087,8 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_genesis_tip)
     using boost::asio::ip::tcp;
     const auto loopback = boost::asio::ip::address_v4::loopback();
     tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
-    const auto wrong_tip = fixture.definition.GetGenesisAnchor() == uint256::ONE ?
-        *cybou::ParseUint256UserHex("02") : uint256::ONE;
+    const auto wrong_tip = fixture.definition.GetGenesisAnchor() == cybou::Hash256::ONE ?
+        cybou::Hash256{uint8_t{2}} : cybou::Hash256::ONE;
     bool handshake_ok{false};
     std::jthread server{[&] {
         tcp::socket socket{io};
@@ -1299,7 +1299,7 @@ BOOST_AUTO_TEST_CASE(manager_fans_out_finalized_block_without_duplicate_payload)
     server.join();
     BOOST_CHECK(served);
     BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(99), 1U);
-    BOOST_CHECK(observer.GetFinalizedTip().value_or(uint256{}) == block_id);
+    BOOST_CHECK(observer.GetFinalizedTip().value_or(cybou::Hash256{}) == block_id);
 }
 
 BOOST_AUTO_TEST_CASE(manager_rejects_block_metadata_with_wrong_height)
@@ -1362,7 +1362,7 @@ BOOST_AUTO_TEST_CASE(manager_rejects_block_conflicting_with_announced_finalized_
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         served = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
-            .finalized_height = 1, .finalized_tip = uint256::ONE,
+            .finalized_height = 1, .finalized_tip = cybou::Hash256::ONE,
             .nonce = 110}) &&
             session.ServeNext(*fixture.runtime);
     }};

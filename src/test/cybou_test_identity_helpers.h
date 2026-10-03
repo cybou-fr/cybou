@@ -15,7 +15,7 @@ struct IdentityKemBinding {
     std::array<unsigned char, 32> pop_digest{};
 };
 
-inline IdentityKemBinding MakeIdentityKemBinding(const uint256& network_binding,
+inline IdentityKemBinding MakeIdentityKemBinding(const cybou::Hash256& network_binding,
     const AccountId& account_id, const IdentityAuthorization& authorization,
     uint64_t key_epoch = 0)
 {

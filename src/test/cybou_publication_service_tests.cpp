@@ -47,7 +47,7 @@ BOOST_AUTO_TEST_CASE(self_publication_waits_for_finality_and_resumes_exact_opera
     cybou::KVStore proof_db{cybou::KVStoreOptions{.memory_only = true}};
     const auto prepared = Prepare(*fixture.runtime, proof_db, "self-pub");
     const auto app_path = fixture.directory / "application";
-    uint256 operation_id;
+    cybou::Hash256 operation_id;
     {
         cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), app_path};
         auto& coordinator = fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore());

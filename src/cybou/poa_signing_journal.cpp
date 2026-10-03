@@ -17,7 +17,7 @@ constexpr unsigned char JOURNAL_FORMAT_VERSION{1};
 constexpr size_t JOURNAL_METADATA_SIZE{1 + 32 + 32 + 32};
 constexpr size_t JOURNAL_HEAD_SIZE{1 + 8 + 32 + 32};
 
-std::string Hex(const uint256& value)
+std::string Hex(const cybou::Hash256& value)
 {
     static constexpr char digits[] = "0123456789abcdef";
     std::string out;
@@ -66,8 +66,8 @@ std::optional<PoaJournalHead> DecodeHead(const std::span<const unsigned char> by
 
 } // namespace
 
-PoaSigningJournal::PoaSigningJournal(KVStore& db, const uint256& network_binding,
-    const uint256& genesis_anchor, const IdentityHybridPublicKey& finalizer_key)
+PoaSigningJournal::PoaSigningJournal(KVStore& db, const cybou::Hash256& network_binding,
+    const cybou::Hash256& genesis_anchor, const IdentityHybridPublicKey& finalizer_key)
     : m_db{db}, m_network_binding{network_binding}, m_genesis_anchor{genesis_anchor},
       m_finalizer_key_id{[&finalizer_key] {
           const auto id = ComputePoaFinalizerKeyId(finalizer_key);
@@ -129,7 +129,7 @@ PoaSigningJournal::PoaSigningJournal(KVStore& db, const uint256& network_binding
 }
 
 PoaJournalStatus PoaSigningJournal::CheckCanonicalTip(
-    const uint64_t finalized_height, const uint256& finalized_tip)
+    const uint64_t finalized_height, const cybou::Hash256& finalized_tip)
 {
     std::lock_guard lock{m_mutex};
     if (m_halted) return PoaJournalStatus::JOURNAL_HALTED;
@@ -155,7 +155,7 @@ PoaJournalStatus PoaSigningJournal::CheckCanonicalTip(
 }
 
 PoaJournalStatus PoaSigningJournal::PrepareToSign(const uint64_t height,
-    const uint256& parent_block_id, const uint256& block_id)
+    const cybou::Hash256& parent_block_id, const cybou::Hash256& block_id)
 {
     std::lock_guard lock{m_mutex};
     if (m_halted) return PoaJournalStatus::JOURNAL_HALTED;

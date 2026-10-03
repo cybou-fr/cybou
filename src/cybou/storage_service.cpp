@@ -30,7 +30,7 @@ constexpr std::size_t MAX_REPLICAS_PER_CHUNK{16};
 
 constexpr std::string_view PLACEMENT_INDEX_KEY{"storage/placements"};
 
-std::string PlacementKey(const uint256& operation_id)
+std::string PlacementKey(const cybou::Hash256& operation_id)
 {
     return "storage/placement/" + operation_id.GetHex();
 }
@@ -120,7 +120,7 @@ std::vector<StorageEndpoint> RuntimeStorageTransport::Providers()
 }
 
 std::optional<ChunkAdmissionResult> RuntimeStorageTransport::Put(const StorageEndpoint& provider,
-    const uint256& publication_operation_id, const ChunkId& chunk_id,
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id,
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
     return m_runtime.PutChunkToStorageEndpoint(provider.address, provider.port, provider.provider_id, publication_operation_id,
@@ -134,7 +134,7 @@ std::optional<std::vector<unsigned char>> RuntimeStorageTransport::Get(const Sto
 }
 
 std::optional<ChunkAuthorizationProof> RuntimeStorageTransport::GetProof(const StorageEndpoint& provider,
-    const uint256& publication_operation_id, const ChunkId& chunk_id)
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id)
 {
     return m_runtime.GetChunkAuthorizationProofFromStorageEndpoint(provider.address, provider.port,
         provider.provider_id, publication_operation_id, chunk_id);
@@ -143,7 +143,7 @@ std::optional<ChunkAuthorizationProof> RuntimeStorageTransport::GetProof(const S
 /* ---- StorageService ---- */
 
 struct StorageService::Placement {
-    uint256 operation_id;
+    cybou::Hash256 operation_id;
     std::vector<ChunkId> leaves;
     /** Remote providers that acknowledged each leaf; the local copy never appears here. */
     std::vector<std::vector<StorageEndpoint>> replicas;
@@ -156,7 +156,7 @@ StorageService::StorageService(CybouNodeRuntime& runtime, StorageTransport& tran
 {
 }
 
-std::optional<StorageService::Placement> StorageService::Load(const uint256& operation_id) const
+std::optional<StorageService::Placement> StorageService::Load(const cybou::Hash256& operation_id) const
 {
     const auto encoded = m_application_db.Get(PlacementKey(operation_id));
     if (!encoded) return std::nullopt;
@@ -225,20 +225,20 @@ bool StorageService::Save(const Placement& placement)
     return batch.Commit();
 }
 
-std::vector<uint256> StorageService::PlacementIndex() const
+std::vector<cybou::Hash256> StorageService::PlacementIndex() const
 {
-    std::vector<uint256> ids;
+    std::vector<cybou::Hash256> ids;
     const auto encoded = m_application_db.Get(PLACEMENT_INDEX_KEY);
     if (!encoded || encoded->size() % 32 != 0) return ids;
     for (std::size_t offset{0}; offset < encoded->size(); offset += 32) {
-        uint256 id;
+        cybou::Hash256 id;
         std::copy_n(encoded->begin() + static_cast<std::ptrdiff_t>(offset), 32, id.begin());
         ids.push_back(id);
     }
     return ids;
 }
 
-bool StorageService::Track(const uint256& operation_id)
+bool StorageService::Track(const cybou::Hash256& operation_id)
 {
     std::lock_guard lock{m_mutex};
     const auto index = PlacementIndex();
@@ -265,7 +265,7 @@ PublicationDurability StorageService::Summarize(const Placement& placement) cons
     return result;
 }
 
-PublicationDurability StorageService::Secure(const uint256& operation_id, const std::span<const ChunkId> leaves)
+PublicationDurability StorageService::Secure(const cybou::Hash256& operation_id, const std::span<const ChunkId> leaves)
 {
     std::lock_guard lock{m_mutex};
     if (!m_application_db.IsUnlocked()) {
@@ -302,7 +302,7 @@ PublicationDurability StorageService::Secure(const uint256& operation_id, const 
 }
 
 std::optional<ChunkAuthorizationProof> StorageService::GetAuthorizationProof(
-    const uint256& operation_id, const ChunkId& chunk_id)
+    const cybou::Hash256& operation_id, const ChunkId& chunk_id)
 {
     const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
     if (!publication) return std::nullopt;
@@ -313,7 +313,7 @@ std::optional<ChunkAuthorizationProof> StorageService::GetAuthorizationProof(
     return std::nullopt;
 }
 
-PublicationDurability StorageService::Rebuild(const uint256& operation_id,
+PublicationDurability StorageService::Rebuild(const cybou::Hash256& operation_id,
     const std::span<const ChunkId> candidate_chunks)
 {
     std::lock_guard lock{m_mutex};
@@ -370,7 +370,7 @@ PublicationDurability StorageService::Rebuild(const uint256& operation_id,
     return Place(placement);
 }
 
-PublicationDurability StorageService::Resume(const uint256& operation_id)
+PublicationDurability StorageService::Resume(const cybou::Hash256& operation_id)
 {
     std::lock_guard lock{m_mutex};
     auto placement = Load(operation_id);
@@ -439,7 +439,7 @@ PublicationDurability StorageService::Place(Placement& placement)
     return result;
 }
 
-std::optional<std::pair<uint256, PublicationDurability>> StorageService::AuditNextPlacement(const std::size_t max_chunks)
+std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::AuditNextPlacement(const std::size_t max_chunks)
 {
     std::lock_guard lock{m_mutex};
     const auto index = PlacementIndex();
@@ -479,7 +479,7 @@ std::optional<std::pair<uint256, PublicationDurability>> StorageService::AuditNe
     return std::pair{operation_id, result};
 }
 
-PublicationDurability StorageService::Audit(const uint256& operation_id)
+PublicationDurability StorageService::Audit(const cybou::Hash256& operation_id)
 {
     std::lock_guard lock{m_mutex};
     auto placement = Load(operation_id);
@@ -501,7 +501,7 @@ PublicationDurability StorageService::Audit(const uint256& operation_id)
     return Place(*placement);
 }
 
-std::optional<PublicationDurability> StorageService::GetDurability(const uint256& operation_id)
+std::optional<PublicationDurability> StorageService::GetDurability(const cybou::Hash256& operation_id)
 {
     std::lock_guard lock{m_mutex};
     const auto placement = Load(operation_id);
@@ -509,7 +509,7 @@ std::optional<PublicationDurability> StorageService::GetDurability(const uint256
     return Summarize(*placement);
 }
 
-std::optional<StorageService::PlacementView> StorageService::DescribePlacement(const uint256& operation_id)
+std::optional<StorageService::PlacementView> StorageService::DescribePlacement(const cybou::Hash256& operation_id)
 {
     std::lock_guard lock{m_mutex};
     auto placement = Load(operation_id);

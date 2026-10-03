@@ -211,11 +211,11 @@ std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignProviderProof(
 }
 
 ChunkAdmissionResult CybouNodeRuntime::PutFinalizedChunk(
-    const uint256& publication_operation_id, const ChunkId& chunk_id,
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id,
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
     const auto result = m_finalized_chunk_store->PutChunk(publication_operation_id, chunk_id, stored_bytes, proof,
-        [this](const uint256& operation_id) { return FindFinalizedRootPublication(operation_id); });
+        [this](const cybou::Hash256& operation_id) { return FindFinalizedRootPublication(operation_id); });
     if (m_config.event_writer) m_config.event_writer->Write(result ? NodeEvent::chunk_put : NodeEvent::chunk_verify_failed,
         {{"operation_id",publication_operation_id.GetHex()},{"chunk_id",ChunkIdHex(chunk_id)},{"bytes",std::uint64_t{stored_bytes.size()}},
          {"error_code",std::uint64_t{static_cast<unsigned>(result.status)}}});
@@ -231,10 +231,10 @@ std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetFinalizedChunk(co
 }
 
 std::optional<ChunkAuthorizationProof> CybouNodeRuntime::GetFinalizedChunkAuthorizationProof(
-    const uint256& publication_operation_id, const ChunkId& chunk_id) const
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id) const
 {
     return m_finalized_chunk_store->GetChunkAuthorizationProof(publication_operation_id, chunk_id,
-        [this](const uint256& operation_id) { return FindFinalizedRootPublication(operation_id); });
+        [this](const cybou::Hash256& operation_id) { return FindFinalizedRootPublication(operation_id); });
 }
 
 bool CybouNodeRuntime::HasFinalizedChunk(const ChunkId& chunk_id) const
@@ -254,7 +254,7 @@ std::vector<CybouNodeRuntime::StorageEndpoint> CybouNodeRuntime::StorageEndpoint
 }
 
 std::optional<ChunkAdmissionResult> CybouNodeRuntime::PutChunkToStorageEndpoint(const std::string& address,
-    const uint16_t port, const std::array<unsigned char, 32>& provider_id, const uint256& publication_operation_id,
+    const uint16_t port, const std::array<unsigned char, 32>& provider_id, const cybou::Hash256& publication_operation_id,
     const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
     std::lock_guard p2p_lock(m_p2p_mutex);
@@ -273,7 +273,7 @@ std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetChunkFromStorageE
 
 std::optional<ChunkAuthorizationProof> CybouNodeRuntime::GetChunkAuthorizationProofFromStorageEndpoint(
     const std::string& address, const uint16_t port, const std::array<unsigned char, 32>& provider_id,
-    const uint256& publication_operation_id, const ChunkId& chunk_id)
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id)
 {
     std::lock_guard p2p_lock(m_p2p_mutex);
     if (!m_peer_manager) return std::nullopt;
@@ -341,13 +341,13 @@ std::optional<uint64_t> CybouNodeRuntime::GetFinalizedHeight() const
     return m_store.GetFinalizedHeight();
 }
 
-std::optional<uint256> CybouNodeRuntime::GetFinalizedTip() const
+std::optional<cybou::Hash256> CybouNodeRuntime::GetFinalizedTip() const
 {
     std::lock_guard lock(m_mutex);
     return m_store.GetFinalizedTip();
 }
 
-std::optional<uint256> CybouNodeRuntime::GetStateRoot() const
+std::optional<cybou::Hash256> CybouNodeRuntime::GetStateRoot() const
 {
     std::lock_guard lock(m_mutex);
     return m_store.GetStateRoot();
@@ -388,7 +388,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitPoaAuthAdjustment(
     case PoolAdmission::ALREADY_FINALIZED: status = OperationSubmitStatus::ALREADY_FINALIZED; break;
     case PoolAdmission::REJECTED: break;
     }
-    const OperationSubmitResult result{.status = status, .op_id = ComputeOperationId(operation).value_or(uint256{})};
+    const OperationSubmitResult result{.status = status, .op_id = ComputeOperationId(operation).value_or(cybou::Hash256{})};
     if (result.status == OperationSubmitStatus::ACCEPTED) {
         RememberOperationStatus(result.op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
     }
@@ -435,7 +435,7 @@ size_t CybouNodeRuntime::CandidateOperationCount() const
     return m_operation_pool.Size();
 }
 
-bool CybouNodeRuntime::HasCandidateOperation(const uint256& operation_id) const
+bool CybouNodeRuntime::HasCandidateOperation(const cybou::Hash256& operation_id) const
 {
     std::lock_guard lock{m_mutex};
     return m_operation_pool.Contains(operation_id);
@@ -450,7 +450,7 @@ void CybouNodeRuntime::RevalidateCandidates()
     for (const auto& id : m_operation_pool.Ids()) AttestCandidate(id);
 }
 
-void CybouNodeRuntime::AttestCandidate(const uint256& operation_id)
+void CybouNodeRuntime::AttestCandidate(const cybou::Hash256& operation_id)
 {
     if (!m_validation_signer || !m_operation_pool.Contains(operation_id)) return;
     const auto tip = m_store.GetFinalizedTip();
@@ -501,7 +501,7 @@ ValidationAcceptStatus CybouNodeRuntime::AcceptValidationAttestation(const Valid
     return ValidationAcceptStatus::INVALID;
 }
 
-std::vector<ValidationAttestation> CybouNodeRuntime::GetValidationAttestations(const uint256& operation_id) const
+std::vector<ValidationAttestation> CybouNodeRuntime::GetValidationAttestations(const cybou::Hash256& operation_id) const
 {
     std::lock_guard lock{m_mutex};
     return m_validation_pool.ForOperation(operation_id);
@@ -519,22 +519,22 @@ std::optional<RelayedOperation> CybouNodeRuntime::ClaimRelayedOperation()
     return m_operation_relay.Claim();
 }
 
-void CybouNodeRuntime::ReleaseRelayedOperation(const uint256& operation_id)
+void CybouNodeRuntime::ReleaseRelayedOperation(const cybou::Hash256& operation_id)
 {
     m_operation_relay.Release(operation_id);
 }
 
-bool CybouNodeRuntime::AcknowledgeRelayedOperation(const uint256& operation_id)
+bool CybouNodeRuntime::AcknowledgeRelayedOperation(const cybou::Hash256& operation_id)
 {
     return m_operation_relay.Acknowledge(operation_id);
 }
 
-bool CybouNodeRuntime::HasRelayedOperation(const uint256& operation_id) const
+bool CybouNodeRuntime::HasRelayedOperation(const cybou::Hash256& operation_id) const
 {
     return m_operation_relay.HasQueued(operation_id);
 }
 
-OperationStatus CybouNodeRuntime::GetOperationStatus(const uint256& op_id) const
+OperationStatus CybouNodeRuntime::GetOperationStatus(const cybou::Hash256& op_id) const
 {
     if (op_id.IsNull()) return {};
     std::lock_guard lock(m_mutex);
@@ -587,7 +587,7 @@ void CybouNodeRuntime::RetryPendingIdentityOperations()
     for (auto* coordinator : coordinators) coordinator->RetryRelayIfDue();
 }
 
-void CybouNodeRuntime::RememberOperationStatus(const uint256& id, OperationStatus status)
+void CybouNodeRuntime::RememberOperationStatus(const cybou::Hash256& id, OperationStatus status)
 {
     if (id.IsNull()) return;
     if (!m_recent_operation_status.contains(id)) m_recent_operation_status_order.push_back(id);
@@ -627,8 +627,8 @@ void CybouNodeRuntime::RememberFinalizedBlockForGossip(const FinalizedBlock& blo
 OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
     ProtocolOperation op, std::optional<std::string> source_peer)
 {
-    const uint256 op_id = ComputeOperationId(op).value_or(uint256{});
-    uint256 net_id{};
+    const cybou::Hash256 op_id = ComputeOperationId(op).value_or(cybou::Hash256{});
+    cybou::Hash256 net_id{};
     {
         std::lock_guard lock(m_mutex);
         const auto loaded = m_store.LoadState();
@@ -809,13 +809,13 @@ std::optional<FinalizedBlock> CybouNodeRuntime::GetBlockAtHeight(const uint64_t 
     return m_store.GetBlockAtHeight(height);
 }
 
-FinalizedOperationLookupResult CybouNodeRuntime::FindFinalizedOperation(const uint256& op_id) const
+FinalizedOperationLookupResult CybouNodeRuntime::FindFinalizedOperation(const cybou::Hash256& op_id) const
 {
     FinalizedOperationLookupResult result;
     const auto status = GetStatus();
     if (!status.is_initialized || op_id.IsNull()) return result;
     result.status = FinalizedOperationLookupStatus::NOT_FOUND;
-    uint256 previous_id = m_config.network_genesis.GetGenesisAnchor();
+    cybou::Hash256 previous_id = m_config.network_genesis.GetGenesisAnchor();
     for (uint64_t height = 1; height <= status.finalized_height; ++height) {
         const auto finalized = GetBlockAtHeight(height);
         if (!finalized) {
@@ -852,7 +852,7 @@ FinalizedOperationLookupResult CybouNodeRuntime::FindFinalizedOperation(const ui
     return result;
 }
 
-std::optional<RootPublication> CybouNodeRuntime::FindFinalizedRootPublication(const uint256& op_id) const
+std::optional<RootPublication> CybouNodeRuntime::FindFinalizedRootPublication(const cybou::Hash256& op_id) const
 {
     const auto location = FindFinalizedOperation(op_id);
     if (location.status != FinalizedOperationLookupStatus::FOUND) return std::nullopt;
@@ -888,7 +888,7 @@ IdentityKemPackageLookupResult CybouNodeRuntime::FindIdentityKemPackage(
     }
 
     bool found{false};
-    uint256 previous_id = m_config.network_genesis.GetGenesisAnchor();
+    cybou::Hash256 previous_id = m_config.network_genesis.GetGenesisAnchor();
     for (uint64_t height = 1; height <= *finalized_height; ++height) {
         const auto finalized = m_store.GetBlockAtHeight(height);
         if (!finalized) return result;

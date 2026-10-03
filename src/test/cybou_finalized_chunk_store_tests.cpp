@@ -23,7 +23,7 @@ struct AuthorizedFixture {
         std::span<const cybou::AuthorizedChunk>{&authorized_chunk, 1});
     cybou::RootPublication publication{};
     cybou::ChunkAuthorizationProof proof = commitment.Proof(0);
-    uint256 operation_id{uint8_t{1}};
+    cybou::Hash256 operation_id{uint8_t{1}};
 
     AuthorizedFixture()
     {
@@ -35,7 +35,7 @@ struct AuthorizedFixture {
 
     cybou::FinalizedPublicationLookup Lookup() const
     {
-        return [this](const uint256& id) -> std::optional<cybou::RootPublication> {
+        return [this](const cybou::Hash256& id) -> std::optional<cybou::RootPublication> {
             if (id != operation_id) return std::nullopt;
             return publication;
         };
@@ -51,7 +51,7 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_requires_finality_and_valid_proof)
     AuthorizedFixture fixture;
     cybou::ChunkBlobStore blobs({}, true);
     cybou::FinalizedChunkStore store(blobs, {}, fixture.network_binding, 4096);
-    const auto unavailable = [](const uint256&) -> std::optional<cybou::RootPublication> { return std::nullopt; };
+    const auto unavailable = [](const cybou::Hash256&) -> std::optional<cybou::RootPublication> { return std::nullopt; };
     BOOST_CHECK(store.PutChunk(fixture.operation_id, fixture.chunk_id, fixture.bytes, fixture.proof, unavailable).status ==
         cybou::ChunkAdmissionStatus::NOT_FINALIZED);
     BOOST_CHECK(!store.HasChunk(fixture.chunk_id));
@@ -93,8 +93,8 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_is_content_addressed_idempotent_and_c
     BOOST_REQUIRE(second_commitment.has_value());
     auto second_publication = fixture.publication;
     second_publication.chunk_authorization_root = second_commitment->root;
-    auto second_id_op = uint256{uint8_t{2}};
-    const auto second_lookup = [second_id_op, second_publication](const uint256& id)
+    auto second_id_op = cybou::Hash256{uint8_t{2}};
+    const auto second_lookup = [second_id_op, second_publication](const cybou::Hash256& id)
         -> std::optional<cybou::RootPublication> {
         if (id == second_id_op) return second_publication;
         return std::nullopt;
@@ -103,8 +103,8 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_is_content_addressed_idempotent_and_c
         second_commitment->Proof(0), second_lookup).status == cybou::ChunkAdmissionStatus::CAPACITY_EXCEEDED);
 
     // The same physical chunk can be authorized by another finalized publication without doubling storage use.
-    const auto second_publication_id = uint256{uint8_t{3}};
-    const auto shared_lookup = [second_publication_id, publication = fixture.publication](const uint256& id)
+    const auto second_publication_id = cybou::Hash256{uint8_t{3}};
+    const auto shared_lookup = [second_publication_id, publication = fixture.publication](const cybou::Hash256& id)
         -> std::optional<cybou::RootPublication> {
         if (id == second_publication_id) return publication;
         return std::nullopt;
@@ -125,12 +125,12 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_allows_proven_chunks_until_provider_c
     const auto commitment = cybou::BuildChunkAuthorizationTree(chunks);
     BOOST_REQUIRE(commitment.has_value());
 
-    const auto publication_id = uint256{uint8_t{4}};
+    const auto publication_id = cybou::Hash256{uint8_t{4}};
     cybou::RootPublication publication;
     publication.root_chunk_id.fill(0x42);
     publication.chunk_authorization_root = commitment->root;
     publication.chunk_count = commitment->chunk_count;
-    const auto lookup = [publication_id, publication](const uint256& id)
+    const auto lookup = [publication_id, publication](const cybou::Hash256& id)
         -> std::optional<cybou::RootPublication> {
         if (id == publication_id) return publication;
         return std::nullopt;

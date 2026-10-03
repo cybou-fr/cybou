@@ -168,7 +168,7 @@ struct Services {
     }
 
     /** Audits every placement until op is PROTECTED with no replica on excluded providers. */
-    void WaitRepaired(const uint256& op, const std::set<std::array<unsigned char, 32>>& excluded, const std::string& what)
+    void WaitRepaired(const cybou::Hash256& op, const std::set<std::array<unsigned char, 32>>& excluded, const std::string& what)
     {
         WaitFor(what, [&] {
             storage->AuditNextPlacement(64);

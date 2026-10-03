@@ -25,7 +25,7 @@
 namespace {
 
 struct PublishedContent {
-    uint256 operation_id;
+    cybou::Hash256 operation_id;
     std::vector<cybou::ChunkId> leaves;
 };
 
@@ -426,7 +426,7 @@ BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
     other_session.nonce = 23;
     BOOST_CHECK(!cybou::p2p::VerifyStorageProof(*proof, cybou::p2p::StorageProofMessage(signer, other_session, exporter)));
     auto other_network = signer;
-    other_network.network_binding = uint256{};
+    other_network.network_binding = cybou::Hash256{};
     BOOST_CHECK(!cybou::p2p::VerifyStorageProof(*proof, cybou::p2p::StorageProofMessage(other_network, verifier, exporter)));
     (*proof)[5] ^= 0x01;
     BOOST_CHECK(!cybou::p2p::VerifyStorageProof(*proof, message));

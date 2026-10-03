@@ -18,7 +18,7 @@ namespace cybou {
 
 bool ValidateProtocolParameters(const CybouProtocolParameters& params)
 {
-    if (params.account_creation_work_bits > uint256::size() * 8) {
+    if (params.account_creation_work_bits > cybou::Hash256::size() * 8) {
         return false;
     }
     if (params.max_account_creates_per_block == 0) {
@@ -39,7 +39,7 @@ bool ValidateProtocolParameters(const CybouProtocolParameters& params)
     if (max_chunk_fee > std::numeric_limits<uint64_t>::max() - max_byte_fee) {
         return false;
     }
-    if (params.name_claim_work_bits > uint256::size() * 8 ||
+    if (params.name_claim_work_bits > cybou::Hash256::size() * 8 ||
         params.name_commit_min_depth == 0 ||
         params.name_commit_max_lifetime < params.name_commit_min_depth ||
         params.max_pending_name_commits == 0 ||
@@ -49,11 +49,11 @@ bool ValidateProtocolParameters(const CybouProtocolParameters& params)
     return true;
 }
 
-uint256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key)
+cybou::Hash256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V6"};
     const auto key = CanonicalSerializeNetworkPublicKey(network_public_key);
-    uint256 result;
+    cybou::Hash256 result;
     ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(key.data(), key.size());
@@ -89,7 +89,7 @@ void WriteU64LE(std::vector<unsigned char>& out, uint64_t value) {
     }
 }
 
-void WriteHash(std::vector<unsigned char>& out, const uint256& hash) {
+void WriteHash(std::vector<unsigned char>& out, const cybou::Hash256& hash) {
     out.insert(out.end(), hash.begin(), hash.end());
 }
 
@@ -190,10 +190,10 @@ std::vector<unsigned char> SerializeNetworkGenesisPayload(const NetworkGenesis& 
     return out;
 }
 
-uint256 ComputeNetworkGenesisDigest(const NetworkGenesis& genesis)
+cybou::Hash256 ComputeNetworkGenesisDigest(const NetworkGenesis& genesis)
 {
     const auto payload = SerializeNetworkGenesisPayload(genesis);
-    uint256 digest;
+    cybou::Hash256 digest;
     crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(CYBOU_GENESIS_SIGNING_DOMAIN.data()),
                  CYBOU_GENESIS_SIGNING_DOMAIN.size());
@@ -239,11 +239,11 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
         pos += 8;
         return v;
     };
-    const auto read_hash = [&]() -> std::optional<uint256> {
-        if (pos + uint256::size() > bytes.size()) return std::nullopt;
-        uint256 val;
-        std::copy_n(bytes.begin() + pos, uint256::size(), val.begin());
-        pos += uint256::size();
+    const auto read_hash = [&]() -> std::optional<cybou::Hash256> {
+        if (pos + cybou::Hash256::size() > bytes.size()) return std::nullopt;
+        cybou::Hash256 val;
+        std::copy_n(bytes.begin() + pos, cybou::Hash256::size(), val.begin());
+        pos += cybou::Hash256::size();
         return val;
     };
 
@@ -355,7 +355,7 @@ NetworkGenesisError VerifySignedNetworkGenesis(const NetworkGenesis& genesis)
     return NetworkGenesisError::NONE;
 }
 
-VerifiedNetworkGenesis::VerifiedNetworkGenesis(NetworkGenesis genesis, std::vector<unsigned char> network_id_bytes, uint256 genesis_digest)
+VerifiedNetworkGenesis::VerifiedNetworkGenesis(NetworkGenesis genesis, std::vector<unsigned char> network_id_bytes, cybou::Hash256 genesis_digest)
     : m_genesis(std::move(genesis)), m_network_id_bytes(std::move(network_id_bytes)), m_genesis_digest(genesis_digest)
 {
 }

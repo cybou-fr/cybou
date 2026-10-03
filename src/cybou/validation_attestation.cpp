@@ -28,9 +28,9 @@ std::optional<std::vector<unsigned char>> SerializeBody(const ValidationAttestat
     return out;
 }
 
-uint256 ReadUint256(std::span<const unsigned char> bytes)
+cybou::Hash256 ReadUint256(std::span<const unsigned char> bytes)
 {
-    uint256 value;
+    cybou::Hash256 value;
     std::copy_n(bytes.begin(), 32, value.begin());
     return value;
 }
@@ -84,7 +84,7 @@ bool IsValidationEligible(const CybouState& finalized_state, const AccountId& ac
 }
 
 ValidationAttestationError VerifyValidationAttestation(const ValidationAttestation& attestation,
-    const uint256& network_binding, const uint256& finalized_tip, const CybouState& finalized_state)
+    const cybou::Hash256& network_binding, const cybou::Hash256& finalized_tip, const CybouState& finalized_state)
 {
     const auto digest = ComputeValidationAttestationDigest(attestation);
     if (!digest || attestation.signature.ml_dsa.size() != 2420) return ValidationAttestationError::INVALID_PAYLOAD;
@@ -101,7 +101,7 @@ ValidationAttestationError VerifyValidationAttestation(const ValidationAttestati
 }
 
 std::optional<ValidationAttestation> SignValidationAttestation(const ValidationSigner& signer,
-    const uint256& network_binding, const uint256& operation_id, const uint256& finalized_tip,
+    const cybou::Hash256& network_binding, const cybou::Hash256& operation_id, const cybou::Hash256& finalized_tip,
     const CybouState& finalized_state)
 {
     const auto account = signer.Account();

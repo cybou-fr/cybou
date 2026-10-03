@@ -63,11 +63,11 @@ std::string Hex(const Bytes& bytes)
     return out;
 }
 
-std::string AccessibleKey(const uint256& id) { return "app/pub/" + id.GetHex(); }
+std::string AccessibleKey(const cybou::Hash256& id) { return "app/pub/" + id.GetHex(); }
 std::string MailKey(const PrivateItemId& id) { return "mail/msg/" + Hex(id); }
 std::string FileKey(const PrivateItemId& id) { return "files/item/" + Hex(id); }
 std::string FileStarKey(const PrivateItemId& id) { return "files/starred/" + Hex(id); }
-std::string BridgeKey(const uint256& id) { return "recovery/bridge/" + id.GetHex(); }
+std::string BridgeKey(const cybou::Hash256& id) { return "recovery/bridge/" + id.GetHex(); }
 
 class Writer {
 public:
@@ -136,7 +136,7 @@ std::optional<AccountId> ReadAccount(Reader& in)
     return AccountId::FromBytes(bytes);
 }
 
-bool ReadUint256(Reader& in, uint256& out) { return in.Bytes(std::span{out.begin(), 32}); }
+bool ReadUint256(Reader& in, cybou::Hash256& out) { return in.Bytes(std::span{out.begin(), 32}); }
 
 /** Fixed-width 32-byte ID lists used as indexes; the store itself is not enumerable. */
 template <typename Id>
@@ -206,7 +206,7 @@ ApplicationService::ApplicationService(CybouNodeRuntime& runtime, CybouKeyStore&
 
 /* ---- persistence ---- */
 
-std::optional<ApplicationService::Accessible> ApplicationService::LoadAccessible(const uint256& id) const
+std::optional<ApplicationService::Accessible> ApplicationService::LoadAccessible(const cybou::Hash256& id) const
 {
     const auto encoded = m_application_db.Get(AccessibleKey(id));
     if (!encoded) return std::nullopt;
@@ -229,7 +229,7 @@ std::optional<ApplicationService::Accessible> ApplicationService::LoadAccessible
     return record;
 }
 
-bool ApplicationService::SaveAccessible(const uint256& id, const Accessible& record)
+bool ApplicationService::SaveAccessible(const cybou::Hash256& id, const Accessible& record)
 {
     Writer out;
     out.Bytes(ACCESSIBLE_MAGIC);
@@ -379,7 +379,7 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
         m_repairing = true;
     }
     // Retry roots that were unavailable earlier; later blocks never wait for them.
-    for (const auto& operation_id : ReadIds<uint256>(m_application_db, UNAVAILABLE_KEY)) {
+    for (const auto& operation_id : ReadIds<cybou::Hash256>(m_application_db, UNAVAILABLE_KEY)) {
         // The indexed records, the new state and the retry list change together.
         PrivateApplicationStore::Batch batch{m_application_db};
         auto accessible = LoadAccessible(operation_id);
@@ -430,7 +430,7 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
     progress.scanned_height = Checkpoint();
     if (progress.scanned_height >= progress.finalized_height) m_repairing = false;
     RecoverOwnPublications(4);
-    progress.unavailable_roots = static_cast<std::uint32_t>(ReadIds<uint256>(m_application_db, UNAVAILABLE_KEY).size());
+    progress.unavailable_roots = static_cast<std::uint32_t>(ReadIds<cybou::Hash256>(m_application_db, UNAVAILABLE_KEY).size());
     return progress;
 }
 
@@ -439,7 +439,7 @@ ApplicationScanProgress ApplicationService::Progress()
     std::lock_guard lock{m_mutex};
     return {.scanned_height = Checkpoint(),
         .finalized_height = m_runtime.GetFinalizedHeight().value_or(0),
-        .unavailable_roots = static_cast<std::uint32_t>(ReadIds<uint256>(m_application_db, UNAVAILABLE_KEY).size())};
+        .unavailable_roots = static_cast<std::uint32_t>(ReadIds<cybou::Hash256>(m_application_db, UNAVAILABLE_KEY).size())};
 }
 
 bool ApplicationService::ProcessBlock(const std::uint64_t height, const std::uint64_t my_key_epoch)
@@ -458,7 +458,7 @@ bool ApplicationService::ProcessBlock(const std::uint64_t height, const std::uin
 }
 
 bool ApplicationService::ProcessPublication(const std::uint64_t height, const std::uint32_t index,
-    const uint256& operation_id, const AuthorizedRootPublication& publication, const std::uint64_t my_key_epoch)
+    const cybou::Hash256& operation_id, const AuthorizedRootPublication& publication, const std::uint64_t my_key_epoch)
 {
     // Idempotent: a recorded publication is not reopened. One that was
     // recorded but never indexed (older databases, or an unavailable root) is
@@ -509,7 +509,7 @@ void ApplicationService::RecoverOwnPublications(const std::uint32_t max_publicat
     std::uint32_t attempted{0};
     const auto me = m_identity.GetAccountId();
     if (!me) return;
-    for (const auto& operation_id : ReadIds<uint256>(m_application_db, OWN_PUBLICATIONS_KEY)) {
+    for (const auto& operation_id : ReadIds<cybou::Hash256>(m_application_db, OWN_PUBLICATIONS_KEY)) {
         const auto durability = m_storage.GetDurability(operation_id);
         if (durability && durability->state == DurabilityState::PROTECTED) {
             m_storage.Track(operation_id); // keep restored placements under audit
@@ -523,7 +523,7 @@ void ApplicationService::RecoverOwnPublications(const std::uint32_t max_publicat
     }
 }
 
-bool ApplicationService::RecoverPlacement(const uint256& operation_id, Accessible& accessible)
+bool ApplicationService::RecoverPlacement(const cybou::Hash256& operation_id, Accessible& accessible)
 {
     const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
     if (!publication || publication->chunk_count == 0 || publication->chunk_count > (1U << 20)) return false;
@@ -589,7 +589,7 @@ bool ApplicationService::RecoverPlacement(const uint256& operation_id, Accessibl
     return recovered.state == DurabilityState::PROTECTED;
 }
 
-AccessibleRootState ApplicationService::Index(const uint256& operation_id, Accessible& accessible)
+AccessibleRootState ApplicationService::Index(const cybou::Hash256& operation_id, Accessible& accessible)
 {
     if (accessible.state == AccessibleRootState::INDEXED || accessible.state == AccessibleRootState::INVALID) {
         return accessible.state;
@@ -631,7 +631,7 @@ AccessibleRootState ApplicationService::Index(const uint256& operation_id, Acces
     return state;
 }
 
-bool ApplicationService::ApplyMail(const uint256& operation_id, const Accessible& accessible, const MailMessage& message)
+bool ApplicationService::ApplyMail(const cybou::Hash256& operation_id, const Accessible& accessible, const MailMessage& message)
 {
     const auto me = m_identity.GetAccountId();
     if (!me) return false;
@@ -652,7 +652,7 @@ bool ApplicationService::ApplyMail(const uint256& operation_id, const Accessible
     return SaveMail(record);
 }
 
-bool ApplicationService::ApplyFiles(const uint256& operation_id, const Accessible& accessible,
+bool ApplicationService::ApplyFiles(const cybou::Hash256& operation_id, const Accessible& accessible,
     const FilesMutationBatch& batch)
 {
     // The Files catalog is private to its owner.
@@ -681,7 +681,7 @@ bool ApplicationService::ApplyFiles(const uint256& operation_id, const Accessibl
     return true;
 }
 
-bool ApplicationService::ApplyBridge(const uint256& operation_id, const Accessible& accessible,
+bool ApplicationService::ApplyBridge(const cybou::Hash256& operation_id, const Accessible& accessible,
     const IdentityRecoveryBridge& bridge)
 {
     const auto me = m_identity.GetAccountId();
@@ -707,7 +707,7 @@ bool ApplicationService::ImportBridgeSeeds(const AccountId& me, const std::uint6
         return false;
     };
     bool newly_recovered{false};
-    for (const auto& id : ReadIds<uint256>(m_application_db, BRIDGE_INDEX_KEY)) {
+    for (const auto& id : ReadIds<cybou::Hash256>(m_application_db, BRIDGE_INDEX_KEY)) {
         const auto encoded = m_application_db.Get(BridgeKey(id));
         auto document = encoded ? DecodePrivateApplicationDocument(*encoded) : std::nullopt;
         if (!document || !std::holds_alternative<IdentityRecoveryBridge>(*document)) continue;
@@ -947,7 +947,7 @@ std::vector<IdentityRecoveryBridge> ApplicationService::RecoveryBridges()
 {
     std::lock_guard lock{m_mutex};
     std::vector<std::pair<PrivateOrder, IdentityRecoveryBridge>> bridges;
-    for (const auto& id : ReadIds<uint256>(m_application_db, BRIDGE_INDEX_KEY)) {
+    for (const auto& id : ReadIds<cybou::Hash256>(m_application_db, BRIDGE_INDEX_KEY)) {
         const auto accessible = LoadAccessible(id);
         const auto encoded = m_application_db.Get(BridgeKey(id));
         auto document = encoded ? DecodePrivateApplicationDocument(*encoded) : std::nullopt;
@@ -961,7 +961,7 @@ std::vector<IdentityRecoveryBridge> ApplicationService::RecoveryBridges()
     return out;
 }
 
-std::optional<AccessibleRootState> ApplicationService::PublicationState(const uint256& operation_id)
+std::optional<AccessibleRootState> ApplicationService::PublicationState(const cybou::Hash256& operation_id)
 {
     std::lock_guard lock{m_mutex};
     const auto accessible = LoadAccessible(operation_id);

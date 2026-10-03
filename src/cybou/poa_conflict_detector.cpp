@@ -31,7 +31,7 @@ std::string Hex(const std::span<const unsigned char> bytes)
     return out;
 }
 
-std::string Hex(const uint256& value)
+std::string Hex(const cybou::Hash256& value)
 {
     return Hex(std::span<const unsigned char>{value.begin(), value.size()});
 }
@@ -46,7 +46,7 @@ std::string ObservationKey(const std::string& prefix, const PoaFinalityCertifica
 }
 
 bool ValidConflictRecord(const std::span<const unsigned char> record,
-    const uint256& network_binding, const IdentityHybridPublicKey& finalizer_key)
+    const cybou::Hash256& network_binding, const IdentityHybridPublicKey& finalizer_key)
 {
     if (record.size() != EQUIVOCATION_RECORD_SIZE || record[0] != RECORD_VERSION ||
         record[1] != HALT_EQUIVOCATION) return false;
@@ -64,7 +64,7 @@ bool ValidConflictRecord(const std::span<const unsigned char> record,
 
 } // namespace
 
-PoaConflictDetector::PoaConflictDetector(KVStore& db, const uint256& network_binding,
+PoaConflictDetector::PoaConflictDetector(KVStore& db, const cybou::Hash256& network_binding,
     const IdentityHybridPublicKey& genesis_finalizer_key)
     : m_db{db}, m_network_binding{network_binding}, m_genesis_finalizer_key{genesis_finalizer_key},
       m_prefix{[&network_binding, &genesis_finalizer_key] {

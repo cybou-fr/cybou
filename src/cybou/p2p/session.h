@@ -5,7 +5,7 @@
 #define CYBOU_P2P_SESSION_H
 
 #include <cybou/operation_submit.h>
-#include <uint256.h>
+#include <cybou/hash256.h>
 #include <cybou/account_id.h>
 #include <cybou/poa_finalizer.h>
 #include <cybou/finalized_chunk_store.h>
@@ -83,9 +83,9 @@ struct Frame {
 };
 
 struct Hello {
-    uint256 network_binding;
+    cybou::Hash256 network_binding;
     uint64_t finalized_height{0};
-    uint256 finalized_tip;
+    cybou::Hash256 finalized_tip;
     uint64_t nonce{0};
 
     friend bool operator==(const Hello&, const Hello&) = default;
@@ -124,7 +124,7 @@ struct BlockRequestResult {
 
 struct BlockAnnouncement {
     uint64_t height{0};
-    uint256 block_id;
+    cybou::Hash256 block_id;
 };
 
 struct BlockBatchResult {
@@ -173,12 +173,12 @@ public:
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     bool SendPeers(const std::vector<std::pair<std::string, uint16_t>>& peers,
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
-    std::optional<ChunkAdmissionResult> PutAuthorizedChunk(const uint256& publication_operation_id,
+    std::optional<ChunkAdmissionResult> PutAuthorizedChunk(const cybou::Hash256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
         const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetChunkById(const ChunkId& chunk_id);
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
-        const uint256& publication_operation_id, const ChunkId& chunk_id);
+        const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id);
     bool ServeNext(CybouNodeRuntime& runtime);
     const std::optional<Hello>& Peer() const { return m_peer; }
     /** One authenticated CYP2 frame for bounded peer extensions and protocol tests. */
@@ -195,7 +195,7 @@ private:
     std::optional<OperationSubmitResult> ReceiveOperation(const Frame& meta, CybouNodeRuntime& runtime,
         bool allow_seen_retry, std::chrono::steady_clock::time_point deadline);
     bool SendOperationResult(const OperationSubmitResult& result, std::chrono::steady_clock::time_point deadline);
-    std::optional<OperationSubmitResult> ReadOperationResult(const uint256& operation_id,
+    std::optional<OperationSubmitResult> ReadOperationResult(const cybou::Hash256& operation_id,
         std::chrono::steady_clock::time_point deadline);
     bool EstablishSecureTransport(std::chrono::steady_clock::time_point deadline);
     bool AdvanceTlsOperation(int result, std::chrono::steady_clock::time_point deadline);
@@ -217,7 +217,7 @@ private:
     std::optional<StorageId> m_peer_provider_id;
     std::optional<Hello> m_local;
     // Attestations already served to this peer on the current finalized base.
-    uint256 m_served_attestation_base;
+    cybou::Hash256 m_served_attestation_base;
     std::set<ValidationPool::Key> m_served_attestations;
     HandshakeStatus m_handshake_status{HandshakeStatus::NOT_ATTEMPTED};
 };

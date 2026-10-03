@@ -4,7 +4,7 @@
 #ifndef CYBOU_OPERATION_RELAY_H
 #define CYBOU_OPERATION_RELAY_H
 
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -25,7 +25,7 @@ enum class OperationRelayEnqueueStatus : uint8_t {
 };
 
 struct RelayedOperation {
-    uint256 operation_id;
+    cybou::Hash256 operation_id;
     std::vector<unsigned char> exact_bytes;
 };
 
@@ -43,10 +43,10 @@ public:
     /** Reserve the FIFO head for one in-flight peer transfer. */
     std::optional<RelayedOperation> Claim();
     /** Release a failed/incomplete transfer so another peer can retry it. */
-    void Release(const uint256& operation_id);
-    bool Acknowledge(const uint256& operation_id);
-    bool HasQueued(const uint256& operation_id) const;
-    void ForgetFinalized(const uint256& operation_id);
+    void Release(const cybou::Hash256& operation_id);
+    bool Acknowledge(const cybou::Hash256& operation_id);
+    bool HasQueued(const cybou::Hash256& operation_id) const;
+    void ForgetFinalized(const cybou::Hash256& operation_id);
     size_t QueuedOperations() const;
     size_t QueuedBytes() const;
 
@@ -56,10 +56,10 @@ private:
     const size_t m_seen_limit;
     mutable std::mutex m_mutex;
     std::deque<RelayedOperation> m_queue;
-    std::optional<uint256> m_claimed_id;
-    std::set<uint256> m_queued_ids;
-    std::deque<uint256> m_seen_order;
-    std::set<uint256> m_seen_ids;
+    std::optional<cybou::Hash256> m_claimed_id;
+    std::set<cybou::Hash256> m_queued_ids;
+    std::deque<cybou::Hash256> m_seen_order;
+    std::set<cybou::Hash256> m_seen_ids;
     size_t m_queued_bytes{0};
 };
 

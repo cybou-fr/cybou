@@ -1,10 +1,9 @@
-// Copyright (c) 2018-present The Bitcoin Core developers
+// Copyright (c) 2026 CYBOU contributors
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <qt/cybouapplication.h>
 
-#include <compat/compat.h>
 #include <cybou/cli/cybou_cli.h>
 
 #ifdef WIN32
@@ -13,7 +12,7 @@
 #include <cstdio>
 #endif
 
-MAIN_FUNCTION
+int main(int argc, char* argv[])
 {
     // One executable: a headless command runs the node/operator CLI, otherwise the desktop.
     if (argc > 1 && (cybou::cli::IsCommand(argv[1]) || argv[1][0] != '-')) {

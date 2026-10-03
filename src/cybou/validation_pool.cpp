@@ -19,25 +19,25 @@ ValidationPoolAdd ValidationPool::Add(const ValidationAttestation& attestation)
     return ValidationPoolAdd::ADDED;
 }
 
-void ValidationPool::ResetBase(const uint256& finalized_tip)
+void ValidationPool::ResetBase(const cybou::Hash256& finalized_tip)
 {
     if (finalized_tip == m_base) return;
     m_base = finalized_tip;
     m_entries.clear();
 }
 
-void ValidationPool::Drop(const uint256& operation_id)
+void ValidationPool::Drop(const cybou::Hash256& operation_id)
 {
     m_entries.erase(operation_id);
 }
 
-size_t ValidationPool::Count(const uint256& operation_id) const
+size_t ValidationPool::Count(const cybou::Hash256& operation_id) const
 {
     const auto entry = m_entries.find(operation_id);
     return entry == m_entries.end() ? 0 : entry->second.size();
 }
 
-std::vector<ValidationAttestation> ValidationPool::ForOperation(const uint256& operation_id) const
+std::vector<ValidationAttestation> ValidationPool::ForOperation(const cybou::Hash256& operation_id) const
 {
     std::vector<ValidationAttestation> attestations;
     const auto entry = m_entries.find(operation_id);

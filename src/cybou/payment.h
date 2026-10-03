@@ -73,14 +73,14 @@ std::optional<std::array<unsigned char, PAYMENT_PAYLOAD_SIZE>> SerializePaymentP
 std::optional<PaymentPayload> DeserializePaymentPayload(std::span<const unsigned char> bytes);
 std::optional<IdentityKeyId> ComputePaymentPayloadCommitment(const PaymentPayload& payment);
 PaymentError ApplyPayment(const AuthorizedPayment& operation,
-    const uint256& network_binding, const CybouProtocolParameters& params,
+    const cybou::Hash256& network_binding, const CybouProtocolParameters& params,
     CybouState& state);
 
 std::optional<std::array<unsigned char, SYSTEM_LOCK_PAYLOAD_SIZE>> SerializeSystemLockPayload(const SystemLockPayload& lock);
 std::optional<SystemLockPayload> DeserializeSystemLockPayload(std::span<const unsigned char> bytes);
 std::optional<IdentityKeyId> ComputeSystemLockPayloadCommitment(const SystemLockPayload& lock);
 SystemLockError ApplySystemLock(const AuthorizedSystemLock& operation,
-    const uint256& network_binding,
+    const cybou::Hash256& network_binding,
     CybouState& state);
 
 } // namespace cybou

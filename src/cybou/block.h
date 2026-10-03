@@ -7,7 +7,7 @@
 
 #include <cybou/protocol_operation.h>
 #include <cybou/poa_finality.h>
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <cstdint>
 #include <optional>
@@ -25,10 +25,10 @@ inline constexpr size_t MAX_FINALIZER_SERIALIZED_BLOCK_BYTES{32U * 1024U * 1024U
  */
 struct CybouBlock {
     uint8_t version{CYBOU_BLOCK_VERSION};
-    uint256 parent_block_id;
+    cybou::Hash256 parent_block_id;
     uint64_t height{0};
     std::vector<ProtocolOperation> operations;
-    uint256 resulting_state_root;
+    cybou::Hash256 resulting_state_root;
 
     friend bool operator==(const CybouBlock&, const CybouBlock&) = default;
 };
@@ -38,18 +38,18 @@ struct CybouBlock {
  */
 struct CybouBlockHeader {
     uint8_t version{CYBOU_BLOCK_VERSION};
-    uint256 parent_block_id;
+    cybou::Hash256 parent_block_id;
     uint64_t height{0};
-    uint256 operations_root;
-    uint256 resulting_state_root;
+    cybou::Hash256 operations_root;
+    cybou::Hash256 resulting_state_root;
 
     friend bool operator==(const CybouBlockHeader&, const CybouBlockHeader&) = default;
 };
 
-uint256 ComputeOperationsRootFromHashes(std::span<const uint256> hashes);
-uint256 ComputeOperationsRoot(const std::vector<ProtocolOperation>& operations);
-uint256 ComputeBlockHeaderId(const CybouBlockHeader& header);
-uint256 ComputeBlockId(const CybouBlock& block);
+cybou::Hash256 ComputeOperationsRootFromHashes(std::span<const cybou::Hash256> hashes);
+cybou::Hash256 ComputeOperationsRoot(const std::vector<ProtocolOperation>& operations);
+cybou::Hash256 ComputeBlockHeaderId(const CybouBlockHeader& header);
+cybou::Hash256 ComputeBlockId(const CybouBlock& block);
 CybouBlockHeader ExtractBlockHeader(const CybouBlock& block);
 
 std::optional<std::vector<unsigned char>> SerializeBlock(const CybouBlock& block);

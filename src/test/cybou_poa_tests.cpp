@@ -24,9 +24,9 @@
 
 namespace {
 
-uint256 TestId(const unsigned char first_byte)
+cybou::Hash256 TestId(const unsigned char first_byte)
 {
-    uint256 id;
+    cybou::Hash256 id;
     id.begin()[0] = first_byte;
     return id;
 }
@@ -39,7 +39,7 @@ cybou::RecoveryEntropy TestEntropy(const unsigned char first_byte)
     return entropy;
 }
 
-cybou::CybouBlock TestBlock(const uint256& parent, const uint64_t height,
+cybou::CybouBlock TestBlock(const cybou::Hash256& parent, const uint64_t height,
     const unsigned char state_tag)
 {
     return cybou::CybouBlock{
@@ -139,10 +139,10 @@ BOOST_AUTO_TEST_CASE(finality_digest_key_and_encoding_golden_vectors)
         parent_bytes[i] = static_cast<unsigned char>(i + 0x21);
         state_bytes[i] = static_cast<unsigned char>(i + 0x41);
     }
-    const uint256 network{network_bytes};
-    const uint256 parent{parent_bytes};
+    const cybou::Hash256 network{network_bytes};
+    const cybou::Hash256 parent{parent_bytes};
     auto vector_block = TestBlock(parent, 7, 0);
-    vector_block.resulting_state_root = uint256{state_bytes};
+    vector_block.resulting_state_root = cybou::Hash256{state_bytes};
     const auto block_id = cybou::ComputeBlockId(vector_block);
     const auto digest = cybou::ComputePoaFinalityDigest(network, block_id, 7, parent);
     const auto signature = cybou::SignIdentityMessage(entropy, cybou::IdentityKeyPurpose::POA_FINALIZER, digest);

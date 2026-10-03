@@ -43,7 +43,7 @@ std::optional<IdentityKeyId> ComputePaymentPayloadCommitment(const PaymentPayloa
 }
 
 PaymentError ApplyPayment(const AuthorizedPayment& operation,
-    const uint256& network_binding, const CybouProtocolParameters& params,
+    const cybou::Hash256& network_binding, const CybouProtocolParameters& params,
     CybouState& state)
 {
     if (operation.authorization.kind != IdentityOperationKind::PAYMENT) return PaymentError::INVALID_AUTHORIZATION;
@@ -105,7 +105,7 @@ std::optional<IdentityKeyId> ComputeSystemLockPayloadCommitment(const SystemLock
 }
 
 SystemLockError ApplySystemLock(const AuthorizedSystemLock& operation,
-    const uint256& network_binding,
+    const cybou::Hash256& network_binding,
     CybouState& state)
 {
     if (operation.authorization.kind != IdentityOperationKind::SYSTEM_LOCK) return SystemLockError::INVALID_AUTHORIZATION;

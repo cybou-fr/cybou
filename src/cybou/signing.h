@@ -5,7 +5,7 @@
 #ifndef CYBOU_SIGNING_H
 #define CYBOU_SIGNING_H
 
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <array>
 #include <cstddef>
@@ -25,12 +25,12 @@ inline constexpr size_t USER_SIGNATURE_SIZE{64};
 
 /** Verify a classical Ed25519 user signature against a 32-byte public key. */
 bool VerifyUserSignature(
-    const uint256& public_key,
+    const cybou::Hash256& public_key,
     std::span<const unsigned char> signature,
     std::span<const unsigned char> message);
 
 /** Derive 32-byte Ed25519 public key from a 32-byte private key seed. */
-std::optional<uint256> DeriveEd25519PublicKey(std::span<const unsigned char, 32> private_key);
+std::optional<cybou::Hash256> DeriveEd25519PublicKey(std::span<const unsigned char, 32> private_key);
 
 /** Sign a message using a 32-byte Ed25519 private key seed, producing a 64-byte signature. */
 std::optional<std::array<unsigned char, USER_SIGNATURE_SIZE>> SignUserMessage(

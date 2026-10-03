@@ -39,7 +39,7 @@ struct DevnetProvisionResult {
     // Consensus Genesis & Initial State
     CybouState genesis_state;
     NetworkGenesis signed_genesis;
-    uint256 genesis_state_root;
+    cybou::Hash256 genesis_state_root;
     std::vector<unsigned char> serialized_signed_genesis;
     std::vector<unsigned char> serialized_genesis_state;
 };

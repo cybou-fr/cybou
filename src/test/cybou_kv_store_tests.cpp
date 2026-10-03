@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(local_record_encoding_preserves_existing_database_bytes)
     BOOST_CHECK(!cybou::detail::DeserializeLocalRecord(std::span{noncanonical_string_size}, decoded));
 
     cybou::FinalizedHead head{};
-    for (size_t i{0}; i < uint256::size(); ++i) head.block_id.begin()[i] = static_cast<unsigned char>(i);
+    for (size_t i{0}; i < cybou::Hash256::size(); ++i) head.block_id.begin()[i] = static_cast<unsigned char>(i);
     head.height = 0x0102030405060708;
     const auto encoded_head = cybou::detail::SerializeLocalRecord(head);
     BOOST_REQUIRE_EQUAL(encoded_head.size(), 40);

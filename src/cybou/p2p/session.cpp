@@ -676,13 +676,12 @@ std::optional<StorageId> PeerSession::ProveStorageIdentity()
     if (m_peer_provider_id) return m_peer_provider_id;
     std::array<unsigned char, 32> challenge{};
     if (RAND_bytes(challenge.data(), challenge.size()) != 1) return std::nullopt;
-    if (!Write(Frame{MessageType::STORAGE_PROOF_REQUEST, {challenge.begin(), challenge.end()}})) { m_peer.reset(); return std::nullopt; }
+    if (!Write(Frame{MessageType::STORAGE_PROOF_REQUEST, {challenge.begin(), challenge.end()}})) return std::nullopt;
     const auto response = Read();
-    if (!response || response->type != MessageType::STORAGE_PROOF) { m_peer.reset(); return std::nullopt; }
+    if (!response || response->type != MessageType::STORAGE_PROOF) return std::nullopt;
     auto message = StorageProofMessage(*m_peer, *m_local, m_tls_exporter);
     message.insert(message.end(), challenge.begin(), challenge.end());
     m_peer_provider_id = VerifyStorageProof(response->payload, message);
-    if (!m_peer_provider_id) { m_peer.reset(); return std::nullopt; }
     return m_peer_provider_id;
 }
 
@@ -827,7 +826,7 @@ bool PeerSession::SendOperationResult(const OperationSubmitResult& result, std::
     return Write(Frame{MessageType::OP_RESULT, response}, deadline);
 }
 
-std::optional<OperationSubmitResult> PeerSession::ReadOperationResult(const uint256& operation_id,
+std::optional<OperationSubmitResult> PeerSession::ReadOperationResult(const cybou::Hash256& operation_id,
     std::chrono::steady_clock::time_point deadline)
 {
     const auto response = Read(deadline);
@@ -934,7 +933,7 @@ bool PeerSession::SendPeers(const std::vector<std::pair<std::string, uint16_t>>&
 }
 
 std::optional<ChunkAdmissionResult> PeerSession::PutAuthorizedChunk(
-    const uint256& publication_operation_id, const ChunkId& chunk_id,
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id,
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
     if (!m_peer || publication_operation_id.IsNull() ||
@@ -991,7 +990,7 @@ std::optional<std::vector<unsigned char>> PeerSession::GetChunkById(const ChunkI
 }
 
 std::optional<ChunkAuthorizationProof> PeerSession::GetChunkAuthorizationProof(
-    const uint256& publication_operation_id, const ChunkId& chunk_id)
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id)
 {
     if (!m_peer || publication_operation_id.IsNull() ||
         IsZeroChunkId(chunk_id)) return std::nullopt;
@@ -1042,7 +1041,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     }
     if (request->type == MessageType::PUT_AUTHORIZED_CHUNK) {
         if (request->payload.size() < 73) return false;
-        uint256 publication_id;
+        cybou::Hash256 publication_id;
         std::copy_n(request->payload.begin(), 32, publication_id.begin());
         ChunkId chunk_id{};
         std::copy_n(request->payload.begin() + 32, 32, chunk_id.begin());
@@ -1091,7 +1090,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     }
     if (request->type == MessageType::GET_CHUNK_AUTHORIZATION_PROOF) {
         if (request->payload.size() != 64) return false;
-        uint256 publication_id;
+        cybou::Hash256 publication_id;
         std::copy_n(request->payload.begin(), 32, publication_id.begin());
         ChunkId chunk_id{};
         std::copy_n(request->payload.begin() + 32, 32, chunk_id.begin());
@@ -1152,7 +1151,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     if (request->type == MessageType::BLOCK_ANNOUNCE) {
         if (request->payload.size() != 41 || request->payload[0] != 1) return false;
         const uint64_t height = Read64(request->payload.data() + 1);
-        uint256 id;
+        cybou::Hash256 id;
         std::copy_n(request->payload.begin() + 9, 32, id.begin());
         if (height == 0 || id.IsNull()) return false;
         auto status = runtime.GetStatus();
@@ -1174,7 +1173,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         // failure (the session must die); GAP when the peer cannot serve the
         // block; APPLIED on success. An expected_id of zero skips the id check
         // (used for catch-up pulls where we only know the height).
-        auto fetch_and_commit = [&](uint64_t h, const uint256& expected_id) ->
+        auto fetch_and_commit = [&](uint64_t h, const cybou::Hash256& expected_id) ->
             std::optional<BlockAnnounceResult> {
             const auto response = RequestBlock(h);
             if (response.status == BlockRequestStatus::NOT_FOUND) return BlockAnnounceResult::GAP;
@@ -1193,7 +1192,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             const bool committed = static_cast<bool>(runtime.CommitBlock(*block));
             return committed ? BlockAnnounceResult::APPLIED : BlockAnnounceResult::GAP;
         };
-        auto have_height = [&](uint64_t h, const uint256& expected) {
+        auto have_height = [&](uint64_t h, const cybou::Hash256& expected) {
             const auto known = runtime.GetBlockAtHeight(h);
             return known && ComputeBlockId(known->block) == expected;
         };

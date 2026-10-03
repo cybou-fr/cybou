@@ -47,7 +47,7 @@ inline uint32_t ReadUint32LE(const std::span<const unsigned char>& bytes, size_t
 
 } // namespace
 
-uint256 ComputeOperationsRootFromHashes(std::span<const uint256> hashes)
+cybou::Hash256 ComputeOperationsRootFromHashes(std::span<const cybou::Hash256> hashes)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/OPS_ROOT/V3"};
     ::cybou::crypto::Sha256 hasher;
@@ -63,26 +63,26 @@ uint256 ComputeOperationsRootFromHashes(std::span<const uint256> hashes)
         hasher.Write(op_hash.begin(), op_hash.size());
     }
 
-    uint256 root;
+    cybou::Hash256 root;
     hasher.Finalize(root.begin());
     return root;
 }
 
-uint256 ComputeOperationsRoot(const std::vector<ProtocolOperation>& operations)
+cybou::Hash256 ComputeOperationsRoot(const std::vector<ProtocolOperation>& operations)
 {
-    std::vector<uint256> hashes;
+    std::vector<cybou::Hash256> hashes;
     hashes.reserve(operations.size());
     for (const auto& op : operations) {
         const auto serialized = SerializeProtocolOperation(op);
         if (!serialized) continue;
-        uint256 op_hash;
+        cybou::Hash256 op_hash;
         ::cybou::crypto::Sha256().Write(serialized->data(), serialized->size()).Finalize(op_hash.begin());
         hashes.push_back(op_hash);
     }
     return ComputeOperationsRootFromHashes(hashes);
 }
 
-uint256 ComputeBlockHeaderId(const CybouBlockHeader& header)
+cybou::Hash256 ComputeBlockHeaderId(const CybouBlockHeader& header)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/BLOCK/V3"};
     ::cybou::crypto::Sha256 hasher;
@@ -98,7 +98,7 @@ uint256 ComputeBlockHeaderId(const CybouBlockHeader& header)
     hasher.Write(header.operations_root.begin(), header.operations_root.size());
     hasher.Write(header.resulting_state_root.begin(), header.resulting_state_root.size());
 
-    uint256 block_id;
+    cybou::Hash256 block_id;
     hasher.Finalize(block_id.begin());
     return block_id;
 }
@@ -114,7 +114,7 @@ CybouBlockHeader ExtractBlockHeader(const CybouBlock& block)
     };
 }
 
-uint256 ComputeBlockId(const CybouBlock& block)
+cybou::Hash256 ComputeBlockId(const CybouBlock& block)
 {
     return ComputeBlockHeaderId(ExtractBlockHeader(block));
 }

@@ -76,18 +76,18 @@ enum class IdentityRegistryError : uint8_t {
 };
 
 std::optional<IdentityKeyId> ComputeIdentityRotateDigest(
-    const uint256& network_binding, const IdentityRotate& request);
+    const cybou::Hash256& network_binding, const IdentityRotate& request);
 std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
-    const uint256& network_binding, const IdentityOperationAuthorization& request);
+    const cybou::Hash256& network_binding, const IdentityOperationAuthorization& request);
 
 class IdentityRegistry
 {
 public:
     IdentityRegistryError Register(const AccountCreateOp& create,
-        const uint256& network_binding, uint64_t block_height,
+        const cybou::Hash256& network_binding, uint64_t block_height,
         const CybouProtocolParameters& params);
-    IdentityRegistryError RotateIdentity(const IdentityRotate& request, const uint256& network_binding);
-    IdentityRegistryError AuthorizeOperation(const IdentityOperationAuthorization& request, const uint256& network_binding);
+    IdentityRegistryError RotateIdentity(const IdentityRotate& request, const cybou::Hash256& network_binding);
+    IdentityRegistryError AuthorizeOperation(const IdentityOperationAuthorization& request, const cybou::Hash256& network_binding);
 
     std::optional<AccountId> FindByRecoveryKeyId(const IdentityKeyId& id) const;
     const IdentityRecord* Find(const AccountId& id) const;

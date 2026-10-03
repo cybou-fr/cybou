@@ -20,7 +20,7 @@ const std::string HASH_KEY{"cybou/hash"};
 const std::string HEAD_KEY{"cybou/head"};
 const std::string NETWORK_ID_KEY{"cybou/network-id"};
 
-inline std::string BlockKey(const uint256& block_id)
+inline std::string BlockKey(const cybou::Hash256& block_id)
 {
     return "cybou/block/" + block_id.GetHex();
 }
@@ -30,7 +30,7 @@ inline std::string BlockHeightKey(const uint64_t height)
     return "cybou/block-height/" + std::to_string(height);
 }
 
-inline std::string OperationKey(const uint256& op_id)
+inline std::string OperationKey(const cybou::Hash256& op_id)
 {
     return "cybou/operation/" + op_id.GetHex();
 }
@@ -64,7 +64,7 @@ PoaEvidenceReadResult CybouStateStore::ReadPoaSafetyEvidence() const
     return m_poa_conflict_detector->ReadSafetyEvidence();
 }
 
-std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
+std::optional<cybou::Hash256> CybouStateStore::ComputeCandidateStateRoot(
     const std::vector<ProtocolOperation>& operations,
     const uint64_t height) const
 {
@@ -121,7 +121,7 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
 StateLoadResult CybouStateStore::LoadState() const
 {
     std::vector<unsigned char> bytes;
-    uint256 stored_hash;
+    cybou::Hash256 stored_hash;
     const bool state_exists{m_db.Exists(STATE_KEY)};
     const bool hash_exists{m_db.Exists(HASH_KEY)};
     const bool head_exists{m_db.Exists(HEAD_KEY)};
@@ -153,9 +153,9 @@ StateLoadResult CybouStateStore::LoadState() const
     return {StateLoadError::NONE, std::move(*state)};
 }
 
-std::optional<uint256> CybouStateStore::GetStateRoot() const
+std::optional<cybou::Hash256> CybouStateStore::GetStateRoot() const
 {
-    uint256 hash;
+    cybou::Hash256 hash;
     if (!m_db.Read(HASH_KEY, hash)) return std::nullopt;
     return hash;
 }
@@ -167,7 +167,7 @@ std::optional<FinalizedHead> CybouStateStore::GetFinalizedHead() const
     return head;
 }
 
-std::optional<uint256> CybouStateStore::GetFinalizedTip() const
+std::optional<cybou::Hash256> CybouStateStore::GetFinalizedTip() const
 {
     const auto head{GetFinalizedHead()};
     if (!head) return std::nullopt;
@@ -181,9 +181,9 @@ std::optional<uint64_t> CybouStateStore::GetFinalizedHeight() const
     return head->height;
 }
 
-std::optional<uint256> CybouStateStore::GetStoredNetworkBinding() const
+std::optional<cybou::Hash256> CybouStateStore::GetStoredNetworkBinding() const
 {
-    uint256 network_binding;
+    cybou::Hash256 network_binding;
     if (!m_db.Read(NETWORK_ID_KEY, network_binding)) return std::nullopt;
     return network_binding;
 }
@@ -206,7 +206,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
 
     const auto& block = finalized_block.block;
     const auto& cert = finalized_block.certificate;
-    const uint256 block_id = ComputeBlockId(block);
+    const cybou::Hash256 block_id = ComputeBlockId(block);
     if (block_id.IsNull()) {
         return {BlockTransitionError::INVALID_BLOCK_ID};
     }
@@ -312,7 +312,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
                 block.height - item.second.commit_height > params.name_commit_max_lifetime;
         });
     const bool is_empty_noop_block = block.operations.empty() && !expires_name;
-    uint256 candidate_root;
+    cybou::Hash256 candidate_root;
     std::optional<CybouState> next_state;
 
     if (is_empty_noop_block) {
@@ -372,7 +372,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     return {};
 }
 
-std::optional<FinalizedBlock> CybouStateStore::GetBlock(const uint256& block_id) const
+std::optional<FinalizedBlock> CybouStateStore::GetBlock(const cybou::Hash256& block_id) const
 {
     std::vector<unsigned char> bytes;
     if (!m_db.Read(BlockKey(block_id), bytes)) {
@@ -384,7 +384,7 @@ std::optional<FinalizedBlock> CybouStateStore::GetBlock(const uint256& block_id)
 std::optional<FinalizedBlock> CybouStateStore::GetBlockAtHeight(const uint64_t height) const
 {
     if (height == 0) return std::nullopt;
-    uint256 block_id;
+    cybou::Hash256 block_id;
     if (!m_db.Read(BlockHeightKey(height), block_id)) {
         // Older databases have no height index. Walk the finalized parent
         // chain as a read-only compatibility path.
@@ -405,15 +405,15 @@ std::optional<FinalizedBlock> CybouStateStore::GetBlockAtHeight(const uint64_t h
     return block;
 }
 
-bool CybouStateStore::HasIndexedFinalizedOperation(const uint256& op_id) const
+bool CybouStateStore::HasIndexedFinalizedOperation(const cybou::Hash256& op_id) const
 {
     return GetFinalizedOperationHeight(op_id).has_value();
 }
 
-std::optional<uint64_t> CybouStateStore::GetFinalizedOperationHeight(const uint256& op_id) const
+std::optional<uint64_t> CybouStateStore::GetFinalizedOperationHeight(const cybou::Hash256& op_id) const
 {
     if (op_id.IsNull()) return std::nullopt;
-    uint256 block_id;
+    cybou::Hash256 block_id;
     if (!m_db.Read(OperationKey(op_id), block_id)) return std::nullopt;
     const auto head = GetFinalizedHead();
     const auto finalized = GetBlock(block_id);

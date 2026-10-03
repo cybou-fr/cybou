@@ -26,7 +26,7 @@ enum class IdentityOperationPhase : uint8_t {
 
 struct IdentityOperationResult {
     IdentityOperationPhase phase{IdentityOperationPhase::REJECTED};
-    uint256 op_id;
+    cybou::Hash256 op_id;
     uint64_t finalized_height{0};
     std::string error;
     explicit operator bool() const
@@ -54,7 +54,7 @@ public:
     bool RetryRelayIfDue();
     bool CompleteIdentityRotation(const IdentityRecord& finalized_identity);
     bool HasPendingIdentityRotation();
-    IdentityOperationResult GetStatus(const uint256& op_id);
+    IdentityOperationResult GetStatus(const cybou::Hash256& op_id);
 
 private:
     struct JournalEntry;

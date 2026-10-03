@@ -248,7 +248,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     const auto& params = m_runtime.GetNetworkGenesis().GetProtocolParameters();
     const uint64_t current_epoch = EpochForHeight(height, params);
 
-    const uint256 network_binding = m_runtime.GetNetworkBinding();
+    const cybou::Hash256 network_binding = m_runtime.GetNetworkBinding();
     const auto account_bytes = account_id.Value();
     const auto kem_package_id = ComputeIdentityKemPackageCommitment(
         std::span<const unsigned char, 32>{network_binding.begin(), 32},

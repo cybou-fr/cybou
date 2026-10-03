@@ -89,10 +89,10 @@ enum class NodeRuntimeState : uint8_t {
 };
 
 struct NodeRuntimeStatus {
-    uint256 network_binding;
+    cybou::Hash256 network_binding;
     uint64_t finalized_height{0};
-    uint256 finalized_tip;
-    uint256 state_root;
+    cybou::Hash256 finalized_tip;
+    cybou::Hash256 state_root;
     bool poa_signer_active{false};
     bool is_initialized{false};
     bool poa_safety_halted{false};
@@ -108,7 +108,7 @@ struct FinalizedOperationLookupResult {
     uint64_t scanned_height{0};
     uint64_t height{0};
     uint32_t operation_index{0};
-    uint256 block_id;
+    cybou::Hash256 block_id;
 };
 
 enum class IdentityKemPackageLookupStatus : uint8_t {
@@ -127,8 +127,8 @@ struct IdentityKemPackageLookupResult {
     uint64_t finalized_height{0};
     uint64_t operation_height{0};
     uint32_t operation_index{0};
-    uint256 block_id;
-    uint256 state_root;
+    cybou::Hash256 block_id;
+    cybou::Hash256 state_root;
 };
 
 enum class OperationStatusKind : uint8_t {
@@ -183,12 +183,12 @@ public:
 
     /** Network definition and identifier */
     const VerifiedNetworkGenesis& GetNetworkGenesis() const { return m_config.network_genesis; }
-    const uint256& GetNetworkBinding() const { return m_network_binding; }
+    const cybou::Hash256& GetNetworkBinding() const { return m_network_binding; }
 
     /** Finalized height and head */
     std::optional<uint64_t> GetFinalizedHeight() const;
-    std::optional<uint256> GetFinalizedTip() const;
-    std::optional<uint256> GetStateRoot() const;
+    std::optional<cybou::Hash256> GetFinalizedTip() const;
+    std::optional<cybou::Hash256> GetStateRoot() const;
 
     /** Account state lookup */
     std::optional<AccountState> GetAccountState(const AccountId& account_id) const;
@@ -197,7 +197,7 @@ public:
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
     /** PoA only: sign and queue an AUTH GRANT/BURN valid solely in the next block. */
     OperationSubmitResult SubmitPoaAuthAdjustment(PoaAuthAction action, const AccountId& target, uint64_t amount);
-    OperationStatus GetOperationStatus(const uint256& op_id) const;
+    OperationStatus GetOperationStatus(const cybou::Hash256& op_id) const;
     IdentityOperationCoordinator& GetIdentityOperationCoordinator(CybouKeyStore& keystore);
     void RetryPendingIdentityOperations();
     std::vector<FinalizedHead> RecentFinalizedBlocksForGossip() const;
@@ -221,25 +221,25 @@ public:
     bool IsLocalValidationEligible() const;
     /** Verify a peer attestation against this node's own candidate and finalized state. */
     ValidationAcceptStatus AcceptValidationAttestation(const ValidationAttestation& attestation);
-    std::vector<ValidationAttestation> GetValidationAttestations(const uint256& operation_id) const;
+    std::vector<ValidationAttestation> GetValidationAttestations(const cybou::Hash256& operation_id) const;
     std::optional<ValidationAttestation> NextValidationAttestation(
         const std::function<bool(const ValidationPool::Key&)>& skip) const;
     /** Locally executed, not yet finalized candidates held by this node. */
     size_t CandidateOperationCount() const;
-    bool HasCandidateOperation(const uint256& operation_id) const;
+    bool HasCandidateOperation(const cybou::Hash256& operation_id) const;
     std::optional<RelayedOperation> ClaimRelayedOperation();
-    void ReleaseRelayedOperation(const uint256& operation_id);
-    bool AcknowledgeRelayedOperation(const uint256& operation_id);
-    bool HasRelayedOperation(const uint256& operation_id) const;
+    void ReleaseRelayedOperation(const cybou::Hash256& operation_id);
+    bool AcknowledgeRelayedOperation(const cybou::Hash256& operation_id);
+    bool HasRelayedOperation(const cybou::Hash256& operation_id) const;
 
     /** Commit a finalized block */
     BlockTransitionResult CommitBlock(const FinalizedBlock& block, bool sync = true);
 
     /** Block lookup by height */
     std::optional<FinalizedBlock> GetBlockAtHeight(uint64_t height) const;
-    FinalizedOperationLookupResult FindFinalizedOperation(const uint256& op_id) const;
+    FinalizedOperationLookupResult FindFinalizedOperation(const cybou::Hash256& op_id) const;
     /** Resolve a RootPublication only from verified canonical finalized history. */
-    std::optional<RootPublication> FindFinalizedRootPublication(const uint256& op_id) const;
+    std::optional<RootPublication> FindFinalizedRootPublication(const cybou::Hash256& op_id) const;
     /** Resolve the finalized KEM capability for an Identity key epoch. */
     IdentityKemPackageLookupResult FindIdentityKemPackage(
         const AccountId& account_id, uint64_t key_epoch) const;
@@ -258,12 +258,12 @@ public:
     ChunkRetentionRegistry::CollectResult CollectChunkGarbage(std::uint64_t cache_budget_bytes,
         std::uint64_t now_ms, std::size_t max_removals = 256);
     const ChunkBlobStore& GetChunkBlobStore() const { return *m_chunk_blob_store; }
-    ChunkAdmissionResult PutFinalizedChunk(const uint256& publication_operation_id,
+    ChunkAdmissionResult PutFinalizedChunk(const cybou::Hash256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
         const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetFinalizedChunk(const ChunkId& chunk_id) const;
     std::optional<ChunkAuthorizationProof> GetFinalizedChunkAuthorizationProof(
-        const uint256& publication_operation_id, const ChunkId& chunk_id) const;
+        const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id) const;
     bool HasFinalizedChunk(const ChunkId& chunk_id) const;
     /** A connected CYP2 storage peer and the ProviderID it proved on demand. */
     struct StorageEndpoint {
@@ -274,7 +274,7 @@ public:
     std::vector<StorageEndpoint> StorageEndpoints() const;
     /** Storage calls go only to a session that proved the expected ProviderID. */
     std::optional<ChunkAdmissionResult> PutChunkToStorageEndpoint(const std::string& address, uint16_t port,
-        const std::array<unsigned char, 32>& provider_id, const uint256& publication_operation_id,
+        const std::array<unsigned char, 32>& provider_id, const cybou::Hash256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetChunkFromStorageEndpoint(const std::string& address,
         uint16_t port, const std::array<unsigned char, 32>& provider_id, const ChunkId& chunk_id);
@@ -284,7 +284,7 @@ public:
     std::optional<std::vector<unsigned char>> SignProviderProof(std::span<const unsigned char> message) const;
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStorageEndpoint(
         const std::string& address, uint16_t port, const std::array<unsigned char, 32>& provider_id,
-        const uint256& publication_operation_id, const ChunkId& chunk_id);
+        const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id);
 
 
     /** Peer discovery endpoints */
@@ -319,15 +319,15 @@ private:
     };
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, std::optional<std::string> source_peer);
     void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
-    void RememberOperationStatus(const uint256& id, OperationStatus status);
+    void RememberOperationStatus(const cybou::Hash256& id, OperationStatus status);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
     void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
     /** Re-execute candidates on the new head and stop relaying the ones that became invalid. */
     void RevalidateCandidates();
     /** Attest one locally accepted candidate on the current finalized base, if eligible. */
-    void AttestCandidate(const uint256& operation_id);
+    void AttestCandidate(const cybou::Hash256& operation_id);
     NodeRuntimeConfig m_config;
-    uint256 m_network_binding;
+    cybou::Hash256 m_network_binding;
     std::unique_ptr<KVStore> m_db;
     std::unique_ptr<ChunkBlobStore> m_chunk_blob_store;
     std::unique_ptr<FinalizedChunkStore> m_finalized_chunk_store;
@@ -343,8 +343,8 @@ private:
     ValidationSignerRef m_validation_signer;
     OperationRelay m_operation_relay;
     std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;
-    std::map<uint256, OperationStatus> m_recent_operation_status;
-    std::deque<uint256> m_recent_operation_status_order;
+    std::map<cybou::Hash256, OperationStatus> m_recent_operation_status;
+    std::deque<cybou::Hash256> m_recent_operation_status_order;
     std::unique_ptr<p2p::PeerManager> m_peer_manager;
     mutable std::mutex m_p2p_mutex;
     std::map<std::pair<std::string, uint16_t>, PeerRetryState> m_peer_retry_after;

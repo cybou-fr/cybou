@@ -8,7 +8,7 @@
 #include <cybou/identity_crypto.h>
 #include <cybou/protocol_params.h>
 #include <cybou/state.h>
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <cstdint>
 #include <optional>
@@ -20,7 +20,7 @@ namespace cybou {
 
 bool ValidateProtocolParameters(const CybouProtocolParameters& params);
 /** SHA-256("CYBOU/NETWORK-ID/V6" || canonical Network Public Key), unchanged. */
-uint256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key);
+cybou::Hash256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key);
 CybouState CreateDevGenesisState();
 
 inline constexpr uint8_t CYBOU_NETWORK_GENESIS_VERSION{2};
@@ -36,7 +36,7 @@ struct NetworkGenesis {
     /** Network Public Key (Root authority of this official network). */
     IdentityHybridPublicKey network_public_key{IdentityKeyPurpose::NETWORK_ROOT, {}, {}};
 
-    uint256 genesis_state_root;
+    cybou::Hash256 genesis_state_root;
     IdentityHybridPublicKey poa_finalizer_public_key{IdentityKeyPurpose::POA_FINALIZER, {}, {}};
     CybouProtocolParameters protocol_parameters;
 
@@ -60,7 +60,7 @@ enum class NetworkGenesisError : uint8_t {
 std::vector<unsigned char> SerializeNetworkGenesisPayload(const NetworkGenesis& genesis);
 
 /** Computes the canonical specification digest to be signed by the Network Key. */
-uint256 ComputeNetworkGenesisDigest(const NetworkGenesis& genesis);
+cybou::Hash256 ComputeNetworkGenesisDigest(const NetworkGenesis& genesis);
 
 /** Fully serializes the signed NetworkGenesis. */
 std::vector<unsigned char> SerializeSignedNetworkGenesis(const NetworkGenesis& genesis);
@@ -79,10 +79,10 @@ public:
     static std::optional<VerifiedNetworkGenesis> Create(NetworkGenesis genesis);
 
     const NetworkGenesis& GetGenesis() const noexcept { return m_genesis; }
-    const uint256& GetGenesisAnchor() const noexcept { return m_genesis_digest; }
-    const uint256& GetGenesisDigest() const noexcept { return m_genesis_digest; }
+    const cybou::Hash256& GetGenesisAnchor() const noexcept { return m_genesis_digest; }
+    const cybou::Hash256& GetGenesisDigest() const noexcept { return m_genesis_digest; }
     const IdentityHybridPublicKey& GetNetworkPublicKey() const noexcept { return m_genesis.network_public_key; }
-    const uint256& GetGenesisStateRoot() const noexcept { return m_genesis.genesis_state_root; }
+    const cybou::Hash256& GetGenesisStateRoot() const noexcept { return m_genesis.genesis_state_root; }
     const IdentityHybridPublicKey& GetPoaPublicKey() const noexcept { return m_genesis.poa_finalizer_public_key; }
     const CybouProtocolParameters& GetProtocolParameters() const noexcept { return m_genesis.protocol_parameters; }
 
@@ -90,11 +90,11 @@ public:
     std::span<const unsigned char> GetNetworkId() const noexcept { return m_network_id_bytes; }
 
 private:
-    explicit VerifiedNetworkGenesis(NetworkGenesis genesis, std::vector<unsigned char> network_id_bytes, uint256 genesis_digest);
+    explicit VerifiedNetworkGenesis(NetworkGenesis genesis, std::vector<unsigned char> network_id_bytes, cybou::Hash256 genesis_digest);
 
     NetworkGenesis m_genesis;
     std::vector<unsigned char> m_network_id_bytes;
-    uint256 m_genesis_digest{uint256::ZERO};
+    cybou::Hash256 m_genesis_digest{cybou::Hash256::ZERO};
 };
 
 /** Canonical byte serialization of any IdentityHybridPublicKey. */

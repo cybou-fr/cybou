@@ -107,12 +107,12 @@ PublicationJobResult Failure(std::string message)
 } // namespace
 
 struct PublicationService::Job {
-    uint256 network_binding;
+    cybou::Hash256 network_binding;
     AccountId account_id;
     PublicationJobPhase phase{PublicationJobPhase::WAITING_FINALITY};
     std::uint64_t nonce{0};
     std::uint64_t key_epoch{0};
-    uint256 operation_id;
+    cybou::Hash256 operation_id;
     RootPublication publication;
 };
 

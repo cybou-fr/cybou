@@ -39,24 +39,24 @@ public:
                         std::optional<std::string> source_peer = std::nullopt);
     std::vector<ProtocolOperation> Snapshot() const;
     /** Re-execute every candidate on the new finalized head; returns the IDs that were dropped. */
-    std::vector<uint256> Revalidate();
+    std::vector<cybou::Hash256> Revalidate();
     void Clear();
     size_t Size() const { return m_entries.size(); }
     size_t Bytes() const { return m_bytes; }
-    bool Contains(const uint256& id) const { return m_ids.contains(id); }
-    std::vector<uint256> Ids() const;
+    bool Contains(const cybou::Hash256& id) const { return m_ids.contains(id); }
+    std::vector<cybou::Hash256> Ids() const;
 
 private:
     struct Entry {
         ProtocolOperation operation;
-        uint256 id;
+        cybou::Hash256 id;
         size_t bytes;
         std::optional<std::string> source_peer;
     };
     CybouStateStore& m_store;
     const OperationPoolLimits m_limits;
     std::vector<Entry> m_entries;
-    std::set<uint256> m_ids;
+    std::set<cybou::Hash256> m_ids;
     size_t m_bytes{0};
 };
 

@@ -9,7 +9,7 @@
 #include <cybou/private_application_store.h>
 #include <cybou/root_publication.h>
 
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <cstdint>
 #include <mutex>
@@ -32,7 +32,7 @@ class StorageService;
 enum class MailFolder : std::uint8_t { INBOX = 1, SENT = 2, ARCHIVE = 3, TRASH = 4, DELETED = 5 };
 
 struct MailRecord {
-    uint256 operation_id;
+    cybou::Hash256 operation_id;
     std::uint64_t finalized_height{0};
     std::uint32_t operation_index{0};
     /** From the outer authorized publication, never from decrypted content. */
@@ -54,7 +54,7 @@ struct PrivateOrder {
 
 struct FileRecord {
     FileItem item;
-    uint256 operation_id;
+    cybou::Hash256 operation_id;
     PrivateOrder order;
     bool deleted{false};
     /** Local, encrypted Identity state; never published. */
@@ -141,21 +141,21 @@ public:
     /** Own RecoveryBridges in canonical order (for historical KEM recovery). */
     std::vector<IdentityRecoveryBridge> RecoveryBridges();
 
-    std::optional<AccessibleRootState> PublicationState(const uint256& operation_id);
+    std::optional<AccessibleRootState> PublicationState(const cybou::Hash256& operation_id);
 
 private:
     struct Accessible;
     bool ProcessBlock(std::uint64_t height, std::uint64_t my_key_epoch);
-    bool ProcessPublication(std::uint64_t height, std::uint32_t index, const uint256& operation_id,
+    bool ProcessPublication(std::uint64_t height, std::uint32_t index, const cybou::Hash256& operation_id,
         const AuthorizedRootPublication& publication, std::uint64_t my_key_epoch);
     void RecoverOwnPublications(std::uint32_t max_publications);
-    bool RecoverPlacement(const uint256& operation_id, Accessible& accessible);
-    AccessibleRootState Index(const uint256& operation_id, Accessible& accessible);
-    bool ApplyMail(const uint256& operation_id, const Accessible& accessible, const MailMessage& message);
-    bool ApplyFiles(const uint256& operation_id, const Accessible& accessible, const FilesMutationBatch& batch);
-    bool ApplyBridge(const uint256& operation_id, const Accessible& accessible, const IdentityRecoveryBridge& bridge);
-    std::optional<Accessible> LoadAccessible(const uint256& operation_id) const;
-    bool SaveAccessible(const uint256& operation_id, const Accessible& accessible);
+    bool RecoverPlacement(const cybou::Hash256& operation_id, Accessible& accessible);
+    AccessibleRootState Index(const cybou::Hash256& operation_id, Accessible& accessible);
+    bool ApplyMail(const cybou::Hash256& operation_id, const Accessible& accessible, const MailMessage& message);
+    bool ApplyFiles(const cybou::Hash256& operation_id, const Accessible& accessible, const FilesMutationBatch& batch);
+    bool ApplyBridge(const cybou::Hash256& operation_id, const Accessible& accessible, const IdentityRecoveryBridge& bridge);
+    std::optional<Accessible> LoadAccessible(const cybou::Hash256& operation_id) const;
+    bool SaveAccessible(const cybou::Hash256& operation_id, const Accessible& accessible);
     std::optional<MailRecord> LoadMail(const PrivateItemId& id) const;
     bool SaveMail(const MailRecord& record);
     std::optional<FileRecord> LoadFile(const PrivateItemId& id) const;

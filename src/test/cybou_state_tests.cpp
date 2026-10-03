@@ -45,7 +45,7 @@ BOOST_AUTO_TEST_CASE(support_mail_pads_to_the_support_rate)
     // The support account is whoever claimed the genesis 'cybou' allocation.
     CybouState state{};
     BOOST_CHECK(!SupportAccount(state));
-    uint256 raw{};
+    cybou::Hash256 raw{};
     raw.begin()[0] = 42;
     IdentityKeyId recovery_id{};
     recovery_id[0] = 7;
@@ -62,7 +62,7 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
     std::array<unsigned char, 32> root_seed{}, device_seed{};
     root_seed[0] = 7;
     device_seed[0] = 8;
-    uint256 raw_account{}, network_binding{};
+    cybou::Hash256 raw_account{}, network_binding{};
     raw_account.begin()[0] = 9;
     network_binding.begin()[0] = 4;
     const AccountId account{raw_account};
@@ -138,7 +138,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     std::array<unsigned char, 32> root_seed{}, device_seed{};
     root_seed[0] = 1;
     device_seed[0] = 2;
-    uint256 raw_account{}, network_binding{};
+    cybou::Hash256 raw_account{}, network_binding{};
     raw_account.begin()[0] = 3;
     network_binding.begin()[0] = 4;
     const AccountId account{raw_account};
@@ -193,7 +193,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     std::array<unsigned char, 32> other_root_seed{}, other_device_seed{};
     other_root_seed[0] = 7;
     other_device_seed[0] = 8;
-    uint256 raw_other{};
+    cybou::Hash256 raw_other{};
     raw_other.begin()[0] = 9;
     const AccountId other_account{raw_other};
     const auto other_root = DeriveIdentityPublicKey(other_root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
@@ -290,7 +290,7 @@ BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_determinis
     std::array<unsigned char, 32> root_seed{}, authorization_seed{};
     root_seed[0] = 0x71;
     authorization_seed[0] = 0x72;
-    uint256 raw_account{}, network_binding{};
+    cybou::Hash256 raw_account{}, network_binding{};
     raw_account.begin()[0] = 0x73;
     network_binding.begin()[0] = 0x74;
     const AccountId account{raw_account};
@@ -353,7 +353,7 @@ BOOST_AUTO_TEST_CASE(insufficient_pool_does_not_register_identity)
     auto params = DevProtocolParameters();
     params.onboarding_bonus = 1;
     const AccountCreateOp empty{};
-    BOOST_CHECK(ApplyAccountCreate(empty, uint256{}, 0, params, state) == AccountCreateStateError::INSUFFICIENT_ONBOARDING_POOL);
+    BOOST_CHECK(ApplyAccountCreate(empty, cybou::Hash256{}, 0, params, state) == AccountCreateStateError::INSUFFICIENT_ONBOARDING_POOL);
     BOOST_CHECK(state.accounts.empty());
     BOOST_CHECK(state.identities.Accounts().empty());
 }
@@ -365,7 +365,7 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     root_seed[0] = 11;
     authorization_seed[0] = 12;
     new_entropy.fill(0x66);
-    uint256 raw_account{}, network_binding{};
+    cybou::Hash256 raw_account{}, network_binding{};
     raw_account.begin()[0] = 15;
     network_binding.begin()[0] = 16;
     const AccountId account{raw_account};
@@ -453,7 +453,7 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     std::array<unsigned char, 32> root_seed{}, device_seed{};
     root_seed[0] = 21;
     device_seed[0] = 22;
-    uint256 raw_account{}, network_binding{};
+    cybou::Hash256 raw_account{}, network_binding{};
     raw_account.begin()[0] = 23;
     network_binding.begin()[0] = 24;
     const AccountId account{raw_account};
@@ -551,7 +551,7 @@ BOOST_AUTO_TEST_CASE(state_validation_invariants)
     BOOST_CHECK(ValidateCybouState(state) == StateValidationError::NONE);
 
     // Mismatched account count
-    uint256 raw{};
+    cybou::Hash256 raw{};
     raw.begin()[0] = 33;
     const AccountId acc{raw};
     state.accounts.emplace(acc, AccountState{.balance = 10});
@@ -583,17 +583,17 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_CHECK(ValidateNameLabel("ali_ce") == NameValidationError::INVALID_CHARACTER);
     BOOST_CHECK(ValidateNameLabel("xn--alice") == NameValidationError::IDN_PREFIX);
     BOOST_CHECK(ValidateNameLabel("12345") == NameValidationError::ALL_DIGITS);
-    BOOST_CHECK(ValidateNameLabel("cybou") == NameValidationError::RESERVED_NAME);
-    BOOST_CHECK(ValidateNameLabel("admin") == NameValidationError::RESERVED_NAME);
-    BOOST_CHECK(ValidateNameLabel("system") == NameValidationError::RESERVED_NAME);
-    BOOST_CHECK(ValidateNameLabel("operator") == NameValidationError::RESERVED_NAME);
-    BOOST_CHECK(ValidateNameLabel("validator") == NameValidationError::RESERVED_NAME);
+    BOOST_CHECK(ValidateNameLabel("cybou") == NameValidationError::PROTECTED_NAME);
+    BOOST_CHECK(ValidateNameLabel("admin") == NameValidationError::PROTECTED_NAME);
+    BOOST_CHECK(ValidateNameLabel("system") == NameValidationError::PROTECTED_NAME);
+    BOOST_CHECK(ValidateNameLabel("operator") == NameValidationError::PROTECTED_NAME);
+    BOOST_CHECK(ValidateNameLabel("validator") == NameValidationError::PROTECTED_NAME);
 
     // 2. Setup state with an account
     std::array<unsigned char, 32> root_seed{}, device_seed{};
     root_seed[0] = 51;
     device_seed[0] = 52;
-    uint256 raw_account{}, network_binding{};
+    cybou::Hash256 raw_account{}, network_binding{};
     raw_account.begin()[0] = 53;
     network_binding.begin()[0] = 54;
     const AccountId account{raw_account};
@@ -625,7 +625,7 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     const std::string label = "stanislav";
     std::array<unsigned char, 32> salt{};
     salt[0] = 77;
-    const uint256 name_commit_hash = ComputeNameCommitment(network_binding, account, label, salt);
+    const cybou::Hash256 name_commit_hash = ComputeNameCommitment(network_binding, account, label, salt);
 
     AuthorizedNameCommit commit_op{};
     commit_op.commit.commitment = name_commit_hash;
@@ -789,9 +789,9 @@ BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
     CybouState state{};
     state.onboarding_pool = params.onboarding_bonus * 5;
 
-    uint256 network_binding{};
+    cybou::Hash256 network_binding{};
     network_binding.begin()[0] = 0xAA;
-    uint256 acc_raw{};
+    cybou::Hash256 acc_raw{};
     acc_raw.begin()[0] = 0xBB;
     const AccountId account{acc_raw};
 
@@ -865,7 +865,7 @@ BOOST_AUTO_TEST_CASE(supply_conservation_invariant_check)
     state.onboarding_pool = 1'000'000;
     state.genesis_allocations.emplace(IdentityKeyId{}, GenesisAllocation{.balance = 2'000'000});
 
-    uint256 acc_raw{};
+    cybou::Hash256 acc_raw{};
     acc_raw.begin()[0] = 0x11;
     const AccountId acc{acc_raw};
     state.accounts.emplace(acc, AccountState{
@@ -889,13 +889,13 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     using namespace cybou;
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
-    uint256 network{};
+    cybou::Hash256 network{};
     network.begin()[0] = 0xCA;
     const auto make_create = [&](unsigned char tag) {
         std::array<unsigned char, 32> recovery{}, authorization{};
         recovery[0] = tag;
         authorization[0] = tag + 1;
-        uint256 raw{};
+        cybou::Hash256 raw{};
         raw.begin()[0] = tag;
         const AccountId account{raw};
         const IdentityAuthorization keys{
@@ -1039,7 +1039,7 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
 BOOST_AUTO_TEST_CASE(authority_earning_utility_bound_and_velocity_capped)
 {
     using namespace cybou;
-    uint256 network{};
+    cybou::Hash256 network{};
     network.begin()[0] = 0x11;
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
@@ -1048,7 +1048,7 @@ BOOST_AUTO_TEST_CASE(authority_earning_utility_bound_and_velocity_capped)
         std::array<unsigned char, 32> recovery{}, authorization{};
         recovery[0] = seed_byte;
         authorization[0] = static_cast<unsigned char>(seed_byte + 1);
-        uint256 raw{};
+        cybou::Hash256 raw{};
         raw.begin()[0] = seed_byte;
         const AccountId account{raw};
         const IdentityAuthorization keys{

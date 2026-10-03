@@ -28,22 +28,22 @@ enum class ValidationPoolAdd : uint8_t { ADDED, DUPLICATE, STALE_BASE, FULL };
 class ValidationPool
 {
 public:
-    using Key = std::pair<uint256, AccountId>;
+    using Key = std::pair<cybou::Hash256, AccountId>;
 
     /** Caller has verified the attestation and executed its operation. */
     ValidationPoolAdd Add(const ValidationAttestation& attestation);
     /** A new finalized tip makes every held attestation stale. */
-    void ResetBase(const uint256& finalized_tip);
-    void Drop(const uint256& operation_id);
-    size_t Count(const uint256& operation_id) const;
-    std::vector<ValidationAttestation> ForOperation(const uint256& operation_id) const;
+    void ResetBase(const cybou::Hash256& finalized_tip);
+    void Drop(const cybou::Hash256& operation_id);
+    size_t Count(const cybou::Hash256& operation_id) const;
+    std::vector<ValidationAttestation> ForOperation(const cybou::Hash256& operation_id) const;
     /** First held attestation whose key `skip` rejects is not yet known to the caller. */
     std::optional<ValidationAttestation> First(const std::function<bool(const Key&)>& skip) const;
     size_t Operations() const { return m_entries.size(); }
 
 private:
-    uint256 m_base;
-    std::map<uint256, std::map<AccountId, ValidationAttestation>> m_entries;
+    cybou::Hash256 m_base;
+    std::map<cybou::Hash256, std::map<AccountId, ValidationAttestation>> m_entries;
 };
 
 } // namespace cybou

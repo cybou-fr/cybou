@@ -7,7 +7,7 @@
 
 #include <cybou/identity_crypto.h>
 #include <cybou/kv_store.h>
-#include <uint256.h>
+#include <cybou/hash256.h>
 
 #include <array>
 #include <cstdint>
@@ -18,8 +18,8 @@ namespace cybou {
 
 struct PoaJournalHead {
     uint64_t height{0};
-    uint256 parent_block_id;
-    uint256 block_id;
+    cybou::Hash256 parent_block_id;
+    cybou::Hash256 block_id;
     friend bool operator==(const PoaJournalHead&, const PoaJournalHead&) = default;
 };
 
@@ -39,15 +39,15 @@ enum class PoaJournalStatus : uint8_t {
 /** Durable pre-sign intent journal. It never stores private signing material. */
 class PoaSigningJournal final {
 public:
-    PoaSigningJournal(KVStore& db, const uint256& network_binding,
-        const uint256& genesis_anchor, const IdentityHybridPublicKey& finalizer_key);
+    PoaSigningJournal(KVStore& db, const cybou::Hash256& network_binding,
+        const cybou::Hash256& genesis_anchor, const IdentityHybridPublicKey& finalizer_key);
 
     /** Check the canonical head before the finalizer session may sign. */
-    PoaJournalStatus CheckCanonicalTip(uint64_t finalized_height, const uint256& finalized_tip);
+    PoaJournalStatus CheckCanonicalTip(uint64_t finalized_height, const cybou::Hash256& finalized_tip);
 
     /** Persist the next block intent synchronously before producing its signature. */
     PoaJournalStatus PrepareToSign(uint64_t height,
-        const uint256& parent_block_id, const uint256& block_id);
+        const cybou::Hash256& parent_block_id, const cybou::Hash256& block_id);
 
     PoaJournalHead Head() const;
     bool SafetyHalted() const;
@@ -56,14 +56,14 @@ private:
     bool PersistHalt(PoaJournalStatus reason) noexcept;
 
     KVStore& m_db;
-    const uint256 m_network_binding;
-    const uint256 m_genesis_anchor;
+    const cybou::Hash256 m_network_binding;
+    const cybou::Hash256 m_genesis_anchor;
     const std::array<unsigned char, 32> m_finalizer_key_id;
     const std::string m_prefix;
     mutable std::mutex m_mutex;
     PoaJournalHead m_head;
     uint64_t m_verified_height{0};
-    uint256 m_verified_tip;
+    cybou::Hash256 m_verified_tip;
     bool m_history_verified{false};
     bool m_halted{false};
 };
