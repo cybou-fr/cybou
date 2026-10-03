@@ -120,6 +120,10 @@ add_library(cybou_node STATIC
   cybou/p2p/inbound_server.cpp
   cybou/p2p/peer_manager.cpp
 )
+if(CYBOU_ENABLE_TEST_HOOKS)
+  target_compile_definitions(cybou_node PUBLIC CYBOU_ENABLE_TEST_HOOKS=1)
+endif()
+
 target_link_libraries(cybou_node
   PUBLIC
     cybou_core

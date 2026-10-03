@@ -1,6 +1,6 @@
 # Implementation status
 
-Status: updated for the network/startup cleanup based on `047cf8c` and local changes (2026-10-03).
+Status: updated through `d47695c` plus the Geo updater resilience changes (2026-10-03).
 This page describes
 implementation and deployment reality; `AGENTS.md` and the frozen architecture
 define the target. The cleanup described here is local work, not a released baseline.
@@ -15,6 +15,7 @@ define the target. The cleanup described here is local work, not a released base
 | Official startup | Select compiled public constants; verify signature and initial state root; no external official file or separate digest pin | Implemented: every `cybou` command, loadgen, storage smoke/soak and the desktop start only from a compiled network (`--network devnet`, or `lab` in LAB test builds). No profile digest pin and no genesis digest in the runtime API. |
 | Network Private Key | Strictly offline, signs genesis once; private material stays under gitignored `/private/` | `network provision-devnet` is the only provisioning flow; raw secret-file keygen and genesis-create commands are removed. The retired DEVNET material is kept under `/private/devnet-retired-20261003`. |
 | Bootstrap | Ordinary CYBOU full peer | Bootstrap binding/protocol/store, `BOOTSTRAP_REQUEST/RESPONSE` and the `cybou-bootstrap` executable are removed. Nodes and the desktop dial the compiled locator first and check its SPKI pin; the locator node serves `--tls-certificate/--tls-key`. Observer/provider peers are optional with compiled locators; finalizer gossip always starts. Pinned rendezvous endpoints are protected from discovered-peer crowd-out. The DEV VPS still runs the retired prototype service. |
+| Geo updater | France-only admission with a valid local dataset; fail closed otherwise | HTTPS and published archive SHA-1 verification, bounded gzip decode, SHA-256 CSV cache and validated atomic installation. Each failed attempt re-fetches metadata and archive; five attempts use interruptible 0/2/5/15/60s delays. Exhaustion retains valid cache and retries in 1h, or retries in 5m without a valid dataset. Successful/current checks use 14 days. Test-only fetch/wait hooks cover publication mismatch, rejected candidates, cache retention, strict temporary cleanup and cancellation without network access. |
 | Consensus bootstrap state | No grants, roster, or `CAP_BOOTSTRAP` | Removed. |
 | Consensus state | Unified current state format | State v11 with canonical AUTH; older decoders removed. |
 | AUTH state | Canonical non-transferable AUTH in AccountState and GenesisAllocation; state root commits it | Implemented (`393657f`): `AccountState.authority`, `GenesisAllocation.authority`, state v11. Legacy AuthorityIndex/AuthorityPolicy removed. Desktop reads AUTH from AccountState (`52c5406`). |

@@ -28,8 +28,8 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 33 | 6d793754b1abd5b7 |
 | docs/cybou/24_DECISIONS.md | 120 | 67dd385179d15269 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 49 | f8fd36051d472d5c |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 40 | de448e4300f81db9 |
-| docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 57 | d8544d0e77a797de |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 41 | fddae2c9f8d4cc3b |
+| docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 67 | d21ca11afbff59fe |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | f82d26a4d1681de3 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
 | docs/cybou/40_REGULATORY_READINESS_FR_EU.md | 149 | 72e59c19f281912f |

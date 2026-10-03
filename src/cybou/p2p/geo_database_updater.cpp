@@ -48,6 +48,25 @@ constexpr size_t MAX_PAGE_BYTES{2 * 1024 * 1024};
 constexpr size_t MAX_GZIP_BYTES{64 * 1024 * 1024};
 constexpr size_t MAX_CSV_BYTES{64 * 1024 * 1024};
 constexpr auto UPDATE_INTERVAL{std::chrono::days{14}};
+constexpr auto FAILED_UPDATE_RETRY_INTERVAL{std::chrono::hours{1}};
+constexpr auto NO_DATABASE_RETRY_INTERVAL{std::chrono::minutes{5}};
+constexpr std::array RETRY_DELAYS{
+    std::chrono::seconds{0}, std::chrono::seconds{2}, std::chrono::seconds{5},
+    std::chrono::seconds{15}, std::chrono::seconds{60},
+};
+
+http::request<http::empty_body> GeoRequest(std::string_view host, std::string_view target)
+{
+    http::request<http::empty_body> request{http::verb::get, std::string{target}, 11};
+    request.set(http::field::host, host);
+    request.set(http::field::user_agent, "CYBOU Geo database updater/1.0");
+    request.set(http::field::accept, "text/html,application/octet-stream");
+    request.set(http::field::cache_control, "no-cache");
+    request.set(http::field::pragma, "no-cache");
+    request.set(http::field::accept_encoding, "identity");
+    request.keep_alive(false);
+    return request;
+}
 
 #ifdef _WIN32
 void AddWindowsRootCertificates(asio::ssl::context& tls)
@@ -89,11 +108,7 @@ std::string HttpsGet(const std::string_view host, const std::string_view target,
     beast::get_lowest_layer(stream).connect(endpoints);
     stream.handshake(asio::ssl::stream_base::client);
 
-    http::request<http::empty_body> request{http::verb::get, std::string{target}, 11};
-    request.set(http::field::host, host_string);
-    request.set(http::field::user_agent, "CYBOU Geo database updater/1.0");
-    request.set(http::field::accept, "text/html,application/octet-stream");
-    request.keep_alive(false);
+    const auto request = GeoRequest(host, target);
     http::write(stream, request);
 
     beast::flat_buffer buffer;
@@ -269,10 +284,16 @@ void GeoDatabaseUpdater::LoadCached()
 {
     std::error_code ec;
     if (!std::filesystem::is_directory(m_data_directory, ec)) return;
+    const std::regex part_name{R"(dbip-country-lite-[0-9]{4}-[0-9]{2}-[a-f0-9]{64}\.csv\.part)"};
     const std::regex cache_name{R"(dbip-country-lite-([0-9]{4})-([0-9]{2})-([a-f0-9]{64})\.csv)"};
     std::vector<std::filesystem::path> candidates;
     for (std::filesystem::directory_iterator it{m_data_directory, ec}, end; !ec && it != end; it.increment(ec)) {
         if (!it->is_regular_file(ec)) continue;
+        if (std::regex_match(it->path().filename().string(), part_name)) {
+            std::error_code ignored;
+            std::filesystem::remove(it->path(), ignored);
+            continue;
+        }
         if (std::regex_match(it->path().filename().string(), cache_name)) candidates.push_back(it->path());
     }
     std::sort(candidates.begin(), candidates.end(), std::greater<>());
@@ -291,69 +312,134 @@ void GeoDatabaseUpdater::LoadCached()
     }
 }
 
-void GeoDatabaseUpdater::Refresh()
+GeoDatabaseUpdater::RefreshResult GeoDatabaseUpdater::RefreshOnce()
 {
-    try {
-        const auto page = HttpsGet(DB_IP_PAGE_HOST, DB_IP_PAGE_PATH, MAX_PAGE_BYTES);
-        const auto release = ParseOfficialReleasePage(page);
-        if (!release) throw std::runtime_error("cannot parse the official DB-IP Lite release page");
+    const auto page = Fetch(DB_IP_PAGE_HOST, DB_IP_PAGE_PATH, MAX_PAGE_BYTES);
+    const auto release = ParseOfficialReleasePage(page);
+    if (!release) throw std::runtime_error("cannot parse the official DB-IP Lite release page");
 
-        const auto current = m_current.load();
-        if (current && release->month <= current->issued_month) return;
-        const auto compressed = HttpsGet(DB_IP_FILE_HOST, release->download_path, MAX_GZIP_BYTES);
-        if (Hex(ComputeSha1(compressed)) != release->sha1) {
-            throw std::runtime_error("DB-IP Geo archive does not match its published SHA-1");
-        }
-        const auto csv = Gunzip(compressed);
-        std::array<unsigned char, 32> sha256{};
-        if (!crypto::ComputeSha256({std::span<const unsigned char>{
-                reinterpret_cast<const unsigned char*>(csv.data()), csv.size()}}, sha256.data())) {
-            throw std::runtime_error("cannot compute Geo CSV SHA-256");
-        }
-        const auto digest = Hex(sha256);
-        const auto year = static_cast<int>(release->month.year());
-        const auto month_number = static_cast<unsigned>(release->month.month());
-        const auto month_text = std::to_string(year) + "-" + (month_number < 10 ? "0" : "") + std::to_string(month_number);
-        const auto temporary_directory = m_data_directory;
-        std::filesystem::create_directories(temporary_directory);
-        const auto target = temporary_directory / ("dbip-country-lite-" + month_text + "-" + digest + ".csv");
-        const auto temp = target.string() + ".part";
-        {
-            std::ofstream output{temp, std::ios::binary | std::ios::trunc};
-            if (!output) throw std::runtime_error("cannot create Geo database cache file");
-            output.write(csv.data(), static_cast<std::streamsize>(csv.size()));
-            output.flush();
-            if (!output) throw std::runtime_error("cannot write Geo database cache file");
-        }
-        const auto dataset = LoadCachedDataset(temp, release->month, digest);
-        if (!dataset) {
-            std::filesystem::remove(temp);
-            throw std::runtime_error("downloaded DB-IP Geo CSV failed validation");
-        }
-        std::error_code ec;
-        std::filesystem::rename(temp, target, ec);
-        if (ec && !std::filesystem::exists(target)) {
-            std::filesystem::remove(temp);
-            throw std::runtime_error("cannot atomically install Geo database cache file");
-        }
-        if (ec) std::filesystem::remove(temp);
-        m_current.store(std::make_shared<const Snapshot>(Snapshot{dataset, release->month}));
-        std::clog << "Updated DB-IP Lite country database to " << month_text << " (SHA-256 " << digest << ")\n";
-    } catch (const std::exception& error) {
-        std::clog << "DB-IP Geo update unavailable: " << error.what() << '\n';
-    } catch (...) {
-        std::clog << "DB-IP Geo update unavailable: unknown error\n";
+    const auto current = m_current.load();
+    if (current && CurrentDataset() && release->month <= current->issued_month) return RefreshResult::CURRENT;
+    const auto compressed = Fetch(DB_IP_FILE_HOST, release->download_path, MAX_GZIP_BYTES);
+    if (Hex(ComputeSha1(compressed)) != release->sha1) {
+        throw std::runtime_error("DB-IP Geo archive does not match its published SHA-1");
     }
+    const auto csv = Gunzip(compressed);
+    std::array<unsigned char, 32> sha256{};
+    if (!crypto::ComputeSha256({std::span<const unsigned char>{
+            reinterpret_cast<const unsigned char*>(csv.data()), csv.size()}}, sha256.data())) {
+        throw std::runtime_error("cannot compute Geo CSV SHA-256");
+    }
+    const auto digest = Hex(sha256);
+    const auto year = static_cast<int>(release->month.year());
+    const auto month_number = static_cast<unsigned>(release->month.month());
+    const auto month_text = std::to_string(year) + "-" + (month_number < 10 ? "0" : "") + std::to_string(month_number);
+    const auto temporary_directory = m_data_directory;
+    std::filesystem::create_directories(temporary_directory);
+    const auto target = temporary_directory / ("dbip-country-lite-" + month_text + "-" + digest + ".csv");
+    const auto temp = target.string() + ".part";
+    {
+        std::ofstream output{temp, std::ios::binary | std::ios::trunc};
+        if (!output) throw std::runtime_error("cannot create Geo database cache file");
+        output.write(csv.data(), static_cast<std::streamsize>(csv.size()));
+        output.flush();
+        if (!output) throw std::runtime_error("cannot write Geo database cache file");
+    }
+    const auto dataset = LoadCachedDataset(temp, release->month, digest);
+    if (!dataset) {
+        std::filesystem::remove(temp);
+        throw std::runtime_error("downloaded DB-IP Geo CSV failed validation");
+    }
+    std::error_code ec;
+    std::filesystem::rename(temp, target, ec);
+    if (ec && !std::filesystem::exists(target)) {
+        std::filesystem::remove(temp);
+        throw std::runtime_error("cannot atomically install Geo database cache file");
+    }
+    if (ec) std::filesystem::remove(temp);
+    m_current.store(std::make_shared<const Snapshot>(Snapshot{dataset, release->month}));
+    std::clog << "Updated DB-IP Lite country database to " << month_text << " (SHA-256 " << digest << ")\n";
+    return RefreshResult::UPDATED;
 }
+
+std::string GeoDatabaseUpdater::Fetch(std::string_view host, std::string_view path, size_t limit)
+{
+#if defined(CYBOU_ENABLE_TEST_HOOKS)
+    if (m_fetch_for_test) {
+        std::map<std::string, std::string> headers;
+        for (const auto& field : GeoRequest(host, path)) {
+            headers.emplace(std::string{field.name_string()}, std::string{field.value()});
+        }
+        auto body = m_fetch_for_test(host, path, limit, headers);
+        if (body.size() > limit) throw std::runtime_error("Geo response exceeds size limit");
+        return body;
+    }
+#endif
+    return HttpsGet(host, path, limit);
+}
+
+bool GeoDatabaseUpdater::Wait(const std::stop_token stop, const std::chrono::milliseconds delay)
+{
+    if (stop.stop_requested()) return false;
+#if defined(CYBOU_ENABLE_TEST_HOOKS)
+    if (m_wait_for_test) return m_wait_for_test(stop, delay) && !stop.stop_requested();
+#endif
+    std::unique_lock lock{m_wait_mutex};
+    m_wakeup.wait_for(lock, stop, delay, [] { return false; });
+    return !stop.stop_requested();
+}
+
+bool GeoDatabaseUpdater::RefreshWithRetries(const std::stop_token stop)
+{
+    for (size_t attempt = 0; attempt < RETRY_DELAYS.size(); ++attempt) {
+        if (attempt > 0) std::clog << "DB-IP Geo update retry in " << RETRY_DELAYS[attempt].count() << "s\n";
+        if (!Wait(stop, RETRY_DELAYS[attempt])) return false;
+        try {
+            const auto result = RefreshOnce();
+            std::clog << "DB-IP Geo update attempt " << attempt + 1 << "/5 succeeded: "
+                      << (result == RefreshResult::UPDATED ? "updated" : "current") << '\n';
+            return true;
+        } catch (const std::exception& error) {
+            std::clog << "DB-IP Geo update attempt " << attempt + 1 << "/5 failed: " << error.what() << '\n';
+        } catch (...) {
+            std::clog << "DB-IP Geo update attempt " << attempt + 1 << "/5 failed: unknown error\n";
+        }
+    }
+    return false;
+}
+
+std::chrono::milliseconds GeoDatabaseUpdater::NextRefreshDelay(const bool success) const
+{
+    if (success) return UPDATE_INTERVAL;
+    return CurrentDataset() ? std::chrono::milliseconds{FAILED_UPDATE_RETRY_INTERVAL}
+                            : std::chrono::milliseconds{NO_DATABASE_RETRY_INTERVAL};
+}
+
+#if defined(CYBOU_ENABLE_TEST_HOOKS)
+std::shared_ptr<GeoDatabaseUpdater> GeoDatabaseUpdater::CreateForTest(const std::filesystem::path& directory,
+    FetchForTest fetch, WaitForTest wait)
+{
+    if (!fetch) throw std::invalid_argument("test Geo updater requires a fetch callback");
+    auto updater = std::shared_ptr<GeoDatabaseUpdater>{new GeoDatabaseUpdater{directory}};
+    updater->m_fetch_for_test = std::move(fetch);
+    updater->m_wait_for_test = std::move(wait);
+    updater->LoadCached();
+    return updater;
+}
+#endif
 
 void GeoDatabaseUpdater::Run(const std::stop_token stop)
 {
-    Refresh();
     while (!stop.stop_requested()) {
-        std::unique_lock lock{m_wait_mutex};
-        m_wakeup.wait_for(lock, stop, UPDATE_INTERVAL, [] { return false; });
-        lock.unlock();
-        if (!stop.stop_requested()) Refresh();
+        const bool success = RefreshWithRetries(stop);
+        if (stop.stop_requested()) break;
+        const auto next = NextRefreshDelay(success);
+        if (!success) {
+            std::clog << "DB-IP Geo update unavailable after 5 attempts; "
+                      << (CurrentDataset() ? "valid cached dataset retained; retry in 1h"
+                          : "no valid Geo dataset; public P2P remains fail-closed; retry in 5m") << '\n';
+        }
+        if (!Wait(stop, next)) break;
     }
 }
 

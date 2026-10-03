@@ -10,6 +10,10 @@
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
+#if defined(CYBOU_ENABLE_TEST_HOOKS)
+#include <functional>
+#include <map>
+#endif
 #include <memory>
 #include <optional>
 #include <string>
@@ -31,6 +35,16 @@ public:
     static std::shared_ptr<GeoDatabaseUpdater> Start(const std::filesystem::path& data_directory);
     static std::optional<GeoDatabaseRelease> ParseOfficialReleasePage(std::string_view page);
     ~GeoDatabaseUpdater();
+#if defined(CYBOU_ENABLE_TEST_HOOKS)
+    using FetchForTest = std::function<std::string(std::string_view, std::string_view, size_t,
+        const std::map<std::string, std::string>&)>;
+    using WaitForTest = std::function<bool(std::stop_token, std::chrono::milliseconds)>;
+    /** Synchronous test instance: never starts a worker or accesses the network. */
+    static std::shared_ptr<GeoDatabaseUpdater> CreateForTest(const std::filesystem::path& directory,
+        FetchForTest fetch, WaitForTest wait = {});
+    bool RefreshForTest(std::stop_token stop = {}) { return RefreshWithRetries(stop); }
+    std::chrono::milliseconds NextDelayForTest(bool success) const { return NextRefreshDelay(success); }
+#endif
 
     GeoDatabaseUpdater(const GeoDatabaseUpdater&) = delete;
     GeoDatabaseUpdater& operator=(const GeoDatabaseUpdater&) = delete;
@@ -46,7 +60,12 @@ private:
 
     explicit GeoDatabaseUpdater(std::filesystem::path data_directory);
     void LoadCached();
-    void Refresh();
+    enum class RefreshResult { CURRENT, UPDATED };
+    RefreshResult RefreshOnce();
+    bool RefreshWithRetries(std::stop_token stop);
+    bool Wait(std::stop_token stop, std::chrono::milliseconds delay);
+    std::chrono::milliseconds NextRefreshDelay(bool success) const;
+    std::string Fetch(std::string_view host, std::string_view path, size_t limit);
     void Run(std::stop_token stop);
 
     std::filesystem::path m_data_directory;
@@ -54,6 +73,10 @@ private:
     std::mutex m_wait_mutex;
     std::condition_variable_any m_wakeup;
     std::jthread m_worker;
+#if defined(CYBOU_ENABLE_TEST_HOOKS)
+    FetchForTest m_fetch_for_test;
+    WaitForTest m_wait_for_test;
+#endif
 };
 
 } // namespace cybou::p2p

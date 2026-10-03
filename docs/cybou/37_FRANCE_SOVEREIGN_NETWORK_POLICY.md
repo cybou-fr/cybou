@@ -45,6 +45,16 @@ See [`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md).
 
 ## Operational resilience
 
+The automatic local Geo updater verifies every candidate before activation.
+A failed update never replaces an already validated dataset. Transient download,
+publication or checksum inconsistency is retried by fetching both release metadata
+and the archive again, up to five attempts (0, 2, 5, 15 and 60 second delays).
+After exhausted retries, the next cycle starts in one hour with a valid current
+dataset, or five minutes without one. Success or a current release returns to the
+14-day check interval. Expired datasets are never usable: without a valid dataset,
+public P2P remains fail-closed. Candidate CSVs retain SHA-256 cache naming and are
+validated before atomic installation; startup removes only matching Geo `.part` files.
+
 One available bootstrap peer is enough for initial rendezvous. Multiple
 bootstrap endpoints improve availability but do not provide consensus resilience.
 Clients connect, discover peers, establish direct P2P mesh connections, and
