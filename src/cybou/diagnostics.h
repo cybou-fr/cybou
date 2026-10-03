@@ -9,7 +9,7 @@ namespace cybou {
 struct PeerDiagnostics {
     std::string endpoint;
     std::uint64_t advertised_height{0};
-    std::string provider_id;
+    std::string storage_id;
 };
 struct OperationDiagnostics {
     std::string operation_id;

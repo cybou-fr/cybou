@@ -985,7 +985,7 @@ Stan</translation>
     </message>
     <message>
         <location filename="../pages/diagnosticspage.cpp" line="145" />
-        <source>ProviderID</source>
+        <source>StorageId</source>
         <translation>ID du fournisseur</translation>
     </message>
     <message>
@@ -2886,13 +2886,13 @@ Objet : %3
     </message>
     <message>
         <location filename="../pages/networkauthoritypage.cpp" line="165" />
-        <source>No ProviderID verified</source>
-        <translation>Aucun ProviderID vérifié</translation>
+        <source>No StorageId verified</source>
+        <translation>Aucun StorageId vérifié</translation>
     </message>
     <message>
         <location filename="../pages/networkauthoritypage.cpp" line="166" />
-        <source>ProviderID verified: %1</source>
-        <translation>ProviderID vérifié : %1</translation>
+        <source>StorageId verified: %1</source>
+        <translation>StorageId vérifié : %1</translation>
     </message>
     <message>
         <location filename="../pages/networkauthoritypage.cpp" line="168" />
@@ -3723,20 +3723,15 @@ Enregistrer quand même ?</translation>
     </message>
     <message>
         <location filename="../pages/settingspage.cpp" line="216" />
-        <source>Storage contribution</source>
-        <translation>Contribution au stockage</translation>
+        <source>Network storage</source>
+        <translation>Stockage réseau</translation>
     </message>
     <message>
         <location filename="../pages/settingspage.cpp" line="217" />
-        <source>Contribute disk space to the CYBOU network. This advanced option arrives in a later release.</source>
-        <translation>Mettez de l’espace disque à disposition du réseau CYBOU. Cette option avancée sera proposée dans une prochaine version.</translation>
+        <source>Every Full Node stores encrypted network content. Disk space is allocated automatically while keeping free space for your computer.</source>
+        <translation>Chaque nœud complet stocke du contenu réseau chiffré. L’espace disque est alloué automatiquement tout en conservant de l’espace libre pour votre ordinateur.</translation>
     </message>
-    <message>
-        <location filename="../pages/settingspage.cpp" line="218" />
-        <source>Contribute storage</source>
-        <translation>Contribuer au stockage</translation>
-    </message>
-    <message>
+<message>
         <location filename="../pages/settingspage.cpp" line="222" />
         <source>Advanced</source>
         <translation>Avancé</translation>

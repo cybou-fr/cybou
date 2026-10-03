@@ -183,6 +183,8 @@ PoaJournalStatus PoaSigningJournal::PrepareToSign(const uint64_t height,
         m_head = next;
         return PoaJournalStatus::NONE;
     } catch (...) {
+        m_halted = true; // A failed synchronous intent write has uncertain durability.
+        m_history_verified = false;
         return PoaJournalStatus::STORAGE_ERROR;
     }
 }

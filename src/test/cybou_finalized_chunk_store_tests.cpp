@@ -114,7 +114,7 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_is_content_addressed_idempotent_and_c
     BOOST_CHECK(store.UsedBytes() == fixture.bytes.size());
 }
 
-BOOST_AUTO_TEST_CASE(finalized_chunk_store_allows_proven_chunks_until_provider_capacity)
+BOOST_AUTO_TEST_CASE(finalized_chunk_store_allows_proven_chunks_until_storage_capacity)
 {
     auto first_bytes = std::vector<unsigned char>(1100, 0x11);
     auto second_bytes = std::vector<unsigned char>(1100, 0x22);

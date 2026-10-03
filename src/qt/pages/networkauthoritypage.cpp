@@ -171,9 +171,9 @@ void NetworkAuthorityPage::refresh()
     if (d.peers.empty()) Row(m_providers, tr("Peers"), tr("None connected"));
     for (const auto& peer : d.peers) {
         const quint64 lag = d.height > peer.advertised_height ? d.height - peer.advertised_height : 0;
-        const QString provider = peer.provider_id.empty()
-            ? tr("No ProviderID verified")
-            : tr("ProviderID verified: %1").arg(QString::fromStdString(peer.provider_id));
+        const QString provider = peer.storage_id.empty()
+            ? tr("No StorageId verified")
+            : tr("StorageId verified: %1").arg(QString::fromStdString(peer.storage_id));
         Row(m_providers, QString::fromStdString(peer.endpoint),
             tr("%1  ·  height %2  ·  lag %3").arg(provider, locale.toString(static_cast<quint64>(peer.advertised_height)))
                 .arg(lag));

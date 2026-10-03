@@ -68,13 +68,13 @@ enum class MessageType : uint8_t {
 };
 inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::STORAGE_PROOF_REQUEST)};
 
-/** Stable identity of a storage provider: BLAKE3 of its STORAGE_PROVIDER public key. */
+/** Stable identity of a storage provider: BLAKE3 of its STORAGE public key. */
 using StorageId = std::array<unsigned char, 32>;
 /** Message a provider signs to prove its key in this TLS session. */
 struct Hello;
 std::vector<unsigned char> StorageProofMessage(const Hello& signer, const Hello& verifier,
     std::span<const unsigned char> tls_exporter);
-/** Verifies a PROVIDER_PROOF payload and returns the proven ProviderID. */
+/** Verifies a STORAGE_PROOF payload and returns the proven StorageId. */
 std::optional<StorageId> VerifyStorageProof(std::span<const unsigned char> payload,
     std::span<const unsigned char> message);
 struct Frame {
@@ -153,7 +153,7 @@ public:
     bool Handshake(const Hello& local);
     /** On-demand, channel-bound storage relationship proof; never part of HELLO. */
     std::optional<StorageId> ProveStorageIdentity();
-    const std::optional<StorageId>& PeerStorageId() const { return m_peer_provider_id; }
+    const std::optional<StorageId>& PeerStorageId() const { return m_peer_storage_id; }
     HandshakeStatus LastHandshakeStatus() const { return m_handshake_status; }
     bool Ping(uint64_t nonce);
     bool AnswerPing();
@@ -214,7 +214,7 @@ private:
     SSL* m_ssl{nullptr};
     std::array<unsigned char, 32> m_tls_exporter{};
     std::optional<Hello> m_peer;
-    std::optional<StorageId> m_peer_provider_id;
+    std::optional<StorageId> m_peer_storage_id;
     std::optional<Hello> m_local;
     // Attestations already served to this peer on the current finalized base.
     cybou::Hash256 m_served_attestation_base;

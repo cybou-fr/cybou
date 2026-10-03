@@ -1342,14 +1342,8 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
     ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
     ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
     controller.start();
-    if (failures.count() == 2) {
-        // Provisioning is deferred: retry must remain fail-closed for the old genesis.
-        QVERIFY(failures.last().at(0).toString().contains(QStringLiteral("provision a new NetworkID")));
-        QVERIFY(!model.status().node_running);
-    } else {
-        QCOMPARE(failures.count(), 1);
-        QVERIFY(model.status().node_running);
-    }
+    QCOMPARE(failures.count(), 1);
+    QVERIFY(model.status().node_running);
 }
 
 void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()

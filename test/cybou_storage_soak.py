@@ -63,18 +63,18 @@ def main() -> int:
                       "--poa-key-file", str(key), "--listen", f"127.0.0.1:{FINALIZER_P2P}", "--block-interval", "200ms", "--peers", str(peers),
                       "--peer-admission", "lab"]
 
-    def provider_args(name):
+    def storage_args(name):
         return [node, "node", "run", "--network", str(network), "--data-dir", str(work / f"provider-{name}-db"),
                 "--peer", f"127.0.0.1:{FINALIZER_P2P}", "--listen", f"127.0.0.1:{PROVIDERS[name]}", "--capacity", CAPACITY,
                 "--peer-admission", "lab"]
 
-    def provider_by_port(port):
+    def storage_by_port(port):
         return next(name for name, p in PROVIDERS.items() if p == port)
 
     start("finalizer", finalizer_args)
     time.sleep(2)
     for name in PROVIDERS:
-        start(f"provider-{name}", provider_args(name))
+        start(f"provider-{name}", storage_args(name))
 
     client_work = work / "client"
     smoke = subprocess.Popen([client, str(network), str(client_work), "127.0.0.1", str(FINALIZER_P2P)],
@@ -90,15 +90,15 @@ def main() -> int:
                 continue
             _, n, action, *args = line.split()
             if action == "KILL":
-                name = provider_by_port(int(args[0]))
+                name = storage_by_port(int(args[0]))
                 stop(f"provider-{name}", kill=True)
                 print(f"[soak] killed provider-{name}", flush=True)
             elif action == "START":
-                name = provider_by_port(int(args[0]))
-                start(f"provider-{name}", provider_args(name))
+                name = storage_by_port(int(args[0]))
+                start(f"provider-{name}", storage_args(name))
                 print(f"[soak] started provider-{name}", flush=True)
             elif action == "CORRUPT":
-                name = provider_by_port(int(args[0]))
+                name = storage_by_port(int(args[0]))
                 chunk = args[1]
                 blob = work / f"provider-{name}-db.chunks" / "chunks" / chunk[:2] / chunk[2:4] / chunk
                 data = bytearray(blob.read_bytes())

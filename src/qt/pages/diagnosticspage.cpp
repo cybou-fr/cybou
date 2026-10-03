@@ -144,7 +144,7 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
             widget->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
             layout->addWidget(widget); return widget;
         };
-        auto* peers = table({tr("Peer endpoint"),tr("Advertised height"),tr("Lag"),tr("ProviderID")});
+        auto* peers = table({tr("Peer endpoint"),tr("Advertised height"),tr("Lag"),tr("StorageId")});
         auto* operations = table({tr("OperationID"),tr("Local assessment"),tr("Finalized height")});
         auto* storage = table({tr("Application object ID"),tr("Content state"),tr("Remote replicas"),tr("Target"),tr("OperationID")});
         peers->setObjectName(QStringLiteral("networkMonitorPeers"));
@@ -163,7 +163,7 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
             peers->setRowCount(0);
             for (const auto& peer : d.peers) row(peers,{QString::fromStdString(peer.endpoint),
                 QString::number(peer.advertised_height),
-                QString::number(d.height > peer.advertised_height ? d.height-peer.advertised_height : 0),QString::fromStdString(peer.provider_id)});
+                QString::number(d.height > peer.advertised_height ? d.height-peer.advertised_height : 0),QString::fromStdString(peer.storage_id)});
             operations->setRowCount(0);
             const QStringList states{tr("Unknown"),tr("Local pending"),tr("Accepted remotely"),tr("Finalized"),tr("Rejected"),tr("History unavailable")};
             for (const auto& op : d.operations) row(operations,{QString::fromStdString(op.operation_id),

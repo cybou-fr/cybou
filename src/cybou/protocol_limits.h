@@ -12,7 +12,7 @@ namespace cybou {
 
 /**
  * One invariant for every layer: consensus validation of RootPublication,
- * fees, bundle staging, the chunk-authorization proof index, encrypted trees
+ * fees, publication staging, transient chunk-authorization proofs, encrypted trees
  * and StorageService placement. A publication the network can finalize is
  * always one the application and storage layers can serve.
  * 2^20 chunks is hundreds of GiB of encrypted content per publication.

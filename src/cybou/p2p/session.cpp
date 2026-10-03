@@ -37,6 +37,12 @@ namespace {
 constexpr size_t HEADER_SIZE{10};
 constexpr size_t HELLO_SIZE{80};
 constexpr auto BLOCK_TRANSFER_TIMEOUT{std::chrono::seconds{5}};
+std::chrono::steady_clock::time_point StorageTransferDeadline(size_t bytes)
+{
+    // 16 KiB/s minimum average throughput, with setup allowance and a hard cap.
+    const auto seconds = std::min<size_t>(120, 10 + (bytes + 16383) / 16384);
+    return std::chrono::steady_clock::now() + std::chrono::seconds{seconds};
+}
 constexpr auto TLS_HANDSHAKE_TIMEOUT{std::chrono::seconds{10}};
 constexpr std::string_view TLS_EXPORTER_LABEL{"EXPORTER-CYBOU-CYP2-V5"};
 
@@ -532,21 +538,28 @@ bool PeerSession::ReadExact(unsigned char* out, size_t length, std::chrono::stea
 {
     if (!m_ssl) return false;
     size_t done{0};
-    while (done < length && std::chrono::steady_clock::now() < deadline) {
+    auto progress_deadline = std::min(deadline, std::chrono::steady_clock::now() + std::chrono::seconds{5});
+    while (done < length && std::chrono::steady_clock::now() < progress_deadline) {
         size_t count{0};
         const int result = SSL_read_ex(m_ssl, out + done, length - done, &count);
         if (result == 1 && count != 0) {
             done += count;
+            progress_deadline = std::min(deadline, std::chrono::steady_clock::now() + std::chrono::seconds{5});
             continue;
         }
-        if (result != 1 && AdvanceTlsOperation(result, deadline)) continue;
+        if (result != 1 && AdvanceTlsOperation(result, progress_deadline)) continue;
         {
             boost::system::error_code close_ec;
             m_socket.close(close_ec);
             return false;
         }
     }
-    return done == length;
+    if (done != length) {
+        boost::system::error_code ec;
+        if (done != 0) m_socket.close(ec); // Idle sessions survive; truncated headers never do.
+        return false;
+    }
+    return true;
 }
 
 bool PeerSession::WriteExact(const unsigned char* bytes, size_t length,
@@ -554,21 +567,28 @@ bool PeerSession::WriteExact(const unsigned char* bytes, size_t length,
 {
     if (!m_ssl) return false;
     size_t done{0};
-    while (done < length && std::chrono::steady_clock::now() < deadline) {
+    auto progress_deadline = std::min(deadline, std::chrono::steady_clock::now() + std::chrono::seconds{5});
+    while (done < length && std::chrono::steady_clock::now() < progress_deadline) {
         size_t count{0};
         const int result = SSL_write_ex(m_ssl, bytes + done, length - done, &count);
         if (result == 1 && count != 0) {
             done += count;
+            progress_deadline = std::min(deadline, std::chrono::steady_clock::now() + std::chrono::seconds{5});
             continue;
         }
-        if (result != 1 && AdvanceTlsOperation(result, deadline)) continue;
+        if (result != 1 && AdvanceTlsOperation(result, progress_deadline)) continue;
         {
             boost::system::error_code close_ec;
             m_socket.close(close_ec);
             return false;
         }
     }
-    return done == length;
+    if (done != length) {
+        boost::system::error_code ec;
+        m_socket.close(ec); // Never reuse a stream containing a truncated frame.
+        return false;
+    }
+    return true;
 }
 
 bool PeerSession::Write(const Frame& frame)
@@ -657,7 +677,7 @@ std::optional<StorageId> VerifyStorageProof(const std::span<const unsigned char>
     std::copy_n(sig.begin(), PROVIDER_ED25519_SIG, signature.ed25519.begin());
     signature.ml_dsa.assign(sig.begin() + PROVIDER_ED25519_SIG, sig.end());
     if (!VerifyIdentityMessage(key, signature, message)) return std::nullopt;
-    // ProviderID commits to both public keys under a provider domain.
+    // StorageId commits to both public keys under a provider domain.
     constexpr std::string_view DOMAIN{"CYBOU/PROVIDER-ID/v1"};
     std::vector<unsigned char> id_input(DOMAIN.begin(), DOMAIN.end());
     id_input.insert(id_input.end(), payload.begin(), payload.begin() + PROVIDER_ED25519_KEY + PROVIDER_MLDSA_KEY);
@@ -667,7 +687,7 @@ std::optional<StorageId> VerifyStorageProof(const std::span<const unsigned char>
 bool PeerSession::Handshake(const Hello& local)
 {
     m_peer.reset();
-    m_peer_provider_id.reset();
+    m_peer_storage_id.reset();
     m_local.reset();
     m_handshake_status = HandshakeStatus::INVALID_LOCAL;
     if (local.network_binding.IsNull() || local.finalized_tip.IsNull() || local.nonce == 0) return false;
@@ -696,7 +716,7 @@ bool PeerSession::Handshake(const Hello& local)
 std::optional<StorageId> PeerSession::ProveStorageIdentity()
 {
     if (!m_peer || !m_local) return std::nullopt;
-    if (m_peer_provider_id) return m_peer_provider_id;
+    if (m_peer_storage_id) return m_peer_storage_id;
     std::array<unsigned char, 32> challenge{};
     if (RAND_bytes(challenge.data(), challenge.size()) != 1) return std::nullopt;
     if (!Write(Frame{MessageType::STORAGE_PROOF_REQUEST, {challenge.begin(), challenge.end()}})) return std::nullopt;
@@ -704,8 +724,8 @@ std::optional<StorageId> PeerSession::ProveStorageIdentity()
     if (!response || response->type != MessageType::STORAGE_PROOF) return std::nullopt;
     auto message = StorageProofMessage(*m_peer, *m_local, m_tls_exporter);
     message.insert(message.end(), challenge.begin(), challenge.end());
-    m_peer_provider_id = VerifyStorageProof(response->payload, message);
-    return m_peer_provider_id;
+    m_peer_storage_id = VerifyStorageProof(response->payload, message);
+    return m_peer_storage_id;
 }
 
 bool PeerSession::Ping(uint64_t nonce)
@@ -858,8 +878,7 @@ std::optional<OperationSubmitResult> PeerSession::ReadOperationResult(const cybo
         !std::equal(operation_id.begin(), operation_id.end(), response->payload.begin() + 1)) return std::nullopt;
     const auto status = static_cast<OperationSubmitStatus>(response->payload[0]);
     return OperationSubmitResult{.status = status, .op_id = operation_id,
-        .delivery_uncertain = status == OperationSubmitStatus::FINALIZER_UNAVAILABLE ||
-            status == OperationSubmitStatus::RELAY_QUEUE_FULL};
+        .delivery_uncertain =             status == OperationSubmitStatus::RELAY_QUEUE_FULL};
 }
 
 std::optional<OperationSubmitResult> PeerSession::ReceiveOperation(const Frame& meta, CybouNodeRuntime& runtime,
@@ -962,7 +981,7 @@ std::optional<ChunkAdmissionResult> PeerSession::PutAuthorizedChunk(
     if (!m_peer || publication_operation_id.IsNull() ||
         IsZeroChunkId(chunk_id) || stored_bytes.size() < ENCRYPTED_CHUNK_MIN_STORED_BYTES ||
         stored_bytes.size() > ENCRYPTED_CHUNK_MAX_STORED_BYTES || proof.siblings.size() > 32) return std::nullopt;
-    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    const auto deadline = StorageTransferDeadline(stored_bytes.size());
     std::vector<unsigned char> init;
     init.insert(init.end(), publication_operation_id.begin(), publication_operation_id.end());
     init.insert(init.end(), chunk_id.begin(), chunk_id.end());
@@ -989,10 +1008,10 @@ std::optional<std::vector<unsigned char>> PeerSession::GetChunkById(const ChunkI
     if (!m_peer || IsZeroChunkId(chunk_id)) return std::nullopt;
     const auto unavailable = [this]() -> std::optional<std::vector<unsigned char>> {
         m_peer.reset();
-        m_peer_provider_id.reset();
+        m_peer_storage_id.reset();
         return std::nullopt;
     };
-    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    auto deadline = StorageTransferDeadline(0);
     if (!Write(Frame{MessageType::GET_CHUNK_BY_ID,
             std::vector<unsigned char>{chunk_id.begin(), chunk_id.end()}}, deadline)) return unavailable();
     const auto meta = Read(deadline);
@@ -1001,6 +1020,7 @@ std::optional<std::vector<unsigned char>> PeerSession::GetChunkById(const ChunkI
     const uint32_t size = Read32(meta->payload.data() + 1);
     if (meta->payload[0] == 0) return size == 0 ? std::optional<std::vector<unsigned char>>{} : unavailable();
     if (size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES) return unavailable();
+    deadline = StorageTransferDeadline(size);
     std::vector<unsigned char> bytes;
     bytes.reserve(size);
     while (bytes.size() < size) {
@@ -1019,10 +1039,10 @@ std::optional<ChunkAuthorizationProof> PeerSession::GetChunkAuthorizationProof(
         IsZeroChunkId(chunk_id)) return std::nullopt;
     const auto unavailable = [this]() -> std::optional<ChunkAuthorizationProof> {
         m_peer.reset();
-        m_peer_provider_id.reset();
+        m_peer_storage_id.reset();
         return std::nullopt;
     };
-    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
     std::vector<unsigned char> payload;
     payload.insert(payload.end(), publication_operation_id.begin(), publication_operation_id.end());
     payload.insert(payload.end(), chunk_id.begin(), chunk_id.end());
@@ -1052,14 +1072,26 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     if (!request) {
         return m_socket.is_open();
     }
+    std::shared_ptr<void> transfer;
+    if (request->type == MessageType::STORAGE_PROOF_REQUEST || request->type == MessageType::PUT_AUTHORIZED_CHUNK ||
+        request->type == MessageType::GET_CHUNK_BY_ID || request->type == MessageType::GET_CHUNK_AUTHORIZATION_PROOF) {
+        boost::system::error_code ec;
+        const auto remote = m_socket.remote_endpoint(ec);
+        if (ec || !(transfer = runtime.AcquireStorageTransfer(remote.address().to_string()))) return false;
+    }
+    const auto admit_storage = [&](IngressBudget::Work work, size_t bytes) {
+        boost::system::error_code ec;
+        const auto remote = m_socket.remote_endpoint(ec);
+        return !ec && runtime.AdmitIngress(remote.address().to_string(), work, bytes);
+    };
     if (request->type == MessageType::STORAGE_PROOF_REQUEST) {
         boost::system::error_code ec;
         const auto remote = m_socket.remote_endpoint(ec);
-        if (ec || !runtime.AdmitIngress(remote.address().to_string(), IngressBudget::Work::OPERATION, request->payload.size())) return false;
+        if (ec || !runtime.AdmitIngress(remote.address().to_string(), IngressBudget::Work::STORAGE_PROOF, request->payload.size() + PROVIDER_PROOF_SIZE)) return false;
         if (!m_local || request->payload.size() != 32) return false;
         auto message = StorageProofMessage(*m_local, *m_peer, m_tls_exporter);
         message.insert(message.end(), request->payload.begin(), request->payload.end());
-        const auto proof = runtime.SignProviderProof(message);
+        const auto proof = runtime.SignStorageProof(message);
         return proof && Write(Frame{MessageType::STORAGE_PROOF, *proof});
     }
     if (request->type == MessageType::PUT_AUTHORIZED_CHUNK) {
@@ -1079,7 +1111,8 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         }
         const uint32_t size = Read32(request->payload.data() + size_offset);
         if (size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES) return false;
-        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        if (!admit_storage(IngressBudget::Work::STORAGE_PUT, size + request->payload.size())) return false;
+        const auto deadline = StorageTransferDeadline(size);
         std::vector<unsigned char> bytes;
         bytes.reserve(size);
         while (bytes.size() < size) {
@@ -1096,8 +1129,10 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         if (request->payload.size() != 32) return false;
         ChunkId chunk_id{};
         std::copy_n(request->payload.begin(), 32, chunk_id.begin());
+        const auto size = runtime.FinalizedChunkSize(chunk_id).value_or(0);
+        if (!admit_storage(IngressBudget::Work::STORAGE_GET, size + request->payload.size())) return false;
         const auto bytes = runtime.GetFinalizedChunk(chunk_id);
-        const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+        const auto deadline = StorageTransferDeadline(size);
         std::vector<unsigned char> meta{static_cast<unsigned char>(bytes.has_value())};
         Put32(meta, bytes ? static_cast<uint32_t>(bytes->size()) : 0);
         if (!Write(Frame{MessageType::CHUNK_ADMISSION_RESULT, meta}, deadline)) return false;
@@ -1117,6 +1152,8 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         std::copy_n(request->payload.begin(), 32, publication_id.begin());
         ChunkId chunk_id{};
         std::copy_n(request->payload.begin() + 32, 32, chunk_id.begin());
+        const auto size = runtime.FinalizedChunkSize(chunk_id).value_or(0);
+        if (!admit_storage(IngressBudget::Work::STORAGE_PROOF, size + 1100)) return false;
         const auto proof = runtime.GetFinalizedChunkAuthorizationProof(publication_id, chunk_id);
         std::vector<unsigned char> response{static_cast<unsigned char>(proof.has_value())};
         if (proof) {

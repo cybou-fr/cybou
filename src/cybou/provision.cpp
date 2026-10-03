@@ -167,14 +167,24 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
 
 bool ProvisionDevnet(
     const std::filesystem::path& private_dir,
-    const std::filesystem::path& constants_header_path,
-    bool overwrite)
+    const std::filesystem::path& constants_header_path)
 {
     std::error_code ec;
-    if (std::filesystem::exists(private_dir, ec) && !overwrite) {
+    const auto private_root = std::filesystem::weakly_canonical(std::filesystem::current_path() / "private");
+    const auto target = std::filesystem::weakly_canonical(private_dir);
+    const auto relative = target.lexically_relative(private_root);
+    if (relative.empty() || relative.is_absolute() || *relative.begin() == "..") {
+        std::cerr << "Private material must stay beneath the repository private directory\n";
+        return false;
+    }
+    if (std::filesystem::exists(constants_header_path)) {
+        std::cerr << "Refusing to replace existing network constants or secret material\n";
+        return false;
+    }
+    if (std::filesystem::exists(private_dir, ec)) {
         if (!std::filesystem::is_empty(private_dir, ec)) {
             std::cerr << "Error: target private directory is not empty: " << private_dir.string()
-                      << " (use --force to overwrite)\n";
+                      << " (existing networks are immutable)\n";
             return false;
         }
     }
@@ -193,9 +203,6 @@ bool ProvisionDevnet(
     // 1. Write private material files
     const auto write_secret = [&](const std::string& filename, const std::string& content) -> bool {
         const auto p = private_dir / filename;
-        if (std::filesystem::exists(p) && overwrite) {
-            std::filesystem::remove(p, ec);
-        }
         std::vector<unsigned char> bytes(content.begin(), content.end());
         const bool ok = CreateSecretFile(p, bytes);
         crypto::CleanseMemory(bytes.data(), bytes.size());

@@ -24,10 +24,10 @@ constexpr const char* NAMES[] = {
     "peer_rejected","sync_started","sync_progress","sync_complete","sync_failed",
     "operation_received","operation_accepted","operation_rejected","operation_uncertain",
     "operation_finalized","block_produced","block_received","block_verified",
-    "block_finalized","poa_safety_halt","provider_connected","provider_disconnected",
+    "block_finalized","poa_safety_halt","storage_connected","storage_disconnected",
     "chunk_put","chunk_get","chunk_verify_failed","placement_created","placement_degraded",
     "placement_repaired","content_securing","content_protected","storage_audit_started",
-    "storage_audit_failed","storage_audit_repaired",
+    "storage_audit_failed","storage_audit_repaired","block_production_retry",
 };
 }
 EventWriter::EventWriter(const std::filesystem::path& path,EventLogMode mode) : m_file{OpenPrivateAppendFile(path)},m_mode{mode} {
@@ -46,12 +46,12 @@ void EventWriter::Observe(const NodeDiagnosticsSnapshot& d) {
             Write(NodeEvent::peer_connected,{{"peer",peer.endpoint},{"advertised_height",peer.advertised_height}});
         }
         const auto previous = m_peers.find(peer.endpoint);
-        if (!peer.provider_id.empty() && (previous == m_peers.end() || previous->second.provider_id != peer.provider_id))
-            Write(NodeEvent::provider_connected,{{"peer",peer.endpoint},{"provider_id",peer.provider_id}});
+        if (!peer.storage_id.empty() && (previous == m_peers.end() || previous->second.storage_id != peer.storage_id))
+            Write(NodeEvent::storage_connected,{{"peer",peer.endpoint},{"storage_id",peer.storage_id}});
     }
     for (const auto& [endpoint,peer] : m_peers) if (!peers.contains(endpoint)) {
         Write(NodeEvent::peer_disconnected,{{"peer",endpoint}});
-        if (!peer.provider_id.empty()) Write(NodeEvent::provider_disconnected,{{"provider_id",peer.provider_id}});
+        if (!peer.storage_id.empty()) Write(NodeEvent::storage_disconnected,{{"storage_id",peer.storage_id}});
     }
     m_peers = std::move(peers);
     Write(NodeEvent::node_status,{{"network_binding",d.network_binding},{"node_type",d.node_type},{"cyp2_version",std::uint64_t{d.cyp2_version}},
@@ -65,7 +65,7 @@ bool EventWriter::Good() const { std::lock_guard lock{m_mutex}; return m_file &&
 void EventWriter::Write(NodeEvent event, const EventFields& fields) {
     static const std::set<std::string> ALLOWED{
         "network_binding","node_type","cyp2_version","poa_signer_active","validation_eligible","height","tip","state_root","peers","storage_used",
-        "storage_capacity","safety_halted","operation_id","block_id","provider_id",
+        "storage_capacity","safety_halted","operation_id","block_id","storage_id",
         "chunk_id","peer","bytes","duration_ms","error_code","replicas","target","account_id","nonce",
         "nonce","account_id","base_height","advertised_height"};
     if (fields.size() > 24 || static_cast<size_t>(event) >= std::size(NAMES)) throw std::invalid_argument("invalid event");
@@ -80,7 +80,7 @@ void EventWriter::Write(NodeEvent event, const EventFields& fields) {
     record << "{\"v\":1,\"run_id\":" << Escape(m_run) << ",\"seq\":" << ++m_sequence
            << ",\"time_ms\":" << time << ",\"event\":" << Escape(NAMES[static_cast<size_t>(event)]);
     for (const auto& [key,value] : fields) {
-        if(m_mode==EventLogMode::MINIMAL && (key=="account_id"||key=="nonce"||key=="peer"||key=="provider_id"||key=="chunk_id"||key=="operation_id"))continue;
+        if(m_mode==EventLogMode::MINIMAL && (key=="account_id"||key=="nonce"||key=="peer"||key=="storage_id"||key=="chunk_id"||key=="operation_id"))continue;
         record << ',' << Escape(key) << ':';
         std::visit([&](const auto& item) {
             using T = std::decay_t<decltype(item)>;

@@ -409,12 +409,12 @@ std::vector<PeerInfo> PeerManager::StorageEndpoints()
 }
 
 std::optional<ChunkAdmissionResult> PeerManager::PutAuthorizedChunk(
-    const std::string& address, const uint16_t port, const StorageId& provider_id,
+    const std::string& address, const uint16_t port, const StorageId& storage_id,
     const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes,
     const ChunkAuthorizationProof& proof)
 {
     Endpoint endpoint;
-    auto* session = FindStorageSession(address, port, provider_id, &endpoint);
+    auto* session = FindStorageSession(address, port, storage_id, &endpoint);
     if (!session) return std::nullopt;
     auto result = session->PutAuthorizedChunk(publication_operation_id, chunk_id, stored_bytes, proof);
     if (!result) {
@@ -425,10 +425,10 @@ std::optional<ChunkAdmissionResult> PeerManager::PutAuthorizedChunk(
 }
 
 std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
-    const std::string& address, const uint16_t port, const StorageId& provider_id, const ChunkId& chunk_id)
+    const std::string& address, const uint16_t port, const StorageId& storage_id, const ChunkId& chunk_id)
 {
     Endpoint endpoint;
-    auto* session = FindStorageSession(address, port, provider_id, &endpoint);
+    auto* session = FindStorageSession(address, port, storage_id, &endpoint);
     if (!session) return std::nullopt;
     auto result = session->GetChunkById(chunk_id);
     if (!session->Peer()) {
@@ -439,11 +439,11 @@ std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
 }
 
 std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
-    const std::string& address, const uint16_t port, const StorageId& provider_id,
+    const std::string& address, const uint16_t port, const StorageId& storage_id,
     const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id)
 {
     Endpoint endpoint;
-    auto* session = FindStorageSession(address, port, provider_id, &endpoint);
+    auto* session = FindStorageSession(address, port, storage_id, &endpoint);
     if (!session) return std::nullopt;
     auto result = session->GetChunkAuthorizationProof(publication_operation_id, chunk_id);
     if (!session->Peer()) {
@@ -454,7 +454,7 @@ std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
 }
 
 PeerSession* PeerManager::FindStorageSession(
-    const std::string& address, const uint16_t port, const std::optional<StorageId>& provider_id, Endpoint* endpoint)
+    const std::string& address, const uint16_t port, const std::optional<StorageId>& storage_id, Endpoint* endpoint)
 {
     if (port == 0) return nullptr;
     boost::system::error_code ec;
@@ -472,7 +472,7 @@ PeerSession* PeerManager::FindStorageSession(
         return nullptr;
     }
     // A different provider now answering at this endpoint is not the recorded replica.
-    if (provider_id && *it->second->PeerStorageId() != *provider_id) return nullptr;
+    if (storage_id && *it->second->PeerStorageId() != *storage_id) return nullptr;
     if (endpoint) *endpoint = key;
     return it->second.get();
 }

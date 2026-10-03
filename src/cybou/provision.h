@@ -55,8 +55,7 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning();
  */
 bool ProvisionDevnet(
     const std::filesystem::path& private_dir,
-    const std::filesystem::path& constants_header_path,
-    bool overwrite = false);
+    const std::filesystem::path& constants_header_path);
 
 } // namespace cybou
 

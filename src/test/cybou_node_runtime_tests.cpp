@@ -740,31 +740,31 @@ BOOST_AUTO_TEST_CASE(sync_completion_is_advisory_for_ordinary_peers)
     BOOST_CHECK_EQUAL(finalizer_sync.blocks_applied, 1U);
     BOOST_CHECK(finalizer_sync.caught_up_with_known_peers);
 
-    tcp::acceptor provider_acceptor{io, tcp::endpoint{loopback, 0}};
-    const auto provider_port = provider_acceptor.local_endpoint().port();
-    std::atomic_bool provider_served{false};
-    std::jthread provider_server{[&] {
+    tcp::acceptor storage_acceptor{io, tcp::endpoint{loopback, 0}};
+    const auto storage_port = storage_acceptor.local_endpoint().port();
+    std::atomic_bool storage_served{false};
+    std::jthread storage_server{[&] {
         tcp::socket socket{io};
-        provider_acceptor.accept(socket);
+        storage_acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         const bool handshake = session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 1, .finalized_tip = *tip,
             .nonce = 1302});
-        provider_served = handshake;
-        for (int i = 0; i < 5 && provider_served; ++i) provider_served = session.ServeNext(*fixture.runtime);
+        storage_served = handshake;
+        for (int i = 0; i < 5 && storage_served; ++i) storage_served = session.ServeNext(*fixture.runtime);
     }};
 
-    cybou::NodeRuntimeConfig provider_observer_config{.network_genesis = fixture.definition,
+    cybou::NodeRuntimeConfig storage_observer_config{.network_genesis = fixture.definition,
         .data_dir = fixture.directory / "provider-tip-observer",
-        .configured_peers = {{std::make_pair(loopback.to_string(), provider_port)}},
+        .configured_peers = {{std::make_pair(loopback.to_string(), storage_port)}},
         .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
-    cybou::CybouNodeRuntime provider_observer{std::move(provider_observer_config)};
-    BOOST_REQUIRE(provider_observer.InitializeGenesis(fixture.genesis));
-    const auto provider_sync = provider_observer.SyncFromConfiguredPeer(10);
-    provider_server.join();
-    BOOST_CHECK(provider_served.load());
-    BOOST_CHECK_EQUAL(provider_sync.blocks_applied, 1U);
-    BOOST_CHECK(provider_sync.caught_up_with_known_peers);
+    cybou::CybouNodeRuntime storage_observer{std::move(storage_observer_config)};
+    BOOST_REQUIRE(storage_observer.InitializeGenesis(fixture.genesis));
+    const auto storage_sync = storage_observer.SyncFromConfiguredPeer(10);
+    storage_server.join();
+    BOOST_CHECK(storage_served.load());
+    BOOST_CHECK_EQUAL(storage_sync.blocks_applied, 1U);
+    BOOST_CHECK(storage_sync.caught_up_with_known_peers);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -53,6 +53,7 @@ add_library(cybou_core STATIC
   cybou/keystore.cpp
   cybou/private_application_schema.cpp
   cybou/payment.cpp
+  cybou/protocol_operation.cpp
   cybou/poa_auth_adjustment.cpp
   cybou/validation_attestation.cpp
   cybou/validation_pool.cpp
@@ -71,6 +72,9 @@ target_link_libraries(cybou_core
     OpenSSL::Crypto
     BLAKE3::blake3
 )
+if(BUILD_TESTS)
+  target_compile_definitions(cybou_core PRIVATE CYBOU_OFFLINE_PROVISIONING=1)
+endif()
 if(CYBOU_ENABLE_TEST_HOOKS)
   target_compile_definitions(cybou_core PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
 endif()
@@ -97,7 +101,6 @@ add_library(cybou_node STATIC
   cybou/block_executor.cpp
   cybou/poa_finalizer.cpp
   cybou/operation_pool.cpp
-  cybou/protocol_operation.cpp
   cybou/identity_operation_coordinator.cpp
   cybou/wallet_service.cpp
   cybou/node_runtime.cpp
@@ -131,13 +134,13 @@ target_link_libraries(cybou_node
     $<$<PLATFORM_ID:Windows>:crypt32>
 )
 
-# One production executable `cybou`: the desktop, plus headless node roles and
-# operator commands (`cybou finalizer run`, `cybou network info`, ...).
+# One production executable `cybou`: desktop and ordinary Full Node commands.
 add_library(cybou_cli STATIC cybou/cli/cybou_cli.cpp)
 target_link_libraries(cybou_cli PUBLIC cybou_node)
 option(BUILD_PROVISION_TOOL "Build the offline network provisioning and verification tool" OFF)
 if(BUILD_PROVISION_TOOL)
-  add_executable(cybou-provision cybou_provision.cpp cybou/provision.cpp)
+  add_executable(cybou-provision cybou_provision.cpp cybou/provision.cpp cybou/identity_crypto.cpp)
+  target_compile_definitions(cybou-provision PRIVATE CYBOU_OFFLINE_PROVISIONING=1)
   target_link_libraries(cybou-provision PRIVATE cybou_node)
 endif()
 if(NOT BUILD_GUI)

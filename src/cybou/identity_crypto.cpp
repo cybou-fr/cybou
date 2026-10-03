@@ -243,6 +243,9 @@ bool Verify(const char* algorithm, std::span<const unsigned char> public_key,
 std::optional<IdentityHybridPublicKey> DeriveIdentityPublicKey(
     std::span<const unsigned char, 32> secret, IdentityKeyPurpose purpose)
 {
+#if !defined(CYBOU_OFFLINE_PROVISIONING)
+    if (purpose == IdentityKeyPurpose::NETWORK_ROOT) return std::nullopt;
+#endif
     if (!Algorithm(purpose)) return std::nullopt;
     auto ed = MakeKey(secret, purpose, "ED25519");
     auto pq = MakeKey(secret, purpose, "ML-DSA");
@@ -260,6 +263,9 @@ std::optional<IdentityHybridSignature> SignIdentityMessage(
     std::span<const unsigned char, 32> secret, IdentityKeyPurpose purpose,
     std::span<const unsigned char> message)
 {
+#if !defined(CYBOU_OFFLINE_PROVISIONING)
+    if (purpose == IdentityKeyPurpose::NETWORK_ROOT) return std::nullopt;
+#endif
     if (!Algorithm(purpose)) return std::nullopt;
     auto ed = MakeKey(secret, purpose, "ED25519");
     auto pq = MakeKey(secret, purpose, "ML-DSA");

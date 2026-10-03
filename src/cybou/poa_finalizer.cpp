@@ -88,7 +88,7 @@ PoaFinalizer::PoaFinalizer(KVStore& db, const cybou::Hash256& network_binding,
           ValidateRecoveryPoaKey(operator_recovery_entropy, genesis_finalizer_key)}
 {
     auto signer = std::make_shared<RecoveryEntropyPoaSigner>(operator_recovery_entropy);
-    if (!EnableSigner(std::move(signer))) {
+    if (!EnableSigner(std::move(signer)) && !m_journal.SafetyHalted()) {
         throw std::invalid_argument{"operator recovery phrase does not match genesis PoA key"};
     }
 }

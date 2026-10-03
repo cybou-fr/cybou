@@ -36,7 +36,7 @@ public:
             auto provider = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
             if (!provider->InitializeGenesis(fixture.genesis)) throw std::runtime_error{"provider genesis failed"};
             const auto id = provider->LocalStorageId();
-            if (!id) throw std::runtime_error{"provider has no ProviderID"};
+            if (!id) throw std::runtime_error{"provider has no StorageId"};
             m_runtimes.push_back(std::move(provider));
             m_providers.emplace(cybou::StorageEndpoint{*id, "10.0.0." + std::to_string(i + 1), 7070},
                 m_runtimes.back().get());
@@ -46,7 +46,7 @@ public:
     /** A second endpoint served by the same provider key (a Sybil-style alias). */
     cybou::StorageEndpoint AddAlias(const cybou::StorageEndpoint& of, std::string address)
     {
-        cybou::StorageEndpoint alias{of.provider_id, std::move(address), of.port};
+        cybou::StorageEndpoint alias{of.storage_id, std::move(address), of.port};
         m_providers.emplace(alias, m_providers.at(of));
         return alias;
     }

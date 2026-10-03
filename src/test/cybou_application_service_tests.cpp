@@ -338,14 +338,14 @@ BOOST_AUTO_TEST_CASE(files_catalog_and_content_survive_rebuild)
     BOOST_CHECK_GE(own_publications->size(), 32U);
     const auto finalized_upload = fixture.runtime->FindFinalizedRootPublication(upload_operation);
     BOOST_REQUIRE(finalized_upload);
-    const auto has_provider_proof = [&](const cybou::ChunkId& id) {
+    const auto has_storage_proof = [&](const cybou::ChunkId& id) {
         for (const auto& provider : network.Endpoints()) {
             if (network.GetProof(provider, upload_operation, id)) return true;
         }
         return false;
     };
-    BOOST_CHECK(has_provider_proof(finalized_upload->root_chunk_id));
-    BOOST_CHECK(has_provider_proof(*uploaded->item.root_chunk_id));
+    BOOST_CHECK(has_storage_proof(finalized_upload->root_chunk_id));
+    BOOST_CHECK(has_storage_proof(*uploaded->item.root_chunk_id));
     const auto rebuilt_durability = owner.storage->GetDurability(upload_operation);
     BOOST_REQUIRE(rebuilt_durability);
     BOOST_CHECK(rebuilt_durability->state == cybou::DurabilityState::PROTECTED);

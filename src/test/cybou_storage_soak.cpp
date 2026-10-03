@@ -10,7 +10,7 @@
 // enforcement:
 //
 //   provider killed -> audit -> repair elsewhere
-//   provider restarted -> same ProviderID
+//   provider restarted -> same StorageId
 //   provider blob corrupted on disk -> audit drops it -> repair
 //   finalizer restarted -> sync continues
 //   app.db deleted -> rebuilt from history, placement from provider proofs
@@ -177,7 +177,7 @@ struct Services {
             if (!placement || !durability || durability->state != cybou::DurabilityState::PROTECTED) return false;
             for (const auto& replicas : placement->replicas) {
                 for (const auto& replica : replicas) {
-                    if (excluded.contains(replica.provider_id)) return false;
+                    if (excluded.contains(replica.storage_id)) return false;
                 }
             }
             return true;
@@ -243,14 +243,14 @@ std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::OfficialNetwork&
 std::set<std::array<unsigned char, 32>> StorageIds(cybou::CybouNodeRuntime& runtime)
 {
     std::set<std::array<unsigned char, 32>> ids;
-    for (const auto& peer : runtime.StorageEndpoints()) ids.insert(peer.provider_id);
+    for (const auto& peer : runtime.StorageEndpoints()) ids.insert(peer.storage_id);
     return ids;
 }
 
 std::optional<std::uint16_t> PortOf(cybou::CybouNodeRuntime& runtime, const std::array<unsigned char, 32>& id)
 {
     for (const auto& peer : runtime.StorageEndpoints()) {
-        if (peer.provider_id == id) return peer.port;
+        if (peer.storage_id == id) return peer.port;
     }
     return std::nullopt;
 }
@@ -291,31 +291,31 @@ int main(int argc, char* argv[])
 
         // 1. Kill a replica holder: audit detects, repairs on another provider.
         auto placement = services.storage->DescribePlacement(op_a);
-        const auto victim = placement->replicas.front().front().provider_id;
+        const auto victim = placement->replicas.front().front().storage_id;
         const auto victim_port = PortOf(runtime, victim);
         if (!victim_port) Fail("holder is not connected");
         orchestrator.Request("KILL " + std::to_string(*victim_port));
         services.WaitRepaired(op_a, {victim}, "repair after provider loss");
         Step("REPAIRED after kill");
 
-        // 2. Restart it: it comes back under the same ProviderID (persisted provider key).
+        // 2. Restart it: it comes back under the same StorageId (persisted provider key).
         orchestrator.Request("START " + std::to_string(*victim_port));
-        WaitFor("restarted provider reconnects with its ProviderID", [&] {
+        WaitFor("restarted provider reconnects with its StorageId", [&] {
             return StorageIds(runtime).contains(victim) && PortOf(runtime, victim) == victim_port;
         }, 180s);
-        Step("RESTARTED same ProviderID");
+        Step("RESTARTED same StorageId");
 
         // 3. Corrupt one replica on a provider's disk: audit drops it and repairs.
         services.Close();
         services.Open();
         placement = services.storage->DescribePlacement(op_a);
         const auto corrupt_leaf = placement->leaves.back();
-        const auto corrupt_holder = placement->replicas.back().front().provider_id;
+        const auto corrupt_holder = placement->replicas.back().front().storage_id;
         orchestrator.Request("CORRUPT " + std::to_string(*PortOf(runtime, corrupt_holder)) + " " + Hex(corrupt_leaf));
         // The damaged copy no longer verifies...
         const auto holder_endpoint = [&] {
             for (const auto& r : placement->replicas.back()) {
-                if (r.provider_id == corrupt_holder) return r;
+                if (r.storage_id == corrupt_holder) return r;
             }
             Fail("corrupted holder not in placement");
         }();

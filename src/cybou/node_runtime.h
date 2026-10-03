@@ -269,30 +269,34 @@ public:
     std::optional<ChunkAuthorizationProof> GetFinalizedChunkAuthorizationProof(
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id) const;
     bool HasFinalizedChunk(const ChunkId& chunk_id) const;
-    /** A connected CYP2 storage peer and the ProviderID it proved on demand. */
+    /** A connected CYP2 storage peer and the StorageId it proved on demand. */
     struct StorageEndpoint {
         std::string address;
         uint16_t port{0};
-        std::array<unsigned char, 32> provider_id{};
+        std::array<unsigned char, 32> storage_id{};
     };
     std::vector<StorageEndpoint> StorageEndpoints() const;
-    /** Storage calls go only to a session that proved the expected ProviderID. */
+    /** Storage calls go only to a session that proved the expected StorageId. */
     std::optional<ChunkAdmissionResult> PutChunkToStorageEndpoint(const std::string& address, uint16_t port,
-        const std::array<unsigned char, 32>& provider_id, const cybou::Hash256& publication_operation_id,
+        const std::array<unsigned char, 32>& storage_id, const cybou::Hash256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetChunkFromStorageEndpoint(const std::string& address,
-        uint16_t port, const std::array<unsigned char, 32>& provider_id, const ChunkId& chunk_id);
+        uint16_t port, const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id);
     /** This node's storage provider identity; available on every Full Node. */
     std::optional<std::array<unsigned char, 32>> LocalStorageId() const;
-    /** Encoded PROVIDER_PROOF for a storage challenge; available on every Full Node. */
-    std::optional<std::vector<unsigned char>> SignProviderProof(std::span<const unsigned char> message) const;
+    /** Encoded STORAGE_PROOF for a storage challenge; available on every Full Node. */
+    std::optional<std::vector<unsigned char>> SignStorageProof(std::span<const unsigned char> message) const;
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStorageEndpoint(
-        const std::string& address, uint16_t port, const std::array<unsigned char, 32>& provider_id,
+        const std::string& address, uint16_t port, const std::array<unsigned char, 32>& storage_id,
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id);
 
 
     /** Peer discovery endpoints */
     /** Local pre-parse abuse limiter; it has no protocol or Authority effect. */
+    std::optional<uint64_t> FinalizedChunkSize(const ChunkId& id) const
+    { return m_finalized_chunk_store->StoredSize(id); }
+    std::shared_ptr<void> AcquireStorageTransfer(const std::string& address)
+    { return m_ingress.AcquireStorageTransfer(address); }
     bool AdmitIngress(const std::string& address, p2p::IngressBudget::Work work, size_t bytes = 0)
     { return m_ingress.Admit(address, work, bytes); }
     bool AdmitPeerAddress(const std::string& numeric_address) const;
@@ -337,8 +341,8 @@ private:
     std::unique_ptr<FinalizedChunkStore> m_finalized_chunk_store;
     std::unique_ptr<ChunkRetentionRegistry> m_chunk_retention;
     /** Storage provider key secret (persisted beside provider data). */
-    std::optional<std::array<unsigned char, 32>> m_provider_secret;
-    std::optional<std::array<unsigned char, 32>> m_provider_id;
+    std::optional<std::array<unsigned char, 32>> m_storage_secret;
+    std::optional<std::array<unsigned char, 32>> m_storage_id;
     CybouStateStore m_store;
     /** Every full node's own volatile candidate pool; a PoA node seals blocks from it. */
     OperationPool m_operation_pool{m_store};

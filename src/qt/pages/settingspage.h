@@ -15,7 +15,7 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 
-/** Settings: General, Privacy, Files, Storage contribution, Advanced. */
+/** Settings: General, Privacy, Files, Network storage, Advanced. */
 class SettingsPage : public QWidget
 {
     Q_DECLARE_TR_FUNCTIONS(SettingsPage)

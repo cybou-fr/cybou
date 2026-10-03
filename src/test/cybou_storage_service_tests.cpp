@@ -201,7 +201,7 @@ BOOST_AUTO_TEST_CASE(too_few_or_lagging_providers_keep_content_securing)
     BOOST_CHECK(result.state == cybou::DurabilityState::PROTECTED);
 }
 
-BOOST_AUTO_TEST_CASE(provider_loss_and_corruption_are_repaired)
+BOOST_AUTO_TEST_CASE(storage_loss_and_corruption_are_repaired)
 {
     CybouServiceTestFixture fixture;
     auto identity = fixture.CreateIdentity("storage-owner.cybou");
@@ -326,7 +326,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
         BOOST_REQUIRE_EQUAL(client.StorageEndpoints().size(), 2U);
         // Each storage peer is known by the ProviderID it proved on demand.
         std::set<std::array<unsigned char, 32>> proven;
-        for (const auto& peer : client.StorageEndpoints()) proven.insert(peer.provider_id);
+        for (const auto& peer : client.StorageEndpoints()) proven.insert(peer.storage_id);
         BOOST_CHECK(proven == (std::set{*providers[0]->LocalStorageId(), *providers[1]->LocalStorageId()}));
 
         cybou::RuntimeStorageTransport transport{client};
@@ -340,7 +340,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
             BOOST_CHECK(providers[1]->HasFinalizedChunk(leaf));
             std::optional<cybou::ChunkAuthorizationProof> proof;
             for (const auto& peer : client.StorageEndpoints()) {
-                proof = transport.GetProof({peer.provider_id, peer.address, peer.port}, content.operation_id, leaf);
+                proof = transport.GetProof({peer.storage_id, peer.address, peer.port}, content.operation_id, leaf);
                 if (proof) break;
             }
             BOOST_REQUIRE(proof);
@@ -377,7 +377,7 @@ BOOST_AUTO_TEST_CASE(development_target_is_one_remote_replica)
     BOOST_CHECK_EQUAL(result.min_replicas, 1U);
 }
 
-BOOST_AUTO_TEST_CASE(one_provider_key_is_one_replica_whatever_its_endpoints)
+BOOST_AUTO_TEST_CASE(one_storage_key_is_one_replica_whatever_its_endpoints)
 {
     CybouServiceTestFixture fixture;
     auto identity = fixture.CreateIdentity("storage-owner.cybou");
@@ -404,7 +404,7 @@ BOOST_AUTO_TEST_CASE(one_provider_key_is_one_replica_whatever_its_endpoints)
     (void)alias;
 }
 
-BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
+BOOST_AUTO_TEST_CASE(storage_proof_binds_key_session_and_network)
 {
     CybouServiceTestFixture fixture;
     cybou::NodeRuntimeConfig config{.network_genesis = fixture.definition,
@@ -418,7 +418,7 @@ BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
     std::array<unsigned char, 32> exporter{};
     exporter[0] = 1;
     const auto message = cybou::p2p::StorageProofMessage(signer, verifier, exporter);
-    auto proof = provider.SignProviderProof(message);
+    auto proof = provider.SignStorageProof(message);
     BOOST_REQUIRE(proof);
     BOOST_CHECK(cybou::p2p::VerifyStorageProof(*proof, message) == provider.LocalStorageId());
     // Replayed into another session or network, or tampered with, it proves nothing.

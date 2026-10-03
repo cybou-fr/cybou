@@ -87,7 +87,7 @@ std::optional<ChunkAuthorizationProof> DecodeProofMetadata(const std::span<const
 FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::filesystem::path& path,
     const std::span<const unsigned char, 32> network_binding, const std::uint64_t capacity_bytes,
     const bool wipe_data)
-    : m_blobs{blobs}, m_namespace{"chunk-store/v4/" + Hex(network_binding)}, m_capacity_bytes{capacity_bytes}
+    : m_blobs{blobs}, m_namespace{"chunk-store/v4/" + Hex(network_binding)}, m_capacity_bytes{capacity_bytes}, m_path{path}
 {
     if (std::all_of(network_binding.begin(), network_binding.end(), [](const auto byte) { return byte == 0; }) ||
         (!m_blobs.MemoryOnly() && path.empty())) {
@@ -137,7 +137,7 @@ FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::files
             }
             total += size;
         });
-        if (total > capacity_bytes) throw std::runtime_error{"provider chunk usage exceeds capacity"};
+        // A reduced quota retains existing replicas but rejects new admission.
         m_db->Write(m_namespace + "/provider-bytes", total, true);
     }
 }
@@ -171,7 +171,7 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const cybou::Hash256& publica
         const auto proof_metadata = EncodeProofMetadata(proof);
         const auto chunk_key = ChunkKey(m_namespace, chunk_id);
         const auto publication_chunk_key = PublicationChunkKey(m_namespace, publication_operation_id, chunk_id);
-        const auto provider_bytes_key = m_namespace + "/provider-bytes";
+        const auto storage_bytes_key = m_namespace + "/provider-bytes";
 
         std::lock_guard lock{m_mutex};
         std::uint64_t existing_size{0};
@@ -188,13 +188,20 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const cybou::Hash256& publica
             return {ChunkAdmissionStatus::STORAGE_ERROR};
         }
 
-        const auto provider_bytes = ReadCounter(provider_bytes_key);
-        if (!provider_bytes) return {ChunkAdmissionStatus::STORAGE_ERROR};
-        if (!chunk_exists && (*provider_bytes > m_capacity_bytes ||
-            stored_bytes.size() > m_capacity_bytes - *provider_bytes)) {
+        const auto storage_bytes = ReadCounter(storage_bytes_key);
+        if (!storage_bytes) return {ChunkAdmissionStatus::STORAGE_ERROR};
+        if (!chunk_exists && (*storage_bytes > m_capacity_bytes ||
+            stored_bytes.size() > m_capacity_bytes - *storage_bytes)) {
             return {ChunkAdmissionStatus::CAPACITY_EXCEEDED};
         }
 
+        if (!m_blobs.MemoryOnly() && !m_blobs.StoredSize(chunk_id)) {
+            std::error_code ec;
+            const auto space = std::filesystem::space(m_path, ec);
+            const uint64_t reserve = std::max<uint64_t>(1ULL << 30, space.capacity / 20);
+            if (ec || space.available <= reserve || stored_bytes.size() > space.available - reserve)
+                return {ChunkAdmissionStatus::CAPACITY_EXCEEDED};
+        }
         const auto blob_status = m_blobs.Put(chunk_id, stored_bytes);
         if (blob_status == ChunkBlobPutStatus::INVALID) return {ChunkAdmissionStatus::INVALID};
         if (blob_status == ChunkBlobPutStatus::CONFLICT) return {ChunkAdmissionStatus::CONFLICT};
@@ -207,7 +214,7 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const cybou::Hash256& publica
         KVStore::Batch batch;
         if (!chunk_exists) {
             batch.Write(chunk_key, static_cast<std::uint64_t>(stored_bytes.size()));
-            batch.Write(provider_bytes_key, *provider_bytes + stored_bytes.size());
+            batch.Write(storage_bytes_key, *storage_bytes + stored_bytes.size());
         }
         batch.Write(publication_chunk_key, proof_metadata);
         m_db->WriteBatch(batch, true);
@@ -245,6 +252,15 @@ std::optional<std::vector<unsigned char>> FinalizedChunkStore::GetChunk(const Ch
     const auto bytes = m_blobs.Get(chunk_id);
     if (!bytes || bytes->size() != expected_size) return std::nullopt;
     return bytes;
+}
+
+std::optional<uint64_t> FinalizedChunkStore::StoredSize(const ChunkId& chunk_id) const
+{
+    uint64_t size{0};
+    if (chunk_id == ChunkId{} || !m_db->Read(ChunkKey(m_namespace, chunk_id), size) ||
+        size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES)
+        return std::nullopt;
+    return size;
 }
 
 bool FinalizedChunkStore::HasChunk(const ChunkId& chunk_id) const

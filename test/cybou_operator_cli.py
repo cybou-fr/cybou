@@ -28,11 +28,9 @@ def main():
         run("serve", ok=False)
         # Only compiled networks start: DEVNET, the test-build LAB network, never a file or MAINNET.
         dev_info = subprocess.run([binary, "network", "info", "--network", "devnet"], capture_output=True, text=True, timeout=30)
-        if dev_info.returncode:
-            assert "compiled DEVNET genesis state is invalid" in dev_info.stderr
-            assert "provision a new NetworkID" in dev_info.stderr
-        else:
-            assert "bootstrap=51.255.46.58:29461" in dev_info.stdout and "network_binding=" in dev_info.stdout
+        assert dev_info.returncode == 0, dev_info.stderr
+        assert "bootstrap=51.255.46.58:29461" in dev_info.stdout and "network_binding=" in dev_info.stdout
+        run("network", "provision-devnet", ok=False)
         run("provider", "run", ok=False)
         run("observer", "run", ok=False)
         run("network", "info", "--network", "mainnet", ok=False)

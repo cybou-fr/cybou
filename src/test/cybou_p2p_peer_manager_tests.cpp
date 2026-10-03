@@ -242,7 +242,7 @@ BOOST_AUTO_TEST_CASE(poa_signer_toggles_preserve_the_full_node_session)
     node->SetConfiguredPeerEndpoints({{"127.0.0.1", server.Port()}});
     BOOST_REQUIRE(node->SyncFromConfiguredPeer(1).caught_up_with_known_peers);
     BOOST_REQUIRE_EQUAL(node->ConnectedPeerCount(), 1U);
-    BOOST_CHECK(!node->GetDiagnostics().peers.front().provider_id.size());
+    BOOST_CHECK(!node->GetDiagnostics().peers.front().storage_id.size());
     BOOST_CHECK(!node->ProduceBlock());
     auto material = cybou::GenerateIdentityMaterial();
     BOOST_REQUIRE(material);
@@ -844,7 +844,7 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_network_peer)
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
 }
 
-BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
+BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_storage_id)
 {
     CybouServiceTestFixture fixture;
     using boost::asio::ip::tcp;
@@ -880,12 +880,12 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
     BOOST_REQUIRE(manager.Connect(address, port));
-    BOOST_CHECK(!manager.Peers().front().provider_id);
+    BOOST_CHECK(!manager.Peers().front().storage_id);
     const auto discovered = manager.StorageEndpoints();
     first_server.join();
     BOOST_REQUIRE(first_handshake.load());
     BOOST_REQUIRE_EQUAL(discovered.size(), 1U);
-    BOOST_CHECK(discovered.front().provider_id == first_id);
+    BOOST_CHECK(discovered.front().storage_id == first_id);
     manager.DisconnectAll();
 
     std::atomic_bool second_handshake{false};
@@ -902,7 +902,7 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
     BOOST_REQUIRE(manager.Connect(address, port));
     const auto current = manager.StorageEndpoints();
     BOOST_REQUIRE_EQUAL(current.size(), 1U);
-    BOOST_CHECK(current.front().provider_id == second_id);
+    BOOST_CHECK(current.front().storage_id == second_id);
     cybou::ChunkId chunk{};
     chunk[0] = 1;
     const auto operation = cybou::Hash256::ONE;
@@ -1746,6 +1746,34 @@ BOOST_AUTO_TEST_CASE(manager_discovers_peers_from_connected_peer)
     BOOST_CHECK_GE(added, 2U);
     const auto known = manager.KnownEndpoints();
     BOOST_CHECK_GE(known.size(), 2U);
+}
+
+BOOST_AUTO_TEST_CASE(storage_put_budget_rejection_does_not_wait_for_chunk_body)
+{
+    CybouServiceTestFixture fixture;
+    using namespace cybou::p2p;
+    BOOST_REQUIRE(fixture.runtime->AdmitIngress("127.0.0.1", IngressBudget::Work::STORAGE_PUT, 32ULL << 20));
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    tcp::acceptor acceptor{io, tcp::endpoint{boost::asio::ip::address_v4::loopback(), 0}};
+    bool rejected{false};
+    std::jthread server{[&] {
+        tcp::socket socket{io}; acceptor.accept(socket);
+        PeerSession session{std::move(socket), TransportRole::SERVER};
+        if (session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
+            .finalized_tip = fixture.definition.GetGenesisAnchor(), .nonce = 171}))
+            rejected = !session.ServeNext(*fixture.runtime);
+    }};
+    tcp::socket socket{io}; socket.connect(acceptor.local_endpoint());
+    PeerSession session{std::move(socket), TransportRole::CLIENT};
+    BOOST_REQUIRE(session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
+        .finalized_tip = fixture.definition.GetGenesisAnchor(), .nonce = 172}));
+    std::vector<unsigned char> init(73, 0);
+    init[0] = 1; init[32] = 1;
+    init[70] = 4; // Declared 1024-byte chunk; no body is ever sent.
+    BOOST_REQUIRE(session.SendFrame({MessageType::PUT_AUTHORIZED_CHUNK, init}));
+    server.join();
+    BOOST_CHECK(rejected);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

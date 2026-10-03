@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/node_service.h>
+#include <cybou/p2p/ingress_budget.h>
 #include <cybou/p2p/session.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_test_setup.h>
@@ -17,6 +18,80 @@
 #include <thread>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_service_tests, CybouTestSetup)
+
+namespace {
+class FlakySigner final : public cybou::PoaSigner {
+    cybou::RecoveryEntropy m_seed;
+public:
+    mutable std::atomic<unsigned> failures{1};
+    mutable std::vector<unsigned char> first_digest;
+    mutable std::atomic<bool> exact_retry{false};
+    explicit FlakySigner(cybou::RecoveryEntropy seed) : m_seed{seed} {}
+    std::optional<cybou::IdentityHybridPublicKey> PublicKey() const override
+    { return cybou::DeriveIdentityPublicKey(m_seed, cybou::IdentityKeyPurpose::POA_FINALIZER); }
+    std::optional<cybou::IdentityHybridSignature> Sign(std::span<const unsigned char> message) const override {
+        if (failures.load() && failures.fetch_sub(1)) {
+            first_digest.assign(message.begin(), message.end());
+            return std::nullopt;
+        }
+        if (!first_digest.empty()) {
+            exact_retry = std::equal(first_digest.begin(), first_digest.end(), message.begin(), message.end());
+            first_digest.clear();
+        }
+        return cybou::SignIdentityMessage(m_seed, cybou::IdentityKeyPurpose::POA_FINALIZER, message);
+    }
+};
+}
+
+BOOST_AUTO_TEST_CASE(worker_retries_signing_failure_and_resumes_after_unlock)
+{
+    CybouServiceTestFixture local;
+    cybou::CybouNodeService service{{.runtime = cybou::NodeRuntimeConfig{
+        .network_genesis = local.definition, .memory_only = true,
+        .peer_admission_policy = TestLabAdmissionPolicy()}, .genesis = local.genesis}};
+    service.Start();
+    auto signer = std::make_shared<FlakySigner>(local.validator_seed);
+    BOOST_REQUIRE(service.Runtime().EnablePoaSigner(signer));
+    service.StartBlockProduction(10);
+    const auto wait_height = [&](uint64_t height) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+        while (service.Runtime().GetFinalizedHeight().value_or(0) < height && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds{10});
+        return service.Runtime().GetFinalizedHeight().value_or(0) >= height;
+    };
+    BOOST_REQUIRE(wait_height(2));
+    BOOST_CHECK(!service.Runtime().GetStatus().poa_safety_halted);
+    BOOST_CHECK(signer->exact_retry);
+    service.Runtime().DisablePoaSigner();
+    const auto height = service.Runtime().GetFinalizedHeight().value_or(0);
+    std::this_thread::sleep_for(std::chrono::milliseconds{150});
+    BOOST_CHECK_EQUAL(service.Runtime().GetFinalizedHeight().value_or(0), height);
+    BOOST_REQUIRE(service.Runtime().EnablePoaSigner(signer));
+    BOOST_REQUIRE(wait_height(height + 1));
+    service.StopBlockProduction();
+    BOOST_CHECK_GT(service.Runtime().GetDiagnostics().storage_capacity, 0U);
+}
+
+BOOST_AUTO_TEST_CASE(storage_budgets_are_separate_and_bytes_are_reserved_before_work)
+{
+    using Budget = cybou::p2p::IngressBudget;
+    Budget budget;
+    auto first = budget.AcquireStorageTransfer("peer");
+    auto second = budget.AcquireStorageTransfer("peer");
+    BOOST_REQUIRE(first && second);
+    BOOST_CHECK(!budget.AcquireStorageTransfer("peer"));
+    first.reset();
+    BOOST_CHECK(budget.AcquireStorageTransfer("peer"));
+    const auto now = std::chrono::steady_clock::now();
+    for (unsigned i = 0; i < 8; ++i) BOOST_REQUIRE(budget.Admit("peer", Budget::Work::OPERATION, 0, now));
+    BOOST_CHECK(!budget.Admit("peer", Budget::Work::OPERATION, 0, now));
+    BOOST_CHECK(budget.Admit("peer", Budget::Work::STORAGE_PUT, 16ULL << 20, now));
+    BOOST_CHECK(budget.Admit("peer", Budget::Work::STORAGE_GET, 16ULL << 20, now));
+    BOOST_CHECK(!budget.Admit("peer", Budget::Work::STORAGE_GET, 1, now));
+    BOOST_CHECK(budget.Admit("peer", Budget::Work::STORAGE_PROOF, 100, now + std::chrono::seconds{1}));
+    BOOST_CHECK(!budget.Admit("peer", Budget::Work::STORAGE_PUT, 33ULL << 20, now + std::chrono::seconds{1}));
+    BOOST_CHECK(budget.Admit("peer", Budget::Work::STORAGE_GET, 1, now + std::chrono::seconds{1}));
+}
 
 BOOST_AUTO_TEST_CASE(desktop_finalizer_worker_produces_blocks_and_stops_cleanly)
 {

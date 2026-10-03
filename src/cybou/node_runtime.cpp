@@ -145,22 +145,36 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     m_chunk_retention = std::make_unique<ChunkRetentionRegistry>(
         m_config.memory_only ? std::filesystem::path{} : storage_path / "retention",
         m_config.memory_only, m_config.wipe_data);
+    if (m_config.storage_capacity_bytes == std::optional<uint64_t>{0} && !m_config.memory_only)
+        throw std::invalid_argument("zero storage capacity is restricted to memory-only unit tests");
+    if (!m_config.storage_capacity_bytes) {
+        constexpr uint64_t gib = 1ULL << 30;
+        uint64_t target = 64ULL << 20;
+        if (!m_config.memory_only) {
+            std::error_code ec;
+            const auto space = std::filesystem::space(storage_path, ec);
+            const uint64_t reserve = std::max<uint64_t>(gib, space.capacity / 20);
+            const uint64_t usable = space.available > reserve ? space.available - reserve : 0;
+            if (!ec) target = std::clamp<uint64_t>(usable / 10, 64ULL << 20, 20 * gib);
+        }
+        m_config.storage_capacity_bytes = target;
+    }
     m_finalized_chunk_store = std::make_unique<FinalizedChunkStore>(*m_chunk_blob_store, storage_path,
         std::span<const unsigned char, 32>{m_network_binding.begin(), 32},
-        m_config.storage_capacity_bytes, m_config.wipe_data);
+        *m_config.storage_capacity_bytes, m_config.wipe_data);
     // The provider key is this node's stable storage identity across restarts.
-    m_provider_secret = LoadOrCreateProviderSecret(m_config.memory_only ? std::filesystem::path{} :
+    m_storage_secret = LoadOrCreateProviderSecret(m_config.memory_only ? std::filesystem::path{} :
         storage_path / "provider.key");
-    if (!m_provider_secret) throw std::runtime_error("cannot load or create the storage provider key");
-    const auto provider_key = DeriveIdentityPublicKey(*m_provider_secret, IdentityKeyPurpose::STORAGE);
-    if (provider_key) {
-        constexpr std::string_view provider_id_domain{"CYBOU/PROVIDER-ID/v1"};
-        std::vector<unsigned char> provider_id_input(provider_id_domain.begin(), provider_id_domain.end());
-        provider_id_input.insert(provider_id_input.end(), provider_key->ed25519.begin(), provider_key->ed25519.end());
-        provider_id_input.insert(provider_id_input.end(), provider_key->ml_dsa.begin(), provider_key->ml_dsa.end());
-        m_provider_id = ComputeBlake3Digest(provider_id_input);
+    if (!m_storage_secret) throw std::runtime_error("cannot load or create the storage provider key");
+    const auto storage_key = DeriveIdentityPublicKey(*m_storage_secret, IdentityKeyPurpose::STORAGE);
+    if (storage_key) {
+        constexpr std::string_view storage_id_domain{"CYBOU/PROVIDER-ID/v1"};
+        std::vector<unsigned char> storage_id_input(storage_id_domain.begin(), storage_id_domain.end());
+        storage_id_input.insert(storage_id_input.end(), storage_key->ed25519.begin(), storage_key->ed25519.end());
+        storage_id_input.insert(storage_id_input.end(), storage_key->ml_dsa.begin(), storage_key->ml_dsa.end());
+        m_storage_id = ComputeBlake3Digest(storage_id_input);
     }
-    if (!m_provider_id) throw std::runtime_error("storage provider key is invalid");
+    if (!m_storage_id) throw std::runtime_error("storage provider key is invalid");
     if (m_config.poa_finalizer_recovery_entropy.has_value()) {
         m_poa_finalizer = std::make_unique<PoaFinalizer>(
             m_store.GetDatabase(), m_store.GetNetworkBinding(), m_store.GetNetworkGenesis().GetGenesisAnchor(),
@@ -180,10 +194,10 @@ bool CybouNodeRuntime::AdmitPeerAddress(const std::string& numeric_address) cons
 
 CybouNodeRuntime::~CybouNodeRuntime()
 {
-    if (m_provider_secret) crypto::CleanseMemory(m_provider_secret->data(), m_provider_secret->size());
+    if (m_storage_secret) crypto::CleanseMemory(m_storage_secret->data(), m_storage_secret->size());
 }
 
-std::optional<std::array<unsigned char, 32>> CybouNodeRuntime::LocalStorageId() const { return m_provider_id; }
+std::optional<std::array<unsigned char, 32>> CybouNodeRuntime::LocalStorageId() const { return m_storage_id; }
 
 ChunkRetentionRegistry::CollectResult CybouNodeRuntime::CollectChunkGarbage(const std::uint64_t cache_budget_bytes,
     const std::uint64_t now_ms, const std::size_t max_removals)
@@ -196,12 +210,12 @@ ChunkRetentionRegistry::CollectResult CybouNodeRuntime::CollectChunkGarbage(cons
         });
 }
 
-std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignProviderProof(
+std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignStorageProof(
     const std::span<const unsigned char> message) const
 {
-    if (!m_provider_secret) return std::nullopt;
-    const auto key = DeriveIdentityPublicKey(*m_provider_secret, IdentityKeyPurpose::STORAGE);
-    const auto signature = SignIdentityMessage(*m_provider_secret, IdentityKeyPurpose::STORAGE, message);
+    if (!m_storage_secret) return std::nullopt;
+    const auto key = DeriveIdentityPublicKey(*m_storage_secret, IdentityKeyPurpose::STORAGE);
+    const auto signature = SignIdentityMessage(*m_storage_secret, IdentityKeyPurpose::STORAGE, message);
     if (!key || !signature) return std::nullopt;
     std::vector<unsigned char> proof(key->ed25519.begin(), key->ed25519.end());
     proof.insert(proof.end(), key->ml_dsa.begin(), key->ml_dsa.end());
@@ -248,36 +262,36 @@ std::vector<CybouNodeRuntime::StorageEndpoint> CybouNodeRuntime::StorageEndpoint
     std::vector<StorageEndpoint> endpoints;
     if (!m_peer_manager) return endpoints;
     for (const auto& peer : m_peer_manager->StorageEndpoints()) {
-        if (peer.provider_id) endpoints.push_back({peer.address, peer.port, *peer.provider_id});
+        if (peer.storage_id) endpoints.push_back({peer.address, peer.port, *peer.storage_id});
     }
     return endpoints;
 }
 
 std::optional<ChunkAdmissionResult> CybouNodeRuntime::PutChunkToStorageEndpoint(const std::string& address,
-    const uint16_t port, const std::array<unsigned char, 32>& provider_id, const cybou::Hash256& publication_operation_id,
+    const uint16_t port, const std::array<unsigned char, 32>& storage_id, const cybou::Hash256& publication_operation_id,
     const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
     std::lock_guard p2p_lock(m_p2p_mutex);
     if (!m_peer_manager) return std::nullopt;
-    return m_peer_manager->PutAuthorizedChunk(address, port, provider_id, publication_operation_id, chunk_id,
+    return m_peer_manager->PutAuthorizedChunk(address, port, storage_id, publication_operation_id, chunk_id,
         stored_bytes, proof);
 }
 
 std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetChunkFromStorageEndpoint(const std::string& address,
-    const uint16_t port, const std::array<unsigned char, 32>& provider_id, const ChunkId& chunk_id)
+    const uint16_t port, const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id)
 {
     std::lock_guard p2p_lock(m_p2p_mutex);
     if (!m_peer_manager) return std::nullopt;
-    return m_peer_manager->GetChunkById(address, port, provider_id, chunk_id);
+    return m_peer_manager->GetChunkById(address, port, storage_id, chunk_id);
 }
 
 std::optional<ChunkAuthorizationProof> CybouNodeRuntime::GetChunkAuthorizationProofFromStorageEndpoint(
-    const std::string& address, const uint16_t port, const std::array<unsigned char, 32>& provider_id,
+    const std::string& address, const uint16_t port, const std::array<unsigned char, 32>& storage_id,
     const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id)
 {
     std::lock_guard p2p_lock(m_p2p_mutex);
     if (!m_peer_manager) return std::nullopt;
-    return m_peer_manager->GetChunkAuthorizationProof(address, port, provider_id,
+    return m_peer_manager->GetChunkAuthorizationProof(address, port, storage_id,
         publication_operation_id, chunk_id);
 }
 
@@ -323,7 +337,7 @@ NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
     if (root) {
         status.state_root = *root;
     }
-    status.poa_safety_halted = m_store.PoaSafetyHalted() ||
+    status.poa_safety_halted = m_production_status == BlockProductionStatus::SAFETY_HALT || m_store.PoaSafetyHalted() ||
         (m_poa_finalizer && m_poa_finalizer->SafetyHalted());
     if (status.poa_safety_halted) status.runtime_state = NodeRuntimeState::SAFETY_HALTED;
     return status;
@@ -373,7 +387,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitPoaAuthAdjustment(
 {
     std::lock_guard lock(m_mutex);
     if (!m_poa_finalizer || !m_poa_finalizer->SignerEnabled() || m_store.PoaSafetyHalted()) {
-        return {.status = OperationSubmitStatus::FINALIZER_UNAVAILABLE};
+        return {.status = OperationSubmitStatus::POA_SIGNER_UNAVAILABLE};
     }
     const auto head = m_store.GetFinalizedHead();
     if (!head || head->height == std::numeric_limits<uint64_t>::max() || m_poa_finalizer->SafetyHalted()) return {};
@@ -733,27 +747,74 @@ void CybouNodeRuntime::EmitFinalizedEvents(const FinalizedBlock& block, bool pro
 std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
 {
     std::lock_guard lock(m_mutex);
-    if (!m_poa_finalizer || !m_poa_finalizer->SignerEnabled()) return std::nullopt;
-    if (m_store.PoaSafetyHalted() || m_poa_finalizer->SafetyHalted()) return std::nullopt;
-    const auto loaded = m_store.LoadState();
-    if (loaded.error != StateLoadError::NONE || !loaded.state.has_value()) return std::nullopt;
-    const auto head = m_store.GetFinalizedHead();
-    if (!head || head->height == std::numeric_limits<uint64_t>::max()) return std::nullopt;
-    const auto operations = m_operation_pool.Snapshot();
-    const auto root = m_store.ComputeCandidateStateRoot(operations, head->height + 1);
-    if (!root) return std::nullopt;
-    CybouBlock block{.parent_block_id = head->block_id, .height = head->height + 1,
-        .operations = operations, .resulting_state_root = *root};
-    const auto signing = m_poa_finalizer->SignFinality(head->height, head->block_id, block);
-    if (!signing.certificate) return std::nullopt;
-    FinalizedBlock finalized{.block = std::move(block), .certificate = *signing.certificate};
-    const auto bytes = SerializeFinalizedBlock(finalized);
-    if (!bytes || bytes->size() > MAX_FINALIZER_SERIALIZED_BLOCK_BYTES ||
-        !m_store.CommitFinalizedBlock(finalized, sync)) return std::nullopt;
-    RememberFinalizedBlockForGossip(finalized);
-    EmitFinalizedEvents(finalized, true);
-    RevalidateCandidates();
-    return finalized;
+    if (m_production_status == BlockProductionStatus::SAFETY_HALT) return std::nullopt;
+    m_production_status = BlockProductionStatus::RETRY;
+    if (!m_poa_finalizer || !m_poa_finalizer->SignerEnabled()) {
+        m_production_status = BlockProductionStatus::SIGNER_UNAVAILABLE;
+        return std::nullopt;
+    }
+    if (m_store.PoaSafetyHalted() || m_poa_finalizer->SafetyHalted()) {
+        m_production_status = BlockProductionStatus::SAFETY_HALT;
+        return std::nullopt;
+    }
+    try {
+        const auto loaded = m_store.LoadState();
+        if (loaded.error != StateLoadError::NONE || !loaded.state) {
+            m_production_status = BlockProductionStatus::SAFETY_HALT;
+            return std::nullopt;
+        }
+        const auto head = m_store.GetFinalizedHead();
+        if (!head || head->height == std::numeric_limits<uint64_t>::max()) return std::nullopt;
+        if (m_poa_finalizer->CheckCanonicalTip(head->height, head->block_id) != PoaJournalStatus::NONE) {
+            m_production_status = BlockProductionStatus::SAFETY_HALT;
+            return std::nullopt;
+        }
+        if (m_production_candidate && m_production_candidate->height <= head->height) {
+            // A concurrent verified commit may have completed the same intent.
+            m_production_candidate.reset();
+            m_production_finalized.reset();
+        }
+        if (!m_production_candidate) {
+            const auto operations = m_operation_pool.Snapshot();
+            const auto root = m_store.ComputeCandidateStateRoot(operations, head->height + 1);
+            if (!root) { RevalidateCandidates(); return std::nullopt; }
+            m_production_candidate = CybouBlock{.parent_block_id = head->block_id,
+                .height = head->height + 1, .operations = operations, .resulting_state_root = *root};
+        }
+        if (!m_production_finalized) {
+            const auto signing = m_poa_finalizer->SignFinality(head->height, head->block_id, *m_production_candidate);
+            if (!signing.certificate) {
+                if (signing.status == PoaSigningStatus::JOURNAL_REJECTED)
+                    m_production_status = BlockProductionStatus::SAFETY_HALT;
+                return std::nullopt;
+            }
+            m_production_finalized = FinalizedBlock{.block = *m_production_candidate, .certificate = *signing.certificate};
+        }
+        const auto bytes = SerializeFinalizedBlock(*m_production_finalized);
+        if (!bytes || bytes->size() > MAX_FINALIZER_SERIALIZED_BLOCK_BYTES) {
+            m_production_status = BlockProductionStatus::SAFETY_HALT;
+            return std::nullopt;
+        }
+        if (!m_store.CommitFinalizedBlock(*m_production_finalized, sync)) return std::nullopt;
+        auto finalized = std::move(*m_production_finalized);
+        m_production_candidate.reset();
+        m_production_finalized.reset();
+        m_production_status = BlockProductionStatus::PRODUCED;
+        RememberFinalizedBlockForGossip(finalized);
+        EmitFinalizedEvents(finalized, true);
+        RevalidateCandidates();
+        return finalized;
+    } catch (...) {
+        // Journal failures are never retried as ordinary transport/storage failures.
+        if (m_poa_finalizer->SafetyHalted()) m_production_status = BlockProductionStatus::SAFETY_HALT;
+        return std::nullopt;
+    }
+}
+
+BlockProductionStatus CybouNodeRuntime::LastBlockProductionStatus() const
+{
+    std::lock_guard lock(m_mutex);
+    return m_production_status;
 }
 
 bool CybouNodeRuntime::EnablePoaSigner(std::shared_ptr<PoaSigner> signer)
@@ -764,6 +825,7 @@ bool CybouNodeRuntime::EnablePoaSigner(std::shared_ptr<PoaSigner> signer)
         std::lock_guard lock(m_mutex);
         if (!m_poa_finalizer) m_poa_finalizer = std::make_unique<PoaFinalizer>(m_store.GetDatabase(), m_store.GetNetworkBinding(),
             m_store.GetNetworkGenesis().GetGenesisAnchor(), m_store.GetNetworkGenesis().GetPoaPublicKey());
+        if (m_production_status == BlockProductionStatus::SAFETY_HALT || m_store.PoaSafetyHalted()) return false;
         enabled = m_poa_finalizer->EnableSigner(std::move(signer));
     }
     return enabled;
@@ -1109,8 +1171,8 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
         std::lock_guard lock{m_p2p_mutex};
         if (m_peer_manager) for (const auto& peer : m_peer_manager->Peers()) {
             std::string provider;
-            if (peer.provider_id) { static constexpr char HEX[] = "0123456789abcdef";
-                for (auto b : *peer.provider_id) { provider += HEX[b >> 4]; provider += HEX[b & 15]; } }
+            if (peer.storage_id) { static constexpr char HEX[] = "0123456789abcdef";
+                for (auto b : *peer.storage_id) { provider += HEX[b >> 4]; provider += HEX[b & 15]; } }
             snapshot.peers.push_back({peer.address + ":" + std::to_string(peer.port),
                 peer.hello.finalized_height, provider});
         }

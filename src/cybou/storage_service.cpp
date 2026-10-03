@@ -143,7 +143,7 @@ std::vector<StorageEndpoint> RuntimeStorageTransport::Providers()
 {
     std::vector<StorageEndpoint> providers;
     for (auto& peer : m_runtime.StorageEndpoints()) {
-        StorageEndpoint endpoint{peer.provider_id, peer.address, peer.port};
+        StorageEndpoint endpoint{peer.storage_id, peer.address, peer.port};
         if (!HasProvider(providers, endpoint)) providers.push_back(std::move(endpoint));
     }
     return providers;
@@ -153,21 +153,21 @@ std::optional<ChunkAdmissionResult> RuntimeStorageTransport::Put(const StorageEn
     const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id,
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
-    return m_runtime.PutChunkToStorageEndpoint(provider.address, provider.port, provider.provider_id, publication_operation_id,
+    return m_runtime.PutChunkToStorageEndpoint(provider.address, provider.port, provider.storage_id, publication_operation_id,
         chunk_id, stored_bytes, proof);
 }
 
 std::optional<std::vector<unsigned char>> RuntimeStorageTransport::Get(const StorageEndpoint& provider,
     const ChunkId& chunk_id)
 {
-    return m_runtime.GetChunkFromStorageEndpoint(provider.address, provider.port, provider.provider_id, chunk_id);
+    return m_runtime.GetChunkFromStorageEndpoint(provider.address, provider.port, provider.storage_id, chunk_id);
 }
 
 std::optional<ChunkAuthorizationProof> RuntimeStorageTransport::GetProof(const StorageEndpoint& provider,
     const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id)
 {
     return m_runtime.GetChunkAuthorizationProofFromStorageEndpoint(provider.address, provider.port,
-        provider.provider_id, publication_operation_id, chunk_id);
+        provider.storage_id, publication_operation_id, chunk_id);
 }
 
 /* ---- StorageService ---- */
@@ -205,7 +205,7 @@ std::optional<StorageService::Placement> StorageService::Load(const cybou::Hash2
         if (!replicas || *replicas > MAX_REPLICAS_PER_CHUNK) return std::nullopt;
         for (std::uint32_t r{0}; r < *replicas; ++r) {
             StorageEndpoint endpoint;
-            if (!in.Take(endpoint.provider_id)) return std::nullopt;
+            if (!in.Take(endpoint.storage_id)) return std::nullopt;
             const auto length = in.U8();
             if (!length || *length == 0) return std::nullopt;
             std::string address(*length, '\0');
@@ -236,7 +236,7 @@ bool StorageService::Save(const Placement& placement)
         for (std::size_t r{0}; r < replicas.size() && r < MAX_REPLICAS_PER_CHUNK; ++r) {
             const auto& address = replicas[r].address;
             if (address.empty() || address.size() > 255) return false;
-            out.insert(out.end(), replicas[r].provider_id.begin(), replicas[r].provider_id.end());
+            out.insert(out.end(), replicas[r].storage_id.begin(), replicas[r].storage_id.end());
             out.push_back(static_cast<unsigned char>(address.size()));
             out.insert(out.end(), address.begin(), address.end());
             Append16(out, replicas[r].port);
@@ -284,7 +284,7 @@ PublicationDurability StorageService::Summarize(const Placement& placement) cons
     result.min_replicas = std::numeric_limits<std::uint32_t>::max();
     for (const auto& replicas : placement.replicas) {
         std::set<std::array<unsigned char, 32>> unique;
-        for (const auto& r : replicas) unique.insert(r.provider_id);
+        for (const auto& r : replicas) unique.insert(r.storage_id);
         const auto count = static_cast<std::uint32_t>(unique.size());
         result.min_replicas = std::min(result.min_replicas, count);
         if (count >= m_target) ++result.chunks_at_target;

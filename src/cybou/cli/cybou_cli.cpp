@@ -601,7 +601,7 @@ int StorageCommand(const std::string& action, const Options& opts)
         if (!bytes && opts.Has("peer")) {
             runtime.SyncFromConfiguredPeer(100);
             for (const auto& peer : runtime.StorageEndpoints()) {
-                bytes = runtime.GetChunkFromStorageEndpoint(peer.address, peer.port, peer.provider_id, chunk);
+                bytes = runtime.GetChunkFromStorageEndpoint(peer.address, peer.port, peer.storage_id, chunk);
                 if (bytes) break;
             }
         }

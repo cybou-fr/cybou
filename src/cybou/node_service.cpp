@@ -136,18 +136,28 @@ void CybouNodeService::StartBlockProduction(const uint64_t block_interval_ms)
     m_stop_block_production.store(false);
     m_block_production_thread = std::thread{[this, block_interval_ms] {
         auto next_block = std::chrono::steady_clock::now();
+        uint64_t retry_ms{100};
+        const auto report = [this](NodeEvent event, const EventFields& fields = EventFields{}) {
+            try { if (auto log = m_runtime->EventLog()) log->Write(event, fields); }
+            catch (const std::exception&) { std::cerr << "CYBOU block production event log unavailable\n"; }
+        };
         while (!m_stop_block_production.load()) {
             const bool finalizer_enabled = m_runtime->IsPoaSignerActive();
             if (finalizer_enabled && std::chrono::steady_clock::now() >= next_block) {
                 const auto block = m_runtime->ProduceBlock();
                 if (!block) {
-                    if (m_runtime->GetStatus().poa_safety_halted) {
-                        if (auto log = m_runtime->EventLog()) log->Write(NodeEvent::poa_safety_halt);
+                    if (m_runtime->LastBlockProductionStatus() == BlockProductionStatus::SAFETY_HALT) {
+                        m_runtime->DisablePoaSigner();
+                        report(NodeEvent::poa_safety_halt);
+                    } else {
+                        report(NodeEvent::block_production_retry, {{"duration_ms", retry_ms}});
                     }
-                    m_runtime->DisablePoaSigner();
-                    break;
+                    next_block = std::chrono::steady_clock::now() + std::chrono::milliseconds{retry_ms};
+                    retry_ms = std::min<uint64_t>(retry_ms * 2, 5000);
+                } else {
+                    retry_ms = 100;
+                    next_block = std::chrono::steady_clock::now() + std::chrono::milliseconds{block_interval_ms};
                 }
-                next_block = std::chrono::steady_clock::now() + std::chrono::milliseconds{block_interval_ms};
             }
 
             std::this_thread::sleep_for(std::chrono::milliseconds{100});
