@@ -55,3 +55,14 @@ Finalized status requires locally verified inclusion.
 Development targets one remote full replica; Beta targets two independent
 remote full replicas (plus local copy = 3 physical copies total).
 A local cache does not count as a remote replica.
+
+## Simplified parser and signing boundaries
+
+Bounded typed binary readers reject invalid lengths before allocation, unknown
+versions, noncanonical presence flags, invalid UTF-8 and trailing bytes. Nodes
+execute each transferred operation independently and verify every streamed
+block against verified genesis and local finalized state. No transport role,
+StorageId, endpoint or Validation signature substitutes execution or PoA proof.
+The genesis specification digest anchors the durable signing journal. When a
+canonical equivocation resolution differs from the signer's prepared history,
+the journal fails closed rather than signing on a conflicting history.

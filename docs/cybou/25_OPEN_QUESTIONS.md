@@ -18,7 +18,7 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 ## Application data plane
 
 - exact encrypted Application DB implementation and crash-recovery strategy;
-- canonical private CBOR profiles for Mail, Files mutations and RecoveryBridge;
+- cross-implementation vectors for typed binary private profiles for Mail, Files mutations and RecoveryBridge;
 - ApplicationService scan bounds and rebuild performance;
 - interruption-safe PublicationService staging/journal behavior.
 

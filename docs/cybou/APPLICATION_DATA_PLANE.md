@@ -84,7 +84,7 @@ are rebuilt from it. Validation never triggers placement.
 Each chunk goes to distinct CSPRNG-selected CYP2 storage providers until the remote
 target is met (1 in development, 2 in Beta; plus local copy = 3 physical copies total);
 STORED and ALREADY_STORED both count, the local copy never does.
-Providers are distinct by ProviderID (the hash of the provider key proven in
+Providers are distinct by StorageId (the hash of the provider key proven in
 the CYP2 handshake), not by address:port, so one key answering on several
 endpoints is one replica.
 Placement records live in the Identity's encrypted Application DB as an
@@ -260,9 +260,9 @@ FILES_MUTATION_BATCH
 IDENTITY_RECOVERY_BRIDGE
 ```
 
-The implemented v1 codecs use strict canonical CBOR arrays. The first two
+The implemented codecs use fixed-order bounded binary schema 3. The first two
 fields are the private schema type and version; unknown types, versions and
-extra fields are rejected. The three types are Mail (1), Files mutation batch
+trailing bytes are rejected. The three types are Mail (1), Files mutation batch
 (2), and Identity RecoveryBridge (3). They are placed only inside encrypted
 application content, never in a consensus operation or public chunk metadata.
 
@@ -301,11 +301,13 @@ RootChunkIDs and child ContentKeys remain encrypted inside that main root.
 `PublicationBundle` is an implementation abstraction only. Do not introduce a
 BundleID, bundle wire format or bundle consensus registry.
 
-The implemented `PublicationBundleStager` streams each tree into the common
-local ChunkBlobStore and appends its staged chunks to one durable authorization
-proof index. It can reopen a completed child-tree index to append the main
-tree. An interrupted tree marks that local index unusable until discard; it
-never authorizes remote provider storage before publication finality.
+PublicationService directly streams child trees and the main tree into the
+common local ChunkBlobStore, pins their unique chunks and saves one ordered
+leaf list in the encrypted Application DB. The staging-attempt marker enables
+cleanup of interrupted work without deleting committed jobs or pending intents.
+A transient Merkle tree generates proofs individually for upload. No persisted
+proof index or intermediate staging service exists. Remote admission still
+requires a finalized RootPublication.
 
 ## 8. Self capsule
 
@@ -459,3 +461,32 @@ each historical seed only if it reproduces that epoch's canonical KEM package,
 imports it into the key store (memory only) and rescans once, so pre-rotation
 publications open. `PublishRecoveryBridge` refuses to omit a published epoch
 whose seed this device has not recovered.
+
+## Typed private binary layouts (schema 3)
+
+Every document begins `type:u8, version:u8=3`; types are Mail=1, Files=2,
+RecoveryBridge=3. IDs and keys use their fixed 32-byte representation. All
+integers below are LE. `optional(T)` is a strict presence byte (0/1), then T
+when present. `text` is u32 byte length followed by valid UTF-8.
+
+```text
+Mail:
+  message_id:32, reply:optional(32), recipient_account_id:32, timestamp:u64
+  subject:text<=1024, body:text<=131072, attachment_count:u16<=32
+  each: attachment_id:32, filename:text<=255, logical_size:u64
+        media_type:optional(text<=127), root_chunk_id:32, content_key:32
+Files:
+  mutation_count:u16 (1..512)
+  each: kind:u8 (UPSERT=1, DELETE=2), item_id:32
+  UPSERT adds: parent:optional(32), item_kind:u8 (FILE=1, FOLDER=2)
+    name:text<=255, logical_size:u64, root:optional(32), key:optional(32)
+    modified_ms:u64
+RecoveryBridge:
+  account_id:32, next_key_epoch:u64, seed_count:u16 (1..64)
+  each: historical_epoch:u64, X-Wing seed:32
+```
+
+Existing semantic validation remains mandatory: unique IDs, valid filenames,
+nonzero required fields, matched root/key presence, folders without content,
+and ordered historical epochs below the next epoch. Decoders consume the
+entire bounded input. No CBOR or legacy decoder remains.

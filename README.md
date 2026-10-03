@@ -26,7 +26,7 @@ sur `51.255.46.58:29461` ; les anciens services finalizer et fournisseurs
 sont inactifs. Le client vérifie la genèse signée compilée et utilise le bootstrap compilé
 avec son pin TLS ; la migration du VPS vers ce protocole reste à effectuer.
 L'exécutable unique `cybou` démarre uniquement le DEVNET compilé et propose, sans
-interface, `node run` et `finalizer run`, mais le
+interface, `node run` avec la clé PoA optionnelle, mais le
 client ne possède pas encore de parcours général de création et de mise en
 service d'un réseau privé d'entreprise.
 
@@ -79,7 +79,7 @@ stockage ; le shell Qt dispose également de tests d'interface.
 
 Le client de bureau démarre actuellement avec les constantes publiques DEVNET compilées et
 n'active pas encore le finalizer dans le parcours utilisateur ; le finalizer
-PoA s'exécute séparément via la commande opérateur `finalizer run`. Le CLI fournit aussi des outils de
+PoA s'exécute séparément via la commande opérateur `node run --poa-key-file`. Le CLI fournit aussi des outils de
 diagnostic, de synchronisation et de vérification du stockage. Les
 fonctions de déploiement d'un réseau d'entreprise doivent encore être reliées
 à un parcours opérateur complet avant de pouvoir être présentées comme une

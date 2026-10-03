@@ -13,8 +13,8 @@ recreating inherited Bitcoin facilities that the active protocol does not use.
   authenticated-encryption wrapper.
 - `cybou_core` links `cybou_base` and does not link `bitcoin_consensus` or
   `bitcoin_crypto` directly.
-- `cybou_base` owns the shared `uint256.cpp` object and has no direct
-  `bitcoin_util` link.
+- `cybou_base` owns the native `cybou/hash256.cpp` object using only the
+  standard library. No inherited blob, util, span or endian helper remains.
 - `cybou_node` no longer links `bitcoin_crypto` directly. PoA seed cleansing
   uses the CYBOU OpenSSL wrapper.
 - `cybou_node` no longer contains the unused CYBOU GCS/compact-filter clone;
@@ -24,7 +24,7 @@ recreating inherited Bitcoin facilities that the active protocol does not use.
 - CYBOU crypto tests use published vectors and CYBOU-local test hex helpers;
   they do not compare against inherited Bitcoin crypto implementations.
 - Legacy `CChainParams` and 100-block Bitcoin fixture tests are removed from the
-  CYBOU test suite; current network-definition behavior is tested directly.
+  CYBOU test suite; current signed-genesis behavior is tested directly.
 
 ## Remaining inherited boundary
 
@@ -34,10 +34,10 @@ encodings while removing inherited `DataStream`, `SpanReader`, and generic
 `Serialize`/`Unserialize` use from CYBOU storage. These bytes are local
 persistence, not CYP2 wire messages or consensus serialization.
 
-The shared `uint256` interface also retains inherited compile-time endian,
-span, and hex helpers. Do not change its byte order or the hash interpretation
-as part of dependency cleanup. Protocol identifiers and consensus hashing
-remain unchanged.
+Native Hash256 preserves protocol raw bytes and lexicographic ordering. Its
+hex display follows canonical byte order, without reversal or numeric padding.
+RootPublication and encrypted/private schemas have fixed-order binary layouts;
+no generic CBOR decoder remains.
 
 ## Constraints
 

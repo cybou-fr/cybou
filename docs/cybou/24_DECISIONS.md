@@ -3,14 +3,14 @@
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
-implements the complete CYP2 v5 baseline: blocks, inventory, announcements,
+implements the complete CYP2 v5 baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
 Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
 possession of the private key matching the public key in genesis, with durable
-signing safety. IP, endpoints, TLS sessions, ProviderID and peer declarations
-never confer consensus authority. ProviderID is proven on demand only for a
+signing safety. IP, endpoints, TLS sessions, StorageId and peer declarations
+never confer consensus authority. StorageId is proven on demand only for a
 storage relationship. Peer sync completion is a liveness/UX hint, never proof
 of global freshness or a prerequisite for creating an Identity.
 
@@ -56,21 +56,27 @@ architecture that contradicts these decisions.
 | DEC-204 | Identity rotation must protect required historical KEM recovery material before rotation when clean recovery needs old epochs. | Frozen |
 | DEC-205 | Development targets 1 remote full replica; Beta targets 2 independent remote full replicas (plus local copy = 3 physical copies total). Local encrypted cache does not count toward remote durability; Beta erasure coding is disabled. | Frozen |
 | DEC-206 | Placement, provider health, audit and repair are StorageService policy, not consensus state. | Frozen |
-| DEC-212 | A storage provider is identified by `ProviderID = BLAKE3(provider public key)`, proven per CYP2 session; placement stores ProviderID plus last endpoint and the replica target counts distinct ProviderIDs. | Frozen |
+| DEC-212 | StorageId is BLAKE3 of the existing domain-separated STORAGE public key encoding, proven on demand with a fresh challenge bound to TLS exporter and both HELLOs. It proves replica independence only; all Full Nodes implement storage. | Frozen |
 | DEC-213 | Local blob retention is a generic node-local pin/cache registry keyed by opaque (holder, reference) tags; GC evicts only unpinned, non-admitted cache entries past a grace period. ChunkStore stays free of application semantics. | Frozen |
 | DEC-217 | Authority creates no canonical reservations, tickets, resource budgets, or per-I/O accounting. Provider limits are local policy. | Frozen |
 | DEC-244 | Official networks are DEVNET and MAINNET. Network identity is immutable `NetworkID = Network Public Key`. For each NetworkID, exactly one signed genesis is valid and immutable for the lifetime of that network. The Network Private Key is strictly offline, never online, and used solely by the network owner to sign the immutable genesis at network creation. | Frozen |
 | DEC-245 | Bootstrap is an ordinary CYBOU full peer running the same executable and CYP2 protocol; it has no network-role announcement, no consensus role, and no special protocol capability. Known IP:port provides transport discovery only. | Frozen |
 | DEC-246 | GenesisAllocation may assign initial AUTH to designated ordinary Identities. AccountCreate claims it exactly once. Such an allocation is a genesis decision, not a property of the bootstrap role; there are no consensus bootstrap grants or bootstrap Identity roles. | Frozen |
 | DEC-247 | Canonical finality is single-operator hybrid-PQ PoA under the genesis-authorized PoA key. The PoA finalizer MUST execute every candidate independently, trusts no validator or peer state, and remains the sole canonical finalizer without BFT or validator quorums. Validation signatures are never sufficient for finalization. | Frozen |
-| DEC-248 | AUTH is a canonical non-transferable account value stored in AccountState and committed by the state root, independent of the 100B CYBOU supply. It changes only through deterministic finalized transitions: GenesisAllocation, +1 AUTH to the authorizing account of each finalized Identity-authorized operation except AccountCreate, and one PoA-signed `PoaAuthAdjustment` operation with GRANT (+N) or BURN (-N, floor 0) that itself earns no AUTH. There is no AUTH transfer. Finalized AUTH > 1,000,000 makes an Identity eligible to sign Validation; AUTH never grants PoA finalization power. Automatic penalties are not frozen. | Frozen |
+| DEC-248 | AUTH is a canonical non-transferable account value stored in AccountState and committed by the state root, independent of the 100B CYBOU supply. It changes only through deterministic finalized transitions: GenesisAllocation, +1 AUTH to the authorizing account of finalized utility operations (RootPublication, SystemLock), capped at +1 per account per block, and one PoA-signed `PoaAuthAdjustment` operation with GRANT (+N) or BURN (-N, floor 0) that itself earns no AUTH. There is no AUTH transfer. Finalized AUTH > 1,000,000 makes an Identity eligible to sign Validation; AUTH never grants PoA finalization power. Automatic penalties are not frozen. | Frozen |
 | DEC-249 | Every full node independently validates and executes every candidate operation against its latest finalized state and relays only locally valid candidates. Validation is an additional signature by an eligible Identity over NetworkBinding, OperationID, finalized base BlockID and its AccountID, made only after its own node validated the operation. It never substitutes local or PoA execution, never changes state, and creates no provisional state. There is no `validation.enabled`, `min_signatures` policy or block-candidate Validation. | Frozen |
 | DEC-252 | For each NetworkID exactly one signed genesis is valid. Genesis is immutable for the lifetime of that network. There is no `genesis_generation`, re-genesis, in-place genesis replacement, or `NetworkTrustStore`. Any different genesis requires a new Network Key and therefore a new NetworkID. | Frozen |
 | DEC-253 | Each official network is compiled into the client as public constants: exact Network Public Key (`NetworkID`), immutable signed `NetworkGenesis` object, initial genesis state, and bootstrap locators (IP:port + TLS SPKI). Runtime uses no external official network/genesis file or separate genesis digest profile pin. Bootstrap never supplies genesis. | Frozen |
 | DEC-254 | Provisioning generates the Network and ordinary `cybou.cybou` Identity private material once. Secret material lives only under gitignored `/private/`; Git contains public keys, public Identity data, and signed genesis constants. The Network Private Key remains strictly offline. | Frozen |
 | DEC-255 | DEVNET is the enabled official profile with bootstrap locator `51.255.46.58:29461`. MAINNET is unprovisioned, has no bootstrap locator, and is disabled in the GUI until its keys, genesis, and bootstrap are created. | Frozen |
 | DEC-256 | `cybou.cybou` is an ordinary account-level Identity with AccountID, Recovery, Authorization, KEM, Mail/support, and a distinct PoA signing key role from its mnemonic. It is not a separate PoA Identity entity. Consensus finalization right is determined only by the PoA public key authorized in genesis, never by name or AUTH value. | Frozen |
-| DEC-258 | Every network participant is a Full Node implementing the uniform CYP2 v5 baseline without a capability bitmap or network role. Storage is intrinsic and quota-controlled. ProviderID is proven on demand only for storage. PoA is private-key possession with durable signing safety; signer toggles never reconnect peers. Peer sync completion is advisory and does not gate Identity creation. | Frozen |
+| DEC-258 | Every network participant is a Full Node implementing the uniform CYP2 v5 baseline without a capability bitmap or network role. Storage is intrinsic and quota-controlled. StorageId is proven on demand only for storage. PoA is private-key possession with durable signing safety; signer toggles never reconnect peers. Peer sync completion is advisory and does not gate Identity creation. | Frozen |
+
+| DEC-259 | Runtime and StateStore take verified signed genesis as their sole network definition; its signed specification digest is the chain height-zero tip and durable signing-journal anchor. No synthetic genesis block identifier exists. | Frozen |
+| DEC-260 | CYP2 v5 has compact IDs 1–26, batched consecutive GET_BLOCKS with strict BLOCKS_END count, and one shared OP_META/OP_DATA/OP_RESULT path for submission and polling. Configured peers are one ordered endpoint/optional-pin vector; discovered peers remain bounded and separate. | Frozen |
+| DEC-261 | PublicationService stages directly into pinned local encrypted blobs and saves the ordered authorization leaf list once in encrypted Application DB. A transient O(N) Merkle tree generates individual O(log N) proofs; no persisted proof levels or separate staging service exists. | Frozen |
+| DEC-262 | RootPublication wire version 4, encrypted ROOT/INDEX schema 3 and private Mail/Files/RecoveryBridge schema 3 are fixed-order bounded binary layouts. Reject unknown versions and trailing bytes; no generic CBOR parser or legacy decoder remains. BLAKE3 is unchanged. | Frozen |
+| DEC-263 | Native Hash256 is an opaque canonical 32-byte value; raw-byte order, comparison and forward hex agree. No numeric padding or reverse-byte display. Unused Bitcoin blob, span, hex, util and compat substrate is removed. | Frozen |
 
 ### Network operations and topology
 

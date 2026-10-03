@@ -3,14 +3,14 @@
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
-implements the complete CYP2 v5 baseline: blocks, inventory, announcements,
+implements the complete CYP2 v5 baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
 Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
 possession of the private key matching the public key in genesis, with durable
-signing safety. IP, endpoints, TLS sessions, ProviderID and peer declarations
-never confer consensus authority. ProviderID is proven on demand only for a
+signing safety. IP, endpoints, TLS sessions, StorageId and peer declarations
+never confer consensus authority. StorageId is proven on demand only for a
 storage relationship. Peer sync completion is a liveness/UX hint, never proof
 of global freshness or a prerequisite for creating an Identity.
 
@@ -166,7 +166,7 @@ There is no production network.
 ## Executables and test networks
 
 - `cybou` is the single production executable: without a command it is the
-  desktop; `cybou node run` / `cybou finalizer run`, `cybou network ...`,
+  desktop; `cybou node run` (optional `--poa-key-file`), `cybou network ...`,
   `cybou doctor`, `cybou operation ...` and `cybou storage ...` run headless.
   A `BUILD_GUI=OFF` build contains only the headless commands.
 - `cybou-loadgen`, storage smoke/soak and other tools exist only with
@@ -348,3 +348,19 @@ After claim: fees credit that allocation claimant's ordinary AccountState Balanc
 
 Balance is spendable CYBOU. System Balance is an irreversible CYBOU service budget.
 Authority is canonical, non-transferable AUTH and is excluded from CYBOU supply.
+
+## Simplified implementation boundary
+
+The only node type is Full Node. Nodes announce no roles or capabilities.
+PoA authority is possession of the genesis-authorized private key; Validation
+is an eligible Identity signature checked against finalized state. Storage is
+intrinsic; StorageId proves replica independence only. Rendezvous is a known
+location of an ordinary Full Node. Runtime takes VerifiedNetworkGenesis and
+uses its signed specification digest as the height-zero chain anchor.
+
+PublicationService stages directly into pinned local encrypted chunks, stores
+one encrypted ordered leaf list and generates Merkle proofs on demand in RAM.
+RootPublication wire v4 and encrypted/private schema v3 are bounded binary
+layouts with exact consumption. Hash256 hex follows its raw 32-byte order.
+No legacy runtime, CBOR or reversed-hash decoder is retained. Provisioning and
+network cutover require the previously established operator authorization.

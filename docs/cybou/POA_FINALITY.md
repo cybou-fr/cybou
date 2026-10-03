@@ -56,3 +56,13 @@ PoA produces blocks from its node's ordinary candidate pool. It may receive
 Validation signatures but never relies on them. There is no validator
 fork-choice, no BFT voting, and no validator quorum override. Validation creates
 no state, so PoA finality never needs to roll back provisional effects.
+
+## Genesis and signer boundary
+
+Runtime and StateStore accept VerifiedNetworkGenesis, not an unsigned network
+summary. The genesis specification digest verified by its network signature
+is height-zero finalized tip, first-block parent and durable journal anchor.
+CybouNodeRuntime executes candidates and constructs the final block;
+PoaFinalizer checks the genesis key, persists intent and signs. No producer
+wrapper, dedicated transport role or special pending state exists. A signer
+whose journal conflicts with the selected canonical history fails closed.

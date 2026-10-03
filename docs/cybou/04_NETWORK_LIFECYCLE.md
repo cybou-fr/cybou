@@ -3,14 +3,14 @@
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
-implements the complete CYP2 v5 baseline: blocks, inventory, announcements,
+implements the complete CYP2 v5 baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
 Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
 possession of the private key matching the public key in genesis, with durable
-signing safety. IP, endpoints, TLS sessions, ProviderID and peer declarations
-never confer consensus authority. ProviderID is proven on demand only for a
+signing safety. IP, endpoints, TLS sessions, StorageId and peer declarations
+never confer consensus authority. StorageId is proven on demand only for a
 storage relationship. Peer sync completion is a liveness/UX hint, never proof
 of global freshness or a prerequisite for creating an Identity.
 
@@ -168,3 +168,19 @@ chunks directly. A bootstrap outage does not stop an already formed mesh.
 Production and DEV public inbound/outbound admission is France-only and fails
 closed when local Geo data is unavailable or corrupt; see
 `37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`.
+
+## Simplified implementation boundary
+
+The only node type is Full Node. Nodes announce no roles or capabilities.
+PoA authority is possession of the genesis-authorized private key; Validation
+is an eligible Identity signature checked against finalized state. Storage is
+intrinsic; StorageId proves replica independence only. Rendezvous is a known
+location of an ordinary Full Node. Runtime takes VerifiedNetworkGenesis and
+uses its signed specification digest as the height-zero chain anchor.
+
+PublicationService stages directly into pinned local encrypted chunks, stores
+one encrypted ordered leaf list and generates Merkle proofs on demand in RAM.
+RootPublication wire v4 and encrypted/private schema v3 are bounded binary
+layouts with exact consumption. Hash256 hex follows its raw 32-byte order.
+No legacy runtime, CBOR or reversed-hash decoder is retained. Provisioning and
+network cutover require the previously established operator authorization.

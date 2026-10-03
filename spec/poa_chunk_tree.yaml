@@ -7,7 +7,7 @@ full_node:
   network_role_announcement: absent
   baseline: [block_sync, announcements, discovery, operation_relay, Validation_transport, encrypted_storage]
   storage: intrinsic_local_quota_may_be_zero
-  provider_identity: on_demand_TLS_bound_challenge_proof_for_storage_only
+  storage_identity: on_demand_TLS_bound_challenge_proof_for_storage_only
   poa_authority: genesis_key_possession_proved_by_block_certificates
   signer_activation_reconnects_peers: false
   peer_sync_completion: advisory_not_global_freshness
@@ -19,6 +19,9 @@ consensus:
     network_id: network_public_key
     genesis: immutable
     genesis_replacement: forbidden
+    runtime_input: VerifiedNetworkGenesis
+    chain_height_zero_tip: verified_signed_genesis_specification_digest
+    synthetic_genesis_block_id: absent
     official_public_data: compiled_network_public_key_signed_genesis_initial_state_bootstrap_locators
     external_official_network_file: absent
     separate_genesis_digest_profile_pin: absent
@@ -37,7 +40,7 @@ consensus:
     creates_state: false
     minimum_authority_for_eligibility: 1000001
     authority_evaluation_state: latest_finalized_state
-    signed_fields: [network_id, operation_id, finalized_base_block_id, validator_account_id]
+    signed_fields: [network_binding, operation_id, finalized_base_block_id, validator_account_id]
     signature: identity_authorization_ed25519_mldsa44
   bootstrap:
     role: ordinary_cybou_full_peer
@@ -75,17 +78,15 @@ chunks:
   object_id_and_chunk_index_on_network: false
   application_graph_metadata_encrypted: true
   b3_implementation: vetted_external_implementation
-  canonical_cbor:
-    deterministic_encoding: RFC8949_core_deterministic
-    allowed_types: [unsigned_integer, negative_integer, byte_string, utf8_text, array, map, boolean, null]
-    forbidden_types: [indefinite_length, tag, floating_point, undefined, unassigned_simple]
-    map_key_order: bytewise_lexicographic_of_encoded_key
-    max_encoded_bytes: 262144
-    max_string_bytes: 262144
-    max_container_items: 4096
-    max_total_items: 16384
-    max_nesting_depth: 32
+  binary_codec:
+    integers: little_endian
+    fixed_ids_bytes: 32
+    length_prefix: u32_LE
+    optional_presence: strict_u8_0_or_1
     text_encoding: strict_UTF8
+    exact_input_consumption: true
+    unknown_versions: rejected
+    generic_recursive_parser: absent
   encrypted_chunk:
     envelope_magic: CYCH
     envelope_version: 1
@@ -109,7 +110,7 @@ chunks:
     max_stored_bytes: 524353
     chunk_id_covers: entire_stored_envelope
   encrypted_tree:
-    metadata_encoding: canonical_CBOR_only_for_ROOT_and_INDEX
+    metadata_encoding: fixed_order_binary_schema_3_ROOT_INDEX
     data_encoding: raw_application_bytes
     structure: ROOT_to_DATA_or_zero_or_more_INDEX_levels_to_DATA
     root_uses_index_only_when_child_list_exceeds_root_fanout: true
@@ -145,12 +146,12 @@ chunks:
     - encrypted_tree_cross_implementation_vectors_and_limits
     - chunk_authorization_merkle_cross_implementation_vectors
     - padding_overhead_benchmarks
-    - canonical_cbor_cross_implementation_vectors
+    - typed_binary_schema_cross_implementation_vectors
     - root_capsule_wrap_unwrap_vectors_and_recipient_recovery
     - root_publication_client_construction_and_history_scanner
 publication:
-  wire_profile: 3
-  canonical_encoding: RFC8949_core_deterministic_CBOR_map_integer_keys_ascending
+  wire_profile: 4
+  canonical_encoding: fixed_order_binary_LE_strict_exact_consumption
   fields: [wire_version, root_chunk_id, chunk_authorization_root, chunk_count, recipient_capsules]
   body_max_bytes: 131072
   full_operation_max_bytes: 147456
@@ -199,3 +200,29 @@ recovery:
   publication_scanner: local_rebuildable_index
   clean_machine_requires_prior_client_database: false
   restore_and_recursive_fetch_acceptance_required: true
+
+hash_values:
+  type: CYBOU_Hash256
+  bytes: 32
+  opaque: true
+  serialization: raw_canonical_byte_order
+  comparison: lexicographic_raw_bytes
+  hex: forward_byte_order_64_digits_lowercase_output
+  parse_prefix_or_padding: rejected
+transport:
+  message_ids: compact_1_through_26
+  block_sync: GET_BLOCKS_META_DATA_END_consecutive_batched
+  maximum_blocks_per_batch: 32
+  operation_transfer: shared_OP_META_OP_DATA_OP_RESULT
+  configured_peers: ordered_endpoint_optional_TLS_pin_vector
+  discovered_peers: separate_bounded_cache
+local_publication:
+  staging: direct_PublicationService_pinned_ChunkBlobStore
+  authorization_leaf_list: saved_once_in_encrypted_Application_DB
+  merkle_levels: transient_O_N
+  proof_generation: per_chunk_O_log_N
+  persisted_proof_index: absent
+private_application_schema:
+  version: 3
+  encoding: typed_fixed_order_binary
+  types: {Mail: 1, Files: 2, RecoveryBridge: 3}

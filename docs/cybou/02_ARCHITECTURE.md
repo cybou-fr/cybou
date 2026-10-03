@@ -9,8 +9,8 @@ is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
 Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
 possession of the private key matching the public key in genesis, with durable
-signing safety. IP, endpoints, TLS sessions, StorageID and peer declarations
-never confer consensus authority. StorageID is proven on demand only for a
+signing safety. IP, endpoints, TLS sessions, StorageId and peer declarations
+never confer consensus authority. StorageId is proven on demand only for a
 storage relationship. Peer sync completion is a liveness/UX hint, never proof
 of global freshness or a prerequisite for creating an Identity.
 
@@ -128,8 +128,8 @@ There is no BFT or validator quorum.
 
 Authority is a canonical non-transferable AUTH account value committed by the
 state root, separate from CYBOU Balance and System Balance. It changes only
-through finalized transitions (genesis, +1 per finalized Identity-authorized
-operation, PoA-signed `PoaAuthAdjustment` GRANT / BURN). An Identity whose finalized
+through finalized transitions (genesis, +1 for utility operations RootPublication
+and SystemLock, capped at +1 per account per block, PoA-signed `PoaAuthAdjustment` GRANT / BURN). An Identity whose finalized
 AccountState.authority exceeds 1,000,000 AUTH may add a Validation signature to
 an operation its own node has independently validated. Every receiving node and
 PoA still re-execute the operation.
@@ -155,3 +155,19 @@ unique genesis-granted `cybou` allocation before claim, and to its ordinary
 claimant Balance afterwards. The DEV OnboardingPool begins at 100,000,000
 CYBOU and only decreases through AccountCreate. AUTH is excluded from supply.
 See `18_ECONOMICS_FEES.md`.
+
+## Simplified implementation boundary
+
+The only node type is Full Node. Nodes announce no roles or capabilities.
+PoA authority is possession of the genesis-authorized private key; Validation
+is an eligible Identity signature checked against finalized state. Storage is
+intrinsic; StorageId proves replica independence only. Rendezvous is a known
+location of an ordinary Full Node. Runtime takes VerifiedNetworkGenesis and
+uses its signed specification digest as the height-zero chain anchor.
+
+PublicationService stages directly into pinned local encrypted chunks, stores
+one encrypted ordered leaf list and generates Merkle proofs on demand in RAM.
+RootPublication wire v4 and encrypted/private schema v3 are bounded binary
+layouts with exact consumption. Hash256 hex follows its raw 32-byte order.
+No legacy runtime, CBOR or reversed-hash decoder is retained. Provisioning and
+network cutover require the previously established operator authorization.

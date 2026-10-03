@@ -87,6 +87,14 @@ justifies the extra protocol complexity.
 Placement is per ChunkID, not necessarily one provider set per file.
 
 StorageService selects independent eligible remote providers using secure
-random selection over proven ProviderIDs.
+random selection over proven StorageIds.
 Providers return stored authorization proofs for audit and state rebuild.
 Placement records live in the Identity's encrypted rebuildable Application DB.
+
+StorageId is proved on demand with STORAGE_PROOF_REQUEST (26) and
+STORAGE_PROOF (23), bound to both HELLOs, TLS exporter and a fresh challenge.
+The STORAGE key retains purpose value 8 and its original derivation domain.
+No role is advertised. PublicationService retains ordered authorization leaves
+in the encrypted Application DB; StorageService builds transient Merkle levels
+and generates each proof on demand. Zero quota rejects admission while leaving
+block sync, candidate relay and Validation transport operational.

@@ -1,6 +1,6 @@
 # Implementation status
 
-Status: updated through `d47695c` plus the Geo updater resilience changes (2026-10-03).
+Status: updated through the main simplification pass (2026-10-03).
 This page describes
 implementation and deployment reality; `AGENTS.md` and the frozen architecture
 define the target. The prepared changes described here are not a released baseline.
@@ -10,31 +10,31 @@ define the target. The prepared changes described here are not a released baseli
 | Component | Target constitution | Current code reality |
 |---|---|---|
 | Official networks | Compiled DEVNET public constants; MAINNET unprovisioned and GUI-disabled | Implemented (`d5d90cb`): one `OfficialNetwork` per kind via `RequireOfficialNetwork`. Prior DEVNET constants from `ec76ef3` are retained but contain state v11; startup now fails closed until separately authorized v12 provisioning under a new NetworkID. MAINNET throws as not provisioned; the GUI has no network selector and always runs DEVNET. |
-| Network identity | `NetworkID = Network Public Key` | Implemented: definitions carry the exact key; every 32-byte field is named `network_binding` and equals `ComputeNetworkBinding(key)`; `GetNetworkId()` exists only for the exact key bytes of a verified genesis. The shared `MakeNodeRuntimeConfig` derives the definition and locators from `OfficialNetwork`; the genesis digest marker is removed from the StateStore. |
+| Network identity | `NetworkID = Network Public Key` | Implemented: verified genesis carries the exact key; every 32-byte field is named `network_binding` and equals `ComputeNetworkBinding(key)`; `GetNetworkId()` exists only for the exact key bytes of a verified genesis. The shared `MakeNodeRuntimeConfig` derives the verified genesis and rendezvous locators from `OfficialNetwork`; the genesis digest marker is removed from the StateStore. |
 | Signed genesis | One immutable offline-signed `NetworkGenesis` object and initial state compiled per official network | Implemented: the compiled genesis must carry exactly the compiled Network Public Key and its initial state root. CYG1/CYN1, `CybouNetworkFile` and every file loader are removed. |
-| Official startup | Select compiled public constants; verify signature and initial state root; no external official file or separate digest pin | Implemented: every `cybou` command, loadgen, storage smoke/soak and the desktop start only from a compiled network (`--network devnet`, or `lab` in LAB test builds). No profile digest pin and no genesis digest in the runtime API. |
+| Official startup | Select compiled public constants; verify signature and initial state root; no external official file or separate digest pin | Implemented: every `cybou` command, loadgen, storage smoke/soak and the desktop start only from a compiled network (`--network devnet`, or `lab` in LAB test builds). No profile digest pin; the verified genesis digest anchors height zero. |
 | Network Private Key | Strictly offline, signs genesis once; private material stays under gitignored `/private/` | `network provision-devnet` is the only provisioning flow; raw secret-file keygen and genesis-create commands are removed. The retired DEVNET material is kept under `/private/devnet-retired-20261003`. |
 | Bootstrap | Ordinary CYBOU full peer | Bootstrap binding/protocol/store, `BOOTSTRAP_REQUEST/RESPONSE` and the `cybou-bootstrap` executable are removed. Nodes and the desktop dial the compiled locator first and check its SPKI pin; the locator node serves `--tls-certificate/--tls-key`. Every process uses the same Full Node network lifecycle; signer activation does not reconnect peers. Pinned rendezvous endpoints are protected from discovered-peer crowd-out. The DEV VPS still runs the retired prototype service. |
 | Geo updater | France-only admission with a valid local dataset; fail closed otherwise | HTTPS and published archive SHA-1 verification, bounded gzip decode, SHA-256 CSV cache and validated atomic installation. Each failed attempt re-fetches metadata and archive; five attempts use interruptible 0/2/5/15/60s delays. Exhaustion retains valid cache and retries in 1h, or retries in 5m without a valid dataset. Successful/current checks use 14 days. Test-only fetch/wait hooks cover publication mismatch, rejected candidates, cache retention, strict temporary cleanup and cancellation without network access. |
 | Consensus bootstrap state | No grants, roster, or network-role announcements | Removed. |
 | Consensus state | Unified current state format | State v12 with canonical AUTH and only OnboardingPool; older decoders removed. |
 | AUTH state | Canonical non-transferable AUTH in AccountState and GenesisAllocation; state root commits it | Implemented (`393657f`): `AccountState.authority`, `GenesisAllocation.authority`, state v12 (AUTH first introduced in v11). Legacy AuthorityIndex/AuthorityPolicy removed. Desktop reads AUTH from AccountState (`52c5406`). |
-| AUTH transitions | +1 per finalized Identity-authorized operation; PoA-signed `PoaAuthAdjustment` GRANT / BURN | Implemented: flat +1 in `ExecuteBlockOperations` (`99af6db`; AccountCreate and `PoaAuthAdjustment` earn nothing, saturating). `PoaAuthAdjustment` (`4a393fd`) is signed by the genesis PoA key, bound to one block height, once per block, verified by every node; never relayed. No CLI/GUI action yet issues adjustments. |
-| Candidate execution | Every full node executes candidates before relay; one pool per node, used by PoA for blocks | Implemented (`7f447d4`): `CybouNodeRuntime` owns the single `OperationPool`; local, peer and relayed operations pass `OperationPool::Admit` before staging or forwarding; every node revalidates after each finalized block. `PoaFinalizer` seals that pool. |
+| AUTH transitions | Current utility-bound earning; PoA-signed `PoaAuthAdjustment` GRANT / BURN | Implemented: utility operations RootPublication and SystemLock earn flat +1, capped at +1 per account per finalized block (`59ada0b`); AccountCreate, maintenance, payments and adjustments earn nothing. `PoaAuthAdjustment` (`4a393fd`) is signed by the genesis PoA key, bound to one block height, once per block, verified by every node; never relayed. No CLI/GUI action yet issues adjustments. |
+| Candidate execution | Every full node executes candidates before relay; one pool per node, used by PoA for blocks | Implemented (`7f447d4`): `CybouNodeRuntime` owns the single `OperationPool`; local, peer and relayed operations pass `OperationPool::Admit` before staging or forwarding; every node revalidates after each finalized block. CybouNodeRuntime produces from that pool; PoaFinalizer only signs with its durable journal. |
 | Validation | `ValidationAttestation` after local execution by an Identity with finalized AUTH > 1,000,000 | Implemented: codec, eligibility and vault-backed signer (`c9422a8`), bounded RAM `ValidationPool` and `OperationStatus::IsValidated()` (`f7f894f`), CYP2 frame v5 `VALIDATION_ATTESTATION_POLL` / `VALIDATION_ATTESTATION` (`037e6b0`), desktop Validated state and signer (`885986f`). An attestation served before the receiver holds the candidate is not stored; it is re-offered on the next finalized base or session. Mail/Files publication jobs do not yet show Validated. No penalty rule. |
 | Executables | One production `cybou` | `cybou` is the desktop and the headless CLI (`src/cybou/cli/cybou_cli.cpp`, one parser, no internal positional commands); `BUILD_GUI=OFF` builds a headless-only `cybou`. `cybou-node` and the `network bootstrap` command are removed; `network info` lists the locators. `cybou-loadgen` builds only with `BUILD_TESTS`. |
 | LAB/CI network | Test-only, never an official key | `--network lab` exists only with `-DCYBOU_ENABLE_LAB_NETWORK=ON`; CI, storage smoke/soak, operator CLI and the stress controller use it. |
-| Operation routing | Uniform CYP2 v5 Full Node mesh | HELLO has no capability field. No PoA transport proof or special route. Sync completion is advisory. Storage is intrinsic; ProviderID is challenged only for storage interaction. |
+| Operation routing | Uniform CYP2 v5 Full Node mesh | HELLO has no capability field. No PoA transport proof or special route. Sync completion is advisory. Storage is intrinsic; StorageId is challenged only for storage interaction. |
 | PoA | Sole independent canonical finalizer | Single-operator PoA re-executes every candidate through the node pool and finalizes with zero attestations; a multi-node CYP2 test covers validator, ordinary node and PoA. |
 
 ## Uniform Full Node pass (2026-10-03)
 
 CYP2 v5 uses an 80-byte HELLO with no network-role field. Every Full Node
 serves blocks, discovery, operation relay, Validation transport and encrypted
-storage with a local quota (including zero). On-demand ProviderID proof is
-restricted to storage interactions. `node run` and the key-required
-`finalizer run` wrapper share `StartNetwork`; `PoaFinalizer` produces blocks
-and `PoaSigningService` owns durable signing safety. Signer toggles preserve
+storage with a local quota (including zero). On-demand StorageId proof is
+restricted to storage interactions. `node run` and its optional
+`--poa-key-file` option use `StartNetwork`; CybouNodeRuntime produces blocks
+and `PoaFinalizer` owns durable signing safety. Signer toggles preserve
 peer sessions. Qt uses feature availability and reports Full Node properties.
 The existing economic reset is retained; official provisioning and VPS
 migration remain deferred.
@@ -71,3 +71,31 @@ finality, remote protection, provider loss, repair and exact retrieval of
 1. Provision a new DEVNET NetworkID with v12 signed constants after operator authorization.
 2. Migrate the DEV VPS to an ordinary headless `cybou ... --network devnet` node with a TLS certificate matching the compiled SPKI pin, after a coordinated state reset.
 3. Complete DEVNET end-to-end acceptance.
+
+## Completed simplification pass (2026-10-03)
+
+Uniform CYP2 v5 uses compact IDs 1–26, consecutive GET_BLOCKS batches and a
+shared operation transfer/acknowledgment path. One ordered configured-peer
+vector holds endpoints and optional pins. Runtime and StateStore receive only
+VerifiedNetworkGenesis; its signed specification digest anchors the chain and
+PoA signing journal. `node run --poa-key-file` is the sole headless signer path.
+
+PublicationService stages directly into the shared pinned blob store and saves
+one encrypted leaf list. Transient Merkle levels generate one proof at a time.
+RootPublication v4 and encrypted/private schema v3 use bounded binary layouts,
+strict UTF-8 and exact input consumption. Native Hash256 preserves raw 32-byte
+serialization with forward hex. Generic CBOR and inherited Bitcoin blob/util/
+compat code are removed, along with unused libevent and Boost dependencies.
+
+Existing economics, AUTH transitions, France-only fail-closed admission,
+hybrid post-quantum signatures and BLAKE3 remain the implementation baseline.
+Provisioning, official constants, network reset and VPS deployment were not run
+as part of this pass; the previously documented operator gates remain open.
+
+Verification for this pass: both headless LAB and Qt builds succeeded; all 205
+core tests and 49 Qt tests passed. Operator CLI acceptance and the multi-process
+storage smoke passed, including finality, remote protection, provider loss,
+repair and exact retrieval of 716,800 bytes. Seven stress-controller unit tests
+ran successfully with one skip. Active CYBOU production sources have zero
+references to the removed runtime APIs and Bitcoin/CBOR substrate. Third-party
+crc32c CPU hardware capability constants are outside that runtime check.

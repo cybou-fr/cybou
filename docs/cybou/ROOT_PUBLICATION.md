@@ -15,8 +15,25 @@ RootPublication {
 }
 ```
 
-The active wire profile/canonical encoding remains the implementation
-authority. This document does not introduce a new format.
+Wire version 4 is fixed-order binary:
+
+```text
+version:u8 = 4
+root_chunk_id:32
+chunk_authorization_root:32
+chunk_count:u32 LE
+capsule_count:u16 LE (1..32)
+repeat capsule_count:
+    kem_profile:u16 LE
+    recipient_key_epoch:u64 LE
+    X-Wing encapsulation:1120
+    wrapped_content_key:60
+```
+
+The body is bounded to 128 KiB. Unknown versions, invalid profiles, zero roots,
+zero chunk counts and trailing bytes are rejected. The public operation admits
+at most 1,048,576 chunks. Payload commitment is SHA-256 over
+`CYBOU/ROOT-PUBLICATION/P4 || canonical_payload_bytes`.
 
 ## Privacy
 

@@ -35,6 +35,11 @@ block independently. Enabling or disabling the signer preserves peer sessions.
 The same network lifecycle handles discovery, sync, operation relay and gossip.
 
 Every Full Node has intrinsic quota-controlled encrypted storage. Its separate
-STORAGE_PROVIDER key is proven only on demand for a storage relationship,
-with both HELLOs, the TLS exporter and a fresh challenge. ProviderID identifies
+STORAGE key (purpose 8) is proven only on demand for a storage relationship,
+with both HELLOs, the TLS exporter and a fresh challenge. StorageId identifies
 replicas and confers no finality or Validation authority.
+
+The STORAGE purpose keeps its original numeric value and mnemonic derivation
+label to preserve storage key bytes. PoA has purpose 7; unused purposes 5 and 6
+are rejected. No network key is used by runtime. Enable signing locally with
+`node run --poa-key-file`; key possession confers no transport role.

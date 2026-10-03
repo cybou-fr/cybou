@@ -6,7 +6,7 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 ## Phase 1 — Architectural alignment and clean core (In Progress)
 
 1. **Constitutional documentation alignment**: establish single truth across Level 0, 1, and 2 documents (Completed in `AGENTS.md`, `24_DECISIONS.md`, `02_ARCHITECTURE.md`, `04_NETWORK_LIFECYCLE.md`, `VALIDATION.md`, and core domain specs).
-2. **State & transport cleanup**: completely eliminate obsolete bootstrap Identity, consensus grants, network-role announcement, and legacy state decoders; establish clean `CYBOU_STATE_VERSION = 11` (Completed in code HEAD `0437427`).
+2. **State & transport cleanup**: completely eliminate obsolete bootstrap Identity, consensus grants, network-role announcement, and legacy state decoders; establish clean canonical state (currently `CYBOU_STATE_VERSION = 12`) (Completed in code HEAD `0437427`).
 3. **Compiled official network definition** (Completed `ec76ef3`, `d5d90cb`): one `OfficialNetwork` built from the compiled Network Public Key, signed `NetworkGenesis`, initial state and bootstrap locators; CYG1/CYN1 and external network files are removed.
 
 ## Phase 2 — Network identity and bootstrap transition
@@ -36,3 +36,12 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 
 Direct Central Authority fees and state v12 are prepared. New DEVNET NetworkID
 provisioning and coordinated clean state cutover remain deferred by the operator.
+
+## Simplification completion
+
+The uniform Full Node runtime, compact CYP2 v5 transfers, verified-genesis
+chain anchor, direct publication staging, transient Merkle proofs, bounded
+binary schemas and native Hash256 are implemented and tested. Dependency and
+legacy runtime cleanup is complete. Remaining official deployment work is
+operator-authorized new DEVNET provisioning and coordinated clean cutover;
+this implementation pass does not launch provisioning or reset machines.

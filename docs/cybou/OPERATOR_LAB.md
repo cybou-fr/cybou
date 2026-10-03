@@ -7,8 +7,7 @@ defined in [`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md).
 The operator interface uses named commands of the single `cybou` executable and CYP2. Run `cybou --help`
 for the complete grammar. The former positional commands are removed.
 `node run` starts the same Full Node on every process, with a local storage
-quota and an optional `--poa-key-file`. `finalizer run --key-file` is a safety
-wrapper requiring that key; it uses the same networking lifecycle. `doctor` validates the network, key, bind address, peers,
+quota and an optional `--poa-key-file`. `doctor` validates the network, key, bind address, peers,
 disk space and an isolated copy of an existing canonical DB before startup.
 An active DB may change during inspection; stop that LAB process and retry.
 

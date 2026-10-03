@@ -29,28 +29,25 @@ entire stored envelope.
 The encrypted frame is `uint32_be plaintext_length || plaintext || random
 padding`. Plaintext is bounded to 512 KiB minus the four-byte length. Padding
 uses the configured buckets and may select the next bucket when it adds no
-more than 256 KiB. The crypto API accepts and returns bytes; it does not parse
-CBOR.
+more than 256 KiB. The crypto API accepts and returns bytes; it does not parse application schemas.
 
 The tree is immutable and ordered:
 
 ```text
-ROOT (private CBOR) -> DATA* (raw application bytes)
+ROOT (private binary metadata) -> DATA* (raw application bytes)
        or
-ROOT (private CBOR) -> INDEX* (private CBOR) -> ... -> DATA*
+ROOT (private binary metadata) -> INDEX* (private binary metadata) -> ... -> DATA*
 ```
 
 ROOT and INDEX contain one child kind and an ordered array of ChunkIDs. The
 encrypted tree schema has no per-child plaintext-size declarations. DATA is
-the original byte range directly, with no CBOR byte-string wrapper. INDEX is
+the original byte range directly, with no serialization wrapper. INDEX is
 introduced only when the ordered child list no longer fits inside ROOT's
 128-child bound. An empty or metadata-only object is a ROOT with zero children.
 Mail, Files catalog, attachment, and Backup schemas are private data inside the
 decrypted stream. ROOT can carry up to
-240 KiB of opaque private canonical-CBOR application metadata, surfaced to the
-client after decryption.
-Generic protocol code validates its encoding but does not interpret its
-schema.
+240 KiB of opaque private application metadata, surfaced to the client after
+decryption. Only the application codec interprets that metadata.
 
 ## Streaming local builder and reader
 
@@ -58,11 +55,10 @@ The builder reads from a source callback, chooses randomized 160–320 KiB DATA
 boundaries, encrypts each piece, and durably stages it locally before moving
 on. It retains only bounded buffers and at most 128 child references at each
 tree level. The durable staging callback receives the assigned leaf index and
-must reject duplicate ChunkIDs; this lets the local store build its proof index
-without holding the object in memory. `ChunkAuthorizationProofIndex` stores
-ordered ChunkIDs and Merkle levels in LevelDB, then returns a requested leaf
-proof without materializing the complete proof set in RAM. After upload or
-abandonment, the client discards the proof index to release its local metadata.
+must reject duplicate ChunkIDs. PublicationService pins each staged chunk and
+records the ordered leaf list once in the encrypted Application DB. A transient
+`ChunkAuthorizationTree` builds O(N) Merkle levels and generates one O(log N)
+proof on demand; it never persists levels or the complete proof set.
 The builder returns the root ChunkID, content key, chunk-authorization root,
 and uint64 counters; it does not return a whole-file vector or all encrypted
 chunks. It performs no network writes. Unfinalized chunks remain in local
@@ -83,3 +79,12 @@ Merkle inclusion proof for that ChunkID. The leaf needs no separate size field:
 ChunkID commits to the complete stored encrypted bytes. RootPublication does
 not publish the complete chunk-ID list. Each provider enforces its own physical
 capacity limit. Finality authorizes storage but does not prove durability.
+
+## Binary metadata schema 3
+
+ROOT/INDEX metadata is `version:u8=3, kind:u8, child_kind:u8,
+child_count:u16 LE, child_ids:32*child_count`. Kind is ROOT=0 or INDEX=1;
+child kind is INDEX=1 or DATA=2. Fanout is at most 128 and INDEX is nonempty.
+ROOT appends `private_metadata_length:u32 LE, private_metadata:bytes`, bounded
+to 240 KiB. INDEX appends nothing. Parsers reject unknown versions, invalid
+kinds, truncated lengths and trailing bytes. DATA remains raw application bytes.

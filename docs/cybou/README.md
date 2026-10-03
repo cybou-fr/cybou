@@ -35,7 +35,7 @@ from or conflicting with higher levels:
 | [`10_IDENTITY_NAMES.md`](10_IDENTITY_NAMES.md) | Protocol Identity, key derivation, and `.cybou` names | Level 2 | Active |
 | [`18_ECONOMICS_FEES.md`](18_ECONOMICS_FEES.md) | Native asset, Balance, System Balance, and direct Central Authority fees | Level 2 | Active |
 | [`19_SECURITY_THREAT_MODEL.md`](19_SECURITY_THREAT_MODEL.md) | System threat model, attacker assumptions, and boundaries | Level 2 | Active |
-| [`20_PROTOCOL_SERIALIZATION.md`](20_PROTOCOL_SERIALIZATION.md) | Deterministic wire formats and CBOR canonical rules | Level 2 | Active |
+| [`20_PROTOCOL_SERIALIZATION.md`](20_PROTOCOL_SERIALIZATION.md) | Deterministic wire formats and bounded binary schemas | Level 2 | Active |
 | [`21_RELEASE_SECURITY.md`](21_RELEASE_SECURITY.md) | Release signing and distribution integrity | Level 2 | Active |
 | [`22_ROADMAP.md`](22_ROADMAP.md) | Protocol and product roadmap | Level 4 | Active |
 | [`24_DECISIONS.md`](24_DECISIONS.md) | Frozen architecture decisions and superseded history | Level 1 | Frozen |
