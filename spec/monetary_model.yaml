@@ -12,8 +12,12 @@ dev_genesis:
     replenished_by_fees: false
   central_authority_genesis_allocation:
     balance: 100000000
-    authority: 1000001
+    authority: 10000001
     name: cybou
+  bootstrap_genesis_allocation:
+    balance: 0
+    authority: 10000001
+    name: bootstrap
   issued_supply: 200000000
   unissued_supply: 99800000000
   official_provisioning: compiled_devnet

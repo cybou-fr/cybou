@@ -32,7 +32,7 @@ PoaAuthAdjustment                    -> no +1
 ```
 
 The Identity does not exist before its AccountCreate, so a genesis allocation
-of 1,000,001 AUTH stays exactly 1,000,001. Submitted or Validated operations
+of 10,000,001 AUTH stays exactly 10,000,001. Submitted or Validated operations
 earn nothing; only finalized block execution does.
 
 ## Burn

@@ -51,9 +51,12 @@ tests use in-memory fixtures and synthetic Geo input through the actual parser;
 these fixtures are not available as a runtime network profile.
 
 Current NetworkBinding:
-`6efa3107b7c40e6c49e6644569810c7ba1a88384705da3b3601d570eb892fcd7`.
+`846e8f223054d5d1944c4e01a576ecbbbc5ef497654ae2fded57368ac6a4b311`.
 Signed genesis anchor:
-`64e9bc4b0533f2753185428cfbd2f788dca023ed2899b22caee54a85971e9eea`.
+`5bd33c6c65462345bd5b40c297ecdfcf718029bc94cf743175bd3e73f9cea9f2`.
+Genesis allocations: `cybou` 100,000,000 CYBOU and 10,000,001 AUTH (same
+phrase, AccountID and PoA key as the retired DEVNET); `bootstrap` 0 CYBOU and
+10,000,001 AUTH. Retired material: `private/devnet-retired-auth1m-20261003/`.
 The pre-generated material is under gitignored `private/devnet/`. Production
 Network Root derivation/signing are disabled. The existing official PoA is
 locked; finality/content integration requires the operator to unlock it.

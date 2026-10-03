@@ -69,11 +69,14 @@ void Verify(const std::filesystem::path& dir)
 {
     using namespace cybou;
     const auto& network = RequireOfficialNetwork("devnet");
-    PrivateText root{dir / "network_root_secret.txt"}, identity{dir / "cybou_identity_secret.txt"};
+    PrivateText root{dir / "network_root_secret.txt"}, identity{dir / "cybou_identity_secret.txt"},
+        bootstrap{dir / "bootstrap_identity_secret.txt"};
     const auto root_seed = Seed(root.text, "NETWORK_SEED_HEX");
     const auto identity_seed = Seed(identity.text, "CYBOU_SEED_HEX");
     VerifyMnemonic(root.text, root_seed);
     VerifyMnemonic(identity.text, identity_seed);
+    const auto bootstrap_seed = Seed(bootstrap.text, "BOOTSTRAP_SEED_HEX");
+    VerifyMnemonic(bootstrap.text, bootstrap_seed);
     const auto root_key = DeriveIdentityPublicKey(root_seed.Get(), IdentityKeyPurpose::NETWORK_ROOT);
     const auto poa_key = DeriveIdentityPublicKey(identity_seed.Get(), IdentityKeyPurpose::POA_FINALIZER);
     const auto recovery = DeriveIdentityPublicKey(identity_seed.Get(), IdentityKeyPurpose::RECOVERY_ROOT);
@@ -94,10 +97,21 @@ void Verify(const std::filesystem::path& dir)
     Require(Field(identity.text, "POA_ML_DSA_HEX") == HexEncode(poa_key->ml_dsa));
     const auto allocation = network.genesis_state.genesis_allocations.find(*recovery_id);
     Require(allocation != network.genesis_state.genesis_allocations.end());
-    Require(allocation->second.label == CENTRAL_AUTHORITY_NAME && allocation->second.balance == 100'000'000 &&
-        allocation->second.authority == 1'000'001);
+    Require(allocation->second.label == CENTRAL_AUTHORITY_NAME &&
+        allocation->second.balance == CENTRAL_AUTHORITY_GENESIS_BALANCE &&
+        allocation->second.authority == GENESIS_ALLOCATION_AUTHORITY);
+    const auto bootstrap_recovery = DeriveIdentityPublicKey(bootstrap_seed.Get(), IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto bootstrap_id = bootstrap_recovery ? ComputeRecoveryKeyId(*bootstrap_recovery) : std::nullopt;
+    Require(bootstrap_id && *bootstrap_id == devnet_constants::BOOTSTRAP_RECOVERY_KEY_ID);
+    Require(Field(bootstrap.text, "ACCOUNT_ID_HEX") == HexEncode(devnet_constants::BOOTSTRAP_ACCOUNT_ID));
+    const auto bootstrap_allocation = network.genesis_state.genesis_allocations.find(*bootstrap_id);
+    Require(bootstrap_allocation != network.genesis_state.genesis_allocations.end());
+    Require(bootstrap_allocation->second.label == BOOTSTRAP_ALLOCATION_LABEL &&
+        bootstrap_allocation->second.balance == 0 &&
+        bootstrap_allocation->second.authority == GENESIS_ALLOCATION_AUTHORITY);
+    Require(network.genesis_state.genesis_allocations.size() == 2);
     Require(CybouStateHash(network.genesis_state) == std::optional<Hash256>{network.genesis.GetGenesisStateRoot()});
-    std::cout << "DEVNET verified: compiled signed genesis, state, Network Root, PoA, Recovery, AccountID and allocation match.\n";
+    std::cout << "DEVNET verified: compiled signed genesis, state, Network Root, PoA, Recovery, AccountIDs and both allocations match.\n";
 }
 }
 int main(int argc, char** argv)
@@ -107,8 +121,23 @@ int main(int argc, char** argv)
         if (argc == 4 && std::string_view{argv[1]} == "create-devnet") {
             return cybou::ProvisionDevnet(argv[2], argv[3]) ? 0 : 1;
         }
+        if (argc == 6 && std::string_view{argv[1]} == "create-devnet" &&
+            std::string_view{argv[4]} == "--keep-central-authority") {
+            // A new network that keeps cybou.cybou's phrase, AccountID and PoA key.
+            PrivateText identity{argv[5]};
+            const auto seed = Seed(identity.text, "CYBOU_SEED_HEX");
+            VerifyMnemonic(identity.text, seed);
+            const auto account = cybou::ParseHash256UserHex(Field(identity.text, "ACCOUNT_ID_HEX"));
+            if (!account) throw std::runtime_error("invalid ACCOUNT_ID_HEX");
+            cybou::ExistingCentralAuthority existing{.account_id = cybou::AccountId{*account}};
+            std::copy(seed.Get().begin(), seed.Get().end(), existing.entropy.begin());
+            const bool ok = cybou::ProvisionDevnet(argv[2], argv[3], existing);
+            cybou::crypto::CleanseMemory(existing.entropy.data(), existing.entropy.size());
+            return ok ? 0 : 1;
+        }
         std::cerr << "Offline use only:\n  cybou-provision verify-devnet PRIVATE_DIR\n"
-                     "  cybou-provision create-devnet NEW_PRIVATE_DIR NEW_CONSTANTS_HEADER\n";
+                     "  cybou-provision create-devnet NEW_PRIVATE_DIR NEW_CONSTANTS_HEADER"
+                     " [--keep-central-authority CYBOU_IDENTITY_SECRET]\n";
         return 2;
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace cybou {
@@ -53,6 +54,16 @@ struct DevnetProvisionResult {
     /// \brief PoA Finalizer Key ID для отчётов и public constants.
     IdentityKeyId cybou_poa_key_id{};
 
+    // bootstrap Identity: ordinary Identity of the bootstrap locator operator
+    /// \brief Entropy Identity `bootstrap`.
+    RecoveryEntropy bootstrap_entropy{};
+    /// \brief Мнемонические слова Identity `bootstrap`.
+    RecoveryWords bootstrap_words{};
+    /// \brief Stable random AccountID Identity `bootstrap`.
+    AccountId bootstrap_account_id{};
+    /// \brief Recovery Key ID genesis allocation `bootstrap`.
+    IdentityKeyId bootstrap_recovery_key_id{};
+
     // Consensus Genesis & Initial State
     /// \brief Genesis state до высоты 1.
     CybouState genesis_state;
@@ -66,10 +77,25 @@ struct DevnetProvisionResult {
     std::vector<unsigned char> serialized_genesis_state;
 };
 
+/// \brief AUTH каждого genesis-выделения: строго выше порога Validation (10,000,000).
+inline constexpr uint64_t GENESIS_ALLOCATION_AUTHORITY{10'000'001};
+/// \brief Spendable CYBOU genesis-выделения Central Authority.
+inline constexpr uint64_t CENTRAL_AUTHORITY_GENESIS_BALANCE{100'000'000};
+/// \brief Метка (и зарезервированное имя) genesis-выделения bootstrap Identity.
+inline constexpr std::string_view BOOTSTRAP_ALLOCATION_LABEL{"bootstrap"};
+
+/// \brief Уже существующая Identity `cybou.cybou`, переносимая в новую сеть без смены фразы.
+struct ExistingCentralAuthority {
+    RecoveryEntropy entropy{};
+    AccountId account_id{};
+};
+
 /// \brief Генерирует весь DEVNET provisioning полностью в памяти.
 /// \return Полный набор секретов и public artifacts либо std::nullopt при криптографической/серилизационной ошибке.
 /// \post При успехе результат уже проходит round-trip и self-verification.
-std::optional<DevnetProvisionResult> GenerateDevnetProvisioning();
+/// \param central_authority Если задан, `cybou.cybou` сохраняет эту фразу и AccountID (новая сеть, тот же PoA-ключ).
+std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
+    const std::optional<ExistingCentralAuthority>& central_authority = std::nullopt);
 
 /// \brief Выполняет одноразовое provisioning: private secrets и public constants header.
 /// \param private_dir Каталог под gitignored private material внутри repository private/.
@@ -79,7 +105,8 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning();
 /// \post При true secrets и constants созданы эксклюзивно; существующие сети не перезаписываются.
 bool ProvisionDevnet(
     const std::filesystem::path& private_dir,
-    const std::filesystem::path& constants_header_path);
+    const std::filesystem::path& constants_header_path,
+    const std::optional<ExistingCentralAuthority>& central_authority = std::nullopt);
 
 } // namespace cybou
 

@@ -42,17 +42,24 @@ The corresponding **Network Private Key**:
 - never changes an existing network;
 - is the creation-time root of trust for that network.
 
-Provisioning creates the Network secret and the ordinary `cybou.cybou`
-Identity secret once. Private material stays only under gitignored `/private/`
+Provisioning creates the Network secret and the ordinary `cybou.cybou` and
+`bootstrap` Identity secrets once. A new network may keep `cybou.cybou`'s
+existing phrase, AccountID and PoA key (`cybou-provision create-devnet ...
+--keep-central-authority FILE`); the Network key is always new, so the new
+network always has a new NetworkID. Private material stays only under gitignored `/private/`
 (`devnet/` for DEVNET; `mainnet/` does not yet exist). Only public keys,
 public Identity data, and signed genesis constants enter Git.
 
-The current DEVNET was provisioned offline for the single-current-format
-cutover on 2026-10-03. Its NetworkBinding is
-`6efa3107b7c40e6c49e6644569810c7ba1a88384705da3b3601d570eb892fcd7`
+The current DEVNET was provisioned offline on 2026-10-03 so that both genesis
+Identities start above the Validation threshold. Its NetworkBinding is
+`846e8f223054d5d1944c4e01a576ecbbbc5ef497654ae2fded57368ac6a4b311`
 and its signed genesis anchor is
-`64e9bc4b0533f2753185428cfbd2f788dca023ed2899b22caee54a85971e9eea`.
-The preceding NetworkID is permanently retired. No prior genesis was re-signed
+`5bd33c6c65462345bd5b40c297ecdfcf718029bc94cf743175bd3e73f9cea9f2`.
+Genesis allocations: `cybou` (Central Authority, PoA key unchanged from the
+previous DEVNET) 100,000,000 CYBOU and 10,000,001 AUTH; `bootstrap` (ordinary
+Identity of the bootstrap operator) 0 CYBOU and 10,000,001 AUTH. The AUTH is a
+genesis decision, never a property of the bootstrap role.
+The preceding NetworkIDs are permanently retired. No prior genesis was re-signed
 or replaced, and no prior network-bound state is imported.
 
 ## Bootstrap peer
