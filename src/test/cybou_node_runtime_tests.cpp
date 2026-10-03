@@ -569,7 +569,7 @@ BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)
     CybouServiceTestFixture fixture;
     std::array<unsigned char, 32> foreign_seed{};
     foreign_seed[0] = 0xBC;
-    auto foreign_genesis = cybou::CreateDevGenesisState();
+    auto foreign_genesis = cybou::CreateTestGenesisState();
     ++foreign_genesis.onboarding_pool;
     cybou::NodeRuntimeConfig config{
         .network_definition = fixture.definition,

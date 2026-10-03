@@ -51,6 +51,17 @@ inline std::vector<unsigned char> ParseHex(std::string_view input)
 
 } // namespace test
 
+/** Canonical fee recipient for synthetic networks; never an official key. */
+inline CybouState CreateTestGenesisState()
+{
+    auto state = CreateDevGenesisState();
+    IdentityKeyId recovery_id{};
+    recovery_id[0] = 0xCA;
+    state.genesis_allocations.emplace(recovery_id,
+        GenesisAllocation{.label = std::string{CENTRAL_AUTHORITY_NAME}, .claimed_by = std::nullopt});
+    return state;
+}
+
 /** A test Network Public Key; distinct seeds give distinct networks. */
 inline IdentityHybridPublicKey TestNetworkPublicKey(unsigned char seed_byte = 0xA7)
 {

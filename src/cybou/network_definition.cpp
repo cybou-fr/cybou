@@ -118,9 +118,7 @@ uint256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key)
 CybouState CreateDevGenesisState()
 {
     return CybouState{
-        .onboarding_pool = 10'000'000,
-        .security_reward_pool = 0,
-        .pending_fee_pool = 0,
+        .onboarding_pool = DEV_ONBOARDING_POOL,
         .accounts = {},
         .identities = {},
         .names = {},

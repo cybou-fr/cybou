@@ -130,7 +130,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
 
     std::array<unsigned char, 32> validator_seed{};
     validator_seed[0] = 0xA7;
-    const auto genesis = cybou::CreateDevGenesisState();
+    const auto genesis = cybou::CreateTestGenesisState();
     auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(), cybou::TestNetworkPublicKey());
     definition.protocol_parameters.account_creation_work_bits = 0;
     const auto network_binding = cybou::ComputeNetworkBinding(definition.network_public_key);
@@ -311,7 +311,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
 
     std::array<unsigned char, 32> foreign_validator_seed{};
     foreign_validator_seed[0] = 0x6a;
-    const auto foreign_genesis = cybou::CreateDevGenesisState();
+    const auto foreign_genesis = cybou::CreateTestGenesisState();
     auto foreign_definition = cybou::CreateDevNetworkDefinition(foreign_genesis, cybou::TestPoaFinalizerPublicKey(0xBC), cybou::TestNetworkPublicKey(0xBC));
     foreign_definition.protocol_parameters.account_creation_work_bits = 0;
     const auto foreign_data = root / "foreign-client";

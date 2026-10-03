@@ -326,7 +326,7 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
     const auto bootstrap_recovery_id = cybou::ComputeRecoveryKeyId(*bootstrap_recovery);
     BOOST_REQUIRE(bootstrap_recovery_id);
 
-    auto genesis = cybou::CreateDevGenesisState();
+    auto genesis = cybou::CreateTestGenesisState();
     auto definition = cybou::CreateDevNetworkDefinition(genesis,
         cybou::TestPoaFinalizerPublicKey(fixture.validator_seed[0]), cybou::TestNetworkPublicKey(fixture.validator_seed[0]));
     definition.protocol_parameters.account_creation_work_bits = 0;

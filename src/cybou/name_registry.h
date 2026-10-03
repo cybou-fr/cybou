@@ -5,6 +5,7 @@
 #ifndef CYBOU_NAME_REGISTRY_H
 #define CYBOU_NAME_REGISTRY_H
 
+#include <cybou/economics.h>
 #include <cybou/crypto/sha256.h>
 #include <cybou/account_id.h>
 #include <cybou/identity_registry.h>
@@ -81,7 +82,7 @@ inline NameValidationError ValidateNameLabel(std::string_view label)
     }
 
     static constexpr std::string_view RESERVED[] = {
-        "cybou", "admin", "root", "system", "support",
+        CENTRAL_AUTHORITY_NAME, "admin", "root", "system", "support",
         "security", "operator", "validator", "wallet", "mail"
     };
     for (const auto& reserved : RESERVED) {

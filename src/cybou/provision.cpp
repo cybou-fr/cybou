@@ -114,11 +114,8 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
 
     // 3. Consensus Genesis State: cybou.cybou is the only genesis allocation.
     res.genesis_state = CreateDevGenesisState();
-    res.genesis_state.onboarding_pool = 10'000'000;
-    res.genesis_state.security_reward_pool = 0;
-    res.genesis_state.pending_fee_pool = 0;
     res.genesis_state.genesis_allocations[res.cybou_recovery_key_id] = GenesisAllocation{
-        .balance = 100'000'000, .authority = 1'000'001, .label = "cybou"};
+        .balance = 100'000'000, .authority = 1'000'001, .label = std::string{CENTRAL_AUTHORITY_NAME}};
 
     if (ValidateCybouState(res.genesis_state) != StateValidationError::NONE) {
         return std::nullopt;

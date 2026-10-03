@@ -25,10 +25,10 @@ namespace cybou {
  * purpose: the sender adds undecryptable padding capsules until the fee
  * reaches SupportMailMinimumFee. This public fee and capsule pattern can act
  * as a statistical support-mail traffic fingerprint. The fee goes to the
- * network pools like any fee; the authority's client verifies it from the
+ * Central Authority Balance like any fee; the authority's client verifies it from the
  * finalized publication and marks messages that paid less.
  */
-inline constexpr std::string_view SUPPORT_NAME_LABEL{"cybou"};
+inline constexpr std::string_view SUPPORT_NAME_LABEL{CENTRAL_AUTHORITY_NAME};
 inline constexpr std::uint64_t SUPPORT_MAIL_FEE_MULTIPLIER{5};
 
 /** About 5x a short message (5 KiB, one chunk). */
@@ -40,10 +40,8 @@ inline std::uint64_t SupportMailMinimumFee(const CybouProtocolParameters& params
 /** The Identity that holds the genesis-granted support name, once claimed. */
 inline std::optional<AccountId> SupportAccount(const CybouState& state)
 {
-    for (const auto& [recovery_id, allocation] : state.genesis_allocations) {
-        if (allocation.label == SUPPORT_NAME_LABEL && allocation.claimed_by) return allocation.claimed_by;
-    }
-    return std::nullopt;
+    const auto* allocation = FindCentralAuthorityAllocation(state);
+    return allocation ? allocation->claimed_by : std::nullopt;
 }
 
 /**

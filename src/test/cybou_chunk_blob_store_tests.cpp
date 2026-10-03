@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(local_blob_survives_restart_and_provider_admission_without_
 
 BOOST_AUTO_TEST_CASE(runtime_exposes_local_blobs_without_provider_admission)
 {
-    const auto genesis = cybou::CreateDevGenesisState();
+    const auto genesis = cybou::CreateTestGenesisState();
     cybou::NodeRuntimeConfig config{
         .network_definition = cybou::CreateDevNetworkDefinition(
             genesis, cybou::TestPoaFinalizerPublicKey(), cybou::TestNetworkPublicKey()),

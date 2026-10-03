@@ -61,12 +61,18 @@ PaymentError ApplyPayment(const AuthorizedPayment& operation,
     if (sender->second.balance < operation.payment.amount) return PaymentError::INSUFFICIENT_BALANCE;
     if (sender->second.system_balance < params.payment_fee) return PaymentError::INSUFFICIENT_SYSTEM_BALANCE;
     if (recipient->second.balance > std::numeric_limits<uint64_t>::max() - operation.payment.amount) return PaymentError::RECIPIENT_OVERFLOW;
-    if (state.pending_fee_pool > std::numeric_limits<uint64_t>::max() - params.payment_fee) return PaymentError::FEE_POOL_OVERFLOW;
+    if (!CanCreditCentralAuthorityFee(state, params.payment_fee)) return PaymentError::FEE_TRANSFER_FAILED;
+    const auto* authority = FindCentralAuthorityAllocation(state);
+    // A payment to Central Authority credits amount and fee to the same Balance.
+    if (authority->claimed_by == operation.payment.recipient &&
+        recipient->second.balance + operation.payment.amount > std::numeric_limits<uint64_t>::max() - params.payment_fee) {
+        return PaymentError::FEE_TRANSFER_FAILED;
+    }
     if (state.identities.AuthorizeOperation(operation.authorization, network_binding) != IdentityRegistryError::NONE) return PaymentError::INVALID_AUTHORIZATION;
     sender->second.balance -= operation.payment.amount;
     sender->second.system_balance -= params.payment_fee;
     recipient->second.balance += operation.payment.amount;
-    state.pending_fee_pool += params.payment_fee;
+    CreditCentralAuthorityFee(state, params.payment_fee);
     return PaymentError::NONE;
 }
 

@@ -5,6 +5,7 @@
 #ifndef CYBOU_STATE_H
 #define CYBOU_STATE_H
 
+#include <cybou/economics.h>
 #include <cybou/identity_registry.h>
 #include <cybou/name_registry.h>
 #include <cybou/root_publication.h>
@@ -20,7 +21,7 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_STATE_VERSION{11};
+inline constexpr uint8_t CYBOU_STATE_VERSION{12};
 
 struct AccountState {
     uint64_t balance{0};
@@ -33,11 +34,13 @@ struct AccountState {
 };
 
 /**
- * Genesis-fixed Balance, AUTH and name for the Identity whose recovery phrase has
+ * Genesis-granted Balance, AUTH and name for the Identity whose recovery phrase has
  * this recovery key. Claimed exactly once by that Identity's AccountCreate,
  * which receives `balance` as spendable Balance and `label` as its .cybou
  * name (reserved labels are allowed only here). The record stays after the
- * claim so the reserved-name grant remains verifiable.
+ * claim so the reserved-name grant remains verifiable. Only the unique
+ * Central Authority allocation may accumulate protocol fees in its Balance
+ * before claim; after claim fees credit its AccountState Balance instead.
  */
 struct GenesisAllocation {
     uint64_t balance{0};
@@ -52,14 +55,20 @@ inline constexpr size_t MAX_GENESIS_ALLOCATIONS{16};
 
 struct CybouState {
     uint64_t onboarding_pool{0};
-    uint64_t security_reward_pool{0};
-    uint64_t pending_fee_pool{0};
     std::map<AccountId, AccountState> accounts;
     IdentityRegistry identities;
     NameRegistry names;
-    /** Keyed by recovery key id; immutable except for the one-time claim. */
+    /** Keyed by recovery key id; only claim and pre-claim Central Authority fees mutate it. */
     std::map<IdentityKeyId, GenesisAllocation> genesis_allocations;
 };
+
+// Duplicate Central Authority labels fail closed.
+GenesisAllocation* FindCentralAuthorityAllocation(CybouState& state);
+const GenesisAllocation* FindCentralAuthorityAllocation(const CybouState& state);
+// Preflight must precede authorization (which advances nonce). Credit is atomic
+// and uses the same checks; callers must not mutate the recipient between them.
+bool CanCreditCentralAuthorityFee(const CybouState& state, uint64_t fee);
+bool CreditCentralAuthorityFee(CybouState& state, uint64_t fee);
 
 enum class AccountCreateStateError : uint8_t {
     NONE,
@@ -91,7 +100,7 @@ enum class RootPublicationError : uint8_t {
     INVALID_AUTHORIZATION,
     SENDER_NOT_FOUND,
     INSUFFICIENT_SYSTEM_BALANCE,
-    FEE_POOL_OVERFLOW,
+    FEE_TRANSFER_FAILED,
 };
 
 RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,

@@ -34,7 +34,7 @@ struct RuntimeFixture {
             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         std::filesystem::remove_all(data_dir);
         validator_seed[0] = 0x73;
-        genesis = cybou::CreateDevGenesisState();
+        genesis = cybou::CreateTestGenesisState();
         definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(validator_seed[0]), cybou::TestNetworkPublicKey(validator_seed[0]));
         definition.protocol_parameters.account_creation_work_bits = 0;
     }

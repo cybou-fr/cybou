@@ -40,7 +40,7 @@ OfficialNetwork VerifyCompiledDevnet()
     if (!verified) throw std::runtime_error("compiled DEVNET genesis failed cryptographic verification");
     auto state = DeserializeCybouState(devnet_constants::GENESIS_STATE_BYTES);
     if (!state || ValidateCybouState(*state) != StateValidationError::NONE) {
-        throw std::runtime_error("compiled DEVNET genesis state is invalid");
+        throw std::runtime_error("compiled DEVNET genesis state is invalid for state v12; provision a new NetworkID before DEVNET startup");
     }
     const auto state_hash = CybouStateHash(*state);
     if (!state_hash || *state_hash != verified->GetGenesisStateRoot()) {
@@ -83,6 +83,11 @@ OfficialNetwork BuildLabNetwork()
     const auto network_key = DeriveIdentityPublicKey(network_seed, IdentityKeyPurpose::NETWORK_ROOT);
     const auto poa_key = DeriveIdentityPublicKey(LabPoaFinalizerSeed(), IdentityKeyPurpose::POA_FINALIZER);
     auto state = CreateDevGenesisState();
+    const auto recovery_key = DeriveIdentityPublicKey(LabSeed("CYBOU/LAB/CENTRAL-AUTHORITY/V1"), IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto recovery_id = recovery_key ? ComputeRecoveryKeyId(*recovery_key) : std::nullopt;
+    if (!recovery_id) throw std::runtime_error("cannot derive LAB Central Authority");
+    state.genesis_allocations.emplace(*recovery_id, GenesisAllocation{
+        .balance = 100'000'000, .authority = 1'000'001, .label = std::string{CENTRAL_AUTHORITY_NAME}});
     const auto state_root = CybouStateHash(state);
     if (!network_key || !poa_key || !state_root) throw std::runtime_error("cannot build LAB network");
     NetworkGenesis spec;

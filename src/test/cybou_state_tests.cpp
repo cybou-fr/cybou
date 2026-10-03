@@ -187,7 +187,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_CHECK(!DeserializeCybouState(damaged));
     BOOST_CHECK(!DeserializeCybouState(std::span{*bytes}.first(bytes->size() - 1)));
     damaged = *bytes;
-    damaged[1 + 8 * 3 + 4] ^= 1; // monetary AccountID no longer matches identity registry
+    damaged[1 + 8 + 4] ^= 1; // monetary AccountID no longer matches identity registry
     BOOST_CHECK(!DeserializeCybouState(damaged));
 
     std::array<unsigned char, 32> other_root_seed{}, other_device_seed{};
@@ -209,6 +209,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
         *other_root_pop, *other_authorization_pop};
     state.onboarding_pool = params.onboarding_bonus;
     BOOST_REQUIRE(ApplyAccountCreate(other_create, network_binding, 1, params, state) == AccountCreateStateError::NONE);
+    state.genesis_allocations.emplace(IdentityKeyId{}, GenesisAllocation{.label = std::string{CENTRAL_AUTHORITY_NAME}});
     state.accounts.at(account).balance = 10; // funded fixture; no mint operation in this test
     AuthorizedPayment payment{};
     payment.payment = PaymentPayload{other_account, 3};
@@ -235,7 +236,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_CHECK(ApplyPayment(payment, network_binding, params, state) == PaymentError::NONE);
     BOOST_CHECK(state.accounts.at(account).balance == 7);
     BOOST_CHECK(state.accounts.at(other_account).balance == 3);
-    BOOST_CHECK(state.pending_fee_pool == params.payment_fee);
+    BOOST_CHECK(FindCentralAuthorityAllocation(state)->balance == params.payment_fee);
     BOOST_CHECK(state.identities.Find(account)->nonce == 1);
     BOOST_CHECK(ApplyPayment(payment, network_binding, params, state) == PaymentError::INVALID_AUTHORIZATION);
     BOOST_CHECK(state.accounts.at(account).balance == 7);
@@ -260,7 +261,6 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_REQUIRE(decoded_create && std::holds_alternative<AccountCreateOp>(*decoded_create));
     BOOST_CHECK(SerializeProtocolOperation(*decoded_create) == create_wire);
 
-    state.pending_fee_pool = 3; // fixture: next fee completes a 4-unit routing group
     auto next_payment = payment;
     next_payment.payment.amount = 1;
     next_payment.authorization.nonce = 1;
@@ -274,11 +274,10 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_REQUIRE(block_result);
     BOOST_CHECK(block_result.state->accounts.at(account).balance == 6);
     BOOST_CHECK(block_result.state->accounts.at(other_account).balance == 4);
-    BOOST_CHECK(block_result.state->security_reward_pool == 3);
-    BOOST_CHECK(block_result.state->onboarding_pool == 1);
-    BOOST_CHECK(block_result.state->pending_fee_pool == 0);
+    BOOST_CHECK(FindCentralAuthorityAllocation(*block_result.state)->balance == 2 * params.payment_fee);
+    BOOST_CHECK(block_result.state->onboarding_pool == state.onboarding_pool);
     BOOST_CHECK(state.accounts.at(account).balance == 7);
-    BOOST_CHECK(state.pending_fee_pool == 3);
+    BOOST_CHECK(FindCentralAuthorityAllocation(state)->balance == params.payment_fee);
     const auto replay_block = ExecuteBlockOperations(*block_result.state,
         {ProtocolOperation{next_payment}}, network_binding, 3, params);
     BOOST_CHECK(replay_block.error == BlockExecutionError::INVALID_PAYMENT);
@@ -310,7 +309,7 @@ BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_determinis
         *root_pop, *authorization_pop};
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
-    CybouState state{};
+    CybouState state = CreateTestGenesisState();
     state.onboarding_pool = params.onboarding_bonus;
 
     BOOST_REQUIRE(ApplyAccountCreate(create, network_binding, 0, params, state) == AccountCreateStateError::NONE);
@@ -342,7 +341,7 @@ BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_determinis
 
     BOOST_CHECK(ApplyRootPublication(operation, network_binding, params, state) == RootPublicationError::NONE);
     BOOST_CHECK(state.accounts.at(account).system_balance == starting_balance - *fee);
-    BOOST_CHECK(state.pending_fee_pool == *fee);
+    BOOST_CHECK(FindCentralAuthorityAllocation(state)->balance == *fee);
     BOOST_CHECK(state.identities.Find(account)->nonce == 1);
     BOOST_CHECK(ApplyRootPublication(operation, network_binding, params, state) == RootPublicationError::INVALID_AUTHORIZATION);
 }
@@ -528,7 +527,6 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     BOOST_REQUIRE(block_res);
     BOOST_CHECK(block_res.state->accounts.at(account).balance == 30);
     BOOST_CHECK(block_res.state->accounts.at(account).system_balance == params.onboarding_bonus + 20);
-    BOOST_CHECK(block_res.state->pending_fee_pool == 0); // no fee for lock
     BOOST_CHECK(block_res.state->identities.Find(account)->nonce == 1);
     // A finalized SystemLock earns a flat +1 AUTH regardless of the locked amount.
     BOOST_CHECK_EQUAL(block_res.state->accounts.at(account).authority, 1U);
@@ -865,8 +863,7 @@ BOOST_AUTO_TEST_CASE(supply_conservation_invariant_check)
 
     CybouState state{};
     state.onboarding_pool = 1'000'000;
-    state.security_reward_pool = 2'000'000;
-    state.pending_fee_pool = 500;
+    state.genesis_allocations.emplace(IdentityKeyId{}, GenesisAllocation{.balance = 2'000'000});
 
     uint256 acc_raw{};
     acc_raw.begin()[0] = 0x11;
@@ -877,13 +874,166 @@ BOOST_AUTO_TEST_CASE(supply_conservation_invariant_check)
     });
 
     // Total supply calculation
-    BOOST_CHECK_EQUAL(TotalSupply(state), 1'000'000ULL + 2'000'000ULL + 500ULL + 3'000'000ULL + 500'000ULL);
+    BOOST_CHECK_EQUAL(TotalSupply(state), 1'000'000ULL + 2'000'000ULL + 3'000'000ULL + 500'000ULL);
 
     // Over-supply check (with valid zero-account state and valid zero-account state)
     CybouState overflow_state{};
 
     overflow_state.onboarding_pool = 100'000'000'001ULL;
     BOOST_CHECK(ValidateCybouState(overflow_state) == StateValidationError::BALANCE_OVERFLOW);
+}
+
+
+BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
+{
+    using namespace cybou;
+    auto params = DevProtocolParameters();
+    params.account_creation_work_bits = 0;
+    uint256 network{};
+    network.begin()[0] = 0xCA;
+    const auto make_create = [&](unsigned char tag) {
+        std::array<unsigned char, 32> recovery{}, authorization{};
+        recovery[0] = tag;
+        authorization[0] = tag + 1;
+        uint256 raw{};
+        raw.begin()[0] = tag;
+        const AccountId account{raw};
+        const IdentityAuthorization keys{
+            *DeriveIdentityPublicKey(recovery, IdentityKeyPurpose::RECOVERY_ROOT),
+            *DeriveIdentityPublicKey(authorization, IdentityKeyPurpose::AUTHORIZATION)};
+        const auto binding = test::MakeIdentityKemBinding(network, account, keys);
+        return AccountCreateOp{account, keys, binding.package,
+            {.network_binding = network, .account_id = account, .authorization_commitment = binding.authorization_commitment},
+            *SignIdentityMessage(recovery, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest),
+            *SignIdentityMessage(authorization, IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest)};
+    };
+    const auto sender_create = make_create(0x31);
+    const auto authority_create = make_create(0x41);
+    const auto sender = sender_create.account_id;
+    const auto authority = authority_create.account_id;
+    const auto recovery_id = *ComputeRecoveryKeyId(authority_create.authorization.recovery_root);
+    auto state = CreateDevGenesisState();
+    BOOST_CHECK_EQUAL(state.onboarding_pool, 100'000'000U);
+    state.genesis_allocations.emplace(recovery_id, GenesisAllocation{
+        .balance = 100'000'000, .authority = 1'000'001, .label = std::string{CENTRAL_AUTHORITY_NAME}});
+    const auto initial_supply = TotalSupply(state);
+    BOOST_REQUIRE(ApplyAccountCreate(sender_create, network, 0, params, state) == AccountCreateStateError::NONE);
+    BOOST_CHECK_EQUAL(state.onboarding_pool, DEV_ONBOARDING_POOL - params.onboarding_bonus);
+    RootPublication publication;
+    publication.root_chunk_id[0] = 1;
+    publication.chunk_authorization_root[0] = 2;
+    publication.chunk_count = 1;
+    publication.recipient_capsules.resize(1);
+    AuthorizedRootPublication op{{.account_id = sender, .kind = IdentityOperationKind::ROOT_PUBLICATION,
+        .payload_commitment = *ComputeRootPublicationPayloadCommitment(publication)}, publication};
+    std::array<unsigned char, 32> authorization_seed{};
+    authorization_seed[0] = 0x32;
+    const auto sign_publication = [&] {
+        op.authorization.signature = *SignIdentityMessage(authorization_seed, IdentityKeyPurpose::AUTHORIZATION,
+            *ComputeIdentityOperationDigest(network, op.authorization));
+    };
+    sign_publication();
+    const auto fee = *ComputeRootPublicationFee(params, SerializeProtocolOperation(ProtocolOperation{op})->size(), 1);
+    const auto assert_rejected_unchanged = [&](CybouState damaged, RootPublicationError expected) {
+        const auto accounts = damaged.accounts;
+        const auto allocations = damaged.genesis_allocations;
+        const auto identities = SerializeIdentityRegistry(damaged.identities);
+        const auto pool = damaged.onboarding_pool;
+        BOOST_CHECK(ApplyRootPublication(op, network, params, damaged) == expected);
+        BOOST_CHECK(damaged.accounts == accounts);
+        BOOST_CHECK(damaged.genesis_allocations == allocations);
+        BOOST_CHECK(SerializeIdentityRegistry(damaged.identities) == identities);
+        BOOST_CHECK_EQUAL(damaged.onboarding_pool, pool);
+    };
+    auto damaged = state;
+    damaged.accounts.at(sender).system_balance = fee - 1;
+    assert_rejected_unchanged(damaged, RootPublicationError::INSUFFICIENT_SYSTEM_BALANCE);
+    damaged = state;
+    damaged.genesis_allocations.clear();
+    assert_rejected_unchanged(damaged, RootPublicationError::FEE_TRANSFER_FAILED);
+    damaged = state;
+    damaged.genesis_allocations.at(recovery_id).balance = std::numeric_limits<uint64_t>::max() - fee + 1;
+    assert_rejected_unchanged(damaged, RootPublicationError::FEE_TRANSFER_FAILED);
+    damaged = state;
+    damaged.genesis_allocations.emplace(IdentityKeyId{}, damaged.genesis_allocations.at(recovery_id));
+    assert_rejected_unchanged(damaged, RootPublicationError::FEE_TRANSFER_FAILED);
+    damaged = state;
+    damaged.genesis_allocations.at(recovery_id).claimed_by = authority;
+    assert_rejected_unchanged(damaged, RootPublicationError::FEE_TRANSFER_FAILED);
+
+    const auto pool = state.onboarding_pool;
+    const auto payer_budget = state.accounts.at(sender).system_balance;
+    const auto finalized = ExecuteBlockOperations(state, {ProtocolOperation{op}}, network, 1, params);
+    BOOST_REQUIRE(finalized);
+    state = *finalized.state;
+    BOOST_CHECK_EQUAL(state.genesis_allocations.at(recovery_id).balance, 100'000'000 + fee);
+    BOOST_CHECK_EQUAL(state.accounts.at(sender).system_balance, payer_budget - fee);
+    BOOST_CHECK_EQUAL(state.onboarding_pool, pool);
+    BOOST_CHECK_EQUAL(TotalSupply(state), initial_supply);
+    BOOST_REQUIRE(ApplyAccountCreate(authority_create, network, 2, params, state) == AccountCreateStateError::NONE);
+    BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, 100'000'000 + fee);
+    BOOST_CHECK_EQUAL(state.onboarding_pool, pool - params.onboarding_bonus);
+    BOOST_CHECK_EQUAL(TotalSupply(state), initial_supply);
+    const auto claimed_allocation_balance = state.genesis_allocations.at(recovery_id).balance;
+    op.authorization.nonce = 1;
+    sign_publication();
+    damaged = state;
+    damaged.accounts.at(authority).balance = std::numeric_limits<uint64_t>::max() - fee + 1;
+    assert_rejected_unchanged(damaged, RootPublicationError::FEE_TRANSFER_FAILED);
+    damaged = state;
+    damaged.names.names.erase(std::string{CENTRAL_AUTHORITY_NAME});
+    assert_rejected_unchanged(damaged, RootPublicationError::FEE_TRANSFER_FAILED);
+    BOOST_REQUIRE(ApplyRootPublication(op, network, params, state) == RootPublicationError::NONE);
+    BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, 100'000'000 + 2 * fee);
+    BOOST_CHECK_EQUAL(state.genesis_allocations.at(recovery_id).balance, claimed_allocation_balance);
+    BOOST_CHECK_EQUAL(state.onboarding_pool, pool - params.onboarding_bonus);
+    BOOST_CHECK_EQUAL(TotalSupply(state), initial_supply);
+    const auto bytes = SerializeCybouState(state);
+    BOOST_REQUIRE(bytes);
+    BOOST_CHECK_EQUAL(bytes->front(), 12);
+    const auto restored = DeserializeCybouState(*bytes);
+    BOOST_REQUIRE(restored);
+    BOOST_CHECK(SerializeCybouState(*restored) == bytes);
+    BOOST_CHECK(CybouStateHash(*restored) == CybouStateHash(state));
+    auto v11 = *bytes;
+    v11[0] = 11;
+    v11.insert(v11.begin() + 9, 16, 0); // actual obsolete pool layout
+    BOOST_CHECK(!DeserializeCybouState(v11));
+
+    // Payment to Central Authority credits both the amount and its entire fee.
+    state.accounts.at(sender).balance = 5;
+    AuthorizedPayment payment{{.account_id = sender, .nonce = 2, .kind = IdentityOperationKind::PAYMENT}, {authority, 5}};
+    payment.authorization.payload_commitment = *ComputePaymentPayloadCommitment(payment.payment);
+    payment.authorization.signature = *SignIdentityMessage(authorization_seed, IdentityKeyPurpose::AUTHORIZATION,
+        *ComputeIdentityOperationDigest(network, payment.authorization));
+    damaged = state;
+    damaged.accounts.at(authority).balance = std::numeric_limits<uint64_t>::max() - 5;
+    const auto previous_accounts = damaged.accounts;
+    const auto previous_identities = SerializeIdentityRegistry(damaged.identities);
+    BOOST_CHECK(ApplyPayment(payment, network, params, damaged) == PaymentError::FEE_TRANSFER_FAILED);
+    BOOST_CHECK(damaged.accounts == previous_accounts);
+    BOOST_CHECK(SerializeIdentityRegistry(damaged.identities) == previous_identities);
+    const auto payment_supply = TotalSupply(state);
+    const auto ca_balance = state.accounts.at(authority).balance;
+    BOOST_REQUIRE(ApplyPayment(payment, network, params, state) == PaymentError::NONE);
+    BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, ca_balance + 5 + params.payment_fee);
+    BOOST_CHECK_EQUAL(TotalSupply(state), payment_supply);
+    BOOST_CHECK_EQUAL(state.genesis_allocations.at(recovery_id).balance, claimed_allocation_balance);
+
+    // When Central Authority pays, its own protocol fee still returns to Balance.
+    AuthorizedPayment return_payment{{.account_id = authority, .kind = IdentityOperationKind::PAYMENT}, {sender, 5}};
+    return_payment.authorization.payload_commitment = *ComputePaymentPayloadCommitment(return_payment.payment);
+    std::array<unsigned char, 32> ca_seed{};
+    ca_seed[0] = 0x42;
+    return_payment.authorization.signature = *SignIdentityMessage(ca_seed, IdentityKeyPurpose::AUTHORIZATION,
+        *ComputeIdentityOperationDigest(network, return_payment.authorization));
+    const auto previous_ca_balance = state.accounts.at(authority).balance;
+    const auto previous_ca_budget = state.accounts.at(authority).system_balance;
+    const auto previous_supply = TotalSupply(state);
+    BOOST_REQUIRE(ApplyPayment(return_payment, network, params, state) == PaymentError::NONE);
+    BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, previous_ca_balance - 5 + params.payment_fee);
+    BOOST_CHECK_EQUAL(state.accounts.at(authority).system_balance, previous_ca_budget - params.payment_fee);
+    BOOST_CHECK_EQUAL(TotalSupply(state), previous_supply);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

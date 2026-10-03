@@ -69,6 +69,52 @@ private:
 
 } // namespace
 
+const GenesisAllocation* FindCentralAuthorityAllocation(const CybouState& state)
+{
+    const GenesisAllocation* result{nullptr};
+    for (const auto& [id, allocation] : state.genesis_allocations) {
+        if (allocation.label != CENTRAL_AUTHORITY_NAME) continue;
+        if (result) return nullptr;
+        result = &allocation;
+    }
+    return result;
+}
+
+GenesisAllocation* FindCentralAuthorityAllocation(CybouState& state)
+{
+    return const_cast<GenesisAllocation*>(FindCentralAuthorityAllocation(std::as_const(state)));
+}
+
+namespace {
+const uint64_t* CentralAuthorityFeeBalance(const CybouState& state)
+{
+    const auto* allocation = FindCentralAuthorityAllocation(state);
+    if (!allocation) return nullptr;
+    if (!allocation->claimed_by) return &allocation->balance;
+    const auto account = state.accounts.find(*allocation->claimed_by);
+    if (account == state.accounts.end() || !state.identities.Find(*allocation->claimed_by)) return nullptr;
+    const auto name = state.names.names.find(allocation->label);
+    const auto reverse = state.names.account_names.find(*allocation->claimed_by);
+    if (name == state.names.names.end() || name->second != *allocation->claimed_by ||
+        reverse == state.names.account_names.end() || reverse->second != allocation->label) return nullptr;
+    return &account->second.balance;
+}
+} // namespace
+
+bool CanCreditCentralAuthorityFee(const CybouState& state, uint64_t fee)
+{
+    const auto* balance = CentralAuthorityFeeBalance(state);
+    return balance && *balance <= std::numeric_limits<uint64_t>::max() - fee;
+}
+
+bool CreditCentralAuthorityFee(CybouState& state, uint64_t fee)
+{
+    if (!CanCreditCentralAuthorityFee(state, fee)) return false;
+    auto* balance = const_cast<uint64_t*>(CentralAuthorityFeeBalance(std::as_const(state)));
+    *balance += fee;
+    return true;
+}
+
 AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     const uint256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
@@ -239,14 +285,12 @@ RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
         return RootPublicationError::SENDER_NOT_FOUND;
     }
     if (sender->second.system_balance < *fee) return RootPublicationError::INSUFFICIENT_SYSTEM_BALANCE;
-    if (state.pending_fee_pool > std::numeric_limits<std::uint64_t>::max() - *fee) {
-        return RootPublicationError::FEE_POOL_OVERFLOW;
-    }
+    if (!CanCreditCentralAuthorityFee(state, *fee)) return RootPublicationError::FEE_TRANSFER_FAILED;
     if (state.identities.AuthorizeOperation(op.authorization, network_binding) != IdentityRegistryError::NONE) {
         return RootPublicationError::INVALID_AUTHORIZATION;
     }
     sender->second.system_balance -= *fee;
-    state.pending_fee_pool += *fee;
+    CreditCentralAuthorityFee(state, *fee);
     return RootPublicationError::NONE;
 }
 
@@ -310,10 +354,6 @@ uint64_t TotalSupply(const CybouState& state)
     uint64_t total{0};
     if (state.onboarding_pool > MAX_SUPPLY) return std::numeric_limits<uint64_t>::max();
     total += state.onboarding_pool;
-    if (state.security_reward_pool > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
-    total += state.security_reward_pool;
-    if (state.pending_fee_pool > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
-    total += state.pending_fee_pool;
     for (const auto& [id, allocation] : state.genesis_allocations) {
         if (allocation.claimed_by) continue; // counted in the claimant Balance
         if (allocation.balance > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
@@ -338,8 +378,6 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
     std::vector<unsigned char> out;
     out.push_back(CYBOU_STATE_VERSION);
     Write64(out, state.onboarding_pool);
-    Write64(out, state.security_reward_pool);
-    Write64(out, state.pending_fee_pool);
     Write32(out, static_cast<uint32_t>(state.accounts.size()));
     for (const auto& [id, account] : state.accounts) {
         if (id.IsNull() || !state.identities.Find(id)) return std::nullopt;
@@ -374,16 +412,12 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
     Reader reader{bytes};
     const auto version = reader.U8();
     const auto onboarding = reader.U64();
-    const auto security = reader.U64();
-    const auto pending = reader.U64();
     const auto count = reader.U32();
     if (!version || *version != CYBOU_STATE_VERSION ||
-        !onboarding || !security || !pending ||
+        !onboarding ||
         !count || *count > MAX_IDENTITY_REGISTRY_ACCOUNTS || *count > reader.Remaining() / ACCOUNT_SIZE) return std::nullopt;
     CybouState state{};
     state.onboarding_pool = *onboarding;
-    state.security_reward_pool = *security;
-    state.pending_fee_pool = *pending;
     std::optional<AccountId> prior;
     for (uint32_t i{0}; i < *count; ++i) {
         const auto id_bytes = reader.Bytes(AccountId::SIZE);

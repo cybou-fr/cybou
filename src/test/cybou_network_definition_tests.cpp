@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/network_definition.h>
+#include <cybou/official_devnet_constants.h>
 #include <cybou/network_genesis.h>
 #include <cybou/official_networks.h>
 #include <test/cybou_test_helpers.h>
@@ -59,6 +60,10 @@ BOOST_AUTO_TEST_CASE(network_binding_depends_only_on_the_network_public_key)
     BOOST_CHECK(cybou::ComputeNetworkBinding(definition.network_public_key) == binding);
 
     // The compiled DEVNET definition carries its exact Network Public Key (NetworkID).
+    if (cybou::devnet_constants::GENESIS_STATE_BYTES.front() != cybou::CYBOU_STATE_VERSION) {
+        BOOST_CHECK_THROW(cybou::RequireOfficialNetwork("devnet"), std::runtime_error);
+        return;
+    }
     const auto& devnet = cybou::RequireOfficialNetwork("devnet");
     BOOST_CHECK(cybou::CanonicalSerializeNetworkPublicKey(devnet.network_definition.network_public_key) ==
         std::vector<unsigned char>(devnet.genesis.GetNetworkId().begin(), devnet.genesis.GetNetworkId().end()));

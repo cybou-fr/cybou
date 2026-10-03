@@ -83,7 +83,7 @@ std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
             return params.name_commit_max_lifetime > 0 && height > item.second.commit_height &&
                 height - item.second.commit_height > params.name_commit_max_lifetime;
         });
-    if (operations.empty() && loaded.state->pending_fee_pool == 0 && !expires_name) {
+    if (operations.empty() && !expires_name) {
         return GetStateRoot();
     }
     const auto execution = ExecuteBlockOperations(*loaded.state, operations, m_network_binding, height,
@@ -273,7 +273,6 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
             block.height, params, &m_network_definition.poa_finalizer_public_key);
         if (!execution) {
             if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
-            if (execution.error == BlockExecutionError::FEE_ROUTING_OVERFLOW) return {BlockTransitionError::FEE_ROUTING_FAILED};
             return BlockTransitionResult{.error = BlockTransitionError::INVALID_OPERATION, .op_result = execution};
         }
         if (*execution.state_root != block.resulting_state_root) {
@@ -324,7 +323,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
             return params.name_commit_max_lifetime > 0 && block.height > item.second.commit_height &&
                 block.height - item.second.commit_height > params.name_commit_max_lifetime;
         });
-    const bool is_empty_noop_block = block.operations.empty() && loaded.state->pending_fee_pool == 0 && !expires_name;
+    const bool is_empty_noop_block = block.operations.empty() && !expires_name;
     uint256 candidate_root;
     std::optional<CybouState> next_state;
 
@@ -337,7 +336,6 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
             &m_network_definition.poa_finalizer_public_key);
         if (!execution) {
             if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
-            if (execution.error == BlockExecutionError::FEE_ROUTING_OVERFLOW) return {BlockTransitionError::FEE_ROUTING_FAILED};
             return BlockTransitionResult{.error = BlockTransitionError::INVALID_OPERATION, .op_result = execution};
         }
         candidate_root = *execution.state_root;

@@ -115,15 +115,8 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 ? std::numeric_limits<uint64_t>::max() : authority + AUTH_PER_FINALIZED_OPERATION;
         }
     }
-    const uint64_t chunks = candidate.pending_fee_pool / 4;
-    const uint64_t security_addition = chunks * 3;
-    if (candidate.security_reward_pool > std::numeric_limits<uint64_t>::max() - security_addition ||
-        candidate.onboarding_pool > std::numeric_limits<uint64_t>::max() - chunks) return fail(BlockExecutionError::FEE_ROUTING_OVERFLOW);
-    candidate.security_reward_pool += security_addition;
-    candidate.onboarding_pool += chunks;
-    candidate.pending_fee_pool %= 4;
     const uint64_t final_supply = TotalSupply(candidate);
-    if (final_supply != initial_supply) return fail(BlockExecutionError::FEE_ROUTING_OVERFLOW);
+    if (final_supply != initial_supply) return fail(BlockExecutionError::SUPPLY_CHANGED);
     if (ValidateCybouState(candidate) != StateValidationError::NONE) return fail(BlockExecutionError::INVALID_STATE);
     const auto root = CybouStateHash(candidate);
     if (!root) return fail(BlockExecutionError::INVALID_STATE);
