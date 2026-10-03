@@ -63,7 +63,7 @@ const char* HELP = R"(CYBOU (headless; run without arguments for the desktop)
   provider run  --network devnet --data-dir DIR --peer IP:PORT --listen IP:PORT --capacity 20GiB
                 [--peers FILE] [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
                 [--event-log FILE] [--event-log-mode minimal|lab]
-  observer run  --network devnet --data-dir DIR --peer IP:PORT [--listen IP:PORT] [--peers FILE]
+  observer run  --network devnet --data-dir DIR (--peer IP:PORT | --listen IP:PORT) [--peers FILE]
                 [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
                 [--event-log FILE] [--event-log-mode minimal|lab]
   network info --network devnet          (NetworkID, binding, genesis and bootstrap locators)
@@ -487,7 +487,9 @@ int RunPeer(const std::string& role, const Options& opts)
     const auto listen = opts.Has("listen") ? std::optional{ParseEndpoint(opts.Get("listen"))} : std::nullopt;
 
     auto config = RuntimeConfig(network, opts.Require("data-dir"));
-    config.p2p_endpoint = ParseEndpoint(opts.Require("peer"));
+    // A rendezvous (bootstrap) node has no upstream peer; others name one.
+    if (opts.Has("peer")) config.p2p_endpoint = ParseEndpoint(opts.Get("peer"));
+    else if (!listen) throw std::invalid_argument("an observer without --peer must --listen");
     if (listen) config.local_p2p_endpoint = opts.Has("advertise") ? ParseEndpoint(opts.Get("advertise")) : *listen;
     config.tls_server_identity = TlsIdentity(opts);
     config.storage_enabled = provider;

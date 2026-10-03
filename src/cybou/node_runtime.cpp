@@ -1166,6 +1166,7 @@ std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetPeerEndpoints
     // Compiled bootstrap locators are ordinary peers with a known address.
     for (const auto& locator : m_config.bootstrap_locators) {
         const std::pair<std::string, uint16_t> ep{std::string{locator.host}, locator.port};
+        if (m_config.local_p2p_endpoint == ep) continue; // this node is the locator
         if (std::find(result.begin(), result.end(), ep) == result.end()) result.push_back(ep);
     }
     // Explicit operator-configured peer endpoints come first: a flood of
