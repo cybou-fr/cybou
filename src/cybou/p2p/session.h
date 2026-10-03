@@ -30,7 +30,7 @@
 namespace cybou { class CybouNodeRuntime; }
 namespace cybou::p2p {
 
-inline constexpr uint32_t MAX_FRAME_PAYLOAD{4096};
+inline constexpr uint32_t MAX_FRAME_PAYLOAD{64U * 1024U};
 inline constexpr uint8_t WIRE_VERSION{5};
 inline constexpr uint8_t MAX_BLOCK_BATCH{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder

@@ -3,9 +3,11 @@
 
 #include <cybou/operation_pool.h>
 
+#include <cybou/block_executor.h>
 #include <cybou/protocol_limits.h>
 
 #include <limits>
+#include <map>
 
 namespace cybou {
 
@@ -74,9 +76,88 @@ std::vector<cybou::Hash256> OperationPool::Revalidate()
     auto previous = std::move(m_entries);
     Clear();
     std::vector<cybou::Hash256> dropped;
-    for (const auto& entry : previous) {
-        if (Admit(entry.operation, entry.source_peer) != PoolAdmission::ACCEPTED) dropped.push_back(entry.id);
+    if (previous.empty()) return dropped;
+
+    const auto loaded = m_store.LoadState();
+    const auto head = m_store.GetFinalizedHead();
+    if (!loaded || !loaded.state || !head || head->height == std::numeric_limits<uint64_t>::max()) {
+        for (const auto& entry : previous) dropped.push_back(entry.id);
+        return dropped;
     }
+
+    const auto& params = m_store.GetNetworkGenesis().GetProtocolParameters();
+    const auto& poa_key = m_store.GetNetworkGenesis().GetPoaPublicKey();
+    const auto& binding = m_store.GetNetworkBinding();
+    const uint64_t target_height = head->height + 1;
+
+    CybouState current_state = *loaded.state;
+    if (params.name_commit_max_lifetime > 0) {
+        std::erase_if(current_state.names.pending_commits, [&](const auto& item) {
+            return target_height > item.second.commit_height &&
+                target_height - item.second.commit_height > params.name_commit_max_lifetime;
+        });
+    }
+
+    std::map<std::string, size_t> peer_counts;
+    std::map<std::string, size_t> peer_bytes;
+    size_t account_creates{0};
+
+    for (auto& entry : previous) {
+        if (m_ids.contains(entry.id)) {
+            dropped.push_back(entry.id);
+            continue;
+        }
+        if (m_store.HasIndexedFinalizedOperation(entry.id)) {
+            dropped.push_back(entry.id);
+            continue;
+        }
+        if (const auto* create = std::get_if<AccountCreateOp>(&entry.operation)) {
+            if (account_creates >= params.max_account_creates_per_block ||
+                current_state.accounts.contains(create->account_id)) {
+                dropped.push_back(entry.id);
+                continue;
+            }
+        }
+        if (m_entries.size() >= m_limits.max_count || m_bytes > m_limits.max_bytes ||
+            entry.bytes > m_limits.max_bytes - m_bytes) {
+            dropped.push_back(entry.id);
+            continue;
+        }
+        if (entry.source_peer) {
+            if (entry.source_peer->empty()) {
+                dropped.push_back(entry.id);
+                continue;
+            }
+            const auto p_count = peer_counts[*entry.source_peer];
+            const auto p_bytes = peer_bytes[*entry.source_peer];
+            if (p_count >= m_limits.max_peer_count || p_bytes > m_limits.max_peer_bytes ||
+                entry.bytes > m_limits.max_peer_bytes - p_bytes) {
+                dropped.push_back(entry.id);
+                continue;
+            }
+        }
+
+        auto exec = ExecuteBlockOperations(current_state, {entry.operation}, binding,
+            target_height, params, &poa_key);
+        if (!exec || !exec.state) {
+            dropped.push_back(entry.id);
+            continue;
+        }
+
+        if (std::holds_alternative<AccountCreateOp>(entry.operation)) {
+            ++account_creates;
+        }
+
+        current_state = std::move(*exec.state);
+        m_ids.insert(entry.id);
+        m_bytes += entry.bytes;
+        if (entry.source_peer) {
+            peer_counts[*entry.source_peer]++;
+            peer_bytes[*entry.source_peer] += entry.bytes;
+        }
+        m_entries.push_back(std::move(entry));
+    }
+
     return dropped;
 }
 
