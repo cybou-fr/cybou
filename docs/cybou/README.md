@@ -71,7 +71,7 @@ from or conflicting with higher levels:
 | [`87_IDENTITY_OPERATION_COORDINATOR.md`](87_IDENTITY_OPERATION_COORDINATOR.md) | In-flight identity operation serialization and retry | Level 2 | Active |
 | [`89_IDENTITY_KEM_PUBLICATION.md`](89_IDENTITY_KEM_PUBLICATION.md) | Public KEM package commitment and epoch publication | Level 2 | Active |
 | [`APPLICATION_DATA_PLANE.md`](APPLICATION_DATA_PLANE.md) | Application services, chunk retention, and local views | Level 5 | Active |
-| [`CYP2_TRANSPORT_V4.md`](CYP2_TRANSPORT_V4.md) | CYP2 transport protocol v4 specification | Level 2 | Active |
+| [`CYP2_TRANSPORT_V5.md`](CYP2_TRANSPORT_V5.md) | CYP2 transport protocol v5 specification | Level 2 | Active |
 | [`ENCRYPTED_CHUNK_TREE.md`](ENCRYPTED_CHUNK_TREE.md) | Encrypted ROOT/INDEX/DATA chunk tree structure | Level 2 | Active |
 | [`IDENTITY_DISCOVERY_AND_RECOVERY.md`](IDENTITY_DISCOVERY_AND_RECOVERY.md) | Clean-machine identity restore and publication scanning | Level 2 | Active |
 | [`OPERATOR_LAB.md`](OPERATOR_LAB.md) | Operator commands, multi-node lab, and stress tools | — | LAB only |

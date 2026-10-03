@@ -6,9 +6,9 @@ defined in [`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md).
 
 The operator interface uses named commands of the single `cybou` executable and CYP2. Run `cybou --help`
 for the complete grammar. The former positional commands are removed.
-`finalizer run` alone signs PoA blocks; `provider run` and `observer run`
-independently verify canonical transitions. An observer does not advertise
-storage capacity. `doctor` validates the network, key, bind address, peers,
+`node run` starts the same Full Node on every process, with a local storage
+quota and an optional `--poa-key-file`. `finalizer run --key-file` is a safety
+wrapper requiring that key; it uses the same networking lifecycle. `doctor` validates the network, key, bind address, peers,
 disk space and an isolated copy of an existing canonical DB before startup.
 An active DB may change during inspection; stop that LAB process and retry.
 
@@ -31,10 +31,9 @@ python3 tools/cybou_stress.py report /path/to/lab.toml
 python3 tools/cybou_stress.py down /path/to/lab.toml
 ```
 
-`init` creates one private LAB PoA seed and copies its public legacy LAB
-network file to every host. This isolated test workflow reflects the current
-CLI and does not define official Network Key / signed-genesis trust. Existing network files
-must match byte for byte.
+`init` exports the compiled LAB PoA seed into isolated test roots. All hosts
+use the compiled LAB profile; there is no runtime network-file loader.
+This workflow never provisions an official network.
 Controller actions require matching ownership markers, scoped paths, ports
 at least 30000 and matching process birth identity. They never target DEV
 systemd services. `down` retains DBs, vaults, journals, encrypted chunks and

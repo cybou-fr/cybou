@@ -1,5 +1,19 @@
 # 24 â€” Current product and protocol decisions
 
+## Uniform Full Node invariant
+
+CYBOU defines exactly one network node type: Full Node. Every Full Node
+implements the complete CYP2 v5 baseline: blocks, inventory, announcements,
+discovery, operation relay, Validation transport and encrypted storage. There
+is no capability bitmap and no network role announcement. Storage is intrinsic;
+capacity is local policy. Bootstrap is only a known locator of an ordinary Full
+Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
+possession of the private key matching the public key in genesis, with durable
+signing safety. IP, endpoints, TLS sessions, ProviderID and peer declarations
+never confer consensus authority. ProviderID is proven on demand only for a
+storage relationship. Peer sync completion is a liveness/UX hint, never proof
+of global freshness or a prerequisite for creating an Identity.
+
 This register records active frozen architecture decisions, followed by the
 superseded decision history. Lower documentation levels cannot introduce
 architecture that contradicts these decisions.
@@ -46,7 +60,7 @@ architecture that contradicts these decisions.
 | DEC-213 | Local blob retention is a generic node-local pin/cache registry keyed by opaque (holder, reference) tags; GC evicts only unpinned, non-admitted cache entries past a grace period. ChunkStore stays free of application semantics. | Frozen |
 | DEC-217 | Authority creates no canonical reservations, tickets, resource budgets, or per-I/O accounting. Provider limits are local policy. | Frozen |
 | DEC-244 | Official networks are DEVNET and MAINNET. Network identity is immutable `NetworkID = Network Public Key`. For each NetworkID, exactly one signed genesis is valid and immutable for the lifetime of that network. The Network Private Key is strictly offline, never online, and used solely by the network owner to sign the immutable genesis at network creation. | Frozen |
-| DEC-245 | Bootstrap is an ordinary CYBOU full peer running the same executable and CYP2 protocol; it has no `CAP_BOOTSTRAP`, no consensus role, and no special protocol capability. Known IP:port provides transport discovery only. | Frozen |
+| DEC-245 | Bootstrap is an ordinary CYBOU full peer running the same executable and CYP2 protocol; it has no network-role announcement, no consensus role, and no special protocol capability. Known IP:port provides transport discovery only. | Frozen |
 | DEC-246 | GenesisAllocation may assign initial AUTH to designated ordinary Identities. AccountCreate claims it exactly once. Such an allocation is a genesis decision, not a property of the bootstrap role; there are no consensus bootstrap grants or bootstrap Identity roles. | Frozen |
 | DEC-247 | Canonical finality is single-operator hybrid-PQ PoA under the genesis-authorized PoA key. The PoA finalizer MUST execute every candidate independently, trusts no validator or peer state, and remains the sole canonical finalizer without BFT or validator quorums. Validation signatures are never sufficient for finalization. | Frozen |
 | DEC-248 | AUTH is a canonical non-transferable account value stored in AccountState and committed by the state root, independent of the 100B CYBOU supply. It changes only through deterministic finalized transitions: GenesisAllocation, +1 AUTH to the authorizing account of each finalized Identity-authorized operation except AccountCreate, and one PoA-signed `PoaAuthAdjustment` operation with GRANT (+N) or BURN (-N, floor 0) that itself earns no AUTH. There is no AUTH transfer. Finalized AUTH > 1,000,000 makes an Identity eligible to sign Validation; AUTH never grants PoA finalization power. Automatic penalties are not frozen. | Frozen |
@@ -56,6 +70,7 @@ architecture that contradicts these decisions.
 | DEC-254 | Provisioning generates the Network and ordinary `cybou.cybou` Identity private material once. Secret material lives only under gitignored `/private/`; Git contains public keys, public Identity data, and signed genesis constants. The Network Private Key remains strictly offline. | Frozen |
 | DEC-255 | DEVNET is the enabled official profile with bootstrap locator `51.255.46.58:29461`. MAINNET is unprovisioned, has no bootstrap locator, and is disabled in the GUI until its keys, genesis, and bootstrap are created. | Frozen |
 | DEC-256 | `cybou.cybou` is an ordinary account-level Identity with AccountID, Recovery, Authorization, KEM, Mail/support, and a distinct PoA signing key role from its mnemonic. It is not a separate PoA Identity entity. Consensus finalization right is determined only by the PoA public key authorized in genesis, never by name or AUTH value. | Frozen |
+| DEC-258 | Every network participant is a Full Node implementing the uniform CYP2 v5 baseline without a capability bitmap or network role. Storage is intrinsic and quota-controlled. ProviderID is proven on demand only for storage. PoA is private-key possession with durable signing safety; signer toggles never reconnect peers. Peer sync completion is advisory and does not gate Identity creation. | Frozen |
 
 ### Network operations and topology
 
@@ -63,9 +78,9 @@ architecture that contradicts these decisions.
 |---|---|---|
 | DEC-219 | The Central Authority desktop operates the genesis-authorized PoA key after unlock and local chain verification. The Network Private Key is separate and strictly offline. | Frozen target |
 | DEC-226 | Authority mobility does not permit concurrent independent signers sharing one PoA key; one active signer and durable anti-equivocation safety remain required. | Frozen target |
-| DEC-232 | All public inbound and outbound P2P admission is France-only for every peer capability; the rule is local networking policy, not consensus state. | Frozen target |
+| DEC-232 | All public inbound and outbound P2P admission is France-only for every Full Node; the rule is local networking policy, not consensus state. | Frozen target |
 | DEC-233 | Known VPN/proxy/Tor filtering is optional local policy using local data. It never affects consensus, Identity, Authority, or PoA. | Frozen target |
-| DEC-235 | Central Authority is identified only by the PoA key. Its live route is session-authenticated and discarded at disconnect; no persistent Authority endpoint or NodeID is stored. | Frozen target |
+| DEC-235 | Central Authority is identified only by the PoA key. It has no authenticated transport route; no persistent Authority endpoint or NodeID is stored. | Frozen target |
 | DEC-238 | Cross-network migration does not exist. A network cutover to a new official network replaces all local network-bound state, wiping everything (chain, genesis, Identity, vault, AccountID, balances, names, Mail, Files, application DB, peer DB, storage metadata). | Frozen target |
 | DEC-240 | Ordinary peers form a direct P2P mesh after initial discovery. Bootstrap is an initial rendezvous peer, not a mandatory traffic intermediary. | Frozen target |
 | DEC-251 | PoA owns no special canonical pending state. Every full node holds a bounded volatile pool of locally executed candidate operations; a PoA node produces blocks from that same pool. Only finalized state is canonical. | Frozen target |
@@ -111,11 +126,11 @@ The following decisions recorded during development iterations have been superse
 | DEC-221 | Network replacement with multi-party proof and history archive | Superseded | Superseded by DEC-238, DEC-244 (New network replaces domain cleanly and wipes all local state; no migration) |
 | DEC-222 | Bootstrap transport identity pinned through release | Superseded | Superseded by DEC-244, DEC-245 (Bootstrap IP:port + TLS pin for transport only) |
 | DEC-223 | Headless finalizer/provider processes LAB-only; official VPS not a finalizer or provider | Superseded | Superseded by DEC-240, DEC-245 (All nodes run same core; bootstrap is ordinary full peer) |
-| DEC-224 | Central Authority route session-authenticated without persistent IP | Consolidated | Superseded by DEC-235 (Ephemeral session route invariant preserved and clarified) |
-| DEC-227 | Bootstrap/Validation as full-node consensus capabilities | Superseded | Superseded by DEC-245, DEC-249 (No CAP_BOOTSTRAP; Validation is a signature, not a capability) |
+| DEC-224 | Central Authority route session-authenticated without persistent IP | Superseded | Superseded by DEC-258 (No PoA transport authority proof or route) |
+| DEC-227 | Bootstrap/Validation as full-node consensus capabilities | Superseded | Superseded by DEC-245, DEC-249 (No bootstrap role announcement; Validation is a signature, not a capability) |
 | DEC-228 | Genesis authorizes 1-4 bootstrap Identities | Superseded | Superseded by DEC-246 (Ordinary Identity with initial Authority in genesis; no consensus bootstrap roster) |
 | DEC-229 | Genesis bootstrap grant binds AccountID + RecoveryKeyID | Superseded | Superseded by DEC-246 (No bootstrap grants or consensus Identity roster) |
-| DEC-230 | Bootstrap authorization follows AccountID through IdentityRotate | Superseded | Superseded by DEC-246 (No bootstrap AccountID or CAP_BOOTSTRAP Identity role) |
+| DEC-230 | Bootstrap authorization follows AccountID through IdentityRotate | Superseded | Superseded by DEC-246 (No special bootstrap AccountID or Identity role) |
 | DEC-231 | Initial IP/SPKI locator pins are pre-genesis only | Superseded | Superseded by DEC-244, DEC-245 (Official profiles have known bootstrap locator IP:port + SPKI for transport authentication) |
 | DEC-234 | Canonical bootstrap roster fixed by genesis in v1 | Superseded | Superseded by DEC-246 (No genesis bootstrap roster) |
 | DEC-236 | Official profiles pin bootstrap locator, TLS SPKI and Network Root R | Superseded | Superseded by DEC-244, DEC-245 (Profiles DEVNET and MAINNET pin NetworkID = Network Public Key, bootstrap IP:port + SPKI) |

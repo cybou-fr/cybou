@@ -74,12 +74,12 @@ Development requires 1 remote full replica; Beta requires 2 independent remote f
 Mail maps Protected to Sent. Incoming Mail is Received after verified finality and decryption;
 the recipient does not claim proof of sender durability.
 
-## Capabilities, policy and Authority
+## Feature availability, policy and Authority
 
-A UI capability becomes true only when its backend path is live. Mail needs
+A UI feature becomes available only when its backend path is live. Mail needs
 publication, scanning, retrieval and mailbox projection. Files needs private
-catalog publication, retrieval and durability. Storage and PoA finalization
-are optional operational capabilities. Bootstrap is an ordinary CYBOU full peer
+catalog publication, retrieval and durability. Storage is intrinsic to each Full Node with a local quota. PoA finalization
+requires the private key matching genesis. Bootstrap is an ordinary CYBOU full peer
 with a known locator. France-only public P2P admission is mandatory in DEV and production;
 optional VPN/proxy/Tor filtering is local policy. Qt displays core decisions.
 

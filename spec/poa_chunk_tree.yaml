@@ -1,4 +1,17 @@
 version: '0.0.1'
+full_node:
+  type: Full_Node
+  cyp2_version: 5
+  hello_fields: [network_binding, finalized_height, finalized_tip, nonce]
+  capability_bitmap: absent
+  network_role_announcement: absent
+  baseline: [block_sync, inventory, announcements, discovery, operation_relay, Validation_transport, encrypted_storage]
+  storage: intrinsic_local_quota_may_be_zero
+  provider_identity: on_demand_TLS_bound_challenge_proof_for_storage_only
+  poa_authority: genesis_key_possession_proved_by_block_certificates
+  signer_activation_reconnects_peers: false
+  peer_sync_completion: advisory_not_global_freshness
+  identity_creation_requires_peer_sync_completion: false
 status: active_protocol_architecture
 consensus:
   mode: genesis_authorized_single_operator_PoA
@@ -32,7 +45,6 @@ consensus:
     same_protocol: CYP2
     auth_from_role: false
     special_consensus_role: absent
-    cap_bootstrap: absent
   unfinalized_operations: local_origin_bounded_volatile_peer_relay
   full_nodes_recompute_state: true
   finality_is_BFT: false

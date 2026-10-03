@@ -1,5 +1,19 @@
 # AGENTS.md — CYBOU implementation authority
 
+## Uniform Full Node invariant
+
+CYBOU defines exactly one network node type: Full Node. Every Full Node
+implements the complete CYP2 v5 baseline: blocks, inventory, announcements,
+discovery, operation relay, Validation transport and encrypted storage. There
+is no capability bitmap and no network role announcement. Storage is intrinsic;
+capacity is local policy. Bootstrap is only a known locator of an ordinary Full
+Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
+possession of the private key matching the public key in genesis, with durable
+signing safety. IP, endpoints, TLS sessions, ProviderID and peer declarations
+never confer consensus authority. ProviderID is proven on demand only for a
+storage relationship. Peer sync completion is a liveness/UX hint, never proof
+of global freshness or a prerequisite for creating an Identity.
+
 Read the active CYBOU documents before coding. Git history records superseded
 architecture; do not keep obsolete runtime paths alive for compatibility.
 
@@ -52,7 +66,7 @@ Bootstrap:
     - same executable (`cybou`)
     - nodes dial the compiled locators first, checking the compiled TLS SPKI pin
     - same CYP2 protocol
-    - no CAP_BOOTSTRAP
+    - no node-role announcement
     - no BootstrapNode class
     - no special consensus role
     - IP:port is known in advance for initial discovery
@@ -107,9 +121,9 @@ PoA:
     - cybou.cybou is an ordinary CYBOU Identity with a PoA key role
     - finalization right is the PoA public key authorized by genesis
     - no separate PoA Identity entity
-    - no special operation routing to PoA: operations travel the ordinary
-      mesh relay; the PoA key holder only proves its key in-session
-      (FINALIZER_PROOF) so peers can confirm finalized tips
+    - operations travel the ordinary mesh relay
+    - PoA ownership is never announced or authenticated in a P2P session
+    - nodes verify finalized blocks against the genesis public key
 
 Canonical truth:
     latest valid PoA-finalized state
@@ -120,7 +134,7 @@ No:
     voting against PoA
     validator fork-choice
     validator quorum finality
-    validator registry, ValidatorSet, CAP_VALIDATOR
+    validator registry, ValidatorSet
     provisional state or provisional storage from Validation
     validation.enabled / validation.min_signatures
     BFT
@@ -139,20 +153,18 @@ There is no production network.
   its SPKI SHA-256 pin is compiled in `src/cybou/official_networks.cpp` for initial transport
   discovery only. This grants no consensus role, no special protocol capability, and does not make
   the bootstrap a separate node class.
-- The target uses one full-node core software with optional storage and PoA finalization
-  capabilities, with the authorized PoA key holder finalizing from the Central Authority desktop.
+- The target uses one full-node core software with intrinsic encrypted storage and an optional local PoA signer, with the authorized PoA key holder finalizing from the Central Authority desktop.
   France-only public peer admission is mandatory in production/DEV.
 - Central Authority is identified solely by the PoA key authorized by network genesis.
   Never add a persistent Authority IP, host, endpoint, or NodeID to bootstrap
-  state or consensus. Authenticate its current route per live session and
-  discard that route on disconnect.
+  state or consensus. No peer session authenticates a PoA route. Verify block signatures only.
 - Connect as `debian@vps-d0669a91.vps.ovh.net`; checkout: `/home/debian/cybou`;
   service binary: `/home/debian/cybou/build/bin/cybou` (headless build).
 
 ## Executables and test networks
 
 - `cybou` is the single production executable: without a command it is the
-  desktop; `cybou finalizer|provider|observer run`, `cybou network ...`,
+  desktop; `cybou node run` / `cybou finalizer run`, `cybou network ...`,
   `cybou doctor`, `cybou operation ...` and `cybou storage ...` run headless.
   A `BUILD_GUI=OFF` build contains only the headless commands.
 - `cybou-loadgen`, storage smoke/soak and other tools exist only with
@@ -163,9 +175,8 @@ There is no production network.
 
 ## Network and node architecture
 
-- Every participant runs the same full-node software core. Storage and
-  Central Authority PoA finalization are optional operational capabilities,
-  not protocol node classes.
+- Every participant runs the same full-node software core. Storage is intrinsic to every Full Node. PoA is an optional local signer,
+  never a network node class.
 - A standard CYBOU installation knows official network profiles (DEVNET, MAINNET).
   Each official network is compiled as public constants: its Network Public Key
   (`NetworkID`), immutable signed `NetworkGenesis` object, initial genesis state,
@@ -200,7 +211,7 @@ There is no production network.
   executed against its finalized state, and relays only locally valid candidates
   until they are finalized into blocks. A PoA node produces blocks from that same pool.
 - Public P2P admission is France-only in production/DEV, for inbound and
-  outbound peers across all capabilities. Classification uses local Geo data;
+  outbound peers for every Full Node. Classification uses local Geo data;
   unavailable/corrupt data fails closed. LAB loopback/private test traffic
   requires an explicit LAB bypass. Optional VPN/proxy/Tor filtering is local
   policy and never changes consensus or Identity.

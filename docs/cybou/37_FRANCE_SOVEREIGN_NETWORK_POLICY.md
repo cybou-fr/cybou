@@ -3,12 +3,11 @@
 ## Network model
 
 CYBOU is a peer-to-peer network of independently validating full nodes.
-Every participant runs the same node software. Storage and Central Authority PoA
-finalization are optional operational capabilities.
+Every participant runs the same node software. Storage is intrinsic to every Full Node; a local PoA signer is optional.
 
 Bootstrap is an ordinary CYBOU full peer whose IP:port and TLS SPKI pin are known
 in advance for initial rendezvous and peer discovery. It has no special consensus
-role, no `CAP_BOOTSTRAP` flag, does not vote, and does not finalize. Any AUTH its
+role, does not vote, and does not finalize. Any AUTH its
 Identity holds is an ordinary GenesisAllocation decision, not a bootstrap property.
 The genesis-authorized Central Authority PoA key remains the sole canonical finality signer.
 

@@ -22,8 +22,10 @@
 
 ## Transport and service identity
 
-CYP2 v4 requires TLS 1.3 with the configured hybrid X25519+ML-KEM-768 group.
-Finalizer and provider role proofs are tied to both HELLOs and the TLS exporter.
+CYP2 v5 requires TLS 1.3 with the configured hybrid X25519+ML-KEM-768 group.
+There is no PoA transport proof. Finalized block certificates alone prove
+PoA authority. On-demand storage key proofs bind both HELLOs, the TLS exporter
+and a fresh challenge; they identify replicas and never confer consensus power.
 The ephemeral TLS certificate alone is not a peer identity. Ordinary peers do
 not have globally authenticated identities; discovered addresses are hints.
 IP addresses, timing, and traffic sizes remain observable. A France-only

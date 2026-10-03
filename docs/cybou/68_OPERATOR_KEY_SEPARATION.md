@@ -25,3 +25,16 @@ signed genesis constants. MAINNET private material does not yet exist.
 
 Bootstrap is an ordinary CYBOU full peer and holds no consensus or network authority keys.
 There is no Operator Authority key, validator registry, or operator-signed ordinary user onboarding.
+
+## Full Node signing boundaries
+
+A Full Node never announces or authenticates a PoA network role. Possession
+of the matching private key enables only the local block-production worker;
+receivers verify the finalized certificate against genesis and execute the
+block independently. Enabling or disabling the signer preserves peer sessions.
+The same network lifecycle handles discovery, sync, operation relay and gossip.
+
+Every Full Node has intrinsic quota-controlled encrypted storage. Its separate
+STORAGE_PROVIDER key is proven only on demand for a storage relationship,
+with both HELLOs, the TLS exporter and a fresh challenge. ProviderID identifies
+replicas and confers no finality or Validation authority.

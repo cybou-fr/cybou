@@ -1,5 +1,19 @@
 # 04 — Network lifecycle
 
+## Uniform Full Node invariant
+
+CYBOU defines exactly one network node type: Full Node. Every Full Node
+implements the complete CYP2 v5 baseline: blocks, inventory, announcements,
+discovery, operation relay, Validation transport and encrypted storage. There
+is no capability bitmap and no network role announcement. Storage is intrinsic;
+capacity is local policy. Bootstrap is only a known locator of an ordinary Full
+Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
+possession of the private key matching the public key in genesis, with durable
+signing safety. IP, endpoints, TLS sessions, ProviderID and peer declarations
+never confer consensus authority. ProviderID is proven on demand only for a
+storage relationship. Peer sync completion is a liveness/UX hint, never proof
+of global freshness or a prerequisite for creating an Identity.
+
 Status: **Active architecture target**. This document defines official network
 trust, creation, joining, Validation, and network replacement.
 
@@ -38,13 +52,13 @@ public Identity data, and signed genesis constants enter Git.
 Bootstrap is an **ordinary CYBOU full peer**:
 - runs the exact same executable as all other nodes;
 - communicates using the standard CYP2 protocol;
-- has no `CAP_BOOTSTRAP` capability flag;
+- announces no network role;
 - has no `BootstrapNode` class or distinct role in consensus;
 - has an IP:port and TLS SPKI pin known in advance for initial discovery;
 - bootstrap status itself grants no authority and no AUTH.
 
 The DEV locator is `51.255.46.58:29461`; its SPKI SHA-256 pin is compiled in
-`src/cybou/official_networks.h` to authenticate initial transport discovery.
+`src/cybou/official_networks.cpp` to authenticate initial transport discovery.
 
 ## Bootstrap Identity
 

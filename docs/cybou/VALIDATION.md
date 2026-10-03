@@ -1,5 +1,19 @@
 # VALIDATION — Eligible-Identity Validation signatures
 
+## Uniform Full Node invariant
+
+CYBOU defines exactly one network node type: Full Node. Every Full Node
+implements the complete CYP2 v5 baseline: blocks, inventory, announcements,
+discovery, operation relay, Validation transport and encrypted storage. There
+is no capability bitmap and no network role announcement. Storage is intrinsic;
+capacity is local policy. Bootstrap is only a known locator of an ordinary Full
+Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
+possession of the private key matching the public key in genesis, with durable
+signing safety. IP, endpoints, TLS sessions, ProviderID and peer declarations
+never confer consensus authority. ProviderID is proven on demand only for a
+storage relationship. Peer sync completion is a liveness/UX hint, never proof
+of global freshness or a prerequisite for creating an Identity.
+
 Status: **Active Level 2 normative protocol specification**.
 
 ## Principle
@@ -50,7 +64,7 @@ validation_eligible(identity) :=
 ```
 
 999,999 and 1,000,000 AUTH are not eligible; 1,000,001 is. There is no
-validator registry, ValidatorSet, `CAP_VALIDATOR`, validator key or staking.
+validator registry, ValidatorSet, validator key or staking.
 
 ## ValidationAttestation
 

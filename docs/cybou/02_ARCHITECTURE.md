@@ -1,5 +1,19 @@
 # CYBOU architecture
 
+## Uniform Full Node invariant
+
+CYBOU defines exactly one network node type: Full Node. Every Full Node
+implements the complete CYP2 v5 baseline: blocks, inventory, announcements,
+discovery, operation relay, Validation transport and encrypted storage. There
+is no capability bitmap and no network role announcement. Storage is intrinsic;
+capacity is local policy. Bootstrap is only a known locator of an ordinary Full
+Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
+possession of the private key matching the public key in genesis, with durable
+signing safety. IP, endpoints, TLS sessions, ProviderID and peer declarations
+never confer consensus authority. ProviderID is proven on demand only for a
+storage relationship. Peer sync completion is a liveness/UX hint, never proof
+of global freshness or a prerequisite for creating an Identity.
+
 CYBOU is an Identity-centered private Mail and Files platform over one
 content-addressed encrypted P2P substrate.
 
@@ -77,20 +91,20 @@ cannot introduce protocol mechanics absent from higher levels:
 - **Level 7 (Machine-readable mirrors)**: `spec/*`
 - **Level 8 (Public projection)**: `README.md`, `www/*`, `www/llms.txt`
 
-## Node capabilities and peer admission
+## Full Node resources and peer admission
 
 Every participant runs the same full-node core software.
 
-Optional operational capabilities:
-- **Storage**: admits and serves authorized encrypted chunks.
-- **Central Authority / PoA**: independently executes candidates and finalizes valid blocks.
+Storage admits and serves authorized encrypted chunks on every Full Node;
+its quota is local policy and may be zero. Possession of the genesis-authorized
+PoA private key activates the independent block-production worker.
 
 **Bootstrap** is an ordinary CYBOU full peer whose IP:port is known in advance
 for initial peer discovery. It runs the same executable and CYP2 protocol.
-It has no `CAP_BOOTSTRAP`, no consensus role, and no special node class.
+It has no network-role announcement, no consensus role, and no special node class.
 
-Public P2P admission is France-only for inbound and outbound connections across
-all capabilities. Policy rules and local fail-closed Geo enforcement are
+Public P2P admission is France-only for inbound and outbound connections for
+every Full Node. Policy rules and local fail-closed Geo enforcement are
 detailed in [`37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`](37_FRANCE_SOVEREIGN_NETWORK_POLICY.md).
 
 ## Identity
@@ -102,8 +116,8 @@ and KEM roles are separate. Device is not a protocol entity.
 distinct PoA key role from its mnemonic. Its name is not a consensus authority:
 only the PoA public key authorized in genesis grants finalization right.
 
-Storage providers prove their own service keys per CYP2 session. The PoA finalizer
-proves the genesis-authorized PoA key. There is no canonical service-node registry.
+Storage keys are proven on demand within the storage relationship. PoA authority
+is proven by finalized block certificates, never by a transport declaration. There is no canonical service-node registry.
 
 ## Finality and Validation
 
