@@ -460,16 +460,36 @@
         <translation>Ce nom n’est pas valide.</translation>
     </message>
     <message>
+        <location filename="../cyboudesktopmodel.cpp" line="1418"/>
+        <source>Deriving your keys and checking the network…</source>
+        <translation>Dérivation de vos clés et vérification du réseau…</translation>
+    </message>
+    <message>
+        <location filename="../cyboudesktopmodel.cpp" line="1419"/>
+        <source>Computing the anti-spam proof-of-work…</source>
+        <translation>Calcul de la preuve de travail anti-spam…</translation>
+    </message>
+    <message>
+        <location filename="../cyboudesktopmodel.cpp" line="1420"/>
+        <source>Sending your Identity to the network…</source>
+        <translation>Envoi de votre identité au réseau…</translation>
+    </message>
+    <message>
+        <location filename="../cyboudesktopmodel.cpp" line="1421"/>
+        <source>Waiting for the network to confirm it…</source>
+        <translation>En attente de la confirmation du réseau…</translation>
+    </message>
+    <message>
         <source>Wait for the network to finish syncing before creating an Identity.</source>
         <translation type="vanished">Attendez la fin de la synchronisation du réseau avant de créer une identité.</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1636"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1656"/>
         <source>%1 saved to Files</source>
         <translation>%1 enregistré dans Fichiers</translation>
     </message>
     <message>
-        <location filename="../cyboudesktopmodel.cpp" line="1636"/>
+        <location filename="../cyboudesktopmodel.cpp" line="1656"/>
         <source>From Mail</source>
         <translation>Depuis Courrier</translation>
     </message>
@@ -3217,399 +3237,480 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
 <context>
     <name>OnboardingView</name>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="143"/>
+        <location filename="../pages/onboardingview.cpp" line="89"/>
+        <source>No Identity with this recovery phrase exists on the network yet, or this computer has not finished syncing. Wait until CYBOU shows Synced and try again.</source>
+        <translation>Aucune identité avec cette phrase de récupération n’existe encore sur le réseau, ou cet ordinateur n’a pas fini de se synchroniser. Attendez que CYBOU affiche Synchronisé, puis réessayez.</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="93"/>
+        <source>The network did not confirm in time. Your request may still be finalized: keep CYBOU open and try again in a few minutes.</source>
+        <translation>Le réseau n’a pas confirmé à temps. Votre demande peut encore être finalisée : gardez CYBOU ouvert et réessayez dans quelques minutes.</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="97"/>
+        <source>This phrase was replaced by a newer one for this Identity. Use the current recovery phrase.</source>
+        <translation>Cette phrase a été remplacée par une plus récente pour cette identité. Utilisez la phrase de récupération actuelle.</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="172"/>
+        <source>Restore did not complete. Try again.</source>
+        <translation>La restauration n’a pas abouti. Réessayez.</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="180"/>
         <source>Your Identity could not be created. Please try again.</source>
         <translation>Votre identité n’a pas pu être créée. Veuillez réessayer.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="174"/>
+        <location filename="../pages/onboardingview.cpp" line="211"/>
         <source>Welcome to CYBOU</source>
         <translation>Bienvenue dans CYBOU</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="177"/>
+        <location filename="../pages/onboardingview.cpp" line="214"/>
         <source>One identity for your private
 Mail, Files, Names and Wallet.</source>
         <translation>Une identité pour vos courriers, fichiers, noms et portefeuille privés.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="181"/>
-        <location filename="../pages/onboardingview.cpp" line="334"/>
+        <location filename="../pages/onboardingview.cpp" line="218"/>
+        <location filename="../pages/onboardingview.cpp" line="371"/>
         <source>Create Identity</source>
         <translation>Créer une identité</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="184"/>
+        <location filename="../pages/onboardingview.cpp" line="221"/>
         <source>Restore from mnemonic</source>
         <translation>Restaurer à partir d’une phrase mnémonique</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="195"/>
+        <location filename="../pages/onboardingview.cpp" line="232"/>
         <source>Post-quantum protected</source>
         <translation>Protégé contre les attaques quantiques</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="216"/>
+        <location filename="../pages/onboardingview.cpp" line="253"/>
         <source>CYBOU is catching up with known peers (block %1). Identity creation uses the locally verified finalized state.</source>
         <translation>CYBOU rattrape les pairs connus (bloc %1). La création d’Identité utilise l’état finalisé vérifié localement.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="229"/>
+        <location filename="../pages/onboardingview.cpp" line="266"/>
         <source>STEP 1 OF 3</source>
         <translation>ÉTAPE 1 SUR 3</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="230"/>
+        <location filename="../pages/onboardingview.cpp" line="267"/>
         <source>Create a local vault password</source>
         <translation>Créer un mot de passe pour le coffre local</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="231"/>
+        <location filename="../pages/onboardingview.cpp" line="268"/>
         <source>This password unlocks CYBOU on this computer. It never leaves your device. Your recovery phrase, not this password, restores your Identity elsewhere.</source>
         <translation>Ce mot de passe déverrouille CYBOU sur cet ordinateur. Il ne quitte jamais votre appareil. Pour restaurer votre identité ailleurs, utilisez votre phrase de récupération, et non ce mot de passe.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="234"/>
-        <location filename="../pages/onboardingview.cpp" line="568"/>
+        <location filename="../pages/onboardingview.cpp" line="271"/>
+        <location filename="../pages/onboardingview.cpp" line="626"/>
         <source>Vault password</source>
         <translation>Mot de passe du coffre</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="235"/>
-        <location filename="../pages/onboardingview.cpp" line="425"/>
+        <location filename="../pages/onboardingview.cpp" line="272"/>
+        <location filename="../pages/onboardingview.cpp" line="464"/>
         <source>At least %1 characters</source>
         <translation>Au moins %1 caractères</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="238"/>
+        <location filename="../pages/onboardingview.cpp" line="275"/>
         <source>Repeat password</source>
         <translation>Répéter le mot de passe</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="239"/>
-        <location filename="../pages/onboardingview.cpp" line="428"/>
+        <location filename="../pages/onboardingview.cpp" line="276"/>
+        <location filename="../pages/onboardingview.cpp" line="470"/>
         <source>Repeat the password</source>
         <translation>Saisissez à nouveau le mot de passe</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="248"/>
-        <location filename="../pages/onboardingview.cpp" line="434"/>
+        <location filename="../pages/onboardingview.cpp" line="285"/>
+        <location filename="../pages/onboardingview.cpp" line="481"/>
         <source>Back</source>
         <translation>Retour</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="249"/>
+        <location filename="../pages/onboardingview.cpp" line="286"/>
         <source>Continue</source>
         <translation>Continuer</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="272"/>
+        <location filename="../pages/onboardingview.cpp" line="309"/>
         <source>STEP 2 OF 3</source>
         <translation>ÉTAPE 2 SUR 3</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="273"/>
+        <location filename="../pages/onboardingview.cpp" line="310"/>
         <source>Write down your 24 recovery words</source>
         <translation>Notez vos 24 mots de récupération</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="274"/>
+        <location filename="../pages/onboardingview.cpp" line="311"/>
         <source>These words restore your Identity, Mail, Files, Names and Wallet on any computer. Anyone who has them controls your Identity. Write them on paper, in order, and keep them somewhere safe. CYBOU cannot recover them for you.</source>
         <translation>Ces mots restaurent votre identité, vos courriers, fichiers, noms et votre portefeuille sur tout ordinateur. Toute personne qui les possède contrôle votre identité. Notez-les dans l’ordre sur papier et conservez-les en lieu sûr. CYBOU ne peut pas les récupérer pour vous.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="285"/>
+        <location filename="../pages/onboardingview.cpp" line="322"/>
         <source>Cancel</source>
         <translation>Annuler</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="286"/>
+        <location filename="../pages/onboardingview.cpp" line="323"/>
         <source>I have written them down</source>
         <translation>J’ai noté les mots</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="306"/>
+        <location filename="../pages/onboardingview.cpp" line="343"/>
         <source>STEP 3 OF 3</source>
         <translation>ÉTAPE 3 SUR 3</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="307"/>
+        <location filename="../pages/onboardingview.cpp" line="344"/>
         <source>Confirm your recovery words</source>
         <translation>Confirmez vos mots de récupération</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="308"/>
+        <location filename="../pages/onboardingview.cpp" line="345"/>
         <source>Enter the requested words to confirm you saved the phrase correctly.</source>
         <translation>Saisissez les mots demandés pour confirmer que vous avez correctement enregistré la phrase.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="333"/>
+        <location filename="../pages/onboardingview.cpp" line="370"/>
         <source>Show words again</source>
         <translation>Afficher à nouveau les mots</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="351"/>
+        <location filename="../pages/onboardingview.cpp" line="388"/>
         <source>Creating your Identity</source>
         <translation>Création de votre identité</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="352"/>
+        <location filename="../pages/onboardingview.cpp" line="389"/>
         <source>This takes a moment. You can keep CYBOU open while it finishes.</source>
         <translation>Cela prend un instant. Vous pouvez laisser CYBOU ouvert pendant cette opération.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="354"/>
+        <location filename="../pages/onboardingview.cpp" line="391"/>
         <source>Preparing keys</source>
         <translation>Préparation des clés</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="354"/>
+        <location filename="../pages/onboardingview.cpp" line="391"/>
         <source>Creating Identity</source>
         <translation>Création de l’identité</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="355"/>
+        <location filename="../pages/onboardingview.cpp" line="392"/>
         <source>Waiting for network confirmation</source>
         <translation>En attente de confirmation du réseau</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="355"/>
+        <location filename="../pages/onboardingview.cpp" line="392"/>
         <source>Identity active</source>
         <translation>Identité active</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="364"/>
+        <location filename="../pages/onboardingview.cpp" line="401"/>
         <source>Start again</source>
         <translation>Recommencer</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="379"/>
+        <location filename="../pages/onboardingview.cpp" line="416"/>
         <source>Restore your Identity</source>
         <translation>Restaurer votre identité</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="380"/>
+        <location filename="../pages/onboardingview.cpp" line="417"/>
         <source>Enter your 24-word recovery phrase</source>
         <translation>Saisissez votre phrase de récupération de 24 mots</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="397"/>
+        <location filename="../pages/onboardingview.cpp" line="434"/>
         <source>Word %1</source>
         <translation>Mot %1</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="413"/>
+        <location filename="../pages/onboardingview.cpp" line="450"/>
         <source>Paste phrase</source>
         <translation>Coller la phrase</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="424"/>
+        <location filename="../pages/onboardingview.cpp" line="461"/>
         <source>Local vault password</source>
         <translation>Mot de passe du coffre local</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="435"/>
+        <location filename="../pages/onboardingview.cpp" line="462"/>
+        <source>It protects this Identity on this computer only. The recovery phrase above is what restores it anywhere.</source>
+        <translation>Il protège cette identité sur cet ordinateur uniquement. C’est la phrase de récupération ci-dessus qui la restaure partout.</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="482"/>
         <source>Restore Identity</source>
         <translation>Restaurer l’identité</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="460"/>
+        <location filename="../pages/onboardingview.cpp" line="514"/>
         <source>Restoring your Identity</source>
         <translation>Restauration de votre identité</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="461"/>
+        <location filename="../pages/onboardingview.cpp" line="515"/>
         <source>CYBOU is rebuilding your data from the network. Mail and Files appear as they are verified.</source>
         <translation>CYBOU restaure vos données depuis le réseau. Les courriers et fichiers apparaissent au fur et à mesure de leur vérification.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="464"/>
+        <location filename="../pages/onboardingview.cpp" line="518"/>
         <source>Identity recovered</source>
         <translation>Identité restaurée</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="464"/>
+        <location filename="../pages/onboardingview.cpp" line="518"/>
         <source>Wallet state recovered</source>
         <translation>État du portefeuille restauré</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="464"/>
+        <location filename="../pages/onboardingview.cpp" line="518"/>
         <source>Names recovered</source>
         <translation>Noms restaurés</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="465"/>
+        <location filename="../pages/onboardingview.cpp" line="519"/>
         <source>Mail</source>
         <translation>Courrier</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="465"/>
+        <location filename="../pages/onboardingview.cpp" line="519"/>
         <source>Files</source>
         <translation>Fichiers</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="471"/>
+        <location filename="../pages/onboardingview.cpp" line="529"/>
         <source>Open CYBOU</source>
         <translation>Ouvrir CYBOU</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="474"/>
+        <location filename="../pages/onboardingview.cpp" line="532"/>
         <source>Mail and Files keep restoring in the background.</source>
         <translation>La restauration des courriers et fichiers continue en arrière-plan.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="487"/>
+        <location filename="../pages/onboardingview.cpp" line="545"/>
         <source>Your Identity is ready</source>
         <translation>Votre identité est prête</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="490"/>
+        <location filename="../pages/onboardingview.cpp" line="548"/>
         <source>Now choose your CYBOU name. People send you mail and payments at name.cybou instead of a long ID.</source>
         <translation>Choisissez votre nom CYBOU. Les autres pourront vous envoyer courriers et paiements à nom.cybou plutôt qu’à un identifiant long.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="498"/>
+        <location filename="../pages/onboardingview.cpp" line="556"/>
         <source>yourname</source>
         <translation>votrenom</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="505"/>
-        <location filename="../pages/onboardingview.cpp" line="522"/>
+        <location filename="../pages/onboardingview.cpp" line="563"/>
+        <location filename="../pages/onboardingview.cpp" line="580"/>
         <source>5–32 characters: lowercase letters, digits and hyphens.</source>
         <translation>5 à 32 caractères : lettres minuscules, chiffres et tirets.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="507"/>
+        <location filename="../pages/onboardingview.cpp" line="565"/>
         <source>Claim name</source>
         <translation>Réserver ce nom</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="512"/>
+        <location filename="../pages/onboardingview.cpp" line="570"/>
         <source>Skip for now</source>
         <translation>Ignorer pour le moment</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="515"/>
+        <location filename="../pages/onboardingview.cpp" line="573"/>
         <source>You can also claim a name later in Identity &amp; Security.</source>
         <translation>Vous pourrez réserver un nom plus tard dans Identité et sécurité.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="523"/>
+        <location filename="../pages/onboardingview.cpp" line="581"/>
         <source>You will be reachable as %1.cybou</source>
         <translation>Vous serez joignable à %1.cybou</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="537"/>
+        <location filename="../pages/onboardingview.cpp" line="595"/>
         <source>A name claim is already in progress.</source>
         <translation>Une réservation de nom est déjà en cours.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="540"/>
+        <location filename="../pages/onboardingview.cpp" line="598"/>
         <source>Claiming %1.cybou. It becomes yours once the network confirms it.</source>
         <translation>Réservation de %1.cybou. Ce nom vous appartiendra après confirmation du réseau.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="562"/>
-        <location filename="../pages/onboardingview.cpp" line="894"/>
+        <location filename="../pages/onboardingview.cpp" line="620"/>
+        <location filename="../pages/onboardingview.cpp" line="976"/>
         <source>Welcome back</source>
         <translation>Ravi de vous revoir</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="565"/>
+        <location filename="../pages/onboardingview.cpp" line="623"/>
         <source>Enter your local vault password to unlock CYBOU on this computer.</source>
         <translation>Saisissez le mot de passe du coffre local pour déverrouiller CYBOU sur cet ordinateur.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="573"/>
+        <location filename="../pages/onboardingview.cpp" line="631"/>
         <source>Unlock</source>
         <translation>Déverrouiller</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="577"/>
+        <location filename="../pages/onboardingview.cpp" line="635"/>
         <source>Restore a different Identity</source>
         <translation>Restaurer une autre identité</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="606"/>
+        <location filename="../pages/onboardingview.cpp" line="664"/>
         <source>Your keys could not be prepared on this computer.</source>
         <translation>Vos clés n’ont pas pu être préparées sur cet ordinateur.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="644"/>
+        <location filename="../pages/onboardingview.cpp" line="702"/>
         <source>Weak</source>
         <translation>Faible</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="644"/>
+        <location filename="../pages/onboardingview.cpp" line="702"/>
         <source>Fair</source>
         <translation>Moyen</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="644"/>
+        <location filename="../pages/onboardingview.cpp" line="702"/>
         <source>Strong</source>
         <translation>Fort</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="658"/>
-        <location filename="../pages/onboardingview.cpp" line="787"/>
+        <location filename="../pages/onboardingview.cpp" line="716"/>
         <source>Use at least %1 characters.</source>
         <translation>Utilisez au moins %1 caractères.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="660"/>
-        <location filename="../pages/onboardingview.cpp" line="789"/>
+        <location filename="../pages/onboardingview.cpp" line="718"/>
         <source>The passwords do not match.</source>
         <translation>Les mots de passe ne correspondent pas.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="710"/>
+        <location filename="../pages/onboardingview.cpp" line="768"/>
         <source>Word #%1</source>
         <translation>Mot n° %1</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="722"/>
+        <location filename="../pages/onboardingview.cpp" line="780"/>
         <source>Word #%1 does not match. Check your written copy.</source>
         <translation>Le mot n° %1 ne correspond pas. Vérifiez votre copie.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="781"/>
-        <source>%1 / %2 words · %3 not recognised</source>
-        <translation>%1 / %2 mots · %3 non reconnu(s)</translation>
+        <location filename="../pages/onboardingview.cpp" line="841"/>
+        <source>%1 / %2 words · %3 not in the recovery word list (marked in red)</source>
+        <translation>%1 / %2 mots · %3 absents de la liste des mots de récupération (en rouge)</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="782"/>
+        <source>%1 / %2 words · %3 not recognised</source>
+        <translation type="vanished">%1 / %2 mots · %3 non reconnu(s)</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="844"/>
         <source>%1 / %2 words</source>
         <translation>%1 / %2 mots</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="803"/>
+        <location filename="../pages/onboardingview.cpp" line="850"/>
+        <source>Valid recovery phrase</source>
+        <translation>Phrase de récupération valide</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="851"/>
+        <source>These 24 words are not a valid recovery phrase. Check the order and the spelling of each word.</source>
+        <translation>Ces 24 mots ne forment pas une phrase de récupération valide. Vérifiez l’ordre et l’orthographe de chaque mot.</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="860"/>
+        <source>%1 / %2 characters</source>
+        <translation>%1 / %2 caractères</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="861"/>
+        <source>Long enough</source>
+        <translation>Longueur suffisante</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="864"/>
+        <source>Passwords match</source>
+        <translation>Les mots de passe correspondent</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="864"/>
+        <source>The passwords do not match</source>
+        <translation>Les mots de passe ne correspondent pas</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="868"/>
+        <source>CYBOU is still starting on this computer…</source>
+        <translation>CYBOU démarre encore sur cet ordinateur…</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="869"/>
+        <source>Enter all 24 words</source>
+        <translation>Saisissez les 24 mots</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="870"/>
+        <source>Fix the recovery phrase</source>
+        <translation>Corrigez la phrase de récupération</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="871"/>
+        <source>Choose a password of at least %1 characters</source>
+        <translation>Choisissez un mot de passe d’au moins %1 caractères</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="872"/>
+        <source>Repeat the same password</source>
+        <translation>Répétez le même mot de passe</translation>
+    </message>
+    <message>
+        <location filename="../pages/onboardingview.cpp" line="884"/>
         <source>These words are not a valid CYBOU recovery phrase. Check the spelling and order.</source>
         <translation>Ces mots ne forment pas une phrase de récupération CYBOU valide. Vérifiez l’orthographe et l’ordre.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="810"/>
+        <location filename="../pages/onboardingview.cpp" line="892"/>
         <source>Restore could not start. Check the phrase and try again.</source>
         <translation>La restauration n’a pas pu démarrer. Vérifiez la phrase et réessayez.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="825"/>
+        <location filename="../pages/onboardingview.cpp" line="905"/>
         <source>Unlocking…</source>
         <translation>Déverrouillage…</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="831"/>
+        <location filename="../pages/onboardingview.cpp" line="911"/>
         <source>The password is incorrect.</source>
         <translation>Le mot de passe est incorrect.</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="894"/>
+        <location filename="../pages/onboardingview.cpp" line="976"/>
         <source>Welcome back, %1</source>
         <translation>Ravi de vous revoir, %1</translation>
     </message>
     <message>
-        <location filename="../pages/onboardingview.cpp" line="905"/>
         <source>Restore did not complete. Check the phrase and try again.</source>
-        <translation>La restauration n’a pas abouti. Vérifiez la phrase et réessayez.</translation>
+        <translation type="vanished">La restauration n’a pas abouti. Vérifiez la phrase et réessayez.</translation>
     </message>
 </context>
 <context>

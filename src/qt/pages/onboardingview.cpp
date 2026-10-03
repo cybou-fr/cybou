@@ -69,6 +69,36 @@ QLabel* FieldLabel(const QString& text, QWidget* parent)
     return label;
 }
 
+/** Inline validation line: neutral, ok (teal) or problem (rose). */
+enum class Check { Neutral, Ok, Problem };
+void SetCheck(QLabel* label, Check check, const QString& text)
+{
+    const QString color = check == Check::Ok ? CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()
+        : check == Check::Problem ? CybouTheme::color(CybouTheme::ROSE).name()
+        : CybouTheme::color(CybouTheme::TEXT_MUTED).name();
+    const QString mark = check == Check::Ok ? QStringLiteral("✓  ") : check == Check::Problem ? QStringLiteral("✕  ") : QString{};
+    label->setStyleSheet(QStringLiteral("color: %1;").arg(color));
+    label->setText(text.isEmpty() ? QString{} : mark + text);
+    label->setVisible(!text.isEmpty());
+}
+
+/** Core restore failures in the user's words. */
+QString RestoreFailureText(const QString& reason)
+{
+    if (reason.contains(QStringLiteral("not in verified state"))) {
+        return OnboardingView::tr("No Identity with this recovery phrase exists on the network yet, or this computer "
+                                  "has not finished syncing. Wait until CYBOU shows Synced and try again.");
+    }
+    if (reason.contains(QStringLiteral("Timed out"))) {
+        return OnboardingView::tr("The network did not confirm in time. Your request may still be finalized: "
+                                  "keep CYBOU open and try again in a few minutes.");
+    }
+    if (reason.contains(QStringLiteral("current finalized Identity key epoch"))) {
+        return OnboardingView::tr("This phrase was replaced by a newer one for this Identity. Use the current recovery phrase.");
+    }
+    return reason;
+}
+
 QPushButton* Button(const QString& text, bool primary, QWidget* parent)
 {
     auto* button = new QPushButton{text, parent};
@@ -135,6 +165,13 @@ OnboardingView::OnboardingView(CybouDesktopModel* model, QWidget* parent)
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::identityRestoreFailed, this, [this](const QString& reason) {
+        // Back to the form with everything still entered, and the reason.
+        showScreen(Screen::Restore);
+        SetCheck(m_restore_hint, Check::Problem, reason.isEmpty()
+            ? tr("Restore did not complete. Try again.") : RestoreFailureText(reason));
+        updateRestoreState();
+    });
     connect(m_model, &CybouDesktopModel::identityCreationFailed, this, [this](const QString& reason) {
         m_offer_name = false;
         m_name_password.fill(QChar{0});
@@ -422,13 +459,23 @@ QWidget* OnboardingView::buildRestore()
     m_phrase_count = MutedText({}, page);
     layout->addWidget(m_phrase_count);
     layout->addWidget(FieldLabel(tr("Local vault password"), page));
+    layout->addWidget(MutedText(tr("It protects this Identity on this computer only. The recovery phrase above is "
+                                   "what restores it anywhere."), page));
     m_restore_password = PasswordField(tr("At least %1 characters").arg(kMinPasswordLength), page);
     m_restore_password->setObjectName(QStringLiteral("restorePassword"));
     layout->addWidget(m_restore_password);
+    m_restore_password_check = MutedText({}, page);
+    m_restore_password_check->setObjectName(QStringLiteral("restorePasswordCheck"));
+    layout->addWidget(m_restore_password_check);
     m_restore_confirm = PasswordField(tr("Repeat the password"), page);
     m_restore_confirm->setObjectName(QStringLiteral("restorePasswordConfirm"));
     layout->addWidget(m_restore_confirm);
+    m_restore_confirm_check = MutedText({}, page);
+    m_restore_confirm_check->setObjectName(QStringLiteral("restoreConfirmCheck"));
+    layout->addWidget(m_restore_confirm_check);
     m_restore_hint = MutedText({}, page);
+    m_restore_hint->setObjectName(QStringLiteral("restoreHint"));
+    m_restore_hint->setWordWrap(true);
     layout->addWidget(m_restore_hint);
     auto* buttons = new QHBoxLayout;
     auto* back = Button(tr("Back"), false, page);
@@ -437,11 +484,18 @@ QWidget* OnboardingView::buildRestore()
     m_restore_button->setProperty("cybouId", QStringLiteral("restoreSubmit"));
     buttons->addWidget(back);
     buttons->addStretch();
+    m_restore_blocker = MutedText({}, page);
+    m_restore_blocker->setObjectName(QStringLiteral("restoreBlocker"));
+    m_restore_blocker->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    buttons->addWidget(m_restore_blocker, 1);
     buttons->addWidget(m_restore_button);
     layout->addLayout(buttons);
 
-    connect(m_restore_password, &QLineEdit::textChanged, this, [this] { updateRestoreState(); });
-    connect(m_restore_confirm, &QLineEdit::textChanged, this, [this] { updateRestoreState(); });
+    connect(m_restore_password, &QLineEdit::textChanged, this, [this] { m_restore_hint->clear(); updateRestoreState(); });
+    connect(m_restore_confirm, &QLineEdit::textChanged, this, [this] { m_restore_hint->clear(); updateRestoreState(); });
+    connect(m_restore_confirm, &QLineEdit::returnPressed, this, [this] {
+        if (m_restore_button->isEnabled()) submitRestore();
+    });
     connect(m_restore_button, &QPushButton::clicked, this, [this] { submitRestore(); });
     connect(back, &QPushButton::clicked, this, [this] {
         clearPhrase();
@@ -467,6 +521,10 @@ QWidget* OnboardingView::buildRestoring()
         m_restore_steps.append(row);
         layout->addWidget(row);
     }
+    m_restoring_detail = MutedText({}, page);
+    m_restoring_detail->setObjectName(QStringLiteral("restoringDetail"));
+    m_restoring_detail->setWordWrap(true);
+    layout->addWidget(m_restoring_detail);
     layout->addSpacing(6);
     m_continue_restoring = Button(tr("Open CYBOU"), true, page);
     m_continue_restoring->setObjectName(QStringLiteral("primaryButton"));
@@ -767,7 +825,7 @@ void OnboardingView::updateRestoreState()
     int filled = 0;
     int unknown = 0;
     for (auto* field : m_word_fields) {
-        const QString word = field->text().trimmed();
+        const QString word = field->text().trimmed().toLower();
         if (word.isEmpty()) {
             field->setStyleSheet({});
             continue;
@@ -777,20 +835,43 @@ void OnboardingView::updateRestoreState()
         if (!known) ++unknown;
         field->setStyleSheet(known ? QString{} : QStringLiteral("border-color: %1;").arg(CybouTheme::color(CybouTheme::ROSE).name()));
     }
-    m_phrase_count->setText(unknown > 0
-        ? tr("%1 / %2 words · %3 not recognised").arg(filled).arg(kPhraseWords).arg(unknown)
-        : tr("%1 / %2 words").arg(filled).arg(kPhraseWords));
+    // The checksum is checked as soon as all 24 words are known words.
+    bool phrase_ok = false;
+    if (unknown > 0) {
+        SetCheck(m_phrase_count, Check::Problem, tr("%1 / %2 words · %3 not in the recovery word list (marked in red)")
+            .arg(filled).arg(kPhraseWords).arg(unknown));
+    } else if (filled < kPhraseWords) {
+        SetCheck(m_phrase_count, Check::Neutral, tr("%1 / %2 words").arg(filled).arg(kPhraseWords));
+    } else {
+        QString phrase = enteredPhrase();
+        phrase_ok = m_model->recoveryPhraseValid(phrase);
+        phrase.fill(QChar{0});
+        SetCheck(m_phrase_count, phrase_ok ? Check::Ok : Check::Problem, phrase_ok
+            ? tr("Valid recovery phrase")
+            : tr("These 24 words are not a valid recovery phrase. Check the order and the spelling of each word."));
+    }
+
     const QString password = m_restore_password->text();
     const QString confirmation = m_restore_confirm->text();
-    QString hint;
-    if (!password.isEmpty() && password.size() < kMinPasswordLength) {
-        hint = tr("Use at least %1 characters.").arg(kMinPasswordLength);
-    } else if (!confirmation.isEmpty() && password != confirmation) {
-        hint = tr("The passwords do not match.");
-    }
-    m_restore_hint->setText(hint);
-    m_restore_button->setEnabled(filled == kPhraseWords && unknown == 0 && password.size() >= kMinPasswordLength &&
-        password == confirmation && m_model->featureAvailability().account_creation);
+    const bool long_enough = password.size() >= kMinPasswordLength;
+    const bool match = long_enough && password == confirmation;
+    if (password.isEmpty()) SetCheck(m_restore_password_check, Check::Neutral, {});
+    else if (!long_enough) SetCheck(m_restore_password_check, Check::Problem,
+        tr("%1 / %2 characters").arg(password.size()).arg(kMinPasswordLength));
+    else SetCheck(m_restore_password_check, Check::Ok, tr("Long enough"));
+    if (confirmation.isEmpty() || !long_enough) SetCheck(m_restore_confirm_check, Check::Neutral, {});
+    else SetCheck(m_restore_confirm_check, match ? Check::Ok : Check::Problem,
+        match ? tr("Passwords match") : tr("The passwords do not match"));
+
+    const bool ready = m_model->featureAvailability().account_creation;
+    QString blocker;
+    if (!ready) blocker = tr("CYBOU is still starting on this computer…");
+    else if (filled < kPhraseWords || unknown > 0) blocker = tr("Enter all 24 words");
+    else if (!phrase_ok) blocker = tr("Fix the recovery phrase");
+    else if (!long_enough) blocker = tr("Choose a password of at least %1 characters").arg(kMinPasswordLength);
+    else if (!match) blocker = tr("Repeat the same password");
+    m_restore_blocker->setText(blocker);
+    m_restore_button->setEnabled(blocker.isEmpty());
 }
 
 void OnboardingView::submitRestore()
@@ -800,19 +881,18 @@ void OnboardingView::submitRestore()
     if (!m_model->recoveryPhraseValid(phrase)) {
         phrase.fill(QChar{0});
         password.fill(QChar{0});
-        m_restore_hint->setText(tr("These words are not a valid CYBOU recovery phrase. Check the spelling and order."));
+        SetCheck(m_restore_hint, Check::Problem, tr("These words are not a valid CYBOU recovery phrase. Check the spelling and order."));
         return;
     }
+    m_restore_hint->clear();
     const bool started = m_model->requestRestoreIdentity(phrase, password);
     phrase.fill(QChar{0});
     password.fill(QChar{0});
     if (!started) {
-        m_restore_hint->setText(tr("Restore could not start. Check the phrase and try again."));
+        SetCheck(m_restore_hint, Check::Problem, tr("Restore could not start. Check the phrase and try again."));
         return;
     }
-    clearPhrase();
-    m_restore_password->clear();
-    m_restore_confirm->clear();
+    // The words stay in the form until the Identity is back, so a failure can be retried.
     showScreen(Screen::Restoring);
 }
 
@@ -884,6 +964,8 @@ void OnboardingView::refresh()
             progress.mail, progress.files};
         for (int i = 0; i < m_restore_steps.size(); ++i) SetStep(m_restore_steps.at(i), RestoreStepState(states[i]));
         // Usable once the Identity, wallet and names are back.
+        m_restoring_detail->setText(progress.identity == CybouRestoreStepState::Running ? status.identity_progress : QString{});
+        m_restoring_detail->setVisible(!m_restoring_detail->text().isEmpty());
         m_continue_restoring->setVisible(progress.identity == CybouRestoreStepState::Done &&
             progress.wallet == CybouRestoreStepState::Done && progress.names == CybouRestoreStepState::Done &&
             !status.account_id.isEmpty());
@@ -901,14 +983,19 @@ void OnboardingView::refresh()
         } else if (screen() == Screen::Creating && !m_create_error->isVisible()) {
             showScreen(Screen::Welcome);
         } else if (screen() == Screen::Restoring) {
-            showScreen(Screen::Restore);
-            m_restore_hint->setText(tr("Restore did not complete. Check the phrase and try again."));
+            showScreen(Screen::Restore); // identityRestoreFailed follows with the reason
         }
         break;
     case CybouIdentityState::Syncing:
     case CybouIdentityState::Active:
     case CybouIdentityState::NeedsAttention:
         for (auto* row : m_create_steps) SetStep(row, 2);
+        // Restored: the entered secrets are no longer needed on screen.
+        if (!m_word_fields.isEmpty() && !m_word_fields.first()->text().isEmpty()) {
+            clearPhrase();
+            m_restore_password->clear();
+            m_restore_confirm->clear();
+        }
         // Creation is finalized: continue straight into choosing a name,
         // unless the Identity already has one or a claim is running.
         if (m_offer_name && screen() != Screen::ChooseName) {

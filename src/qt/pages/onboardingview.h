@@ -88,8 +88,14 @@ private:
     QLineEdit* m_restore_password{nullptr};
     QLineEdit* m_restore_confirm{nullptr};
     QLabel* m_restore_hint{nullptr};
+    /** Live checks: password length, then passwords match. */
+    QLabel* m_restore_password_check{nullptr};
+    QLabel* m_restore_confirm_check{nullptr};
+    /** Why Restore is not available yet, or the last failure. */
+    QLabel* m_restore_blocker{nullptr};
     QPushButton* m_restore_button{nullptr};
     QVector<QLabel*> m_restore_steps;
+    QLabel* m_restoring_detail{nullptr};
 
     // Unlock.
     QLabel* m_unlock_title{nullptr};

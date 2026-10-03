@@ -329,8 +329,8 @@ void CybouShellTests::restoreFlowValidatesPhrase()
     auto* confirm = home->findChild<QLineEdit*>(QStringLiteral("restorePasswordConfirm"));
     auto* first = home->findChild<QLineEdit*>(QStringLiteral("recoveryWord0"));
     QVERIFY(password && confirm && first);
-    password->setText(QStringLiteral("correct horse battery"));
-    confirm->setText(QStringLiteral("correct horse battery"));
+    password->setText(QStringLiteral("too short"));
+    confirm->setText(QStringLiteral("too short"));
     // Pasting the whole phrase into the first field fills all 24.
     QStringList words;
     for (int i = 0; i < 23; ++i) words << CybouDesktopModel::recoveryWordList().at(i * 7);
@@ -339,10 +339,29 @@ void CybouShellTests::restoreFlowValidatesPhrase()
     Q_EMIT first->textEdited(first->text());
     QCOMPARE(home->findChild<QLineEdit*>(QStringLiteral("recoveryWord23"))->text(), QStringLiteral("notaword"));
     QVERIFY(!submit->isEnabled()); // unknown word blocks restore
+    auto* blocker = home->findChild<QLabel*>(QStringLiteral("restoreBlocker"));
+    QVERIFY(blocker && !blocker->text().isEmpty()); // the disabled button says why
     home->findChild<QLineEdit*>(QStringLiteral("recoveryWord23"))->setText(QStringLiteral("zoo"));
+    QVERIFY(!submit->isEnabled()); // a short password blocks restore, and says so
+    auto* password_check = home->findChild<QLabel*>(QStringLiteral("restorePasswordCheck"));
+    QVERIFY(password_check && password_check->text().contains(QStringLiteral("/ 12")));
+    password->setText(QStringLiteral("correct horse battery staple"));
+    confirm->setText(QStringLiteral("correct horse battery stapl"));
+    QVERIFY(!submit->isEnabled());
+    auto* confirm_check = home->findChild<QLabel*>(QStringLiteral("restoreConfirmCheck"));
+    QVERIFY(confirm_check && !confirm_check->isHidden());
+    confirm->setText(QStringLiteral("correct horse battery staple"));
     QVERIFY(submit->isEnabled());
+    QVERIFY(blocker->text().isEmpty());
     submit->click();
     QCOMPARE(model->status().identity_state, CybouIdentityState::Restoring);
+    // The words stay until the Identity is back, so a failure can be retried.
+    QVERIFY(!first->text().isEmpty());
+    Q_EMIT model->identityRestoreFailed(QStringLiteral("Timed out waiting for PoA finality"));
+    auto* hint = home->findChild<QLabel*>(QStringLiteral("restoreHint"));
+    QVERIFY(hint && hint->text().contains(QStringLiteral("did not confirm in time")));
+    QVERIFY(!first->text().isEmpty());
+    model->setIdentityState(CybouIdentityState::Active, QStringLiteral("aa"), 1);
     QVERIFY(first->text().isEmpty());
 }
 

@@ -63,6 +63,8 @@ struct CybouDesktopStatus {
 
     CybouIdentityState identity_state{CybouIdentityState::None};
     CybouIdentityStep identity_step{CybouIdentityStep::PreparingKeys};
+    /** What core is doing right now while creating or restoring (user-facing). */
+    QString identity_progress;
     QString account_id;
     QString primary_name;
     QString name_claim_status;
@@ -442,6 +444,8 @@ Q_SIGNALS:
     void walletChanged();
     void createIdentityRequested();
     void identityCreationFailed(const QString& reason);
+    /** Restore from a recovery phrase failed; reason is user-facing. */
+    void identityRestoreFailed(const QString& reason);
     void nameClaimFailed(const QString& reason);
     /** outcome: Finalized, Pending (accepted/uncertain) or Failed. */
     void recoveryRotationFinished(CybouOperationOutcome outcome, const QString& error);

@@ -429,8 +429,13 @@ void CybouDesktopController::updatePoaSigner()
     if (!m_model || !m_node_service || !m_identity_service) return;
     std::lock_guard identity_access{m_identity_access_mutex};
     try {
-        if (m_model->status().identity_state != CybouIdentityState::Active ||
-            !m_identity_service->IsUnlocked() || !m_identity_service->IsNetworkAuthority()) {
+        // The genesis Identity finalizes its own AccountCreate: the signer runs
+        // while it is created or restored too, not only once it is Active.
+        const auto state = m_model->status().identity_state;
+        const bool holds_keys = state == CybouIdentityState::Active || state == CybouIdentityState::Syncing ||
+            state == CybouIdentityState::Creating || state == CybouIdentityState::Restoring ||
+            state == CybouIdentityState::NeedsAttention;
+        if (!holds_keys || !m_identity_service->IsUnlocked() || !m_identity_service->IsNetworkAuthority()) {
             m_node_service->Runtime().DisablePoaSigner();
             m_node_service->StopBlockProduction();
             return;

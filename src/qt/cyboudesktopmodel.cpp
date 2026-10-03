@@ -1409,6 +1409,20 @@ void CybouDesktopModel::completeVaultLock()
 }
 
 namespace {
+/** Creation and restore wait this long for PoA finality before reporting a timeout. */
+constexpr std::chrono::minutes kIdentityFinalityTimeout{3};
+
+QString PhaseText(cybou::IdentityCreationPhase phase)
+{
+    switch (phase) {
+    case cybou::IdentityCreationPhase::CREATING_KEYS: return CybouDesktopModel::tr("Deriving your keys and checking the network…");
+    case cybou::IdentityCreationPhase::PERFORMING_WORK: return CybouDesktopModel::tr("Computing the anti-spam proof-of-work…");
+    case cybou::IdentityCreationPhase::BROADCASTING: return CybouDesktopModel::tr("Sending your Identity to the network…");
+    case cybou::IdentityCreationPhase::WAITING_FOR_FINALITY: return CybouDesktopModel::tr("Waiting for the network to confirm it…");
+    default: return {};
+    }
+}
+
 CybouIdentityStep StepForPhase(cybou::IdentityCreationPhase phase)
 {
     switch (phase) {
@@ -1437,6 +1451,7 @@ void CybouDesktopModel::requestCreateIdentity(const QString& vault_password)
                     return;
                 }
                 if (phase == cybou::IdentityCreationPhase::ACTIVE) return;
+                m_status.identity_progress = PhaseText(phase);
                 setIdentityStep(StepForPhase(phase));
                 setIdentityState(CybouIdentityState::Creating);
             }, Qt::QueuedConnection);
@@ -1452,7 +1467,7 @@ void CybouDesktopModel::requestCreateIdentity(const QString& vault_password)
                     Q_EMIT identityCreationFailed(QString::fromStdString(result.error_message));
                 }
             }, Qt::QueuedConnection);
-        });
+        }, kIdentityFinalityTimeout);
 }
 
 bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, const QString& vault_password)
@@ -1481,7 +1496,12 @@ bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, c
     m_identity_service->RestoreIdentityAsync(std::move(words), vault_password.toStdString(),
         [this](cybou::IdentityCreationPhase phase, const std::string&) {
             QMetaObject::invokeMethod(this, [this, phase] {
-                if (phase == cybou::IdentityCreationPhase::FAILED) setIdentityState(CybouIdentityState::None);
+                // The completion reports failures with their reason.
+                if (phase == cybou::IdentityCreationPhase::FAILED || phase == cybou::IdentityCreationPhase::ACTIVE) return;
+                m_status.identity_progress = PhaseText(phase);
+                // A step change also re-evaluates the local PoA signer (genesis Identity claim).
+                setIdentityStep(StepForPhase(phase));
+                Q_EMIT statusChanged();
             }, Qt::QueuedConnection);
         },
         [this](const cybou::IdentityCreationResult& result) {
@@ -1500,10 +1520,10 @@ bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, c
                     setBalances(0, result.system_balance);
                 } else {
                     setIdentityState(CybouIdentityState::None);
-                    Q_EMIT identityCreationFailed(QString::fromStdString(result.error_message));
+                    Q_EMIT identityRestoreFailed(QString::fromStdString(result.error_message));
                 }
             }, Qt::QueuedConnection);
-        });
+        }, kIdentityFinalityTimeout);
     return true;
 }
 
