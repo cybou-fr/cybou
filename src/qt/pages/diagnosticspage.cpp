@@ -204,7 +204,7 @@ void DiagnosticsPage::refresh()
     m_node->setText(status.node_running ? tr("Running") : tr("Stopped"));
     m_network->setText(status.network_name);
     m_peers->setText(QString::number(status.peer_count));
-    m_height->setText(status.finality_known ? QLocale{}.toString(status.finalized_height) : QStringLiteral("â€”"));
+    m_height->setText(status.finality_known ? QLocale{}.toString(status.finalized_height) : QStringLiteral("—"));
     m_finality->setText(status.finality_known ? tr("PoA verified") : tr("Waiting"));
 
     ClearLayout(m_rows);
@@ -223,7 +223,7 @@ void DiagnosticsPage::refresh()
     Row(m_rows, tr("Data directory"), status.data_directory.isEmpty() ? tr("Available after node startup") : status.data_directory, parent);
     Row(m_rows, tr("Finality model"), tr("Single-operator proof of authority (not Byzantine fault tolerant)"), parent);
     const auto auth_val = m_model->authority();
-    Row(m_rows, tr("Authority"), QStringLiteral("%1 AUTH").arg(QLocale{}.toString(auth_val)), parent);
+    Row(m_rows, tr("Authority"), cybouAuthorityText(auth_val), parent);
     Row(m_rows, tr("Validation eligible"), auth_val > cybou::VALIDATION_AUTHORITY_THRESHOLD ? tr("Yes") : tr("No"), parent);
 
     ClearLayout(m_services);

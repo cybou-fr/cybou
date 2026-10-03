@@ -16,14 +16,18 @@
 #include <QLocale>
 #include <QMouseEvent>
 #include <QFrame>
+#include <QGridLayout>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QRegularExpressionValidator>
 #include <QStandardItemModel>
 #include <QVBoxLayout>
+
+#include <cybou/validation_attestation.h>
 
 #include <algorithm>
 
@@ -101,6 +105,7 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     available->addWidget(Eyebrow(tr("AVAILABLE"), hero));
     m_available = BigAmount(hero);
     available->addWidget(m_available);
+    available->addStretch();
     hero_layout->addLayout(available, 1);
     auto* system = new QVBoxLayout;
     system->setSpacing(2);
@@ -117,6 +122,18 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     m_lock_button->setIcon(QIcon{glyphPixmap(Glyph::Lock, {14, 14}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
     system->addWidget(m_lock_button, 0, Qt::AlignLeft);
     hero_layout->addLayout(system, 1);
+    auto* authority = new QVBoxLayout;
+    authority->setSpacing(2);
+    authority->addWidget(Eyebrow(tr("AUTHORITY"), hero));
+    m_authority = new QLabel{hero};
+    m_authority->setObjectName(QStringLiteral("metric"));
+    m_authority->setProperty("cybouId", QStringLiteral("walletAuthority"));
+    m_authority->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    authority->addWidget(m_authority);
+    m_authority_hint = MutedText(tr("Earned by network use; cannot be sent"), hero);
+    authority->addWidget(m_authority_hint);
+    authority->addStretch();
+    hero_layout->addLayout(authority, 1);
     auto* actions = new QVBoxLayout;
     actions->setSpacing(8);
     m_send_button = new QPushButton{tr("Send"), hero};
@@ -134,6 +151,40 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
 
     m_gate = MutedText({}, this);
     root->addWidget(m_gate);
+
+    // Limits granted by finalized AUTH.
+    auto* limits = Card(this);
+    limits->setProperty("cybouId", QStringLiteral("walletLimits"));
+    auto* limits_layout = new QVBoxLayout{limits};
+    limits_layout->setContentsMargins(22, 16, 22, 16);
+    limits_layout->setSpacing(10);
+    limits_layout->addWidget(SectionTitle(tr("Your current limits"), limits));
+    auto* limits_grid = new QGridLayout;
+    limits_grid->setHorizontalSpacing(24);
+    limits_grid->setVerticalSpacing(2);
+    const auto limit = [&](int column, const QString& caption) {
+        auto* label = new QLabel{caption, limits};
+        label->setObjectName(QStringLiteral("metricCaption"));
+        auto* value = new QLabel{limits};
+        value->setObjectName(QStringLiteral("rowTitle"));
+        value->setWordWrap(true);
+        limits_grid->addWidget(label, 0, column);
+        limits_grid->addWidget(value, 1, column, Qt::AlignTop);
+        limits_grid->setColumnStretch(column, 1);
+        return value;
+    };
+    m_limit_storage = limit(0, tr("Network storage"));
+    m_limit_operations = limit(1, tr("Operations per block"));
+    m_limit_validation = limit(2, tr("Validation"));
+    limits_layout->addLayout(limits_grid);
+    m_next_tier_bar = new QProgressBar{limits};
+    m_next_tier_bar->setRange(0, 1000);
+    m_next_tier_bar->setTextVisible(false);
+    m_next_tier_bar->setFixedHeight(6);
+    limits_layout->addWidget(m_next_tier_bar);
+    m_limit_next = MutedText({}, limits);
+    limits_layout->addWidget(m_limit_next);
+    root->addWidget(limits);
 
     // Send panel.
     m_send_panel = Card(this);
@@ -329,6 +380,27 @@ void WalletPage::refresh()
                        "Mail and Files keep working: their fees come from System Balance.")
         : QString{});
     m_gate->setVisible(!m_gate->text().isEmpty());
+
+    const QLocale locale;
+    const auto limits = cybouAccountLimits(status.authority);
+    m_authority->setText(cybouAuthorityText(status.authority));
+    m_limit_storage->setText(limits.storage_quota
+        ? tr("%1 used of %2").arg(CybouProduct::sizeText(status.storage_used), CybouProduct::sizeText(*limits.storage_quota))
+        : tr("%1 used  ·  unlimited").arg(CybouProduct::sizeText(status.storage_used)));
+    m_limit_operations->setText(limits.operations_per_block
+        ? locale.toString(*limits.operations_per_block) : tr("Unlimited"));
+    m_limit_validation->setText(limits.validation_eligible ? tr("Eligible to sign")
+        : tr("Above %1").arg(cybouAuthorityText(cybou::VALIDATION_AUTHORITY_THRESHOLD)));
+    if (limits.next_tier_authority) {
+        const quint64 next = *limits.next_tier_authority;
+        m_next_tier_bar->setValue(static_cast<int>(qMin<quint64>(1000, status.authority * 1000 / next)));
+        m_limit_next->setText(tr("%1 more to the next tier. Each finalized file or message publication and each "
+                                 "move to System Balance adds 1 AUTH (at most 1 per block).")
+            .arg(cybouAuthorityText(next - status.authority)));
+    } else {
+        m_next_tier_bar->setValue(1000);
+        m_limit_next->setText(tr("Top tier: operations and storage are not limited by AUTH."));
+    }
     if (!payments) m_send_panel->setVisible(false);
     updateSendState();
 }

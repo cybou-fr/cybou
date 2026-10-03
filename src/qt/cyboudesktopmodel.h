@@ -83,12 +83,29 @@ struct CybouDesktopStatus {
  * unlocked Identity's recovery phrase derives the genesis PoA finalizer key.
  * Every value is read from this node's own validated finalized state.
  */
+/** Local finalizer loop state of this desktop; never a canonical network property. */
+enum class CybouFinalizerState : quint8 {
+    /** The vault-backed PoA signer is not active (locked vault or key mismatch). */
+    SignerUnavailable,
+    /** The signer is active and the block production loop is running. */
+    Finalizing,
+    /** The operator paused block production; the signer stays active. */
+    Paused,
+    /** Signing safety stopped finalization fail-closed. */
+    SafetyHalt,
+};
+
 struct CybouNetworkAuthorityStatus {
     bool proven{false};
     /** Local runtime signer state; this is not a canonical network property. */
     bool signer_enabled{false};
+    CybouFinalizerState finalizer{CybouFinalizerState::SignerUnavailable};
+    /** Locally executed candidate operations waiting for the next block. */
+    quint64 candidates{0};
     quint64 finalized_height{0};
     quint64 identities{0};
+    /** Identities whose finalized AUTH makes them eligible to sign Validation. */
+    quint64 validators{0};
     quint64 names{0};
     quint64 pending_name_commits{0};
     quint64 total_balance{0};
@@ -96,6 +113,23 @@ struct CybouNetworkAuthorityStatus {
     quint64 total_authority{0};
     quint64 onboarding_pool{0};
 };
+
+/**
+ * Resource limits that finalized AUTH grants an Identity. Derived locally
+ * from the same deterministic tier rules every Full Node applies.
+ */
+struct CybouAccountLimits {
+    /** Remote network storage quota; nullopt means unconstrained. */
+    std::optional<quint64> storage_quota;
+    /** Operations per block; nullopt means unconstrained. */
+    std::optional<quint32> operations_per_block;
+    bool validation_eligible{false};
+    /** AUTH at which the next tier starts; nullopt at the top tier. */
+    std::optional<quint64> next_tier_authority;
+};
+CybouAccountLimits cybouAccountLimits(quint64 authority);
+/** "12,345 AUTH". */
+QString cybouAuthorityText(quint64 authority);
 
 /**
  * Canonical CYBOU amount rendering.
@@ -145,6 +179,18 @@ public:
     const CybouNetworkAuthorityStatus& networkAuthority() const { return m_network_authority; }
     bool isNetworkAuthority() const { return m_network_authority.proven; }
     void setNetworkAuthority(const CybouNetworkAuthorityStatus& status);
+    /* Central Authority operator commands; the controller carries them out. */
+    void requestFinalizationPaused(bool paused);
+    void requestFinalizeNow();
+    /**
+     * Signs a PoaAuthAdjustment for the next block. target is a .cybou name
+     * or a 64-hex AccountID. Returns false when inputs are invalid or one is
+     * already in flight; the result arrives via authAdjustmentFinished.
+     */
+    bool requestAuthAdjustment(const QString& target, bool grant, quint64 amount);
+    bool authAdjustmentPending() const { return m_auth_adjustment_pending; }
+    /** Adapter entry: the PoaAuthAdjustment was submitted (ok) or refused. */
+    void setAuthAdjustmentFinished(bool ok, const QString& message);
     void setSyncing(bool syncing);
     void setSyncError(const QString& error);
     void setLastSync(const QDateTime& when);
@@ -392,6 +438,11 @@ Q_SIGNALS:
     void paymentFinished(bool ok, const QString& error);
     void systemLockFinished(bool ok, const QString& error);
     void authorityChanged();
+    void finalizationPauseRequested(bool paused);
+    void finalizeNowRequested();
+    /** target is already resolved to a 64-hex AccountID. */
+    void authAdjustmentRequested(const QString& account_id, bool grant, quint64 amount);
+    void authAdjustmentFinished(bool ok, const QString& message);
     void operationStatusChanged(const QString& operation_id);
 
 private:
@@ -408,6 +459,7 @@ private:
     /** Submits (or resumes) IdentityRotate once the backend secured the old keys. */
     void startRecoveryRotation(cybou::RecoveryWords words, const QString& vault_password, bool resume_pending);
     bool m_payment_pending{false};
+    bool m_auth_adjustment_pending{false};
     std::optional<quint64> m_payment_fee;
     bool m_recovery_rotation_pending{false};
     bool m_fixture_mode{false};

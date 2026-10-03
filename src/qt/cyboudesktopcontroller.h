@@ -5,8 +5,10 @@
 #ifndef BITCOIN_QT_CYBOUDESKTOPCONTROLLER_H
 #define BITCOIN_QT_CYBOUDESKTOPCONTROLLER_H
 
+#include <atomic>
 #include <filesystem>
 #include <memory>
+#include <thread>
 #include <mutex>
 
 #include <QObject>
@@ -46,6 +48,12 @@ private:
     std::shared_ptr<cybou::p2p::GeoDatabaseUpdater> m_geo_database_updater;
     std::mutex m_identity_access_mutex;
     bool m_validation_signer_enabled{false};
+    /** Operator pause of the local block production loop (GUI thread). */
+    std::atomic<bool> m_production_paused{false};
+    /** Runs one operator command (finalize now, AUTH change) off the GUI thread. */
+    std::jthread m_operator_worker;
+    void finalizeNow();
+    void submitAuthAdjustment(const QString& account_id, bool grant, quint64 amount);
     /** Where data of an older DEV network was moved at startup, if it was. */
     void stop();
     void updatePoaSigner();

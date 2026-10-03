@@ -14,6 +14,8 @@
 #include <cybou/node_service.h>
 #include <cybou/p2p/geo_database_updater.h>
 #include <cybou/p2p/peer_admission.h>
+#include <cybou/poa_auth_adjustment.h>
+#include <cybou/validation_attestation.h>
 #include <cybou/wallet_service.h>
 
 #include <QFile>
@@ -27,6 +29,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 #include <QDebug>
@@ -95,12 +98,71 @@ CybouDesktopController::CybouDesktopController(CybouDesktopModel* model,
             updatePoaSigner();
             updateValidationSigner();
         });
+        connect(m_model, &CybouDesktopModel::finalizationPauseRequested, this, [this](bool paused) {
+            m_production_paused = paused;
+            updatePoaSigner();
+            publishNetworkAuthority();
+        });
+        connect(m_model, &CybouDesktopModel::finalizeNowRequested, this, [this] { finalizeNow(); });
+        connect(m_model, &CybouDesktopModel::authAdjustmentRequested, this,
+            [this](const QString& account_id, bool grant, quint64 amount) { submitAuthAdjustment(account_id, grant, amount); });
     }
 }
 
 CybouDesktopController::~CybouDesktopController()
 {
+    if (m_operator_worker.joinable()) m_operator_worker.join();
     stop();
+}
+
+void CybouDesktopController::finalizeNow()
+{
+    // One block on demand while the loop is paused; the running loop needs no help.
+    if (!m_node_service || !m_production_paused) return;
+    if (m_operator_worker.joinable()) m_operator_worker.join();
+    m_operator_worker = std::jthread([this] {
+        bool produced{false};
+        try {
+            produced = m_node_service->Runtime().ProduceBlock().has_value();
+            if (!produced && m_node_service->Runtime().LastBlockProductionStatus() == cybou::BlockProductionStatus::SAFETY_HALT) {
+                m_node_service->Runtime().DisablePoaSigner();
+            }
+            publishNetworkAuthority();
+        } catch (const std::exception& e) {
+            qWarning() << "cannot finalize a block:" << e.what();
+        }
+        QMetaObject::invokeMethod(m_model, [model = m_model, produced] {
+            model->notify(produced ? CybouDesktopModel::tr("Block finalized.")
+                                   : CybouDesktopModel::tr("No block was finalized. See the finalizer state."));
+        }, Qt::QueuedConnection);
+    });
+}
+
+void CybouDesktopController::submitAuthAdjustment(const QString& account_id, bool grant, quint64 amount)
+{
+    const auto target = cybou::ParseHash256UserHex(account_id.toStdString());
+    if (!m_node_service || !target) {
+        m_model->setAuthAdjustmentFinished(false, CybouDesktopModel::tr("The AUTH change could not be prepared."));
+        return;
+    }
+    if (m_operator_worker.joinable()) m_operator_worker.join();
+    m_operator_worker = std::jthread([this, target = *target, grant, amount] {
+        QString message;
+        bool ok{false};
+        try {
+            const auto result = m_node_service->Runtime().SubmitPoaAuthAdjustment(
+                grant ? cybou::PoaAuthAction::GRANT : cybou::PoaAuthAction::BURN, cybou::AccountId{target}, amount);
+            ok = static_cast<bool>(result);
+            message = ok ? CybouDesktopModel::tr("AUTH change submitted for the next block.")
+                : result.status == cybou::OperationSubmitStatus::POA_SIGNER_UNAVAILABLE
+                ? CybouDesktopModel::tr("The PoA signer is not active.")
+                : CybouDesktopModel::tr("The AUTH change was rejected by local execution.");
+        } catch (const std::exception& e) {
+            message = QString::fromLocal8Bit(e.what());
+        }
+        QMetaObject::invokeMethod(m_model, [model = m_model, ok, message] { model->setAuthAdjustmentFinished(ok, message); },
+            Qt::QueuedConnection);
+    });
 }
 
 void CybouDesktopController::start()
@@ -303,7 +365,14 @@ void CybouDesktopController::publishNetworkAuthority()
     CybouNetworkAuthorityStatus status;
     std::lock_guard identity_access{m_identity_access_mutex};
     if (m_identity_service && m_node_service && m_identity_service->IsNetworkAuthority()) {
-        status.signer_enabled = m_node_service->Runtime().IsPoaSignerActive();
+        auto& runtime = m_node_service->Runtime();
+        status.signer_enabled = runtime.IsPoaSignerActive();
+        status.candidates = runtime.CandidateOperationCount();
+        status.finalizer = runtime.LastBlockProductionStatus() == cybou::BlockProductionStatus::SAFETY_HALT
+            ? CybouFinalizerState::SafetyHalt
+            : !status.signer_enabled ? CybouFinalizerState::SignerUnavailable
+            : m_production_paused ? CybouFinalizerState::Paused
+            : CybouFinalizerState::Finalizing;
         const auto loaded = m_node_service->Runtime().GetStore().LoadState();
         if (loaded && loaded.state) {
             const auto& state = *loaded.state;
@@ -316,6 +385,7 @@ void CybouDesktopController::publishNetworkAuthority()
                 status.total_balance += account.balance;
                 status.total_system_balance += account.system_balance;
                 status.total_authority += account.authority;
+                if (account.authority > cybou::VALIDATION_AUTHORITY_THRESHOLD) ++status.validators;
             }
             status.onboarding_pool = state.onboarding_pool;
         }
@@ -346,7 +416,7 @@ void CybouDesktopController::updateValidationSigner()
         m_identity_service->IsUnlocked();
     if (active == m_validation_signer_enabled) return;
     // The runtime signs only for candidates it executed itself and only while
-    // this Identity's finalized AUTH exceeds 1,000,000.
+    // this Identity's finalized AUTH exceeds 10,000,000.
     m_node_service->Runtime().SetValidationSigner(active
         ? std::make_shared<cybou::CybouKeyStoreValidationSigner>(m_identity_service->GetKeyStore())
         : nullptr);
@@ -371,7 +441,8 @@ void CybouDesktopController::updatePoaSigner()
             qWarning() << "unlocked Identity does not match the genesis PoA key";
             return;
         }
-        m_node_service->StartBlockProduction();
+        if (m_production_paused) m_node_service->StopBlockProduction();
+        else m_node_service->StartBlockProduction();
     } catch (const std::exception& e) {
         m_node_service->StopBlockProduction();
         m_node_service->Runtime().DisablePoaSigner();

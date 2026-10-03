@@ -45,6 +45,7 @@ private Q_SLOTS:
     void networkPageReflectsModel();
     void networkMonitorUsesCoreSnapshot();
     void authorityDashboardUsesLocalHeightObservation();
+    void walletShowsAuthorityLimits();
     void adapterSettersDrivePages();
     void productCollectionsDriveModel();
     void fixturesLoadDeterministically();

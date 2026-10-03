@@ -14,6 +14,7 @@ class QCompleter;
 class QFrame;
 class QHBoxLayout;
 class QLabel;
+class QProgressBar;
 class QLineEdit;
 class QPushButton;
 class QVBoxLayout;
@@ -22,7 +23,8 @@ class QVBoxLayout;
  * Wallet around .cybou names. CYBOU is indivisible (whole CYBOU only).
  * Balance is user-controlled; System Balance funds CYBOU network services
  * and cannot be sent. Payments go to a .cybou name; the deterministic
- * network service fee is shown before sending.
+ * network service fee is shown before sending. Authority (AUTH) is shown
+ * beside both balances with the limits it currently grants.
  */
 class WalletPage : public QWidget
 {
@@ -42,6 +44,14 @@ private:
     QPushButton* m_receive_button{nullptr};
     QPushButton* m_lock_button{nullptr};
     QLabel* m_system_hint{nullptr};
+    QLabel* m_authority{nullptr};
+    QLabel* m_authority_hint{nullptr};
+    /** Current limits granted by finalized AUTH. */
+    QLabel* m_limit_storage{nullptr};
+    QLabel* m_limit_operations{nullptr};
+    QLabel* m_limit_validation{nullptr};
+    QLabel* m_limit_next{nullptr};
+    QProgressBar* m_next_tier_bar{nullptr};
     /** Fee groups the user expanded (keyed by the group's first entry id). */
     QSet<QString> m_expanded_fees;
     QFrame* m_send_panel{nullptr};

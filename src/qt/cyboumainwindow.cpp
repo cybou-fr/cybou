@@ -864,6 +864,29 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         showPage(CybouPage::Settings);
         save(QStringLiteral("settings"));
 
+        // Operator console with a representative finalizer snapshot.
+        CybouNetworkAuthorityStatus authority;
+        authority.proven = true;
+        authority.signer_enabled = true;
+        authority.finalizer = CybouFinalizerState::Finalizing;
+        authority.finalized_height = 48'213;
+        authority.candidates = 4;
+        authority.identities = 1'284;
+        authority.validators = 2;
+        authority.names = 911;
+        authority.pending_name_commits = 7;
+        authority.total_balance = 12'480'300;
+        authority.total_system_balance = 3'902'144;
+        authority.total_authority = 21'640'882;
+        authority.onboarding_pool = 87'159'000;
+        model->setNetworkAuthority(authority);
+        showPage(CybouPage::NetworkAuthority);
+        save(QStringLiteral("network-authority"));
+        authority.finalizer = CybouFinalizerState::Paused;
+        model->setNetworkAuthority(authority);
+        save(QStringLiteral("network-authority-paused"));
+        model->setNetworkAuthority({});
+
         model->setFileItems({});
         showPage(CybouPage::Files);
         save(QStringLiteral("files-empty"));

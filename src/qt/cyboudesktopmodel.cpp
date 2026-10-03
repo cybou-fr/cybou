@@ -13,7 +13,9 @@
 #include <cybou/name_service.h>
 #include <cybou/node_runtime.h>
 #include <cybou/hex.h>
+#include <cybou/protocol_limits.h>
 #include <cybou/support_mail.h>
+#include <cybou/validation_attestation.h>
 #include <cybou/wallet_service.h>
 
 #include <cybou/crypto/cleanse.h>
@@ -636,10 +638,36 @@ void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
     Q_EMIT walletChanged();
 }
 
+CybouAccountLimits cybouAccountLimits(quint64 authority)
+{
+    // AUTH at which ComputeStorageQuotaBytes / ComputeMaxOperationsPerBlock step up.
+    static constexpr quint64 kTiers[]{10'000, 100'000, 1'000'000, 10'000'001};
+    CybouAccountLimits limits;
+    const auto quota = cybou::ComputeStorageQuotaBytes(authority);
+    if (quota != UINT64_MAX) limits.storage_quota = quota;
+    const auto operations = cybou::ComputeMaxOperationsPerBlock(authority);
+    if (operations != UINT32_MAX) limits.operations_per_block = operations;
+    limits.validation_eligible = authority > cybou::VALIDATION_AUTHORITY_THRESHOLD;
+    for (const quint64 tier : kTiers) {
+        if (authority < tier) {
+            limits.next_tier_authority = tier;
+            break;
+        }
+    }
+    return limits;
+}
+
+QString cybouAuthorityText(quint64 authority)
+{
+    return QLocale{}.toString(authority) + QStringLiteral(" AUTH");
+}
+
 void CybouDesktopModel::setAuthority(quint64 authority)
 {
     if (m_status.authority == authority) return;
     m_status.authority = authority;
+    // The remote storage quota follows finalized AUTH (fixtures set their own).
+    if (!m_fixture_mode) m_status.storage_quota = cybouAccountLimits(authority).storage_quota.value_or(0);
     Q_EMIT authorityChanged();
     Q_EMIT statusChanged();
 }
@@ -655,6 +683,53 @@ void CybouDesktopModel::setNetworkAuthority(const CybouNetworkAuthorityStatus& s
     const bool changed_role = status.proven != m_network_authority.proven;
     m_network_authority = status.proven ? status : CybouNetworkAuthorityStatus{};
     if (changed_role || status.proven) Q_EMIT networkAuthorityChanged();
+}
+
+void CybouDesktopModel::requestFinalizationPaused(bool paused)
+{
+    if (!m_network_authority.proven) return;
+    Q_EMIT finalizationPauseRequested(paused);
+}
+
+void CybouDesktopModel::requestFinalizeNow()
+{
+    if (!m_network_authority.proven) return;
+    Q_EMIT finalizeNowRequested();
+}
+
+bool CybouDesktopModel::requestAuthAdjustment(const QString& target, bool grant, quint64 amount)
+{
+    if (!m_network_authority.proven || m_auth_adjustment_pending || amount == 0) return false;
+    const QString input = target.trimmed().toLower();
+    QString account_id;
+    if (const auto parsed = cybou::ParseHash256UserHex(input.toStdString())) {
+        account_id = QString::fromStdString(parsed->GetHex());
+    } else if (input.endsWith(QStringLiteral(".cybou")) && nameLabelProblem(input.chopped(6)).isEmpty() &&
+               m_identity_service) {
+        const auto loaded = m_identity_service->GetNodeRuntime().GetStore().LoadState();
+        if (loaded && loaded.state) {
+            if (const auto* owner = loaded.state->names.Resolve(input.chopped(6).toStdString())) {
+                account_id = QString::fromStdString(owner->Value().GetHex());
+            }
+        }
+        if (account_id.isEmpty()) {
+            setAuthAdjustmentFinished(false, tr("%1 does not belong to a CYBOU Identity.").arg(input));
+            return true;
+        }
+    } else {
+        return false;
+    }
+    m_auth_adjustment_pending = true;
+    Q_EMIT networkAuthorityChanged();
+    Q_EMIT authAdjustmentRequested(account_id, grant, amount);
+    return true;
+}
+
+void CybouDesktopModel::setAuthAdjustmentFinished(bool ok, const QString& message)
+{
+    m_auth_adjustment_pending = false;
+    Q_EMIT networkAuthorityChanged();
+    Q_EMIT authAdjustmentFinished(ok, message);
 }
 
 void CybouDesktopModel::setOperationStatus(const CybouOperationStatus& status)
@@ -941,7 +1016,7 @@ bool CybouDesktopModel::requestClaimName(const QString& label, const QString& va
     if (m_fixture_mode) {
         if (m_status.identity_state != CybouIdentityState::Active || m_status.name_claim_pending) return false;
         m_status.name_claim_pending = true;
-        m_status.name_claim_status = tr("Claiming %1.cybouâ€¦").arg(label);
+        m_status.name_claim_status = tr("Claiming %1.cybou…").arg(label);
         Q_EMIT statusChanged();
         Q_EMIT nameClaimRequested(label);
         return true;
@@ -950,7 +1025,7 @@ bool CybouDesktopModel::requestClaimName(const QString& label, const QString& va
         m_status.name_claim_pending || !m_status.primary_name.isEmpty()) return false;
     if (m_name_worker.joinable()) m_name_worker.join();
     m_status.name_claim_pending = true;
-    m_status.name_claim_status = tr("Saving encrypted name claimâ€¦");
+    m_status.name_claim_status = tr("Saving encrypted name claim…");
     Q_EMIT statusChanged();
     m_name_worker = std::jthread([this, name = label.toStdString(), password = vault_password.toStdString()]() mutable {
         const auto result = m_name_service->ClaimSync(std::move(name), password,
@@ -1229,7 +1304,7 @@ QString CybouDesktopModel::nameLabelProblem(const QString& label) const
     case E::EMPTY: return tr("Enter a name.");
     case E::TOO_SHORT: return tr("Use at least 5 characters.");
     case E::TOO_LONG: return tr("Use at most 32 characters.");
-    case E::INVALID_CHARACTER: return tr("Use lowercase letters aâ€“z, digits and hyphens.");
+    case E::INVALID_CHARACTER: return tr("Use lowercase letters a–z, digits and hyphens.");
     case E::INVALID_START_END: return tr("A name cannot start or end with a hyphen.");
     case E::CONSECUTIVE_HYPHENS: return tr("A name cannot contain two hyphens in a row.");
     case E::IDN_PREFIX: return tr("Names cannot start with \"xn--\".");

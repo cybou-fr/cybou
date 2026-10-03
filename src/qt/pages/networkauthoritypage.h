@@ -11,12 +11,18 @@
 
 class CybouDesktopModel;
 class QLabel;
+class QLineEdit;
+class QPushButton;
 class QVBoxLayout;
 
 /**
- * Central Authority: visible only when the unlocked Identity derives this
- * network's genesis PoA finalizer key. Reports this node's independently
- * validated finalized state and the local finalizer's operating model.
+ * Central Authority operator console: visible only when the unlocked
+ * Identity derives this network's genesis PoA finalizer key.
+ *
+ * The operator sees the local finalizer state and controls it (pause,
+ * resume, finalize one block), sees the candidates waiting for the next
+ * block, signs PoaAuthAdjustment GRANT/BURN, and reads network totals from
+ * this node's own independently validated finalized state.
  */
 class NetworkAuthorityPage : public QWidget
 {
@@ -27,21 +33,36 @@ public:
 
 private:
     CybouDesktopModel* const m_model;
+
+    QLabel* m_finalizer_state{nullptr};
+    QLabel* m_finalizer_detail{nullptr};
+    QPushButton* m_pause{nullptr};
+    QPushButton* m_finalize_now{nullptr};
+
     QLabel* m_height{nullptr};
     QLabel* m_last_block{nullptr};
-    QLabel* m_safety{nullptr};
-    QLabel* m_identities{nullptr};
-    QLabel* m_names{nullptr};
+    QLabel* m_candidates{nullptr};
     QLabel* m_peers{nullptr};
-    QVBoxLayout* m_finality{nullptr};
-    QVBoxLayout* m_economy{nullptr};
-    QVBoxLayout* m_providers{nullptr};
+    QLabel* m_identities{nullptr};
+    QLabel* m_validators{nullptr};
+
+    QVBoxLayout* m_queue{nullptr};
+    QLineEdit* m_auth_target{nullptr};
+    QLineEdit* m_auth_amount{nullptr};
+    QPushButton* m_grant{nullptr};
+    QPushButton* m_burn{nullptr};
+    QLabel* m_auth_status{nullptr};
+    QVBoxLayout* m_totals{nullptr};
+    QVBoxLayout* m_peer_rows{nullptr};
+    QVBoxLayout* m_chain{nullptr};
+
     quint64 m_seen_height{0};
     QDateTime m_seen_at;
-    bool m_seen_authority_height{false};
     bool m_height_advanced_in_view{false};
 
     void refresh();
+    void updateAuthButtons();
+    void confirmAuthAdjustment(bool grant);
 };
 
 #endif // BITCOIN_QT_PAGES_NETWORKAUTHORITYPAGE_H

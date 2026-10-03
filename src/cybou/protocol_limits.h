@@ -37,8 +37,8 @@ inline constexpr std::uint64_t LOCAL_ONBOARDING_STORAGE_BASELINE_BYTES{ONBOARDIN
 /// \brief Вычисляет максимальную квоту удалённого хранения по финализированному AUTH (DEC-268, DEC-269).
 constexpr std::uint64_t ComputeStorageQuotaBytes(std::uint64_t authority) noexcept
 {
-    if (authority >= 10'000'000ULL) {
-        return UINT64_MAX; // Неограниченно для уровня валидатора (> 10M AUTH)
+    if (authority > 10'000'000ULL) {
+        return UINT64_MAX; // Неограниченно для уровня валидатора (AUTH > 10M)
     }
     if (authority >= 1'000'000ULL) {
         return 500ULL * 1024ULL * 1024ULL * 1024ULL; // 500 GiB
@@ -55,7 +55,7 @@ constexpr std::uint64_t ComputeStorageQuotaBytes(std::uint64_t authority) noexce
 /// \brief Вычисляет ограничение числа операций на блок по финализированному AUTH (DEC-268).
 constexpr std::uint32_t ComputeMaxOperationsPerBlock(std::uint64_t authority) noexcept
 {
-    if (authority >= 10'000'000ULL) {
+    if (authority > 10'000'000ULL) {
         return UINT32_MAX; // Неограниченно для уровня валидатора
     }
     if (authority >= 1'000'000ULL) {

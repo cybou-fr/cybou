@@ -23,6 +23,7 @@
 #include <qt/pages/storagepage.h>
 #include <qt/pages/diagnosticspage.h>
 #include <qt/pages/networkauthoritypage.h>
+#include <qt/pages/walletpage.h>
 #include <QTableWidget>
 
 #include <cybou/network_genesis.h>
@@ -776,7 +777,10 @@ void CybouShellTests::authorityDashboardUsesLocalHeightObservation()
     model.setNodeStatus(true, 2, true);
     CybouNetworkAuthorityStatus authority;
     authority.proven = true;
+    authority.signer_enabled = true;
+    authority.finalizer = CybouFinalizerState::Finalizing;
     authority.finalized_height = 10;
+    authority.candidates = 3;
     model.setNetworkAuthority(authority);
     NetworkAuthorityPage page{&model};
 
@@ -784,17 +788,79 @@ void CybouShellTests::authorityDashboardUsesLocalHeightObservation()
         for (const auto* label : page.findChildren<QLabel*>()) if (label->text() == text) return true;
         return false;
     };
-    QVERIFY(has_text(QStringLiteral("Not observed yet")));
+    auto button = [&page](const char* id) {
+        for (auto* candidate : page.findChildren<QPushButton*>()) {
+            if (candidate->property("cybouId").toString() == QLatin1String{id}) return candidate;
+        }
+        return static_cast<QPushButton*>(nullptr);
+    };
+    QVERIFY(has_text(QStringLiteral("None in this view")));
     QVERIFY(has_text(QStringLiteral("Synced")));
-    QVERIFY(has_text(QStringLiteral("Waiting to observe a height change in this view")));
+    QVERIFY(has_text(QStringLiteral("Finalizing")));
 
     authority.finalized_height = 11;
     model.setNetworkAuthority(authority);
-    QVERIFY(!has_text(QStringLiteral("Not observed yet")));
+    QVERIFY(!has_text(QStringLiteral("None in this view")));
+    QVERIFY(has_text(QStringLiteral("0 s ago")));
+
+    // Pause asks the controller to stop the loop; one block on demand only while paused.
+    auto* pause = button("authorityPause");
+    auto* finalize_now = button("authorityFinalizeNow");
+    QVERIFY(pause);
+    QVERIFY(finalize_now);
+    QVERIFY(finalize_now->isHidden());
+    QSignalSpy paused{&model, &CybouDesktopModel::finalizationPauseRequested};
+    pause->click();
+    QCOMPARE(paused.count(), 1);
+    QCOMPARE(paused.at(0).at(0).toBool(), true);
+    authority.finalizer = CybouFinalizerState::Paused;
+    model.setNetworkAuthority(authority);
+    QVERIFY(!finalize_now->isHidden());
+    QCOMPARE(pause->text(), QStringLiteral("Resume"));
+    QSignalSpy finalize{&model, &CybouDesktopModel::finalizeNowRequested};
+    finalize_now->click();
+    QCOMPARE(finalize.count(), 1);
+
+    // AUTH changes need an active signer, a target and an amount.
+    auto* grant = button("authorityGrant");
+    QVERIFY(grant);
+    QVERIFY(!grant->isEnabled());
+    for (auto* edit : page.findChildren<QLineEdit*>()) {
+        edit->setText(edit->accessibleName() == QStringLiteral("Identity") ? QStringLiteral("alice.cybou") : QStringLiteral("5"));
+    }
+    QVERIFY(grant->isEnabled());
+    authority.finalizer = CybouFinalizerState::SafetyHalt;
+    authority.signer_enabled = false;
+    model.setNetworkAuthority(authority);
+    QVERIFY(!grant->isEnabled());
+    QVERIFY(pause->isEnabled() == false);
+}
+
+void CybouShellTests::walletShowsAuthorityLimits()
+{
+    const auto base = cybouAccountLimits(0);
+    QCOMPARE(base.storage_quota.value_or(0), quint64{5} * 1024 * 1024 * 1024);
+    QCOMPARE(base.operations_per_block.value_or(0), quint32{1});
+    QVERIFY(!base.validation_eligible);
+    QCOMPARE(base.next_tier_authority.value_or(0), quint64{10'000});
+    const auto top = cybouAccountLimits(10'000'001);
+    QVERIFY(!top.storage_quota);
+    QVERIFY(!top.operations_per_block);
+    QVERIFY(top.validation_eligible);
+    QVERIFY(!top.next_tier_authority);
+
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    model.setAuthority(12'000);
+    QCOMPARE(model.status().storage_quota, quint64{25} * 1024 * 1024 * 1024);
+    WalletPage page{&model};
+    QLabel* authority = nullptr;
+    for (auto* label : page.findChildren<QLabel*>()) {
+        if (label->property("cybouId").toString() == QStringLiteral("walletAuthority")) authority = label;
+    }
+    QVERIFY(authority);
+    QCOMPARE(authority->text(), cybouAuthorityText(12'000));
     const auto labels = page.findChildren<QLabel*>();
-    QVERIFY(std::any_of(labels.begin(), labels.end(), [](const QLabel* label) {
-        return label->text().contains(QStringLiteral("Height changed "));
-    }));
+    QVERIFY(std::any_of(labels.begin(), labels.end(), [](const QLabel* label) { return label->text() == QStringLiteral("5"); }));
 }
 
 void CybouShellTests::networkPageReflectsModel()
@@ -1159,9 +1225,12 @@ void CybouShellTests::languageSwitchRebuildsShell()
     QVERIFY(authority_nav);
     QVERIFY(!authority_nav->isHidden());
     QCOMPARE(authority_nav->accessibleName(), QStringLiteral("Autorité centrale"));
-    auto* authority_proof = window->findChild<QLabel*>(QStringLiteral("networkAuthorityProof"));
-    QVERIFY(authority_proof);
-    QVERIFY(authority_proof->text().contains(QStringLiteral("signataire")));
+    QLabel* authority_state = nullptr;
+    for (auto* label : window->findChildren<QLabel*>()) {
+        if (label->property("cybouId").toString() == QStringLiteral("authorityFinalizerState")) authority_state = label;
+    }
+    QVERIFY(authority_state);
+    QCOMPARE(authority_state->text(), QStringLiteral("Signataire indisponible"));
     QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Files));
 
     const auto* old_page = window->page(CybouPage::Files);

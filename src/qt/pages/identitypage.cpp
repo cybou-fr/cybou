@@ -247,7 +247,7 @@ QWidget* IdentityPage::buildContent()
     m_system_balance = DetailRow(account, tr("System Balance"), page);
     m_authority_value = DetailRow(account, tr("Authority"), page);
     m_authority_value->setProperty("cybouId", QStringLiteral("identityAuthorityValue"));
-    account->addWidget(MutedText(tr("Authority > 1,000,000 AUTH enables Validation."), page));
+    account->addWidget(MutedText(tr("Authority above 10,000,000 AUTH enables Validation. Current limits are shown in Wallet."), page));
     account->addWidget(MutedText(tr("Share your Account ID only if someone cannot find your .cybou name."), page));
 
     // Names.
@@ -368,7 +368,7 @@ void IdentityPage::refresh()
 
     m_balance->setText(cybouAmountText(status.balance));
     m_system_balance->setText(cybouAmountText(status.system_balance));
-    m_authority_value->setText(QStringLiteral("%1 AUTH").arg(locale().toString(m_model->authority())));
+    m_authority_value->setText(cybouAuthorityText(m_model->authority()));
 
     ClearLayout(m_advanced_rows);
     const auto add = [this](const QString& key, const QString& value) {

@@ -94,7 +94,7 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     model.setKeyEpoch(1);
     model.setNames({{QStringLiteral("stan.cybou"), true}});
     model.setBalances(5820, 4621);
-    model.setStorageUsage(13314398618ULL, 100ULL * 1024 * MB);
+    model.setStorageUsage(13314398618ULL, 500ULL * 1024 * MB); // AUTH 1,200,000 tier
 
     CybouFeatureAvailability caps;
     caps.account_creation = true;

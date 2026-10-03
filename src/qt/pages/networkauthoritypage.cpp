@@ -10,7 +10,12 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QLocale>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QRegularExpressionValidator>
+#include <QStyle>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -18,12 +23,14 @@ using namespace CybouUi;
 
 namespace {
 
+constexpr int kQueueRows{12};
+
 QLabel* Tile(QGridLayout* grid, int row, int column, const QString& caption, QWidget* parent)
 {
     auto* card = Card(parent);
     auto* layout = new QVBoxLayout{card};
-    layout->setContentsMargins(20, 16, 20, 16);
-    layout->setSpacing(4);
+    layout->setContentsMargins(20, 14, 20, 14);
+    layout->setSpacing(2);
     auto* label = new QLabel{caption, card};
     label->setObjectName(QStringLiteral("metricCaption"));
     auto* value = new QLabel{card};
@@ -35,19 +42,27 @@ QLabel* Tile(QGridLayout* grid, int row, int column, const QString& caption, QWi
     return value;
 }
 
-QVBoxLayout* Section(QVBoxLayout* root, const QString& title, QWidget* parent)
+/** Card with a title; returns the card's own layout so callers can add controls too. */
+QVBoxLayout* Section(QVBoxLayout* root, const QString& title, QWidget* parent, const QString& hint = {})
 {
     auto* card = Card(parent);
     auto* layout = new QVBoxLayout{card};
     layout->setContentsMargins(22, 18, 22, 18);
     layout->setSpacing(8);
     layout->addWidget(SectionTitle(title, card));
-    auto* body = new QWidget{card};
+    if (!hint.isEmpty()) layout->addWidget(MutedText(hint, card));
+    root->addWidget(card);
+    return layout;
+}
+
+/** Rebuildable rows inside a section. */
+QVBoxLayout* Rows(QVBoxLayout* section)
+{
+    auto* body = new QWidget{section->parentWidget()};
     auto* rows = new QVBoxLayout{body};
     rows->setContentsMargins(0, 0, 0, 0);
-    rows->setSpacing(8);
-    layout->addWidget(body);
-    root->addWidget(card);
+    rows->setSpacing(6);
+    section->addWidget(body);
     return rows;
 }
 
@@ -63,21 +78,35 @@ void ClearLayout(QLayout* layout)
     }
 }
 
-void Row(QVBoxLayout* layout, const QString& key, const QString& value)
+void Row(QVBoxLayout* layout, const QString& key, const QString& value, bool mono = false)
 {
     QWidget* parent = layout->parentWidget();
     auto* row = new QHBoxLayout;
     row->setSpacing(12);
     auto* k = new QLabel{key, parent};
     k->setObjectName(QStringLiteral("rowSub"));
-    k->setFixedWidth(210);
+    k->setFixedWidth(200);
     auto* v = new QLabel{value, parent};
     v->setObjectName(QStringLiteral("rowTitle"));
     v->setWordWrap(true);
     v->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    if (mono) v->setStyleSheet(QStringLiteral("font-family: Consolas, 'Cascadia Mono', monospace;"));
     row->addWidget(k, 0, Qt::AlignTop);
     row->addWidget(v, 1);
     layout->addLayout(row);
+}
+
+QString ShortHex(const std::string& hex)
+{
+    const auto text = QString::fromStdString(hex);
+    return text.size() > 20 ? text.left(10) + QStringLiteral("…") + text.right(8) : text;
+}
+
+void SetTint(QLabel* pill, Tint tint)
+{
+    pill->setProperty("tint", tintName(tint));
+    pill->style()->unpolish(pill);
+    pill->style()->polish(pill);
 }
 
 } // namespace
@@ -90,32 +119,113 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     auto* root = new QVBoxLayout{this};
     root->setContentsMargins(28, 24, 28, 28);
     root->setSpacing(16);
-    auto* proof = MutedText(tr("This Identity derives this network's genesis PoA key. When its vault is unlocked, "
-                               "this desktop can operate the PoA finalizer through a vault-backed signer. "
-                               "This page reports finalized state independently validated by this node."), this);
-    proof->setObjectName(QStringLiteral("networkAuthorityProof"));
-    root->addWidget(proof);
 
+    // Finalizer: the one thing the operator must see first, with its controls.
+    auto* hero = new QFrame{this};
+    hero->setObjectName(QStringLiteral("heroHeader"));
+    auto* hero_layout = new QHBoxLayout{hero};
+    hero_layout->setContentsMargins(28, 20, 28, 20);
+    hero_layout->setSpacing(18);
+    auto* hero_text = new QVBoxLayout;
+    hero_text->setSpacing(4);
+    auto* title_row = new QHBoxLayout;
+    title_row->setSpacing(12);
+    title_row->addWidget(HeroTitle(tr("PoA finalizer"), hero));
+    m_finalizer_state = Pill({}, Tint::Neutral, hero);
+    m_finalizer_state->setProperty("cybouId", QStringLiteral("authorityFinalizerState"));
+    title_row->addWidget(m_finalizer_state, 0, Qt::AlignVCenter);
+    title_row->addStretch();
+    hero_text->addLayout(title_row);
+    m_finalizer_detail = HeroSubtitle({}, hero);
+    m_finalizer_detail->setWordWrap(true);
+    hero_text->addWidget(m_finalizer_detail);
+    hero_layout->addLayout(hero_text, 1);
+    m_pause = new QPushButton{hero};
+    m_pause->setObjectName(QStringLiteral("secondaryButton"));
+    m_pause->setProperty("cybouId", QStringLiteral("authorityPause"));
+    m_pause->setCursor(Qt::PointingHandCursor);
+    hero_layout->addWidget(m_pause, 0, Qt::AlignVCenter);
+    m_finalize_now = new QPushButton{tr("Finalize one block"), hero};
+    m_finalize_now->setObjectName(QStringLiteral("primaryButton"));
+    m_finalize_now->setProperty("cybouId", QStringLiteral("authorityFinalizeNow"));
+    m_finalize_now->setCursor(Qt::PointingHandCursor);
+    m_finalize_now->setToolTip(tr("Available while finalization is paused"));
+    hero_layout->addWidget(m_finalize_now, 0, Qt::AlignVCenter);
+    root->addWidget(hero);
+    connect(m_pause, &QPushButton::clicked, this, [this] {
+        m_model->requestFinalizationPaused(m_model->networkAuthority().finalizer != CybouFinalizerState::Paused);
+    });
+    connect(m_finalize_now, &QPushButton::clicked, this, [this] { m_model->requestFinalizeNow(); });
+
+    // Live network health.
     auto* grid = new QGridLayout;
     grid->setSpacing(14);
     m_height = Tile(grid, 0, 0, tr("Finalized height"), this);
-    m_last_block = Tile(grid, 0, 1, tr("Height change observed"), this);
-    m_safety = Tile(grid, 0, 2, tr("Safety halt"), this);
-    m_identities = Tile(grid, 1, 0, tr("Identities"), this);
-    m_names = Tile(grid, 1, 1, tr(".cybou names"), this);
-    m_peers = Tile(grid, 1, 2, tr("Connected peers"), this);
+    m_last_block = Tile(grid, 0, 1, tr("Last new block"), this);
+    m_candidates = Tile(grid, 0, 2, tr("Waiting for next block"), this);
+    m_peers = Tile(grid, 1, 0, tr("Connected peers"), this);
+    m_identities = Tile(grid, 1, 1, tr("Identities"), this);
+    m_validators = Tile(grid, 1, 2, tr("Validators (AUTH > 10M)"), this);
     for (int column = 0; column < 3; ++column) grid->setColumnStretch(column, 1);
     root->addLayout(grid);
 
-    m_finality = Section(root, tr("Finality"), this);
-    m_economy = Section(root, tr("Supply and pools"), this);
-    m_providers = Section(root, tr("Connected peers"), this);
+    // Candidate operations this node executed and will finalize.
+    auto* queue = Section(root, tr("Candidate operations"), this,
+        tr("Operations this node executed against its finalized state. Each is executed again before signing."));
+    m_queue = Rows(queue);
+
+    // AUTH adjustment.
+    auto* auth = Section(root, tr("Adjust Authority"), this,
+        tr("Signs a PoaAuthAdjustment for the next block. GRANT adds AUTH; BURN removes it (never below 0). "
+           "AUTH cannot be transferred and grants no finalization power."));
+    auto* form = new QHBoxLayout;
+    form->setSpacing(10);
+    m_auth_target = new QLineEdit{this};
+    m_auth_target->setPlaceholderText(tr("name.cybou or Account ID"));
+    m_auth_target->setAccessibleName(tr("Identity"));
+    m_auth_target->setMinimumHeight(36);
+    m_auth_amount = new QLineEdit{this};
+    m_auth_amount->setPlaceholderText(tr("AUTH"));
+    m_auth_amount->setAccessibleName(tr("AUTH amount"));
+    m_auth_amount->setMinimumHeight(36);
+    m_auth_amount->setMaximumWidth(180);
+    m_auth_amount->setValidator(new QRegularExpressionValidator{QRegularExpression{QStringLiteral("[0-9]{1,15}")}, m_auth_amount});
+    m_grant = new QPushButton{tr("Grant"), this};
+    m_grant->setObjectName(QStringLiteral("primaryButton"));
+    m_grant->setProperty("cybouId", QStringLiteral("authorityGrant"));
+    m_burn = new QPushButton{tr("Burn"), this};
+    m_burn->setObjectName(QStringLiteral("secondaryButton"));
+    m_burn->setProperty("cybouId", QStringLiteral("authorityBurn"));
+    form->addWidget(m_auth_target, 1);
+    form->addWidget(m_auth_amount);
+    form->addWidget(m_grant);
+    form->addWidget(m_burn);
+    auth->addLayout(form);
+    m_auth_status = MutedText({}, this);
+    auth->addWidget(m_auth_status);
+    connect(m_auth_target, &QLineEdit::textChanged, this, [this] { updateAuthButtons(); });
+    connect(m_auth_amount, &QLineEdit::textChanged, this, [this] { updateAuthButtons(); });
+    connect(m_grant, &QPushButton::clicked, this, [this] { confirmAuthAdjustment(true); });
+    connect(m_burn, &QPushButton::clicked, this, [this] { confirmAuthAdjustment(false); });
+    connect(m_model, &CybouDesktopModel::authAdjustmentFinished, this, [this](bool ok, const QString& message) {
+        m_auth_status->setText(message);
+        if (ok) {
+            m_auth_amount->clear();
+            m_model->notify(message);
+        }
+        updateAuthButtons();
+    });
+
+    m_totals = Rows(Section(root, tr("Network totals"), this));
+    m_peer_rows = Rows(Section(root, tr("Peers"), this,
+        tr("Peer heights are their own announcements, not verified state.")));
+    m_chain = Rows(Section(root, tr("Chain"), this));
     root->addStretch();
 
     connect(m_model, &CybouDesktopModel::networkAuthorityChanged, this, [this] { refresh(); });
     auto* ticker = new QTimer{this};
     connect(ticker, &QTimer::timeout, this, [this] { refresh(); });
-    ticker->start(5000);
+    ticker->start(2000);
     refresh();
 }
 
@@ -126,13 +236,11 @@ void NetworkAuthorityPage::refresh()
     const QLocale locale;
     const auto now = QDateTime::currentDateTimeUtc();
     if (!a.proven) {
-        m_seen_authority_height = false;
-        m_height_advanced_in_view = false;
         m_seen_at = {};
-    } else if (!m_seen_authority_height) {
+        m_height_advanced_in_view = false;
+    } else if (!m_seen_at.isValid()) {
         m_seen_height = a.finalized_height;
         m_seen_at = now;
-        m_seen_authority_height = true;
     } else if (a.finalized_height != m_seen_height) {
         m_seen_height = a.finalized_height;
         m_seen_at = now;
@@ -140,42 +248,112 @@ void NetworkAuthorityPage::refresh()
     }
     const qint64 age = m_seen_at.isValid() ? m_seen_at.secsTo(now) : 0;
 
+    // Finalizer state and controls.
+    switch (a.finalizer) {
+    case CybouFinalizerState::Finalizing:
+        m_finalizer_state->setText(tr("Finalizing"));
+        SetTint(m_finalizer_state, Tint::Mint);
+        m_finalizer_detail->setText(tr("Valid candidates are executed and signed into a block about every second."));
+        break;
+    case CybouFinalizerState::Paused:
+        m_finalizer_state->setText(tr("Paused"));
+        SetTint(m_finalizer_state, Tint::Amber);
+        m_finalizer_detail->setText(tr("No blocks are produced. Candidates wait in the pool; finalize one block "
+                                       "on demand or resume."));
+        break;
+    case CybouFinalizerState::SafetyHalt:
+        m_finalizer_state->setText(tr("Safety halt"));
+        SetTint(m_finalizer_state, Tint::Rose);
+        m_finalizer_detail->setText(tr("Signing safety stopped finalization fail-closed. Inspect the signing "
+                                       "journal and evidence before any further signing."));
+        break;
+    case CybouFinalizerState::SignerUnavailable:
+        m_finalizer_state->setText(tr("Signer unavailable"));
+        SetTint(m_finalizer_state, Tint::Neutral);
+        m_finalizer_detail->setText(tr("The PoA signer is not active. Unlock the vault of this Identity to finalize."));
+        break;
+    }
+    const bool paused = a.finalizer == CybouFinalizerState::Paused;
+    m_pause->setText(paused ? tr("Resume") : tr("Pause"));
+    m_pause->setEnabled(a.finalizer == CybouFinalizerState::Finalizing || paused);
+    m_finalize_now->setVisible(paused);
+
     m_height->setText(a.proven ? locale.toString(a.finalized_height) : QStringLiteral("—"));
-    m_last_block->setText(a.proven
-        ? (m_height_advanced_in_view ? tr("%1 s ago").arg(age) : tr("Not observed yet"))
-        : QStringLiteral("—"));
-    m_safety->setText(d.safety_halted ? tr("HALTED") : tr("No"));
+    m_last_block->setText(!a.proven ? QStringLiteral("—")
+        : m_height_advanced_in_view ? (age < 60 ? tr("%1 s ago").arg(age) : relTime(m_seen_at.toLocalTime()))
+        : tr("None in this view"));
+    m_candidates->setText(locale.toString(a.candidates));
+    m_peers->setText(locale.toString(static_cast<qulonglong>(d.peers.size())));
     m_identities->setText(locale.toString(a.identities));
-    m_names->setText(locale.toString(a.names));
-    m_peers->setText(QString::number(d.peers.size()));
+    m_validators->setText(locale.toString(a.validators));
 
-    ClearLayout(m_finality);
-    Row(m_finality, tr("Local PoA signer"), a.signer_enabled ? tr("Enabled in the unlocked vault") : tr("Not enabled"));
-    Row(m_finality, tr("Model"), tr("Genesis-bound single-operator hybrid-PQ PoA (centralized finality, not BFT)"));
-    Row(m_finality, tr("Finalizer key"), tr("Matches this Identity's recovery phrase (proven from genesis)"));
-    Row(m_finality, tr("P2P connection"), cybouConnectionText(m_model->status()));
-    Row(m_finality, tr("Height tracking"), m_height_advanced_in_view
-        ? tr("Height changed %1 s ago in this view").arg(age)
-        : tr("Waiting to observe a height change in this view"));
-    Row(m_finality, tr("Tip"), QString::fromStdString(d.tip));
-    Row(m_finality, tr("State root"), QString::fromStdString(d.state_root));
-    Row(m_finality, tr("Network ID"), QString::fromStdString(d.network_binding));
-    Row(m_finality, tr("Pending .cybou name commits"), locale.toString(a.pending_name_commits));
+    ClearLayout(m_queue);
+    if (d.operations.empty()) {
+        m_queue->addWidget(MutedText(tr("No candidate operations. The pool is empty."), m_queue->parentWidget()));
+    }
+    int shown = 0;
+    for (const auto& operation : d.operations) {
+        if (shown++ == kQueueRows) {
+            m_queue->addWidget(MutedText(tr("and %1 more").arg(d.operations.size() - kQueueRows), m_queue->parentWidget()));
+            break;
+        }
+        Row(m_queue, ShortHex(operation.operation_id),
+            tr("base height %1").arg(locale.toString(static_cast<qulonglong>(operation.finalized_height))), true);
+    }
 
-    ClearLayout(m_economy);
-    Row(m_economy, tr("Spendable Balance (all Identities)"), cybouAmountText(a.total_balance));
-    Row(m_economy, tr("System Balance (all Identities)"), cybouAmountText(a.total_system_balance));
-    Row(m_economy, tr("Onboarding pool"), cybouAmountText(a.onboarding_pool));
+    ClearLayout(m_totals);
+    Row(m_totals, tr("Spendable Balance"), cybouAmountText(a.total_balance));
+    Row(m_totals, tr("System Balance"), cybouAmountText(a.total_system_balance));
+    Row(m_totals, tr("Authority"), cybouAuthorityText(a.total_authority));
+    Row(m_totals, tr("Onboarding pool"), cybouAmountText(a.onboarding_pool));
+    Row(m_totals, tr(".cybou names"), tr("%1  ·  %2 commits pending")
+        .arg(locale.toString(a.names), locale.toString(a.pending_name_commits)));
 
-    ClearLayout(m_providers);
-    if (d.peers.empty()) Row(m_providers, tr("Peers"), tr("None connected"));
+    ClearLayout(m_peer_rows);
+    if (d.peers.empty()) m_peer_rows->addWidget(MutedText(tr("No peers connected."), m_peer_rows->parentWidget()));
     for (const auto& peer : d.peers) {
         const quint64 lag = d.height > peer.advertised_height ? d.height - peer.advertised_height : 0;
-        const QString provider = peer.storage_id.empty()
-            ? tr("No StorageId verified")
-            : tr("StorageId verified: %1").arg(QString::fromStdString(peer.storage_id));
-        Row(m_providers, QString::fromStdString(peer.endpoint),
-            tr("%1  ·  height %2  ·  lag %3").arg(provider, locale.toString(static_cast<quint64>(peer.advertised_height)))
-                .arg(lag));
+        QString text = lag == 0 ? tr("height %1  ·  in step").arg(locale.toString(static_cast<qulonglong>(peer.advertised_height)))
+                                : tr("height %1  ·  %2 behind").arg(locale.toString(static_cast<qulonglong>(peer.advertised_height)))
+                                      .arg(locale.toString(lag));
+        if (!peer.storage_id.empty()) text += tr("  ·  StorageId %1").arg(ShortHex(peer.storage_id));
+        Row(m_peer_rows, QString::fromStdString(peer.endpoint), text);
     }
+
+    ClearLayout(m_chain);
+    Row(m_chain, tr("Tip"), QString::fromStdString(d.tip), true);
+    Row(m_chain, tr("State root"), QString::fromStdString(d.state_root), true);
+    Row(m_chain, tr("Network ID"), QString::fromStdString(d.network_binding), true);
+    Row(m_chain, tr("Connection"), cybouConnectionText(m_model->status()));
+
+    updateAuthButtons();
+}
+
+void NetworkAuthorityPage::updateAuthButtons()
+{
+    const auto& a = m_model->networkAuthority();
+    const bool ready = a.signer_enabled && a.finalizer != CybouFinalizerState::SafetyHalt &&
+        !m_model->authAdjustmentPending() && !m_auth_target->text().trimmed().isEmpty() &&
+        m_auth_amount->text().toULongLong() > 0;
+    m_grant->setEnabled(ready);
+    m_burn->setEnabled(ready);
+    if (m_model->authAdjustmentPending()) m_auth_status->setText(tr("Signing…"));
+}
+
+void NetworkAuthorityPage::confirmAuthAdjustment(bool grant)
+{
+    const QString target = m_auth_target->text().trimmed();
+    const quint64 amount = m_auth_amount->text().toULongLong();
+    const QString amount_text = cybouAuthorityText(amount);
+    const auto answer = QMessageBox::question(this, grant ? tr("Grant AUTH") : tr("Burn AUTH"),
+        grant ? tr("Grant %1 to %2?\n\nThis is signed with the genesis PoA key and becomes canonical "
+                   "once finalized.").arg(amount_text, target)
+              : tr("Burn %1 from %2?\n\nAUTH never goes below 0. This is signed with the genesis PoA key "
+                   "and becomes canonical once finalized.").arg(amount_text, target),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (answer != QMessageBox::Yes) return;
+    if (!m_model->requestAuthAdjustment(target, grant, amount)) {
+        m_auth_status->setText(tr("Enter a .cybou name or a 64-character Account ID and a whole AUTH amount."));
+    }
+    updateAuthButtons();
 }
